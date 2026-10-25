@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createLocalAgentJwt, verifyLocalAgentJwt } from "../agent-auth-jwt.js";
+import { createLocalAgentJwt, createSandboxExecJwt, verifyLocalAgentJwt, verifySandboxExecJwt } from "../agent-auth-jwt.js";
 
 describe("agent local JWT", () => {
   const secretEnv = "PAPERCLIP_AGENT_JWT_SECRET";
@@ -65,6 +65,44 @@ describe("agent local JWT", () => {
       iss: "paperclip",
       aud: "paperclip-api",
     });
+  });
+
+  it("issues a short, exact sandbox-exec audience that ordinary API auth rejects", () => {
+    const now = new Date("2026-01-01T00:00:00.000Z");
+    vi.setSystemTime(now);
+    const claim = {
+      requestId: "11111111-1111-4111-8111-111111111111",
+      bindingId: "22222222-2222-4222-8222-222222222222",
+      cellId: "33333333-3333-4333-8333-333333333333",
+      generation: "7",
+      hostId: "44444444-4444-4444-8444-444444444444",
+      hostEpoch: 9,
+      runId: "55555555-5555-4555-8555-555555555555",
+      attemptId: "66666666-6666-4666-8666-666666666666",
+      attempt: 1,
+      manifestId: "77777777-7777-4777-8777-777777777777",
+      manifestHash: "a".repeat(64),
+      policySnapshotId: "88888888-8888-4888-8888-888888888888",
+      policyHash: "b".repeat(64),
+      commandDigest: "c".repeat(64),
+      deadlineAt: new Date(now.getTime() + 30_000).toISOString(),
+    };
+    const token = createSandboxExecJwt({
+      agentId: "agent-1", companyId: "company-1", adapterType: "paperclip_runner",
+      runId: claim.runId, responsibleUserId: "user-1", claim,
+      parentExpiresAt: new Date(now.getTime() + 60_000),
+      nativeLeaseExpiresAt: new Date(now.getTime() + 45_000),
+    });
+    expect(token).toBeTruthy();
+    expect(verifyLocalAgentJwt(token!)).toBeNull();
+    expect(verifySandboxExecJwt(token!)).toMatchObject({
+      purpose: "sandbox_exec", aud: "paperclip-sandbox-exec", sandbox_exec: claim,
+      exp: Math.floor((now.getTime() + 30_000) / 1000),
+    });
+    const [header, body, signature] = token!.split(".");
+    const tampered = JSON.parse(Buffer.from(body!, "base64url").toString("utf8"));
+    tampered.sandbox_exec.commandDigest = "d".repeat(64);
+    expect(verifySandboxExecJwt(`${header}.${Buffer.from(JSON.stringify(tampered)).toString("base64url")}.${signature}`)).toBeNull();
   });
 
   it("round-trips a skill_test run scope", () => {

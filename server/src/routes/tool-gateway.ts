@@ -477,7 +477,7 @@ export function toolGatewayRoutes(db: Db, toolGateway: ToolGatewayService) {
 
       const companyId = req.actor.type === "agent" ? req.actor.companyId : body.companyId;
       const agentId = req.actor.type === "agent" ? req.actor.agentId : body.agentId;
-      const runId = req.actor.type === "agent" ? (req.actor.runId ?? body.runId) : body.runId;
+      const runId = req.actor.type === "agent" ? req.actor.runId : body.runId;
       if (!companyId || !agentId || !runId) {
         res.status(400).json({ error: "companyId, agentId, and runId are required" });
         return;
@@ -493,6 +493,7 @@ export function toolGatewayRoutes(db: Db, toolGateway: ToolGatewayService) {
         ttlMs: body.ttlMs,
         actorType: actor.actorType,
         actorId: actor.actorId,
+        authorizationActor: req.actor,
       });
 
       res.status(201).json({

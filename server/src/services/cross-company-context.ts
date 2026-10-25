@@ -143,7 +143,7 @@ export function crossCompanyContextService(db: Db) {
           ? await contextEngineService(db).assemble(assembleInput)
           : await authorizationService(db).withReadDelegatedContextSources({ homeActor: actor, scope: resolved.scope,
             scopeRequestId: accountability.scopeRequestId, guestCompanyId: local.companyId, guestAgentId: local.presence.id },
-          source => contextEngineService(source.db).assemble(assembleInput, undefined, source.db, undefined, undefined, source.nativeSource));
+          source => contextEngineService(source.db).assembleDelegated(assembleInput, source.nativeSource));
         if (!result.packet.manifest) throw forbidden("Cross-company context requires a persisted provenance manifest");
         manifests.push({ companyId: local.companyId, contextManifestId: result.packet.manifest.id });
         for (const item of [

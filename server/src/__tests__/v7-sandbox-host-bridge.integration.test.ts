@@ -7,9 +7,11 @@ import { and, eq } from "drizzle-orm";
 import {
   activityLog,
   agents,
+  agentProviderBindings,
   authSessions,
   billingAccounts,
   billingAccountCompanies,
+  billingSubscriptions,
   companyMemberships,
   createDb,
   runtimeCells,
@@ -22,7 +24,7 @@ import {
   runtimeSandboxBindings,
   runtimeVersionCatalog,
 } from "@paperclipai/db";
-import { PROVIDER_CAPABILITY_FEATURES, SANDBOX_CONTROLS, SANDBOX_HOST_COMMAND } from "@paperclipai/shared";
+import { PROVIDER_CAPABILITY_FEATURES, SANDBOX_CONTROLS, SANDBOX_HOST_COMMAND, sandboxCapabilitySnapshotSchema } from "@paperclipai/shared";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -119,6 +121,24 @@ const image = "fixture.invalid/openshell@sha256:" + "a".repeat(64);
       await db
         .insert(billingAccountCompanies)
         .values({ companyId: f.home, billingAccountId: account!.id });
+      await db.insert(billingSubscriptions).values({
+        billingAccountId: account!.id,
+        providerSubscriptionId: `sandbox-host-fixture-${randomUUID()}`,
+        status: "active",
+        productKeys: ["platform", "runtime_standard"],
+        currentPeriodEnd: new Date(Date.now() + 86_400_000),
+        providerUpdatedAt: new Date(),
+        sourceHash: "local-commercial-entitlement-fixture",
+      });
+      await db.insert(billingSubscriptions).values({
+        billingAccountId: account!.id,
+        providerSubscriptionId: `sandbox-host-capacity-fixture-${randomUUID()}`,
+        status: "active",
+        productKeys: ["runtime_standard"],
+        currentPeriodEnd: new Date(Date.now() + 86_400_000),
+        providerUpdatedAt: new Date(),
+        sourceHash: "local-commercial-entitlement-fixture",
+      });
       [cell] = (await db
         .insert(runtimeCells)
         .values({
@@ -210,7 +230,7 @@ const image = "fixture.invalid/openshell@sha256:" + "a".repeat(64);
     async function driveHost<T>(work: Promise<T>, targetCellId: string): Promise<T> {
       let settled = false;
       const result = work.then(value => ({ value }), error => ({ error })).then(value => { settled = true; return value; });
-      const deadline = Date.now() + 45000;
+      const deadline = Date.now() + 15000;
       while (!settled && Date.now() < deadline) {
         const claim = await transportForTest.claim(host.id);
         if (!claim) { await new Promise(resolve => setTimeout(resolve, 2)); continue; }
@@ -230,7 +250,10 @@ const image = "fixture.invalid/openshell@sha256:" + "a".repeat(64);
           : { action, document: projectOpenShellPolicy(supportedPolicy()).document };
         await transportForTest.complete(host.id, claim.id, { claimToken: command.claimToken, generation: command.scope.cellGeneration, success: true, reply, errorCode: null });
       }
-      if (!settled) throw new Error(`test host did not drain commands for cell ${targetCellId}`);
+      if (!settled) {
+        const pendingRows = await db.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.runtimeCellId, targetCellId));
+        throw new Error(`test host did not drain commands for cell ${targetCellId}: ${JSON.stringify(pendingRows.map(row => ({ status: row.status, errorCode: row.errorCode, action: (row.payload as Record<string, unknown>).action })))}`);
+      }
       const output = await result;
       if ("error" in output) throw output.error;
       return output.value;
@@ -543,6 +566,7 @@ const image = "fixture.invalid/openshell@sha256:" + "a".repeat(64);
         agent_identities_v5: true,
         agent_provider_bindings_v5: true,
         agent_runtime_fabric_v5: true,
+        enableFoundationV1: true,
         enableContextEngineV1: true,
       });
       const created = await agentIdentityService(db).create(f.actor, { name: "Sandbox admission Task fixture", homeCompanyId: f.home });
@@ -565,15 +589,24 @@ const image = "fixture.invalid/openshell@sha256:" + "a".repeat(64);
       const manifest = await agentRuntimeFabricService(db).prepare({ companyId: f.home, agentId: presence.id, runId: run!.id, responsibleUserId: f.userId, issueId: task!.id, query: task!.title });
       expect(manifest).toBeTruthy();
       const boundary = supportedPolicy();
+      boundary.riskClass = "C3";
       const sandboxBinding = await executionSandboxService(db, { operatorUserIds: [f.userId] }).create(f.actor, f.home, { runtimeCellId: admissionCell!.id, expectedCellGeneration: admissionCell!.generation.toString(), backend: "openshell", profile: "development", boundaryPolicy: boundary });
       const sandboxIdentity: SandboxIdentity = { companyId: f.home, bindingId: sandboxBinding.id, cellId: admissionCell!.id, cellGeneration: admissionCell!.generation.toString(), sandboxRef: `aw-v7-${sandboxBinding.id}` };
+      expect(sandboxCapabilitySnapshotSchema.safeParse(testCapabilities(image)).success).toBe(true);
       const serviceOptions = {
         operatorUserIds: [f.userId],
         backendFor: (binding: any, actor: any) => simulatedBackend(sandboxIdentity, transportForTest.bridge(actor)),
       };
       const qualification = await driveHost(executionSandboxService(db, serviceOptions).qualify(f.actor, f.home, sandboxBinding.id, 1), admissionCell!.id);
+      if (qualification.status !== "ready") {
+        const retained = await executionSandboxService(db, serviceOptions).get(f.actor, f.home, sandboxBinding.id);
+        const probeReceipts = await db.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.runtimeCellId, admissionCell!.id));
+        throw new Error(`CI-only qualification did not pass: ${JSON.stringify({ report: retained.qualifications[0], probes: probeReceipts.filter(row => (row.payload as Record<string, any>).action === "probe").map(row => ({ test: (row.payload as any).probe, status: row.status, errorCode: row.errorCode, safeResult: row.safeResult })) })}`);
+      }
       expect(qualification).toMatchObject({ status: "ready", version: 2 });
-      const compiled = await executionSandboxService(db, serviceOptions).compile(f.actor, f.home, sandboxBinding.id, { expectedVersion: 2, executionManifestId: manifest!.record.id, candidatePolicy: boundary });
+      const candidatePolicy = structuredClone(boundary);
+      candidatePolicy.riskClass = "C3";
+      const compiled = await executionSandboxService(db, serviceOptions).compile(f.actor, f.home, sandboxBinding.id, { expectedVersion: 2, executionManifestId: manifest!.record.id, candidatePolicy });
       expect(compiled.status).toBe("qualified");
       const runtime = runtimeControlService(db, { runtime: { suspectSeconds: 90, unreachableSeconds: 600, relayPort: 3102 } } as SaasPlatformConfig);
       const app = express();
@@ -585,9 +618,20 @@ const image = "fixture.invalid/openshell@sha256:" + "a".repeat(64);
         recordRuntimeWorkloadState: (tx, input) => runtime.recordSandboxWorkloadState(tx, input),
       }));
       app.use(errorHandler);
-      const admissionPromise = request(app).post(`/api/companies/${f.home}/runtime-sandboxes/${sandboxBinding.id}/admit`).send({ expectedVersion: 2, policySnapshotId: compiled.id });
-      const admitted = await driveHost(admissionPromise.then(response => { expect(response.status).toBe(200); return response.body; }), admissionCell!.id);
-      expect(admitted.binding).toMatchObject({ status: "running", version: 4 });
+      const admissionPath = `/api/companies/${f.home}/runtime-sandboxes/${sandboxBinding.id}/admit`;
+      const commandCountBeforeDenials = (await db.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.runtimeCellId, admissionCell!.id))).length;
+      await db.update(agentProviderBindings).set({ status: "revoked" }).where(eq(agentProviderBindings.id, provider.id));
+      const revokedProvider = await request(app).post(admissionPath).send({ expectedVersion: 3, policySnapshotId: compiled.id });
+      expect(revokedProvider.status).toBe(409);
+      await db.update(agentProviderBindings).set({ status: "active" }).where(eq(agentProviderBindings.id, provider.id));
+      await db.update(heartbeatRuns).set({ status: "paused" }).where(eq(heartbeatRuns.id, run!.id));
+      const pausedRun = await request(app).post(admissionPath).send({ expectedVersion: 3, policySnapshotId: compiled.id });
+      expect(pausedRun.status).toBe(409);
+      await db.update(heartbeatRuns).set({ status: "running" }).where(eq(heartbeatRuns.id, run!.id));
+      expect((await db.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.runtimeCellId, admissionCell!.id))).length).toBe(commandCountBeforeDenials);
+      const admissionPromise = request(app).post(admissionPath).send({ expectedVersion: 3, policySnapshotId: compiled.id });
+      const admitted = await driveHost(admissionPromise.then(response => { expect(response.status, JSON.stringify(response.body)).toBe(200); return response.body; }), admissionCell!.id);
+      expect(admitted.binding).toMatchObject({ status: "running", version: 5 });
       expect((await db.select().from(runtimeCells).where(eq(runtimeCells.id, admissionCell!.id)))[0]).toMatchObject({ status: "HEALTHY" });
       expect((await db.select().from(runtimeOperations).where(eq(runtimeOperations.runtimeCellId, admissionCell!.id))).map(row => [row.operationType, row.status])).toEqual([["start", "SUCCEEDED"]]);
       await new Promise(resolve => setTimeout(resolve, 5));

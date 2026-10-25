@@ -16,12 +16,33 @@ export interface LocalAgentJwtClaims {
   key_scope?: AgentApiKeyScope | null;
   /** Server-minted, one HTTP effect binding for an authenticated native tool call. */
   native_tool_effect?: NativeToolEffectClaim;
+  /** Dedicated one-use OpenShell process-execution audience. */
+  purpose?: "sandbox_exec";
+  sandbox_exec?: SandboxExecCapabilityClaim;
   iat: number;
   exp: number;
   iss?: string;
   aud?: string;
   instance_id?: string;
   jti?: string;
+}
+
+export interface SandboxExecCapabilityClaim {
+  requestId: string;
+  bindingId: string;
+  cellId: string;
+  generation: string;
+  hostId: string;
+  hostEpoch: number;
+  runId: string;
+  attemptId: string | null;
+  attempt: number;
+  manifestId: string;
+  manifestHash: string;
+  policySnapshotId: string;
+  policyHash: string;
+  commandDigest: string;
+  deadlineAt: string;
 }
 
 export interface NativeToolEffectClaim {
@@ -189,7 +210,49 @@ export function createLocalAgentJwt(
   return `${signingInput}.${signature}`;
 }
 
-export function verifyLocalAgentJwt(token: string): LocalAgentJwtClaims | null {
+/** Mint only after the durable sandbox exec claim exists and all current run,
+ * host, manifest and policy owners have been rechecked. */
+export function createSandboxExecJwt(input: {
+  agentId: string;
+  companyId: string;
+  adapterType: string;
+  runId: string;
+  responsibleUserId: string | null;
+  claim: SandboxExecCapabilityClaim;
+  parentExpiresAt: Date;
+  nativeLeaseExpiresAt: Date;
+}) {
+  const config = jwtConfig();
+  if (!config || !parseSandboxExecCapabilityClaim(input.claim)) return null;
+  const now = Math.floor(Date.now() / 1000);
+  const deadlineAt = Date.parse(input.claim.deadlineAt);
+  const exp = Math.min(
+    now + 60,
+    Math.floor(input.parentExpiresAt.getTime() / 1000),
+    Math.floor(input.nativeLeaseExpiresAt.getTime() / 1000),
+    Math.floor(deadlineAt / 1000),
+  );
+  if (exp <= now) return null;
+  const claims: LocalAgentJwtClaims = {
+    sub: input.agentId,
+    company_id: input.companyId,
+    adapter_type: input.adapterType,
+    run_id: input.runId,
+    responsible_user_id: input.responsibleUserId,
+    purpose: "sandbox_exec",
+    sandbox_exec: input.claim,
+    iat: now,
+    exp,
+    iss: config.issuer,
+    aud: "paperclip-sandbox-exec",
+    instance_id: config.instanceId,
+    jti: input.claim.requestId,
+  };
+  const signingInput = `${base64UrlEncode(JSON.stringify({ alg: JWT_ALGORITHM, typ: "JWT" }))}.${base64UrlEncode(JSON.stringify(claims))}`;
+  return `${signingInput}.${signPayload(deriveCompanySigningKey(config.secret, input.companyId, config.instanceId), signingInput)}`;
+}
+
+function verifySignedLocalAgentJwt(token: string): LocalAgentJwtClaims | null {
   if (!token) return null;
   const config = jwtConfig();
   if (!config) return null;
@@ -203,6 +266,8 @@ export function verifyLocalAgentJwt(token: string): LocalAgentJwtClaims | null {
 
   const claims = parseJson(base64UrlDecode(claimsB64));
   if (!claims) return null;
+  if ((Object.hasOwn(claims, "purpose") && claims.purpose !== "sandbox_exec") ||
+    (Object.hasOwn(claims, "sandbox_exec") && claims.purpose !== "sandbox_exec")) return null;
 
   const claimedCompanyId = typeof claims.company_id === "string" ? claims.company_id : null;
   if (!claimedCompanyId) return null;
@@ -259,7 +324,8 @@ export function verifyLocalAgentJwt(token: string): LocalAgentJwtClaims | null {
   const issuer = typeof claims.iss === "string" ? claims.iss : undefined;
   const audience = typeof claims.aud === "string" ? claims.aud : undefined;
   if (issuer && issuer !== config.issuer) return null;
-  if (audience && audience !== config.audience) return null;
+  if (audience && audience !== config.audience &&
+    !(claims.purpose === "sandbox_exec" && audience === "paperclip-sandbox-exec")) return null;
 
   // Enforce the minting instance when the claim is present. The instance-scoped
   // signing key above is the real cryptographic boundary; this claim check is
@@ -278,6 +344,8 @@ export function verifyLocalAgentJwt(token: string): LocalAgentJwtClaims | null {
     ...(responsibleUserClaim !== undefined ? { responsible_user_id: responsibleUserClaim } : {}),
     ...(keyScopeClaim !== undefined ? { key_scope: keyScopeClaim } : {}),
     ...(nativeToolEffect ? { native_tool_effect: nativeToolEffect } : {}),
+    ...(claims.purpose === "sandbox_exec" ? { purpose: "sandbox_exec" as const } : {}),
+    ...(Object.hasOwn(claims, "sandbox_exec") ? { sandbox_exec: parseSandboxExecCapabilityClaim(claims.sandbox_exec) ?? undefined } : {}),
     iat,
     exp,
     ...(issuer ? { iss: issuer } : {}),
@@ -285,6 +353,38 @@ export function verifyLocalAgentJwt(token: string): LocalAgentJwtClaims | null {
     ...(instanceClaim ? { instance_id: instanceClaim } : {}),
     jti: typeof claims.jti === "string" ? claims.jti : undefined,
   };
+}
+
+/** Ordinary API authentication must never accept an execution-only JWT. */
+export function verifyLocalAgentJwt(token: string): LocalAgentJwtClaims | null {
+  const claims = verifySignedLocalAgentJwt(token);
+  return claims && claims.purpose !== "sandbox_exec" && !claims.sandbox_exec ? claims : null;
+}
+
+export function verifySandboxExecJwt(token: string): LocalAgentJwtClaims & {
+  purpose: "sandbox_exec";
+  sandbox_exec: SandboxExecCapabilityClaim;
+} | null {
+  const claims = verifySignedLocalAgentJwt(token);
+  if (!claims || claims.purpose !== "sandbox_exec" || !claims.sandbox_exec || claims.aud !== "paperclip-sandbox-exec") return null;
+  return claims as LocalAgentJwtClaims & { purpose: "sandbox_exec"; sandbox_exec: SandboxExecCapabilityClaim };
+}
+
+function parseSandboxExecCapabilityClaim(value: unknown): SandboxExecCapabilityClaim | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const claim = value as Record<string, unknown>;
+  const keys = ["requestId", "bindingId", "cellId", "generation", "hostId", "hostEpoch", "runId", "attemptId", "attempt", "manifestId", "manifestHash", "policySnapshotId", "policyHash", "commandDigest", "deadlineAt"];
+  const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
+  const digest = /^[a-f0-9]{64}$/;
+  if (Object.keys(claim).length !== keys.length || keys.some(key => !Object.hasOwn(claim, key)) ||
+    !["requestId", "bindingId", "cellId", "hostId", "runId", "manifestId", "policySnapshotId"].every(key => typeof claim[key] === "string" && uuid.test(claim[key] as string)) ||
+    !(claim.attemptId === null || typeof claim.attemptId === "string" && uuid.test(claim.attemptId)) ||
+    !Number.isSafeInteger(claim.attempt) || (claim.attempt as number) < 1 ||
+    typeof claim.generation !== "string" || !/^[1-9][0-9]{0,18}$/.test(claim.generation) ||
+    !Number.isSafeInteger(claim.hostEpoch) || (claim.hostEpoch as number) < 1 ||
+    !["manifestHash", "policyHash", "commandDigest"].every(key => typeof claim[key] === "string" && digest.test(claim[key] as string)) ||
+    typeof claim.deadlineAt !== "string" || !Number.isFinite(Date.parse(claim.deadlineAt))) return null;
+  return claim as unknown as SandboxExecCapabilityClaim;
 }
 
 function parseNativeToolEffectClaim(value: unknown): NativeToolEffectClaim | null {

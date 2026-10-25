@@ -1,10 +1,8 @@
 import { createHash } from "node:crypto";
-import { isDeepStrictEqual } from "node:util";
 import { and, eq, gte, inArray, sql } from "drizzle-orm";
 import { issues, projects, issueComments, documentRevisions, issueDocuments, issueAttachments,
-  contextManifests, contextManifestItems, contextManifestMemoryRoots, heartbeatRuns, nativeRunFinalizations,
-  authUsers, accountDeletionOperations, agents, companyMemberships, type Db } from "@paperclipai/db";
-import { nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema, type NativePayloadSourceInput, type NativePayloadSourcePolicy,
+  contextManifests, contextManifestItems, contextManifestMemoryRoots, accountDeletionOperations, type Db } from "@paperclipai/db";
+import { nativePayloadSourceSnapshotSchema, type NativePayloadSourceInput, type NativePayloadSourcePolicy,
   type NativePayloadSourceSnapshot } from "@paperclipai/shared";
 import { forbidden } from "../errors.js";
 import type { AuthorizationActor } from "./authorization.js";
@@ -18,143 +16,17 @@ export interface NativeIssueEffectPrefix {
   readonly runId: string;
 }
 
-function effectPrefixRecord(value: unknown): Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function effectPrefixCanonical(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(effectPrefixCanonical).join(",")}]`;
-  if (typeof value === "object" && value !== null) {
-    const object = value as Record<string, unknown>;
-    return `{${Object.keys(object).sort().map(key => `${JSON.stringify(key)}:${effectPrefixCanonical(object[key])}`).join(",")}}`;
-  }
-  return JSON.stringify(value) ?? "null";
-}
-
-/** Re-read the exact acknowledged first-call prefix under the output transaction.
- * This admits only a single stateless task-only bootstrap. It is not a general
- * completeness claim: later turns, tools, Context, Memory, workspace or runtime
- * inputs remain unknown. */
+/** There is not yet a provider-owned witness for the complete input delivered to
+ * the model. The server's pre-startTurn dispatch envelope omits driver-owned
+ * runtime state, files, system prompts and provider history. Keep output
+ * snapshots fail-closed until the actual provider wire owner can attest those
+ * inputs together with their source closure. */
 export async function readNativeIssueEffectPrefix(tx: Transaction, actor: AuthorizationActor,
   claim: NativeToolEffectClaim): Promise<NativeIssueEffectPrefix> {
-  const deny = () => forbidden("Native Task input prefix is unavailable");
-  if (actor.type !== "agent" || actor.source !== "agent_jwt" || !actor.agentId || !actor.companyId || !actor.runId ||
-    claim.tool !== "call_api" || claim.operationId !== "POST /api/companies/{companyId}/issues" || claim.method !== "POST" ||
-    claim.pathAndQuery !== `/api/companies/${actor.companyId}/issues` || !claim.bodyPresent ||
-    !actor.onBehalfOfUserId || !Number.isFinite(actor.authenticatedCredentialExpiresAt)) throw deny();
-
-  const [credential] = await tx.execute<{ active: boolean }>(sql`select
-    ${actor.authenticatedCredentialExpiresAt}::double precision > extract(epoch from clock_timestamp())*1000 as active`);
-  if (!credential?.active) throw deny();
-  const [user] = await tx.select({ id: authUsers.id }).from(authUsers)
-    .where(eq(authUsers.id, actor.onBehalfOfUserId)).for("share");
-  const [deletion] = await tx.select({ userId: accountDeletionOperations.userId }).from(accountDeletionOperations)
-    .where(eq(accountDeletionOperations.userId, actor.onBehalfOfUserId));
-  const memberships = await tx.select({ principalType: companyMemberships.principalType,
-    principalId: companyMemberships.principalId, status: companyMemberships.status }).from(companyMemberships)
-    .where(and(eq(companyMemberships.companyId, actor.companyId), inArray(companyMemberships.principalId,
-      [actor.agentId, actor.onBehalfOfUserId]), inArray(companyMemberships.principalType, ["agent", "user"])))
-    .orderBy(companyMemberships.principalType, companyMemberships.principalId).for("share");
-  const [agent] = await tx.select({ id: agents.id, status: agents.status }).from(agents)
-    .where(and(eq(agents.id, actor.agentId), eq(agents.companyId, actor.companyId))).for("share");
-  if (!user || deletion || !agent || agent.status === "terminated" || agent.status === "pending_approval" ||
-    !memberships.some(row => row.principalType === "agent" && row.principalId === actor.agentId && row.status === "active") ||
-    !memberships.some(row => row.principalType === "user" && row.principalId === actor.onBehalfOfUserId && row.status === "active")) throw deny();
-
-  const [run] = await tx.select().from(heartbeatRuns).where(and(
-    eq(heartbeatRuns.id, actor.runId), eq(heartbeatRuns.companyId, actor.companyId),
-    eq(heartbeatRuns.agentId, actor.agentId), eq(heartbeatRuns.runtimeMode, "native"),
-    eq(heartbeatRuns.status, "running"),
-  )).for("update");
-  if (!run || !run.nativeIssueId || !run.responsibleUserId || run.responsibleUserId !== actor.onBehalfOfUserId ||
-    run.nativeInputSourceProtocolVersion !== 1) throw deny();
-  const [launch] = await tx.execute<{ id: number }>(sql`select seq as id from heartbeat_run_events
-    where company_id=${actor.companyId}::uuid and run_id=${actor.runId}::uuid and agent_id=${actor.agentId}::uuid
-      and seq=${claim.eventSeq} and event_type='native.process_start_requested' for share`);
-  if (!launch) throw deny();
-  const [lease] = await tx.select().from(nativeRunFinalizations).where(and(
-    eq(nativeRunFinalizations.companyId, actor.companyId), eq(nativeRunFinalizations.runId, actor.runId),
-    eq(nativeRunFinalizations.issueId, run.nativeIssueId), eq(nativeRunFinalizations.attempt, claim.attempt),
-    eq(nativeRunFinalizations.leaseOwner, claim.leaseOwner), eq(nativeRunFinalizations.controllerBootId, claim.controllerBootId),
-    eq(nativeRunFinalizations.controllerPid, claim.controllerPid),
-    eq(nativeRunFinalizations.controllerProcessStartedAt, new Date(claim.controllerProcessStartedAt)),
-    gte(nativeRunFinalizations.leaseExpiresAt, new Date(claim.leaseExpiresAt)),
-    sql`${nativeRunFinalizations.leaseExpiresAt} > clock_timestamp()`,
-  )).for("update");
-  if (!lease) throw deny();
-
-  const profile = effectPrefixRecord(run.runnerProfileJson);
-  const intents = profile.nativeModelInputDispatchIntents;
-  const associations = profile.nativeToolCallDispatchAssociations;
-  const legacyResults = profile.nativeDocumentToolResultSources;
-  const results = profile.nativeToolResultSourceCaptures;
-  const attachmentStages = profile.nativeAttachmentStageSources;
-  if (!Array.isArray(intents) || intents.length !== 1 || !Array.isArray(associations) || associations.length !== 1 ||
-    legacyResults !== undefined || results !== undefined && (!Array.isArray(results) || results.length !== 0) ||
-    attachmentStages !== undefined && (!Array.isArray(attachmentStages) || attachmentStages.length !== 0)) throw deny();
-  const intent = effectPrefixRecord(intents[0]);
-  const association = effectPrefixRecord(associations[0]);
-  if (intent.dispatchId !== claim.dispatchId || intent.eventSeq !== claim.eventSeq || intent.attempt !== claim.attempt ||
-    intent.turnId !== claim.turnId || intent.responsibleUserId !== run.responsibleUserId || intent.continuation !== false ||
-    association.dispatchId !== claim.dispatchId || association.eventSeq !== claim.eventSeq || association.attempt !== claim.attempt ||
-    association.turnId !== claim.turnId || association.callId !== claim.callId || association.tool !== "call_api") throw deny();
-
-  const parsedReceipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
-  if (!parsedReceipt.success || parsedReceipt.data.binding.companyId !== run.companyId || parsedReceipt.data.binding.runId !== run.id ||
-    parsedReceipt.data.binding.agentId !== run.agentId || parsedReceipt.data.binding.responsibleUserId !== run.responsibleUserId ||
-    parsedReceipt.data.binding.issueId !== run.nativeIssueId || parsedReceipt.data.dispatches.length !== 1 ||
-    parsedReceipt.data.additionalInputs.length !== 0) throw deny();
-  const receipt = parsedReceipt.data;
-  const dispatch = receipt.dispatches[0]!;
-  if (dispatch.executionInputDigest !== intent.turnInputDigest ||
-    !isDeepStrictEqual({ policy: dispatch.policy, inputs: dispatch.inputs }, { policy: receipt.bootstrap.policy, inputs: receipt.bootstrap.inputs })) throw deny();
-  const [receiptDigest] = await tx.execute<{ digest: string }>(sql`select encode(sha256(convert_to(((${JSON.stringify(receipt)}::jsonb)-'digest')::text,'UTF8')),'hex') as digest`);
-  if (!receiptDigest || receiptDigest.digest !== receipt.digest) throw deny();
-  const [executionDigest] = await tx.execute<{ digest: string }>(sql`select encode(sha256(convert_to((${JSON.stringify(profile.nativeExecutionInput)}::jsonb)::text,'UTF8')),'hex') as digest`);
-  if (!executionDigest || executionDigest.digest !== receipt.bootstrap.executionInputDigest) throw deny();
-
-  const resultJson = effectPrefixRecord(run.resultJson);
-  const apiReceipts = effectPrefixRecord(resultJson.apiToolReceipts);
-  const receiptKey = createHash("sha256").update(claim.callId).digest("hex");
-  const apiReceipt = effectPrefixRecord(apiReceipts[receiptKey]);
-  if (Object.keys(apiReceipts).length !== 1 || apiReceipt.digest !== claim.apiReceiptDigest || apiReceipt.operationId !== claim.operationId ||
-    apiReceipt.state !== "pending" || apiReceipt.nativeEffectClaimConsumed !== true) throw deny();
-
-  const sourceInputs = receipt.bootstrap.inputs;
-  if (!sourceInputs.length || sourceInputs.some(input => input.kind !== "task") || receipt.bootstrap.policy.memoryIds.length !== 0 ||
-    receipt.bootstrap.policy.foundationRevisionIds.length !== 0) throw deny();
-  const taskInputs = sourceInputs as Extract<NativePayloadSourceInput, { kind: "task" }>[];
-  const currentPolicy: NativePayloadSourcePolicy = { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] };
-  const mergePolicy = (source: NativePayloadSourcePolicy) => {
-    for (const key of Object.keys(currentPolicy) as Array<keyof NativePayloadSourcePolicy>) {
-      currentPolicy[key].push(...source[key]);
-      currentPolicy[key] = [...new Set(currentPolicy[key])].sort();
-    }
-  };
-  const taskIds = taskInputs.map(input => input.issueId).sort();
-  if (new Set(taskIds).size !== taskIds.length) throw deny();
-  const taskRows = await tx.select().from(issues).where(and(eq(issues.companyId, actor.companyId), inArray(issues.id, taskIds)))
-    .orderBy(issues.id).for("share");
-  if (taskRows.length !== taskIds.length) throw deny();
-  const { canActorReadIssuePrivacy } = await import("./authorization.js");
-  for (const input of taskInputs) {
-    const source = taskRows.find(row => row.id === input.issueId);
-    if (!source || !Number.isFinite(Number(input.sourceVersion)) ||
-      new Date(Number(input.sourceVersion) * 1000).getTime() !== source.updatedAt.getTime() ||
-      createHash("sha256").update(JSON.stringify({ id: source.id, identifier: source.identifier, title: source.title,
-        description: source.description, workMode: source.workMode }), "utf8").digest("hex") !== input.contentHash ||
-      !source.payloadSourceSnapshot || source.payloadSourceSnapshotInvalidated || source.payloadSourceProtocolVersion !== 1 ||
-      !await canActorReadIssuePrivacy(tx, actor, source)) throw deny();
-    const snapshot = nativePayloadSourceSnapshotSchema.safeParse(source.payloadSourceSnapshot);
-    if (!snapshot.success || snapshot.data.owner.kind !== "issue" || snapshot.data.owner.id !== source.id ||
-      snapshot.data.owner.companyId !== actor.companyId || snapshot.data.inputs.some(item => item.kind !== "task")) throw deny();
-    mergePolicy(snapshot.data.policy);
-    for (const nested of snapshot.data.inputs) {
-      if (nested.kind !== "task") throw deny();
-    }
-  }
-  if (!isDeepStrictEqual(currentPolicy, receipt.bootstrap.policy)) throw deny();
-  return { policy: receipt.bootstrap.policy, inputs: taskInputs, runId: run.id };
+  void tx;
+  void actor;
+  void claim;
+  throw forbidden("Native provider input boundary is unavailable");
 }
 
 export interface NativeTemporalContextCapture {

@@ -134,7 +134,7 @@ export async function revalidateStoredContextManifestSources(db: Db, input: {
       manifest.issueId !== (run.nativeIssueId ?? run.issueId))
       throw forbidden("Native bootstrap Context accountability changed");
   }
-  await lockIssuePrivacyTree(db, input.companyId);
+  await lockIssuePrivacyTree(db as unknown as Parameters<typeof lockIssuePrivacyTree>[0], input.companyId);
   await lockMemoryPrivacy(db, input.companyId);
   const items = await db.select().from(contextManifestItems).where(and(
     eq(contextManifestItems.companyId, input.companyId), eq(contextManifestItems.manifestId, input.manifestId)))
@@ -767,9 +767,10 @@ export function contextManifestService(db: Db) {
         if (nativeBootstrap) {
           if (delegated || !input.runId || !issueId || input.issueId !== issueId)
             throw forbidden("Native bootstrap Context requires its exact same-company accountable Task run");
-          nativeBootstrapWitness = captureNativeBootstrapContextWitness({ companyId: input.companyId, runId: input.runId,
+          const capturedWitness = captureNativeBootstrapContextWitness({ companyId: input.companyId, runId: input.runId,
             agentId: input.agentId, issueId, actor: sourceActor, renderedMarkdown: nativeBootstrap.renderedMarkdown,
             manifest: manifest!, items, roots: retainedMemoryRoots });
+          if (capturedWitness) nativeBootstrapWitness = capturedWitness;
         }
         return { manifest: manifest!, items, roots: retainedMemoryRoots, ...(nativeBootstrapWitness ? { nativeBootstrapWitness } : {}) };
       });

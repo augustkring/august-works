@@ -31,8 +31,6 @@ import { nativeRuntimeContextFixture } from "./runtime-context.test-fixture.js";
 import { issueService } from "../issues.js";
 import type { NativeTaskSourceCapture } from "../issues.js";
 import { canActorReadIssuePrivacy } from "../authorization.js";
-import { contextManifestService } from "../context/context-manifest.js";
-import { memoryService } from "../memory/memory-service.js";
 import { initializeRunIdentity } from "../run-identity.js";
 import { getIssueExecutionContext, buildPaperclipTaskMarkdown } from "../heartbeat.js";
 import { createLocalAgentJwt } from "../../agent-auth-jwt.js";
@@ -247,7 +245,7 @@ describe("native model input dispatch intent", () => {
     expect(replay.status).toBe(403);
   });
 
-  it("seals a real native Task-create HTTP effect to its one current task-only bootstrap", async () => {
+  it("denies native Task output until the provider input boundary is attested", async () => {
     const sessionId = randomUUID(), now = new Date();
     await db.insert(authSessions).values({ id: sessionId, userId: responsibleUserId, token: randomUUID(), createdAt: now,
       updatedAt: now, expiresAt: new Date(now.getTime() + 3_600_000) });
@@ -255,16 +253,16 @@ describe("native model input dispatch intent", () => {
       companyIds: [companyId], memberships: [{ companyId, membershipRole: "admin", status: "active" as const }] };
     const sourceTask = await issueService(db).create(companyId, { title: "Native source Task", description: "Public task input",
       createdByUserId: responsibleUserId }, db, undefined, { manualInputActor: humanActor });
-    let taskCapture: NativeTaskSourceCapture | null = null;
-    const selectedTask = await getIssueExecutionContext(db, companyId, sourceTask.id, capture => { taskCapture = capture; });
+    const taskCaptureHolder: { value: NativeTaskSourceCapture | null } = { value: null };
+    const selectedTask = await getIssueExecutionContext(db, companyId, sourceTask.id, capture => { taskCaptureHolder.value = capture; });
     expect(selectedTask).not.toBeNull();
-    expect(taskCapture?.input.kind).toBe("task");
+    expect(taskCaptureHolder.value?.input.kind).toBe("task");
     const renderedReferences: Array<{ kind: "task" | "comment" | "document_revision" | "attachment" | "unknown"; id: string }> = [];
     const renderedMarkdown = buildPaperclipTaskMarkdown({ issue: { id: sourceTask.id, identifier: selectedTask!.identifier,
       title: selectedTask!.title, description: selectedTask!.description, workMode: selectedTask!.workMode } },
       { onRenderedSource: source => renderedReferences.push(source) });
     expect(renderedMarkdown).toBeTruthy();
-    const parsedTaskCapture = taskCapture!;
+    const parsedTaskCapture = taskCaptureHolder.value!;
     const seeded = await seed({ existingIssueId: sourceTask.id, responsibleUserId });
     const sourceSet = buildNativeBootstrapSourceSet({ companyId, renderedMarkdown: renderedMarkdown!,
       runId: seeded.runId, agentId, issueId: sourceTask.id,
@@ -324,71 +322,11 @@ describe("native model input dispatch intent", () => {
     app.use("/api", issueRoutes(db, {} as never));
     app.use(errorHandler);
     const response = await request(app).post(pathAndQuery).set("Authorization", `Bearer ${token}`).send(body);
-    expect(response.status, JSON.stringify(response.body)).toBe(201);
-    const createdId = response.body.id as string;
-    const [created] = await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, createdId)));
-    expect(created?.payloadSourceProtocolVersion).toBe(1);
-    expect(created?.payloadSourceSnapshot).toMatchObject({
-      owner: { kind: "issue", companyId, id: createdId },
-      inputs: [expect.objectContaining({ kind: "task", issueId: sourceTask.id })],
-    });
-    expect(created?.payloadSourceSnapshot?.inputs.some(input => input.kind === "context")).toBe(false);
-
-    const bobId = randomUUID();
-    await db.insert(authUsers).values({ id: bobId, name: "Later Context reader", email: `${bobId}@example.test`, createdAt: now, updatedAt: now });
-    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: bobId, status: "active", membershipRole: "admin" });
-    const human = { principal: { type: "user" as const, userId: responsibleUserId } };
-    const memory = memoryService(db);
-    const binding = await memory.createCompanyBinding(companyId, { key: randomUUID(), name: "Future private Context", providerKey: "local" }, human);
-    await memory.addBindingTarget(companyId, binding.id, { targetType: "agent", targetId: agentId }, human);
-    const producer = { principal: { type: "agent" as const, agentId, responsibleUserId }, runId: seeded.runId };
-    const privateMemory = await memory.createPrivateMemory(companyId, agentId, { bindingId: binding.id, memoryType: "lesson",
-      title: "Later private input", content: "private context created after the Task effect", summary: null,
-      sensitivity: "internal", observedAt: new Date().toISOString(), validFrom: null, validUntil: null, expiresAt: null,
-      createdByOperationId: randomUUID(), evidence: [{ sourceClass: "task", sourceProvider: "native_effect_fixture",
-        sourceType: "actual_task", sourceRef: `issue://${sourceTask.id}`, sourceVersion: sourceTask.updatedAt.toISOString(),
-        sourceUpdatedAt: sourceTask.updatedAt.toISOString(), observedAt: new Date().toISOString(),
-        excerptHash: createHash("sha256").update("private context created after the Task effect").digest("hex"),
-        citation: { label: "Native source Task" }, trustLevel: "low", relation: "supports" }] }, producer);
-    const version = privateMemory.record.updatedAt.toISOString();
-    const decision: ContextAuthorityDecision = { authorityRank: 0, primaryForDomain: true, reason: "preferred_authority", evidence: {
-      id: `memory:${privateMemory.record.id}`, companyId, sourceClass: "private_memory", sourceProvider: "august_works_memory",
-      sourceType: "memory_record", sourceRef: `memory://record/${privateMemory.record.id}`, sourceVersion: version,
-      sourceUpdatedAt: version, title: privateMemory.record.title, excerpt: privateMemory.record.content,
-      observedAt: privateMemory.record.observedAt.toISOString(), validFrom: null, validUntil: null, authorityDomain: null,
-      trustLevel: "low", sensitivity: "internal", citation: { label: "Later private source" }, metadata: {} } };
-    await contextManifestService(db).create({ companyId, agentId, runId: seeded.runId, issueId: sourceTask.id,
-      responsibleUserId, query: "Private Context selected after earlier Task creation", policySnapshot: {}, selected: [{ decision }] });
-    const bob = { type: "board" as const, source: "session" as const, userId: bobId };
-    expect(await canActorReadIssuePrivacy(db, bob, { id: createdId, companyId })).toBe(true);
-
-    // A later unknown turn cannot inherit the earlier prefix's source closure.
-    // This is an actual second dispatch/association, but it deliberately has no
-    // complete source receipt because the newly selected Context is unsupported.
-    const nextEventSeq = seeded.eventSeq + 1;
-    await db.insert(heartbeatRunEvents).values({ companyId, runId: seeded.runId, agentId, seq: nextEventSeq,
-      eventType: PROCESS_START_REQUESTED, payload: { fixture: "later dispatch with unsupported Context" } });
-    const laterTurn = { message: { role: "user" as const, text: "Create a Task after selecting a new Context input" } };
-    const laterArgs = { ...args, eventSeq: nextEventSeq, turnInput: laterTurn };
-    const laterDispatchId = await recordNativeModelInputDispatchIntent(laterArgs);
-    const laterTurnId = "native-task-effect-later-turn", laterCallId = "native-task-effect-later-call";
-    await recordNativeModelInputDispatchAcknowledgement({ ...acknowledgementArgs(seeded, laterDispatchId, laterTurn, laterTurnId), eventSeq: nextEventSeq });
-    await recordNativeToolCallDispatchAssociation({ ...laterArgs, turnId: laterTurnId, callId: laterCallId, tool: "call_api" });
-    const laterBody = { title: "Must remain unknown", description: "Not admitted from the earlier prefix." };
-    const laterApiInput = { operationId, body: laterBody };
-    const laterApiDigest = createHash("sha256").update(canonicalJson(laterApiInput)).digest("hex");
-    await db.update(heartbeatRuns).set({ resultJson: { apiToolReceipts: {
-      [receiptKey]: { digest: apiReceiptDigest, operationId, state: "completed" },
-      [createHash("sha256").update(laterCallId).digest("hex")]: { digest: laterApiDigest, operationId, state: "pending" },
-    } } }).where(eq(heartbeatRuns.id, seeded.runId));
-    const laterClaim = { ...claim, dispatchId: laterDispatchId, eventSeq: nextEventSeq, turnId: laterTurnId, callId: laterCallId,
-      bodyHash: createHash("sha256").update(canonicalJson(laterBody)).digest("hex"), apiReceiptDigest: laterApiDigest };
-    const laterToken = createLocalAgentJwt(agentId, companyId, "paperclip_runner", seeded.runId, responsibleUserId,
-      { kind: "standard" }, laterClaim);
-    const laterResponse = await request(app).post(pathAndQuery).set("Authorization", `Bearer ${laterToken}`).send(laterBody);
-    expect(laterResponse.status, JSON.stringify(laterResponse.body)).toBe(403);
-    expect(JSON.stringify(laterResponse.body)).not.toContain(laterBody.title);
-    expect(await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.title, laterBody.title)))).toHaveLength(0);
+    expect(response.status, JSON.stringify(response.body)).toBe(403);
+    expect(response.body.error).toBe("Native provider input boundary is unavailable");
+    const [created] = await db.select({ id: issues.id }).from(issues).where(and(
+      eq(issues.companyId, companyId), eq(issues.title, body.title)));
+    expect(created).toBeUndefined();
   });
 
   it("binds an unknown Project tool result to its actual acknowledged dispatch without qualifying inputs", async () => {

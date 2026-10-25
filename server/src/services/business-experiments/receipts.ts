@@ -1,11 +1,11 @@
-import { createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { analyticalLineageEdges, analyticalLineageManifests, businessExperimentAssignments, businessExperimentCompletions, businessExperimentExecutions, businessExperimentExposures, businessExperimentVersions, businessExperimentTransitions, type Db } from "@paperclipai/db";
 import { ISSUE_STATUSES, PROJECT_STATUSES, type BusinessExperimentAssignmentView, type BusinessExperimentExposureView, type BusinessExperimentUnitSnapshot } from "@paperclipai/shared";
 import { conflict, notFound, unprocessable } from "../../errors.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { resolveDecisionSigningSecret, signDecisionSpec, verifyDecisionSpec } from "../decision-signing.js";
-import { nativeSha256 } from "../native-runtime/canonical.js";
+import { canonicalNativeJson, nativeSha256 } from "../native-runtime/canonical.js";
 import { authorizeStrategyNativePopulation, authorizeStrategyReference } from "../strategy-execution/references.js";
 import { inspectDecisionSourceAuthority } from "../decision-intelligence.js";
 import { assertAnalyticalSourcesNotErased } from "../analytical-privacy.js";
@@ -58,6 +58,14 @@ export function experimentAssignmentKey(companyId: string, versionId: string) {
 export function signedExperimentReceipt(domain: string, material: Record<string, unknown>) {
   const receiptHash = nativeSha256(material);
   return { receiptHash, signature: signDecisionSpec({ domain: `aw-business-experiment:${domain}:v1`, receiptHash }) };
+}
+/** Hash the exact canonical experiment source material while reusing the
+ * already canonicalized immutable snapshot shared by sibling metric outcomes. */
+export function experimentOutcomeSourceHashFromCanonicalSnapshot(snapshotCanonical: string, metricHash: string, inputHash: string, value: number) {
+  return createHash("sha256").update(`{"inputHash":${JSON.stringify(inputHash)},"metricHash":${JSON.stringify(metricHash)},"snapshot":${snapshotCanonical},"value":${value}}`, "utf8").digest("hex");
+}
+export function experimentOutcomeSourceHash(snapshot: unknown, metricHash: string, inputHash: string, value: number) {
+  return experimentOutcomeSourceHashFromCanonicalSnapshot(canonicalNativeJson(snapshot), metricHash, inputHash, value);
 }
 export function verifyExperimentReceipt(domain: string, material: Record<string, unknown>, row: { receiptHash: string; signature: string }) {
   if (nativeSha256(material) !== row.receiptHash || !verifyDecisionSpec({ domain: `aw-business-experiment:${domain}:v1`, receiptHash: row.receiptHash }, row.signature)) throw notFound("Experiment native receipt integrity is unavailable");
@@ -117,6 +125,7 @@ export function nativeExperimentUnit(tx:Db,companyId:string,actor:AuthorizationA
 /** Registry and recording consumers must authorize every enrolled source before
  * returning any protocol/receipt/aggregate. No recursive registry admission. */
 export async function inspectBusinessExperimentReceipts(tx: Db, companyId: string, actor: AuthorizationActor, version: ExperimentVersion, deadline: number) {
+  const inspectStarted=performance.now();
   const currentUnits = new Map<string, Awaited<ReturnType<typeof nativeExperimentUnit>>>();
   const where = and(eq(businessExperimentExecutions.companyId, companyId), eq(businessExperimentExecutions.experimentId, version.experimentId), eq(businessExperimentExecutions.versionId, version.id));
   const [execution] = await tx.select().from(businessExperimentExecutions).where(where).for("share");
@@ -124,27 +133,34 @@ export async function inspectBusinessExperimentReceipts(tx: Db, companyId: strin
   const [review] = await tx.select().from(businessExperimentTransitions).where(and(eq(businessExperimentTransitions.companyId, companyId), eq(businessExperimentTransitions.experimentId, version.experimentId), eq(businessExperimentTransitions.versionId, version.id), eq(businessExperimentTransitions.id, execution.reviewTransitionId))).for("share");
   if (!review || review.toState !== "ready" || review.createdAt > execution.startedAt || review.createdAt.getTime() > Date.parse(version.definition.sampleOrDurationPlan.from)) throw notFound("Experiment exact human preregistration review is unavailable");
   verifyExperimentReceipt("execution", executionMaterial(execution, version.contentHash, experimentReviewHash(review)), execution);
+  process.stdout.write(`Experiment receipt stage ${JSON.stringify({stage:"execution_review",ms:Math.round(performance.now()-inspectStarted)})}\n`);
   const assignmentKey = experimentAssignmentKey(companyId, version.id);
   if (nativeSha256(assignmentKey.toString("hex")) !== execution.assignmentKeyFingerprint) throw conflict("Experiment signing owner changed; assignment receipts require operator revalidation");
   const assignments = await tx.select().from(businessExperimentAssignments).where(and(eq(businessExperimentAssignments.companyId, companyId), eq(businessExperimentAssignments.experimentId, version.experimentId), eq(businessExperimentAssignments.versionId, version.id))).orderBy(asc(businessExperimentAssignments.id)).limit(version.definition.sampleOrDurationPlan.maximumAssignedUnits + 1).for("share");
   if (assignments.length > version.definition.sampleOrDurationPlan.maximumAssignedUnits) throw unprocessable("Experiment assignment population exceeds preregistered bounds");
   const versionEdges = await tx.select().from(analyticalLineageEdges).where(and(eq(analyticalLineageEdges.companyId, companyId), eq(analyticalLineageEdges.manifestId, version.lineageManifestId))).limit(257);
+  const lineageStarted=performance.now();
   const lineage = await loadExperimentLineage(tx, companyId, assignments.map(assignment => assignment.lineageManifestId), deadline), authorityEdges = new Map<string, ExperimentEdge>(), admittedObjectSourceKeys=new Set<string>();
+  process.stdout.write(`Experiment receipt stage ${JSON.stringify({stage:"assignment_lineage_load",ms:Math.round(performance.now()-lineageStarted),units:assignments.length})}\n`);
   // Verify the original immutable assignment material before transporting
   // current rows. Batch transport never replaces any native source authorization.
+  const assignmentVerifyStarted=performance.now();
   for (const assignment of assignments) {
     experimentBudget(deadline); verifyExperimentReceipt("assignment", assignmentMaterial(assignment, execution.receiptHash, version.contentHash), assignment);
     if (assignment.sourceHash !== nativeSha256({ snapshot: assignment.sourceSnapshot, invariantReceipts: assignment.invariantReceipts })
       || assignment.arm !== assignNativeBusinessExperimentUnit(assignmentKey, companyId, version.id, assignment.unitId, version.definition.assignment.treatmentProbability)) throw notFound("Experiment assignment source or label integrity is unavailable");
   }
+  process.stdout.write(`Experiment receipt stage ${JSON.stringify({stage:"assignment_receipt_verify",ms:Math.round(performance.now()-assignmentVerifyStarted),units:assignments.length})}\n`);
+  const nativePopulationStarted=performance.now();
   const nativeSources = await authorizeStrategyNativePopulation(tx, companyId, actor, version.definition.population.randomizationUnit,
     assignments.map(assignment => assignment.unitId), version.definition.sensitivity, deadline);
-  // Bound and pipeline transport only: each unit and its complete ancestry
-  // still enter the original native owner independently. Drain every in-flight
-  // admission before throwing so none can outlive this transaction's locks.
+  process.stdout.write(`Experiment receipt stage ${JSON.stringify({stage:"native_population_admission",ms:Math.round(performance.now()-nativePopulationStarted),units:assignments.length})}\n`);
+  // Bound deadline checks across the exact locked population. Every row's
+  // native admission and complete ancestry are still independently verified.
+  const sourceRowsStarted=performance.now();
   for (let offset = 0; offset < assignments.length; offset += 32) {
     experimentBudget(deadline);
-    const inspected = await Promise.allSettled(assignments.slice(offset, offset + 32).map(async assignment => {
+    for (const assignment of assignments.slice(offset, offset + 32)) {
       experimentBudget(deadline);
       const admitted = nativeSources.get(assignment.unitId);
       if (!admitted) throw notFound("Experiment native source population is unavailable");
@@ -153,30 +169,39 @@ export async function inspectBusinessExperimentReceipts(tx: Db, companyId: strin
       for(const edge of current.edges)admittedObjectSourceKeys.add(`${edge.inputType}:${edge.inputRef}`);
       if (current.snapshot.createdAt !== assignment.sourceSnapshot.createdAt) throw conflict("Experiment enrolled unit identity was corrected");
       const manifest = lineage.manifests.get(assignment.lineageManifestId), edges = lineage.edges.get(assignment.lineageManifestId) ?? [];
+      const unitHash=nativeSha256({type:assignment.unitType,id:assignment.unitId});
       const expectedEdges = experimentEdges([...versionEdges,
-        { inputType: assignment.unitType, inputRef: assignment.unitId, inputHash: nativeSha256({ type: assignment.unitType, id: assignment.unitId }), relationship: "source" },
+        { inputType: assignment.unitType, inputRef: assignment.unitId, inputHash: unitHash, relationship: "source" },
         ...(assignment.sourceSnapshot.projectId ? [{ inputType: "project" as const, inputRef: assignment.sourceSnapshot.projectId, inputHash: nativeSha256({ type: "project", id: assignment.sourceSnapshot.projectId }), relationship: "source" as const }] : []),
       ]);
       if (!manifest || manifest.expiresAt <= new Date() || manifest.engineVersion !== EXPERIMENT_OWNER_ENGINE || manifest.analysisType !== "experiment_assignment" || manifest.analysisRef !== assignment.id
         || manifest.definitionHash !== version.contentHash || manifest.inputHash !== assignment.sourceHash || manifest.parameters.receiptHash !== assignment.receiptHash
-        || manifest.sourceCount !== edges.length || manifest.parameters.lineageHash !== nativeSha256(experimentEdges(edges)) || nativeSha256(experimentEdges(edges)) !== nativeSha256(expectedEdges)
+        || manifest.sourceCount !== edges.length
         || manifest.createdAt.getTime() !== assignment.assignedAt.getTime() || manifest.expiresAt.getTime() !== version.expiresAt.getTime()
-        || !edges.some(edge => edge.inputType === assignment.unitType && edge.inputRef === assignment.unitId && edge.inputHash === nativeSha256({ type: assignment.unitType, id: assignment.unitId }))) throw notFound("Experiment enrolled source lineage is erased or unavailable");
+      ) throw notFound("Experiment enrolled source lineage is erased or unavailable");
+      const actualEdgesHash=nativeSha256(experimentEdges(edges));
+      if (manifest.parameters.lineageHash !== actualEdgesHash || actualEdgesHash !== nativeSha256(expectedEdges)
+        || !edges.some(edge => edge.inputType === assignment.unitType && edge.inputRef === assignment.unitId && edge.inputHash === unitHash)) throw notFound("Experiment enrolled source lineage is erased or unavailable");
       for (const edge of edges) { const key = `${edge.inputType}:${edge.inputRef}`, prior = authorityEdges.get(key); if (prior && prior.inputHash !== edge.inputHash) throw conflict("Experiment enrolled Source pins disagree"); authorityEdges.set(key, edge); }
       experimentBudget(deadline);
-    }));
-    for (const result of inspected) if (result.status === "rejected") throw result.reason;
+    }
   }
+  process.stdout.write(`Experiment receipt stage ${JSON.stringify({stage:"current_source_and_assignment_lineage",ms:Math.round(performance.now()-sourceRowsStarted),units:assignments.length})}\n`);
   // Batch only the marker lookup, after every actual current native object
   // was admitted. The company → Memory locks prevent erasure between reads.
   const currentIssueRefs:string[]=[],currentProjectRefs:string[]=[];
   for(const sources of currentUnits.values())for(const edge of sources.edges)(edge.inputType==="issue"?currentIssueRefs:currentProjectRefs).push(edge.inputRef);
+  const erasureStarted=performance.now();
   await assertAnalyticalSourcesNotErased(tx,companyId,currentIssueRefs,currentProjectRefs);
+  process.stdout.write(`Experiment receipt stage ${JSON.stringify({stage:"current_source_erasure",ms:Math.round(performance.now()-erasureStarted),refs:currentIssueRefs.length+currentProjectRefs.length})}\n`);
   // Every current unit/ancestry was just admitted and share-locked above in
   // this same company → Memory transaction. Inspect remaining recorded
   // ancestry; keep every original hash/receipt check and every current unit.
+  const decisionSourceStarted=performance.now();
   await inspectDecisionSourceAuthority(tx, companyId, actor, [...authorityEdges.values()].filter(edge=>!admittedObjectSourceKeys.has(`${edge.inputType}:${edge.inputRef}`)), deadline);
+  process.stdout.write(`Experiment receipt stage ${JSON.stringify({stage:"remaining_decision_source_authority",ms:Math.round(performance.now()-decisionSourceStarted)})}\n`);
   for(const edge of authorityEdges.values())if(edge.inputType==="issue"||edge.inputType==="project")admittedObjectSourceKeys.add(`${edge.inputType}:${edge.inputRef}`);
+  const exposureStarted=performance.now();
   const exposures = await tx.select().from(businessExperimentExposures).where(and(eq(businessExperimentExposures.companyId, companyId), eq(businessExperimentExposures.experimentId, version.experimentId), eq(businessExperimentExposures.versionId, version.id))).limit(assignments.length + 1).for("share");
   if (exposures.length > assignments.length) throw notFound("Experiment exposure join integrity is unavailable");
   const byAssignment = new Map(assignments.map(assignment => [assignment.id, assignment]));
@@ -187,8 +212,11 @@ export async function inspectBusinessExperimentReceipts(tx: Db, companyId: strin
   }
   const [completion] = await tx.select().from(businessExperimentCompletions).where(and(eq(businessExperimentCompletions.companyId, companyId), eq(businessExperimentCompletions.experimentId, version.experimentId), eq(businessExperimentCompletions.versionId, version.id))).for("share");
   if (completion) verifyExperimentReceipt("completion", completionMaterial(completion, execution.receiptHash), completion);
+  process.stdout.write(`Experiment receipt stage ${JSON.stringify({stage:"exposures_completion",ms:Math.round(performance.now()-exposureStarted),exposures:exposures.length})}\n`);
   const receipts = { execution, assignments, exposures, completion: completion ?? null, assignmentLineage: lineage.edges,admittedObjectSourceKeys };
+  const resultReadStarted=performance.now();
   const results = await inspectBusinessExperimentResults(tx, companyId, actor, version, receipts, deadline);
+  process.stdout.write(`Experiment receipt stage ${JSON.stringify({stage:"saved_result_review",ms:Math.round(performance.now()-resultReadStarted),outcomes:results.outcomes.length})}\n`);
   experimentBudget(deadline); return { ...receipts, ...results, currentUnits };
 }
 export async function experimentStatementTime(tx: Db) {

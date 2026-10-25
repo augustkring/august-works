@@ -1614,6 +1614,134 @@
         "Duration  19.72s (transform 9.81s, setup 79ms, import 13.32s, tests 6.20s, environment 0ms)"
       ],
       "sourceCommit": "0465977a0dd2e2bfad7b360bd134689dfccd4d97"
+    },
+    {
+      "name": "business-scenario-artifacts-worker-3d3ac21d7",
+      "exitCode": 1,
+      "exitSidecar": "business-scenario-artifacts-worker-3d3ac21d7.exit",
+      "rawSha256": "dd086df30e75bcc694ae5a782f2691609772c86b1ddf29967e742a9194ac4dce",
+      "sanitizedSha256": "b14c48543b22343fe404be161873c3522f41e01eb4b06e90d9caebc339e3b0ed",
+      "archiveSha256": "547e66f59fda708defac92817ab91e644cb7297b3c71848825753e34de8750b5",
+      "redactions": {
+        "ansi": 300,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 15 passed (16)",
+        "Duration  29.09s (transform 10.68s, setup 120ms, import 15.68s, tests 13.17s, environment 0ms)"
+      ],
+      "sourceCommit": "6f0512d1e4b4929a08a3d7fd2aa47a6ba6941224"
+    },
+    {
+      "name": "artifact-purge-worker-cycle-diagnostic",
+      "exitCode": 1,
+      "exitSidecar": "artifact-purge-worker-cycle-diagnostic.exit",
+      "rawSha256": "ed0ef0a764b923c8785b91792670c2de92b7948a9cd6d9a49c9645c8ac6f3854",
+      "sanitizedSha256": "6d22c93d915e53ec8b3dcfa770de0c7f6f2608856844e1cf633b72dcc39b1c0a",
+      "archiveSha256": "781a362077c62ada16add9954d89db336d7b3bf10dfb3eaa40797e7435d760e3",
+      "redactions": {
+        "ansi": 252,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 15 skipped (16)",
+        "Duration  24.73s (transform 12.41s, setup 85ms, import 17.32s, tests 7.19s, environment 0ms)"
+      ],
+      "sourceCommit": "6f0512d1e4b4929a08a3d7fd2aa47a6ba6941224"
+    },
+    {
+      "name": "business-scenario-artifacts-worker-purge-owner-final",
+      "exitCode": 0,
+      "exitSidecar": "business-scenario-artifacts-worker-purge-owner-final.exit",
+      "rawSha256": "a30c556597c6f84b7cef9b46d8c729d74239f9e380712fee59ad7b5647c4f856",
+      "sanitizedSha256": "1a9429114e815c3e50096992c8c2f39279e465c63fe4f7cfc53f2a055dc9ce03",
+      "archiveSha256": "0462509755cf8161528ca51f59bec0c4ef68f24de7ec26a88ce19fc68aea4a8e",
+      "redactions": {
+        "ansi": 126,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  16 passed (16)",
+        "Duration  30.47s (transform 10.93s, setup 85ms, import 15.31s, tests 14.95s, environment 0ms)"
+      ],
+      "sourceCommit": "6f0512d1e4b4929a08a3d7fd2aa47a6ba6941224"
+    },
+    {
+      "name": "causal-claims-full-canonical",
+      "exitCode": 0,
+      "exitSidecar": "causal-claims-full-canonical.exit",
+      "rawSha256": "220adcad8866e0ad5976d5e2d1eafcdf537cd35e579c81e5ff17c1011a99887e",
+      "sanitizedSha256": "220adcad8866e0ad5976d5e2d1eafcdf537cd35e579c81e5ff17c1011a99887e",
+      "archiveSha256": "a2b931f0fd568d4405fa650230c7dd66feae2db39e70c11ee624124f84059f38",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  15 passed | 1 skipped (16)",
+        "Duration  44.97s (transform 10.84s, setup 79ms, import 15.32s, tests 29.43s, environment 0ms)"
+      ],
+      "sourceCommit": "6f0512d1e4b4929a08a3d7fd2aa47a6ba6941224"
+    },
+    {
+      "name": "v6-company-purge-after-artifact-owner",
+      "exitCode": 0,
+      "exitSidecar": "v6-company-purge-after-artifact-owner.exit",
+      "rawSha256": "5ef7636f8aee1a439cfc8ca86606ef5e1cad95dd2d2cd39206dda446486e4000",
+      "sanitizedSha256": "5ef7636f8aee1a439cfc8ca86606ef5e1cad95dd2d2cd39206dda446486e4000",
+      "archiveSha256": "3deeac9b444ff62e83dfe5075c50abb5a9a6d0873d4e3d9246c61c94de308206",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed (1)",
+        "Duration  18.18s (transform 9.66s, setup 78ms, import 13.81s, tests 4.16s, environment 0ms)"
+      ],
+      "sourceCommit": "6f0512d1e4b4929a08a3d7fd2aa47a6ba6941224"
+    },
+    {
+      "name": "v8-company-purge-canonical-human-retest",
+      "exitCode": 0,
+      "exitSidecar": "v8-company-purge-canonical-human-retest.exit",
+      "rawSha256": "ff862c661f0707995ebf79d4d14eaba365248fd301c388a0ead06700946d4bd6",
+      "sanitizedSha256": "ff862c661f0707995ebf79d4d14eaba365248fd301c388a0ead06700946d4bd6",
+      "archiveSha256": "d38f8fd3431e9cfd21ecd84da1a223f37f914ab1b6e43ddcda27c99f58872fce",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed (1)",
+        "Duration  24.13s (transform 9.50s, setup 71ms, import 13.28s, tests 10.67s, environment 0ms)"
+      ],
+      "sourceCommit": "6f0512d1e4b4929a08a3d7fd2aa47a6ba6941224"
     }
   ],
   "updates": [
@@ -1803,6 +1931,18 @@
         "delegated-context-v5-runtime-purge-control",
         "native-call-carrier-full",
         "native-effect-prefix-http-final2"
+      ]
+    },
+    {
+      "sourceCommit": "6f0512d1e4b4929a08a3d7fd2aa47a6ba6941224",
+      "meaning": "Isolated full scenario16PASS after actual scoped Artifact root cascade, exact base+owner patch recorded; V6/V8 native purge1+1PASS; earlier host/worker failures retained.",
+      "logs": [
+        "business-scenario-artifacts-worker-3d3ac21d7",
+        "artifact-purge-worker-cycle-diagnostic",
+        "business-scenario-artifacts-worker-purge-owner-final",
+        "causal-claims-full-canonical",
+        "v6-company-purge-after-artifact-owner",
+        "v8-company-purge-canonical-human-retest"
       ]
     }
   ],

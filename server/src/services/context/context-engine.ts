@@ -897,6 +897,9 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
   };
   return {
     assemble: (rawInput: AssembleContextInput) => assemble(rawInput),
+    /** Server-only entry for a live original delegated-source callback. */
+    assembleDelegated: (rawInput: AssembleContextInput, source: NativeDelegatedContextSource) =>
+      assemble(rawInput, undefined, db, undefined, undefined, source),
     assembleNativeBootstrap: async (rawInput: AssembleContextInput): Promise<ContextAssemblyResult> => {
       return assemble(rawInput, undefined, db, undefined, undefined, undefined, true);
     },

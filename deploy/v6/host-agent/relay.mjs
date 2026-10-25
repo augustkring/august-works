@@ -4,6 +4,7 @@ export function hostGatewayRelay({
   origin,
   proof,
   engine,
+  openShell,
   WebSocketClass = WebSocket,
 }) {
   let tunnel,
@@ -12,6 +13,7 @@ export function hostGatewayRelay({
     queue = Promise.resolve(),
     queuedBytes = 0;
   const channels = new Map();
+  const execChannels = new Map();
   function send(value) {
     if (tunnel?.readyState !== 1 || tunnel.bufferedAmount > 4 * 1024 * 1024) {
       tunnel?.close(1013);
@@ -49,6 +51,49 @@ export function hostGatewayRelay({
           if (ws !== tunnel || ws.readyState !== 1) return;
           const message = JSON.parse(event.data);
           if (!uuid.test(message.channelId)) throw new Error("invalid_channel");
+          if (message.type === "exec_open") {
+            if (!openShell || channels.has(message.channelId) || execChannels.has(message.channelId) ||
+              !uuid.test(message.cellId) || !uuid.test(message.companyId) ||
+              !/^[1-9][0-9]{0,18}$/.test(message.generation) ||
+              typeof message.capabilityToken !== "string" || message.capabilityToken.length > 16384 ||
+              !message.request || typeof message.request !== "object" || Array.isArray(message.request) ||
+              Object.keys(message).sort().join(",") !== "capabilityToken,cellId,channelId,companyId,generation,request,type")
+              throw new Error("invalid_exec_scope");
+            const controller = new AbortController();
+            execChannels.set(message.channelId, controller);
+            void (async () => {
+              try {
+                const result = await openShell.executeStream({
+                  scope: {
+                    companyId: message.companyId,
+                    cellId: message.cellId,
+                    bindingId: message.request.bindingId,
+                    cellGeneration: message.generation,
+                    sandboxRef: message.request.sandboxRef,
+                  },
+                  request: message.request,
+                  capabilityToken: message.capabilityToken,
+                },
+                async (stream, chunk) => {
+                  for (let offset = 0; offset < chunk.length; offset += 64 * 1024) {
+                    const part = chunk.subarray(offset, offset + 64 * 1024);
+                    if (!send({ type: "exec_output", channelId: message.channelId, stream, base64: part.toString("base64") }))
+                      throw new Error("exec_unknown");
+                  }
+                }, controller.signal);
+                if (ws === tunnel && ws.readyState === 1)
+                  send({ type: "exec_exit", channelId: message.channelId, exitCode: result.exitCode, timedOut: result.timedOut });
+              } catch (error) {
+                const code = ["policy_changed", "exec_rejected", "exec_timeout"].includes(error?.message)
+                  ? error.message
+                  : "exec_unknown";
+                if (ws === tunnel && ws.readyState === 1) send({ type: "exec_error", channelId: message.channelId, code });
+              } finally {
+                execChannels.delete(message.channelId);
+              }
+            })();
+            return;
+          }
           if (message.type === "open") {
             if (
               channels.has(message.channelId) ||
@@ -113,8 +158,10 @@ export function hostGatewayRelay({
               gateway?.close(1013);
               send({ type: "close", channelId: message.channelId });
             }
-          } else if (message.type === "close")
+          } else if (message.type === "close") {
             channels.get(message.channelId)?.close();
+            execChannels.get(message.channelId)?.abort();
+          }
           else throw new Error("invalid_relay_message");
         })
         .catch(() => ws.close(1008))
@@ -127,6 +174,8 @@ export function hostGatewayRelay({
       if (ws !== tunnel) return;
       for (const gateway of channels.values()) gateway.close();
       channels.clear();
+      for (const controller of execChannels.values()) controller.abort();
+      execChannels.clear();
       if (!stopped) {
         reconnect = setTimeout(
           connect,

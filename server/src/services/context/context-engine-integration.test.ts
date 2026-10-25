@@ -19,6 +19,7 @@ import {
   foundationDocuments,
   foundationSections,
   heartbeatRuns,
+  heartbeatRunEvents,
   externalObjectMentions,
   externalObjects,
   issues,
@@ -30,14 +31,16 @@ import {
   memoryRecords,
   memoryJobs,
   principalPermissionGrants,
+  toolPolicies,
+  nativeRunFinalizations,
+  nativeRunResults,
 } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "../../__tests__/helpers/embedded-postgres.js";
 import { memoryService } from "../memory/memory-service.js";
-import { assertMemorySourcesRetained } from "../memory/memory-privacy.js";
-import { initializeRunIdentity } from "../run-identity.js";
+import { assertMemorySourcesRetained, expireMemoryPayloads } from "../memory/memory-privacy.js";
 import { issueService, type NativeTaskSourceCapture } from "../issues.js";
 import { workflowService } from "../workflows/workflow-service.js";
 import { workflowExecutorService } from "../workflows/workflow-executor.js";
@@ -50,7 +53,11 @@ import { errorHandler } from "../../middleware/index.js";
 import { issueRoutes } from "../../routes/issues.js";
 import { buildPaperclipTaskMarkdown, getIssueExecutionContext } from "../heartbeat.js";
 import { buildNativeBootstrapSourceSet } from "../native-runtime/native-execution-input.js";
-import { authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy } from "../authorization.js";
+import { createLocalAgentJwt, verifyLocalAgentJwt } from "../../agent-auth-jwt.js";
+import type { AuthorizationActor } from "../authorization.js";
+import { createToolGatewayService } from "../tool-gateway.js";
+import { heartbeatService } from "../heartbeat.js";
+import type { NativeSessionBackend } from "../../vendor/paperclip-runner/index.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported
@@ -74,10 +81,13 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     await db.delete(memoryRecords);
     await db.delete(memoryBindingTargets);
     await db.delete(memoryBindings);
-    await db.delete(contextManifests);
-    await db.delete(heartbeatRuns);
     // The original run deletion owner enqueues its runtime-asset erasure job.
     await db.delete(memoryJobs);
+    await db.delete(nativeRunFinalizations);
+    await db.delete(nativeRunResults);
+    await db.delete(heartbeatRunEvents);
+    await db.delete(contextManifests);
+    await db.delete(heartbeatRuns);
     await db.delete(foundationChangeProposals);
     await db.delete(foundationSections);
     await db.delete(foundationDocuments);
@@ -88,6 +98,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     await db.delete(issues);
     await db.delete(projects);
     await db.delete(principalPermissionGrants);
+    await db.delete(toolPolicies);
     await db.delete(companyMemberships);
     await db.delete(agents);
     await db.delete(authUsers);
@@ -156,6 +167,99 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     return { companyId, userId, agent: agent!, issue: issue!, run:run! };
   }
 
+  async function createOwnerPrivateMemoryThroughNativeGateway(input: {
+    companyId: string; agentId: string; userId: string; issueId: string; bindingKey: string; content: string;
+    sensitivity: "public" | "internal" | "confidential" | "restricted"; observedAt: Date; expiresAt: Date | null;
+  }) {
+    const previousSecret = process.env.PAPERCLIP_AGENT_JWT_SECRET;
+    process.env.PAPERCLIP_AGENT_JWT_SECRET = randomUUID();
+    let releaseTurn!: () => void;
+    let signalTurnStarted!: () => void;
+    const turnGate = new Promise<void>((resolve) => { releaseTurn = resolve; });
+    const turnStarted = new Promise<void>((resolve) => { signalTurnStarted = resolve; });
+    const backend: NativeSessionBackend = {
+      async descriptor() {
+        return { kind: "mock", name: "context-memory-native-fixture", version: "1",
+          capabilities: { resume: false, typedEvents: true, steering: false, interruption: true, structuredResult: true } };
+      },
+      async openSession(openInput) {
+        return {
+          identity: () => openInput.identity,
+          async capabilities() { return { resume: false, typedEvents: true, steering: false, interruption: true, structuredResult: true }; },
+          async *events() {},
+          async startTurn() {
+            signalTurnStarted();
+            await turnGate;
+            return { turnId: `context-memory-${openInput.binding.runId}` };
+          },
+          async result() { return null; },
+          async snapshot() {
+            return { backendKind: "mock", sessionId: openInput.session.normalizedSessionId,
+              identity: openInput.identity, providerSessionId: "context-memory-fixture" } as never;
+          },
+          async close() { releaseTurn(); },
+        };
+      },
+    };
+    const heartbeat = heartbeatService(db, { nativeSessionBackendFactory: () => backend });
+    try {
+      await instanceSettingsService(db).updateExperimental({ enableNativeRunner: true });
+      const run = await heartbeat.invoke(input.agentId, "on_demand", { issueId: input.issueId }, "manual",
+        { actorType: "user", actorId: input.userId });
+      if (!run) throw new Error("Canonical Heartbeat owner did not create the Memory producer run");
+      const backendWait = new Promise<never>((_, reject) => {
+        const timer = setTimeout(() => reject(new Error("Canonical Heartbeat run did not reach its native backend")), 15_000);
+        timer.unref();
+      });
+      await Promise.race([turnStarted, backendWait]);
+
+      const token = createLocalAgentJwt(input.agentId, input.companyId, "paperclip_runner", run.id, input.userId);
+      const claims = token ? verifyLocalAgentJwt(token) : null;
+      if (!token || !claims) throw new Error("Could not mint and verify the actual Memory producer AgentJWT");
+      const memberships = await db.select({ companyId: companyMemberships.companyId,
+        membershipRole: companyMemberships.membershipRole, status: companyMemberships.status })
+        .from(companyMemberships).where(and(eq(companyMemberships.companyId, input.companyId),
+          eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, input.userId)));
+      const actor: AuthorizationActor = {
+        type: "agent", source: "agent_jwt", companyId: claims.company_id, agentId: claims.sub, runId: claims.run_id,
+        onBehalfOfUserId: claims.responsible_user_id, authenticatedCredentialExpiresAt: claims.exp * 1000,
+        keyScope: claims.key_scope ?? { kind: "standard" }, onBehalfOfMemberships: memberships,
+      };
+      await db.insert(toolPolicies).values({ companyId: input.companyId, name: `Allow native Memory ${randomUUID()}`,
+        policyType: "allow", selectors: { toolName: "paperclip-self:remember" } });
+      const gateway = createToolGatewayService(db);
+      const session = await gateway.createSession({ companyId: input.companyId, agentId: input.agentId, runId: run.id,
+        issueId: input.issueId, authorizationActor: actor });
+      const result = await gateway.executeTool({ sessionToken: session.token, tool: "paperclip-self:remember",
+        parameters: { scope: "private", memoryType: "lesson", content: input.content,
+          bindingKey: input.bindingKey,
+          observedAt: input.observedAt.toISOString(), expiresAt: input.expiresAt?.toISOString() ?? null,
+          idempotencyKey: `context-memory-${randomUUID()}` } });
+      if (!result.data || typeof result.data !== "object" || !(result.data as { record?: { id?: string } }).record?.id)
+        throw new Error("The real Tool Gateway Memory producer returned no record");
+      const recordId = (result.data as { record: { id: string } }).record.id;
+      const [record] = await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, input.companyId),
+        eq(memoryRecords.id, recordId)));
+      if (!record) throw new Error("The real Tool Gateway Memory producer record was not persisted");
+      const restartedGateway = createToolGatewayService(db);
+      await expect(restartedGateway.executeTool({ sessionToken: session.token, tool: "paperclip-self:remember",
+        parameters: { scope: "private", memoryType: "lesson", content: input.content, bindingKey: input.bindingKey,
+          observedAt: input.observedAt.toISOString(), expiresAt: input.expiresAt?.toISOString() ?? null,
+          idempotencyKey: `context-memory-${randomUUID()}` } })).rejects.toMatchObject({
+        reasonCode: "memory_agent_authority_unavailable",
+      });
+      const persistedAfterRestart = await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, input.companyId),
+        eq(memoryRecords.id, recordId)));
+      expect(persistedAfterRestart).toHaveLength(1);
+      return record;
+    } finally {
+      releaseTurn();
+      await heartbeat.drainActiveRunExecutions();
+      if (previousSecret === undefined) delete process.env.PAPERCLIP_AGENT_JWT_SECRET;
+      else process.env.PAPERCLIP_AGENT_JWT_SECRET = previousSecret;
+    }
+  }
+
   async function seedMemory(input: {
     companyId: string;
     agentId: string;
@@ -189,6 +293,38 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     const [company] = await db.select().from(companies).where(eq(companies.id,input.companyId));
     const userId=company!.defaultResponsibleUserId!;
     const human=await seedCurrentHumanSourceActor(db,[input.companyId],userId);
+    if(human.type!=="board"||human.source!=="session"||!human.userId)throw new Error("Canonical Memory Human fixture lacks its verified session");
+    if(scope==="company"){
+      // Shared Memory comes from the supported Human authoring path. Its
+      // evidence is an explicit Human-entered source, not an Agent Run or a
+      // manufactured native qualification receipt.
+      await db.insert(principalPermissionGrants).values({companyId:input.companyId,principalType:"agent",principalId:input.agentId,
+        permissionKey:"company_scope:read"}).onConflictDoNothing();
+      const humanActor={principal:{type:"user" as const,userId},authorizationActor:human};
+      const candidate=await memoryService(db).createCandidate(input.companyId,{
+        bindingId:binding!.id,memoryType:"lesson",scope:{type:"company",id:null},subject:{type:"company",id:input.companyId},
+        ownerAgentId:null,title:null,content:input.content,summary:null,sensitivity:input.sensitivity??"internal",importance:50,
+        confidenceScore:0.8,validFrom:null,validUntil:null,observedAt:observedAt.toISOString(),retentionPolicy:"standard",
+        expiresAt:input.expiresAt?.toISOString()??null,createdByOperationId:null,metadata:{},evidence:[{
+          sourceClass:"task",sourceProvider:"native_orchestration_fixture",sourceType:"human_input",sourceRef:`manual://${randomUUID()}`,
+          sourceVersion:"1",sourceUpdatedAt:null,observedAt:observedAt.toISOString(),
+          excerptHash:createHash("sha256").update(input.content).digest("hex"),citation:{label:"Current Human fixture input"},
+          trustLevel:"low",relation:"supports"}],
+      },humanActor);
+      let record=candidate.record;
+      if((input.reviewState??"accepted")==="accepted"||(input.reviewState??"accepted")==="rejected"){
+        const reviewed=await memoryService(db).reviewCandidate(input.companyId,record.id,
+          (input.reviewState??"accepted")==="accepted"?{decision:"accept"}:{decision:"reject",reason:"Context fixture control"},humanActor);
+        record=reviewed.record;
+      }
+      if(input.revokedAt){
+        const [revoked]=await db.update(memoryRecords).set({revokedAt:input.revokedAt,revokedByActorType:"system",
+          revokedByActorId:"context-memory-test",revocationReason:"Test revocation"})
+          .where(and(eq(memoryRecords.companyId,input.companyId),eq(memoryRecords.id,record.id))).returning();
+        record=revoked!;
+      }
+      return record;
+    }
     const app=express(); app.use(express.json());
     app.use(((req,_res,next)=>{req.actor={...human,companyIds:[input.companyId],memberships:[{companyId:input.companyId,membershipRole:"owner",status:"active"}]};next();}) as RequestHandler);
     app.use("/api",issueRoutes(db,{} as never)); app.use(errorHandler);
@@ -199,54 +335,19 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     await request(app).patch(`/api/issues/${sourceIssueId}`).send({assigneeAgentId:input.agentId}).expect(200);
     const [sourceIssue] = await db.select().from(issues).where(and(eq(issues.companyId,input.companyId),eq(issues.id,sourceIssueId)));
     if(!sourceIssue?.payloadSourceSnapshot)throw new Error("Memory source fixture Task lacks its original Human payload capture");
-    const [sourceRun]=await db.insert(heartbeatRuns).values({companyId:input.companyId,agentId:input.agentId,
-      responsibleUserId:userId,status:"running",runtimeMode:"native",nativeIssueId:sourceIssueId,issueId:sourceIssueId,
-      contextSnapshot:{issueId:sourceIssueId}}).returning();
-    await initializeRunIdentity(db,{companyId:input.companyId,runId:sourceRun!.id,issueId:sourceIssueId,responsibleUserId:userId,cause:"dispatch"});
     await db.insert(principalPermissionGrants).values({companyId:input.companyId,principalType:"agent",principalId:input.agentId,
       permissionKey:"company_scope:read"}).onConflictDoNothing();
-    const producerActor={principal:{type:"agent" as const,agentId:input.agentId,responsibleUserId:userId},runId:sourceRun!.id};
-    const sourceActor={type:"agent" as const,source:"agent_jwt" as const,companyId:input.companyId,agentId:input.agentId,
-      runId:sourceRun!.id,onBehalfOfUserId:userId};
-    const sourceReadable={run:await canActorReadHeartbeatRunPrivacy(db,sourceActor,{companyId:input.companyId,id:sourceRun!.id}),
-      task:await canActorReadIssuePrivacy(db,sourceActor,{companyId:input.companyId,id:sourceIssueId})};
-    if(!sourceReadable.run||!sourceReadable.task)throw new Error(`Canonical Memory source fixture denied: ${JSON.stringify(sourceReadable)}`);
-    const companyDecision=await authorizationService(db).decide({actor:sourceActor,action:"company_scope:read",
-      resource:{type:"company",companyId:input.companyId},enforceResponsibleUserIntersection:true});
-    if(!companyDecision.allowed)throw new Error(`Canonical Memory producer company admission denied: ${JSON.stringify(companyDecision)}`);
-    const sourceEvidence={sourceClass:"task" as const,sourceProvider:"august_works_memory_agent_tool",sourceType:"agent_run_observation",
-      sourceRef:`run://${sourceRun!.id}/issue/${sourceIssueId}`,sourceVersion:sourceIssue!.updatedAt.toISOString(),
-      sourceUpdatedAt:sourceIssue!.updatedAt.toISOString(),observedAt:observedAt.toISOString(),
-      excerptHash:createHash("sha256").update(input.content).digest("hex"),citation:{label:sourceIssue!.title},
-      trustLevel:"low" as const,relation:"supports" as const};
-    const commonInput={bindingId:binding!.id,memoryType:"lesson" as const,subject:{type:"company" as const,id:input.companyId},
-      title:null,content:input.content,summary:null,sensitivity:input.sensitivity??"internal",importance:50,confidenceScore:0.8,
-      validFrom:null,validUntil:null,observedAt:observedAt.toISOString(),retentionPolicy:"standard",
-      expiresAt:input.expiresAt?.toISOString()??null,metadata:{},evidence:[sourceEvidence]};
-    let record:typeof memoryRecords.$inferSelect;
-    if(scope==="agent"){
-      if(input.reviewState==="pending"||input.reviewState==="rejected")throw new Error("Private context fixture does not support review-state overrides");
-      const created=await memoryService(db).createPrivateMemory(input.companyId,input.agentId,
-        {...commonInput,createdByOperationId:`context-private-${randomUUID()}`},producerActor);
-      record=created.record;
-    }else{
-      const candidate=await memoryService(db).createCandidate(input.companyId,{
-        ...commonInput,scope:{type:"company",id:null},ownerAgentId:null,createdByOperationId:null},producerActor);
-      record=candidate.record;
-      if((input.reviewState??"accepted")==="accepted"||(input.reviewState??"accepted")==="rejected"){
-        const reviewed=await memoryService(db).reviewCandidate(input.companyId,record.id,
-          (input.reviewState??"accepted")==="accepted"?{decision:"accept"}:{decision:"reject",reason:"Context fixture control"},
-          {principal:{type:"user",userId},authorizationActor:human});
-        record=reviewed.record;
-      }
-    }
+    const memoryRecord=await createOwnerPrivateMemoryThroughNativeGateway({
+      companyId:input.companyId,agentId:input.agentId,userId,issueId:sourceIssueId,bindingKey:binding!.key,content:input.content,
+      sensitivity:input.sensitivity??"internal",observedAt,expiresAt:input.expiresAt??null,
+    });
     if(input.revokedAt){
       const [revoked]=await db.update(memoryRecords).set({revokedAt:input.revokedAt,revokedByActorType:"system",
         revokedByActorId:"context-memory-test",revocationReason:"Test revocation"})
-        .where(and(eq(memoryRecords.companyId,input.companyId),eq(memoryRecords.id,record.id))).returning();
-      record=revoked!;
+        .where(and(eq(memoryRecords.companyId,input.companyId),eq(memoryRecords.id,memoryRecord.id))).returning();
+      return revoked!;
     }
-    return record;
+    return memoryRecord;
   }
 
   async function createApprovedFoundation(input: {
@@ -427,6 +528,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     const renderedMarkdown = buildPaperclipTaskMarkdown({ issue: { id: task.id, identifier: renderedTask!.identifier,
       title: renderedTask!.title, description: renderedTask!.description, workMode: renderedTask!.workMode } },
       { onRenderedSource: reference => references.push(reference) });
+    if(!renderedMarkdown)throw new Error("Native bootstrap fixture could not render its exact Task Markdown");
     const sourceSet = buildNativeBootstrapSourceSet({ companyId: seeded.companyId, runId: run!.id,
       agentId: seeded.agent.id, issueId: task.id, renderedMarkdown,
       renderedMarkdownDigest: createHash("sha256").update(renderedMarkdown, "utf8").digest("hex"), references,
@@ -696,12 +798,14 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       content: "Enterprise launch revoked memory must not hydrate.",
       revokedAt: new Date("2026-09-30T12:30:00.000Z"),
     });
-    await seedMemory({
+    const expiredMemory = await seedMemory({
       companyId: seeded.companyId,
       agentId: seeded.agent.id,
       content: "Enterprise launch expired memory must not hydrate.",
-      expiresAt: new Date("2026-09-30T12:30:00.000Z"),
+      expiresAt: new Date(Date.now() + 30 * 60_000),
     });
+    expect(expiredMemory.expiresAt!.getTime()).toBeGreaterThan(Date.now());
+    await expireMemoryPayloads(db, seeded.companyId, new Date(Date.now() + 60 * 60_000));
     await seedMemory({
       companyId: seeded.companyId,
       agentId: seeded.agent.id,

@@ -96,8 +96,8 @@ export const sandboxHostRequestSchema = z
     ]),
     probe: z
       .object({
-        caseId: z.string().regex(/^[a-z_]{1,100}$/),
-        control: z.string().regex(/^[a-zA-Z]{1,100}$/),
+        caseId: z.string().regex(/^[a-z0-9_]{1,100}$/),
+        control: z.string().regex(/^[a-zA-Z0-9]{1,100}$/),
         expected: z.enum(["allow", "deny", "observe"]),
       })
       .strict()

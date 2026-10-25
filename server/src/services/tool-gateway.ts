@@ -7,6 +7,7 @@ import { resolveWorkflowConnectorSession, type WorkflowGatewayContext } from "./
 import { validateWorkflowOutput, WorkflowOutputSchemaError } from "./workflows/workflow-output-schema.js";
 import { COGNEE_STDIO_TEMPLATE, cogneeCloudUrl, callCogneeCloud } from "./cognee-connection.js";
 import { HttpError } from "../errors.js";
+import type { AuthorizationActor } from "./authorization.js";
 import { claimSlackRateLimitRetry } from "./connectors/slack-retry.js";
 import { resolveSlackTaskAuthority } from "./connectors/slack-authority.js";
 import { SLACK_TOOLS } from "@paperclipai/shared";
@@ -1290,6 +1291,58 @@ export function createToolGatewayService(
     now?: () => number;
   } = {},
 ) {
+  // Tool Gateway sessions persist only their token hash and execution IDs.
+  // Retain the original verified Agent actor in process memory so Memory
+  // writers can recheck its current credential, key revocation, run, and
+  // responsible-user authority. A process restart intentionally loses this
+  // carrier and makes Memory tools unavailable for those sessions.
+  const memorySessionActors = new Map<string, { actor: AuthorizationActor; sessionExpiresAt: number }>();
+  function rememberSessionActor(session: ToolGatewaySession, actor: AuthorizationActor | undefined) {
+    const now = Date.now();
+    for (const [id, value] of memorySessionActors) {
+      if (value.sessionExpiresAt <= now) memorySessionActors.delete(id);
+    }
+    while (memorySessionActors.size >= 10_000) {
+      const oldest = memorySessionActors.keys().next().value;
+      if (!oldest) break;
+      memorySessionActors.delete(oldest);
+    }
+    if (
+      actor?.type !== "agent" || (actor.source !== "agent_jwt" && actor.source !== "agent_key") ||
+      actor.companyId !== session.companyId || actor.agentId !== session.agentId ||
+      (actor.runId ?? null) !== (session.runId ?? null) ||
+      (actor.onBehalfOfUserId ?? null) !== (session.responsibleUserId ?? null) ||
+      (actor.authenticatedCredentialExpiresAt != null &&
+        (!Number.isFinite(actor.authenticatedCredentialExpiresAt) || actor.authenticatedCredentialExpiresAt <= now))
+    ) return;
+    const detached: AuthorizationActor = {
+      ...actor,
+      companyIds: actor.companyIds ? [...actor.companyIds] : undefined,
+      memberships: actor.memberships?.map((membership) => ({ ...membership })),
+      onBehalfOfMemberships: actor.onBehalfOfMemberships?.map((membership) => ({ ...membership })),
+      keyScope: actor.keyScope ? structuredClone(actor.keyScope) : actor.keyScope,
+      // One-request native effect proofs are consumed by middleware and must
+      // never become reusable session authority.
+      nativeToolEffect: undefined,
+    };
+    memorySessionActors.set(session.id, { actor: detached, sessionExpiresAt: session.expiresAt.getTime() });
+  }
+  function currentSessionMemoryActor(session: ToolGatewaySession): AuthorizationActor | undefined {
+    const value = memorySessionActors.get(session.id);
+    if (!value || value.sessionExpiresAt <= Date.now()) {
+      memorySessionActors.delete(session.id);
+      return undefined;
+    }
+    const actor = value.actor;
+    if (actor.companyId !== session.companyId || actor.agentId !== session.agentId ||
+      (actor.runId ?? null) !== (session.runId ?? null) ||
+      (actor.onBehalfOfUserId ?? null) !== (session.responsibleUserId ?? null) ||
+      (actor.authenticatedCredentialExpiresAt != null && actor.authenticatedCredentialExpiresAt <= Date.now())) {
+      memorySessionActors.delete(session.id);
+      return undefined;
+    }
+    return actor;
+  }
   // Authorization links can contain one-time codes. Keep them briefly in memory;
   // persist only the redacted request and execution identifiers for recovery.
   const upstreamHandoffs = new Map<string, { pending: ToolUpstreamPending; expires: number }>();
@@ -2160,7 +2213,10 @@ export function createToolGatewayService(
       lastUsedAt: now,
       updatedAt: now,
     });
-    return captureSessionIdentity(session);
+    const memoryActor = memorySessionActors.get(session.id)?.actor;
+    return captureSessionIdentity(memoryActor?.type === "agent"
+      ? { ...session, responsibleUserId: memoryActor.onBehalfOfUserId ?? null }
+      : session);
   }
 
   async function captureSessionIdentity(
@@ -3536,6 +3592,15 @@ export function createToolGatewayService(
         );
       }
 
+      const authorizationActor = currentSessionMemoryActor(session);
+      if (!authorizationActor) {
+        throw new ToolGatewayHttpError(
+          403,
+          "Memory tools require the original verified Agent credential",
+          "memory_agent_authority_unavailable",
+        );
+      }
+
       const memory = memoryAgentToolsService(db);
       const context = {
         companyId: session.companyId,
@@ -3544,6 +3609,7 @@ export function createToolGatewayService(
         issueId: session.issueId,
         projectId: session.projectId,
         responsibleUserId: session.responsibleUserId ?? null,
+        authorizationActor,
         allowShared: flags.sharedMemory,
         allowPrivate: flags.privateMemory,
       };
@@ -9395,6 +9461,8 @@ export function createToolGatewayService(
       ttlMs?: number;
       actorType?: LogActivityInput["actorType"];
       actorId?: string;
+      /** Original middleware-verified actor; never populated from request JSON. */
+      authorizationActor?: AuthorizationActor;
     }): Promise<ToolGatewaySession> {
       await assertAgentInCompany(input.companyId, input.agentId);
       const { issueId, projectId } = await resolveRunContext(input);
@@ -9411,6 +9479,9 @@ export function createToolGatewayService(
         projectId,
         createdAt: now,
         expiresAt: new Date(now.getTime() + sessionTtlMs(input.ttlMs)),
+        responsibleUserId: input.authorizationActor?.type === "agent"
+          ? input.authorizationActor.onBehalfOfUserId ?? null
+          : null,
       };
 
       await db.insert(toolGatewaySessions).values({
@@ -9441,6 +9512,7 @@ export function createToolGatewayService(
           expiresAt: session.expiresAt.toISOString(),
         },
       });
+      rememberSessionActor(session, input.authorizationActor);
 
       return session;
     },
@@ -11708,6 +11780,7 @@ export function createToolGatewayService(
           ),
         )
         .returning();
+      memorySessionActors.delete(input.sessionId);
       const sessionView = gatewaySessionFromRow(session!);
       await writeAudit({
         session: sessionView,
@@ -11734,6 +11807,7 @@ export function createToolGatewayService(
         .delete(toolGatewaySessions)
         .where(lte(toolGatewaySessions.expiresAt, now))
         .returning({ id: toolGatewaySessions.id });
+      for (const row of rows) memorySessionActors.delete(row.id);
       return { deletedCount: rows.length };
     },
 

@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { activityLog, agentExecutionManifests, agents, agentPresenceRuntimeBindings, agentProviderBindings, billingAccounts, companyMemberships, principalPermissionGrants, heartbeatRuns, issues, runtimeCapacityProfiles, orchestrationPlans, orchestrationWorkerAttempts, runtimeCells, runtimeHosts, runtimeSandboxBindings, runtimePolicySnapshots, sandboxQualificationRuns, type Db } from "@paperclipai/db";
+import { activityLog, agentExecutionManifests, agents, agentPresenceRuntimeBindings, agentProviderBindings, billingAccounts, companyMemberships, principalPermissionGrants, heartbeatRuns, issues, environmentLeases, runtimeCapacityProfiles, orchestrationPlans, orchestrationWorkerAttempts, runtimeCells, runtimeHosts, runtimeSandboxBindings, runtimePolicySnapshots, sandboxQualificationRuns, type Db } from "@paperclipai/db";
 import { SANDBOX_CONTROLS, sandboxBindingCreateSchema, sandboxCapabilitySnapshotSchema, sandboxCompileSchema, type SandboxAdmissionInput, type SandboxBindingCreateInput, type SandboxCompileInput, type SandboxPosture } from "@paperclipai/shared";
 import { conflict, forbidden, notFound } from "../../errors.js";
 import { assertConfiguredOperatorAuthentication } from "../../auth/authenticator-assurance.js";
@@ -7,7 +7,7 @@ import type { AuthorizationActor } from "../authorization.js";
 import { assertV7Authorization, assertV7Enabled, v7HumanActorId } from "../v7-authorization.js";
 import { logActivity, withV7ActivityTransaction } from "../v7-mutations.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
-import { assertAgentRunWriteAllowed } from "../../agent-run-cancellation.js";
+import { assertAgentRunPolicyAllowed, assertAgentRunWriteAllowed } from "../../agent-run-cancellation.js";
 import { agentProviderBindingService } from "../agent-provider-bindings.js";
 import { capabilityResolverService } from "../capability-resolver.js";
 import { compileSandboxPolicy } from "./policy-compiler.js";
@@ -17,6 +17,10 @@ import { SANDBOX_PROBE_CASES, type ExecutionSandboxBackend, type SandboxIdentity
 import { fenceSandboxAdmissionOutcome, releaseSandboxAdmissionClaim } from "./sandbox-guardian.js";
 
 type Binding = typeof runtimeSandboxBindings.$inferSelect;
+function sandboxCapabilityFacts(value: ReturnType<typeof sandboxCapabilitySnapshotSchema.parse>) {
+  const { testedAt: _testedAt, expiresAt: _expiresAt, qualificationHash: _qualificationHash, ...facts } = value;
+  return facts;
+}
 export function executionSandboxService(db: Db, options: {
   operatorUserIds?: readonly string[];
   backendFor?: (binding: Binding, actor: AuthorizationActor) => ExecutionSandboxBackend | undefined;
@@ -57,7 +61,13 @@ export function executionSandboxService(db: Db, options: {
     if (!record) throw notFound("Execution manifest not found");
     const [run] = await tx.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, record.runId), eq(heartbeatRuns.agentId, record.agentId))).for("share");
     if (!run || run.status !== "running" || !run.nativeIssueId || !run.responsibleUserId || run.responsibleUserId !== record.manifest.responsibleUserId) throw conflict("A current owned native execution manifest is required");
-    await assertAgentRunWriteAllowed(tx, companyId, { agentId: record.agentId, runId: run.id });
+    // Policy compilation and cold-start admission happen while the original
+    // runtime cell is STOPPED. Run provenance remains mandatory, but the
+    // HEALTHY-cell requirement for ordinary Task writes would deadlock this
+    // start lifecycle. The native runtime start-admission owner is checked
+    // immediately before host I/O in admit(); normal writes keep the stricter
+    // assertAgentRunWriteAllowed gate.
+    await assertAgentRunPolicyAllowed(tx, companyId, { agentId: record.agentId, runId: run.id });
     const [task] = await tx.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, run.nativeIssueId))).for("share");
     if (!task || task.hiddenAt || task.assigneeAgentId !== record.agentId) throw conflict("Execution Task changed its current owner");
     await assertV7Authorization(tx, actor, companyId, "issue:read", { type: "issue", companyId, issueId: task.id, projectId: task.projectId });
@@ -75,6 +85,81 @@ export function executionSandboxService(db: Db, options: {
     // Projection never grants broker credentials from an inventory pin. Direct
     // credential bindings stay closed until the native broker is qualified.
     return { record, task, run, runtime, currentCapabilities, authorityHash: nativeSha256(JSON.parse(JSON.stringify({ manifest: record.hash, memberships, grants, agentPermissions: agent?.permissions, runtimeId: runtime.id, providerId: provider.id, providerSnapshot: provider.capabilitySnapshotHash, profile: runtime.providerProfileRef, currentCapabilities, configurationHash: runtime.qualifiedConfigurationHash, conformanceHash: runtime.conformanceSnapshotHash }))) };
+  }
+  async function assertTaskExecutionContext(tx: Db, input: { companyId: string; runId: string; leaseId: string; now?: Date }) {
+    const now = input.now ?? new Date();
+    const [lease] = await tx.select().from(environmentLeases).where(and(
+      eq(environmentLeases.companyId, input.companyId), eq(environmentLeases.id, input.leaseId),
+      eq(environmentLeases.heartbeatRunId, input.runId), eq(environmentLeases.status, "active"),
+    )).for("share");
+    if (!lease || !lease.expiresAt || lease.expiresAt <= now) throw conflict("Current native environment lease is required");
+    const [run] = await tx.select().from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId),
+    )).for("share");
+    if (!run || run.status !== "running" || !run.startedAt || !run.agentId || !run.nativeIssueId || !run.responsibleUserId || agentRunWritesRevoked(run))
+      throw conflict("Current active native Task run is required");
+    const [manifest] = await tx.select().from(agentExecutionManifests).where(and(
+      eq(agentExecutionManifests.companyId, input.companyId), eq(agentExecutionManifests.runId, run.id), eq(agentExecutionManifests.agentId, run.agentId),
+    )).for("share");
+    if (!manifest) throw conflict("Current execution manifest is required");
+    await assertAgentRunWriteAllowed(tx, input.companyId, { agentId: run.agentId, runId: run.id });
+    const worker: AuthorizationActor = { type: "agent", companyId: input.companyId, agentId: run.agentId, runId: run.id, onBehalfOfUserId: run.responsibleUserId };
+    const source = await authority(tx, input.companyId, manifest.id, worker);
+    if (source.record.hash !== manifest.hash || source.task.hiddenAt || source.task.assigneeAgentId !== run.agentId || source.task.executionRunId !== run.id)
+      throw conflict("Task or manifest binding changed before sandbox execution");
+    const cellRef = /^aw:cell:([0-9a-f-]{36}):generation:([1-9][0-9]{0,18})$/i.exec(source.runtime.providerProfileRef);
+    if (!cellRef) return null;
+    const [cellRow] = await tx.select().from(runtimeCells).where(and(
+      eq(runtimeCells.companyId, input.companyId), eq(runtimeCells.id, cellRef[1]!), eq(runtimeCells.generation, BigInt(cellRef[2]!)),
+      eq(runtimeCells.status, "HEALTHY"), isNull(runtimeCells.deletedAt),
+    )).for("share");
+    if (!cellRow?.runtimeHostId || cellRow.suspendedReason) throw conflict("Current managed runtime cell is unavailable");
+    const [sandboxBinding] = await tx.select().from(runtimeSandboxBindings).where(and(
+      eq(runtimeSandboxBindings.companyId, input.companyId), eq(runtimeSandboxBindings.runtimeCellId, cellRow.id),
+      eq(runtimeSandboxBindings.cellGeneration, cellRef[2]!), eq(runtimeSandboxBindings.status, "running"),
+    )).for("share");
+    if (!sandboxBinding || sandboxBinding.backend !== "openshell" || !sandboxBinding.capabilitySnapshot || !sandboxBinding.capabilitySnapshotHash)
+      throw conflict("Current running OpenShell admission is required for sandbox execution");
+    const capability = sandboxCapabilitySnapshotSchema.parse(sandboxBinding.capabilitySnapshot);
+    if (capability.expiresAt <= now.toISOString() || capability.sandboxImageDigest !== (cellRow.activeImageDigest ?? cellRow.desiredImageDigest))
+      throw conflict("OpenShell qualification expired or image changed");
+    const [qualification] = sandboxBinding.qualificationRunId ? await tx.select().from(sandboxQualificationRuns).where(and(
+      eq(sandboxQualificationRuns.companyId, input.companyId), eq(sandboxQualificationRuns.bindingId, sandboxBinding.id),
+      eq(sandboxQualificationRuns.id, sandboxBinding.qualificationRunId), eq(sandboxQualificationRuns.status, "passed"),
+    )).for("share") : [];
+    if (!qualification || qualification.evidenceKind !== "protected_host_report" || qualification.reportHash !== capability.qualificationHash ||
+      qualification.results.length !== SANDBOX_PROBE_CASES.length || SANDBOX_PROBE_CASES.some(test => {
+        const matches = qualification.results.filter(result => result.caseId === test.caseId);
+        return matches.length !== 1 || matches[0]?.control !== test.control || matches[0]?.verdict !== "pass" || !/^[a-f0-9]{64}$/.test(matches[0]?.observationHash ?? "");
+      })) throw conflict("Current protected-host qualification is incomplete");
+    const [policy] = await tx.select().from(runtimePolicySnapshots).where(and(
+      eq(runtimePolicySnapshots.companyId, input.companyId), eq(runtimePolicySnapshots.bindingId, sandboxBinding.id),
+      eq(runtimePolicySnapshots.executionManifestId, manifest.id),
+    )).orderBy(desc(runtimePolicySnapshots.policyVersion)).limit(1).for("share");
+    if (!policy || policy.status !== "qualified" || policy.expiresAt <= now || policy.authorityHash !== source.authorityHash ||
+      policy.capabilitySnapshotHash !== sandboxBinding.capabilitySnapshotHash || policy.compilation.compiledPolicy.credentials.mode !== "none" ||
+      policy.compilation.compiledPolicy.credentials.bindings.length !== 0 || policy.compilation.sourcePolicyRefs.find(ref => ref.startsWith("manifest:")) !== `manifest:${manifest.id}:${manifest.hash}`)
+      throw conflict("Current unexpired OpenShell policy is not bound to this exact Task manifest");
+    const [host] = await tx.select().from(runtimeHosts).where(and(
+      eq(runtimeHosts.id, cellRow.runtimeHostId), isNull(runtimeHosts.fencedAt), isNull(runtimeHosts.credentialRevokedAt), isNull(runtimeHosts.retiredAt),
+      inArray(runtimeHosts.status, ["READY", "DRAINING"]), gt(runtimeHosts.lastHeartbeatAt, new Date(now.getTime() - config.runtime.suspectSeconds * 1000)),
+    )).for("share");
+    if (!host) throw conflict("Current qualified OpenShell host is unavailable");
+    const [attempt] = await tx.select().from(orchestrationWorkerAttempts).where(and(
+      eq(orchestrationWorkerAttempts.companyId, input.companyId), eq(orchestrationWorkerAttempts.runId, run.id),
+    )).for("share");
+    let planDeadline = Number.POSITIVE_INFINITY;
+    if (attempt) {
+      const [plan] = await tx.select().from(orchestrationPlans).where(and(
+        eq(orchestrationPlans.companyId, input.companyId), eq(orchestrationPlans.id, attempt.planId), eq(orchestrationPlans.status, "running"),
+      )).for("share");
+      if (!plan || attempt.status !== "running" || attempt.executionManifestId !== manifest.id || !plan.startedAt)
+        throw conflict("Current orchestration attempt is unavailable");
+      planDeadline = plan.startedAt.getTime() + plan.budgets.maxWallClockSeconds * 1000;
+    }
+    const deadlineAt = new Date(Math.min(policy.expiresAt.getTime(), lease.expiresAt.getTime(), run.executionControlDeadlineAt?.getTime() ?? Number.POSITIVE_INFINITY, run.startedAt.getTime() + policy.compilation.compiledPolicy.resources.wallClockSeconds * 1000, planDeadline));
+    if (deadlineAt <= now) throw conflict("Original Task or policy execution deadline expired");
+    return { lease, run, manifest, source, sandboxBinding, capability, policy, cell: cellRow, host, attempt, deadlineAt };
   }
   async function admissionContext(
     tx: Db,
@@ -261,6 +346,7 @@ export function executionSandboxService(db: Db, options: {
     return { row, currentCell, imageDigest, snapshot, capability, source, selected, claimEvent };
   }
   return {
+    assertTaskExecutionContext,
     posture: async (actor: AuthorizationActor, companyId: string, cellId: string): Promise<SandboxPosture> => {
       await access(db, actor, companyId); const current = await cell(db, companyId, cellId);
       const [row] = await db.select().from(runtimeSandboxBindings).where(and(eq(runtimeSandboxBindings.companyId, companyId), eq(runtimeSandboxBindings.runtimeCellId, cellId))).orderBy(desc(runtimeSandboxBindings.createdAt)).limit(1);
@@ -302,15 +388,25 @@ export function executionSandboxService(db: Db, options: {
       const initial = await binding(db, actor, companyId, id), selected = backend(initial, actor);
       if (!selected) throw conflict("The requested backend is not installed; the binding remains unqualified");
       const current = await cell(db, companyId, initial.runtimeCellId);
-      if (current.generation.toString() !== initial.cellGeneration || current.status !== "STOPPED") throw conflict("Qualification requires the current stopped cell, without disrupting a running workload");
+      if (initial.version !== expectedVersion || current.generation.toString() !== initial.cellGeneration || current.status !== "STOPPED") throw conflict("Qualification requires the current stopped cell, without disrupting a running workload");
       const startedAt = new Date(), report = await runSandboxQualification(selected, identity(initial), startedAt);
+      // Host I/O stays outside the binding-row transaction: the native host
+      // command owner takes a shared binding lock while awaiting its receipt.
+      // Holding an update lock here would deadlock qualification against its
+      // own prepare command.
+      const prepared = report.capabilities
+        ? await selected.prepareSandbox(identity(initial))
+        : { backendVersion: "unqualified", imageDigest: `cell:${current.id}:${initial.cellGeneration}` };
+      if (report.capabilities && (
+        report.capabilities.sandboxImageDigest !== prepared.imageDigest ||
+        report.capabilities.backendVersion !== prepared.backendVersion ||
+        new Date(report.capabilities.expiresAt) <= new Date()
+      )) throw conflict("Observed backend image or qualification changed during preparation");
       return withV7ActivityTransaction(db, async (tx, publications) => {
         const row = await binding(tx, actor, companyId, id, true); await access(tx, actor, companyId, true); const currentCell = await cell(tx, companyId, row.runtimeCellId);
-        if (row.version !== expectedVersion || row.cellGeneration !== currentCell.generation.toString() || currentCell.status !== "STOPPED") throw conflict("Runtime changed during qualification");
+        if (row.version !== expectedVersion || row.version !== initial.version || row.cellGeneration !== initial.cellGeneration || row.boundaryPolicyHash !== initial.boundaryPolicyHash || row.backend !== initial.backend || currentCell.generation.toString() !== initial.cellGeneration || currentCell.status !== "STOPPED" || (currentCell.activeImageDigest ?? currentCell.desiredImageDigest) !== (current.activeImageDigest ?? current.desiredImageDigest)) throw conflict("Runtime changed during qualification");
         // An unavailable host qualification must remain a retained inconclusive
         // report. Do not turn a configured image into preparation evidence.
-        const prepared = report.capabilities ? await selected.prepareSandbox(identity(row)) : { backendVersion: "unqualified", imageDigest: `cell:${currentCell.id}:${row.cellGeneration}` };
-        if (report.capabilities && (report.capabilities.sandboxImageDigest !== prepared.imageDigest || report.capabilities.backendVersion !== prepared.backendVersion)) throw conflict("Observed backend image does not match the current sandbox");
         await access(tx, actor, companyId, true);
         const [run] = await tx.insert(sandboxQualificationRuns).values({ companyId, bindingId: id, backend: row.backend, backendVersion: prepared.backendVersion, hostOrImageRef: prepared.imageDigest, kernelVersion: report.capabilities?.hostKernelVersion ?? null, suiteVersion: report.suiteVersion, evidenceKind: selected.evidenceKind, status: report.status, results: report.results, exceptions: report.exceptions, reportHash: report.reportHash, startedAt, completedAt: new Date() }).returning();
         const [updated] = await tx.update(runtimeSandboxBindings).set({ qualificationRunId: run!.id, capabilitySnapshot: report.capabilities, capabilitySnapshotHash: report.capabilities ? nativeSha256(report.capabilities) : null, status: report.status === "passed" && report.capabilities && selected.evidenceKind === "protected_host_report" ? "ready" : report.status === "failed" ? "failed" : "requested", version: row.version + 1, updatedAt: new Date() }).where(eq(runtimeSandboxBindings.id, id)).returning();
@@ -509,8 +605,8 @@ export function executionSandboxService(db: Db, options: {
             ...resumed,
             claimKey,
             claimVersion: current.version,
-            claimReplay: true,
-            claimCompleted: false,
+            claimReplay: true as const,
+            claimCompleted: false as const,
           };
         }
         if (current.status === "ready" || current.status === "running") {
@@ -560,8 +656,8 @@ export function executionSandboxService(db: Db, options: {
                 ...completed,
                 claimKey,
                 claimVersion: Number(claimDetails?.claimVersion),
-                claimReplay: true,
-                claimCompleted: true,
+                claimReplay: true as const,
+                claimCompleted: true as const,
                 successEvent,
               };
             }
@@ -617,8 +713,8 @@ export function executionSandboxService(db: Db, options: {
           row: claimed,
           claimKey,
           claimVersion: claimed.version,
-          claimReplay: false,
-          claimCompleted: false,
+          claimReplay: false as const,
+          claimCompleted: false as const,
         };
       });
       const scope = identity(initial.row);
@@ -682,7 +778,11 @@ export function executionSandboxService(db: Db, options: {
         if (
           !currentCapabilities.success ||
           currentCapabilities.data.evidenceKind !== "protected_host_report" ||
-          nativeSha256(currentCapabilities.data) !== initial.row.capabilitySnapshotHash
+          new Date(currentCapabilities.data.testedAt) > new Date() ||
+          new Date(currentCapabilities.data.expiresAt) <= new Date() ||
+          !initial.row.capabilitySnapshot ||
+          nativeSha256(sandboxCapabilityFacts(currentCapabilities.data)) !==
+            nativeSha256(sandboxCapabilityFacts(sandboxCapabilitySnapshotSchema.parse(initial.row.capabilitySnapshot)))
         )
           throw conflict("Current protected-host capability snapshot changed");
         const prepared = await selected.prepareSandbox(scope);

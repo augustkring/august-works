@@ -22,7 +22,12 @@ export async function createCanonicalHumanProject(db: Db, companyId: string, act
   const app = express();
   app.use(express.json());
   app.use(((req, _res, next) => {
-    req.actor = { ...actor, companyIds: [companyId], memberships: [{ companyId, membershipRole: "owner", status: "active" }] };
+    req.actor = { ...actor, userId: actor.userId ?? undefined, agentId: actor.agentId ?? undefined,
+      companyId: actor.companyId ?? undefined, keyId: actor.keyId ?? undefined,
+      authenticatedKeyHash: actor.authenticatedKeyHash ?? undefined,
+      authenticatedCredentialExpiresAt: actor.authenticatedCredentialExpiresAt ?? undefined,
+      keyScope: actor.keyScope ?? undefined, runId: actor.runId ?? undefined,
+      companyIds: [companyId], memberships: [{ companyId, membershipRole: "owner", status: "active" }] };
     next();
   }) as RequestHandler);
   app.use("/api", projectRoutes(db));

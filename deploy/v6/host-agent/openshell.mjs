@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { createHash, randomUUID } from "node:crypto";
 import { readFile, stat, realpath, writeFile, unlink } from "node:fs/promises";
@@ -27,6 +27,7 @@ export function openShellHostEngine({
   epoch,
   root = "/var/lib/aw-runtime",
   run = runFile,
+  spawnProcess = spawn,
 }) {
   const journalFile = path.join(root, "openshell-journal.json");
   let journal = { version: 2, scopes: {}, commands: {} },
@@ -646,6 +647,103 @@ export function openShellHostEngine({
     // Configured image/labels therefore cannot earn a preparation receipt.
     throw new Error("sandbox_operation_unsupported");
   }
+  async function executeStream(input, onOutput, signal) {
+    const request = input?.request;
+    const requestKeys = ["requestId", "bindingId", "hostEpoch", "runId", "attemptId", "attempt", "manifestId", "manifestHash", "policySnapshotId", "policyHash", "commandDigest", "deadlineAt", "sandboxRef", "imageDigest", "argv", "cwd", "env", "stdinBase64"];
+    if (!input || !validScope(input.scope) || !request ||
+      Object.keys(request).sort().join(",") !== requestKeys.slice().sort().join(",") ||
+      !uuid.test(request.requestId) || request.bindingId !== input.scope.bindingId ||
+      request.hostEpoch !== epoch || !uuid.test(request.runId) ||
+      (request.attemptId !== null && !uuid.test(request.attemptId)) ||
+      !Number.isSafeInteger(request.attempt) || request.attempt < 1 ||
+      !uuid.test(request.manifestId) || !/^[a-f0-9]{64}$/.test(request.manifestHash) ||
+      !uuid.test(request.policySnapshotId) || !/^[a-f0-9]{64}$/.test(request.policyHash) ||
+      !/^[a-f0-9]{64}$/.test(request.commandDigest) ||
+      request.sandboxRef !== input.scope.sandboxRef ||
+      !/^sha256:[a-f0-9]{64}$/.test(request.imageDigest) ||
+      !Array.isArray(request.argv) || request.argv.length < 1 || request.argv.length > 64 ||
+      request.argv.some(value => typeof value !== "string" || !value.length || value.length > 8192) ||
+      typeof request.cwd !== "string" || !path.isAbsolute(request.cwd) ||
+      !request.env || typeof request.env !== "object" || Array.isArray(request.env) || Object.keys(request.env).length > 64 ||
+      Object.entries(request.env).some(([key, value]) => !/^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(key) || typeof value !== "string" || value.length > 8192 || /(?:TOKEN|SECRET|PASSWORD|CREDENTIAL|API[_-]?KEY|PRIVATE[_-]?KEY|AUTHORIZATION)/i.test(key)) ||
+      typeof request.stdinBase64 !== "string" || request.stdinBase64.length > 512 * 1024 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(request.stdinBase64) ||
+      typeof input.capabilityToken !== "string" || input.capabilityToken.length > 16384 ||
+      typeof onOutput !== "function") throw new Error("sandbox_scope_changed");
+    const deadlineAt = request.deadlineAt;
+    if (!Number.isFinite(Date.parse(deadlineAt)) || Date.parse(deadlineAt) <= Date.now()) throw new Error("sandbox_host_unavailable");
+    const commandDigest = hash(JSON.stringify(canonical({ argv: request.argv, cwd: request.cwd, env: request.env, stdinHash: hash(Buffer.from(request.stdinBase64, "base64")), timeoutDeadline: deadlineAt })));
+    if (commandDigest !== request.commandDigest) throw new Error("sandbox_scope_changed");
+    const detail = await observed(input.scope, deadlineAt);
+    const pinnedPolicy = journal.scopes[input.scope.bindingId]?.policy;
+    const effectivePolicy = await policy(input.scope, deadlineAt);
+    const workload = await container(input.scope, detail, request.imageDigest, deadlineAt);
+    if (!pinnedPolicy || pinnedPolicy.policyHash !== request.policyHash || !samePolicyRevision(effectivePolicy, pinnedPolicy) ||
+      detail.phase !== "Ready" || !workload.State.Running) throw new Error("sandbox_operation_unsupported");
+
+    const requestHash = hash(JSON.stringify(canonical({ request: { ...request, stdinBase64: undefined }, stdinHash: hash(Buffer.from(request.stdinBase64, "base64")), scope: input.scope })));
+    const begin = await serial(async () => {
+      const existing = journal.commands[request.requestId];
+      if (existing) {
+        if (existing.requestHash !== requestHash) throw new Error("sandbox_scope_changed");
+        throw new Error("exec_unknown");
+      }
+      if (Object.keys(journal.commands).length >= 10256) throw new Error("sandbox_host_unavailable");
+      journal.commands[request.requestId] = { requestHash, result: null, kind: "exec", state: "claimed" };
+      await atomicJson(journalFile, journal);
+    });
+    void begin;
+    const privateConfig = await privateConfiguration();
+    const cliArgs = ["--gateway", config.gateway, "--workspace", config.workspace, "sandbox", "exec", "--name", input.scope.sandboxRef, "--workdir", request.cwd];
+    for (const key of Object.keys(request.env).sort()) cliArgs.push("--env", `${key}=${request.env[key]}`);
+    cliArgs.push("--", ...request.argv);
+    const remaining = Math.max(1, Math.min(60_000, Date.parse(deadlineAt) - Date.now()));
+    const child = spawnProcess(privateConfig.executable, cliArgs, {
+      cwd: privateConfig.stateHome,
+      env: privateConfig.env,
+      stdio: ["pipe", "pipe", "pipe"],
+      shell: false,
+      windowsHide: true,
+    });
+    let timedOut = false, outputBytes = 0, settled = false;
+    const terminate = () => { if (!settled) child.kill("SIGKILL"); };
+    const onAbort = () => terminate();
+    signal?.addEventListener("abort", onAbort, { once: true });
+    const timeout = setTimeout(() => { timedOut = true; terminate(); }, remaining);
+    timeout.unref?.();
+    const forward = async (stream, source) => {
+      for await (const chunk of source) {
+        outputBytes += chunk.length;
+        if (outputBytes > 64 * 1024 * 1024) { terminate(); throw new Error("exec_rejected"); }
+        await onOutput(stream, Buffer.from(chunk));
+      }
+    };
+    const readOutput = Promise.all([forward("stdout", child.stdout), forward("stderr", child.stderr)]);
+    child.stdin.end(Buffer.from(request.stdinBase64, "base64"));
+    let exitCode;
+    try {
+      const exited = new Promise((resolve, reject) => {
+        child.once("error", reject);
+        child.once("close", (code, signalName) => resolve({ code, signalName }));
+      });
+      const result = await exited;
+      await readOutput;
+      settled = true;
+      exitCode = Number.isInteger(result.code) ? result.code : (timedOut ? 124 : 1);
+    } catch (error) {
+      terminate();
+      await Promise.allSettled([readOutput]);
+      throw error;
+    } finally {
+      settled = true;
+      clearTimeout(timeout);
+      signal?.removeEventListener("abort", onAbort);
+    }
+    await serial(async () => {
+      journal.commands[request.requestId] = { requestHash, result: { exitCode, timedOut }, kind: "exec", state: "completed" };
+      await atomicJson(journalFile, journal);
+    });
+    return { exitCode, timedOut };
+  }
   return {
     async initialize() {
       try {
@@ -767,6 +865,7 @@ export function openShellHostEngine({
         return result;
       });
     },
+    executeStream,
     acknowledge(id) {
       return serial(async () => {
         delete journal.commands[id];

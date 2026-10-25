@@ -1,5 +1,6 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
+  activityLog,
   runtimeCells,
   runtimeHosts,
   runtimePolicySnapshots,

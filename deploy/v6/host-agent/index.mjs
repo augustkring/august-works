@@ -258,6 +258,7 @@ const relay = hostGatewayRelay({
   origin: origin.origin,
   proof: { hostId: config.hostId, epoch: config.epoch, sign: proof },
   engine,
+  openShell: sandboxEngine,
 });
 let heartbeatActive = false;
 async function heartbeat() {

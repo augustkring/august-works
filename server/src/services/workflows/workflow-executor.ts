@@ -129,7 +129,12 @@ export interface WorkflowRunActor {
 
 function workflowSourceActor(companyId: string, actor: WorkflowRunActor): AuthorizationActor | undefined {
   const original = actor.authorizationActor;
-  if (!original) return learningActorFromPrincipal(companyId, actor.principal, actor.runId);
+  // A display principal is not a verified board session. HTTP readers must
+  // carry the original authenticated actor; background callers may use the
+  // canonical run-derived actor only for non-user execution principals.
+  if (!original) return actor.principal.type === "user"
+    ? undefined
+    : learningActorFromPrincipal(companyId, actor.principal, actor.runId);
   const sameRun = (original.runId ?? null) === (actor.runId ?? null);
   const matches = actor.principal.type === "user"
     ? original.type === "board" && original.source !== "local_implicit" && original.userId === actor.principal.userId && sameRun

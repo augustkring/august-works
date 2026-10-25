@@ -23106,6 +23106,8 @@ export function heartbeatService(
           workspaceId: persistedExecutionWorkspace?.id ?? null,
         });
         let nativeExecution: NativeExecutionInput | null = null;
+        let freshGovernedContext: Awaited<ReturnType<typeof assembleFreshNativeGovernedContext>> | null = null;
+        let governedContextMarkdown: string | null = null;
         // Exact Context inputs to this bootstrap only. NULL is unknown, never
         // a complete source-free input receipt; later tool reads are separate.
         let nativeBootstrapContextManifests: Array<{ companyId: string; contextManifestId: string }> | null = null;
@@ -23538,7 +23540,7 @@ export function heartbeatService(
                   })
                 : null;
             const pinnedPlanMarkdown = pinnedPlan?.body ?? "";
-            const freshGovernedContext = v5Fabric?.contextMarkdown != null ? null :
+            freshGovernedContext = v5Fabric?.contextMarkdown != null ? null :
               await assembleFreshNativeGovernedContext(db, {
                 enabled:
                   experimentalInstanceSettings.enableContextEngineV1 === true,
@@ -23558,7 +23560,7 @@ export function heartbeatService(
                   safeWakeCommentContext?.body ??
                   null,
               });
-            const governedContextMarkdown = v5Fabric?.contextMarkdown ?? freshGovernedContext?.markdown ?? null;
+            governedContextMarkdown = v5Fabric?.contextMarkdown ?? freshGovernedContext?.markdown ?? null;
             // A reused V5 inventory can name an older Context. Retain the fresh
             // references that actually produced this bootstrap's markdown.
             nativeBootstrapContextManifests = v5Fabric?.contextMarkdown != null
@@ -24302,10 +24304,11 @@ export function heartbeatService(
             // gate, after cancellation and chat admission have been rechecked.
             const guardedDispatch =
               await dispatchResolvedInteractionContinuationWithAtomicGate(
-                async (_markDispatchStarted) => {
-                  if (freshGovernedContext?.sourceWitness && governedContextMarkdown?.trim() && nativeBootstrapContextManifests) {
+                async (markDispatchStarted) => {
+                  const nativeDispatchIssueId = issueRef?.id ?? null;
+                  if (nativeDispatchIssueId && freshGovernedContext?.sourceWitness && governedContextMarkdown?.trim() && nativeBootstrapContextManifests) {
                     await revalidateNativeBootstrapContextWitness(db, { witness: freshGovernedContext.sourceWitness,
-                      companyId: agent.companyId, runId: run.id, agentId: agent.id, issueId: issueRef.id,
+                      companyId: agent.companyId, runId: run.id, agentId: agent.id, issueId: nativeDispatchIssueId,
                       renderedMarkdown: governedContextMarkdown, manifestIds: nativeBootstrapContextManifests });
                   }
                   const nativeDraftBackend = nativeExecution.provider.kind === "aw_text_only"

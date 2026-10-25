@@ -17,12 +17,21 @@ import {
 import {
   activityLog,
   companySecrets,
+  agentExecutionManifests,
   agentProviderBindings,
   agentPresenceRuntimeBindings,
   agents,
   billingAccounts,
   runtimeCapacityProfiles,
   runtimeCells,
+  runtimeSandboxBindings,
+  runtimePolicySnapshots,
+  sandboxQualificationRuns,
+  heartbeatRuns,
+  issues,
+  environmentLeases,
+  orchestrationWorkerAttempts,
+  orchestrationPlans,
   runtimeHostCommands,
   runtimeHosts,
   runtimeOperations,
@@ -53,6 +62,11 @@ import { equalDigest, randomToken, sha256 } from "../saas/crypto.js";
 import { runtimeBackupService } from "./backups.js";
 import { runtimeGatewayRelay } from "./gateway-relay.js";
 import { runtimeHostAuth } from "./host-auth.js";
+import { createSandboxExecJwt, verifySandboxExecJwt } from "../../agent-auth-jwt.js";
+import { assertAgentRunWriteAllowed, agentRunWritesRevoked } from "../../agent-run-cancellation.js";
+import { assertV7Authorization } from "../v7-authorization.js";
+import { nativeSha256 } from "../native-runtime/canonical.js";
+import { executionSandboxService } from "../execution-sandbox/sandbox-service.js";
 
 const ACTIVE_OPERATIONS = [
   "REQUESTED",
@@ -157,6 +171,7 @@ export function runtimeControlService(
         generation: cell.generation.toString(),
       };
     },
+    authorizeExec: (input) => authorizeSandboxExec(input),
   });
   type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
   async function meter(
@@ -2219,11 +2234,178 @@ export function runtimeControlService(
       .where(eq(runtimeCells.companyId, companyId))
       .orderBy(runtimeCells.createdAt);
   }
+  async function authorizeSandboxExec(input: { cellId: string; generation: string; request: import("@paperclipai/shared").RuntimeSandboxExecRelayRequest; capabilityToken: string }) {
+    const claims = verifySandboxExecJwt(input.capabilityToken);
+    const capability = claims?.sandbox_exec, request = input.request, now = new Date();
+    if (!claims || !capability || claims.sub === "" || claims.company_id === "" ||
+      capability.requestId !== request.requestId || capability.bindingId !== request.bindingId ||
+      capability.cellId !== input.cellId || capability.generation !== input.generation ||
+      capability.hostEpoch !== request.hostEpoch || capability.runId !== request.runId ||
+      capability.attemptId !== request.attemptId || capability.attempt !== request.attempt ||
+      capability.manifestId !== request.manifestId || capability.manifestHash !== request.manifestHash ||
+      capability.policySnapshotId !== request.policySnapshotId || capability.policyHash !== request.policyHash ||
+      capability.commandDigest !== request.commandDigest || capability.deadlineAt !== request.deadlineAt ||
+      claims.run_id !== request.runId || claims.jti !== request.requestId)
+      throw forbidden("Sandbox execution capability scope mismatch");
+    return db.transaction(async transaction => {
+      const tx = transaction as unknown as Db;
+      const [operation] = await tx.select().from(runtimeOperations).where(and(
+        eq(runtimeOperations.companyId, claims.company_id), eq(runtimeOperations.runtimeCellId, input.cellId),
+        eq(runtimeOperations.operationType, "sandbox_exec"), eq(runtimeOperations.status, "RUNNING"),
+        eq(runtimeOperations.attemptCount, 0), gt(runtimeOperations.deadlineAt, now),
+        sql`${runtimeOperations.desiredState}->>'requestId' = ${request.requestId}`,
+      )).for("update");
+      const expected = operation?.desiredState as Record<string, unknown> | undefined;
+      if (!operation || expected?.bindingId !== request.bindingId || expected.generation !== input.generation ||
+        expected.hostId !== capability.hostId || expected.hostEpoch !== request.hostEpoch ||
+        expected.runId !== request.runId || expected.attemptId !== request.attemptId || expected.attempt !== request.attempt ||
+        expected.manifestId !== request.manifestId || expected.manifestHash !== request.manifestHash ||
+        expected.policySnapshotId !== request.policySnapshotId || expected.policyHash !== request.policyHash ||
+        expected.commandDigest !== request.commandDigest || expected.deadlineAt !== request.deadlineAt)
+        throw forbidden("Sandbox execution claim is missing, expired, or already consumed");
+      const source = await executionSandboxService(tx).assertTaskExecutionContext(tx, {
+        companyId: claims.company_id, runId: request.runId, leaseId: String(expected.leaseId), now,
+      });
+      if (!source || source.run.agentId !== claims.sub || source.run.responsibleUserId !== claims.responsible_user_id ||
+        source.sandboxBinding.id !== request.bindingId || source.cell.id !== input.cellId ||
+        source.cell.generation.toString() !== input.generation || source.host.id !== capability.hostId ||
+        source.host.credentialVersion !== request.hostEpoch || source.manifest.id !== request.manifestId ||
+        source.manifest.hash !== request.manifestHash || source.policy.id !== request.policySnapshotId ||
+        source.policy.policyHash !== request.policyHash || source.deadlineAt.toISOString() < request.deadlineAt)
+        throw forbidden("Sandbox execution source changed before host dispatch");
+      const [consumed] = await tx.update(runtimeOperations).set({ attemptCount: 1, updatedAt: now }).where(and(
+        eq(runtimeOperations.id, operation.id), eq(runtimeOperations.status, "RUNNING"), eq(runtimeOperations.attemptCount, 0),
+      )).returning({ id: runtimeOperations.id });
+      if (!consumed) throw forbidden("Sandbox execution capability was already consumed");
+      return { runtimeHostId: source.host.id, companyId: claims.company_id, generation: input.generation };
+    });
+  }
+  async function executeSandboxTask(input: {
+    companyId: string;
+    runId: string | null;
+    leaseId: string;
+    command: string;
+    args?: string[];
+    cwd?: string;
+    env?: Record<string, string>;
+    stdin?: string;
+    timeoutMs?: number;
+    signal?: AbortSignal;
+    onOutput?: (stream: "stdout" | "stderr", chunk: string) => void | Promise<void>;
+  }): Promise<{ exitCode: number | null; signal: null; timedOut: boolean; stdout: string; stderr: string } | null> {
+    if (!input.runId) return null;
+    const command = input.command, argv = [command, ...(input.args ?? [])];
+    const cwd = input.cwd;
+    if (!cwd || !cwd.startsWith("/")) throw conflict("Sandbox execution requires an absolute workspace path");
+    const env = input.env ?? {};
+    const stdinBytes = Buffer.from(input.stdin ?? "", "utf8");
+    const requestId = randomUUID();
+    const now = new Date();
+    const prepared = await db.transaction(async transaction => {
+      const tx = transaction as unknown as Db;
+      const source = await executionSandboxService(tx).assertTaskExecutionContext(tx, {
+        companyId: input.companyId, runId: input.runId!, leaseId: input.leaseId, now,
+      });
+      if (!source) return null;
+      const deadlineAt = new Date(Math.min(
+        source.deadlineAt.getTime(),
+        input.timeoutMs && input.timeoutMs > 0 ? now.getTime() + input.timeoutMs : Number.POSITIVE_INFINITY,
+      ));
+      if (deadlineAt <= now) throw conflict("Task execution deadline expired");
+      const commandDigest = nativeSha256({
+        argv, cwd, env, stdinHash: sha256(stdinBytes), timeoutDeadline: deadlineAt.toISOString(),
+      });
+      const attempt = source.attempt?.attempt ?? Math.max(1, source.run.continuationAttempt + 1);
+      const desiredState = {
+        kind: "sandbox_exec_v1", requestId, bindingId: source.sandboxBinding.id,
+        cellId: source.cell.id, generation: source.cell.generation.toString(), hostId: source.host.id,
+        hostEpoch: source.host.credentialVersion, runId: source.run.id, attemptId: source.attempt?.id ?? null,
+        attempt, leaseId: source.lease.id, manifestId: source.manifest.id, manifestHash: source.manifest.hash,
+        policySnapshotId: source.policy.id, policyHash: source.policy.policyHash,
+        commandDigest, deadlineAt: deadlineAt.toISOString(),
+      };
+      const [claim] = await tx.insert(runtimeOperations).values({
+        companyId: input.companyId, runtimeCellId: source.cell.id, operationType: "sandbox_exec",
+        status: "REQUESTED", requestedByType: "agent", requestedById: source.run.agentId!,
+        idempotencyKey: requestId, requestHash: nativeSha256(desiredState), desiredState,
+        deadlineAt, notBefore: now,
+      }).returning();
+      if (!claim) throw conflict("Sandbox execution claim could not be persisted");
+      const [running] = await tx.update(runtimeOperations).set({ status: "RUNNING", attemptCount: 1, updatedAt: now })
+        .where(and(eq(runtimeOperations.id, claim.id), eq(runtimeOperations.status, "REQUESTED"))).returning();
+      if (!running) throw conflict("Sandbox execution claim changed before dispatch");
+      return { source, claim: running, requestId, commandDigest, attempt, deadlineAt, argv, cwd, env, stdinBytes };
+    });
+    if (!prepared) return null;
+    const { source, claim, commandDigest, attempt, deadlineAt } = prepared;
+    const request = {
+      requestId: prepared.requestId,
+      bindingId: source.sandboxBinding.id,
+      hostEpoch: source.host.credentialVersion,
+      runId: source.run.id,
+      attemptId: source.attempt?.id ?? null,
+      attempt,
+      manifestId: source.manifest.id,
+      manifestHash: source.manifest.hash,
+      policySnapshotId: source.policy.id,
+      policyHash: source.policy.policyHash,
+      commandDigest,
+      deadlineAt: deadlineAt.toISOString(),
+      sandboxRef: source.sandboxBinding.sandboxRef ?? `aw-v7-${source.sandboxBinding.id}`,
+      imageDigest: source.cell.activeImageDigest ?? source.cell.desiredImageDigest,
+      argv: prepared.argv,
+      cwd: prepared.cwd,
+      env: prepared.env,
+      stdinBase64: prepared.stdinBytes.toString("base64"),
+    };
+    const capabilityToken = createSandboxExecJwt({
+      agentId: source.run.agentId!, companyId: input.companyId, adapterType: source.source.record.manifest.agent.adapterType,
+      runId: source.run.id, responsibleUserId: source.run.responsibleUserId,
+      claim: {
+        requestId: prepared.requestId, bindingId: source.sandboxBinding.id, cellId: source.cell.id,
+        generation: source.cell.generation.toString(), hostId: source.host.id, hostEpoch: source.host.credentialVersion,
+        runId: source.run.id, attemptId: source.attempt?.id ?? null, attempt,
+        manifestId: source.manifest.id, manifestHash: source.manifest.hash, policySnapshotId: source.policy.id,
+        policyHash: source.policy.policyHash, commandDigest, deadlineAt: deadlineAt.toISOString(),
+      },
+      parentExpiresAt: source.run.executionControlDeadlineAt ?? source.deadlineAt,
+      nativeLeaseExpiresAt: source.lease.expiresAt!,
+    });
+    if (!capabilityToken) throw conflict("Short-lived sandbox execution capability could not be issued");
+    const stdout: Buffer[] = [], stderr: Buffer[] = [];
+    let outputBytes = 0;
+    try {
+      const result = await relay.executeOpenShell({
+        cellId: source.cell.id,
+        generation: source.cell.generation.toString(),
+        request,
+        capabilityToken,
+        signal: input.signal,
+        onOutput: async (stream, chunk) => {
+          outputBytes += chunk.length;
+          if (outputBytes > 64 * 1024 * 1024) throw conflict("Sandbox output exceeded its bounded stream limit");
+          (stream === "stdout" ? stdout : stderr).push(chunk);
+          await input.onOutput?.(stream, chunk.toString("utf8"));
+        },
+      });
+      await db.update(runtimeOperations).set({
+        status: "SUCCEEDED", completedAt: new Date(), desiredState: { ...(claim.desiredState as Record<string, unknown>), exitCode: result.exitCode, timedOut: result.timedOut }, updatedAt: new Date(),
+      }).where(and(eq(runtimeOperations.id, claim.id), eq(runtimeOperations.status, "RUNNING")));
+      return { exitCode: result.exitCode, signal: null, timedOut: result.timedOut, stdout: Buffer.concat(stdout).toString("utf8"), stderr: Buffer.concat(stderr).toString("utf8") };
+    } catch (error) {
+      const code = error instanceof Error && ["exec_timeout", "exec_unknown", "runtime_unavailable", "policy_changed", "exec_rejected"].includes(error.message)
+        ? error.message : "exec_unknown";
+      await db.update(runtimeOperations).set({ status: "NEEDS_RECONCILIATION", errorCode: code, updatedAt: new Date() })
+        .where(and(eq(runtimeOperations.id, claim.id), eq(runtimeOperations.status, "RUNNING")));
+      throw error;
+    }
+  }
   return {
     auth,
     backups,
     relay,
     getCell,
+    executeSandboxTask,
     create,
     request,
     assertSandboxStartAdmission,
