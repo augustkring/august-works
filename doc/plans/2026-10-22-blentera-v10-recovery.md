@@ -1585,3 +1585,8 @@ This is saved work, not completed acceptance. The first overlapping compiler run
 Adapted paused-recipient behavior from pinned upstream d30648dee89720358271c276b9fc28cf83f18be7 through the fork original wake-queue owner. The existing native invokability result distinguishes a paused recipient from a missing/terminated/unavailable one. A paused row stays deferred and is excluded from the current drain, allowing an eligible follower to proceed. Explicit Task holds retain their cancellation priority; this adds no grant or permission bypass.
 
 All186 tests across the complete policy/application/PostgreSQL adapter files pass. The real-PG assignee/mentioned cases verify unchanged accepted rows across repeated release, one successor after resume and retained comment content. These scoped queue tests do not establish assembled heartbeat restart/concurrency or complete UP05/native cleanup acceptance. The pinned stranded-queue and cleanup dependencies are now being reconciled; no upstream historical SQL/journal is imported.
+
+
+### 2026-10-25 — UP05 live legacy-controller finalization guard
+
+Ported pinned32ee2e9a6a35da4cbde0c7f57df92f4d7eda5444 through the original abandoned-execution reconciliation owner. Under its existing locked run transaction, a current database-backed legacy-controller lease defers the recovery deadline to that lease instead of publishing a false terminal failure. An expired controller still follows the original failure and no-replay recovery path. Complete native reconciliation suite5PASS, including one eventual failure report after expiry and no failure while the controller owns the running work. This repairs the specific ownership race; it is not a physical OpenShell/SSH Stop or provider-completion qualification.
