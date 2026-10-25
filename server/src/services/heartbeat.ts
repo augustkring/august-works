@@ -23858,6 +23858,9 @@ export function heartbeatService(
                   // historical sources. Never substitute a later live Context.
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapContextManifests }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapAuthoredSources }),
+                  // A reused inventory has unknown original Role Pack captures;
+                  // current selections cannot replace its historical sources.
+                  ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapRolePackSources: v5Fabric ? v5Fabric.inputRolePackSources ?? null : [] }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapConversationReplaySources }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapTaskPlanSources, nativeBootstrapPlanningSources }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapTaskSource: taskSourceCapture, nativeBootstrapAncestorSources }),

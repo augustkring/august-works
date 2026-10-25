@@ -6,7 +6,7 @@ import {assertAnalyticalContextPayloadAccess} from "./analytical-context-authori
 import {lockAnalyticalCompany} from "./analytical-privacy.js";
 import { and, eq, sql } from "drizzle-orm";
 import { agentIdentities, agents, companies, heartbeatRuns, issues, contextManifestItems, contextManifestMemoryRoots, companySkillTestRuns, companySkillEvalRuns, agentExecutionManifests, agentExecutionManifestItems, agentExecutionAuthorizations, agentExecutionScopeRequests, companySkillUsageEvents, type Db } from "@paperclipai/db";
-import { agentExecutionManifestSchema, createExecutionScopeRequestSchema, v5FeatureEnabled, type AgentExecutionScope } from "@paperclipai/shared";
+import { agentExecutionManifestSchema, createExecutionScopeRequestSchema, v5FeatureEnabled, type AgentExecutionScope, type NativePayloadSourceInput } from "@paperclipai/shared";
 import type { z } from "zod";
 import { readAuthoredAgentDefinition } from "./agents/authored-definition.js";
 import { resolveAuthoringProcedures } from "./agents/authoring-procedures.js";
@@ -146,7 +146,9 @@ export function agentRuntimeFabricService(db: Db) {
       const scoped = scope.delegatedScopes.length ? await crossCompanyContextService(db).resolve(actor, scope) : null;
       const provider = await agentProviderBindingService(db).assertRuntime(input.companyId, input.agentId);
       const providers = [{ companyId: input.companyId, agentId: input.agentId, providerBindingId: provider.provider.id, profileRef: provider.runtime.providerProfileRef, snapshotHash: provider.provider.capabilitySnapshot!.hash, isolationMode: provider.provider.isolationMode as "isolated_per_presence" | "shared_trusted_runtime" }, ...(scoped?.scopes.filter((s) => s.companyId !== input.companyId).map((s) => ({ companyId: s.companyId, agentId: s.presence.id, providerBindingId: s.provider.provider.id, profileRef: s.provider.runtime.providerProfileRef, snapshotHash: s.provider.provider.capabilitySnapshot!.hash, isolationMode: s.provider.provider.isolationMode as "isolated_per_presence" | "shared_trusted_runtime" })) ?? [])];
-      const rolePack = v5FeatureEnabled(flags, "role_packs_v5") ? await rolePackService(db).resolve(actor, input.companyId, input.agentId,undefined,"task") : null;
+      let inputRolePackSources: Array<Extract<NativePayloadSourceInput, { kind: "role_pack_version" }>> | null = stored ? null : [];
+      const rolePack = v5FeatureEnabled(flags, "role_packs_v5") ? await rolePackService(db).resolve(actor, input.companyId, input.agentId,undefined,"task",
+        inputs => { if (!stored) inputRolePackSources = inputs; }) : null;
       if (authored?.procedureSnapshotHash && !input.responsibleUserId)
         throw forbidden("The identified procedural version requires its accountable execution principal");
       const procedures = authored?.procedureSnapshotHash ? await resolveAuthoringProcedures(db, {
@@ -240,7 +242,7 @@ export function agentRuntimeFabricService(db: Db) {
         return row!;
       });
 
-      return { record, manifest, inputContextManifests: context.refs, contextMarkdown: `${inventory}\n\n${context.markdown}`, testSelected: Boolean(test && manifest.skills.some((p) => p.skillId === test.skillId)), providerRuntime: { providerType: provider.provider.providerType, providerBindingId: provider.provider.id, providerAgentRef: provider.provider.providerAgentRef, providerProfileRef: provider.runtime.providerProfileRef, sessionNamespace: provider.runtime.providerSessionNamespace, isolationMode: provider.provider.isolationMode as "isolated_per_presence" | "shared_trusted_runtime", capabilitySnapshotHash: provider.provider.capabilitySnapshot!.hash } };
+      return { record, manifest, inputContextManifests: context.refs, inputRolePackSources, contextMarkdown: `${inventory}\n\n${context.markdown}`, testSelected: Boolean(test && manifest.skills.some((p) => p.skillId === test.skillId)), providerRuntime: { providerType: provider.provider.providerType, providerBindingId: provider.provider.id, providerAgentRef: provider.provider.providerAgentRef, providerProfileRef: provider.runtime.providerProfileRef, sessionNamespace: provider.runtime.providerSessionNamespace, isolationMode: provider.provider.isolationMode as "isolated_per_presence" | "shared_trusted_runtime", capabilitySnapshotHash: provider.provider.capabilitySnapshot!.hash } };
     },
   };
 }

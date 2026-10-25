@@ -1564,3 +1564,10 @@ Evidence: `scheduled-deadlines-2026-10-25/receipts.json`: native deadline query1
 Saved the current Workflow source scope and actual execution-principal Task creation changes before continuing Learning fixes. The owner validates actual revision and step Artifact Learning/Memory roots; public/manual baseline compatibility retains its original SQL predicate and does not gain private Run IDs. Current full executor51 and authoring18 pass. The complete Routine/Task/private-source three-file rerun now passes158/158 without fixture or production changes; its two earlier Workflow-target failures did not recur.
 
 The latest full Learning suite is39PASS/3FAIL: two source-denial error-detail mismatches and one120s timeout. These failures remain open at this saved checkpoint. No whole-workspace acceptance, PR-readiness or complete V10 qualification is claimed.
+
+
+### 2026-10-25 — Exact selected Role Pack preparation inputs
+
+The original Role Pack resolver now captures only the immutable versions actually selected for its successful merge, with canonical summary/item rendition hashes. Current published heads and unrelated packs are excluded. First Runtime Fabric preparation returns those references; a reused inventory returns unknown rather than substituting current choices. The first native bootstrap persists this internal capture alongside the existing partial collectors and preserves already saved inputs. This is preparation provenance, not model consumption, complete Source closure or permission. Source protocol qualification remains disabled.
+
+Scoped native Role Pack/runtime tests pass6 (3othercases filtered); bootstrap-before-dispatch redacted/plain controls pass2. The broader initial9-case run retains7PASS/2FAIL in delegated-company flows: a raw unqualified Project fixture and cross-company Context assembly without an actual accountable local run. Those source-denial failures remain open, rather than weakening actual-run admission. Bootstrap controls initially found an outdated expectation of zero runtime instruction inputs; the corrected assertion binds the actual prepared instruction bundle digests.

@@ -87,9 +87,11 @@ describe.skipIf(!support.supported)("V5 execution authority", () => {
     const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId, status: "running" }).returning();
     const input = { companyId: f.home, agentId: f.presence.id, runId: run!.id, responsibleUserId: f.userId, issueId: null, query: "Review the approved company context" };
     const first = await svc.prepare(input); expect(first?.manifest.agentIdentityId).toBe(f.identity.id);
+    expect(first?.inputRolePackSources).toEqual([]);
     expect(first?.manifest.executionScope.delegatedScopes).toEqual([]);
     expect(first?.inputContextManifests).toEqual(first?.manifest.contextManifests);
     const resumed = await svc.prepare(input); expect(resumed?.record.id).toBe(first?.record.id);
+    expect(resumed?.inputRolePackSources).toBeNull();
     expect(resumed?.manifest.contextManifests).toEqual(first?.manifest.contextManifests);
     expect(resumed?.inputContextManifests).toHaveLength(1);
     expect(resumed?.inputContextManifests).not.toEqual(first?.inputContextManifests);
