@@ -9793,42 +9793,17 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   });
 
   it("retains an accepted recipient message while paused and delivers one successor after resume", async () => {
-    const companyId = randomUUID();
-    const agentId = randomUUID();
-    const issueId = randomUUID();
+    const { companyId, agentId, issueId, runId, wakeupRequestId } = await seedQueuedIssueRunFixture();
     const interactionId = randomUUID();
     const resolvedAt = new Date("2026-03-19T00:05:00.000Z");
-    const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
-
-    await db.insert(companies).values({
-      id: companyId,
-      name: "Paperclip",
-      issuePrefix,
-      defaultResponsibleUserId: "responsible-user",
-      requireBoardApprovalForNewAgents: false,
-    });
-    await db.insert(agents).values({
-      id: agentId,
-      companyId,
-      name: "CodexCoder",
-      role: "engineer",
-      status: "paused",
-      adapterType: "codex_local",
-      adapterConfig: mockedCodexAdapterConfig,
-      runtimeConfig: { heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 } },
-      permissions: {},
-    });
-    await db.insert(issues).values({
-      id: issueId,
-      companyId,
-      title: "Accepted recipient message waits for resume",
-      status: "in_review",
-      priority: "medium",
-      assigneeAgentId: agentId,
-      responsibleUserId: "responsible-user",
-      issueNumber: 1,
-      identifier: `${issuePrefix}-1`,
-    });
+    await db.update(heartbeatRuns).set({ status: "succeeded", startedAt: new Date("2026-03-19T00:00:00.000Z"),
+      finishedAt: new Date("2026-03-19T00:01:00.000Z"), updatedAt: new Date("2026-03-19T00:01:00.000Z") })
+      .where(eq(heartbeatRuns.id, runId));
+    await db.update(agentWakeupRequests).set({ status: "completed", finishedAt: new Date("2026-03-19T00:01:00.000Z"),
+      updatedAt: new Date("2026-03-19T00:01:00.000Z") }).where(eq(agentWakeupRequests.id, wakeupRequestId));
+    await db.update(issues).set({ status: "in_review", executionRunId: null, checkoutRunId: null })
+      .where(eq(issues.id, issueId));
+    await db.update(agents).set({ status: "paused" }).where(eq(agents.id, agentId));
     await db.insert(issueThreadInteractions).values({
       id: interactionId,
       companyId,
@@ -9844,19 +9819,6 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       result: { outcome: "accepted" },
     });
 
-    const heartbeat = heartbeatService(db);
-    const paused = await heartbeat.reconcileStrandedAssignedIssues();
-    expect(paused.continuationRequeued).toBe(0);
-    expect(paused.skipped).toBeGreaterThan(0);
-    expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, agentId))).toHaveLength(0);
-    expect((await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.id, interactionId)))[0])
-      .toMatchObject({ status: "accepted", result: { outcome: "accepted" } });
-
-    await db.update(agents).set({ status: "idle" }).where(eq(agents.id, agentId));
-    const resumed = await heartbeat.reconcileStrandedAssignedIssues();
-    expect(resumed.continuationRequeued).toBe(1);
-    expect(resumed.issueIds).toEqual([issueId]);
-
     mockAdapterExecute.mockImplementationOnce(async (input) => {
       await db.insert(issueComments).values({
         companyId,
@@ -9868,8 +9830,24 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       await db.update(issues).set({ status: "done" }).where(eq(issues.id, issueId));
       return { exitCode: 0, summary: "Accepted message delivered once", provider: "test", model: "test-model" };
     });
-    const [successor] = await db.select().from(heartbeatRuns)
-      .where(and(eq(heartbeatRuns.agentId, agentId), eq(heartbeatRuns.status, "queued")));
+
+    const heartbeat = heartbeatService(db);
+    const paused = await heartbeat.reconcileStrandedAssignedIssues();
+    expect(paused.continuationRequeued).toBe(0);
+    expect(paused.skipped).toBeGreaterThan(0);
+    expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, agentId))).toHaveLength(1);
+    expect((await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.id, interactionId)))[0])
+      .toMatchObject({ status: "accepted", result: { outcome: "accepted" } });
+
+    await db.update(agents).set({ status: "idle" }).where(eq(agents.id, agentId));
+    const resumed = await heartbeat.reconcileStrandedAssignedIssues();
+    expect(resumed.continuationRequeued).toBe(1);
+    expect(resumed.issueIds).toEqual([issueId]);
+
+    const successors = (await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, agentId)))
+      .filter((run) => run.id !== runId);
+    expect(successors).toHaveLength(1);
+    const successor = successors[0]!;
     expect(successor).toMatchObject({
       contextSnapshot: {
         issueId,
@@ -9880,23 +9858,13 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     });
 
     await heartbeat.resumeQueuedRuns();
+    await heartbeat.drainActiveRunExecutions();
     const settledSuccessor = await waitForRunToSettle(heartbeat, successor!.id);
-    console.log("up05-paused-accepted-diagnostic", {
-      runStatus: settledSuccessor?.status,
-      runErrorCode: settledSuccessor?.errorCode,
-      runError: settledSuccessor?.error,
-      createdAt: settledSuccessor?.createdAt,
-      suppression: heartbeat.schedulingSuppressionSnapshot(),
-      executeCalls: mockAdapterExecute.mock.calls.length,
-      agentStatus: (await db.select({ status: agents.status }).from(agents).where(eq(agents.id, agentId)))[0]?.status,
-      issueStatus: (await db.select({ status: issues.status, executionRunId: issues.executionRunId }).from(issues).where(eq(issues.id, issueId)))[0],
-      wake: successor?.wakeupRequestId ? (await db.select({ status: agentWakeupRequests.status, error: agentWakeupRequests.error }).from(agentWakeupRequests).where(eq(agentWakeupRequests.id, successor.wakeupRequestId)))[0] : null,
-    });
     expect(settledSuccessor).toMatchObject({ status: "succeeded" });
     expect(mockAdapterExecute).toHaveBeenCalledTimes(1);
     const repeated = await heartbeat.reconcileStrandedAssignedIssues();
     expect(repeated.continuationRequeued).toBe(0);
-    expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, agentId))).toHaveLength(1);
+    expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, agentId))).toHaveLength(2);
     expect(await db.select().from(issueComments).where(and(
       eq(issueComments.issueId, issueId),
       eq(issueComments.body, "Accepted message delivered once"),

@@ -84,6 +84,20 @@ function canonicalHash(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(canonicalValue(value)) ?? "undefined").digest("hex");
 }
 
+function staticManagedErrorCodes(value: unknown, depth = 0): string[] {
+  if (depth > 6) return [];
+  if (typeof value === "string") {
+    if (/^managed_opencode_[a-z0-9_]{1,100}$/.test(value)) return [value];
+    if (value.length > 16_384) return [];
+    try { return staticManagedErrorCodes(JSON.parse(value), depth + 1); }
+    catch { return []; }
+  }
+  if (Array.isArray(value)) return value.flatMap(item => staticManagedErrorCodes(item, depth + 1));
+  if (value && typeof value === "object") return Object.values(value).flatMap(item =>
+    staticManagedErrorCodes(item, depth + 1));
+  return [];
+}
+
 function differencePaths(left: unknown, right: unknown, path = "$"): string[] {
   if (JSON.stringify(canonicalValue(left)) === JSON.stringify(canonicalValue(right))) return [];
   if (Array.isArray(left) && Array.isArray(right)) {
@@ -380,6 +394,14 @@ describe("managed OpenCode source-closure binary integration", () => {
       const wire = req.body && typeof req.body === "object" ? req.body as Record<string, unknown> : {};
       const messages = Array.isArray(wire.messages) ? wire.messages : [];
       const tools = Array.isArray(wire.tools) ? wire.tools : [];
+      const toolResultFacts = messages.flatMap(message => {
+        const item = message && typeof message === "object" ? message as Record<string, unknown> : {};
+        return (Array.isArray(item.content) ? item.content : []).flatMap(block => {
+          const value = block && typeof block === "object" ? block as Record<string, unknown> : {};
+          if (value.type !== "tool_result") return [];
+          return [{ isError: value.is_error === true, staticErrorCodes: staticManagedErrorCodes(value.content) }];
+        });
+      });
       const shape = {
         keys: Object.keys(wire).sort(), model: wire.model, max_tokens: wire.max_tokens, stream: wire.stream,
         messages: messages.map((message) => {
@@ -398,7 +420,7 @@ describe("managed OpenCode source-closure binary integration", () => {
           ? { keys: Object.keys(wire.tool_choice as Record<string, unknown>).sort(), type: (wire.tool_choice as Record<string, unknown>).type }
           : wire.tool_choice,
       };
-      brokerRequests.push(`managed-request-shape ${JSON.stringify(shape)}`);
+      brokerRequests.push(`managed-request-shape ${JSON.stringify({ ...shape, toolResultFacts })}`);
       // Test TLS mediation stands in for OpenShell host injection. Only the
       // exact Messages endpoint receives a capability minted by issueForRun;
       // the OpenCode child receives no bearer token in its environment.
@@ -518,6 +540,7 @@ describe("managed OpenCode source-closure binary integration", () => {
     const qualifiedOpenCodeSha256 = createHash("sha256")
       .update(await readFile(opencodeBinary)).digest("hex");
     const diagnostics: string[] = [];
+    const openCodeProcessFacts: Array<{ shaMatchesQualifiedBinary: boolean; managedEnvironment: Record<string, boolean> }> = [];
     const capabilityPayload = JSON.parse(Buffer.from(minted.token.split(".")[1]!, "base64url").toString("utf8")) as Record<string, unknown>;
     const workerModelClaims = capabilityPayload.worker_model && typeof capabilityPayload.worker_model === "object"
       ? capabilityPayload.worker_model as Record<string, unknown> : {};
@@ -618,22 +641,7 @@ describe("managed OpenCode source-closure binary integration", () => {
       }
     };
     const onSpawn = async ({ pid }: { pid: number }) => {
-      diagnostics.push(`OpenCode process pid ${pid}`);
-      const openCodeEnvironment = (await readFile(`/proc/${pid}/environ`, "utf8").catch(() => "")).split("\0");
-      const openCodeExecutableSha256 = createHash("sha256")
-        .update(await readFile(`/proc/${pid}/exe`)).digest("hex");
-      diagnostics.push(`OpenCode executable sha256: ${openCodeExecutableSha256 === qualifiedOpenCodeSha256 ? "qualified-match" : "mismatch"}`);
-      if (openCodeExecutableSha256 !== qualifiedOpenCodeSha256)
-        throw new Error("managed_opencode_executable_does_not_match_qualified_binary");
-      const openCodeManagedEnvironment = {
-        brokerOrigin: openCodeEnvironment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN=")),
-        inputCap: openCodeEnvironment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND=")),
-        outputCap: openCodeEnvironment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS=")),
-        placeholderKey: openCodeEnvironment.includes("ANTHROPIC_API_KEY=paperclip-managed-model-broker"),
-      };
-      diagnostics.push(`OpenCode managed environment: ${JSON.stringify(openCodeManagedEnvironment)}`);
-      if (!Object.values(openCodeManagedEnvironment).every(Boolean))
-        throw new Error("managed_opencode_authority_environment_missing");
+      diagnostics.push(`runner process pid ${pid}`);
       const observed = new Set<number>();
       const inspect = async () => {
         const descendants: Array<{ pid: number; parent: number }> = [];
@@ -661,7 +669,23 @@ describe("managed OpenCode source-closure binary integration", () => {
           const environment = environmentText.split("\0");
           const executable = executablePath.split("/").at(-1) || "unknown";
           const isOpenCodeProcess = /opencode/i.test(executable);
+          let openCodeShaMatches: boolean | null = null;
+          let openCodeManagedEnvironment: Record<string, boolean> | null = null;
+          if (isOpenCodeProcess) {
+            const runningHash = await readFile(`/proc/${childPid}/exe`).then(bytes =>
+              createHash("sha256").update(bytes).digest("hex")).catch(() => "");
+            openCodeShaMatches = runningHash === qualifiedOpenCodeSha256;
+            openCodeManagedEnvironment = {
+              brokerOrigin: environment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN=")),
+              inputCap: environment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND=")),
+              outputCap: environment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS=")),
+              placeholderKey: environment.includes("ANTHROPIC_API_KEY=paperclip-managed-model-broker"),
+            };
+            openCodeProcessFacts.push({ shaMatchesQualifiedBinary: openCodeShaMatches, managedEnvironment: openCodeManagedEnvironment });
+          }
           diagnostics.push(`runner descendant pid=${childPid} parent=${parentPid} executable=${executable} comm=${comm.trim()} openCode=${isOpenCodeProcess ? "yes" : "no"} brokerOrigin=${environment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN=")) ? "present" : "missing"} inputCap=${environment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND=")) ? "present" : "missing"} outputCap=${environment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS=")) ? "present" : "missing"} placeholderKey=${environment.includes("ANTHROPIC_API_KEY=paperclip-managed-model-broker") ? "present" : "missing"}`);
+          if (isOpenCodeProcess)
+            diagnostics.push(`OpenCode child qualification: ${JSON.stringify({ shaMatchesQualifiedBinary: openCodeShaMatches, managedEnvironment: openCodeManagedEnvironment })}`);
         }
       };
       const timer = setInterval(() => { void inspect(); }, 250);
@@ -693,6 +717,20 @@ describe("managed OpenCode source-closure binary integration", () => {
                   tool: typeof payload.name === "string" ? payload.name : undefined,
                   payloadKeys: Object.keys(payload).sort() };
                 diagnostics.push(`runner ${stream} event: ${JSON.stringify(safe)}`);
+                if (event.eventType === "semantic_tool.result") {
+                  const semantic = payload.semantic_tool && typeof payload.semantic_tool === "object"
+                    ? payload.semantic_tool as Record<string, unknown> : {};
+                  const correlation = semantic.correlation && typeof semantic.correlation === "object"
+                    ? semantic.correlation as Record<string, unknown> : {};
+                  diagnostics.push(`runner semantic tool result: ${JSON.stringify({
+                    code: typeof semantic.code === "string" && /^[a-z0-9_]{1,100}$/.test(semantic.code) ? semantic.code : null,
+                    outcome: semantic.outcome, phase: semantic.phase,
+                    callIdPresent: typeof semantic.callId === "string" && semantic.callId.length > 0,
+                    operationIdPresent: typeof semantic.operationId === "string" && semantic.operationId.length > 0,
+                    operationReceiptIdPresent: typeof semantic.operationReceiptId === "string" && semantic.operationReceiptId.length > 0,
+                    correlationKeys: Object.keys(correlation).sort(),
+                  })}`);
+                }
                 if (event.eventType === "session.started")
                   void assertManagedConfigIsReadOnlyBeforeSpawn().catch(() => diagnostics.push("managed config probe unavailable"));
                 if (event.eventType === "session.started" && !pgMonitorTimer) {

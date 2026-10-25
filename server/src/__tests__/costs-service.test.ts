@@ -78,6 +78,7 @@ const mockCostService = vi.hoisted(() => ({
     issueCount: 1,
     includeDescendants: true,
     costCents: 0,
+    unpricedEventCount: 0,
     inputTokens: 0,
     cachedInputTokens: 0,
     outputTokens: 0,
@@ -436,6 +437,10 @@ describeEmbeddedPostgres("cost and finance aggregate overflow handling", () => {
   it("persists unpriced token usage without inflating monthly spend", async () => {
     const companyId = randomUUID();
     const agentId = randomUUID();
+    const issueId = randomUUID();
+    const projectId = randomUUID();
+    const now = new Date();
+    const reportedAt = new Date(now.getTime() + 1_000);
 
     await db.insert(companies).values({
       id: companyId,
@@ -454,9 +459,22 @@ describeEmbeddedPostgres("cost and finance aggregate overflow handling", () => {
       runtimeConfig: {},
       permissions: {},
     });
+    await db.insert(projects).values({ id: projectId, companyId, name: "Unpriced usage", status: "active" });
+    await db.insert(issues).values({
+      id: issueId,
+      companyId,
+      projectId,
+      title: "Unpriced usage",
+      status: "in_progress",
+      priority: "medium",
+      issueNumber: 1,
+      identifier: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}-1`,
+    });
 
     const event = await costs.createEvent(companyId, {
       agentId,
+      issueId,
+      projectId,
       provider: "openai",
       biller: "chatgpt",
       billingType: "subscription_included",
@@ -466,13 +484,33 @@ describeEmbeddedPostgres("cost and finance aggregate overflow handling", () => {
       cachedInputTokens: 2_632_998,
       outputTokens: 32_644,
       costCents: 0,
-      occurredAt: new Date("2026-07-13T14:22:54.000Z"),
+      occurredAt: now,
     });
 
+    const range = { from: new Date(now.getTime() - 1_000), to: new Date(now.getTime() + 2_000) };
+    expect(await costs.summary(companyId, range)).toMatchObject({ spendCents: 0, unpricedEventCount: 1 });
+    for (const read of [costs.byAgent, costs.byProvider, costs.byBiller, costs.byAgentModel, costs.byProject]) {
+      expect(await read(companyId, range)).toEqual([expect.objectContaining({ costCents: 0, unpricedEventCount: 1 })]);
+    }
+    expect(await costs.issueTreeSummary(companyId, issueId)).toMatchObject({ costCents: 0, unpricedEventCount: 1 });
+    const initialWindow = (await costs.windowSpend(companyId)).find((row) => row.window === "7d");
+    expect(initialWindow).toMatchObject({ costCents: 0, unpricedEventCount: 1 });
+    const [agentBeforeReported] = await db.select().from(agents).where(eq(agents.id, agentId));
+    expect(agentBeforeReported?.spentMonthlyCents).toBe(0);
+
+    await costs.createEvent(companyId, { agentId, issueId, projectId, provider: "openai", biller: "chatgpt", billingType: "subscription_included",
+      costStatus: "reported", model: "gpt-5.6-terra", costCents: 125, occurredAt: reportedAt });
+    expect(await costs.summary(companyId, range)).toMatchObject({ spendCents: 125, unpricedEventCount: 1 });
+    for (const read of [costs.byAgent, costs.byProvider, costs.byBiller, costs.byAgentModel, costs.byProject]) {
+      expect(await read(companyId, range)).toEqual([expect.objectContaining({ costCents: 125, unpricedEventCount: 1 })]);
+    }
+    expect(await costs.issueTreeSummary(companyId, issueId)).toMatchObject({ costCents: 125, unpricedEventCount: 1 });
+    const mixedWindow = (await costs.windowSpend(companyId)).find((row) => row.window === "7d");
+    expect(mixedWindow).toMatchObject({ costCents: 125, unpricedEventCount: 1 });
     expect(event.costStatus).toBe("unpriced");
     expect(event.inputTokens).toBe(2_732_577);
     const [agent] = await db.select().from(agents).where(eq(agents.id, agentId));
-    expect(agent?.spentMonthlyCents).toBe(0);
+    expect(agent?.spentMonthlyCents).toBe(125);
   });
 
   it("aggregates cost event sums above int32 without raising Postgres integer overflow", async () => {

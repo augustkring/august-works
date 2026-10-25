@@ -24,6 +24,8 @@ export interface CostEvent {
 }
 
 export interface CostSummary {
+  /** Usage events without a reported price; excluded from the recorded amount. */
+  unpricedEventCount?: number;
   companyId: string;
   spendCents: number;
   budgetCents: number;
@@ -31,6 +33,8 @@ export interface CostSummary {
 }
 
 export interface IssueCostSummary {
+  /** Usage events without a reported price; excluded from the recorded amount. */
+  unpricedEventCount?: number;
   issueId: string;
   issueCount: number;
   includeDescendants: boolean;
@@ -46,6 +50,8 @@ export interface IssueCostSummary {
 }
 
 export interface CostByAgent {
+  /** Usage events without a reported price; excluded from the recorded amount. */
+  unpricedEventCount?: number;
   agentId: string;
   agentName: string | null;
   agentAppearance?: AgentAppearance | null;
@@ -63,6 +69,8 @@ export interface CostByAgent {
 }
 
 export interface CostByProviderModel {
+  /** Usage events without a reported price; excluded from the recorded amount. */
+  unpricedEventCount?: number;
   provider: string;
   biller: string;
   billingType: BillingType;
@@ -79,6 +87,8 @@ export interface CostByProviderModel {
 }
 
 export interface CostByBiller {
+  /** Usage events without a reported price; excluded from the recorded amount. */
+  unpricedEventCount?: number;
   biller: string;
   costCents: number;
   inputTokens: number;
@@ -95,6 +105,8 @@ export interface CostByBiller {
 
 /** per-agent breakdown by provider + model, for identifying token-hungry agents */
 export interface CostByAgentModel {
+  /** Usage events without a reported price; excluded from the recorded amount. */
+  unpricedEventCount?: number;
   agentId: string;
   agentName: string | null;
   agentAppearance?: AgentAppearance | null;
@@ -111,6 +123,8 @@ export interface CostByAgentModel {
 
 /** spend per provider for a fixed rolling time window */
 export interface CostWindowSpendRow {
+  /** Usage events without a reported price; excluded from the recorded amount. */
+  unpricedEventCount?: number;
   provider: string;
   biller: string;
   /** duration label, e.g. "5h", "24h", "7d" */
@@ -125,6 +139,8 @@ export interface CostWindowSpendRow {
 
 /** cost attributed to a project via heartbeat run → activity log → issue → project chain */
 export interface CostByProject {
+  /** Usage events without a reported price; excluded from the recorded amount. */
+  unpricedEventCount?: number;
   projectId: string | null;
   projectName: string | null;
   costCents: number;

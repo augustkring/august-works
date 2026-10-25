@@ -64,6 +64,7 @@ import { RailwayError } from "../services/railway.js";
 import type { VercelConnectClient } from "../services/vercel-connect.js";
 import {
   appWithPaperclipCloudConnectorAvailability,
+  appWithSlackManagedOAuthAvailability,
   isPaperclipCloudConnectorStrategy,
   invalidatePaperclipCloudConnectorCapabilities,
   type PaperclipCloudConnector,
@@ -824,7 +825,9 @@ function connectorEnrollmentPrincipal(req: Request): string {
         },
       },
       apps: APP_STORE_DEFINITIONS.filter((app) => (enableMemoryConnectors || !isMemoryConnectorId(app.slug))).map((app) =>
-        appWithPaperclipCloudConnectorAvailability(app, advertisedProfiles)
+        appWithSlackManagedOAuthAvailability(
+          appWithPaperclipCloudConnectorAvailability(app, advertisedProfiles),
+        )
       ),
     });
   });

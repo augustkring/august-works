@@ -55,6 +55,7 @@ import {
   issues,
   issueThreadInteractions,
   nativeRunFinalizations,
+  toolInvocations,
 } from "@paperclipai/db";
 import {
   bindManagedNativeMemoryOutputCapture,
@@ -960,12 +961,40 @@ export class PaperclipRunnerToolAuthority {
       },
     };
     bindManagedNativeMemoryOutputCapture(scopedContext, capture);
-    return gateway.executeTool({
+    const gatewayResult = await gateway.executeTool({
       sessionToken: session.token,
       tool: MANAGED_NATIVE_REMEMBER_GATEWAY_TOOL,
       parameters: record(call.arguments),
       idempotencyKey: `aw-native-tool:${this.binding.runId}:${use.callId}`,
     }, undefined, scopedContext);
+    const completed = record(gatewayResult);
+    if ((completed.status !== "completed" && completed.status !== "replayed") ||
+      completed.tool !== MANAGED_NATIVE_REMEMBER_GATEWAY_TOOL ||
+      typeof completed.invocationId !== "string" || !Object.hasOwn(completed, "result")) {
+      throw forbidden("Managed Memory result has no completed canonical Tool Gateway invocation");
+    }
+    const resultHash = nativeSha256(completed.result);
+    const [invocation] = await this.db.select({ id: toolInvocations.id,
+      argumentsHash: toolInvocations.argumentsHash, resultHash: toolInvocations.resultHash,
+      workflowResultJson: toolInvocations.workflowResultJson,
+    }).from(toolInvocations).where(and(
+      eq(toolInvocations.companyId, this.binding.companyId),
+      eq(toolInvocations.id, completed.invocationId),
+      eq(toolInvocations.runId, this.binding.runId),
+      eq(toolInvocations.agentId, this.binding.agentId),
+      eq(toolInvocations.issueId, this.binding.issueId),
+      eq(toolInvocations.idempotencyKey, `aw-native-tool:${this.binding.runId}:${use.callId}`),
+      eq(toolInvocations.toolName, MANAGED_NATIVE_REMEMBER_GATEWAY_TOOL),
+      eq(toolInvocations.status, "succeeded"),
+    ));
+    if (!invocation || invocation.argumentsHash !== nativeSha256(call.arguments) ||
+      invocation.resultHash !== resultHash || nativeSha256(invocation.workflowResultJson) !== resultHash) {
+      throw forbidden("Managed Memory result does not match its canonical invocation");
+    }
+    // Native tool results are the validated result payload itself. The Gateway
+    // wrapper's invocation ID is server authority, while the provider transcript
+    // must hash exactly the same bounded result stored in the canonical row.
+    return completed.result;
   }
 
   async #readApiFile(file: RunnerApiFile): Promise<{ bytes: Buffer; filename: string; contentType: string }> {

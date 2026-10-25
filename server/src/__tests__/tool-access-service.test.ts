@@ -10233,8 +10233,12 @@ describeEmbeddedPostgres("tool access service", () => {
       expect(connectRes.body.connection).toMatchObject({
         status: "draft",
         enabled: false,
+        ownership: "platform_shared",
         credentialSecretRefs: [],
-        config: expect.objectContaining({ sourceTemplateKey: "slack" }),
+        config: expect.objectContaining({
+          sourceTemplateKey: "slack",
+          connectionMethodKey: "managed-oauth",
+        }),
       });
       const startUrl = new URL(connectRes.body.auth.startUrl);
       expect(`${startUrl.origin}${startUrl.pathname}`).toBe(
@@ -10248,6 +10252,35 @@ describeEmbeddedPostgres("tool access service", () => {
       expect(startUrl.searchParams.get("redirect_uri")).toBe(
         `${origin}/api/tools/oauth/callback`,
       );
+
+      const ownAppConnectRes = await request(app)
+        .post(`/api/companies/${company.id}/tools/apps/connect`)
+        .set("Host", new URL(origin).host)
+        .set("Origin", origin)
+        .send({
+          galleryKey: "slack",
+          connectionMethodKey: "mcp-oauth",
+          name: "Slack own OAuth app",
+          oauthClient: {
+            clientId: "customer-slack-client-id",
+            clientSecret: "customer-slack-client-secret",
+          },
+        });
+      expect(ownAppConnectRes.status).toBe(201);
+      expect(ownAppConnectRes.body.connection).toMatchObject({
+        ownership: "customer",
+        config: expect.objectContaining({
+          connectionMethodKey: "mcp-oauth",
+          oauth: expect.objectContaining({
+            clientId: "customer-slack-client-id",
+            clientRegistrationSource: "manual",
+          }),
+        }),
+      });
+      expect(
+        new URL(ownAppConnectRes.body.auth.startUrl).searchParams.get("client_id"),
+      ).toBe("customer-slack-client-id");
+
       const state = startUrl.searchParams.get("state");
       expect(state).toBeTruthy();
       await expect(db.select().from(toolOauthStates)).resolves.toEqual([

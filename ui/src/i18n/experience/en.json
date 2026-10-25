@@ -1,4 +1,13 @@
 {
+  "costPricing": {
+      "unknown_one": "Price unknown for {{count}} usage event",
+      "unknown_other": "Price unknown for {{count}} usage events",
+      "partial_one": "{{amount}} + {{count}} unpriced usage event",
+      "partial_other": "{{amount}} + {{count}} unpriced usage events",
+      "recordedPeriodSpend": "Recorded period spend: {{amount}}",
+      "recordedWeekSpend": "This week: {{amount}}",
+      "budgetComparisonUnavailable": "Budget comparison is unavailable while some prices are unknown."
+  },
   "cliAuth": {
     "sessionFailed": "Your sign-in could not be checked",
     "sessionRetryHelp": "Check your sign-in again before reviewing this request. Checking sign-in will not submit approval.",

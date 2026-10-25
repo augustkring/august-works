@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { promises as fs } from "node:fs";
 import { and, eq } from "drizzle-orm";
-import { agents, agentExecutionManifests, companySkills, companySkillVersions, companySkillEvalRuns,
+import { agentExecutionManifests, companySkills, companySkillVersions, companySkillEvalRuns,
   companySkillEvalScores, createDb, heartbeatRuns, pluginConfig, plugins, type Db } from "@paperclipai/db";
 import { PROVIDER_CAPABILITY_FEATURES, skillCandidateInputSchema } from "@paperclipai/shared";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -21,6 +21,7 @@ import { skillResolverService } from "../services/skill-resolver.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { issueService } from "../services/issues.js";
 import { costService } from "../services/costs.js";
+import { agentService } from "../services/agents.js";
 
 const support=await getEmbeddedPostgresTestSupport();
 describe.skipIf(!support.supported)("UP04 evaluated Skill promotion and immutable runtime consumer",()=>{
@@ -31,7 +32,7 @@ describe.skipIf(!support.supported)("UP04 evaluated Skill promotion and immutabl
     root=await fs.mkdtemp(path.join(os.tmpdir(),"aw-up04-skills-"));
     process.env.PAPERCLIP_HOME=root;process.env.PAPERCLIP_INSTANCE_ID="default";
     await enableV5ForTest(db);
-    await instanceSettingsService(db).updateExperimental({role_packs_v5:false,enableBetaSkills:true});
+    await instanceSettingsService(db).updateExperimental({enableBetaSkills:true});
   },120000);
   afterAll(async()=>{
     await database?.cleanup();if(root)await fs.rm(root,{recursive:true,force:true});
@@ -49,10 +50,11 @@ describe.skipIf(!support.supported)("UP04 evaluated Skill promotion and immutabl
     const providers=agentProviderBindingService(db);
     const binding=await providers.create(actor,f.home,agentId,{providerType:"paperclip_native",providerAgentRef:agentId,providerEndpointRef:null,isolationMode:"isolated_per_presence"});
     await providers.attach(actor,f.home,agentId,{providerBindingId:binding.id,providerProfileRef:agentId});
-    await providers.recordDiscovery(f.home,agentId,{provider:"paperclip_native",version:"controlled-evaluation-fixture",
+    const refreshControlledProvider=()=>providers.recordDiscovery(f.home,agentId,{provider:"paperclip_native",version:"controlled-evaluation-fixture",
       features:Object.fromEntries(PROVIDER_CAPABILITY_FEATURES.map(key=>[key,false])) as Record<(typeof PROVIDER_CAPABILITY_FEATURES)[number],boolean>,
       skills:[],tools:[],discoveredAt:new Date().toISOString()},
       {connect:true,identity:true,start:true,stream:true,wait:true,cancel:true,memoryScoping:true});
+    await refreshControlledProvider();
     const pluginId=randomUUID();
     await db.insert(plugins).values({id:pluginId,pluginKey:pluginId,packageName:"up04-controlled-consumer",version:"1.0.0",status:"ready",
       manifestJson:{agentLifecycle:true,resourceLifecycle:["agent_runtime"],capabilities:["events.subscribe","agents.lifecycle.manage"]} as never});
@@ -82,7 +84,7 @@ describe.skipIf(!support.supported)("UP04 evaluated Skill promotion and immutabl
               expect(prepared?.manifest.skills.map(pin=>pin.versionId)).toEqual(testCase.shouldTrigger?[versionId]:[]);
               await costService(db).createEvent(f.home,{agentId,issueId,heartbeatRunId:run!.id,provider:"controlled-evaluation-fixture",model:"deterministic-fixture",
                 billingType:"unknown",costStatus:"reported",costCents:1,occurredAt:new Date()});
-              await db.update(heartbeatRuns).set({status:"succeeded",finishedAt:new Date(startedAt.getTime()+1)}).where(eq(heartbeatRuns.id,run!.id));
+              await db.update(heartbeatRuns).set({status:"succeeded",finishedAt:new Date()}).where(eq(heartbeatRuns.id,run!.id));
               await skills.completeTestRunForIssue({companyId:f.home,issueId,outcome:"succeeded"});
             }});
           const observation=await evaluations.observe(actor,f.home,draft.skillId,evaluation.id,{caseId:testCase.id,trial,arm,testRunId:trace.id,
@@ -99,6 +101,10 @@ describe.skipIf(!support.supported)("UP04 evaluated Skill promotion and immutabl
       return evaluation;
     }
     await evaluateAndPromote(draft.candidate.id,null);
+    const [skill]=await db.select().from(companySkills).where(eq(companySkills.id,draft.skillId));
+    await agentService(db).update(agentId,{adapterConfig:{paperclipSkillSync:{desiredSkills:[{key:skill!.key,versionId:draft.candidate.id}]}}},
+      {recordRevision:{createdByUserId:f.userId,source:"skill-sync"}});
+    await refreshControlledProvider();
     const [running]=await db.insert(heartbeatRuns).values({companyId:f.home,agentId,status:"running",runtimeMode:"native",responsibleUserId:f.userId,startedAt:new Date(),invocationSource:"on_demand"}).returning();
     await fabric.prepare({companyId:f.home,agentId,runId:running!.id,responsibleUserId:f.userId,issueId:null,query:"Review a zephyr receipt"});
     const [pinned]=await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId,running!.id));
@@ -106,15 +112,26 @@ describe.skipIf(!support.supported)("UP04 evaluated Skill promotion and immutabl
     const next=await lifecycle.propose(actor,f.home,draft.skillId,skillCandidateInputSchema.parse({baseActiveVersionId:draft.candidate.id,
       markdown:"# Zephyr receipts\n\nReview and cross-check every discrepancy.",sharing:"company_proposed"}));
     await evaluateAndPromote(next.id,draft.candidate.id);
-    await db.update(agents).set({adapterConfig:{paperclipSkillSync:{desiredSkills:[]}}}).where(eq(agents.id,agentId));
+    await agentService(db).update(agentId,{adapterConfig:{paperclipSkillSync:{desiredSkills:[]}}},
+      {recordRevision:{createdByUserId:f.userId,source:"skill-sync"}});
     expect(await pluginAgentRuntimeState(db,pluginId,f.home,agentId)).toMatchObject({skillsReady:true,
       skills:[expect.objectContaining({versionId:draft.candidate.id,currentVersionId:next.id,sourceStatus:"available"})]});
     const versions=await db.select().from(companySkillVersions).where(eq(companySkillVersions.companySkillId,draft.skillId));
     expect(versions.find(version=>version.id===draft.candidate.id)?.state).toBe("superseded");
     expect(versions.find(version=>version.id===next.id)?.state).toBe("active");
     expect((await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.id,pinned!.id)))[0]!.hash).toBe(pinned!.hash);
+    await db.update(heartbeatRuns).set({status:"succeeded",finishedAt:new Date()}).where(eq(heartbeatRuns.id,running!.id));
+    const [fresh]=await db.insert(heartbeatRuns).values({companyId:f.home,agentId,status:"running",runtimeMode:"native",responsibleUserId:f.userId,startedAt:new Date(),invocationSource:"on_demand"}).returning();
+    const freshInput={companyId:f.home,agentId,runId:fresh!.id,responsibleUserId:f.userId,issueId:null,query:"Review a zephyr receipt"};
+    await expect(fabric.prepare(freshInput)).rejects.toMatchObject({status:409,message:"Provider profile/configuration changed; repeat conformance and dependency validation"});
+    expect(await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId,fresh!.id))).toEqual([]);
+    await refreshControlledProvider();
+    const current=await fabric.prepare(freshInput);
+    expect(current!.manifest.skills).toMatchObject([{skillId:draft.skillId,versionId:next.id}]);
+    expect(await pluginAgentRuntimeState(db,pluginId,f.home,agentId)).toMatchObject({skillsReady:true,
+      skills:[expect.objectContaining({versionId:next.id,currentVersionId:next.id})]});
     await lifecycle.transition(actor,f.home,draft.skillId,{state:"revoked",reason:"Withdraw this procedure after review"});
-    await expect(pluginAgentRuntimeState(db,pluginId,f.home,agentId)).rejects.toThrow(/pinned Skill is no longer authorized/);
+    await expect(pluginAgentRuntimeState(db,pluginId,f.home,agentId)).rejects.toMatchObject({status:409,message:"The pinned Skill is no longer active; revalidation is required"});
     expect((await db.select().from(companySkills).where(and(eq(companySkills.companyId,f.home),eq(companySkills.id,draft.skillId))))[0]!.lifecycleState).toBe("revoked");
   },120000);
 });

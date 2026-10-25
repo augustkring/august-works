@@ -250,6 +250,8 @@ import { listConnectionLifecycleEvents } from "./tool-connection-activity.js";
 import { isRetiredComposioConnection, RETIRED_COMPOSIO_MESSAGE } from "@paperclipai/shared";
 import {
   appWithPaperclipCloudConnectorAvailability,
+  appWithSlackManagedOAuthAvailability,
+  MANAGED_SLACK_OAUTH_METHOD_KEY,
   paperclipCloudConnectorCapabilitiesFromEnv,
   createPaperclipCloudConnector,
   isPaperclipCloudConnectorStrategy,
@@ -1047,7 +1049,8 @@ function connectionMethodFor(app: AppDefinition, methodKey?: string | null) {
   const toolMethods = app.methods.filter(
     (candidate) =>
       candidate.purpose !== "channel" && candidate.transport !== "chat_sdk"
-      && (availableMethods.has(candidate) || isPaperclipCloudConnectorStrategy(candidate.oauthStrategy)),
+      && (availableMethods.has(candidate) || isPaperclipCloudConnectorStrategy(candidate.oauthStrategy)
+        || (app.slug === "slack" && candidate.key === MANAGED_SLACK_OAUTH_METHOD_KEY)),
   );
   const method = normalizedMethodKey
     ? (toolMethods.find((candidate) => candidate.key === normalizedMethodKey) ??
@@ -3108,13 +3111,15 @@ export function toolAccessService(
     return cachedCloudConnector;
   };
   async function appForConnectionSetup(app: AppDefinition): Promise<AppDefinition> {
-    if (!app.methods.some((method) => isPaperclipCloudConnectorStrategy(method.oauthStrategy))) {
-      return app;
-    }
-    const profiles = connectorWasProvided
-      ? (await currentCloudConnector()?.getCapabilities() ?? [])
-      : await paperclipCloudConnectorCapabilitiesFromEnv();
-    return appWithPaperclipCloudConnectorAvailability(app, profiles);
+    const withCloudProfiles = !app.methods.some((method) => isPaperclipCloudConnectorStrategy(method.oauthStrategy))
+      ? app
+      : appWithPaperclipCloudConnectorAvailability(
+          app,
+          connectorWasProvided
+            ? (await currentCloudConnector()?.getCapabilities() ?? [])
+            : await paperclipCloudConnectorCapabilitiesFromEnv(),
+        );
+    return appWithSlackManagedOAuthAvailability(withCloudProfiles);
   }
   /** Original setup metadata and actual managed scopes; never a guessed scope
    * from a gallery hint. Broker availability is read outside onboarding locks. */
@@ -8567,6 +8572,24 @@ export function toolAccessService(
     connection: typeof toolConnections.$inferSelect,
     provider: string,
   ) {
+    const connectionConfig = asRecord(connection.config);
+    const storedOAuth = asRecord(connectionConfig.oauth);
+    if (
+      provider === "slack" &&
+      connectionConfig.sourceTemplateKey === "slack" &&
+      connectionConfig.connectionMethodKey === "mcp-oauth" &&
+      storedOAuth.clientRegistrationSource === "manual"
+    ) {
+      // Choosing Slack's advanced own-app method is an explicit ownership
+      // decision. Do not silently substitute the instance's Blentera-managed
+      // client after the customer supplied their separate client.
+      return {
+        clientIdEnv: null,
+        clientSecretEnv: null,
+        clientId: null,
+        clientSecret: null,
+      };
+    }
     if (isSmokeLabOAuthFixture(connection) && provider === "smoke_lab") {
       return {
         clientIdEnv: "SMOKE_LAB_FIXED_CLIENT_ID",
@@ -12102,7 +12125,9 @@ export function toolAccessService(
       galleryEntry?.slug === "google-sheets" &&
       Array.isArray(input.configValues?.allowedSpreadsheetIds)
         ? "local"
-        : input.connectionMethodKey;
+        : !input.connectionMethodKey && galleryEntry?.slug === "slack"
+          ? getAvailableConnectionMethod(galleryEntry)?.key
+          : input.connectionMethodKey;
     if (!galleryEntry && input.connectionMethodKey)
       throw badRequest("Connection method selection requires a gallery app");
     if (
@@ -12601,9 +12626,7 @@ export function toolAccessService(
         : requestedGrantKind === "agent"
           ? "per_agent"
           : "shared";
-    const connectionOwnership = isPaperclipCloudConnectorStrategy(
-      method?.oauthStrategy,
-    )
+    const connectionOwnership = method?.ownershipModes.includes("platform_shared")
       ? "platform_shared"
       : "customer";
     let applicationRow: typeof toolApplications.$inferSelect | null = null;

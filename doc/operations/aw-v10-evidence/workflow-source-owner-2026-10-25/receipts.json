@@ -3135,6 +3135,27 @@
         "Duration  4.85s (transform 1.89s, setup 23ms, import 2.90s, tests 1.18s, environment 597ms)"
       ],
       "sourceCommit": "1f81be97df99692ce7e2d1beff8718ad000fae96"
+    },
+    {
+      "name": "company-import-export-e2e-host-20261025",
+      "exitCode": 0,
+      "exitSidecar": "company-import-export-e2e-host-20261025.exit",
+      "rawSha256": "53bf91d8fa8a5768d6c52f76ebade171f6ebd5b1dd9d1245d9962b8e040f18fc",
+      "sanitizedSha256": "53bf91d8fa8a5768d6c52f76ebade171f6ebd5b1dd9d1245d9962b8e040f18fc",
+      "archiveSha256": "a14e4512b826e513f3aa48f899f07bd3cb80efad03243f9cc523acfd5432c8ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed (1)",
+        "Duration  55.65s (transform 2.16s, setup 0ms, import 3.77s, tests 51.75s, environment 0ms)"
+      ],
+      "sourceCommit": "ec9e2bd4ca50558597f0848e7fe6ffc22286315b"
     }
   ],
   "updates": [
@@ -3628,6 +3649,13 @@
         "v10-worker-ui-cli-a969b7c6c",
         "v10-worker-cli-a969b7c6c",
         "sidebar-focused-after-router-toast-fixtures-20261025"
+      ]
+    },
+    {
+      "sourceCommit": "ec9e2bd4ca50558597f0848e7fe6ffc22286315b",
+      "meaning": "Original CLI positive import/export after conditional publication target binding; actual host scoped exit0, isolated broad rerun remains separate.",
+      "logs": [
+        "company-import-export-e2e-host-20261025"
       ]
     }
   ],

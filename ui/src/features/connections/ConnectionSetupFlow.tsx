@@ -3513,9 +3513,29 @@ function KeyStep({
     connectionMethodAcceptsCustomerOAuthClient(candidate)
     && !connectionMethodSupportsAutomaticOAuth(candidate),
   );
+  const managedSlackMethod = entry.slug === "slack"
+    ? capabilityMethods.find((candidate) => candidate.key === "managed-oauth" && candidate.ownershipModes.includes("platform_shared"))
+    : undefined;
+  const customerSlackMethod = managedSlackMethod && capabilityMethods.find((candidate) =>
+    candidate.key === "mcp-oauth"
+    && connectionMethodAcceptsCustomerOAuthClient(candidate)
+    && !connectionMethodSupportsAutomaticOAuth(candidate),
+  );
   const usingCustomGoogleOAuth = method?.key === customerGoogleMethod?.key;
+  const usingCustomSlackOAuth = method?.key === customerSlackMethod?.key;
   const googleOAuthFieldsId = useId();
-  const authenticationSelection = managedGoogleMethod && customerGoogleMethod && capabilityMethods.length === 2 ? (
+  const authenticationSelection = managedSlackMethod && customerSlackMethod && capabilityMethods.length === 2 ? (
+    <Button
+      type="button"
+      variant="link"
+      className="h-auto p-0 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+      aria-expanded={usingCustomSlackOAuth}
+      disabled={submitting}
+      onClick={() => onMethodChange(usingCustomSlackOAuth ? managedSlackMethod : customerSlackMethod)}
+    >
+      {usingCustomSlackOAuth ? "Use Blentera's Slack app" : "Use your own Slack OAuth app (advanced)"}
+    </Button>
+  ) : managedGoogleMethod && customerGoogleMethod && capabilityMethods.length === 2 ? (
     <Button
       type="button"
       variant="link"

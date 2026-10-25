@@ -16,13 +16,45 @@
   ],
   "methods": [
     {
+      "key": "managed-oauth",
+      "transport": "mcp_remote",
+      "auth": "oauth",
+      "ownershipModes": [
+        "platform_shared"
+      ],
+      "whenToUse": "Use Blentera's configured Slack OAuth app for the standard setup.",
+      "defaults": {
+        "serverUrl": "https://mcp.slack.com/mcp",
+        "authorizationEndpoint": "https://slack.com/oauth/v2/authorize",
+        "tokenEndpoint": "https://slack.com/api/oauth.v2.access",
+        "scopesHint": [
+          "channels:read",
+          "chat:write",
+          "search:read"
+        ]
+      },
+      "guidanceMd": "Review the Slack workspace and requested permissions, then authorize Blentera. A connection manager can use the advanced option to connect a separately managed Slack OAuth app.",
+      "riskTier": "S3",
+      "label": "Use Blentera's Slack app",
+      "purpose": "tool",
+      "capabilityProfile": {
+        "key": "slack-tools",
+        "label": "Use Slack as an agent tool",
+        "description": "Connect a Slack workspace for governed agent tools."
+      },
+      "requiredResourceFilters": [
+        "workspace",
+        "channel"
+      ]
+    },
+    {
       "key": "mcp-oauth",
       "transport": "mcp_remote",
       "auth": "oauth",
       "ownershipModes": [
         "customer"
       ],
-      "whenToUse": "Use the provider-hosted connection for the quickest setup.",
+      "whenToUse": "Use a separately managed Slack OAuth app only when your organization needs to control its app registration.",
       "defaults": {
         "serverUrl": "https://mcp.slack.com/mcp",
         "authorizationEndpoint": "https://slack.com/oauth/v2/authorize",
@@ -35,8 +67,13 @@
       },
       "guidanceMd": "Connect a Slack workspace and limit access to the channels agents need.",
       "riskTier": "S3",
-      "label": "Use this connection as an agent tool",
+      "label": "Use your own Slack OAuth app (advanced)",
       "purpose": "tool",
+      "capabilityProfile": {
+        "key": "slack-tools",
+        "label": "Use Slack as an agent tool",
+        "description": "Connect a Slack workspace for governed agent tools."
+      },
       "requiredResourceFilters": [
         "workspace",
         "channel"

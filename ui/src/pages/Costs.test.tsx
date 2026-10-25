@@ -5,6 +5,8 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Costs } from "./Costs";
+import { useCostFormatting } from "../hooks/useCostFormatting";
+import { i18n } from "../i18n";
 
 const budgetOverviewMock = vi.hoisted(() => vi.fn());
 const setBreadcrumbsMock = vi.hoisted(() => vi.fn());
@@ -22,6 +24,15 @@ const costsApiMocks = vi.hoisted(() => ({
   windowSpend: vi.fn(),
   quotaWindows: vi.fn(),
 }));
+
+function CostFormattingProbe() {
+  const formatCost = useCostFormatting();
+  return <div>
+    <span data-testid="reported-zero">{formatCost(0, 0)}</span>
+    <span data-testid="unpriced-zero">{formatCost(0, 1)}</span>
+    <span data-testid="mixed">{formatCost(125, 2)}</span>
+  </div>;
+}
 
 vi.mock("../api/budgets", () => ({
   budgetsApi: {
@@ -88,5 +99,24 @@ describe("Costs embedded Audit surfaces", () => {
     expect(container.querySelector('[role="tab"]')).toBeFalsy();
     expect(setBreadcrumbsMock).not.toHaveBeenCalled();
     for (const mock of Object.values(costsApiMocks)) expect(mock).not.toHaveBeenCalled();
+  });
+
+  it("localizes the difference between recorded zero, unknown price, and partial recorded spend", async () => {
+    root = createRoot(container);
+    await act(async () => {
+      await i18n.changeLanguage("en");
+      root.render(<CostFormattingProbe />);
+    });
+    expect(container.querySelector('[data-testid="reported-zero"]')?.textContent).toBe("$0.00");
+    expect(container.querySelector('[data-testid="unpriced-zero"]')?.textContent).toBe("Price unknown for 1 usage event");
+    expect(container.querySelector('[data-testid="mixed"]')?.textContent).toBe("$1.25 + 2 unpriced usage events");
+
+    await act(async () => {
+      await i18n.changeLanguage("da");
+    });
+    expect(container.querySelector('[data-testid="reported-zero"]')?.textContent).toBe("$0.00");
+    expect(container.querySelector('[data-testid="unpriced-zero"]')?.textContent).toBe("Pris ukendt for 1 forbrugshændelse");
+    expect(container.querySelector('[data-testid="mixed"]')?.textContent).toBe("$1.25 + 2 forbrugshændelser uden pris");
+    await act(async () => { await i18n.changeLanguage("en"); });
   });
 });

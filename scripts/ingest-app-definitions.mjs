@@ -341,6 +341,31 @@ const apps = [
     ["https://mcp.slack.com/*", "https://app.slack.com/client/*"],
     [
       method(
+        "managed-oauth",
+        "mcp_remote",
+        "oauth",
+        {
+          serverUrl: "https://mcp.slack.com/mcp",
+          authorizationEndpoint: "https://slack.com/oauth/v2/authorize",
+          tokenEndpoint: "https://slack.com/api/oauth.v2.access",
+          scopesHint: ["channels:read", "chat:write", "search:read"],
+        },
+        "S3",
+        "Review the Slack workspace and requested permissions, then authorize Blentera. A connection manager can use the advanced option to connect a separately managed Slack OAuth app.",
+        {
+          label: "Use Blentera's Slack app",
+          whenToUse: "Use Blentera's configured Slack OAuth app for the standard setup.",
+          purpose: "tool",
+          ownershipModes: ["platform_shared"],
+          capabilityProfile: {
+            key: "slack-tools",
+            label: "Use Slack as an agent tool",
+            description: "Connect a Slack workspace for governed agent tools.",
+          },
+          requiredResourceFilters: ["workspace", "channel"],
+        },
+      ),
+      method(
         "mcp-oauth",
         "mcp_remote",
         "oauth",
@@ -353,9 +378,15 @@ const apps = [
         "S3",
         "Connect a Slack workspace and limit access to the channels agents need.",
         {
-          label: "Use this connection as an agent tool",
+          label: "Use your own Slack OAuth app (advanced)",
+          whenToUse: "Use a separately managed Slack OAuth app only when your organization needs to control its app registration.",
           purpose: "tool",
           ownershipModes: ["customer"],
+          capabilityProfile: {
+            key: "slack-tools",
+            label: "Use Slack as an agent tool",
+            description: "Connect a Slack workspace for governed agent tools.",
+          },
           requiredResourceFilters: ["workspace", "channel"],
         },
       ),

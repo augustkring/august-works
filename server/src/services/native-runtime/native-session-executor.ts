@@ -7560,10 +7560,7 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
   agentId: string; turnId: string; callId: string; argumentsHash: string;
   tool: "read_document" | "write_document" | "create_task" | "self_remember"; result: unknown;
 }): Promise<void> {
-  const resultRecord = record(input.result);
-  const gatewayInvocationId = input.tool === "self_remember" && typeof resultRecord.invocationId === "string"
-    ? resultRecord.invocationId : null;
-  const digest = input.tool === "self_remember" ? null : nativeSha256(input.result);
+  const digest = nativeSha256(input.result);
   try {
     await input.db.transaction(async tx => {
       await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
@@ -7583,15 +7580,14 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
       const [invocation] = await tx.select().from(toolInvocations).where(and(
         eq(toolInvocations.companyId, input.companyId), eq(toolInvocations.runId, input.runId),
         eq(toolInvocations.agentId, input.agentId),
-        ...(gatewayInvocationId ? [eq(toolInvocations.id, gatewayInvocationId)] :
-          [eq(toolInvocations.idempotencyKey, `aw-native-tool:${input.runId}:${input.callId}`)]),
+        eq(toolInvocations.idempotencyKey, `aw-native-tool:${input.runId}:${input.callId}`),
         eq(toolInvocations.toolName, invocationToolName), eq(toolInvocations.status, "succeeded"),
+        eq(toolInvocations.argumentsHash, input.argumentsHash),
       )).for("share");
-      const contentHash = input.tool === "self_remember" ? invocation?.resultHash ?? null : digest;
+      const contentHash = digest;
       if (!run || sourceAuthority.version !== 1 || !parsed.success || call.length !== 1 || !invocation ||
-        !contentHash || (digest !== null && invocation.resultHash !== digest) ||
-        (input.tool === "self_remember" && (resultRecord.status !== "completed" ||
-          resultRecord.tool !== invocationToolName || !gatewayInvocationId)) ||
+        !contentHash || invocation.resultHash !== contentHash ||
+        (input.tool === "self_remember" && nativeSha256(invocation.workflowResultJson) !== contentHash) ||
         invocation.issueId !== input.issueId || parsed.data.binding.companyId !== input.companyId ||
         parsed.data.binding.runId !== input.runId || parsed.data.binding.agentId !== input.agentId ||
         parsed.data.binding.responsibleUserId !== run.responsibleUserId)
@@ -7721,24 +7717,28 @@ async function assertManagedOpenCodeToolCallCurrent(input: Parameters<typeof ren
     authority.executionInputHash !== nativeSha256(profile.nativeExecutionInput))
     throw new Error("managed_opencode_tool_call_source_binding_invalid");
   const bootstrapHash = nativeSha256(receipt.data.bootstrap);
-  const toolUses = Array.isArray(profile.nativeAwModelWireIntents)
-    ? profile.nativeAwModelWireIntents.map(record).flatMap(intent => {
-        const calls = Array.isArray(intent.responseToolUses) ? intent.responseToolUses.map(record) : [];
-        return calls.filter(call => {
-          let name = typeof call.name === "string" ? call.name : "";
-          for (const prefix of ["paperclip__", "paperclip_", "paperclip."]) {
-            if (name.startsWith(prefix)) { name = name.slice(prefix.length); break; }
-          }
-          return intent.sourcePolicyHash === bootstrapHash && call.id === input.callId && name === input.tool &&
-            call.argumentsHash === input.argumentsHash && typeof intent.responseContentHash === "string";
-        }).map(() => intent);
-      }) : [];
-  if (toolUses.length !== 1 || typeof toolUses[0]!.reservationId !== "string")
-    throw new Error("managed_opencode_tool_call_response_unqualified");
+  const sourceIntents = Array.isArray(profile.nativeAwModelWireIntents)
+    ? profile.nativeAwModelWireIntents.map(record).filter(intent => intent.sourcePolicyHash === bootstrapHash) : [];
+  const matchingCallId = sourceIntents.flatMap(intent =>
+    Array.isArray(intent.responseToolUses) ? intent.responseToolUses.map(record).map(use => ({ intent, use })) : [])
+    .filter(value => value.use.id === input.callId);
+  if (matchingCallId.length !== 1) throw new Error(matchingCallId.length === 0
+    ? "managed_opencode_tool_call_response_id_unmatched" : "managed_opencode_tool_call_response_id_ambiguous");
+  const callName = typeof matchingCallId[0]!.use.name === "string" ? matchingCallId[0]!.use.name : "";
+  let normalizedName = callName;
+  for (const prefix of ["paperclip__", "paperclip_", "paperclip."]) {
+    if (normalizedName.startsWith(prefix)) { normalizedName = normalizedName.slice(prefix.length); break; }
+  }
+  if (normalizedName !== input.tool) throw new Error("managed_opencode_tool_call_response_tool_mismatch");
+  if (matchingCallId[0]!.use.argumentsHash !== input.argumentsHash)
+    throw new Error("managed_opencode_tool_call_response_arguments_mismatch");
+  const matchedIntent = matchingCallId[0]!.intent;
+  if (typeof matchedIntent.responseContentHash !== "string" || typeof matchedIntent.reservationId !== "string")
+    throw new Error("managed_opencode_tool_call_response_receipt_missing");
   const [reservation] = await input.db.select({ status: orchestrationModelReservations.status,
     providerResponseHash: orchestrationModelReservations.providerResponseHash }).from(orchestrationModelReservations).where(and(
     eq(orchestrationModelReservations.companyId, input.companyId),
-    eq(orchestrationModelReservations.id, toolUses[0]!.reservationId as string),
+    eq(orchestrationModelReservations.id, matchedIntent.reservationId),
     eq(orchestrationModelReservations.purpose, "worker_model"),
     eq(orchestrationModelReservations.status, "completed"),
   ));

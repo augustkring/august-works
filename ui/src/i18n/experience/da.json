@@ -1,4 +1,13 @@
 {
+  "costPricing": {
+      "unknown_one": "Pris ukendt for {{count}} forbrugshændelse",
+      "unknown_other": "Pris ukendt for {{count}} forbrugshændelser",
+      "partial_one": "{{amount}} + {{count}} forbrugshændelse uden pris",
+      "partial_other": "{{amount}} + {{count}} forbrugshændelser uden pris",
+      "recordedPeriodSpend": "Registreret forbrug i perioden: {{amount}}",
+      "recordedWeekSpend": "Denne uge: {{amount}}",
+      "budgetComparisonUnavailable": "Budget sammenlignes ikke, når nogle priser er ukendte."
+  },
   "cliAuth": {
     "sessionFailed": "Dit login kunne ikke bekræftes",
     "sessionRetryHelp": "Kontrollér dit login igen, før du gennemgår anmodningen. Kontrol af login sender ikke en godkendelse.",

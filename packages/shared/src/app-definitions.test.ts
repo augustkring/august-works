@@ -8,6 +8,8 @@ import {
   APP_STORE_HIDDEN_SLUGS,
   CONNECTABLE_APP_DEFINITIONS,
   appSupportsCatalogSetup,
+  connectionMethodAcceptsCustomerOAuthClient,
+  connectionMethodSupportsAutomaticOAuth,
   getAvailableConnectionMethod,
   getAppDefinitionForUrl,
   getRecommendedConnectionMethod,
@@ -240,6 +242,22 @@ describe("AppDefinition catalog", () => {
     expect(anthropic.methods.map((method) => method.key)).toEqual(["ai-subscription", "ai-api_key"]);
     expect(anthropic.methods.every((method) => method.purpose === "ai" && method.transport === "runtime_auth")).toBe(true);
     expect(getAvailableConnectionMethod(anthropic, "api-key")).toBeNull();
+  });
+
+  it("keeps Slack's managed path preferred and own-app OAuth as the explicit fallback", () => {
+    const slack = APP_DEFINITIONS.find((app) => app.slug === "slack")!;
+    const managed = slack.methods.find((method) => method.key === "managed-oauth")!;
+    const ownApp = slack.methods.find((method) => method.key === "mcp-oauth")!;
+    expect(managed.ownershipModes).toEqual(["platform_shared"]);
+    expect(managed.defaults?.scopesHint).toEqual([
+      "channels:read",
+      "chat:write",
+      "search:read",
+    ]);
+    expect(connectionMethodSupportsAutomaticOAuth(managed)).toBe(true);
+    expect(connectionMethodAcceptsCustomerOAuthClient(managed)).toBe(false);
+    expect(connectionMethodAcceptsCustomerOAuthClient(ownApp)).toBe(true);
+    expect(getRecommendedConnectionMethod([managed, ownApp])).toBe(managed);
   });
 
   it("validates all Wave 1 definitions", () =>

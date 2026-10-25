@@ -1,4 +1,4 @@
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { Ajv2020, type ValidateFunction } from "ajv/dist/2020.js";
 
@@ -26,6 +26,8 @@ export interface OpenCodeMcpBridgeOptions {
   tools?: readonly Readonly<Record<string, unknown>>[];
   /** Runner-owned operations callable only by a trusted harness extension and never advertised to the model. */
   privateTools?: readonly Readonly<Record<string, unknown>>[];
+  /** Managed source mode stages exact IDs from the pinned OpenCode hook over an authenticated local channel. */
+  requireNativeToolCallObservation?: boolean;
   handler: (call: OpenCodeMcpCall) => Promise<unknown>;
   timeoutMs?: number;
   /** Human-gated private operations may remain pending much longer than model tool calls. */
@@ -62,9 +64,15 @@ export async function startOpenCodeMcpBridge(
   const validators = compileValidators(admittedTools);
   const calls = new Map<string, { fingerprint: string; promise: Promise<unknown> }>();
   const controllers = new Map<string, AbortController>();
+  const usedNativeToolCallIds = new Set<string>();
+  let pendingNativeToolCall: { callId: string; tool: string; argsHash: string; observedAt: number } | null = null;
   const server = createServer((request, response) => {
     void handleRequest(request, response, {
       secret,
+      requireNativeToolCallObservation: options.requireNativeToolCallObservation === true,
+      usedNativeToolCallIds,
+      get pendingNativeToolCall() { return pendingNativeToolCall; },
+      set pendingNativeToolCall(value) { pendingNativeToolCall = value; },
       tools,
       admittedTools,
       validators,
@@ -135,6 +143,9 @@ async function handleRequest(
   response: ServerResponse,
   context: {
     secret: string;
+    requireNativeToolCallObservation: boolean;
+    usedNativeToolCallIds: Set<string>;
+    pendingNativeToolCall: { callId: string; tool: string; argsHash: string; observedAt: number } | null;
     tools: OpenCodeMcpToolDefinition[];
     admittedTools: OpenCodeMcpToolDefinition[];
     validators: Map<string, ValidateFunction>;
@@ -161,6 +172,37 @@ async function handleRequest(
   }
   if (request.method === "DELETE") {
     response.statusCode = 204;
+    response.end();
+    return;
+  }
+  if (request.method === "POST" && request.url === "/paperclip-native-tool-call") {
+    if (!context.requireNativeToolCallObservation) {
+      response.statusCode = 404;
+      response.end();
+      return;
+    }
+    let observation: Record<string, unknown>;
+    try {
+      const value: unknown = JSON.parse(await readBody(request, 16 * 1024));
+      observation = isRecord(value) ? value : {};
+    } catch {
+      response.statusCode = 400;
+      response.end();
+      return;
+    }
+    const callId = typeof observation.callId === "string" ? observation.callId : "";
+    const tool = typeof observation.tool === "string" ? canonicalOpenCodeMcpToolName(observation.tool) : "";
+    const argsHash = typeof observation.argsHash === "string" ? observation.argsHash : "";
+    const prior = context.pendingNativeToolCall;
+    if (!/^[\x21-\x7e]{1,240}$/.test(callId) || !/^[a-zA-Z0-9_.:-]{1,200}$/.test(tool) ||
+      !/^[0-9a-f]{64}$/.test(argsHash) || !context.admittedTools.some(candidate => candidate.name === tool) ||
+      context.usedNativeToolCallIds.has(callId) || (prior !== null && prior.observedAt + 5_000 > Date.now())) {
+      response.statusCode = 409;
+      response.end();
+      return;
+    }
+    context.pendingNativeToolCall = { callId, tool, argsHash, observedAt: Date.now() };
+    response.statusCode = 202;
     response.end();
     return;
   }
@@ -221,8 +263,22 @@ async function handleRequest(
     writeRpc(response, id, { isError: true, content: [{ type: "text", text: "Unsupported tool." }] });
     return;
   }
-  const callId = typeof id === "string" || typeof id === "number" ? String(id) : randomBytes(12).toString("hex");
+  const requestId = typeof id === "string" || typeof id === "number" ? String(id) : randomBytes(12).toString("hex");
+  let callId = requestId;
   const args = params.arguments ?? {};
+  if (context.requireNativeToolCallObservation) {
+    const observation = context.pendingNativeToolCall;
+    const argsHash = createHash("sha256").update(canonicalJson(args), "utf8").digest("hex");
+    if (!observation || observation.observedAt + 5_000 <= Date.now() || observation.tool !== tool ||
+      observation.argsHash !== argsHash || context.usedNativeToolCallIds.has(observation.callId)) {
+      context.pendingNativeToolCall = null;
+      writeRpc(response, id, { isError: true, content: [{ type: "text", text: "Managed tool call has no exact hook observation." }] });
+      return;
+    }
+    callId = observation.callId;
+    context.pendingNativeToolCall = null;
+    context.usedNativeToolCallIds.add(callId);
+  }
   const validator = context.validators.get(tool);
   if (validator === undefined || !validator(args)) {
     const detail = validator?.errors?.map((error) => `${error.instancePath || "/"} ${error.message ?? "is invalid"}`).join("; ");
@@ -232,8 +288,8 @@ async function handleRequest(
     });
     return;
   }
-  const fingerprint = canonicalJson({ tool, args });
-  const existing = context.calls.get(callId);
+  const fingerprint = canonicalJson({ tool, args, callId });
+  const existing = context.calls.get(requestId);
   if (existing && existing.fingerprint !== fingerprint) {
     writeRpc(response, id, { isError: true, content: [{ type: "text", text: "Duplicate call identity conflict." }] });
     return;
@@ -246,9 +302,9 @@ async function handleRequest(
   );
   if (!existing) {
     if (context.calls.size >= 2_048) context.calls.delete(context.calls.keys().next().value!);
-    context.calls.set(callId, { fingerprint, promise: execution });
-    context.controllers.set(callId, controller!);
-    void execution.finally(() => context.controllers.delete(callId)).catch(() => undefined);
+    context.calls.set(requestId, { fingerprint, promise: execution });
+    context.controllers.set(requestId, controller!);
+    void execution.finally(() => context.controllers.delete(requestId)).catch(() => undefined);
   }
   try {
     const result = await execution;

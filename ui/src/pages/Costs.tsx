@@ -34,8 +34,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
+import { useCostFormatting } from "../hooks/useCostFormatting";
+import { useTranslation } from "../i18n";
+
 const NO_COMPANY = "__none__";
 export type CostsMainTab = "overview" | "budgets" | "providers" | "billers" | "finance";
+
+type SpendCoverage = { costCents: number; unpricedEventCount: number };
 
 export interface CostsProps {
   /** Render inside Audit without a second page-level title or breadcrumb. */
@@ -57,25 +62,27 @@ function currentWeekRange(): { from: string; to: string } {
 }
 
 function ProviderTabLabel({ provider, rows }: { provider: string; rows: CostByProviderModel[] }) {
+  const formatCost = useCostFormatting();
   const totalTokens = rows.reduce((sum, row) => sum + row.inputTokens + row.cachedInputTokens + row.outputTokens, 0);
   const totalCost = rows.reduce((sum, row) => sum + row.costCents, 0);
   return (
     <span className="flex items-center gap-1.5">
       <span>{providerDisplayName(provider)}</span>
       <span className="font-mono text-xs text-muted-foreground">{formatTokens(totalTokens)}</span>
-      <span className="text-xs text-muted-foreground">{formatCents(totalCost)}</span>
+      <span className="text-xs text-muted-foreground">{formatCost(totalCost, rows.reduce((sum, row) => sum + (row.unpricedEventCount ?? 0), 0))}</span>
     </span>
   );
 }
 
 function BillerTabLabel({ biller, rows }: { biller: string; rows: CostByBiller[] }) {
+  const formatCost = useCostFormatting();
   const totalTokens = rows.reduce((sum, row) => sum + row.inputTokens + row.cachedInputTokens + row.outputTokens, 0);
   const totalCost = rows.reduce((sum, row) => sum + row.costCents, 0);
   return (
     <span className="flex items-center gap-1.5">
       <span>{providerDisplayName(biller)}</span>
       <span className="font-mono text-xs text-muted-foreground">{formatTokens(totalTokens)}</span>
-      <span className="text-xs text-muted-foreground">{formatCents(totalCost)}</span>
+      <span className="text-xs text-muted-foreground">{formatCost(totalCost, rows.reduce((sum, row) => sum + (row.unpricedEventCount ?? 0), 0))}</span>
     </span>
   );
 }
@@ -163,6 +170,8 @@ export function Costs({
   lockTab = false,
   hideBudgetsTab = false,
 }: CostsProps = {}) {
+  const formatCost = useCostFormatting();
+  const { t } = useTranslation("experience");
   const { selectedCompanyId } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
   const queryClient = useQueryClient();
@@ -379,17 +388,23 @@ export function Costs({
   }, [billerData]);
 
   const weekSpendByProvider = useMemo(() => {
-    const map = new Map<string, number>();
+    const map = new Map<string, SpendCoverage>();
     for (const row of weekData ?? []) {
-      map.set(row.provider, (map.get(row.provider) ?? 0) + row.costCents);
+      const current = map.get(row.provider) ?? { costCents: 0, unpricedEventCount: 0 };
+      current.costCents += row.costCents;
+      current.unpricedEventCount += row.unpricedEventCount ?? 0;
+      map.set(row.provider, current);
     }
     return map;
   }, [weekData]);
 
   const weekSpendByBiller = useMemo(() => {
-    const map = new Map<string, number>();
+    const map = new Map<string, SpendCoverage>();
     for (const row of weekBillerData ?? []) {
-      map.set(row.biller, (map.get(row.biller) ?? 0) + row.costCents);
+      const current = map.get(row.biller) ?? { costCents: 0, unpricedEventCount: 0 };
+      current.costCents += row.costCents;
+      current.unpricedEventCount += row.unpricedEventCount ?? 0;
+      map.set(row.biller, current);
     }
     return map;
   }, [weekBillerData]);
@@ -489,7 +504,7 @@ export function Costs({
             {providerKeys.length > 0 ? (
               <>
                 <span className="font-mono text-xs text-muted-foreground">{formatTokens(allTokens)}</span>
-                <span className="text-xs text-muted-foreground">{formatCents(allCents)}</span>
+                <span className="text-xs text-muted-foreground">{formatCost(allCents, [...byProvider.values()].flat().reduce((sum, row) => sum + (row.unpricedEventCount ?? 0), 0))}</span>
               </>
             ) : null}
           </span>
@@ -500,7 +515,7 @@ export function Costs({
         label: <ProviderTabLabel provider={provider} rows={byProvider.get(provider) ?? []} />,
       })),
     ];
-  }, [byProvider]);
+  }, [byProvider, formatCost]);
 
   const billerTabItems = useMemo(() => {
     const billerKeys = Array.from(byBiller.keys());
@@ -521,7 +536,7 @@ export function Costs({
             {billerKeys.length > 0 ? (
               <>
                 <span className="font-mono text-xs text-muted-foreground">{formatTokens(allTokens)}</span>
-                <span className="text-xs text-muted-foreground">{formatCents(allCents)}</span>
+                <span className="text-xs text-muted-foreground">{formatCost(allCents, [...byBiller.values()].flat().reduce((sum, row) => sum + (row.unpricedEventCount ?? 0), 0))}</span>
               </>
             ) : null}
           </span>
@@ -532,7 +547,7 @@ export function Costs({
         label: <BillerTabLabel biller={biller} rows={byBiller.get(biller) ?? []} />,
       })),
     ];
-  }, [byBiller]);
+  }, [byBiller, formatCost]);
 
   const inferenceTokenTotal =
     (spendData?.byAgent ?? []).reduce(
@@ -608,7 +623,7 @@ export function Costs({
           <dl className="grid grid-cols-2 gap-x-6 gap-y-5 border-y border-border py-4 lg:grid-cols-4">
             <MetricTile
               label="Inference spend"
-              value={formatCents(spendData?.summary.spendCents ?? 0)}
+              value={formatCost(spendData?.summary.spendCents ?? 0, spendData?.summary.unpricedEventCount)}
               subtitle={`${formatTokens(inferenceTokenTotal)} tokens across request-scoped events`}
               icon={DollarSign}
             />
@@ -616,14 +631,18 @@ export function Costs({
               label="Budget"
               value={activeBudgetIncidents.length > 0 ? String(activeBudgetIncidents.length) : (
                 spendData?.summary.budgetCents && spendData.summary.budgetCents > 0
-                  ? `${spendData.summary.utilizationPercent}%`
+                  ? spendData.summary.unpricedEventCount
+                    ? formatCost(spendData.summary.spendCents, spendData.summary.unpricedEventCount)
+                    : `${spendData.summary.utilizationPercent}%`
                   : "Open"
               )}
               subtitle={
                 activeBudgetIncidents.length > 0
                   ? `${budgetData?.pausedAgentCount ?? 0} agents paused · ${budgetData?.pausedProjectCount ?? 0} projects paused`
                   : spendData?.summary.budgetCents && spendData.summary.budgetCents > 0
-                    ? `${formatCents(spendData.summary.spendCents)} of ${formatCents(spendData.summary.budgetCents)}`
+                    ? spendData.summary.unpricedEventCount
+                      ? `Recorded amount against ${formatCents(spendData.summary.budgetCents)} budget`
+                      : `${formatCents(spendData.summary.spendCents)} of ${formatCents(spendData.summary.budgetCents)}`
                     : "No monthly cap configured"
               }
               icon={Coins}
@@ -695,7 +714,7 @@ export function Costs({
                     <div className="flex flex-wrap items-end justify-between gap-3">
                       <div>
                         <div className="text-3xl font-semibold tabular-nums">
-                          {formatCents(spendData?.summary.spendCents ?? 0)}
+                          {formatCost(spendData?.summary.spendCents ?? 0, spendData?.summary.unpricedEventCount)}
                         </div>
                         <div className="mt-1 text-sm text-muted-foreground">
                           {spendData?.summary.budgetCents && spendData.summary.budgetCents > 0
@@ -710,7 +729,7 @@ export function Costs({
                         </div>
                       </div>
                     </div>
-                    {spendData?.summary.budgetCents && spendData.summary.budgetCents > 0 ? (
+                    {spendData?.summary.budgetCents && spendData.summary.budgetCents > 0 && !spendData.summary.unpricedEventCount ? (
                       <div className="space-y-2">
                         <div className="h-2 overflow-hidden bg-muted">
                           <div
@@ -729,6 +748,10 @@ export function Costs({
                           {spendData.summary.utilizationPercent}% of monthly budget consumed in this range.
                         </div>
                       </div>
+                    ) : spendData?.summary.unpricedEventCount ? (
+                      <p className="text-xs text-muted-foreground">
+                        {t("costPricing.recordedPeriodSpend", { amount: formatCost(spendData.summary.spendCents, spendData.summary.unpricedEventCount) })}. {t("costPricing.budgetComparisonUnavailable")}
+                      </p>
                     ) : null}
                   </CardContent>
                 </Card>
@@ -774,7 +797,7 @@ export function Costs({
                                 {row.agentStatus === "terminated" ? <StatusBadge status="terminated" /> : null}
                               </div>
                               <div className="text-right text-sm tabular-nums">
-                                <div className="font-medium">{formatCents(row.costCents)}</div>
+                                <div className="font-medium">{formatCost(row.costCents, row.unpricedEventCount)}</div>
                                 <div className="text-xs text-muted-foreground">
                                   in {formatTokens(row.inputTokens + row.cachedInputTokens)} · out {formatTokens(row.outputTokens)}
                                 </div>
@@ -811,8 +834,10 @@ export function Costs({
                                       </div>
                                       <div className="text-right tabular-nums">
                                         <div className="font-medium">
-                                          {formatCents(modelRow.costCents)}
-                                          <span className="ml-1 font-normal text-muted-foreground">({sharePct}%)</span>
+                                          {formatCost(modelRow.costCents, modelRow.unpricedEventCount)}
+                                          {!row.unpricedEventCount && !modelRow.unpricedEventCount ? (
+                                            <span className="ml-1 font-normal text-muted-foreground">({sharePct}%)</span>
+                                          ) : null}
                                         </div>
                                         <div className="text-muted-foreground">
                                           {formatTokens(modelRow.inputTokens + modelRow.cachedInputTokens + modelRow.outputTokens)} tok
@@ -846,7 +871,7 @@ export function Costs({
                             className="flex items-center justify-between gap-3 border border-border px-3 py-2 text-sm"
                           >
                             <span className="truncate">{row.projectName ?? row.projectId ?? "Unattributed"}</span>
-                            <span className="font-medium tabular-nums">{formatCents(row.costCents)}</span>
+                            <span className="font-medium tabular-nums">{formatCost(row.costCents, row.unpricedEventCount)}</span>
                           </div>
                         ))
                       )}
@@ -999,7 +1024,8 @@ export function Costs({
                           rows={byProvider.get(provider) ?? []}
                           budgetMonthlyCents={spendData?.summary.budgetCents ?? 0}
                           totalCompanySpendCents={spendData?.summary.spendCents ?? 0}
-                          weekSpendCents={weekSpendByProvider.get(provider) ?? 0}
+                          weekSpendCents={weekSpendByProvider.get(provider)?.costCents ?? 0}
+                          weekUnpricedEventCount={weekSpendByProvider.get(provider)?.unpricedEventCount ?? 0}
                           windowRows={windowSpendByProvider.get(provider) ?? []}
                           showDeficitNotch={deficitNotchByProvider.get(provider) ?? false}
                           quotaWindows={quotaWindowsByProvider.get(provider) ?? []}
@@ -1019,7 +1045,8 @@ export function Costs({
                       rows={byProvider.get(provider) ?? []}
                       budgetMonthlyCents={spendData?.summary.budgetCents ?? 0}
                       totalCompanySpendCents={spendData?.summary.spendCents ?? 0}
-                      weekSpendCents={weekSpendByProvider.get(provider) ?? 0}
+                      weekSpendCents={weekSpendByProvider.get(provider)?.costCents ?? 0}
+                      weekUnpricedEventCount={weekSpendByProvider.get(provider)?.unpricedEventCount ?? 0}
                       windowRows={windowSpendByProvider.get(provider) ?? []}
                       showDeficitNotch={deficitNotchByProvider.get(provider) ?? false}
                       quotaWindows={quotaWindowsByProvider.get(provider) ?? []}
@@ -1055,7 +1082,8 @@ export function Costs({
                           <BillerSpendCard
                             key={biller}
                             row={row}
-                            weekSpendCents={weekSpendByBiller.get(biller) ?? 0}
+                            weekSpendCents={weekSpendByBiller.get(biller)?.costCents ?? 0}
+                            weekUnpricedEventCount={weekSpendByBiller.get(biller)?.unpricedEventCount ?? 0}
                             budgetMonthlyCents={spendData?.summary.budgetCents ?? 0}
                             totalCompanySpendCents={spendData?.summary.spendCents ?? 0}
                             providerRows={providerRows}
@@ -1074,7 +1102,8 @@ export function Costs({
                     <TabsContent key={biller} value={biller} className="mt-4">
                       <BillerSpendCard
                         row={row}
-                        weekSpendCents={weekSpendByBiller.get(biller) ?? 0}
+                        weekSpendCents={weekSpendByBiller.get(biller)?.costCents ?? 0}
+                        weekUnpricedEventCount={weekSpendByBiller.get(biller)?.unpricedEventCount ?? 0}
                         budgetMonthlyCents={spendData?.summary.budgetCents ?? 0}
                         totalCompanySpendCents={spendData?.summary.spendCents ?? 0}
                         providerRows={providerRows}
