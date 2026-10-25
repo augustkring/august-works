@@ -205,7 +205,8 @@ const support = await getEmbeddedPostgresTestSupport();
     const [edge]=await db.select().from(learningAnalyticalDependencies).where(eq(learningAnalyticalDependencies.cycleId,cycle.id));
     await expect(db.update(learningAnalyticalDependencies).set({sourceManifestId:edge!.sourceManifestId}).where(eq(learningAnalyticalDependencies.cycleId,cycle.id))).rejects.toMatchObject({cause:{code:"23514"}});
   });
-  it.each(["verified_memory","artifact_signal","workflow_signal","promoted_artifact_signal","expired_artifact_signal"] as const)("retains current Optimizer source authority and erases native compiler copies: %s", async sourceKind => {
+  for (const sourceKind of ["verified_memory","artifact_signal","workflow_signal","promoted_artifact_signal","expired_artifact_signal"] as const) {
+  it(`retains current Optimizer source authority and erases native compiler copies: ${sourceKind}`, async () => {
     const generated=sourceKind==="artifact_signal"||sourceKind==="promoted_artifact_signal"||sourceKind==="expired_artifact_signal";
     const signal=sourceKind==="verified_memory"?null:await analyticalSignal();
     await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:"local-board",status:"active",membershipRole:"owner"}).onConflictDoNothing();
@@ -471,6 +472,11 @@ const support = await getEmbeddedPostgresTestSupport();
     expect(shadowObservation!.shadowResult).not.toBeNull();
     await expect(db.update(workflowOptimizerObservations).set({workflowRunId:evaluation!.sourceRunIds[0]!}).where(eq(workflowOptimizerObservations.id,shadowObservation!.id))).rejects.toMatchObject({cause:{code:"23514"}});
     if(sourceKind==="promoted_artifact_signal"){
+      // Exercise a valid persisted 50% canary allocation (the schema limit)
+      // so the native integration reliably observes the required ten
+      // committed candidate executions without weakening that minimum.
+      await db.update(workflowOptimizerEvaluations).set({canaryTrafficPercent:50})
+        .where(eq(workflowOptimizerEvaluations.id,replay.evaluationId));
       await instanceSettingsService(db).updateExperimental({enableWorkflowOptimizerPromotion:true});
       // Current declared Source owner and native company membership are
       // software identity prerequisites, not a browser/JWT or Human trial.
@@ -595,7 +601,8 @@ const support = await getEmbeddedPostgresTestSupport();
     expect((await db.select().from(automationArtifactVersions).where(eq(automationArtifactVersions.id, replay.artifactVersionId)))[0]!.sourceCode).toBe("");
     await db.update(workflowOptimizerEvaluations).set({compilerResult:evaluation!.compilerResult,replayEvaluation:evaluation!.replayEvaluation,status:"shadow"}).where(eq(workflowOptimizerEvaluations.id,replay.evaluationId));
     expect((await db.select().from(workflowOptimizerEvaluations).where(eq(workflowOptimizerEvaluations.id,replay.evaluationId)))[0]).toMatchObject({status:"retired",compilerResult:null,replayEvaluation:null});
-  }, 120_000);
+  }, sourceKind === "promoted_artifact_signal" ? 300_000 : 120_000);
+  }
   it("keeps Role Pack challengers unpublished, preserves required policies and erases descendants", async () => {
     const packs = rolePackService(db), pack = await packs.create(owner, companyId, { key: "learning-ops", name: "Operations", description: "" });
     const baseline = await packs.createVersion(owner, companyId, pack.id, { summary: "Baseline", items: [{ type: "required_policy", ref: "approval_before_side_effects", operation: "add", versionId: null, loadPoint: "always", triggerTerms: [], excludeTerms: [] }] });
