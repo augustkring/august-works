@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
-import { and, desc, eq, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import {
   accountDeletionOperations, authRateLimits, authUsers, companies, companyDeletionOperations, companyMemberships,
   supportCases, supportCaseEvents, supportCaseDeletionMarkers, type Db,
@@ -339,6 +339,41 @@ export function customerSupportCaseService(db: Db, options: { dataPolicy: Readon
 /** Native maintenance drains only expired local content. Holds and attempted
  * external delivery remain with their erasure owner, never a success receipt. */
 export async function eraseExpiredSupportCases(db: Db) {
+  // A delivery lease is evidence that an attempt may have reached its
+  // provider. Once its lease expires, preserve that uncertainty as `unknown`;
+  // never return it to `pending`, which could cause a duplicate external send.
+  // This is a bounded native state transition only. It does not contact a
+  // provider or claim that delivery succeeded.
+  const expiredAttempts = await db.transaction(async raw => {
+    const tx = raw as unknown as Db;
+    await tx.execute(sql`set local statement_timeout='2s'`);
+    // Match support intake/deletion lock order: company, case, then event.
+    // SKIP LOCKED lets a busy company root or case defer to a later sweep.
+    const [company] = await tx.select({ id: companies.id }).from(companies)
+      .where(sql`exists(select 1 from support_cases c join support_case_events e
+        on e.company_id=c.company_id and e.case_id=c.id
+        where c.company_id=${companies.id} and e.delivery_state='sending'
+          and e.delivery_lease_until<=clock_timestamp())`)
+      .orderBy(companies.id).limit(1).for("update", { skipLocked: true });
+    if (!company) return 0;
+    const cases = await tx.select({ id: supportCases.id }).from(supportCases)
+      .where(and(eq(supportCases.companyId, company.id), sql`exists(select 1 from support_case_events e
+        where e.company_id=${supportCases.companyId} and e.case_id=${supportCases.id}
+          and e.delivery_state='sending' and e.delivery_lease_until<=clock_timestamp())`))
+      .orderBy(supportCases.id).limit(100).for("update", { skipLocked: true });
+    if (!cases.length) return 0;
+    const events = await tx.select({ id: supportCaseEvents.id }).from(supportCaseEvents)
+      .where(and(inArray(supportCaseEvents.caseId, cases.map(row => row.id)),
+        eq(supportCaseEvents.deliveryState, "sending"), sql`${supportCaseEvents.deliveryLeaseUntil}<=clock_timestamp()`))
+      .orderBy(supportCaseEvents.caseId, supportCaseEvents.id).limit(100)
+      .for("update", { skipLocked: true });
+    if (!events.length) return 0;
+    const updated = await tx.update(supportCaseEvents).set({ deliveryState: "unknown", deliveryLeaseUntil: null })
+      .where(and(inArray(supportCaseEvents.id, events.map(row => row.id)),
+        eq(supportCaseEvents.deliveryState, "sending"), sql`${supportCaseEvents.deliveryLeaseUntil}<=clock_timestamp()`))
+      .returning({ id: supportCaseEvents.id });
+    return updated.length;
+  });
   const eligible = sql`${supportCases.expiresAt}<=clock_timestamp()
     and not (${supportCases.legalHold} and (${supportCases.holdReleaseAt} is null or ${supportCases.holdReleaseAt}>clock_timestamp()))
     and ${supportCases.providerCaseRef} is null and not exists(select 1 from support_case_events e
@@ -347,7 +382,7 @@ export async function eraseExpiredSupportCases(db: Db) {
         or e.delivery_state in ('sending','delivered','unknown')))`;
   const [candidate] = await db.select({ companyId: supportCases.companyId }).from(supportCases).where(eligible)
     .orderBy(supportCases.expiresAt, supportCases.id).limit(1);
-  if (!candidate) return { erasedCases: 0 };
+  if (!candidate) return { erasedCases: 0, expiredAttempts };
   const publications: ActivityPublication[] = [];
   const erasedCases = await db.transaction(async raw => {
     const tx = raw as unknown as Db;
@@ -366,5 +401,5 @@ export async function eraseExpiredSupportCases(db: Db) {
     return rows.length;
   });
   for (const publication of publications) publishActivity(publication);
-  return { erasedCases };
+  return { erasedCases, expiredAttempts };
 }

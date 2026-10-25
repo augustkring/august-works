@@ -29,6 +29,8 @@ Choose **Support cases** to send a request or read an existing case. A saved cas
 
 If a submission's result is unknown, keep the page's original request and use its recovery action. Reload checks for the saved receipt. Do not create another request solely because the response was interrupted.
 
+If a saved case shows unknown delivery, keep its reference and contact support directly. An interrupted delivery attempt is not automatically sent again, because the provider may already have received it.
+
 ## Report a security or privacy concern
 
 Use [security@blentera.com](mailto:security@blentera.com) for a security concern and [privacy@blentera.com](mailto:privacy@blentera.com) for a privacy request. Share only the information needed to explain the concern. Never send a credential to prove that you possess it.

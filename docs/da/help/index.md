@@ -29,6 +29,8 @@ Vælg **Mine supportsager** for at sende en anmodning eller læse en eksisterend
 
 Hvis resultatet af en indsendelse er ukendt, skal du beholde den oprindelige anmodning på siden og bruge dens genoprettelseshandling. Genindlæsning kontrollerer, om kvitteringen er gemt. Opret ikke en ny anmodning alene, fordi svaret blev afbrudt.
 
+Hvis en gemt sag viser ukendt levering, skal du beholde sagsreferencen og kontakte support direkte. Et afbrudt leveringsforsøg sendes ikke automatisk igen, fordi udbyderen allerede kan have modtaget det.
+
 ## Indberet et sikkerheds- eller privatlivsproblem
 
 Brug [security@blentera.com](mailto:security@blentera.com) ved sikkerhedsproblemer og [privacy@blentera.com](mailto:privacy@blentera.com) ved privatlivsanmodninger. Del kun de oplysninger, der er nødvendige for at forklare problemet. Send aldrig en adgangsoplysning for at bevise, at den tilhører dig.

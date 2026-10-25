@@ -428,6 +428,78 @@ const policy = {
     expect((await request(app).get(`${path(companyA)}/cases`).set(auth("opener"))
       .query({ expectedUserId: users.owner })).status).toBe(409);
   });
+  it("turns expired delivery leases into unknown without retrying or changing other delivery states", async () => {
+    const expired = await create(companyA, "opener", "Lease expired during provider handoff");
+    const future = await create(companyA, "opener", "Provider attempt still holds its lease");
+    const delivered = await create(companyA, "opener", "Provider delivery is recorded");
+    const pending = await create(companyA, "opener", "No provider attempt has started");
+    for (const response of [expired, future, delivered, pending]) expect(response.status).toBe(201);
+    const expiredAttempt = randomUUID(), futureAttempt = randomUUID(), deliveredAttempt = randomUUID();
+    await db.execute(sql`update support_case_events set delivery_state='sending', delivery_attempt_id=${expiredAttempt}::uuid,
+      delivery_provider_key='test-provider', delivery_started_at=clock_timestamp(),
+      delivery_lease_until=clock_timestamp()-interval '1 second' where case_id=${expired.body.id}::uuid`);
+    await db.execute(sql`update support_case_events set delivery_state='sending', delivery_attempt_id=${futureAttempt}::uuid,
+      delivery_provider_key='test-provider', delivery_started_at=clock_timestamp(),
+      delivery_lease_until=clock_timestamp()+interval '1 hour' where case_id=${future.body.id}::uuid`);
+    await db.execute(sql`update support_case_events set delivery_state='delivered', delivery_attempt_id=${deliveredAttempt}::uuid,
+      delivery_provider_key='test-provider', provider_message_ref='test-message', delivery_started_at=clock_timestamp(),
+      delivered_at=clock_timestamp() where case_id=${delivered.body.id}::uuid`);
+
+    const sweep = await eraseExpiredSupportCases(db);
+    expect(sweep.expiredAttempts).toBe(1);
+    const readEvent = async (caseId: string) => {
+      const [event] = await db.select().from(supportCaseEvents).where(eq(supportCaseEvents.caseId, caseId));
+      return event!;
+    };
+    const [expiredEvent, futureEvent, deliveredEvent, pendingEvent] = await Promise.all([
+      readEvent(expired.body.id), readEvent(future.body.id), readEvent(delivered.body.id), readEvent(pending.body.id),
+    ]);
+    expect(expiredEvent).toMatchObject({ deliveryState: "unknown", deliveryAttemptId: expiredAttempt,
+      deliveryProviderKey: "test-provider", deliveryLeaseUntil: null, deliveredAt: null, providerMessageRef: null });
+    expect(futureEvent).toMatchObject({ deliveryState: "sending", deliveryAttemptId: futureAttempt,
+      deliveryProviderKey: "test-provider" });
+    expect(futureEvent.deliveryLeaseUntil!.getTime()).toBeGreaterThan(Date.now());
+    expect(deliveredEvent).toMatchObject({ deliveryState: "delivered", deliveryAttemptId: deliveredAttempt,
+      deliveryProviderKey: "test-provider", providerMessageRef: "test-message" });
+    expect(pendingEvent).toMatchObject({ deliveryState: "pending", deliveryAttemptId: null, deliveryProviderKey: null });
+    expect((await detail(companyA, "opener", expired.body.id)).body.delivery).toBe("unknown");
+    expect((await detail(companyA, "opener", future.body.id)).body.delivery).toBe("pending");
+    expect((await detail(companyA, "opener", delivered.body.id)).body.delivery).toBe("delivered");
+    expect((await detail(companyA, "opener", pending.body.id)).body.delivery).toBe("pending");
+    // Running maintenance again neither retries the expired attempt nor
+    // changes its recorded uncertainty.
+    expect((await eraseExpiredSupportCases(db)).expiredAttempts).toBe(0);
+    expect(await readEvent(expired.body.id)).toMatchObject({ deliveryState: "unknown", deliveryAttemptId: expiredAttempt });
+  });
+  it("skips a locked company root or case and transitions the expired lease after release", async () => {
+    const expired = await create(companyA, "opener", "Lease waits for maintenance after root release");
+    expect(expired.status).toBe(201);
+    const attempt = randomUUID();
+    await db.execute(sql`update support_case_events set delivery_state='sending', delivery_attempt_id=${attempt}::uuid,
+      delivery_provider_key='test-provider', delivery_started_at=clock_timestamp(),
+      delivery_lease_until=clock_timestamp()-interval '1 second' where case_id=${expired.body.id}::uuid`);
+
+    await db.transaction(async tx => {
+      await tx.execute(sql`select id from companies where id=${companyA}::uuid for update`);
+      await tx.execute(sql`select id from support_cases where id=${expired.body.id}::uuid for update`);
+      const [held] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+      const [other] = await db.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+      expect(other!.pid).not.toBe(held!.pid);
+      expect((await eraseExpiredSupportCases(db)).expiredAttempts).toBe(0);
+      const [stillSending] = await tx.select().from(supportCaseEvents).where(eq(supportCaseEvents.caseId, expired.body.id));
+      expect(stillSending!.deliveryState).toBe("sending");
+    });
+
+    // With only the child locked, the sweep acquires the company first, skips
+    // the case, and releases the root without waiting on the busy case.
+    await db.transaction(async tx => {
+      await tx.execute(sql`select id from support_cases where id=${expired.body.id}::uuid for update`);
+      expect((await eraseExpiredSupportCases(db)).expiredAttempts).toBe(0);
+    });
+    expect((await eraseExpiredSupportCases(db)).expiredAttempts).toBe(1);
+    const [event] = await db.select().from(supportCaseEvents).where(eq(supportCaseEvents.caseId, expired.body.id));
+    expect(event).toMatchObject({ deliveryState: "unknown", deliveryAttemptId: attempt, deliveryLeaseUntil: null });
+  });
   it("erases expired local content but preserves held and uncertain delivery without false completion", async () => {
     const clean = await create(companyA, "opener", "Remove this expired local case");
     const held = await create(companyA, "opener", "Keep this held case");
