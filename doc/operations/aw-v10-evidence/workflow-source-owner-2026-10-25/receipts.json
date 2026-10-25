@@ -295,6 +295,27 @@
         "Duration  132.42s (transform 9.48s, setup 73ms, import 13.49s, tests 118.74s, environment 0ms)"
       ],
       "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "learning-workflow-source-final42-scoped",
+      "exitCode": 0,
+      "exitSidecar": "learning-workflow-source-final42-scoped.exit",
+      "rawSha256": "1d9c96e519a727fb155a1829fada741f26b518f362a52f1915a26c9fbab3426c",
+      "sanitizedSha256": "636352871e7f0a03848f719748337df28b94ad43286f9af60f5e3c8fd5c569a9",
+      "archiveSha256": "776c944d8f1454b6b4c5e060350ddf56cd29c669549ced265b8f905dd2c1a77c",
+      "redactions": {
+        "ansi": 36,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  42 passed (42)",
+        "Duration  571.20s (transform 9.48s, setup 81ms, import 13.19s, tests 557.82s, environment 0ms)"
+      ],
+      "sourceCommit": "102ae29e96061744df46c84b3850aacf532f6ab1"
     }
   ],
   "updates": [
@@ -318,6 +339,13 @@
         "learning-workflow-promoted-live-phases-run",
         "learning-workflow-promoted-50pct",
         "learning-workflow-signal-180"
+      ]
+    },
+    {
+      "sourceCommit": "102ae29e96061744df46c84b3850aacf532f6ab1",
+      "meaning": "Final complete42 Learning suite passes on scoped measured harness limits without compiler contention; productionSource8s unchanged",
+      "logs": [
+        "learning-workflow-source-final42-scoped"
       ]
     }
   ],

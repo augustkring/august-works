@@ -1629,3 +1629,10 @@ The original queued-comment mutation adapter had omitted the existing persisted 
 The first full42 rerun reached41PASS/1timeout in workflow_signal,154ms beyond its120s harness limit while full workspace compilation was running. Its isolated measured control passes118.74s aggregate; only this additional variant now has180s harness headroom. Promoted stays300s after219.23s complete isolated measurement; other variants stay120s and production Source review stays8s. A fresh complete42 rerun is in progress without compiler contention.
 
 Archive creation checkout identity is now explicitly distinguished from separately recorded final unchanged-source gate identity. The original scoped logs keep their exact observed outcomes and hashes, including failures. The local archive helper now merges earlier receipt indexes instead of replacing them and recognizes actual .log.exit sidecars used by some agent commands. Original observed companion11 and native guard84/2 statuses were read from those sidecars, not inferred from passing test text.
+
+
+### 2026-10-25 — Complete Learning42 passes
+
+The clean full Learning integration suite passes42/42 with the final source owner and the two measured per-variant harness ceilings, without concurrent whole-workspace compilation. Total test time557.82s; no production Source deadline changed. This includes native source-owner positives, revoked/expired/erased analytical/Learning/Memory negatives, promoted canary/active consumption and retained-copy erasure controls. Fresh authoring18 and executor51 reruns are following because their prior green receipts predated the final duplicate-check optimization and error-code passthrough.
+
+This closes the observed full-file failures; it does not establish complete18-family native input/body provenance, support inference/provider qualification, all upstream packages, full workspace test/build acceptance or PR readiness.
