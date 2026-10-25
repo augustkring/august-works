@@ -4648,7 +4648,7 @@ function leaseDb(
       return {
         where: () => {
           if (failDocumentCaptureWrite && table === heartbeatRuns && values.runnerProfileJson &&
-              typeof values.runnerProfileJson === "object" && "nativeDocumentToolResultSources" in values.runnerProfileJson)
+              typeof values.runnerProfileJson === "object" && "nativeToolResultSourceCaptures" in values.runnerProfileJson)
             throw new Error("Injected document SQL parameters PRIVATE_DOCUMENT_RESULT");
           if (failModelInputCaptureWrite && table === heartbeatRuns &&
               values.runnerProfileJson && typeof values.runnerProfileJson === "object" &&
@@ -8127,10 +8127,10 @@ describe("runnerd provider runtime wiring", () => {
       const selected = await backendOptions.dynamicToolHandler!({ tool: "read_document", callId: "model-document-read",
         turnId: "provider-turn-call", arguments: { key: "notes" } });
       const write = updates.findLast(row => row.table === heartbeatRuns && row.values.runnerProfileJson &&
-        typeof row.values.runnerProfileJson === "object" && "nativeDocumentToolResultSources" in row.values.runnerProfileJson);
+        typeof row.values.runnerProfileJson === "object" && "nativeToolResultSourceCaptures" in row.values.runnerProfileJson);
       expect(write).toBeDefined();
       const profile = write!.values.runnerProfileJson as Record<string, unknown>;
-      expect(profile.nativeDocumentToolResultSources).toEqual([expect.objectContaining({ callId: "model-document-read",
+      expect(profile.nativeToolResultSourceCaptures).toEqual([expect.objectContaining({ callId: "model-document-read",
         tool: "read_document", resultDigest: digest, source: null, responsibleUserId: null })]);
       expect(profile.nativeToolCallDispatchAssociations).toEqual([{
         dispatchId: "11111111-1111-4111-8111-111111111111", eventSeq: 1, attempt: 1,

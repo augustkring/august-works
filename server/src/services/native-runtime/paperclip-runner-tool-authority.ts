@@ -14,7 +14,8 @@ import { isConnectorTool, executeConnectorTool, type ConnectorAssignment } from 
 import { resolveNativeRuntimeMcpSnapshot } from "./runtime-context.js";
 import { connectionIntentService } from "../connection-intents.js";
 import { RUNTIME_CONNECTION_TOOL_DEFINITIONS } from "../connection-tool-definitions.js";
-import { connectionsSearchInputSchema, connectionRequestInputSchema, CONNECTION_INTENT_AGENT_GUIDANCE } from "@paperclipai/shared";
+import { connectionsSearchInputSchema, connectionRequestInputSchema, CONNECTION_INTENT_AGENT_GUIDANCE,
+  nativePayloadSourceInputSchema, type NativePayloadSourceInput } from "@paperclipai/shared";
 import { createHash } from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { paperclipChatFilePreparationDelivery } from "@paperclipai/adapter-utils/chat-file-delivery";
@@ -164,6 +165,49 @@ export type NativeDocumentToolResultSource = {
   resultDigest: string;
   source: DocumentRevisionSourceCapture | null;
 };
+
+/** Exact public Project projection returned by one native API tool result.
+ * This is a partial returned-input fact, not provider-consumption or complete
+ * Native input evidence. The body itself is deliberately not retained here. */
+export type NativeProjectToolResultSource = {
+  turnId: string | null;
+  callId: string;
+  tool: "call_api";
+  operationId: "GET /api/projects/{id}";
+  projectId: string | null;
+  resultDigest: string;
+  source: Extract<NativePayloadSourceInput, { kind: "project" }> | null;
+};
+
+export function captureNativeProjectToolResult(input: {
+  companyId: string;
+  requestedProjectId: string | null | undefined;
+  turnId: string | null;
+  callId: string;
+  result: unknown;
+}): NativeProjectToolResultSource {
+  const rawRequestedId = input.requestedProjectId?.toLowerCase();
+  const requestedId = rawRequestedId && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(rawRequestedId)
+    ? rawRequestedId : null;
+  const response = record(input.result), project = record(response.data);
+  const projectId = typeof project.id === "string" ? project.id.toLowerCase() : "";
+  const sourceCandidate = response.ok === true && response.status === 200 && requestedId !== null &&
+    projectId === requestedId && project.companyId === input.companyId && typeof project.updatedAt === "string"
+    ? nativePayloadSourceInputSchema.safeParse({ kind: "project", projectId, sourceVersion: project.updatedAt,
+        contentHash: createHash("sha256").update(JSON.stringify(project)).digest("hex") })
+    : null;
+  const source = sourceCandidate?.success ? sourceCandidate.data : null;
+  const { operationId: _operationId, ...toolResponse } = response;
+  return {
+    turnId: input.turnId,
+    callId: input.callId,
+    tool: "call_api",
+    operationId: "GET /api/projects/{id}",
+    projectId: requestedId,
+    resultDigest: createHash("sha256").update(JSON.stringify({ ...toolResponse, apiOperationId: "GET /api/projects/{id}" })).digest("hex"),
+    source: source?.kind === "project" ? source : null,
+  };
+}
 
 function record(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -317,6 +361,7 @@ export class PaperclipRunnerToolAuthority {
     arguments: unknown;
   }, options: {
     onDocumentRead?: (source: NativeDocumentToolResultSource) => Promise<void>;
+    onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>;
     nativeToolCallIdentity?: NativeBackendToolCallIdentity;
   } = {}): Promise<unknown> {
     const nativeCall = options.nativeToolCallIdentity;
@@ -328,7 +373,7 @@ export class PaperclipRunnerToolAuthority {
       this.binding.authoritySignal?.throwIfAborted();
       let documentSource: DocumentRevisionSourceCapture | null = null;
       const result = await withOrchestrationNativeTool(this.db, this.binding, call,
-        () => this.#executeAdmitted(call, source => { documentSource = source; }),
+        () => this.#executeAdmitted(call, source => { documentSource = source; }, options.onProjectToolResult),
         call.tool !== "paperclip_search_assigned_tools" && (this.binding.assignedMcpTools?.has(call.tool) ?? false));
       if (call.tool === "read_document" && options.onDocumentRead) {
         await options.onDocumentRead({ turnId: boundNativeCall?.turnId ?? null, callId: call.callId, tool: "read_document",
@@ -339,7 +384,8 @@ export class PaperclipRunnerToolAuthority {
   }
 
   async #executeAdmitted(call: { tool: string; callId: string; arguments: unknown },
-    onDocumentReadSource?: (source: DocumentRevisionSourceCapture | null) => void): Promise<unknown> {
+    onDocumentReadSource?: (source: DocumentRevisionSourceCapture | null) => void,
+    onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>): Promise<unknown> {
     if (this.binding.nativeReview) {
       if (call.tool === "resolve_review") return this.#resolveReview(call.arguments);
       if (!NATIVE_REVIEW_READ_TOOLS.has(call.tool)) {
@@ -516,7 +562,7 @@ export class PaperclipRunnerToolAuthority {
         // PRP reserves operationId/callId for semantic result identity. The
         // HTTP operation is metadata, including in previously saved receipts;
         // exposing it as operationId makes the runner reject a valid response.
-        const { operationId, ...response } = record(await this.#callApi(call.callId, call.arguments));
+        const { operationId, ...response } = record(await this.#callApi(call.callId, call.arguments, onProjectToolResult));
         return { ...response, apiOperationId: operationId };
       }
       case "get_task_context": {
@@ -630,7 +676,8 @@ export class PaperclipRunnerToolAuthority {
     }
   }
 
-  async #callApi(callId: string, value: unknown): Promise<unknown> {
+  async #callApi(callId: string, value: unknown,
+    onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>): Promise<unknown> {
     const bound = await this.#boundContext();
     const context = { ...this.binding, issueIdentifier: bound.issue.identifier, workMode: bound.issue.workMode };
     const { input, operation } = validateRunnerApiCall(value, context);
@@ -659,7 +706,15 @@ export class PaperclipRunnerToolAuthority {
         },
       });
     };
-    if (["GET", "HEAD", "OPTIONS"].includes(operation.method)) return execute();
+    if (["GET", "HEAD", "OPTIONS"].includes(operation.method)) {
+      const result = await execute();
+      if (operation.operationId === "GET /api/projects/{id}" && onProjectToolResult) {
+        await onProjectToolResult(captureNativeProjectToolResult({ companyId: this.binding.companyId,
+          requestedProjectId: input.pathParams?.id, turnId: nativeBackendToolCallIdentity.getStore()?.turnId ?? null,
+          callId, result }));
+      }
+      return result;
+    }
     if (!callId || callId.length > 500) throw badRequest("A bounded runner call id is required");
     // Reserve durably before HTTP dispatch, without holding a DB lock over an
     // HTTP route that itself needs DB locks. A crash leaves an explicit unknown

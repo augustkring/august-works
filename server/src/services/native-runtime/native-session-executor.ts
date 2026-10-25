@@ -121,7 +121,8 @@ import {
 import { PaperclipControlPlanePort } from "./paperclip-control-plane-port.js";
 import { appendHeartbeatRunEvent } from "../heartbeat-run-events.js";
 import { nativeSha256 } from "./canonical.js";
-import { PaperclipRunnerToolAuthority, resolveNativeInputDispatchReceiptIdentity, type NativeDocumentToolResultSource } from "./paperclip-runner-tool-authority.js";
+import { PaperclipRunnerToolAuthority, resolveNativeInputDispatchReceiptIdentity, type NativeDocumentToolResultSource,
+  type NativeProjectToolResultSource } from "./paperclip-runner-tool-authority.js";
 import {nativeManagementToolsAvailable} from "./management-analytical-tools.js";
 import { createAssignedMcpTools, getAssignedMcpGateway } from "./assigned-mcp-tools.js";
 import { getNativeReviewAssignment, readNativeReviewAssignmentContext } from "./native-review-participant.js";
@@ -1422,6 +1423,7 @@ class SessionToolAuthorityEpoch {
 
   constructor(runId: string, authority: PaperclipRunnerToolAuthority, private readonly toolTrace?: NativeToolTrace,
     private readonly onDocumentRead?: (source: NativeDocumentToolResultSource) => Promise<void>,
+    private readonly onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>,
     private readonly onNativeToolCall?: (call: { tool: string; callId: string; turnId: string }) => Promise<void>) {
     this.runId = runId;
     this.#authority = authority;
@@ -1448,6 +1450,7 @@ class SessionToolAuthorityEpoch {
       if (call.turnId) await this.onNativeToolCall?.({ tool: call.tool, callId: call.callId, turnId: call.turnId });
       return this.#authority.execute(call, {
         onDocumentRead: this.onDocumentRead,
+        onProjectToolResult: this.onProjectToolResult,
         ...(call.turnId ? { nativeToolCallIdentity: { tool: call.tool, callId: call.callId, turnId: call.turnId } } : {}),
       });
     };
@@ -7242,6 +7245,72 @@ export async function recordNativeToolCallDispatchAssociation(input: Parameters<
 
 /** A fact about one document result selected for return, not delivery,
  * source permission or a complete model-input receipt. */
+async function persistNativeToolResultSourceCapture(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
+  agentId: string; eventSeq: number;
+}, capture: NativeDocumentToolResultSource | NativeProjectToolResultSource, family: "document" | "project"): Promise<void> {
+  const bindingError = `native_${family}_tool_capture_binding_invalid`;
+  const budgetError = `native_${family}_tool_capture_budget_exceeded`;
+  const persistenceError = `native_${family}_tool_capture_persistence_failed`;
+  try {
+    await input.db.transaction(async tx => {
+      // Same owned coordinator -> run -> launch order as selected turn inputs.
+      await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
+      const [run] = await tx.select().from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.companyId, input.companyId),
+        eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId),
+        eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.status, "running"),
+      )).for("update");
+      if (!run) throw new Error(bindingError);
+      const [launch] = await tx.select({ seq: heartbeatRunEvents.seq }).from(heartbeatRunEvents).where(and(
+        eq(heartbeatRunEvents.companyId, input.companyId), eq(heartbeatRunEvents.runId, input.runId),
+        eq(heartbeatRunEvents.agentId, input.agentId), eq(heartbeatRunEvents.seq, input.eventSeq),
+        eq(heartbeatRunEvents.eventType, PROCESS_START_REQUESTED),
+      )).for("share");
+      if (!launch) throw new Error(bindingError);
+      const profile = record(run.runnerProfileJson);
+      const legacy = profile.nativeDocumentToolResultSources;
+      const current = profile.nativeToolResultSourceCaptures;
+      if ((legacy !== undefined && !Array.isArray(legacy)) || (current !== undefined && !Array.isArray(current)))
+        throw new Error(bindingError);
+      // During a rolling deploy, an older node may still append to the legacy
+      // document-only field while this writer appends to the shared field.
+      // Preserve both histories and collapse only exact duplicate facts.
+      const previous: unknown[] = [];
+      const seenFacts = new Set<string>();
+      for (const fact of [...(legacy as unknown[] | undefined ?? []), ...(current as unknown[] | undefined ?? [])]) {
+        const factHash = nativeSha256(fact);
+        if (!seenFacts.has(factHash)) {
+          seenFacts.add(factHash);
+          previous.push(fact);
+        }
+      }
+      if (previous.length >= 256) throw new Error(budgetError);
+      const selectedDispatch = resolveNativeInputDispatchReceiptIdentity(profile,
+        capture.turnId === null ? null : { turnId: capture.turnId, callId: capture.callId, tool: capture.tool }, capture.tool);
+      const nativeInputDispatch = selectedDispatch?.eventSeq === launch.seq && selectedDispatch.attempt === input.attempt
+        ? selectedDispatch : null;
+      const projectBinding = capture.tool === "call_api"
+        ? { operationId: capture.operationId, projectId: capture.projectId } : {};
+      const captures = [...previous, { eventSeq: launch.seq, attempt: input.attempt, turnId: capture.turnId,
+        nativeInputDispatch, responsibleUserId: run.responsibleUserId ?? null, callId: capture.callId,
+        tool: capture.tool, ...projectBinding, resultDigest: capture.resultDigest, source: capture.source }];
+      if (Buffer.byteLength(JSON.stringify(captures)) > 2 * 1024 * 1024) throw new Error(budgetError);
+      const nextProfile: Record<string, unknown> = { ...profile, nativeToolResultSourceCaptures: captures };
+      delete nextProfile.nativeDocumentToolResultSources;
+      const [stored] = await tx.update(heartbeatRuns).set({
+        runnerProfileJson: nextProfile, updatedAt: new Date(),
+      }).where(eq(heartbeatRuns.id, run.id)).returning({ profile: heartbeatRuns.runnerProfileJson });
+      const retained = record(stored?.profile).nativeToolResultSourceCaptures;
+      if (!Array.isArray(retained) || nativeSha256(retained) !== nativeSha256(captures)) throw new Error(persistenceError);
+      await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "";
+    throw new Error(["native_session_lease_lost", "native_session_lease_ttl_invalid", bindingError, budgetError].includes(message)
+      ? message : persistenceError);
+  }
+}
+
 export async function recordNativeDocumentToolResultIntent(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
   agentId: string; eventSeq: number; capture: NativeDocumentToolResultSource;
 }): Promise<void> {
@@ -7260,49 +7329,38 @@ export async function recordNativeDocumentToolResultIntent(input: Parameters<typ
       source.payloadSourceSnapshot && (source.payloadSourceSnapshot.owner.kind !== "document_revision" ||
         source.payloadSourceSnapshot.owner.companyId !== input.companyId || source.payloadSourceSnapshot.owner.id !== source.input.revisionId)))
       throw new Error("native_document_tool_capture_binding_invalid");
-    await input.db.transaction(async tx => {
-      // Same owned coordinator -> run -> launch order as selected turn inputs.
-      await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
-      const [run] = await tx.select().from(heartbeatRuns).where(and(
-        eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.companyId, input.companyId),
-        eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId),
-        eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.status, "running"),
-      )).for("update");
-      if (!run) throw new Error("native_document_tool_capture_binding_invalid");
-      const [launch] = await tx.select({ seq: heartbeatRunEvents.seq }).from(heartbeatRunEvents).where(and(
-        eq(heartbeatRunEvents.companyId, input.companyId), eq(heartbeatRunEvents.runId, input.runId),
-        eq(heartbeatRunEvents.agentId, input.agentId), eq(heartbeatRunEvents.seq, input.eventSeq),
-        eq(heartbeatRunEvents.eventType, PROCESS_START_REQUESTED),
-      )).for("share");
-      if (!launch) throw new Error("native_document_tool_capture_binding_invalid");
-      const profile = record(run.runnerProfileJson), previous = profile.nativeDocumentToolResultSources ?? [];
-      if (!Array.isArray(previous) || previous.length >= 256)
-        throw new Error("native_document_tool_capture_budget_exceeded");
-      const selectedDispatch = resolveNativeInputDispatchReceiptIdentity(profile, capture.turnId === null ? null
-        : { turnId: capture.turnId, callId: capture.callId, tool: capture.tool }, capture.tool);
-      // A call from a prior launch/attempt cannot bind to the current result.
-      // Missing or ambiguous native identity remains unknown, never retrobound.
-      const nativeInputDispatch = selectedDispatch?.eventSeq === launch.seq && selectedDispatch.attempt === input.attempt
-        ? selectedDispatch : null;
-      const captures = [...previous, { eventSeq: launch.seq, attempt: input.attempt,
-        turnId: capture.turnId, nativeInputDispatch,
-        responsibleUserId: run.responsibleUserId ?? null, callId: capture.callId, tool: capture.tool,
-        resultDigest: capture.resultDigest, source }];
-      if (Buffer.byteLength(JSON.stringify(captures)) > 2 * 1024 * 1024)
-        throw new Error("native_document_tool_capture_budget_exceeded");
-      const [stored] = await tx.update(heartbeatRuns).set({
-        runnerProfileJson: { ...profile, nativeDocumentToolResultSources: captures }, updatedAt: new Date(),
-      }).where(eq(heartbeatRuns.id, run.id)).returning({ profile: heartbeatRuns.runnerProfileJson });
-      const retained = record(stored?.profile).nativeDocumentToolResultSources;
-      if (!Array.isArray(retained) || nativeSha256(retained) !== nativeSha256(captures))
-        throw new Error("native_document_tool_capture_persistence_failed");
-      await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
-    });
+    await persistNativeToolResultSourceCapture(input, { ...capture, source }, "document");
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "";
     throw new Error(["native_session_lease_lost", "native_session_lease_ttl_invalid",
       "native_document_tool_capture_binding_invalid", "native_document_tool_capture_budget_exceeded"].includes(message)
       ? message : "native_document_tool_capture_persistence_failed");
+  }
+}
+
+/** Records the exact public Project projection returned by one authenticated
+ * Native API tool result. It does not assert provider consumption, source
+ * permission after this read, or closure completeness. */
+export async function recordNativeProjectToolResultIntent(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
+  agentId: string; eventSeq: number; capture: NativeProjectToolResultSource;
+}): Promise<void> {
+  try {
+    const capture = input.capture;
+    if (!Number.isSafeInteger(input.eventSeq) || input.eventSeq < 0 || capture.tool !== "call_api" ||
+      capture.operationId !== "GET /api/projects/{id}" || !/^[\x21-\x7e]{1,240}$/.test(capture.callId) ||
+      !/^[0-9a-f]{64}$/.test(capture.resultDigest) ||
+      capture.turnId !== null && !/^[\x21-\x7e]{1,240}$/.test(capture.turnId) ||
+      capture.projectId !== null && !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(capture.projectId))
+      throw new Error("native_project_tool_capture_binding_invalid");
+    const source = capture.source === null ? null : nativePayloadSourceInputSchema.parse(capture.source);
+    if (source && (source.kind !== "project" || source.projectId !== capture.projectId))
+      throw new Error("native_project_tool_capture_binding_invalid");
+    await persistNativeToolResultSourceCapture(input, { ...capture, source }, "project");
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "";
+    throw new Error(["native_session_lease_lost", "native_session_lease_ttl_invalid",
+      "native_project_tool_capture_binding_invalid", "native_project_tool_capture_budget_exceeded"].includes(message)
+      ? message : "native_project_tool_capture_persistence_failed");
   }
 }
 
@@ -8423,6 +8481,17 @@ async function executePaperclipNativeSessionWithinScope(
               if (launchEventSeq === null) throw new Error("native_document_tool_capture_binding_invalid");
               await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
               await recordNativeDocumentToolResultIntent({ db: input.db, runId,
+                companyId: input.execution.binding.companyId, issueId: input.execution.binding.issueId,
+                agentId: input.execution.binding.agentId, leaseOwner, attempt, controller, eventSeq: launchEventSeq, capture });
+              await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
+              await renewNativeSessionExecutionLease({ db: input.db, runId,
+                companyId: input.execution.binding.companyId, issueId: input.execution.binding.issueId,
+                leaseOwner, attempt, controller });
+            },
+            onProjectToolResult: async capture => {
+              if (launchEventSeq === null) throw new Error("native_project_tool_capture_binding_invalid");
+              await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
+              await recordNativeProjectToolResultIntent({ db: input.db, runId,
                 companyId: input.execution.binding.companyId, issueId: input.execution.binding.issueId,
                 agentId: input.execution.binding.agentId, leaseOwner, attempt, controller, eventSeq: launchEventSeq, capture });
               await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
@@ -10742,6 +10811,7 @@ export async function createRunnerdBackend(input: {
   trace?: NativeRunTrace;
   toolTrace?: NativeToolTrace;
   onDocumentRead?: (source: NativeDocumentToolResultSource) => Promise<void>;
+  onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>;
   onNativeToolCall?: (call: { tool: string; callId: string; turnId: string }) => Promise<void>;
   onLog?: (stream: "stdout" | "stderr", chunk: string) => Promise<void>;
   stopTaskForReassignment?: (target: { companyId: string; issueId: string; agentId: string; runId: string | null }) => Promise<void>;
@@ -10895,6 +10965,7 @@ async function createRunnerdBackendWithinSessionClaim(
     authority,
     input.toolTrace,
     input.onDocumentRead,
+    input.onProjectToolResult,
     input.onNativeToolCall,
   );
   let dynamicTools: Awaited<

@@ -9,6 +9,7 @@ import { startRunnerApiTestServer } from "../../__tests__/helpers/runner-api-ser
 import { createRunnerdCodexTransport, defaultCapabilityRunnerdBinary } from "../../vendor/paperclip-runner/index.js";
 import { runnerApiCatalog } from "./runner-api-catalog.js";
 import { registerRunnerPrpAuthority } from "../../realtime/runner-prp-ws.js";
+import type { NativeProjectToolResultSource } from "./paperclip-runner-tool-authority.js";
 
 describe("runner API against real HTTP routes", () => {
   let server: Awaited<ReturnType<typeof startRunnerApiTestServer>>;
@@ -113,6 +114,30 @@ else if(m.id!==undefined) send({id:m.id,result:{}});
     const [run] = await server.db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
     expect((run.resultJson as Record<string, unknown> | null)?.apiToolReceipts).toBeUndefined();
     expect((await fixture.snapshot()).activity.filter(row => row.action === "runner.api_called")).toEqual([]);
+  });
+
+  it("reads a Human-created qualified Project over Native HTTP and denies an independently qualified foreign Project", async () => {
+    const fixture = await server.fixture({ projectReadSource: true });
+    expect(fixture.qualifiedProjectId).toBeTruthy();
+    expect(fixture.qualifiedForeignProjectId).toBeTruthy();
+    let projectCapture: NativeProjectToolResultSource | null = null;
+    const result = await fixture.authority.execute({ tool: "call_api", callId: "human-project-read", arguments: {
+      operationId: "GET /api/projects/{id}", pathParams: { id: fixture.qualifiedProjectId },
+    } }, { onProjectToolResult: async capture => { projectCapture = capture; } });
+    expect(result).toMatchObject({ ok: true, status: 200, data: {
+      id: fixture.qualifiedProjectId, name: "Human-owned runner API Project",
+      description: "Created through the canonical Human Project route.",
+    } });
+    expect(projectCapture).toMatchObject({ projectId: fixture.qualifiedProjectId, source: {
+      kind: "project", projectId: fixture.qualifiedProjectId,
+    } });
+
+    let foreignCapture: NativeProjectToolResultSource | null = null;
+    const foreign = await fixture.authority.execute({ tool: "call_api", callId: "qualified-foreign-project-read", arguments: {
+      operationId: "GET /api/projects/{id}", pathParams: { id: fixture.qualifiedForeignProjectId },
+    } }, { onProjectToolResult: async capture => { foreignCapture = capture; } });
+    expect(foreign).toMatchObject({ ok: false, status: 404 });
+    expect(foreignCapture).toMatchObject({ projectId: fixture.qualifiedForeignProjectId, source: null });
   });
 
   it("rejects issue lifecycle intents before dispatch or receipt creation", async () => {

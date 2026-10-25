@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import express, { type RequestHandler } from "express";
 import request from "supertest";
 import { and, eq, sql } from "drizzle-orm";
@@ -13,6 +13,7 @@ import { projectRoutes } from "../routes/projects.js";
 import type { AuthorizationActor } from "../services/authorization.js";
 import { projectService } from "../services/projects.js";
 import { lockIssuePrivacyTree } from "../services/issues.js";
+import { captureNativeProjectToolResult } from "../services/native-runtime/paperclip-runner-tool-authority.js";
 
 describe("manual Human Project payload source capture", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
@@ -102,6 +103,25 @@ describe("manual Human Project payload source capture", () => {
     expect(audit).toHaveLength(1);
     expect(audit[0]).toMatchObject({ actorType: "user", actorId: f.userId, entityType: "project", entityId: row.id });
     expect(JSON.stringify(audit[0]!.details)).not.toContain("Direct Human project description");
+  });
+
+  it("captures the exact public Project rendition returned through its authenticated read route", async () => {
+    const f = await seed("admin"), http = request(appFor(f.actor));
+    const created = await http.post(`/api/companies/${f.companyId}/projects`)
+      .send(simpleBody("Project tool result source")).expect(201);
+    const selected = await http.get(`/api/projects/${created.body.id}`).expect(200);
+    const result = { ok: true, status: 200, operationId: "GET /api/projects/{id}", contentType: "application/json",
+      retryAfter: null, data: selected.body };
+    const capture = captureNativeProjectToolResult({ companyId: f.companyId, requestedProjectId: created.body.id,
+      turnId: null, callId: "actual-project-read-result", result });
+    expect(capture).toMatchObject({ projectId: created.body.id, source: {
+      kind: "project", projectId: created.body.id, sourceVersion: selected.body.updatedAt,
+      contentHash: createHash("sha256").update(JSON.stringify(selected.body)).digest("hex"),
+    } });
+    const modelResult = { ok: true, status: 200, contentType: "application/json", retryAfter: null,
+      data: selected.body, apiOperationId: "GET /api/projects/{id}" };
+    expect(capture.resultDigest).toBe(createHash("sha256").update(JSON.stringify(modelResult)).digest("hex"));
+    expect(JSON.stringify(capture)).not.toContain("Direct Human project description");
   });
 
   it("preserves the capture for operational edits and irreversibly invalidates a changed body", async () => {

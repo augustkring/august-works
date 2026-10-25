@@ -16,7 +16,9 @@ import {
 } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { PROCESS_START_REQUESTED } from "../native-local-process-stop.js";
-import { recordNativeModelInputDispatchIntent, recordNativeModelInputDispatchAcknowledgement, recordNativeToolCallDispatchAssociation, recordNativeDocumentToolResultIntent } from "./native-session-executor.js";
+import { recordNativeModelInputDispatchIntent, recordNativeModelInputDispatchAcknowledgement, recordNativeToolCallDispatchAssociation,
+  recordNativeDocumentToolResultIntent, recordNativeProjectToolResultIntent } from "./native-session-executor.js";
+import type { NativeProjectToolResultSource } from "./paperclip-runner-tool-authority.js";
 import { documentService, type DocumentRevisionSourceCapture } from "../documents.js";
 import { nativeSha256 } from "./canonical.js";
 import { currentNativeControllerIdentity } from "./native-restart-recovery.js";
@@ -134,7 +136,7 @@ describe("native model input dispatch intent", () => {
     args.capture.resultDigest = createHash("sha256").update(JSON.stringify({ document: selected })).digest("hex");
     await recordNativeDocumentToolResultIntent(args);
     const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
-    expect(run!.runnerProfileJson).toMatchObject({ retainedProfileField: "preserve-me", nativeDocumentToolResultSources: [{
+    expect(run!.runnerProfileJson).toMatchObject({ retainedProfileField: "preserve-me", nativeToolResultSourceCaptures: [{
       eventSeq: seeded.eventSeq, attempt: seeded.attempt, responsibleUserId,
       callId: "actual-document-read", tool: "read_document", resultDigest: args.capture.resultDigest,
       source: { input: { kind: "document_revision", issueId: seeded.issueId, documentId: document.id,
@@ -143,6 +145,31 @@ describe("native model input dispatch intent", () => {
     expect(JSON.stringify(run!.runnerProfileJson)).not.toContain(body);
     expect(run!.nativeInputSourceProtocolVersion).toBe(0);
     expect(run!.runnerProfileJson).not.toHaveProperty("nativeInputSourceReceipt");
+  });
+
+  it("binds an unknown Project tool result to its actual acknowledged dispatch without qualifying inputs", async () => {
+    const seeded = await seed(), turnId = "actual-project-tool-turn", callId = "actual-project-tool-call";
+    const turnInput = { message: { role: "user" as const, text: "Read the current Project" } };
+    const args = dispatchArgs(seeded, turnInput), dispatchId = await recordNativeModelInputDispatchIntent(args);
+    await recordNativeModelInputDispatchAcknowledgement(acknowledgementArgs(seeded, dispatchId, turnInput, turnId));
+    await recordNativeToolCallDispatchAssociation({ ...args, turnId, callId, tool: "call_api" });
+    const projectId = randomUUID();
+    const capture: NativeProjectToolResultSource = { turnId, callId, tool: "call_api",
+      operationId: "GET /api/projects/{id}", projectId, resultDigest: nativeSha256({ status: 200, unknown: true }), source: null };
+    const { turnInput: _turnInput, ...binding } = args;
+    await recordNativeProjectToolResultIntent({ ...binding, capture });
+    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
+    expect(run!.runnerProfileJson!.nativeToolResultSourceCaptures).toEqual([expect.objectContaining({
+      eventSeq: seeded.eventSeq, attempt: seeded.attempt, turnId, callId, tool: "call_api",
+      operationId: "GET /api/projects/{id}", projectId, responsibleUserId,
+      nativeInputDispatch: { dispatchId, eventSeq: seeded.eventSeq, attempt: seeded.attempt, turnId, callId },
+      source: null,
+    })]);
+    expect(run!.nativeInputSourceProtocolVersion).toBe(0);
+    expect(run!.runnerProfileJson).not.toHaveProperty("nativeInputSourceReceipt");
+    await expect(recordNativeProjectToolResultIntent({ ...binding, capture: {
+      ...capture, source: { kind: "project", projectId: randomUUID(), sourceVersion: new Date().toISOString(), contentHash: "a".repeat(64) },
+    } })).rejects.toThrow("native_project_tool_capture_binding_invalid");
   });
 
   it.each(["missing_ack", "missing_call", "other_tool", "ambiguous_turn", "prior_attempt", "prior_launch"] as const)(
@@ -176,7 +203,7 @@ describe("native model input dispatch intent", () => {
           turnId: args.capture.turnId, callId: args.capture.callId, tool: "read_document" });
       }
       const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
-      expect(run!.runnerProfileJson!.nativeDocumentToolResultSources).toEqual([
+      expect(run!.runnerProfileJson!.nativeToolResultSourceCaptures).toEqual([
         expect.objectContaining({ turnId: args.capture.turnId, nativeInputDispatch: null }),
       ]);
       expect(run!.nativeInputSourceProtocolVersion).toBe(0);
@@ -200,7 +227,7 @@ describe("native model input dispatch intent", () => {
     args.capture.resultDigest = createHash("sha256").update(JSON.stringify({ document: selected })).digest("hex");
     await recordNativeDocumentToolResultIntent(args);
     const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
-    expect(run!.runnerProfileJson!.nativeDocumentToolResultSources).toEqual([expect.objectContaining({ responsibleUserId: userId, source })]);
+    expect(run!.runnerProfileJson!.nativeToolResultSourceCaptures).toEqual([expect.objectContaining({ responsibleUserId: userId, source })]);
     const substituted = structuredClone(args.capture);
     substituted.source!.payloadSourceSnapshot!.owner.companyId = randomUUID();
     await expect(recordNativeDocumentToolResultIntent({ ...args, capture: substituted })).rejects.toThrow("native_document_tool_capture_binding_invalid");
@@ -208,12 +235,20 @@ describe("native model input dispatch intent", () => {
     expect(unchanged!.runnerProfileJson).toEqual(run!.runnerProfileJson);
   });
 
-  it("preserves earlier result facts and explicit unknown source/Human markers", async () => {
-    const prior = { callId: "earlier-read", source: null, responsibleUserId: "earlier-human" };
-    const seeded = await seed({ responsibleUserId: null, runnerProfileJson: { nativeDocumentToolResultSources: [prior] } });
+  it("merges legacy and current result histories, deduplicating only exact facts", async () => {
+    const legacyOnly = { callId: "legacy-read", source: null, responsibleUserId: "legacy-human" };
+    const duplicate = { callId: "same-read", source: null, responsibleUserId: "same-human" };
+    const currentOnly = { callId: "current-read", source: null, responsibleUserId: "current-human" };
+    const seeded = await seed({ responsibleUserId: null, runnerProfileJson: {
+      nativeDocumentToolResultSources: [legacyOnly, duplicate],
+      nativeToolResultSourceCaptures: [duplicate, currentOnly],
+    } });
     await recordNativeDocumentToolResultIntent(documentArgs(seeded));
     const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
-    expect(run!.runnerProfileJson!.nativeDocumentToolResultSources).toEqual([prior, expect.objectContaining({ source: null, responsibleUserId: null })]);
+    expect(run!.runnerProfileJson!.nativeToolResultSourceCaptures).toEqual([
+      legacyOnly, duplicate, currentOnly, expect.objectContaining({ source: null, responsibleUserId: null }),
+    ]);
+    expect(run!.runnerProfileJson).not.toHaveProperty("nativeDocumentToolResultSources");
   });
 
   it.each(["launch", "lease", "attempt", "foreign_task"] as const)("refuses document capture with a changed %s binding", async kind => {
@@ -235,13 +270,14 @@ describe("native model input dispatch intent", () => {
     await expect(recordNativeDocumentToolResultIntent(documentArgs(seeded))).rejects.toThrow("native_document_tool_capture_budget_exceeded");
     const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
     expect(run!.runnerProfileJson!.nativeDocumentToolResultSources).toEqual(prior);
+    expect(run!.runnerProfileJson).not.toHaveProperty("nativeToolResultSourceCaptures");
   });
 
   it("refuses a silently suppressed document fact and hides private database diagnostics", async () => {
     const seeded = await seed(), suffix = seeded.runId.replaceAll("-", ""), name = `suppress_document_${suffix}`;
     await db.execute(sql`create function public.${sql.identifier(name)}() returns trigger language plpgsql as $function$
       begin if new.id=${sql.raw(`'${seeded.runId}'::uuid`)} then
-        new.runner_profile_json=new.runner_profile_json-'nativeDocumentToolResultSources'; end if; return new; end $function$`);
+        new.runner_profile_json=new.runner_profile_json-'nativeToolResultSourceCaptures'; end if; return new; end $function$`);
     await db.execute(sql`create trigger ${sql.identifier(name)} before update on heartbeat_runs for each row execute function public.${sql.identifier(name)}()`);
     try {
       await expect(recordNativeDocumentToolResultIntent(documentArgs(seeded))).rejects.toThrow("native_document_tool_capture_persistence_failed");

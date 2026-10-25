@@ -302,7 +302,7 @@ describe("PaperclipRunnerToolAuthority", () => {
       onDocumentRead: capture => recordNativeDocumentToolResultIntent({ ...fixture.documentCaptureBinding, capture }),
     });
     const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
-    expect(run!.runnerProfileJson!.nativeDocumentToolResultSources).toEqual([
+    expect(run!.runnerProfileJson!.nativeToolResultSourceCaptures).toEqual([
       expect.objectContaining({ callId: nativeCall.callId, turnId: nativeCall.turnId,
         resultDigest: createHash("sha256").update(JSON.stringify(result)).digest("hex"),
         nativeInputDispatch: { dispatchId: nativeCall.dispatchId, eventSeq: nativeCall.eventSeq,

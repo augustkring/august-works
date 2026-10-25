@@ -3,8 +3,10 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import express, { type RequestHandler } from "express";
+import request from "supertest";
 import { eq, sql } from "drizzle-orm";
-import { agents, authUsers, companies, companyMemberships, createDb, heartbeatRuns, issues, projects, projectWorkspaces, activityLog, issueComments, assets, goals, approvals, documents, documentRevisions, issueDocuments, issueRelations, issueThreadInteractions, connectionIntentDeliveries, toolApplications, toolConnections, toolConnectionInstalls, connectionGrants, toolCatalogEntries, toolProfiles, toolProfileBindings } from "@paperclipai/db";
+import { agents, authUsers, authSessions, companies, companyMemberships, createDb, heartbeatRuns, issues, projects, projectWorkspaces, activityLog, issueComments, assets, goals, approvals, documents, documentRevisions, issueDocuments, issueRelations, issueThreadInteractions, connectionIntentDeliveries, toolApplications, toolConnections, toolConnectionInstalls, connectionGrants, toolCatalogEntries, toolProfiles, toolProfileBindings } from "@paperclipai/db";
 import { documentService } from "../../services/documents.js";
 import { connectionIntentService } from "../../services/connection-intents.js";
 import { initializeRunIdentity } from "../../services/run-identity.js";
@@ -15,6 +17,9 @@ import { createStorageService } from "../../storage/service.js";
 import { setupRunnerPrpWebSocketServer, runnerPrpWebSocketInternals } from "../../realtime/runner-prp-ws.js";
 import { PaperclipRunnerToolAuthority } from "../../services/native-runtime/paperclip-runner-tool-authority.js";
 import { applyTaskDrain, getTaskDrainStatus, heartbeatService, startTaskDrain, stopTaskDrain } from "../../services/heartbeat.js";
+import { projectRoutes } from "../../routes/projects.js";
+import type { AuthorizationActor } from "../../services/authorization.js";
+import { errorHandler } from "../../middleware/error-handler.js";
 
 let fixtureAdmissionHolds = 0;
 let restoreRunAdmission = () => {};
@@ -65,7 +70,7 @@ export async function startRunnerApiTestServer() {
   const releaseRunAdmission = holdNewFixtureRuns();
   return {
     db, root, apiUrl, storage,
-    async fixture(options: { mode?: "standard" | "ask" | "planning"; apiToolsEnabled?: boolean; reset?: boolean; conversation?: boolean; connectionScenario?: RunnerConnectionScenario } = {}) {
+    async fixture(options: { mode?: "standard" | "ask" | "planning"; apiToolsEnabled?: boolean; reset?: boolean; conversation?: boolean; projectReadSource?: boolean; connectionScenario?: RunnerConnectionScenario } = {}) {
       if (options.connectionScenario !== undefined && !CONNECTION_SCENARIOS.includes(options.connectionScenario)) throw new Error(`Unknown connection eval scenario: ${String(options.connectionScenario)}`);
       // This DB is created inside this helper, never supplied by a caller. Paid
       // paired runs reset it between attempts so modeled IDs and data match.
@@ -97,7 +102,8 @@ export async function startRunnerApiTestServer() {
       const foreignCompanyId = id("foreign-company"), foreignProjectId = id("foreign-project");
       const projectWorkspaceId = id("workspace"), artifactId = id("artifact"), binaryArtifactId = id("binary-artifact"), goalId = id("goal");
       const blockerId = id("blocker"), approvalId = id("approval");
-      const responsibleUserId = options.connectionScenario || options.conversation ? id("responsible-user") : null;
+      const responsibleUserId = options.connectionScenario || options.conversation || options.projectReadSource ? id("responsible-user") : null;
+      const humanSessionId = options.projectReadSource ? id("project-human-session") : null;
       const workspace = await mkdtemp(join(root, "workspace-"));
       await writeFile(join(workspace, "sample.txt"), "API escape hatch fixture\n");
       await db.insert(companies).values([
@@ -107,8 +113,12 @@ export async function startRunnerApiTestServer() {
       if (responsibleUserId) {
         await db.insert(authUsers).values({ id: responsibleUserId, name: "Eval responsible user", email: `${responsibleUserId}@fixture.invalid`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() }).onConflictDoNothing();
         await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: responsibleUserId, status: "active", membershipRole: "member" });
+        if (humanSessionId) await db.insert(authSessions).values({ id: humanSessionId, userId: responsibleUserId,
+          token: randomUUID(), createdAt: new Date(), updatedAt: new Date(), expiresAt: new Date(Date.now() + 60 * 60_000) });
       }
       await db.insert(agents).values({ id: agentId, companyId, name: "API eval agent", adapterType: "paperclip_runner", adapterConfig: { provider: "codex", cwd: workspace }, runtimeConfig: { heartbeat: { enabled: false } }, status: "active" });
+      if (options.projectReadSource) await db.insert(companyMemberships).values({ companyId, principalType: "agent",
+        principalId: agentId, status: "active", membershipRole: "member" });
       await db.insert(projects).values([
         { id: projectId, companyId, name: "Aurora", description: "The project verification code is violet-otter.", status: "in_progress" },
         { id: foreignProjectId, companyId: foreignCompanyId, name: "Private project", description: "foreign-data-must-not-leak" },
@@ -119,10 +129,48 @@ export async function startRunnerApiTestServer() {
         const saved = await storage.putFile({ companyId, namespace: "eval", originalFilename: filename, contentType, body });
         await db.insert(assets).values({ id, companyId, ...saved, createdByAgentId: agentId });
       }
-      await db.insert(issues).values({ id: issueId, companyId, projectId, projectWorkspaceId, issueNumber: 1, identifier: "E" + companyId.replaceAll("-", "").slice(0, 8) + "-1", ...(options.conversation ? { conversationAgentId: agentId, conversationUserId: responsibleUserId, conversationState: "active" as const } : {}), title: "Verify runner API tools", description: "Fixture marker: amber-fox.", status: "in_progress", workMode: options.mode ?? "standard", assigneeAgentId: agentId });
+      // The legacy raw Project below is deliberately not provenance-qualified.
+      // Keep it out of this opt-in Human-source run's retained Task graph; the
+      // canonical Human-created qualified Project is tested separately.
+      await db.insert(issues).values({ id: issueId, companyId,
+        projectId: options.projectReadSource ? null : projectId,
+        projectWorkspaceId: options.projectReadSource ? null : projectWorkspaceId,
+        issueNumber: 1, identifier: "E" + companyId.replaceAll("-", "").slice(0, 8) + "-1", ...(options.conversation ? { conversationAgentId: agentId, conversationUserId: responsibleUserId, conversationState: "active" as const } : {}), title: "Verify runner API tools", description: "Fixture marker: amber-fox.", status: "in_progress", workMode: options.mode ?? "standard", assigneeAgentId: agentId });
       await db.insert(heartbeatRuns).values({ id: runId, companyId, agentId, status: "running", responsibleUserId, runtimeMode: "native", nativeIssueId: issueId, invocationSource: "assignment", triggerDetail: "system", contextSnapshot: { issueId, ...(options.conversation ? { conversationSessionGeneration: 0 } : {}) } });
       await db.update(issues).set({ executionRunId: runId }).where(eq(issues.id, issueId));
       if (responsibleUserId) await initializeRunIdentity(db, { companyId, runId, issueId, responsibleUserId, cause: "instruction" });
+      let qualifiedProjectId: string | null = null;
+      let qualifiedForeignProjectId: string | null = null;
+      if (options.projectReadSource && responsibleUserId && humanSessionId) {
+        const createAsHuman = async (targetCompanyId: string, userId: string, sessionId: string, name: string) => {
+          const actor: AuthorizationActor = { type: "board", source: "session", userId, sessionId,
+            companyIds: [targetCompanyId], memberships: [{ companyId: targetCompanyId, membershipRole: "member", status: "active" }] };
+          const ownerApp = express();
+          ownerApp.use(express.json());
+          ownerApp.use(((req, _res, next) => { (req as typeof req & { actor: AuthorizationActor }).actor = actor; next(); }) as RequestHandler);
+          ownerApp.use("/api", projectRoutes(db));
+          ownerApp.use(errorHandler);
+          const created = await request(ownerApp).post(`/api/companies/${targetCompanyId}/projects`)
+            .send({ name, description: "Created through the canonical Human Project route." });
+          if (created.status !== 201 || typeof created.body.id !== "string")
+            throw new Error(`Runner API Human Project fixture creation failed: ${created.status}`);
+          return created.body.id as string;
+        };
+        qualifiedProjectId = await createAsHuman(companyId, responsibleUserId, humanSessionId,
+          "Human-owned runner API Project");
+
+        // The foreign denial proves company isolation against an independently
+        // qualified project, rather than a row rejected for missing provenance.
+        const foreignUserId = id("foreign-project-owner"), foreignSessionId = id("foreign-project-session"), now = new Date();
+        await db.insert(authUsers).values({ id: foreignUserId, name: "Foreign Project owner",
+          email: `${foreignUserId}@fixture.invalid`, emailVerified: true, createdAt: now, updatedAt: now });
+        await db.insert(companyMemberships).values({ companyId: foreignCompanyId, principalType: "user",
+          principalId: foreignUserId, status: "active", membershipRole: "member" });
+        await db.insert(authSessions).values({ id: foreignSessionId, userId: foreignUserId, token: randomUUID(),
+          createdAt: now, updatedAt: now, expiresAt: new Date(now.getTime() + 60 * 60_000) });
+        qualifiedForeignProjectId = await createAsHuman(foreignCompanyId, foreignUserId, foreignSessionId,
+          "Qualified foreign runner API Project");
+      }
       await db.insert(issues).values({ id: blockerId, companyId, projectId, issueNumber: 2, identifier: "E" + companyId.replaceAll("-", "").slice(0, 8) + "-2", title: "Dependency gate", description: "Complete before shipping.", status: "todo", assigneeAgentId: agentId });
       await db.insert(approvals).values({ id: approvalId, companyId, type: "runner_review", status: "pending", requestedByAgentId: agentId, payload: { title: "Launch review" } });
       await documentService(db).upsertIssueDocument({ issueId, key: "notes", title: "Fixture notes", format: "markdown", body: "Document verification code: silver-wren.", baseRevisionId: null, changeSummary: null, createdByAgentId: agentId, createdByRunId: runId });
@@ -169,7 +217,7 @@ export async function startRunnerApiTestServer() {
       }
       const binding = { companyId, agentId, issueId, runId, apiUrl, storage, apiToolsEnabled: options.apiToolsEnabled ?? true };
       return {
-        ...binding, projectId, projectWorkspaceId, artifactId, binaryArtifactId, goalId, blockerId, approvalId, foreignCompanyId, foreignProjectId, workspace,
+        ...binding, projectId, qualifiedProjectId, qualifiedForeignProjectId, projectWorkspaceId, artifactId, binaryArtifactId, goalId, blockerId, approvalId, foreignCompanyId, foreignProjectId, workspace,
         conversation: options.conversation ?? false,
         connectionScenario: options.connectionScenario ?? null, responsibleUserId, userId: responsibleUserId, sourceRunId: runId,
         customConnectionService, foreignConnectionService, pendingInteractionId,
