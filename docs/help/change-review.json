@@ -224,7 +224,7 @@
       "sourceSha256": "848676297a26bb77b3f53b31256f8bbfcfb296421cc5ce1c0d4dc61827fda7fa",
       "articleSha256": "c51a73bf02851b92d2dae42dbfe6855ede800542dacbe01fe854817a8a7a83fe",
       "decision": "updated",
-      "rationale": "Extended authorized Import history to find the original requester’s unbound new-company receipt; the article now states the honest target label and its limits."
+      "rationale": "Extended authorized Import history to find the original requester\u2019s unbound new-company receipt; the article now states the honest target label and its limits."
     },
     {
       "source": "server/src/routes/companies.ts",
@@ -240,7 +240,7 @@
       "sourceSha256": "37682d39ad51f1ade89469c8812bf9347138d5115db026d1e273dbcc7d2e33e3",
       "articleSha256": "c51a73bf02851b92d2dae42dbfe6855ede800542dacbe01fe854817a8a7a83fe",
       "decision": "updated",
-      "rationale": "Extended authorized Import history to find the original requester’s unbound new-company receipt; the article now states the honest target label and its limits."
+      "rationale": "Extended authorized Import history to find the original requester\u2019s unbound new-company receipt; the article now states the honest target label and its limits."
     },
     {
       "source": "server/src/services/company-import-transfers.ts",
@@ -613,10 +613,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "fe402560178693691ad1302a0b5706ea7035f0762d8bea618c78b500144d3a72",
+      "sourceSha256": "d62fe287b46c6c3e8f1d2e82e534ed774d76fdc024af1860ffbbd6c064a45264",
       "articleSha256": "7db4ab48ab595554d9c6d838f803d0bf70b4e931bf6e428f526e048031f64fe1",
       "decision": "no_change",
-      "rationale": "Reviewed the shared native current Routine read scope for Find and Task/Project collections, SQL-before-limit/count behavior, current cache/attention metrics, narrow Agent admission and original credential fences. Help-only queries still skip unrelated Task sources; localized Help behavior is unchanged."
+      "rationale": "Reviewed the shared original Workflow/Routine source scope used before Task and Project limits, counts and Find results, including cache bypass and current reader revalidation. Help-only search still skips Task source enumeration; the paired Help navigation and human support guidance remains accurate."
     },
     {
       "source": "packages/shared/src/types/search.ts",
@@ -1349,10 +1349,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "fe402560178693691ad1302a0b5706ea7035f0762d8bea618c78b500144d3a72",
+      "sourceSha256": "d62fe287b46c6c3e8f1d2e82e534ed774d76fdc024af1860ffbbd6c064a45264",
       "articleSha256": "e9ef1d13e8079524d3e58d816ed9f43d0221a3edf777605aa0e19a93a60c76fd",
       "decision": "no_change",
-      "rationale": "Reviewed the shared native current Routine read scope for Find and Task/Project collections, SQL-before-limit/count behavior, current cache/attention metrics, narrow Agent admission and original credential fences. Help-only queries still skip unrelated Task sources; localized Help behavior is unchanged."
+      "rationale": "Reviewed the shared original Workflow/Routine source scope used before Task and Project limits, counts and Find results, including cache bypass and current reader revalidation. Help-only search still skips Task source enumeration; the paired Help navigation and human support guidance remains accurate."
     },
     {
       "source": "packages/shared/src/types/search.ts",
