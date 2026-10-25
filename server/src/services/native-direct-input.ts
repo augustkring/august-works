@@ -37,6 +37,26 @@ function nativeProviderToolName(name: string): string {
   return stripped === "self_remember" ? "paperclip-self:remember" : stripped;
 }
 
+async function assertNativeMemorySourceCurrent(db: Db | Transaction, companyId: string, actor: AuthorizationActor,
+  source: Extract<NativePayloadSourceInput, { kind: "memory" }>): Promise<void> {
+  const [memory] = await db.select({ content: memoryRecords.content, updatedAt: memoryRecords.updatedAt })
+    .from(memoryRecords).where(and(eq(memoryRecords.companyId, companyId), eq(memoryRecords.id, source.memoryId), isNull(memoryRecords.deletedAt)));
+  if (!memory || memory.updatedAt.toISOString() !== source.sourceVersion || nativeSha256(memory.content) !== source.contentHash ||
+    !await canActorReadMemorySources(db as Db, companyId, actor, source.memoryId))
+    throw forbidden("A Native Memory source is unavailable");
+}
+
+/** Revalidate an exact Memory body delivered as a prior managed tool result.
+ * The caller must also bind its tool_result bytes to the canonical succeeded
+ * Gateway invocation; this validates the returned Memory owner and current ACL. */
+export async function assertNativeMemorySourceInputCurrent(db: Db | Transaction, input: {
+  companyId: string; actor: AuthorizationActor; source: Extract<NativePayloadSourceInput, { kind: "memory" }>;
+}): Promise<void> {
+  if (input.actor.companyId !== input.companyId || !input.source.memoryId || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(input.source.memoryId))
+    throw forbidden("A Native Memory source is unavailable");
+  await assertNativeMemorySourceCurrent(db, input.companyId, input.actor, input.source);
+}
+
 export interface NativeIssueEffectPrefix {
   readonly policy: NativePayloadSourcePolicy;
   readonly inputs: NativePayloadSourceInput[];
@@ -381,6 +401,10 @@ async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction
   }
   for (const source of capture.sourceSet.inputs) {
     if (["task", "project", "memory", "context", "completion_contract", "runtime_instructions", "runtime_skill", "workspace_metadata", "worker_model_dispatch", "tool_result"].includes(source.kind)) {
+      if (source.kind === "memory") {
+        if (!capture.sourceSet.policy.memoryIds.includes(source.memoryId)) throw forbidden("A Native Memory source is unavailable");
+        await assertNativeMemorySourceCurrent(db, companyId, actor, source);
+      }
       if (source.kind === "worker_model_dispatch") {
         const [sourceReservation] = await db.select().from(orchestrationModelReservations).where(and(
           eq(orchestrationModelReservations.companyId, companyId), eq(orchestrationModelReservations.id, source.reservationId),
@@ -531,8 +555,11 @@ export async function assertNativePayloadSourceSetCurrent(db: Db | Transaction, 
       const owner = nativePayloadSourceSnapshotSchema.safeParse(task.payloadSourceSnapshot);
       const current = createHash("sha256").update(JSON.stringify({ id: issueId, identifier: task.identifier,
         title: task.title, description: task.description, workMode: task.workMode }), "utf8").digest("hex");
+      // The source version is a row timestamp, while accepted completion
+      // changes operational Task fields. The owner snapshot and exact consumed
+      // body hash remain the authority for this payload.
       if (task.payloadSourceSnapshotInvalidated || !owner.success || owner.data.owner.kind !== "issue" || !hash ||
-        owner.data.owner.contentHash !== hash.hash || source.sourceVersion !== task.sourceVersion || source.contentHash !== current)
+        owner.data.owner.contentHash !== hash.hash || source.contentHash !== current)
         throw forbidden("A Native source Task changed");
     }
   }
@@ -578,7 +605,8 @@ export async function assertNativePayloadSourceSetCurrent(db: Db | Transaction, 
       continue;
     }
     if (source.kind === "memory") {
-      if (!await canActorReadMemorySources(db, input.companyId, input.actor, source.memoryId)) throw forbidden("A Native source Memory is unavailable");
+      if (!input.policy.memoryIds.includes(source.memoryId)) throw forbidden("A Native source Memory is unavailable");
+      await assertNativeMemorySourceCurrent(db, input.companyId, input.actor, source);
       continue;
     }
     if (source.kind === "workspace_metadata") {
@@ -652,19 +680,27 @@ export async function assertNativePayloadSourceSetCurrent(db: Db | Transaction, 
       continue;
     }
     if (source.kind === "worker_model_dispatch") {
-      const dispatches = receipt.data.dispatches.flatMap(prefix => prefix.inputs.filter(value =>
-        value.kind === "worker_model_dispatch" && isDeepStrictEqual(value, source)));
       const intents = Array.isArray(profile?.nativeAwModelWireIntents)
         ? profile.nativeAwModelWireIntents.filter(value => value && typeof value === "object" && !Array.isArray(value) &&
             (value as Record<string, unknown>).reservationId === source.reservationId) as Record<string, unknown>[] : [];
+      const intent = intents[0];
+      const exactSourceDispatchPrefix = intent && typeof intent.sourceDispatchDigest === "string"
+        ? receipt.data.dispatches.some(prefix => prefix.executionInputDigest === intent.sourceDispatchDigest &&
+            prefix.inputs.some(value => value.kind === "worker_model_dispatch" && isDeepStrictEqual(value, source)))
+        : false;
+      const conflictingCopies = receipt.data.dispatches.some(prefix => prefix.inputs.some(value =>
+        value.kind === "worker_model_dispatch" && value.reservationId === source.reservationId &&
+        !isDeepStrictEqual(value, source)));
       const [reservation] = await db.select().from(orchestrationModelReservations).where(and(
         eq(orchestrationModelReservations.companyId, input.companyId), eq(orchestrationModelReservations.id, source.reservationId),
         eq(orchestrationModelReservations.purpose, "worker_model"), eq(orchestrationModelReservations.status, "completed")));
-      if (source.runId !== input.runId || dispatches.length !== 1 || intents.length !== 1 || !reservation ||
+      if (source.runId !== input.runId || intents.length !== 1 || !exactSourceDispatchPrefix || conflictingCopies || !reservation ||
         reservation.inputHash !== source.requestHash || reservation.providerResponseHash !== source.responseHash ||
-        intents[0]!.requestHash !== source.requestHash || intents[0]!.wireBodyHash !== source.wireBodyHash ||
-        intents[0]!.responseContentHash === undefined || intents[0]!.endpoint !== "https://api.anthropic.com/v1/messages" ||
-        intents[0]!.method !== "POST") throw forbidden("A Native historical model dispatch changed");
+        intent!.requestHash !== source.requestHash || intent!.wireBodyHash !== source.wireBodyHash ||
+        typeof intent!.responseContentHash !== "string" || !/^[0-9a-f]{64}$/.test(intent!.responseContentHash) ||
+        intent!.sourcePolicyHash !== nativeSha256(receipt.data.bootstrap) ||
+        intent!.endpoint !== "https://api.anthropic.com/v1/messages" || intent!.method !== "POST")
+        throw forbidden("A Native historical model dispatch changed");
       continue;
     }
     if (source.kind === "tool_result") {
@@ -932,6 +968,95 @@ export interface NativeTemporalContextCapture {
   readonly issueEdges: { issueId: string; manifestId: string }[];
 }
 
+export interface NativeContextReadBinding {
+  readonly markdown: string;
+  readonly witness: NonNullable<import("./context/context-engine.js").ContextAssemblyResult["nativeBootstrapWitness"]>;
+  readonly manifestIds: readonly { companyId: string; contextManifestId: string }[];
+  readonly sourceSet: { policy: NativePayloadSourcePolicy; inputs: NativePayloadSourceInput[] };
+}
+
+/** Assemble and bind the exact Native Context body returned by the managed
+ * read_context tool. The model supplies only a bounded search query; current
+ * owners, policy roots, witness and manifest IDs all come from server reads. */
+export async function assembleNativeContextRead(db: Db | Transaction, input: {
+  companyId: string; agentId: string; runId: string; issueId: string; projectId: string | null;
+  responsibleUserId: string | null; actor: AuthorizationActor; query: string;
+}): Promise<NativeContextReadBinding> {
+  if (input.actor.type !== "agent" || input.actor.companyId !== input.companyId ||
+    input.actor.agentId !== input.agentId || input.actor.runId !== input.runId ||
+    (input.actor.onBehalfOfUserId ?? null) !== input.responsibleUserId ||
+    !input.query.trim() || input.query.length > 4_000)
+    throw forbidden("The Native Context read binding is unavailable");
+  const [issue] = await db.select({ id: issues.id, companyId: issues.companyId, projectId: issues.projectId,
+    title: issues.title, description: issues.description }).from(issues).where(and(
+    eq(issues.companyId, input.companyId), eq(issues.id, input.issueId)));
+  const [run] = await db.select({ id: heartbeatRuns.id, agentId: heartbeatRuns.agentId,
+    responsibleUserId: heartbeatRuns.responsibleUserId, status: heartbeatRuns.status,
+    nativeIssueId: heartbeatRuns.nativeIssueId, issueId: heartbeatRuns.issueId }).from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.agentId, input.agentId)));
+  if (!issue || issue.projectId !== input.projectId || !run || run.status !== "running" ||
+    (run.nativeIssueId ?? run.issueId) !== input.issueId || (run.responsibleUserId ?? null) !== input.responsibleUserId ||
+    !await canActorReadIssuePrivacy(db, input.actor, issue))
+    throw forbidden("The Native Context read owner is unavailable");
+
+  const { contextEngineService } = await import("./context/context-engine.js");
+  const assembled = await contextEngineService(db as Db).assembleNativeBootstrap({ companyId: input.companyId,
+    agentId: input.agentId, authorizationActor: input.actor, responsibleUserId: input.responsibleUserId,
+    runId: input.runId, issueId: input.issueId, projectId: input.projectId, query: input.query,
+    intent: "native_task_execution", includeFoundation: true, sensitivityCeiling: "internal" });
+  const witness = assembled.nativeBootstrapWitness;
+  const manifestId = assembled.packet.manifest?.id;
+  if (!witness || !manifestId || assembled.markdown.length > 64_000)
+    throw forbidden("The Native Context read witness is unavailable");
+  const manifestIds = [{ companyId: input.companyId, contextManifestId: manifestId }];
+  const { revalidateNativeBootstrapContextWitness } = await import("./context/context-manifest.js");
+  await revalidateNativeBootstrapContextWitness(db as Db, { witness, companyId: input.companyId, runId: input.runId,
+    agentId: input.agentId, issueId: input.issueId, renderedMarkdown: assembled.markdown, manifestIds });
+
+  const manifests = await db.select().from(contextManifests).where(and(eq(contextManifests.companyId, input.companyId),
+    eq(contextManifests.id, manifestId), eq(contextManifests.runId, input.runId), eq(contextManifests.agentId, input.agentId),
+    eq(contextManifests.issueId, input.issueId)));
+  const items = await db.select().from(contextManifestItems).where(and(eq(contextManifestItems.companyId, input.companyId),
+    eq(contextManifestItems.manifestId, manifestId))).orderBy(contextManifestItems.rank, contextManifestItems.id);
+  const roots = await db.select().from(contextManifestMemoryRoots).where(and(eq(contextManifestMemoryRoots.companyId, input.companyId),
+    eq(contextManifestMemoryRoots.manifestId, manifestId))).orderBy(contextManifestMemoryRoots.memoryRecordId);
+  if (manifests.length !== 1 || items.length > 256 || roots.length > 256)
+    throw forbidden("The Native Context read source set exceeds its bound");
+  const contextInput: Extract<NativePayloadSourceInput, { kind: "context" }> = { kind: "context", manifestId,
+    queryHash: manifests[0]!.queryHash, policySnapshotHash: manifests[0]!.policySnapshotHash,
+    contentHash: temporalContextContentHash(manifests[0]!, items, roots) };
+  const sourceSet: NativeContextReadBinding["sourceSet"] = { policy: {
+    issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [],
+  }, inputs: [contextInput] };
+  const issueIds = new Set<string>(), projectIds = new Set<string>(), memoryIds = new Set<string>(), foundationRevisionIds = new Set<string>();
+  if (issue.projectId) projectIds.add(issue.projectId);
+  for (const item of items) {
+    if (item.sourceProvider === "august_works_tasks") {
+      const ref = /^issue:\/\/([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})$/i.exec(item.sourceRef);
+      if (!ref) throw forbidden("The Native Context read has an unsupported Task source");
+      issueIds.add(ref[1]!);
+    } else if (item.sourceProvider === "august_works_memory" || item.sourceProvider === "august_works_derived_memory") {
+      const ref = /^memory:\/\/(?:record|derived)\/([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})$/i.exec(item.sourceRef);
+      if (!ref) throw forbidden("The Native Context read has an unsupported Memory source");
+      memoryIds.add(ref[1]!);
+    } else if (item.sourceProvider === "august_works_foundation") {
+      const ref = /^foundation:\/\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\/([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})\/(?:whole|\d+)$/i.exec(item.sourceRef);
+      if (!ref || item.sourceVersion !== ref[1]) throw forbidden("The Native Context read has an unsupported Foundation source");
+      foundationRevisionIds.add(ref[1]!);
+    } else throw forbidden("The Native Context read source family is unsupported");
+  }
+  roots.forEach(root => memoryIds.add(root.memoryRecordId));
+  sourceSet.policy.issueIds = [...issueIds].sort();
+  sourceSet.policy.projectIds = [...projectIds].sort();
+  sourceSet.policy.memoryIds = [...memoryIds].sort();
+  sourceSet.policy.foundationRevisionIds = [...foundationRevisionIds].sort();
+  if (issueIds.size + projectIds.size + memoryIds.size + foundationRevisionIds.size > 256)
+    throw forbidden("The Native Context read source set exceeds its bound");
+  await assertNativeTemporalContextInputsCurrent(db as Db, input.companyId, [contextInput]);
+  await assertNativeContextInputOwnersCurrent(db as Db, input.companyId, input.actor, [contextInput], nativeSourceReadScope());
+  return { markdown: assembled.markdown, witness, manifestIds, sourceSet };
+}
+
 function temporalContextContentHash(manifest: typeof contextManifests.$inferSelect,
   items: (typeof contextManifestItems.$inferSelect)[], roots: (typeof contextManifestMemoryRoots.$inferSelect)[]) {
   return createHash("sha256").update(JSON.stringify({
@@ -1108,7 +1233,7 @@ async function assertNativeDocumentRevisionCurrentSourceAccessInScope(db: Db, in
         title: task.title, description: task.description, workMode: task.workMode }), "utf8").digest("hex");
       const currentAncestor = createHash("sha256").update(JSON.stringify({ id: issueId, identifier: task.identifier,
         title: task.title, status: task.status, priority: task.priority }), "utf8").digest("hex");
-      if ((source.contentHash !== currentBody && source.contentHash !== currentAncestor) || source.sourceVersion !== task.sourceVersion)
+      if (source.contentHash !== currentBody && source.contentHash !== currentAncestor)
         throw forbidden("A Native document Task source changed");
     }
   }

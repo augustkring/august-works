@@ -334,6 +334,7 @@ const OAUTH_SIGN_IN_STEP_LABELS = ["Access", "Sign in"];
  * original identity through the explicit reconnect hint.
  */
 function defaultGrantKindFor(method: ConnectionMethodDef | null, preferPersonal = false): ConnectionGrantKind {
+  if (method?.defaultGrantKind && (!method.grantKinds || method.grantKinds.includes(method.defaultGrantKind))) return method.defaultGrantKind;
   if (preferPersonal && method?.auth !== "none" && (!method?.grantKinds || method.grantKinds.includes("user"))) return "user";
   if (method?.grantKinds?.length === 1) return method.grantKinds[0]!;
   if (method?.grantKinds && !method.grantKinds.includes("organization")) return method.grantKinds[0]!;
@@ -590,6 +591,7 @@ function StandardConnectionSetupFlow({
   onCancel,
   renderCredentialStep,
 }: ConnectionSetupFlowProps = {}) {
+  const { t } = useTranslation("experience");
   const routeNavigate = useNavigate();
   const navigate = useCallback((to: string, options?: { replace?: boolean }) => {
     if (host !== "page") return;
@@ -2441,6 +2443,7 @@ function StandardConnectionSetupFlow({
           lockedAgentId={requestedAgentId}
           capabilities={galleryQuery.data?.capabilities}
           githubIdentity={entry?.slug === "github"}
+          identityDisclosure={entry?.slug === "slack" && accessStepMethod?.auth === "oauth" ? t("slackConnection.humanTokenDisclosure") : undefined}
           submitLabel={accessSubmitLabel}
           continuesToProvider={accessContinuesToProvider}
           identityLoading={Boolean(automaticOAuthEntry) && directOAuthLookupPending}
@@ -3999,6 +4002,7 @@ export function AccessStepContent({
   lockedAgentId,
   capabilities,
   githubIdentity = false,
+  identityDisclosure,
   submitLabel,
   continuesToProvider = false,
   identityLoading = false,
@@ -4026,6 +4030,7 @@ export function AccessStepContent({
     editableAgentIds?: string[];
   } | null;
   githubIdentity?: boolean;
+  identityDisclosure?: string;
   submitLabel: string;
   /** Only show an external-handoff cue when this action starts provider OAuth. */
   continuesToProvider?: boolean;
@@ -4086,6 +4091,7 @@ export function AccessStepContent({
         <div className="divide-y divide-border">
           <section className="p-6">
             <h2 className="text-sm font-semibold text-foreground">{identityHeading}</h2>
+            {identityDisclosure ? <p className="mt-2 text-sm text-muted-foreground">{identityDisclosure}</p> : null}
             {githubIdentity && grantKind === "agent" ? (
               <p className="mt-2 text-sm text-muted-foreground">This agent uses this GitHub account for everyone’s work, instead of the person giving instructions.</p>
             ) : null}

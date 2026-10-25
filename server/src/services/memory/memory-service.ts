@@ -513,26 +513,28 @@ async function assertMemorySourceAccess(db:Db,companyId:string,recordId:string,a
   if(!await canActorReadMemorySources(db,companyId,memorySourceActor(companyId,actor),recordId))throw notFound("Memory record not found");
 }
 async function requireCurrentMemoryDetail(db:Db,companyId:string,recordId:string,actor:MemoryMutationActor):Promise<NonNullable<Awaited<ReturnType<typeof getRecordDetail>>>> {
-  if (actor.nativeModelOutputCapture) {
+  const nativeOutputCapture = actor.nativeModelOutputCapture;
+  const nativeToolInvocationId = actor.nativeToolInvocationId;
+  if (nativeOutputCapture) {
     return db.transaction(async rawTx => {
       const tx = rawTx as unknown as Db;
       await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
       const outputActor = memorySourceActor(companyId, actor);
-      const capture = actor.nativeModelOutputCapture;
+      const capture = nativeOutputCapture;
       const use = capture.managedOpenCodeToolUse;
       const [run] = await tx.select({ issueId: heartbeatRuns.nativeIssueId }).from(heartbeatRuns).where(and(
         eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, capture.runId)));
-      if (!outputActor || outputActor.type !== "agent" || !run?.issueId || !use || !actor.nativeToolInvocationId ||
+      if (!outputActor || outputActor.type !== "agent" || !run?.issueId || !use || !nativeToolInvocationId ||
         actor.principal.type !== "agent") throw notFound("Memory record not found");
       await assertNativeMemoryToolInvocationCurrent(tx, { companyId, issueId: run.issueId,
-        actor: outputActor, capture, invocationId: actor.nativeToolInvocationId, status: "executing" });
+        actor: outputActor, capture, invocationId: nativeToolInvocationId, status: "executing" });
       const detail = await getRecordDetail(tx, companyId, recordId);
       const record = detail?.record;
       const metadata = record?.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
         ? record.metadata as Record<string, unknown> : null;
       if (!record || record.createdByActorType !== "agent" || record.createdByActorId !== actor.principal.agentId ||
         record.payloadSourceProtocolVersion !== 1 || record.payloadSourceSnapshot !== null || !metadata ||
-        metadata.nativeManagedMemoryInvocationId !== actor.nativeToolInvocationId ||
+        metadata.nativeManagedMemoryInvocationId !== nativeToolInvocationId ||
         metadata.nativeManagedMemoryCallId !== use.callId || metadata.nativeManagedMemoryArgumentsHash !== use.argumentsHash)
         throw notFound("Memory record not found");
       return detail!;

@@ -12,7 +12,8 @@
     "requestedUserScopes": "Slack anmoder om disse brugertilladelser. Slack-botappen til chat er separat:",
     "managedUnavailable": "Blenteras administrerede Slack-app er ikke konfigureret på denne instans. Bed en forbindelsesadministrator om at aktivere standardopsætningen, eller brug din organisations egen OAuth-app nedenfor.",
     "useManaged": "Brug Blenteras Slack-app",
-    "useOwnAdvanced": "Brug din egen Slack OAuth-app (avanceret)"
+    "useOwnAdvanced": "Brug din egen Slack OAuth-app (avanceret)",
+    "humanTokenDisclosure": "Slack-login godkender den indloggede persons Slack-konto. Hvis forbindelsen deles med organisationen, deles personens Slack-forbindelse; der oprettes ikke en bot eller servicekonto."
   },
   "cliAuth": {
     "sessionFailed": "Dit login kunne ikke bekræftes",

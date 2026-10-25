@@ -99,7 +99,8 @@ export class PaperclipRunnerSemanticAuthority {
   ): Promise<PaperclipSemanticToolResult> {
     return withOrchestrationNativeTool(this.#db, this.#binding,
       { tool: call.operationId, callId: call.callId, arguments: call.input },
-      () => this.#dispatcher.dispatch({ ...call, runId: this.#binding.runId }));
+      () => this.#dispatcher.dispatch({ ...call, runId: this.#binding.runId }))
+      .then(result => result as PaperclipSemanticToolResult);
   }
 
   authorizationRecords(): readonly PaperclipSemanticAuthorizationRecord[] {

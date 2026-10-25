@@ -23,7 +23,7 @@ Choose the app and follow its connection flow. Before continuing, review the acc
 
 A connection is permission to use the selected account and scope. It does not mean every possible action is enabled. Review the app’s permissions and action settings before asking a Co-worker to use it.
 
-For Slack agent tools, the standard option uses the Blentera-managed Slack app when the instance has it configured. Review the user permissions on the setup screen and on Slack’s consent page. If the managed option is unavailable, a connection manager can use the advanced option for the organization’s own Slack OAuth app. These options connect a person’s Slack account for agent tools; the separate Slack bot app is used when people start work from Slack.
+For Slack agent tools, the standard option uses the Blentera-managed Slack app when the instance has it configured. Review the user permissions on the setup screen and on Slack’s consent page. The connection defaults to the signed-in person’s Slack account. If you explicitly choose organization access, that person’s Slack connection is shared with the company; this does not create a bot or service account. If the managed option is unavailable, a connection manager can use the advanced option for the organization’s own Slack OAuth app. The separate Slack bot app is used when people start work from Slack.
 
 ## Reconnect when access is unavailable
 

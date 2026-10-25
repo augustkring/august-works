@@ -1054,6 +1054,11 @@ class OpenCodeHarnessSession implements HarnessSession {
           },
           { turnId, itemId: call.callId },
         );
+        // Managed messages are source-bound per provider request. Once the
+        // server accepts the semantic result, stop this turn instead of asking
+        // the model for another answer whose transcript would contain a local
+        // terminal tool result without a provider call receipt.
+        if (this.#runtime.managedModel) await this.interrupt({ turnId });
         return { accepted: true };
       } catch (error) {
         // A rejected semantic call still completes its tool activity item.
@@ -1603,6 +1608,26 @@ class OpenCodeHarnessSession implements HarnessSession {
         text(providerErrorData.message, text(providerError.message)) ===
           "Aborted"
       ) {
+        if (this.#runtime.managedModel && this.#resultTurnId === turnId &&
+          this.#resultFingerprint !== null) {
+          const fingerprint = canonicalJson({
+            status: "completed",
+            semanticResult: this.#resultFingerprint,
+          });
+          this.#terminalTurns.set(turnId, fingerprint);
+          this.#emitSettledFinalAgentMessage(turnId);
+          const workspace = this.#workspaceChangesByTurn.get(turnId);
+          if (workspace !== undefined)
+            this.#emit(
+              "workspace.diff.recorded",
+              { ...workspace, complete: true },
+              { turnId, itemId: `${turnId}:workspace` },
+            );
+          this.#activeTurnId = null;
+          this.#emit("turn.completed", { status: "completed" }, { turnId });
+          this.#events.close();
+          return;
+        }
         // OpenCode reports its normal /abort control path as session.error. That
         // endpoint is also how Paperclip parks a provider turn after a durable
         // governed interaction is created, so presenting it as a provider

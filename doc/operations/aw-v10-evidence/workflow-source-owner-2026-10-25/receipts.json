@@ -3236,6 +3236,146 @@
       },
       "summary": [],
       "sourceCommit": "1b5a19d567f025cbe4377766f0098e20ad2c3539"
+    },
+    {
+      "name": "v10-worker-ui-cli-ec9e2bd4c",
+      "exitCode": 0,
+      "exitSidecar": "v10-worker-ui-cli-ec9e2bd4c.exit",
+      "rawSha256": "d4270bf2e2fc5d56df888804c5f261513dce6407967ab62bd55092d60c7dc570",
+      "sanitizedSha256": "8fc27a8e598195ee39d0be25b92442313141ee615221b5941fc8badba55c2132",
+      "archiveSha256": "1645cb7e22462261ba4bdfaef8974c7298d4197908a85746e8ab59f9e51ee3b2",
+      "redactions": {
+        "ansi": 122217,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Duration  1262.34s (transform 35.32s, setup 4.81s, import 562.08s, tests 293.22s, environment 299.49s)",
+        "Test Files  63 passed (63)",
+        "Tests  522 passed (522)",
+        "Duration  180.70s (transform 4.89s, setup 0ms, import 30.86s, tests 142.19s, environment 6ms)"
+      ],
+      "sourceCommit": "b1497ccabb4449c66bea49c69cd9b9bd931a72f0"
+    },
+    {
+      "name": "v10-integrated-typecheck-pricing-slack",
+      "exitCode": 1,
+      "exitSidecar": "v10-integrated-typecheck-pricing-slack.exit",
+      "rawSha256": "965c9c2206fd8c9671f95c9ed01e5086768f7f2b5b1753aed10ccc7aeb03e14a",
+      "sanitizedSha256": "965c9c2206fd8c9671f95c9ed01e5086768f7f2b5b1753aed10ccc7aeb03e14a",
+      "archiveSha256": "1c21187aaa6d21589fed61c7eeb6cf8051b772ae75691606dc42e02bc9e68b65",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "b1497ccabb4449c66bea49c69cd9b9bd931a72f0"
+    },
+    {
+      "name": "v10-integrated-typecheck-after-finance-story-fix",
+      "exitCode": 1,
+      "exitSidecar": "v10-integrated-typecheck-after-finance-story-fix.exit",
+      "rawSha256": "109e2f2d6d8b73d3dcb9492bfd6eca6cc307206871bb23c9f1857f4d69c02b92",
+      "sanitizedSha256": "109e2f2d6d8b73d3dcb9492bfd6eca6cc307206871bb23c9f1857f4d69c02b92",
+      "archiveSha256": "e28811afe6818d289699314ce599c1d27eba4bfa5b2a33fb095bff8fa296bfa0",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "b1497ccabb4449c66bea49c69cd9b9bd931a72f0"
+    },
+    {
+      "name": "managed-opencode-source-e2e-20261025-task-version-fix",
+      "exitCode": 0,
+      "exitSidecar": "managed-opencode-source-e2e-20261025-task-version-fix.exit",
+      "rawSha256": "e590954f7c0fbb33505e0b6902631f428ea0c2155028897a18936d963639b3be",
+      "sanitizedSha256": "e590954f7c0fbb33505e0b6902631f428ea0c2155028897a18936d963639b3be",
+      "archiveSha256": "568a89c7acab3157924502f8822ad72c94d5371f2a630f2cfe58a0376d2bcad7",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed (1)",
+        "Duration  40.39s (transform 11.06s, setup 69ms, import 14.71s, tests 25.50s, environment 0ms)"
+      ],
+      "sourceCommit": "b1497ccabb4449c66bea49c69cd9b9bd931a72f0"
+    },
+    {
+      "name": "slack-managed-focused-20261025-final2",
+      "exitCode": 0,
+      "exitSidecar": "slack-managed-focused-20261025-final2.exit",
+      "rawSha256": "3459ca7112d7deea744195a06263173df96487c724d259070201ad7ddf1dd3b1",
+      "sanitizedSha256": "3459ca7112d7deea744195a06263173df96487c724d259070201ad7ddf1dd3b1",
+      "archiveSha256": "62dc63f6076338e2f51a3acfe253137fb6e76df477f579c571bc568077c5f59f",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  3 passed (3)",
+        "Tests  27 passed | 198 skipped (225)",
+        "Duration  8.90s (transform 5.53s, setup 66ms, import 8.75s, tests 185ms, environment 616ms)"
+      ],
+      "sourceCommit": "b1497ccabb4449c66bea49c69cd9b9bd931a72f0"
+    },
+    {
+      "name": "slack-managed-route-pg-20261025-final10",
+      "exitCode": 0,
+      "exitSidecar": "slack-managed-route-pg-20261025-final10.exit",
+      "rawSha256": "6e717096e9da26217c095053e5d4bf4d3e9d122192f70542390a1ed142099d08",
+      "sanitizedSha256": "6e717096e9da26217c095053e5d4bf4d3e9d122192f70542390a1ed142099d08",
+      "archiveSha256": "99ed2d3186725a4073f695b8d5fee090b62bc640656a48ec7d7108ea5c8880d5",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  3 passed | 348 skipped (351)",
+        "Duration  20.89s (transform 11.73s, setup 79ms, import 15.78s, tests 4.85s, environment 0ms)"
+      ],
+      "sourceCommit": "b1497ccabb4449c66bea49c69cd9b9bd931a72f0"
+    },
+    {
+      "name": "cli-company-import-export-process-group-final3-20261025",
+      "exitCode": 0,
+      "exitSidecar": "cli-company-import-export-process-group-final3-20261025.log.exit",
+      "rawSha256": "4d64434254c3d854e00263d763cafe2a02d88fa3909bd147c786ed4f70364a14",
+      "sanitizedSha256": "4d64434254c3d854e00263d763cafe2a02d88fa3909bd147c786ed4f70364a14",
+      "archiveSha256": "8eca3cbf6a7034c65d6c3dd28b32767097fe781aaa23023b13a3a51c0d91b57b",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed (1)",
+        "Duration  54.78s (transform 2.44s, setup 0ms, import 4.35s, tests 50.31s, environment 0ms)"
+      ],
+      "sourceCommit": "b1497ccabb4449c66bea49c69cd9b9bd931a72f0"
     }
   ],
   "updates": [
@@ -3746,6 +3886,31 @@
         "up05-paused-accepted-resume-final2-20261025",
         "managed-opencode-mcp-bridge-test-20261025-rerun",
         "v10-token-gates-pricing-slack"
+      ]
+    },
+    {
+      "sourceCommit": "b1497ccabb4449c66bea49c69cd9b9bd931a72f0",
+      "meaning": "Exact ec9e2bd4c isolated UI/CLI group passes: UI824 files8172 tests, CLI63files522 tests, actual combined exit0. Later pricing/Slack/Native changes require their focused and final source gates.",
+      "logs": [
+        "v10-worker-ui-cli-ec9e2bd4c"
+      ]
+    },
+    {
+      "sourceCommit": "b1497ccabb4449c66bea49c69cd9b9bd931a72f0",
+      "meaning": "Retained integrated compiler failures: initial4Storybook props, then5server wire/Memory/prompt typing diagnostics; UI compiler passed after Storybook fixture repair. No final compiler-green claim.",
+      "logs": [
+        "v10-integrated-typecheck-pricing-slack",
+        "v10-integrated-typecheck-after-finance-story-fix"
+      ]
+    },
+    {
+      "sourceCommit": "b1497ccabb4449c66bea49c69cd9b9bd931a72f0",
+      "meaning": "Actual pinned OpenCode baseline1/1 completes through canonical tool effect, original completion/finalizer and post-terminal HTTP reader; Slack27/3 focused controls and CLI process-group cleanup1 pass. Memory same-Run extension remains open.",
+      "logs": [
+        "managed-opencode-source-e2e-20261025-task-version-fix",
+        "slack-managed-focused-20261025-final2",
+        "slack-managed-route-pg-20261025-final10",
+        "cli-company-import-export-process-group-final3-20261025"
       ]
     }
   ],

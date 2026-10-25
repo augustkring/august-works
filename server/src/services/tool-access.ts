@@ -12318,7 +12318,10 @@ export function toolAccessService(
       }
     }
     const requestedGrantKind =
-      retainedGrantKind ?? input.grantKind ?? "organization";
+      retainedGrantKind ?? input.grantKind ?? (
+        method?.defaultGrantKind ??
+          (method?.grantKinds?.length === 1 ? method.grantKinds[0]! : "organization")
+      );
     if (method?.grantKinds && !method.grantKinds.includes(requestedGrantKind)) {
       throw badRequest(
         `${galleryEntry?.name ?? "This app"} supports only ${method.grantKinds.join(" or ")} credentials`,

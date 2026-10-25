@@ -12,7 +12,8 @@
     "requestedUserScopes": "Slack will request these user permissions. The Slack bot app for chat is separate:",
     "managedUnavailable": "The Blentera-managed Slack app is not configured on this instance. Ask a connection manager to enable the standard setup, or use your organization's own OAuth app below.",
     "useManaged": "Use Blentera's Slack app",
-    "useOwnAdvanced": "Use your own Slack OAuth app (advanced)"
+    "useOwnAdvanced": "Use your own Slack OAuth app (advanced)",
+    "humanTokenDisclosure": "Slack sign-in authorizes the signed-in person’s Slack account. Sharing the connection with the organization shares that person’s Slack connection; it does not create a bot or service account."
   },
   "cliAuth": {
     "sessionFailed": "Your sign-in could not be checked",

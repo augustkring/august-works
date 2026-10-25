@@ -40,7 +40,7 @@ type RpcMessage = {
 const input = createInterface({ input: process.stdin, crlfDelay: Infinity });
 const pending = new Map<
   string,
-  { resolve(value: unknown): void; reject(error: Error): void }
+  { method: string; resolve(value: unknown): void; reject(error: Error): void }
 >();
 let nextServerRequestId = 1;
 let driver: OpenCodeServerDriver | null = null;
@@ -61,13 +61,18 @@ function requestController(method: string, params: unknown): Promise<unknown> {
   const id = `opencode-${nextServerRequestId++}`;
   send({ id, method, params });
   return new Promise((resolveValue, reject) =>
-    pending.set(id, { resolve: resolveValue, reject }),
+    pending.set(id, { method, resolve: resolveValue, reject }),
   );
 }
 
 function unwrapDynamicToolResponse(value: unknown): unknown {
   const response = record(value);
-  if (response.success !== true) return value;
+  if (response.success !== true) {
+    const items = response.contentItems;
+    return response.success === false && Array.isArray(items)
+      ? (items[0] ?? value)
+      : value;
+  }
   const items = response.contentItems;
   if (Object.keys(response).sort().join(",") !== "contentItems,success" ||
     !Array.isArray(items) || items.length !== 1) {
@@ -145,13 +150,13 @@ async function open(
     runtimeContext,
     dynamicTools,
     dynamicToolHandler: async (call) =>
-      unwrapDynamicToolResponse(await requestController("item/tool/call", {
+      requestController("item/tool/call", {
         threadId: session?.ids().driverSessionId ?? "opening",
         turnId: call.turnId,
         callId: call.callId,
         tool: call.tool,
         arguments: call.arguments,
-      })),
+      }),
     onDiagnostic: (message) => process.stderr.write(`[opencode] ${message}\n`),
     // runnerd gives this proxy its own process group. Keep `opencode serve` in
     // that same group so runnerd's TERM/KILL fallback cannot orphan it.
@@ -334,7 +339,9 @@ async function handle(message: RpcMessage): Promise<void> {
     pending.delete(String(message.id));
     if (message.error !== undefined)
       waiter.reject(new Error(JSON.stringify(message.error)));
-    else {
+    else if (waiter.method === "item/tool/call") {
+      waiter.resolve(unwrapDynamicToolResponse(message.result));
+    } else {
       const contentItems = record(message.result).contentItems;
       waiter.resolve(
         Array.isArray(contentItems)

@@ -624,6 +624,7 @@ function BudgetFinanceMatrix() {
                 rows={providerRowsByProvider.anthropic}
                 budgetMonthlyCents={250_000}
                 totalCompanySpendCents={83_000}
+                weekUnpricedEventCount={0}
                 weekSpendCents={3_870}
                 windowRows={providerWindowRows.anthropic}
                 showDeficitNotch={false}
@@ -637,6 +638,7 @@ function BudgetFinanceMatrix() {
                 rows={providerRowsByProvider.openai}
                 budgetMonthlyCents={250_000}
                 totalCompanySpendCents={218_000}
+                weekUnpricedEventCount={0}
                 weekSpendCents={10_430}
                 windowRows={providerWindowRows.openai}
                 showDeficitNotch={false}
@@ -650,6 +652,7 @@ function BudgetFinanceMatrix() {
                 rows={providerRowsByProvider.openrouter}
                 budgetMonthlyCents={250_000}
                 totalCompanySpendCents={286_000}
+                weekUnpricedEventCount={0}
                 weekSpendCents={14_630}
                 windowRows={providerWindowRows.openrouter}
                 showDeficitNotch
@@ -678,6 +681,7 @@ function BudgetFinanceMatrix() {
               >
                 <BillerSpendCard
                   row={entry.row}
+                  weekUnpricedEventCount={0}
                   weekSpendCents={entry.weekSpendCents}
                   budgetMonthlyCents={250_000}
                   totalCompanySpendCents={entry.totalCompanySpendCents}

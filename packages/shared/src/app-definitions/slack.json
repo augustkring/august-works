@@ -47,6 +47,11 @@
       "riskTier": "S3",
       "label": "Use this connection as an agent tool",
       "purpose": "tool",
+      "grantKinds": [
+        "user",
+        "organization"
+      ],
+      "defaultGrantKind": "user",
       "capabilityProfile": {
         "key": "slack-tools",
         "label": "Use Slack as an agent tool",
@@ -89,6 +94,11 @@
       "riskTier": "S3",
       "label": "Use your own Slack OAuth app (advanced)",
       "purpose": "tool",
+      "grantKinds": [
+        "user",
+        "organization"
+      ],
+      "defaultGrantKind": "user",
       "capabilityProfile": {
         "key": "slack-tools",
         "label": "Use Slack as an agent tool",

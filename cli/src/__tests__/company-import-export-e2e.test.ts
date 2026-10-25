@@ -1,4 +1,4 @@
-import { execFile, spawn } from "node:child_process";
+import { execFile, execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import os from "node:os";
@@ -188,16 +188,88 @@ function collectTextFiles(root: string, current: string, files: Record<string, s
 }
 
 async function stopServerProcess(child: ServerProcess | null) {
-  if (!child || child.exitCode !== null) return;
-  child.kill("SIGTERM");
-  await new Promise<void>((resolve) => {
-    child.once("exit", () => resolve());
-    setTimeout(() => {
-      if (child.exitCode === null) {
-        child.kill("SIGKILL");
+  if (!child) return;
+
+  const processGroupId = process.platform === "win32" ? null : child.pid;
+  if (!processGroupId && (child.exitCode !== null || child.signalCode !== null)) return;
+  const signalTree = (signal: NodeJS.Signals) => {
+    if (processGroupId) {
+      try {
+        process.kill(-processGroupId, signal);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
       }
-    }, 5_000);
-  });
+    } else if (child.exitCode === null && child.signalCode === null) {
+      child.kill(signal);
+    }
+  };
+  const processGroupHasLiveMembers = () => {
+    if (!processGroupId) return child.exitCode === null && child.signalCode === null;
+    try {
+      process.kill(-processGroupId, 0);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ESRCH") return false;
+      if ((error as NodeJS.ErrnoException).code === "EPERM") return true;
+      throw error;
+    }
+
+    // Container PID 1 may leave adopted zombies unreaped. They are dead and
+    // hold no server resources, so wait for live members rather than treating
+    // those inert process-table entries as a running process group.
+    if (existsSync("/proc")) {
+      for (const entry of readdirSync("/proc")) {
+        if (!/^\d+$/.test(entry)) continue;
+        try {
+          const stat = readFileSync(`/proc/${entry}/stat`, "utf8");
+          const closingParen = stat.lastIndexOf(")");
+          if (closingParen < 0) continue;
+          const fields = stat.slice(closingParen + 2).split(" ");
+          const state = fields[0];
+          const groupId = Number(fields[2]);
+          if (groupId === processGroupId && state !== "Z" && state !== "X") return true;
+        } catch {
+          // A process may exit while /proc is being inspected.
+        }
+      }
+      return false;
+    }
+
+    // BSD/macOS lack /proc, so use ps to distinguish live members from
+    // zombies that cannot be reaped by the test process.
+    const processes = execFileSync("ps", ["-eo", "pgid=,stat="], { encoding: "utf8" });
+    return processes.split("\n").some((line) => {
+      const [groupIdText, state] = line.trim().split(/\s+/, 2);
+      return Number(groupIdText) === processGroupId && state !== "Z" && state !== "X";
+    });
+  };
+  const waitForTreeExit = async (timeoutMs: number) => {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (!processGroupHasLiveMembers()) return true;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    return !processGroupHasLiveMembers();
+  };
+  const waitForDirectChildExit = async () => {
+    const deadline = Date.now() + 1_000;
+    while (Date.now() < deadline) {
+      if (child.exitCode !== null || child.signalCode !== null) return true;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    return child.exitCode !== null || child.signalCode !== null;
+  };
+  const ensureFullyStopped = async () => {
+    if (!(await waitForTreeExit(2_500))) return false;
+    return waitForDirectChildExit();
+  };
+
+  signalTree("SIGTERM");
+  if (await ensureFullyStopped()) return;
+
+  signalTree("SIGKILL");
+  if (!(await ensureFullyStopped())) {
+    throw new Error(`CLI test server process group ${processGroupId ?? child.pid ?? "unknown"} did not exit`);
+  }
 }
 
 async function api<T>(baseUrl: string, pathname: string, init?: RequestInit): Promise<T> {
@@ -330,6 +402,7 @@ describeEmbeddedPostgres("paperclipai company import/export e2e", () => {
       ["paperclipai", "run", "--config", configPath],
       {
         cwd: repoRoot,
+        detached: process.platform !== "win32",
         env: createServerEnv(configPath, port, tempDb.connectionString, {
           paperclipHome,
           instanceId: paperclipInstanceId,
@@ -357,7 +430,7 @@ describeEmbeddedPostgres("paperclipai company import/export e2e", () => {
     if (tempRoot) {
       rmSync(tempRoot, { recursive: true, force: true });
     }
-  });
+  }, 30_000);
 
   it("exports a company package and imports it into new and existing companies", async () => {
     expect(serverProcess).not.toBeNull();

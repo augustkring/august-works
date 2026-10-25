@@ -53,16 +53,16 @@
     {
       "source": "packages/shared/src/app-definitions/slack.json",
       "articleId": "apps-and-connections",
-      "sourceSha256": "3873a45dcc3476a6bc512e744847aaba7ddc2534cc1714cad02a08c84b4ca110",
-      "articleSha256": "a83deb2fb1245ee97ccb2f39d6f4264600e99ba6d213ae0de9527d7030312127",
+      "sourceSha256": "09b6ea84fbed511ce5d7dd8c8b8254a6b28b381c2f3a1f48ea268f509acea26c",
+      "articleSha256": "ad10bf45d1856f8e3a1bfcaded8ba9221e7d999e0470b0ed9966baba06e72474",
       "decision": "updated",
-      "rationale": "The EN/DA article reflects the reviewed Slack OAuth methods, user permission disclosure, and separate bot-app purpose in the current catalog definition."
+      "rationale": "The paired article describes the reviewed Slack OAuth scope set, personal-account default, explicit organization sharing, and the separate bot-app setup."
     },
     {
       "source": "server/src/routes/jev-decisions.ts",
       "articleId": "apps-and-connections",
       "sourceSha256": "79866198ddf6f7495a3750701d68456c77a1210b68fca0c2cfbc1eb138d734a2",
-      "articleSha256": "a83deb2fb1245ee97ccb2f39d6f4264600e99ba6d213ae0de9527d7030312127",
+      "articleSha256": "ad10bf45d1856f8e3a1bfcaded8ba9221e7d999e0470b0ed9966baba06e72474",
       "decision": "updated",
       "rationale": "The paired article reflects explicit consent for each fixed-sample test, per-company settings, and fail-closed profile and processing-policy gates."
     },
@@ -70,7 +70,7 @@
       "source": "server/src/services/jev-skill-suggestions.ts",
       "articleId": "apps-and-connections",
       "sourceSha256": "ab666a7f91a568b92bae58136145cb9078dd1497c8f5da50541f193b456000aa",
-      "articleSha256": "a83deb2fb1245ee97ccb2f39d6f4264600e99ba6d213ae0de9527d7030312127",
+      "articleSha256": "ad10bf45d1856f8e3a1bfcaded8ba9221e7d999e0470b0ed9966baba06e72474",
       "decision": "updated",
       "rationale": "The paired article limits Jev to optional suggestions and discloses the selected shared OpenRouter account and that the setup test cannot qualify Skills."
     },
@@ -78,39 +78,39 @@
       "source": "server/src/services/paperclip-cloud-connector.ts",
       "articleId": "apps-and-connections",
       "sourceSha256": "0aef1927ff92e2753ff662b91c2d5f19dbbc4732f49795ae262245514bbb32f1",
-      "articleSha256": "a83deb2fb1245ee97ccb2f39d6f4264600e99ba6d213ae0de9527d7030312127",
+      "articleSha256": "ad10bf45d1856f8e3a1bfcaded8ba9221e7d999e0470b0ed9966baba06e72474",
       "decision": "updated",
       "rationale": "The EN/DA article limits the standard setup claim to an operator-configured managed Slack method; missing app credentials leave the advanced route available."
     },
     {
       "source": "server/src/services/tool-access.ts",
       "articleId": "apps-and-connections",
-      "sourceSha256": "103b9a75358a6bf091cc3e3258b714c610383d220562946a4303ab005cb797bf",
-      "articleSha256": "a83deb2fb1245ee97ccb2f39d6f4264600e99ba6d213ae0de9527d7030312127",
+      "sourceSha256": "79c7f6e183c80391055cf6d112b5b38facf003a33bb3c1d04485867b254cdef9",
+      "articleSha256": "ad10bf45d1856f8e3a1bfcaded8ba9221e7d999e0470b0ed9966baba06e72474",
       "decision": "updated",
-      "rationale": "The EN/DA article describes the current OAuth callback and grant path for the reviewed managed and customer-owned Slack methods."
+      "rationale": "The managed and customer-owned Slack methods default to a current-human grant, permit explicit organization sharing, and validate comma-delimited scopes against the exact consent request."
     },
     {
       "source": "ui/src/components/JevSkillSuggestionSettings.tsx",
       "articleId": "apps-and-connections",
       "sourceSha256": "78a47504f8b19d7fd7ef9f25be4593789dcc2b3617e3196ef61c511186437218",
-      "articleSha256": "a83deb2fb1245ee97ccb2f39d6f4264600e99ba6d213ae0de9527d7030312127",
+      "articleSha256": "ad10bf45d1856f8e3a1bfcaded8ba9221e7d999e0470b0ed9966baba06e72474",
       "decision": "updated",
       "rationale": "The optional Jev section matches the settings UI: off by default, a separate background-check control, and a disclosed fixed-sample test that does not qualify suggestions."
     },
     {
       "source": "ui/src/features/connections/ConnectionSetupFlow.tsx",
       "articleId": "apps-and-connections",
-      "sourceSha256": "e66271d3097ae6c7dc0c74a515c7a95689656de0655ca22bf154939364ef385a",
-      "articleSha256": "a83deb2fb1245ee97ccb2f39d6f4264600e99ba6d213ae0de9527d7030312127",
+      "sourceSha256": "1a2b3d7becdbb50b9ff8c12dfc4cd7071795fa3474fd7cc22c879093cdb3e5aa",
+      "articleSha256": "ad10bf45d1856f8e3a1bfcaded8ba9221e7d999e0470b0ed9966baba06e72474",
       "decision": "updated",
-      "rationale": "The EN/DA article now describes the managed Slack option when configured and preserves the advanced own-app fallback shown in the setup flow."
+      "rationale": "The Access step discloses that Slack consent authorizes the signed-in person and that organization sharing shares that person’s connection; setup retains managed and advanced own-app choices."
     },
     {
       "source": "ui/src/pages/apps/app-detail/PermissionsPanel.tsx",
       "articleId": "apps-and-connections",
       "sourceSha256": "6bd3df903c2b8b91aaaf964a0c3c7ca6a07b842359b6d68242464a946527fb44",
-      "articleSha256": "a83deb2fb1245ee97ccb2f39d6f4264600e99ba6d213ae0de9527d7030312127",
+      "articleSha256": "ad10bf45d1856f8e3a1bfcaded8ba9221e7d999e0470b0ed9966baba06e72474",
       "decision": "updated",
       "rationale": "The paired article reflects the permission boundary: a connection alone does not enable every action, and action settings must be reviewed separately."
     },
@@ -118,7 +118,7 @@
       "source": "ui/src/pages/apps/AppDetail.tsx",
       "articleId": "apps-and-connections",
       "sourceSha256": "2c5de01bbf0adc3eb74f4d8678055cf8b15a5fe69946453ffcb4bdc2f4746608",
-      "articleSha256": "a83deb2fb1245ee97ccb2f39d6f4264600e99ba6d213ae0de9527d7030312127",
+      "articleSha256": "ad10bf45d1856f8e3a1bfcaded8ba9221e7d999e0470b0ed9966baba06e72474",
       "decision": "updated",
       "rationale": "The paired article directs administrators to inspect an app’s active connection and permissions before asking a Co-worker to use it."
     },
@@ -126,7 +126,7 @@
       "source": "ui/src/pages/apps/AppNotConnected.tsx",
       "articleId": "apps-and-connections",
       "sourceSha256": "218b58f14a1feb713347afaf7760ac3549ccf20bb0be5259073015376c0ecd3b",
-      "articleSha256": "a83deb2fb1245ee97ccb2f39d6f4264600e99ba6d213ae0de9527d7030312127",
+      "articleSha256": "ad10bf45d1856f8e3a1bfcaded8ba9221e7d999e0470b0ed9966baba06e72474",
       "decision": "updated",
       "rationale": "The paired article covers this screen’s unavailable-connection recovery through the same provider sign-in and permission review, without promising reconnection is always available."
     },
@@ -134,23 +134,23 @@
       "source": "ui/src/pages/apps/Connections.tsx",
       "articleId": "apps-and-connections",
       "sourceSha256": "219334acc72099017f5ab01e9a7ee4011186aa8a0afd8dece89af23bc0f2ccbe",
-      "articleSha256": "a83deb2fb1245ee97ccb2f39d6f4264600e99ba6d213ae0de9527d7030312127",
+      "articleSha256": "ad10bf45d1856f8e3a1bfcaded8ba9221e7d999e0470b0ed9966baba06e72474",
       "decision": "updated",
       "rationale": "The paired article matches the connection screen flow: review account and permissions, complete provider consent, then verify status or reconnect when prompted."
     },
     {
       "source": "packages/shared/src/app-definitions/slack.json",
       "articleId": "apps-and-connections-da",
-      "sourceSha256": "3873a45dcc3476a6bc512e744847aaba7ddc2534cc1714cad02a08c84b4ca110",
-      "articleSha256": "155e7e66ec947f48e910a0362b225477d9d1a0166246d85e7979bd093ccdc3d1",
+      "sourceSha256": "09b6ea84fbed511ce5d7dd8c8b8254a6b28b381c2f3a1f48ea268f509acea26c",
+      "articleSha256": "790d5b90202b5414d91a3458d1bddac3cd382ea7f9a3e4658c99e20bd82b9a8b",
       "decision": "updated",
-      "rationale": "Danish version checked against the same current behavior: The EN/DA article reflects the reviewed Slack OAuth methods, user permission disclosure, and separate bot-app purpose in the current catalog definition."
+      "rationale": "Danish version checked against the same current behavior: The paired article describes the reviewed Slack OAuth scope set, personal-account default, explicit organization sharing, and the separate bot-app setup."
     },
     {
       "source": "server/src/routes/jev-decisions.ts",
       "articleId": "apps-and-connections-da",
       "sourceSha256": "79866198ddf6f7495a3750701d68456c77a1210b68fca0c2cfbc1eb138d734a2",
-      "articleSha256": "155e7e66ec947f48e910a0362b225477d9d1a0166246d85e7979bd093ccdc3d1",
+      "articleSha256": "790d5b90202b5414d91a3458d1bddac3cd382ea7f9a3e4658c99e20bd82b9a8b",
       "decision": "updated",
       "rationale": "Danish version checked against the same current source behavior: The paired article reflects explicit consent for each fixed-sample test, per-company settings, and fail-closed profile and processing-policy gates."
     },
@@ -158,7 +158,7 @@
       "source": "server/src/services/jev-skill-suggestions.ts",
       "articleId": "apps-and-connections-da",
       "sourceSha256": "ab666a7f91a568b92bae58136145cb9078dd1497c8f5da50541f193b456000aa",
-      "articleSha256": "155e7e66ec947f48e910a0362b225477d9d1a0166246d85e7979bd093ccdc3d1",
+      "articleSha256": "790d5b90202b5414d91a3458d1bddac3cd382ea7f9a3e4658c99e20bd82b9a8b",
       "decision": "updated",
       "rationale": "Danish version checked against the same current source behavior: The paired article limits Jev to optional suggestions and discloses the selected shared OpenRouter account and that the setup test cannot qualify Skills."
     },
@@ -166,39 +166,39 @@
       "source": "server/src/services/paperclip-cloud-connector.ts",
       "articleId": "apps-and-connections-da",
       "sourceSha256": "0aef1927ff92e2753ff662b91c2d5f19dbbc4732f49795ae262245514bbb32f1",
-      "articleSha256": "155e7e66ec947f48e910a0362b225477d9d1a0166246d85e7979bd093ccdc3d1",
+      "articleSha256": "790d5b90202b5414d91a3458d1bddac3cd382ea7f9a3e4658c99e20bd82b9a8b",
       "decision": "updated",
       "rationale": "Danish version checked against the same current behavior: The EN/DA article limits the standard setup claim to an operator-configured managed Slack method; missing app credentials leave the advanced route available."
     },
     {
       "source": "server/src/services/tool-access.ts",
       "articleId": "apps-and-connections-da",
-      "sourceSha256": "103b9a75358a6bf091cc3e3258b714c610383d220562946a4303ab005cb797bf",
-      "articleSha256": "155e7e66ec947f48e910a0362b225477d9d1a0166246d85e7979bd093ccdc3d1",
+      "sourceSha256": "79c7f6e183c80391055cf6d112b5b38facf003a33bb3c1d04485867b254cdef9",
+      "articleSha256": "790d5b90202b5414d91a3458d1bddac3cd382ea7f9a3e4658c99e20bd82b9a8b",
       "decision": "updated",
-      "rationale": "Danish version checked against the same current behavior: The EN/DA article describes the current OAuth callback and grant path for the reviewed managed and customer-owned Slack methods."
+      "rationale": "Danish version checked against the current OAuth owner: The managed and customer-owned Slack methods default to a current-human grant, permit explicit organization sharing, and validate comma-delimited scopes against the exact consent request."
     },
     {
       "source": "ui/src/components/JevSkillSuggestionSettings.tsx",
       "articleId": "apps-and-connections-da",
       "sourceSha256": "78a47504f8b19d7fd7ef9f25be4593789dcc2b3617e3196ef61c511186437218",
-      "articleSha256": "155e7e66ec947f48e910a0362b225477d9d1a0166246d85e7979bd093ccdc3d1",
+      "articleSha256": "790d5b90202b5414d91a3458d1bddac3cd382ea7f9a3e4658c99e20bd82b9a8b",
       "decision": "updated",
       "rationale": "Danish version checked against the same current source behavior: The optional Jev section matches the settings UI: off by default, a separate background-check control, and a disclosed fixed-sample test that does not qualify suggestions."
     },
     {
       "source": "ui/src/features/connections/ConnectionSetupFlow.tsx",
       "articleId": "apps-and-connections-da",
-      "sourceSha256": "e66271d3097ae6c7dc0c74a515c7a95689656de0655ca22bf154939364ef385a",
-      "articleSha256": "155e7e66ec947f48e910a0362b225477d9d1a0166246d85e7979bd093ccdc3d1",
+      "sourceSha256": "1a2b3d7becdbb50b9ff8c12dfc4cd7071795fa3474fd7cc22c879093cdb3e5aa",
+      "articleSha256": "790d5b90202b5414d91a3458d1bddac3cd382ea7f9a3e4658c99e20bd82b9a8b",
       "decision": "updated",
-      "rationale": "Danish version checked against the same current behavior: The EN/DA article now describes the managed Slack option when configured and preserves the advanced own-app fallback shown in the setup flow."
+      "rationale": "Danish version checked against the current UI: The Access step discloses that Slack consent authorizes the signed-in person and that organization sharing shares that person’s connection; setup retains managed and advanced own-app choices."
     },
     {
       "source": "ui/src/pages/apps/app-detail/PermissionsPanel.tsx",
       "articleId": "apps-and-connections-da",
       "sourceSha256": "6bd3df903c2b8b91aaaf964a0c3c7ca6a07b842359b6d68242464a946527fb44",
-      "articleSha256": "155e7e66ec947f48e910a0362b225477d9d1a0166246d85e7979bd093ccdc3d1",
+      "articleSha256": "790d5b90202b5414d91a3458d1bddac3cd382ea7f9a3e4658c99e20bd82b9a8b",
       "decision": "updated",
       "rationale": "Danish version checked against the same current source behavior: The paired article reflects the permission boundary: a connection alone does not enable every action, and action settings must be reviewed separately."
     },
@@ -206,7 +206,7 @@
       "source": "ui/src/pages/apps/AppDetail.tsx",
       "articleId": "apps-and-connections-da",
       "sourceSha256": "2c5de01bbf0adc3eb74f4d8678055cf8b15a5fe69946453ffcb4bdc2f4746608",
-      "articleSha256": "155e7e66ec947f48e910a0362b225477d9d1a0166246d85e7979bd093ccdc3d1",
+      "articleSha256": "790d5b90202b5414d91a3458d1bddac3cd382ea7f9a3e4658c99e20bd82b9a8b",
       "decision": "updated",
       "rationale": "Danish version checked against the same current source behavior: The paired article directs administrators to inspect an app’s active connection and permissions before asking a Co-worker to use it."
     },
@@ -214,7 +214,7 @@
       "source": "ui/src/pages/apps/AppNotConnected.tsx",
       "articleId": "apps-and-connections-da",
       "sourceSha256": "218b58f14a1feb713347afaf7760ac3549ccf20bb0be5259073015376c0ecd3b",
-      "articleSha256": "155e7e66ec947f48e910a0362b225477d9d1a0166246d85e7979bd093ccdc3d1",
+      "articleSha256": "790d5b90202b5414d91a3458d1bddac3cd382ea7f9a3e4658c99e20bd82b9a8b",
       "decision": "updated",
       "rationale": "Danish version checked against the same current source behavior: The paired article covers this screen’s unavailable-connection recovery through the same provider sign-in and permission review, without promising reconnection is always available."
     },
@@ -222,7 +222,7 @@
       "source": "ui/src/pages/apps/Connections.tsx",
       "articleId": "apps-and-connections-da",
       "sourceSha256": "219334acc72099017f5ab01e9a7ee4011186aa8a0afd8dece89af23bc0f2ccbe",
-      "articleSha256": "155e7e66ec947f48e910a0362b225477d9d1a0166246d85e7979bd093ccdc3d1",
+      "articleSha256": "790d5b90202b5414d91a3458d1bddac3cd382ea7f9a3e4658c99e20bd82b9a8b",
       "decision": "updated",
       "rationale": "Danish version checked against the same current source behavior: The paired article matches the connection screen flow: review account and permissions, complete provider consent, then verify status or reconnect when prompted."
     },

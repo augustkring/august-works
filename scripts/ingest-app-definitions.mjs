@@ -362,6 +362,8 @@ const apps = [
           label: "Use this connection as an agent tool",
           whenToUse: "Use Blentera's configured Slack OAuth app for the standard setup.",
           purpose: "tool",
+          grantKinds: ["user", "organization"],
+          defaultGrantKind: "user",
           ownershipModes: ["platform_shared"],
           capabilityProfile: {
             key: "slack-tools",
@@ -387,6 +389,8 @@ const apps = [
           label: "Use your own Slack OAuth app (advanced)",
           whenToUse: "Use a separately managed Slack OAuth app only when your organization needs to control its app registration.",
           purpose: "tool",
+          grantKinds: ["user", "organization"],
+          defaultGrantKind: "user",
           ownershipModes: ["customer"],
           capabilityProfile: {
             key: "slack-tools",

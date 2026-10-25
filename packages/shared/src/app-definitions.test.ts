@@ -26,7 +26,7 @@ import {
   SELF_SERVE_MCP_CANDIDATES,
   SELF_SERVE_MCP_RESEARCH,
 } from "./self-serve-mcp-research.js";
-import { appDefinitionsSchema } from "./validators/app-definition.js";
+import { appDefinitionSchema, appDefinitionsSchema } from "./validators/app-definition.js";
 
 const googleScope = (scope: string) =>
   `https://www.googleapis.com/auth/${scope}`;
@@ -266,14 +266,23 @@ describe("AppDefinition catalog", () => {
     ]);
     expect(managed.defaults?.authorizationEndpoint).toBe("https://slack.com/oauth/v2_user/authorize");
     expect(managed.defaults?.tokenEndpoint).toBe("https://slack.com/api/oauth.v2.user.access");
+    expect(managed.grantKinds).toEqual(["user", "organization"]);
+    expect(managed.defaultGrantKind).toBe("user");
     expect(connectionMethodSupportsAutomaticOAuth(managed)).toBe(true);
     expect(connectionMethodAcceptsCustomerOAuthClient(managed)).toBe(false);
     expect(connectionMethodAcceptsCustomerOAuthClient(ownApp)).toBe(true);
+    expect(ownApp.grantKinds).toEqual(["user", "organization"]);
+    expect(ownApp.defaultGrantKind).toBe("user");
     expect(getRecommendedConnectionMethod([managed, ownApp])).toBe(managed);
   });
 
   it("validates all Wave 1 definitions", () =>
     expect(() => appDefinitionsSchema.parse(APP_DEFINITIONS)).not.toThrow());
+  it("requires the declared OAuth grant default to be an allowed grant", () => {
+    const slack = structuredClone(APP_DEFINITIONS.find((app) => app.slug === "slack")!);
+    slack.methods[0]!.defaultGrantKind = "agent";
+    expect(() => appDefinitionSchema.parse(slack)).toThrow(/Default grant kind must be allowed/);
+  });
   it("contains every established provider plus the reviewed self-serve catalog", () => {
     expect(APP_DEFINITIONS.map((app) => app.slug)).toEqual(
       expect.arrayContaining([

@@ -23,7 +23,7 @@ Vælg appen, og følg forbindelsesforløbet. Før du fortsætter, skal du kontro
 
 En forbindelse giver adgang til den valgte konto og det viste omfang. Det betyder ikke, at alle handlinger er slået til. Gennemgå appens tilladelser og handlingsindstillinger, før du beder en Co-worker om at bruge den.
 
-Til Slack-agentværktøjer bruger standardvalget Blenteras administrerede Slack-app, når den er konfigureret på installationen. Gennemgå brugertilladelserne på opsætningsskærmen og på Slacks samtykkeside. Hvis den administrerede mulighed ikke er tilgængelig, kan en forbindelsesadministrator bruge den avancerede mulighed til organisationens egen Slack OAuth-app. Disse muligheder forbinder en persons Slack-konto til agentværktøjer; den separate Slack-botapp bruges, når personer starter arbejde fra Slack.
+Til Slack-agentværktøjer bruger standardvalget Blenteras administrerede Slack-app, når den er konfigureret på installationen. Gennemgå brugertilladelserne på opsætningsskærmen og på Slacks samtykkeside. Forbindelsen bruger som standard den indloggede persons Slack-konto. Hvis du udtrykkeligt vælger organisationsadgang, deles personens Slack-forbindelse med virksomheden; det opretter ikke en bot eller servicekonto. Hvis den administrerede mulighed ikke er tilgængelig, kan en forbindelsesadministrator bruge den avancerede mulighed til organisationens egen Slack OAuth-app. Den separate Slack-botapp bruges, når personer starter arbejde fra Slack.
 
 ## Genopret en forbindelse, når adgangen mangler
 

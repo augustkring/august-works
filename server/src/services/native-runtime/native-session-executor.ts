@@ -130,6 +130,7 @@ import {
   issues,
   nativeRunFinalizations,
   nativeRunResults,
+  memoryRecords,
   orchestrationModelReservations,
   toolInvocations,
 } from "@paperclipai/db";
@@ -138,7 +139,7 @@ import { appendHeartbeatRunEvent } from "../heartbeat-run-events.js";
 import { nativeSha256 } from "./canonical.js";
 import { resolveDefaultAgentWorkspaceDir } from "../../home-paths.js";
 import { assertAnalyticalContextPayloadAccess } from "../analytical-context-authority.js";
-import { assertNativePayloadSourceSetCurrent } from "../native-direct-input.js";
+import { assertNativeMemorySourceInputCurrent, assertNativePayloadSourceSetCurrent } from "../native-direct-input.js";
 import { canActorReadIssuePrivacy, type AuthorizationActor } from "../authorization.js";
 import { PaperclipRunnerToolAuthority, resolveNativeInputDispatchReceiptIdentity, type NativeDocumentToolResultSource,
   type NativeProjectToolResultSource } from "./paperclip-runner-tool-authority.js";
@@ -7614,6 +7615,40 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         typeof resultDocument.latestRevisionId === "string"
         ? { issueId: input.issueId, documentId: resultDocument.id, revisionId: resultDocument.latestRevisionId }
         : null;
+      let returnedMemorySource: Extract<NativePayloadSourceInput, { kind: "memory" }> | null = null;
+      if (input.tool === "self_remember") {
+        const resultData = record(record(input.result).data);
+        const resultMemory = record(resultData.record);
+        const memoryId = resultMemory.id;
+        const resultScope = record(resultMemory.scope);
+        if ((resultData.status !== "accepted" && resultData.status !== "pending" &&
+          resultData.status !== "duplicate" && resultData.status !== "corroborated") ||
+          typeof memoryId !== "string" || typeof resultMemory.content !== "string")
+          throw new Error("managed_opencode_tool_result_binding_invalid");
+        const [memory] = await tx.select({ id: memoryRecords.id, content: memoryRecords.content,
+          updatedAt: memoryRecords.updatedAt, scopeType: memoryRecords.scopeType, scopeId: memoryRecords.scopeId,
+          ownerAgentId: memoryRecords.ownerAgentId, reviewState: memoryRecords.reviewState,
+          verificationState: memoryRecords.verificationState, supersedesRecordId: memoryRecords.supersedesRecordId,
+          supersededByRecordId: memoryRecords.supersededByRecordId, revokedAt: memoryRecords.revokedAt,
+          payloadSourceProtocolVersion: memoryRecords.payloadSourceProtocolVersion,
+          payloadSourceSnapshotInvalidated: memoryRecords.payloadSourceSnapshotInvalidated,
+        }).from(memoryRecords).where(and(eq(memoryRecords.companyId, input.companyId), eq(memoryRecords.id, memoryId)));
+        if (!memory || memory.payloadSourceProtocolVersion !== 1 || memory.payloadSourceSnapshotInvalidated ||
+          memory.revokedAt || memory.supersededByRecordId || memory.content !== resultMemory.content ||
+          memory.scopeType !== resultScope.type || (memory.scopeId ?? null) !== (resultScope.id ?? null) ||
+          memory.ownerAgentId !== (resultMemory.ownerAgentId ?? null) || memory.reviewState !== resultMemory.reviewState ||
+          memory.verificationState !== resultMemory.verificationState ||
+          (memory.supersedesRecordId ?? null) !== (resultMemory.supersedesRecordId ?? null) ||
+          (memory.supersededByRecordId ?? null) !== (resultMemory.supersededByRecordId ?? null))
+          throw new Error("managed_opencode_tool_result_binding_invalid");
+        const memorySource = nativePayloadSourceInputSchema.parse({ kind: "memory", memoryId: memory.id,
+          sourceVersion: memory.updatedAt.toISOString(), contentHash: nativeSha256(memory.content) });
+        if (memorySource.kind !== "memory") throw new Error("managed_opencode_tool_result_binding_invalid");
+        await assertNativeMemorySourceInputCurrent(tx as unknown as Db, { companyId: input.companyId,
+          actor: { type: "agent", source: "none", companyId: input.companyId, agentId: input.agentId,
+            runId: input.runId, onBehalfOfUserId: run.responsibleUserId ?? undefined }, source: memorySource });
+        returnedMemorySource = memorySource;
+      }
       let returnedDocumentSource: Extract<NativePayloadSourceInput, { kind: "document_revision" }> | null = null;
       if (input.tool === "read_document") {
         const readCaptures = Array.isArray(profile.nativeToolResultSourceCaptures)
@@ -7676,8 +7711,9 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         // retained_run source. Only returned Task/document owners add source policy.
         policy: { issueIds: [...new Set([...(createdTask ? [createdTask.id] : []),
           ...(returnedDocumentSource?.issueId ? [returnedDocumentSource.issueId] : [])])],
-          projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] },
-        inputs: [inputSource, ...(returnedDocumentSource ? [returnedDocumentSource] : []), ...(createdTask ? [createdTask.source] : [])],
+          projectIds: [], runIds: [], memoryIds: returnedMemorySource ? [returnedMemorySource.memoryId] : [], foundationRevisionIds: [] },
+        inputs: [inputSource, ...(returnedDocumentSource ? [returnedDocumentSource] : []),
+          ...(createdTask ? [createdTask.source] : []), ...(returnedMemorySource ? [returnedMemorySource] : [])],
       }] };
       const receipt = { ...updatedReceiptBody, digest: await postgresJsonbSha256(tx, updatedReceiptBody) };
       if (!nativeRunInputSourceReceiptSchema.safeParse(receipt).success || Buffer.byteLength(JSON.stringify(nextCaptures)) > 2 * 1024 * 1024)

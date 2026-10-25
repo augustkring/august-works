@@ -1506,6 +1506,9 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
     }] });
 
     await render();
+    expect(container.textContent).toContain("Slack sign-in authorizes the signed-in person’s Slack account");
+    expect(radioContaining("Just me")?.getAttribute("aria-checked")).toBe("true");
+    expect(radioContaining("Any human in the organization")?.getAttribute("aria-checked")).toBe("false");
     await passAccessStep();
 
     expect(container.textContent).toContain("Slack will request these user permissions");

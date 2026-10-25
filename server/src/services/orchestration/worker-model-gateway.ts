@@ -243,6 +243,8 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
           if (typeof block.text !== "string" || !prompts.includes(promptHash) || promptBindings.length !== 1)
             throw forbidden("Managed OpenCode user history is outside the current server-owned prompt receipts");
           const bindingHash = promptBindings[0]!.sourceSetHash;
+          if (typeof bindingHash !== "string" || !/^[0-9a-f]{64}$/.test(bindingHash))
+            throw forbidden("Managed OpenCode prompt source binding is invalid");
           currentPromptBinding = { promptHash, sourceSetHash: bindingHash };
           const bootstrapSourceSet = { policy: receipt.data.bootstrap.policy, inputs: receipt.data.bootstrap.inputs };
           if (bindingHash === nativeSha256(bootstrapSourceSet)) {

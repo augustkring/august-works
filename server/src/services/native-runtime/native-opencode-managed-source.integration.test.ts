@@ -50,6 +50,8 @@ import { issueRoutes } from "../../routes/issues.js";
 import { setupRunnerPrpWebSocketServer } from "../../realtime/runner-prp-ws.js";
 import { prepareNativeHeartbeatRun } from "./prepare-native-run.js";
 import { executePaperclipNativeSession } from "./native-session-executor.js";
+import { PaperclipControlPlanePort } from "./paperclip-control-plane-port.js";
+import { finalizeNativeRun } from "./native-run-finalizer.js";
 import { buildNativeExecutionInput, buildNativeBootstrapSourceSet } from "./native-execution-input.js";
 import { buildRetainedNativeRuntimeContext } from "./runtime-context.js";
 import { getIssueExecutionContext, buildPaperclipTaskMarkdown } from "../heartbeat.js";
@@ -59,6 +61,7 @@ import { nativeCompletionContractInput } from "./completion-contracts.js";
 import { resolveDefaultAgentWorkspaceDir } from "../../home-paths.js";
 import { OpenCodeServerDriver } from "@paperclipai/paperclip-runner";
 import { buildNativeModelEnvelope, createCodexTaskEnvelope, nativeTaskConstraints } from "../../vendor/paperclip-runner/index.js";
+import type { PrpStructuredRunResult, PrpTerminalState } from "../../vendor/paperclip-runner/index.js";
 
 const QUALIFIED_OPENCODE_SHA256 = "513f500a1a5ea1dc7d865547ac87b32a8936334e8d5abd5b3ff585c45a170080";
 const sourceSha = "a".repeat(40);
@@ -87,7 +90,7 @@ function canonicalHash(value: unknown): string {
 function staticManagedErrorCodes(value: unknown, depth = 0): string[] {
   if (depth > 6) return [];
   if (typeof value === "string") {
-    if (/^[a-z][a-z0-9_]{2,80}$/.test(value)) return [value];
+    if (/^(?:managed_opencode|native|paperclip)_[a-z0-9_]{2,80}$/.test(value)) return [value];
     if (value.length > 16_384) return [];
     try { return staticManagedErrorCodes(JSON.parse(value), depth + 1); }
     catch { return []; }
@@ -569,6 +572,10 @@ describe("managed OpenCode source-closure binary integration", () => {
     })}`);
     let runtimeDirectory = "";
     let configDirectory = "";
+    let completedNativeFinalization: {
+      result: Record<string, unknown>; terminal: PrpTerminalState; turnId: string | null;
+      normalizedSessionId: string; sourceInstanceId: string;
+    } | null = null;
     const processTreeTimers: ReturnType<typeof setInterval>[] = [];
     let managedProviderConfigReported = false;
     const pgMonitor = postgres(database.connectionString, { max: 1 });
@@ -805,6 +812,7 @@ describe("managed OpenCode source-closure binary integration", () => {
             .map(match => match[0]).filter((value, index, all) => all.indexOf(value) === index)) })}`);
         throw new Error(`managed_opencode_runner_exit_${result.exitCode}; providerResponses=${responseCount}; fakeFetchEntrances=${JSON.stringify(fakeFetchEntrances)}\n${diagnostics.join("\n")}\nBroker: ${brokerRequests.join(", ")}\nArtifacts: ${runRoot}`);
       }
+      completedNativeFinalization = (result as unknown as Record<string, unknown>).nativeFinalization as NonNullable<typeof completedNativeFinalization>;
       expect(responseCount).toBeGreaterThanOrEqual(2);
       const assertManagedConfigCleanup = async () => {
         expect((await stat(configDirectory)).mode & 0o777).toBe(0o700);
@@ -836,7 +844,7 @@ describe("managed OpenCode source-closure binary integration", () => {
     const [persistedRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, run!.id));
     const sourceReceipt = persistedRun!.runnerProfileJson as Record<string, unknown>;
     expect(sourceReceipt.nativeOpenCodeSourceAuthority).toMatchObject({ version: 1, toolSchemas: expect.any(Array) });
-    expect(sourceReceipt.nativeInputSourceProtocolVersion).toBe(1);
+    expect(persistedRun!.nativeInputSourceProtocolVersion).toBe(1);
     expect(nativeRunInputSourceReceiptSchema.safeParse(sourceReceipt.nativeInputSourceReceipt).success).toBe(true);
     expect(sourceReceipt.nativeToolResultSourceCaptures).toEqual(expect.arrayContaining([
       expect.objectContaining({ managedOpenCode: true, tool: "write_document", callId: "managed-e2e-write-1" }),
@@ -851,9 +859,27 @@ describe("managed OpenCode source-closure binary integration", () => {
     expect(nativePayloadSourceSnapshotSchema.safeParse(snapshotRow?.payloadSourceSnapshot).success).toBe(true);
     // Exercise the real current-source HTTP reader after the producer run is
     // terminal and the exact output is published on an open Task.
-    await db.update(heartbeatRuns).set({ status: "succeeded", finishedAt: new Date() })
-      .where(eq(heartbeatRuns.id, run!.id));
-    const httpDocument = await request(humanApp).get(`/api/issues/${task.id}/documents/managed-source-e2e`).expect(200);
+    const nativeFinalization = completedNativeFinalization;
+    expect(nativeFinalization).not.toBeNull();
+    if (!nativeFinalization) throw new Error("managed_opencode_finalization_missing");
+    const controlPlane = new PaperclipControlPlanePort(db, {
+      companyId, issueId: task.id, runId: run!.id, agentId,
+      sessionId: nativeFinalization.normalizedSessionId,
+      completionContractId: contractRow.id, completionContractSha256: contractRow.canonicalSha256,
+      sourceInstanceId: nativeFinalization.sourceInstanceId,
+      controlPlaneSourceInstanceId: nativeFinalization.sourceInstanceId,
+    });
+    await controlPlane.completeRun({ result: nativeFinalization.result as PrpStructuredRunResult,
+      terminal: nativeFinalization.terminal, turnId: nativeFinalization.turnId,
+      callerResultId: `managed-opencode-e2e:${run!.id}` });
+    await finalizeNativeRun({ db, runId: run!.id, workspaceFinalizeStatus: "succeeded", projectRunStatus: true });
+    const [terminalRun] = await db.select({ status: heartbeatRuns.status, nativePhase: heartbeatRuns.nativePhase })
+      .from(heartbeatRuns).where(eq(heartbeatRuns.id, run!.id));
+    expect(terminalRun?.status).toBe("succeeded");
+    const httpDocument = await request(humanApp).get(`/api/issues/${task.id}/documents/managed-source-e2e`);
+    const httpError = typeof httpDocument.body?.error === "string" && /^[a-zA-Z0-9 _-]{1,120}$/.test(httpDocument.body.error)
+      ? httpDocument.body.error : "unspecified";
+    expect(httpDocument.status, `current-source HTTP reader returned ${httpDocument.status}: ${httpError}`).toBe(200);
     expect(httpDocument.body.body).toContain("governed OpenCode tool boundary");
     const reservations = await db.select().from(orchestrationModelReservations)
       .where(and(eq(orchestrationModelReservations.companyId, companyId), eq(orchestrationModelReservations.planId, plan.id)));

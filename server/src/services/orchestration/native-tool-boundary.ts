@@ -410,13 +410,13 @@ async function fence(db: Db, b: Binding, planId: string, reasonCode: string) {
 
 /** Native Task builtins share tool_invocations and its SQL charge guard with
  * connected tools. No second ledger, result cache, queue or automatic resend. */
-export async function withOrchestrationNativeTool<T>(
+export async function withOrchestrationNativeTool(
   db: Db,
   b: Binding,
   call: Call,
-  effect: () => Promise<T>,
+  effect: () => Promise<unknown>,
   externallyMetered = false,
-): Promise<T> {
+): Promise<unknown> {
   const preliminary = await scope(db, b);
   if (!preliminary) return effect();
   if (!/^[\x21-\x7e]{1,240}$/.test(call.callId))

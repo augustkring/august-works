@@ -8915,6 +8915,7 @@ describeEmbeddedPostgres("tool access service", () => {
       {
         galleryKey: "slack",
         name: "Shared OAuth grant",
+        grantKind: "organization",
       },
       { actorType: "user", actorId: userId },
     );
@@ -9061,6 +9062,7 @@ describeEmbeddedPostgres("tool access service", () => {
     const connected = await service.connectGalleryApp(company.id, {
       galleryKey: "slack",
       name: "Slack user auth",
+      grantKind: "organization",
     });
 
     const workspaceStarted = await service.startOAuth(
@@ -10234,6 +10236,7 @@ describeEmbeddedPostgres("tool access service", () => {
         status: "draft",
         enabled: false,
         ownership: "platform_shared",
+        credentialPolicy: "per_user",
         credentialSecretRefs: [],
         config: expect.objectContaining({
           sourceTemplateKey: "slack",
@@ -10272,6 +10275,7 @@ describeEmbeddedPostgres("tool access service", () => {
       expect(ownAppConnectRes.status).toBe(201);
       expect(ownAppConnectRes.body.connection).toMatchObject({
         ownership: "customer",
+        credentialPolicy: "per_user",
         config: expect.objectContaining({
           connectionMethodKey: "mcp-oauth",
           oauth: expect.objectContaining({
@@ -10323,8 +10327,12 @@ describeEmbeddedPostgres("tool access service", () => {
           if (href === "https://slack.com/api/oauth.v2.user.access") {
             const body = init?.body as URLSearchParams;
             expect(body.get("grant_type")).toBe("authorization_code");
-            expect(body.get("code")).toBe("oauth-code");
-            expect(body.get("client_secret")).toBe("slack-client-secret");
+            expect(["oauth-code", "extra-scope-code"]).toContain(body.get("code"));
+            expect(body.get("client_secret")).toBe(
+              body.get("code") === "oauth-code"
+                ? "slack-client-secret"
+                : "customer-slack-client-secret",
+            );
             expect(body.get("code_verifier")).toBeTruthy();
             expect(body.get("redirect_uri")).toBe(
               `${origin}/api/tools/oauth/callback`,
@@ -10337,7 +10345,9 @@ describeEmbeddedPostgres("tool access service", () => {
                 refresh_token: "refresh-token",
                 expires_in: 3600,
                 token_type: "Bearer",
-                scope: "channels:history,channels:read,chat:write,groups:history,groups:read,im:history,im:read,mpim:history,mpim:read,search:read.im,search:read.mpim,search:read.private,search:read.public",
+                scope: body.get("code") === "extra-scope-code"
+                  ? "channels:history,channels:read,chat:write,groups:history,groups:read,im:history,im:read,mpim:history,mpim:read,search:read.im,search:read.mpim,search:read.private,search:read.public,admin:everything"
+                  : "channels:history,channels:read,chat:write,groups:history,groups:read,im:history,im:read,mpim:history,mpim:read,search:read.im,search:read.mpim,search:read.private,search:read.public",
               }),
             } as Response;
           }
@@ -10373,11 +10383,12 @@ describeEmbeddedPostgres("tool access service", () => {
         .query({ state, code: "oauth-code" });
 
       expect(callbackRes.status).toBe(200);
-      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
       expect(callbackRes.body.connection).toMatchObject({
         id: connectRes.body.connectionId,
         status: "active",
         enabled: true,
+        credentialPolicy: "per_user",
         config: expect.objectContaining({
           oauth: expect.objectContaining({
             provider: "slack",
@@ -10389,31 +10400,52 @@ describeEmbeddedPostgres("tool access service", () => {
             ],
           }),
         }),
-        credentialSecretRefs: [
-          expect.objectContaining({
-            configPath: "oauth.access_token",
-            label: "OAuth access token",
-          }),
-          expect.objectContaining({
-            configPath: "oauth.refresh_token",
-            label: "OAuth refresh token",
-          }),
-        ],
+        credentialSecretRefs: [],
       });
       const [slackGrant] = await db
         .select()
         .from(connectionGrants)
         .where(eq(connectionGrants.connectionId, connectRes.body.connectionId));
-      expect(slackGrant?.providerTenant).toMatchObject({
-        oauth: {
-          scopes: [
-            "channels:history", "channels:read", "chat:write",
-            "groups:history", "groups:read", "im:history", "im:read",
-            "mpim:history", "mpim:read", "search:read.im",
-            "search:read.mpim", "search:read.private", "search:read.public",
-          ],
+      expect(slackGrant).toMatchObject({
+        kind: "user",
+        subjectUserId: "board-user",
+        status: "active",
+        providerTenant: {
+          oauth: {
+            scopes: [
+              "channels:history", "channels:read", "chat:write",
+              "groups:history", "groups:read", "im:history", "im:read",
+              "mpim:history", "mpim:read", "search:read.im",
+              "search:read.mpim", "search:read.private", "search:read.public",
+            ],
+          },
         },
+        credentialSecretRefs: [
+          expect.objectContaining({ configPath: "oauth.access_token", label: "OAuth access token" }),
+          expect.objectContaining({ configPath: "oauth.refresh_token", label: "OAuth refresh token" }),
+        ],
       });
+      const ownAppDenied = await request(app)
+        .get("/api/tools/oauth/callback")
+        .set("Host", new URL(origin).host)
+        .query({
+          state: ownAppStartUrl.searchParams.get("state"),
+          code: "extra-scope-code",
+        });
+      expect(ownAppDenied.status).toBe(403);
+      expect(ownAppDenied.body.error).toBe(
+        "Slack returned permissions outside the consent request",
+      );
+      const [stillDraftOwnApp] = await db
+        .select()
+        .from(toolConnections)
+        .where(eq(toolConnections.id, ownAppConnectRes.body.connectionId));
+      expect(stillDraftOwnApp).toMatchObject({
+        status: "draft",
+        credentialPolicy: "per_user",
+        credentialSecretRefs: [],
+      });
+      expect(JSON.stringify(stillDraftOwnApp.config)).not.toContain("access-token");
       expect(callbackRes.body.actions.readOnly).toEqual([
         expect.objectContaining({
           toolName: "search_messages",
@@ -10447,11 +10479,23 @@ describeEmbeddedPostgres("tool access service", () => {
       expect(redirectCallbackRes.headers.location).toBe(
         `/${company.issuePrefix}/apps/${redirectConnectRes.body.connectionId}/permissions?success=1`,
       );
-      expect(fetchMock).toHaveBeenCalledTimes(6);
-      await expect(db.select().from(toolOauthStates)).resolves.toHaveLength(0);
+      expect(fetchMock).toHaveBeenCalledTimes(5);
+      const remainingOAuthStateConnections = await db
+        .select({ connectionId: toolOauthStates.connectionId })
+        .from(toolOauthStates);
+      expect(remainingOAuthStateConnections).toEqual([]);
       await expect(
-        db.select().from(companySecretBindings),
-      ).resolves.toHaveLength(6);
+        db
+          .select()
+          .from(companySecretBindings)
+          .where(
+            and(
+              eq(companySecretBindings.companyId, company.id),
+              eq(companySecretBindings.targetType, "tool_connection"),
+              eq(companySecretBindings.targetId, connectRes.body.connectionId),
+            ),
+          ),
+      ).resolves.toHaveLength(0);
       const [connection] = await db
         .select()
         .from(toolConnections)
@@ -12001,6 +12045,7 @@ describeEmbeddedPostgres("tool access service", () => {
     const connect = await service.connectGalleryApp(company.id, {
       galleryKey: "slack",
       name: "Slack refresh",
+      grantKind: "organization",
     });
     const start = await service.startOAuth(company.id, connect.connectionId, {
       redirectUri: "http://paperclip.test/api/tools/oauth/callback",
@@ -12147,6 +12192,7 @@ describeEmbeddedPostgres("tool access service", () => {
     const connect = await service.connectGalleryApp(company.id, {
       galleryKey: "slack",
       name: "Slack invalid grant",
+      grantKind: "organization",
     });
     const start = await service.startOAuth(company.id, connect.connectionId, {
       redirectUri: "http://paperclip.test/api/tools/oauth/callback",
@@ -12270,6 +12316,7 @@ describeEmbeddedPostgres("tool access service", () => {
     const connect = await service.connectGalleryApp(company.id, {
       galleryKey: "slack",
       name: "Slack stale invalid grant",
+      grantKind: "organization",
     });
     const start = await service.startOAuth(company.id, connect.connectionId, {
       redirectUri: "http://paperclip.test/api/tools/oauth/callback",
@@ -12518,6 +12565,7 @@ describeEmbeddedPostgres("tool access service", () => {
     const connect = await service.connectGalleryApp(company.id, {
       galleryKey: "slack",
       name: "Slack no refresh",
+      grantKind: "organization",
     });
     const start = await service.startOAuth(company.id, connect.connectionId, {
       redirectUri: "http://paperclip.test/api/tools/oauth/callback",
