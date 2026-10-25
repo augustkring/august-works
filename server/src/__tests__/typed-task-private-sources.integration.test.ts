@@ -29,6 +29,9 @@ import { errorHandler } from "../middleware/error-handler.js";
 import { lockMemoryPrivacy, purgeDerivedWorkflowMemory } from "../services/memory/memory-privacy.js";
 import { routineAuthoringToolsService } from "../services/routine-authoring-tools.js";
 import { routineService } from "../services/routines.js";
+import { workflowAuthoringToolsService } from "../services/workflows/workflow-authoring-tools.js";
+import { workflowService } from "../services/workflows/workflow-service.js";
+import { workflowExecutorService } from "../services/workflows/workflow-executor.js";
 import { grantsForHumanRole } from "../services/company-member-roles.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
@@ -107,6 +110,42 @@ describe("typed routine Task private source graph", () => {
       originKind: "routine_execution", originId: source.routineId, originRunId: source.run.id,
       createdByUserId: f.userId, responsibleUserId: f.userId, actorResponsibleUserId: f.userId,
       trustExplicitResponsibleUserId: true }, db, undefined, { privacyActor: ownerActor() });
+  }
+
+  async function createWorkflowTask(userId: string, sourceRunId: string, title: string, projectId: string) {
+    const actor = { principal: { type: "user" as const, userId } };
+    const created = await workflowAuthoringToolsService(db).create(
+      { companyId: f.home, agentId: f.presence.id, runId: sourceRunId },
+      { name: `${title} workflow`, idempotencyKey: randomUUID() },
+    );
+    const owner = workflowService(db);
+    const changed = await owner.updateDraft(f.home, created.workflow.id, {
+      expectedRevisionId: created.workflow.draftRevisionId!,
+      graph: {
+        version: 1,
+        nodes: [
+          { id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} },
+          { id: "task", type: "work.create_task", name: title, position: { x: 0, y: 1 }, config: {
+            title, description: `${title} private detail`, projectId, assigneeAgentId: null,
+            assigneeUserId: userId, waitForCompletion: false,
+          } },
+        ],
+        edges: [{ id: "to-task", source: "start", target: "task" }],
+        variables: [],
+        settings: { totalDeadlineSeconds: 60 },
+      },
+    }, actor);
+    const published = await owner.publish(f.home, changed.id, {
+      expectedDraftRevisionId: changed.draftRevisionId!, expectedPublishedRevisionId: null,
+    }, actor);
+    const execution = await workflowExecutorService(db).startManualRun(
+      f.home, published.id, { input: {} }, actor, randomUUID(),
+    );
+    const [task] = await db.select().from(issues).where(and(
+      eq(issues.companyId, f.home), eq(issues.originKind, "workflow_task"), eq(issues.originRunId, execution.run.id),
+    ));
+    if (!task) throw new Error("Canonical Workflow execution did not create its configured Task");
+    return { task, workflowId: created.workflow.id, runId: execution.run.id };
   }
 
   const ownerActor = () => f.actor;
@@ -195,6 +234,103 @@ describe("typed routine Task private source graph", () => {
       });
     });
   }, 90_000);
+
+  it("filters mixed private Workflow Tasks for each current source owner before list, count, Find, and project metrics", async () => {
+    await instanceSettingsService(db).updateExperimental({
+      enableWorkflowsV1: true, enableWorkflowBuilderV1: true, enableAiWorkflowAuthoring: true, enableAgentChat: true,
+    });
+    await db.insert(companyMemberships).values({ companyId: f.home, principalType: "agent", principalId: f.presence.id,
+      status: "active" }).onConflictDoNothing();
+    const workflowPermissions = ["workflows:read", "workflows:edit", "workflows:publish", "workflows:run"];
+    await db.insert(principalPermissionGrants).values([
+      ...workflowPermissions.map(permissionKey => ({ companyId: f.home, principalType: "agent" as const,
+        principalId: f.presence.id, permissionKey })),
+      ...[f.userId, bobId].flatMap(userId => workflowPermissions.map(permissionKey => ({ companyId: f.home,
+        principalType: "user" as const, principalId: userId, permissionKey }))),
+    ]).onConflictDoNothing();
+
+    const ownerHttp = appFor(ownerActor());
+    const bobHttp = appFor(bobActor());
+    const projectResponse = await ownerHttp.post(`/api/companies/${f.home}/projects`)
+      .send({ name: "Mixed Workflow source boundary" }).expect(201);
+    const projectId = projectResponse.body.id as string;
+
+    const bobConversation = await issueService(db).create(f.home, {
+      title: "Private Bob Workflow source conversation", assigneeAgentId: f.presence.id,
+      conversationAgentId: f.presence.id, conversationUserId: bobId, conversationState: "active",
+      status: "in_progress", createdByUserId: bobId, responsibleUserId: bobId,
+    }, db, undefined, { privacyActor: bobActor() });
+    const [bobAuthoringRun] = await db.insert(heartbeatRuns).values({ companyId: f.home,
+      agentId: f.presence.id, responsibleUserId: bobId, nativeIssueId: bobConversation.id, runtimeMode: "native",
+      status: "running", contextSnapshot: { conversationSessionGeneration: 0 } }).returning();
+    await db.update(issues).set({ executionRunId: bobAuthoringRun!.id }).where(eq(issues.id, bobConversation.id));
+
+    const ownerTask = await createWorkflowTask(f.userId, authoringRunId, "Owner private Workflow Task", projectId);
+    const bobTask = await createWorkflowTask(bobId, bobAuthoringRun!.id, "Bob private Workflow Task", projectId);
+    for (const task of [ownerTask.task, bobTask.task]) {
+      expect(await db.select().from(issuePrivacySources).where(and(eq(issuePrivacySources.issueId, task.id),
+        eq(issuePrivacySources.sourceKind, "workflow_run"), eq(issuePrivacySources.sourceId, task.originRunId!)))).toHaveLength(1);
+      await db.update(issues).set({ status: "blocked" }).where(eq(issues.id, task.id));
+    }
+    const routineSource = await createRoutineAndRun("workflow-mixed-routine-source");
+    const ownerRoutineTask = await createTypedTask(routineSource, { projectId, status: "blocked" });
+    expect(await canActorReadTypedTaskSourcePrivacy(db, ownerActor(), {
+      sourceKind: "workflow_run", id: ownerTask.runId, companyId: f.home,
+    })).toBe(true);
+    await expect(canActorReadTypedTaskSourcePrivacy(db, ownerActor(), {
+      sourceKind: "workflow_run", id: bobTask.runId, companyId: f.home,
+    })).rejects.toMatchObject({ status: 403 });
+    expect(await canActorReadTypedTaskSourcePrivacy(db, bobActor(), {
+      sourceKind: "workflow_run", id: bobTask.runId, companyId: f.home,
+    })).toBe(true);
+    await expect(canActorReadTypedTaskSourcePrivacy(db, bobActor(), {
+      sourceKind: "workflow_run", id: ownerTask.runId, companyId: f.home,
+    })).rejects.toMatchObject({ status: 403 });
+
+    // The inaccessible row is first in storage order for the other reader.
+    // Correct SQL-before-limit filtering must still return the sole readable Task.
+    const baseTime = Date.now();
+    await db.update(issues).set({ updatedAt: new Date(baseTime + 5_000) }).where(eq(issues.id, bobTask.task.id));
+    await db.update(issues).set({ updatedAt: new Date(baseTime + 4_000) }).where(eq(issues.id, ownerTask.task.id));
+    const listQuery = { projectId, originKind: "workflow_task", sortField: "updated", sortDir: "desc", limit: 1 };
+    const ownerList = await ownerHttp.get(`/api/companies/${f.home}/issues`).query(listQuery).expect(200);
+    const bobList = await bobHttp.get(`/api/companies/${f.home}/issues`).query(listQuery).expect(200);
+    expect(ownerList.body.map((row: { id: string }) => row.id)).toEqual([ownerTask.task.id]);
+    expect(bobList.body.map((row: { id: string }) => row.id)).toEqual([bobTask.task.id]);
+
+    const ownerCount = await ownerHttp.get(`/api/companies/${f.home}/issues/count`)
+      .query({ attention: "blocked", projectId, originKind: "workflow_task" }).expect(200);
+    const bobCount = await bobHttp.get(`/api/companies/${f.home}/issues/count`)
+      .query({ attention: "blocked", projectId, originKind: "workflow_task" }).expect(200);
+    expect(ownerCount.body.count).toBe(1);
+    expect(bobCount.body.count).toBe(1);
+
+    const ownerSearch = await ownerHttp.get(`/api/companies/${f.home}/search`)
+      .query({ q: "private Workflow Task", scope: "issues" }).expect(200);
+    const bobSearch = await bobHttp.get(`/api/companies/${f.home}/search`)
+      .query({ q: "private Workflow Task", scope: "issues" }).expect(200);
+    const ownerExtract = await ownerHttp.get(`/api/companies/${f.home}/search/extract`)
+      .query({ contains: "private Workflow Task", scope: "issues" }).expect(200);
+    const bobExtract = await bobHttp.get(`/api/companies/${f.home}/search/extract`)
+      .query({ contains: "private Workflow Task", scope: "issues" }).expect(200);
+    expect(JSON.stringify(ownerSearch.body.results)).toContain("Owner private Workflow Task");
+    expect(JSON.stringify(ownerSearch.body.results)).not.toContain("Bob private Workflow Task");
+    expect(JSON.stringify(bobSearch.body.results)).toContain("Bob private Workflow Task");
+    expect(JSON.stringify(bobSearch.body.results)).not.toContain("Owner private Workflow Task");
+    expect(ownerSearch.body.countsByType.issue).toBe(1);
+    expect(bobSearch.body.countsByType.issue).toBe(1);
+    expect(JSON.stringify(ownerExtract.body.results)).toContain("Owner private Workflow Task");
+    expect(JSON.stringify(ownerExtract.body.results)).not.toContain("Bob private Workflow Task");
+    expect(JSON.stringify(bobExtract.body.results)).toContain("Bob private Workflow Task");
+    expect(JSON.stringify(bobExtract.body.results)).not.toContain("Owner private Workflow Task");
+
+    const ownerProject = (await ownerHttp.get(`/api/companies/${f.home}/projects`).expect(200)).body
+      .find((row: { id: string }) => row.id === projectId);
+    const bobProject = (await bobHttp.get(`/api/companies/${f.home}/projects`).expect(200)).body
+      .find((row: { id: string }) => row.id === projectId);
+    expect(ownerProject?.taskCount).toBe(2);
+    expect(bobProject?.taskCount).toBe(1);
+  }, 180_000);
 
   it("keeps assigned narrow Agent Task reads available while withholding private Routine-backed rows", async () => {
     const ownerHttp = appFor(ownerActor());

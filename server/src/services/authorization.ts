@@ -952,9 +952,9 @@ type ReadSourceDecisionInput = {
 export type NativeContextInspectionOwner = { decide(input: ReadSourceDecisionInput): Promise<AuthorizationDecision> };
 type ReadSourceOwner = NativeContextInspectionOwner & {
   readRoutineSources?(runIds: string[], actor: AuthorizationActor): Promise<string[]>;
-  readWorkflowSources?(runIds: string[], actor: AuthorizationActor): Promise<string[]>;
+  readWorkflowSources?(runIds: string[], actor: AuthorizationActor, mode?: "strict" | "task_candidates"): Promise<string[]>;
 };
-type ReadScopePurpose = "task_sources" | "company_search" | "context_inspection" | "routine_sources" | "workflow_sources";
+type ReadScopePurpose = "task_sources" | "company_search" | "context_inspection" | "routine_sources" | "workflow_sources" | "workflow_task_candidates";
 type ReadSourceRows = {
   companyId: string;
   agentId: string | null;
@@ -971,6 +971,7 @@ type ReadSourceRows = {
   routineScopeToken?: string;
   workflowRunIds?: Set<string>;
   workflowSourceCheckRunIds?: Set<string>;
+  workflowReadableRunIds?: Set<string>;
   workflowActorKey?: string;
   workflowScopeToken?: string;
 };
@@ -1065,7 +1066,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       projects: new Map(locked && purpose !== "context_inspection" ? requestedProjects.map(id => [id, null]) : []),
     };
     if (purpose === "routine_sources") context.routineScopeToken = randomUUID();
-    if (purpose === "workflow_sources") context.workflowScopeToken = randomUUID();
+    if (purpose === "workflow_sources" || purpose === "workflow_task_candidates") context.workflowScopeToken = randomUUID();
     const owner: ReadSourceOwner = createAuthorizationService(db, context);
     owner.readRoutineSources = async (runIds, actor) => {
       if (purpose !== "routine_sources" || !locked || !context.active || context.companyId !== companyId)
@@ -1146,8 +1147,9 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       await db.execute(sql`select set_config('paperclip.native_routine_source_ids', ${[...authorized].join(",")}, true)`);
       return [...authorized];
     };
-    owner.readWorkflowSources = async (runIds, actor) => {
-      if (purpose !== "workflow_sources" || !locked || !context.active || context.companyId !== companyId || !context.workflowScopeToken)
+    owner.readWorkflowSources = async (runIds, actor, mode = "strict") => {
+      const taskCandidates = purpose === "workflow_task_candidates" && mode === "task_candidates";
+      if ((purpose !== "workflow_sources" && !taskCandidates) || !locked || !context.active || context.companyId !== companyId || !context.workflowScopeToken)
         throw forbidden("Private Workflow reads require their original native source scope.");
       if (runIds.length > 256 || new Set(runIds).size !== runIds.length ||
         runIds.some(id => !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)))
@@ -1166,28 +1168,45 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       const { assertWorkflowRunPayloadSourceAccess, withWorkflowAuthoringSourceReview } = await import("./workflows/workflow-authoring-sources.js");
       if (!company?.allowed) {
         await requireActiveWorkflowBaselineMembership(db, companyId, sourceActor);
+        const readable = new Set<string>();
         await withWorkflowAuthoringSourceReview(async () => {
           for (const runId of runIds) {
             const publicBaseline = await canActorReadTypedTaskSourcePrivacy(db as unknown as Db, { type: "none" },
               { sourceKind: "workflow_run", id: runId, companyId });
-            if (!publicBaseline) throw forbidden("Current Workflow source access is unavailable.", { code: "analytical_source_access_lost" });
-            await assertWorkflowRunPayloadSourceAccess(db as unknown as Db, companyId, runId, sourceActor);
+            if (!publicBaseline) {
+              if (taskCandidates) continue;
+              throw forbidden("Current Workflow source access is unavailable.", { code: "analytical_source_access_lost" });
+            }
+            try {
+              await assertWorkflowRunPayloadSourceAccess(db as unknown as Db, companyId, runId, sourceActor);
+              readable.add(runId);
+            } catch (error) {
+              if (taskCandidates && error instanceof HttpError && [403, 404, 409, 422].includes(error.status)) continue;
+              throw error;
+            }
           }
         });
         context.workflowRunIds = new Set();
         context.workflowSourceCheckRunIds = new Set(runIds);
+        context.workflowReadableRunIds = taskCandidates ? readable : new Set(runIds);
         await db.execute(sql`select set_config('paperclip.native_workflow_run_ids', '', true)`);
-        return [...runIds];
+        return [...(context.workflowReadableRunIds ?? [])].sort();
       }
       const authorized = new Set<string>();
       await withWorkflowAuthoringSourceReview(async () => {
         for (const runId of runIds) {
-          await assertWorkflowRunPayloadSourceAccess(db as unknown as Db, companyId, runId, sourceActor, "task");
-          authorized.add(runId);
+          try {
+            await assertWorkflowRunPayloadSourceAccess(db as unknown as Db, companyId, runId, sourceActor, "task");
+            authorized.add(runId);
+          } catch (error) {
+            if (taskCandidates && error instanceof HttpError && [403, 404, 409, 422].includes(error.status)) continue;
+            throw error;
+          }
         }
       });
       context.workflowRunIds = authorized;
-      context.workflowSourceCheckRunIds = new Set(authorized);
+      context.workflowSourceCheckRunIds = new Set(runIds);
+      context.workflowReadableRunIds = new Set(authorized);
       await db.execute(sql`select set_config('paperclip.native_workflow_run_ids', ${[...authorized].sort().join(",")}, true)`);
       return [...authorized];
     };
@@ -1215,7 +1234,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     for (const row of projectRows) context.projects.set(row.id, row);
     try {
       if (purpose === "routine_sources") nativeRoutineReadScopes.set(db as object, context);
-      if (purpose === "workflow_sources") nativeWorkflowReadScopes.set(db as object, context);
+      if (purpose === "workflow_sources" || purpose === "workflow_task_candidates") nativeWorkflowReadScopes.set(db as object, context);
       const result = await read(owner);
       if (purpose === "routine_sources" && context.routineActor) {
         const before = [...(context.routineRunIds ?? [])].sort();
@@ -1224,8 +1243,17 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
           throw forbidden("Current Routine source authority changed during the read.");
       }
       if (purpose === "workflow_sources" && context.workflowActorKey) {
-        const before = [...(context.workflowSourceCheckRunIds ?? context.workflowRunIds ?? [])].sort();
-        const after = await owner.readWorkflowSources!(before, preflightActor!);
+        const candidates = [...(context.workflowSourceCheckRunIds ?? context.workflowRunIds ?? [])].sort();
+        const before = [...(context.workflowReadableRunIds ?? context.workflowRunIds ?? [])].sort();
+        const after = await owner.readWorkflowSources!(candidates, preflightActor!);
+        const sortedAfter = [...after].sort();
+        if (before.length !== sortedAfter.length || before.some((id, index) => id !== sortedAfter[index]))
+          throw forbidden("Current Workflow source authority changed during the read.");
+      }
+      if (purpose === "workflow_task_candidates" && context.workflowActorKey) {
+        const candidates = [...(context.workflowSourceCheckRunIds ?? [])].sort();
+        const before = [...(context.workflowReadableRunIds ?? [])].sort();
+        const after = await owner.readWorkflowSources!(candidates, preflightActor!, "task_candidates");
         const sortedAfter = [...after].sort();
         if (before.length !== sortedAfter.length || before.some((id, index) => id !== sortedAfter[index]))
           throw forbidden("Current Workflow source authority changed during the read.");
@@ -1251,7 +1279,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
           context.active = false;
           if (nativeRoutineReadScopes.get(db as object) === context) nativeRoutineReadScopes.delete(db as object);
         }
-      } else if (purpose === "workflow_sources") {
+      } else if (purpose === "workflow_sources" || purpose === "workflow_task_candidates") {
         try { await db.execute(sql`select set_config('paperclip.native_workflow_run_ids', '', true),
           set_config('paperclip.native_workflow_actor_hash', '', true),
           set_config('paperclip.native_workflow_scope_token', '', true)`); }
@@ -1293,7 +1321,9 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       owner.readWorkflowSources = async (ids, currentActor) => {
         if (!existing.active || currentActor.type === "none" || !existing.workflowScopeToken)
           throw forbidden("Nested Workflow source authority is unavailable.");
-        const combined = [...new Set([...(existing.workflowSourceCheckRunIds ?? existing.workflowRunIds ?? []), ...ids])].sort();
+        const candidates = new Set(existing.workflowSourceCheckRunIds ?? existing.workflowRunIds ?? []);
+        const currentlyReadable = existing.workflowReadableRunIds ?? existing.workflowRunIds ?? new Set<string>();
+        const combined = [...new Set([...currentlyReadable, ...ids])].sort();
         if (!combined.length || combined.length > 256) throw forbidden("The complete nested Workflow source population exceeds its bound.");
         await db.execute(sql`select set_config('paperclip.native_workflow_run_ids', '', true),
           set_config('paperclip.native_workflow_actor_hash', ${workflowActorHash(currentActor)}, true),
@@ -1314,7 +1344,9 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
             }
           });
           existing.workflowRunIds = new Set();
-          existing.workflowSourceCheckRunIds = new Set(combined);
+          combined.forEach(id => candidates.add(id));
+          existing.workflowSourceCheckRunIds = candidates;
+          existing.workflowReadableRunIds = new Set(combined);
           existing.credentialUserId = sourceActor.type === "board" ? sourceActor.userId ?? null
             : sourceActor.type === "agent" ? sourceActor.onBehalfOfUserId ?? null : null;
           await db.execute(sql`select set_config('paperclip.native_workflow_run_ids', '', true)`);
@@ -1324,7 +1356,9 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
           for (const id of combined) await assertWorkflowRunPayloadSourceAccess(db as unknown as Db, companyId, id, sourceActor, "task");
         });
         existing.workflowRunIds = new Set(combined);
-        existing.workflowSourceCheckRunIds = new Set(combined);
+        combined.forEach(id => candidates.add(id));
+        existing.workflowSourceCheckRunIds = candidates;
+        existing.workflowReadableRunIds = new Set(combined);
         existing.credentialUserId = sourceActor.type === "board" ? sourceActor.userId ?? null
           : sourceActor.type === "agent" ? sourceActor.onBehalfOfUserId ?? null : null;
         await db.execute(sql`select set_config('paperclip.native_workflow_run_ids', ${combined.join(",")}, true)`);
@@ -1341,6 +1375,23 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     return withReadScope(companyId, [], [], "workflow_sources", async owner => {
       if (!owner.readWorkflowSources) throw forbidden("Private Workflow reader is unavailable.");
       await owner.readWorkflowSources(runIds, actor);
+      return read(owner);
+    }, null, actor);
+  }
+  /** Route-only candidate filtering: unlike explicit Workflow source reads,
+   * inaccessible candidate Runs are withheld individually before list/count
+   * limits. The complete candidate population is rechecked before return. */
+  async function withReadWorkflowTaskCandidates<T>(companyId: string, actor: AuthorizationActor, runIds: string[],
+    read: (owner: ReadSourceOwner) => Promise<T>) {
+    if (!is(db, PgTransaction)) throw forbidden("Workflow Task candidate reads require a native transaction.");
+    if (nativeWorkflowReadScopes.get(db as object)?.active || nativeRoutineReadScopes.get(db as object)?.active)
+      throw forbidden("Nested Workflow Task candidate scopes are unavailable.");
+    if (runIds.length > 256 || new Set(runIds).size !== runIds.length ||
+      runIds.some(id => !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)))
+      throw forbidden("The native Workflow Task candidate population is incomplete.");
+    return withReadScope(companyId, [], [], "workflow_task_candidates", async owner => {
+      if (!owner.readWorkflowSources) throw forbidden("Private Workflow Task candidate reader is unavailable.");
+      await owner.readWorkflowSources(runIds, actor, "task_candidates");
       return read(owner);
     }, null, actor);
   }
@@ -3324,7 +3375,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       );
       const routineSourceRead = readSources.purpose === "routine_sources" && input.action === "company_scope:read"
         && input.resource.type === "company" && (!input.scope || Object.keys(input.scope).length === 0);
-      const workflowSourceRead = readSources.purpose === "workflow_sources" && input.action === "company_scope:read"
+      const workflowSourceRead = (readSources.purpose === "workflow_sources" || readSources.purpose === "workflow_task_candidates") && input.action === "company_scope:read"
         && input.resource.type === "company" && (!input.scope || Object.keys(input.scope).length === 0);
       const routineAgentRead = readSources.purpose === "routine_sources" && input.action === "agent:read"
         && input.resource.type === "agent" && Boolean(input.resource.agentId && readSources.routineAgentIds?.has(input.resource.agentId));
@@ -3333,7 +3384,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       const readScopeAllows = readSources.purpose === "company_search" ? companySearchRead
         : readSources.purpose === "context_inspection" ? contextInspectionRead
           : readSources.purpose === "routine_sources" ? routineSourceRead || routineAgentRead || routineIssueRead
-            : readSources.purpose === "workflow_sources" ? workflowSourceRead
+            : readSources.purpose === "workflow_sources" || readSources.purpose === "workflow_task_candidates" ? workflowSourceRead
             : (["issue:read", "project:read"].includes(input.action) || foundationRead);
       if (companyIdForResource(input.resource) !== readSources.companyId || !readScopeAllows) {
         return deny({ action: input.action, reason: "deny_scope", explanation: "This native Source row scope admits same-company reads only." });
@@ -3366,7 +3417,8 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       // A source label alone does not prove an HTTP credential was verified.
       const credential = input.actor.keyId != null || input.actor.authenticatedKeyHash != null
         || input.actor.authenticatedCredentialExpiresAt != null || input.actor.sessionId != null || input.actor.source === "board_key";
-      if (input.action === "foundation:read" || readSources.purpose === "company_search" || readSources.purpose === "workflow_sources" || credential) {
+      if (input.action === "foundation:read" || readSources.purpose === "company_search" || readSources.purpose === "workflow_sources"
+        || readSources.purpose === "workflow_task_candidates" || credential) {
         const actor = await pinReadSourceActor(input.actor, readSources.companyId);
         if (!actor) return deny({ action: input.action, reason: "deny_unauthenticated", explanation: "Current native Source principal is unavailable." });
         readSources.credentialUserId = actor.type === "board" ? actor.userId ?? null
@@ -3409,6 +3461,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     withReadCompany,
     withReadRoutineSources,
     withReadWorkflowSources,
+    withReadWorkflowTaskCandidates,
     withReadContextInspection,
   };
 }

@@ -8359,7 +8359,7 @@ export function issueRoutes(
       db,
       companyId,
       req.actor,
-      async (queryDb, hasRoutineReferences) => {
+      async (queryDb, hasTaskSourceReferences) => {
         const queryService = issueService(queryDb);
         const scopedListFilters: IssueFilters = {
           ...listFilters,
@@ -8369,8 +8369,8 @@ export function issueRoutes(
           req,
           companyId,
           requestKey,
-          allowTtlCache: compactView && !hasRoutineReferences,
-          bypassSharedResult: hasRoutineReferences,
+          allowTtlCache: compactView && !hasTaskSourceReferences,
+          bypassSharedResult: hasTaskSourceReferences,
           diagnostics: opts.issueListDiagnostics,
           compute: async () => {
         const rawResult = await queryService.list(companyId, scopedListFilters);

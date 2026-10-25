@@ -9,14 +9,13 @@ import {
 import { forbidden } from "../errors.js";
 
 /** Run a route's Task/Project SQL reads inside the original native read scope.
- * Private Routine IDs are only candidate hints: withReadRoutineSources pins
- * and rechecks the current Routine, revision, authoring conversation and
- * Human credential before and after the caller's SQL executes. */
+ * Typed run IDs are candidate hints only: the original Routine/Workflow owners
+ * pin and recheck current source policy before and after the caller's SQL. */
 export async function withCurrentTaskSourceRead<T>(
   db: Db,
   companyId: string,
   actor: AuthorizationActor,
-  read: (queryDb: Db, hasRoutineCandidates: boolean) => Promise<T>,
+  read: (queryDb: Db, hasTaskSourceReferences: boolean) => Promise<T>,
   includeTaskSources = true,
   requireCompanyScope = true,
 ): Promise<T> {
@@ -47,37 +46,51 @@ export async function withCurrentTaskSourceRead<T>(
         return read(tx, false);
       }
 
+      await tx.execute(sql`set local statement_timeout='8s'`);
+
       // This is the existing complete-candidate enumeration used by Find.
       // The cap is deliberately fail-closed: a truncated set cannot become an
       // incomplete authorization scope for SQL-before-limit Task reads.
       const sourceRows = await tx.execute<{
-        ids: string[];
+        routineIds: string[];
+        workflowIds: string[];
         overflow: boolean;
-        hasRoutineReferences: boolean;
+        hasTaskSourceReferences: boolean;
       }>(sql`
-        with referenced as materialized (
-          select case when i.origin_run_id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+        with typed_references as materialized (
+          select 'routine_run'::text as kind, case when i.origin_run_id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
             then i.origin_run_id::uuid end as id
           from issues i where i.company_id=${companyId} and i.origin_kind='routine_execution'
-          union
-          select s.source_id as id from issue_privacy_sources s
+          union all
+          select 'workflow_run', case when i.origin_run_id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+            then i.origin_run_id::uuid end
+          from issues i where i.company_id=${companyId} and i.origin_kind='workflow_task'
+          union all
+          select s.source_kind, s.source_id from issue_privacy_sources s
             join issues i on i.company_id=s.company_id and i.id=s.issue_id
-            where s.company_id=${companyId} and s.source_kind='routine_run'
+            where s.company_id=${companyId} and s.source_kind in ('routine_run','workflow_run')
+        ), referenced as materialized (
+          select distinct kind,id from typed_references where id is not null
         ), conversation_runs as materialized (
           select distinct r.id from referenced ref
             join routine_runs r on r.id=ref.id and r.company_id=${companyId}
             join routines p on p.id=r.routine_id and p.company_id=r.company_id
-            where p.origin_kind='conversation_draft'
-        ), bounded as materialized (
+            where ref.kind='routine_run' and p.origin_kind='conversation_draft'
+        ), bounded_routines as materialized (
           select id from conversation_runs order by id limit 257
+        ), workflow_runs as materialized (
+          select distinct id from referenced where kind='workflow_run'
+        ), bounded_workflows as materialized (
+          select id from workflow_runs order by id limit 257
         )
-        select coalesce(array_agg(id::text order by id),array[]::text[]) as ids,
-          count(*)>256 as overflow,
-          exists(select 1 from referenced) as "hasRoutineReferences"
-        from bounded
+        select coalesce((select array_agg(id::text order by id) from bounded_routines),array[]::text[]) as "routineIds",
+          coalesce((select array_agg(id::text order by id) from bounded_workflows),array[]::text[]) as "workflowIds",
+          (select count(*)>256 from bounded_routines) or (select count(*)>256 from bounded_workflows) as overflow,
+          exists(select 1 from typed_references) as "hasTaskSourceReferences"
       `);
-      const routineRunIds = sourceRows[0]?.ids ?? [];
-      const hasRoutineReferences = sourceRows[0]?.hasRoutineReferences === true;
+      const routineRunIds = sourceRows[0]?.routineIds ?? [];
+      const workflowRunIds = sourceRows[0]?.workflowIds ?? [];
+      const hasTaskSourceReferences = sourceRows[0]?.hasTaskSourceReferences === true;
       if (sourceRows[0]?.overflow) {
         throw forbidden(
           "Task sources are unavailable for a complete current access review.",
@@ -88,10 +101,10 @@ export async function withCurrentTaskSourceRead<T>(
       // When a Routine source candidate is present, a board actor without
       // company scope still needs the original native identity/deadline
       // fence before it can read any Task rows. This pin grants no permission.
-      const boardPin = routineRunIds.length && !decision.allowed && actor.type === "board"
+      const boardPin = (routineRunIds.length || workflowRunIds.length) && !decision.allowed && actor.type === "board"
         ? await pinCurrentBoardActor(tx, actor)
         : null;
-      if (routineRunIds.length && !decision.allowed && actor.type === "board" && !boardPin) {
+      if ((routineRunIds.length || workflowRunIds.length) && !decision.allowed && actor.type === "board" && !boardPin) {
         throw forbidden("Current organization access is required");
       }
       const preserveBoardDeadline = async <R>(operation: Promise<R>) => {
@@ -105,16 +118,28 @@ export async function withCurrentTaskSourceRead<T>(
         return value;
       };
 
-      const readInsideCurrentSources = () => read(tx, hasRoutineReferences);
-      const result = routineRunIds.length && decision.allowed
-        ? authorizationService(tx).withReadRoutineSources(
+      const sourceReviewDeadline = performance.now() + 8_000;
+      const finalReview = { deadline: null as number | null };
+      const readInsideCurrentSources = async () => {
+        if (performance.now() > sourceReviewDeadline) throw forbidden("Current Task source review exceeded its budget.");
+        const result = await read(tx, hasTaskSourceReferences);
+        finalReview.deadline = performance.now() + 8_000;
+        return result;
+      };
+      const readWithRoutineSources = () => routineRunIds.length && decision.allowed
+        ? authorizationService(tx).withReadRoutineSources(companyId, actor, routineRunIds, readInsideCurrentSources)
+        : readInsideCurrentSources();
+      const result = await (workflowRunIds.length
+        ? authorizationService(tx).withReadWorkflowTaskCandidates(
             companyId,
             actor,
-            routineRunIds,
-            readInsideCurrentSources,
+            workflowRunIds,
+            readWithRoutineSources,
           )
-        : readInsideCurrentSources();
-      return preserveBoardDeadline(result);
+        : readWithRoutineSources());
+      if (finalReview.deadline === null || performance.now() > finalReview.deadline)
+        throw forbidden("Current Task source recheck exceeded its budget.");
+      return preserveBoardDeadline(Promise.resolve(result));
     });
   });
 }
