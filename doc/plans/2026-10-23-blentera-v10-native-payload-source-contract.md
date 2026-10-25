@@ -560,3 +560,8 @@ The selected private Memory and temporal-body counterexamples remain open.
 ### 2026-10-25 — Actual backend turn identity checkpoint
 
 Native chosen-input intents have unique persisted dispatch UUIDs. After backend startTurn returns, the original runtime carries that exact invocation key and detached chosen-input identity into the native acknowledgement writer. The writer binds the returned turn ID under the original event/attempt/digest and current coordinator lease. Native PG27PASS and full runtime142PASS; exact evidence is retained in `../operations/aw-v10-evidence/native-turn-acknowledgement-2026-10-25/receipts.json`. This closes the missing acknowledgement identity fact only. Intent/acknowledgement does not establish model consumption, complete sources, later tool/output binding or Source qualification; the live-graph temporal counterexamples remain open.
+
+
+### 2026-10-25 — Atomic mutation-to-input identity
+
+The original Task/document mutation receipt now resolves actual backend turn/call metadata against the native acknowledged dispatch under the same locked Run and effect transaction. Ambiguous/missing identities stay unknown; replay preserves the old receipt, concurrent calls retain separate invocation metadata, and receipt failure rolls back the mutation. Original native authority33PASS; evidence: `../operations/aw-v10-evidence/native-mutation-input-2026-10-25/receipts.json`. This closes an identity association only. Full input-family closure, immutable body-bound private output snapshots and temporal provenance remain open; no protocol or Source qualification was enabled.
