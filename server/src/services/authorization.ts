@@ -100,6 +100,24 @@ export type AuthorizationActor =
     nativeToolEffect?: NativeToolEffectClaim;
   };
 
+/** Shared owner check for the company APIs that admit only Board or CEO
+ * operators. Keep the role read live so a demoted Agent cannot continue a
+ * long operation with its admission-time role. */
+export async function assertCompanyCeoAgentOrBoard(
+  db: Db | DbTransaction,
+  companyId: string,
+  actor: AuthorizationActor,
+  capability: string,
+) {
+  if (actor.type === "board") return;
+  if (actor.type !== "agent" || !actor.agentId) throw forbidden("Agent authentication required");
+  const [actorAgent] = await db.select({ companyId: agents.companyId, role: agents.role }).from(agents)
+    .where(eq(agents.id, actor.agentId)).limit(1);
+  if (!actorAgent || actorAgent.companyId !== companyId)
+    throw forbidden("Agent key cannot access another company");
+  if (actorAgent.role !== "ceo") throw forbidden(`Only CEO agents can manage ${capability}`);
+}
+
 export type AuthorizationAction =
   | PermissionKey
   | "agent_config:read"

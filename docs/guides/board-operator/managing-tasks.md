@@ -17,6 +17,8 @@ linked_source_files: [ui/src/pages/ExperienceWork.tsx, ui/src/pages/IssueDetail.
 
 Tasks are the work items in a company. Open **Work** to find company work you can access, or open a task to review its description, owner, status, comments, and activity.
 
+Choose **Ask Blentera** to open your preferred Co-worker chat, if you have set one, or choose a Co-worker.
+
 ## Create a useful task
 
 State the outcome you need in the title, then add the context and acceptance details someone needs to do the work. Select a project or parent task when the work belongs with an existing effort. Choose an owner only after checking that person or Co-worker is appropriate for the task.

@@ -17,6 +17,8 @@ linked_source_files: [ui/src/pages/ExperienceWork.tsx, ui/src/pages/IssueDetail.
 
 Opgaver er virksomhedens arbejdsemner. Åbn **Work** for at finde de opgaver, du har adgang til, eller åbn en opgave for at se beskrivelse, ejer, status, kommentarer og aktivitet.
 
+Vælg **Spørg Blentera** for at åbne chatten med din foretrukne Co-worker, hvis du har valgt en, eller vælg en Co-worker.
+
 ## Opret en tydelig opgave
 
 Skriv det ønskede resultat i titlen, og tilføj derefter den sammenhæng og de acceptkriterier, som den ansvarlige skal bruge. Vælg et projekt eller en overordnet opgave, hvis arbejdet hører til en eksisterende indsats. Vælg først en ejer, når du har kontrolleret, at personen eller Co-worker er passende til opgaven.

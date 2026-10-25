@@ -28,6 +28,7 @@ import { currentNativeControllerIdentity } from "./native-restart-recovery.js";
 import { buildNativeModelEnvelope } from "@paperclipai/paperclip-runner";
 import { buildNativeExecutionInput, buildNativeBootstrapSourceSet, prepareNativeTurnWithContext } from "./native-execution-input.js";
 import { buildRetainedNativeRuntimeContext, type NativeRuntimeAuthoredSourceCapture } from "./runtime-context.js";
+import { nativeRuntimeContextFixture } from "./runtime-context.test-fixture.js";
 import { issueService } from "../issues.js";
 import type { NativeTaskSourceCapture } from "../issues.js";
 import { canActorReadIssuePrivacy } from "../authorization.js";
@@ -453,10 +454,10 @@ describe("native model input dispatch intent", () => {
     expect(governedContext.nativeBootstrapWitness).toBeDefined();
     const [runtimeAgent] = await db.select().from(agents).where(and(eq(agents.companyId, companyId), eq(agents.id, agentId)));
     expect(runtimeAgent).toBeDefined();
-    let runtimeSourceCapture: NativeRuntimeAuthoredSourceCapture | null = null;
+    const runtimeSourceCapture: { value: NativeRuntimeAuthoredSourceCapture | null } = { value: null };
     const runtimeContext = await buildRetainedNativeRuntimeContext({ db, agent: runtimeAgent!, runId: seeded.runId,
-      runtimeConfig: {}, runtimeSkillEntries: [], onAuthoredSourceCapture: capture => { runtimeSourceCapture = capture; } });
-    const runtimeInputs = runtimeSourceCapture?.inputs ?? [];
+      runtimeConfig: {}, runtimeSkillEntries: [], onAuthoredSourceCapture: capture => { runtimeSourceCapture.value = capture; } });
+    const runtimeInputs = runtimeSourceCapture.value?.inputs ?? [];
     const renderedReferences: Array<{ kind: "task" | "comment" | "document_revision" | "attachment" | "unknown"; id: string }> = [];
     const renderedMarkdown = buildPaperclipTaskMarkdown({
       issue: { id: createdIssue.id, identifier: selectedTask!.identifier, title: selectedTask!.title, description: selectedTask!.description, workMode: "standard" },

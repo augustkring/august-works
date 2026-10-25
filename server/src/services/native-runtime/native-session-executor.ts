@@ -7103,11 +7103,7 @@ export async function renewNativeSessionExecutionLease(input: {
 async function nativeTurnFrameMatchesSourceClosure(tx: Parameters<Parameters<Db["transaction"]>[0]>[0],
   run: typeof heartbeatRuns.$inferSelect, turnInput: Parameters<NativeSession["startTurn"]>[0],
   closure: NativeBootstrapSourceClosure | null | undefined, rawNativeExecutionInput: unknown) {
-  const no = (reason: string) => {
-    if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTIC === "1")
-      process.stderr.write(`native_source_closure_reject:${reason}\n`);
-    return false;
-  };
+  const no = (_reason: string) => false;
   if (!closure || turnInput.continuation === true || turnInput.message.role !== "user") return no("frame_kind");
   let frame: Record<string, unknown>, parsedExecution: ReturnType<typeof parseNativeExecutionInput>, expected: unknown;
   try {
@@ -7219,7 +7215,9 @@ async function nativeTurnFrameMatchesSourceClosure(tx: Parameters<Parameters<Db[
     parsedExecution.completionContract.id !== run.completionContractId ||
     parsedExecution.completionContract.sha256 !== run.completionContractSha256) return no("contract_binding");
   const [contract] = await tx.select({ id: completionContracts.id, revision: completionContracts.revision,
-    schemaVersion: completionContracts.schemaVersion, canonicalSha256: completionContracts.canonicalSha256,
+    schemaVersion: completionContracts.schemaVersion, policyVersion: completionContracts.policyVersion,
+    risk: completionContracts.risk, completionAuthority: completionContracts.completionAuthority,
+    canonicalSha256: completionContracts.canonicalSha256,
     contractJson: completionContracts.contractJson })
     .from(completionContracts).where(and(eq(completionContracts.companyId, run.companyId),
       eq(completionContracts.issueId, run.nativeIssueId), eq(completionContracts.id, run.completionContractId))).for("share");
@@ -7227,9 +7225,10 @@ async function nativeTurnFrameMatchesSourceClosure(tx: Parameters<Parameters<Db[
   const contractJson = record(contract.contractJson);
   const projectedContract = { revision: String(contractJson.revision), objective: String(contractJson.objective),
     criteria: Array.isArray(contractJson.criteria) ? contractJson.criteria : null };
-  const matches = nativeSha256({ schemaVersion: contract.schemaVersion, contract: contract.contractJson }) === contract.canonicalSha256 &&
-    isDeepStrictEqual(parsedExecution.completionContract.contract, projectedContract);
-  return matches || no("contract_shape");
+  if (nativeSha256({ schemaVersion: contract.schemaVersion, policyVersion: contract.policyVersion,
+    risk: contract.risk, completionAuthority: contract.completionAuthority, contract: contract.contractJson }) !== contract.canonicalSha256)
+    return no("contract_digest");
+  return isDeepStrictEqual(parsedExecution.completionContract.contract, projectedContract) || no("contract_projection");
 }
 
 async function postgresJsonbSha256(tx: Parameters<Parameters<Db["transaction"]>[0]>[0], value: unknown): Promise<string> {

@@ -69,26 +69,26 @@
     {
       "source": "server/src/services/agents.ts",
       "articleId": "working-with-coworkers",
-      "sourceSha256": "cb3b5f7c500e3531215ef20358a3be7321a3fa61a36396aa4d48eb4b490efc60",
+      "sourceSha256": "4eecbb0ebeef8011cef204c4a6406f760fe917c2672971bf3354134b8c87cb00",
       "articleSha256": "787c7cb3216491261ed93602bafca0548f622e6379b2621b9810ef998b69f2c4",
       "decision": "updated",
-      "rationale": "Replaced stale agent lifecycle claims with current Co-worker setup, detail, status, and pause guidance from the company UI."
+      "rationale": "Agent lifecycle changes now notify plugin lifecycle processing and synchronize runtime ownership when a Co-worker is created; the guide still distinguishes pausing future work from stopping a run already in progress."
     },
     {
       "source": "ui/src/pages/ExperienceWork.tsx",
       "articleId": "create-and-track-work",
-      "sourceSha256": "d87cfcb81d4b35461797d9dceb1df9b7f57601f1be9a5769e04e7e13a6cb553d",
+      "sourceSha256": "2d0092d35f217b44b0ef9ec9b0d38a22887ddf31e7dc7b4846f9e0c5b0d3829b",
       "articleSha256": "621f7f4b0f0fca8fb5cd77f10b7570671d91af1e41247565a3c94adb4b3e32e8",
       "decision": "updated",
-      "rationale": "Replaced endpoint-oriented task prose with current Work and task-detail guidance; status and result claims stay tied to the UI."
+      "rationale": "The Work-page Ask Blentera action now opens the preferred Co-worker chat or the Co-worker picker; both language versions now say this beside the task workflow."
     },
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "create-and-track-work",
       "sourceSha256": "8be44f0a61787fe84a5d049ccdcbc2d40ca7fd0626f8f4ef2d062fcd32914af5",
       "articleSha256": "621f7f4b0f0fca8fb5cd77f10b7570671d91af1e41247565a3c94adb4b3e32e8",
-      "decision": "updated",
-      "rationale": "Replaced endpoint-oriented task prose with current Work and task-detail guidance; status and result claims stay tied to the UI."
+      "decision": "no_change",
+      "rationale": "The source delta only removes the built-in feedback terms fallback URL; task status, run history, recovery actions and the instructions in this article are unchanged."
     },
     {
       "source": "ui/src/pages/Workflows.tsx",
@@ -125,10 +125,10 @@
     {
       "source": "server/src/routes/workflows.ts",
       "articleId": "workflows-preview",
-      "sourceSha256": "600940c55f08673bf6bbd21c2b74469ce3d478a23295fee99503a99639d27562",
+      "sourceSha256": "36843e5948653ce1a082d253e378fd7be97d24580f9b26b9f6c3957bb0d1269f",
       "articleSha256": "93759d2a40ad3b6d5ab738f00aa85907a1d162fd20cfaba8bbabfa483ea9106b",
-      "decision": "updated",
-      "rationale": "Added current draft, test, publish, run, and capability-limit guidance from the Workflow UI and node registry."
+      "decision": "no_change",
+      "rationale": "The route now passes the authenticated actor into Workflow authorization context; draft, test, publish and run actions remain as described, with their current capability gates."
     },
     {
       "source": "server/src/services/workflows/workflow-node-registry.ts",
@@ -150,33 +150,33 @@
       "source": "ui/src/pages/apps/Connections.tsx",
       "articleId": "apps-and-connections",
       "sourceSha256": "219334acc72099017f5ab01e9a7ee4011186aa8a0afd8dece89af23bc0f2ccbe",
-      "articleSha256": "824d808b56a4085ee73eb6408e758c7a9c4ce06040dbeb7e97d65e35018bb4c0",
+      "articleSha256": "99e10f89a032c4905fb2aadbc57f5dc8b9657bd3ab2ea087f00bab86a7101a76",
       "decision": "updated",
-      "rationale": "Added current connect, permission review, status, and reconnect guidance from app connection screens."
+      "rationale": "The paired article matches the connection screen flow: review account and permissions, complete provider consent, then verify status or reconnect when prompted."
     },
     {
       "source": "ui/src/pages/apps/AppNotConnected.tsx",
       "articleId": "apps-and-connections",
       "sourceSha256": "218b58f14a1feb713347afaf7760ac3549ccf20bb0be5259073015376c0ecd3b",
-      "articleSha256": "824d808b56a4085ee73eb6408e758c7a9c4ce06040dbeb7e97d65e35018bb4c0",
+      "articleSha256": "99e10f89a032c4905fb2aadbc57f5dc8b9657bd3ab2ea087f00bab86a7101a76",
       "decision": "updated",
-      "rationale": "Added current connect, permission review, status, and reconnect guidance from app connection screens."
+      "rationale": "The paired article covers this screen’s unavailable-connection recovery through the same provider sign-in and permission review, without promising reconnection is always available."
     },
     {
       "source": "ui/src/pages/apps/AppDetail.tsx",
       "articleId": "apps-and-connections",
       "sourceSha256": "2c5de01bbf0adc3eb74f4d8678055cf8b15a5fe69946453ffcb4bdc2f4746608",
-      "articleSha256": "824d808b56a4085ee73eb6408e758c7a9c4ce06040dbeb7e97d65e35018bb4c0",
+      "articleSha256": "99e10f89a032c4905fb2aadbc57f5dc8b9657bd3ab2ea087f00bab86a7101a76",
       "decision": "updated",
-      "rationale": "Added current connect, permission review, status, and reconnect guidance from app connection screens."
+      "rationale": "The paired article directs administrators to inspect an app’s active connection and permissions before asking a Co-worker to use it."
     },
     {
       "source": "ui/src/pages/apps/app-detail/PermissionsPanel.tsx",
       "articleId": "apps-and-connections",
       "sourceSha256": "6bd3df903c2b8b91aaaf964a0c3c7ca6a07b842359b6d68242464a946527fb44",
-      "articleSha256": "824d808b56a4085ee73eb6408e758c7a9c4ce06040dbeb7e97d65e35018bb4c0",
+      "articleSha256": "99e10f89a032c4905fb2aadbc57f5dc8b9657bd3ab2ea087f00bab86a7101a76",
       "decision": "updated",
-      "rationale": "Added current connect, permission review, status, and reconnect guidance from app connection screens."
+      "rationale": "The paired article reflects the permission boundary: a connection alone does not enable every action, and action settings must be reviewed separately."
     },
     {
       "source": "ui/src/pages/CompanyAccess.tsx",
@@ -253,10 +253,10 @@
     {
       "source": "server/src/services/company-portability.ts",
       "articleId": "company-import-export",
-      "sourceSha256": "742f852688f8cf4801b731f2bafde96b62ae01400afc9d784c61b24401981ff0",
+      "sourceSha256": "2f778ac4151975af3cac5c9a7baea4e3c3119c7e8db1a1f21fca65835d63e32c",
       "articleSha256": "878dcc436da18fdd2423e5e8285173e8d03f9d0869b3aeab4a428079e612945c",
       "decision": "updated",
-      "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
+      "rationale": "The import guide describes exact source-release review, current source and target authority checks, manual review of external packages, and cancellation with reconciliation when the outcome is uncertain."
     },
     {
       "source": "server/src/services/company-export-readme.ts",
@@ -335,80 +335,80 @@
       "articleId": "approvals-and-stop",
       "sourceSha256": "8be44f0a61787fe84a5d049ccdcbc2d40ca7fd0626f8f4ef2d062fcd32914af5",
       "articleSha256": "601860635ecfdbef65d0703b3966a9af6429ec84d78d857ab85ac9863b77ba60",
-      "decision": "updated",
-      "rationale": "Replaced outdated approval types with current approval decisions and the separate task pause/stop actions."
+      "decision": "no_change",
+      "rationale": "The source delta only removes the built-in feedback terms fallback URL; task status, run history, recovery actions and the instructions in this article are unchanged."
     },
     {
       "source": "ui/src/pages/CompanyExport.tsx",
       "articleId": "export-and-delete",
       "sourceSha256": "bcb095fa5cce076e515485f318daefcc5940251ef917affd62eadb6c72f64dca",
-      "articleSha256": "f4a921bd0683d97d5d7c4cb8ef15a1af9494d6df8ec6bf4cf366ede6da2771cb",
-      "decision": "no_change",
-      "rationale": "Reviewed unchanged company export, organization/account deletion and retention behavior against this article. The added paired private Memory section is supported by its separately reviewed original Memory owners; existing export/deletion guidance remains accurate."
+      "articleSha256": "c1dc8377806263baff1cd3fbddc16c2f0e68c6afb3dbcd48ebbf3bf8099b31df",
+      "decision": "updated",
+      "rationale": "The export screen adds an optional support-case archive limited to cases the current Human can view; the article now states it contains customer-visible history only and cannot restore live cases."
     },
     {
       "source": "ui/src/pages/SaasDeletion.tsx",
       "articleId": "export-and-delete",
       "sourceSha256": "c10303000adfea5317b7cf3c75dd420eb1beee5771a749de17cec32d82a8161f",
-      "articleSha256": "f4a921bd0683d97d5d7c4cb8ef15a1af9494d6df8ec6bf4cf366ede6da2771cb",
+      "articleSha256": "c1dc8377806263baff1cd3fbddc16c2f0e68c6afb3dbcd48ebbf3bf8099b31df",
       "decision": "no_change",
-      "rationale": "Reviewed unchanged company export, organization/account deletion and retention behavior against this article. The added paired private Memory section is supported by its separately reviewed original Memory owners; existing export/deletion guidance remains accurate."
+      "rationale": "The deletion screen still asks the operator to export, confirm the organization name and follow the displayed stage; this article preserves those steps and does not promise final erasure on submission."
     },
     {
       "source": "ui/src/pages/SaasAccount.tsx",
       "articleId": "export-and-delete",
       "sourceSha256": "4ea9ace52188ed50a115c403b27341bdd50454245260e13d49d1e678e1832fe3",
-      "articleSha256": "f4a921bd0683d97d5d7c4cb8ef15a1af9494d6df8ec6bf4cf366ede6da2771cb",
-      "decision": "no_change",
-      "rationale": "Reviewed unchanged company export, organization/account deletion and retention behavior against this article. The added paired private Memory section is supported by its separately reviewed original Memory owners; existing export/deletion guidance remains accurate."
+      "articleSha256": "c1dc8377806263baff1cd3fbddc16c2f0e68c6afb3dbcd48ebbf3bf8099b31df",
+      "decision": "updated",
+      "rationale": "The account screen adds current authentication settings and retains password confirmation for deletion; the article now notes a recent-factor confirmation when the account requires it."
     },
     {
       "source": "server/src/services/saas/account-deletion.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "7214bed4add42ad5778c1b8bc6e235e968c4bc2c9ae6bc3107c1b11e633c8911",
-      "articleSha256": "f4a921bd0683d97d5d7c4cb8ef15a1af9494d6df8ec6bf4cf366ede6da2771cb",
-      "decision": "no_change",
-      "rationale": "Reviewed unchanged company export, organization/account deletion and retention behavior against this article. The added paired private Memory section is supported by its separately reviewed original Memory owners; existing export/deletion guidance remains accurate."
+      "articleSha256": "c1dc8377806263baff1cd3fbddc16c2f0e68c6afb3dbcd48ebbf3bf8099b31df",
+      "decision": "updated",
+      "rationale": "Account deletion requires a current session and, for accounts with an additional-factor requirement, recent authentication; the paired article now includes that condition and retains the existing password and export acknowledgements."
     },
     {
       "source": "server/src/services/saas/offboarding.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "20f02e6c5f24b62d7db8102350d1e92272149036258db62ec5bcb70511f23a6a",
-      "articleSha256": "f4a921bd0683d97d5d7c4cb8ef15a1af9494d6df8ec6bf4cf366ede6da2771cb",
+      "articleSha256": "c1dc8377806263baff1cd3fbddc16c2f0e68c6afb3dbcd48ebbf3bf8099b31df",
       "decision": "no_change",
-      "rationale": "Reviewed unchanged company export, organization/account deletion and retention behavior against this article. The added paired private Memory section is supported by its separately reviewed original Memory owners; existing export/deletion guidance remains accurate."
+      "rationale": "Offboarding now blocks completion until unresolved managed outcomes and erasure work are reconciled; the screen directs users to the displayed status and the article already says a submitted request is not proof of final erasure."
     },
     {
       "source": "server/src/services/saas/company-purge.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "e2f19874904c75dd706ac32efc9352ee2723e74d5388b2a568d313a8d0812070",
-      "articleSha256": "f4a921bd0683d97d5d7c4cb8ef15a1af9494d6df8ec6bf4cf366ede6da2771cb",
+      "sourceSha256": "2e419c7ec370e66c8f035e6f4a6ddef242b63e64761900097a1b4505968c7ef8",
+      "articleSha256": "c1dc8377806263baff1cd3fbddc16c2f0e68c6afb3dbcd48ebbf3bf8099b31df",
       "decision": "no_change",
-      "rationale": "Reviewed unchanged company export, organization/account deletion and retention behavior against this article. The added paired private Memory section is supported by its separately reviewed original Memory owners; existing export/deletion guidance remains accurate."
+      "rationale": "The purge owner adds a retained funding receipt and safe cleanup ordering; organization deletion stages, backup retention, financial records and deletion receipts remain as stated."
     },
     {
       "source": "ui/src/pages/Memory.tsx",
       "articleId": "export-and-delete",
       "sourceSha256": "868990402f0308c8cf6640b7d2ff2d89265a29af3b4343dd7482a476ce675f74",
-      "articleSha256": "f4a921bd0683d97d5d7c4cb8ef15a1af9494d6df8ec6bf4cf366ede6da2771cb",
+      "articleSha256": "c1dc8377806263baff1cd3fbddc16c2f0e68c6afb3dbcd48ebbf3bf8099b31df",
       "decision": "updated",
-      "rationale": "Reviewed the original private Memory share, Human review, exact receipt/source walk and current session UI. Paired privacy guides now distinguish explicit Approve and share from ordinary verification, preserve underlying Task/source restrictions and describe source withdrawal without claiming complete Source or provider qualification."
+      "rationale": "The Memory screen now distinguishes ordinary acceptance from the explicit owner-only Approve and share action and shows the destination; the article describes that exact review and the retained-source boundary."
     },
     {
       "source": "server/src/routes/memory.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "1fae08e6465ba1c6ea49efcafed34f650d4c0b5cf10a4f197a81ef9c297c3356",
-      "articleSha256": "f4a921bd0683d97d5d7c4cb8ef15a1af9494d6df8ec6bf4cf366ede6da2771cb",
+      "articleSha256": "c1dc8377806263baff1cd3fbddc16c2f0e68c6afb3dbcd48ebbf3bf8099b31df",
       "decision": "updated",
-      "rationale": "Reviewed the original private Memory share, Human review, exact receipt/source walk and current session UI. Paired privacy guides now distinguish explicit Approve and share from ordinary verification, preserve underlying Task/source restrictions and describe source withdrawal without claiming complete Source or provider qualification."
+      "rationale": "Memory routes now filter private records by current source access and return sanitized payloads; the paired article explains current access and that sharing never publishes an underlying private Task."
     },
     {
       "source": "server/src/services/memory/memory-service.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "8f4cff2c23181ee3a2a7fae1862a8c8a5a40c05382dc5fd862c946bb18840102",
-      "articleSha256": "f4a921bd0683d97d5d7c4cb8ef15a1af9494d6df8ec6bf4cf366ede6da2771cb",
+      "sourceSha256": "e18e4b6f6f86e7f069d076a4beda1fae6774b7963e6fe0d83f1cdfd346fb9b5a",
+      "articleSha256": "c1dc8377806263baff1cd3fbddc16c2f0e68c6afb3dbcd48ebbf3bf8099b31df",
       "decision": "updated",
-      "rationale": "Reviewed the original private Memory share, Human review, exact receipt/source walk and current session UI. Paired privacy guides now distinguish explicit Approve and share from ordinary verification, preserve underlying Task/source restrictions and describe source withdrawal without claiming complete Source or provider qualification."
+      "rationale": "The privacy section reflects explicit private-share review and retained-source access checks, while preserving the underlying Task privacy and source-withdrawal behavior."
     },
     {
       "source": "server/src/services/memory/memory-privacy.ts",
@@ -416,7 +416,7 @@
       "sourceSha256": "f467a374b56bdb4c5f2547321dfc1cb1c9fd55a23acf530800b20fe3f4cafc72",
       "articleSha256": "c1dc8377806263baff1cd3fbddc16c2f0e68c6afb3dbcd48ebbf3bf8099b31df",
       "decision": "updated",
-      "rationale": "Reviewed source erasure for saved outputs: deleting a source removes copied text from results that used it, while independent person-authored tasks and documents remain. The paired Help article now explains both outcomes."
+      "rationale": "Deleting a source scrubs text copied into a saved model result but leaves an independent person-authored Task or document intact; both outcomes are stated in the article."
     },
     {
       "source": "ui/src/pages/SaasBilling.tsx",
@@ -437,10 +437,10 @@
     {
       "source": "server/src/routes/saas.ts",
       "articleId": "billing-and-capacity",
-      "sourceSha256": "cd81fb96f8761d955ee6d09751ba5043ba83a9b23a03abf9a74d0f44758feaf8",
+      "sourceSha256": "522f703046d6d7695a5dc81f21ea4ea7816ba1e789ea109b28d023789504d99d",
       "articleSha256": "1dc8a089d3a9db6699cca986f76f7484a74027850a915d6dc245b3ac68614110",
-      "decision": "no_change",
-      "rationale": "Reviewed the new native Human support response route and the existing configured-operator passkey gate. Billing, capacity, portal and account navigation behavior are unchanged; customers still read replies through the original authorized case reader."
+      "decision": "updated",
+      "rationale": "The configured Human operator response remains separate from customer case access; the Help guide describes replies, resolved-case reopening, and linked follow-up for closed cases."
     },
     {
       "source": "server/src/services/billing/billing.ts",
@@ -462,41 +462,41 @@
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "recovering-work",
       "sourceSha256": "8be44f0a61787fe84a5d049ccdcbc2d40ca7fd0626f8f4ef2d062fcd32914af5",
-      "articleSha256": "54ba747c42686a3646ab5853d49c33a79c4d869ddbb39e3cc76a412be19c17a5",
-      "decision": "updated",
-      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+      "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
+      "decision": "no_change",
+      "rationale": "The source delta only removes the built-in feedback terms fallback URL; task status, run history, recovery actions and the instructions in this article are unchanged."
     },
     {
       "source": "ui/src/components/IssueBlockedNotice.tsx",
       "articleId": "recovering-work",
       "sourceSha256": "90983e55a2fa9ea9a8abe2b33a5aab817e05a463a65bf5d5795335149d769fd2",
-      "articleSha256": "54ba747c42686a3646ab5853d49c33a79c4d869ddbb39e3cc76a412be19c17a5",
+      "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "updated",
-      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+      "rationale": "The blocked-task notice is covered by the article’s instruction to read the displayed blocker and use only the next action shown for the original task."
     },
     {
       "source": "ui/src/lib/wait-for-stopped-runs.ts",
       "articleId": "recovering-work",
       "sourceSha256": "ce5726db6b535d3dd592bfde111b94de36291c1fe7dd5a85198dd22799bbe8c2",
-      "articleSha256": "54ba747c42686a3646ab5853d49c33a79c4d869ddbb39e3cc76a412be19c17a5",
+      "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "updated",
-      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+      "rationale": "The stop-waiting UI is covered by the article’s instruction to keep the task open, wait for status, and inspect the original run when an outcome is unknown."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "5dba9a4821f71474d1bd510f87c55093ccd62223d1f28eba8adee287325869e0",
-      "articleSha256": "54ba747c42686a3646ab5853d49c33a79c4d869ddbb39e3cc76a412be19c17a5",
-      "decision": "updated",
-      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+      "sourceSha256": "23704492b2cc2f801c60e72f2a1b3e4770cf907b5e00e86318bed76f9da6d131",
+      "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
+      "decision": "no_change",
+      "rationale": "The change removes an internal workspace-reader identifier from the public recovery-action projection; it does not change recovery choices or task guidance."
     },
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "f5a2e440b137092d00ccadde9bd89b8e6058ad225e36d76678d096d2dfad7d68",
-      "articleSha256": "54ba747c42686a3646ab5853d49c33a79c4d869ddbb39e3cc76a412be19c17a5",
+      "sourceSha256": "fdc430ee5bdf838046f8ad8b0cc29408be77732516770efeb81a79ee6d7ea1b4",
+      "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "updated",
-      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+      "rationale": "Current issue reads and recovery writes recheck task, workspace and source authority; the article sends readers back to the original task and makes restoration conditional on current access and retained history."
     },
     {
       "source": "ui/src/App.tsx",
@@ -509,10 +509,10 @@
     {
       "source": "ui/src/components/ExperienceUtilities.tsx",
       "articleId": "help-and-human-support",
-      "sourceSha256": "d44832d4849da6c1eb50a91b97f08d43b8d14ed55fe3fe56a6c565dc0e5ae781",
+      "sourceSha256": "f62e36c1fbdb826fba9ac7715ac57d77eb56a922abe8058e647328fcc5e58b21",
       "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
-      "decision": "no_change",
-      "rationale": "Reviewed ExperienceUtilities.tsx: current Help navigation, support intake, human contact, and request recovery behavior matches the article; no wording change is needed."
+      "decision": "updated",
+      "rationale": "Help utilities retain direct human support and the optional assistant route; the article keeps those paths independent and describes the assistant’s consent and read-only limits."
     },
     {
       "source": "ui/src/pages/CustomerHelpCenter.tsx",
@@ -613,10 +613,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "64b853ae2a79db176cf638e43bcf76176edd86bc13acfd7f99a9ee5bf0e32ed1",
+      "sourceSha256": "9364b1cb9fd6d5fba1b71cd4e4f610ed8e0f50fc5078f66255f31a5ebb24b728",
       "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "no_change",
-      "rationale": "Reviewed authenticated conversation-comment session pinning and current owner checks alongside Help support routes. This change adds no support-case access or assistant authority; the paired article preserves direct human contact and the optional assistant boundary."
+      "rationale": "The route pins the current actor for issue and conversation operations; it adds no Help or support-case authority and does not change the documented recovery steps."
     },
     {
       "source": "packages/shared/src/types/search.ts",
@@ -677,10 +677,10 @@
     {
       "source": "server/src/routes/saas.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "cd81fb96f8761d955ee6d09751ba5043ba83a9b23a03abf9a74d0f44758feaf8",
+      "sourceSha256": "522f703046d6d7695a5dc81f21ea4ea7816ba1e789ea109b28d023789504d99d",
       "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "updated",
-      "rationale": "Reviewed the native configured Human operator response: current recent passkey session, original deadline, strict case/version/command identity, erased-command fence, resolution/closure and safe customer messages. The guide now explains reading replies and resolved/closed follow-up behavior; no tenant support access or provider qualification is implied."
+      "rationale": "The configured Human operator response remains separate from customer case access; the Help guide describes replies, resolved-case reopening, and linked follow-up for closed cases."
     },
     {
       "source": "server/src/services/saas/support-case-operator.ts",
@@ -717,10 +717,10 @@
     {
       "source": "server/src/routes/openapi.ts",
       "articleId": "developer-and-advanced",
-      "sourceSha256": "b6ddd027f2b76f21f7be356da6027496070fa6febb3c875f027e4d9d7c0db6b7",
+      "sourceSha256": "dca81a3a8bd9b4983ea288cc816bca5cbc8c7697d89f6f3b90775d428204f388",
       "articleSha256": "1d4d2db664346000357fafa1735eed2371dca17e2e96cb270d5ed5900cfff170",
       "decision": "no_change",
-      "rationale": "Reviewed source-backed contracts for the new operator response and fifteen existing Native support/import/privacy/access routes, including strict schemas, path-owned IDs, Native versus SaaS availability, alternate success statuses and optional revocation body. The developer guide already directs users to the actual API contracts; no customer action or permission changed."
+      "rationale": "The new OpenAPI entries expose existing route contracts and identify Native versus SaaS availability; the developer guide directs readers to the generated API reference for endpoint schemas."
     },
     {
       "source": "server/src/routes/index.ts",
@@ -805,26 +805,26 @@
     {
       "source": "server/src/services/agents.ts",
       "articleId": "working-with-coworkers-da",
-      "sourceSha256": "cb3b5f7c500e3531215ef20358a3be7321a3fa61a36396aa4d48eb4b490efc60",
+      "sourceSha256": "4eecbb0ebeef8011cef204c4a6406f760fe917c2672971bf3354134b8c87cb00",
       "articleSha256": "6d85052a90096da7eac074cad9dbf866392f6fc31ffec6920587a8fbe519bc6f",
       "decision": "updated",
-      "rationale": "Danish translation of working-with-coworkers: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "rationale": "Danish version checked against the same current source behavior: Agent lifecycle changes now notify plugin lifecycle processing and synchronize runtime ownership when a Co-worker is created; the guide still distinguishes pausing future work from stopping a run already in progress."
     },
     {
       "source": "ui/src/pages/ExperienceWork.tsx",
       "articleId": "create-and-track-work-da",
-      "sourceSha256": "d87cfcb81d4b35461797d9dceb1df9b7f57601f1be9a5769e04e7e13a6cb553d",
+      "sourceSha256": "2d0092d35f217b44b0ef9ec9b0d38a22887ddf31e7dc7b4846f9e0c5b0d3829b",
       "articleSha256": "4bab39ad4921ae7460cb8c16dc13d0bdbb9436f219777d94dccccf6378136a3b",
       "decision": "updated",
-      "rationale": "Danish translation of create-and-track-work: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "rationale": "Danish version checked against the same current source behavior: The Work-page Ask Blentera action now opens the preferred Co-worker chat or the Co-worker picker; both language versions now say this beside the task workflow."
     },
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "create-and-track-work-da",
       "sourceSha256": "8be44f0a61787fe84a5d049ccdcbc2d40ca7fd0626f8f4ef2d062fcd32914af5",
       "articleSha256": "4bab39ad4921ae7460cb8c16dc13d0bdbb9436f219777d94dccccf6378136a3b",
-      "decision": "updated",
-      "rationale": "Danish translation of create-and-track-work: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "decision": "no_change",
+      "rationale": "Danish version checked against the same current source behavior: The source delta only removes the built-in feedback terms fallback URL; task status, run history, recovery actions and the instructions in this article are unchanged."
     },
     {
       "source": "ui/src/pages/Workflows.tsx",
@@ -861,10 +861,10 @@
     {
       "source": "server/src/routes/workflows.ts",
       "articleId": "workflows-preview-da",
-      "sourceSha256": "600940c55f08673bf6bbd21c2b74469ce3d478a23295fee99503a99639d27562",
+      "sourceSha256": "36843e5948653ce1a082d253e378fd7be97d24580f9b26b9f6c3957bb0d1269f",
       "articleSha256": "ded10f8b422669815e021718f2bcc686fd87c5839b8037edd4450cab3299ff56",
-      "decision": "updated",
-      "rationale": "Danish translation of workflows-preview: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "decision": "no_change",
+      "rationale": "Danish version checked against the same current source behavior: The route now passes the authenticated actor into Workflow authorization context; draft, test, publish and run actions remain as described, with their current capability gates."
     },
     {
       "source": "server/src/services/workflows/workflow-node-registry.ts",
@@ -886,33 +886,33 @@
       "source": "ui/src/pages/apps/Connections.tsx",
       "articleId": "apps-and-connections-da",
       "sourceSha256": "219334acc72099017f5ab01e9a7ee4011186aa8a0afd8dece89af23bc0f2ccbe",
-      "articleSha256": "e7cee868f1553f968dee04e55d2b94d3d9230542fb381c4a153c260837d8b485",
+      "articleSha256": "42359467fc66d26335f8521a2c893d4a0e91b81c5c854d2d8ffe687ef9e89867",
       "decision": "updated",
-      "rationale": "Danish translation of apps-and-connections: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "rationale": "Danish version checked against the same current source behavior: The paired article matches the connection screen flow: review account and permissions, complete provider consent, then verify status or reconnect when prompted."
     },
     {
       "source": "ui/src/pages/apps/AppNotConnected.tsx",
       "articleId": "apps-and-connections-da",
       "sourceSha256": "218b58f14a1feb713347afaf7760ac3549ccf20bb0be5259073015376c0ecd3b",
-      "articleSha256": "e7cee868f1553f968dee04e55d2b94d3d9230542fb381c4a153c260837d8b485",
+      "articleSha256": "42359467fc66d26335f8521a2c893d4a0e91b81c5c854d2d8ffe687ef9e89867",
       "decision": "updated",
-      "rationale": "Danish translation of apps-and-connections: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "rationale": "Danish version checked against the same current source behavior: The paired article covers this screen’s unavailable-connection recovery through the same provider sign-in and permission review, without promising reconnection is always available."
     },
     {
       "source": "ui/src/pages/apps/AppDetail.tsx",
       "articleId": "apps-and-connections-da",
       "sourceSha256": "2c5de01bbf0adc3eb74f4d8678055cf8b15a5fe69946453ffcb4bdc2f4746608",
-      "articleSha256": "e7cee868f1553f968dee04e55d2b94d3d9230542fb381c4a153c260837d8b485",
+      "articleSha256": "42359467fc66d26335f8521a2c893d4a0e91b81c5c854d2d8ffe687ef9e89867",
       "decision": "updated",
-      "rationale": "Danish translation of apps-and-connections: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "rationale": "Danish version checked against the same current source behavior: The paired article directs administrators to inspect an app’s active connection and permissions before asking a Co-worker to use it."
     },
     {
       "source": "ui/src/pages/apps/app-detail/PermissionsPanel.tsx",
       "articleId": "apps-and-connections-da",
       "sourceSha256": "6bd3df903c2b8b91aaaf964a0c3c7ca6a07b842359b6d68242464a946527fb44",
-      "articleSha256": "e7cee868f1553f968dee04e55d2b94d3d9230542fb381c4a153c260837d8b485",
+      "articleSha256": "42359467fc66d26335f8521a2c893d4a0e91b81c5c854d2d8ffe687ef9e89867",
       "decision": "updated",
-      "rationale": "Danish translation of apps-and-connections: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "rationale": "Danish version checked against the same current source behavior: The paired article reflects the permission boundary: a connection alone does not enable every action, and action settings must be reviewed separately."
     },
     {
       "source": "ui/src/pages/CompanyAccess.tsx",
@@ -989,10 +989,10 @@
     {
       "source": "server/src/services/company-portability.ts",
       "articleId": "company-import-export-da",
-      "sourceSha256": "742f852688f8cf4801b731f2bafde96b62ae01400afc9d784c61b24401981ff0",
+      "sourceSha256": "2f778ac4151975af3cac5c9a7baea4e3c3119c7e8db1a1f21fca65835d63e32c",
       "articleSha256": "46050e4274e4162eba35e42e4a130c91d6d32da232fe142ca661448b94fb8116",
       "decision": "updated",
-      "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
+      "rationale": "Danish version checked against the same current source behavior: The import guide describes exact source-release review, current source and target authority checks, manual review of external packages, and cancellation with reconciliation when the outcome is uncertain."
     },
     {
       "source": "server/src/services/company-export-readme.ts",
@@ -1071,80 +1071,80 @@
       "articleId": "approvals-and-stop-da",
       "sourceSha256": "8be44f0a61787fe84a5d049ccdcbc2d40ca7fd0626f8f4ef2d062fcd32914af5",
       "articleSha256": "b9ef02341c31fea40d5b41c881d1cc60efe7e709a12b3942092001b7b91a91b6",
-      "decision": "updated",
-      "rationale": "Danish translation of approvals-and-stop: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "decision": "no_change",
+      "rationale": "Danish version checked against the same current source behavior: The source delta only removes the built-in feedback terms fallback URL; task status, run history, recovery actions and the instructions in this article are unchanged."
     },
     {
       "source": "ui/src/pages/CompanyExport.tsx",
       "articleId": "export-and-delete-da",
       "sourceSha256": "bcb095fa5cce076e515485f318daefcc5940251ef917affd62eadb6c72f64dca",
-      "articleSha256": "0deb4c9a8300bff2bfc69e3bd20d6e0478909ec6ceece03fe50cf2bef856ee01",
-      "decision": "no_change",
-      "rationale": "Reviewed unchanged company export, organization/account deletion and retention behavior against this article. The added paired private Memory section is supported by its separately reviewed original Memory owners; existing export/deletion guidance remains accurate."
+      "articleSha256": "97e45e5e71a15f914ce5b3bfb5f092534f52f63bb01529c3c7b28e62743b05b5",
+      "decision": "updated",
+      "rationale": "Danish version checked against the same current behavior: The export screen adds an optional support-case archive limited to cases the current Human can view; the article now states it contains customer-visible history only and cannot restore live cases."
     },
     {
       "source": "ui/src/pages/SaasDeletion.tsx",
       "articleId": "export-and-delete-da",
       "sourceSha256": "c10303000adfea5317b7cf3c75dd420eb1beee5771a749de17cec32d82a8161f",
-      "articleSha256": "0deb4c9a8300bff2bfc69e3bd20d6e0478909ec6ceece03fe50cf2bef856ee01",
+      "articleSha256": "97e45e5e71a15f914ce5b3bfb5f092534f52f63bb01529c3c7b28e62743b05b5",
       "decision": "no_change",
-      "rationale": "Reviewed unchanged company export, organization/account deletion and retention behavior against this article. The added paired private Memory section is supported by its separately reviewed original Memory owners; existing export/deletion guidance remains accurate."
+      "rationale": "Danish version checked against the same current behavior: The deletion screen still asks the operator to export, confirm the organization name and follow the displayed stage; this article preserves those steps and does not promise final erasure on submission."
     },
     {
       "source": "ui/src/pages/SaasAccount.tsx",
       "articleId": "export-and-delete-da",
       "sourceSha256": "4ea9ace52188ed50a115c403b27341bdd50454245260e13d49d1e678e1832fe3",
-      "articleSha256": "0deb4c9a8300bff2bfc69e3bd20d6e0478909ec6ceece03fe50cf2bef856ee01",
-      "decision": "no_change",
-      "rationale": "Reviewed unchanged company export, organization/account deletion and retention behavior against this article. The added paired private Memory section is supported by its separately reviewed original Memory owners; existing export/deletion guidance remains accurate."
+      "articleSha256": "97e45e5e71a15f914ce5b3bfb5f092534f52f63bb01529c3c7b28e62743b05b5",
+      "decision": "updated",
+      "rationale": "Danish version checked against the same current behavior: The account screen adds current authentication settings and retains password confirmation for deletion; the article now notes a recent-factor confirmation when the account requires it."
     },
     {
       "source": "server/src/services/saas/account-deletion.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "7214bed4add42ad5778c1b8bc6e235e968c4bc2c9ae6bc3107c1b11e633c8911",
-      "articleSha256": "0deb4c9a8300bff2bfc69e3bd20d6e0478909ec6ceece03fe50cf2bef856ee01",
-      "decision": "no_change",
-      "rationale": "Reviewed unchanged company export, organization/account deletion and retention behavior against this article. The added paired private Memory section is supported by its separately reviewed original Memory owners; existing export/deletion guidance remains accurate."
+      "articleSha256": "97e45e5e71a15f914ce5b3bfb5f092534f52f63bb01529c3c7b28e62743b05b5",
+      "decision": "updated",
+      "rationale": "Danish version checked against the same current behavior: Account deletion requires a current session and, for accounts with an additional-factor requirement, recent authentication; the paired article now includes that condition and retains the existing password and export acknowledgements."
     },
     {
       "source": "server/src/services/saas/offboarding.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "20f02e6c5f24b62d7db8102350d1e92272149036258db62ec5bcb70511f23a6a",
-      "articleSha256": "0deb4c9a8300bff2bfc69e3bd20d6e0478909ec6ceece03fe50cf2bef856ee01",
+      "articleSha256": "97e45e5e71a15f914ce5b3bfb5f092534f52f63bb01529c3c7b28e62743b05b5",
       "decision": "no_change",
-      "rationale": "Reviewed unchanged company export, organization/account deletion and retention behavior against this article. The added paired private Memory section is supported by its separately reviewed original Memory owners; existing export/deletion guidance remains accurate."
+      "rationale": "Danish version checked against the same current behavior: Offboarding now blocks completion until unresolved managed outcomes and erasure work are reconciled; the screen directs users to the displayed status and the article already says a submitted request is not proof of final erasure."
     },
     {
       "source": "server/src/services/saas/company-purge.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "e2f19874904c75dd706ac32efc9352ee2723e74d5388b2a568d313a8d0812070",
-      "articleSha256": "0deb4c9a8300bff2bfc69e3bd20d6e0478909ec6ceece03fe50cf2bef856ee01",
+      "sourceSha256": "2e419c7ec370e66c8f035e6f4a6ddef242b63e64761900097a1b4505968c7ef8",
+      "articleSha256": "97e45e5e71a15f914ce5b3bfb5f092534f52f63bb01529c3c7b28e62743b05b5",
       "decision": "no_change",
-      "rationale": "Reviewed unchanged company export, organization/account deletion and retention behavior against this article. The added paired private Memory section is supported by its separately reviewed original Memory owners; existing export/deletion guidance remains accurate."
+      "rationale": "Danish version checked against the same current source behavior: The purge owner adds a retained funding receipt and safe cleanup ordering; organization deletion stages, backup retention, financial records and deletion receipts remain as stated."
     },
     {
       "source": "ui/src/pages/Memory.tsx",
       "articleId": "export-and-delete-da",
       "sourceSha256": "868990402f0308c8cf6640b7d2ff2d89265a29af3b4343dd7482a476ce675f74",
-      "articleSha256": "0deb4c9a8300bff2bfc69e3bd20d6e0478909ec6ceece03fe50cf2bef856ee01",
+      "articleSha256": "97e45e5e71a15f914ce5b3bfb5f092534f52f63bb01529c3c7b28e62743b05b5",
       "decision": "updated",
-      "rationale": "Reviewed the original private Memory share, Human review, exact receipt/source walk and current session UI. Paired privacy guides now distinguish explicit Approve and share from ordinary verification, preserve underlying Task/source restrictions and describe source withdrawal without claiming complete Source or provider qualification."
+      "rationale": "Danish version checked against the same current behavior: The Memory screen now distinguishes ordinary acceptance from the explicit owner-only Approve and share action and shows the destination; the article describes that exact review and the retained-source boundary."
     },
     {
       "source": "server/src/routes/memory.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "1fae08e6465ba1c6ea49efcafed34f650d4c0b5cf10a4f197a81ef9c297c3356",
-      "articleSha256": "0deb4c9a8300bff2bfc69e3bd20d6e0478909ec6ceece03fe50cf2bef856ee01",
+      "articleSha256": "97e45e5e71a15f914ce5b3bfb5f092534f52f63bb01529c3c7b28e62743b05b5",
       "decision": "updated",
-      "rationale": "Reviewed the original private Memory share, Human review, exact receipt/source walk and current session UI. Paired privacy guides now distinguish explicit Approve and share from ordinary verification, preserve underlying Task/source restrictions and describe source withdrawal without claiming complete Source or provider qualification."
+      "rationale": "Danish version checked against the same current behavior: Memory routes now filter private records by current source access and return sanitized payloads; the paired article explains current access and that sharing never publishes an underlying private Task."
     },
     {
       "source": "server/src/services/memory/memory-service.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "8f4cff2c23181ee3a2a7fae1862a8c8a5a40c05382dc5fd862c946bb18840102",
-      "articleSha256": "0deb4c9a8300bff2bfc69e3bd20d6e0478909ec6ceece03fe50cf2bef856ee01",
+      "sourceSha256": "e18e4b6f6f86e7f069d076a4beda1fae6774b7963e6fe0d83f1cdfd346fb9b5a",
+      "articleSha256": "97e45e5e71a15f914ce5b3bfb5f092534f52f63bb01529c3c7b28e62743b05b5",
       "decision": "updated",
-      "rationale": "Reviewed the original private Memory share, Human review, exact receipt/source walk and current session UI. Paired privacy guides now distinguish explicit Approve and share from ordinary verification, preserve underlying Task/source restrictions and describe source withdrawal without claiming complete Source or provider qualification."
+      "rationale": "Danish version checked against the same current source behavior: The privacy section reflects explicit private-share review and retained-source access checks, while preserving the underlying Task privacy and source-withdrawal behavior."
     },
     {
       "source": "server/src/services/memory/memory-privacy.ts",
@@ -1152,7 +1152,7 @@
       "sourceSha256": "f467a374b56bdb4c5f2547321dfc1cb1c9fd55a23acf530800b20fe3f4cafc72",
       "articleSha256": "97e45e5e71a15f914ce5b3bfb5f092534f52f63bb01529c3c7b28e62743b05b5",
       "decision": "updated",
-      "rationale": "Reviewed source erasure for saved outputs: deleting a source removes copied text from results that used it, while independent person-authored tasks and documents remain. The paired Help article now explains both outcomes."
+      "rationale": "Danish version checked against the same current source behavior: Deleting a source scrubs text copied into a saved model result but leaves an independent person-authored Task or document intact; both outcomes are stated in the article."
     },
     {
       "source": "ui/src/pages/SaasBilling.tsx",
@@ -1173,10 +1173,10 @@
     {
       "source": "server/src/routes/saas.ts",
       "articleId": "billing-and-capacity-da",
-      "sourceSha256": "cd81fb96f8761d955ee6d09751ba5043ba83a9b23a03abf9a74d0f44758feaf8",
+      "sourceSha256": "522f703046d6d7695a5dc81f21ea4ea7816ba1e789ea109b28d023789504d99d",
       "articleSha256": "b11c75a4dc5766898ef17113a345aebb2fb8700f1a14b5d07b4aa8c4e598ef5d",
-      "decision": "no_change",
-      "rationale": "Reviewed the new native Human support response route and the existing configured-operator passkey gate. Billing, capacity, portal and account navigation behavior are unchanged; customers still read replies through the original authorized case reader."
+      "decision": "updated",
+      "rationale": "Danish version checked against the same current source behavior: The configured Human operator response remains separate from customer case access; the Help guide describes replies, resolved-case reopening, and linked follow-up for closed cases."
     },
     {
       "source": "server/src/services/billing/billing.ts",
@@ -1198,41 +1198,41 @@
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "recovering-work-da",
       "sourceSha256": "8be44f0a61787fe84a5d049ccdcbc2d40ca7fd0626f8f4ef2d062fcd32914af5",
-      "articleSha256": "653be69f33553a2937d71f8f8cec015e288235f7e470f817ad19b2c6bcef8ff6",
-      "decision": "updated",
-      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+      "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
+      "decision": "no_change",
+      "rationale": "Danish version checked against the same current source behavior: The source delta only removes the built-in feedback terms fallback URL; task status, run history, recovery actions and the instructions in this article are unchanged."
     },
     {
       "source": "ui/src/components/IssueBlockedNotice.tsx",
       "articleId": "recovering-work-da",
       "sourceSha256": "90983e55a2fa9ea9a8abe2b33a5aab817e05a463a65bf5d5795335149d769fd2",
-      "articleSha256": "653be69f33553a2937d71f8f8cec015e288235f7e470f817ad19b2c6bcef8ff6",
+      "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "updated",
-      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+      "rationale": "Danish version checked against the same current source behavior: The blocked-task notice is covered by the article’s instruction to read the displayed blocker and use only the next action shown for the original task."
     },
     {
       "source": "ui/src/lib/wait-for-stopped-runs.ts",
       "articleId": "recovering-work-da",
       "sourceSha256": "ce5726db6b535d3dd592bfde111b94de36291c1fe7dd5a85198dd22799bbe8c2",
-      "articleSha256": "653be69f33553a2937d71f8f8cec015e288235f7e470f817ad19b2c6bcef8ff6",
+      "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "updated",
-      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+      "rationale": "Danish version checked against the same current source behavior: The stop-waiting UI is covered by the article’s instruction to keep the task open, wait for status, and inspect the original run when an outcome is unknown."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "5dba9a4821f71474d1bd510f87c55093ccd62223d1f28eba8adee287325869e0",
-      "articleSha256": "653be69f33553a2937d71f8f8cec015e288235f7e470f817ad19b2c6bcef8ff6",
-      "decision": "updated",
-      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+      "sourceSha256": "23704492b2cc2f801c60e72f2a1b3e4770cf907b5e00e86318bed76f9da6d131",
+      "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
+      "decision": "no_change",
+      "rationale": "Danish version checked against the same current source behavior: The change removes an internal workspace-reader identifier from the public recovery-action projection; it does not change recovery choices or task guidance."
     },
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "f5a2e440b137092d00ccadde9bd89b8e6058ad225e36d76678d096d2dfad7d68",
-      "articleSha256": "653be69f33553a2937d71f8f8cec015e288235f7e470f817ad19b2c6bcef8ff6",
+      "sourceSha256": "fdc430ee5bdf838046f8ad8b0cc29408be77732516770efeb81a79ee6d7ea1b4",
+      "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "updated",
-      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+      "rationale": "Danish version checked against the same current source behavior: Current issue reads and recovery writes recheck task, workspace and source authority; the article sends readers back to the original task and makes restoration conditional on current access and retained history."
     },
     {
       "source": "ui/src/App.tsx",
@@ -1245,10 +1245,10 @@
     {
       "source": "ui/src/components/ExperienceUtilities.tsx",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "d44832d4849da6c1eb50a91b97f08d43b8d14ed55fe3fe56a6c565dc0e5ae781",
+      "sourceSha256": "f62e36c1fbdb826fba9ac7715ac57d77eb56a922abe8058e647328fcc5e58b21",
       "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
-      "rationale": "Danish translation of help-and-human-support: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "rationale": "Danish version checked against the same current source behavior: Help utilities retain direct human support and the optional assistant route; the article keeps those paths independent and describes the assistant’s consent and read-only limits."
     },
     {
       "source": "ui/src/pages/CustomerHelpCenter.tsx",
@@ -1349,10 +1349,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "64b853ae2a79db176cf638e43bcf76176edd86bc13acfd7f99a9ee5bf0e32ed1",
+      "sourceSha256": "9364b1cb9fd6d5fba1b71cd4e4f610ed8e0f50fc5078f66255f31a5ebb24b728",
       "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "no_change",
-      "rationale": "Reviewed authenticated conversation-comment session pinning and current owner checks alongside Help support routes. This change adds no support-case access or assistant authority; the paired article preserves direct human contact and the optional assistant boundary."
+      "rationale": "Danish version checked against the same current source behavior: The route pins the current actor for issue and conversation operations; it adds no Help or support-case authority and does not change the documented recovery steps."
     },
     {
       "source": "packages/shared/src/types/search.ts",
@@ -1413,10 +1413,10 @@
     {
       "source": "server/src/routes/saas.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "cd81fb96f8761d955ee6d09751ba5043ba83a9b23a03abf9a74d0f44758feaf8",
+      "sourceSha256": "522f703046d6d7695a5dc81f21ea4ea7816ba1e789ea109b28d023789504d99d",
       "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
-      "rationale": "Reviewed the native configured Human operator response: current recent passkey session, original deadline, strict case/version/command identity, erased-command fence, resolution/closure and safe customer messages. The guide now explains reading replies and resolved/closed follow-up behavior; no tenant support access or provider qualification is implied."
+      "rationale": "Danish version checked against the same current source behavior: The configured Human operator response remains separate from customer case access; the Help guide describes replies, resolved-case reopening, and linked follow-up for closed cases."
     },
     {
       "source": "server/src/services/saas/support-case-operator.ts",
@@ -1453,10 +1453,10 @@
     {
       "source": "server/src/routes/openapi.ts",
       "articleId": "developer-and-advanced-da",
-      "sourceSha256": "b6ddd027f2b76f21f7be356da6027496070fa6febb3c875f027e4d9d7c0db6b7",
+      "sourceSha256": "dca81a3a8bd9b4983ea288cc816bca5cbc8c7697d89f6f3b90775d428204f388",
       "articleSha256": "e27a68c1ed13e31bbdca2d3da6d672a6863c47efca9cd6d5d3eb61572e4de23b",
       "decision": "no_change",
-      "rationale": "Reviewed source-backed contracts for the new operator response and fifteen existing Native support/import/privacy/access routes, including strict schemas, path-owned IDs, Native versus SaaS availability, alternate success statuses and optional revocation body. The developer guide already directs users to the actual API contracts; no customer action or permission changed."
+      "rationale": "Danish version checked against the same current source behavior: The new OpenAPI entries expose existing route contracts and identify Native versus SaaS availability; the developer guide directs readers to the generated API reference for endpoint schemas."
     },
     {
       "source": "server/src/routes/index.ts",
@@ -1478,129 +1478,129 @@
       "source": "server/src/services/routines.ts",
       "articleId": "recovering-work",
       "sourceSha256": "a93f1b08a0f9a22f5db5a3df224487b32d8a8c3b2ac9e896ee1096af8c10adc1",
-      "articleSha256": "54ba747c42686a3646ab5853d49c33a79c4d869ddbb39e3cc76a412be19c17a5",
+      "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "updated",
-      "rationale": "Reviewed exact manual-run Human credential forwarding: existing advice to restore current source access before retrying remains valid. Added saved-workspace recovery guidance in this article."
+      "rationale": "Routine scheduling suppresses automatic runs when access to saved sources is withdrawn; the article tells users to ask the source owner to review access before retrying."
     },
     {
       "source": "server/src/services/scheduled-work.ts",
       "articleId": "recovering-work",
       "sourceSha256": "36f16b664876fddcc54ad9f8df27049eac628d7f768e6fdcd3727c741ff1d490",
-      "articleSha256": "54ba747c42686a3646ab5853d49c33a79c4d869ddbb39e3cc76a412be19c17a5",
-      "decision": "updated",
-      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+      "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
+      "decision": "no_change",
+      "rationale": "The scheduler restores persisted due times after work and recovery; it does not change the retry or recovery actions shown to a task owner."
     },
     {
       "source": "server/src/services/routines.ts",
       "articleId": "recovering-work-da",
       "sourceSha256": "a93f1b08a0f9a22f5db5a3df224487b32d8a8c3b2ac9e896ee1096af8c10adc1",
-      "articleSha256": "653be69f33553a2937d71f8f8cec015e288235f7e470f817ad19b2c6bcef8ff6",
+      "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "updated",
-      "rationale": "Reviewed exact manual-run Human credential forwarding: existing advice to restore current source access before retrying remains valid. Added saved-workspace recovery guidance in this article."
+      "rationale": "Danish version checked against the same current source behavior: Routine scheduling suppresses automatic runs when access to saved sources is withdrawn; the article tells users to ask the source owner to review access before retrying."
     },
     {
       "source": "server/src/services/scheduled-work.ts",
       "articleId": "recovering-work-da",
       "sourceSha256": "36f16b664876fddcc54ad9f8df27049eac628d7f768e6fdcd3727c741ff1d490",
-      "articleSha256": "653be69f33553a2937d71f8f8cec015e288235f7e470f817ad19b2c6bcef8ff6",
-      "decision": "updated",
-      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+      "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
+      "decision": "no_change",
+      "rationale": "Danish version checked against the same current source behavior: The scheduler restores persisted due times after work and recovery; it does not change the retry or recovery actions shown to a task owner."
     },
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "64b853ae2a79db176cf638e43bcf76176edd86bc13acfd7f99a9ee5bf0e32ed1",
-      "articleSha256": "54ba747c42686a3646ab5853d49c33a79c4d869ddbb39e3cc76a412be19c17a5",
+      "sourceSha256": "9364b1cb9fd6d5fba1b71cd4e4f610ed8e0f50fc5078f66255f31a5ebb24b728",
+      "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Reviewed the current authenticated conversation-comment session pin and current owner authorization. This change does not alter the saved-workspace recovery steps described here; current task and workspace checks still apply."
+      "rationale": "The route pins the current actor for issue and conversation operations; it adds no Help or support-case authority and does not change the documented recovery steps."
     },
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "64b853ae2a79db176cf638e43bcf76176edd86bc13acfd7f99a9ee5bf0e32ed1",
-      "articleSha256": "653be69f33553a2937d71f8f8cec015e288235f7e470f817ad19b2c6bcef8ff6",
+      "sourceSha256": "9364b1cb9fd6d5fba1b71cd4e4f610ed8e0f50fc5078f66255f31a5ebb24b728",
+      "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Reviewed the current authenticated conversation-comment session pin and current owner authorization. This change does not alter the saved-workspace recovery steps described here; current task and workspace checks still apply."
+      "rationale": "Danish version checked against the same current source behavior: The route pins the current actor for issue and conversation operations; it adds no Help or support-case authority and does not change the documented recovery steps."
     },
     {
       "source": "server/src/services/execution-workspaces.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "a79171e51ca7c7ea35eb587d3d0c33453c1479d32fed60f3b9ac2d184d9fd98b",
-      "articleSha256": "54ba747c42686a3646ab5853d49c33a79c4d869ddbb39e3cc76a412be19c17a5",
+      "sourceSha256": "a1a0c7f8344dbc3cfe68bb79c01c3cb41e95d344b2d519b72db110bea31f4b70",
+      "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "updated",
-      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+      "rationale": "Workspace reopen and cleanup preserve source identity and customer files unless exact restoration is verified; the guide tells owners to check access and review preserved files before cleanup."
     },
     {
       "source": "server/src/services/execution-workspaces.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "a79171e51ca7c7ea35eb587d3d0c33453c1479d32fed60f3b9ac2d184d9fd98b",
-      "articleSha256": "653be69f33553a2937d71f8f8cec015e288235f7e470f817ad19b2c6bcef8ff6",
+      "sourceSha256": "a1a0c7f8344dbc3cfe68bb79c01c3cb41e95d344b2d519b72db110bea31f4b70",
+      "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "updated",
-      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+      "rationale": "Danish version checked against the same current source behavior: Workspace reopen and cleanup preserve source identity and customer files unless exact restoration is verified; the guide tells owners to check access and review preserved files before cleanup."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "b86965d9e3b4a7612e39f4f0c7fcf8da459c224deb36de18d2b5a469293f1e70",
-      "articleSha256": "54ba747c42686a3646ab5853d49c33a79c4d869ddbb39e3cc76a412be19c17a5",
+      "sourceSha256": "aaebc327cff5370f35aa3d333ddd73e16561fe085e348d86b757dcb26ba6984b",
+      "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "updated",
-      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+      "rationale": "Heartbeat admission rechecks current source access before dispatch and records a suppressed scheduled run when access is withdrawn; the article gives the matching source-owner review step."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "b86965d9e3b4a7612e39f4f0c7fcf8da459c224deb36de18d2b5a469293f1e70",
-      "articleSha256": "653be69f33553a2937d71f8f8cec015e288235f7e470f817ad19b2c6bcef8ff6",
+      "sourceSha256": "aaebc327cff5370f35aa3d333ddd73e16561fe085e348d86b757dcb26ba6984b",
+      "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "updated",
-      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+      "rationale": "Danish version checked against the same current source behavior: Heartbeat admission rechecks current source access before dispatch and records a suppressed scheduled run when access is withdrawn; the article gives the matching source-owner review step."
     },
     {
       "source": "server/src/services/workspace-runtime.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "e6b93bc100a26b8f363656bee02b79ced8b24335552c8e6f9170b3741b5bb6ea",
-      "articleSha256": "54ba747c42686a3646ab5853d49c33a79c4d869ddbb39e3cc76a412be19c17a5",
+      "sourceSha256": "9bea9b30457d3700a8f9440c47e4fecedc43edb2ae42920e4e41eaae344e6085",
+      "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "updated",
-      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+      "rationale": "Cleanup keeps Git workspaces without exact restoration proof and avoids removing non-empty local workspaces; the article tells owners to review files reported as kept."
     },
     {
       "source": "server/src/services/workspace-runtime.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "e6b93bc100a26b8f363656bee02b79ced8b24335552c8e6f9170b3741b5bb6ea",
-      "articleSha256": "653be69f33553a2937d71f8f8cec015e288235f7e470f817ad19b2c6bcef8ff6",
+      "sourceSha256": "9bea9b30457d3700a8f9440c47e4fecedc43edb2ae42920e4e41eaae344e6085",
+      "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "updated",
-      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+      "rationale": "Danish version checked against the same current source behavior: Cleanup keeps Git workspaces without exact restoration proof and avoids removing non-empty local workspaces; the article tells owners to review files reported as kept."
     },
     {
       "source": "server/src/services/managed-repository-checkout.ts",
       "articleId": "recovering-work",
       "sourceSha256": "a1a541ddfd891aa3e4fcea7748403c8c4c65d4cfebf3fac78ac2d8879eb7feda",
-      "articleSha256": "54ba747c42686a3646ab5853d49c33a79c4d869ddbb39e3cc76a412be19c17a5",
+      "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "updated",
-      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+      "rationale": "The checkout owner verifies the saved repository source before reopening work; the guide directs readers to check that source and its current connection."
     },
     {
       "source": "server/src/services/managed-repository-checkout.ts",
       "articleId": "recovering-work-da",
       "sourceSha256": "a1a541ddfd891aa3e4fcea7748403c8c4c65d4cfebf3fac78ac2d8879eb7feda",
-      "articleSha256": "653be69f33553a2937d71f8f8cec015e288235f7e470f817ad19b2c6bcef8ff6",
+      "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "updated",
-      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+      "rationale": "Danish version checked against the same current source behavior: The checkout owner verifies the saved repository source before reopening work; the guide directs readers to check that source and its current connection."
     },
     {
       "source": "server/src/services/git-credentials.ts",
       "articleId": "recovering-work",
       "sourceSha256": "87e3715036da6bb070b75b4d9bef539ff93a199aa47254652b98669c4cb999a7",
-      "articleSha256": "54ba747c42686a3646ab5853d49c33a79c4d869ddbb39e3cc76a412be19c17a5",
+      "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "updated",
-      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+      "rationale": "Repository credential access is rechecked for the current task owner; the guide says to restore the saved source connection before retrying workspace recovery."
     },
     {
       "source": "server/src/services/git-credentials.ts",
       "articleId": "recovering-work-da",
       "sourceSha256": "87e3715036da6bb070b75b4d9bef539ff93a199aa47254652b98669c4cb999a7",
-      "articleSha256": "653be69f33553a2937d71f8f8cec015e288235f7e470f817ad19b2c6bcef8ff6",
+      "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "updated",
-      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+      "rationale": "Danish version checked against the same current source behavior: Repository credential access is rechecked for the current task owner; the guide says to restore the saved source connection before retrying workspace recovery."
     },
     {
       "source": "ui/src/components/CustomerSupportAssistant.tsx",
@@ -1621,18 +1621,18 @@
     {
       "source": "server/src/services/orchestration/first-party-support-model-gateway.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "11108ac40c7f93162bbd07ea377bd3b202b3b8544fbcaedfd1676b2515225c36",
+      "sourceSha256": "b62bb2cc422bb86546b3a612ac1505cde134f4e2f22a1e904f226d5d2d4c5ea2",
       "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "updated",
-      "rationale": "Reviewed English Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+      "rationale": "The article matches the bounded Support call: explicit consent, approved Help excerpts only, platform funding, and no account inspection or actions."
     },
     {
       "source": "server/src/services/orchestration/first-party-support-model-profiles.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "95bb50d0ec74bdabe7bb97e8f83021be2ee87e3b29cfd2e33be3bd30b4b7bb9a",
+      "sourceSha256": "985ab498b969bbd6eed65d70829ca22bfa62483026ce71358742d4b9d8089f19",
       "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "updated",
-      "rationale": "Reviewed English Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+      "rationale": "The article says the assistant may be unavailable without a current operator-approved profile and does not imply customer AI connections enable it."
     },
     {
       "source": "server/src/services/experience/support-assistant-grounding.ts",
@@ -1645,10 +1645,10 @@
     {
       "source": "server/src/services/orchestration/model-reservations.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "b8b29068c83ad641ef5ef6c735cc9511c3a6084f9db4b98f95c68d7bdcc7a4c6",
+      "sourceSha256": "bd802644684b65d3edf8bba676315d0773b44f8ea5e0d864dd365b100e4137ea",
       "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "updated",
-      "rationale": "Reviewed English Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+      "rationale": "An unclear assistant result is not resent automatically, and direct human support remains available; calls are bounded by the operator-qualified funding profile."
     },
     {
       "source": "server/src/services/agent-packages/execution-gate.ts",
@@ -1669,10 +1669,10 @@
     {
       "source": "server/src/services/agent-packages/package-service.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "d1b6c5e8787fb1ddc3d9ffd42b2073158baaac14557e7978566a43759d5cdaf1",
+      "sourceSha256": "3d9a9af661d46269d88bbfc5fa3bf4c96557db9c9aab0851efec67e8471dcaea",
       "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "updated",
-      "rationale": "Reviewed English Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+      "rationale": "The article limits assistant answers to current approved Help evidence and says it may be unavailable without the approved package; it does not promise general account lookup."
     },
     {
       "source": "server/src/saas-platform-config.ts",
@@ -1685,18 +1685,18 @@
     {
       "source": "server/src/app.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "d1c2804a37e2573124cc9442febef463b85ce919af46f6964c121137a87af9ca",
+      "sourceSha256": "b67ee66f75315578b2489754a72136a7a3937034c1b687d7b6fdf4a3d1346139",
       "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "updated",
-      "rationale": "Reviewed English Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+      "rationale": "Application wiring mounts the assistant only with a server-owned profile and release; the article describes availability as optional and deployment-dependent."
     },
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "dd34919dd2b68f6fd4bf0eedbcca49e4ae47b6f82bb785a0693766cdde97701a",
+      "sourceSha256": "0f98f591a5ee2e27619df5c9a36397e8de72870a842af1e43b29b8208eb55ff5",
       "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "updated",
-      "rationale": "Reviewed English Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+      "rationale": "Assistant evidence comes from approved linked Help articles; the article says answers cite only those excerpts and cannot add unsupported remedies."
     },
     {
       "source": "packages/shared/src/agent-packages.ts",
@@ -1709,18 +1709,18 @@
     {
       "source": "packages/shared/src/model-broker.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "0a878ca1d6d937ad9a002a7223abc04654ca588e2fd2b471b23948eacc7e1c51",
+      "sourceSha256": "156790480456159a792b46e3c6ccbcc17eb9118a3460799b66fc8f4a401bc80b",
       "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "updated",
-      "rationale": "Reviewed English Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+      "rationale": "The funding contract separates platform-funded Support from company-funded Jev tests; the articles disclose each funding path and the shared OpenRouter account charge."
     },
     {
       "source": "server/src/services/orchestration/read-only-model-transport.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "f40a68d7be1b1c2f36de15e1d2276f4d917c3659d0babef6588caa490cc6a51e",
+      "sourceSha256": "51752a64a9553944832c3f2b89e221f4c52adb3156e4013855ec4c4c1e6e152b",
       "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "updated",
-      "rationale": "Reviewed English Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+      "rationale": "The assistant transport is read-only, bounded and cannot execute tools; the article states those limits and directs account-specific questions to a person."
     },
     {
       "source": "ui/src/components/CustomerSupportAssistant.tsx",
@@ -1741,18 +1741,18 @@
     {
       "source": "server/src/services/orchestration/first-party-support-model-gateway.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "11108ac40c7f93162bbd07ea377bd3b202b3b8544fbcaedfd1676b2515225c36",
+      "sourceSha256": "b62bb2cc422bb86546b3a612ac1505cde134f4e2f22a1e904f226d5d2d4c5ea2",
       "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
-      "rationale": "Reviewed Danish Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+      "rationale": "Danish version checked against the same current source behavior: The article matches the bounded Support call: explicit consent, approved Help excerpts only, platform funding, and no account inspection or actions."
     },
     {
       "source": "server/src/services/orchestration/first-party-support-model-profiles.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "95bb50d0ec74bdabe7bb97e8f83021be2ee87e3b29cfd2e33be3bd30b4b7bb9a",
+      "sourceSha256": "985ab498b969bbd6eed65d70829ca22bfa62483026ce71358742d4b9d8089f19",
       "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
-      "rationale": "Reviewed Danish Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+      "rationale": "Danish version checked against the same current source behavior: The article says the assistant may be unavailable without a current operator-approved profile and does not imply customer AI connections enable it."
     },
     {
       "source": "server/src/services/experience/support-assistant-grounding.ts",
@@ -1765,10 +1765,10 @@
     {
       "source": "server/src/services/orchestration/model-reservations.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "b8b29068c83ad641ef5ef6c735cc9511c3a6084f9db4b98f95c68d7bdcc7a4c6",
+      "sourceSha256": "bd802644684b65d3edf8bba676315d0773b44f8ea5e0d864dd365b100e4137ea",
       "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
-      "rationale": "Reviewed Danish Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+      "rationale": "Danish version checked against the same current source behavior: An unclear assistant result is not resent automatically, and direct human support remains available; calls are bounded by the operator-qualified funding profile."
     },
     {
       "source": "server/src/services/agent-packages/execution-gate.ts",
@@ -1789,10 +1789,10 @@
     {
       "source": "server/src/services/agent-packages/package-service.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "d1b6c5e8787fb1ddc3d9ffd42b2073158baaac14557e7978566a43759d5cdaf1",
+      "sourceSha256": "3d9a9af661d46269d88bbfc5fa3bf4c96557db9c9aab0851efec67e8471dcaea",
       "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
-      "rationale": "Reviewed Danish Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+      "rationale": "Danish version checked against the same current source behavior: The article limits assistant answers to current approved Help evidence and says it may be unavailable without the approved package; it does not promise general account lookup."
     },
     {
       "source": "server/src/saas-platform-config.ts",
@@ -1805,18 +1805,18 @@
     {
       "source": "server/src/app.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "d1c2804a37e2573124cc9442febef463b85ce919af46f6964c121137a87af9ca",
+      "sourceSha256": "b67ee66f75315578b2489754a72136a7a3937034c1b687d7b6fdf4a3d1346139",
       "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
-      "rationale": "Reviewed Danish Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+      "rationale": "Danish version checked against the same current source behavior: Application wiring mounts the assistant only with a server-owned profile and release; the article describes availability as optional and deployment-dependent."
     },
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "dd34919dd2b68f6fd4bf0eedbcca49e4ae47b6f82bb785a0693766cdde97701a",
+      "sourceSha256": "0f98f591a5ee2e27619df5c9a36397e8de72870a842af1e43b29b8208eb55ff5",
       "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
-      "rationale": "Reviewed Danish Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+      "rationale": "Danish version checked against the same current source behavior: Assistant evidence comes from approved linked Help articles; the article says answers cite only those excerpts and cannot add unsupported remedies."
     },
     {
       "source": "packages/shared/src/agent-packages.ts",
@@ -1829,18 +1829,18 @@
     {
       "source": "packages/shared/src/model-broker.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "0a878ca1d6d937ad9a002a7223abc04654ca588e2fd2b471b23948eacc7e1c51",
+      "sourceSha256": "156790480456159a792b46e3c6ccbcc17eb9118a3460799b66fc8f4a401bc80b",
       "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
-      "rationale": "Reviewed Danish Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+      "rationale": "Danish version checked against the same current source behavior: The funding contract separates platform-funded Support from company-funded Jev tests; the articles disclose each funding path and the shared OpenRouter account charge."
     },
     {
       "source": "server/src/services/orchestration/read-only-model-transport.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "f40a68d7be1b1c2f36de15e1d2276f4d917c3659d0babef6588caa490cc6a51e",
+      "sourceSha256": "51752a64a9553944832c3f2b89e221f4c52adb3156e4013855ec4c4c1e6e152b",
       "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
-      "rationale": "Reviewed Danish Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+      "rationale": "Danish version checked against the same current source behavior: The assistant transport is read-only, bounded and cannot execute tools; the article states those limits and directs account-specific questions to a person."
     },
     {
       "source": "packages/shared/src/validators/company-portability.ts",
@@ -1863,8 +1863,8 @@
       "articleId": "company-import-export",
       "sourceSha256": "dca81a3a8bd9b4983ea288cc816bca5cbc8c7697d89f6f3b90775d428204f388",
       "articleSha256": "878dcc436da18fdd2423e5e8285173e8d03f9d0869b3aeab4a428079e612945c",
-      "decision": "updated",
-      "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
+      "decision": "no_change",
+      "rationale": "The new OpenAPI entries expose existing route contracts and identify Native versus SaaS availability; the developer guide directs readers to the generated API reference for endpoint schemas."
     },
     {
       "source": "packages/shared/src/validators/company-portability.ts",
@@ -1887,8 +1887,56 @@
       "articleId": "company-import-export-da",
       "sourceSha256": "dca81a3a8bd9b4983ea288cc816bca5cbc8c7697d89f6f3b90775d428204f388",
       "articleSha256": "46050e4274e4162eba35e42e4a130c91d6d32da232fe142ca661448b94fb8116",
+      "decision": "no_change",
+      "rationale": "Danish version checked against the same current source behavior: The new OpenAPI entries expose existing route contracts and identify Native versus SaaS availability; the developer guide directs readers to the generated API reference for endpoint schemas."
+    },
+    {
+      "source": "ui/src/components/JevSkillSuggestionSettings.tsx",
+      "articleId": "apps-and-connections",
+      "sourceSha256": "78a47504f8b19d7fd7ef9f25be4593789dcc2b3617e3196ef61c511186437218",
+      "articleSha256": "99e10f89a032c4905fb2aadbc57f5dc8b9657bd3ab2ea087f00bab86a7101a76",
       "decision": "updated",
-      "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
+      "rationale": "The optional Jev section matches the settings UI: off by default, a separate background-check control, and a disclosed fixed-sample test that does not qualify suggestions."
+    },
+    {
+      "source": "ui/src/components/JevSkillSuggestionSettings.tsx",
+      "articleId": "apps-and-connections-da",
+      "sourceSha256": "78a47504f8b19d7fd7ef9f25be4593789dcc2b3617e3196ef61c511186437218",
+      "articleSha256": "42359467fc66d26335f8521a2c893d4a0e91b81c5c854d2d8ffe687ef9e89867",
+      "decision": "updated",
+      "rationale": "Danish version checked against the same current source behavior: The optional Jev section matches the settings UI: off by default, a separate background-check control, and a disclosed fixed-sample test that does not qualify suggestions."
+    },
+    {
+      "source": "server/src/routes/jev-decisions.ts",
+      "articleId": "apps-and-connections",
+      "sourceSha256": "79866198ddf6f7495a3750701d68456c77a1210b68fca0c2cfbc1eb138d734a2",
+      "articleSha256": "99e10f89a032c4905fb2aadbc57f5dc8b9657bd3ab2ea087f00bab86a7101a76",
+      "decision": "updated",
+      "rationale": "The paired article reflects explicit consent for each fixed-sample test, per-company settings, and fail-closed profile and processing-policy gates."
+    },
+    {
+      "source": "server/src/routes/jev-decisions.ts",
+      "articleId": "apps-and-connections-da",
+      "sourceSha256": "79866198ddf6f7495a3750701d68456c77a1210b68fca0c2cfbc1eb138d734a2",
+      "articleSha256": "42359467fc66d26335f8521a2c893d4a0e91b81c5c854d2d8ffe687ef9e89867",
+      "decision": "updated",
+      "rationale": "Danish version checked against the same current source behavior: The paired article reflects explicit consent for each fixed-sample test, per-company settings, and fail-closed profile and processing-policy gates."
+    },
+    {
+      "source": "server/src/services/jev-skill-suggestions.ts",
+      "articleId": "apps-and-connections",
+      "sourceSha256": "ab666a7f91a568b92bae58136145cb9078dd1497c8f5da50541f193b456000aa",
+      "articleSha256": "99e10f89a032c4905fb2aadbc57f5dc8b9657bd3ab2ea087f00bab86a7101a76",
+      "decision": "updated",
+      "rationale": "The paired article limits Jev to optional suggestions and discloses the selected shared OpenRouter account and that the setup test cannot qualify Skills."
+    },
+    {
+      "source": "server/src/services/jev-skill-suggestions.ts",
+      "articleId": "apps-and-connections-da",
+      "sourceSha256": "ab666a7f91a568b92bae58136145cb9078dd1497c8f5da50541f193b456000aa",
+      "articleSha256": "42359467fc66d26335f8521a2c893d4a0e91b81c5c854d2d8ffe687ef9e89867",
+      "decision": "updated",
+      "rationale": "Danish version checked against the same current source behavior: The paired article limits Jev to optional suggestions and discloses the selected shared OpenRouter account and that the setup test cannot qualify Skills."
     }
   ]
 }

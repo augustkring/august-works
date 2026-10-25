@@ -19,7 +19,7 @@ Blentera has separate actions for exporting a company, deleting an organization,
 
 ## Export company data
 
-Open **Company settings → Export** to choose the files included in a company package. Review the export preview and its **Not included in this export** report before downloading. A company export is a portable package, not a copy of every database record or provider-held item. See [Importing and exporting companies](/guides/board-operator/importing-and-exporting) for the current package contents and import recovery guidance.
+Open **Company settings → Export** to choose the files included in a company package. You can separately include the support cases you can currently view; that archive contains customer-visible history, excludes internal notes and access grants, and cannot restore live cases. Review the export preview and its **Not included in this export** report before downloading. A company export is a portable package, not a copy of every database record or provider-held item. See [Importing and exporting companies](/guides/board-operator/importing-and-exporting) for the current package contents and import recovery guidance.
 
 ## Request organization deletion
 
@@ -29,7 +29,7 @@ Deletion may remain in a retention state while managed backups reach their delet
 
 ## Request personal account deletion
 
-Open **Company settings → Security** to review personal account deletion. The form requires your current password, the text **DELETE MY ACCOUNT**, and acknowledgement that you saved the exports you need. If the request is accepted, the account page redirects and provides a deletion receipt when available.
+Open **Company settings → Security** to review personal account deletion. The form requires your current password, the text **DELETE MY ACCOUNT**, and acknowledgement that you saved the exports you need. If your account requires additional authentication, confirm the recent factor when asked. If the request is accepted, the account page redirects and provides a deletion receipt when available.
 
 If an earlier request has an unknown result, use the recovery shown on the account page instead of starting a new request. For a privacy question, contact [privacy@blentera.com](mailto:privacy@blentera.com). Do not send your password, recovery code, or API key.
 

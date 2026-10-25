@@ -1972,6 +1972,9 @@ async function startRuntime(input: {
     model: input.options.model,
     small_model: input.options.model,
     share: "disabled",
+    // Cold starts must not contact the public update service or mutate the
+    // pinned runtime outside the qualified provider/tool routes.
+    autoupdate: false,
     // The configured entry is already composed exactly once into the session
     // system prompt; siblings remain available through the read-only root.
     instructions: [],

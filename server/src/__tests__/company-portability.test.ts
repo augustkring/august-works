@@ -4563,7 +4563,8 @@ describe("company portability", () => {
     const sourceIssueId = nativeSourceUuid("issue", "issue-1");
     const documentId = nativeSourceUuid("document", "document-1");
     const revisionId = nativeSourceUuid("revision", "revision-1");
-    await seedNativeBoardTask({ id: sourceIssueId, number: 9001, title: "Alpha task", description: null });
+    const [existingSourceIssue] = await nativeDb.select({ id: issues.id }).from(issues).where(eq(issues.id, sourceIssueId));
+    if (!existingSourceIssue) await seedNativeBoardTask({ id: sourceIssueId, number: 9001, title: "Alpha task", description: null });
     await nativeDb.insert(documents).values({ id: documentId, companyId: nativeCompanyId, title: "Spec",
       format: "markdown", latestBody: "# Spec\n\nDetails.", latestRevisionId: revisionId, latestRevisionNumber: 1,
       createdByUserId: nativeUserId, updatedByUserId: nativeUserId }).onConflictDoNothing();

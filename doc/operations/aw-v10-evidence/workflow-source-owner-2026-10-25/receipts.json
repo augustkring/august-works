@@ -2666,6 +2666,107 @@
         "Duration  1.18s (transform 851ms, setup 0ms, import 1.01s, tests 35ms, environment 0ms)"
       ],
       "sourceCommit": "b56ef80b411cec061de8fe34273a5ad4a1e64c4c"
+    },
+    {
+      "name": "v10-integrated-typecheck-next",
+      "exitCode": 1,
+      "exitSidecar": "v10-integrated-typecheck-next.exit",
+      "rawSha256": "315e9ce73989e43b1084be3760da7323942815857066a9469eef6413746fa55e",
+      "sanitizedSha256": "315e9ce73989e43b1084be3760da7323942815857066a9469eef6413746fa55e",
+      "archiveSha256": "3fb740ecdd7b28235c4de74628623bec2d3e2d0ca5b0f3efd927c419f1d5380b",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "a41d639eb585f0c1ec6a8ddd8b4176953ddc494f"
+    },
+    {
+      "name": "native-erase-test2",
+      "exitCode": 0,
+      "exitSidecar": "native-erase-test2.exit",
+      "rawSha256": "2eb20ae0f08b9540c8fb640510e83833d766cc8f022b5be038d7d2d20542e6c8",
+      "sanitizedSha256": "2eb20ae0f08b9540c8fb640510e83833d766cc8f022b5be038d7d2d20542e6c8",
+      "archiveSha256": "26d3bbfef28e585bb31618da49d60dba44345fdf5e5ad2e0feba9b6193c5b380",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  11 passed (11)",
+        "Duration  31.93s (transform 9.52s, setup 72ms, import 13.02s, tests 18.73s, environment 0ms)"
+      ],
+      "sourceCommit": "a41d639eb585f0c1ec6a8ddd8b4176953ddc494f"
+    },
+    {
+      "name": "native-erasure-final-two-positive",
+      "exitCode": 0,
+      "exitSidecar": "native-erasure-final-two-positive.exit",
+      "rawSha256": "4597a6b1f5db119197c212113f0e484113df4591b555df4e17ced39e9d9bfa5e",
+      "sanitizedSha256": "4597a6b1f5db119197c212113f0e484113df4591b555df4e17ced39e9d9bfa5e",
+      "archiveSha256": "bcd2d47eb582e63d39e36b69b7dc8e9d4c58e5ae12e22d6ecadbf7dee28a4d15",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  29 passed (29)",
+        "Duration  19.48s (transform 10.01s, setup 68ms, import 13.72s, tests 5.58s, environment 0ms)"
+      ],
+      "sourceCommit": "a41d639eb585f0c1ec6a8ddd8b4176953ddc494f"
+    },
+    {
+      "name": "native-v1-output-physical-erasure",
+      "exitCode": 0,
+      "exitSidecar": "native-v1-output-physical-erasure.exit",
+      "rawSha256": "d6b74eb5600ac88d7e74b23b8e05cc53d61e77e548ef9e387df3da146daebe95",
+      "sanitizedSha256": "d6b74eb5600ac88d7e74b23b8e05cc53d61e77e548ef9e387df3da146daebe95",
+      "archiveSha256": "011d07887f66fc16f6506b26773838e72c075429d2ee977d78c86c5cfa180a20",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 skipped (1)",
+        "Tests  65 skipped (65)",
+        "Duration  16.30s (transform 11.28s, setup 79ms, import 16.09s, tests 0ms, environment 0ms)"
+      ],
+      "sourceCommit": "a41d639eb585f0c1ec6a8ddd8b4176953ddc494f"
+    },
+    {
+      "name": "native-context-dispatch-full",
+      "exitCode": 0,
+      "exitSidecar": "native-context-dispatch-full.exit",
+      "rawSha256": "eb92af3ef8abdbe3e7ddff974d558360585ef0118770541210bf098a640488d3",
+      "sanitizedSha256": "eb92af3ef8abdbe3e7ddff974d558360585ef0118770541210bf098a640488d3",
+      "archiveSha256": "c0cf14ebc7433b06417ba269ec1c48983c01487e4e417516013e94f984987c2c",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  40 passed (40)",
+        "Duration  26.72s (transform 10.31s, setup 68ms, import 14.00s, tests 12.53s, environment 0ms)"
+      ],
+      "sourceCommit": "a41d639eb585f0c1ec6a8ddd8b4176953ddc494f"
     }
   ],
   "updates": [
@@ -3064,6 +3165,29 @@
         "managed-source-closure-package-build",
         "managed-source-closure-server-tsc",
         "managed-source-closure-runtime-test2"
+      ]
+    },
+    {
+      "sourceCommit": "a41d639eb585f0c1ec6a8ddd8b4176953ddc494f",
+      "meaning": "Whole workspace typecheck found three source-dispatch fixture typing errors; fixed afterward, fresh unchanged-source gate pending.",
+      "logs": [
+        "v10-integrated-typecheck-next"
+      ]
+    },
+    {
+      "sourceCommit": "a41d639eb585f0c1ec6a8ddd8b4176953ddc494f",
+      "meaning": "Current PG erasure/source binding and real AW model output-copy erasure controls; scoped source still moving, not final full-suite identity.",
+      "logs": [
+        "native-erase-test2",
+        "native-erasure-final-two-positive",
+        "native-v1-output-physical-erasure"
+      ]
+    },
+    {
+      "sourceCommit": "a41d639eb585f0c1ec6a8ddd8b4176953ddc494f",
+      "meaning": "Complete native dispatch integration file 40/40, including canonical runtime inputs and two actual Context dispatches; not complete private temporal output coverage.",
+      "logs": [
+        "native-context-dispatch-full"
       ]
     }
   ],

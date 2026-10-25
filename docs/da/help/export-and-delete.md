@@ -19,7 +19,7 @@ Blentera har særskilte handlinger til at eksportere en virksomhed, slette en or
 
 ## Eksportér virksomhedsdata
 
-Åbn **Company settings → Export** for at vælge de filer, der skal med i virksomhedspakken. Gennemgå forhåndsvisningen og rapporten **Not included in this export**, før du henter pakken. En virksomhedseksport er en flytbar pakke, ikke en kopi af alle databaseposter eller data hos eksterne udbydere. Se [Importér og eksportér virksomheder](/da/guides/board-operator/importing-and-exporting) for pakkens aktuelle indhold og hjælp til importgenopretning.
+Åbn **Company settings → Export** for at vælge de filer, der skal med i virksomhedspakken. Du kan særskilt inkludere de supportsager, du aktuelt kan se; arkivet indeholder den kundesynlige historik, men ikke interne noter eller adgangstilladelser, og det gendanner ikke aktive sager. Gennemgå forhåndsvisningen og rapporten **Not included in this export**, før du henter pakken. En virksomhedseksport er en flytbar pakke, ikke en kopi af alle databaseposter eller data hos eksterne udbydere. Se [Importér og eksportér virksomheder](/da/guides/board-operator/importing-and-exporting) for pakkens aktuelle indhold og hjælp til importgenopretning.
 
 ## Anmod om sletning af organisation
 
@@ -29,7 +29,7 @@ Sletningen kan forblive i en opbevaringstilstand, mens administrerede sikkerheds
 
 ## Anmod om sletning af personlig konto
 
-Åbn **Company settings → Security** for at gennemgå sletning af din personlige konto. Formularen kræver din aktuelle adgangskode, teksten **DELETE MY ACCOUNT** og en bekræftelse af, at du har gemt de eksporter, du har brug for. Hvis anmodningen accepteres, viderestilles kontosiden og viser en kvittering, når den er tilgængelig.
+Åbn **Company settings → Security** for at gennemgå sletning af din personlige konto. Formularen kræver din aktuelle adgangskode, teksten **DELETE MY ACCOUNT** og en bekræftelse af, at du har gemt de eksporter, du har brug for. Hvis din konto kræver yderligere godkendelse, skal du bekræfte den seneste faktor, når du bliver bedt om det. Hvis anmodningen accepteres, viderestilles kontosiden og viser en kvittering, når den er tilgængelig.
 
 Hvis en tidligere anmodning har et ukendt resultat, skal du bruge gendannelsen på kontosiden i stedet for at indsende en ny anmodning. Ved spørgsmål om privatliv kan du skrive til [privacy@blentera.com](mailto:privacy@blentera.com). Send ikke din adgangskode, gendannelseskode eller API-nøgle.
 

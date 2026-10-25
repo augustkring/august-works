@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { canonicalJson } from "@paperclipai/shared/portability-hash";
 import { companyImportJobService, companyImportOperationReceipt, type CompanyImportJob } from "../services/company-import-jobs.js";
-import { authorizationService, canActorReadProjectPrivacy } from "../services/authorization.js";
+import { assertCompanyCeoAgentOrBoard, authorizationService, canActorReadProjectPrivacy } from "../services/authorization.js";
 import { routineService } from "../services/routines.js";
 import { isSaasDeployment } from "../deployment-profile.js";
 import express, { Router, type NextFunction, type Request, type Response } from "express";
@@ -403,18 +403,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
 
   async function assertSameCompanyCeoAgentOrBoard(req: Request, companyId: string, capability: string) {
     assertCompanyAccess(req, companyId);
-    if (req.actor.type === "board") {
-      return;
-    }
-    if (!req.actor.agentId) throw forbidden("Agent authentication required");
-
-    const actorAgent = await agents.getById(req.actor.agentId);
-    if (!actorAgent || actorAgent.companyId !== companyId) {
-      throw forbidden("Agent key cannot access another company");
-    }
-    if (actorAgent.role !== "ceo") {
-      throw forbidden(`Only CEO agents can manage ${capability}`);
-    }
+    await assertCompanyCeoAgentOrBoard(db, companyId, req.actor, capability);
   }
 
   function assertSupportCaseExportAccess(req: Request, body: z.infer<typeof companyPortabilityExportSchema>) {
