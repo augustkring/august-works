@@ -53,7 +53,7 @@ import { workerModelProfileSchema, type WorkerModelProfile } from "../orchestrat
 import { currentNativeControllerIdentity } from "./native-restart-recovery.js";
 import { nativeCompletionContractInput } from "./completion-contracts.js";
 import { resolveDefaultAgentWorkspaceDir } from "../../home-paths.js";
-import { createOpenCodeNativeSessionBackend, OpenCodeServerDriver } from "@paperclipai/paperclip-runner";
+import { OpenCodeServerDriver } from "@paperclipai/paperclip-runner";
 
 const QUALIFIED_OPENCODE_SHA256 = "513f500a1a5ea1dc7d865547ac87b32a8936334e8d5abd5b3ff585c45a170080";
 const sourceSha = "a".repeat(40);
@@ -272,7 +272,7 @@ describe("managed OpenCode source-closure binary integration", () => {
         if (responseCount === 1) {
           const writeTool = tools.find(tool => toolName(tool.name) === "write_document");
           if (!writeTool) throw new Error("OpenCode wire omitted the governed write_document tool.");
-          return new Response(JSON.stringify({ type: "message", role: "assistant", model, stop_reason: "tool_use",
+          return new Response(JSON.stringify({ id: "msg_managed_e2e_write", type: "message", role: "assistant", model, stop_reason: "tool_use",
             content: [{ type: "tool_use", id: "managed-e2e-write-1", name: writeTool.name, input: {
               idempotencyKey: "managed-opencode-source-document-v1", key: "managed-source-e2e", title: "Private E2E note",
               body: "This document was written through the governed OpenCode tool boundary.", baseRevisionId: null,
@@ -286,7 +286,7 @@ describe("managed OpenCode source-closure binary integration", () => {
             criteria: completionContract.criteria.map(criterion => ({ criterionId: criterion.id, status: "satisfied", evidenceRefs: [] })),
             remainingWork: [] }, evidence: [], verification: [], attentionRequests: [], artifacts: [],
         };
-        return new Response(JSON.stringify({ type: "message", role: "assistant", model, stop_reason: "tool_use",
+        return new Response(JSON.stringify({ id: "msg_managed_e2e_finish", type: "message", role: "assistant", model, stop_reason: "tool_use",
           content: [{ type: "tool_use", id: "managed-e2e-finish-1", name: finish.name, input: finishInput }],
           usage: { input_tokens: 160, output_tokens: 38 } }), { status: 200, headers: { "content-type": "application/json" } });
       },
@@ -296,10 +296,38 @@ describe("managed OpenCode source-closure binary integration", () => {
     app.use(express.json({ limit: "2mb" }));
     app.use((req, res, next) => {
       brokerRequests.push(`${req.method} ${req.path}`);
+      res.on("finish", () => brokerRequests.push(`response ${req.method} ${req.path} ${res.statusCode}`));
+      const originalJson = res.json.bind(res);
+      res.json = ((body: unknown) => {
+        brokerRequests.push(`response-body ${req.method} ${req.path} ${JSON.stringify(body)}`);
+        return originalJson(body);
+      }) as typeof res.json;
       if (req.method !== "POST" || req.path !== "/runtime-tools/model/v1/messages") {
         res.status(404).end();
         return;
       }
+      const wire = req.body && typeof req.body === "object" ? req.body as Record<string, unknown> : {};
+      const messages = Array.isArray(wire.messages) ? wire.messages : [];
+      const tools = Array.isArray(wire.tools) ? wire.tools : [];
+      const shape = {
+        keys: Object.keys(wire).sort(), model: wire.model, max_tokens: wire.max_tokens, stream: wire.stream,
+        messages: messages.map((message) => {
+          const item = message && typeof message === "object" ? message as Record<string, unknown> : {};
+          const content = Array.isArray(item.content) ? item.content : null;
+          return { role: item.role, contentType: typeof item.content,
+            blocks: content?.map((block) => {
+              const value = block && typeof block === "object" ? block as Record<string, unknown> : {};
+              return { type: value.type, keys: Object.keys(value).sort() };
+            }) ?? null };
+        }),
+        tools: tools.map((tool) => tool && typeof tool === "object"
+          ? { keys: Object.keys(tool as Record<string, unknown>).sort(), name: (tool as Record<string, unknown>).name }
+          : { kind: typeof tool }),
+        toolChoice: wire.tool_choice && typeof wire.tool_choice === "object"
+          ? { keys: Object.keys(wire.tool_choice as Record<string, unknown>).sort(), type: (wire.tool_choice as Record<string, unknown>).type }
+          : wire.tool_choice,
+      };
+      brokerRequests.push(`managed-request-shape ${JSON.stringify(shape)}`);
       // Test TLS mediation stands in for OpenShell host injection. Only the
       // exact Messages endpoint receives a capability minted by issueForRun;
       // the OpenCode child receives no bearer token in its environment.
@@ -307,6 +335,13 @@ describe("managed OpenCode source-closure binary integration", () => {
       next();
     });
     app.use(runtimeConnectionIntentRoutes(db, gateway));
+    app.use((error: unknown, req: express.Request, _res: express.Response, next: express.NextFunction) => {
+      const name = error instanceof Error ? error.name : "UnknownError";
+      const message = error instanceof Error ? error.message : String(error);
+      const stack = error instanceof Error ? error.stack?.split("\n").slice(1, 5).join(" | ") : "";
+      brokerRequests.push(`route-error ${req.method} ${req.path} ${name}: ${message} ${stack}`);
+      next(error);
+    });
     app.use(errorHandler);
     const broker = createHttpsServer({ key: await readFile(keyPath), cert: await readFile(certPath) }, app);
     await new Promise<void>((resolveListen, reject) => {
@@ -317,9 +352,11 @@ describe("managed OpenCode source-closure binary integration", () => {
     if (!address || typeof address === "string") throw new Error("Expected local HTTPS listener.");
     const runnerEnvironment = { PATH: `${dirname(opencodeBinary)}:${process.env.PATH ?? ""}`, SSL_CERT_FILE: certBundlePath,
       OPENCODE_DISABLE_DEFAULT_PLUGINS: "true", OPENCODE_DISABLE_MODELS_FETCH: "true",
+      PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: String(profile.inputTokensUpperBound),
+      PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: String(profile.maxOutputTokens),
       PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: `https://127.0.0.1:${address.port}` };
     const diagnostics: string[] = [];
-    const runtimeDirectory = join(runRoot, "opencode-runtime");
+    const runtimeDirectory = join(root, "runtime", "paperclip-runner", "opencode");
     const configDirectory = join(runtimeDirectory, prepared.normalizedSessionId, "config", "opencode");
     const assertManagedConfigIsReadOnlyBeforeSpawn = async () => {
       const [directory, ignore, config, plugin] = await Promise.all([
@@ -331,32 +368,17 @@ describe("managed OpenCode source-closure binary integration", () => {
         throw new Error(`managed_opencode_config_not_read_only_before_spawn:${modes.map(mode => mode.toString(8)).join(",")}`);
       diagnostics.push(`managed config modes before spawn: ${modes.map(mode => mode.toString(8)).join(",")}`);
     };
-    const backend = createOpenCodeNativeSessionBackend(execution, { runtimeDirectory,
-      environment: runnerEnvironment, command: opencodeBinary, runnerInstanceId: prepared.runnerInstanceId,
-      onSpawn: async ({ pid }) => {
-        await assertManagedConfigIsReadOnlyBeforeSpawn();
-        diagnostics.push(`OpenCode pid ${pid}`);
-        const environment = (await readFile(`/proc/${pid}/environ`, "utf8").catch(() => "")).split("\0");
-        diagnostics.push(environment.filter(value => value.startsWith("OPENCODE_DISABLE_") ||
-          value.startsWith("XDG_CONFIG_HOME=") || value.startsWith("XDG_DATA_HOME=")).join("; "));
-        const processState = await readFile(`/proc/${pid}/wchan`, "utf8").catch(() => "unknown");
-        diagnostics.push(`OpenCode wait channel ${processState.trim()}`);
-      },
-      onDiagnostic: message => diagnostics.push(message), fetch: async (input, init) => {
-        const url = new URL(String(input));
-        const method = init?.method ?? "GET";
-        diagnostics.push(`driver request ${method} ${url.pathname}`);
-        try {
-          const response = await fetch(input, init);
-          diagnostics.push(`driver response ${method} ${url.pathname} ${response.status}`);
-          return response;
-        } catch (error) {
-          diagnostics.push(`driver error ${method} ${url.pathname}: ${String(error)}`);
-          throw error;
-        }
-      } });
+    const onSpawn = async ({ pid }: { pid: number }) => {
+      await assertManagedConfigIsReadOnlyBeforeSpawn();
+      diagnostics.push(`OpenCode pid ${pid}`);
+      const environment = (await readFile(`/proc/${pid}/environ`, "utf8").catch(() => "")).split("\0");
+      diagnostics.push(environment.filter(value => value.startsWith("OPENCODE_DISABLE_") ||
+        value.startsWith("XDG_CONFIG_HOME=") || value.startsWith("XDG_DATA_HOME=")).join("; "));
+      const processState = await readFile(`/proc/${pid}/wchan`, "utf8").catch(() => "unknown");
+      diagnostics.push(`OpenCode wait channel ${processState.trim()}`);
+    };
     try {
-      const result = await executePaperclipNativeSession({ db, execution, backend, bootstrapSourceClosure,
+      const result = await executePaperclipNativeSession({ db, execution, bootstrapSourceClosure, useRunnerd: true, onSpawn,
         runnerInstanceId: prepared.runnerInstanceId, leaseOwner, turnTimeoutMs: 90_000, adapterType: "paperclip_runner",
         runnerEnvironment }).catch(error => {
           preserveDebugArtifacts = true;

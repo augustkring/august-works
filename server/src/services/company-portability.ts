@@ -4111,7 +4111,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           : input.include?.issues,
       skills: input.skills && input.skills.length > 0 ? true : input.include?.skills,
     });
-    if (include.issues && options.actor && options.actor.type !== "none"
+    if ((include.issues || include.projects) && options.actor && options.actor.type !== "none"
       && options.actor.source !== "local_implicit" && !activeSourceScopedExports.has(db as object)) {
       return withCurrentTaskSourceRead(db, companyId, options.actor, async (queryDb) => {
         activeSourceScopedExports.add(queryDb as object);

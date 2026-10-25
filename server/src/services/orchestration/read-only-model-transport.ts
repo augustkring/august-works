@@ -43,7 +43,9 @@ function boundedRecord(max: number) {
   });
 }
 
-const managedTextBlockSchema = z.object({ type: z.literal("text"), text: z.string().max(262144) }).strict();
+const managedCacheControlSchema = z.object({ type: z.literal("ephemeral") }).strict();
+const managedTextBlockSchema = z.object({ type: z.literal("text"), text: z.string().max(262144),
+  cache_control: managedCacheControlSchema.optional() }).strict();
 const managedContentBlockSchema = z.discriminatedUnion("type", [
   managedTextBlockSchema,
   z.object({ type: z.literal("tool_use"), id: z.string().min(1).max(200), name: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/), input: boundedRecord(128) }).strict(),
@@ -106,7 +108,20 @@ export function validateAnthropicManagedMessagesRequest(
     request.stream !== true ||
     (request.model !== undefined && request.model !== input.model)
   ) throw new ReadOnlyModelTransportError("invalid_response");
-  const providerRequest = { ...request, model: input.model, stream: false, service_tier: "standard_only" };
+  const stripCacheHint = (block: z.infer<typeof managedContentBlockSchema>) => {
+    if (block.type !== "text" || block.cache_control === undefined) return block;
+    const { cache_control: _cacheControl, ...textBlock } = block;
+    return textBlock;
+  };
+  const normalized = { ...request,
+    ...(Array.isArray(request.system) ? { system: request.system.map((block) => {
+      if (block.cache_control === undefined) return block;
+      const { cache_control: _cacheControl, ...textBlock } = block;
+      return textBlock;
+    }) } : {}),
+    messages: request.messages.map((message) => ({ ...message,
+      ...(Array.isArray(message.content) ? { content: message.content.map(stripCacheHint) } : {}) })) };
+  const providerRequest = { ...normalized, model: input.model, stream: false, service_tier: "standard_only" };
   const body = JSON.stringify(providerRequest);
   if (Buffer.byteLength(body, "utf8") > input.maximumEnvelopeBytes)
     throw new ReadOnlyModelTransportError("response_limit");

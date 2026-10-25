@@ -105,14 +105,17 @@ describe("OpenCodeServerDriver", () => {
   it("routes only the explicitly selected Anthropic managed profile to the fixed Paperclip model broker", () => {
     expect(openCodeServerDriverInternals.resolveManagedModelProviderConfiguration(
       "anthropic/claude-fixture-2026",
-      { PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://paperclip.example" },
+      { PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://paperclip.example",
+        PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "100000",
+        PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "1024" },
     )).toEqual({
       anthropic: {
         options: {
           baseURL: "https://paperclip.example/runtime-tools/model/v1",
           apiKey: "paperclip-managed-model-broker",
         },
-        models: { "claude-fixture-2026": { name: "claude-fixture-2026" } },
+        models: { "claude-fixture-2026": { name: "claude-fixture-2026", tool_call: true,
+          limit: { context: 101024, output: 1024 } } },
       },
     });
     expect(openCodeServerDriverInternals.resolveManagedModelProviderConfiguration(
@@ -125,8 +128,13 @@ describe("OpenCodeServerDriver", () => {
     )).toThrow("managed_model_broker_requires_anthropic");
     expect(() => openCodeServerDriverInternals.resolveManagedModelProviderConfiguration(
       "anthropic/arbitrary",
-      { PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://paperclip.example/untrusted" },
+      { PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://paperclip.example/untrusted",
+        PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "100000",
+        PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "1024" },
     )).toThrow("managed_model_broker_origin_invalid");
+    expect(() => openCodeServerDriverInternals.resolveManagedModelProviderConfiguration(
+      "anthropic/arbitrary", { PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://paperclip.example" },
+    )).toThrow("managed_model_profile_limits_invalid");
   });
   it("pins the managed source plugin and removes OpenCode built-ins from actual prompt payloads", async () => {
     await chmod(fixture, 0o755);
@@ -143,7 +151,9 @@ describe("OpenCodeServerDriver", () => {
         if (String(input).endsWith("/prompt_async")) promptPayload = JSON.parse(String(init?.body)) as Record<string, unknown>;
         return fetch(input, init);
       },
-      environment: { PATH: process.env.PATH, PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://paperclip.example.test" },
+      environment: { PATH: process.env.PATH, PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://paperclip.example.test",
+        PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "100000",
+        PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "1024" },
     });
     const session = await driver.openSession({ runId: "managed-source", normalizedSessionId: "managed-source", workingDirectory: workspace });
     const config = JSON.parse(await readFile(join(root, "managed-source", "config", "opencode", "opencode.json"), "utf8"));

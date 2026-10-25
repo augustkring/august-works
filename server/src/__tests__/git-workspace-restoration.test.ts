@@ -277,7 +277,8 @@ describe("managed project worktree restoration recipe", () => {
     await fs.rm(target, { force: true });
     await fs.writeFile(temporary, settings.subarray(0, Math.floor(settings.length / 2)), { mode: 0o600 });
     await restoreGitWorkspaceContents({ companyId: workspace.companyId, workspaceId: workspace.id,
-      cwd: workspace.cwd!, contents: recipe.contents, resolveGitAuth, authorizeSource: async () => {} });
+      cwd: workspace.cwd!, contents: recipe.contents, resolveGitAuth, authorizeSource: async () => {},
+      prepareLocalSource: async () => async () => {} });
     expect(await fs.readFile(target)).toEqual(settings);
     await expect(fs.access(temporary)).rejects.toMatchObject({ code: "ENOENT" });
 
@@ -288,7 +289,8 @@ describe("managed project worktree restoration recipe", () => {
     await fs.chmod(temporary, 0o600);
     await fs.link(temporary, target);
     await restoreGitWorkspaceContents({ companyId: workspace.companyId, workspaceId: workspace.id,
-      cwd: workspace.cwd!, contents: recipe.contents, resolveGitAuth, authorizeSource: async () => {} });
+      cwd: workspace.cwd!, contents: recipe.contents, resolveGitAuth, authorizeSource: async () => {},
+      prepareLocalSource: async () => async () => {} });
     expect(await fs.readFile(target)).toEqual(settings);
     await expect(fs.access(temporary)).rejects.toMatchObject({ code: "ENOENT" });
     expect(await fs.readFile(path.join(workspace.cwd!, PROJECT_REPOSITORIES_DIR, nestedName, ".claude/settings.local.json")))

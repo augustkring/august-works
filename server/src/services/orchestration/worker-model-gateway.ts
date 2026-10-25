@@ -901,8 +901,9 @@ export function workerModelGateway(db: Db, options: Options) {
         minted && verifyRuntimeToolsToken(minted.token, "worker_model");
       if (!claims?.worker_model)
         throw forbidden("Worker capability signing is unavailable");
-      await current(db, claims as BoundClaims);
-      return minted!;
+      const state = await current(db, claims as BoundClaims);
+      return { ...minted!, inputTokensUpperBound: state.profile.inputTokensUpperBound,
+        maxOutputTokens: state.profile.maxOutputTokens };
     },
     /** Host-side admission helper. Derive the immutable worker binding from
      * the live attempt; callers cannot submit plan, attempt or manifest IDs. */

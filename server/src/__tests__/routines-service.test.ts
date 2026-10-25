@@ -948,7 +948,9 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
       expect(second.coordinator.nextWakeAt()).toBe(dueDeadline.getTime());
 
       await vi.waitFor(async () => {
-        expect(await db.select().from(routineRuns).where(eq(routineRuns.routineId, routine.id))).toHaveLength(1);
+        const current = await db.select().from(routineRuns).where(eq(routineRuns.routineId, routine.id));
+        expect(current).toHaveLength(1);
+        expect(current[0]?.status).toBe("issue_created");
       }, { timeout: 10_000 });
       const runs = await db.select().from(routineRuns).where(eq(routineRuns.routineId, routine.id));
       const tasks = await db.select().from(issues).where(eq(issues.originRunId, runs[0]!.id));

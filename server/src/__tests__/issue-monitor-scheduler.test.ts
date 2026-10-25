@@ -299,6 +299,27 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
     expect(activity).toContain("issue.monitor_triggered");
   });
 
+  it("claims a due monitor once across independent server database clients", async () => {
+    const { issueId, agentId } = await seedFixture({ bindBodySnapshot: true });
+    const independentDb = createDb(tempDb!.connectionString);
+    try {
+      const tickAt = new Date("2026-04-11T12:31:00.000Z");
+      const results = await Promise.all([
+        heartbeatService(db).tickIssueMonitors(tickAt),
+        heartbeatService(independentDb).tickIssueMonitors(tickAt),
+      ]);
+
+      expect(results.map(result => result.triggered).sort()).toEqual([0, 1]);
+      const [issue] = await db.select().from(issues).where(eq(issues.id, issueId));
+      expect(issue?.monitorNextCheckAt).toBeNull();
+      expect(issue?.monitorAttemptCount).toBe(1);
+      expect(await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.agentId, agentId))).toHaveLength(1);
+      expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, agentId))).toHaveLength(1);
+    } finally {
+      await independentDb.$client.end({ timeout: 0 }).catch(() => undefined);
+    }
+  });
+
   it.each(["unknown", "exhausted"] as const)("does not replay a quota monitor with %s execution evidence", async (kind) => {
     const sourceRunId = randomUUID();
     const { companyId, issueId, agentId } = await seedFixture({

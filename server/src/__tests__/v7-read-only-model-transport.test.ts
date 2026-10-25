@@ -264,9 +264,6 @@ describe("managed Anthropic Messages broker transport", () => {
     await expect(anthropicManagedMessagesCall({ ...managedRequest, messages: [{ role: "user", content: [{ type: "document", source: { type: "url", url: "https://example.test/file.pdf" } }] }] }, {
       model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000,
     }, key, new AbortController().signal, { fetch })).rejects.toThrow("invalid_response");
-    await expect(anthropicManagedMessagesCall({ ...managedRequest, messages: [{ role: "user", content: [{ type: "text", text: "x", cache_control: { type: "ephemeral" } }] }] }, {
-      model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000,
-    }, key, new AbortController().signal, { fetch })).rejects.toThrow("invalid_response");
     expect(fetch).not.toHaveBeenCalled();
     await expect(anthropicManagedMessagesCall({ ...managedRequest, messages: [{ role: "user", content: "x".repeat(2000) }] }, {
       model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 1024, maximumInputTokens: 1000,
@@ -319,5 +316,24 @@ describe("managed Anthropic Messages broker transport", () => {
     await expect(anthropicManagedMessagesCall(managedRequest, {
       model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000,
     }, key, new AbortController().signal, { fetch })).resolves.toMatchObject({ usage: { inputTokens: 20, outputTokens: 10 } });
+  });
+  it("strips only the pinned SDK ephemeral cache hint while preserving block text and rejects other cache features", async () => {
+    const requestWithHint = { ...managedRequest,
+      messages: [{ role: "user", content: [{ type: "text", text: "Please inspect the task.", cache_control: { type: "ephemeral" } }] }],
+      system: [{ type: "text", text: "Use the assigned sources.", cache_control: { type: "ephemeral" } }],
+    };
+    const fetch = vi.fn(async () => json(toolResponse));
+    await anthropicManagedMessagesCall(requestWithHint, {
+      model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000,
+    }, key, new AbortController().signal, { fetch });
+    const [, init] = fetch.mock.calls[0]! as unknown as [string, RequestInit];
+    const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+    expect(body.messages).toEqual([{ role: "user", content: [{ type: "text", text: "Please inspect the task." }] }]);
+    expect(body.system).toEqual([{ type: "text", text: "Use the assigned sources." }]);
+    await expect(anthropicManagedMessagesCall({ ...requestWithHint,
+      messages: [{ role: "user", content: [{ type: "text", text: "x", cache_control: { type: "ephemeral", ttl: "5m" } }] }],
+    }, { model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000 },
+    key, new AbortController().signal, { fetch })).rejects.toThrow("invalid_response");
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });

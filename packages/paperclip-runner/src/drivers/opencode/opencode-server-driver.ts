@@ -2211,6 +2211,11 @@ function resolveManagedModelProviderConfiguration(
   const base = { models: { [modelId]: { name: modelId } } };
   if (!managedOrigin) return { [provider]: base };
   if (provider !== "anthropic") throw new Error("managed_model_broker_requires_anthropic");
+  const inputTokensUpperBound = Number(environment.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND);
+  const maxOutputTokens = Number(environment.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS);
+  if (!Number.isSafeInteger(inputTokensUpperBound) || inputTokensUpperBound < 1 || inputTokensUpperBound > 2_000_000 ||
+    !Number.isSafeInteger(maxOutputTokens) || maxOutputTokens < 256 || maxOutputTokens > 8192)
+    throw new Error("managed_model_profile_limits_invalid");
   let origin: URL;
   try { origin = new URL(managedOrigin); }
   catch { throw new Error("managed_model_broker_origin_invalid"); }
@@ -2224,7 +2229,8 @@ function resolveManagedModelProviderConfiguration(
         // only for the exact endpoint. This placeholder is not a credential.
         apiKey: "paperclip-managed-model-broker",
       },
-      ...base,
+      models: { [modelId]: { name: modelId, tool_call: true,
+        limit: { context: inputTokensUpperBound + maxOutputTokens, output: maxOutputTokens } } },
     },
   };
 }
@@ -2595,6 +2601,8 @@ function sanitizedEnvironment(
     "SSL_CERT_FILE",
     "SSL_CERT_DIR",
     "OPENROUTER_API_KEY",
+    "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND",
+    "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS",
     "OPENCODE_DISABLE_AUTOUPDATE",
     "OPENCODE_DISABLE_DEFAULT_PLUGINS",
     "OPENCODE_DISABLE_MODELS_FETCH",
@@ -2641,6 +2649,8 @@ function sanitizedEnvironmentKeys(): string[] {
     "SSL_CERT_FILE",
     "SSL_CERT_DIR",
     "OPENROUTER_API_KEY",
+    "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND",
+    "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS",
     "OPENCODE_DISABLE_AUTOUPDATE",
     "OPENCODE_DISABLE_DEFAULT_PLUGINS",
     "OPENCODE_DISABLE_MODELS_FETCH",

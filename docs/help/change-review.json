@@ -253,10 +253,10 @@
     {
       "source": "server/src/services/company-portability.ts",
       "articleId": "company-import-export",
-      "sourceSha256": "17aeeab8303e6b91a722b36f7c2de07c1da30657a276ffe32269924bb0a4ec03",
+      "sourceSha256": "709a2fb8e30b7a1ca3d37ff8c08b787a6622183debe98930ecb4f681eea9b676",
       "articleSha256": "878dcc436da18fdd2423e5e8285173e8d03f9d0869b3aeab4a428079e612945c",
       "decision": "updated",
-      "rationale": "The original portability owner rechecks exact native source-release evidence and target authority, requires manual review for external packages, and uses safe cancellation checkpoints; the guide states those conditions and reconciliation behavior."
+      "rationale": "The original portability owner rechecks exact native source-release evidence, target authority and current Task/Project source access while building selected package entries; the guide states exports are subject to current access and describes package scope and reconciliation behavior."
     },
     {
       "source": "server/src/services/company-export-readme.ts",
@@ -989,10 +989,10 @@
     {
       "source": "server/src/services/company-portability.ts",
       "articleId": "company-import-export-da",
-      "sourceSha256": "17aeeab8303e6b91a722b36f7c2de07c1da30657a276ffe32269924bb0a4ec03",
+      "sourceSha256": "709a2fb8e30b7a1ca3d37ff8c08b787a6622183debe98930ecb4f681eea9b676",
       "articleSha256": "46050e4274e4162eba35e42e4a130c91d6d32da232fe142ca661448b94fb8116",
       "decision": "updated",
-      "rationale": "Danish guide checked against the original portability owner: exact native source-release review, target authority, external-package attestation, safe cancellation checkpoints and unknown-outcome reconciliation are described."
+      "rationale": "The original portability owner rechecks exact native source-release evidence, target authority and current Task/Project source access while building selected package entries; the Danish guide states exports are subject to current access and describes package scope and reconciliation behavior."
     },
     {
       "source": "server/src/services/company-export-readme.ts",

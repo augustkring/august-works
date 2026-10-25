@@ -30,6 +30,8 @@ import { lockMemoryPrivacy, purgeDerivedWorkflowMemory } from "../services/memor
 import { routineAuthoringToolsService } from "../services/routine-authoring-tools.js";
 import { routineService } from "../services/routines.js";
 import { companyPortabilityService } from "../services/company-portability.js";
+import { projectService } from "../services/projects.js";
+import { withCurrentTaskSourceRead } from "../services/task-source-read-scope.js";
 import { workflowAuthoringToolsService } from "../services/workflows/workflow-authoring-tools.js";
 import { workflowService } from "../services/workflows/workflow-service.js";
 import { workflowExecutorService } from "../services/workflows/workflow-executor.js";
@@ -191,6 +193,24 @@ describe("typed routine Task private source graph", () => {
     const afterWithdrawal = await companyPortabilityService(db).exportBundle(f.home, input, { actor: ownerActor() });
     expect(JSON.stringify(afterWithdrawal.manifest.issues)).not.toContain(task.title);
     expect(JSON.stringify(afterWithdrawal.files)).not.toContain("PRIVATE execution detail");
+  }, 120_000);
+
+  it("exports a project backed by a private typed Routine Task only to its current source owner", async () => {
+    const source = await createRoutineAndRun();
+    const task = await createTypedTask(source);
+    const project = await withCurrentTaskSourceRead(db, f.home, ownerActor(), async queryDb =>
+      projectService(queryDb).create(f.home, { name: "Private sourced project", visibility: "private",
+        privacyOwnerUserId: f.userId, sourceIssueIds: [task.id], sourceProjectIds: [], sourceProvenanceQualified: true },
+      queryDb as never, ownerActor()));
+    const input = { projects: [project.id], include: { company: true, agents: false, projects: true, issues: false } };
+
+    const ownerExport = await companyPortabilityService(db).exportBundle(f.home, input, { actor: ownerActor() });
+    expect(ownerExport.manifest.projects.some(row => row.name === project.name)).toBe(true);
+    expect(ownerExport.manifest.issues).toHaveLength(0);
+
+    const otherExport = await companyPortabilityService(db).exportBundle(f.home, input, { actor: bobActor() });
+    expect(otherExport.manifest.projects).toHaveLength(0);
+    expect(JSON.stringify(otherExport.files)).not.toContain(project.name);
   }, 120_000);
 
   it("withdraws the copied Task for both readers when its actual authoring source is erased", async () => {

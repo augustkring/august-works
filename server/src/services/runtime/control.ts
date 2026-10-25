@@ -2367,6 +2367,12 @@ export function runtimeControlService(
           modelCredential.profileId !== source.capability.modelBrokerProviderProfile.id ||
           modelCredential.profileHash !== source.capability.modelBrokerProviderProfile.hash ||
           request.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN !== credentialBrokerOrigin ||
+          !Number.isSafeInteger(modelCredential.inputTokensUpperBound) || modelCredential.inputTokensUpperBound < 1 ||
+          modelCredential.inputTokensUpperBound > 2_000_000 ||
+          !Number.isSafeInteger(modelCredential.maxOutputTokens) || modelCredential.maxOutputTokens < 256 ||
+          modelCredential.maxOutputTokens > 8192 ||
+          request.env.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND !== String(modelCredential.inputTokensUpperBound) ||
+          request.env.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS !== String(modelCredential.maxOutputTokens) ||
           modelClaims.company_id !== claims.company_id || modelClaims.sub !== source.run.agentId ||
           modelClaims.run_id !== source.run.id || modelClaims.responsible_user_id !== source.run.responsibleUserId ||
           modelClaims.exp * 1000 < Date.now() || Date.parse(modelCredential.expiresAt) > Date.parse(request.deadlineAt) ||
@@ -2456,7 +2462,7 @@ export function runtimeControlService(
     const cwd = input.cwd;
     if (!cwd || !cwd.startsWith("/")) throw conflict("Sandbox execution requires an absolute workspace path");
     const env = { ...(input.env ?? {}) };
-    for (const reserved of ["PAPERCLIP_SANDBOX_BROKER_TOKEN", "PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN", "PAPERCLIP_SANDBOX_BROKER_SESSION_ID", "PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN"])
+    for (const reserved of ["PAPERCLIP_SANDBOX_BROKER_TOKEN", "PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN", "PAPERCLIP_SANDBOX_BROKER_SESSION_ID", "PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN", "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND", "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS"])
       if (Object.hasOwn(env, reserved)) throw conflict("Sandbox broker variables are server-owned");
     const stdinBytes = Buffer.from(input.stdin ?? "", "utf8");
     const requestId = randomUUID();
@@ -2477,7 +2483,8 @@ export function runtimeControlService(
     let brokerCapability: SandboxBrokerCapabilityClaim | null = null;
     let brokerCapabilityToken: string | null = null;
     let brokerProviderProfile: { id: string; hash: string } | null = null;
-    let modelBrokerCredential: { capabilityToken: string; profileId: string; profileHash: string; expiresAt: string } | null = null;
+    let modelBrokerCredential: { capabilityToken: string; profileId: string; profileHash: string; expiresAt: string;
+      inputTokensUpperBound: number; maxOutputTokens: number } | null = null;
     const runnerProfile = initialSource.source.agent.adapterType === "paperclip_runner"
       ? resolvePaperclipRunnerProviderProfile(initialSource.source.agent.adapterConfig)
       : null;
@@ -2493,9 +2500,13 @@ export function runtimeControlService(
       });
       const expiresAt = new Date(Math.min(Date.parse(minted.expiresAt), deadlineAt.getTime(), initialSource.lease.expiresAt!.getTime()));
       if (expiresAt <= now) throw conflict("Managed model broker capability expired before sandbox dispatch");
-      modelBrokerCredential = { capabilityToken: minted.token, profileId: profile.id, profileHash: profile.hash, expiresAt: expiresAt.toISOString() };
+      modelBrokerCredential = { capabilityToken: minted.token, profileId: profile.id, profileHash: profile.hash,
+        expiresAt: expiresAt.toISOString(), inputTokensUpperBound: minted.inputTokensUpperBound,
+        maxOutputTokens: minted.maxOutputTokens };
       await createRunSecretRedactionRegistry(db).register(input.companyId, initialSource.run.id, minted.token);
       env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN = credentialBrokerOrigin;
+      env.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND = String(minted.inputTokensUpperBound);
+      env.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS = String(minted.maxOutputTokens);
     }
     if (credentials.mode === "brokered") {
       if (credentials.bindings.length === 0) throw conflict("Brokered sandbox policy has no current credential bindings");
