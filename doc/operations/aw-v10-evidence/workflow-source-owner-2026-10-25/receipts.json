@@ -820,6 +820,23 @@
         "Duration  29.57s (transform 15.37s, setup 75ms, import 21.13s, tests 8.23s, environment 0ms)"
       ],
       "sourceCommit": "ae0221c8b430a2447ce9b3e32f3f560a14456cce"
+    },
+    {
+      "name": "v10-workspace-tests",
+      "exitCode": 130,
+      "exitSidecar": "v10-workspace-tests.exit",
+      "rawSha256": "df369c01894327f7c148c676710162aaaaeec83d1ebbc8ba27878b8b3da7c159",
+      "sanitizedSha256": "a3c93eca554aa33e93338c65b803455050931df5e48187e4b841eb727975ac58",
+      "archiveSha256": "bcad1b471f03744fbfda4ebf5b427455645bb8b26db45867254bcb023d403443",
+      "redactions": {
+        "ansi": 7276,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "fb2e755f81486f5854d8d228c28964f52b036a0d"
     }
   ],
   "updates": [
@@ -910,6 +927,13 @@
         "native-plan-canonical-project-suite",
         "workspace-busy-native-project-fixtures",
         "heartbeat-plugin-native-project-fixtures"
+      ]
+    },
+    {
+      "sourceCommit": "fb2e755f81486f5854d8d228c28964f52b036a0d",
+      "meaning": "Interrupted concurrent diagnostic only: SIGINT deliberately stopped the old mixed-source workspace run; status130 overrides wrapper zero, no global passing gate.",
+      "logs": [
+        "v10-workspace-tests"
       ]
     }
   ],
