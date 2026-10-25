@@ -41,6 +41,7 @@ import {
 
 const support = await getEmbeddedPostgresTestSupport();
 const describePg = support.supported ? describe.sequential : describe.skip;
+const boardReader = (userId: string) => ({ type: "board" as const, source: "session" as const, userId });
 
 describePg("Workflow executor V1", () => {
   let db!: ReturnType<typeof createDb>;
@@ -1237,6 +1238,8 @@ describePg("Workflow executor V1", () => {
       status: "running",
       source: "manual",
       triggerPayload: { enabled: true },
+      responsibleUserId: seeded.userId,
+      executionPrincipal: { type: "user", userId: seeded.userId },
       correlationId: randomUUID(),
       executionOwnerId: "dead-worker",
       leaseExpiresAt: new Date(now.getTime() - 60_000),
@@ -1334,6 +1337,8 @@ describePg("Workflow executor V1", () => {
       status: "running",
       source: "manual",
       triggerPayload: {},
+      responsibleUserId: seeded.userId,
+      executionPrincipal: { type: "user", userId: seeded.userId },
       correlationId: randomUUID(),
       executionOwnerId: "dead-worker",
       leaseExpiresAt: new Date(now.getTime() - 60_000),
@@ -1403,6 +1408,8 @@ describePg("Workflow executor V1", () => {
       status: "queued",
       source: "manual",
       triggerPayload: { source: "recovery" },
+      responsibleUserId: seeded.userId,
+      executionPrincipal: { type: "user", userId: seeded.userId },
       correlationId: randomUUID(),
       createdAt: old,
       updatedAt: old,
@@ -1445,9 +1452,13 @@ describePg("Workflow executor V1", () => {
     }).returning();
     await db.delete(companyMemberships).where(eq(companyMemberships.companyId, seeded.companyId));
     await workflowExecutorService(db).recoverExpiredRuns(10, now);
-    const detail = await workflowExecutorService(db).getRun(seeded.companyId, run!.id);
-    expect(detail?.run).toMatchObject({ status: "failed", failureCode: "workflow_execution_principal_revoked" });
-    expect(detail?.steps).toHaveLength(0);
+    expect((await workflowExecutorService(db).getRun(seeded.companyId, run!.id))?.run)
+      .toMatchObject({ status: "failed", failureCode: "workflow_execution_principal_revoked" });
+    await expect(workflowExecutorService(db).getRun(seeded.companyId, run!.id, boardReader(seeded.userId)))
+      .rejects.toMatchObject({ status: 403 });
+    const [detail] = await db.select().from(workflowRuns).where(eq(workflowRuns.id, run!.id));
+    expect(detail).toMatchObject({ status: "failed", failureCode: "workflow_execution_principal_revoked" });
+    expect(await db.select().from(workflowStepRuns).where(eq(workflowStepRuns.workflowRunId, run!.id))).toHaveLength(0);
   });
 
   it("does not steal a run while its execution lease is still valid", async () => {
@@ -1461,6 +1472,8 @@ describePg("Workflow executor V1", () => {
       status: "running",
       source: "manual",
       triggerPayload: {},
+      responsibleUserId: seeded.userId,
+      executionPrincipal: { type: "user", userId: seeded.userId },
       correlationId: randomUUID(),
       executionOwnerId: "healthy-worker",
       leaseExpiresAt: new Date(now.getTime() + 20_000),
@@ -2231,6 +2244,7 @@ describePg("Workflow executor V1", () => {
       source: "manual",
       triggerPayload: {},
       responsibleUserId: seeded.userId,
+      executionPrincipal: { type: "user", userId: seeded.userId },
       correlationId: randomUUID(),
       executionOwnerId: "dead-worker",
       leaseExpiresAt: new Date(now.getTime() - 60_000),

@@ -71,10 +71,10 @@ export async function assertLearnedWorkflowPayloadAccess(db:Db,companyId:string,
  if(sourceRunRows.length>256)throw new HttpError(403,"Analytical Workflow source access is unavailable",{code:"analytical_source_access_lost"});
  const sourceRunIds=[...new Set([...sourceRunRows.map(row=>row.id),...( "workflowRunId" in scope ? [scope.workflowRunId] : [])])].sort();
  if(!sourceRunIds.length)return;
- if(!actor)throw new HttpError(403,"Analytical Workflow source access is unavailable",{code:"analytical_source_access_lost"});
- return authorizationService(db).withReadWorkflowSources(companyId,actor,sourceRunIds,async()=>{
+ const sourceActor=actor??{type:"none" as const};
+ return authorizationService(db).withReadWorkflowSources(companyId,sourceActor,sourceRunIds,async()=>{
  if("workflowRunId" in scope){const {assertWorkflowRunAuthoringSources}=await import("./workflows/workflow-authoring-sources.js");
-  await assertWorkflowRunAuthoringSources(db,companyId,scope.workflowRunId,actor,readScope);}
+  await assertWorkflowRunAuthoringSources(db,companyId,scope.workflowRunId,sourceActor,readScope);}
  const assets=await db.selectDistinct({revisionId:workflowRuns.workflowRevisionId,artifactVersionId:workflowStepRuns.automationArtifactVersionId}).from(workflowStepRuns)
   .innerJoin(workflowRuns,and(eq(workflowRuns.companyId,workflowStepRuns.companyId),eq(workflowRuns.id,workflowStepRuns.workflowRunId)))
   .where(and(eq(workflowStepRuns.companyId,companyId),inArray(workflowStepRuns.workflowRunId,sourceRunIds))).limit(257);
@@ -82,16 +82,16 @@ export async function assertLearnedWorkflowPayloadAccess(db:Db,companyId:string,
  if(!assets.length)return;
  const {assertLearnedAssetAnalyticalSources}=await import("./learning/learning-analytical-sources.js");
  const {assertWorkflowRunAuthoringSources}=await import("./workflows/workflow-authoring-sources.js");
- for(const sourceId of sourceRunIds){budget();await assertWorkflowRunAuthoringSources(db,companyId,sourceId,actor,readScope);}
+ for(const sourceId of sourceRunIds){budget();await assertWorkflowRunAuthoringSources(db,companyId,sourceId,sourceActor,readScope);}
  for(const revisionId of new Set(assets.map(asset=>asset.revisionId))){
   budget();const [receipt]=await db.execute<{lost:boolean}>(sql`select not aw_learning_asset_current(${companyId}::uuid,'workflow_revision',${revisionId}::uuid) as lost`);
   if(receipt?.lost)throw new HttpError(403,"Native Workflow Source is unavailable",{code:"analytical_source_access_lost"});
-  await assertLearnedAssetAnalyticalSources(db,companyId,"workflow_revision",revisionId,actor,readScope);
+  await assertLearnedAssetAnalyticalSources(db,companyId,"workflow_revision",revisionId,sourceActor,readScope);
  }
  for(const artifactId of new Set(assets.flatMap(asset=>asset.artifactVersionId?[asset.artifactVersionId]:[]))){
   budget();const [receipt]=await db.execute<{erased:boolean}>(sql`select aw_artifact_version_source_erased(${companyId}::uuid,${artifactId}::uuid) or not aw_learning_asset_current(${companyId}::uuid,'automation_artifact_version',${artifactId}::uuid) as erased`);
   if(receipt?.erased)throw new HttpError(403,"Native Workflow Artifact Source is unavailable",{code:"analytical_source_access_lost"});
-  await assertLearnedAssetAnalyticalSources(db,companyId,"automation_artifact_version",artifactId,actor,readScope);
+  await assertLearnedAssetAnalyticalSources(db,companyId,"automation_artifact_version",artifactId,sourceActor,readScope);
  }
  budget();
  });

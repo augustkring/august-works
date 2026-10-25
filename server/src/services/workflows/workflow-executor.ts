@@ -2954,7 +2954,8 @@ async function createWorkflowAgentTaskIssueInTransaction(
         ? actor.principal.userId
         : null);
   let deduplicated = false;
-  const issue = await issueService(db).create(
+  const privacyActor = learningActorFromPrincipal(run.companyId, actor.principal, actor.runId);
+  const create = () => issueService(db).create(
     run.companyId,
     {
       title: taskConfig.title,
@@ -2978,7 +2979,12 @@ async function createWorkflowAgentTaskIssueInTransaction(
       },
     },
     executor,
+    undefined,
+    privacyActor ? { privacyActor } : {},
   );
+  const issue = privacyActor
+    ? await authorizationService(executor).withReadWorkflowSources(run.companyId, privacyActor, [run.id], create)
+    : await create();
 
   const publications: ActivityPublication[] = [];
   if (!deduplicated) {
@@ -4495,10 +4501,11 @@ async function scheduleTaskCompletionWait(
         ? actor.principal.userId
         : null);
   const publications: ActivityPublication[] = [];
+  const privacyActor = learningActorFromPrincipal(run.companyId, actor.principal, actor.runId);
 
   await db.transaction(async (tx) => {
     let deduplicated = false;
-    const issue = await issueService(db).create(
+    const create = () => issueService(db).create(
       run.companyId,
       {
         title: config.title,
@@ -4522,7 +4529,12 @@ async function scheduleTaskCompletionWait(
         },
       },
       tx as unknown as Db,
+      undefined,
+      privacyActor ? { privacyActor } : {},
     );
+    const issue = privacyActor
+      ? await authorizationService(tx as unknown as Db).withReadWorkflowSources(run.companyId, privacyActor, [run.id], create)
+      : await create();
 
     const now = new Date();
     const [wait] = await tx

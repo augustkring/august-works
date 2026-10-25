@@ -39,7 +39,7 @@ import { companies, agents, agentIdentities, heartbeatRuns, contextManifestMemor
 import { learningChangeSchema, createGovernedSkillSchema, createPlaybookSchema, roadmapPolicySchema, type LearningChange } from "@paperclipai/shared";
 import { learningService } from "../services/learning/learning-service.js";
 import {assertAnalyticalContextPayloadAccess} from "../services/analytical-context-authority.js";
-import {authorizationService} from "../services/authorization.js";
+import {authorizationService,workflowRunReadSqlCondition} from "../services/authorization.js";
 import {businessMetricService} from "../services/business-metrics/service.js";
 import {businessMetricObservations,learningAnalyticalDependencies,memoryJobs} from "@paperclipai/db";
 import {metricDefinition} from "./helpers/business-metric-fixture.js";
@@ -212,6 +212,7 @@ const support = await getEmbeddedPostgresTestSupport();
     await db.insert(principalPermissionGrants).values(["company_scope:read","workflows:read","issue:read","agent:read"].map(permissionKey=>({companyId,principalType:"user",principalId:"local-board",permissionKey}))).onConflictDoNothing();
     const sourceActor={type:"board" as const,source:"session" as const,userId:"local-board"};
     const sourceRunActor={principal:{type:"user" as const,userId:"local-board"}};
+    const reviewedRunIds:string[]=[];
     await expect(authorizationService(db).decide({actor:sourceActor,action:"company_scope:read",resource:{type:"company",companyId},enforceResponsibleUserIntersection:true})).resolves.toMatchObject({allowed:true});
     const service = workflowService(db), created = await service.create(companyId, { name: "Reviewed pure transform" }, sourceRunActor);
     const draft = await service.updateDraft(companyId, created.id, { expectedRevisionId: created.draftRevisionId!, graph: {
@@ -231,10 +232,14 @@ const support = await getEmbeddedPostgresTestSupport();
     await db.insert(authUsers).values({ id: "local-reviewer", name: "Alternate test operator", email: `local-reviewer@${companyId}.test.invalid`,
       emailVerified: true, createdAt: reviewerNow, updatedAt: reviewerNow }).onConflictDoNothing();
     await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: "local-reviewer", status: "active", membershipRole: "owner" });
+    await db.insert(principalPermissionGrants).values(["company_scope:read","workflows:read","issue:read","agent:read"]
+      .map(permissionKey=>({companyId,principalType:"user" as const,principalId:"local-reviewer",permissionKey}))).onConflictDoNothing();
     const executor = workflowExecutorService(db);
     // These are actual local engine runs reviewed against the declared fixture contract, not customer pilot evidence.
     for (let index = 1; index <= 3; index++) {
-      const run = await executor.startManualRun(companyId, created.id, { input: { value: index } }, sourceRunActor, `learning-source-${index}`);
+      const runActor=sourceKind==="verified_memory"?{...sourceRunActor,memoryRecordIds:[roots[0]!]}:sourceRunActor;
+      const run = await executor.startManualRun(companyId, created.id, { input: { value: index } }, runActor, `learning-source-${index}`);
+      reviewedRunIds.push(run.run.id);
       await reviewWorkflowRun(db, companyId, run.run.id, { humanCorrection: false, correctedOutputs: {}, reason: "Verified the saved engine output against the copy contract" }, sourceRunActor);
       if(sourceKind==="verified_memory"&&index===1){
         const now=new Date(),sessionId=randomUUID(),verifiedDeadline=now.getTime()+1500;
@@ -248,6 +253,28 @@ const support = await getEmbeddedPostgresTestSupport();
         }))).rejects.toMatchObject({status:403});
         expect(callbackEntered).toBe(true);
       }
+    }
+    if(sourceKind==="verified_memory"){
+      const otherReader={type:"board" as const,source:"session" as const,userId:"local-reviewer"};
+      await expect(executor.getRun(companyId,reviewedRunIds[0]!,otherReader)).resolves.toMatchObject({run:{id:reviewedRunIds[0]}});
+      await expect(db.transaction(async tx=>authorizationService(tx).withReadWorkflowSources(companyId,otherReader,[randomUUID()],async()=>{
+        throw new Error("An unknown Workflow source cannot enter the callback");
+      }))).rejects.toMatchObject({status:403});
+      const foreignCompanyId=randomUUID();
+      await db.insert(companies).values({id:foreignCompanyId,name:"Foreign Workflow source fixture",issuePrefix:`F${foreignCompanyId.slice(0,7)}`});
+      await db.insert(companyMemberships).values({companyId:foreignCompanyId,principalType:"user",principalId:"local-reviewer",status:"active",membershipRole:"owner"});
+      await db.insert(principalPermissionGrants).values(["company_scope:read","workflows:read","workflows:edit","workflows:publish","workflows:run"]
+        .map(permissionKey=>({companyId:foreignCompanyId,principalType:"user" as const,principalId:"local-reviewer",permissionKey}))).onConflictDoNothing();
+      const foreignWorkflow=await workflowService(db).create(foreignCompanyId,{name:"Foreign source workflow"},{principal:{type:"user",userId:"local-reviewer"}});
+      const foreignDraft=await workflowService(db).updateDraft(foreignCompanyId,foreignWorkflow.id,{expectedRevisionId:foreignWorkflow.draftRevisionId!,graph:{
+        version:1,nodes:[{id:"start",type:"core.manual_trigger",name:"Start",position:{x:0,y:0},config:{}}],edges:[],variables:[],settings:{}}},
+        {principal:{type:"user",userId:"local-reviewer"}});
+      await workflowService(db).publish(foreignCompanyId,foreignWorkflow.id,{expectedDraftRevisionId:foreignDraft.draftRevisionId!,expectedPublishedRevisionId:null,approvalId:null},
+        {principal:{type:"user",userId:"local-reviewer"}});
+      const foreignRun=await executor.startManualRun(foreignCompanyId,foreignWorkflow.id,{input:{}},{principal:{type:"user",userId:"local-reviewer"}},randomUUID());
+      await expect(db.transaction(async tx=>authorizationService(tx).withReadWorkflowSources(companyId,otherReader,[foreignRun.run.id],async()=>{
+        throw new Error("A foreign-company Workflow run cannot enter the callback");
+      }))).rejects.toMatchObject({status:403});
     }
     const suggestion = (await optimizerSuggestionService(db).forWorkflow(companyId, created.id, sourceActor))!.suggestions.find(item => item.operationTypes.length === 1 && item.operationTypes[0] === "core.transform")!;
     const request = await proposeOptimizerCandidate(db, companyId, created.id, suggestion.id,sourceActor);
@@ -294,6 +321,24 @@ const support = await getEmbeddedPostgresTestSupport();
       const [child] = await db.insert(issues).values({ companyId, title: "Historical Artifact-informed task", description: "Copied private analytical procedure", originKind: "workflow_task", originId: created.id, originRunId: consumer!.id }).returning();
       artifactChildTaskId = child!.id;
       await expect(assertAnalyticalContextPayloadAccess(db,companyId,sourceOwner,{issueId:artifactChildTaskId})).resolves.toBeUndefined();
+      if(sourceKind==="verified_memory"){
+        await db.insert(principalPermissionGrants).values(["company_scope:read","workflows:read","issue:read","agent:read"]
+          .map(permissionKey=>({companyId,principalType:"user" as const,principalId:"local-reviewer",permissionKey}))).onConflictDoNothing();
+        const otherReader={type:"board" as const,source:"session" as const,userId:"local-reviewer"};
+        await expect(assertAnalyticalContextPayloadAccess(db,companyId,otherReader,{issueId:artifactChildTaskId})).resolves.toBeUndefined();
+      }
+      await db.transaction(async raw=>{
+        const tx=raw as unknown as typeof db;
+        let escapedWorkflowRead:Awaited<ReturnType<typeof workflowRunReadSqlCondition>>|null=null;
+        await authorizationService(tx).withReadWorkflowSources(companyId,sourceOwner,[consumer!.id],async()=>{
+          await expect(assertAnalyticalContextPayloadAccess(tx,companyId,sourceOwner,{issueId:artifactChildTaskId!})).resolves.toBeUndefined();
+          escapedWorkflowRead=await workflowRunReadSqlCondition(tx,sourceOwner);
+        });
+        expect(escapedWorkflowRead).not.toBeNull();
+        const escapedRows=await tx.select({id:workflowRuns.id}).from(workflowRuns).where(and(eq(workflowRuns.companyId,companyId),
+          eq(workflowRuns.id,consumer!.id),escapedWorkflowRead!));
+        expect(escapedRows).toHaveLength(0);
+      });
 
       await expect(executor.getRun(companyId, consumer!.id)).rejects.toMatchObject({ details: { code: "analytical_source_access_lost" } });
       expect((await artifacts.getDetail(companyId,replay.artifactId,artifactActor))!.latestVersion!.sourceCode).not.toBe("");
@@ -789,7 +834,7 @@ const support = await getEmbeddedPostgresTestSupport();
     expect(await db.select().from(contextManifests).where(eq(contextManifests.companyId,companyId))).toHaveLength(contexts.length);expect(await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId))).toHaveLength(1);
     await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,signal.sourceId));await expect(assertNativeAnalyticalRunPayloadAccess(db,companyId,run!.id)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
     const before=await db.select().from(contextManifests).where(eq(contextManifests.companyId,companyId));
-    await expect(contextEngineService(db).assemble(input)).rejects.toMatchObject({status:503,details:{providerKey:"foundation",reason:"provider_failed"}});
+    await expect(contextEngineService(db).assemble(input)).rejects.toMatchObject({status:403,details:{code:"analytical_source_access_lost"}});
     expect(await db.select().from(contextManifests).where(eq(contextManifests.companyId,companyId))).toHaveLength(before.length);
     await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,signal.sourceId));await expect(assertNativeAnalyticalRunPayloadAccess(db,companyId,run!.id)).resolves.toBeUndefined();
     await db.update(heartbeatRuns).set({...(stage==="native"?{runtimeMode:"native" as const,runtimeModeResolvedAt:new Date(),nativeIssueId:task!.id}:{}),resultJson:{procedure:"Copied original learned procedure"}}).where(eq(heartbeatRuns.id,run!.id));

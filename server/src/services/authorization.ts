@@ -608,6 +608,13 @@ export async function issueReadSqlCondition(_db: Db | DbTransaction, actor: Auth
   return taskSourcePrivacySqlCondition(_db, "issue", sql`${issues.id}`, sql`${issues.companyId}`, actor);
 }
 
+/** Same retained-source SQL for the exact typed Workflow Run. A predicate
+ * captured inside the native callback still depends on its transaction-local
+ * token when executed, so the capability cannot escape callback lifetime. */
+export async function workflowRunReadSqlCondition(_db: Db | DbTransaction, actor: AuthorizationActor): Promise<SQL<boolean>> {
+  return taskSourcePrivacySqlCondition(_db, "workflow_run", sql`${workflowRuns.id}`, sql`${workflowRuns.companyId}`, actor);
+}
+
 /** Every native read uses the same persisted Task binding, including recursive
  * list/count source checks. A display key cannot replace a missing UUID. */
 function heartbeatRunTaskBindingCondition(row: SQL): SQL<boolean> {
@@ -764,7 +771,19 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
           where wr.id=n.id and wr.company_id=${company}
             and ((w.authoring_source_run_ids='[]'::jsonb and wr.authoring_source_workflow_ids='[]'::jsonb
               and wr.memory_record_ids='[]'::jsonb and not exists(select 1 from workflow_step_runs step
-                where step.company_id=wr.company_id and step.workflow_run_id=wr.id and step.memory_record_ids is distinct from '[]'::jsonb))
+                where step.company_id=wr.company_id and step.workflow_run_id=wr.id and step.memory_record_ids is distinct from '[]'::jsonb)
+              and not exists(select 1 from learning_retained_assets lra
+                join learning_domain_candidates ldc on ldc.company_id=lra.company_id and ldc.id=lra.candidate_link_id
+                join learning_hypotheses lh on lh.company_id=ldc.company_id and lh.id=ldc.hypothesis_id
+                join learning_cycles lc on lc.company_id=lh.company_id and lc.id=lh.cycle_id
+                where lra.company_id=wr.company_id and lra.asset_type='workflow_revision' and lra.asset_id=wr.workflow_revision_id)
+              and not exists(select 1 from workflow_step_runs source_step
+                join learning_retained_assets lra on lra.company_id=source_step.company_id
+                  and lra.asset_type='automation_artifact_version' and lra.asset_id=source_step.automation_artifact_version_id
+                join learning_domain_candidates ldc on ldc.company_id=lra.company_id and ldc.id=lra.candidate_link_id
+                join learning_hypotheses lh on lh.company_id=ldc.company_id and lh.id=ldc.hypothesis_id
+                join learning_cycles lc on lc.company_id=lh.company_id and lc.id=lh.cycle_id
+                where source_step.company_id=wr.company_id and source_step.workflow_run_id=wr.id))
               or ${workflowRunScope})
             and not aw_workflow_authoring_source_erased(w.company_id,w.id)
             and not aw_workflow_run_authoring_source_erased(wr.company_id,wr.id)))
@@ -822,11 +841,21 @@ export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: Au
   return (await db.select({ id: issues.id }).from(issues).where(and(eq(issues.id, issue.id), eq(issues.companyId, issue.companyId), await issueReadSqlCondition(db, actor))).limit(1)).length > 0;
 }
 /** Typed Task execution owners are distinct namespaces from heartbeat runs.
- * Until the native authoring ACL graph is projected here, only un-erased,
- * manually authored sources can contribute readable Task content. */
+ * Workflow and Routine payload reads enter their original native authoring
+ * owners before the shared retained-source SQL checks run. */
 export async function canActorReadTypedTaskSourcePrivacy(db: Db | DbTransaction, actor: AuthorizationActor,
   source: { sourceKind: "workflow_run" | "routine_run"; id: string; companyId: string }): Promise<boolean> {
   const table = source.sourceKind === "workflow_run" ? workflowRuns : routineRuns;
+  if (source.sourceKind === "workflow_run" && !nativeWorkflowReadScopes.get(db as object)?.active
+    && actor.type !== "none" && actor.source !== "local_implicit") {
+    if (is(db, PgTransaction)) return authorizationService(db).withReadWorkflowSources(source.companyId, actor, [source.id], async () =>
+      canActorReadTypedTaskSourcePrivacy(db, actor, source));
+    return db.transaction(async rawTx => {
+      const tx = rawTx as unknown as DbTransaction;
+      return authorizationService(tx).withReadWorkflowSources(source.companyId, actor, [source.id], async () =>
+        canActorReadTypedTaskSourcePrivacy(tx, actor, source));
+    });
+  }
   if (source.sourceKind === "routine_run" && !nativeRoutineReadScopes.get(db as object)?.active
     && actor.type !== "none" && actor.source !== "local_implicit") {
     if (is(db, PgTransaction)) return authorizationService(db).withReadRoutineSources(source.companyId, actor, [source.id], async () =>
@@ -941,6 +970,8 @@ type ReadSourceRows = {
   routineAgentIds?: Set<string>;
   routineScopeToken?: string;
   workflowRunIds?: Set<string>;
+  workflowSourceCheckRunIds?: Set<string>;
+  workflowBaselineOnly?: boolean;
   workflowActorKey?: string;
   workflowScopeToken?: string;
 };
@@ -953,7 +984,7 @@ function routineActorHash(actor: AuthorizationActor) {
   return createHash("sha256").update(routineActorKey(actor)).digest("hex");
 }
 function workflowActorKey(actor: AuthorizationActor) {
-  const { isInstanceAdmin: _instanceAdminProjection, ...identity } = actor;
+  const { isInstanceAdmin: _instanceAdminProjection, ignoreInstanceAdmin: _ignoreInstanceAdminProjection, ...identity } = actor;
   return JSON.stringify(identity);
 }
 function workflowActorHash(actor: AuthorizationActor) { return createHash("sha256").update(workflowActorKey(actor)).digest("hex"); }
@@ -992,6 +1023,31 @@ export async function pinCurrentBoardActor(db: Db | DbTransaction, actor: Author
   // never a pinned role, including cloud tenant actors.
   if (credentialExpiresAt !== null && credentialExpiresAt <= Date.now()) return null;
   return { actor: { ...actor, isInstanceAdmin: false }, credentialExpiresAt };
+}
+
+async function requireActiveWorkflowBaselineMembership(db: Db | DbTransaction, companyId: string, actor: AuthorizationActor) {
+  if (actor.type === "none") return;
+  if (actor.type === "board" && actor.source === "local_implicit") return;
+  if (actor.type === "agent") {
+    const responsibleUserId = actor.onBehalfOfUserId?.trim();
+    if (!responsibleUserId) throw forbidden("Current Workflow baseline Human authority is unavailable.");
+    const [user] = await db.select({ id: authUsers.id }).from(authUsers).where(and(
+      eq(authUsers.id, responsibleUserId), sql`not exists(select 1 from ${accountDeletionOperations} d where d.user_id=${authUsers.id})`,
+    )).for("share", { noWait: true });
+    const [humanMembership] = await db.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, responsibleUserId), eq(companyMemberships.status, "active"),
+    )).for("share", { noWait: true });
+    if (!user || !humanMembership) throw forbidden("Current Workflow baseline Human authority is unavailable.");
+  }
+  const principalType = actor.type === "board" ? "user" : actor.type === "agent" ? "agent" : null;
+  const principalId = actor.type === "board" ? actor.userId : actor.type === "agent" ? actor.agentId : null;
+  if (!principalType || !principalId) throw forbidden("Current Workflow baseline membership is unavailable.");
+  const [membership] = await db.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
+    eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, principalType),
+    eq(companyMemberships.principalId, principalId), eq(companyMemberships.status, "active"),
+  )).for("share", { noWait: true });
+  if (!membership) throw forbidden("Current Workflow baseline membership is unavailable.");
 }
 
 // Only this native owner can construct the private row context. Caller DTOs
@@ -1094,27 +1150,47 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     owner.readWorkflowSources = async (runIds, actor) => {
       if (purpose !== "workflow_sources" || !locked || !context.active || context.companyId !== companyId || !context.workflowScopeToken)
         throw forbidden("Private Workflow reads require their original native source scope.");
-      if (actor.type === "none" || runIds.length > 256 || new Set(runIds).size !== runIds.length ||
+      if (runIds.length > 256 || new Set(runIds).size !== runIds.length ||
         runIds.some(id => !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)))
         throw forbidden("The native Workflow source population is incomplete.");
       await db.execute(sql`select set_config('paperclip.native_workflow_run_ids', '', true),
         set_config('paperclip.native_workflow_actor_hash', ${workflowActorHash(actor)}, true),
         set_config('paperclip.native_workflow_scope_token', ${context.workflowScopeToken}, true)`);
-      const sourceActor = await pinReadSourceActor(actor, companyId);
+      const sourceActor = actor.type === "none" ? actor : await pinReadSourceActor(actor, companyId);
       if (!sourceActor) throw forbidden("The current Workflow reader is unavailable.");
       context.credentialUserId = sourceActor.type === "board" ? sourceActor.userId ?? null
         : sourceActor.type === "agent" ? sourceActor.onBehalfOfUserId ?? null : null;
       context.workflowActorKey = workflowActorKey(actor);
-      const company = await owner.decide({ actor: sourceActor, action: "company_scope:read",
-        resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true });
-      if (!company.allowed) throw forbidden("Current company access to Workflow sources is unavailable.");
-      const { assertWorkflowRunPayloadSourceAccess } = await import("./workflows/workflow-authoring-sources.js");
-      const authorized = new Set<string>();
-      for (const runId of runIds) {
-        await assertWorkflowRunPayloadSourceAccess(db as unknown as Db, companyId, runId, sourceActor, "task");
-        authorized.add(runId);
+      const company = sourceActor.type === "none" ? { allowed: false } as AuthorizationDecision
+        : await owner.decide({ actor: sourceActor, action: "company_scope:read",
+          resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true });
+      const { assertWorkflowRunPayloadSourceAccess, withWorkflowAuthoringSourceReview } = await import("./workflows/workflow-authoring-sources.js");
+      if (!company.allowed) {
+        await requireActiveWorkflowBaselineMembership(db, companyId, sourceActor);
+        await withWorkflowAuthoringSourceReview(async () => {
+          for (const runId of runIds) {
+            const publicBaseline = await canActorReadTypedTaskSourcePrivacy(db as unknown as Db, { type: "none" },
+              { sourceKind: "workflow_run", id: runId, companyId });
+            if (!publicBaseline) throw forbidden("Current Workflow source access is unavailable.", { code: "analytical_source_access_lost" });
+            await assertWorkflowRunPayloadSourceAccess(db as unknown as Db, companyId, runId, sourceActor);
+          }
+        });
+        context.workflowBaselineOnly = true;
+        context.workflowRunIds = new Set();
+        context.workflowSourceCheckRunIds = new Set(runIds);
+        await db.execute(sql`select set_config('paperclip.native_workflow_run_ids', '', true)`);
+        return [...runIds];
       }
+      const authorized = new Set<string>();
+      await withWorkflowAuthoringSourceReview(async () => {
+        for (const runId of runIds) {
+          await assertWorkflowRunPayloadSourceAccess(db as unknown as Db, companyId, runId, sourceActor, "task");
+          authorized.add(runId);
+        }
+      });
       context.workflowRunIds = authorized;
+      context.workflowSourceCheckRunIds = new Set(authorized);
+      context.workflowBaselineOnly = false;
       await db.execute(sql`select set_config('paperclip.native_workflow_run_ids', ${[...authorized].sort().join(",")}, true)`);
       return [...authorized];
     };
@@ -1151,7 +1227,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
           throw forbidden("Current Routine source authority changed during the read.");
       }
       if (purpose === "workflow_sources" && context.workflowActorKey) {
-        const before = [...(context.workflowRunIds ?? [])].sort();
+        const before = [...(context.workflowSourceCheckRunIds ?? context.workflowRunIds ?? [])].sort();
         const after = await owner.readWorkflowSources!(before, preflightActor!);
         const sortedAfter = [...after].sort();
         if (before.length !== sortedAfter.length || before.some((id, index) => id !== sortedAfter[index]))
@@ -1220,7 +1296,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       owner.readWorkflowSources = async (ids, currentActor) => {
         if (!existing.active || currentActor.type === "none" || !existing.workflowScopeToken)
           throw forbidden("Nested Workflow source authority is unavailable.");
-        const combined = [...new Set([...(existing.workflowRunIds ?? []), ...ids])].sort();
+        const combined = [...new Set([...(existing.workflowSourceCheckRunIds ?? existing.workflowRunIds ?? []), ...ids])].sort();
         if (!combined.length || combined.length > 256) throw forbidden("The complete nested Workflow source population exceeds its bound.");
         await db.execute(sql`select set_config('paperclip.native_workflow_run_ids', '', true),
           set_config('paperclip.native_workflow_actor_hash', ${workflowActorHash(currentActor)}, true),
@@ -1229,10 +1305,31 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
         if (!sourceActor) throw forbidden("The nested Workflow reader is unavailable.");
         const company = await owner.decide({ actor: sourceActor, action: "company_scope:read",
           resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true });
-        if (!company.allowed) throw forbidden("Current company access to Workflow sources is unavailable.");
-        const { assertWorkflowRunPayloadSourceAccess } = await import("./workflows/workflow-authoring-sources.js");
-        for (const id of combined) await assertWorkflowRunPayloadSourceAccess(db as unknown as Db, companyId, id, sourceActor, "task");
+        const { assertWorkflowRunPayloadSourceAccess, withWorkflowAuthoringSourceReview } = await import("./workflows/workflow-authoring-sources.js");
+        if (!company.allowed) {
+          await requireActiveWorkflowBaselineMembership(db, companyId, sourceActor);
+          await withWorkflowAuthoringSourceReview(async () => {
+            for (const runId of combined) {
+              const publicBaseline = await canActorReadTypedTaskSourcePrivacy(db as unknown as Db, { type: "none" },
+                { sourceKind: "workflow_run", id: runId, companyId });
+              if (!publicBaseline) throw forbidden("Current Workflow source access is unavailable.", { code: "analytical_source_access_lost" });
+              await assertWorkflowRunPayloadSourceAccess(db as unknown as Db, companyId, runId, sourceActor, "task");
+            }
+          });
+          existing.workflowBaselineOnly = true;
+          existing.workflowRunIds = new Set();
+          existing.workflowSourceCheckRunIds = new Set(combined);
+          existing.credentialUserId = sourceActor.type === "board" ? sourceActor.userId ?? null
+            : sourceActor.type === "agent" ? sourceActor.onBehalfOfUserId ?? null : null;
+          await db.execute(sql`select set_config('paperclip.native_workflow_run_ids', '', true)`);
+          return combined;
+        }
+        await withWorkflowAuthoringSourceReview(async () => {
+          for (const id of combined) await assertWorkflowRunPayloadSourceAccess(db as unknown as Db, companyId, id, sourceActor, "task");
+        });
         existing.workflowRunIds = new Set(combined);
+        existing.workflowSourceCheckRunIds = new Set(combined);
+        existing.workflowBaselineOnly = false;
         existing.credentialUserId = sourceActor.type === "board" ? sourceActor.userId ?? null
           : sourceActor.type === "agent" ? sourceActor.onBehalfOfUserId ?? null : null;
         await db.execute(sql`select set_config('paperclip.native_workflow_run_ids', ${combined.join(",")}, true)`);
