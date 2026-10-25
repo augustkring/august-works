@@ -12,7 +12,7 @@ import {
   createDb,
   EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
 } from "@paperclipai/db";
-import { assertConfiguredOperatorAuthentication, assertHumanAuthentication } from "../auth/authenticator-assurance.js";
+import { assertConfiguredOperatorAuthentication, assertHumanAuthentication, assertPinnedAuthenticationDeadline } from "../auth/authenticator-assurance.js";
 import type { AuthorizationActor } from "../services/authorization.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 
@@ -484,6 +484,34 @@ describeNative("native authenticator lifetime constraints", () => {
     await expect(check(sessionActor(user.id, wrongGeneration.id))).rejects.toMatchObject({ status: 403 });
     await db.delete(authSessions).where(eq(authSessions.id, session.id));
     await expect(check()).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("retains the originally verified request deadline when the stored session has been extended", async () => {
+    const user = await makeUser();
+    await db.update(authUsers).set({ emailVerified: true }).where(eq(authUsers.id, user.id));
+    await makePasskey(user.id);
+    const session = await makeSqlClockSession(user.id, "passkey", { expiresInSeconds: 2 });
+    const [verified] = await db.select({ expiresAt: authSessions.expiresAt }).from(authSessions).where(eq(authSessions.id, session.id));
+    const actor = { ...sessionActor(user.id, session.id), authenticatedCredentialExpiresAt: verified!.expiresAt.getTime() };
+    await db.execute(sql`update "session" set expires_at=clock_timestamp()+interval '1 hour' where id=${session.id}`);
+
+    await expect(db.transaction(async tx => {
+      const proof = await assertConfiguredOperatorAuthentication(tx, actor, [user.id]);
+      await tx.update(authUsers).set({ name: "Must roll back after the original deadline" }).where(eq(authUsers.id, user.id));
+      await tx.execute(sql`select pg_sleep(2.2)`);
+      await assertPinnedAuthenticationDeadline(tx, proof);
+    })).rejects.toMatchObject({ status: 403, details: { code: "recent_authentication_required" } });
+    const [unchanged] = await db.select({ name: authUsers.name }).from(authUsers).where(eq(authUsers.id, user.id));
+    expect(unchanged!.name).toBe(user.name);
+    await expectAssuranceDenied(actor);
+
+    // A new request verified against the later stored deadline still works.
+    const [current] = await db.select({ expiresAt: authSessions.expiresAt }).from(authSessions).where(eq(authSessions.id, session.id));
+    const currentActor = { ...sessionActor(user.id, session.id), authenticatedCredentialExpiresAt: current!.expiresAt.getTime() };
+    await expect(db.transaction(tx => assertConfiguredOperatorAuthentication(tx, currentActor, [user.id])))
+      .resolves.toMatchObject({ method: "passkey", credentialExpiresAt: current!.expiresAt });
+    for (const invalid of [NaN, Infinity, -Infinity])
+      await expectAssuranceDenied({ ...currentActor, authenticatedCredentialExpiresAt: invalid });
   });
 
   it("holds native session and user rows through assurance checks", async () => {

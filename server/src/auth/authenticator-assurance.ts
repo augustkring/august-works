@@ -32,6 +32,8 @@ export async function assertHumanAuthentication(
 ): Promise<NativeAuthenticationProof> {
   const denied = () => forbidden("Authenticate again to continue", { code: "recent_authentication_required" });
   if (actor.type !== "board" || actor.source !== "session" || !actor.userId || !actor.sessionId) throw denied();
+  const verifiedExpiresAt = actor.authenticatedCredentialExpiresAt ?? null;
+  if (verifiedExpiresAt !== null && !Number.isFinite(verifiedExpiresAt)) throw denied();
   try {
     const [proof] = await db.execute<{
       method: NativeAuthenticationMethod; authenticatedAt: Date | string; authenticatorVersion: number;
@@ -42,6 +44,8 @@ export async function assertHumanAuthentication(
       from "session" s join "user" u on u.id=s.user_id
       where s.id=${actor.sessionId} and u.id=${actor.userId}
         and s.expires_at>clock_timestamp()
+        and ${verifiedExpiresAt === null ? sql`true`
+          : sql`${verifiedExpiresAt}::double precision>extract(epoch from clock_timestamp())*1000`}
         and s.authenticator_version=u.authenticator_version
         and (${!options.requireVerifiedEmail} or u.email_verified)
         and not exists (select 1 from account_deletion_operations where user_id=u.id)
@@ -62,7 +66,10 @@ export async function assertHumanAuthentication(
       for share of s,u nowait
     `);
     if (!proof) throw denied();
-    const authenticatedAt = new Date(proof.authenticatedAt), credentialExpiresAt = new Date(proof.credentialExpiresAt);
+    const authenticatedAt = new Date(proof.authenticatedAt);
+    // The stored row may have been extended since request authentication.
+    // Preserve the original verified carrier's deadline through native work.
+    const credentialExpiresAt = new Date(Math.min(new Date(proof.credentialExpiresAt).getTime(), verifiedExpiresAt ?? Infinity));
     if (!Number.isFinite(authenticatedAt.getTime()) || !Number.isFinite(credentialExpiresAt.getTime())) throw denied();
     return { ...proof, authenticatedAt, credentialExpiresAt };
   } catch (error) {
