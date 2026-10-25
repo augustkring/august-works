@@ -1,6 +1,11 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHash, randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
+import { eq, sql } from "drizzle-orm";
 import {
   activityLog,
   companyMemberships,
@@ -15,6 +20,7 @@ import {
   orchestrationWorkerAttempts,
   orchestrationCompanyPurposeBudgets,
   orchestrationCompanyPurposeReservations,
+  nativeRunFinalizations,
 } from "@paperclipai/db";
 import type { CompanyPurposeFunding, ModelTariffCeiling } from "@paperclipai/shared";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
@@ -36,6 +42,9 @@ import { agentPackageService } from "../services/agent-packages/package-service.
 import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 import { COMPANY_SEARCH_HELP_ARTICLES } from "../services/company-search-help.generated.js";
 import { supportGuideKnowledgePin } from "../services/experience/support-assistant-grounding.js";
+import { managedOpenCodeRuntimeDirectory } from "../services/native-runtime/runtime-asset-retention.js";
+import { PROCESS_IDENTITY_RECORDED, recordNativeLocalProcessStop } from "../services/native-local-process-stop.js";
+import { appendHeartbeatRunEvent } from "../services/heartbeat-run-events.js";
 import { firstPartySupportModelGateway, supportAssistantPolicyRevision } from "../services/orchestration/first-party-support-model-gateway.js";
 import { searchAuthorizedSupportHelp } from "../services/experience/support-assistant-help.js";
 import type { FirstPartySupportModelProfile } from "../services/orchestration/first-party-support-model-profiles.js";
@@ -166,6 +175,7 @@ const support = await getEmbeddedPostgresTestSupport();
       supportPackageVersionId: string,
       lateProofEnabled: boolean,
       lateProofAccountMismatch: boolean;
+    let cleanupOffboardingProviderFixture: (() => Promise<void>) | null = null;
     beforeAll(async () => {
       database = await startEmbeddedPostgresTestDatabase("aw-v7-model-budget-");
       db = createDb(database.connectionString);
@@ -175,6 +185,10 @@ const support = await getEmbeddedPostgresTestSupport();
     afterAll(async () => {
       await database?.cleanup();
     }, 30000);
+    afterEach(async () => {
+      await cleanupOffboardingProviderFixture?.();
+      cleanupOffboardingProviderFixture = null;
+    });
     let supportPackageSequence = 0;
     beforeEach(async () => {
       await instanceSettingsService(db).updateExperimental({
@@ -994,12 +1008,29 @@ const support = await getEmbeddedPostgresTestSupport();
     });
     it("cancels undispatched holds, waits for dispatched outcomes, then purges only through the canonical offboarding receipt", async () => {
       supportFunding = makeSupportFunding(f.home, { maxCostMinor: 100 });
+      const priorHome = process.env.PAPERCLIP_HOME, priorInstance = process.env.PAPERCLIP_INSTANCE_ID;
+      const providerTestHome = await fs.mkdtemp(path.join(os.tmpdir(), "aw-offboard-opencode-"));
+      process.env.PAPERCLIP_HOME = providerTestHome;
+      process.env.PAPERCLIP_INSTANCE_ID = "offboard-opencode";
+      cleanupOffboardingProviderFixture = async () => {
+        if (priorHome === undefined) delete process.env.PAPERCLIP_HOME; else process.env.PAPERCLIP_HOME = priorHome;
+        if (priorInstance === undefined) delete process.env.PAPERCLIP_INSTANCE_ID; else process.env.PAPERCLIP_INSTANCE_ID = priorInstance;
+        await fs.rm(providerTestHome, { recursive: true, force: true });
+      };
       const broker = service();
       const dispatched = await broker.reserveCompanyPurpose(f.actor, supportRequest("purge-dispatched"));
       const pending = await broker.reserveCompanyPurpose(f.actor, supportRequest("purge-pending"));
       await broker.claimCompanyPurposeForDispatch(f.actor, f.home, dispatched.id);
       await agentIdentityService(db).rehome(f.actor, f.home, f.identity.id, f.guest);
       const [company] = await db.select({ name: companies.name }).from(companies).where(eq(companies.id, f.home));
+      const providerRunId = randomUUID();
+      await db.insert(heartbeatRuns).values({ id: providerRunId, companyId: f.home, agentId: f.presence.id,
+        responsibleUserId: f.userId, nativeIssueId: plan.issueId, runtimeMode: "native", status: "running",
+        driverKind: "opencode_server" });
+      const providerDb = path.join(managedOpenCodeRuntimeDirectory({ companyId: f.home, runId: providerRunId }),
+        "managed-session-1", "data", "opencode.db");
+      await fs.mkdir(path.dirname(providerDb), { recursive: true });
+      await fs.writeFile(providerDb, "Synthetic private company OpenCode transcript");
       let objectEraseCalls = 0;
       const offboarding = saasOffboardingService(db, {} as never, {} as never, {
         targets: () => ({ fixture: true }),
@@ -1010,7 +1041,8 @@ const support = await getEmbeddedPostgresTestSupport();
         acknowledgeExport: true,
         idempotencyKey: "fixture-offboarding-operation",
       });
-      await db.update(companyDeletionOperations).set({ stage: "purge", status: "processing", notBefore: new Date(0) })
+      await db.update(companyDeletionOperations).set({ stage: "purge", status: "processing", notBefore: new Date(0),
+        evidence: sql`coalesce(${companyDeletionOperations.evidence},'{}'::jsonb) || jsonb_build_object('runtimesErasedAt',now()::text)` })
         .where(eq(companyDeletionOperations.companyId, f.home));
       await expect(broker.reserveCompanyPurpose(f.actor, supportRequest("late-after-offboarding"))).rejects.toMatchObject({ status: 403 });
       const [existingBudget] = await db.select().from(orchestrationCompanyPurposeBudgets).where(eq(orchestrationCompanyPurposeBudgets.companyId, f.home));
@@ -1037,12 +1069,33 @@ const support = await getEmbeddedPostgresTestSupport();
       lateProofAccountMismatch = false;
       await expect(broker.reconcileUnknownCompanyPurposeOutcome(f.home, dispatched.id)).resolves.toMatchObject({ status: "completed" });
       expect(await offboarding.processOne(new Date(Date.now() + 2000))).toBe(true);
+      expect(objectEraseCalls).toBe(0);
+      await expect(fs.readFile(providerDb, "utf8")).resolves.toBe("Synthetic private company OpenCode transcript");
+      await expect(db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, providerRunId))).resolves.toHaveLength(1);
+      const stoppedProcess = spawn(process.execPath, ["-e", "setTimeout(()=>process.exit(0),25)"], { detached: true, stdio: "ignore" });
+      if (!stoppedProcess.pid) throw new Error("Could not start offboarding Stop test process");
+      const [stoppedCode] = await once(stoppedProcess, "exit");
+      expect(stoppedCode).toBe(0);
+      await db.update(heartbeatRuns).set({ status: "interrupted", processPid: stoppedProcess.pid,
+        processGroupId: stoppedProcess.pid, controllerLeaseExpiresAt: null }).where(eq(heartbeatRuns.id, providerRunId));
+      await appendHeartbeatRunEvent(db, { companyId: f.home, runId: providerRunId, agentId: f.presence.id,
+        eventType: PROCESS_IDENTITY_RECORDED, stream: "system", message: "Offboarding test process identity",
+        payload: { processPid: stoppedProcess.pid, processGroupId: stoppedProcess.pid } });
+      const [stoppingRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, providerRunId));
+      expect(await recordNativeLocalProcessStop(db, stoppingRun!)).toBe(true);
+      await db.update(heartbeatRuns).set({ processPid: null, processGroupId: null }).where(eq(heartbeatRuns.id, providerRunId));
+      await db.insert(nativeRunFinalizations).values({ companyId: f.home, issueId: plan.issueId, runId: providerRunId,
+        phase: "committed", leaseOwner: null, leaseExpiresAt: null });
+      expect(await offboarding.processOne(new Date(Date.now() + 70000))).toBe(true);
+      await expect(fs.stat(providerDb)).rejects.toMatchObject({ code: "ENOENT" });
       expect(objectEraseCalls).toBe(1);
       expect(await offboarding.get(f.home)).toMatchObject({ status: "completed", stage: "completed", errorCode: null });
       expect(await db.select().from(orchestrationCompanyPurposeBudgets).where(eq(orchestrationCompanyPurposeBudgets.companyId, f.home))).toHaveLength(0);
       expect(await db.select().from(orchestrationCompanyPurposeReservations).where(eq(orchestrationCompanyPurposeReservations.companyId, f.home))).toHaveLength(0);
       const receipt = await offboarding.get(f.home);
       expect(receipt?.evidence).toMatchObject({ platformModelFunding: { budgets: "1", maximumReservedMinorExposure: "60", invocationCount: "2", completed: "1", cancelled: "1", settledInputTokens: "1", settledOutputTokens: "1" } });
+      await cleanupOffboardingProviderFixture();
+      cleanupOffboardingProviderFixture = null;
     });
   },
 );

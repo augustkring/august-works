@@ -1,16 +1,17 @@
 import { randomUUID } from "node:crypto";
-import { chmod, mkdtemp, rm } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { contextManifestItems, createDb, documents, documentRevisions, issueDocuments, issues, memoryRecords,
-  EMBEDDED_POSTGRES_TEST_TIMEOUT_MS } from "@paperclipai/db";
+import { contextManifestItems, createDb, documents, documentRevisions, issueDocuments, issues, memoryJobs, memoryRecords } from "@paperclipai/db";
 import { canActorReadIssuePrivacy } from "../services/authorization.js";
 import { issueService } from "../services/issues.js";
 import { memoryService } from "../services/memory/memory-service.js";
+import { memoryJobService } from "../services/memory/memory-jobs.js";
 import { assertNativeDocumentRevisionCurrentSourceAccess } from "../services/native-direct-input.js";
+import { managedOpenCodeRuntimeDirectory } from "../services/native-runtime/runtime-asset-retention.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { makeFixtureTreeWritable, runManagedNativeOpenCodeFixture } from "./helpers/managed-native-opencode-e2e-fixture.js";
 
@@ -63,7 +64,9 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
           title: "Later shared Memory B", content: "Memory B was produced after private Context selection.",
           idempotencyKey: randomUUID() } },
         { tool: "paperclip_finish", id: `temporal-finish-first-${randomUUID()}` },
-      ] });
+      ],
+      humanActions: [{ afterModelToolCallId: ids.memoryA, action: "accept_memory_candidate" }],
+    });
     expect(first.contextResultConsumers).toContainEqual({ callId: ids.contextR, consumed: true });
     const firstToolResult = (callId: string) => first.toolResults.find(value => value.callId === callId);
     const taskAId = firstToolResult(ids.taskA)?.taskId;
@@ -77,8 +80,7 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
       throw new Error("The managed Native producer omitted a real output ID");
 
     const memories = memoryService(db);
-    for (const memoryId of [memoryAId, memoryBId])
-      await memories.reviewCandidate(first.companyId, memoryId, { decision: "accept" }, first.aliceMemoryActor);
+    await memories.reviewCandidate(first.companyId, memoryBId, { decision: "accept" }, first.aliceMemoryActor);
     const [taskA] = await db.select().from(issues).where(and(eq(issues.companyId, first.companyId), eq(issues.id, taskAId)));
     const [taskB] = await db.select().from(issues).where(and(eq(issues.companyId, first.companyId), eq(issues.id, taskBId)));
     if (!taskA || !taskB) throw new Error("The managed Native Task outputs disappeared");
@@ -171,6 +173,9 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
 
   it("erases exact Task and Memory copies while preserving independent earlier Task, Memory, and document", async () => {
     const { first, documentKey, taskAId, taskBId, memoryAId, memoryBId, privateRootId, memoryCId } = temporal;
+    const providerDb = join(managedOpenCodeRuntimeDirectory({ companyId: first.companyId, runId: first.runId }),
+      "managed-session-1", "data", "opencode.db");
+    expect((await readFile(providerDb)).byteLength).toBeGreaterThan(0);
     const memories = memoryService(db);
     const erased = await memories.forget(first.companyId, privateRootId, first.aliceMemoryActor);
     expect(erased.deletedRecordCount).toBeGreaterThan(1);
@@ -211,5 +216,11 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
     expect(retainedMemoryA?.payloadSourceSnapshotInvalidated).toBe(false);
     expect(scrubbedMemoryB?.deletedAt).not.toBeNull();
     expect(scrubbedMemoryC?.deletedAt).not.toBeNull();
+
+    await memoryJobService(db).tick({ limit: 10, companyId: first.companyId });
+    const [providerEraseJob] = await db.select().from(memoryJobs).where(and(eq(memoryJobs.companyId, first.companyId),
+      eq(memoryJobs.jobKey, `runtime-asset-erasure:v1:${first.runId}`)));
+    expect(providerEraseJob?.status).toBe("succeeded");
+    await expect(stat(providerDb)).rejects.toMatchObject({ code: "ENOENT" });
   });
 });

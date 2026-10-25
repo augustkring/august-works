@@ -14,6 +14,7 @@ import {
   runtimeOperations,
   supportSessions,
   orchestrationCompanyPurposeReservations,
+  memoryJobs,
   type Db,
 } from "@paperclipai/db";
 import { companyDeletionRequestSchema } from "@paperclipai/shared";
@@ -23,6 +24,8 @@ import type { companyObjectErasure } from "./object-erasure.js";
 import { companyService } from "../companies.js";
 import type { billingService } from "../billing/billing.js";
 import type { runtimeControlService } from "../runtime/control.js";
+import { enqueueCompanyManagedOpenCodeRuntimeErasure } from "../native-runtime/runtime-asset-retention.js";
+import { memoryJobService } from "../memory/memory-jobs.js";
 export function saasOffboardingService(
   db: Db,
   billing: ReturnType<typeof billingService>,
@@ -373,6 +376,26 @@ export function saasOffboardingService(
           return true;
         });
         if (!admitted) return false;
+        // Retained OpenCode transcripts belong to the original run and Stop
+        // receipt. Persist their existing outbox work before company purge can
+        // remove those owner rows; a failed/active run holds this phase open.
+        const managedRunIds = await enqueueCompanyManagedOpenCodeRuntimeErasure(db, operation.companyId, operation.id);
+        if (managedRunIds.length) {
+          await memoryJobService(db).tick({ limit: 32, companyId: operation.companyId });
+          const keys = managedRunIds.map(runId => `runtime-asset-erasure:v1:${runId}`);
+          const attempts = await db.select({ jobKey: memoryJobs.jobKey, attemptNumber: memoryJobs.attemptNumber, status: memoryJobs.status })
+            .from(memoryJobs).where(and(
+            eq(memoryJobs.companyId, operation.companyId), inArray(memoryJobs.jobKey, keys),
+          )).orderBy(memoryJobs.jobKey, desc(memoryJobs.attemptNumber));
+          const latest = new Map<string, typeof attempts[number]>();
+          for (const job of attempts) if (!latest.has(job.jobKey)) latest.set(job.jobKey, job);
+          if (managedRunIds.some(runId => latest.get(`runtime-asset-erasure:v1:${runId}`)?.status !== "succeeded")) {
+            const waitingOnStop = managedRunIds.some(runId => latest.get(`runtime-asset-erasure:v1:${runId}`)?.status === "failed");
+            await db.update(companyDeletionOperations).set({ notBefore: new Date(now.getTime() + (waitingOnStop ? 60000 : 10000)),
+              errorCode: "managed_provider_erasure_pending" }).where(eq(companyDeletionOperations.id, operation.id));
+            return true;
+          }
+        }
         const objectEvidence = await objects.erase(
           operation.companyId,
           now,

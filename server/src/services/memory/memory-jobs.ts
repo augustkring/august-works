@@ -492,12 +492,12 @@ export function memoryJobService(
     return enqueued;
   }
 
-  async function claimNext(now = new Date()): Promise<MemoryJob | null> {
+  async function claimNext(now = new Date(), companyId?: string): Promise<MemoryJob | null> {
     return db.transaction(async (tx) => {
       const candidate = await tx
         .select()
         .from(memoryJobs)
-        .where(eq(memoryJobs.status, "queued"))
+        .where(companyId ? and(eq(memoryJobs.status, "queued"), eq(memoryJobs.companyId, companyId)) : eq(memoryJobs.status, "queued"))
         .orderBy(asc(memoryJobs.submittedAt), asc(memoryJobs.createdAt))
         .limit(1)
         .for("update", { skipLocked: true })
@@ -642,16 +642,19 @@ export function memoryJobService(
       return { summary: "Erased the deleted procedure version's actual runtime copies.", result: { processedRunCount: 1 } };
     }
     if (source.kind === "runtime_asset_erasure") {
-      if (typeof source.runId !== "string" || !Array.isArray(source.legacyDigests) || source.legacyDigests.some(value => typeof value !== "string")) throw unprocessable("Invalid native runtime asset erasure binding");
+      if (typeof source.runId !== "string" || !Array.isArray(source.legacyDigests) || source.legacyDigests.some(value => typeof value !== "string") ||
+        (source.companyPurgeOperationId !== undefined && (typeof source.companyPurgeOperationId !== "string" || !/^[a-f0-9-]{36}$/i.test(source.companyPurgeOperationId))))
+        throw unprocessable("Invalid native runtime asset erasure binding");
       const digests = source.legacyDigests as string[];
       const suffix = digests.length ? `:${createHash("sha256").update([...new Set(digests)].sort().join(",")).digest("hex")}` : "";
       if (job.jobKey !== `runtime-asset-erasure:v1:${source.runId}${suffix}`) throw unprocessable("Invalid native runtime asset erasure binding");
       const { closeWarmNativeSessionsForRun } = await import("../native-runtime/native-session-executor.js");
       const stop = await closeWarmNativeSessionsForRun({ companyId: job.companyId, runId: source.runId,
-        reason: "source erasure" });
-      if (stop.busy || stop.failed) throw new Error("Managed Native provider Stop is still pending for source erasure");
+        reason: source.companyPurgeOperationId ? "company offboarding" : "source erasure" });
+      if (stop.busy || stop.failed) throw new Error("Managed Native provider Stop is still pending for run asset erasure");
       const { eraseNativeRuntimeAssets } = await import("../native-runtime/runtime-asset-retention.js");
-      await eraseNativeRuntimeAssets(db, { companyId: job.companyId, runId: source.runId }, source.legacyDigests as string[]);
+      await eraseNativeRuntimeAssets(db, { companyId: job.companyId, runId: source.runId }, source.legacyDigests as string[],
+        typeof source.companyPurgeOperationId === "string" ? { companyPurgeOperationId: source.companyPurgeOperationId } : undefined);
       return { summary: "Erased the native run's generated runtime assets.", result: { processedRunCount: 1 } };
     }
     if (source.kind === "skill_version_file_erasure") {
@@ -861,6 +864,7 @@ export function memoryJobService(
   async function recoverExpiredLeases(
     now = new Date(),
     limit = 50,
+    companyId?: string,
   ): Promise<{ recovered: number; retried: number }> {
     const expired = await db
       .select()
@@ -868,6 +872,7 @@ export function memoryJobService(
       .where(
         and(
           eq(memoryJobs.status, "running"),
+          companyId ? eq(memoryJobs.companyId, companyId) : undefined,
           isNotNull(memoryJobs.leaseExpiresAt),
           lte(memoryJobs.leaseExpiresAt, now),
         ),
@@ -886,6 +891,7 @@ export function memoryJobService(
             and(
               eq(memoryJobs.id, stale.id),
               eq(memoryJobs.status, "running"),
+              companyId ? eq(memoryJobs.companyId, companyId) : undefined,
               isNotNull(memoryJobs.leaseExpiresAt),
               lte(memoryJobs.leaseExpiresAt, now),
             ),
@@ -905,7 +911,7 @@ export function memoryJobService(
   }
 
   async function tick(
-    input: { now?: Date; limit?: number } = {},
+    input: { now?: Date; limit?: number; companyId?: string } = {},
   ): Promise<{
     recovered: number;
     retried: number;
@@ -918,10 +924,11 @@ export function memoryJobService(
     // filesystem attempt. The existing reconciliation tick supplies the retry.
     await db.update(memoryJobs).set({status:"queued",finishedAt:null,error:null,errorCode:null,updatedAt:now})
       .where(and(eq(memoryJobs.operationType,"retention"),eq(memoryJobs.status,"failed"),
+        input.companyId ? eq(memoryJobs.companyId, input.companyId) : undefined,
         lte(memoryJobs.updatedAt,new Date(now.getTime()-60000)),
         sql`(${memoryJobs.sourceRefJson}->>'kind' in ('provider_trace_erasure','run_log_erasure','learning_analytical_erasure','skill_version_file_erasure','runtime_asset_erasure','runtime_skill_source_erasure','runtime_playbook_source_erasure','runtime_knowledge_source_erasure','authored_definition_source_erasure','artifact_workspace_erasure','workflow_artifact_source_erasure') or (${memoryJobs.sourceRefJson}->>'kind'='retention_sweep' and ${memoryJobs.jobKey} like 'analytical-context-erasure:v1:%'))`));
-    const recovered = await recoverExpiredLeases(now);
-    const [backfilled, retentionQueued] = await Promise.all([
+    const recovered = await recoverExpiredLeases(now, 50, input.companyId);
+    const [backfilled, retentionQueued] = input.companyId ? [0, 0] : await Promise.all([
       enqueueMissingPostRunCaptures(),
       enqueueDueRetentionJobs(now),
     ]);
@@ -931,7 +938,7 @@ export function memoryJobService(
     );
     let processed = 0;
     for (let index = 0; index < limit; index += 1) {
-      const job = await claimNext(new Date());
+      const job = await claimNext(new Date(), input.companyId);
       if (!job) break;
       await executeClaimed(job);
       processed += 1;

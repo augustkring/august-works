@@ -45,7 +45,8 @@ import { assertV7Authorization, assertV7Enabled } from "../v7-authorization.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import type { NativeConsumedSourceComponent } from "../native-runtime/native-execution-input.js";
-import { assertNativeContextReadSourceSetCurrent, type NativeContextReadBinding } from "../native-direct-input.js";
+import { assertNativeContextReadSourceSetCurrent, assertNativeMemorySourceInputCurrent,
+  type NativeContextReadBinding } from "../native-direct-input.js";
 import {
   lockMemoryPrivacy,
   heartbeatMemoryPayloadRetained,
@@ -117,6 +118,10 @@ function managedToolName(value: string): string {
     }
   }
   return value;
+}
+
+function managedToolSourceName(value: string): string {
+  return value === "self_remember" ? "paperclip-self:remember" : value;
 }
 
 function managedRecord(value: unknown): Record<string, unknown> {
@@ -341,20 +346,27 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
           throw forbidden("managed_opencode_tool_result_capture_digest_mismatch");
         if (source.kind !== "tool_result" || source.contentHash !== contentHash)
           throw forbidden("managed_opencode_tool_result_source_digest_mismatch");
-        if (source.callId !== block.tool_use_id || source.toolName !== toolName)
+        const sourceToolName = managedToolSourceName(toolName);
+        if (source.callId !== block.tool_use_id || source.toolName !== sourceToolName)
           throw forbidden("managed_opencode_tool_result_identity_mismatch");
         if (typeof invocationId !== "string")
           throw forbidden("managed_opencode_tool_result_invocation_missing");
         const [invocation] = await db.select().from(toolInvocations).where(and(
           eq(toolInvocations.companyId, claims.company_id), eq(toolInvocations.id, invocationId),
           eq(toolInvocations.runId, claims.run_id), eq(toolInvocations.agentId, claims.sub),
-          eq(toolInvocations.toolName, toolName), eq(toolInvocations.status, "succeeded"),
+          eq(toolInvocations.toolName, sourceToolName), eq(toolInvocations.status, "succeeded"),
           eq(toolInvocations.resultHash, contentHash),
         ));
         if (!invocation) throw forbidden("Managed OpenCode source tool invocation is no longer current");
-        const consumedEntries = receipt.data.additionalInputs.filter(entry => entry.inputs.some(value =>
-          value.kind === "tool_result" && isDeepStrictEqual(value, source)));
-        if (consumedEntries.length !== 1) throw forbidden("Managed OpenCode tool result source entry is ambiguous");
+        const consumedEntries = receipt.data.additionalInputs.filter(entry => entry.inputs[0]?.kind === "tool_result" &&
+          isDeepStrictEqual(entry.inputs[0], source));
+        const exactCopies = receipt.data.additionalInputs.reduce((count, entry) => count + entry.inputs.filter(value =>
+          value.kind === "tool_result" && isDeepStrictEqual(value, source)).length, 0);
+        const conflictingCopies = receipt.data.additionalInputs.some(entry => entry.inputs.some(value =>
+          value.kind === "tool_result" && value.callId === source.callId && !isDeepStrictEqual(value, source)));
+        if (consumedEntries.length !== 1 || exactCopies < 1 || conflictingCopies ||
+          consumedEntries[0]!.inputs.filter(value => value.kind === "tool_result" && isDeepStrictEqual(value, source)).length !== 1)
+          throw forbidden("Managed OpenCode tool result source entry is ambiguous");
         const consumedEntry = consumedEntries[0]!;
         consumedSourceComponents.push({ kind: "additional_input", responsibleUserId: consumedEntry.responsibleUserId,
           policy: consumedEntry.policy, inputs: consumedEntry.inputs });
@@ -387,13 +399,11 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
           const sources = Array.isArray(sourceSet.inputs) ? sourceSet.inputs : [];
           const manifestIds = contextCapture.manifestIds;
           const contextSources = sources.filter((value) => managedRecord(value).kind === "context");
-          const receiptEntries = receipt.data.additionalInputs.filter(entry => entry.inputs.some(value =>
-            value.kind === "tool_result" && isDeepStrictEqual(value, source)));
           if (capture.managedOpenCode !== true || contextCapture.contentDigest !== contentHash ||
             !nativePayloadSourcePolicySchema.safeParse(policy).success || !nativePayloadSourceInputSchema.array().safeParse(sources).success ||
-            contextSources.length !== 1 || sources.length !== 1 || !Array.isArray(manifestIds) || receiptEntries.length !== 1 ||
-            !isDeepStrictEqual(receiptEntries[0]!.policy, policy) ||
-            !receiptEntries[0]!.inputs.some(value => value.kind === "context" && isDeepStrictEqual(value, contextSources[0])) ||
+            contextSources.length !== 1 || sources.length !== 1 || !Array.isArray(manifestIds) ||
+            !isDeepStrictEqual(consumedEntry.policy, policy) ||
+            !isDeepStrictEqual(consumedEntry.inputs, [source, ...sources]) ||
             source.toolName !== "read_context")
             throw forbidden("Managed OpenCode Context tool result capture is incomplete");
           await assertNativeContextReadSourceSetCurrent(db, { companyId: claims.company_id, agentId: claims.sub,
@@ -403,6 +413,14 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
             }, sourceSet: { policy: policy as NativeContextReadBinding["sourceSet"]["policy"],
               inputs: sources as NativeContextReadBinding["sourceSet"]["inputs"] },
             manifestIds: manifestIds as NativeContextReadBinding["manifestIds"] });
+        } else if (toolName === "self_remember") {
+          const memorySources = consumedEntry.inputs.filter((value): value is Extract<NativePayloadSourceInput, { kind: "memory" }> =>
+            value.kind === "memory");
+          if (memorySources.length !== 1 || !consumedEntry.policy.memoryIds.includes(memorySources[0]!.memoryId))
+            throw forbidden("Managed OpenCode Memory result source is incomplete");
+          await assertNativeMemorySourceInputCurrent(db, { companyId: claims.company_id,
+            actor: { type: "agent", source: "agent_jwt", companyId: claims.company_id, agentId: claims.sub,
+              runId: claims.run_id, onBehalfOfUserId: claims.responsible_user_id }, source: memorySources[0]! });
         } else {
           let documentRef: Record<string, unknown>;
           if (toolName === "read_document") {

@@ -70,7 +70,12 @@ describe("managed OpenCode source-closure binary integration", () => {
           body: "Document B was produced after private Context was selected.", baseRevisionId: null,
         } },
         { tool: "paperclip_finish", id: "managed-e2e-finish-1" },
-      ], onPreserveDebugArtifacts: () => { preserveDebugArtifacts = true; } });
+      ],
+      // A shared Memory is born as a pending proposal. Accept it through the
+      // normal Human review service after its real Gateway call and before
+      // the next model request consumes that tool_result in Context.
+      humanActions: [{ afterModelToolCallId: memoryAId, action: "accept_memory_candidate" }],
+      onPreserveDebugArtifacts: () => { preserveDebugArtifacts = true; } });
     expect(result.runId).toMatch(/^[0-9a-f-]{36}$/);
     expect(result.sourceReceipt).toBeDefined();
     expect(result.contextResultConsumers).toContainEqual({ callId: contextReadId, consumed: true });

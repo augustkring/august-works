@@ -10,7 +10,7 @@ import { agents, issues, projects, issueComments, documentRevisions, issueDocume
 import { toolInvocations } from "@paperclipai/db";
 import { nativePayloadSourceInputSchema, nativePayloadSourcePolicySchema, nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema,
   AUTHORED_AGENT_DEFINITION_KEY, type NativePayloadSourceInput, type NativePayloadSourcePolicy,
-  type NativePayloadSourceSnapshot } from "@paperclipai/shared";
+  type NativePayloadSourceSnapshot, type NativeRunInputSourceReceipt } from "@paperclipai/shared";
 import { forbidden } from "../errors.js";
 import { assertAnalyticalContextPayloadAccess } from "./analytical-context-authority.js";
 import { canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, authorizationService,
@@ -39,6 +39,15 @@ function nativeProviderToolName(name: string): string {
   if (stripped === "self_remember") return "paperclip-self:remember";
   if (stripped === "self_read_context") return "read_context";
   return stripped;
+}
+
+function nativeToolResultReceiptCopies(receipt: NativeRunInputSourceReceipt, source: Extract<NativePayloadSourceInput, { kind: "tool_result" }>) {
+  const perEntry = receipt.additionalInputs.map(entry => entry.inputs.filter(value =>
+    value.kind === "tool_result" && isDeepStrictEqual(value, source)).length);
+  const exact = perEntry.reduce((count, value) => count + value, 0);
+  const conflicting = receipt.additionalInputs.some(entry => entry.inputs.some(value =>
+    value.kind === "tool_result" && value.callId === source.callId && !isDeepStrictEqual(value, source)));
+  return { exact, conflicting, duplicateWithinEntry: perEntry.some(value => value > 1) };
 }
 
 function nativeManagedConsumedSourceParts(intent: Record<string, unknown>, expected: NativePayloadSourceSet) {
@@ -423,10 +432,22 @@ async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction
     }
   }
   for (const source of capture.sourceSet.inputs) {
-    if (["task", "project", "memory", "context", "completion_contract", "runtime_instructions", "runtime_skill", "workspace_metadata", "worker_model_dispatch", "tool_result"].includes(source.kind)) {
+    if (["task", "project", "memory", "context", "document_revision", "completion_contract", "runtime_instructions", "runtime_skill", "workspace_metadata", "worker_model_dispatch", "tool_result"].includes(source.kind)) {
       if (source.kind === "memory") {
         if (!capture.sourceSet.policy.memoryIds.includes(source.memoryId)) throw forbidden("A Native Memory source is unavailable");
         await assertNativeMemorySourceCurrent(db, companyId, actor, source);
+      }
+      if (source.kind === "document_revision") {
+        if (!source.issueId) throw forbidden("A Native output document source is unavailable");
+        const [revision] = await db.select({ body: documentRevisions.body,
+          payloadSourceProtocolVersion: documentRevisions.payloadSourceProtocolVersion })
+          .from(documentRevisions).where(and(eq(documentRevisions.companyId, companyId),
+            eq(documentRevisions.id, source.revisionId)));
+        if (!revision || revision.payloadSourceProtocolVersion !== 1 ||
+          createHash("sha256").update(revision.body, "utf8").digest("hex") !== source.contentHash)
+          throw forbidden("A Native output document source changed");
+        await assertNativeDocumentRevisionCurrentSourceAccessInScope(db as Db, { companyId, issueId: source.issueId,
+          revisionId: source.revisionId, actor, requireLatest: false }, scope, depth + 1);
       }
       if (source.kind === "worker_model_dispatch") {
         const [sourceReservation] = await db.select().from(orchestrationModelReservations).where(and(
@@ -440,17 +461,26 @@ async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction
           (value as Record<string, unknown>).wireBodyHash === source.wireBodyHash &&
           (value as Record<string, unknown>).endpoint === "https://api.anthropic.com/v1/messages" &&
           (value as Record<string, unknown>).method === "POST");
-        const sourceReceiptDispatches = receipt.data.dispatches.flatMap(value => value.inputs.filter(item =>
-          item.kind === "worker_model_dispatch" && isDeepStrictEqual(item, source)));
+        const sourceDispatchIntent = sourceIntentMatches.length === 1 ? sourceIntentMatches[0] as Record<string, unknown> : null;
+        const exactSourceDispatchPrefix = typeof sourceDispatchIntent?.sourceDispatchDigest === "string" &&
+          receipt.data.dispatches.some(prefix => prefix.executionInputDigest === sourceDispatchIntent.sourceDispatchDigest &&
+            prefix.inputs.some(item => item.kind === "worker_model_dispatch" && isDeepStrictEqual(item, source)));
+        const conflictingCopies = receipt.data.dispatches.some(prefix => prefix.inputs.some(item =>
+          item.kind === "worker_model_dispatch" && item.reservationId === source.reservationId &&
+          !isDeepStrictEqual(item, source)));
         if (source.runId !== capture.runId || !sourceReservation || sourceIntentMatches.length !== 1 ||
           sourceReservation.inputHash !== source.requestHash || sourceReservation.providerResponseHash !== source.responseHash ||
-          sourceReceiptDispatches.length !== 1)
+          !exactSourceDispatchPrefix || conflictingCopies || sourceDispatchIntent!.requestHash !== source.requestHash ||
+          sourceDispatchIntent!.wireBodyHash !== source.wireBodyHash ||
+          typeof sourceDispatchIntent!.responseContentHash !== "string" ||
+          !/^[0-9a-f]{64}$/.test(sourceDispatchIntent!.responseContentHash as string) ||
+          sourceDispatchIntent!.endpoint !== "https://api.anthropic.com/v1/messages" || sourceDispatchIntent!.method !== "POST")
           throw forbidden("A Native output historical model dispatch is unavailable");
       }
       if (source.kind === "tool_result") {
-        const recorded = receipt.data.additionalInputs.flatMap(value => value.inputs.filter(item =>
-          item.kind === "tool_result" && isDeepStrictEqual(item, source)));
-        if (recorded.length !== 1) throw forbidden("A Native output historical tool result is unavailable");
+        const recorded = nativeToolResultReceiptCopies(receipt.data, source);
+        if (recorded.exact < 1 || recorded.conflicting || recorded.duplicateWithinEntry)
+          throw forbidden("A Native output historical tool result is unavailable");
         const captures = Array.isArray(profile?.nativeToolResultSourceCaptures) ? profile!.nativeToolResultSourceCaptures : [];
         const matching = captures.filter(value => value && typeof value === "object" && !Array.isArray(value) &&
           (value as Record<string, unknown>).callId === source.callId && typeof (value as Record<string, unknown>).tool === "string" &&
@@ -749,9 +779,9 @@ async function assertNativePayloadSourceSetCurrentInScope(db: Db | Transaction, 
         eq(toolInvocations.companyId, input.companyId), eq(toolInvocations.id, source.invocationId),
         eq(toolInvocations.runId, input.runId), eq(toolInvocations.status, "succeeded"),
         eq(toolInvocations.resultHash, source.contentHash))) : [];
-      const matchingReceiptInputs = receipt.data.additionalInputs.flatMap(entry => entry.inputs.filter(value =>
-        value.kind === "tool_result" && isDeepStrictEqual(value, source)));
-      if (source.runId !== input.runId || matchingReceiptInputs.length !== 1 || captures.length !== 1 || !invocation ||
+      const matchingReceiptInputs = nativeToolResultReceiptCopies(receipt.data, source);
+      if (source.runId !== input.runId || matchingReceiptInputs.exact < 1 || matchingReceiptInputs.conflicting ||
+        matchingReceiptInputs.duplicateWithinEntry || captures.length !== 1 || !invocation ||
         invocation.issueId !== input.issueId || invocation.toolName !== source.toolName ||
         invocation.idempotencyKey !== `aw-native-tool:${input.runId}:${source.callId}`)
         throw forbidden("A Native historical tool result changed");
@@ -1104,14 +1134,28 @@ async function assertNativeManagedConsumedSourceSetCurrentUncached(db: Db | Tran
       if (!/^[0-9a-f]{64}$/.test(component.executionInputDigest)) throw forbidden("A Native dispatch component is malformed");
       const matches = receipt.data.dispatches.filter(value => value.executionInputDigest === component.executionInputDigest &&
         isDeepStrictEqual(value.policy, set.policy) && isDeepStrictEqual(value.inputs, set.inputs));
-      const markers = set.inputs.filter(value => value.kind === "worker_model_dispatch");
-      const matchingMarkers = markers.filter(marker => wireIntents.some(intent => intent.reservationId === marker.reservationId &&
+      const markers = set.inputs.filter((value): value is Extract<NativePayloadSourceInput, { kind: "worker_model_dispatch" }> =>
+        value.kind === "worker_model_dispatch");
+      // Cumulative transcript prefixes retain every earlier model dispatch.
+      // The current response's marker is the final input appended to this
+      // immutable prefix; older markers can share the same acknowledged-turn
+      // digest and are validated as preceding sources below.
+      const marker = markers.at(-1);
+      const markerIntents = marker ? wireIntents.filter(intent => intent.reservationId === marker.reservationId &&
         intent.sourceDispatchDigest === component.executionInputDigest && intent.callId === marker.callId &&
-        intent.requestHash === marker.requestHash && intent.wireBodyHash === marker.wireBodyHash));
-      if (matches.length !== 1 || matchingMarkers.length !== 1 ||
-        !matches[0]!.inputs.some(value => value.kind === "worker_model_dispatch" && isDeepStrictEqual(value, matchingMarkers[0])))
+        intent.requestHash === marker.requestHash && intent.wireBodyHash === marker.wireBodyHash) : [];
+      const [reservation] = marker ? await db.select({ status: orchestrationModelReservations.status,
+        inputHash: orchestrationModelReservations.inputHash, providerResponseHash: orchestrationModelReservations.providerResponseHash })
+        .from(orchestrationModelReservations).where(and(eq(orchestrationModelReservations.companyId, input.companyId),
+          eq(orchestrationModelReservations.id, marker.reservationId), eq(orchestrationModelReservations.purpose, "worker_model"))) : [];
+      if (matches.length !== 1 || !marker || marker.runId !== input.runId ||
+        markers.filter(value => isDeepStrictEqual(value, marker)).length !== 1 ||
+        !isDeepStrictEqual(matches[0]!.inputs.at(-1), marker) || markerIntents.length !== 1 || !reservation ||
+        reservation.status !== "completed" || reservation.inputHash !== marker.requestHash ||
+        reservation.providerResponseHash !== marker.responseHash ||
+        markerIntents[0]!.endpoint !== "https://api.anthropic.com/v1/messages" || markerIntents[0]!.method !== "POST")
         throw forbidden("A Native dispatch component is not in its original receipt");
-      dispatchMarkers.set(component, matchingMarkers[0]!);
+      dispatchMarkers.set(component, marker);
     } else if (component.kind === "additional_input") {
       if (typeof component.responsibleUserId !== "string") throw forbidden("A Native additional input is malformed");
       const matches = receipt.data.additionalInputs.filter(value => value.responsibleUserId === component.responsibleUserId &&

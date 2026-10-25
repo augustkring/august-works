@@ -8,16 +8,18 @@ import { dirname, join } from "node:path";
 import express from "express";
 import request from "supertest";
 import postgres from "postgres";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, gte, inArray } from "drizzle-orm";
 import { expect } from "vitest";
 
 import {
   agents,
+  agentIdentities,
   authUsers,
   createDb,
   heartbeatRuns,
   completionContracts,
   companyMemberships,
+  companies,
   documentRevisions,
   agentExecutionManifests,
   issueDocuments,
@@ -28,6 +30,10 @@ import {
   orchestrationWorkers,
   nativeRunFinalizations,
   toolInvocations,
+  memoryRecords,
+  activityLog,
+  supervisionInterventions,
+  toolPolicies,
 } from "@paperclipai/db";
 import { nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema,
   type NativePayloadSourceInput } from "@paperclipai/shared";
@@ -39,9 +45,12 @@ import { aiConnectionService } from "../../services/ai-connections.js";
 import { issueService } from "../../services/issues.js";
 import { documentService } from "../../services/documents.js";
 import { memoryService } from "../../services/memory/memory-service.js";
+import { canActorReadMemorySources } from "../../services/memory/memory-privacy.js";
 import { instanceSettingsService } from "../../services/instance-settings.js";
 import { orchestrationService } from "../../services/orchestration/orchestration-service.js";
 import { workerModelGateway } from "../../services/orchestration/worker-model-gateway.js";
+import { createToolGatewayService } from "../../services/tool-gateway.js";
+import { getAssignedMcpGateway, registerAssignedMcpGateway } from "../../services/native-runtime/assigned-mcp-tools.js";
 import { hashContextPolicySnapshot } from "../../services/context/context-manifest.js";
 import { discoverNativeCapabilities } from "../../services/native-provider-conformance.js";
 import { makeProviderCapabilitySnapshot, providerConformanceRequirements } from "../../services/provider-capabilities.js";
@@ -100,6 +109,77 @@ function staticManagedErrorCodes(value: unknown, depth = 0): string[] {
   if (value && typeof value === "object") return Object.values(value).flatMap(item =>
     staticManagedErrorCodes(item, depth + 1));
   return [];
+}
+
+function managedMemoryBoundaryFacts(value: unknown, depth = 0): { messageMatches: string[]; errorCodes: string[] } {
+  const messageLabels = new Map([
+    ["Managed Memory write has no exact provider tool-use capture", "provider_capture_missing"],
+    ["Managed Memory requires the current verified Agent credential", "verified_agent_credential_missing"],
+    ["Managed Memory result has no completed canonical Tool Gateway invocation", "gateway_invocation_missing"],
+    ["Managed Memory result does not match its canonical invocation", "gateway_invocation_mismatch"],
+    ["Managed Memory output capture is unavailable", "managed_memory_capture_unavailable"],
+    ["Native Memory output capture does not match this scoped call", "scoped_memory_capture_mismatch"],
+    ["The Native output capture is unavailable", "native_output_capture_unavailable"],
+    ["The Native output capture is not bound to its settled provider tool use", "native_output_capture_unbound"],
+    ["The Native consumed source graph contains a cycle", "native_source_cycle"],
+    ["The Native output source chain exceeds its bound", "native_output_source_bound_exceeded"],
+    ["The Native output capture lacks its consumed source components", "native_output_components_missing"],
+    ["assigned_mcp_gateway_unavailable", "assigned_gateway_unavailable"],
+  ]);
+  const messageMatches = new Set<string>();
+  const errorCodes = new Set<string>();
+  const visit = (current: unknown, level: number) => {
+    if (level > 6) return;
+    if (typeof current === "string") {
+      const label = messageLabels.get(current);
+      if (label) messageMatches.add(label);
+      if (current.length <= 16_384) {
+        try { visit(JSON.parse(current), level + 1); } catch { /* plain tool text */ }
+      }
+      return;
+    }
+    if (Array.isArray(current)) {
+      for (const item of current.slice(0, 32)) visit(item, level + 1);
+      return;
+    }
+    if (!current || typeof current !== "object") return;
+    const record = current as Record<string, unknown>;
+    for (const key of ["code", "errorCode"]) {
+      const code = record[key];
+      if (typeof code === "string" && /^[a-z][a-z0-9_]{1,80}$/.test(code)) errorCodes.add(code);
+    }
+    for (const item of Object.values(record).slice(0, 32)) visit(item, level + 1);
+  };
+  visit(value, depth);
+  return { messageMatches: [...messageMatches].sort(), errorCodes: [...errorCodes].sort() };
+}
+
+function safeToolResultShape(value: unknown) {
+  let parsed: unknown = value;
+  if (typeof value === "string") {
+    try { parsed = JSON.parse(value); } catch { parsed = null; }
+  } else if (Array.isArray(value)) {
+    const text = value.flatMap(part => part && typeof part === "object" && typeof (part as Record<string, unknown>).text === "string"
+      ? [(part as Record<string, unknown>).text as string] : []).join("");
+    try { parsed = JSON.parse(text); } catch { parsed = null; }
+  }
+  const row = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  const data = row.data && typeof row.data === "object" && !Array.isArray(row.data) ? row.data as Record<string, unknown> : {};
+  const record = data.record && typeof data.record === "object" && !Array.isArray(data.record)
+    ? data.record as Record<string, unknown> : {};
+  const scope = record.scope && typeof record.scope === "object" && !Array.isArray(record.scope)
+    ? record.scope as Record<string, unknown> : {};
+  const allowedStatuses = new Set(["accepted", "pending", "duplicate", "corroborated", "completed", "replayed", "failed"]);
+  const allowedScopes = new Set(["company", "private", "agent", "project"]);
+  return { parseSucceeded: parsed !== null,
+    topLevelKeys: Object.keys(row).sort(), dataKeys: Object.keys(data).sort(), recordKeys: Object.keys(record).sort(),
+    status: typeof data.status === "string" && allowedStatuses.has(data.status) ? data.status : "other_or_absent",
+    scopeType: typeof scope.type === "string" && allowedScopes.has(scope.type) ? scope.type : "other_or_absent",
+    errorCode: typeof row.errorCode === "string" && /^[a-z][a-z0-9_]{1,80}$/.test(row.errorCode) ? row.errorCode : undefined };
+}
+
+function safeCode(value: unknown): string | undefined {
+  return typeof value === "string" && /^[a-z0-9_]{1,120}$/i.test(value) ? value : undefined;
 }
 
 function differencePaths(left: unknown, right: unknown, path = "$"): string[] {
@@ -397,6 +477,12 @@ export async function runManagedNativeOpenCodeFixture(input: {
     const brokerRequests: string[] = [];
     const submittedPromptFacts: Array<{ length: number; sha256: string }> = [];
     let managedConfigReadOnlyVerified = false;
+    const assignedToolGateway = createToolGatewayService(db);
+    registerAssignedMcpGateway(db, assignedToolGateway, scopedDb => createToolGatewayService(scopedDb));
+    expect(getAssignedMcpGateway(db)).toBe(assignedToolGateway);
+    await db.insert(toolPolicies).values({ companyId,
+      name: `Managed OpenCode fixture Memory policy ${randomUUID()}`,
+      policyType: "allow", selectors: { toolName: "paperclip-self:remember" } });
     const gateway = workerModelGateway(db, {
       profiles: [profile], sourceSha, protectedEvidenceOrigin: "https://protected.test.invalid",
       fetch: async (url, init) => {
@@ -421,30 +507,6 @@ export async function runManagedNativeOpenCodeFixture(input: {
           contextResultConsumers.push({ callId, consumed: toolResults.some(block =>
             block.type === "tool_result" && block.tool_use_id === callId && block.is_error !== true &&
             (typeof block.content === "string" || Array.isArray(block.content))) });
-        }
-        if (responseCount > 1) {
-          const previousStep = modelSteps[responseCount - 2]!;
-          const previousCallId = previousStep.id ?? `managed-e2e-${previousStep.tool}-${responseCount - 2}`;
-          for (const action of input.humanActions ?? []) {
-            if (action.afterModelToolCallId !== previousCallId || completedHumanActions.has(previousCallId)) continue;
-            if (action.action !== "accept_memory_candidate" || previousStep.tool !== "self_remember")
-              throw new Error("managed_fixture_human_action_unqualified");
-            const idempotencyKey = `aw-native-tool:${run!.id}:${previousCallId}`;
-            const [invocation] = await db.select({ workflowResultJson: toolInvocations.workflowResultJson,
-              status: toolInvocations.status, toolName: toolInvocations.toolName })
-              .from(toolInvocations).where(and(eq(toolInvocations.companyId, companyId),
-                eq(toolInvocations.idempotencyKey, idempotencyKey)));
-            if (!invocation || invocation.status !== "succeeded" || invocation.toolName !== "paperclip-self:remember")
-              throw new Error("managed_fixture_memory_candidate_invocation_unavailable");
-            const result = (typeof invocation.workflowResultJson === "string"
-              ? JSON.parse(invocation.workflowResultJson) : invocation.workflowResultJson) as { record?: { id?: unknown; reviewState?: unknown } };
-            if (typeof result.record?.id !== "string" || !/^[0-9a-f-]{36}$/i.test(result.record.id) ||
-              result.record.reviewState !== "pending")
-              throw new Error("managed_fixture_memory_candidate_unavailable");
-            await memoryService(db).reviewCandidate(companyId, result.record.id, { decision: "accept" }, aliceMemoryActor);
-            acceptedMemoryIds.push(result.record.id);
-            completedHumanActions.add(previousCallId);
-          }
         }
         const tools = (body.tools as Array<Record<string, unknown>>) ?? [];
         const step = modelSteps[responseCount - 1];
@@ -476,7 +538,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
     const minted = await gateway.issueForRun({ companyId, agentId, runId: run!.id, responsibleUserId: aliceUserId });
     const app = express();
     app.use(express.json({ limit: "2mb" }));
-    app.use((req, res, next) => {
+    app.use(async (req, res, next) => {
       brokerRequests.push(`${req.method} ${req.path}`);
       res.on("finish", () => brokerRequests.push(`response ${req.method} ${req.path} ${res.statusCode}`));
       const originalJson = res.json.bind(res);
@@ -490,13 +552,71 @@ export async function runManagedNativeOpenCodeFixture(input: {
       }
       const wire = req.body && typeof req.body === "object" ? req.body as Record<string, unknown> : {};
       const messages = Array.isArray(wire.messages) ? wire.messages : [];
+      // Run explicitly configured Human review actions after the actual tool
+      // call has completed and before the next Messages request is qualified.
+      // This is a real service action on the current Gateway result; it does
+      // not create or edit any Native source receipt.
+      const incomingToolResults = messages.flatMap(message => {
+        if (!message || typeof message !== "object") return [];
+        const content = (message as Record<string, unknown>).content;
+        return Array.isArray(content) ? content : [];
+      }).flatMap(block => {
+        if (!block || typeof block !== "object") return [];
+        const value = block as Record<string, unknown>;
+        return value.type === "tool_result" && value.is_error !== true && typeof value.tool_use_id === "string"
+          ? [value.tool_use_id] : [];
+      });
+      for (const action of input.humanActions ?? []) {
+        const callId = action.afterModelToolCallId;
+        const step = modelSteps.find((value, index) =>
+          (value.id ?? `managed-e2e-${value.tool}-${index}`) === callId);
+        if (!incomingToolResults.includes(callId) || completedHumanActions.has(callId)) continue;
+        if (action.action !== "accept_memory_candidate" || step?.tool !== "self_remember")
+          throw new Error("managed_fixture_human_action_unqualified");
+        brokerRequests.push(`human-action started ${action.action}`);
+        const [invocation] = await db.select({ workflowResultJson: toolInvocations.workflowResultJson,
+          status: toolInvocations.status, toolName: toolInvocations.toolName })
+          .from(toolInvocations).where(and(eq(toolInvocations.companyId, companyId),
+            eq(toolInvocations.idempotencyKey, `aw-native-tool:${run!.id}:${callId}`)));
+        if (!invocation || invocation.status !== "succeeded" || invocation.toolName !== "paperclip-self:remember")
+          throw new Error("managed_fixture_memory_candidate_invocation_unavailable");
+        const wrapper = (typeof invocation.workflowResultJson === "string"
+          ? JSON.parse(invocation.workflowResultJson) : invocation.workflowResultJson) as Record<string, unknown>;
+        const data = wrapper.data && typeof wrapper.data === "object" && !Array.isArray(wrapper.data)
+          ? wrapper.data as Record<string, unknown> : wrapper;
+        const record = data.record && typeof data.record === "object" && !Array.isArray(data.record)
+          ? data.record as Record<string, unknown> : {};
+        if (typeof record.id !== "string" || !/^[0-9a-f-]{36}$/i.test(record.id) || record.reviewState !== "pending")
+          throw new Error("managed_fixture_memory_candidate_unavailable");
+        await memoryService(db).reviewCandidate(companyId, record.id, { decision: "accept" }, human);
+        acceptedMemoryIds.push(record.id);
+        completedHumanActions.add(callId);
+        brokerRequests.push(`human-action completed ${action.action}`);
+      }
       const tools = Array.isArray(wire.tools) ? wire.tools : [];
+      const currentCaptureRows = await db.select({ runnerProfileJson: heartbeatRuns.runnerProfileJson })
+        .from(heartbeatRuns).where(eq(heartbeatRuns.id, run!.id)).catch(() => []);
+      const currentCaptureRun = currentCaptureRows[0];
+      const currentCaptureProfile = currentCaptureRun?.runnerProfileJson && typeof currentCaptureRun.runnerProfileJson === "object"
+        ? currentCaptureRun.runnerProfileJson as Record<string, unknown> : {};
+      const currentCaptures = Array.isArray(currentCaptureProfile.nativeToolResultSourceCaptures)
+        ? currentCaptureProfile.nativeToolResultSourceCaptures.map(value => value && typeof value === "object"
+          ? value as Record<string, unknown> : {}) : [];
       const toolResultFacts = messages.flatMap(message => {
         const item = message && typeof message === "object" ? message as Record<string, unknown> : {};
         return (Array.isArray(item.content) ? item.content : []).flatMap(block => {
           const value = block && typeof block === "object" ? block as Record<string, unknown> : {};
           if (value.type !== "tool_result") return [];
-          return [{ isError: value.is_error === true, staticErrorCodes: staticManagedErrorCodes(value.content) }];
+          const toolUseId = typeof value.tool_use_id === "string" ? value.tool_use_id : "";
+          const priorCaptures = currentCaptures.filter(capture => capture.managedOpenCode === true && capture.callId === toolUseId);
+          return [{ isError: value.is_error === true, contentType: typeof value.content,
+            contentBlockTypes: Array.isArray(value.content) ? value.content.map(part => part && typeof part === "object"
+              ? (part as Record<string, unknown>).type : "other") : [],
+            resultShape: safeToolResultShape(value.content),
+            capturePresent: priorCaptures.length > 0,
+            captureTools: priorCaptures.map(capture => typeof capture.tool === "string" ? capture.tool : "other"),
+            staticErrorCodes: staticManagedErrorCodes(value.content),
+            managedMemoryBoundary: managedMemoryBoundaryFacts(value.content) }];
         });
       });
       const shape = {
@@ -618,6 +738,104 @@ export async function runManagedNativeOpenCodeFixture(input: {
       const message = error instanceof Error ? error.message : String(error);
       const stack = error instanceof Error ? error.stack?.split("\n").slice(1, 5).join(" | ") : "";
       brokerRequests.push(`route-error ${req.method} ${req.path} ${name}: ${message} ${stack}`);
+      if (message === "Current Native human, internal draft Task, worker attempt and manifest required") {
+        void (async () => {
+          const [currentPlan] = await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id, plan.id));
+          const [currentWorker] = await db.select().from(orchestrationWorkers).where(eq(orchestrationWorkers.id, worker!.id));
+          const [currentAttempt] = await db.select().from(orchestrationWorkerAttempts)
+            .where(eq(orchestrationWorkerAttempts.runId, run!.id));
+          const [currentRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, run!.id));
+          const [currentManifest] = await db.select().from(agentExecutionManifests)
+            .where(eq(agentExecutionManifests.id, manifest!.record.id));
+          const [currentTask] = await db.select().from(issues).where(eq(issues.id, task.id));
+          const [currentRoot] = await db.select().from(issues).where(eq(issues.id, plan.issueId));
+          const [currentAgent] = await db.select().from(agents).where(eq(agents.id, agentId));
+          const [currentCompany] = await db.select().from(companies).where(eq(companies.id, companyId));
+          const [currentIdentity] = currentAgent?.agentIdentityId
+            ? await db.select().from(agentIdentities).where(eq(agentIdentities.id, currentAgent.agentIdentityId)) : [];
+          const workflowErrorCodes = (value: unknown, depth = 0): string[] => {
+            if (depth > 4 || !value || typeof value !== "object" || Array.isArray(value)) return [];
+            const row = value as Record<string, unknown>;
+            const result: string[] = [];
+            for (const key of ["errorCode", "code"]) {
+              const code = safeCode(row[key]);
+              if (code) result.push(code);
+            }
+            for (const key of ["error", "record", "result", "data"]) result.push(...workflowErrorCodes(row[key], depth + 1));
+            return [...new Set(result)];
+          };
+          const memoryInvocationRows = await db.select({ toolName: toolInvocations.toolName,
+            status: toolInvocations.status, policyDecision: toolInvocations.policyDecision,
+            approvalState: toolInvocations.approvalState, errorCode: toolInvocations.errorCode,
+            workflowResultJson: toolInvocations.workflowResultJson })
+            .from(toolInvocations).where(and(eq(toolInvocations.companyId, companyId), eq(toolInvocations.runId, run!.id)));
+          const memoryInvocationFacts = memoryInvocationRows.filter(value => value.toolName === "paperclip-self:remember")
+            .map(value => {
+              const parsed = typeof value.workflowResultJson === "string"
+                ? (() => { try { return JSON.parse(value.workflowResultJson); } catch { return null; } })()
+                : value.workflowResultJson;
+              return { status: value.status, policyDecision: value.policyDecision,
+                approvalState: value.approvalState, errorCode: safeCode(value.errorCode),
+                resultTopLevelKeys: parsed && typeof parsed === "object" && !Array.isArray(parsed)
+                  ? Object.keys(parsed as Record<string, unknown>).sort() : [],
+                resultErrorCodes: workflowErrorCodes(parsed) };
+            });
+          const recentMemoryRows = await db.select({ reviewState: memoryRecords.reviewState,
+            retentionState: memoryRecords.retentionState, deleted: memoryRecords.deletedAt,
+            revoked: memoryRecords.revokedAt })
+            .from(memoryRecords).where(and(eq(memoryRecords.companyId, companyId),
+              eq(memoryRecords.ownerAgentId, agentId), gte(memoryRecords.createdAt, run!.createdAt)));
+          const fenceActivities = await db.select({ action: activityLog.action, details: activityLog.details })
+            .from(activityLog).where(and(eq(activityLog.companyId, companyId), eq(activityLog.runId, run!.id)));
+          const supervisionRows = await db.select({ reasonCode: supervisionInterventions.reasonCode,
+            status: supervisionInterventions.status, lastErrorCode: supervisionInterventions.lastErrorCode })
+            .from(supervisionInterventions).where(and(eq(supervisionInterventions.companyId, companyId),
+              eq(supervisionInterventions.planId, plan.id)));
+          const executionScope = currentManifest?.manifest.executionScope;
+          const expectedPlanVersion = workerModelClaims.expectedPlanVersion;
+          brokerRequests.push(`current-model-authority-facts ${JSON.stringify({
+            planStatus: currentPlan?.status, planStarted: currentPlan?.startedAt instanceof Date,
+            planVersionMatches: currentPlan?.version === expectedPlanVersion,
+            planActionClass: currentPlan?.actionClass, planRiskClass: currentPlan?.riskClass,
+            planPrincipalMatches: currentPlan?.executionPrincipal?.type === "user" &&
+              currentPlan.executionPrincipal.userId === aliceUserId,
+            planCostBudgetConfigured: currentPlan?.budgets.maxModelCostMinor !== null && currentPlan?.budgets.maxModelCostMinor !== undefined,
+            workerStatus: currentWorker?.status, workerAgentMatches: currentWorker?.agentId === agentId,
+            attemptStatus: currentAttempt?.status, attemptAgentMatches: currentAttempt?.agentId === agentId,
+            attemptRunMatches: currentAttempt?.runId === run!.id,
+            attemptManifestMatches: currentAttempt?.executionManifestId === manifest!.record.id,
+            runStatus: currentRun?.status, runNative: currentRun?.runtimeMode === "native",
+            runTaskMatches: currentRun?.nativeIssueId === task.id, runHumanMatches: currentRun?.responsibleUserId === aliceUserId,
+            manifestHumanMatches: currentManifest?.manifest.responsibleUserId === aliceUserId,
+            manifestScopesCompanyScoped: !!executionScope?.delegatedScopes.every(scope => scope.companyId === companyId),
+            taskHidden: currentTask?.hiddenAt !== null && currentTask?.hiddenAt !== undefined,
+            taskStatusAllowed: !!currentTask && !["done", "cancelled"].includes(currentTask.status),
+            taskAgentMatches: currentTask?.assigneeAgentId === agentId, taskRunMatches: currentTask?.executionRunId === run!.id,
+            taskCheckoutMatches: !currentTask?.checkoutRunId || currentTask.checkoutRunId === run!.id,
+            rootHidden: currentRoot?.hiddenAt !== null && currentRoot?.hiddenAt !== undefined,
+            rootStatusAllowed: !!currentRoot && !["done", "cancelled"].includes(currentRoot.status),
+            delegationDepthAllowed: !!currentTask && !!currentRoot &&
+              currentTask.requestDepth - currentRoot.requestDepth <= (currentPlan?.budgets.maxDelegationDepth ?? -1),
+            agentStatusAllowed: !!currentAgent && ["idle", "running"].includes(currentAgent.status),
+            companyActive: currentCompany?.status === "active", identityActive: currentIdentity?.status === "active",
+            outputInvocationStatuses: (await db.select({ toolName: toolInvocations.toolName, status: toolInvocations.status })
+              .from(toolInvocations).where(and(eq(toolInvocations.companyId, companyId), eq(toolInvocations.runId, run!.id))))
+              .map(value => ({ tool: value.toolName, status: value.status })),
+            memoryInvocationFacts,
+            memoryRows: { count: recentMemoryRows.length,
+              states: recentMemoryRows.map(value => ({ reviewState: value.reviewState,
+                retentionState: value.retentionState, deleted: value.deleted !== null, revoked: value.revoked !== null })) },
+            fenceReasonCodes: fenceActivities.flatMap(value => {
+              const details = value.details && typeof value.details === "object" ? value.details : {};
+              const code = safeCode(details.reasonCode);
+              return code && /(?:fenc|pause|supervision)/i.test(value.action) ? [code] : [];
+            }),
+            supervisionReasons: supervisionRows.map(value => ({ reasonCode: safeCode(value.reasonCode),
+              status: value.status, lastErrorCode: safeCode(value.lastErrorCode) })),
+          })}`);
+        })().then(() => next(error), next);
+        return;
+      }
       next(error);
     });
     app.use(errorHandler);
@@ -862,7 +1080,6 @@ export async function runManagedNativeOpenCodeFixture(input: {
         } }).catch(error => {
           input.onPreserveDebugArtifacts?.();
           const failure = error instanceof Error ? error as Error & { code?: unknown; cause?: { code?: unknown }; stage?: unknown } : null;
-          const safeCode = (value: unknown) => typeof value === "string" && /^[a-z0-9_]{1,120}$/i.test(value) ? value : undefined;
           const frames = failure?.stack?.split("\n").slice(1)
             .filter(line => /^\s*at /.test(line)).slice(0, 6)
             .map(line => line.trim().replace(/\s+/g, " ").slice(0, 220)) ?? [];
@@ -890,7 +1107,10 @@ export async function runManagedNativeOpenCodeFixture(input: {
           ? failedProfile.nativeToolCallDispatchAssociations as Array<Record<string, unknown>> : [];
         const captures = Array.isArray(failedProfile.nativeToolResultSourceCaptures)
           ? failedProfile.nativeToolResultSourceCaptures as Array<Record<string, unknown>> : [];
-        const invocations = await db.select({ toolName: toolInvocations.toolName, status: toolInvocations.status })
+        const invocations = await db.select({ id: toolInvocations.id, idempotencyKey: toolInvocations.idempotencyKey,
+          toolName: toolInvocations.toolName, status: toolInvocations.status,
+          policyDecision: toolInvocations.policyDecision, approvalState: toolInvocations.approvalState,
+          errorCode: toolInvocations.errorCode, workflowResultJson: toolInvocations.workflowResultJson })
           .from(toolInvocations).where(and(eq(toolInvocations.companyId, companyId), eq(toolInvocations.runId, run!.id)));
         const documentPrefixFacts = await Promise.all(modelSteps.filter(step => step.tool === "write_document").map(async step => {
           const callId = step.id ?? `managed-e2e-${step.tool}-${modelSteps.indexOf(step)}`;
@@ -924,6 +1144,141 @@ export async function runManagedNativeOpenCodeFixture(input: {
             consumedComponentKinds: components.map(component => typeof component.kind === "string" ? component.kind : "unknown").sort(),
             intentSetIncludesOwnToolResult: ownToolResultInComponents };
         }));
+        const memoryPrefixFacts = modelSteps.filter(step => step.tool === "self_remember").map(step => {
+          const callId = step.id ?? `managed-e2e-${step.tool}-${modelSteps.indexOf(step)}`;
+          const matchingIntents = failedIntents.filter(value => {
+            const intent = value && typeof value === "object" ? value as Record<string, unknown> : {};
+            return Array.isArray(intent.responseToolUses) && intent.responseToolUses.some(useValue => {
+              const use = useValue && typeof useValue === "object" ? useValue as Record<string, unknown> : {};
+              return use.id === callId && toolName(use.name) === "self_remember";
+            });
+          });
+          const components = matchingIntents.flatMap(value => {
+            const intent = value && typeof value === "object" ? value as Record<string, unknown> : {};
+            return Array.isArray(intent.consumedSourceComponents)
+              ? intent.consumedSourceComponents as Array<Record<string, unknown>> : [];
+          });
+          const inputs = components.flatMap(component => Array.isArray(component.inputs)
+            ? component.inputs as Array<Record<string, unknown>> : []);
+          const matchingCaptures = captures.filter(value => value && typeof value === "object" &&
+            (value as Record<string, unknown>).callId === callId &&
+            toolName((value as Record<string, unknown>).tool) === "self_remember");
+          const captureInputKinds = matchingCaptures.flatMap(value => {
+            const capture = value as Record<string, unknown>;
+            const source = capture.source && typeof capture.source === "object" ? capture.source as Record<string, unknown> : {};
+            return Array.isArray(source.inputs) ? (source.inputs as Array<Record<string, unknown>>)
+              .map(input => typeof input.kind === "string" ? input.kind : "unknown") : [];
+          });
+          return { intentCount: matchingIntents.length,
+            componentKinds: components.map(component => typeof component.kind === "string" ? component.kind : "unknown").sort(),
+            consumedInputCount: inputs.length,
+            consumedInputKinds: inputs.map(source => typeof source.kind === "string" ? source.kind : "unknown").sort(),
+            captureCount: matchingCaptures.length, captureInputKinds: captureInputKinds.sort() };
+        });
+        const memoryOutputQualificationFacts = modelSteps.filter(step => step.tool === "self_remember").map(step => {
+          const callId = step.id ?? `managed-e2e-${step.tool}-${modelSteps.indexOf(step)}`;
+          const matchingUses = failedIntents.flatMap(value => {
+            const intent = value && typeof value === "object" ? value as Record<string, unknown> : {};
+            return Array.isArray(intent.responseToolUses) ? intent.responseToolUses.flatMap(useValue => {
+              const use = useValue && typeof useValue === "object" ? useValue as Record<string, unknown> : {};
+              return use.id === callId && toolName(use.name) === "self_remember" ? [use] : [];
+            }) : [];
+          });
+          const matchingAssociations = associations.filter(value => value.callId === callId &&
+            toolName(value.tool) === "self_remember");
+          const matchingCaptures = captures.filter(value => value.callId === callId &&
+            toolName(value.tool) === "self_remember");
+          const canonicalInvocationRows = invocations.filter(value => value.toolName === "paperclip-self:remember" &&
+            value.idempotencyKey === `aw-native-tool:${run!.id}:${callId}`);
+          const invocationResultShapes = canonicalInvocationRows.map(value => safeToolResultShape(value.workflowResultJson));
+          return { providerUseCount: matchingUses.length, associationCount: matchingAssociations.length,
+            associationHasTurnId: matchingAssociations.map(value => typeof value.turnId === "string"),
+            captureCount: matchingCaptures.length,
+            captureQualification: matchingCaptures.map(value => {
+              const source = value.source && typeof value.source === "object" ? value.source as Record<string, unknown> : {};
+              return { managed: value.managedOpenCode === true,
+                sourceIsToolResult: source.kind === "tool_result",
+                sourceCallIdMatches: source.callId === callId,
+                sourceToolNameCanonicalRemember: source.toolName === "paperclip-self:remember",
+                sourceToolNameProviderAlias: toolName(source.toolName) === "self_remember",
+                resultDigestPresent: typeof value.resultDigest === "string" && /^[0-9a-f]{64}$/.test(value.resultDigest) };
+            }),
+            invocationStates: canonicalInvocationRows.map(value => ({ status: value.status,
+              policyDecision: value.policyDecision, approvalState: value.approvalState,
+              errorCode: typeof value.errorCode === "string" && /^[a-z0-9_]{1,120}$/i.test(value.errorCode)
+                ? value.errorCode : undefined })), invocationResultShapes };
+        });
+        const memoryOutputSourceFacts = await Promise.all(modelSteps.filter(step => step.tool === "self_remember").map(async step => {
+          const callId = step.id ?? `managed-e2e-${step.tool}-${modelSteps.indexOf(step)}`;
+          const invocation = invocations.find(value => value.toolName === "paperclip-self:remember" &&
+            value.idempotencyKey === `aw-native-tool:${run!.id}:${callId}`);
+          let result: Record<string, unknown> = {};
+          try {
+            const parsed = typeof invocation?.workflowResultJson === "string"
+              ? JSON.parse(invocation.workflowResultJson) : invocation?.workflowResultJson;
+            result = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+          } catch { /* bounded failure diagnostic */ }
+          const data = result.data && typeof result.data === "object" && !Array.isArray(result.data)
+            ? result.data as Record<string, unknown> : result;
+          const record = data.record && typeof data.record === "object" && !Array.isArray(data.record)
+            ? data.record as Record<string, unknown> : {};
+          const memoryId = typeof record.id === "string" ? record.id : null;
+          const [memory] = memoryId ? await db.select({ scopeType: memoryRecords.scopeType,
+            scopeId: memoryRecords.scopeId, ownerAgentId: memoryRecords.ownerAgentId,
+            privateOwnerUserId: memoryRecords.privateOwnerUserId, sourceMemoryIds: memoryRecords.sourceMemoryIds,
+            payloadSourceSnapshot: memoryRecords.payloadSourceSnapshot,
+            payloadSourceSnapshotInvalidated: memoryRecords.payloadSourceSnapshotInvalidated,
+            payloadSourceProtocolVersion: memoryRecords.payloadSourceProtocolVersion, metadata: memoryRecords.metadata,
+            deletedAt: memoryRecords.deletedAt, revokedAt: memoryRecords.revokedAt })
+            .from(memoryRecords).where(and(eq(memoryRecords.companyId, companyId), eq(memoryRecords.id, memoryId))) : [];
+          const snapshot = memory?.payloadSourceSnapshot && typeof memory.payloadSourceSnapshot === "object"
+            ? memory.payloadSourceSnapshot as Record<string, unknown> : {};
+          const snapshotInputs = Array.isArray(snapshot.inputs) ? snapshot.inputs as Array<Record<string, unknown>> : [];
+          const metadata = memory?.metadata && typeof memory.metadata === "object" ? memory.metadata as Record<string, unknown> : {};
+          const firstStep = modelSteps.find(value => value.tool === "self_remember");
+          const firstCallId = firstStep?.id ?? (firstStep ? `managed-e2e-${firstStep.tool}-${modelSteps.indexOf(firstStep)}` : "");
+          const firstInvocation = firstCallId ? invocations.find(value => value.toolName === "paperclip-self:remember" &&
+            value.idempotencyKey === `aw-native-tool:${run!.id}:${firstCallId}`) : undefined;
+          let firstMemoryId: string | null = null;
+          try {
+            const parsed = typeof firstInvocation?.workflowResultJson === "string"
+              ? JSON.parse(firstInvocation.workflowResultJson) : firstInvocation?.workflowResultJson;
+            const wrapper = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+            const payload = wrapper.data && typeof wrapper.data === "object" ? wrapper.data as Record<string, unknown> : wrapper;
+            const firstRecord = payload.record && typeof payload.record === "object" ? payload.record as Record<string, unknown> : {};
+            firstMemoryId = typeof firstRecord.id === "string" ? firstRecord.id : null;
+          } catch { /* bounded failure diagnostic */ }
+          let canReadSources = false;
+          let aliceCanRead = false;
+          if (memoryId) {
+            try { canReadSources = await canActorReadMemorySources(db, companyId, aliceMemoryActor, memoryId); }
+            catch { canReadSources = false; }
+            try { aliceCanRead = Boolean(await memoryService(db).get(companyId, memoryId, aliceMemoryActor)); }
+            catch { aliceCanRead = false; }
+          }
+          const snapshotOwner = snapshot.owner && typeof snapshot.owner === "object" ? snapshot.owner as Record<string, unknown> : {};
+          return { gatewayInvocationFound: Boolean(invocation),
+            gatewayResultTopLevelKeys: Object.keys(result).sort(), gatewayResultDataKeys: Object.keys(data).sort(),
+            gatewayResultHasRecordId: typeof record.id === "string",
+            gatewayResultStatus: typeof data.status === "string" && ["accepted", "pending", "duplicate", "corroborated"].includes(data.status)
+              ? data.status : "other_or_absent",
+            gatewayResultScopeType: typeof (record.scope as Record<string, unknown> | undefined)?.type === "string"
+              ? (record.scope as Record<string, unknown>).type as string : "absent",
+            rowExists: Boolean(memory), scopeType: memory?.scopeType,
+            privateOwnerPresent: typeof memory?.privateOwnerUserId === "string",
+            privateOwnerMatchesResponsibleUser: memory?.privateOwnerUserId === aliceUserId,
+            ownerAgentMatches: memory?.ownerAgentId === agentId,
+            sourceMemoryIdsIncludeMemoryA: Boolean(firstMemoryId && memory?.sourceMemoryIds.includes(firstMemoryId)),
+            protocolVersion: memory?.payloadSourceProtocolVersion,
+            snapshotInvalidated: memory?.payloadSourceSnapshotInvalidated,
+            snapshotOwnerKind: typeof snapshotOwner.kind === "string" ? snapshotOwner.kind : "absent",
+            snapshotInputKinds: snapshotInputs.map(source => typeof source.kind === "string" ? source.kind : "unknown").sort(),
+            snapshotBindsInvocation: typeof metadata.nativeManagedMemoryInvocationId === "string" &&
+              metadata.nativeManagedMemoryInvocationId === invocation?.id,
+            deleted: memory?.deletedAt !== null && memory?.deletedAt !== undefined,
+            revoked: memory?.revokedAt !== null && memory?.revokedAt !== undefined,
+            canActorReadMemorySources: canReadSources, aliceMemoryServiceRead: aliceCanRead };
+        }));
         const writeInvocationStatusCounts = Object.fromEntries(["executing", "succeeded", "failed", "cancelled"].map(status =>
           [status, invocations.filter(value => value.toolName === "write_document" && value.status === status).length]));
         diagnostics.push(`managed write capture facts: ${JSON.stringify({ providerWriteUseCount: writeUses.length,
@@ -937,6 +1292,9 @@ export async function runManagedNativeOpenCodeFixture(input: {
           managedToolResultErrorCodes: diagnostics.flatMap(line => [...line.matchAll(/managed_opencode_tool_result_[a-z_]+/g)]
             .map(match => match[0]).filter((value, index, all) => all.indexOf(value) === index)) })}`);
         diagnostics.push(`managed document prefix facts: ${JSON.stringify(documentPrefixFacts)}`);
+        diagnostics.push(`managed memory prefix facts: ${JSON.stringify(memoryPrefixFacts)}`);
+        diagnostics.push(`managed memory output qualification facts: ${JSON.stringify(memoryOutputQualificationFacts)}`);
+        diagnostics.push(`managed memory output source facts: ${JSON.stringify(memoryOutputSourceFacts)}`);
         throw new Error(`managed_opencode_runner_exit_${result.exitCode}; providerResponses=${responseCount}; fakeFetchEntrances=${JSON.stringify(fakeFetchEntrances)}\n${diagnostics.join("\n")}\nBroker: ${brokerRequests.join(", ")}\nArtifacts: ${runRoot}`);
       }
       completedNativeFinalization = (result as unknown as Record<string, unknown>).nativeFinalization as NonNullable<typeof completedNativeFinalization>;
