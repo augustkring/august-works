@@ -68,6 +68,7 @@ export function buildNativeBootstrapSourceSet(input: {
   references: readonly NativeRenderedSourceReference[] | null;
   candidates: readonly NativePreparedSourceCandidate[];
   runtimeInputs: readonly NativePayloadSourceInput[] | null;
+  additionalInputs?: readonly NativePayloadSourceInput[] | null;
   contextManifestIds: readonly { companyId: string; contextManifestId: string }[] | null;
   governedContextMarkdown?: string | null;
   contextWitness?: NativeBootstrapContextWitness | null;
@@ -127,6 +128,8 @@ export function buildNativeBootstrapSourceSet(input: {
     append(candidate.input);
   }
   for (const source of input.runtimeInputs) append(source);
+  if (input.additionalInputs === null) return null;
+  for (const source of input.additionalInputs ?? []) append(source);
   if (context) {
     mergePolicy(context.policy);
     append(context.contextInput);

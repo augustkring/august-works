@@ -581,6 +581,22 @@ export interface PluginEventsClient {
   emit(name: string, companyId: string, payload: unknown): Promise<void>;
 }
 
+/** Committed resource change retained until a configured plugin acknowledges it. */
+export type ResourceLifecycleEvent = {
+  id: string;
+  companyId: string;
+  resourceId: string;
+  createdAt: string;
+} & (
+  | { resourceType: "agent"; action: "create" | "pause" | "resume" | "terminate" }
+  | { resourceType: "project"; action: "create" | "update" | "archive" | "delete" }
+);
+
+export interface ResourceLifecycleResult {
+  eventId: string;
+  status: "acknowledged" | "retry" | "deferred";
+}
+
 /**
  * `ctx.jobs` — register handlers for scheduled jobs declared in the manifest.
  *

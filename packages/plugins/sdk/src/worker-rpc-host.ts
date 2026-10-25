@@ -66,6 +66,7 @@ import type {
   ToolResult,
   EventFilter,
   AgentSessionEvent,
+  ResourceLifecycleEvent,
 } from "./types.js";
 import type {
   JsonRpcId,
@@ -1609,6 +1610,8 @@ export function startWorkerRpcHost(options: WorkerRpcHostOptions): WorkerRpcHost
 
       case "handleApiRequest":
         return handleApiRequest(params as PluginApiRequestInput);
+      case "resourceLifecycle":
+        return plugin.definition.onResourceLifecycle?.(params as ResourceLifecycleEvent);
 
       case "getData":
         return handleGetData(params as GetDataParams);
@@ -1732,6 +1735,7 @@ export function startWorkerRpcHost(options: WorkerRpcHostOptions): WorkerRpcHost
     if (plugin.definition.onHealth) supportedMethods.push("health");
     if (plugin.definition.onShutdown) supportedMethods.push("shutdown");
     if (plugin.definition.onApiRequest) supportedMethods.push("handleApiRequest");
+    if (plugin.definition.onResourceLifecycle) supportedMethods.push("resourceLifecycle");
     if (plugin.definition.onDetectExternalObjects) supportedMethods.push("detectExternalObjects");
     if (plugin.definition.onResolveExternalObject) supportedMethods.push("resolveExternalObject");
     if (plugin.definition.onRefreshExternalObjects) supportedMethods.push("refreshExternalObjects");

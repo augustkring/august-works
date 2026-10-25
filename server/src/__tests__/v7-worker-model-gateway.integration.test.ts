@@ -1774,7 +1774,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
           .where(eq(supervisionInterventions.planId, plan.id));
         expect(stop[0]).toMatchObject({
           decisionAction: "ESCALATE_HUMAN",
-          reasonCode: "worker_model_unsettled",
+          reasonCode: "worker_model_result_withheld",
         });
         await expect(gateway().call(claims, input())).rejects.toThrow();
         expect(calls).toBe(1);

@@ -49,6 +49,7 @@ import { hashContextPolicySnapshot } from "../context/context-manifest.js";
 import {
   anthropicReadOnlyCall,
   readOnlyModelEnvelopeBytes,
+  type ReadOnlyModelWireReceipt,
 } from "./read-only-model-transport.js";
 import {
   assertWorkerModelProfileCurrent,
@@ -62,6 +63,11 @@ import { agentRuntimeCandidateConformanceService } from "../agents/authoring-run
 
 type BoundClaims = RuntimeToolsTokenClaims & {
   worker_model: WorkerModelBinding;
+};
+export type WorkerModelDispatchWireReceipt = ReadOnlyModelWireReceipt & {
+  reservationId: string;
+  callId: string;
+  requestHash: string;
 };
 type Options = {
   profiles: readonly WorkerModelProfile[];
@@ -644,6 +650,7 @@ export function workerModelGateway(db: Db, options: Options) {
       claims: RuntimeToolsTokenClaims,
       raw: WorkerModelCall,
       callerSignal?: AbortSignal,
+      internal?: { onWireDispatch?: (receipt: WorkerModelDispatchWireReceipt) => void },
     ) {
       callerSignal?.throwIfAborted();
       if (!claims.worker_model || claims.scope !== "worker_model")
@@ -758,7 +765,10 @@ export function workerModelGateway(db: Db, options: Options) {
           request,
           credential,
           controller.signal,
-          { fetch: options.fetch },
+          { fetch: options.fetch, onWireDispatch: (wire) => internal?.onWireDispatch?.({
+            ...wire, reservationId: reservation.id, callId: input.callId,
+            requestHash: nativeSha256(request),
+          }) },
         );
         // A known provider charge survives access withdrawal. Settle its
         // bounded receipt before checking whether the result may be disclosed.
@@ -790,9 +800,12 @@ export function workerModelGateway(db: Db, options: Options) {
               usage: null,
             })
             .catch(() => {});
-        await fence(claims.company_id, bound.worker_model.planId);
+        const reasonCode = financiallySettled
+          ? "worker_model_result_withheld"
+          : "worker_model_unsettled";
+        await fence(claims.company_id, bound.worker_model.planId, reasonCode);
         throw conflict("Worker model result requires human resolution", {
-          code: "worker_model_unsettled",
+          code: reasonCode,
         });
       } finally {
         clearTimeout(timeout);

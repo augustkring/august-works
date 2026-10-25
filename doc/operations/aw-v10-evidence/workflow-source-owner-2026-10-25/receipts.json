@@ -1822,6 +1822,44 @@
         "Duration  46.46s (transform 9.69s, setup 83ms, import 13.67s, tests 32.58s, environment 0ms)"
       ],
       "sourceCommit": "074eadec86b2e62e3da63971dc3b061ceec81ba2"
+    },
+    {
+      "name": "worker-model-known-charge-withheld-reason",
+      "exitCode": 0,
+      "exitSidecar": "worker-model-known-charge-withheld-reason.exit",
+      "rawSha256": "77e1feea9596e6995f18ee0d9a4e18c8624cbb573ad12c54e3ce4946cfc241b2",
+      "sanitizedSha256": "77e1feea9596e6995f18ee0d9a4e18c8624cbb573ad12c54e3ce4946cfc241b2",
+      "archiveSha256": "b90b778fe606a00d8083ed1f51b7b3fc3d1145b020c1690ec1127c0af4763622",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  9 passed | 56 skipped (65)",
+        "Duration  44.37s (transform 10.67s, setup 75ms, import 14.91s, tests 29.27s, environment 0ms)"
+      ],
+      "sourceCommit": "f67d4b9ddcbdfb593d694a190c5a390a166f11df"
+    },
+    {
+      "name": "v10-sandbox-exec-host-tests",
+      "exitCode": 0,
+      "exitSidecar": "v10-sandbox-exec-host-tests.exit",
+      "rawSha256": "d41cdf715320b8363b6fa1163c3718923ba9513f6647019aeb136ba5a8538624",
+      "sanitizedSha256": "d41cdf715320b8363b6fa1163c3718923ba9513f6647019aeb136ba5a8538624",
+      "archiveSha256": "d22878f92ba7c1ee9d3fcfa7d959ec8825b1c0ea25a7bd6123f11f0673903511",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "f67d4b9ddcbdfb593d694a190c5a390a166f11df"
     }
   ],
   "updates": [
@@ -2051,6 +2089,20 @@
       "meaning": "Known worker provider usage settles before post-response revocation fencing; eight revocation cases plus overflow; no provider qualification",
       "logs": [
         "worker-model-known-charge-after-revocation"
+      ]
+    },
+    {
+      "sourceCommit": "f67d4b9ddcbdfb593d694a190c5a390a166f11df",
+      "meaning": "Known usage is settled even after revocation; output withheld and accurate reason retained; selected nine software controls",
+      "logs": [
+        "worker-model-known-charge-withheld-reason"
+      ]
+    },
+    {
+      "sourceCommit": "f67d4b9ddcbdfb593d694a190c5a390a166f11df",
+      "meaning": "Host exec software stream/no-shell/no-journal-output/duplicate/Stop-preflight regression only, not physical host qualification",
+      "logs": [
+        "v10-sandbox-exec-host-tests"
       ]
     }
   ],

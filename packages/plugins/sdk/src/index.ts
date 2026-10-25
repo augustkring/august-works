@@ -106,6 +106,7 @@ export type {
   PluginApiRequestInput,
   PluginApiResponse,
 } from "./define-plugin.js";
+export type { ResourceLifecycleEvent, ResourceLifecycleResult } from "./types.js";
 export type {
   TestHarness,
   TestHarnessOptions,

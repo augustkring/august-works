@@ -23708,6 +23708,9 @@ export function heartbeatService(
               references: nativeBootstrapTaskMarkdownSourceMap?.references ?? null,
               candidates: nativeSourceCandidates,
               runtimeInputs: capturedAuthoredSources?.inputs ?? null,
+              additionalInputs: completionContract ? [{ kind: "completion_contract",
+                issueId: issueRef.id, contractId: completionContract.row.id,
+                revision: String(completionContract.row.revision), contentHash: completionContract.row.canonicalSha256 }] : null,
               contextManifestIds: nativeBootstrapContextManifests,
               governedContextMarkdown,
               contextWitness: freshGovernedContext?.sourceWitness ?? null,
@@ -24314,7 +24317,7 @@ export function heartbeatService(
                       renderedMarkdown: governedContextMarkdown, manifestIds: nativeBootstrapContextManifests });
                   }
                   const nativeDraftBackend = nativeExecution.provider.kind === "aw_text_only"
-                    ? await selectNativeHeartbeatBackend(db, nativeExecution)
+                    ? await selectNativeHeartbeatBackend(db, nativeExecution, nativeBootstrapSourceClosure)
                     : undefined;
                   return executePaperclipNativeSession({
                     db,

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { createHash } from "node:crypto";
 import {
   anthropicReadOnlyCall,
   readOnlyModelEnvelopeBytes,
@@ -23,6 +24,22 @@ const json = (value: unknown) =>
     headers: { "content-type": "application/json" },
   });
 describe("finite text-only provider transport", () => {
+  it("reports only a hash of the exact body sent at the fixed wire boundary", async () => {
+    const onWireDispatch = vi.fn();
+    const fetch = vi.fn(async () => json(body()));
+    await anthropicReadOnlyCall(request, key, new AbortController().signal, {
+      fetch,
+      onWireDispatch,
+    });
+    const [, init] = fetch.mock.calls[0]! as unknown as [string, RequestInit];
+    const wireBody = String(init.body);
+    expect(onWireDispatch).toHaveBeenCalledExactlyOnceWith({
+      method: "POST",
+      endpoint: "https://api.anthropic.com/v1/messages",
+      bodySha256: createHash("sha256").update(wireBody, "utf8").digest("hex"),
+    });
+    expect(JSON.stringify(onWireDispatch.mock.calls[0])).not.toContain(key);
+  });
   it("uses one fixed DNS-pinned endpoint and no tools, thinking, cache, retry or credential-bearing prompt", async () => {
     const fetch = vi.fn(async () => json(body()));
     expect(

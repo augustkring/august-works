@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
   orchestrationWorkers,
@@ -26,6 +26,7 @@ import type {
 import { verifyRuntimeToolsToken } from "../../runtime-tools-token.js";
 import { forbidden, conflict } from "../../errors.js";
 import type { workerModelGateway } from "../orchestration/worker-model-gateway.js";
+import type { NativeBootstrapSourceClosure } from "./native-execution-input.js";
 import { retainedOrchestrationContract } from "../orchestration/orchestration-contracts.js";
 import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
 import { readAuthoredAgentDefinition, assertAuthoredAgentSnapshotCurrent,
@@ -35,6 +36,7 @@ type Gateway = ReturnType<typeof workerModelGateway>;
 type Input = Parameters<Gateway["issue"]>[0] & {
   outputKey: string;
   maxOutputTokens: number;
+  sourceClosure: NativeBootstrapSourceClosure;
   /** Verified, bounded server projection; never accepted by the model HTTP API. */
   runtimeContextText?: {
     aggregateDigest: string;
@@ -227,20 +229,34 @@ export function createAwTextDraftBackend(
         callId: `${callId}:context`,
         arguments: {},
       });
-      const activeTask = z
+          const activeTaskRow = z
         .object({
           activeTask: z
             .object({
               id: z.string(),
+                  identifier: z.string().nullable(),
               title: z.string(),
               description: z.string().nullable(),
+                  workMode: z.string(),
             })
             .passthrough(),
         })
         .passthrough()
-        .parse(taskContext).activeTask;
+            .parse(taskContext).activeTask;
+          const activeTask = {
+            id: activeTaskRow.id,
+            identifier: activeTaskRow.identifier,
+            title: activeTaskRow.title,
+            description: activeTaskRow.description,
+            workMode: activeTaskRow.workMode,
+          };
       if (activeTask.id !== identity.issueId)
         throw forbidden("Text draft canonical Task changed");
+          const taskSource = input.sourceClosure.sourceSet.inputs.find((source) =>
+            source.kind === "task" && source.issueId === activeTask.id);
+          const taskDigest = createHash("sha256").update(JSON.stringify(activeTask), "utf8").digest("hex");
+          if (!taskSource || taskSource.contentHash !== taskDigest)
+            throw forbidden("Text draft Task does not match the captured source body");
       open.signal?.throwIfAborted();
       return draftSession(
         db,

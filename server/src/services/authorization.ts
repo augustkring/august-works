@@ -1831,11 +1831,25 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
         checkDeadline();
         const ids = issueIds.slice(offset, offset + 512);
         const roots = valuesFor(ids);
-        const rows = await db.execute<{ id: string; allowed: boolean }>(sql`
+        const query = sql`
           select selected.id::text as id, (${issueCondition}) as allowed
           from (values ${roots}) as selected(id)
           join issues on issues.id=selected.id and issues.company_id=${companyId}
-        `);
+        `;
+        if (offset === 0 && process.env.PAPERCLIP_NATIVE_PRIVACY_EXPLAIN === "1") {
+          const planRows = await db.execute<Record<string, unknown>>(sql`explain (analyze, buffers, format json) ${query}`);
+          const explain = (planRows[0]?.["QUERY PLAN"] as Array<Record<string, unknown>> | undefined)?.[0];
+          const nodes: Array<Record<string, unknown>> = [];
+          const visit = (node: Record<string, unknown>) => {
+            nodes.push(Object.fromEntries(["Node Type", "Relation Name", "Index Name", "Join Type", "Plan Rows", "Actual Rows", "Actual Loops", "Shared Hit Blocks", "Shared Read Blocks", "Temp Read Blocks", "Temp Written Blocks"].filter(key => node[key] !== undefined).map(key => [key, node[key]])));
+            for (const child of (node.Plans as Array<Record<string, unknown>> | undefined) ?? []) visit(child);
+          };
+          if (explain?.Plan && typeof explain.Plan === "object") visit(explain.Plan as Record<string, unknown>);
+          process.stdout.write(`Native privacy SQL explain ${JSON.stringify({planningMs:explain?.["Planning Time"],executionMs:explain?.["Execution Time"],nodes})}\n`);
+        }
+        const queryStarted=performance.now();
+        const rows = await db.execute<{ id: string; allowed: boolean }>(query);
+        if (offset === 0) process.stdout.write(`Native privacy SQL batch ${JSON.stringify({kind:"issue",rows:rows.length,ms:Math.round(performance.now()-queryStarted)})}\n`);
         for (const row of rows) if (ids.includes(row.id)) issuesById.set(row.id, row.allowed === true);
         for (const id of ids) {
           if (issuesById.get(id) === true) continue;

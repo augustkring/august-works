@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import {
   heartbeatRuns,
@@ -18,6 +19,7 @@ import type { workerModelGateway } from "./worker-model-gateway.js";
 import { retainedOrchestrationContract } from "./orchestration-contracts.js";
 import { readNativeRuntimeAssetText } from "../native-runtime/runtime-context.js";
 import { createAwTextDraftBackend } from "../native-runtime/aw-text-draft-backend.js";
+import type { NativeBootstrapSourceClosure } from "../native-runtime/native-execution-input.js";
 
 type Gateway = ReturnType<typeof workerModelGateway>;
 type Plan = typeof orchestrationPlans.$inferSelect;
@@ -29,12 +31,13 @@ const installed = new WeakMap<Db, Gateway>();
 export async function selectNativeHeartbeatBackend(
   db: Db,
   execution: NativeExecutionInput,
+  sourceClosure?: NativeBootstrapSourceClosure | null,
   otherProviderFactory?: (
     input: NativeExecutionInput,
   ) => NativeSessionBackend | undefined,
 ) {
   return execution.provider.kind === "aw_text_only"
-    ? prepareNativeDraftBackend(db, execution)
+    ? prepareNativeDraftBackend(db, execution, sourceClosure)
     : otherProviderFactory?.(execution);
 }
 
@@ -209,6 +212,7 @@ export async function qualifyNativeDraftPlan(
 export async function prepareNativeDraftBackend(
   db: Db,
   execution: NativeExecutionInput,
+  sourceClosure?: NativeBootstrapSourceClosure | null,
 ) {
   const gateway = installed.get(db);
   if (
@@ -216,6 +220,7 @@ export async function prepareNativeDraftBackend(
     execution.provider.kind !== "aw_text_only" ||
     !("runtimeContext" in execution) ||
     execution.session.lifecyclePolicy.mode !== "per_turn" ||
+    !sourceClosure ||
     ("continuationPrompt" in execution && execution.continuationPrompt) ||
     execution.runtimeContext.mcp.bindingId !== null
   )
@@ -304,6 +309,27 @@ export async function prepareNativeDraftBackend(
     bound.run.completionContractSha256 !== contract.row.canonicalSha256
   )
     throw forbidden("The persisted native draft completion contract changed");
+  const taskSource = sourceClosure?.sourceSet.inputs.find((source) =>
+    source.kind === "task" && source.issueId === execution.binding.issueId);
+  const completionSource = sourceClosure?.sourceSet.inputs.find((source) =>
+    source.kind === "completion_contract" && source.issueId === execution.binding.issueId &&
+    source.contractId === contract.row.id && source.revision === String(contract.row.revision) &&
+    source.contentHash === contract.row.canonicalSha256);
+  const instructionSource = sourceClosure?.sourceSet.inputs.find((source) =>
+    source.kind === "runtime_instructions" && source.agentId === execution.binding.agentId &&
+    source.bundleDigest === execution.runtimeContext.instructions.bundle.digest &&
+    source.manifestDigest === execution.runtimeContext.instructions.bundle.manifestDigest);
+  const skillSources = sourceClosure?.sourceSet.inputs.filter((source) => source.kind === "runtime_skill") ?? [];
+  const expectedTaskDigest = createHash("sha256").update(JSON.stringify({
+    id: execution.task.id, identifier: execution.task.identifier, title: execution.task.title,
+    description: execution.task.description, workMode: execution.task.workMode,
+  }), "utf8").digest("hex");
+  if (!sourceClosure || !taskSource || taskSource.contentHash !== expectedTaskDigest || !completionSource ||
+    !instructionSource || skillSources.length !== execution.runtimeContext.skills.length ||
+    execution.runtimeContext.skills.some((skill) => !skillSources.some((source) => source.kind === "runtime_skill" &&
+      source.key === skill.key && source.versionId === skill.versionId && source.bundleDigest === skill.bundle.digest &&
+      source.manifestDigest === skill.bundle.manifestDigest)))
+    throw forbidden("The native draft source closure does not cover its exact Task, contract, instructions and Skills");
   const completion = orchestrationCompletionSchema.parse(
     contract.row.contractJson.v7,
   );
@@ -340,5 +366,6 @@ export async function prepareNativeDraftBackend(
       instructionFiles,
       skills,
     },
+    sourceClosure,
   });
 }

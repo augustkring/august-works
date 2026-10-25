@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { createHash } from "node:crypto";
 import { guardedRemoteHttpFetch } from "../remote-http-fetch.js";
 
 const requestSchema = z
@@ -10,6 +11,13 @@ const requestSchema = z
   })
   .strict();
 export type ReadOnlyModelRequest = z.infer<typeof requestSchema>;
+/** Hash-only receipt for the exact provider wire body. This records dispatch
+ * bytes; it does not assert source completeness or provider consumption. */
+export type ReadOnlyModelWireReceipt = {
+  method: "POST";
+  endpoint: "https://api.anthropic.com/v1/messages";
+  bodySha256: string;
+};
 export class ReadOnlyModelTransportError extends Error {
   constructor(
     readonly code:
@@ -30,7 +38,10 @@ export async function anthropicReadOnlyCall(
   raw: ReadOnlyModelRequest,
   credential: string,
   signal: AbortSignal,
-  options: { fetch?: typeof guardedRemoteHttpFetch } = {},
+  options: {
+    fetch?: typeof guardedRemoteHttpFetch;
+    onWireDispatch?: (receipt: ReadOnlyModelWireReceipt) => void;
+  } = {},
 ) {
   const input = requestSchema.parse(raw);
   if (
@@ -51,6 +62,13 @@ export async function anthropicReadOnlyCall(
   });
   if (body.includes(credential))
     throw new ReadOnlyModelTransportError("credential_boundary");
+  // Report only a digest of the exact canonical body. Callers cannot use this
+  // as source authority; the transport still sends the same immutable string.
+  options.onWireDispatch?.({
+    method: "POST",
+    endpoint: "https://api.anthropic.com/v1/messages",
+    bodySha256: createHash("sha256").update(body, "utf8").digest("hex"),
+  });
   let response: Response;
   try {
     signal.throwIfAborted();

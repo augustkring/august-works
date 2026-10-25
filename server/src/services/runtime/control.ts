@@ -318,7 +318,7 @@ export function runtimeControlService(
     }
     if (input.action === "stop") {
       await tx.update(runtimeHostCommands).set({
-        status: "CANCELED", errorCode: "sandbox_exec_quiesced_by_stop", completedAt: now, updatedAt: now,
+        status: "CANCELED", errorCode: "sandbox_exec_quiesced_by_stop", completedAt: now,
       }).where(and(
         eq(runtimeHostCommands.companyId, input.companyId),
         eq(runtimeHostCommands.runtimeCellId, input.cellId),
@@ -2285,7 +2285,7 @@ export function runtimeControlService(
         source.manifest.hash !== request.manifestHash || source.policy.id !== request.policySnapshotId ||
         source.policy.policyHash !== request.policyHash || source.deadlineAt.toISOString() < request.deadlineAt)
         throw forbidden("Sandbox execution source changed before host dispatch");
-      const [consumed] = await tx.update(runtimeHostCommands).set({ status: "CLAIMED", attempt: 1, updatedAt: now }).where(and(
+      const [consumed] = await tx.update(runtimeHostCommands).set({ status: "CLAIMED", attempt: 1 }).where(and(
         eq(runtimeHostCommands.id, operation.id), eq(runtimeHostCommands.status, "PENDING"), eq(runtimeHostCommands.attempt, 0),
       )).returning({ id: runtimeHostCommands.id });
       if (!consumed) throw forbidden("Sandbox execution capability was already consumed");
@@ -2381,7 +2381,7 @@ export function runtimeControlService(
       nativeLeaseExpiresAt: source.lease.expiresAt!,
     });
     if (!capabilityToken) {
-      await db.update(runtimeHostCommands).set({ status: "FAILED", errorCode: "exec_capability_unavailable", completedAt: new Date(), updatedAt: new Date() })
+      await db.update(runtimeHostCommands).set({ status: "FAILED", errorCode: "exec_capability_unavailable", completedAt: new Date() })
         .where(and(eq(runtimeHostCommands.id, claim.id), eq(runtimeHostCommands.status, "PENDING")));
       throw conflict("Short-lived sandbox execution capability could not be issued");
     }
@@ -2401,15 +2401,30 @@ export function runtimeControlService(
           await input.onOutput?.(stream, chunk.toString("utf8"));
         },
       });
-      await db.update(runtimeHostCommands).set({
-        status: "SUCCEEDED", completedAt: new Date(), safeResult: { exitCode: result.exitCode, timedOut: result.timedOut }, updatedAt: new Date(),
-      }).where(and(eq(runtimeHostCommands.id, claim.id), eq(runtimeHostCommands.status, "CLAIMED")));
+      const returned = await db.transaction(async transaction => {
+        const tx = transaction as unknown as Db;
+        const current = await executionSandboxService(tx, { runtimeSuspectSeconds: config.runtime.suspectSeconds }).assertTaskExecutionContext(tx, {
+          companyId: input.companyId, runId: source.run.id, leaseId: source.lease.id, now: new Date(),
+        });
+        if (!current || current.run.agentId !== source.run.agentId || current.sandboxBinding.id !== source.sandboxBinding.id ||
+          current.cell.id !== source.cell.id || current.cell.generation !== source.cell.generation || current.host.id !== source.host.id ||
+          current.manifest.id !== source.manifest.id || current.manifest.hash !== source.manifest.hash ||
+          current.policy.id !== source.policy.id || current.policy.policyHash !== source.policy.policyHash ||
+          current.deadlineAt < new Date()) throw conflict("Sandbox execution authority changed before result delivery");
+        const [completed] = await tx.update(runtimeHostCommands).set({
+          status: "SUCCEEDED", completedAt: new Date(), safeResult: { exitCode: result.exitCode, timedOut: result.timedOut },
+        }).where(and(eq(runtimeHostCommands.id, claim.id), eq(runtimeHostCommands.status, "CLAIMED"))).returning({ id: runtimeHostCommands.id });
+        return completed ?? null;
+      });
+      if (!returned) throw conflict("Sandbox execution claim was fenced before result delivery");
       return { exitCode: result.exitCode, signal: null, timedOut: result.timedOut, stdout: Buffer.concat(stdout).toString("utf8"), stderr: Buffer.concat(stderr).toString("utf8") };
     } catch (error) {
       const code = error instanceof Error && ["exec_timeout", "exec_unknown", "runtime_unavailable", "policy_changed", "exec_rejected"].includes(error.message)
         ? error.message : "exec_unknown";
-      await db.update(runtimeHostCommands).set({ errorCode: code, updatedAt: new Date() })
-        .where(and(eq(runtimeHostCommands.id, claim.id), inArray(runtimeHostCommands.status, ["PENDING", "CLAIMED"])));
+      await db.update(runtimeHostCommands).set({ status: "FAILED", completedAt: new Date(), errorCode: code })
+        .where(and(eq(runtimeHostCommands.id, claim.id), eq(runtimeHostCommands.status, "PENDING")));
+      await db.update(runtimeHostCommands).set({ errorCode: code })
+        .where(and(eq(runtimeHostCommands.id, claim.id), eq(runtimeHostCommands.status, "CLAIMED")));
       throw error;
     }
   }

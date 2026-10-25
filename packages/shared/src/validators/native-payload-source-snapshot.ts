@@ -58,6 +58,9 @@ export const nativePayloadSourceInputSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("retained_run"), runId: id, inputDigest: sha256, dispatchDigest: sha256 }).strict(),
   z.object({ kind: z.literal("retained_workspace"), runId: id, executionWorkspaceId: id, sessionId: text.nullable(), contentHash: sha256 }).strict(),
   z.object({ kind: z.literal("tool_result"), runId: id, callId: text, toolName: text, invocationId: id.nullable(), contentHash: sha256 }).strict(),
+  z.object({ kind: z.literal("completion_contract"), issueId: id, contractId: id, revision: text, contentHash: sha256 }).strict(),
+  z.object({ kind: z.literal("worker_model_dispatch"), runId: id, reservationId: id, callId: text,
+    requestHash: sha256, wireBodyHash: sha256, responseHash: sha256 }).strict(),
 ]);
 
 const sourceFields = {

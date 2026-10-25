@@ -3753,6 +3753,13 @@
       "when": 1792924966372,
       "tag": "0537_sandbox_admission_claim",
       "breakpoints": true
+    },
+    {
+      "idx": 538,
+      "version": "7",
+      "when": 1792940000000,
+      "tag": "0538_durable_plugin_lifecycle",
+      "breakpoints": true
     }
   ]
 }

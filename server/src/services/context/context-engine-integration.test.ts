@@ -12,6 +12,7 @@ import {
   companyMemberships,
   contextManifestItems,
   contextManifests,
+  completionContracts,
   createDb,
   documentRevisions,
   documents,
@@ -34,6 +35,8 @@ import {
   toolPolicies,
   nativeRunFinalizations,
   nativeRunResults,
+  agentRuntimeState,
+  agentWakeupRequests,
 } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
@@ -77,6 +80,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
   afterEach(async () => {
     for (const drain of activeNativeMemoryRunDrains.splice(0)) await drain();
     await db.delete(activityLog);
+    await db.delete(agentRuntimeState);
     await db.delete(workflows);
     await db.delete(contextManifestItems);
     await db.delete(memoryEvidence);
@@ -89,6 +93,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     await db.delete(nativeRunResults);
     await db.delete(heartbeatRunEvents);
     await db.delete(contextManifests);
+    await db.delete(completionContracts);
     await db.delete(heartbeatRuns);
     await db.delete(foundationChangeProposals);
     await db.delete(foundationSections);
@@ -101,6 +106,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     await db.delete(projects);
     await db.delete(principalPermissionGrants);
     await db.delete(toolPolicies);
+    await db.delete(agentWakeupRequests);
     await db.delete(companyMemberships);
     await db.delete(agents);
     await db.delete(authUsers);
@@ -182,7 +188,8 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     const backend: NativeSessionBackend = {
       async descriptor() {
         return { kind: "mock", name: "context-memory-native-fixture", version: "1",
-          capabilities: { resume: false, typedEvents: true, steering: false, interruption: true, structuredResult: true } };
+          capabilities: { resume: false, typedEvents: true, steering: false, interruption: true, structuredResult: true },
+          runtimeContextCapabilities: { instructions: "native", skills: "native", mcp: "native" } };
       },
       async openSession(openInput) {
         return {
@@ -216,6 +223,13 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       });
       await Promise.race([turnStarted, backendWait]);
 
+      const currentRunRows = await db.select({ id: heartbeatRuns.id, status: heartbeatRuns.status,
+        activeIdentityContextId: heartbeatRuns.activeIdentityContextId }).from(heartbeatRuns)
+        .where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.agentId, input.agentId)));
+      const returnedRun = currentRunRows.find((candidate) => candidate.id === run.id);
+      if (returnedRun?.status !== "running")
+        throw new Error(`Canonical Memory producer run is not active: ${JSON.stringify({returnedRun, currentRunRows})}`);
+
       const token = createLocalAgentJwt(input.agentId, input.companyId, "paperclip_runner", run.id, input.userId);
       const claims = token ? verifyLocalAgentJwt(token) : null;
       if (!token || !claims) throw new Error("Could not mint and verify the actual Memory producer AgentJWT");
@@ -237,7 +251,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
         parameters: { scope: "private", memoryType: "lesson", content: input.content,
           bindingKey: input.bindingKey,
           observedAt: input.observedAt.toISOString(), expiresAt: input.expiresAt?.toISOString() ?? null,
-          idempotencyKey: `context-memory-${randomUUID()}` } });
+          idempotencyKey: randomUUID() } });
       if (result.status !== "completed" || !result.result || typeof result.result !== "object" ||
         !("record" in result.result) || !(result.result as { record?: { id?: string } }).record?.id)
         throw new Error("The real Tool Gateway Memory producer returned no record");
@@ -249,7 +263,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       await expect(restartedGateway.executeTool({ sessionToken: session.token, tool: "paperclip-self:remember",
         parameters: { scope: "private", memoryType: "lesson", content: input.content, bindingKey: input.bindingKey,
           observedAt: input.observedAt.toISOString(), expiresAt: input.expiresAt?.toISOString() ?? null,
-          idempotencyKey: `context-memory-${randomUUID()}` } })).rejects.toMatchObject({
+          idempotencyKey: randomUUID() } })).rejects.toMatchObject({
         reasonCode: "memory_agent_authority_unavailable",
       });
       const persistedAfterRestart = await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, input.companyId),

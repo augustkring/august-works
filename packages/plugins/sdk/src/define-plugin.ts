@@ -49,7 +49,7 @@
  * ```
  */
 
-import type { PluginContext } from "./types.js";
+import type { PluginContext, ResourceLifecycleEvent, ResourceLifecycleResult } from "./types.js";
 import type {
   PluginEnvironmentAcquireLeaseParams,
   PluginEnvironmentDestroyLeaseParams,
@@ -235,6 +235,9 @@ export interface PluginDefinition {
    * @param ctx - The full plugin context provided by the host
    */
   setup(ctx: PluginContext): Promise<void>;
+
+  /** Reconcile a committed resource change; the host acknowledges only the exact successful event. */
+  onResourceLifecycle?(event: ResourceLifecycleEvent): Promise<ResourceLifecycleResult>;
 
   /**
    * Called when the host wants to know if the plugin is healthy.

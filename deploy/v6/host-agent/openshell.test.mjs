@@ -185,9 +185,9 @@ function canonical(value) {
   if (value && typeof value === "object") return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])]));
   return value;
 }
-function execRequest(deadlineAt = deadline()) {
+function execRequest(deadlineAt = deadline(), stdinBase64 = "") {
   const argv = ["node", "-e", "process.stdout.write('fixture')"];
-  const cwd = "/workspace", env = {}, stdinBase64 = "";
+  const cwd = "/workspace", env = {};
   const commandDigest = createHash("sha256").update(JSON.stringify(canonical({
     argv, cwd, env,
     stdinHash: createHash("sha256").update(Buffer.from(stdinBase64, "base64")).digest("hex"),
@@ -539,6 +539,54 @@ test("physical inspection never promotes host observations to qualification", as
       },
     );
   }));
+
+test("sandbox exec streams through pinned CLI argv without shell and journals no output or replay", async () => {
+  let spawnCount = 0, stdinReceived = "";
+  const hooks = {
+    spawnProcess(file, args, options) {
+      spawnCount++;
+      assert.ok(path.isAbsolute(file));
+      assert.equal(options.shell, false);
+      assert.deepEqual(options.stdio, ["pipe", "pipe", "pipe"]);
+      const command = args.slice(4), execIndex = command.indexOf("exec");
+      assert.ok(execIndex >= 0);
+      assert.equal(command[execIndex + 2], scope.sandboxRef);
+      assert.ok(command.includes("--workdir"));
+      const child = new EventEmitter();
+      child.stdin = new PassThrough();
+      child.stdin.on("data", chunk => { stdinReceived += chunk.toString("utf8"); });
+      child.stdout = Readable.from([Buffer.from("fixture stdout")]);
+      child.stderr = Readable.from([Buffer.from("fixture stderr")]);
+      child.kill = () => true;
+      setImmediate(() => child.emit("close", 0, null));
+      return child;
+    },
+  };
+  await fixture(async ({ engine, enablePhysical, setPhase, root }) => {
+    enablePhysical();
+    setPhase("Stopped");
+    await engine.execute(randomUUID(), {
+      ...input("apply"),
+      admission: { policyHash, expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: "exec-stream-policy", document: policyDocument },
+    }, deadline());
+    await engine.execute(randomUUID(), {
+      ...input("start"),
+      start: { policyHash, expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: "exec-stream-start" },
+    }, deadline());
+    const request = execRequest(deadline(), Buffer.from("fixture stdin").toString("base64"));
+    const outputs = [];
+    const scopeInput = { companyId: scope.companyId, bindingId: scope.bindingId, cellId: scope.cellId, cellGeneration: "1", sandboxRef: scope.sandboxRef };
+    const result = await engine.executeStream({ scope: scopeInput, request, capabilityToken: "fixture-token" }, (stream, chunk) => outputs.push([stream, chunk.toString("utf8")]));
+    assert.deepEqual(result, { exitCode: 0, timedOut: false });
+    assert.deepEqual(outputs, [["stdout", "fixture stdout"], ["stderr", "fixture stderr"]]);
+    assert.equal(stdinReceived, "fixture stdin");
+    const journal = await readFile(path.join(root, "openshell-journal.json"), "utf8");
+    assert.equal(journal.includes("fixture stdout"), false);
+    assert.equal(journal.includes("fixture stderr"), false);
+    await assert.rejects(engine.executeStream({ scope: scopeInput, request, capabilityToken: "fixture-token" }, () => {}), /exec_unknown/);
+    assert.equal(spawnCount, 1);
+  }, hooks);
+});
 
 test("sandbox exec preflight cancellation and deadline expiry never spawn the CLI", async () => {
   let holdInspect = false, enteredInspect = () => {}, releaseInspect = () => {}, inspectRelease = Promise.resolve();
