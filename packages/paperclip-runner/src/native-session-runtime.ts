@@ -187,7 +187,9 @@ export interface ExecuteNativeSessionOptions {
   /** Durable launch intent, after cleanup admission and before provider calls. */
   onSessionAdmission?: () => Promise<void>;
   /** Observe the finalized provider input immediately before its turn starts. */
-  onTurnInput?: (input: Parameters<NativeSession["startTurn"]>[0]) => Promise<void>;
+  onTurnInput?: (input: Parameters<NativeSession["startTurn"]>[0]) => Promise<string | void>;
+  /** Observe the provider-assigned turn identity after startTurn acknowledges. */
+  onTurnStarted?: (input: Parameters<NativeSession["startTurn"]>[0], turnId: string, dispatchId?: string) => Promise<void>;
   input: NativeExecutionInput;
   backend: NativeSessionBackend;
   controlPlane: ControlPlanePort;
@@ -2368,8 +2370,11 @@ export async function executeNativeSession(
             requestedCollaborationMode:
               "executionMode" in input ? input.executionMode : "default",
           };
-          await options.onTurnInput?.(structuredClone(turnInput));
-          await session.startTurn(turnInput);
+          const dispatchId = await options.onTurnInput?.(structuredClone(turnInput));
+          const acknowledgedInput = structuredClone(turnInput);
+          const startedTurn = await session.startTurn(turnInput);
+          await options.onTurnStarted?.(acknowledgedInput, startedTurn.turnId,
+            typeof dispatchId === "string" ? dispatchId : undefined);
           await checkpoint();
         }
       } catch (error) {

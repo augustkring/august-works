@@ -8061,9 +8061,11 @@ describe("runnerd provider runtime wiring", () => {
     const prior = { eventSeq: 0, attempt: 1, responsibleUserId: null, turnInputDigest: "a".repeat(64) };
     const turnInput = { message: { role: "user" as const, text: "PRIVATE_MODEL_INPUT /private/model/path" }, continuation: true as const };
     const providerDispatch = vi.fn();
+    let observedDispatchId: string | undefined;
     state.execute.mockReset().mockImplementationOnce(async options => {
       await options.onSessionAdmission();
-      await options.onTurnInput(turnInput);
+      const dispatchId = await options.onTurnInput(turnInput);
+      observedDispatchId = dispatchId;
       const profileWrite = updates.findLast(row => row.table === heartbeatRuns &&
         row.values.runnerProfileJson && typeof row.values.runnerProfileJson === "object" &&
         "nativeModelInputDispatchIntents" in row.values.runnerProfileJson);
@@ -8079,6 +8081,7 @@ describe("runnerd provider runtime wiring", () => {
       expect(JSON.stringify(intents)).not.toContain("/private/model/path");
       expect(profile).not.toHaveProperty("nativeInputSourceReceipt");
       providerDispatch();
+      await options.onTurnStarted?.(turnInput, "backend-turn-ack-1", dispatchId);
       return {
         result: { summary: "completed" }, terminal: { runTerminalState: "succeeded" },
         turnId: "dispatch-input-turn", normalizedSessionId: "dispatch-input-session",
@@ -8096,6 +8099,15 @@ describe("runnerd provider runtime wiring", () => {
     } else {
       await result;
       expect(providerDispatch).toHaveBeenCalledOnce();
+      const ackWrite = updates.findLast(row => row.table === heartbeatRuns &&
+        row.values.runnerProfileJson && typeof row.values.runnerProfileJson === "object" &&
+        "nativeModelInputDispatchIntents" in row.values.runnerProfileJson);
+      expect((ackWrite?.values.runnerProfileJson as Record<string, unknown>)
+        .nativeModelInputDispatchIntents).toEqual([prior, expect.objectContaining({
+          dispatchId: observedDispatchId,
+          turnInputDigest: createHash("sha256").update(JSON.stringify(turnInput)).digest("hex"),
+          turnId: "backend-turn-ack-1",
+        })]);
     }
   });
 

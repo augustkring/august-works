@@ -7063,9 +7063,10 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
   agentId: string;
   eventSeq: number;
   turnInput: Parameters<NativeSession["startTurn"]>[0];
-}): Promise<void> {
+}): Promise<string> {
   if (!Number.isSafeInteger(input.eventSeq) || input.eventSeq < 0)
     throw new Error("native_model_input_launch_binding_invalid");
+  const dispatchId = randomUUID();
   const encoded = JSON.stringify(input.turnInput);
   await input.db.transaction(async tx => {
     // Keep the original coordinator -> run lock order, and repeat the actual
@@ -7088,6 +7089,7 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
     if (!Array.isArray(previous) || previous.length >= 64)
       throw new Error("native_model_input_dispatch_budget_exceeded");
     const intents = [...previous, {
+      dispatchId,
       eventSeq: launch.seq, attempt: input.attempt, responsibleUserId: run.responsibleUserId ?? null,
       turnInputDigest: createHash("sha256").update(encoded).digest("hex"),
       byteSize: Buffer.byteLength(encoded), continuation: input.turnInput.continuation === true,
@@ -7110,6 +7112,53 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
       "native_model_input_run_binding_changed", "native_model_input_launch_binding_changed",
       "native_model_input_dispatch_budget_exceeded",
     ].includes(message) ? message : "native_model_input_dispatch_persistence_failed");
+  });
+  return dispatchId;
+}
+
+/** Attach the backend's returned turn id to the exact input intent. This is
+ * an acknowledgement fact only; it does not establish delivery or provenance. */
+export async function recordNativeModelInputDispatchAcknowledgement(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
+  agentId: string; eventSeq: number; dispatchId: string; turnInput: Parameters<NativeSession["startTurn"]>[0]; turnId: string;
+}): Promise<void> {
+  if (!Number.isSafeInteger(input.eventSeq) || input.eventSeq < 0 ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(input.dispatchId) ||
+    typeof input.turnId !== "string" || !/^[\x21-\x7e]{1,240}$/.test(input.turnId))
+    throw new Error("native_model_input_ack_binding_invalid");
+  const digest = createHash("sha256").update(JSON.stringify(input.turnInput)).digest("hex");
+  await input.db.transaction(async tx => {
+    await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
+    const [run] = await tx.select().from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.companyId, input.companyId),
+      eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId),
+      eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.status, "running"),
+    )).for("update");
+    if (!run) throw new Error("native_model_input_ack_binding_invalid");
+    const profile = record(run.runnerProfileJson);
+    const intents = profile.nativeModelInputDispatchIntents;
+    if (!Array.isArray(intents)) throw new Error("native_model_input_ack_binding_invalid");
+    const matching = intents.map((raw, index) => ({ raw: record(raw), index })).filter(({ raw }) =>
+      raw.dispatchId === input.dispatchId && raw.eventSeq === input.eventSeq &&
+      raw.attempt === input.attempt && raw.turnInputDigest === digest);
+    if (matching.length !== 1 || matching[0]!.raw.turnId !== undefined)
+      throw new Error("native_model_input_ack_binding_invalid");
+    const acknowledged = intents.map((raw, index) => index === matching[0]!.index
+      ? { ...record(raw), turnId: input.turnId } : raw);
+    if (Buffer.byteLength(JSON.stringify(acknowledged)) > 2 * 1024 * 1024)
+      throw new Error("native_model_input_ack_budget_exceeded");
+    const [stored] = await tx.update(heartbeatRuns).set({
+      runnerProfileJson: { ...profile, nativeModelInputDispatchIntents: acknowledged }, updatedAt: new Date(),
+    }).where(eq(heartbeatRuns.id, run.id)).returning({ profile: heartbeatRuns.runnerProfileJson });
+    const retained = record(stored?.profile).nativeModelInputDispatchIntents;
+    if (!Array.isArray(retained) || nativeSha256(retained) !== nativeSha256(acknowledged))
+      throw new Error("native_model_input_ack_persistence_failed");
+    await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
+  }).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : "";
+    throw new Error(["native_session_lease_lost", "native_session_lease_ttl_invalid",
+      "native_model_input_ack_binding_invalid", "native_model_input_ack_budget_exceeded",
+      "native_model_input_ack_persistence_failed"].includes(message)
+      ? message : "native_model_input_ack_persistence_failed");
   });
 }
 
@@ -8364,7 +8413,7 @@ async function executePaperclipNativeSessionWithinScope(
             onTurnInput: async turnInput => {
               if (launchEventSeq === null) throw new Error("native_model_input_launch_binding_invalid");
               await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
-              await recordNativeModelInputDispatchIntent({
+              const dispatchId = await recordNativeModelInputDispatchIntent({
                 db: input.db, runId, companyId: input.execution.binding.companyId,
                 issueId: input.execution.binding.issueId, agentId: input.execution.binding.agentId,
                 leaseOwner, attempt, controller, eventSeq: launchEventSeq, turnInput,
@@ -8373,6 +8422,15 @@ async function executePaperclipNativeSessionWithinScope(
               await renewNativeSessionExecutionLease({
                 db: input.db, runId, companyId: input.execution.binding.companyId,
                 issueId: input.execution.binding.issueId, leaseOwner, attempt, controller,
+              });
+              return dispatchId;
+            },
+            onTurnStarted: async (turnInput, turnId, dispatchId) => {
+              if (launchEventSeq === null || !dispatchId) throw new Error("native_model_input_ack_binding_invalid");
+              await recordNativeModelInputDispatchAcknowledgement({
+                db: input.db, runId, companyId: input.execution.binding.companyId,
+                issueId: input.execution.binding.issueId, agentId: input.execution.binding.agentId,
+                leaseOwner, attempt, controller, eventSeq: launchEventSeq, dispatchId, turnInput, turnId,
               });
             },
             input: runnerExecution,

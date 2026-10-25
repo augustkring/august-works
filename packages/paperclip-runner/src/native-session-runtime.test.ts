@@ -383,7 +383,12 @@ describe("executeNativeSession recovery", () => {
       pendingRuntimeRequests: [],
       goal: { ...oldGoal, createdAt: oldGoal.createdAt / 1000, updatedAt: oldGoal.updatedAt / 1000 },
     };
-    const startTurn = vi.fn<NativeSession["startTurn"]>(async () => ({ turnId: "turn-recovery" }));
+    const providerSubmittedInputs: Parameters<NativeSession["startTurn"]>[0][] = [];
+    const startTurn = vi.fn<NativeSession["startTurn"]>(async submitted => {
+      providerSubmittedInputs.push(structuredClone(submitted));
+      submitted.message.text = "backend mutation after submission";
+      return { turnId: "turn-recovery" };
+    });
     const goal = vi.fn(async () => oldGoal);
     const session: NativeSession = {
       identity: () => identity,
@@ -422,6 +427,7 @@ describe("executeNativeSession recovery", () => {
     };
     const appended: PrpEvent[] = [];
     const observedTurnInputs: Parameters<NativeSession["startTurn"]>[0][] = [];
+    const observedTurnStarts: Array<{ input: Parameters<NativeSession["startTurn"]>[0]; turnId: string; dispatchId?: string }> = [];
     const digest = "0".repeat(64);
     const context = {
       prompt: { revision: PAPERCLIP_EXECUTION_PROMPT_REVISION, text: PAPERCLIP_EXECUTION_PROMPT, digest: nativeRuntimePromptDigest() },
@@ -462,11 +468,17 @@ describe("executeNativeSession recovery", () => {
         // A callback receives a detached observation and cannot rewrite the
         // finalized message that the provider is about to receive.
         observed.message.text = "callback mutation must not reach provider";
+        return snapshotBeforeUpdate ? "dispatch-continuation" : "dispatch-fresh";
+      },
+      onTurnStarted: async (observed, turnId, dispatchId) => {
+        observedTurnStarts.push({ input: structuredClone(observed), turnId, dispatchId });
       },
     });
     expect(startTurn).toHaveBeenCalledOnce();
-    const submitted = startTurn.mock.calls[0]![0]!;
+    const submitted = providerSubmittedInputs[0]!;
     expect(observedTurnInputs).toEqual([submitted]);
+    expect(observedTurnStarts).toEqual([{ input: submitted, turnId: "turn-recovery",
+      dispatchId: snapshotBeforeUpdate ? "dispatch-continuation" : "dispatch-fresh" }]);
     if (snapshotBeforeUpdate) {
       expect(submitted.continuation).toBe(true);
       expect(JSON.parse(submitted.message.text)).toMatchObject({ schema: "paperclip.native-continuation.v1", events: "Say bye" });
@@ -544,6 +556,21 @@ describe("executeNativeSession recovery", () => {
 
     expect(startTurn).not.toHaveBeenCalled();
     expect(close).toHaveBeenCalled();
+
+    const startFailure = new Error("backend did not acknowledge startTurn");
+    startTurn.mockRejectedValue(startFailure);
+    const onTurnStarted = vi.fn(async () => {});
+    await expect(executeNativeSession({
+      input,
+      backend,
+      controlPlane,
+      runnerInstanceId: "runner-recovery",
+      controlPlaneInstanceId: "control-recovery",
+      onTurnInput: async () => "dispatch-before-throw",
+      onTurnStarted,
+    })).rejects.toBe(startFailure);
+    expect(startTurn).toHaveBeenCalledOnce();
+    expect(onTurnStarted).not.toHaveBeenCalled();
   });
 
   it("applies a session goal control without starting an ordinary turn", async () => {

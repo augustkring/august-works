@@ -16,7 +16,7 @@ import {
 } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { PROCESS_START_REQUESTED } from "../native-local-process-stop.js";
-import { recordNativeModelInputDispatchIntent, recordNativeDocumentToolResultIntent } from "./native-session-executor.js";
+import { recordNativeModelInputDispatchIntent, recordNativeModelInputDispatchAcknowledgement, recordNativeDocumentToolResultIntent } from "./native-session-executor.js";
 import { documentService, type DocumentRevisionSourceCapture } from "../documents.js";
 import { nativeSha256 } from "./canonical.js";
 import { currentNativeControllerIdentity } from "./native-restart-recovery.js";
@@ -109,6 +109,16 @@ describe("native model input dispatch intent", () => {
     const { turnInput: _turnInput, ...binding } = dispatchArgs(seeded, { message: { role: "user", text: "unused" } });
     return { ...binding, capture: { callId: "actual-document-read", tool: "read_document" as const,
       resultDigest: nativeSha256({ document: null }), source } };
+  }
+
+  function acknowledgementArgs(
+    seeded: Awaited<ReturnType<typeof seed>>,
+    dispatchId: string,
+    turnInput: { message: { role: "user"; text: string }; continuation?: true; requestedCollaborationMode?: "default" | "plan" },
+    turnId = "provider-turn-ack-1",
+  ) {
+    const { turnInput: _turnInput, ...binding } = dispatchArgs(seeded, turnInput);
+    return { ...binding, dispatchId, turnInput, turnId };
   }
 
   it("retains the exact document read before later revision edits without inventing source history", async () => {
@@ -231,19 +241,111 @@ describe("native model input dispatch intent", () => {
     expect(JSON.stringify(profile)).not.toContain("never-store-this");
     expect(profile.nativeModelInputDispatchIntents).toEqual([
       priorIntent,
-      {
+      expect.objectContaining({
+        dispatchId: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/),
         eventSeq: seeded.eventSeq,
         attempt: seeded.attempt,
         responsibleUserId: userId,
         turnInputDigest: createHash("sha256").update(encoded).digest("hex"),
         byteSize: Buffer.byteLength(encoded),
         continuation: continuation === true,
-      },
+      }),
     ]);
     const [finalization] = await db.select().from(nativeRunFinalizations).where(eq(nativeRunFinalizations.runId, seeded.runId));
     expect(finalization!.attempt).toBe(seeded.attempt);
     const [storedRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
     expect(storedRun!.nativeInputSourceProtocolVersion).toBe(0);
+  });
+
+  it("binds backend turn acknowledgements to exact same-input dispatch UUIDs", async () => {
+    const seeded = await seed();
+    const turnInput = { message: { role: "user" as const, text: "identical private provider input" }, continuation: true as const };
+    const firstDispatchId = await recordNativeModelInputDispatchIntent(dispatchArgs(seeded, turnInput));
+    const secondDispatchId = await recordNativeModelInputDispatchIntent(dispatchArgs(seeded, turnInput));
+    expect(firstDispatchId).not.toBe(secondDispatchId);
+
+    await recordNativeModelInputDispatchAcknowledgement(acknowledgementArgs(seeded, secondDispatchId, turnInput, "provider-turn-second"));
+    await recordNativeModelInputDispatchAcknowledgement(acknowledgementArgs(seeded, firstDispatchId, turnInput, "provider-turn-first"));
+
+    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
+    const intents = run!.runnerProfileJson!.nativeModelInputDispatchIntents as Array<Record<string, unknown>>;
+    expect(intents).toHaveLength(2);
+    expect(intents).toEqual(expect.arrayContaining([
+      expect.objectContaining({ dispatchId: firstDispatchId, turnId: "provider-turn-first", eventSeq: seeded.eventSeq, attempt: seeded.attempt }),
+      expect.objectContaining({ dispatchId: secondDispatchId, turnId: "provider-turn-second", eventSeq: seeded.eventSeq, attempt: seeded.attempt }),
+    ]));
+    expect(run!.nativeInputSourceProtocolVersion).toBe(0);
+    expect(run!.runnerProfileJson).not.toHaveProperty("nativeInputSourceReceipt");
+    expect(JSON.stringify(intents)).not.toContain(turnInput.message.text);
+  });
+
+  it.each([
+    { name: "wrong dispatch", update: (_seeded: Awaited<ReturnType<typeof seed>>, dispatchId: string) => ({ dispatchId: randomUUID() }) },
+    { name: "wrong event", update: (seeded: Awaited<ReturnType<typeof seed>>, dispatchId: string) => ({ eventSeq: seeded.eventSeq + 1, dispatchId }) },
+    { name: "wrong attempt", update: (seeded: Awaited<ReturnType<typeof seed>>, dispatchId: string) => ({ attempt: seeded.attempt + 1, dispatchId }), error: "native_session_lease_lost" },
+    { name: "different input", update: (_seeded: Awaited<ReturnType<typeof seed>>, dispatchId: string) => ({ dispatchId, turnInput: { message: { role: "user" as const, text: "substituted input" } } }), error: "native_model_input_ack_binding_invalid" },
+  ])("refuses acknowledgement with $name mismatch without changing the intent", async ({ update, error = "native_model_input_ack_binding_invalid" }) => {
+    const seeded = await seed();
+    const turnInput = { message: { role: "user" as const, text: "selected exact input" } };
+    const dispatchId = await recordNativeModelInputDispatchIntent(dispatchArgs(seeded, turnInput));
+    const before = (await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId)))[0]!.runnerProfileJson;
+    await expect(recordNativeModelInputDispatchAcknowledgement({
+      ...acknowledgementArgs(seeded, dispatchId, turnInput),
+      ...update(seeded, dispatchId),
+    })).rejects.toThrow(error);
+    const [after] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
+    expect(after!.runnerProfileJson).toEqual(before);
+  });
+
+  it("refuses duplicate and invalid backend turn acknowledgements", async () => {
+    const seeded = await seed();
+    const turnInput = { message: { role: "user" as const, text: "ack once" } };
+    const dispatchId = await recordNativeModelInputDispatchIntent(dispatchArgs(seeded, turnInput));
+    const args = acknowledgementArgs(seeded, dispatchId, turnInput);
+    await expect(recordNativeModelInputDispatchAcknowledgement({ ...args, turnId: "bad\nturn" }))
+      .rejects.toThrow("native_model_input_ack_binding_invalid");
+    await recordNativeModelInputDispatchAcknowledgement(args);
+    const [afterAck] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
+    await expect(recordNativeModelInputDispatchAcknowledgement(args)).rejects.toThrow("native_model_input_ack_binding_invalid");
+    const [afterDuplicate] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
+    expect(afterDuplicate!.runnerProfileJson).toEqual(afterAck!.runnerProfileJson);
+  });
+
+  it("does not acknowledge after lease expiry", async () => {
+    const seeded = await seed();
+    const turnInput = { message: { role: "user" as const, text: "lease bounded acknowledgement" } };
+    const dispatchId = await recordNativeModelInputDispatchIntent(dispatchArgs(seeded, turnInput));
+    await db.execute(sql`update native_run_finalizations set lease_expires_at = clock_timestamp() + interval '1200 milliseconds' where run_id = ${seeded.runId}::uuid`);
+    await expect(db.transaction(async tx => {
+      const [leaseAtStart] = await tx.execute<{ live: boolean }>(sql`select lease_expires_at > clock_timestamp() as live
+        from native_run_finalizations where run_id = ${seeded.runId}::uuid`);
+      expect(leaseAtStart!.live).toBe(true);
+      await tx.execute(sql`select pg_sleep(1.4)`);
+      await recordNativeModelInputDispatchAcknowledgement({
+        ...acknowledgementArgs(seeded, dispatchId, turnInput), db: tx as unknown as typeof db,
+      });
+    })).rejects.toThrow("native_session_lease_lost");
+    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
+    expect(run!.runnerProfileJson!.nativeModelInputDispatchIntents).toEqual([
+      expect.objectContaining({ dispatchId, turnInputDigest: createHash("sha256").update(JSON.stringify(turnInput)).digest("hex") }),
+    ]);
+    expect((run!.runnerProfileJson!.nativeModelInputDispatchIntents as Array<Record<string, unknown>>)[0]).not.toHaveProperty("turnId");
+  });
+
+  it("keeps an intent unacknowledged when adding the backend id would exceed the profile budget", async () => {
+    const prior = { dispatchId: randomUUID(), eventSeq: 2, attempt: 1, responsibleUserId: null,
+      turnInputDigest: "a".repeat(64), byteSize: 1, continuation: false,
+      padding: "x".repeat(2 * 1024 * 1024 - 600) };
+    const seeded = await seed({ runnerProfileJson: { nativeModelInputDispatchIntents: [prior] } });
+    const turnInput = { message: { role: "user" as const, text: "budget" } };
+    const dispatchId = await recordNativeModelInputDispatchIntent(dispatchArgs(seeded, turnInput));
+    const largeTurnId = "t".repeat(240);
+    await expect(recordNativeModelInputDispatchAcknowledgement(
+      acknowledgementArgs(seeded, dispatchId, turnInput, largeTurnId),
+    )).rejects.toThrow("native_model_input_ack_budget_exceeded");
+    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
+    const intents = run!.runnerProfileJson!.nativeModelInputDispatchIntents as Array<Record<string, unknown>>;
+    expect(intents.find(intent => intent.dispatchId === dispatchId)).not.toHaveProperty("turnId");
   });
 
   it.each([
