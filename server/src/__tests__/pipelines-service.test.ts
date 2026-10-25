@@ -1,18 +1,24 @@
 import { randomUUID } from "node:crypto";
+import express, { type RequestHandler } from "express";
 import { eq, sql } from "drizzle-orm";
+import request from "supertest";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   activityLog,
   agents,
+  authSessions,
   authUsers,
   companies,
   companyMemberships,
   principalPermissionGrants,
   createDb,
   executionWorkspaces,
+  documents,
+  documentRevisions,
   heartbeatRuns,
   instanceSettings,
   issueComments,
+  issueDocuments,
   issueThreadInteractions,
   issues,
   pipelineAutomationExecutions,
@@ -44,6 +50,9 @@ import {
 } from "../services/pipelines.ts";
 import { routineService } from "../services/routines.ts";
 import { instanceSettingsService } from "../services/instance-settings.ts";
+import { projectRoutes } from "../routes/projects.ts";
+import { errorHandler } from "../middleware/error-handler.ts";
+import { canActorReadTypedTaskSourcePrivacy, type AuthorizationActor } from "../services/authorization.ts";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -123,6 +132,24 @@ describeEmbeddedPostgres("pipelineService", () => {
     await db.insert(principalPermissionGrants).values({ companyId: company!.id, principalType: "user", principalId: userActor.userId,
       permissionKey: "workflows:run", scope: {} });
     return company!;
+  }
+
+  async function createQualifiedProject(companyId: string, name: string) {
+    const sessionId = randomUUID();
+    await db.insert(authSessions).values({ id: sessionId, userId: userActor.userId, token: randomUUID(),
+      createdAt: new Date(), updatedAt: new Date(), expiresAt: new Date(Date.now() + 60 * 60_000) });
+    const app = express();
+    app.use(express.json());
+    app.use(((req, _res, next) => {
+      req.actor = { type: "board", source: "session", userId: userActor.userId, sessionId,
+        companyIds: [companyId], memberships: [{ companyId, membershipRole: "owner", status: "active" }] };
+      next();
+    }) as RequestHandler);
+    app.use("/api", projectRoutes(db));
+    app.use(errorHandler);
+    const response = await request(app).post(`/api/companies/${companyId}/projects`).send({ name });
+    if (response.status !== 201) throw new Error(`Canonical Human Project creation failed: ${response.status}`);
+    return { id: response.body.id as string, sessionId };
   }
 
   async function seedPipeline(options?: { enforceTransitions?: boolean }) {
@@ -1404,6 +1431,20 @@ describeEmbeddedPostgres("pipelineService", () => {
     expect(ledgers[0]!.executionIssueId).toBeTruthy();
     const runsAfterTransition = await db.select().from(routineRuns);
     expect(runsAfterTransition).toHaveLength(1);
+    expect(runsAfterTransition[0]!.triggerPayload).toMatchObject({
+      automation: {
+        automationId: ledgers[0]!.automationId,
+        automationExecutionId: ledgers[0]!.id,
+        generation: ledgers[0]!.generation,
+      },
+      contextPack: {
+        pipeline: { id: pipeline.id },
+        case: { id: created.case.id },
+        stage: { id: moved.case.stageId },
+        taskSourceIssueIds: [],
+      },
+      triggeringEventId: moved.event.id,
+    });
     const linksAfterTransition = await db.select().from(pipelineCaseIssueLinks);
     expect(linksAfterTransition).toHaveLength(1);
     expect(linksAfterTransition[0]!.role).toBe("automation");
@@ -1617,17 +1658,31 @@ describeEmbeddedPostgres("pipelineService", () => {
   it("carries saved stage automation workspace context into the execution issue", async () => {
     const { company, pipeline, byKey } = await seedPipeline();
     const routineSeed = await seedRoutine(company.id, "Workspace automation seed");
-    const projectId = randomUUID();
+    const qualifiedProject = await createQualifiedProject(company.id, "Automation project");
+    const projectId = qualifiedProject.id;
     const projectWorkspaceId = randomUUID();
     const executionWorkspaceId = randomUUID();
+    const sourceIssueId = randomUUID();
+    const sourceDocumentId = randomUUID();
+    const sourceRevisionId = randomUUID();
+    const sourceActor: AuthorizationActor = {
+      type: "board", source: "session", userId: userActor.userId, sessionId: qualifiedProject.sessionId,
+      companyIds: [company.id], memberships: [{ companyId: company.id, membershipRole: "owner", status: "active" }],
+    };
+
+    await db.insert(issues).values({ id: sourceIssueId, companyId: company.id, title: "Private source Task",
+      description: "Private source content", status: "done", visibility: "private",
+      createdByUserId: userActor.userId, responsibleUserId: userActor.userId });
+    await db.insert(documents).values({ id: sourceDocumentId, companyId: company.id, title: "Private source report",
+      latestBody: "A private output used by this pipeline automation.", latestRevisionId: sourceRevisionId,
+      latestRevisionNumber: 1 });
+    await db.insert(documentRevisions).values({ id: sourceRevisionId, companyId: company.id, documentId: sourceDocumentId,
+      revisionNumber: 1, title: "Private source report", format: "markdown",
+      body: "A private output used by this pipeline automation.", createdByUserId: userActor.userId });
+    await db.insert(issueDocuments).values({ companyId: company.id, issueId: sourceIssueId,
+      documentId: sourceDocumentId, key: "report" });
 
     await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: true });
-    await db.insert(projects).values({
-      id: projectId,
-      companyId: company.id,
-      name: "Automation project",
-      status: "in_progress",
-    });
     await db.insert(projectWorkspaces).values({
       id: projectWorkspaceId,
       companyId: company.id,
@@ -1683,14 +1738,16 @@ describeEmbeddedPostgres("pipelineService", () => {
       title: "Workspace context case",
       actor: userActor,
     });
+    await db.insert(pipelineCaseIssueLinks).values({ companyId: company.id, caseId: created.case.id,
+      issueId: sourceIssueId, role: "work" });
     const moved = await svc.transitionCase({
       companyId: company.id,
       caseId: created.case.id,
       toStageKey: "in_progress",
       expectedVersion: 1,
       actor: userActor,
+      privacyActor: sourceActor,
     });
-
     expect(moved.automationExecution.status, moved.automationExecution.status === "failed" ? moved.automationExecution.execution.error ?? undefined : undefined).toBe("succeeded");
     const executionIssueId = moved.automationExecution.status === "succeeded"
       ? moved.automationExecution.execution.executionIssueId
@@ -1713,6 +1770,53 @@ describeEmbeddedPostgres("pipelineService", () => {
       executionWorkspacePreference: "reuse_existing",
       executionWorkspaceSettings: { mode: "isolated_workspace" },
     });
+    const [runRoutine] = await db.select({ id: routines.id }).from(routines)
+      .where(eq(routines.id, moved.automationLedger!.routineId!));
+    const [routineRun] = await db.select().from(routineRuns).where(eq(routineRuns.routineId, runRoutine!.id));
+    expect(routineRun!.triggerPayload).toMatchObject({
+      automation: { automationExecutionId: moved.automationLedger!.id },
+      contextPack: { taskSourceIssueIds: [sourceIssueId] },
+    });
+    expect(await canActorReadTypedTaskSourcePrivacy(db, sourceActor, {
+      sourceKind: "routine_run", id: routineRun!.id, companyId: company.id,
+    })).toBe(true);
+    const [sourceLink] = await db.select().from(pipelineCaseIssueLinks)
+      .where(eq(pipelineCaseIssueLinks.issueId, sourceIssueId));
+    await db.update(pipelineCaseIssueLinks).set({ retiredAt: new Date() })
+      .where(eq(pipelineCaseIssueLinks.id, sourceLink!.id));
+    expect(await canActorReadTypedTaskSourcePrivacy(db, sourceActor, {
+      sourceKind: "routine_run", id: routineRun!.id, companyId: company.id,
+    })).toBe(true);
+    await db.update(pipelineCaseIssueLinks).set({ retiredAt: null })
+      .where(eq(pipelineCaseIssueLinks.id, sourceLink!.id));
+    await db.update(issues).set({ hiddenAt: new Date() }).where(eq(issues.id, sourceIssueId));
+    expect(await canActorReadTypedTaskSourcePrivacy(db, sourceActor, {
+      sourceKind: "routine_run", id: routineRun!.id, companyId: company.id,
+    })).toBe(false);
+    await db.update(issues).set({ hiddenAt: null }).where(eq(issues.id, sourceIssueId));
+    const originalPayload = routineRun!.triggerPayload!;
+    await db.update(routineRuns).set({ triggerPayload: {
+      ...originalPayload,
+      automation: { ...(originalPayload.automation as Record<string, unknown>), automationExecutionId: randomUUID() },
+    } }).where(eq(routineRuns.id, routineRun!.id));
+    expect(await canActorReadTypedTaskSourcePrivacy(db, sourceActor, {
+      sourceKind: "routine_run", id: routineRun!.id, companyId: company.id,
+    })).toBe(false);
+    await db.update(routineRuns).set({ triggerPayload: originalPayload }).where(eq(routineRuns.id, routineRun!.id));
+    await db.delete(issues).where(eq(issues.id, sourceIssueId));
+    expect(await canActorReadTypedTaskSourcePrivacy(db, sourceActor, {
+      sourceKind: "routine_run", id: routineRun!.id, companyId: company.id,
+    })).toBe(false);
+    await db.update(pipelineCases).set({ hiddenFromBoardAt: null, retiredAt: null }).where(eq(pipelineCases.id, created.case.id));
+    await db.update(routineRuns).set({ triggerPayload: originalPayload }).where(eq(routineRuns.id, routineRun!.id));
+    await db.update(pipelineCases).set({ hiddenFromBoardAt: new Date() }).where(eq(pipelineCases.id, created.case.id));
+    expect(await canActorReadTypedTaskSourcePrivacy(db, sourceActor, {
+      sourceKind: "routine_run", id: routineRun!.id, companyId: company.id,
+    })).toBe(false);
+    await db.update(pipelineCases).set({ hiddenFromBoardAt: null, retiredAt: new Date() }).where(eq(pipelineCases.id, created.case.id));
+    expect(await canActorReadTypedTaskSourcePrivacy(db, sourceActor, {
+      sourceKind: "routine_run", id: routineRun!.id, companyId: company.id,
+    })).toBe(false);
   });
 
   it("defaults, preserves, and interpolates pipeline automation issue title templates", async () => {

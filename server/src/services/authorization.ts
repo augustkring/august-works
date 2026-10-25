@@ -633,6 +633,56 @@ function heartbeatRunTaskBindingCondition(row: SQL): SQL<boolean> {
   ))`;
 }
 
+/** A pipeline Routine source is admitted only by its exact, live pipeline
+ * execution ledger and the source Task set captured before dispatch. */
+function pipelineAutomationRoutineSourceCondition(company: SQL): SQL<boolean> {
+  const payload = sql`rr.trigger_payload`;
+  const taskIds = sql`case when jsonb_typeof(${payload}->'contextPack'->'taskSourceIssueIds')='array'
+    then ${payload}->'contextPack'->'taskSourceIssueIds' else '[]'::jsonb end`;
+  return sql<boolean>`(
+    jsonb_typeof(${payload})='object'
+    and jsonb_typeof(${payload}->'contextPack')='object'
+    and jsonb_typeof(${payload}->'automation')='object'
+    and ${payload}->'pipeline'->>'id'=${payload}->'contextPack'->'pipeline'->>'id'
+    and ${payload}->'pipeline'->>'id'=p.origin_id
+    and ${payload}->'case'->>'id'=${payload}->'contextPack'->'case'->>'id'
+    and ${payload}->'stage'->>'id'=${payload}->'contextPack'->'stage'->>'id'
+    and ${payload}->>'triggeringEventId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+    and ${payload}->'automation'->>'automationExecutionId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+    and jsonb_typeof(${payload}->'contextPack'->'taskSourceIssueIds')='array'
+    and jsonb_array_length(${taskIds})<=256
+    and not exists(select 1 from jsonb_array_elements_text(${taskIds}) source(id)
+      where source.id !~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$')
+    and exists(select 1 from pipeline_automation_executions e
+      join pipeline_cases c on c.id=e.case_id and c.company_id=e.company_id
+      join pipeline_stages s on s.id=case when ${payload}->'contextPack'->'stage'->>'id' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+        then (${payload}->'contextPack'->'stage'->>'id')::uuid end and s.pipeline_id=c.pipeline_id
+      join pipeline_case_events ev on ev.id=case when ${payload}->>'triggeringEventId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+        then (${payload}->>'triggeringEventId')::uuid end and ev.case_id=c.id and ev.company_id=c.company_id
+      where e.id=case when ${payload}->'automation'->>'automationExecutionId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+          then (${payload}->'automation'->>'automationExecutionId')::uuid end
+        and e.company_id=${company} and e.routine_id=rr.routine_id and e.target_kind='routine'
+        and e.target_ref=rr.routine_id and e.case_id=c.id and c.pipeline_id::text=p.origin_id
+        and c.retired_at is null and c.hidden_from_board_at is null
+        and e.automation_id=${payload}->'automation'->>'automationId'
+        and e.generation::text=${payload}->'automation'->>'generation'
+        and e.triggering_event_id=case when ${payload}->>'triggeringEventId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+          then (${payload}->>'triggeringEventId')::uuid end
+        and (select count(distinct source.id) from jsonb_array_elements_text(${taskIds}) source(id))
+          =(select count(distinct link.issue_id) from pipeline_case_issue_links link
+            where link.company_id=e.company_id and link.case_id=c.id and link.created_at<=e.created_at)
+        and not exists(select 1 from pipeline_case_issue_links link where link.company_id=e.company_id
+          and link.case_id=c.id and link.created_at<=e.created_at
+          and not exists(select 1 from jsonb_array_elements_text(${taskIds}) source(id) where source.id=link.issue_id::text))
+        and not exists(select 1 from jsonb_array_elements_text(${taskIds}) source(id)
+          where not exists(select 1 from pipeline_case_issue_links link
+            join issues source_issue on source_issue.company_id=link.company_id and source_issue.id=link.issue_id
+            where link.company_id=e.company_id and link.case_id=c.id and link.created_at<=e.created_at
+              and link.issue_id::text=source.id and source_issue.hidden_at is null
+              and source_issue.cancelled_at is null and source_issue.status<>'cancelled')))
+  )`;
+}
+
 /** One native Task/Project source graph; this never authorizes a company action.
  * Private Routine sources enter through the exact callback-local native owner.
  * Empty stored arrays are relational facts only,
@@ -647,8 +697,13 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
     ? sql`(p.origin_kind='manual' or (p.origin_kind='conversation_draft'
       and current_setting('paperclip.native_routine_actor_hash',true)=${routineActorHash(actor)}
       and current_setting('paperclip.native_routine_scope_token',true)=${routineScope.routineScopeToken ?? ""}
-      and rr.id=any(string_to_array(nullif(current_setting('paperclip.native_routine_source_ids',true),''),',')::uuid[])))`
-    : sql`p.origin_kind='manual'`;
+      and rr.id=any(string_to_array(nullif(current_setting('paperclip.native_routine_source_ids',true),''),',')::uuid[])) or
+      (p.origin_kind='pipeline_automation' and ${pipelineAutomationRoutineSourceCondition(company)}
+        and current_setting('paperclip.native_routine_actor_hash',true)=${routineActorHash(actor)}
+        and current_setting('paperclip.native_routine_scope_token',true)=${routineScope.routineScopeToken ?? ""}
+        and rr.id=any(string_to_array(nullif(current_setting('paperclip.native_routine_source_ids',true),''),',')::uuid[])))`
+    : sql`(p.origin_kind='manual' or (p.origin_kind='pipeline_automation'
+      and ${pipelineAutomationRoutineSourceCondition(company)}))`;
   const contextRoots = sql`
     select 'issue'::text as kind,case when c.agent_id=r.agent_id then c.issue_id end as id
       where c.issue_id is not null or c.agent_id<>r.agent_id
@@ -698,6 +753,13 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
           cross join lateral (values ('project',v.snapshot->'routine'->>'projectId'),
             ('issue',v.snapshot->'routine'->>'parentIssueId')) ref(kind,id)
           where n.kind='routine_run' and rr.id=n.id and rr.company_id=${company} and ref.id is not null
+        union all select 'issue',source.id::uuid from routine_runs rr
+          cross join lateral jsonb_array_elements_text(case
+            when jsonb_typeof(rr.trigger_payload->'contextPack'->'taskSourceIssueIds')='array'
+              then rr.trigger_payload->'contextPack'->'taskSourceIssueIds' else '[]'::jsonb end) source(id)
+          where n.kind='routine_run' and rr.id=n.id and rr.company_id=${company}
+            and rr.trigger_payload->'automation'->>'automationExecutionId' is not null
+            and source.id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
         union all select 'issue',source.id from projects p cross join lateral unnest(p.source_issue_ids) source(id)
           where n.kind='project' and p.id=n.id and p.company_id=${company}
         union all select 'project',source.id from projects p cross join lateral unnest(p.source_project_ids) source(id)
@@ -801,6 +863,10 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
 }
 
 export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: AuthorizationActor, issue: IssuePrivacyRow): Promise<boolean> {
+  const taskPrivacyBatch = nativeTaskPrivacyBatches.get(db as object);
+  if (taskPrivacyBatch?.active && taskPrivacyBatch.companyId === issue.companyId && taskPrivacyBatch.actorKey === routineActorKey(actor)) {
+    return taskPrivacyBatch.issues.get(issue.id) ?? false;
+  }
   const activeRoutineScope = nativeRoutineReadScopes.get(db as object);
   if (!activeRoutineScope?.active && actor.type !== "none" && actor.source !== "local_implicit") {
     const [sourceRows] = await db.execute<{ ids: string[]; overflow: boolean }>(sql`
@@ -866,10 +932,15 @@ export async function canActorReadTypedTaskSourcePrivacy(db: Db | DbTransaction,
         canActorReadTypedTaskSourcePrivacy(tx, actor, source));
     });
   }
-  return (await db.select({ id: table.id }).from(table).where(and(eq(table.id, source.id), eq(table.companyId, source.companyId),
-    await taskSourcePrivacySqlCondition(db, source.sourceKind, sql`${table.id}`, sql`${table.companyId}`, actor))).limit(1)).length > 0;
+  const sourceCondition = await taskSourcePrivacySqlCondition(db, source.sourceKind, sql`${table.id}`, sql`${table.companyId}`, actor);
+  const rows = await db.select({ id: table.id }).from(table).where(and(eq(table.id, source.id), eq(table.companyId, source.companyId), sourceCondition)).limit(1);
+  return rows.length > 0;
 }
 export async function canActorReadProjectPrivacy(db: Db | DbTransaction, actor: AuthorizationActor, project: ProjectPrivacyRow) {
+  const taskPrivacyBatch = nativeTaskPrivacyBatches.get(db as object);
+  if (taskPrivacyBatch?.active && taskPrivacyBatch.companyId === project.companyId && taskPrivacyBatch.actorKey === routineActorKey(actor)) {
+    return taskPrivacyBatch.projects.get(project.id) ?? false;
+  }
   return (await db.select({ id: projects.id }).from(projects).where(and(eq(projects.id, project.id), eq(projects.companyId, project.companyId), await projectReadSqlCondition(db, actor))).limit(1)).length > 0;
 }
 
@@ -951,6 +1022,7 @@ type ReadSourceDecisionInput = {
 };
 export type NativeContextInspectionOwner = { decide(input: ReadSourceDecisionInput): Promise<AuthorizationDecision> };
 type ReadSourceOwner = NativeContextInspectionOwner & {
+  withTaskPrivacyBatch<T>(actor: AuthorizationActor, issueIds: string[], projectIds: string[], read: () => Promise<T>): Promise<T>;
   readRoutineSources?(runIds: string[], actor: AuthorizationActor): Promise<string[]>;
   readWorkflowSources?(runIds: string[], actor: AuthorizationActor, mode?: "strict" | "task_candidates"): Promise<string[]>;
 };
@@ -975,8 +1047,29 @@ type ReadSourceRows = {
   workflowActorKey?: string;
   workflowScopeToken?: string;
 };
+type NativeTaskPrivacyBatch = {
+  active: boolean;
+  companyId: string;
+  actorKey: string;
+  issues: Map<string, boolean>;
+  projects: Map<string, boolean>;
+  decisionMemo: NativeTaskDecisionMemo;
+};
+type NativeTaskDecisionMemo = {
+  agents: Map<string, Promise<AgentAuthorizationRow | null>>;
+  memberships: Map<string, Promise<typeof companyMemberships.$inferSelect | null>>;
+  grants: Map<string, Promise<typeof principalPermissionGrants.$inferSelect | null>>;
+  responsibleUsers: Map<string, Promise<ResponsibleUserSnapshot>>;
+  runPolicies: Map<string, Promise<{ companyId: string; executionPolicy: Record<string, unknown> } | null>>;
+  instanceAdmins: Map<string, Promise<boolean>>;
+  readActorEvidence: Map<string, Promise<{ agent: AgentAuthorizationRow | null; run: { companyId: string; executionPolicy: Record<string, unknown> } | null }>>;
+};
 const nativeRoutineReadScopes = new WeakMap<object, ReadSourceRows>();
 const nativeWorkflowReadScopes = new WeakMap<object, ReadSourceRows>();
+const nativeTaskPrivacyBatches = new WeakMap<object, NativeTaskPrivacyBatch>();
+function createNativeTaskDecisionMemo(): NativeTaskDecisionMemo {
+  return { agents: new Map(), memberships: new Map(), grants: new Map(), responsibleUsers: new Map(), runPolicies: new Map(), instanceAdmins: new Map(), readActorEvidence: new Map() };
+}
 function routineActorKey(actor: AuthorizationActor) {
   return JSON.stringify(actor);
 }
@@ -1063,6 +1156,16 @@ async function requireActiveWorkflowBaselineMembership(db: Db | DbTransaction, c
 // Only this native owner can construct the private row context. Caller DTOs
 // cannot supply row facts, policies, authorization results or a read capability.
 function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSourceRows, sourceAuthorityPins = false) {
+  const taskDecisionMemo = () => sourceAuthorityPins ? nativeTaskPrivacyBatches.get(db as object)?.decisionMemo : undefined;
+  function memoized<T>(cache: Map<string, Promise<T>> | undefined, key: string, load: () => Promise<T>): Promise<T> {
+    if (!cache) return load();
+    let pending = cache.get(key);
+    if (!pending) {
+      pending = load();
+      cache.set(key, pending);
+    }
+    return pending;
+  }
   async function withReadScope<T>(companyId: string, issueIds: string[], projectIds: string[], purpose: ReadScopePurpose,
     read: (owner: ReadSourceOwner) => Promise<T>, agentId: string | null = null, preflightActor?: AuthorizationActor): Promise<T> {
     const locked = is(db, PgTransaction);
@@ -1102,7 +1205,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       }
       for (const runId of runIds) {
         const [run] = await db.select({ id: routineRuns.id, routineId: routineRuns.routineId,
-          revisionId: routineRuns.routineRevisionId }).from(routineRuns).where(and(
+          revisionId: routineRuns.routineRevisionId, triggerPayload: routineRuns.triggerPayload }).from(routineRuns).where(and(
             eq(routineRuns.id, runId), eq(routineRuns.companyId, companyId))).for("share", { noWait: true });
         if (!run) continue;
         const [routine] = await db.select({ id: routines.id, companyId: routines.companyId, originKind: routines.originKind,
@@ -1113,6 +1216,41 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
           eq(routineRevisions.id, run.revisionId), eq(routineRevisions.routineId, routine.id),
           eq(routineRevisions.companyId, companyId))).for("share", { noWait: true });
         if (!revision) continue;
+        if (routine.originKind === "pipeline_automation") {
+          const [source] = await db.execute<{ valid: boolean }>(sql`
+            select ${pipelineAutomationRoutineSourceCondition(sql`${companyId}::uuid`)} as valid
+            from routine_runs rr join routines p on p.id=rr.routine_id and p.company_id=rr.company_id
+            where rr.id=${runId} and rr.company_id=${companyId}
+          `);
+          if (source?.valid !== true) continue;
+          const payload = run.triggerPayload;
+          const contextPack = payload && typeof payload === "object" && !Array.isArray(payload)
+            ? (payload as Record<string, unknown>).contextPack : null;
+          const taskSourceIssueIds = contextPack && typeof contextPack === "object" && !Array.isArray(contextPack)
+            ? (contextPack as Record<string, unknown>).taskSourceIssueIds : null;
+          if (!Array.isArray(taskSourceIssueIds) || taskSourceIssueIds.length > 256 || taskSourceIssueIds.some(id =>
+            typeof id !== "string" || !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id))) continue;
+          let readable = true;
+          for (const issueId of taskSourceIssueIds as string[]) {
+            const [sourceIssue] = await db.select(issueReadColumns).from(issues).where(and(
+              eq(issues.id, issueId), eq(issues.companyId, companyId))).for("share", { noWait: true });
+            if (!sourceIssue) { readable = false; break; }
+            context.issues.set(sourceIssue.id, sourceIssue);
+            if (sourceIssue.projectId && !context.projects.has(sourceIssue.projectId)) {
+              const [project] = await db.select(projectReadColumns).from(projects).where(and(
+                eq(projects.id, sourceIssue.projectId), eq(projects.companyId, companyId))).for("share", { noWait: true });
+              context.projects.set(sourceIssue.projectId, project ?? null);
+            }
+            const decision = await owner.decide({ actor: sourceActor!, action: "issue:read",
+              resource: { type: "issue", companyId, issueId: sourceIssue.id, projectId: sourceIssue.projectId,
+                parentIssueId: sourceIssue.parentId, status: sourceIssue.status,
+                assigneeAgentId: sourceIssue.assigneeAgentId, assigneeUserId: sourceIssue.assigneeUserId },
+              enforceResponsibleUserIntersection: true });
+            if (!decision.allowed) { readable = false; break; }
+          }
+          if (readable) authorized.add(runId);
+          continue;
+        }
         if (routine.originKind === "conversation_draft") {
           if (!routine.originId || !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(routine.originId)) continue;
           const [authoringRun] = await db.select({ id: heartbeatRuns.id, agentId: heartbeatRuns.agentId,
@@ -1312,6 +1450,78 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
   async function withReadSources<T>(companyId: string, issueIds: string[], projectIds: string[], read: (owner: ReadSourceOwner) => Promise<T>) {
     return withReadScope(companyId, issueIds, projectIds, "task_sources", read);
   }
+  async function withTaskPrivacyBatch<T>(actor: AuthorizationActor, issueIds: string[], projectIds: string[], read: () => Promise<T>) {
+    const batchStartedAt = performance.now();
+    if (!readSources || !is(db, PgTransaction) || !readSources.active || readSources.purpose !== "task_sources")
+      throw forbidden("Batched Task privacy checks require their active native source scope.");
+    const companyId = readSources.companyId;
+    const idsValid = (ids: string[]) => ids.length <= 20065 && new Set(ids).size === ids.length && ids.every(id =>
+      /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id));
+    if (!idsValid(issueIds) || !idsValid(projectIds) || issueIds.some(id => !readSources.issues.has(id) || !readSources.issues.get(id)) ||
+      projectIds.some(id => !readSources.projects.has(id) || !readSources.projects.get(id)))
+      throw forbidden("Batched Task privacy input is not the complete captured native population.");
+
+    const valuesFor = (ids: string[]) => sql.join(ids.map(id => sql`(${id}::uuid)`), sql`, `);
+    const issueCondition = await issueReadSqlCondition(db, actor);
+    const projectCondition = await projectReadSqlCondition(db, actor);
+    const evaluate = async () => {
+      const issuesById = new Map<string, boolean>();
+      const projectsById = new Map<string, boolean>();
+      // Keep every exact per-root predicate and its independent 256-node/edge
+      // bound. Batching only removes client/server round trips; it never
+      // aggregates a filtered subset or omits a root from the decision.
+      for (let offset = 0; offset < issueIds.length; offset += 512) {
+        const ids = issueIds.slice(offset, offset + 512);
+        const roots = valuesFor(ids);
+        const rows = await db.execute<{ id: string; allowed: boolean }>(sql`
+          select selected.id::text as id, (${issueCondition}) as allowed
+          from (values ${roots}) as selected(id)
+          join issues on issues.id=selected.id and issues.company_id=${companyId}
+        `);
+        for (const row of rows) if (ids.includes(row.id)) issuesById.set(row.id, row.allowed === true);
+        for (const id of ids) {
+          if (issuesById.get(id) === true) continue;
+          // A private Routine edge requires its original canonical owner. The
+          // ordinary batched predicate intentionally has no Routine grant;
+          // only rows it withholds enter this exact per-source fallback.
+          const issue = readSources.issues.get(id);
+          if (issue && await canActorReadIssuePrivacy(db, actor, { id, companyId })) issuesById.set(id, true);
+        }
+      }
+      for (let offset = 0; offset < projectIds.length; offset += 512) {
+        const ids = projectIds.slice(offset, offset + 512);
+        const roots = valuesFor(ids);
+        const rows = await db.execute<{ id: string; allowed: boolean }>(sql`
+          select selected.id::text as id, (${projectCondition}) as allowed
+          from (values ${roots}) as selected(id)
+          join projects on projects.id=selected.id and projects.company_id=${companyId}
+        `);
+        for (const row of rows) if (ids.includes(row.id)) projectsById.set(row.id, row.allowed === true);
+      }
+      return { issues: issuesById, projects: projectsById };
+    };
+
+    const initial = await evaluate();
+    process.stdout.write(`Task privacy batch initial ${JSON.stringify({ issues: issueIds.length, projects: projectIds.length, ms: Math.round(performance.now() - batchStartedAt) })}\n`);
+    if (issueIds.some(id => initial.issues.get(id) !== true) || projectIds.some(id => initial.projects.get(id) !== true))
+      throw forbidden("A Task source is outside the current privacy boundary.");
+    const batch: NativeTaskPrivacyBatch = { active: true, companyId, actorKey: routineActorKey(actor), decisionMemo: createNativeTaskDecisionMemo(), ...initial };
+    nativeTaskPrivacyBatches.set(db as object, batch);
+    try {
+      const result = await read();
+      process.stdout.write(`Task privacy batch callback ${JSON.stringify({ issues: issueIds.length, ms: Math.round(performance.now() - batchStartedAt) })}\n`);
+      batch.active = false;
+      nativeTaskPrivacyBatches.delete(db as object);
+      const final = await evaluate();
+      process.stdout.write(`Task privacy batch final ${JSON.stringify({ issues: issueIds.length, ms: Math.round(performance.now() - batchStartedAt) })}\n`);
+      if (issueIds.some(id => final.issues.get(id) !== true) || projectIds.some(id => final.projects.get(id) !== true))
+        throw forbidden("Task source privacy changed during the complete read.");
+      return result;
+    } finally {
+      batch.active = false;
+      nativeTaskPrivacyBatches.delete(db as object);
+    }
+  }
   async function withReadCompany<T>(companyId: string, read: (owner: ReadSourceOwner) => Promise<T>) {
     if (!is(db, PgTransaction)) throw forbidden("Company search requires a native read transaction.");
     return withReadScope(companyId, [], [], "company_search", read);
@@ -1432,10 +1642,12 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
   let sourceInstanceAdminRead: ReturnType<typeof prepareSourceInstanceAdminRead> | undefined;
   async function isInstanceAdmin(userId: string | null | undefined): Promise<boolean> {
     if (sourceAuthorityPins && userId) {
-      const rows = await db.select({ id: instanceUserRoles.id }).from(instanceUserRoles).where(and(
-        eq(instanceUserRoles.userId, userId), eq(instanceUserRoles.role, "instance_admin"),
-      )).for("share", { noWait: true });
-      return rows.length > 0;
+      return memoized(taskDecisionMemo()?.instanceAdmins, userId, async () => {
+        const rows = await db.select({ id: instanceUserRoles.id }).from(instanceUserRoles).where(and(
+          eq(instanceUserRoles.userId, userId), eq(instanceUserRoles.role, "instance_admin"),
+        )).for("share", { noWait: true });
+        return rows.length > 0;
+      });
     }
     if (readSources && userId) {
       sourceInstanceAdminRead ??= prepareSourceInstanceAdminRead();
@@ -1460,11 +1672,13 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     principalId: string,
   ) {
     if (sourceAuthorityPins) {
-      const [row] = await db.select().from(companyMemberships).where(and(
-        eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, principalType),
-        eq(companyMemberships.principalId, principalId), eq(companyMemberships.status, "active"),
-      )).for("share", { noWait: true });
-      return row ?? null;
+      return memoized(taskDecisionMemo()?.memberships, `${companyId}:${principalType}:${principalId}`, async () => {
+        const [row] = await db.select().from(companyMemberships).where(and(
+          eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, principalType),
+          eq(companyMemberships.principalId, principalId), eq(companyMemberships.status, "active"),
+        )).for("share", { noWait: true });
+        return row ?? null;
+      });
     }
     if (readSources) {
       sourceMembershipRead ??= prepareSourceMembershipRead();
@@ -1487,9 +1701,11 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
 
   async function loadResponsibleUserSnapshot(companyId: string, userId: string): Promise<ResponsibleUserSnapshot> {
     if (sourceAuthorityPins) {
-      const [user] = await db.select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, userId)).for("share", { noWait: true });
-      const membership = user ? await getActiveMembership(companyId, "user", userId) : null;
-      return { userId, companyId, userExists: Boolean(user), activeMembership: membership };
+      return memoized(taskDecisionMemo()?.responsibleUsers, `${companyId}:${userId}`, async () => {
+        const [user] = await db.select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, userId)).for("share", { noWait: true });
+        const membership = user ? await getActiveMembership(companyId, "user", userId) : null;
+        return { userId, companyId, userExists: Boolean(user), activeMembership: membership };
+      });
     }
     const [user, membership] = await Promise.all([
       db
@@ -1528,6 +1744,13 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     principalId: string,
     permissionKey: PermissionKey,
   ) {
+    if (sourceAuthorityPins) return memoized(taskDecisionMemo()?.grants, `${companyId}:${principalType}:${principalId}:${permissionKey}`, async () => {
+      const [row] = await db.select().from(principalPermissionGrants).where(and(
+        eq(principalPermissionGrants.companyId, companyId), eq(principalPermissionGrants.principalType, principalType),
+        eq(principalPermissionGrants.principalId, principalId), eq(principalPermissionGrants.permissionKey, permissionKey),
+      )).for("share", { noWait: true });
+      return row ?? null;
+    });
     const query = db
       .select()
       .from(principalPermissionGrants)
@@ -1614,6 +1837,17 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
   }
 
   async function loadAgent(agentId: string): Promise<AgentAuthorizationRow | null> {
+    if (sourceAuthorityPins) return memoized(taskDecisionMemo()?.agents, agentId, async () => {
+      const [row] = await db.select({
+        id: agents.id,
+        companyId: agents.companyId,
+        role: agents.role,
+        status: agents.status,
+        reportsTo: agents.reportsTo,
+        permissions: agents.permissions,
+      }).from(agents).where(eq(agents.id, agentId)).for("share", { noWait: true });
+      return row ?? null;
+    });
     const query = db
       .select({
         id: agents.id,
@@ -1646,7 +1880,10 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
   }
   let readActorQuery: ReturnType<typeof prepareReadActorEvidence> | undefined;
   async function loadReadActorEvidence(actor: AuthorizationActor, companyId: string) {
-    if (sourceAuthorityPins) return { agent: await loadAgent(actor.agentId!), run: await loadRunPolicy(actor.runId, companyId, actor.agentId!) };
+    if (sourceAuthorityPins) return memoized(taskDecisionMemo()?.readActorEvidence,
+      `${companyId}:${actor.agentId ?? ""}:${actor.runId ?? ""}`, async () => ({
+        agent: await loadAgent(actor.agentId!), run: await loadRunPolicy(actor.runId, companyId, actor.agentId!),
+      }));
     readActorQuery ??= prepareReadActorEvidence();
     const [row] = await readActorQuery.execute({ runId: actor.runId!, companyId, agentId: actor.agentId! });
     const context = isPlainRecord(row?.run?.contextSnapshot) ? row.run.contextSnapshot : null;
@@ -1700,6 +1937,19 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
 
   async function loadRunPolicy(runId: string | null | undefined, companyId: string, agentId: string) {
     if (!runId) return null;
+    if (sourceAuthorityPins) return memoized(taskDecisionMemo()?.runPolicies, `${companyId}:${agentId}:${runId}`, async () => {
+      const [row] = await db.select({
+        id: heartbeatRuns.id,
+        companyId: heartbeatRuns.companyId,
+        agentId: heartbeatRuns.agentId,
+        contextSnapshot: heartbeatRuns.contextSnapshot,
+      }).from(heartbeatRuns).where(eq(heartbeatRuns.id, runId)).for("share", { noWait: true });
+      if (!row || row.companyId !== companyId || row.agentId !== agentId) return null;
+      const context = isPlainRecord(row.contextSnapshot) ? row.contextSnapshot : null;
+      return isPlainRecord(context?.executionPolicy)
+        ? { companyId: row.companyId, executionPolicy: context.executionPolicy }
+        : null;
+    });
     const query = db
       .select({
         id: heartbeatRuns.id,
@@ -3474,6 +3724,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     decide,
     decidePrincipalGrant,
     withReadSources,
+    withTaskPrivacyBatch,
     withReadCompany,
     withReadRoutineSources,
     withReadWorkflowSources,

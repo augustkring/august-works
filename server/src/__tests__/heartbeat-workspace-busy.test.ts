@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import express, { type RequestHandler } from "express";
+import request from "supertest";
 import { and, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
@@ -10,8 +12,11 @@ import {
   agentWakeupRequests,
   activityLog,
   budgetPolicies,
+  authUsers,
   companies,
   companySkills,
+  companyMemberships,
+  principalPermissionGrants,
   createDb,
   environments,
   environmentLeases,
@@ -45,6 +50,10 @@ import {
   heartbeatService,
 } from "../services/heartbeat.ts";
 import { instanceSettingsService } from "../services/instance-settings.ts";
+import { projectRoutes } from "../routes/projects.js";
+import { errorHandler } from "../middleware/index.js";
+import { grantsForHumanRole } from "../services/company-member-roles.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 
 // Exercise the real SSH lease and heartbeat paths without connecting to a host.
 vi.mock("@paperclipai/adapter-utils/ssh", async (importOriginal) => ({
@@ -171,7 +180,10 @@ describeEmbeddedPostgres("shared-workspace run serialization", () => {
     await db.delete(agents);
     await db.delete(environments);
     await db.delete(companySkills);
+    await db.delete(companyMemberships);
+    await db.delete(principalPermissionGrants);
     await db.delete(companies);
+    await db.delete(authUsers);
   }
 
   async function waitForRunToLeaveActiveStates(runId: string, timeoutMs = 10_000) {
@@ -207,6 +219,33 @@ describeEmbeddedPostgres("shared-workspace run serialization", () => {
       .then((rows) => rows[0] ?? null);
   }
 
+  async function seedNativeHuman(companyId: string, userId: string) {
+    await db.insert(authUsers).values({ id: userId, name: "Workspace busy owner",
+      email: `${userId}@example.test`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId,
+      status: "active", membershipRole: "owner" });
+    await db.insert(principalPermissionGrants).values(grantsForHumanRole("owner").map(grant => ({
+      companyId, principalType: "user" as const, principalId: userId, ...grant,
+    })));
+    return seedNativePasskeySession(db, userId);
+  }
+
+  async function createNativeProject(companyId: string, userId: string, sessionId: string, executionWorkspacePolicy?: Record<string, unknown>) {
+    const app = express();
+    app.use(express.json());
+    app.use(((req, _res, next) => { req.actor = { type: "board", source: "session", userId, sessionId,
+      companyIds: [companyId], memberships: [{ companyId, membershipRole: "owner", status: "active" }] }; next(); }) as RequestHandler);
+    app.use("/api", projectRoutes(db));
+    app.use(errorHandler);
+    const response = await request(app).post(`/api/companies/${companyId}/projects`).send({ name: "Workspace Busy Project" });
+    if (response.status !== 201) throw new Error(`Canonical Human Project creation failed: ${response.status}`);
+    if (executionWorkspacePolicy) {
+      const updated = await request(app).patch(`/api/projects/${response.body.id}`).send({ executionWorkspacePolicy });
+      if (updated.status !== 200) throw new Error(`Canonical Human Project policy update failed: ${updated.status}`);
+    }
+    return response.body.id as string;
+  }
+
   interface WorkspaceFixture {
     companyId: string;
     projectId: string;
@@ -229,7 +268,7 @@ describeEmbeddedPostgres("shared-workspace run serialization", () => {
   }): Promise<WorkspaceFixture> {
     await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: true });
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const projectWorkspaceId = randomUUID();
     const holderAgentId = randomUUID();
     const holderIssueId = randomUUID();
@@ -243,21 +282,17 @@ describeEmbeddedPostgres("shared-workspace run serialization", () => {
     const agentEnvironmentId = agentEnvironmentDriver === "local" ? null : randomUUID();
     const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
     const now = new Date();
+    const responsibleUserId = randomUUID();
 
     await db.insert(companies).values({
       id: companyId,
       name: "Paperclip",
       issuePrefix,
       requireBoardApprovalForNewAgents: false,
-      defaultResponsibleUserId: "responsible-user",
+      defaultResponsibleUserId: responsibleUserId,
     });
-
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
-      name: "Workspace Busy Project",
-      executionWorkspacePolicy: input?.projectWorkspacePolicy ?? null,
-    });
+    const sessionId = await seedNativeHuman(companyId, responsibleUserId);
+    projectId = await createNativeProject(companyId, responsibleUserId, sessionId, input?.projectWorkspacePolicy);
 
     await db.insert(projectWorkspaces).values({
       id: projectWorkspaceId,
@@ -342,7 +377,7 @@ describeEmbeddedPostgres("shared-workspace run serialization", () => {
       title: "Holder issue",
       status: "in_progress",
       priority: "medium",
-      responsibleUserId: "responsible-user",
+      responsibleUserId,
       assigneeAgentId: holderAgentId,
       projectId,
       projectWorkspaceId: holderProjectWorkspaceId,
@@ -362,7 +397,7 @@ describeEmbeddedPostgres("shared-workspace run serialization", () => {
       title: "Deferred issue",
       status: "in_progress",
       priority: "medium",
-      responsibleUserId: "responsible-user",
+      responsibleUserId,
       assigneeAgentId: agentId,
       projectId,
       projectWorkspaceId,

@@ -71,13 +71,13 @@ export async function withCurrentTaskSourceRead<T>(
             where s.company_id=${companyId} and s.source_kind in ('routine_run','workflow_run')
         ), referenced as materialized (
           select distinct kind,id from typed_references where id is not null
-        ), conversation_runs as materialized (
+        ), native_routine_runs as materialized (
           select distinct r.id from referenced ref
             join routine_runs r on r.id=ref.id and r.company_id=${companyId}
             join routines p on p.id=r.routine_id and p.company_id=r.company_id
-            where ref.kind='routine_run' and p.origin_kind='conversation_draft'
+            where ref.kind='routine_run' and p.origin_kind in ('conversation_draft','pipeline_automation')
         ), bounded_routines as materialized (
-          select id from conversation_runs order by id limit 257
+          select id from native_routine_runs order by id limit 257
         ), workflow_runs as materialized (
           select distinct id from referenced where kind='workflow_run'
         ), bounded_workflows as materialized (

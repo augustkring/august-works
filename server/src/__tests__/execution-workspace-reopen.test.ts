@@ -3,6 +3,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { randomUUID } from "node:crypto";
 import express, { type RequestHandler } from "express";
 import request from "supertest";
@@ -39,6 +40,7 @@ import { authorizationService } from "../services/authorization.js";
 import type { AuthorizationActor } from "../services/authorization.js";
 import { projectRoutes } from "../routes/projects.js";
 import { errorHandler } from "../middleware/error-handler.js";
+import { GIT_CACHE_RESTORATION_KEY, inspectGitCacheRecipe } from "../services/git-workspace-restoration.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -250,6 +252,7 @@ describeEmbeddedPostgres("reopen archived isolated execution workspace", () => {
     git("commit", "-m", "seed");
     git("branch", worktreeBranch);
     git("remote", "add", "origin", repoUrl);
+      git("push", "origin", `HEAD:${worktreeBranch}`);
   }
 
   async function seedIssue(input: {
@@ -370,13 +373,15 @@ describeEmbeddedPostgres("reopen archived isolated execution workspace", () => {
     expect(readExecutionWorkspaceLifecycleGeneration(row?.metadata as Record<string, unknown> | null)).toBe(3);
   });
 
-  it("resolves the managed base checkout for a git_worktree row when the project workspace cwd is null", async () => {
+  it("restores the exact captured commit for a managed git_worktree when the project workspace cwd is null", async () => {
     const previousHome = process.env.PAPERCLIP_HOME;
     const tempHome = await mkdtemp(join(tmpdir(), "paperclip-reopen-home-"));
     tempDirs.push(tempHome);
     process.env.PAPERCLIP_HOME = tempHome;
     try {
-      const repoUrl = "https://example.test/acme/widget.git";
+      const remoteRepoPath = join(tempHome, "widget.git");
+      execFileSync("git", ["init", "--bare", remoteRepoPath], { stdio: "ignore" });
+      const repoUrl = pathToFileURL(remoteRepoPath).href;
       const { companyId, projectId, projectWorkspaceId } = await seedManagedCheckoutProject(repoUrl);
       const branchName = "reopen-feature";
       // Build the live managed checkout that the rebuild must spawn git in.
@@ -394,6 +399,28 @@ describeEmbeddedPostgres("reopen archived isolated execution workspace", () => {
         branchName,
       });
       const issueId = await seedIssue({ companyId, projectId, workspaceId, issueNumber: 4305 });
+      await db.update(executionWorkspaces).set({ sourceIssueId: issueId })
+        .where(eq(executionWorkspaces.id, workspaceId));
+
+      // Capture a real recipe from this linked worktree and its actual commit
+      // before simulating the reaper removing the worktree. This exercises the
+      // same immutable recipe verifier used by the reopen owner; no mutable
+      // branch-head fallback can satisfy the test.
+      execFileSync("git", ["-C", managedDir, "worktree", "add", deletedWorktree, branchName], { stdio: "ignore" });
+      const [workspaceRow] = await db.select().from(executionWorkspaces).where(eq(executionWorkspaces.id, workspaceId));
+      const [sourceRow] = await db.select().from(projectWorkspaces).where(eq(projectWorkspaces.id, projectWorkspaceId));
+      const metadata = { ...(workspaceRow.metadata as Record<string, unknown>), createdByRuntime: true,
+        gitBranchOwnershipVersion: 1 };
+      const recipe = await inspectGitCacheRecipe({
+        id: workspaceId, companyId, projectId, projectWorkspaceId, sourceIssueId: issueId,
+        repoUrl, baseRef: null, sourceRepoRef: sourceRow.repoRef, sourceCwd: sourceRow.cwd,
+        sourceType: sourceRow.sourceType, sourceVisibility: sourceRow.visibility,
+        mode: "isolated_workspace", strategyType: "git_worktree", branchName,
+        cwd: deletedWorktree, providerRef: deletedWorktree, metadata,
+      }, async () => null);
+      execFileSync("git", ["-C", managedDir, "worktree", "remove", "--force", deletedWorktree], { stdio: "ignore" });
+      await db.update(executionWorkspaces).set({ metadata: { ...metadata, [GIT_CACHE_RESTORATION_KEY]: recipe } })
+        .where(eq(executionWorkspaces.id, workspaceId));
 
       const svc = executionWorkspaceService(db);
       const result = await svc.reopenClosedIsolatedExecutionWorkspaceForIssue({
@@ -410,10 +437,7 @@ describeEmbeddedPostgres("reopen archived isolated execution workspace", () => {
       expect(row?.status).toBe("active");
       expect(row?.closedAt).toBeNull();
       expect(row?.cleanupReason).toBeNull();
-      // The rebuild recreated the worktree at the archived path from the managed
-      // base checkout.
-      const worktreeStat = await stat(deletedWorktree).catch(() => null);
-      expect(worktreeStat?.isDirectory()).toBe(true);
+      expect((await stat(deletedWorktree)).isDirectory()).toBe(true);
     } finally {
       if (previousHome === undefined) delete process.env.PAPERCLIP_HOME;
       else process.env.PAPERCLIP_HOME = previousHome;

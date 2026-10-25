@@ -10076,13 +10076,14 @@ export function issueService(db: Db) {
       data: IssueCreateInput,
       dbOrTx: Db | DbTransaction = db,
       postCommitActivityPublications?: ActivityPublication[],
-      options: { manualInputActor?: AuthorizationActor; privacyActor?: AuthorizationActor } = {},
+      options: { manualInputActor?: AuthorizationActor; privacyActor?: AuthorizationActor; sourceAccessActor?: AuthorizationActor } = {},
     ) => {
       const ownedPrivacyPublications: ActivityPublication[] = [];
       const privacyPublications = postCommitActivityPublications ?? ownedPrivacyPublications;
       // This carrier is supplied by the original HTTP owner, never the DTO.
       const manualActor = options.manualInputActor ? { ...options.manualInputActor } : null;
       const suppliedPrivacyActor = options.privacyActor ? { ...options.privacyActor } : null;
+      const suppliedSourceAccessActor = options.sourceAccessActor ? { ...options.sourceAccessActor } : null;
       if (manualActor && (manualActor.type !== "board" || manualActor.source !== "session" ||
           !manualActor.userId || !manualActor.sessionId || manualActor.runId ||
           data.createdByUserId !== manualActor.userId || data.createdByAgentId))
@@ -10096,6 +10097,8 @@ export function issueService(db: Db) {
           (suppliedPrivacyActor.agentId !== data.createdByAgentId || suppliedPrivacyActor.companyId !== companyId ||
             data.createdByUserId != null || (suppliedPrivacyActor.runId ?? null) !== (data.actorRunId ?? null)))
       )) throw forbidden("Task creator does not match the current native actor");
+      if (suppliedSourceAccessActor && (suppliedSourceAccessActor.type === "none" || suppliedSourceAccessActor.source === "local_implicit"))
+        throw forbidden("A current Task source reader is required");
       const captureManualInput = !!manualActor && isManualRootPayloadInput(data) &&
         (!data.responsibleUserId || data.responsibleUserId === manualActor.userId) &&
         (!data.actorResponsibleUserId || data.actorResponsibleUserId === manualActor.userId);
@@ -10149,6 +10152,9 @@ export function issueService(db: Db) {
         let privacyActorExpiresAt: number | null = null;
         let privacyActorPinned = false;
         let currentPrivacyActor = suppliedPrivacyActor;
+        let sourceAccessActorExpiresAt: number | null = null;
+        let sourceAccessActorPinned = false;
+        let currentSourceAccessActor = suppliedSourceAccessActor;
         const finishManualInput = async <T>(result: T) => {
           if (captureManualInput && manualActor && manualExpiresAt !== null) {
             if (manualOperator) await assertHumanAuthentication(tx, manualActor, { requireRecent: true, phishingResistant: true });
@@ -10157,6 +10163,9 @@ export function issueService(db: Db) {
           if (privacyActorPinned && currentPrivacyActor)
             await assertManualInputCredentialCurrent(tx, currentPrivacyActor, privacyActorExpiresAt,
               "The authenticated task creator credential is unavailable");
+          if (sourceAccessActorPinned && currentSourceAccessActor?.type === "board")
+            await assertManualInputCredentialCurrent(tx, currentSourceAccessActor, sourceAccessActorExpiresAt,
+              "The authenticated Task source reader credential is unavailable");
           return result;
         };
         if (captureManualInput && manualActor) {
@@ -10186,6 +10195,24 @@ export function issueService(db: Db) {
               throw conflict("Authentication state is changing; try again", { code: "authentication_state_busy" });
             throw error;
           }
+        }
+        if (currentSourceAccessActor?.type === "board") {
+          const pinned = await pinCurrentBoardActor(tx, currentSourceAccessActor).catch(error => {
+            if (isAuthenticationStateBusy(error))
+              throw conflict("Authentication state is changing; try again", { code: "authentication_state_busy" });
+            throw error;
+          });
+          if (!pinned || (pinned.credentialExpiresAt !== null && !Number.isFinite(pinned.credentialExpiresAt)))
+            throw forbidden("The authenticated Task source reader credential is unavailable");
+          currentSourceAccessActor = pinned.actor;
+          sourceAccessActorExpiresAt = pinned.credentialExpiresAt;
+          sourceAccessActorPinned = true;
+        }
+        if (currentSourceAccessActor) {
+          const sourceReaderDecision = await authorizationService(tx).decide({ actor: currentSourceAccessActor,
+            action: "company_scope:read", resource: { type: "company", companyId },
+            enforceResponsibleUserIntersection: true });
+          if (!sourceReaderDecision.allowed) throw forbidden("The current Task source reader is unavailable");
         }
         await lockIssuePrivacyTree(tx, companyId);
         await assertExecutionTaskParent(tx as unknown as Db, companyId, issueData.parentId);
@@ -10560,8 +10587,8 @@ export function issueService(db: Db) {
           ? { type: "agent", agentId: issueData.createdByAgentId, companyId, runId: actorRunId ?? undefined,
               onBehalfOfUserId: responsibleUserId ?? undefined }
           : issueData.createdByUserId ? { type: "board", userId: issueData.createdByUserId, source: "session" } : { type: "none" });
-        await assertIssuePrivacySourcesReadable(tx, creatorActor, companyId, privacy.sources);
-        if (privacy.visibility === "private") await pinIssueMutationHuman(tx, creatorActor, companyId);
+        await assertIssuePrivacySourcesReadable(tx, currentSourceAccessActor ?? creatorActor, companyId, privacy.sources);
+        if (privacy.visibility === "private") await pinIssueMutationHuman(tx, currentSourceAccessActor ?? creatorActor, companyId);
         const values = {
           ...issueData,
           visibility: privacy.visibility,
@@ -10631,7 +10658,7 @@ export function issueService(db: Db) {
           agentId: issue.createdByAgentId, userId: issue.createdByUserId,
         });
         if (assignmentGrant) privacyPublications.push(assignmentGrant.publication);
-        if (issue.visibility === "private" && !(await canActorReadIssuePrivacy(tx, creatorActor, issue))) {
+        if (issue.visibility === "private" && !(await canActorReadIssuePrivacy(tx, currentSourceAccessActor ?? creatorActor, issue))) {
           throw forbidden("Private task creation is outside the current actor authority");
         }
         if (idempotencyKey) {

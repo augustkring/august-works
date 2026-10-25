@@ -2152,6 +2152,7 @@ export function routineService(
     descriptionAppendix?: string | null;
     nextRunAtOverride?: Date | null;
     actor?: Actor;
+    privacyActor?: AuthorizationActor;
     onSourceAccessDenied?: () => Promise<void>;
   }) {
     try {
@@ -2528,8 +2529,11 @@ export function routineService(
             executionWorkspaceId: input.executionWorkspaceId ?? null,
             executionWorkspacePreference: input.executionWorkspacePreference ?? null,
             executionWorkspaceSettings: input.executionWorkspaceSettings ?? null,
-          }, taskTx, workflowPublications, deps.sourceActor?.type === "board" &&
-            deps.sourceActor.userId === manualRunnerUserId ? { privacyActor: deps.sourceActor } : {}));
+          }, taskTx, workflowPublications, input.privacyActor
+            ? { sourceAccessActor: input.privacyActor }
+            : deps.sourceActor?.type === "board" && deps.sourceActor.userId === manualRunnerUserId
+              ? { privacyActor: deps.sourceActor }
+              : {}));
         } catch (error) {
           workflowPublications.length = issuePublicationStart;
           const isOpenExecutionConflict =
@@ -3765,7 +3769,7 @@ export function routineService(
       });
     },
 
-    runPipelineStageEntryRoutine: async (id: string, input: RunRoutine & { descriptionAppendix?: string | null }, actor?: Actor) => {
+    runPipelineStageEntryRoutine: async (id: string, input: RunRoutine & { descriptionAppendix?: string | null; privacyActor?: AuthorizationActor }, actor?: Actor) => {
       const routine = await getRoutineById(id);
       if (!routine) throw notFound("Routine not found");
       if (routine.status === "archived") throw conflict("Routine is archived");
@@ -3785,6 +3789,7 @@ export function routineService(
         executionWorkspaceSettings:
           (input.executionWorkspaceSettings as Record<string, unknown> | null | undefined) ?? null,
         descriptionAppendix: input.descriptionAppendix ?? null,
+        privacyActor: input.privacyActor,
         actor,
       });
     },

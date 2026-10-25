@@ -34,7 +34,7 @@ import {analyticalLiveEventForReader} from "../services/analytical-live-events.j
 import {appendHeartbeatRunEvent} from "../services/heartbeat-run-events.js";
 import type {LiveEvent} from "@paperclipai/shared";
 import {and,eq,sql} from "drizzle-orm";
-import {agents,authSessions,authUsers,companies,companyMemberships,heartbeatRuns,heartbeatRunEvents,issues,issueComments,businessMetrics,businessMetricVersions,businessMetricPublications,businessMetricObservations,governanceObligations,analyticalLineageManifests,analyticalContextRoots,analyticalContextDependencies,memoryRecords,contextManifestMemoryRoots,providerTraceRecords,memoryJobs,createDb} from "@paperclipai/db";
+import {agents,authSessions,authUsers,companies,companyMemberships,heartbeatRuns,heartbeatRunEvents,issues,issuePrivacySources,issueComments,businessMetrics,businessMetricVersions,businessMetricPublications,businessMetricObservations,governanceObligations,analyticalLineageManifests,analyticalContextRoots,analyticalContextDependencies,memoryRecords,contextManifestMemoryRoots,providerTraceRecords,memoryJobs,createDb} from "@paperclipai/db";
 import {afterAll,beforeAll,beforeEach,describe,expect,it,vi} from "vitest";
 import {instanceSettingsService} from "../services/instance-settings.js";
 import {businessMetricService} from "../services/business-metrics/service.js";
@@ -60,6 +60,7 @@ import type {BusinessMetricResult} from "@paperclipai/shared";
 import {getEmbeddedPostgresTestSupport,startEmbeddedPostgresTestDatabase} from "./helpers/embedded-postgres.js";
 import {seedNativePasskeySession} from "./helpers/native-authentication-fixtures.js";
 import type {AuthorizationActor} from "../services/authorization.js";
+import {authorizationService} from "../services/authorization.js";
 const support=await getEmbeddedPostgresTestSupport(),board={type:"board" as const,source:"local_implicit" as const};
 describe.skipIf(!support.supported)("Native analytical Context retention on PostgreSQL",()=>{
  let database:Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>,db:ReturnType<typeof createDb>,companyId:string,userId:string,agentId:string,issueId:string,runId:string,reader:AuthorizationActor;
@@ -290,6 +291,26 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
   } finally {restoreClock?.();}
   expect(await db.select().from(businessMetricObservations).where(eq(businessMetricObservations.companyId,companyId))).toHaveLength(0);
   expect(await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId))).toHaveLength(0);
+ });
+ it("rechecks the complete batched Task privacy set before transaction commit",async()=>{
+  const f=await fixture(),privateIssueId=randomUUID(),otherUserId=`private-source-${randomUUID()}`;
+  await db.insert(authUsers).values({id:otherUserId,name:"Private source owner",email:`${otherUserId}@example.test`,emailVerified:true,image:null,createdAt:new Date(),updatedAt:new Date()});
+  await db.insert(issues).values({id:privateIssueId,companyId,title:"Private contributing task",status:"done",visibility:"private",responsibleUserId:otherUserId});
+  const beforeObservations=(await db.select().from(businessMetricObservations).where(eq(businessMetricObservations.companyId,companyId))).length;
+  const beforeManifests=(await db.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.companyId,companyId))).length;
+  const manifestId=randomUUID(),observationId=randomUUID(),now=new Date(),hash="a".repeat(64);
+  await expect(db.transaction(async tx=>authorizationService(tx).withReadSources(companyId,[f.sourceId],[],async owner=>
+   owner.withTaskPrivacyBatch(actor(),[f.sourceId],[],async()=>{
+    await tx.insert(analyticalLineageManifests).values({id:manifestId,companyId,analysisType:"business_metric",analysisRef:observationId,engineVersion:"native-test",inputHash:hash,definitionHash:hash,requestedBy:userId,sourceWatermark:"fixture",sourceCount:1,parameters:{},createdAt:now,expiresAt:new Date(now.getTime()+60000)});
+    await tx.insert(analyticalLineageEdges).values({companyId,manifestId,inputType:"issue",inputRef:f.sourceId,inputHash:hash,relationship:"source"});
+    await tx.insert(issuePrivacySources).values({companyId,issueId:f.sourceId,sourceKind:"issue",sourceId:privateIssueId});
+    return "staged metric output";
+   })
+  ))).rejects.toMatchObject({status:403});
+  expect(await db.select().from(businessMetricObservations).where(eq(businessMetricObservations.companyId,companyId))).toHaveLength(beforeObservations);
+  expect(await db.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.companyId,companyId))).toHaveLength(beforeManifests);
+  expect(await db.select().from(analyticalLineageEdges).where(eq(analyticalLineageEdges.manifestId,manifestId))).toHaveLength(0);
+  expect(await db.select().from(issuePrivacySources).where(eq(issuePrivacySources.issueId,f.sourceId))).toHaveLength(0);
  });
  it("commits the full source set and conservative expiry before returning a native result",async()=>{const f=await fixture(),result=await f.capture(),r=await root(),[memory]=await db.select().from(memoryRecords).where(eq(memoryRecords.id,r.memoryRecordId));expect(result.lineageManifestId).toBeTruthy();expect(r.sourceCount).toBe(1);expect(r.expiresAt.toISOString()).toBe(result.expiresAt);expect(memory).toMatchObject({reviewState:"rejected",verificationState:"unverified",memoryType:"observation",scopeType:"agent",confidenceScore:0});expect(await db.select().from(contextManifestMemoryRoots).where(eq(contextManifestMemoryRoots.memoryRecordId,r.memoryRecordId))).toHaveLength(1);await expect(db.update(memoryRecords).set({reviewState:"accepted",verificationState:"human_verified",memoryType:"outcome"}).where(eq(memoryRecords.id,r.memoryRecordId))).rejects.toThrow();});
  it("requires the current native Context and rolls back measurement derivation on failure",async()=>{const f=await fixture(false);await expect(f.capture()).rejects.toMatchObject({status:409});expect(await db.select().from(businessMetricObservations).where(eq(businessMetricObservations.companyId,companyId))).toHaveLength(0);expect(await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId))).toHaveLength(0);});

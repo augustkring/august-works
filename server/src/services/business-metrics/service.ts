@@ -110,9 +110,16 @@ export function businessMetricService(db: Db) {
     // population. Every contributing object's current authority is required.
     await accessService(tx).withReadSources(companyId, population.entity === "issue" ? rows.map(row => row.id) : [],
       population.entity === "project" ? rows.map(row => row.id) : [], async sourceAccess => {
-        await inspectSourcePopulation(rows, deadline, async row => {
-          if (!await permitted(tx, companyId, actor, population.entity, row.id,population.entity==="issue"?currentIssues.get(row.id)??null:undefined, sourceAccess)
-            || (row.projectId && !await permitted(tx, companyId, actor, "project", row.projectId, undefined, sourceAccess))) throw forbidden("Metric population is outside the current authorization boundary");
+        const issueIds = population.entity === "issue" ? rows.map(row => row.id) : [];
+        const projectIds = [...new Set([
+          ...(population.entity === "project" ? rows.map(row => row.id) : []),
+          ...rows.map(row => row.projectId).filter((id): id is string => id !== null),
+        ])];
+        await sourceAccess.withTaskPrivacyBatch(actor, issueIds, projectIds, async () => {
+          await inspectSourcePopulation(rows, deadline, async row => {
+            if (!await permitted(tx, companyId, actor, population.entity, row.id,population.entity==="issue"?currentIssues.get(row.id)??null:undefined, sourceAccess)
+              || (row.projectId && !await permitted(tx, companyId, actor, "project", row.projectId, undefined, sourceAccess))) throw forbidden("Metric population is outside the current authorization boundary");
+          });
         });
       });
     queryTimeBudget(deadline);

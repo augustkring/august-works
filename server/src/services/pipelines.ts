@@ -63,7 +63,7 @@ import {
   type WorkflowRunActor,
 } from "./workflows/workflow-executor.js";
 import { assertAssignableAgent } from "./agent-assignability.js";
-import { authorizationService } from "./authorization.js";
+import { authorizationService, type AuthorizationActor } from "./authorization.js";
 import { instanceSettingsService } from "./instance-settings.js";
 import { visibleIssueCondition } from "./issue-visibility.js";
 import type { IssuePostCommitAction } from "./issues.js";
@@ -1389,6 +1389,7 @@ function buildPipelineCaseContextPack(input: {
   case: typeof pipelineCases.$inferSelect;
   stage: typeof pipelineStages.$inferSelect;
   outputSummaries?: ReturnType<typeof summarizePipelineCaseOutputsForContext> | null;
+  taskSourceIssueIds?: string[];
 }) {
   return {
     pipeline: {
@@ -1413,6 +1414,7 @@ function buildPipelineCaseContextPack(input: {
       name: input.stage.name,
       kind: input.stage.kind,
     },
+    taskSourceIssueIds: input.taskSourceIssueIds ?? [],
     outputSummaries: input.outputSummaries ?? null,
   };
 }
@@ -3084,6 +3086,7 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
   async function executeAutomationLedger(
     executionId: string,
     actor: PipelineActor = { type: "system" },
+    privacyActor?: AuthorizationActor,
   ): Promise<PipelineAutomationExecutionResult> {
     const execution = await db
       .select()
@@ -3137,7 +3140,15 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       const outputSummaries = summarizePipelineCaseOutputsForContext(
         await outputsSvc.listCaseOutputs(execution.companyId, execution.caseId),
       );
-      const contextPack = buildPipelineCaseContextPack({ ...detail, outputSummaries });
+      const linkedTaskIssueIds = await db.selectDistinct({ issueId: pipelineCaseIssueLinks.issueId })
+        .from(pipelineCaseIssueLinks)
+        .where(and(eq(pipelineCaseIssueLinks.companyId, execution.companyId), eq(pipelineCaseIssueLinks.caseId, execution.caseId)))
+        .then(rows => rows.map(row => row.issueId));
+      const taskSourceIssueIds = [...new Set([
+        ...linkedTaskIssueIds,
+        ...outputSummaries.items.map(item => item.sourceIssue.id),
+      ])].sort();
+      const contextPack = buildPipelineCaseContextPack({ ...detail, outputSummaries, taskSourceIssueIds });
       const variables = buildPipelineCaseVariables(detail);
       const breakdownConfig = readBreakdownConfig(stageConfig(detail.stage));
 
@@ -3285,6 +3296,11 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
           case: contextPack.case,
           stage: contextPack.stage,
           triggeringEventId: execution.triggeringEventId,
+          automation: {
+            automationId: execution.automationId,
+            automationExecutionId: execution.id,
+            generation: execution.generation,
+          },
           contextPack,
           variables,
         },
@@ -3299,6 +3315,7 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
             outputSummaries,
           }),
         ].filter(Boolean).join("\n\n"),
+        privacyActor,
       });
       if (!run.linkedIssueId) {
         const failureReason = typeof run.failureReason === "string" && run.failureReason.trim().length > 0
@@ -3395,13 +3412,14 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
   async function executeAutomationLedgers(
     ledgers: Array<typeof pipelineAutomationExecutions.$inferSelect>,
     actor: PipelineActor = { type: "system" },
+    privacyActor?: AuthorizationActor,
   ) {
     const results = new Map<string, PipelineAutomationExecutionResult>();
     const seen = new Set<string>();
     for (const ledger of ledgers) {
       if (seen.has(ledger.id)) continue;
       seen.add(ledger.id);
-      results.set(ledger.id, await executeAutomationLedger(ledger.id, actor));
+      results.set(ledger.id, await executeAutomationLedger(ledger.id, actor, privacyActor));
     }
     return results;
   }
@@ -4739,10 +4757,11 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       reason?: string | null;
       force?: boolean;
       skipChildrenTerminalGate?: boolean;
+      privacyActor?: AuthorizationActor;
     }) {
       const automationLedgers: Array<typeof pipelineAutomationExecutions.$inferSelect> = [];
       const result = await db.transaction((tx) => transitionCaseInTransaction(tx, { ...input, automationLedgers }));
-      const automationExecutions = await executeAutomationLedgers(automationLedgers, { type: "system" });
+      const automationExecutions = await executeAutomationLedgers(automationLedgers, { type: "system" }, input.privacyActor);
       if (result.automationLedger) {
         return {
           ...result,
@@ -4758,6 +4777,7 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       caseId: string;
       automationId: string;
       actor: PipelineActor;
+      privacyActor?: AuthorizationActor;
     }) {
       const execution = await db
         .select()
@@ -4771,7 +4791,7 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
         .limit(1)
         .then((rows) => rows[0] ?? null);
       if (!execution) throw notFound("Pipeline automation execution not found");
-      return executeAutomationLedger(execution.id, input.actor);
+      return executeAutomationLedger(execution.id, input.actor, input.privacyActor);
     },
 
     async getAutomationRetryPlan(input: {
@@ -4797,6 +4817,7 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       expectedVersion: number;
       cleanup: PipelineAutomationRetryCleanupOptions;
       actor: PipelineActor;
+      privacyActor?: AuthorizationActor;
     }) {
       const postCommitIssueActions: IssuePostCommitAction[] = [];
       const { executeIssuePostCommitActions, issueService } = await import("./issues.js");
@@ -5028,7 +5049,7 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
         };
       });
       await executeIssuePostCommitActions(db, postCommitIssueActions);
-      const automationExecution = await executeAutomationLedger(result.ledger.id, input.actor);
+      const automationExecution = await executeAutomationLedger(result.ledger.id, input.actor, input.privacyActor);
       const {
         targetStageRow: _targetStageRow,
         automationTarget: _automationTarget,
@@ -5048,6 +5069,7 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       companyId: string;
       caseId: string;
       actor: PipelineActor;
+      privacyActor?: AuthorizationActor;
     }) {
       const ledger = await db.transaction(async (tx) => {
         const detail = await getCaseWithStageForUpdateOrThrow(tx, input.companyId, input.caseId);
@@ -5091,7 +5113,7 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
         }
         return nextLedger;
       });
-      const automationExecution = await executeAutomationLedger(ledger.id, input.actor);
+      const automationExecution = await executeAutomationLedger(ledger.id, input.actor, input.privacyActor);
       return { automationLedger: ledger, automationExecution };
     },
 

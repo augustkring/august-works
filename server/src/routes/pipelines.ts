@@ -2027,6 +2027,7 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
       force: req.body.force,
       suggestionId: req.body.acceptSuggestionId,
       actor,
+      privacyActor: req.actor,
     }));
   });
 
@@ -2323,6 +2324,7 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
       expectedVersion: req.body.expectedVersion,
       cleanup: req.body.cleanup,
       actor,
+      privacyActor: req.actor,
     }));
   });
 
@@ -2332,7 +2334,7 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
     const companyId = await assertCaseAccess(db, req, caseId);
     await assertCurrentStageAutomationTargetWriteAccess(db, req, { access, companyId, caseId, automationId });
     const actor = actorForMutation(req);
-    res.json(await svc.retryAutomation({ companyId, caseId, automationId, actor }));
+    res.json(await svc.retryAutomation({ companyId, caseId, automationId, actor, privacyActor: req.actor }));
   });
 
   router.post("/cases/:caseId/automation/current-stage/rerun", async (req, res) => {
@@ -2340,7 +2342,7 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
     const companyId = await assertCaseAccess(db, req, caseId);
     await assertCurrentStageAutomationTargetWriteAccess(db, req, { access, companyId, caseId });
     const actor = actorForMutation(req);
-    res.json(await svc.rerunCurrentStageAutomation({ companyId, caseId, actor }));
+    res.json(await svc.rerunCurrentStageAutomation({ companyId, caseId, actor, privacyActor: req.actor }));
   });
 
   return router;
