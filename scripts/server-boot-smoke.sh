@@ -79,7 +79,32 @@ while [ "$(date +%s)" -lt "$deadline" ]; do
   fi
   if printf '%s' "$body" | grep -q '"status":"ok"'; then
     ready_ms=$(node -e 'console.log(Date.now())')
-    echo "boot smoke ok: listening after $(( listen_ms - started_ms )) ms, ready after $(( ready_ms - started_ms )) ms"
+    # Exercise a real lazy worker from the plain-Node bundle. A readiness-only
+    # request would miss workers that still need workspace TypeScript loading.
+    avatar="$scratch/avatar.png"
+    if ! curl -fsS --max-time 25 "http://127.0.0.1:$port/api/agent-avatars/cap-v1/arctic-blue/rest.png?size=24&scale=1" -o "$avatar"; then
+      echo "FAIL: bundled avatar worker did not return an image" >&2
+      cat "$log" >&2
+      exit 1
+    fi
+    node -e 'const b=require("node:fs").readFileSync(process.argv[1]); if(b.length<24 || b.subarray(0,8).toString("hex")!=="89504e470d0a1a0a" || b.readUInt32BE(16)!==24 || b.readUInt32BE(20)!==24) process.exit(1)' "$avatar"
+    kill -TERM "$server_pid"
+    for _ in $(seq 1 100); do
+      kill -0 "$server_pid" 2>/dev/null || break
+      sleep 0.2
+    done
+    if kill -0 "$server_pid" 2>/dev/null; then
+      echo "FAIL: server did not shut down after SIGTERM" >&2
+      cat "$log" >&2
+      exit 1
+    fi
+    if ! wait "$server_pid"; then
+      echo "FAIL: server exited unsuccessfully after SIGTERM" >&2
+      cat "$log" >&2
+      exit 1
+    fi
+    server_pid=""
+    echo "boot smoke ok: listening after $(( listen_ms - started_ms )) ms, ready after $(( ready_ms - started_ms )) ms; avatar worker PNG verified; clean SIGTERM exit"
     exit 0
   fi
   sleep 0.5
