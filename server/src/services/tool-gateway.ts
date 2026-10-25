@@ -101,6 +101,7 @@ import type {
   SandboxPolicy,
 } from "@paperclipai/shared";
 import {
+  memoryAgentRememberInputSchema,
   memoryAgentCorrectInputJsonSchema,
   memoryAgentRecallInputJsonSchema,
   memoryAgentRememberInputJsonSchema,
@@ -3330,6 +3331,7 @@ export function createToolGatewayService(
     tool: ToolGatewayDescriptor,
     parameters: unknown,
     invocationId?: string,
+    scopedContext?: ScopedToolGatewayContext,
   ) {
     const params = asRecord(parameters) ?? {};
 
@@ -10945,6 +10947,15 @@ export function createToolGatewayService(
           use.argumentsHash !== nativeSha256(input.parameters ?? {})) {
           throw new ToolGatewayHttpError(403, "Native Memory output capture does not match this scoped call", "native_memory_capture_invalid");
         }
+        const [capturedRun] = await db.select({ agentId: heartbeatRuns.agentId, issueId: heartbeatRuns.nativeIssueId,
+          responsibleUserId: heartbeatRuns.responsibleUserId }).from(heartbeatRuns).where(and(
+          eq(heartbeatRuns.companyId, session.companyId), eq(heartbeatRuns.id, capture.runId),
+        ));
+        if (!capturedRun || capturedRun.agentId !== session.agentId || capturedRun.issueId !== session.issueId ||
+          capturedRun.responsibleUserId !== (session.responsibleUserId ?? null))
+          throw new ToolGatewayHttpError(403, "Native Memory output session binding changed", "native_memory_capture_invalid");
+        const { assertNativeModelOutputCaptureCurrent } = await import("./native-direct-input.js");
+        await assertNativeModelOutputCaptureCurrent(db, session.companyId, session.issueId, capture, "paperclip-self:remember");
         input = { ...input, idempotencyKey: `aw-native-tool:${capture.runId}:${use.callId}` };
       }
       if (scopedContext && tool.name === "paperclip-self:remember" && !scopedMemoryCapture) {
@@ -11084,7 +11095,9 @@ export function createToolGatewayService(
       }
 
       if (scopedContext) {
-        if (!tool.connectionId || !["mcp_remote_http", "mcp_local_stdio"].includes(tool.providerType)) {
+        const nativeMemoryCall = Boolean(scopedMemoryCapture && tool.name === "paperclip-self:remember" &&
+          tool.providerType === "paperclip_self");
+        if (!nativeMemoryCall && (!tool.connectionId || !["mcp_remote_http", "mcp_local_stdio"].includes(tool.providerType))) {
           throw new ToolGatewayHttpError(403, "Scoped calls require a local connected tool", "scoped_tool_not_connected");
         }
         await scopedContext.assertCurrent(tool);
@@ -11502,10 +11515,10 @@ export function createToolGatewayService(
         if (accessDecision.allowed && tool.providerType === "paperclip_slack_chat" && SLACK_TOOLS.some(t => t.name === tool.upstreamToolName && t.risk === "approval")) {
           accessDecision = { ...accessDecision, allowed: false, decision: "require_approval", reasonCode: "requires_approval_policy", explanation: "Slack destructive actions, channel creation and invitations require approval." };
         }
-        const recorded = await policyService.recordInvocation(
-          decisionInput,
-          accessDecision,
-        );
+        const rememberDraft = scopedMemoryCapture && tool.name === "paperclip-self:remember"
+          ? memoryAgentRememberInputSchema.safeParse(effectiveParameters).success : false;
+        const recorded = await policyService.recordInvocation(decisionInput, accessDecision,
+          rememberDraft ? { nativeMemoryDraft: true } : undefined);
         await policyService.writeAudit(decisionInput, accessDecision);
         invocationId = recorded.invocation.id;
         const retryingSlackRateLimit = recorded.replayed && accessDecision.allowed && tool.providerType === "paperclip_slack_chat" && session.agentId && session.runId && session.issueId
@@ -11684,7 +11697,7 @@ export function createToolGatewayService(
                 executionTimeoutMs,
               )
             : await runWithTimeout(
-                executeBuiltinTool(session, tool, effectiveParameters, invocationId),
+                executeBuiltinTool(session, tool, effectiveParameters, invocationId, scopedContext),
                 executionTimeoutMs,
               );
 
@@ -11727,6 +11740,9 @@ export function createToolGatewayService(
           const memory = asRecord(data?.record);
           if ((data?.status === "accepted" || data?.status === "pending") && typeof memory?.id === "string" &&
             resultValidation.summary.sha256) {
+            const authorizationActor = currentSessionMemoryActor(session);
+            if (!authorizationActor) throw new ToolGatewayHttpError(403,
+              "Memory output lost its verified Agent session", "memory_agent_authority_unavailable");
             const actor: MemoryMutationActor = {
               principal: { type: "agent", agentId: session.agentId!, responsibleUserId: session.responsibleUserId ?? null },
               runId: session.runId, authorizationActor,

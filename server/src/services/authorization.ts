@@ -1318,7 +1318,7 @@ export async function withReadMemoryTemporalSources<T>(db: Db | DbTransaction, a
   const dispatch = snapshot?.success ? snapshot.data.inputs.find((input): input is Extract<typeof input, { kind: "worker_model_dispatch" }> =>
     input.kind === "worker_model_dispatch") : undefined;
   const capturedRunIds = dispatch
-    ? [...new Set([...snapshot!.data.policy.runIds, dispatch.runId])].sort()
+    ? [...new Set([...(snapshot?.success ? snapshot.data.policy.runIds : []), dispatch.runId])].sort()
     : row?.sourceRunIds ?? [];
   if (!row || !snapshot?.success || !row.sourceProvenanceQualified || row.payloadSourceProtocolVersion !== 1 || row.payloadSourceSnapshotInvalidated
     || snapshot.data.owner.kind !== "memory_record" || snapshot.data.owner.companyId !== companyId || snapshot.data.owner.id !== recordId

@@ -513,6 +513,31 @@ async function assertMemorySourceAccess(db:Db,companyId:string,recordId:string,a
   if(!await canActorReadMemorySources(db,companyId,memorySourceActor(companyId,actor),recordId))throw notFound("Memory record not found");
 }
 async function requireCurrentMemoryDetail(db:Db,companyId:string,recordId:string,actor:MemoryMutationActor):Promise<NonNullable<Awaited<ReturnType<typeof getRecordDetail>>>> {
+  if (actor.nativeModelOutputCapture) {
+    return db.transaction(async rawTx => {
+      const tx = rawTx as unknown as Db;
+      await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
+      const outputActor = memorySourceActor(companyId, actor);
+      const capture = actor.nativeModelOutputCapture;
+      const use = capture.managedOpenCodeToolUse;
+      const [run] = await tx.select({ issueId: heartbeatRuns.nativeIssueId }).from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, capture.runId)));
+      if (!outputActor || outputActor.type !== "agent" || !run?.issueId || !use || !actor.nativeToolInvocationId ||
+        actor.principal.type !== "agent") throw notFound("Memory record not found");
+      await assertNativeMemoryToolInvocationCurrent(tx, { companyId, issueId: run.issueId,
+        actor: outputActor, capture, invocationId: actor.nativeToolInvocationId, status: "executing" });
+      const detail = await getRecordDetail(tx, companyId, recordId);
+      const record = detail?.record;
+      const metadata = record?.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
+        ? record.metadata as Record<string, unknown> : null;
+      if (!record || record.createdByActorType !== "agent" || record.createdByActorId !== actor.principal.agentId ||
+        record.payloadSourceProtocolVersion !== 1 || record.payloadSourceSnapshot !== null || !metadata ||
+        metadata.nativeManagedMemoryInvocationId !== actor.nativeToolInvocationId ||
+        metadata.nativeManagedMemoryCallId !== use.callId || metadata.nativeManagedMemoryArgumentsHash !== use.argumentsHash)
+        throw notFound("Memory record not found");
+      return detail!;
+    });
+  }
   const detail=await memoryService(db).get(companyId,recordId,actor);
   if(!detail)throw notFound("Memory record not found");
   return detail;
@@ -641,6 +666,10 @@ async function insertCandidate(
   let sourceProvenance=state.sourceProvenance??await captureMemorySources(tx,companyId,memorySourceActor(companyId,actor),input.scope,
     [...(supersedesRecordId?[supersedesRecordId]:[]),...(state.sourceMemoryIds??[])], input.evidence);
   const outputCapture = actor.nativeModelOutputCapture;
+  const memoryMetadata: Record<string, unknown> = { ...input.metadata };
+  delete memoryMetadata.nativeManagedMemoryInvocationId;
+  delete memoryMetadata.nativeManagedMemoryCallId;
+  delete memoryMetadata.nativeManagedMemoryArgumentsHash;
   let outputIssueId: string | null = null;
   if (outputCapture) {
     const outputActor = memorySourceActor(companyId, actor);
@@ -660,6 +689,9 @@ async function insertCandidate(
       sourceProjectIds: [...outputCapture.sourceSet.policy.projectIds],
       sourceMemoryIds: [...outputCapture.sourceSet.policy.memoryIds],
       sourceFoundationRevisionIds: [...outputCapture.sourceSet.policy.foundationRevisionIds] };
+    memoryMetadata.nativeManagedMemoryInvocationId = actor.nativeToolInvocationId;
+    memoryMetadata.nativeManagedMemoryCallId = outputCapture.managedOpenCodeToolUse!.callId;
+    memoryMetadata.nativeManagedMemoryArgumentsHash = outputCapture.managedOpenCodeToolUse!.argumentsHash;
   }
   const temporalContext = actor.principal.type === "agent" && actor.runId && sourceProvenance.sourceProvenanceQualified
     ? await captureNativeTemporalContext(tx, companyId, actor.runId, "memory_record") : null;
@@ -707,7 +739,7 @@ async function insertCandidate(
       createdByOperationId: input.createdByOperationId,
       ...sourceProvenance,
       ...(freezeTemporalContext ? { payloadSourceProtocolVersion: 1, payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: false } : {}),
-      metadata: input.metadata,
+      metadata: memoryMetadata,
       createdAt: now,
       updatedAt: now,
     })
@@ -762,12 +794,13 @@ export async function sealNativeMemoryToolResultSnapshot(db: Db, input: {
       eq(memoryRecords.createdByActorId, actor.agentId!), eq(memoryRecords.sourceProvenanceQualified, true),
       eq(memoryRecords.payloadSourceProtocolVersion, 1), isNull(memoryRecords.payloadSourceSnapshot),
       eq(memoryRecords.payloadSourceSnapshotInvalidated, false)));
-    if (!record) throw forbidden("Native Memory output is no longer eligible for source binding");
-    const toolResult = nativePayloadSourceInputSchema.parse({ kind: "tool_result", runId: capture.runId,
-      callId: capture.managedOpenCodeToolUse!.callId, toolName: "paperclip-self:remember", invocationId,
-      contentHash: input.resultHash });
-    if (toolResult.kind !== "tool_result") throw forbidden("Native Memory result source is unavailable");
-    const inputs: NativePayloadSourceInput[] = [...capture.sourceSet.inputs, capture.dispatch, toolResult];
+    const metadata = record?.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
+      ? record.metadata as Record<string, unknown> : null;
+    if (!record || metadata?.nativeManagedMemoryInvocationId !== invocationId ||
+      metadata.nativeManagedMemoryCallId !== capture.managedOpenCodeToolUse!.callId ||
+      metadata.nativeManagedMemoryArgumentsHash !== capture.managedOpenCodeToolUse!.argumentsHash)
+      throw forbidden("Native Memory output is no longer eligible for source binding");
+    const inputs: NativePayloadSourceInput[] = [...capture.sourceSet.inputs, capture.dispatch];
     const [sealed] = await tx.update(memoryRecords).set({ payloadSourceSnapshot: nativePayloadSnapshotSql(
       "memory_record", capture.sourceSet.policy, inputs,
     ) }).where(and(eq(memoryRecords.companyId, input.companyId), eq(memoryRecords.id, record.id),
@@ -865,6 +898,13 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
           resolution.metadata.kind === "contradiction" &&
           resolution.metadata.reasonCode ===
             "contradicting_evidence_against_pending_equivalent_claim";
+
+        if (actor.nativeModelOutputCapture && (resolution.metadata.kind === "duplicate" ||
+          resolution.metadata.kind === "corroboration" || attachesToExistingPendingContradiction)) {
+          throw conflict("A Native Memory output must remain a new private record or pending shared proposal", {
+            code: "native_memory_output_requires_new_draft",
+          });
+        }
 
         if (
           resolution.metadata.kind === "duplicate" ||

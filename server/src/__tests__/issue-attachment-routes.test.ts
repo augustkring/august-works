@@ -555,10 +555,7 @@ describe("issue attachment routes", () => {
       .parse(parseBinaryResponse);
 
     expect(res.status).toBe(200);
-    expect([
-      undefined,
-      'attachment; filename="report.html"',
-    ]).toContain(res.headers["content-disposition"]);
+    expect(res.headers["content-disposition"]).toBe('attachment; filename="report.html"');
     expect(res.headers["x-content-type-options"]).toBe("nosniff");
   });
 

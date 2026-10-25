@@ -32,6 +32,10 @@ function nativeSourceReadWork(scope: NativeSourceReadScope) {
   if (++scope.work > 512) throw forbidden("The Native source graph exceeds its total-work bound");
 }
 function nativeSourceReadScope(): NativeSourceReadScope { return { active: new Set(), complete: new Set(), work: 0 }; }
+function nativeProviderToolName(name: string): string {
+  const stripped = name.replace(/^(?:paperclip__|paperclip_|paperclip\.)/, "");
+  return stripped === "self_remember" ? "paperclip-self:remember" : stripped;
+}
 
 export interface NativeIssueEffectPrefix {
   readonly policy: NativePayloadSourcePolicy;
@@ -67,7 +71,8 @@ async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction
     (value as Record<string, unknown>).reservationId === capture.dispatch.reservationId) as Record<string, unknown>[] : [];
   const associations = Array.isArray(profile?.nativeToolCallDispatchAssociations)
     ? profile.nativeToolCallDispatchAssociations.filter(value => value && typeof value === "object" && !Array.isArray(value) &&
-      (value as Record<string, unknown>).callId === use.callId && (value as Record<string, unknown>).tool === use.toolName &&
+      (value as Record<string, unknown>).callId === use.callId && typeof (value as Record<string, unknown>).tool === "string" &&
+      nativeProviderToolName((value as Record<string, unknown>).tool as string) === use.toolName &&
       (value as Record<string, unknown>).argumentsHash === use.argumentsHash)
     : [];
   const [reservation] = await db.select().from(orchestrationModelReservations).where(and(
@@ -78,7 +83,7 @@ async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction
   const uses = Array.isArray(wire?.responseToolUses) ? wire.responseToolUses.filter(value => value && typeof value === "object" && !Array.isArray(value) &&
     (value as Record<string, unknown>).id === use.callId &&
     typeof (value as Record<string, unknown>).name === "string" &&
-    ((value as Record<string, unknown>).name as string).replace(/^(?:paperclip__|paperclip_|paperclip\.)/, "") === use.toolName &&
+    nativeProviderToolName((value as Record<string, unknown>).name as string) === use.toolName &&
     (value as Record<string, unknown>).argumentsHash === use.argumentsHash) : [];
   const matchingPrefixDispatches = receipt?.success ? receipt.data.dispatches.filter(source =>
     source.inputs.some(value => value.kind === "worker_model_dispatch" && isDeepStrictEqual(value, capture.dispatch)) &&
@@ -396,7 +401,8 @@ async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction
         if (recorded.length !== 1) throw forbidden("A Native output historical tool result is unavailable");
         const captures = Array.isArray(profile?.nativeToolResultSourceCaptures) ? profile!.nativeToolResultSourceCaptures : [];
         const matching = captures.filter(value => value && typeof value === "object" && !Array.isArray(value) &&
-          (value as Record<string, unknown>).callId === source.callId && (value as Record<string, unknown>).tool === source.toolName &&
+          (value as Record<string, unknown>).callId === source.callId && typeof (value as Record<string, unknown>).tool === "string" &&
+          nativeProviderToolName((value as Record<string, unknown>).tool as string) === source.toolName &&
           (value as Record<string, unknown>).resultDigest === source.contentHash &&
           isDeepStrictEqual((value as Record<string, unknown>).source, source));
         if (matching.length !== 1) throw forbidden("A Native output tool result source is unavailable");
@@ -483,16 +489,19 @@ export async function assertNativePayloadSourceSetCurrent(db: Db | Transaction, 
     for (const capture of captures) {
       const source = capture.source as Record<string, unknown> | undefined;
       if (typeof capture.callId !== "string" || typeof capture.tool !== "string" || !source ||
-        source.kind !== "tool_result" || source.callId !== capture.callId || source.toolName !== capture.tool ||
+        typeof source.toolName !== "string" || source.kind !== "tool_result" || source.callId !== capture.callId ||
+        nativeProviderToolName(source.toolName) !== nativeProviderToolName(capture.tool) ||
         source.contentHash !== capture.resultDigest) continue;
-      const association = associations.filter(value => value.callId === capture.callId && value.tool === capture.tool);
-      const use = uses.filter(value => value.id === capture.callId && typeof value.name === "string" &&
-        (value.name as string).replace(/^(?:paperclip__|paperclip_|paperclip\.)/, "") === capture.tool &&
+      const captureCallId = capture.callId;
+      const captureTool = capture.tool;
+      const association = associations.filter(value => value.callId === captureCallId && value.tool === captureTool);
+      const use = uses.filter(value => value.id === captureCallId && typeof value.name === "string" &&
+        nativeProviderToolName(value.name as string) === nativeProviderToolName(captureTool) &&
         association.some(row => row.argumentsHash === value.argumentsHash));
       if (association.length !== 1 || use.length !== 1) continue;
       const outputCapture: NativeModelOutputCapture = { runId: input.runId,
         sourceSet: { policy: policy.data, inputs: inputs.data }, dispatch,
-        managedOpenCodeToolUse: { callId: capture.callId, toolName: capture.tool,
+        managedOpenCodeToolUse: { callId: captureCallId, toolName: nativeProviderToolName(captureTool),
           argumentsHash: use[0]!.argumentsHash as string, responseContentHash: intent[0]!.responseContentHash as string } };
       await assertNativeModelOutputCaptureCurrentInScope(db, input.companyId, input.issueId, outputCapture,
         capture.tool, scope, 0);
@@ -657,7 +666,8 @@ export async function assertNativePayloadSourceSetCurrent(db: Db | Transaction, 
       const captures = Array.isArray(profile?.nativeToolResultSourceCaptures)
         ? profile.nativeToolResultSourceCaptures.filter(value => value && typeof value === "object" && !Array.isArray(value) &&
             (value as Record<string, unknown>).callId === source.callId &&
-            (value as Record<string, unknown>).tool === source.toolName &&
+            typeof (value as Record<string, unknown>).tool === "string" &&
+            nativeProviderToolName((value as Record<string, unknown>).tool as string) === source.toolName &&
             (value as Record<string, unknown>).resultDigest === source.contentHash &&
             isDeepStrictEqual((value as Record<string, unknown>).source, source)) as Record<string, unknown>[] : [];
       const [invocation] = source.invocationId ? await db.select().from(toolInvocations).where(and(
@@ -672,7 +682,8 @@ export async function assertNativePayloadSourceSetCurrent(db: Db | Transaction, 
         throw forbidden("A Native historical tool result changed");
       const associations = Array.isArray(profile?.nativeToolCallDispatchAssociations)
         ? profile.nativeToolCallDispatchAssociations.filter(value => value && typeof value === "object" && !Array.isArray(value) &&
-            (value as Record<string, unknown>).callId === source.callId && (value as Record<string, unknown>).tool === source.toolName)
+            (value as Record<string, unknown>).callId === source.callId && typeof (value as Record<string, unknown>).tool === "string" &&
+            nativeProviderToolName((value as Record<string, unknown>).tool as string) === source.toolName)
         : [];
       const providerUses = Array.isArray(profile?.nativeAwModelWireIntents) ? profile.nativeAwModelWireIntents.flatMap(value => {
         if (!value || typeof value !== "object" || Array.isArray(value)) return [];
@@ -680,7 +691,7 @@ export async function assertNativePayloadSourceSetCurrent(db: Db | Transaction, 
           ? (value as Record<string, unknown>).responseToolUses as unknown[] : [];
         return uses.filter(use => use && typeof use === "object" && !Array.isArray(use) &&
           (use as Record<string, unknown>).id === source.callId && typeof (use as Record<string, unknown>).name === "string" &&
-          ((use as Record<string, unknown>).name as string).replace(/^(?:paperclip__|paperclip_|paperclip\.)/, "") === source.toolName);
+          nativeProviderToolName((use as Record<string, unknown>).name as string) === source.toolName);
       }) : [];
       if (associations.length !== 1 || providerUses.length !== 1 ||
         !associations.some(value => (value as Record<string, unknown>).argumentsHash === (providerUses[0] as Record<string, unknown>).argumentsHash))
@@ -843,20 +854,42 @@ export async function assertNativeMemoryToolInvocationCurrent(db: Db | Transacti
     throw forbidden("Native Memory invocation no longer matches its provider tool-use");
 }
 
-/** Validate both the consumed model prefix and the completed Gateway result
- * carried by a Native Memory V1 snapshot. The producer dispatch is provenance,
- * while only the snapshot policy's retained_run entries grant whole-Run reads. */
+/** Validate the consumed model prefix and its exact Gateway-created Memory
+ * effect binding. The producer dispatch/invocation are provenance, while only
+ * retained_run entries in the consumed policy grant whole-Run reads. */
 export async function assertNativeMemoryOutputSnapshotCurrent(db: Db | Transaction, input: {
   companyId: string; recordId: string; snapshot: NativePayloadSourceSnapshot;
 }): Promise<void> {
+  const [ownerBinding] = await db.execute<{ valid: boolean }>(sql`select
+    public.aw_native_payload_body_hash('memory_record',to_jsonb(m))=${input.snapshot.owner.contentHash}
+      and m.payload_source_snapshot->>'digest'=${input.snapshot.digest}
+      and m.payload_source_snapshot_invalidated=false and m.payload_source_protocol_version=1 as valid
+    from ${memoryRecords} m where m.company_id=${input.companyId}::uuid and m.id=${input.recordId}::uuid`);
+  if (!ownerBinding?.valid) throw forbidden("Native Memory output owner binding is unavailable");
   const dispatches = input.snapshot.inputs.flatMap((source, index) => source.kind === "worker_model_dispatch" ? [{ source, index }] : []);
   if (!dispatches.length) throw forbidden("Native Memory output prefix is unavailable");
   // The writer appends this effect's dispatch after its exact prior prefix.
   const { source: dispatch, index: dispatchIndex } = dispatches[dispatches.length - 1]!;
-  if (dispatch.kind !== "worker_model_dispatch") throw forbidden("Native Memory output prefix is unavailable");
+  if (dispatch.kind !== "worker_model_dispatch" || dispatchIndex !== input.snapshot.inputs.length - 1)
+    throw forbidden("Native Memory output prefix is unavailable");
+  const [record] = await db.select({ metadata: memoryRecords.metadata }).from(memoryRecords).where(and(
+    eq(memoryRecords.companyId, input.companyId), eq(memoryRecords.id, input.recordId)));
+  const metadata = record?.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
+    ? record.metadata as Record<string, unknown> : null;
+  const invocationId = typeof metadata?.nativeManagedMemoryInvocationId === "string"
+    ? metadata.nativeManagedMemoryInvocationId : null;
+  if (!invocationId) throw forbidden("Native Memory output invocation binding is unavailable");
   const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId),
     eq(heartbeatRuns.id, dispatch.runId), eq(heartbeatRuns.runtimeMode, "native")));
   if (!run?.nativeIssueId) throw forbidden("Native Memory output owner is unavailable");
+  const [invocation] = await db.select().from(toolInvocations).where(and(eq(toolInvocations.companyId, input.companyId),
+    eq(toolInvocations.id, invocationId), eq(toolInvocations.runId, dispatch.runId),
+    eq(toolInvocations.issueId, run.nativeIssueId), eq(toolInvocations.agentId, run.agentId),
+    eq(toolInvocations.toolName, "paperclip-self:remember"), eq(toolInvocations.status, "succeeded")));
+  if (!invocation?.resultHash || typeof invocation.idempotencyKey !== "string" ||
+    !invocation.idempotencyKey.startsWith(`aw-native-tool:${dispatch.runId}:`))
+    throw forbidden("Native Memory output invocation is unavailable");
+  const callId = invocation.idempotencyKey.slice(`aw-native-tool:${dispatch.runId}:`.length);
   const profile = run.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson)
     ? run.runnerProfileJson as Record<string, unknown> : null;
   const intentMatches = Array.isArray(profile?.nativeAwModelWireIntents)
@@ -865,27 +898,24 @@ export async function assertNativeMemoryOutputSnapshotCurrent(db: Db | Transacti
   const uses = intentMatches.flatMap(intent => Array.isArray(intent.responseToolUses)
     ? (intent.responseToolUses as unknown[]).filter(value => value && typeof value === "object" && !Array.isArray(value) &&
       typeof (value as Record<string, unknown>).id === "string" && typeof (value as Record<string, unknown>).name === "string" &&
-      ((value as Record<string, unknown>).name as string).replace(/^(?:paperclip__|paperclip_|paperclip\.)/, "") === "paperclip-self:remember" &&
+      nativeProviderToolName((value as Record<string, unknown>).name as string) === "paperclip-self:remember" &&
       typeof (value as Record<string, unknown>).argumentsHash === "string") as Record<string, unknown>[] : []);
-  const resultCandidates = input.snapshot.inputs.flatMap((source, index) => source.kind === "tool_result" &&
-    source.toolName === "paperclip-self:remember" && index > dispatchIndex ? [{ source, index }] : []);
-  const resultPair = resultCandidates.length === 1 ? resultCandidates[0] : undefined;
-  const result = resultPair?.source;
-  const matchingUses = uses.filter(value => value.id === result?.callId);
+  const matchingUses = uses.filter(value => value.id === callId);
   const use = matchingUses[0];
-  if (!result || result.kind !== "tool_result" || result.runId !== dispatch.runId || !result.invocationId ||
-    resultPair!.index <= dispatchIndex || intentMatches.length !== 1 || matchingUses.length !== 1 || !use ||
-    typeof intentMatches[0]!.responseContentHash !== "string")
+  if (intentMatches.length !== 1 || matchingUses.length !== 1 || !use ||
+    typeof intentMatches[0]!.responseContentHash !== "string" ||
+    !metadata || metadata.nativeManagedMemoryCallId !== callId ||
+    metadata.nativeManagedMemoryArgumentsHash !== use.argumentsHash)
     throw forbidden("Native Memory output tool-use is unavailable");
   const inputActor: AuthorizationActor = { type: "agent", source: "none", companyId: input.companyId,
     agentId: run.agentId, runId: run.id, onBehalfOfUserId: run.responsibleUserId };
-  const sourceInputs = input.snapshot.inputs.filter((_, index) => index !== resultPair!.index && index !== dispatchIndex);
+  const sourceInputs = input.snapshot.inputs.filter((_, index) => index !== dispatchIndex);
   const capture: NativeModelOutputCapture = { runId: run.id, sourceSet: { policy: input.snapshot.policy, inputs: sourceInputs },
-    dispatch, managedOpenCodeToolUse: { callId: result.callId, toolName: result.toolName,
+    dispatch, managedOpenCodeToolUse: { callId, toolName: "paperclip-self:remember",
       argumentsHash: use!.argumentsHash as string, responseContentHash: intentMatches[0]!.responseContentHash as string } };
   await assertNativeModelOutputCaptureCurrent(db, input.companyId, run.nativeIssueId, capture, "paperclip-self:remember");
-  await assertNativePayloadSourceSetCurrent(db, { companyId: input.companyId, issueId: run.nativeIssueId,
-    runId: run.id, actor: inputActor, policy: input.snapshot.policy, inputs: [result] });
+  await assertNativeMemoryToolInvocationCurrent(db, { companyId: input.companyId, issueId: run.nativeIssueId,
+    actor: inputActor, capture, invocationId, status: "succeeded", resultHash: invocation.resultHash });
 }
 
 export interface NativeTemporalContextCapture {

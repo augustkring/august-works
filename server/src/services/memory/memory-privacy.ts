@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
+import { isDeepStrictEqual } from "node:util";
 import { and, eq, inArray, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 import { agentExecutionManifests, providerTraceRecords,
   memoryDeletionMarkers, memoryEvidence, memoryJobs, memoryRecords, memoryPrivateSharePublications, memoryRetentionPolicies,
@@ -480,6 +481,37 @@ export async function assertMemorySourcesRetained(db: Db, companyId: string,
   if (marker) throw conflict("A deleted source cannot be captured into Memory", { code: "memory_source_deleted" });
 }
 
+async function scrubMemoryToolInvocations(db: Db, companyId: string, ids: string[], now: Date) {
+  if (!ids.length) return;
+  await db.update(toolInvocations).set({ argumentsHash: null, argumentsSummary: null, idempotencyRequestHash: null,
+    resultHash: null, resultSummary: null, resultSizeBytes: null, workflowResultJson: null, errorMessage: null, updatedAt: now })
+    .where(and(eq(toolInvocations.companyId, companyId), inArray(toolInvocations.id, ids)));
+  await db.update(toolCallEvents).set({ argumentsSummary: null, requestSummary: null, resultSummary: null,
+    metadata: { payloadDeleted: true }, errorMessage: null }).where(and(eq(toolCallEvents.companyId, companyId),
+      inArray(toolCallEvents.invocationId, ids)));
+  const reviews = await db.select({ interactionId: toolActionRequests.interactionId }).from(toolActionRequests).where(and(
+    eq(toolActionRequests.companyId, companyId), inArray(toolActionRequests.invocationId, ids)));
+  await db.update(toolActionRequests).set({ signedArguments: null,
+    canonicalArgumentsSummary: { summary: "Erased source payload", sizeBytes: 0 }, previewMarkdown: null, updatedAt: now })
+    .where(and(eq(toolActionRequests.companyId, companyId), inArray(toolActionRequests.invocationId, ids)));
+  await db.update(toolActionRequests).set({ status: "cancelled", resolvedAt: now, updatedAt: now }).where(and(
+    eq(toolActionRequests.companyId, companyId), inArray(toolActionRequests.invocationId, ids),
+    inArray(toolActionRequests.status, ["pending", "approved"])));
+  await db.update(toolAccessAuditEvents).set({ details: { payloadDeleted: true } }).where(and(
+    eq(toolAccessAuditEvents.companyId, companyId),
+    sql`${toolAccessAuditEvents.details} ->> 'invocationId' in (${sql.join(ids.map(id => sql`${id}`), sql`, `)})`));
+  await db.update(activityLog).set({ details: { payloadDeleted: true } }).where(and(eq(activityLog.companyId, companyId),
+    sql`${activityLog.details} ->> 'invocationId' in (${sql.join(ids.map(id => sql`${id}`), sql`, `)})`));
+  const interactionIds = reviews.flatMap(row => row.interactionId ? [row.interactionId] : []);
+  if (interactionIds.length) await db.update(issueThreadInteractions).set({
+    payload: sql`jsonb_set(jsonb_set(jsonb_set(${issueThreadInteractions.payload}, '{toolAction,argumentsSummaryJson}', '"Erased source payload"'),
+      '{toolAction,previewMarkdown}', '"Source payload erased"'), '{detailsMarkdown}', '""')`,
+    result: sql`case when ${issueThreadInteractions.result} is null then null else
+      jsonb_set(jsonb_set(${issueThreadInteractions.result}, '{toolAction,resultSummary}', 'null'), '{toolAction,errorMessage}', 'null') end`,
+    updatedAt: now,
+  }).where(and(eq(issueThreadInteractions.companyId, companyId), inArray(issueThreadInteractions.id, interactionIds)));
+}
+
 /** Scrub a record and its correction/share lineage in the caller's transaction. */
 export async function purgeMemoryRecords(db: Db, companyId: string, rootIds: string[], now = new Date()) {
   await lockMemoryPrivacy(db, companyId);
@@ -498,6 +530,45 @@ export async function purgeMemoryRecords(db: Db, companyId: string, rootIds: str
   }
   if (!ids.size) return { deletedRecordIds: [] as string[], deletedRecordCount: 0 };
   const rows = await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, companyId), inArray(memoryRecords.id, [...ids]))).for("update");
+  const outputBindings = rows.flatMap(row => {
+    const metadata = row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+      ? row.metadata as Record<string, unknown> : null;
+    const invocationId = metadata?.nativeManagedMemoryInvocationId;
+    const callId = metadata?.nativeManagedMemoryCallId;
+    const argumentsHash = metadata?.nativeManagedMemoryArgumentsHash;
+    if (row.createdByActorType !== "agent" || !row.createdByActorId || !row.sourceProvenanceQualified ||
+      typeof invocationId !== "string" || typeof callId !== "string" || typeof argumentsHash !== "string" || row.payloadSourceSnapshotInvalidated ||
+      row.payloadSourceProtocolVersion !== 1) return [];
+    const snapshot = nativePayloadSourceSnapshotSchema.safeParse(row.payloadSourceSnapshot);
+    if (row.payloadSourceSnapshot != null && (!snapshot.success || snapshot.data.owner.kind !== "memory_record" ||
+      snapshot.data.owner.companyId !== companyId || snapshot.data.owner.id !== row.id)) return [];
+    return [{ row, invocationId, callId, argumentsHash, snapshot: snapshot.success ? snapshot.data : null,
+      snapshotWasPresent: row.payloadSourceSnapshot != null }];
+  });
+  for (const binding of outputBindings) {
+    if (!binding.snapshot) continue;
+    const [owner] = await db.execute<{ valid: boolean }>(sql`select
+      public.aw_native_payload_body_hash('memory_record',to_jsonb(m))=${binding.snapshot.owner.contentHash}
+        and encode(sha256(convert_to((m.payload_source_snapshot-'digest')::text,'UTF8')),'hex')=${binding.snapshot.digest} as valid
+      from ${memoryRecords} m where m.company_id=${companyId}::uuid and m.id=${binding.row.id}::uuid`);
+    if (!owner?.valid) binding.snapshot = null;
+  }
+  const verifiedOutputBindings = outputBindings.filter(binding => !binding.snapshotWasPresent || binding.snapshot !== null);
+  const outputInvocationRows = verifiedOutputBindings.length ? await db.select({ id: toolInvocations.id, runId: toolInvocations.runId,
+    issueId: toolInvocations.issueId, agentId: toolInvocations.agentId, toolName: toolInvocations.toolName,
+    idempotencyKey: toolInvocations.idempotencyKey, argumentsHash: toolInvocations.argumentsHash }).from(toolInvocations).where(and(
+    eq(toolInvocations.companyId, companyId), inArray(toolInvocations.id, verifiedOutputBindings.map(binding => binding.invocationId)))) : [];
+  const outputInvocationIds = verifiedOutputBindings.flatMap(binding => {
+    const invocation = outputInvocationRows.find(value => value.id === binding.invocationId);
+    return invocation && invocation.agentId === binding.row.createdByActorId &&
+      invocation.runId != null && binding.row.sourceRunIds.includes(invocation.runId) &&
+      binding.row.sourceIssueIds.includes(invocation.issueId ?? "") && invocation.toolName === "paperclip-self:remember" &&
+      invocation.argumentsHash === binding.argumentsHash &&
+      (!binding.snapshot || binding.snapshot.inputs.some(source => source.kind === "worker_model_dispatch" &&
+        source.runId === invocation.runId)) &&
+      invocation.idempotencyKey === `aw-native-tool:${invocation.runId}:${binding.callId}` ? [invocation.id] : [];
+  });
+  await scrubMemoryToolInvocations(db, companyId, [...new Set(outputInvocationIds)], now);
   await db.delete(memoryPrivateSharePublications).where(and(eq(memoryPrivateSharePublications.companyId,companyId),or(
     inArray(memoryPrivateSharePublications.sharedRecordId,[...ids]),inArray(memoryPrivateSharePublications.sourceRecordId,[...ids]))));
   for (const row of rows) {
@@ -541,26 +612,9 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
       eq(toolInvocations.companyId, companyId), inArray(toolInvocations.runId, sourceAssets.runIds),
       eq(toolInvocations.toolName, "paperclip-self:remember"),
     ));
-    if (memoryCalls.length) {
-      const ids = memoryCalls.map(row => row.id);
-      await db.update(toolInvocations).set({ argumentsHash: null, argumentsSummary: null, idempotencyRequestHash: null,
-        resultHash: null, resultSummary: null, resultSizeBytes: null, workflowResultJson: null, errorMessage: null, updatedAt: now })
-        .where(and(eq(toolInvocations.companyId, companyId), inArray(toolInvocations.id, ids)));
-      await db.update(toolCallEvents).set({ argumentsSummary: null, requestSummary: null, resultSummary: null,
-        metadata: { payloadDeleted: true }, errorMessage: null }).where(and(eq(toolCallEvents.companyId, companyId),
-          inArray(toolCallEvents.invocationId, ids)));
-      await db.update(toolActionRequests).set({ signedArguments: null,
-        canonicalArgumentsSummary: { summary: "Erased source payload", sizeBytes: 0 }, previewMarkdown: null, updatedAt: now })
-        .where(and(eq(toolActionRequests.companyId, companyId), inArray(toolActionRequests.invocationId, ids)));
-      await db.update(toolActionRequests).set({ status: "cancelled", resolvedAt: now, updatedAt: now }).where(and(
-        eq(toolActionRequests.companyId, companyId), inArray(toolActionRequests.invocationId, ids),
-        inArray(toolActionRequests.status, ["pending", "approved"])));
-      await db.update(toolAccessAuditEvents).set({ details: { payloadDeleted: true } }).where(and(
-        eq(toolAccessAuditEvents.companyId, companyId),
-        sql`${toolAccessAuditEvents.details} ->> 'invocationId' in (${sql.join(ids.map(id => sql`${id}`), sql`, `)})`));
-      await db.update(activityLog).set({ details: { payloadDeleted: true } }).where(and(eq(activityLog.companyId, companyId),
-        inArray(activityLog.runId, sourceAssets.runIds), eq(activityLog.action, "memory.private_created")));
-    }
+    await scrubMemoryToolInvocations(db, companyId, memoryCalls.map(row => row.id), now);
+    await db.update(activityLog).set({ details: { payloadDeleted: true } }).where(and(eq(activityLog.companyId, companyId),
+      inArray(activityLog.runId, sourceAssets.runIds), eq(activityLog.action, "memory.private_created")));
   }
   const evaluations = await db.select({ id: workflowOptimizerEvaluations.id, artifactId: workflowOptimizerEvaluations.artifactId }).from(workflowOptimizerEvaluations).where(and(eq(workflowOptimizerEvaluations.companyId, companyId),
     or(recordIds.length?sql`${workflowOptimizerEvaluations.memoryRecordIds} ?| ARRAY[${sql.join(recordIds.map((id) => sql`${id}`), sql`, `)}]::text[]`:undefined,sourceAssets?.artifactVersionIds.length?inArray(workflowOptimizerEvaluations.artifactVersionId,sourceAssets.artifactVersionIds):undefined)??sql`false`));

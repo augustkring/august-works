@@ -1,12 +1,13 @@
 import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, readlink, rm, stat, writeFile } from "node:fs/promises";
 import { createServer as createHttpsServer } from "node:https";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 import express from "express";
 import request from "supertest";
+import postgres from "postgres";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -17,6 +18,7 @@ import {
   completionContracts,
   companyMemberships,
   documentRevisions,
+  agentExecutionManifests,
   issueDocuments,
   issues,
   orchestrationModelReservations,
@@ -55,6 +57,7 @@ import { currentNativeControllerIdentity } from "./native-restart-recovery.js";
 import { nativeCompletionContractInput } from "./completion-contracts.js";
 import { resolveDefaultAgentWorkspaceDir } from "../../home-paths.js";
 import { OpenCodeServerDriver } from "@paperclipai/paperclip-runner";
+import { buildNativeModelEnvelope, createCodexTaskEnvelope, nativeTaskConstraints } from "../../vendor/paperclip-runner/index.js";
 
 const QUALIFIED_OPENCODE_SHA256 = "513f500a1a5ea1dc7d865547ac87b32a8936334e8d5abd5b3ff585c45a170080";
 const sourceSha = "a".repeat(40);
@@ -65,6 +68,45 @@ function toolName(value: unknown): string {
   for (const prefix of ["paperclip__", "paperclip_", "paperclip."])
     if (name.startsWith(prefix)) return name.slice(prefix.length);
   return name;
+}
+
+function canonicalValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalValue);
+  if (value && typeof value === "object") return Object.fromEntries(
+    Object.entries(value).sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, nested]) => [key, canonicalValue(nested)]),
+  );
+  return value;
+}
+
+function canonicalHash(value: unknown): string {
+  return createHash("sha256").update(JSON.stringify(canonicalValue(value)) ?? "undefined").digest("hex");
+}
+
+function differencePaths(left: unknown, right: unknown, path = "$"): string[] {
+  if (JSON.stringify(canonicalValue(left)) === JSON.stringify(canonicalValue(right))) return [];
+  if (Array.isArray(left) && Array.isArray(right)) {
+    const paths: string[] = [];
+    for (let index = 0; index < Math.max(left.length, right.length); index += 1)
+      paths.push(...differencePaths(left[index], right[index], `${path}[${index}]`));
+    return paths;
+  }
+  if (left && right && typeof left === "object" && typeof right === "object" &&
+    !Array.isArray(left) && !Array.isArray(right)) {
+    const leftRecord = left as Record<string, unknown>;
+    const rightRecord = right as Record<string, unknown>;
+    return [...new Set([...Object.keys(leftRecord), ...Object.keys(rightRecord)])].sort()
+      .flatMap(key => differencePaths(leftRecord[key], rightRecord[key], `${path}.${key}`));
+  }
+  return [path];
+}
+
+function valueCategory(value: unknown): string {
+  if (value === undefined) return "absent";
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "array";
+  if (typeof value === "boolean") return value ? "true" : "false";
+  return typeof value;
 }
 
 function qualifiedOpenCodeBinary(): string {
@@ -202,7 +244,7 @@ describe("managed OpenCode source-closure binary integration", () => {
     const manifest = await agentRuntimeFabricService(db).prepare({ companyId, agentId, runId: run!.id,
       responsibleUserId: f.userId, issueId: task.id, query: task.title });
     const plan = await orchestrationService(db).create(human, companyId, {
-      issueId: task.id, expectedIssueUpdatedAt: task.updatedAt.toISOString(), workload: "semantic", riskClass: "C0",
+      issueId: task.id, expectedIssueUpdatedAt: task.updatedAt.toISOString(), workload: "semantic", actionClass: "internal_draft", riskClass: "C0",
       completionContract: { objective: "Save the internal note", requiredOutputs: [{ key: "note" }],
         businessInvariants: ["Use only this task's private workspace"] },
       budgets: { maxModelCostMinor: 10, maxToolActions: 2 }, workers: [{ key: "writer", issueId: task.id }],
@@ -243,6 +285,16 @@ describe("managed OpenCode source-closure binary integration", () => {
       lifecyclePolicy: { mode: "per_turn", idleTimeoutMs: null },
       completionContract: { id: contractRow.id, sha256: contractRow.canonicalSha256,
         schemaVersion: contractRow.schemaVersion, contract: completionContract }, runtimeContext });
+    const managedTaskEnvelope = createCodexTaskEnvelope({
+      objective: execution.completionContract.contract.objective,
+      contractRevision: execution.completionContract.contract.revision,
+      criteria: execution.completionContract.contract.criteria,
+      constraints: ["Work only inside the supplied working directory.", ...nativeTaskConstraints(execution),
+        "Return one semantic completion result through paperclip_finish or paperclip_block."],
+    });
+    const canonicalManagedPrompt = JSON.stringify({ task: managedTaskEnvelope,
+      message: JSON.stringify(buildNativeModelEnvelope(execution)) });
+    const canonicalManagedPromptHash = canonicalHash(canonicalManagedPrompt);
     const sourceSet = buildNativeBootstrapSourceSet({ companyId, runId: run!.id, agentId, issueId: task.id,
       renderedMarkdown: taskPrompt, renderedMarkdownDigest: createHash("sha256").update(taskPrompt, "utf8").digest("hex"),
       references: renderedReferences, candidates: [{ kind: "task", id: task.id, input: taskSource.input,
@@ -269,14 +321,20 @@ describe("managed OpenCode source-closure binary integration", () => {
       controllerProcessStartedAt: controller.processStartedAt });
 
     let responseCount = 0;
+    const fakeFetchEntrances: Array<{ host: string; path: string; apiKeyHeader: boolean; bearerHeader: boolean }> = [];
     const modelCalls: Array<Record<string, unknown>> = [];
     const brokerRequests: string[] = [];
+    const submittedPromptFacts: Array<{ length: number; sha256: string }> = [];
     let managedConfigReadOnlyVerified = false;
     const gateway = workerModelGateway(db, {
       profiles: [profile], sourceSha, protectedEvidenceOrigin: "https://protected.test.invalid",
       fetch: async (url, init) => {
+        const requestUrl = new URL(String(url));
+        const requestHeaders = new Headers(init.headers);
+        fakeFetchEntrances.push({ host: requestUrl.host, path: requestUrl.pathname,
+          apiKeyHeader: requestHeaders.has("x-api-key"), bearerHeader: requestHeaders.has("authorization") });
         expect(String(url)).toBe("https://api.anthropic.com/v1/messages");
-        expect(new Headers(init.headers).get("x-api-key")).toBe(credential);
+        expect(requestHeaders.get("x-api-key")).toBe(credential);
         const body = JSON.parse(String(init.body)) as Record<string, unknown>;
         modelCalls.push(body);
         responseCount += 1;
@@ -343,14 +401,95 @@ describe("managed OpenCode source-closure binary integration", () => {
       // Test TLS mediation stands in for OpenShell host injection. Only the
       // exact Messages endpoint receives a capability minted by issueForRun;
       // the OpenCode child receives no bearer token in its environment.
-      const continueRequest = () => {
+      const continueRequest = async () => {
+        const [persisted] = await db.select({ runnerProfileJson: heartbeatRuns.runnerProfileJson })
+          .from(heartbeatRuns).where(eq(heartbeatRuns.id, run!.id));
+        const profileBlob = persisted?.runnerProfileJson && typeof persisted.runnerProfileJson === "object"
+          ? persisted.runnerProfileJson as Record<string, unknown> : {};
+        const authority = profileBlob.nativeOpenCodeSourceAuthority && typeof profileBlob.nativeOpenCodeSourceAuthority === "object"
+          ? profileBlob.nativeOpenCodeSourceAuthority as Record<string, unknown> : {};
+        const nativeReceipt = nativeRunInputSourceReceiptSchema.safeParse(profileBlob.nativeInputSourceReceipt);
+        const wireIntents = profileBlob.nativeAwModelWireIntents;
+        const expected = Array.isArray(authority.toolSchemas) ? authority.toolSchemas.map(value =>
+          value && typeof value === "object" ? value as Record<string, unknown> : {}) : [];
+        const actual = tools.map(value => value && typeof value === "object" ? value as Record<string, unknown> : {});
+        const authorizedPromptHashes = Array.isArray(authority.authorizedPromptHashes)
+          ? authority.authorizedPromptHashes.filter((value): value is string => typeof value === "string") : [];
+        const userTextFacts = messages.flatMap(message => {
+          const item = message && typeof message === "object" ? message as Record<string, unknown> : {};
+          if (item.role !== "user") return [];
+          const content = Array.isArray(item.content) ? item.content : [];
+          return content.flatMap(block => {
+            const value = block && typeof block === "object" ? block as Record<string, unknown> : {};
+            return value.type === "text" && typeof value.text === "string" ? [value.text] : [];
+          });
+        }).map((value, index) => ({ index, length: value.length, matchesAuthorizedPrompt: authorizedPromptHashes.includes(
+          canonicalHash(value)),
+          matchesCanonicalExecutionPrompt: canonicalHash(value) === canonicalManagedPromptHash,
+          matchesSubmittedPrompt: submittedPromptFacts.some(prompt => prompt.sha256 === canonicalHash(value)),
+          jsonShape: (() => {
+            try {
+              const parsed = JSON.parse(value) as Record<string, unknown>;
+              const task = parsed.task && typeof parsed.task === "object" ? parsed.task as Record<string, unknown> : {};
+              const messageText = parsed.message;
+              let nestedMessageShape: string[] = [];
+              if (typeof messageText === "string") {
+                try {
+                  const nested = JSON.parse(messageText) as Record<string, unknown>;
+                  nestedMessageShape = Object.keys(nested).sort();
+                } catch { /* shape only; malformed data is denied by the route */ }
+              }
+              return { topLevelKeys: Object.keys(parsed).sort(), taskKeys: Object.keys(task).sort(),
+                messageType: typeof messageText, messageLength: typeof messageText === "string" ? messageText.length : null,
+                nestedMessageKeys: nestedMessageShape };
+            } catch { return { parseable: false }; }
+          })() }));
+        const schemaComparison = expected.map(schema => {
+          const actualSchema = actual.find(candidate => toolName(candidate.name) === schema.name);
+          const expectedInput = schema.inputSchema;
+          const actualInput = actualSchema?.input_schema;
+          return { name: schema.name,
+            descriptionEqual: actualSchema?.description === schema.description,
+            expectedDescriptionPresent: typeof schema.description === "string",
+            actualDescriptionPresent: typeof actualSchema?.description === "string",
+            expectedDescriptionLength: typeof schema.description === "string" ? schema.description.length : null,
+            actualDescriptionLength: typeof actualSchema?.description === "string" ? actualSchema.description.length : null,
+            expectedDescriptionPrefixesActual: typeof schema.description === "string" && typeof actualSchema?.description === "string"
+              ? schema.description.startsWith(actualSchema.description) : null,
+            actualDescriptionPrefixesExpected: typeof schema.description === "string" && typeof actualSchema?.description === "string"
+              ? actualSchema.description.startsWith(schema.description) : null,
+            schemaEqual: canonicalHash(expectedInput) === canonicalHash(actualInput),
+            expectedSchemaKeys: expectedInput && typeof expectedInput === "object" ? Object.keys(expectedInput).sort() : [],
+            actualSchemaKeys: actualInput && typeof actualInput === "object" ? Object.keys(actualInput).sort() : [],
+            descriptionDiffPaths: differencePaths(schema.description, actualSchema?.description, "description"),
+            schemaDiffPaths: differencePaths(expectedInput, actualInput, "input_schema"),
+            expectedAdditionalProperties: expectedInput && typeof expectedInput === "object"
+              ? valueCategory((expectedInput as Record<string, unknown>).additionalProperties) : "absent",
+            actualAdditionalProperties: actualInput && typeof actualInput === "object"
+              ? valueCategory((actualInput as Record<string, unknown>).additionalProperties) : "absent",
+            expectedSchemaHash: canonicalHash(expectedInput), actualSchemaHash: canonicalHash(actualInput) };
+        });
+        brokerRequests.push(`managed-tool-schema-comparison ${JSON.stringify({ expectedNames: expected.map(schema => schema.name),
+          actualNames: actual.map(schema => toolName(schema.name)), tools: schemaComparison, userTextFacts,
+          nativeReceiptPresent: nativeReceipt.success,
+          bootstrapSourceKinds: nativeReceipt.success ? nativeReceipt.data.bootstrap.inputs.map(source => source.kind).sort() : [],
+          nativeReceiptDispatchCount: nativeReceipt.success ? nativeReceipt.data.dispatches.length : null,
+          wireIntentArray: Array.isArray(wireIntents), wireIntentCount: Array.isArray(wireIntents) ? wireIntents.length : null,
+          toolResultCaptureCount: Array.isArray(profileBlob.nativeToolResultSourceCaptures)
+            ? profileBlob.nativeToolResultSourceCaptures.length : null,
+          submittedPromptFacts: submittedPromptFacts.map(prompt => ({ length: prompt.length,
+            matchesAuthorizedPrompt: authorizedPromptHashes.includes(prompt.sha256),
+            matchesCanonicalExecutionPrompt: prompt.sha256 === canonicalManagedPromptHash,
+            matchesWireText: userTextFacts.some(fact => fact.length === prompt.length && fact.matchesSubmittedPrompt) })),
+          authorizedPromptCount: authorizedPromptHashes.length, canonicalManagedPromptLength: canonicalManagedPrompt.length,
+          authorityContainsCanonicalPrompt: authorizedPromptHashes.includes(canonicalManagedPromptHash) })}`);
         req.headers.authorization = `Bearer ${minted.token}`;
         next();
       };
-      if (managedConfigReadOnlyVerified) continueRequest();
+      if (managedConfigReadOnlyVerified) void continueRequest().catch(next);
       else void assertManagedConfigIsReadOnlyBeforeSpawn().then(() => {
         managedConfigReadOnlyVerified = true;
-        continueRequest();
+        return continueRequest();
       }).catch(next);
     });
     app.use(runtimeConnectionIntentRoutes(db, gateway));
@@ -376,8 +515,66 @@ describe("managed OpenCode source-closure binary integration", () => {
       PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: String(profile.maxOutputTokens),
       PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: `https://127.0.0.1:${address.port}` };
     const diagnostics: string[] = [];
+    const capabilityPayload = JSON.parse(Buffer.from(minted.token.split(".")[1]!, "base64url").toString("utf8")) as Record<string, unknown>;
+    const workerModelClaims = capabilityPayload.worker_model && typeof capabilityPayload.worker_model === "object"
+      ? capabilityPayload.worker_model as Record<string, unknown> : {};
+    const [livePlan] = await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id, plan.id));
+    const [liveWorker] = await db.select().from(orchestrationWorkers).where(eq(orchestrationWorkers.id, worker!.id));
+    const [liveAttempt] = await db.select().from(orchestrationWorkerAttempts).where(eq(orchestrationWorkerAttempts.runId, run!.id));
+    const [liveRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, run!.id));
+    const [liveManifest] = await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.id, manifest!.record.id));
+    const liveTask = (await db.select().from(issues).where(eq(issues.id, task.id)))[0];
+    const manifestBody = liveManifest?.manifest as Record<string, unknown> | undefined;
+    const manifestPrincipal = manifestBody?.responsibleUserId;
+    diagnostics.push(`governance fixture predicates: ${JSON.stringify({
+      planStatus: livePlan?.status, planActionClass: livePlan?.actionClass, planRiskClass: livePlan?.riskClass,
+      planStarted: livePlan?.startedAt instanceof Date, planUnexpired: livePlan?.startedAt instanceof Date &&
+        Date.now() < livePlan.startedAt.getTime() + Number(livePlan.budgets.maxWallClockSeconds) * 1000,
+      planVersionMatchesCapability: livePlan?.version === workerModelClaims.expectedPlanVersion,
+      budgetCostAvailable: livePlan?.budgets.maxModelCostMinor !== null && livePlan?.budgets.maxModelCostMinor !== undefined,
+      workerRunning: liveWorker?.status === "running", workerAgentMatches: liveWorker?.agentId === agentId,
+      attemptRunning: liveAttempt?.status === "running", attemptAgentMatches: liveAttempt?.agentId === agentId,
+      attemptRunMatches: liveAttempt?.runId === run!.id, attemptManifestMatches: liveAttempt?.executionManifestId === manifest!.record.id,
+      runRunning: liveRun?.status === "running", runNative: liveRun?.runtimeMode === "native",
+      runTaskMatches: liveRun?.nativeIssueId === task.id, runUserMatches: liveRun?.responsibleUserId === f.userId,
+      manifestPrincipalMatches: manifestPrincipal === f.userId,
+      manifestScopesCompanyScoped: !!liveManifest?.manifest.executionScope.delegatedScopes.every(scope => scope.companyId === companyId),
+      taskAssigned: liveTask?.assigneeAgentId === agentId, taskRunMatches: liveTask?.executionRunId === run!.id,
+    })}`);
     let runtimeDirectory = "";
     let configDirectory = "";
+    const processTreeTimers: ReturnType<typeof setInterval>[] = [];
+    let managedProviderConfigReported = false;
+    const pgMonitor = postgres(database.connectionString, { max: 1 });
+    let pgMonitorTimer: ReturnType<typeof setInterval> | undefined;
+    let pgMonitorInFlight = false;
+    const inspectPostgresWaits = async () => {
+      if (pgMonitorInFlight) return;
+      pgMonitorInFlight = true;
+      try {
+        const [sample] = await pgMonitor<{ active: number; idleInTransaction: number; waiters: Array<{
+          pid: number; waitEventType: string | null; waitEvent: string | null; blockedBy: number[]; queryKind: string;
+        }> }[]>`
+          select count(*) filter (where state = 'active')::int as active,
+            count(*) filter (where state = 'idle in transaction')::int as "idleInTransaction",
+            coalesce(json_agg(json_build_object('pid', pid, 'waitEventType', wait_event_type,
+              'waitEvent', wait_event, 'blockedBy', pg_blocking_pids(pid),
+              'queryKind', case when query ilike '%issues%' then 'issues'
+                when query ilike '%heartbeat_runs%' then 'heartbeat_runs'
+                when query ilike '%native_run_finalizations%' then 'run_finalizations'
+                else lower(split_part(query, ' ', 1)) end))
+              filter (where state = 'active' and wait_event_type is not null), '[]'::json) as waiters
+          from pg_stat_activity where datname = current_database() and pid <> pg_backend_pid()
+        `;
+        if (sample) diagnostics.push(`independent PG wait sample: ${JSON.stringify(sample)}`);
+      } catch (error) {
+        const code = error && typeof error === "object" && "code" in error && typeof error.code === "string"
+          ? error.code : "unavailable";
+        diagnostics.push(`independent PG wait sample unavailable: ${code}`);
+      } finally {
+        pgMonitorInFlight = false;
+      }
+    };
     const findManagedOpenCodeConfig = async (directory: string, depth = 0): Promise<string | null> => {
       if (depth > 16) return null;
       const entries = await readdir(directory, { withFileTypes: true }).catch(() => []);
@@ -407,11 +604,53 @@ describe("managed OpenCode source-closure binary integration", () => {
       if (modes.some((mode, index) => mode !== [0o500, 0o400, 0o400, 0o400][index]))
         throw new Error(`managed_opencode_config_not_read_only_before_spawn:${modes.map(mode => mode.toString(8)).join(",")}`);
       diagnostics.push(`managed config modes before spawn: ${modes.map(mode => mode.toString(8)).join(",")}`);
+      if (!managedProviderConfigReported) {
+        const config = JSON.parse(await readFile(join(configDirectory, "opencode.json"), "utf8")) as Record<string, unknown>;
+        const provider = config.provider && typeof config.provider === "object"
+          ? (config.provider as Record<string, unknown>).anthropic as Record<string, unknown> | undefined : undefined;
+        const options = provider?.options && typeof provider.options === "object"
+          ? provider.options as Record<string, unknown> : {};
+        diagnostics.push(`managed provider config: apiKey=${options.apiKey === "paperclip-managed-model-broker" ? "placeholder" : "missing"} baseURL=${typeof options.baseURL === "string" && options.baseURL.startsWith("https://127.0.0.1:") ? "local" : "missing"}`);
+        managedProviderConfigReported = true;
+      }
     };
     const onSpawn = async ({ pid }: { pid: number }) => {
-      diagnostics.push(`OpenCode pid ${pid}`);
-      const environment = (await readFile(`/proc/${pid}/environ`, "utf8").catch(() => "")).split("\0");
-      diagnostics.push(`managed OpenCode spawn env: brokerOrigin=${environment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN=")) ? "present" : "missing"}, inputCap=${environment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND=")) ? "present" : "missing"}, outputCap=${environment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS=")) ? "present" : "missing"}, placeholderKey=${environment.includes("ANTHROPIC_API_KEY=paperclip-managed-model-broker") ? "present" : "missing"}, xdgConfig=${environment.find(value => value.startsWith("XDG_CONFIG_HOME="))?.slice("XDG_CONFIG_HOME=".length) ?? "missing"}`);
+      diagnostics.push(`runnerd host pid ${pid}`);
+      const runnerEnvironment = (await readFile(`/proc/${pid}/environ`, "utf8").catch(() => "")).split("\0");
+      diagnostics.push(`runnerd host managed environment: brokerOrigin=${runnerEnvironment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN=")) ? "present" : "missing"} inputCap=${runnerEnvironment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND=")) ? "present" : "missing"} outputCap=${runnerEnvironment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS=")) ? "present" : "missing"}`);
+      const observed = new Set<number>();
+      const inspect = async () => {
+        const descendants: Array<{ pid: number; parent: number }> = [];
+        const pending = [pid];
+        const parents = new Map<number, number>();
+        for (let depth = 0; pending.length > 0 && depth < 8; depth += 1) {
+          const parentPid = pending.shift()!;
+          const children = await readFile(`/proc/${parentPid}/task/${parentPid}/children`, "utf8").catch(() => "");
+          for (const rawChildPid of children.trim().split(/\s+/)) {
+            const childPid = Number(rawChildPid);
+            if (!Number.isSafeInteger(childPid) || childPid <= 0 || parents.has(childPid)) continue;
+            parents.set(childPid, parentPid);
+            descendants.push({ pid: childPid, parent: parentPid });
+            pending.push(childPid);
+          }
+        }
+        for (const { pid: childPid, parent: parentPid } of descendants) {
+          if (observed.has(childPid)) continue;
+          observed.add(childPid);
+          const [executablePath, comm, environmentText] = await Promise.all([
+            readlink(`/proc/${childPid}/exe`).catch(() => "unknown"),
+            readFile(`/proc/${childPid}/comm`, "utf8").catch(() => "unknown"),
+            readFile(`/proc/${childPid}/environ`, "utf8").catch(() => ""),
+          ]);
+          const environment = environmentText.split("\0");
+          const executable = executablePath.split("/").at(-1) || "unknown";
+          const isOpenCodeProcess = /opencode/i.test(executable);
+          diagnostics.push(`runner descendant pid=${childPid} parent=${parentPid} executable=${executable} comm=${comm.trim()} openCode=${isOpenCodeProcess ? "yes" : "no"} brokerOrigin=${environment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN=")) ? "present" : "missing"} inputCap=${environment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND=")) ? "present" : "missing"} outputCap=${environment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS=")) ? "present" : "missing"} placeholderKey=${environment.includes("ANTHROPIC_API_KEY=paperclip-managed-model-broker") ? "present" : "missing"}`);
+        }
+      };
+      const timer = setInterval(() => { void inspect(); }, 250);
+      void inspect();
+      processTreeTimers.push(timer);
     };
     try {
       const result = await executePaperclipNativeSession({ db, execution, bootstrapSourceClosure, useRunnerd: true, onSpawn,
@@ -424,11 +663,26 @@ describe("managed OpenCode source-closure binary integration", () => {
               const event = envelope.event && typeof envelope.event === "object" ? envelope.event as Record<string, unknown> : null;
               if (event) {
                 const payload = event.payload && typeof event.payload === "object" ? event.payload as Record<string, unknown> : {};
+                if (event.eventType === "turn.submitted") {
+                  const submittedText = typeof payload.text === "string" ? payload.text :
+                    payload.message && typeof payload.message === "object" && typeof (payload.message as Record<string, unknown>).text === "string"
+                      ? (payload.message as Record<string, unknown>).text as string : null;
+                  if (submittedText !== null) submittedPromptFacts.push({ length: submittedText.length,
+                    sha256: canonicalHash(submittedText) });
+                  diagnostics.push(`turn submitted prompt metadata: ${JSON.stringify({ textPresent: submittedText !== null,
+                    textLength: submittedText?.length ?? null })}`);
+                }
                 const safe = { eventType: event.eventType, payloadType: payload.type, status: payload.status,
                   code: payload.code, reasonCode: payload.reasonCode,
                   tool: typeof payload.name === "string" ? payload.name : undefined,
                   payloadKeys: Object.keys(payload).sort() };
                 diagnostics.push(`runner ${stream} event: ${JSON.stringify(safe)}`);
+                if (event.eventType === "session.started")
+                  void assertManagedConfigIsReadOnlyBeforeSpawn().catch(() => diagnostics.push("managed config probe unavailable"));
+                if (event.eventType === "session.started" && !pgMonitorTimer) {
+                  pgMonitorTimer = setInterval(() => { void inspectPostgresWaits(); }, 5_000);
+                  void inspectPostgresWaits();
+                }
                 if (event.eventType === "turn.failed") {
                   const failure = payload.error;
                   if (typeof failure === "string")
@@ -452,11 +706,20 @@ describe("managed OpenCode source-closure binary integration", () => {
           }
         } }).catch(error => {
           preserveDebugArtifacts = true;
-          throw new Error(`${error instanceof Error ? error.message : String(error)}\n${diagnostics.join("\n")}\nBroker: ${brokerRequests.join(", ")}\nArtifacts: ${runRoot}`);
+          const failure = error instanceof Error ? error as Error & { code?: unknown; cause?: { code?: unknown }; stage?: unknown } : null;
+          const safeCode = (value: unknown) => typeof value === "string" && /^[a-z0-9_]{1,120}$/i.test(value) ? value : undefined;
+          const frames = failure?.stack?.split("\n").slice(1)
+            .filter(line => /^\s*at /.test(line)).slice(0, 6)
+            .map(line => line.trim().replace(/\s+/g, " ").slice(0, 220)) ?? [];
+          const metadata = { name: failure?.name ?? "UnknownError", code: safeCode(failure?.code),
+            causeCode: safeCode(failure?.cause?.code), stage: safeCode(failure?.stage), frames };
+          diagnostics.push(`execution failure metadata: ${JSON.stringify(metadata)}`);
+          const safeMessage = safeCode(failure?.message) ?? "native_session_execution_failed";
+          throw new Error(`${safeMessage}\n${diagnostics.join("\n")}\nBroker: ${brokerRequests.join(", ")}\nArtifacts: ${runRoot}`);
         });
       if (result.exitCode !== 0) {
         preserveDebugArtifacts = true;
-        throw new Error(`managed_opencode_runner_exit_${result.exitCode}; providerResponses=${responseCount}\n${diagnostics.join("\n")}\nBroker: ${brokerRequests.join(", ")}\nArtifacts: ${runRoot}`);
+        throw new Error(`managed_opencode_runner_exit_${result.exitCode}; providerResponses=${responseCount}; fakeFetchEntrances=${JSON.stringify(fakeFetchEntrances)}\n${diagnostics.join("\n")}\nBroker: ${brokerRequests.join(", ")}\nArtifacts: ${runRoot}`);
       }
       expect(responseCount).toBeGreaterThanOrEqual(2);
       const assertManagedConfigCleanup = async () => {
@@ -480,6 +743,9 @@ describe("managed OpenCode source-closure binary integration", () => {
       await warmSession.close({ reason: "managed E2E warm-start probe complete" });
       await assertManagedConfigCleanup();
     } finally {
+      for (const timer of processTreeTimers) clearInterval(timer);
+      if (pgMonitorTimer) clearInterval(pgMonitorTimer);
+      await pgMonitor.end({ timeout: 1 });
       broker.closeAllConnections();
       await new Promise<void>(resolveClose => broker.close(() => resolveClose()));
     }

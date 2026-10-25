@@ -4,7 +4,7 @@ import {assertAnalyticalContextPayloadAccess} from "../analytical-context-author
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { withOrchestrationNativeTool, lockNativeToolPlan, assertNativeToolPlanCurrent } from "../orchestration/native-tool-boundary.js";
-import type { createAssignedMcpTools } from "./assigned-mcp-tools.js";
+import { createAssignedMcpTools, getAssignedMcpGateway } from "./assigned-mcp-tools.js";
 import { assertAssignableAgent } from "../agent-assignability.js";
 import { authorizationService, canActorReadIssuePrivacy, issueReadSqlCondition, type AuthorizationActor } from "../authorization.js";
 import { handoffPlanContext } from "./handoff-plan-context.js";
@@ -28,7 +28,7 @@ import {
 import { runnerApiToolsEnabled } from "./runner-api-rollout.js";
 import { openRunnerApiWorkspaceFile } from "./runner-api-files.js";
 import { basename } from "node:path";
-import { createLocalAgentJwt, type NativeToolEffectClaim } from "../../agent-auth-jwt.js";
+import { createLocalAgentJwt, verifyLocalAgentJwt, type NativeToolEffectClaim } from "../../agent-auth-jwt.js";
 import { getStorageService } from "../../storage/index.js";
 import type { StorageService } from "../../storage/types.js";
 import { assetService } from "../assets.js";
@@ -48,6 +48,7 @@ import {
   documents,
   documentRevisions,
   heartbeatRuns,
+  companyMemberships,
   issueApprovals,
   issueComments,
   issueDocuments,
@@ -55,6 +56,11 @@ import {
   issueThreadInteractions,
   nativeRunFinalizations,
 } from "@paperclipai/db";
+import {
+  bindManagedNativeMemoryOutputCapture,
+  managedNativeRememberToolDescriptor,
+  type ScopedToolGatewayContext,
+} from "../tool-gateway.js";
 import { CAPABILITY_SEMANTIC_TOOL_CATALOG, runnerCodexDynamicToolsFit } from "../../vendor/paperclip-runner/index.js";
 import { agentService } from "../agents.js";
 import { approvalService } from "../approvals.js";
@@ -99,6 +105,8 @@ const IMPLEMENTED_OPERATIONS = new Set([
   "list_documents", "read_document", "list_document_revisions", "write_document",
   "list_agents", "get_agent", "list_approvals", "get_approval", "get_approval_context",
 ]);
+const MANAGED_NATIVE_REMEMBER_TOOL = "self_remember";
+const MANAGED_NATIVE_REMEMBER_GATEWAY_TOOL = "paperclip-self:remember";
 
 const NATIVE_REVIEW_READ_TOOLS = new Set([
   "get_task_context", "get_task_history", "list_documents", "read_document", "list_document_revisions",
@@ -360,6 +368,14 @@ export class PaperclipRunnerToolAuthority {
     definitions.push(LIST_CHAT_ATTACHMENTS_TOOL_DEFINITION);
     definitions.push(REUSE_CHAT_ATTACHMENT_TOOL_DEFINITION);
     definitions.push(READ_CHAT_ATTACHMENT_TOOL_DEFINITION);
+    if (this.binding.nativeModelOutputCapture) {
+      const remember = managedNativeRememberToolDescriptor();
+      definitions.push({
+        name: MANAGED_NATIVE_REMEMBER_TOOL,
+        description: remember.description,
+        inputSchema: structuredClone(remember.parametersSchema),
+      });
+    }
     if(this.binding.managementToolsEnabled)definitions.push(...MANAGEMENT_ANALYTICAL_TOOL_DEFINITIONS);
     const connectionTools = [...RUNTIME_CONNECTION_TOOL_DEFINITIONS,
       ...(this.binding.connectorAssignments ?? []).flatMap((assignment) => assignment.tools)];
@@ -385,9 +401,11 @@ export class PaperclipRunnerToolAuthority {
     if (this.binding.nativeModelOutputCapture) {
       const capture = this.binding.nativeModelOutputCapture.value;
       const use = capture?.managedOpenCodeToolUse;
-      if (["write_document", "create_task"].includes(call.tool) && !use)
+      if (["write_document", "create_task", MANAGED_NATIVE_REMEMBER_TOOL].includes(call.tool) && !use)
         throw forbidden("Managed OpenCode output effect has no settled provider tool-use capture");
-      if (use && (use.callId !== call.callId || use.toolName !== call.tool ||
+      const captureToolName = call.tool === MANAGED_NATIVE_REMEMBER_TOOL
+        ? MANAGED_NATIVE_REMEMBER_GATEWAY_TOOL : call.tool;
+      if (use && (use.callId !== call.callId || use.toolName !== captureToolName ||
         use.argumentsHash !== nativeSha256(call.arguments)))
         throw forbidden("Managed OpenCode output effect does not match its exact provider tool use");
     }
@@ -396,7 +414,8 @@ export class PaperclipRunnerToolAuthority {
       const documentSource: { value: DocumentRevisionSourceCapture | null } = { value: null };
       const result = await withOrchestrationNativeTool(this.db, this.binding, call,
         () => this.#executeAdmitted(call, source => { documentSource.value = source; }, options.onProjectToolResult),
-        call.tool !== "paperclip_search_assigned_tools" && (this.binding.assignedMcpTools?.has(call.tool) ?? false));
+        call.tool === MANAGED_NATIVE_REMEMBER_TOOL ||
+          (call.tool !== "paperclip_search_assigned_tools" && (this.binding.assignedMcpTools?.has(call.tool) ?? false)));
       if (call.tool === "read_document") {
         const resultDigest = createHash("sha256").update(JSON.stringify(result)).digest("hex");
         const exactCapture = documentSource.value?.returnedResultDigest === resultDigest ? documentSource.value : null;
@@ -526,6 +545,7 @@ export class PaperclipRunnerToolAuthority {
     }
     if (
       !IMPLEMENTED_OPERATIONS.has(call.tool) &&
+      !(call.tool === MANAGED_NATIVE_REMEMBER_TOOL && this.binding.nativeModelOutputCapture) &&
       call.tool !== READ_CURRENT_WAKE_COMMENTS_TOOL_NAME &&
       call.tool !== LIST_CHAT_ATTACHMENTS_TOOL_NAME &&
       call.tool !== REUSE_CHAT_ATTACHMENT_TOOL_NAME &&
@@ -732,6 +752,7 @@ export class PaperclipRunnerToolAuthority {
         return { revisions };
       }
       case "write_document": return this.#writeDocument(input);
+      case MANAGED_NATIVE_REMEMBER_TOOL: return this.#rememberManagedNativeMemory(call);
       case "list_agents":
         return { actors: (await agentService(this.db).list(this.binding.companyId)).map(redactedActor) };
       case "get_agent": {
@@ -882,6 +903,69 @@ export class PaperclipRunnerToolAuthority {
       await tx.update(heartbeatRuns).set({ resultJson: { ...resultJson, apiToolReceipts: receipts } }).where(eq(heartbeatRuns.id, this.binding.runId));
     });
     return result;
+  }
+
+  async #rememberManagedNativeMemory(call: { tool: string; callId: string; arguments: unknown }) {
+    const capture = this.binding.nativeModelOutputCapture?.value;
+    const use = capture?.managedOpenCodeToolUse;
+    if (!capture || !use || use.callId !== call.callId ||
+      use.toolName !== MANAGED_NATIVE_REMEMBER_GATEWAY_TOOL ||
+      use.argumentsHash !== nativeSha256(call.arguments)) {
+      throw forbidden("Managed Memory write has no exact provider tool-use capture");
+    }
+    const current = await this.#boundContext();
+    const token = createLocalAgentJwt(this.binding.agentId, this.binding.companyId,
+      current.actor.adapterType, this.binding.runId, current.run.responsibleUserId);
+    const claims = token ? verifyLocalAgentJwt(token) : null;
+    if (!claims || claims.sub !== this.binding.agentId || claims.company_id !== this.binding.companyId ||
+      claims.run_id !== this.binding.runId ||
+      (claims.responsible_user_id ?? null) !== (current.run.responsibleUserId ?? null)) {
+      throw forbidden("Managed Memory requires the current verified Agent credential");
+    }
+    const memberships = current.run.responsibleUserId
+      ? await this.db.select({ companyId: companyMemberships.companyId,
+          membershipRole: companyMemberships.membershipRole, status: companyMemberships.status })
+          .from(companyMemberships).where(and(eq(companyMemberships.companyId, this.binding.companyId),
+            eq(companyMemberships.principalType, "user"),
+            eq(companyMemberships.principalId, current.run.responsibleUserId)))
+      : [];
+    const actor: AuthorizationActor = {
+      type: "agent", source: "agent_jwt", companyId: claims.company_id,
+      agentId: claims.sub, runId: claims.run_id,
+      onBehalfOfUserId: claims.responsible_user_id ?? null,
+      authenticatedCredentialExpiresAt: claims.exp * 1000,
+      keyScope: claims.key_scope ?? { kind: "standard" },
+      onBehalfOfMemberships: memberships,
+    };
+    const gateway = getAssignedMcpGateway(this.db);
+    const session = await gateway.createSession({
+      companyId: this.binding.companyId,
+      agentId: this.binding.agentId,
+      runId: this.binding.runId,
+      issueId: this.binding.issueId,
+      authorizationActor: actor,
+      actorType: "agent",
+      actorId: this.binding.agentId,
+    });
+    const scopedContext: ScopedToolGatewayContext = {
+      session,
+      assertCurrent: async descriptor => {
+        const stillCurrent = await this.#boundContext();
+        if (session.companyId !== this.binding.companyId || session.agentId !== this.binding.agentId ||
+          session.runId !== this.binding.runId || session.issueId !== this.binding.issueId ||
+          (session.responsibleUserId ?? null) !== (stillCurrent.run.responsibleUserId ?? null) ||
+          (descriptor && descriptor.name !== MANAGED_NATIVE_REMEMBER_GATEWAY_TOOL)) {
+          throw forbidden("Managed Memory Tool Gateway session changed");
+        }
+      },
+    };
+    bindManagedNativeMemoryOutputCapture(scopedContext, capture);
+    return gateway.executeTool({
+      sessionToken: session.token,
+      tool: MANAGED_NATIVE_REMEMBER_GATEWAY_TOOL,
+      parameters: record(call.arguments),
+      idempotencyKey: `aw-native-tool:${this.binding.runId}:${use.callId}`,
+    }, undefined, scopedContext);
   }
 
   async #readApiFile(file: RunnerApiFile): Promise<{ bytes: Buffer; filename: string; contentType: string }> {

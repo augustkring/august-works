@@ -104,7 +104,33 @@ async function managedJsonbSha256(db: Db, value: unknown): Promise<string> {
   return row.digest;
 }
 
-async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, request: Record<string, unknown>) {
+/** Keep database diagnostics finite and content-free at the managed model boundary. */
+function managedSqlFailureDetails(error: unknown): Record<string, string> {
+  let value: unknown = error;
+  for (let depth = 0; depth < 3; depth++) {
+    if (!value || typeof value !== "object") break;
+    const candidate = value as Record<string, unknown>;
+    const code = typeof candidate.code === "string" && /^[0-9A-Z]{5}$/.test(candidate.code)
+      ? candidate.code : undefined;
+    const constraint = typeof candidate.constraint_name === "string" && /^[a-zA-Z0-9_]{1,96}$/.test(candidate.constraint_name)
+      ? candidate.constraint_name : typeof candidate.constraint === "string" && /^[a-zA-Z0-9_]{1,96}$/.test(candidate.constraint)
+        ? candidate.constraint : undefined;
+    const table = typeof candidate.table_name === "string" && /^[a-zA-Z0-9_]{1,96}$/.test(candidate.table_name)
+      ? candidate.table_name : undefined;
+    if (code || constraint || table) return {
+      ...(code ? { sqlState: code } : {}),
+      ...(constraint ? { constraint } : {}),
+      ...(table ? { table } : {}),
+    };
+    value = candidate.cause;
+  }
+  return {};
+}
+
+async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, request: Record<string, unknown>): Promise<{
+  promptHash: string;
+  sourceSetHash: string;
+}> {
   await assertNativeAnalyticalRunPayloadAccess(db, claims.company_id, claims.run_id);
   const [run] = await db.select().from(heartbeatRuns).where(and(
     eq(heartbeatRuns.companyId, claims.company_id), eq(heartbeatRuns.id, claims.run_id),
@@ -170,13 +196,14 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
       input_schema: tool.input_schema };
   }).sort((a, b) => a.name.localeCompare(b.name));
   if (!isDeepStrictEqual(actualTools, expectedTools) ||
-    actualTools.some((tool) => !["read_document", "write_document", "create_task", "paperclip_finish", "paperclip_block"].includes(tool.name)))
+    actualTools.some((tool) => !["read_document", "write_document", "create_task", "self_remember", "paperclip_finish", "paperclip_block"].includes(tool.name)))
     throw forbidden("Managed OpenCode tool schemas do not match the exact current Native catalog");
 
   const intents = Array.isArray(profile.nativeAwModelWireIntents) ? profile.nativeAwModelWireIntents.map(managedRecord) : [];
   const captures = Array.isArray(profile.nativeToolResultSourceCaptures) ? profile.nativeToolResultSourceCaptures.map(managedRecord) : [];
   const associations = Array.isArray(profile.nativeToolCallDispatchAssociations) ? profile.nativeToolCallDispatchAssociations.map(managedRecord) : [];
   let sawAuthorizedUserPrompt = false;
+  let currentPromptBinding: { promptHash: string; sourceSetHash: string } | null = null;
   const priorProviderToolUses = new Set<string>();
   const consumedProviderToolUses = new Set<string>();
   for (const messageValue of Array.isArray(request.messages) ? request.messages : []) {
@@ -216,6 +243,7 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
           if (typeof block.text !== "string" || !prompts.includes(promptHash) || promptBindings.length !== 1)
             throw forbidden("Managed OpenCode user history is outside the current server-owned prompt receipts");
           const bindingHash = promptBindings[0]!.sourceSetHash;
+          currentPromptBinding = { promptHash, sourceSetHash: bindingHash };
           const bootstrapSourceSet = { policy: receipt.data.bootstrap.policy, inputs: receipt.data.bootstrap.inputs };
           if (bindingHash === nativeSha256(bootstrapSourceSet)) {
             await assertNativePayloadSourceSetCurrent(db, { companyId: claims.company_id,
@@ -253,7 +281,7 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
         }
         const capture = captures.find((item) => item.managedOpenCode === true && item.callId === block.tool_use_id &&
           item.tool === toolName && typeof item.resultDigest === "string");
-        if (!capture || !["read_document", "write_document", "create_task"].includes(toolName) ||
+        if (!capture || !["read_document", "write_document", "create_task", "self_remember"].includes(toolName) ||
           !associations.some((item) => item.callId === block.tool_use_id && item.tool === toolName && typeof item.turnId === "string"))
           throw forbidden("Managed OpenCode tool result has no original qualified invocation receipt");
         const source = managedRecord(capture.source);
@@ -326,6 +354,8 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
     }
   }
   if (!sawAuthorizedUserPrompt) throw forbidden("Managed OpenCode request is missing its server-owned task input");
+  if (!currentPromptBinding) throw forbidden("Managed OpenCode request is missing its current Native prompt binding");
+  return currentPromptBinding;
 }
 
 /** A Native worker's single inference boundary. It never supplies a provider
@@ -1166,7 +1196,8 @@ export function workerModelGateway(db: Db, options: Options) {
         maxOutputTokens: state.profile.maxOutputTokens,
         maximumEnvelopeBytes: state.profile.maximumEnvelopeBytes,
       });
-      await assertManagedOpenCodeRequestSources(db, bound, qualifiedInput.request as unknown as Record<string, unknown>);
+      const requestSourceBinding = await assertManagedOpenCodeRequestSources(db, bound,
+        qualifiedInput.request as unknown as Record<string, unknown>);
       const inputHash = nativeSha256(qualifiedInput.providerRequest);
       const callId = `messages:${inputHash}`;
       const reservations = modelReservationService(db, {
@@ -1217,13 +1248,36 @@ export function workerModelGateway(db: Db, options: Options) {
         void assertCurrent().catch(cancel).finally(() => { checking = false; });
       }, 1000);
       let financiallySettled = false;
+      let managedFailureStage:
+        | "provider_authority_recheck"
+        | "credential_lookup"
+        | "credential_recheck"
+        | "wire_authority_recheck"
+        | "wire_run_binding"
+        | "wire_receipt_binding"
+        | "wire_intent_budget"
+        | "wire_intent_write"
+        | "provider_transport"
+        | "reservation_settlement"
+        | "response_run_binding"
+        | "response_history_revalidation"
+        | "response_receipt_binding"
+        | "response_wire_intent_match"
+        | "response_result_identity"
+        | "response_source_union"
+        | "response_receipt_finalize"
+        | "response_capture_write"
+        | "post_response_recheck" = "provider_authority_recheck";
       try {
         if (callerSignal?.aborted) controller.abort();
         await assertCurrent();
+        managedFailureStage = "credential_lookup";
         const credential = await aiConnectionService(db).credential(state.selection);
+        managedFailureStage = "credential_recheck";
         const fresh = await assertCurrent();
         if (createHash("sha256").update(credential).digest("hex") !== fresh.credentialSha256)
           throw forbidden("Worker credential changed before provider dispatch");
+        managedFailureStage = "provider_transport";
         const result = await anthropicManagedMessagesCall(raw, {
           model: state.profile.tariff.model,
           maxOutputTokens: state.profile.maxOutputTokens,
@@ -1232,6 +1286,7 @@ export function workerModelGateway(db: Db, options: Options) {
         }, credential, controller.signal, {
           fetch: options.fetch,
           onWireDispatch: async (wire) => {
+            managedFailureStage = "wire_authority_recheck";
             const receipt: WorkerModelDispatchWireReceipt = {
               ...wire, reservationId: reservation.id, callId, requestHash: inputHash,
             };
@@ -1239,36 +1294,68 @@ export function workerModelGateway(db: Db, options: Options) {
               const fresh = await current(tx, bound);
               if (fresh.authorityHash !== state.authorityHash)
                 throw forbidden("Worker source authority changed before wire dispatch");
+              managedFailureStage = "wire_run_binding";
               const [run] = await tx.select().from(heartbeatRuns).where(and(
                 eq(heartbeatRuns.companyId, claims.company_id), eq(heartbeatRuns.id, claims.run_id),
                 eq(heartbeatRuns.agentId, claims.sub), eq(heartbeatRuns.status, "running"),
               )).for("update");
               const profile = run?.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson)
                 ? run.runnerProfileJson as Record<string, unknown> : null;
+              managedFailureStage = "wire_receipt_binding";
               const sourceReceipt = profile && nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
-              const prior = profile?.nativeAwModelWireIntents;
+              // The first dispatch has no wire-intent list yet. Treat only an
+              // absent list as empty; malformed or caller-shaped values still
+              // fail closed, and every later intent is appended transactionally.
+              const prior = profile?.nativeAwModelWireIntents === undefined
+                ? [] : profile.nativeAwModelWireIntents;
               if (!run || !profile || !sourceReceipt?.success || !Array.isArray(prior) || prior.length >= 64 ||
                 prior.some((entry) => entry && typeof entry === "object" && !Array.isArray(entry) &&
                   (entry as Record<string, unknown>).reservationId === receipt.reservationId))
                 throw forbidden("The Native source receipt cannot bind this model dispatch");
+              const authority = managedRecord(profile.nativeOpenCodeSourceAuthority);
+              const promptBindings = Array.isArray(authority.promptSourceBindings)
+                ? authority.promptSourceBindings.map(managedRecord).filter((binding) =>
+                    binding.promptHash === requestSourceBinding.promptHash &&
+                    binding.sourceSetHash === requestSourceBinding.sourceSetHash)
+                : [];
+              const matchingSourceDispatches = sourceReceipt.data.dispatches.filter((dispatch) =>
+                nativeSha256({ policy: dispatch.policy, inputs: dispatch.inputs }) === requestSourceBinding.sourceSetHash);
+              const matchingTurnDigests = [...new Set(matchingSourceDispatches.map((dispatch) => dispatch.executionInputDigest))];
+              const nativeInputIntents = Array.isArray(profile.nativeModelInputDispatchIntents)
+                ? profile.nativeModelInputDispatchIntents.map(managedRecord).filter((intent) =>
+                    intent.turnInputDigest === matchingTurnDigests[0] &&
+                    intent.responsibleUserId === run.responsibleUserId &&
+                    typeof intent.turnId === "string" && intent.continuation === false)
+                : [];
+              if (promptBindings.length !== 1 || matchingSourceDispatches.length !== 1 ||
+                matchingTurnDigests.length !== 1 || nativeInputIntents.length !== 1 ||
+                !/^[0-9a-f]{64}$/.test(matchingTurnDigests[0] ?? ""))
+                throw forbidden("The managed request is not bound to one acknowledged Native input dispatch");
+              const sourceDispatchDigest = matchingTurnDigests[0]!;
+              managedFailureStage = "wire_intent_budget";
               const sourcePolicyHash = nativeSha256(sourceReceipt.data.bootstrap);
               const intents = [...prior, { reservationId: receipt.reservationId, callId: receipt.callId,
                 requestHash: receipt.requestHash, wireBodyHash: receipt.bodySha256, endpoint: receipt.endpoint,
-                method: receipt.method, sourcePolicyHash }];
+                method: receipt.method, sourcePolicyHash, sourceDispatchDigest,
+                sourceSetHash: requestSourceBinding.sourceSetHash }];
               if (Buffer.byteLength(JSON.stringify(intents), "utf8") > 256 * 1024)
                 throw forbidden("The Native model wire receipt exceeds its bound");
+              managedFailureStage = "wire_intent_write";
               await tx.update(heartbeatRuns).set({ runnerProfileJson: { ...profile, nativeAwModelWireIntents: intents }, updatedAt: new Date() })
                 .where(and(eq(heartbeatRuns.companyId, run.companyId), eq(heartbeatRuns.id, run.id), eq(heartbeatRuns.status, "running")));
             });
             internal?.onWireDispatch?.(receipt);
+            managedFailureStage = "provider_transport";
           },
         });
+        managedFailureStage = "reservation_settlement";
         const outcome = await reservations.recordOutcome(claims.company_id, reservation.id, {
           status: "completed", providerResponseHash: result.responseHash, usage: result.usage,
         });
         financiallySettled = true;
         if (outcome.status !== "completed") throw conflict("Worker model charge could not be confirmed");
         const responseContentHash = nativeSha256(result.responseContent);
+        managedFailureStage = "response_run_binding";
         await db.transaction(async (tx) => {
           const [run] = await tx.select().from(heartbeatRuns).where(and(
             eq(heartbeatRuns.companyId, claims.company_id), eq(heartbeatRuns.id, claims.run_id),
@@ -1278,12 +1365,15 @@ export function workerModelGateway(db: Db, options: Options) {
             ? run.runnerProfileJson as Record<string, unknown> : null;
           const previous = profile?.nativeAwModelWireIntents;
           if (!run || !profile || !Array.isArray(previous)) throw forbidden("The managed model response has no original wire intent");
+          managedFailureStage = "response_history_revalidation";
           await assertManagedOpenCodeRequestSources(tx as unknown as Db, bound,
             qualifiedInput.request as unknown as Record<string, unknown>);
+          managedFailureStage = "response_receipt_binding";
           const sourceReceipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
           if (!sourceReceipt.success || sourceReceipt.data.binding.responsibleUserId !== run.responsibleUserId ||
             sourceReceipt.data.bootstrap.executionInputDigest !== await managedJsonbSha256(tx as unknown as Db, profile.nativeExecutionInput))
             throw forbidden("The managed model response lost its exact Native input receipt");
+          managedFailureStage = "response_wire_intent_match";
           const matches = previous.map((value, index) => ({ value, index })).filter(({ value }) =>
             value && typeof value === "object" && !Array.isArray(value) &&
             (value as Record<string, unknown>).reservationId === reservation.id);
@@ -1291,6 +1381,17 @@ export function workerModelGateway(db: Db, options: Options) {
           const existing = matches[0]!.value as Record<string, unknown>;
           if (existing.responseContentHash !== undefined && existing.responseContentHash !== responseContentHash)
             throw forbidden("The managed model response changed after its original capture");
+          const sourceDispatchDigest = existing.sourceDispatchDigest;
+          const nativeInputIntents = Array.isArray(profile.nativeModelInputDispatchIntents)
+            ? profile.nativeModelInputDispatchIntents.map(managedRecord).filter((intent) =>
+                intent.turnInputDigest === sourceDispatchDigest && intent.responsibleUserId === run.responsibleUserId &&
+                typeof intent.turnId === "string" && intent.continuation === false)
+            : [];
+          if (typeof sourceDispatchDigest !== "string" || !/^[0-9a-f]{64}$/.test(sourceDispatchDigest) ||
+            nativeInputIntents.length !== 1 || typeof existing.sourceSetHash !== "string" ||
+            !/^[0-9a-f]{64}$/.test(existing.sourceSetHash))
+            throw forbidden("The managed model response is not bound to one acknowledged Native input dispatch");
+          managedFailureStage = "response_result_identity";
           const responseToolUses = result.responseContent.flatMap((block) => block.type === "tool_use"
             ? [{ id: block.id, name: block.name, argumentsHash: nativeSha256(block.input) }] : []);
           const priorToolUseIds = new Set(previous.flatMap((value, index) => {
@@ -1306,6 +1407,7 @@ export function workerModelGateway(db: Db, options: Options) {
           const providerDispatch = nativePayloadSourceInputSchema.parse({ kind: "worker_model_dispatch",
             runId: claims.run_id, reservationId: reservation.id, callId: existing.callId,
             requestHash: existing.requestHash, wireBodyHash: existing.wireBodyHash, responseHash: result.responseHash });
+          managedFailureStage = "response_source_union";
           const allInputs = [
             ...sourceReceipt.data.bootstrap.inputs,
             ...sourceReceipt.data.dispatches.flatMap((dispatch) => dispatch.inputs),
@@ -1320,22 +1422,28 @@ export function workerModelGateway(db: Db, options: Options) {
             ...sourceReceipt.data.additionalInputs.flatMap((entry) => entry.policy[key]),
           ])].sort()])) as typeof sourceReceipt.data.bootstrap.policy;
           const dispatch = {
-            executionInputDigest: sourceReceipt.data.bootstrap.executionInputDigest,
+            // Receipt dispatches are append-only. Bind this provider response
+            // to the acknowledged Native input turn that actually carried its
+            // prompt, rather than the broader bootstrap execution-input hash.
+            executionInputDigest: sourceDispatchDigest,
             responsibleUserId: run.responsibleUserId,
             policy: sourcePolicy,
             inputs: nativePayloadSourceInputSchema.array().parse(uniqueInputs),
           };
           const { digest: _oldDigest, ...receiptBody } = sourceReceipt.data;
           const nextReceiptBody = { ...receiptBody, dispatches: [...receiptBody.dispatches, dispatch] };
+          managedFailureStage = "response_receipt_finalize";
           const nextReceipt = { ...nextReceiptBody, digest: await managedJsonbSha256(tx as unknown as Db, nextReceiptBody) };
           if (!nativeRunInputSourceReceiptSchema.safeParse(nextReceipt).success ||
             Buffer.byteLength(JSON.stringify(intents), "utf8") > 256 * 1024)
             throw forbidden("The managed model source closure exceeds its bound");
+          managedFailureStage = "response_capture_write";
           await tx.update(heartbeatRuns).set({ runnerProfileJson: {
             ...profile, nativeAwModelWireIntents: intents, nativeInputSourceReceipt: nextReceipt,
           }, updatedAt: new Date() })
             .where(and(eq(heartbeatRuns.companyId, run.companyId), eq(heartbeatRuns.id, run.id), eq(heartbeatRuns.status, "running")));
         });
+        managedFailureStage = "post_response_recheck";
         await assertCurrent();
         return { reservationId: reservation.id, sse: result.sse };
       } catch (error) {
@@ -1349,7 +1457,11 @@ export function workerModelGateway(db: Db, options: Options) {
           await reservations.recordOutcome(claims.company_id, reservation.id, { status: "unknown", providerResponseHash: null, usage: null }).catch(() => {});
         const reasonCode = financiallySettled ? "worker_model_result_withheld" : "worker_model_unsettled";
         await fence(claims.company_id, bound.worker_model.planId, reasonCode);
-        throw conflict("Worker model result requires human resolution", { code: reasonCode });
+        throw conflict("Worker model result requires human resolution", {
+          code: reasonCode,
+          stage: managedFailureStage,
+          ...managedSqlFailureDetails(error),
+        });
       } finally {
         clearTimeout(timeout);
         clearInterval(watch);

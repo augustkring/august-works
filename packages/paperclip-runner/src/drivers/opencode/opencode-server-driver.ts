@@ -633,7 +633,12 @@ class OpenCodeHarnessSession implements HarnessSession {
     // OpenCode then completes with `finish: unknown` and zero tokens. The
     // native model envelope still carries the authoritative wake delta,
     // interaction responses, completion contract, and current issue context.
-    const prompt = this.#sendFullContext
+    const prompt = this.#runtime.managedModel
+      // Managed Native input is already the complete server-owned envelope.
+      // The generic task wrapper below is a legacy prompt convenience; adding
+      // it here changes the provider bytes after their source receipt is bound.
+      ? input.message.text
+      : this.#sendFullContext
       ? JSON.stringify({
           task: this.#taskEnvelope,
           message: input.message.text,

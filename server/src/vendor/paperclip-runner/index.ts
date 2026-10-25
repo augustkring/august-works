@@ -76,6 +76,7 @@ export const PRP_COMPLETION_TOOL_NAME = runner.PRP_COMPLETION_TOOL_NAME;
 export const PRP_BLOCK_TOOL_NAME = runner.PRP_BLOCK_TOOL_NAME;
 export const PRP_COMPLETION_RESULT_PROVIDER_INPUT_SCHEMA = runner.PRP_COMPLETION_RESULT_PROVIDER_INPUT_SCHEMA;
 export const PRP_BLOCK_RESULT_PROVIDER_INPUT_SCHEMA = runner.PRP_BLOCK_RESULT_PROVIDER_INPUT_SCHEMA;
+export const codexSemanticToolSpecs = runner.codexSemanticToolSpecs;
 export const inspectWarmRunTransition = runner.inspectWarmRunTransition;
 export const readRunnerdArtifactBinding = runner.readRunnerdArtifactBinding;
 export const NativeSessionCleanupQuarantinedError =

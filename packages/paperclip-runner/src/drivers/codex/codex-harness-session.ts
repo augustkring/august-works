@@ -167,8 +167,11 @@ export class CodexHarnessSession
     // or re-invoke a skill whose instructions are already in this session.
     const continuationTurn = input.continuation === true;
     const turnSkills = continuationTurn ? [] : this.skillInputs;
+    if (this.verbatimNativeEnvelope && turnSkills.length > 0) {
+      throw new Error("managed_native_envelope_cannot_add_skill_inputs");
+    }
     const taskText =
-      this.conversationMode === "direct"
+      this.conversationMode === "direct" || this.verbatimNativeEnvelope
         ? input.message.text
         : dispositionOnlyRecovery || continuationTurn
           ? input.message.text

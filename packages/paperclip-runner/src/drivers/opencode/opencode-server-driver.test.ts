@@ -173,6 +173,7 @@ describe("OpenCodeServerDriver", () => {
     expect((await stat(pluginPath)).mode & 0o777).toBe(0o400);
     await session.startTurn({ message: { role: "user", text: "finish" } });
     expect(promptPayload).not.toHaveProperty("tools");
+    expect(promptPayload).toMatchObject({ parts: [{ type: "text", text: "finish" }] });
     await session.close();
   });
   it("advertises within-turn plans as unsupported", async () => {

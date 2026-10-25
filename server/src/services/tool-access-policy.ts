@@ -1447,10 +1447,13 @@ export function toolAccessPolicyService(db: Db) {
     }
   }
 
-  async function recordInvocation(input: ToolAccessDecisionInput, accessDecision: ToolAccessDecision) {
+  async function recordInvocation(input: ToolAccessDecisionInput, accessDecision: ToolAccessDecision,
+    options: { nativeMemoryDraft?: true } = {}) {
     const loaded = await loadContext(input);
     if (!loaded.ok) throw new Error("Cannot record invocation for invalid tool access context");
     const { ctx, redaction } = loaded;
+    if (options.nativeMemoryDraft && (ctx.toolName !== "paperclip-self:remember" || ctx.providerType !== "paperclip_self" ||
+      ctx.riskLevel !== "write")) throw new Error("Invalid Native Memory draft classification");
     const argumentsHash = redaction.summary.sha256 ?? sha256(input.request.arguments ?? {});
     const idempotencyRequestHash = sha256({ actorType: ctx.actorType, actorId: ctx.actorId,
       connectionId: ctx.connectionId, catalogEntryId: ctx.catalogEntryId, toolName: ctx.toolName,
@@ -1497,7 +1500,11 @@ export function toolAccessPolicyService(db: Db) {
       providerType: ctx.providerType,
       applicationKey: ctx.applicationKey,
       upstreamToolName: ctx.upstreamToolName,
-      riskLevel: ctx.riskLevel,
+      // A Native capture-bound Memory remember call creates owner-private
+      // Memory or a shared proposal held for Human review. Keep it within the
+      // existing bounded internal-draft action class; access policy still
+      // evaluates the descriptor's declared write risk before this row exists.
+      riskLevel: options.nativeMemoryDraft ? "low" : ctx.riskLevel,
       toolName: ctx.toolName,
       argumentsHash,
       argumentsSummary: redaction.summary,
