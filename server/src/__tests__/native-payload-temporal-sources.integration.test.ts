@@ -63,7 +63,10 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
         { tool: "paperclip_finish", id: `temporal-finish-first-${randomUUID()}` },
       ],
       privateContextContent: privateRootContent,
-      humanActions: [{ afterModelToolCallId: ids.memoryA, action: "accept_memory_candidate" }],
+      humanActions: [
+        { afterModelToolCallId: ids.memoryA, action: "accept_memory_candidate" },
+        { afterModelToolCallId: ids.memoryA, action: "create_private_context_root" },
+      ],
     });
     expect(first.contextResultConsumers).toContainEqual({ callId: ids.contextR, consumed: true });
     const firstToolResult = (callId: string) => first.toolResults.find(value => value.callId === callId);
@@ -223,6 +226,9 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
     const [retainedMemoryA] = await db.select({ deletedAt: memoryRecords.deletedAt,
       payloadSourceSnapshotInvalidated: memoryRecords.payloadSourceSnapshotInvalidated }).from(memoryRecords)
       .where(and(eq(memoryRecords.companyId, first.companyId), eq(memoryRecords.id, memoryAId)));
+    const [scrubbedRoot] = await db.select({ content: memoryRecords.content, title: memoryRecords.title,
+      deletedAt: memoryRecords.deletedAt }).from(memoryRecords)
+      .where(and(eq(memoryRecords.companyId, first.companyId), eq(memoryRecords.id, privateRootId)));
     const [scrubbedMemoryB] = await db.select({ deletedAt: memoryRecords.deletedAt,
       payloadSourceSnapshotInvalidated: memoryRecords.payloadSourceSnapshotInvalidated }).from(memoryRecords)
       .where(and(eq(memoryRecords.companyId, first.companyId), eq(memoryRecords.id, memoryBId)));
@@ -231,6 +237,7 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
       .where(and(eq(memoryRecords.companyId, first.companyId), eq(memoryRecords.id, memoryCId)));
     expect(retainedMemoryA?.deletedAt).toBeNull();
     expect(retainedMemoryA?.payloadSourceSnapshotInvalidated).toBe(false);
+    expect(scrubbedRoot).toMatchObject({ content: "", title: null, deletedAt: expect.any(Date) });
     expect(scrubbedMemoryB?.deletedAt).not.toBeNull();
     expect(scrubbedMemoryC?.deletedAt).not.toBeNull();
 

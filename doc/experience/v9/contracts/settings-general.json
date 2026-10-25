@@ -16,13 +16,15 @@
     "Missing category jobs remain implementation gaps; navigation, an empty state or a contract does not claim configuration or evidence."
   ],
   "content": {
-    "h1": "General",
+    "h1": "Company",
     "supportingCopy": "Find company identity and currently available cross-company defaults through their existing Original owner. Company-wide locale/timezone defaults are not configured here.",
     "customerTerms": [
+      "General",
       "Company identity",
       "New-agent approval and interaction defaults"
     ],
     "displayedState": [
+      "Stable category heading: General",
       "Company name, description, logo, new-hire approval and interaction resolver settings",
       "No company locale/timezone editor is present in the mapped owner",
       "Only authorized entries are shown; an empty category does not imply support for missing jobs."
@@ -65,14 +67,14 @@
   },
   "states": {
     "loading": "Announce loading only while the current identity/company request is pending.",
-    "empty": "Explain an actual empty authorized result. Missing dependencies or qualified capabilities are separate unavailable states.",
+    "empty": "Explain that no controls are currently available for this access and enabled-capability set; requested settings may not yet be supported.",
     "partial": "Retain trustworthy available results and name unavailable dependencies or sources.",
     "stale": "Hide retained controls during background checks and live authority/source-loss invalidations; query epochs reject late prior responses.",
     "validation_error": "Preserve other entered values, identify the field problem and associate it programmatically with the control.",
     "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
     "permission_denied": "Suppress retained private data and unavailable controls; do not infer additional grants from profile or navigation.",
     "recovering": "Re-resolve canonical state/version and the original request identity before permitting another effect.",
-    "success": "Announce only the server-confirmed canonical result. First value additionally requires independently verified native artifact/run binding."
+    "success": "Show only the current Company navigation result. This screen creates no configuration-success or first-value claim."
   },
   "navigation": {
     "back": "Return to Company or the invoking control through the current company route.",
@@ -81,9 +83,9 @@
     "resume": "Reload current authorized entries, then reopen the Original object/request; never replay a prior mutation."
   },
   "accessibility": {
-    "initialFocus": "Main heading or the dialog category control; keyboard focus is visible and unobscured.",
+    "initialFocus": "Focus the Company page heading after the current authorized read; a category hash deep link moves focus to that category heading.",
     "focusAfterError": "Error summary or first invalid control, with a programmatically associated explanation.",
-    "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
+    "focusAfterSuccess": "There is no mutation-success state here; focus remains at the current Company or requested category heading.",
     "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
     "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
     "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",

@@ -79,7 +79,10 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
       // normal Human review service after its real Gateway call and before
       // the next model request consumes that tool_result in Context.
       privateContextContent: privateRootContent,
-      humanActions: [{ afterModelToolCallId: memoryAId, action: "accept_memory_candidate" }],
+      humanActions: [
+        { afterModelToolCallId: memoryAId, action: "accept_memory_candidate" },
+        { afterModelToolCallId: memoryAId, action: "create_private_context_root" },
+      ],
       onPreserveDebugArtifacts: () => { preserveDebugArtifacts = true; } });
     expect(result.runId).toMatch(/^[0-9a-f-]{36}$/);
     expect(result.sourceReceipt).toBeDefined();

@@ -1861,6 +1861,8 @@ export {
 
 export {
   createCompanySchema,
+  companyLocaleSchema,
+  companyTimeZoneSchema,
   interactionResolverGovernanceSchema,
   updateCompanySchema,
   updateCompanyBrandingSchema,

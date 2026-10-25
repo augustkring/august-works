@@ -88,6 +88,8 @@ function createCompany(id: string) {
     id,
     name: id === companyAId ? "Company A" : "Company B",
     description: null,
+    locale: "en",
+    timezone: "UTC",
     status: "active",
     issuePrefix: id === companyAId ? "CPA" : "CPB",
     issueCounter: 1,
@@ -294,6 +296,39 @@ describe.sequential("company route cross-company authorization", () => {
     const app = await createApp(boardActor({ userId: "local-board", source: "local_implicit" }));
     const res = await request(app).get("/api/companies?scope=accessible").expect(200);
     expect(res.body.map((company: { id: string }) => company.id)).toEqual([companyAId, companyBId]);
+  });
+
+  it("allows an authorized company member to update locale and timezone defaults only in that tenant", async () => {
+    const app = await createApp(boardActor({
+      userId: "settings-admin",
+      companyIds: [companyBId],
+      memberships: [{ companyId: companyBId, membershipRole: "admin", status: "active" }],
+    }));
+
+    await request(app).patch(`/api/companies/${companyBId}`)
+      .send({ locale: "da", timezone: "Europe/Copenhagen" }).expect(200);
+
+    expect(mockCompanyService.update).toHaveBeenCalledWith(
+      companyBId,
+      { locale: "da", timezone: "Europe/Copenhagen" },
+      expect.anything(),
+    );
+  });
+
+  it("rejects unauthenticated company-default changes and invalid timezones before persistence", async () => {
+    const unauthenticated = await createApp({ type: "none", source: "none" });
+    await request(unauthenticated).patch(`/api/companies/${companyAId}`)
+      .send({ locale: "da", timezone: "Europe/Copenhagen" }).expect(403);
+    expect(mockCompanyService.update).not.toHaveBeenCalled();
+
+    const member = await createApp(boardActor({
+      userId: "settings-admin",
+      companyIds: [companyAId],
+      memberships: [{ companyId: companyAId, membershipRole: "admin", status: "active" }],
+    }));
+    await request(member).patch(`/api/companies/${companyAId}`)
+      .send({ timezone: "Mars/Olympus" }).expect(400);
+    expect(mockCompanyService.update).not.toHaveBeenCalled();
   });
 
   it.each([{ type: "none", source: "none" }, companyACeoActor()])(

@@ -7,6 +7,16 @@ import { objectWithoutDefaults } from "./partial.js";
 
 const logoAssetIdSchema = z.string().guid().nullable().optional();
 const feedbackDataSharingTermsVersionSchema = z.string().min(1).nullable().optional();
+export const companyLocaleSchema = z.enum(["en", "da"]);
+
+export const companyTimeZoneSchema = z.string().trim().min(1).max(128).refine((timeZone) => {
+  try {
+    new Intl.DateTimeFormat("en", { timeZone }).format();
+    return true;
+  } catch {
+    return false;
+  }
+}, { message: "Invalid IANA timezone" });
 
 const interactionResolverKindGovernanceSchema = z.object({
   defaultPolicy: z.enum(ISSUE_THREAD_INTERACTION_RESOLVER_POLICIES).optional(),
@@ -35,6 +45,8 @@ export const updateCompanySchema = objectWithoutDefaults(
     .partial()
     .extend({
       status: z.enum(COMPANY_STATUSES).optional(),
+      locale: companyLocaleSchema.optional(),
+      timezone: companyTimeZoneSchema.optional(),
       spentMonthlyCents: z.number().int().nonnegative().optional(),
       requireBoardApprovalForNewAgents: z.boolean().optional(),
       interactionResolverGovernance: interactionResolverGovernanceSchema.optional(),

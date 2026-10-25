@@ -421,6 +421,15 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     await assertCompanyCeoAgentOrBoard(db, companyId, req.actor, capability);
   }
 
+  async function assertCompanyDefaultsAdmin(req: Request, companyId: string) {
+    await assertSameCompanyCeoAgentOrBoard(req, companyId, "company defaults");
+    if (req.actor.type !== "board" || req.actor.source === "local_implicit" || req.actor.isInstanceAdmin) return;
+    const membership = req.actor.memberships?.find((item) => item.companyId === companyId && item.status === "active");
+    if (!membership || !["owner", "admin"].includes(membership.membershipRole)) {
+      throw forbidden("Only a company owner or administrator can change company defaults");
+    }
+  }
+
   function assertSupportCaseExportAccess(req: Request, body: z.infer<typeof companyPortabilityExportSchema>) {
     if (!body.include?.supportCases) return;
     if (req.actor.type !== "board") {
@@ -1387,6 +1396,10 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
   router.patch("/:companyId", async (req, res) => {
     const companyId = req.params.companyId as string;
     await assertSameCompanyCeoAgentOrBoard(req, companyId, "company settings");
+    if (req.actor.type === "board" && req.body && typeof req.body === "object" &&
+        (Object.hasOwn(req.body, "locale") || Object.hasOwn(req.body, "timezone"))) {
+      await assertCompanyDefaultsAdmin(req, companyId);
+    }
 
     const actor = getActorInfo(req);
     let body: Record<string, unknown>;

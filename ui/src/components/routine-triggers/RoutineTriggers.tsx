@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { ScheduleEditor } from "@/components/ScheduleEditor";
 import { useRoutineDetail } from "@/components/routine-sections/context";
+import { useCompany } from "@/context/CompanyContext";
 import { RoutineTriggerCard } from "./TriggerCard";
 import {
   RoutineTriggerWizard,
@@ -64,6 +65,7 @@ function scheduleCron(draft: TriggerDraft) {
 
 export function RoutineTriggers() {
   const ctx = useRoutineDetail();
+  const { selectedCompany } = useCompany();
   const [params, setParams] = useSearchParams();
   const setupId = params.get("triggerSetup");
   const client = useQueryClient();
@@ -348,7 +350,7 @@ function TriggerSetup({
     return (
       saved ?? {
         ...defaultTriggerDraft,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        timezone: selectedCompany?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
         created: false,
       }
     );

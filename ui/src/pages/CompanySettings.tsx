@@ -1,6 +1,7 @@
 import { ChangeEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import {
   type InteractionResolverGovernance,
   type IssueThreadInteractionKind,
@@ -32,6 +33,7 @@ import { InstanceGeneralSettings } from "./InstanceGeneralSettings";
 import { JevSkillSuggestionSettings } from "../components/JevSkillSuggestionSettings";
 
 export function CompanySettings() {
+  const { t } = useTranslation("experience");
   const {
     companies,
     selectedCompany,
@@ -49,6 +51,8 @@ export function CompanySettings() {
   // General settings local state
   const [companyName, setCompanyName] = useState("");
   const [description, setDescription] = useState("");
+  const [locale, setLocale] = useState<"en" | "da">("en");
+  const [timezone, setTimezone] = useState("UTC");
   const [logoUrl, setLogoUrl] = useState("");
   const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
   const [governance, setGovernance] = useState<InteractionResolverGovernance>({});
@@ -58,6 +62,8 @@ export function CompanySettings() {
     if (!selectedCompany) return;
     setCompanyName(selectedCompany.name);
     setDescription(selectedCompany.description ?? "");
+    setLocale(selectedCompany.locale ?? "en");
+    setTimezone(selectedCompany.timezone ?? "UTC");
     setLogoUrl(selectedCompany.logoUrl ?? "");
     setGovernance(selectedCompany.interactionResolverGovernance ?? {});
   }, [selectedCompany]);
@@ -65,12 +71,16 @@ export function CompanySettings() {
   const generalDirty =
     !!selectedCompany &&
     (companyName !== selectedCompany.name ||
-      description !== (selectedCompany.description ?? ""));
+      description !== (selectedCompany.description ?? "") ||
+      locale !== (selectedCompany.locale ?? "en") ||
+      timezone !== (selectedCompany.timezone ?? "UTC"));
 
   const generalMutation = useMutation({
     mutationFn: (data: {
       name: string;
       description: string | null;
+      locale: "en" | "da";
+      timezone: string;
     }) => companiesApi.update(selectedCompanyId!, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.companies.all });
@@ -209,7 +219,9 @@ export function CompanySettings() {
   function handleSaveGeneral() {
     generalMutation.mutate({
       name: companyName.trim(),
-      description: description.trim() || null
+      description: description.trim() || null,
+      locale,
+      timezone: timezone.trim(),
     });
   }
 
@@ -251,6 +263,40 @@ export function CompanySettings() {
               placeholder="Optional organization description"
               onChange={(e) => setDescription(e.target.value)}
             />
+          </Field>
+          <Field
+            label={t("company.generalDefaults.language")}
+            hint={t("company.generalDefaults.languageHint")}
+          >
+            <select
+              className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none"
+              value={locale}
+              onChange={(event) => setLocale(event.target.value === "da" ? "da" : "en")}
+            >
+              <option value="en">English</option>
+              <option value="da">Dansk</option>
+            </select>
+          </Field>
+          <Field
+            label={t("company.generalDefaults.timezone")}
+            hint={t("company.generalDefaults.timezoneHint")}
+          >
+            <input
+              className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none"
+              type="text"
+              list="company-timezone-suggestions"
+              value={timezone}
+              onChange={(event) => setTimezone(event.target.value)}
+              aria-label={t("company.generalDefaults.timezone")}
+            />
+            <datalist id="company-timezone-suggestions">
+              <option value="UTC" />
+              <option value="Europe/Copenhagen" />
+              <option value="Europe/London" />
+              <option value="America/Chicago" />
+              <option value="America/Los_Angeles" />
+              <option value="Asia/Singapore" />
+            </datalist>
           </Field>
         </div>
       </div>

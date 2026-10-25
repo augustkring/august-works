@@ -19,11 +19,11 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 let root: Root, host: HTMLDivElement, client: QueryClient;
 const session = (id: string) => ({ user: { id, email: `${id}@example.test` }, session: { id: `session-${id}`, userId: id } });
 beforeEach(() => vi.resetAllMocks());
-async function mount(userId = "user-1") {
+async function mount(userId = "user-1", companyLocale?: "en" | "da") {
   getSession.mockResolvedValue(session(userId));
   client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity, gcTime: 0 } } });
   host = document.createElement("div"); document.body.append(host); root = createRoot(host);
-  await act(async () => root.render(<QueryClientProvider client={client}><AccountExperienceLanguageSelect /></QueryClientProvider>));
+  await act(async () => root.render(<QueryClientProvider client={client}><AccountExperienceLanguageSelect companyLocale={companyLocale} companyId={companyLocale ? "company-1" : undefined} /></QueryClientProvider>));
   await vi.waitFor(() => expect(getPreferences).toHaveBeenCalledWith(userId));
 }
 async function choose(locale: string) {
@@ -46,6 +46,15 @@ it("initializes from the current account preference when there is no browser cho
   await vi.waitFor(() => expect(i18n.resolvedLanguage).toBe("da"));
   expect(host.textContent).toContain("Sprog");
   expect(getPreferences).toHaveBeenCalledWith("user-1");
+});
+
+it("uses the selected company language only when the person has no saved preference", async () => {
+  localStorage.removeItem(EXPERIENCE_LOCALE_KEY);
+  await i18n.changeLanguage("en");
+  getPreferences.mockResolvedValue({ keyboardShortcuts: false, locale: null });
+  await mount("user-1", "da");
+  await vi.waitFor(() => expect(i18n.resolvedLanguage).toBe("da"));
+  expect(host.textContent).toContain("Sprog");
 });
 
 it("saves the browser selection to the account that owns the selector", async () => {

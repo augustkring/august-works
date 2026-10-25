@@ -236,7 +236,7 @@ export type ManagedNativeOpenCodeModelStep = {
 
 export type ManagedNativeOpenCodeHumanAction = {
   afterModelToolCallId: string;
-  action: "accept_memory_candidate";
+  action: "accept_memory_candidate" | "create_private_context_root";
 };
 
 type ManagedNativePrivateRoot = {
@@ -253,7 +253,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
   instanceId: string;
   steps?: ManagedNativeOpenCodeModelStep[];
   humanActions?: ManagedNativeOpenCodeHumanAction[];
-  /** Create a canonical Agent-private Context root before the managed run. */
+  /** Prepare a private Task source; create its Human-reviewed Memory root after the configured model step. */
   privateContextContent?: string;
   reuseIdentity?: { companyId: string; agentId: string; aliceUserId: string; bobUserId: string };
   onPreserveDebugArtifacts?: () => void;
@@ -279,7 +279,8 @@ export async function runManagedNativeOpenCodeFixture(input: {
   for (const action of input.humanActions ?? []) {
     const target = modelSteps.find((step, index) =>
       (step.id ?? `managed-e2e-${step.tool}-${index}`) === action.afterModelToolCallId);
-    if (action.action !== "accept_memory_candidate" || target?.tool !== "self_remember")
+    if ((action.action !== "accept_memory_candidate" && action.action !== "create_private_context_root") ||
+      target?.tool !== "self_remember")
       throw new Error("managed_fixture_human_action_invalid");
   }
   const acceptedMemoryIds: string[] = [];
@@ -390,7 +391,10 @@ export async function runManagedNativeOpenCodeFixture(input: {
     humanApp.use(express.json());
     humanApp.use((req, _res, next) => { req.actor = human as typeof req.actor; next(); });
     humanApp.use("/api", issueRoutes(db, {} as never)); humanApp.use(errorHandler);
-    let privateRoot: ManagedNativePrivateRoot | null = null;
+    const privateRootRef: { current: ManagedNativePrivateRoot | null } = { current: null };
+    let privateRootTask: typeof issues.$inferSelect | null = null;
+    let privateRootBindingId: string | null = null;
+    let privateRootMemoryActor: MemoryMutationActor | null = null;
     if (input.privateContextContent) {
       // The ordinary HTTP admission path deliberately rejects private work.
       // For this source-closure fixture, create the private root through the
@@ -421,28 +425,9 @@ export async function runManagedNativeOpenCodeFixture(input: {
       }, sourceActor);
       await privateMemoryService.addBindingTarget(companyId, binding.id,
         { targetType: "agent", targetId: agentId }, sourceActor);
-      const observedAt = new Date();
-      const taskExcerpt = [`Status: ${privateTask.status}`, `Priority: ${privateTask.priority}`,
-        `Description: ${privateTask.description!.trim()}`].join("\n").slice(0, 60_000);
-      const privateTaskMemory = await privateMemoryService.createCandidate(companyId, {
-        memoryType: "lesson", scope: { type: "company", id: null }, subject: { type: "company", id: companyId }, ownerAgentId: null,
-        title: "Human-provided private-context root", content: input.privateContextContent, summary: null,
-        sensitivity: "internal", importance: 50, confidenceScore: 0.8, validFrom: null, validUntil: null,
-        observedAt: observedAt.toISOString(), retentionPolicy: "standard", expiresAt: null,
-        createdByOperationId: null, metadata: {}, bindingId: binding.id,
-        evidence: [{ sourceClass: "task", sourceProvider: "august_works_tasks", sourceType: "issue",
-          sourceRef: `issue://${privateTask.id}`, sourceVersion: privateTask.updatedAt.toISOString(),
-          sourceUpdatedAt: privateTask.updatedAt.toISOString(), observedAt: observedAt.toISOString(),
-          excerptHash: createHash("sha256").update(taskExcerpt).digest("hex"),
-          citation: { label: `${privateTask.identifier}: ${privateTask.title}` }, trustLevel: "low", relation: "supports" }],
-      }, sourceActor);
-      const acceptedPrivateTaskMemory = await privateMemoryService.reviewCandidate(companyId,
-        privateTaskMemory.record.id, { decision: "accept" }, sourceActor);
-      if (!(await privateMemoryService.get(companyId, acceptedPrivateTaskMemory.record.id, sourceActor)) ||
-        await privateMemoryService.get(companyId, acceptedPrivateTaskMemory.record.id, bobMemoryActor))
-        throw new Error("managed_fixture_private_context_memory_acl_invalid");
-      privateRoot = { issueId: privateTask.id, memoryId: acceptedPrivateTaskMemory.record.id,
-        content: input.privateContextContent, memoryActor: sourceActor };
+      privateRootTask = privateTask as typeof issues.$inferSelect;
+      privateRootBindingId = binding.id;
+      privateRootMemoryActor = sourceActor;
     }
     const createTaskResponse = await request(humanApp).post(`/api/companies/${companyId}/issues`)
       .send({ title: "Save a private source-bound note", description: "Create a short internal note and finish the task.",
@@ -459,8 +444,45 @@ export async function runManagedNativeOpenCodeFixture(input: {
     const acquiredEnvironment = await runtimeEnvironment.acquireRunLease({ companyId, environment: localEnvironment,
       issueId: task.id, agentId, heartbeatRunId: run!.id, persistedExecutionWorkspace: null,
       executionWorkspaceSettings: null, adapterType: "paperclip_runner" });
-    const manifest = await agentRuntimeFabricService(db).prepare({ companyId, agentId, runId: run!.id,
-      responsibleUserId: aliceUserId, issueId: task.id, query: task.title });
+    const contextProbe = postgres(input.connectionString, { max: 1, connect_timeout: 3 });
+    const contextPrepareStartedAt = Date.now();
+    let manifest: Awaited<ReturnType<ReturnType<typeof agentRuntimeFabricService>["prepare"]>>;
+    try {
+      manifest = await agentRuntimeFabricService(db).prepare({ companyId, agentId, runId: run!.id,
+        responsibleUserId: aliceUserId, issueId: task.id, query: task.title });
+    } catch (error) {
+      let postgresWaitFacts: unknown = { available: false };
+      try {
+        const [sample] = await contextProbe<{ active: number; idleInTransaction: number; waiters: Array<{
+          waitEventType: string | null; waitEvent: string | null; blockedByCount: number; queryKind: string;
+        }> }[]>`
+          select count(*) filter (where state = 'active')::int as active,
+            count(*) filter (where state = 'idle in transaction')::int as "idleInTransaction",
+            coalesce(json_agg(json_build_object('waitEventType', wait_event_type, 'waitEvent', wait_event,
+              'blockedByCount', cardinality(pg_blocking_pids(pid)),
+              'queryKind', case when query ilike '%context_manifest%' then 'context_manifest'
+                when query ilike '%memory_records%' then 'memory_records'
+                when query ilike '%issues%' then 'issues'
+                when query ilike '%heartbeat_runs%' then 'heartbeat_runs'
+                else lower(split_part(query, ' ', 1)) end))
+              filter (where state = 'active' and wait_event_type is not null), '[]'::json) as waiters
+          from pg_stat_activity where datname = current_database() and pid <> pg_backend_pid()
+        `;
+        postgresWaitFacts = sample ?? { available: false };
+      } catch { /* Bounded diagnostic: never mask the context failure with probe failure. */ }
+      const errorRecord = error && typeof error === "object" ? error as Record<string, unknown> : {};
+      const details = errorRecord.details && typeof errorRecord.details === "object"
+        ? errorRecord.details as Record<string, unknown> : {};
+      const safeContextFailure = {
+        code: typeof details.code === "string" ? details.code : "unknown",
+        stage: typeof details.stage === "string" ? details.stage : "unknown",
+        reason: typeof details.reason === "string" ? details.reason : "unknown",
+      };
+      throw new Error(`managed_fixture_context_prepare_failed ${JSON.stringify({ elapsedMs: Date.now() - contextPrepareStartedAt,
+        failure: safeContextFailure, postgresWaitFacts })}`, { cause: error });
+    } finally {
+      await contextProbe.end({ timeout: 1 });
+    }
     const plan = await orchestrationService(db).create(human, companyId, {
       issueId: task.id, expectedIssueUpdatedAt: task.updatedAt.toISOString(), workload: "semantic", actionClass: "internal_draft", riskClass: "C0",
       completionContract: { objective: "Complete the managed source-bound task", requiredOutputs: (() => {
@@ -641,29 +663,62 @@ export async function runManagedNativeOpenCodeFixture(input: {
       });
       for (const action of input.humanActions ?? []) {
         const callId = action.afterModelToolCallId;
+        const actionKey = `${action.action}:${callId}`;
         const step = modelSteps.find((value, index) =>
           (value.id ?? `managed-e2e-${value.tool}-${index}`) === callId);
-        if (!incomingToolResults.includes(callId) || completedHumanActions.has(callId)) continue;
-        if (action.action !== "accept_memory_candidate" || step?.tool !== "self_remember")
+        if (!incomingToolResults.includes(callId) || completedHumanActions.has(actionKey)) continue;
+        if (step?.tool !== "self_remember")
           throw new Error("managed_fixture_human_action_unqualified");
         brokerRequests.push(`human-action started ${action.action}`);
-        const [invocation] = await db.select({ workflowResultJson: toolInvocations.workflowResultJson,
-          status: toolInvocations.status, toolName: toolInvocations.toolName })
-          .from(toolInvocations).where(and(eq(toolInvocations.companyId, companyId),
-            eq(toolInvocations.idempotencyKey, `aw-native-tool:${run!.id}:${callId}`)));
-        if (!invocation || invocation.status !== "succeeded" || invocation.toolName !== "paperclip-self:remember")
-          throw new Error("managed_fixture_memory_candidate_invocation_unavailable");
-        const wrapper = (typeof invocation.workflowResultJson === "string"
-          ? JSON.parse(invocation.workflowResultJson) : invocation.workflowResultJson) as Record<string, unknown>;
-        const data = wrapper.data && typeof wrapper.data === "object" && !Array.isArray(wrapper.data)
-          ? wrapper.data as Record<string, unknown> : wrapper;
-        const record = data.record && typeof data.record === "object" && !Array.isArray(data.record)
-          ? data.record as Record<string, unknown> : {};
-        if (typeof record.id !== "string" || !/^[0-9a-f-]{36}$/i.test(record.id) || record.reviewState !== "pending")
-          throw new Error("managed_fixture_memory_candidate_unavailable");
-        await memoryService(db).reviewCandidate(companyId, record.id, { decision: "accept" }, aliceMemoryActor);
-        acceptedMemoryIds.push(record.id);
-        completedHumanActions.add(callId);
+        if (action.action === "accept_memory_candidate") {
+          const [invocation] = await db.select({ workflowResultJson: toolInvocations.workflowResultJson,
+            status: toolInvocations.status, toolName: toolInvocations.toolName })
+            .from(toolInvocations).where(and(eq(toolInvocations.companyId, companyId),
+              eq(toolInvocations.idempotencyKey, `aw-native-tool:${run!.id}:${callId}`)));
+          if (!invocation || invocation.status !== "succeeded" || invocation.toolName !== "paperclip-self:remember")
+            throw new Error("managed_fixture_memory_candidate_invocation_unavailable");
+          const wrapper = (typeof invocation.workflowResultJson === "string"
+            ? JSON.parse(invocation.workflowResultJson) : invocation.workflowResultJson) as Record<string, unknown>;
+          const data = wrapper.data && typeof wrapper.data === "object" && !Array.isArray(wrapper.data)
+            ? wrapper.data as Record<string, unknown> : wrapper;
+          const record = data.record && typeof data.record === "object" && !Array.isArray(data.record)
+            ? data.record as Record<string, unknown> : {};
+          if (typeof record.id !== "string" || !/^[0-9a-f-]{36}$/i.test(record.id) || record.reviewState !== "pending")
+            throw new Error("managed_fixture_memory_candidate_unavailable");
+          await memoryService(db).reviewCandidate(companyId, record.id, { decision: "accept" }, aliceMemoryActor);
+          acceptedMemoryIds.push(record.id);
+        } else {
+          if (!input.privateContextContent || !privateRootTask || !privateRootBindingId || !privateRootMemoryActor || privateRootRef.current)
+            throw new Error("managed_fixture_private_context_root_not_prepared");
+          const task = await issueService(db).getById(privateRootTask.id);
+          if (!task || task.visibility !== "private" || task.assigneeAgentId !== agentId ||
+            task.responsibleUserId !== aliceUserId || task.updatedAt.toISOString() !== privateRootTask.updatedAt.toISOString())
+            throw new Error("managed_fixture_private_context_task_changed");
+          const observedAt = new Date();
+          const excerpt = [`Status: ${task.status}`, `Priority: ${task.priority}`,
+            task.description?.trim() ? `Description: ${task.description.trim()}` : null].filter(Boolean).join("\n").slice(0, 60_000);
+          const candidate = await memoryService(db).createCandidate(companyId, {
+            bindingId: privateRootBindingId, memoryType: "lesson", scope: { type: "company", id: null },
+            subject: { type: "company", id: companyId }, ownerAgentId: null,
+            title: "Human-provided private-context root", content: input.privateContextContent, summary: null,
+            sensitivity: "internal", importance: 50, confidenceScore: 0.8, validFrom: null, validUntil: null,
+            observedAt: observedAt.toISOString(), retentionPolicy: "standard", expiresAt: null,
+            createdByOperationId: null, metadata: {},
+            evidence: [{ sourceClass: "task", sourceProvider: "august_works_tasks", sourceType: "issue",
+              sourceRef: `issue://${task.id}`, sourceVersion: task.updatedAt.toISOString(),
+              sourceUpdatedAt: task.updatedAt.toISOString(), observedAt: observedAt.toISOString(),
+              excerptHash: createHash("sha256").update(excerpt).digest("hex"),
+              citation: { label: `${task.identifier}: ${task.title}` }, trustLevel: "low", relation: "supports" }],
+          }, privateRootMemoryActor);
+          const accepted = await memoryService(db).reviewCandidate(companyId,
+            candidate.record.id, { decision: "accept" }, privateRootMemoryActor);
+          if (!(await memoryService(db).get(companyId, accepted.record.id, privateRootMemoryActor)) ||
+            await memoryService(db).get(companyId, accepted.record.id, bobMemoryActor))
+            throw new Error("managed_fixture_private_context_memory_acl_invalid");
+          privateRootRef.current = { issueId: task.id, memoryId: accepted.record.id,
+            content: input.privateContextContent, memoryActor: privateRootMemoryActor };
+        }
+        completedHumanActions.add(actionKey);
         brokerRequests.push(`human-action completed ${action.action}`);
       }
       const tools = Array.isArray(wire.tools) ? wire.tools : [];
@@ -1326,7 +1381,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
           let canReadSources = false;
           let aliceCanRead = false;
           if (memoryId) {
-            try { canReadSources = await canActorReadMemorySources(db, companyId, aliceMemoryActor, memoryId); }
+            try { canReadSources = await canActorReadMemorySources(db, companyId, aliceMemoryActor.authorizationActor, memoryId); }
             catch { canReadSources = false; }
             try { aliceCanRead = Boolean(await memoryService(db).get(companyId, memoryId, aliceMemoryActor)); }
             catch { aliceCanRead = false; }
@@ -1521,6 +1576,6 @@ export async function runManagedNativeOpenCodeFixture(input: {
       modelCalls: modelCalls.length,
       completedRun: terminalRun,
       nativeFinalization,
-      privateRoot,
+      privateRoot: privateRootRef.current,
     };
 }

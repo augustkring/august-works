@@ -7,7 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { eq } from "drizzle-orm";
-import { companies, createDb, heartbeatRuns, issues, routineRuns, routineTriggers, type Db } from "@paperclipai/db";
+import { agentWakeupRequests, companies, createDb, heartbeatRuns, issues, routineRuns, routineTriggers, type Db } from "@paperclipai/db";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { seedV5Presences } from "./helpers/v5-fixtures.js";
@@ -67,6 +67,7 @@ describe.skipIf(!support.supported)("UP13 assembled built server scheduled resta
   },120000);
   async function stopServer(){
     const active=child;if(!active)return;
+    if(!active.pid){child=null;throw new Error("Built server process was not spawned");}
     if(active.exitCode!==null || active.signalCode!==null){child=null;throw new Error(`Built server exited unexpectedly: ${active.exitCode}/${active.signalCode}\n${logs}`);}
     const exited=once(active,"exit");active.kill("SIGTERM");
     let timer:ReturnType<typeof setTimeout>|undefined;
@@ -89,8 +90,10 @@ describe.skipIf(!support.supported)("UP13 assembled built server scheduled resta
   async function startServer(){
     logs="";child=spawn(process.execPath,[entry],{cwd:serverRoot,env:childEnv,detached:process.platform!=="win32",stdio:["ignore","pipe","pipe"]});
     const active=child;
+    let spawnError:Error|null=null;active.once("error",error=>{spawnError=error;});
     const append=(chunk:Buffer)=>{logs=(logs+chunk.toString()).slice(-262144);};active.stdout?.on("data",append);active.stderr?.on("data",append);
     await vi.waitFor(async()=>{
+      if(spawnError)throw spawnError;
       if(active.exitCode!==null || active.signalCode!==null)throw new Error(`Built server failed to start: ${active.exitCode}/${active.signalCode}\n${logs}`);
       const response=await fetch(`http://127.0.0.1:${port}/api/health`,{signal:AbortSignal.timeout(2000)});
       expect(response.ok).toBe(true);expect((await response.json()).startupRecovery?.phase).toBe("ready");
@@ -103,6 +106,10 @@ describe.skipIf(!support.supported)("UP13 assembled built server scheduled resta
     expect(occurrences[0]).toMatchObject({source:"schedule",status:"issue_created",linkedIssueId:expect.any(String)});
     const tasks=await db.select().from(issues).where(eq(issues.originRunId,occurrences[0]!.id));
     expect(tasks).toHaveLength(1);expect(tasks[0]).toMatchObject({id:occurrences[0]!.linkedIssueId,originKind:"routine_execution",originId:routineId});
+    const wakeups=await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.idempotencyKey,`routine-assignment:${occurrences[0]!.id}`));
+    expect(wakeups).toHaveLength(1);
+    expect(wakeups[0]).toMatchObject({agentId:tasks[0]!.assigneeAgentId,source:"assignment",status:"skipped",
+      reason:"heartbeat.wakeOnDemand.disabled",payload:{issueId:tasks[0]!.id}});
     return {runId:occurrences[0]!.id,taskId:tasks[0]!.id};
   }
   it("recovers a deadline saved while stopped and never duplicates its canonical occurrence on another full restart",async()=>{

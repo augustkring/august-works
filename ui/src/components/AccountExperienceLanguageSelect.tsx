@@ -7,7 +7,11 @@ import { queryKeys } from "../lib/queryKeys";
 import { useUserPreferences } from "../hooks/useUserPreferences";
 import { ExperienceLanguageSelect } from "./ExperienceLanguageSelect";
 
-export function AccountExperienceLanguageSelect({ userId: expectedUserId }: { userId?: string | null }) {
+export function AccountExperienceLanguageSelect({
+  userId: expectedUserId,
+  companyLocale,
+  companyId,
+}: { userId?: string | null; companyLocale?: string; companyId?: string | null }) {
   // The parent already checked this session. A second stale session observer
   // would restart that check on every gated mount and repeatedly unmount us.
   const preferences = useUserPreferences(expectedUserId);
@@ -17,6 +21,8 @@ export function AccountExperienceLanguageSelect({ userId: expectedUserId }: { us
     key={userId ?? "signed-out"}
     userId={userId}
     locale={preferenceMatchesAccount && preferences.data?.locale != null ? preferences.data.locale : null}
+    companyLocale={companyLocale}
+    companyId={companyId ?? null}
     preferenceReady={preferenceMatchesAccount && preferences.isSuccess}
   />;
 }
@@ -24,10 +30,14 @@ export function AccountExperienceLanguageSelect({ userId: expectedUserId }: { us
 function AccountExperienceLanguageSelectBound({
   userId,
   locale,
+  companyLocale,
+  companyId,
   preferenceReady,
 }: {
   userId: string | null;
   locale: string | null;
+  companyLocale?: string;
+  companyId: string | null;
   preferenceReady: boolean;
 }) {
   const { i18n, t } = useTranslation("experience");
@@ -40,7 +50,7 @@ function AccountExperienceLanguageSelectBound({
     languageRevision.current += 1;
   }
   const readRevision = useRef(languageRevision.current);
-  const handledHydration = useRef(false);
+  const handledHydrationKey = useRef<string | null>(null);
   const mounted = useRef(true);
   const [hydrationFailed, setHydrationFailed] = useState(false);
 
@@ -49,8 +59,10 @@ function AccountExperienceLanguageSelectBound({
     return () => { mounted.current = false; };
   }, []);
   useEffect(() => {
-    if (!userId || !preferenceReady || handledHydration.current) return;
-    handledHydration.current = true;
+    if (!userId || !preferenceReady) return;
+    const hydrationKey = `${userId}:${companyId ?? "none"}:${locale ?? "none"}:${companyLocale ?? "none"}`;
+    if (handledHydrationKey.current === hydrationKey) return;
+    handledHydrationKey.current = hydrationKey;
     let explicitBrowserChoice = false;
     try {
       explicitBrowserChoice = isExperienceLocale(window.localStorage.getItem(EXPERIENCE_LOCALE_KEY));
@@ -61,10 +73,15 @@ function AccountExperienceLanguageSelectBound({
     const isMailLanding = ["/saas/welcome", "/saas/reset-password"].includes(window.location.pathname);
     const mailLocale = isMailLanding && isExperienceLocale(params.get("locale"));
     if (explicitBrowserChoice || mailLocale || readRevision.current !== languageRevision.current) return;
-    if (isExperienceLocale(locale) && locale !== currentLanguage) {
-      void i18n.changeLanguage(locale).catch(() => setHydrationFailed(true));
+    const fallbackLocale = locale ?? companyLocale;
+    // Company selection is a fallback only while no account/browser choice is
+    // active. A locale change caused by this fallback must not prevent a later
+    // company selection from applying its own default.
+    readRevision.current = languageRevision.current;
+    if (isExperienceLocale(fallbackLocale) && fallbackLocale !== currentLanguage) {
+      void i18n.changeLanguage(fallbackLocale).catch(() => setHydrationFailed(true));
     }
-  }, [userId, preferenceReady, locale, currentLanguage, i18n]);
+  }, [userId, preferenceReady, locale, companyLocale, companyId, currentLanguage, i18n]);
 
   if (!userId) return <ExperienceLanguageSelect />;
   return <div className="flex flex-wrap items-center gap-2">

@@ -7,6 +7,21 @@ import {
 import { portabilityCompanyManifestEntrySchema } from "./company-portability.js";
 
 describe("company schemas without the retired settings", () => {
+  it("accepts supported company locale and strict IANA timezone defaults", () => {
+    expect(updateCompanySchema.parse({ locale: "da", timezone: "Europe/Copenhagen" })).toMatchObject({
+      locale: "da",
+      timezone: "Europe/Copenhagen",
+    });
+  });
+
+  it.each(["Mars/Olympus", "", "Not_A_Timezone"]) ("rejects invalid company timezone %s", (timezone) => {
+    expect(updateCompanySchema.safeParse({ timezone }).success).toBe(false);
+  });
+
+  it("rejects locales not shipped by the app", () => {
+    expect(updateCompanySchema.safeParse({ locale: "fr" }).success).toBe(false);
+  });
+
   it("strips brandColor and attachmentMaxBytes from a create payload", () => {
     const parsed = createCompanySchema.parse({
       name: "Acme",

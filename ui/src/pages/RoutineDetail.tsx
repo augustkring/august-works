@@ -142,7 +142,7 @@ export function RoutineDetail() {
   const { routineId, section: sectionParam } = useParams<{ routineId: string; section?: string }>();
   const [searchParams] = useSearchParams();
   const triggerSetup = sectionParam === "triggers" && searchParams.has("triggerSetup");
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, selectedCompany } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -528,7 +528,7 @@ export function RoutineDetail() {
         kind: newTrigger.kind,
         label: autoLabel,
         ...(newTrigger.kind === "schedule"
-          ? { cronExpression: newTrigger.cronExpression.trim(), timezone: getLocalTimezone() }
+          ? { cronExpression: newTrigger.cronExpression.trim(), timezone: selectedCompany?.timezone ?? getLocalTimezone() }
           : {}),
         ...(newTrigger.kind === "webhook"
           ? { signingMode: newTrigger.signingMode, replayWindowSec: Number(newTrigger.replayWindowSec || "300") }

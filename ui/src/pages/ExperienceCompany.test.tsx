@@ -96,6 +96,9 @@ it("searches authorized customer labels, purposes and old aliases with category 
   await vi.waitFor(() =>
     expect(container.querySelectorAll("section")).toHaveLength(10),
   );
+  expect(container.textContent).toContain(
+    "Some requested settings may not yet be supported.",
+  );
   expect(container.querySelectorAll("a")).toHaveLength(3);
   expect(document.activeElement).toBe(container.querySelector("h1"));
   await search("team invites");
@@ -140,6 +143,9 @@ it("renders the added Company owner entries in Danish as well as English", async
     expect(container.textContent).toContain("Virksomhedsstandarder");
     expect(container.textContent).toContain("Beredskabskontroller");
     expect(container.textContent).toContain("Værktøjsgateways");
+    expect(container.textContent).toContain(
+      "Nogle ønskede indstillinger understøttes muligvis ikke endnu.",
+    );
   } finally {
     await act(async () => {
       await i18n.changeLanguage(previous);

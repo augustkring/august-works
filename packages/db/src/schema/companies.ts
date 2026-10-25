@@ -1,5 +1,6 @@
 import type { InteractionResolverGovernance } from "@paperclipai/shared";
-import { pgTable, uuid, text, integer, timestamp, boolean, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, integer, timestamp, boolean, jsonb, uniqueIndex, check } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export const companies = pgTable(
   "companies",
@@ -7,6 +8,10 @@ export const companies = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     name: text("name").notNull(),
     description: text("description"),
+    // Company-level defaults apply only when a user's account preference or a
+    // record-specific locale/timezone has not been set.
+    locale: text("locale").notNull().default("en"),
+    timezone: text("timezone").notNull().default("UTC"),
     status: text("status").notNull().default("active"),
     pauseReason: text("pause_reason"),
     // Native offboarding binds immutable-evidence deletion to its own database
@@ -36,5 +41,7 @@ export const companies = pgTable(
   },
   (table) => ({
     issuePrefixUniqueIdx: uniqueIndex("companies_issue_prefix_idx").on(table.issuePrefix),
+    localeCheck: check("companies_locale_check", sql`${table.locale} in ('en', 'da')`),
+    timezoneCheck: check("companies_timezone_check", sql`length(trim(${table.timezone})) > 0`),
   }),
 );

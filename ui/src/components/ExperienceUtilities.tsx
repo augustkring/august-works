@@ -13,7 +13,7 @@ import { useSidebar } from "../context/SidebarContext";
 import { HELP_CENTER_UTILITY_ENTRY_ID } from "../lib/help-navigation";
 export function ExperienceUtilities({ safetyRecovery = false }: { safetyRecovery?: boolean }) {
   const { sidebarOpen, setSidebarOpen } = useSidebar();
-  const { selectedCompanyId } = useCompany(), account = useV9CurrentAccount(), location = useLocation();
+  const { selectedCompanyId, selectedCompany } = useCompany(), account = useV9CurrentAccount(), location = useLocation();
   const { t } = useTranslation("experience"),
     shell = useV9FeatureEnabled("progressive_shell_v9");
   const showNavigation = shell.enabled || safetyRecovery;
@@ -47,7 +47,7 @@ export function ExperienceUtilities({ safetyRecovery = false }: { safetyRecovery
           {t("ask")}
         </Button>
       )}
-      <AccountExperienceLanguageSelect />
+      <AccountExperienceLanguageSelect companyLocale={selectedCompany?.locale} companyId={selectedCompanyId} />
       <CustomerFeedbackDialog />
       <Link
         className="inline-flex min-h-11 items-center rounded-md px-3 text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

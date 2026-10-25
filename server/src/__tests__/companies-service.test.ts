@@ -95,6 +95,20 @@ describeEmbeddedPostgres("companyService", () => {
     expect(rows.map((row) => row.issuePrefix).sort()).toEqual(["ARO", "AROA"]);
   });
 
+  it("persists company language and timezone defaults through the canonical company update service", async () => {
+    const created = await companyService(db).create({ name: "Locale Defaults" });
+    expect(created).toMatchObject({ locale: "en", timezone: "UTC" });
+
+    const updated = await companyService(db).update(created.id, {
+      locale: "da",
+      timezone: "Europe/Copenhagen",
+    });
+    expect(updated).toMatchObject({ locale: "da", timezone: "Europe/Copenhagen" });
+
+    const reread = await companyService(db).getById(created.id);
+    expect(reread).toMatchObject({ locale: "da", timezone: "Europe/Copenhagen" });
+  });
+
   it("does not auto-provision bundled built-in agents for a freshly created company", async () => {
     const created = await companyService(db).create({
       name: "Fresh Company",

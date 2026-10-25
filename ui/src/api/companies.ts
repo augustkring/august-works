@@ -119,6 +119,8 @@ export const companiesApi = {
         Company,
         | "name"
         | "description"
+        | "locale"
+        | "timezone"
         | "status"
         | "budgetMonthlyCents"
         | "requireBoardApprovalForNewAgents"

@@ -13525,12 +13525,10 @@ async function createRunnerdBackendWithinSessionClaim(
     },
     dynamicToolHandler: executeCurrentToolAuthority,
     acpxDynamicToolHandler: executeCurrentToolAuthority,
-    opencodeRuntimeDirectory: resolve(
-      resolvePaperclipInstanceRoot(),
-      "runtime",
-      "paperclip-runner",
-      "opencode",
-    ),
+    opencodeRuntimeDirectory: managedOpenCodeDataHome
+      ? managedOpenCodeRuntimeDirectory({ companyId: input.execution.binding.companyId,
+          runId: input.execution.binding.runId })
+      : resolve(resolvePaperclipInstanceRoot(), "runtime", "paperclip-runner", "opencode"),
     acpxRuntimeDirectory: resolve(
       resolvePaperclipInstanceRoot(),
       "runtime",
@@ -13671,9 +13669,12 @@ async function createRunnerdBackendWithinSessionClaim(
         runnerFilesystemRoot: remoteRunnerFilesystemRoot ?? undefined,
         resumeWorkingDirectory: runnerExecution.workspace.cwd,
         externallySandboxed: remoteTarget?.transport === "sandbox",
-        opencodeRuntimeDirectory: remoteRunnerFilesystemRoot
-          ? posix.join(remoteRunnerFilesystemRoot, "opencode")
-          : undefined,
+        opencodeRuntimeDirectory: managedOpenCodeDataHome
+          ? managedOpenCodeRuntimeDirectory({ companyId: input.execution.binding.companyId,
+              runId: input.execution.binding.runId })
+          : remoteRunnerFilesystemRoot
+            ? posix.join(remoteRunnerFilesystemRoot, "opencode")
+            : undefined,
         // A warm attach must retain the same qualified CRUD catalog as the
         // original managed session; terminal tools are appended by Runnerd's
         // trusted bridge. Never restore the generic Native tool inventory.

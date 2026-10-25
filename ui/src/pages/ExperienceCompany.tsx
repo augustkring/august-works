@@ -172,7 +172,11 @@ export function CompanyControls({
             aria-labelledby={`company-${section.id}`}
             className="space-y-3 rounded-lg border border-border p-4"
           >
-            <h2 id={`company-${section.id}`} className="text-lg font-semibold">
+                <h2
+                  id={`company-${section.id}`}
+                  tabIndex={-1}
+                  className="text-lg font-semibold"
+                >
               {t(`company.section.${section.id}`)}
             </h2>
             {section.entries.length ? (
