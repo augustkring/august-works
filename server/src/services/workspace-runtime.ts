@@ -1,3 +1,5 @@
+import { sanitizeRuntimeServiceBaseEnv } from "./runtime-service-env.js";
+export { sanitizeRuntimeServiceBaseEnv } from "./runtime-service-env.js";
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import fs from "node:fs/promises";
@@ -672,25 +674,6 @@ export async function ensureServerWorkspaceLinksCurrent(
   throw new Error(
     `Workspace relink did not repair all server package links: ${remainingMismatches.map((item) => item.packageName).join(", ")}`,
   );
-}
-
-export function sanitizeRuntimeServiceBaseEnv(baseEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...baseEnv };
-  for (const key of Object.keys(env)) {
-    if (["PAPERCLIP_", "AW_", "PADDLE_", "MAILGUN_", "RUNTIME_CONTROL_", "AWS_", "UPCLOUD_", "RUN_LOG_"].some(prefix => key.startsWith(prefix))) {
-      delete env[key];
-    }
-  }
-  // These origin settings belong to the parent instance. Letting them leak into a
-  // managed worktree runtime can send auth cookies and OAuth callbacks to the wrong
-  // Paperclip instance. Runtime/service overrides are merged back after sanitizing.
-  delete env.BETTER_AUTH_URL;
-  delete env.BETTER_AUTH_BASE_URL;
-  delete env.BETTER_AUTH_SECRET;
-  delete env.DATABASE_URL;
-  delete env.npm_config_tailscale_auth;
-  delete env.npm_config_authenticated_private;
-  return env;
 }
 
 function stableRuntimeServiceId(input: {

@@ -52,9 +52,9 @@ import { buildHeartbeatRunStatusLiveEventPayload } from "./heartbeat-run-status-
 export { buildHeartbeatRunStatusLiveEventPayload } from "./heartbeat-run-status-payload.js";
 import { buildExecutionContinuation, StaleExecutionContinuationError } from "./execution-continuation.js";
 import { renderPaperclipWakePrompt } from "@paperclipai/adapter-utils/server-utils";
-import { PROJECT_REPOSITORIES_DIR, readGitWorkspaceSnapshot } from "@paperclipai/adapter-utils/git-workspace-sync";
+import { PROJECT_REPOSITORIES_DIR } from "@paperclipai/adapter-utils/git-workspace-sync";
+import { materializeManagedProjectWorkspace } from "./managed-repository-checkout.js";
 import { isWorkspaceGitScanError, WorkspaceGitScanError, WORKSPACE_GIT_SCAN_ERROR_CODES } from "./workspace-git-operation-scheduler.js";
-import { captureDirectorySnapshot, mergeDirectoryWithBaseline } from "@paperclipai/adapter-utils/workspace-restore-merge";
 import { initializeRunIdentity, explicitOperatorRunIdentity } from "./run-identity.js";
 import {
   assertDurableChatWakeupReceipt,
@@ -188,7 +188,6 @@ import { logger } from "../middleware/logger.js";
 import {
   createGitRemoteAuthProvider,
   resolveManagedGitHubIdentitySelection,
-  describeGitAuthFailure,
   filterResolvedGitHubConnectionsForRun,
   scrubGitCredentialText,
   type GitRemoteAuthProvider,
@@ -396,7 +395,6 @@ import {
   type RealizedExecutionWorkspace,
   type RuntimeServiceRef,
   type UnresolvedWorkspaceBaseRefError,
-  sanitizeRuntimeServiceBaseEnv,
 } from "./workspace-runtime.js";
 import {
   readManagedWorktreeInstanceOwnership,
@@ -766,7 +764,6 @@ function pendingCleanupCapWarnedSql() {
   )`;
 }
 const REPO_ONLY_CWD_SENTINEL = "/__paperclip_repo_only__";
-const MANAGED_WORKSPACE_GIT_CLONE_TIMEOUT_MS = 10 * 60 * 1000;
 const MAX_INLINE_WAKE_COMMENTS = 8;
 const MAX_INLINE_WAKE_ATTACHMENTS = 20;
 const MAX_INLINE_WAKE_COMMENT_BODY_CHARS = 4_000;
@@ -2409,117 +2406,6 @@ export async function ensureManagedProjectWorkspace(input: {
     }
   }
   return result;
-}
-
-async function materializeManagedProjectWorkspace(
-  cwd: string,
-  input: {
-    repoUrl: string | null;
-    repoRef?: string | null;
-    localSource?: string | null;
-    resolveGitAuth?: GitRemoteAuthProvider | null;
-  },
-): Promise<{ cwd: string; warning: string | null }> {
-  await fs.mkdir(path.dirname(cwd), { recursive: true });
-  const stats = await fs.stat(cwd).catch(() => null);
-
-  if (!input.repoUrl) {
-    if (!stats) {
-      await fs.mkdir(cwd, { recursive: true });
-    }
-    return { cwd, warning: null };
-  }
-
-  const hasAdoptableGitDir = () =>
-    fs
-      .stat(path.resolve(cwd, ".git"))
-      .then((entry) => entry.isDirectory())
-      .catch(() => false);
-  if (await hasAdoptableGitDir()) {
-    return { cwd, warning: null };
-  }
-
-  if (stats) {
-    const entries = await fs.readdir(cwd).catch(() => []);
-    if (entries.length > 0) {
-      return {
-        cwd,
-        warning: `Managed workspace path "${cwd}" already exists but is not a git checkout. Using it as-is.`,
-      };
-    }
-    await fs.rm(cwd, { recursive: true, force: true });
-  }
-
-  // Clone into a temp sibling, then move into place atomically. The shared target directory
-  // is never created in a partial state and never removed on failure, so a concurrent
-  // materialization (another process, or a run racing this one) can neither adopt a broken
-  // checkout nor lose its own completed one.
-  const auth = input.resolveGitAuth && !input.localSource
-    ? await input.resolveGitAuth(input.repoUrl)
-    : null;
-  const cloneTmpDir = await fs.mkdtemp(`${cwd}.clone-`);
-  try {
-    await execFile(
-      "git",
-      [...(auth?.configArgs ?? []), "clone", "--no-hardlinks", "--", input.localSource ?? input.repoUrl, cloneTmpDir],
-      {
-        env: {
-          // Spread order matters: the sanitizer strips PAPERCLIP_*, which would remove the
-          // credential-helper token env if it came first. GIT_TERMINAL_PROMPT=0 fails a
-          // credential-less private clone immediately instead of hanging on a prompt until
-          // the clone timeout.
-          ...sanitizeRuntimeServiceBaseEnv(process.env),
-          GIT_TERMINAL_PROMPT: "0",
-          ...(auth?.env ?? {}),
-        },
-        timeout: MANAGED_WORKSPACE_GIT_CLONE_TIMEOUT_MS,
-      },
-    );
-    if (input.localSource) {
-      const snapshot = await readGitWorkspaceSnapshot(input.localSource, false);
-      if (!snapshot) throw new Error("Configured repository folder is not a Git checkout");
-      const baseline = await captureDirectorySnapshot(cloneTmpDir, { exclude: [".git", ".paperclip-runtime", PROJECT_REPOSITORIES_DIR, ...snapshot.ignoredPaths] });
-      await mergeDirectoryWithBaseline({ baseline, sourceDir: input.localSource, targetDir: cloneTmpDir });
-      await execFile("git", ["-C", cloneTmpDir, "remote", "set-url", "origin", input.repoUrl], { timeout: 10_000 });
-    } else if (input.repoRef) {
-      await execFile("git", ["-C", cloneTmpDir, "checkout", input.repoRef], { timeout: MANAGED_WORKSPACE_GIT_CLONE_TIMEOUT_MS });
-    }
-  } catch (error) {
-    await fs
-      .rm(cloneTmpDir, { recursive: true, force: true })
-      .catch(() => undefined);
-    const reason = error instanceof Error ? error.message : String(error);
-    const authNote = describeGitAuthFailure({
-      error: reason,
-      used: auth ? { source: auth.source, secretName: auth.secretName } : null,
-    });
-    const message = scrubGitCredentialText(
-      `Failed to prepare managed checkout for "${input.repoUrl}" at "${cwd}": ${reason}${authNote ? ` ${authNote}` : ""}`,
-    );
-    // Preserve the closed failure code without copying subprocess output or
-    // credentials into the durable run. Setup recovery needs the actual cause.
-    if (isWorkspaceGitScanError(error)) throw new WorkspaceGitScanError(error.code, message);
-    throw new Error(message);
-  }
-
-  try {
-    await fs.rename(cloneTmpDir, cwd);
-  } catch (renameError) {
-    await fs
-      .rm(cloneTmpDir, { recursive: true, force: true })
-      .catch(() => undefined);
-    // The target appearing between the emptiness check and the rename means another
-    // materialization won the race; adopt its checkout instead of failing the run.
-    if (await hasAdoptableGitDir()) {
-      return { cwd, warning: null };
-    }
-    const reason =
-      renameError instanceof Error ? renameError.message : String(renameError);
-    throw new Error(
-      `Failed to move managed checkout into place at "${cwd}": ${reason}`,
-    );
-  }
-  return { cwd, warning: null };
 }
 
 /** Keep every distinct project repository inside the task's writable/synced root. */
