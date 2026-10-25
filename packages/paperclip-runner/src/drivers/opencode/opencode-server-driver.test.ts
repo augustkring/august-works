@@ -102,6 +102,32 @@ afterAll(async () => {
 });
 
 describe("OpenCodeServerDriver", () => {
+  it("routes only the explicitly selected Anthropic managed profile to the fixed Paperclip model broker", () => {
+    expect(openCodeServerDriverInternals.resolveManagedModelProviderConfiguration(
+      "anthropic/claude-fixture-2026",
+      { PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://paperclip.example" },
+    )).toEqual({
+      anthropic: {
+        options: {
+          baseURL: "https://paperclip.example/runtime-tools/model",
+          apiKey: "paperclip-managed-model-broker",
+        },
+        models: { "claude-fixture-2026": { name: "claude-fixture-2026" } },
+      },
+    });
+    expect(openCodeServerDriverInternals.resolveManagedModelProviderConfiguration(
+      "openrouter/deepseek/deepseek-v4-flash-0731",
+      {},
+    )).toEqual({ openrouter: { models: { "deepseek/deepseek-v4-flash-0731": { name: "deepseek/deepseek-v4-flash-0731" } } } });
+    expect(() => openCodeServerDriverInternals.resolveManagedModelProviderConfiguration(
+      "openrouter/arbitrary",
+      { PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://paperclip.example" },
+    )).toThrow("managed_model_broker_requires_anthropic");
+    expect(() => openCodeServerDriverInternals.resolveManagedModelProviderConfiguration(
+      "anthropic/arbitrary",
+      { PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://paperclip.example/untrusted" },
+    )).toThrow("managed_model_broker_origin_invalid");
+  });
   it("advertises within-turn plans as unsupported", async () => {
     const driver = new OpenCodeServerDriver({
       model: "openrouter/deepseek/deepseek-v4-flash-0731",

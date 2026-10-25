@@ -395,6 +395,11 @@ plugin-owned database schemas. See `doc/DEVELOPING.md` for the current
 `paperclipai db:backup` / `pnpm db:backup` commands and backup retention
 configuration.
 
+The JavaScript logical backup preserves both identity generation modes, their
+sequence ownership, options and current values. Restore imports the original
+identity values and retains generation for subsequent inserts and triggers.
+Identity columns are not reconstructed as plain integers with a missing default.
+
 Database backups do not include non-database instance files such as local-disk
 uploads, workspace files, or the local encrypted secrets master key. Back those paths
 up separately when you need full instance disaster recovery.

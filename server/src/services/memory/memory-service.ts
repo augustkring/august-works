@@ -38,6 +38,7 @@ import {
   memorySourceDeletionInputSchema,
   memoryDeletionLedgerInputSchema,
   type ExecutionPrincipal,
+  type EvidenceSensitivity,
   type MemoryRecordDetail,
   type MemoryCandidateInputParsed,
   type MemoryResolutionMetadata,
@@ -2108,6 +2109,7 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
         scopeId?: string | null;
         asOf?: Date;
         limit?: number;
+        sensitivityCeiling?: EvidenceSensitivity;
       },
       actor: MemoryMutationActor,
     ) => {
@@ -2134,6 +2136,12 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
 
       const asOf = input.asOf ?? new Date();
       const limit = Math.min(100, Math.max(1, input.limit ?? 50));
+      const sensitivityLabels = input.sensitivityCeiling
+        ? (["public", "internal", "confidential", "restricted"] as const).slice(
+            0,
+            (["public", "internal", "confidential", "restricted"] as const).indexOf(input.sensitivityCeiling) + 1,
+          )
+        : null;
       return visibleMemoryPage(db,companyId,actor,limit,async (scopedDb,offset)=>scopedDb
         .select()
         .from(memoryRecords)
@@ -2148,6 +2156,7 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
             or(isNull(memoryRecords.validFrom), lte(memoryRecords.validFrom, asOf)),
             or(isNull(memoryRecords.validUntil), gt(memoryRecords.validUntil, asOf)),
             or(isNull(memoryRecords.expiresAt), gt(memoryRecords.expiresAt, asOf)),
+            ...(sensitivityLabels ? [inArray(memoryRecords.sensitivityLabel, sensitivityLabels)] : []),
             ...(input.scopeType
               ? [eq(memoryRecords.scopeType, input.scopeType)]
               : [ne(memoryRecords.scopeType, "agent")]),

@@ -48,11 +48,11 @@ function canUseCredential(
 
 export function aiConnectionService(db: Db) {
   const secrets = secretService(db);
-  async function membership(companyId: string, userId: string | null) {
+  async function membership(companyId: string, userId: string | null, reader: Db = db) {
     if (!userId) return false;
     return Boolean(
       (
-        await db
+        await reader
           .select({ id: companyMemberships.id })
           .from(companyMemberships)
           .where(
@@ -67,8 +67,8 @@ export function aiConnectionService(db: Db) {
       )[0],
     );
   }
-  async function rows(companyId: string) {
-    return db
+  async function rows(companyId: string, reader: Db = db) {
+    return reader
       .select({ connection: toolConnections, grant: connectionGrants })
       .from(toolConnections)
       .innerJoin(
@@ -84,6 +84,34 @@ export function aiConnectionService(db: Db) {
           eq(toolConnections.connectionPurpose, "ai"),
         ),
       );
+  }
+  async function selectDecision(input: { companyId: string; userId: string | null; agentId?: string | null; connectionId: string; grantId: string }, reader: Db = db) {
+    const { companyId, userId } = input;
+    if (!userId || !(await membership(companyId, userId, reader))) throw forbidden("An active responsible Human is required for decision inference");
+    const row = (await rows(companyId, reader)).find(item => item.connection.id === input.connectionId && item.grant.id === input.grantId);
+    if (!row) throw notFound("Selected decision connection is unavailable");
+    const { connection, grant } = row;
+    const metadata = aiConnectionMetadataSchema.safeParse(connection.config.ai);
+    // Connection metadata intentionally contains only provider and auth method.
+    // Jev uses the fixed official OpenRouter endpoint; customer routing is not
+    // represented by this contract and must not be inferred from arbitrary config.
+    if (!metadata.success || metadata.data.provider !== "openrouter" || metadata.data.method !== "api_key")
+      throw unprocessable("Select a company-shared OpenRouter API-key connection for Jev Decisions");
+    if (grant.kind !== "organization" || grant.status !== "active" || !connection.enabled || connection.status !== "active" || connection.healthStatus !== "ok")
+      throw forbidden("The selected company connection is not currently usable");
+    const audience = await reader.select().from(connectionGrantMembers).where(and(
+      eq(connectionGrantMembers.companyId, companyId), eq(connectionGrantMembers.grantId, grant.id),
+    ));
+    if (!canUseCredential(grant, userId, audience)) throw forbidden("The selected credential is not shared with the responsible Human");
+    const installs = await reader.select({ id: toolConnectionInstalls.id }).from(toolConnectionInstalls).where(and(
+      eq(toolConnectionInstalls.companyId, companyId), eq(toolConnectionInstalls.connectionId, connection.id),
+      or(
+        and(eq(toolConnectionInstalls.targetType, "company"), eq(toolConnectionInstalls.targetId, companyId)),
+        input.agentId ? and(eq(toolConnectionInstalls.targetType, "agent"), eq(toolConnectionInstalls.targetId, input.agentId)) : undefined,
+      ),
+    ));
+    if (!installs.length) throw forbidden("Install the selected shared connection for this company or Co-worker");
+    return row;
   }
   async function list(
     companyId: string,
@@ -373,7 +401,10 @@ export function aiConnectionService(db: Db) {
       } satisfies AiConnectionAttribution,
     };
   }
-  async function credential(row: Awaited<ReturnType<typeof select>>) {
+  async function credential(row: { connection: typeof toolConnections.$inferSelect; grant: typeof connectionGrants.$inferSelect }, audit?: {
+    responsibleUserId?: string | null; actorType?: "agent" | "user" | "system"; actorId?: string | null; issueId?: string | null; heartbeatRunId?: string | null;
+  }, reader: Db = db) {
+    const credentialSecrets = reader === db ? secrets : secretService(reader);
     const ref = row.grant.credentialSecretRefs.find(
       (r) => r.configPath === "ai.credential",
     );
@@ -381,7 +412,7 @@ export function aiConnectionService(db: Db) {
       throw unprocessable("Reconnect this AI account", {
         code: "ai_connection_credential_missing",
       });
-    const [secret] = await db
+    const [secret] = await reader
       .select()
       .from(companySecrets)
       .where(
@@ -398,8 +429,11 @@ export function aiConnectionService(db: Db) {
       consumerType: "tool_connection" as const,
       consumerId: row.connection.id,
       configPath: ref.configPath,
-      responsibleUserId: row.grant.subjectUserId,
-      actorType: "system" as const,
+      responsibleUserId: audit?.responsibleUserId ?? row.grant.subjectUserId,
+      actorType: audit?.actorType ?? "system",
+      actorId: audit?.actorId ?? null,
+      issueId: audit?.issueId ?? null,
+      heartbeatRunId: audit?.heartbeatRunId ?? null,
     };
     if (secret.scope === "user") {
       if (
@@ -407,7 +441,7 @@ export function aiConnectionService(db: Db) {
         !secret.userSecretDefinitionId
       )
         throw forbidden("Credential ownership mismatch");
-      const result = await secrets.resolveUserSecretValue(
+      const result = await credentialSecrets.resolveUserSecretValue(
         row.connection.companyId,
         {
           definitionId: secret.userSecretDefinitionId,
@@ -420,7 +454,7 @@ export function aiConnectionService(db: Db) {
       if (!result) throw unprocessable("Reconnect this AI account");
       return result.value;
     }
-    return secrets.resolveSecretValue(
+    return credentialSecrets.resolveSecretValue(
       row.connection.companyId,
       secret.id,
       "latest",
@@ -775,5 +809,5 @@ export function aiConnectionService(db: Db) {
       return { connectionId: id, grantId };
     });
   }
-  return { list, select, credential, save, setDefault, membership };
+  return { list, select, selectDecision, credential, save, setDefault, membership };
 }

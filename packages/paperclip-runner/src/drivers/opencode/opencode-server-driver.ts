@@ -1884,8 +1884,10 @@ async function startRuntime(input: {
   ]);
   const instructionRoot =
     input.options.runtimeContext?.instructions.bundle.rootPath;
-  const [modelProvider, ...modelIdParts] = input.options.model.split("/");
-  const providerModelId = modelIdParts.join("/");
+  const providerConfiguration = resolveManagedModelProviderConfiguration(
+    input.options.model,
+    input.options.environment ?? process.env,
+  );
   const config = {
     $schema: "https://opencode.ai/config.json",
     model: input.options.model,
@@ -1898,13 +1900,7 @@ async function startRuntime(input: {
     // OpenCode's bundled models.dev snapshot can lag behind OpenRouter's live
     // catalog. Bind the already-qualified exact model slug into the built-in
     // provider instead of silently falling back or rejecting a newer model.
-    provider: {
-      [modelProvider!]: {
-        models: {
-          [providerModelId]: { name: providerModelId },
-        },
-      },
-    },
+    provider: providerConfiguration,
     tools: {
       question: true,
     },
@@ -2098,6 +2094,35 @@ async function startRuntime(input: {
     );
     throw error;
   }
+}
+
+function resolveManagedModelProviderConfiguration(
+  model: string,
+  environment: NodeJS.ProcessEnv,
+): Record<string, unknown> {
+  const [provider, ...parts] = model.split("/");
+  const modelId = parts.join("/");
+  if (!provider || !modelId) throw new Error("opencode_model_provider_invalid");
+  const managedOrigin = environment.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN?.trim();
+  const base = { models: { [modelId]: { name: modelId } } };
+  if (!managedOrigin) return { [provider]: base };
+  if (provider !== "anthropic") throw new Error("managed_model_broker_requires_anthropic");
+  let origin: URL;
+  try { origin = new URL(managedOrigin); }
+  catch { throw new Error("managed_model_broker_origin_invalid"); }
+  if (origin.protocol !== "https:" || origin.username || origin.password || origin.pathname !== "/" || origin.search || origin.hash)
+    throw new Error("managed_model_broker_origin_invalid");
+  return {
+    anthropic: {
+      options: {
+        baseURL: `${origin.origin}/runtime-tools/model`,
+        // The OpenShell host injects the scoped Authorization capability
+        // only for the exact endpoint. This placeholder is not a credential.
+        apiKey: "paperclip-managed-model-broker",
+      },
+      ...base,
+    },
+  };
 }
 
 export function normalizeOpenCodeQuestionSet(
@@ -2594,7 +2619,10 @@ async function waitForExit(
   });
 }
 
-export const openCodeServerDriverInternals = { parseSse };
+export const openCodeServerDriverInternals = {
+  parseSse,
+  resolveManagedModelProviderConfiguration,
+};
 
 class AsyncQueue<T> implements AsyncIterable<T> {
   #items: T[] = [];

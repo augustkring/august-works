@@ -12,7 +12,10 @@ import {
  * calibration; a vendor's advertised context window is insufficient. */
 export const modelQualificationMetadataSchema = z
   .object({
-    contract: z.literal("anthropic-text-messages-2023-06-01"),
+    contract: z.enum([
+      "anthropic-text-messages-2023-06-01",
+      "anthropic-messages-tools-2023-06-01",
+    ]),
     tariff: modelTariffCeilingSchema,
     maximumEnvelopeBytes: z.number().int().min(1024).max(262144),
     inputTokensUpperBound: z.number().int().min(1).max(2000000),
@@ -62,7 +65,11 @@ export const readOnlyModelProfileSchema = modelQualificationProfileSchema
       .default(["read_only_verification"]),
     calibrationHash: z.string().regex(/^[a-f0-9]{64}$/),
   })
-  .superRefine(checkModelQualificationProvider);
+  .superRefine((profile, context) => {
+    checkModelQualificationProvider(profile, context);
+    if (profile.contract !== "anthropic-text-messages-2023-06-01")
+      context.addIssue({ code: "custom", message: "Read-only verification requires the text-only contract" });
+  });
 export type ReadOnlyModelProfile = z.input<typeof readOnlyModelProfileSchema>;
 
 export function assertReadOnlyModelProfileCurrent(

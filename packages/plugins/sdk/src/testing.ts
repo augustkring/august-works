@@ -2066,10 +2066,9 @@ export function createTestHarness(options: TestHarnessOptions): TestHarness {
           agent: agent!,
           instructionsRootPath: null,
           instructionsEntryFile: "AGENTS.md",
-          skillsReady: true,
+          skillsReady: false,
           skills: [],
           connectionAssignments: {
-            features: { publicMcp: false, chatConnectors: false },
             connections: [],
             profileIds: [],
           },

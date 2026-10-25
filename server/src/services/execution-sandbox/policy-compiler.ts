@@ -36,6 +36,7 @@ export function compileSandboxPolicy(input: { boundary: SandboxPolicy; candidate
   if (candidate.credentials.mode === "none" && candidate.credentials.bindings.length || candidate.credentials.mode === "legacy_injected" && candidate.credentials.bindings.length) failures.push("credential_mode_inconsistent");
   let compiledPolicy = candidate;
   if (candidate.credentials.mode === "brokered") {
+    if (candidate.credentials.bindings.length === 0) failures.push("credential_broker_binding_missing");
     let origin: URL | null = null;
     try {
       origin = new URL(input.credentialBrokerOrigin ?? "");
@@ -46,9 +47,10 @@ export function compileSandboxPolicy(input: { boundary: SandboxPolicy; candidate
       candidate.credentials.bindings.some(binding => !resolvedBrokerBindings.some(resolved =>
         resolved.connectionId === binding.connectionId && resolved.grantVersionHash === binding.grantVersionHash &&
         resolved.destination.hostname === binding.hostname && resolved.destination.port === binding.port &&
-        binding.binary === null && binding.methods.includes("POST") && pathsWithin([resolved.destination.path], binding.pathPrefixes)))) {
+        binding.methods.includes("POST") && pathsWithin([resolved.destination.path], binding.pathPrefixes)))) {
       failures.push("credential_broker_binding_resolution_mismatch");
     }
+    if (candidate.credentials.bindings.some(binding => binding.binary !== null)) unsupported.push("credential_binary_binding_not_enforced");
     const endpoints: NonNullable<typeof input.credentialBrokerBindings> = [];
     for (const resolved of resolvedBrokerBindings) {
       const expectedPath = `/mcp/gateways/${resolved.gatewayPublicId}`;
@@ -103,7 +105,7 @@ export function compileSandboxPolicy(input: { boundary: SandboxPolicy; candidate
     if (required.has("filesystemPolicy") && caps.filesystemEnforcementMode !== "hard_requirement") unsupported.push("filesystem_hard_enforcement_missing");
     if (compiledPolicy.credentials.mode === "brokered") for (const dimension of ["company", "presence", "host", "port", "method", "path", "expiry", "revocation"] as const) if (!caps.credentialBindingDimensions.includes(dimension)) unsupported.push(`credential_${dimension}_binding_missing`);
     if (compiledPolicy.credentials.mode === "brokered" && !caps.credentialBrokerProviderProfile) unsupported.push("credential_broker_provider_profile_unqualified");
-    if (compiledPolicy.credentials.bindings.some(binding => binding.binary) && !caps.credentialBindingDimensions.includes("binary")) unsupported.push("credential_binary_binding_missing");
+    if (compiledPolicy.credentials.bindings.some(binding => binding.binary !== null) && !caps.credentialBindingDimensions.includes("binary")) unsupported.push("credential_binary_binding_missing");
     if (candidate.profile === "high_assurance_managed" && (!caps.policyProverBoundaryCheck || [...required].some(control => !caps.policyProverCoverage.includes(control)))) unsupported.push("backend_boundary_prover_coverage_missing");
   }
   if ((compiledPolicy.broadAutonomy || rank[compiledPolicy.profile] >= 2) && compiledPolicy.credentials.mode === "legacy_injected") failures.push("raw_credential_exposure");

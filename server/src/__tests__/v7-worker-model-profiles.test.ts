@@ -47,7 +47,24 @@ const fixture = (): WorkerModelProfile => ({
   qualificationEvidenceRef: `${origin}/qualification/worker-fixture-only.json`,
   qualificationArtifactSha256: "e".repeat(64),
 });
-describe("private worker text transport qualifications", () => {
+describe("private worker model transport qualifications", () => {
+  it("keeps the general tool-capable Messages profile distinct from the text-only contract", () => {
+    const p = fixture();
+    const managed = {
+      ...p,
+      transport: "server-anthropic-messages-v1" as const,
+      contract: "anthropic-messages-tools-2023-06-01" as const,
+    };
+    expect(workerModelProfileSchema.parse(managed)).toEqual(managed);
+    expect(() => workerModelProfileSchema.parse({
+      ...managed,
+      contract: "anthropic-text-messages-2023-06-01",
+    })).toThrow();
+    expect(() => workerModelProfileSchema.parse({
+      ...managed,
+      transport: "server-text-only-v1",
+    })).toThrow();
+  });
   it("selects only the explicit owned profile and never falls back to another installed alternative", () => {
     const p = fixture(), alternative = { ...p, id: randomUUID(), qualifiedConfigurationHash: "f".repeat(64),
       tariff: { ...p.tariff, model: "alternative-fixture-model" } };

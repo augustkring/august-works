@@ -30,6 +30,8 @@ import {
   companySkillEvalCases,
   companySkillVersions,
   companySkills,
+  agentExecutionManifests,
+  heartbeatRuns,
   costEvents,
   documents,
   issueAttachments,
@@ -39,6 +41,8 @@ import {
   issueWorkProducts,
 } from "@paperclipai/db";
 import { readPaperclipSkillSyncPreference, writePaperclipSkillSyncPreference } from "@paperclipai/adapter-utils/server-utils";
+import { agentExecutionManifestSchema } from "@paperclipai/shared";
+import { hashContextPolicySnapshot } from "./context/context-manifest.js";
 import type { PaperclipDesiredSkillEntry, PaperclipSkillEntry } from "@paperclipai/adapter-utils/server-utils";
 import type {
   AgentDesiredSkillEntry,
@@ -6075,9 +6079,10 @@ export function companySkillService(db: Db) {
     }
   }
 
-  async function listRuntimeSkillEntries(
+  async function listRuntimeSkillEntriesInternal(
     companyId: string,
     options: RuntimeSkillEntryOptions = {},
+    immutableManifestPinVersionIds: ReadonlySet<string> = new Set(),
   ): Promise<PaperclipSkillEntry[]> {
     if(options.selectedSkillKeys?.size===0)return [];
     const skills = await listFull(companyId);
@@ -6091,7 +6096,11 @@ export function companySkillService(db: Db) {
         if (!selectedVersionId) continue;
         const selected = await getVersion(companyId, skill.id, selectedVersionId,options.actor,options.readScope);
         if (!selected || selected.visibility === "private") continue;
-        if (!options.allowCandidateVersionsForTest && (skill.lifecycleState !== "active" || selected.state !== "active" || selectedVersionId !== skill.activeVersionId)) continue;
+        const pinnedByCurrentManifest = immutableManifestPinVersionIds.has(selectedVersionId);
+        if (pinnedByCurrentManifest) {
+          if (!(["active", "needs_revalidation", "degraded"] as const).includes(skill.lifecycleState as "active" | "needs_revalidation" | "degraded") || !(["active", "superseded"] as const).includes(selected.state as "active" | "superseded")) continue;
+        } else if (!options.allowCandidateVersionsForTest &&
+          (skill.lifecycleState !== "active" || selected.state !== "active" || selectedVersionId !== skill.activeVersionId)) continue;
       }
       const pinnedOptions = selectedVersionId ? { ...options, versionSelections: new Map([[skill.key, selectedVersionId]]) } : options;
       const sourceResolution = await resolveRuntimeSkillSource(companyId, skill, pinnedOptions);
@@ -6110,6 +6119,56 @@ export function companySkillService(db: Db) {
 
     out.sort((left, right) => left.key.localeCompare(right.key));
     return out;
+  }
+
+  async function listRuntimeSkillEntries(companyId: string, options: RuntimeSkillEntryOptions = {}) {
+    return listRuntimeSkillEntriesInternal(companyId, options);
+  }
+
+  /** Resolve only exact Skill versions retained by the current immutable native run manifest. */
+  async function listRuntimeSkillEntriesForCurrentExecution(
+    companyId: string,
+    actor: AuthorizationActor,
+    runId: string,
+  ): Promise<PaperclipSkillEntry[]> {
+    if (actor.type !== "agent" || actor.companyId !== companyId || actor.runId !== runId || !actor.agentId || !actor.onBehalfOfUserId) {
+      throw forbidden("Runtime Skill pins require the current persisted native execution");
+    }
+    const [run] = await db.select({
+      companyId: heartbeatRuns.companyId,
+      agentId: heartbeatRuns.agentId,
+      responsibleUserId: heartbeatRuns.responsibleUserId,
+      status: heartbeatRuns.status,
+      runtimeMode: heartbeatRuns.runtimeMode,
+    }).from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, runId))).limit(1);
+    if (!run || run.agentId !== actor.agentId || run.responsibleUserId !== actor.onBehalfOfUserId ||
+        run.status !== "running" || run.runtimeMode !== "native") {
+      throw forbidden("Runtime Skill pins require the current responsible Human and running native attempt");
+    }
+    const [stored] = await db.select({ agentId: agentExecutionManifests.agentId, manifest: agentExecutionManifests.manifest, hash: agentExecutionManifests.hash })
+      .from(agentExecutionManifests).where(and(eq(agentExecutionManifests.companyId, companyId), eq(agentExecutionManifests.runId, runId))).limit(1);
+    const parsed = agentExecutionManifestSchema.safeParse(stored?.manifest);
+    if (!stored || stored.agentId !== actor.agentId || !parsed.success || parsed.data.companyId !== companyId ||
+        parsed.data.agentId !== actor.agentId || parsed.data.runId !== runId || hashContextPolicySnapshot(parsed.data) !== stored.hash) {
+      throw forbidden("Runtime Skill pins do not match the current immutable execution manifest");
+    }
+    const pins = parsed.data.skills;
+    if (new Set(pins.map(pin => pin.key)).size !== pins.length || new Set(pins.map(pin => pin.versionId)).size !== pins.length) {
+      throw forbidden("Runtime execution manifest contains duplicate Skill pins");
+    }
+    for (const pin of pins) {
+      if (!(await canReadSkill(companyId, pin.skillId, actor, "task", pin.versionId))) {
+        throw forbidden("A pinned Skill is no longer authorized for the current execution");
+      }
+      await assertRuntimeSkillSourceRetained(db, companyId, actor, pin.skillId, pin.versionId);
+    }
+    const selectedSkillKeys = new Set(pins.map(pin => pin.key));
+    return listRuntimeSkillEntriesInternal(companyId, {
+      actor,
+      readScope: "task",
+      selectedSkillKeys,
+      versionSelections: new Map<string, string | null>(pins.map(pin => [pin.key, pin.versionId])),
+    }, new Set(pins.map(pin => pin.versionId)));
   }
 
   async function importPackageFiles(
@@ -7342,5 +7401,6 @@ export function companySkillService(db: Db) {
     resetSkill,
     canReadSkill,
     listRuntimeSkillEntries,
+    listRuntimeSkillEntriesForCurrentExecution,
   };
 }

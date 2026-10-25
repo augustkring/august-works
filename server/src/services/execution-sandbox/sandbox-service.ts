@@ -211,6 +211,15 @@ export function executionSandboxService(db: Db, options: {
         ),
       )
       .for("share");
+    const capability = row.capabilitySnapshot ? sandboxCapabilitySnapshotSchema.parse(row.capabilitySnapshot) : null;
+    const credentials = snapshot?.compilation.compiledPolicy.credentials;
+    const brokerDimensions = ["company", "presence", "host", "port", "method", "path", "expiry", "revocation"] as const;
+    const supportedCredentials = credentials?.mode === "none"
+      ? credentials.bindings.length === 0
+      : credentials?.mode === "brokered" && credentials.bindings.length > 0 &&
+        credentials.bindings.every(binding => binding.binary === null && binding.methods.includes("POST")) &&
+        Boolean(capability?.credentialBrokerProviderProfile) &&
+        brokerDimensions.every(dimension => capability?.credentialBindingDimensions.includes(dimension));
     if (
       !snapshot ||
       snapshot.status !== "qualified" ||
@@ -219,11 +228,10 @@ export function executionSandboxService(db: Db, options: {
       snapshot.runtimeCellId !== row.runtimeCellId ||
       snapshot.compilation.proverResult !== "pass" ||
       snapshot.compilation.boundaryPolicyHash !== row.boundaryPolicyHash ||
-      snapshot.compilation.compiledPolicy.credentials.mode !== "none" ||
-      snapshot.compilation.compiledPolicy.credentials.bindings.length !== 0
+      !supportedCredentials
     )
       throw conflict("An unexpired qualified policy bound to the current runtime is required");
-    const capability = sandboxCapabilitySnapshotSchema.parse(row.capabilitySnapshot);
+    if (!capability) throw conflict("A complete current protected-host qualification is required");
     if (
       capability.evidenceKind !== "protected_host_report" ||
       capability.backend !== "openshell" ||
@@ -463,7 +471,7 @@ export function executionSandboxService(db: Db, options: {
         let authorizedConnectionGrantHashes: Record<string, string> = {};
         let credentialBrokerBindings: SandboxCredentialBrokerBinding[] = [];
         if (input.candidatePolicy.credentials.mode === "brokered") {
-          const broker = await createToolGatewayService(tx as unknown as Db).resolveSandboxCredentialBrokerBindings({
+          const broker = await createToolGatewayService(tx as unknown as Db).resolveSandboxCredentialBrokerPolicyBindings({
             companyId, agentId: source.record.agentId, runId: source.run.id,
             responsibleUserId: source.run.responsibleUserId!, presenceId: source.runtime.id,
             bindings: input.candidatePolicy.credentials.bindings,

@@ -1,5 +1,6 @@
 export type { CustomerOperationStatus, CustomerOperationReceipt, CompanyImportJobState } from "./customer-operations.js";
 export * from "./customer-support.js";
+export * from "./types/jev-decisions.js";
 export * from "./maintenance-history.js";
 export * from "./memory-maintenance-history.js";
 export * from "./agent-runtime-candidates.js";

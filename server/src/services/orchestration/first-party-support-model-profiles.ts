@@ -34,6 +34,8 @@ export const firstPartySupportModelProfileSchema = modelQualificationMetadataSch
   })
   .strict()
   .superRefine((p, ctx) => {
+    if (p.contract !== "anthropic-text-messages-2023-06-01")
+      ctx.addIssue({ code: "custom", path: ["contract"], message: "First-party support remains limited to the qualified text-only transport" });
     const start = Date.parse(p.periodStartsAt), end = Date.parse(p.periodEndsAt);
     const testedAt = Date.parse(p.tariff.testedAt), tariffEndsAt = Date.parse(p.tariff.expiresAt);
     if (p.tariff.provider !== "anthropic")

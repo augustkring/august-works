@@ -8,7 +8,6 @@ export async function pluginAgentConnectionAssignments(
   db: Db,
   companyId: string,
   agentId: string,
-  features: PluginAgentConnectionAssignments["features"],
 ): Promise<PluginAgentConnectionAssignments> {
   const [connections, profiles] = await Promise.all([
     db.selectDistinct({
@@ -46,5 +45,5 @@ export async function pluginAgentConnectionAssignments(
   if (connections.length > 512 || profiles.length > 128) {
     throw unprocessable("Agent connection assignments exceed the synchronization limit");
   }
-  return { features, connections, profileIds: profiles.map(({ id }) => id) };
+  return { connections, profileIds: profiles.map(({ id }) => id) };
 }

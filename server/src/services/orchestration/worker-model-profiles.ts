@@ -14,14 +14,21 @@ import {
 export const workerModelProfileSchema = modelQualificationProfileSchema
   .extend({
     workerAgentId: z.string().uuid(),
-    transport: z.literal("server-text-only-v1"),
+    transport: z.enum(["server-text-only-v1", "server-anthropic-messages-v1"]),
     providerBindingId: z.string().uuid(),
     providerSnapshotHash: z.string().regex(/^[a-f0-9]{64}$/),
     providerProfileRef: z.string().min(1).max(200),
     qualifiedConfigurationHash: z.string().regex(/^[a-f0-9]{64}$/),
   })
   .strict()
-  .superRefine(checkModelQualificationProvider);
+  .superRefine((profile, context) => {
+    checkModelQualificationProvider(profile, context);
+    const expectedContract = profile.transport === "server-text-only-v1"
+      ? "anthropic-text-messages-2023-06-01"
+      : "anthropic-messages-tools-2023-06-01";
+    if (profile.contract !== expectedContract)
+      context.addIssue({ code: "custom", message: "Worker model transport and price qualification contract disagree" });
+  });
 export type WorkerModelProfile = z.infer<typeof workerModelProfileSchema>;
 
 /** The current canonical configuration selects one installed qualification.

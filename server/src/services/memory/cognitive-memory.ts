@@ -15,9 +15,9 @@ import { nativeSha256 } from "../native-runtime/canonical.js";
 import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 
 export function cognitiveMemoryActor(actor: AuthorizationActor): MemoryMutationActor {
-  if (actor.type === "agent" && actor.agentId) return { principal: { type: "agent", agentId: actor.agentId, responsibleUserId: actor.onBehalfOfUserId ?? null }, runId: actor.runId ?? null };
+  if (actor.type === "agent" && actor.agentId) return { principal: { type: "agent", agentId: actor.agentId, responsibleUserId: actor.onBehalfOfUserId ?? null }, runId: actor.runId ?? null, authorizationActor: actor };
   const userId = v7HumanActorId(actor);
-  return actor.source === "local_implicit" ? { principal: { type: "system", service: "local-board" } } : { principal: { type: "user", userId } };
+  return actor.source === "local_implicit" ? { principal: { type: "system", service: "local-board" } } : { principal: { type: "user", userId }, authorizationActor: actor };
 }
 async function assertManager(db: Db, actor: AuthorizationActor, companyId: string) {
   v7HumanActorId(actor);

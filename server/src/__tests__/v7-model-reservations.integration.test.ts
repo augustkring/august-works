@@ -7,8 +7,11 @@ import {
   companies,
   createDb,
   issues,
+  heartbeatRuns,
   orchestrationPlans,
   orchestrationModelReservations,
+  orchestrationWorkers,
+  orchestrationWorkerAttempts,
   orchestrationCompanyPurposeBudgets,
   orchestrationCompanyPurposeReservations,
 } from "@paperclipai/db";
@@ -376,6 +379,33 @@ const support = await getEmbeddedPostgresTestSupport();
         })
         .where(eq(orchestrationPlans.id, plan.id));
     }
+    it("requires a current accountable Agent run and active Worker attempt for decision-shadow spend", async () => {
+      const [task] = await db.select().from(issues).where(eq(issues.id, plan.issueId));
+      const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId,
+        status: "running", runtimeMode: "native", nativeIssueId: task!.id, contextSnapshot: { issueId: task!.id } }).returning();
+      await db.update(orchestrationPlans).set({ status: "running", startedAt: new Date(), executionPrincipal: { type: "user", userId: f.userId } }).where(eq(orchestrationPlans.id, plan.id));
+      await db.update(issues).set({ assigneeAgentId: f.presence.id, executionRunId: run!.id }).where(eq(issues.id, task!.id));
+      const [worker] = await db.update(orchestrationWorkers).set({ status: "running", agentId: f.presence.id, attemptCount: 1 })
+        .where(eq(orchestrationWorkers.planId, plan.id)).returning();
+      const [attempt] = await db.insert(orchestrationWorkerAttempts).values({ companyId: f.home, planId: plan.id, workerId: worker!.id,
+        agentId: f.presence.id, runId: run!.id, attempt: 1 }).returning();
+      const actor = { type: "agent" as const, source: "agent_jwt" as const, companyId: f.home, agentId: f.presence.id, runId: run!.id, onBehalfOfUserId: f.userId };
+      const request = { companyId: f.home, planId: plan.id, expectedPlanVersion: plan.version, purpose: "decision_shadow" as const,
+        workerId: worker!.id, workerAttemptId: attempt!.id, idempotencyKey: "decision-shadow-current-run", inputHash: "d".repeat(64), authorityHash,
+        inputTokensUpperBound: 1, maxOutputTokens: 1 };
+      const broker = service();
+      const wrongRunActor = { ...actor, runId: randomUUID() };
+      await expect(broker.reserve(wrongRunActor, { ...request, idempotencyKey: "decision-shadow-wrong-run" })).rejects.toMatchObject({ status: 403 });
+      currentHash = "f".repeat(64);
+      await expect(broker.reserve(actor, { ...request, idempotencyKey: "decision-shadow-stale-authority" })).rejects.toMatchObject({ status: 409 });
+      currentHash = authorityHash;
+      const reservation = await broker.reserve(actor, request);
+      await expect(broker.claimForDispatch(actor, f.home, reservation.id)).resolves.toMatchObject({ status: "dispatched", purpose: "decision_shadow" });
+      await expect(broker.reserve(actor, { ...request, idempotencyKey: "decision-shadow-over-cap" })).rejects.toMatchObject({ status: 403 });
+
+      await db.update(orchestrationWorkerAttempts).set({ status: "failed", finishedAt: new Date() }).where(eq(orchestrationWorkerAttempts.id, attempt!.id));
+      await expect(broker.claimForDispatch(actor, f.home, reservation.id)).rejects.toMatchObject({ status: 403 });
+    });
     it("serializes concurrent reservations before spend and debits the native counter exactly once", async () => {
       const broker = service(),
         outcomes = await Promise.allSettled([

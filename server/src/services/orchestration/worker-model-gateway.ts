@@ -49,6 +49,8 @@ import { resolvePaperclipRunnerProviderProfile } from "../native-runtime/provide
 import { hashContextPolicySnapshot } from "../context/context-manifest.js";
 import {
   anthropicReadOnlyCall,
+  anthropicManagedMessagesCall,
+  validateAnthropicManagedMessagesRequest,
   readOnlyModelEnvelopeBytes,
   type ReadOnlyModelWireReceipt,
 } from "./read-only-model-transport.js";
@@ -220,6 +222,12 @@ export function workerModelGateway(db: Db, options: Options) {
     // an implicit default. Existing runtime/manifest guards remain authoritative.
     const p = profile(claims.company_id, claims.sub, selected?.provider === "aw_text_only" ? selected.workerModelProfileId : undefined,
       hashContextPolicySnapshot({ adapterType: agent.adapterType, adapterConfig: agent.adapterConfig }));
+    if (
+      (selected?.provider === "aw_text_only" && p.transport !== "server-text-only-v1") ||
+      (p.transport === "server-anthropic-messages-v1" && selected?.provider !== "opencode") ||
+      (selected?.provider === "opencode" && p.transport !== "server-anthropic-messages-v1") ||
+      (selected?.provider === "opencode" && selected.model !== `anthropic/${p.tariff.model}`)
+    ) throw forbidden("The selected managed model transport does not match its exact qualification");
     if (selected?.provider === "aw_text_only" && (selected.model !== p.tariff.model || selected.maxOutputTokens > p.maxOutputTokens))
       throw forbidden("The selected draft model or output ceiling changed");
     const [company] = await tx
@@ -647,6 +655,48 @@ export function workerModelGateway(db: Db, options: Options) {
       await current(db, claims as BoundClaims);
       return minted!;
     },
+    /** Host-side admission helper. Derive the immutable worker binding from
+     * the live attempt; callers cannot submit plan, attempt or manifest IDs. */
+    async issueForRun(input: {
+      companyId: string;
+      agentId: string;
+      runId: string;
+      responsibleUserId: string;
+    }) {
+      const matches = await db.select({ attempt: orchestrationWorkerAttempts, worker: orchestrationWorkers, plan: orchestrationPlans })
+        .from(orchestrationWorkerAttempts)
+        .innerJoin(orchestrationWorkers, and(
+          eq(orchestrationWorkers.companyId, orchestrationWorkerAttempts.companyId),
+          eq(orchestrationWorkers.id, orchestrationWorkerAttempts.workerId),
+        ))
+        .innerJoin(orchestrationPlans, and(
+          eq(orchestrationPlans.companyId, orchestrationWorkerAttempts.companyId),
+          eq(orchestrationPlans.id, orchestrationWorkerAttempts.planId),
+        ))
+        .where(and(
+          eq(orchestrationWorkerAttempts.companyId, input.companyId),
+          eq(orchestrationWorkerAttempts.agentId, input.agentId),
+          eq(orchestrationWorkerAttempts.runId, input.runId),
+          eq(orchestrationWorkerAttempts.status, "running"),
+        )).limit(2);
+      if (matches.length !== 1 || !matches[0]!.attempt.executionManifestId ||
+        matches[0]!.plan.executionPrincipal?.type !== "user" ||
+        matches[0]!.plan.executionPrincipal.userId !== input.responsibleUserId)
+        throw forbidden("One exact active, accountable worker attempt is required for managed model execution");
+      const row = matches[0]!;
+      const binding: WorkerModelBinding = {
+        planId: row.plan.id,
+        workerId: row.worker.id,
+        workerAttemptId: row.attempt.id,
+        executionManifestId: row.attempt.executionManifestId!,
+        expectedPlanVersion: row.plan.version,
+      };
+      const minted = createRuntimeToolsToken({ ...input, workerModelBinding: binding, scope: "worker_model" });
+      const claims = minted && verifyRuntimeToolsToken(minted.token, "worker_model");
+      if (!claims?.worker_model) throw forbidden("Worker capability signing is unavailable");
+      await current(db, claims as BoundClaims);
+      return minted!;
+    },
     async call(
       claims: RuntimeToolsTokenClaims,
       raw: WorkerModelCall,
@@ -838,6 +888,141 @@ export function workerModelGateway(db: Db, options: Options) {
         throw conflict("Worker model result requires human resolution", {
           code: reasonCode,
         });
+      } finally {
+        clearTimeout(timeout);
+        clearInterval(watch);
+        callerSignal?.removeEventListener("abort", cancel);
+      }
+    },
+    /** Tool-capable Messages API for the exact managed OpenCode profile. The
+     * actual Anthropic request is treated as the reserved invocation; callers
+     * cannot select a destination, model, price or retry identity. */
+    async callManagedMessages(
+      claims: RuntimeToolsTokenClaims,
+      raw: unknown,
+      callerSignal?: AbortSignal,
+      internal?: { onWireDispatch?: (receipt: WorkerModelDispatchWireReceipt) => void },
+    ) {
+      callerSignal?.throwIfAborted();
+      if (!claims.worker_model || claims.scope !== "worker_model")
+        throw forbidden("Bound worker model capability required");
+      const bound = claims as BoundClaims;
+      const state = await current(db, bound);
+      if (state.profile.transport !== "server-anthropic-messages-v1")
+        throw forbidden("The selected worker profile is not the Messages broker profile");
+      const qualifiedInput = validateAnthropicManagedMessagesRequest(raw, {
+        model: state.profile.tariff.model,
+        maxOutputTokens: state.profile.maxOutputTokens,
+        maximumEnvelopeBytes: state.profile.maximumEnvelopeBytes,
+      });
+      const inputHash = nativeSha256(qualifiedInput.providerRequest);
+      const callId = `messages:${inputHash}`;
+      const reservations = modelReservationService(db, {
+        sourceSha: options.sourceSha,
+        qualifiedTariff: async (i) =>
+          i.purpose === "worker_model" && i.companyId === claims.company_id && i.planId === bound.worker_model.planId
+            ? assertWorkerModelProfileCurrent(state.profile, options.sourceSha, options.protectedEvidenceOrigin).tariff
+            : null,
+        currentAuthority: async (tx) => (await current(tx, bound)).authorityHash,
+      });
+      const reservation = await reservations.reserve(state.actor, {
+        companyId: claims.company_id,
+        planId: bound.worker_model.planId,
+        workerId: bound.worker_model.workerId,
+        workerAttemptId: bound.worker_model.workerAttemptId,
+        expectedPlanVersion: bound.worker_model.expectedPlanVersion,
+        purpose: "worker_model",
+        idempotencyKey: `worker-model-messages:${claims.run_id}:${inputHash}`,
+        inputHash,
+        authorityHash: state.authorityHash,
+        inputTokensUpperBound: state.profile.inputTokensUpperBound,
+        maxOutputTokens: qualifiedInput.request.max_tokens,
+      }).catch(async (error) => {
+        if (error instanceof Error && error.message === "Cumulative model reservation budget exhausted")
+          await fence(claims.company_id, bound.worker_model.planId, "worker_model_budget_exhausted");
+        throw error;
+      });
+      if (reservation.status !== "reserved")
+        throw conflict("Worker model request cannot be dispatched again");
+      await reservations.claimForDispatch(state.actor, claims.company_id, reservation.id);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), Math.min(
+        30000, reservation.expiresAt.getTime() - Date.now(), claims.exp * 1000 - Date.now(),
+      ));
+      const cancel = () => controller.abort();
+      callerSignal?.addEventListener("abort", cancel, { once: true });
+      let checking = false;
+      const assertCurrent = async () => {
+        controller.signal.throwIfAborted();
+        const fresh = await current(db, bound);
+        if (fresh.authorityHash !== state.authorityHash)
+          throw forbidden("Worker source authority changed during dispatch");
+        return fresh;
+      };
+      const watch = setInterval(() => {
+        if (checking) return;
+        checking = true;
+        void assertCurrent().catch(cancel).finally(() => { checking = false; });
+      }, 1000);
+      let financiallySettled = false;
+      try {
+        if (callerSignal?.aborted) controller.abort();
+        await assertCurrent();
+        const credential = await aiConnectionService(db).credential(state.selection);
+        const fresh = await assertCurrent();
+        if (createHash("sha256").update(credential).digest("hex") !== fresh.credentialSha256)
+          throw forbidden("Worker credential changed before provider dispatch");
+        const result = await anthropicManagedMessagesCall(raw, {
+          model: state.profile.tariff.model,
+          maxOutputTokens: state.profile.maxOutputTokens,
+          maximumEnvelopeBytes: state.profile.maximumEnvelopeBytes,
+          maximumInputTokens: state.profile.inputTokensUpperBound,
+        }, credential, controller.signal, {
+          fetch: options.fetch,
+          onWireDispatch: async (wire) => {
+            if (!internal?.onWireDispatch) return;
+            const receipt: WorkerModelDispatchWireReceipt = {
+              ...wire, reservationId: reservation.id, callId, requestHash: inputHash,
+            };
+            await db.transaction(async (tx) => {
+              const fresh = await current(tx, bound);
+              if (fresh.authorityHash !== state.authorityHash)
+                throw forbidden("Worker source authority changed before wire dispatch");
+              const [run] = await tx.select().from(heartbeatRuns).where(and(
+                eq(heartbeatRuns.companyId, claims.company_id), eq(heartbeatRuns.id, claims.run_id),
+                eq(heartbeatRuns.agentId, claims.sub), eq(heartbeatRuns.status, "running"),
+              )).for("update");
+              const profile = run?.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson)
+                ? run.runnerProfileJson as Record<string, unknown> : null;
+              const sourceReceipt = profile && nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+              const prior = profile?.nativeAwModelWireIntents;
+              if (!run || !profile || !sourceReceipt?.success || !Array.isArray(prior) || prior.length >= 64 ||
+                prior.some((entry) => entry && typeof entry === "object" && !Array.isArray(entry) &&
+                  (entry as Record<string, unknown>).reservationId === receipt.reservationId))
+                throw forbidden("The Native source receipt cannot bind this model dispatch");
+              const intents = [...prior, { reservationId: receipt.reservationId, callId: receipt.callId,
+                requestHash: receipt.requestHash, wireBodyHash: receipt.bodySha256, endpoint: receipt.endpoint, method: receipt.method }];
+              if (Buffer.byteLength(JSON.stringify(intents), "utf8") > 256 * 1024)
+                throw forbidden("The Native model wire receipt exceeds its bound");
+              await tx.update(heartbeatRuns).set({ runnerProfileJson: { ...profile, nativeAwModelWireIntents: intents }, updatedAt: new Date() })
+                .where(and(eq(heartbeatRuns.companyId, run.companyId), eq(heartbeatRuns.id, run.id), eq(heartbeatRuns.status, "running")));
+            });
+            internal.onWireDispatch?.(receipt);
+          },
+        });
+        const outcome = await reservations.recordOutcome(claims.company_id, reservation.id, {
+          status: "completed", providerResponseHash: result.responseHash, usage: result.usage,
+        });
+        financiallySettled = true;
+        if (outcome.status !== "completed") throw conflict("Worker model charge could not be confirmed");
+        await assertCurrent();
+        return { reservationId: reservation.id, sse: result.sse };
+      } catch {
+        if (!financiallySettled)
+          await reservations.recordOutcome(claims.company_id, reservation.id, { status: "unknown", providerResponseHash: null, usage: null }).catch(() => {});
+        const reasonCode = financiallySettled ? "worker_model_result_withheld" : "worker_model_unsettled";
+        await fence(claims.company_id, bound.worker_model.planId, reasonCode);
+        throw conflict("Worker model result requires human resolution", { code: reasonCode });
       } finally {
         clearTimeout(timeout);
         clearInterval(watch);

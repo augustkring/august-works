@@ -92,26 +92,6 @@ function isClosedEmptyTaskContinuation(value: unknown, input: {
   if (!trigger || typeof trigger !== "object" || Array.isArray(trigger)) return false;
   const triggerRecord = trigger as Record<string, unknown>;
   const triggerKeys = ["reason", "interactionId", "sourceRunId"];
-  if (process.env.NODE_ENV === "test") console.warn("[test-only] empty continuation check", {
-    keys: Object.keys(continuation).sort(), objective: continuation.objective === (input.task.description ?? input.task.title),
-    version: continuation.version === 1, company: continuation.companyId === input.companyId, issue: continuation.issueId === input.issueId,
-    messagesEmpty: Array.isArray(continuation.messages) && continuation.messages.length === 0,
-    originEmpty: Array.isArray(continuation.originCommentIds) && continuation.originCommentIds.length === 0,
-    humanEmpty: continuation.humanResponses === undefined || Array.isArray(continuation.humanResponses) && continuation.humanResponses.length === 0,
-    outcomesEmpty: Array.isArray(continuation.interactionOutcomes) && continuation.interactionOutcomes.length === 0,
-    recoveryEmpty: continuation.recoveryOutcomes === undefined || Array.isArray(continuation.recoveryOutcomes) && continuation.recoveryOutcomes.length === 0,
-    noCompletion: continuation.completedWork === null,
-    noActions: continuation.completedActions === undefined || Array.isArray(continuation.completedActions) && continuation.completedActions.length === 0,
-    noInterrupted: continuation.interruptedRunId === undefined,
-    unresolvedEmpty: Array.isArray(continuation.unresolvedInteractionIds) && continuation.unresolvedInteractionIds.length === 0,
-    reason: triggerRecord.reason === input.wakeReason || input.wakeReason === null && triggerRecord.reason === "task_execution",
-    ids: triggerRecord.interactionId === null && triggerRecord.sourceRunId === null,
-    coverage: continuation.coverage && typeof continuation.coverage === "object" && !Array.isArray(continuation.coverage) &&
-      Object.keys(continuation.coverage).every(key => ["kind", "throughCommentId", "summaryThroughCommentId"].includes(key)) &&
-      (continuation.coverage as Record<string, unknown>).kind === "full_task_history" &&
-      (continuation.coverage as Record<string, unknown>).throughCommentId === null &&
-      (continuation.coverage as Record<string, unknown>).summaryThroughCommentId === null,
-  });
   if (Object.keys(triggerRecord).some(key => !triggerKeys.includes(key)) || typeof triggerRecord.reason !== "string" ||
     (triggerRecord.reason !== input.wakeReason && !(input.wakeReason === null && triggerRecord.reason === "task_execution")) ||
     triggerRecord.interactionId !== null || triggerRecord.sourceRunId !== null) return false;
@@ -132,7 +112,9 @@ export function captureNativeTaskWakeSource(input: {
   sourceVersion: string;
   task: { id: string; identifier: string | null; title: string; description: string | null; status: string;
     priority: string; workMode: string };
-  wakeReason: string | null;
+  /** Read from the persisted heartbeat run, independently of the rendered
+   * wake payload. */
+  persistedWakeReason: string | null;
   payload: unknown;
 }): Extract<NativePayloadSourceInput, { kind: "native_task_wake" }> | null {
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -160,34 +142,36 @@ export function captureNativeTaskWakeSource(input: {
       description: wakeIssue.description, status: wakeIssue.status, priority: wakeIssue.priority, workMode: wakeIssue.workMode }) !==
     JSON.stringify(input.task) || wakeIssue.descriptionTruncated !== false) return null;
   const emptyObject = (value: unknown) => value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0;
-  if (process.env.NODE_ENV === "test") console.warn("[test-only] Task wake extra source profile", {
-    planReviewEmpty: payload.planReviewContext === null, documentReviewEmpty: payload.documentReviewContext === null,
-    continuationSummaryEmpty: payload.continuationSummary === null, taskWatchdogEmpty: payload.taskWatchdog === null,
-    skillTestEmpty: payload.skillTest === null, livenessEmpty: payload.livenessContinuation === null,
-    executionStageEmpty: payload.executionStage === null, latestCommentEmpty: payload.latestCommentId === null,
-    annotationsEmpty: Array.isArray(payload.annotationDeltas) && payload.annotationDeltas.length === 0,
-    commentWindow: payload.commentWindow && typeof payload.commentWindow === "object" && !Array.isArray(payload.commentWindow)
-      ? Object.values(payload.commentWindow).every(value => value === 0) : false,
-  });
-  if ((payload.reason !== null && typeof payload.reason !== "string") ||
-    (payload.executionContinuation !== null && !isClosedEmptyTaskContinuation(payload.executionContinuation, {
-      companyId: input.companyId, issueId: input.issueId, wakeReason: input.wakeReason, task: input.task,
-    })) ||
-    !Array.isArray(payload.attachmentOmissions) || payload.attachmentOmissions.length !== 0 || payload.externalChatProvider !== null ||
-    payload.recovery !== null || payload.agentMessage !== null || !Array.isArray(payload.childIssueSummaries) || payload.childIssueSummaries.length !== 0 ||
-    payload.childIssueSummaryTruncated !== false || payload.dispositionRepair !== null || payload.livenessContinuation !== null ||
-    payload.interactionKind !== null || payload.interactionStatus !== null || payload.interactionId !== null || payload.sourceRunId !== null ||
-    payload.externalChatQuestionResponse !== null || payload.externalInteractionContinuation !== false || payload.checkboxSelection !== null ||
-    payload.checkedOutByHarness !== false || payload.externalChatExecutionBound !== false || payload.simplifiedEnglishInteractions !== false ||
-    payload.dependencyBlockedInteraction !== false || payload.treeHoldInteraction !== false || !emptyObject(payload.activeTreeHold) ||
-    !Array.isArray(payload.unresolvedBlockerIssueIds) || payload.unresolvedBlockerIssueIds.length !== 0 ||
-    !Array.isArray(payload.unresolvedBlockerSummaries) || payload.unresolvedBlockerSummaries.length !== 0 || payload.executionStage !== null ||
-    payload.taskWatchdog !== null || payload.skillTest !== null || payload.continuationSummary !== null ||
-    (payload.connectorSkillInstructions !== undefined && payload.connectorSkillInstructions !== null && payload.connectorSkillInstructions !== "") ||
-    !Array.isArray(payload.commentIds) || payload.commentIds.length !== 0 || payload.latestCommentId !== null ||
-    !Array.isArray(payload.comments) || payload.comments.length !== 0 || !Array.isArray(payload.annotationDeltas) || payload.annotationDeltas.length !== 0 ||
-    payload.planReviewContext !== null || payload.documentReviewContext !== null || payload.truncated !== false || payload.fallbackFetchNeeded !== false)
-    return null;
+  const checks: Record<string, boolean> = {
+    reason: payload.reason === input.persistedWakeReason,
+    continuation: payload.executionContinuation === null || isClosedEmptyTaskContinuation(payload.executionContinuation, {
+      companyId: input.companyId, issueId: input.issueId, wakeReason: input.persistedWakeReason, task: input.task,
+    }),
+    attachmentOmissions: Array.isArray(payload.attachmentOmissions) && payload.attachmentOmissions.length === 0,
+    externalChatProvider: payload.externalChatProvider === null, recovery: payload.recovery === null, agentMessage: payload.agentMessage === null,
+    childIssueSummaries: Array.isArray(payload.childIssueSummaries) && payload.childIssueSummaries.length === 0,
+    childIssueSummaryTruncated: payload.childIssueSummaryTruncated === false,
+    dispositionRepair: payload.dispositionRepair === null, livenessContinuation: payload.livenessContinuation === null,
+    interactionKind: payload.interactionKind === null, interactionStatus: payload.interactionStatus === null,
+    interactionId: payload.interactionId === null, sourceRunId: payload.sourceRunId === null,
+    externalChatQuestionResponse: payload.externalChatQuestionResponse === null,
+    externalInteractionContinuation: payload.externalInteractionContinuation === false, checkboxSelection: payload.checkboxSelection === null,
+    checkedOutByHarness: payload.checkedOutByHarness === false, externalChatExecutionBound: payload.externalChatExecutionBound === false,
+    simplifiedEnglishInteractions: payload.simplifiedEnglishInteractions === false, dependencyBlockedInteraction: payload.dependencyBlockedInteraction === false,
+    treeHoldInteraction: payload.treeHoldInteraction === false, activeTreeHold: Boolean(emptyObject(payload.activeTreeHold)),
+    unresolvedBlockerIssueIds: Array.isArray(payload.unresolvedBlockerIssueIds) && payload.unresolvedBlockerIssueIds.length === 0,
+    unresolvedBlockerSummaries: Array.isArray(payload.unresolvedBlockerSummaries) && payload.unresolvedBlockerSummaries.length === 0,
+    executionStage: payload.executionStage === null, taskWatchdog: payload.taskWatchdog === null, skillTest: payload.skillTest === null,
+    continuationSummary: payload.continuationSummary === null,
+    connectorSkillInstructions: payload.connectorSkillInstructions === undefined || payload.connectorSkillInstructions === null || payload.connectorSkillInstructions === "",
+    commentIds: Array.isArray(payload.commentIds) && payload.commentIds.length === 0, latestCommentId: payload.latestCommentId === null,
+    comments: Array.isArray(payload.comments) && payload.comments.length === 0,
+    annotationDeltas: Array.isArray(payload.annotationDeltas) && payload.annotationDeltas.length === 0,
+    planReviewContext: payload.planReviewContext === null, documentReviewContext: payload.documentReviewContext === null,
+    truncated: payload.truncated === false, fallbackFetchNeeded: payload.fallbackFetchNeeded === false,
+  };
+  const failedChecks = Object.keys(checks).filter(key => !checks[key]);
+  if (failedChecks.length) return null;
   const commentWindow = payload.commentWindow;
   if (!commentWindow || typeof commentWindow !== "object" || Array.isArray(commentWindow) ||
     JSON.stringify(commentWindow) !== JSON.stringify({ requestedCount: 0, includedCount: 0, missingCount: 0 })) return null;
@@ -210,13 +194,15 @@ export function buildNativeBootstrapSourceSet(input: {
   additionalInputs?: readonly NativePayloadSourceInput[] | null;
   contextManifestIds: readonly { companyId: string; contextManifestId: string }[] | null;
   governedContextMarkdown?: string | null;
+  contextWitnessMarkdown?: string | null;
   contextWitness?: NativeBootstrapContextWitness | null;
   rolePackInputs: readonly NativePayloadSourceInput[] | null;
   unsupportedInputPresent: boolean;
 }): NativePayloadSourceSet | null {
-  const context = input.contextWitness && input.governedContextMarkdown
+  const contextMarkdown = input.contextWitnessMarkdown ?? input.governedContextMarkdown;
+  const context = input.contextWitness && contextMarkdown
     ? readNativeBootstrapContextWitness(input.contextWitness, { companyId: input.companyId, runId: input.runId,
-      agentId: input.agentId, issueId: input.issueId, renderedMarkdown: input.governedContextMarkdown,
+      agentId: input.agentId, issueId: input.issueId, renderedMarkdown: contextMarkdown,
       manifestIds: input.contextManifestIds ?? [] }) : null;
   if (input.unsupportedInputPresent || !input.references || input.references.length === 0 ||
     !input.references.some(reference => reference.kind === "task") || !input.renderedMarkdownDigest ||

@@ -2307,7 +2307,7 @@ export function runtimeControlService(
         const brokerClaims = brokerCredential ? verifySandboxBrokerJwt(brokerCredential.capabilityToken) : null;
         const brokerCapability = brokerClaims?.sandbox_broker;
         const endpointOrigin = credentialBrokerOrigin;
-        if (!brokerClaims || !brokerCapability || !endpointOrigin || brokerClaims.sub !== claims.sub ||
+        if (!brokerCredential || !brokerClaims || !brokerCapability || !endpointOrigin || brokerClaims.sub !== claims.sub ||
           brokerClaims.company_id !== claims.company_id || brokerClaims.run_id !== request.runId ||
           brokerClaims.responsible_user_id !== claims.responsible_user_id || brokerCapability.parentRequestId !== request.requestId ||
           brokerCapability.bindingId !== request.bindingId || brokerCapability.cellId !== input.cellId ||
@@ -2324,7 +2324,7 @@ export function runtimeControlService(
           request.env.PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN !== endpointOrigin ||
           request.env.PAPERCLIP_SANDBOX_BROKER_SESSION_ID !== brokerCapability.brokerSessionId)
           throw forbidden("Sandbox broker capability is not bound to this exact parent execution");
-        const resolved = await getAssignedMcpGateway(tx as Db).resolveSandboxCredentialBrokerBindings({
+        const resolved = await getAssignedMcpGateway(db, tx).resolveSandboxCredentialBrokerBindings({
           companyId: claims.company_id, agentId: source.run.agentId!, runId: source.run.id,
           responsibleUserId: source.run.responsibleUserId!, presenceId: source.source.runtime.id,
           bindings: credentials.bindings,
@@ -2388,7 +2388,7 @@ export function runtimeControlService(
       const minimumBindingTtl = Math.min(...credentials.bindings.map(binding => binding.ttlSeconds));
       if (!Number.isFinite(minimumBindingTtl) || claims.exp > claims.iat + minimumBindingTtl)
         throw forbidden("Sandbox broker capability exceeded its compiled binding TTL");
-      const resolved = await getAssignedMcpGateway(tx).resolveSandboxCredentialBrokerBindings({
+      const resolved = await getAssignedMcpGateway(db, tx).resolveSandboxCredentialBrokerBindings({
         companyId: claims.company_id, agentId: source.run.agentId!, runId: source.run.id,
         responsibleUserId: source.run.responsibleUserId!, presenceId: source.source.runtime.id,
         bindings: credentials.bindings,
@@ -2613,7 +2613,7 @@ export function runtimeControlService(
         const credentials = current.policy.compilation.compiledPolicy.credentials;
         if (credentials.mode !== "brokered" || credentials.bindings.length === 0)
           throw conflict("Sandbox broker policy changed before output delivery");
-        const resolved = await getAssignedMcpGateway(tx).resolveSandboxCredentialBrokerBindings({
+        const resolved = await getAssignedMcpGateway(db, tx).resolveSandboxCredentialBrokerBindings({
           companyId: input.companyId, agentId: current.run.agentId!, runId: current.run.id,
           responsibleUserId: current.run.responsibleUserId!, presenceId: current.source.runtime.id,
           bindings: credentials.bindings,

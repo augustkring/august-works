@@ -4,9 +4,12 @@ import {
   companies,
   orchestrationPlans,
   orchestrationModelReservations,
+  orchestrationWorkerAttempts,
+  orchestrationWorkers,
   orchestrationCompanyPurposeBudgets,
   orchestrationCompanyPurposeReservations,
   agentConfigurationTests,
+  heartbeatRuns,
   type Db,
 } from "@paperclipai/db";
 import {
@@ -95,6 +98,7 @@ const requestSchema = z
       "read_only_trajectory",
       "provider_conformance",
       "agent_safe_test",
+      "decision_shadow",
     ]),
     workerId: z.string().uuid().nullable().default(null),
     workerAttemptId: z.string().uuid().nullable().default(null),
@@ -202,9 +206,24 @@ export function modelReservationService(
     expectedVersion: number | null,
     dispatch: boolean,
     purpose: Request["purpose"],
+    workerId: string | null,
+    workerAttemptId: string | null,
     now: Date,
   ) {
-    const userId = v7HumanActorId(actor);
+    let userId: string;
+    if (purpose === "decision_shadow" && actor.type === "agent") {
+      if (!actor.agentId || !actor.runId || actor.companyId !== companyId) throw forbidden("A current Agent run is required for shadow decisions");
+      const [run] = await tx.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, actor.runId),
+        eq(heartbeatRuns.agentId, actor.agentId), eq(heartbeatRuns.status, "running"))).for("share");
+      if (!run?.responsibleUserId || actor.onBehalfOfUserId !== run.responsibleUserId) throw forbidden("The current persisted run Human is required for shadow decisions");
+      const [attempt] = await tx.select({ id: orchestrationWorkerAttempts.id, workerId: orchestrationWorkerAttempts.workerId }).from(orchestrationWorkerAttempts)
+        .innerJoin(orchestrationWorkers, and(eq(orchestrationWorkers.companyId, orchestrationWorkerAttempts.companyId), eq(orchestrationWorkers.planId, orchestrationWorkerAttempts.planId), eq(orchestrationWorkers.id, orchestrationWorkerAttempts.workerId)))
+        .where(and(eq(orchestrationWorkerAttempts.companyId, companyId), eq(orchestrationWorkerAttempts.planId, planId), eq(orchestrationWorkerAttempts.agentId, actor.agentId),
+          eq(orchestrationWorkerAttempts.runId, run.id), eq(orchestrationWorkerAttempts.status, "running"), workerId ? eq(orchestrationWorkerAttempts.workerId, workerId) : undefined,
+          workerAttemptId ? eq(orchestrationWorkerAttempts.id, workerAttemptId) : undefined)).for("share");
+      if (!attempt) throw forbidden("The Agent run is not the active Worker attempt for this plan");
+      userId = run.responsibleUserId;
+    } else userId = v7HumanActorId(actor);
     await assertV7Enabled(tx, "orchestration_v7");
     if (purpose === "read_only_verification")
       await assertV7Enabled(tx, "verifier_v7");
@@ -234,13 +253,13 @@ export function modelReservationService(
       (expectedVersion !== null && plan.version !== expectedVersion) ||
       ["completed", "cancelled", "failed"].includes(plan.status) ||
       (dispatch && !["running", "paused", "verifying"].includes(plan.status)) ||
-      (dispatch && purpose === "worker_model" && plan.status !== "running") ||
+      (dispatch && ["worker_model", "decision_shadow"].includes(purpose) && plan.status !== "running") ||
       plan.riskClass === "C4"
     )
       throw forbidden(
         "Current initiating human and eligible plan are required for model spend",
       );
-    if (purpose === "worker_model" && plan.budgets.maxModelCostMinor === null)
+    if (["worker_model", "decision_shadow"].includes(purpose) && plan.budgets.maxModelCostMinor === null)
       throw forbidden("Explicit model cost cap required for this broker");
     if (
       plan.startedAt &&
@@ -267,7 +286,7 @@ export function modelReservationService(
       throw forbidden("Provider probes require their private paused tool-free harness");
     if (!task || (task.hiddenAt && !conformance && !authoringTest) || ["done", "cancelled"].includes(task.status))
       throw forbidden("Current canonical Task required for model spend");
-    await assertV7Authorization(tx, actor, companyId, "issue:mutate", {
+    await assertV7Authorization(tx, actor, companyId, purpose === "decision_shadow" ? "issue:read" : "issue:mutate", {
       type: "issue",
       companyId,
       issueId: task.id,
@@ -773,6 +792,8 @@ export function modelReservationService(
           input.expectedPlanVersion,
           false,
           input.purpose,
+          input.workerId,
+          input.workerAttemptId,
           now,
         );
         if (
@@ -893,6 +914,8 @@ export function modelReservationService(
           null,
           true,
           initial.purpose,
+          initial.workerId,
+          initial.workerAttemptId,
           now,
         );
         const [record] = await tx

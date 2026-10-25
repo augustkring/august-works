@@ -3760,6 +3760,13 @@
       "when": 1792940000000,
       "tag": "0538_durable_plugin_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 539,
+      "version": "7",
+      "when": 1792940000001,
+      "tag": "0539_jev_decision_settings",
+      "breakpoints": true
     }
   ]
 }

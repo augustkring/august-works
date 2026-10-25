@@ -198,6 +198,7 @@ export async function retrieveEligibleMemory(
         scopeId: scope.scopeId,
         asOf,
         limit: ELIGIBLE_SCOPE_SCAN_LIMIT,
+        sensitivityCeiling: input.sensitivityCeiling,
       },
       actor,
     );

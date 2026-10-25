@@ -106,8 +106,8 @@ async function fixture(work, hooks = {}) {
       if (command[0] === "profile" && command[1] === "describe")
         return { stdout: JSON.stringify(hooks.brokerProfile ?? {}) };
       if (command[0] === "provider" && command[1] === "create") {
-        assert.ok(!args.some(value => String(value).includes(hooks.brokerSecret ?? "__never__")));
-        assert.equal(options.env.PAPERCLIP_SANDBOX_BROKER_TOKEN, hooks.brokerSecret);
+        assert.ok(!args.some(value => String(value).includes(hooks.brokerToken ?? "__never__")));
+        assert.equal(options.env.PAPERCLIP_SANDBOX_BROKER_TOKEN, hooks.brokerToken);
         return { stdout: "provider created" };
       }
       if (command[0] === "provider" && command[1] === "update") return { stdout: "provider updated" };
@@ -659,11 +659,9 @@ test("sandbox exec streams through pinned CLI argv without shell and journals no
 });
 
 test("sandbox broker capability enters through an expiring native provider, never CLI argv or workload env", async () => {
-  const brokerSecret = "one-shot-broker-capability-secret";
   let spawnedArgs = null, providerEnvSeen = false;
   const hooks = {
     brokerProfile,
-    brokerSecret,
     spawnProcess(_file, args, options) {
       spawnedArgs = args;
       assert.equal(options.shell, false);
@@ -692,6 +690,7 @@ test("sandbox broker capability enters through an expiring native provider, neve
       start: { policyHash, expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: "broker-stream-start" },
     }, deadline());
     const { request, token } = brokerExecRequest();
+    hooks.brokerToken = token;
     const outputs = [];
     const scopeInput = { companyId: scope.companyId, bindingId: scope.bindingId, cellId: scope.cellId, cellGeneration: "1", sandboxRef: scope.sandboxRef };
     const result = await engine.executeStream({ scope: scopeInput, request, capabilityToken: "fixture-token" }, (stream, chunk) => outputs.push([stream, chunk.toString("utf8")]));

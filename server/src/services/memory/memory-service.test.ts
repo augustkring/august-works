@@ -744,6 +744,7 @@ describePg("Memory Core service", () => {
     expect(await svc.listEligible(seeded.companyId, {}, userActor(seeded.userId))).toEqual([
       expect.objectContaining({ id: created.record.id }),
     ]);
+    expect(await svc.listEligible(seeded.companyId, { sensitivityCeiling: "public" }, userActor(seeded.userId))).toEqual([]);
   });
 
   it("does not supersede accepted memory until its correction candidate is accepted", async () => {

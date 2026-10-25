@@ -29,6 +29,7 @@ import {
   ToggleField,
 } from "../components/agent-config-primitives";
 import { InstanceGeneralSettings } from "./InstanceGeneralSettings";
+import { JevSkillSuggestionSettings } from "../components/JevSkillSuggestionSettings";
 
 export function CompanySettings() {
   const {
@@ -367,6 +368,8 @@ export function CompanySettings() {
             : null
         }
       />
+
+      <JevSkillSuggestionSettings companyId={selectedCompanyId!} />
 
       <InstanceGeneralSettings embedded />
 

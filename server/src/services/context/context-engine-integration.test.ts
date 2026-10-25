@@ -6,6 +6,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   activityLog,
   workflows,
+  workflowStepRuns,
   agents,
   authUsers,
   companies,
@@ -53,6 +54,7 @@ import { foundationService } from "../foundation/foundation-service.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { contextEngineService } from "./context-engine.js";
 import { revalidateNativeBootstrapContextWitness } from "./context-manifest.js";
+import { readNativeBootstrapContextWitness } from "./native-bootstrap-context-witness.js";
 import { seedCurrentHumanSourceActor } from "../../__tests__/helpers/current-human-source-fixture.js";
 import { errorHandler } from "../../middleware/index.js";
 import { issueRoutes } from "../../routes/issues.js";
@@ -73,7 +75,7 @@ const describeEmbeddedPostgres = embeddedPostgresSupport.supported
 describeEmbeddedPostgres("Context Engine integration", () => {
   let db!: ReturnType<typeof createDb>;
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
-  const activeNativeMemoryRunDrains: Array<() => Promise<void>> = [];
+  const activeNativeMemoryRunDrains: Array<{ release: () => void; drain: () => Promise<void> }> = [];
 
   beforeAll(async () => {
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-context-engine-");
@@ -81,7 +83,9 @@ describeEmbeddedPostgres("Context Engine integration", () => {
   }, 20_000);
 
   afterEach(async () => {
-    for (const drain of activeNativeMemoryRunDrains.splice(0)) await drain();
+    const activeDrains = activeNativeMemoryRunDrains.splice(0);
+    for (const active of activeDrains) active.release();
+    if (activeDrains[0]) await activeDrains[0].drain();
     await db.delete(activityLog);
     await db.delete(agentRuntimeState);
     await db.delete(companySkills);
@@ -183,7 +187,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
   async function createOwnerPrivateMemoryThroughNativeGateway(input: {
     companyId: string; agentId: string; userId: string; issueId: string; bindingKey: string; content: string;
     sensitivity: "public" | "internal" | "confidential" | "restricted"; observedAt: Date; expiresAt: Date | null;
-    onNativeRun?: (run: { id: string; actor: AuthorizationActor }) => void;
+    onNativeRun?: (run: { id: string; actor: AuthorizationActor; issueId: string }) => void;
   }) {
     const previousSecret = process.env.PAPERCLIP_AGENT_JWT_SECRET;
     process.env.PAPERCLIP_AGENT_JWT_SECRET = randomUUID();
@@ -283,7 +287,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
         onBehalfOfUserId: claims.responsible_user_id, authenticatedCredentialExpiresAt: claims.exp * 1000,
         keyScope: claims.key_scope ?? { kind: "standard" }, onBehalfOfMemberships: memberships,
       };
-      input.onNativeRun?.({ id: run.id, actor });
+      input.onNativeRun?.({ id: run.id, actor, issueId: input.issueId });
       await db.insert(toolPolicies).values({ companyId: input.companyId, name: `Allow native Memory ${randomUUID()}`,
         policyType: "allow", selectors: { toolName: "paperclip-self:remember" } });
       const gateway = createToolGatewayService(db);
@@ -319,14 +323,12 @@ describeEmbeddedPostgres("Context Engine integration", () => {
         eq(memoryRecords.id, recordId)));
       expect(persistedAfterRestart).toHaveLength(1);
       retainedForContextRead = true;
-      activeNativeMemoryRunDrains.push(async () => {
-        releaseTurn();
-        await heartbeat.drainActiveRunExecutions();
-      });
+      activeNativeMemoryRunDrains.push({ release: releaseTurn, drain: () => heartbeat.drainActiveRunExecutions() });
       return record;
     } finally {
       if (!retainedForContextRead) {
         releaseTurn();
+        for (const active of activeNativeMemoryRunDrains) active.release();
         await heartbeat.drainActiveRunExecutions();
       }
       if (previousSecret === undefined) delete process.env.PAPERCLIP_AGENT_JWT_SECRET;
@@ -348,7 +350,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     expiresAt?: Date | null;
     verificationState?: "unverified" | "corroborated" | "human_verified" | "system_verified";
     sourceTaskBody?: string;
-    onNativeRun?: (run: { id: string; actor: AuthorizationActor }) => void;
+    onNativeRun?: (run: { id: string; actor: AuthorizationActor; issueId: string }) => void;
   }) {
     const scope = input.scope ?? "company";
     const [binding] = await db
@@ -520,7 +522,11 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     const sourceUpdateApp = express();
     sourceUpdateApp.use(express.json());
     sourceUpdateApp.use(((req, _res, next) => {
-      req.actor = { ...humanActor, companyIds: [seeded.companyId],
+      req.actor = { type: "board", source: "session", userId: humanActor.userId!,
+        sessionId: humanActor.sessionId ?? undefined,
+        ...(typeof humanActor.authenticatedCredentialExpiresAt === "number"
+          ? { authenticatedCredentialExpiresAt: humanActor.authenticatedCredentialExpiresAt } : {}),
+        companyIds: [seeded.companyId],
         memberships: [{ companyId: seeded.companyId, membershipRole: "owner", status: "active" }] };
       next();
     }) as RequestHandler);
@@ -528,11 +534,19 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     sourceUpdateApp.use(errorHandler);
     await request(sourceUpdateApp).patch(`/api/issues/${accepted.sourceIssueIds[0]}`)
       .send({ description: "The canonical Human Task source changed after Memory review." }).expect(200);
+    const [changedSource] = await db.select({ payloadSourceSnapshot: issues.payloadSourceSnapshot,
+      payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated }).from(issues).where(and(
+        eq(issues.companyId, seeded.companyId), eq(issues.id, accepted.sourceIssueIds[0]!)));
+    expect(changedSource).toMatchObject({ payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: true });
     expect(await memoryService(db).get(seeded.companyId, accepted.id, actor)).toBeNull();
     await issueService(db).remove(accepted.sourceIssueIds[0]!);
     await issueService(db).remove(seeded.issue.id);
-    const erased = await executor.getRun(seeded.companyId, result.run.id);
-    for (const id of ["memory", "derived"]) expect(erased?.steps.find((step) => step.nodeId === id)).toMatchObject({ inputJson: null, outputJson: null, payloadDeleted: true });
+    await expect(executor.getRun(seeded.companyId, result.run.id, humanActor)).rejects.toMatchObject({ status: 403 });
+    const erasedSteps = await db.select({ nodeId: workflowStepRuns.nodeId, inputJson: workflowStepRuns.inputJson,
+      outputJson: workflowStepRuns.outputJson }).from(workflowStepRuns).where(and(
+        eq(workflowStepRuns.companyId, seeded.companyId), eq(workflowStepRuns.workflowRunId, result.run.id)));
+    for (const id of ["memory", "derived"]) expect(erasedSteps.find((step) => step.nodeId === id))
+      .toMatchObject({ inputJson: null, outputJson: null });
     expect(await memoryService(db).get(seeded.companyId, accepted.id, actor)).toBeNull();
     await expect(assertMemorySourcesRetained(db, seeded.companyId, [{ sourceProvider: "august_works_tasks", sourceRef }]))
       .rejects.toMatchObject({ details: { code: "memory_source_deleted" } });
@@ -622,9 +636,16 @@ describeEmbeddedPostgres("Context Engine integration", () => {
 
     const assembleInput = { companyId: seeded.companyId, agentId: seeded.agent.id, responsibleUserId: seeded.userId,
       runId: run!.id, issueId: task.id, projectId: null, query: "enterprise strategy",
-      intent: "native_task_execution", includeFoundation: true, sensitivityCeiling: "internal" as const };
+      intent: "native_task_execution", includeFoundation: true, sensitivityCeiling: "internal" as const,
+      authorizationActor: { type: "agent" as const, source: "none" as const, companyId: seeded.companyId,
+        agentId: seeded.agent.id, runId: run!.id, onBehalfOfUserId: seeded.userId } };
     const context = await contextEngineService(db).assembleNativeBootstrap(assembleInput);
     expect(context.nativeBootstrapWitness).toBeDefined();
+    expect(readNativeBootstrapContextWitness(context.nativeBootstrapWitness, { companyId: seeded.companyId,
+      runId: run!.id, agentId: seeded.agent.id, issueId: task.id, renderedMarkdown: context.markdown,
+      manifestIds: [{ companyId: seeded.companyId, contextManifestId: context.packet.manifest!.id }] })?.actor)
+      .toMatchObject({ type: "agent", source: "none", companyId: seeded.companyId, agentId: seeded.agent.id,
+        runId: run!.id, onBehalfOfUserId: seeded.userId });
     expect(context.packet.foundation).toHaveLength(1);
     expect(context.packet.taskContext).toEqual(expect.arrayContaining([expect.objectContaining({ sourceRef: `issue://${task.id}` })]));
 
@@ -834,13 +855,21 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       agentId: seeded.agent.id,
       content: "Enterprise launch memory should remain disabled.",
     });
+    const nativeRuns: Array<{ id: string; actor: AuthorizationActor; issueId: string }> = [];
+    await seedMemory({ companyId: seeded.companyId, agentId: seeded.agent.id, scope: "agent",
+      content: "Enterprise launch private Memory remains disabled.",
+      sourceTaskBody: "Enterprise launch source task for the disabled Memory control.",
+      onNativeRun: run => { nativeRuns.push(run); } });
+    const nativeRun = nativeRuns[0];
+    if (!nativeRun) throw new Error("Canonical disabled-Memory source run is unavailable");
 
     const result = await contextEngineService(db).assemble({
-      runId: seeded.run.id,
+      runId: nativeRun.id,
       companyId: seeded.companyId,
       agentId: seeded.agent.id,
       responsibleUserId: seeded.userId,
-      issueId: seeded.issue.id,
+      issueId: nativeRun.issueId,
+      authorizationActor: nativeRun.actor,
       query: "enterprise launch",
       includeFoundation: false,
       totalDeadlineMs: 3_000,
@@ -864,13 +893,17 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       content: "Enterprise launch works best with a staged security review.",
       verificationState: "human_verified",
     });
+    const nativeRuns: Array<{ id: string; actor: AuthorizationActor; issueId: string }> = [];
     const privateRecord = await seedMemory({
       companyId: seeded.companyId,
       agentId: seeded.agent.id,
       scope: "agent",
       content: "Enterprise launch follow-ups should name the decision owner.",
       verificationState: "unverified",
+      onNativeRun: run => { nativeRuns.push(run); },
     });
+    const nativeRun = nativeRuns[0];
+    if (!nativeRun) throw new Error("Canonical private Memory producer did not retain its exact Agent run authority");
     const [otherAgent] = await db.insert(agents).values({
       companyId: seeded.companyId,
       name: "Other Context Agent",
@@ -927,11 +960,12 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     });
 
     const result = await contextEngineService(db).assemble({
-      runId: seeded.run.id,
+      runId: nativeRun.id,
       companyId: seeded.companyId,
       agentId: seeded.agent.id,
       responsibleUserId: seeded.userId,
-      issueId: seeded.issue.id,
+      issueId: nativeRun.issueId,
+      authorizationActor: nativeRun.actor,
       query: "enterprise launch",
       includeFoundation: false,
       sensitivityCeiling: "internal",
@@ -939,7 +973,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       totalDeadlineMs: 3_000,
     });
 
-    expect(result.packet.sharedMemory).toEqual([
+    expect(result.packet.sharedMemory, JSON.stringify(result.packet.warnings)).toEqual([
       expect.objectContaining({
         id: `memory:${shared.id}`,
         sourceClass: "accepted_memory",
@@ -1008,15 +1042,14 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       sensitivity: "internal",
     });
 
-    const nativeRuns: Array<{ id: string; actor: AuthorizationActor }> = [];
-    const privateMemory = await seedMemory({ companyId: seeded.companyId, agentId: seeded.agent.id,
+    const nativeRuns: Array<{ id: string; actor: AuthorizationActor; issueId: string }> = [];
+    await seedMemory({ companyId: seeded.companyId, agentId: seeded.agent.id,
       content: "Enterprise strategy context for the native source reader.", scope: "agent",
       sourceTaskBody: "Enterprise strategy source task for the current native run.",
       onNativeRun: run => { nativeRuns.push(run); } });
     const nativeRun = nativeRuns[0];
     if (!nativeRun) throw new Error("Canonical native producer did not expose its exact run authority");
-    const sourceIssueId = privateMemory.sourceIssueIds[0];
-    if (!sourceIssueId) throw new Error("Canonical native Memory producer Task was not retained");
+    const sourceIssueId = nativeRun.issueId;
 
     const result = await contextEngineService(db).assemble({
       runId: nativeRun.id,

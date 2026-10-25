@@ -53,28 +53,28 @@ describe("native bootstrap rendered-source closure", () => {
       originCommentIds: [], objective: task.description, messages: [], humanResponses: [], interactionOutcomes: [],
       completedWork: null, recoveryOutcomes: [], unresolvedInteractionIds: [],
       coverage: { kind: "full_task_history", throughCommentId: null, summaryThroughCommentId: null } };
-    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", wakeReason: "on_demand", task,
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand", task,
       payload: { ...payload, connectorSkillInstructions: "" } })).toMatchObject({
       kind: "native_task_wake", runId, issueId, sourceVersion: "1", contentHash: expect.stringMatching(/^[0-9a-f]{64}$/),
     });
-    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", wakeReason: "on_demand", task, payload })).toMatchObject({ kind: "native_task_wake" });
-    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", wakeReason: "on_demand", task,
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand", task, payload })).toMatchObject({ kind: "native_task_wake" });
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand", task,
       payload: { ...payload, executionContinuation: emptyContinuation } })).toMatchObject({ kind: "native_task_wake" });
-    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", wakeReason: null, task,
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: null, task,
       payload: { ...payload, reason: null, executionContinuation: { ...emptyContinuation,
         trigger: { reason: "task_execution", interactionId: null, sourceRunId: null } } } })).toMatchObject({ kind: "native_task_wake" });
-    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", wakeReason: "on_demand", task, payload: {
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand", task, payload: {
       ...payload, connectorSkillInstructions: "untracked connector instructions",
     } })).toBeNull();
-    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", wakeReason: "on_demand", task, payload: {
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand", task, payload: {
       ...payload, comments: [{ id: randomUUID(), body: "unaccounted" }],
     } })).toBeNull();
-    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", wakeReason: "on_demand", task, payload: {
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand", task, payload: {
       ...payload, futureField: "unknown input",
     } })).toBeNull();
-    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", wakeReason: "on_demand", task,
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand", task,
       payload: { ...payload, executionContinuation: { ...emptyContinuation, completedActions: [{ runId, receiptId: "x" }] } } })).toBeNull();
-    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", wakeReason: "different_reason", task,
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "different_reason", task,
       payload: { ...payload, executionContinuation: emptyContinuation } })).toBeNull();
   });
 
@@ -118,6 +118,20 @@ describe("native bootstrap rendered-source closure", () => {
       expect.objectContaining({ kind: "task", issueId }),
     ]));
     expect(sourceSet?.policy.foundationRevisionIds).toEqual([foundationRevisionId]);
+    const combinedFabricContext = `## Pinned execution inventory\nPolicies: budget_hard_stop\n\n${contextMarkdown}`;
+    const combinedContextSourceSet = buildNativeBootstrapSourceSet({ companyId, runId, agentId, issueId, renderedMarkdown,
+      renderedMarkdownDigest: createHash("sha256").update(renderedMarkdown, "utf8").digest("hex"),
+      references: [{ kind: "task", id: issueId }],
+      candidates: [{ kind: "task", id: issueId, input: taskInput, payloadSourceSnapshot: snapshot() }], runtimeInputs: [],
+      contextManifestIds: [{ companyId, contextManifestId: manifestId }], governedContextMarkdown: combinedFabricContext,
+      contextWitnessMarkdown: contextMarkdown, contextWitness: exactWitness, rolePackInputs: [], unsupportedInputPresent: false });
+    expect(combinedContextSourceSet?.inputs).toContainEqual(expect.objectContaining({ kind: "context", manifestId }));
+    expect(buildNativeBootstrapSourceSet({ companyId, runId, agentId, issueId, renderedMarkdown,
+      renderedMarkdownDigest: createHash("sha256").update(renderedMarkdown, "utf8").digest("hex"),
+      references: [{ kind: "task", id: issueId }], candidates: [{ kind: "task", id: issueId, input: taskInput,
+        payloadSourceSnapshot: snapshot() }], runtimeInputs: [], contextManifestIds: [{ companyId, contextManifestId: manifestId }],
+      governedContextMarkdown: combinedFabricContext, contextWitnessMarkdown: `${contextMarkdown} changed`,
+      contextWitness: exactWitness, rolePackInputs: [], unsupportedInputPresent: false })).toBeNull();
     expect(buildNativeBootstrapSourceSet({ companyId, runId, agentId, issueId, renderedMarkdown,
       renderedMarkdownDigest: createHash("sha256").update(renderedMarkdown, "utf8").digest("hex"),
       references: [{ kind: "task", id: issueId }], candidates: [{ kind: "task", id: issueId, input: taskInput,

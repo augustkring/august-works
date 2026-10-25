@@ -65,6 +65,32 @@ export function runtimeConnectionIntentRoutes(db: Db, workerModels?: ReturnType<
     }
   });
 
+  const managedMessagesRoute = async (req: Request, res: import("express").Response) => {
+    if (req.headers.origin || req.headers.cookie || req.headers["sec-fetch-site"])
+      throw forbidden("Managed model calls require runtime authentication");
+    const claims = verifyRuntimeToolsToken(bearer(req), "worker_model");
+    if (!claims) throw unauthorized("Invalid managed model capability");
+    if (!workerModels) throw forbidden("Worker model transport is not configured");
+    const controller = new AbortController();
+    const cancel = () => { if (!res.writableEnded) controller.abort(); };
+    req.on("aborted", cancel);
+    res.on("close", cancel);
+    try {
+      const result = await workerModels.callManagedMessages(claims, req.body, controller.signal);
+      res.status(200);
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("X-Accel-Buffering", "no");
+      res.type("text/event-stream").send(result.sse);
+    } finally {
+      req.off("aborted", cancel);
+      res.off("close", cancel);
+    }
+  };
+  router.post("/runtime-tools/model/anthropic-messages", managedMessagesRoute);
+  // OpenCode's Anthropic provider appends `/v1/messages` to its configured
+  // baseURL, so this exact route is the one allowed in managed egress policy.
+  router.post("/runtime-tools/model/v1/messages", managedMessagesRoute);
+
   router.post("/runtime-tools/github/credentials", async (req, res) => {
     // This capability is never accepted as board/session authentication.
     // Node fetch sends Sec-Fetch-Mode too; browsers additionally send Origin or Sec-Fetch-Site.

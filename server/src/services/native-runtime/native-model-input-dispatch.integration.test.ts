@@ -443,6 +443,7 @@ describe("native model input dispatch intent", () => {
     expect(revisionCapture).not.toBeNull();
     if (!selectedRevision || typeof selectedRevision.body !== "string") throw new Error("The selected document body is unavailable");
     const governedContext = await contextEngineService(db).assembleNativeBootstrap({ companyId, agentId,
+      authorizationActor: { type: "agent", source: "none", companyId, agentId, runId: seeded.runId, onBehalfOfUserId: userId },
       responsibleUserId: userId, runId: seeded.runId, issueId: createdIssue.id, projectId: null,
       query: "Rendered native task", intent: "native_task_execution", includeFoundation: false,
       sensitivityCeiling: "internal" });

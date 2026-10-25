@@ -52,16 +52,29 @@ function definition(name: string, tool: ToolGatewayDescriptor): ToolDefinition {
 // Execution must use the app's configured gateway, including deployment
 // restrictions, OAuth refresh, and approval delivery. Never fall back to an
 // isolated gateway whose defaults differ from the running instance.
-const assignedMcpGateways = new WeakMap<Db, ToolGatewayService>();
+type AssignedMcpGatewayRegistration = {
+  gateway: ToolGatewayService;
+  forDatabase?: (db: Db) => ToolGatewayService;
+};
+const assignedMcpGateways = new WeakMap<Db, AssignedMcpGatewayRegistration>();
 
-export function registerAssignedMcpGateway(db: Db, gateway: ToolGatewayService): void {
-  assignedMcpGateways.set(db, gateway);
+export function registerAssignedMcpGateway(
+  db: Db,
+  gateway: ToolGatewayService,
+  forDatabase?: (db: Db) => ToolGatewayService,
+): void {
+  assignedMcpGateways.set(db, { gateway, forDatabase });
 }
 
-export function getAssignedMcpGateway(db: Db): ToolGatewayService {
-  const gateway = assignedMcpGateways.get(db);
-  if (!gateway) throw new Error("assigned_mcp_gateway_unavailable");
-  return gateway;
+/** Resolve the app-configured Gateway owner for root DB operations, or a
+ * transaction-bound instance from that same registration for atomic metadata
+ * checks. Callers must pass both handles explicitly inside a transaction. */
+export function getAssignedMcpGateway(rootDb: Db, scopedDb: Db = rootDb): ToolGatewayService {
+  const registration = assignedMcpGateways.get(rootDb);
+  if (!registration) throw new Error("assigned_mcp_gateway_unavailable");
+  if (scopedDb === rootDb) return registration.gateway;
+  if (!registration.forDatabase) throw new Error("assigned_mcp_gateway_transaction_unavailable");
+  return registration.forDatabase(scopedDb);
 }
 
 function assignedToolName(name: string): string {

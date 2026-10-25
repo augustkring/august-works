@@ -24,7 +24,8 @@ export function captureNativeBootstrapContextWitness(input: { companyId: string;
   const { manifest } = input;
   if (!uuid.test(input.companyId) || !uuid.test(input.runId) || !uuid.test(input.agentId) || !uuid.test(input.issueId) ||
     manifest.companyId !== input.companyId || manifest.runId !== input.runId || manifest.agentId !== input.agentId ||
-    manifest.issueId !== input.issueId || input.actor.type !== "agent" || input.actor.source !== "agent_jwt" ||
+    manifest.issueId !== input.issueId || input.actor.type !== "agent" ||
+    (input.actor.source !== "agent_jwt" && input.actor.source !== "none") ||
     input.actor.companyId !== input.companyId || input.actor.agentId !== input.agentId || input.actor.runId !== input.runId ||
     !input.actor.onBehalfOfUserId || input.items.length === 0 || input.items.length > 256 || input.roots.length > 256 ||
     input.items.some(item => item.companyId !== input.companyId || item.manifestId !== manifest.id) ||

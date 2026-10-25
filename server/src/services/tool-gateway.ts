@@ -9133,6 +9133,166 @@ export function createToolGatewayService(
     };
   }
 
+  async function resolveSandboxCredentialBrokerBindingsWithDecision(
+    input: {
+      companyId: string;
+      agentId: string;
+      runId: string;
+      responsibleUserId: string;
+      presenceId: string;
+      bindings: SandboxPolicy["credentials"]["bindings"];
+    },
+    decideForTool: (input: ToolAccessDecisionInput) => Promise<ToolAccessDecision>,
+  ): Promise<{ authorizedConnectionGrantHashes: Record<string, string>; bindings: SandboxCredentialBrokerBinding[] }> {
+    const authorizedConnectionGrantHashes: Record<string, string> = {};
+    const resolved: SandboxCredentialBrokerBinding[] = [];
+    const [run] = await db.select({
+      companyId: heartbeatRuns.companyId, agentId: heartbeatRuns.agentId,
+      responsibleUserId: heartbeatRuns.responsibleUserId, status: heartbeatRuns.status,
+      issueId: heartbeatRuns.nativeIssueId,
+    }).from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId))).limit(1);
+    if (!run || run.status !== "running" || run.agentId !== input.agentId || run.responsibleUserId !== input.responsibleUserId || !run.issueId) {
+      throw new ToolGatewayHttpError(409, "Current responsible run is required for credential brokering", "sandbox_broker_run_changed");
+    }
+    const [issue] = await db.select({ projectId: issues.projectId }).from(issues).where(and(
+      eq(issues.companyId, input.companyId), eq(issues.id, run.issueId), eq(issues.assigneeAgentId, input.agentId),
+    )).limit(1);
+    if (!issue) throw new ToolGatewayHttpError(409, "Current Task owner is required for credential brokering", "sandbox_broker_task_changed");
+    const sessionBase: ToolGatewaySession = {
+      id: `sandbox-broker:${input.runId}`, token: "", companyId: input.companyId,
+      agentId: input.agentId, runId: input.runId, issueId: run.issueId, projectId: issue.projectId,
+      actorType: "agent", actorId: input.agentId, responsibleUserId: input.responsibleUserId,
+      createdAt: new Date(), expiresAt: new Date(Date.now() + 60_000),
+    };
+    const currentSession = await captureSessionIdentity(sessionBase);
+    if (currentSession.responsibleUserId !== input.responsibleUserId) {
+      throw new ToolGatewayHttpError(403, "The current execution identity does not match the responsible Human", "sandbox_broker_identity_changed");
+    }
+    for (const binding of input.bindings) {
+      const [connection] = await db.select().from(toolConnections).where(and(
+        eq(toolConnections.companyId, input.companyId), eq(toolConnections.id, binding.connectionId),
+        eq(toolConnections.enabled, true), eq(toolConnections.status, "active"), eq(toolConnections.transport, "mcp_remote"),
+      )).limit(1);
+      if (!connection) throw new ToolGatewayHttpError(409, "Credential broker connection is unavailable", "sandbox_broker_connection_unavailable");
+      const grant = await resolveConnectionGrant(currentSession, connection);
+      const endpoint = new URL(await resolvedRemoteEndpoint(currentSession, connection, grant));
+      const port = endpoint.port ? Number(endpoint.port) : endpoint.protocol === "https:" ? 443 : 80;
+      const path = endpoint.pathname || "/";
+      if (endpoint.protocol !== "https:" || endpoint.username || endpoint.password || endpoint.search || endpoint.hash ||
+        endpoint.hostname !== binding.hostname || port !== binding.port || !binding.methods.includes("POST") ||
+        !binding.pathPrefixes.some(prefix => prefix === "/" || path === prefix || path.startsWith(`${prefix.replace(/\/$/, "")}/`)) || binding.binary !== null) {
+        throw new ToolGatewayHttpError(409, "Credential broker destination does not match the compiled connection endpoint", "sandbox_broker_destination_changed");
+      }
+      const secretVersions = await connectedCredentialVersionSnapshots(connection, grant, { requireResolved: true });
+      const gateways = await db.select().from(toolMcpGateways).where(and(
+        eq(toolMcpGateways.companyId, input.companyId), eq(toolMcpGateways.status, "active"), isNull(toolMcpGateways.archivedAt),
+      ));
+      const eligible: Array<{
+        gateway: typeof toolMcpGateways.$inferSelect;
+        profile: typeof toolProfiles.$inferSelect;
+        profileEntries: Array<typeof toolProfileEntries.$inferSelect>;
+        tools: ToolGatewayDescriptor[];
+      }> = [];
+      for (const gateway of gateways) {
+        if ((gateway.agentId && gateway.agentId !== input.agentId) || (gateway.projectId && gateway.projectId !== issue.projectId) ||
+          (gateway.issueId && gateway.issueId !== run.issueId) ||
+          (gateway.contextScopeType === "agent" && gateway.contextScopeId && gateway.contextScopeId !== input.agentId) ||
+          (gateway.contextScopeType === "project" && gateway.contextScopeId && gateway.contextScopeId !== issue.projectId) ||
+          (gateway.contextScopeType === "issue" && gateway.contextScopeId && gateway.contextScopeId !== run.issueId)) continue;
+        const [profile] = await db.select().from(toolProfiles).where(and(
+          eq(toolProfiles.companyId, input.companyId), eq(toolProfiles.id, gateway.profileId), eq(toolProfiles.status, "active"),
+        )).limit(1);
+        if (!profile) continue;
+        const profileEntries = await db.select().from(toolProfileEntries).where(and(
+          eq(toolProfileEntries.companyId, input.companyId), eq(toolProfileEntries.profileId, gateway.profileId),
+        ));
+        if (profileEntries.some(entry => entry.conditions && Object.keys(entry.conditions).length > 0)) continue;
+        const matches = (entry: typeof toolProfileEntries.$inferSelect, tool: ToolGatewayDescriptor) => {
+          if (entry.selectorType === "connection") return entry.connectionId === connection.id;
+          if (entry.selectorType === "application") return entry.applicationId === connection.applicationId;
+          if (entry.selectorType === "catalog_entry") return entry.catalogEntryId === tool.catalogEntryId;
+          if (entry.selectorType === "tool_name") return entry.toolName === tool.name || entry.toolName === tool.upstreamToolName;
+          return entry.riskLevel === tool.risk;
+        };
+        const gatewaySession: ToolGatewaySession = {
+          ...currentSession, id: `sandbox-broker:${input.runId}:${gateway.id}`,
+          gatewayId: gateway.id, gatewayPublicId: gateway.gatewayPublicId,
+          gatewayName: gateway.name, gatewayProfileId: gateway.profileId,
+        };
+        // Compile-time route provenance does not confer dispatch authority. Use
+        // the server-owned catalog and Gateway profile directly, then apply
+        // policy checks through the caller-selected server-only decision path.
+        const guestBotConnection = await githubGuestBotConnectionForSession(db, gatewaySession);
+        const visibleTools = (await connectedMcpToolsForCompany(input.companyId)).filter(tool => {
+          if (guestBotConnection && (tool.connectionId !== guestBotConnection || tool.providerType !== "paperclip_github_chat")) return false;
+          if (tool.connectionId !== connection.id || tool.providerType !== "mcp_remote_http") return false;
+          if (profile.defaultAction === "allow") return !profileEntries.some(entry => entry.effect === "exclude" && matches(entry, tool));
+          return profileEntries.some(entry => entry.effect === "include" && matches(entry, tool)) &&
+            !profileEntries.some(entry => entry.effect === "exclude" && matches(entry, tool));
+        });
+        const permittedTools: ToolGatewayDescriptor[] = [];
+        for (const tool of visibleTools) {
+          const decision = await decideForTool(policyInputForTool({ session: gatewaySession, tool }));
+          if (decision.allowed) permittedTools.push(tool);
+        }
+        if (permittedTools.length) eligible.push({ gateway, profile, profileEntries, tools: permittedTools });
+      }
+      eligible.sort((a, b) => a.gateway.gatewayPublicId.localeCompare(b.gateway.gatewayPublicId));
+      const selected = eligible[0];
+      if (!selected) throw new ToolGatewayHttpError(409, "No current assigned gateway tools match the credential binding", "sandbox_broker_tools_unavailable");
+      const allowedTools = selected.tools.map(tool => tool.name).sort();
+      const fingerprint = {
+        source: {
+          companyId: input.companyId, agentId: input.agentId, runId: input.runId,
+          issueId: run.issueId, projectId: issue.projectId, responsibleUserId: input.responsibleUserId,
+          presenceId: input.presenceId,
+        },
+        connection: {
+          id: connection.id, applicationId: connection.applicationId, transport: connection.transport,
+          enabled: connection.enabled, status: connection.status, authKind: connection.authKind,
+          credentialSource: connection.credentialSource, credentialPolicy: connection.credentialPolicy,
+          credentialRefs: connection.credentialRefs, credentialSecretRefs: connection.credentialSecretRefs,
+          externalCredential: connection.externalCredential,
+        },
+        grant: {
+          id: grant.id, kind: grant.kind, subjectUserId: grant.subjectUserId,
+          subjectAgentId: grant.subjectAgentId, status: grant.status, revokedAt: grant.revokedAt,
+          credentialSecretRefs: grant.credentialSecretRefs, externalCredential: grant.externalCredential,
+          providerTenant: grant.providerTenant,
+        },
+        endpoint: { protocol: endpoint.protocol, hostname: endpoint.hostname, port, path },
+        secretVersions,
+        gateway: {
+          id: selected.gateway.id, publicId: selected.gateway.gatewayPublicId,
+          agentId: selected.gateway.agentId, projectId: selected.gateway.projectId,
+          issueId: selected.gateway.issueId, contextScopeType: selected.gateway.contextScopeType,
+          contextScopeId: selected.gateway.contextScopeId,
+          profile: { id: selected.profile.id, status: selected.profile.status, defaultAction: selected.profile.defaultAction },
+          entries: selected.profileEntries.map(entry => ({
+            selectorType: entry.selectorType, effect: entry.effect, connectionId: entry.connectionId,
+            applicationId: entry.applicationId, catalogEntryId: entry.catalogEntryId,
+            toolName: entry.toolName, riskLevel: entry.riskLevel,
+          })),
+          tools: selected.tools.map(tool => ({
+            name: tool.name, upstreamToolName: tool.upstreamToolName,
+            catalogEntryId: tool.catalogEntryId, schemaHash: stableHash(tool.parametersSchema),
+            descriptionHash: stableHash(tool.description), risk: tool.risk,
+          })),
+        },
+      };
+      const grantVersionHash = stableHash(fingerprint);
+      authorizedConnectionGrantHashes[binding.connectionId] = grantVersionHash;
+      resolved.push({
+        connectionId: binding.connectionId, grantVersionHash,
+        gatewayPublicId: selected.gateway.gatewayPublicId,
+        endpointPath: `/mcp/gateways/${selected.gateway.gatewayPublicId}`,
+        allowedTools,
+        destination: { hostname: endpoint.hostname, port, method: "POST", path },
+      });
+    }
+    return { authorizedConnectionGrantHashes, bindings: resolved };
+  }
+
   const service = {
     setSandboxBrokerAuthority(authority: SandboxBrokerAuthority) {
       sandboxBrokerAuthority = authority;
@@ -9212,7 +9372,7 @@ export function createToolGatewayService(
           if (payload.operationHash !== operationHash || raced.status !== "SUCCEEDED") throw new ToolGatewayHttpError(409, "Original broker operation has an unknown or conflicting outcome", "sandbox_broker_operation_unsettled");
           return { replay: raced };
         }
-        const [claimed] = await tx.update(runtimeHostCommands).set({ status: "CLAIMED", attempt: 1, updatedAt: now }).where(and(
+        const [claimed] = await tx.update(runtimeHostCommands).set({ status: "CLAIMED", attempt: 1 }).where(and(
           eq(runtimeHostCommands.id, created.id), eq(runtimeHostCommands.status, "PENDING"), eq(runtimeHostCommands.attempt, 0),
         )).returning();
         if (!claimed) throw new ToolGatewayHttpError(409, "Broker operation claim was already consumed", "sandbox_broker_claim_unavailable");
@@ -9271,123 +9431,21 @@ export function createToolGatewayService(
       presenceId: string;
       bindings: SandboxPolicy["credentials"]["bindings"];
     }): Promise<{ authorizedConnectionGrantHashes: Record<string, string>; bindings: SandboxCredentialBrokerBinding[] }> {
-      const authorizedConnectionGrantHashes: Record<string, string> = {};
-      const resolved: SandboxCredentialBrokerBinding[] = [];
-      const [run] = await db.select({
-        companyId: heartbeatRuns.companyId, agentId: heartbeatRuns.agentId,
-        responsibleUserId: heartbeatRuns.responsibleUserId, status: heartbeatRuns.status,
-        issueId: heartbeatRuns.nativeIssueId,
-      }).from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId))).limit(1);
-      if (!run || run.status !== "running" || run.agentId !== input.agentId || run.responsibleUserId !== input.responsibleUserId || !run.issueId) {
-        throw new ToolGatewayHttpError(409, "Current responsible run is required for credential brokering", "sandbox_broker_run_changed");
-      }
-      const [issue] = await db.select({ projectId: issues.projectId }).from(issues).where(and(
-        eq(issues.companyId, input.companyId), eq(issues.id, run.issueId), eq(issues.assigneeAgentId, input.agentId),
-      )).limit(1);
-      if (!issue) throw new ToolGatewayHttpError(409, "Current Task owner is required for credential brokering", "sandbox_broker_task_changed");
-      const sessionBase: ToolGatewaySession = {
-        id: `sandbox-broker:${input.runId}`, token: "", companyId: input.companyId,
-        agentId: input.agentId, runId: input.runId, issueId: run.issueId, projectId: issue.projectId,
-        actorType: "agent", actorId: input.agentId, responsibleUserId: input.responsibleUserId,
-        createdAt: new Date(), expiresAt: new Date(Date.now() + 60_000),
-      };
-      const currentSession = await captureSessionIdentity(sessionBase);
-      if (currentSession.responsibleUserId !== input.responsibleUserId) {
-        throw new ToolGatewayHttpError(403, "The current execution identity does not match the responsible Human", "sandbox_broker_identity_changed");
-      }
-      for (const binding of input.bindings) {
-        const [connection] = await db.select().from(toolConnections).where(and(
-          eq(toolConnections.companyId, input.companyId), eq(toolConnections.id, binding.connectionId),
-          eq(toolConnections.enabled, true), eq(toolConnections.status, "active"), eq(toolConnections.transport, "mcp_remote"),
-        )).limit(1);
-        if (!connection) throw new ToolGatewayHttpError(409, "Credential broker connection is unavailable", "sandbox_broker_connection_unavailable");
-        const grant = await resolveConnectionGrant(currentSession, connection);
-        const endpoint = new URL(await resolvedRemoteEndpoint(currentSession, connection, grant));
-        const port = endpoint.port ? Number(endpoint.port) : endpoint.protocol === "https:" ? 443 : 80;
-        const path = endpoint.pathname || "/";
-        if (endpoint.protocol !== "https:" || endpoint.username || endpoint.password || endpoint.search || endpoint.hash ||
-          endpoint.hostname !== binding.hostname || port !== binding.port || !binding.methods.includes("POST") ||
-          !binding.pathPrefixes.some(prefix => prefix === "/" || path === prefix || path.startsWith(`${prefix.replace(/\/$/, "")}/`)) || binding.binary !== null) {
-          throw new ToolGatewayHttpError(409, "Credential broker destination does not match the compiled connection endpoint", "sandbox_broker_destination_changed");
-        }
-        const secretVersions = await connectedCredentialVersionSnapshots(connection, grant, { requireResolved: true });
-        const grantVersionHash = stableHash({
-          companyId: input.companyId, agentId: input.agentId, responsibleUserId: input.responsibleUserId,
-          presenceId: input.presenceId,
-          identityContextId: currentSession.identityContextId ?? null,
-          connection: {
-            id: connection.id, applicationId: connection.applicationId, authKind: connection.authKind,
-            credentialSource: connection.credentialSource, credentialPolicy: connection.credentialPolicy,
-            config: connection.config, transportConfig: connection.transportConfig,
-            credentialRefs: connection.credentialRefs, credentialSecretRefs: connection.credentialSecretRefs,
-            externalCredential: connection.externalCredential,
-          },
-          grant: {
-            id: grant.id, kind: grant.kind, subjectUserId: grant.subjectUserId,
-            subjectAgentId: grant.subjectAgentId, status: grant.status, revokedAt: grant.revokedAt,
-            updatedAt: grant.updatedAt, isDefault: grant.isDefault,
-            credentialSecretRefs: grant.credentialSecretRefs, externalCredential: grant.externalCredential,
-            providerTenant: grant.providerTenant,
-          },
-          endpoint: { protocol: endpoint.protocol, hostname: endpoint.hostname, port, path },
-          secretVersions,
-        });
-        const gateways = await db.select().from(toolMcpGateways).where(and(
-          eq(toolMcpGateways.companyId, input.companyId), eq(toolMcpGateways.status, "active"), isNull(toolMcpGateways.archivedAt),
-        ));
-        const eligible: Array<{ gateway: typeof toolMcpGateways.$inferSelect; tools: ToolGatewayDescriptor[] }> = [];
-        for (const gateway of gateways) {
-          if ((gateway.agentId && gateway.agentId !== input.agentId) || (gateway.projectId && gateway.projectId !== issue.projectId) ||
-            (gateway.issueId && gateway.issueId !== run.issueId) ||
-            (gateway.contextScopeType === "agent" && gateway.contextScopeId && gateway.contextScopeId !== input.agentId) ||
-            (gateway.contextScopeType === "project" && gateway.contextScopeId && gateway.contextScopeId !== issue.projectId) ||
-            (gateway.contextScopeType === "issue" && gateway.contextScopeId && gateway.contextScopeId !== run.issueId)) continue;
-          const [profile] = await db.select().from(toolProfiles).where(and(
-            eq(toolProfiles.companyId, input.companyId), eq(toolProfiles.id, gateway.profileId), eq(toolProfiles.status, "active"),
-          )).limit(1);
-          if (!profile) continue;
-          const profileEntries = await db.select().from(toolProfileEntries).where(and(
-            eq(toolProfileEntries.companyId, input.companyId), eq(toolProfileEntries.profileId, gateway.profileId),
-          ));
-          if (profileEntries.some(entry => entry.conditions && Object.keys(entry.conditions).length > 0)) continue;
-          const matches = (entry: typeof toolProfileEntries.$inferSelect, tool: ToolGatewayDescriptor) => {
-            if (entry.selectorType === "connection") return entry.connectionId === connection.id;
-            if (entry.selectorType === "application") return entry.applicationId === connection.applicationId;
-            if (entry.selectorType === "catalog_entry") return entry.catalogEntryId === tool.catalogEntryId;
-            if (entry.selectorType === "tool_name") return entry.toolName === tool.name || entry.toolName === tool.upstreamToolName;
-            return entry.riskLevel === tool.risk;
-          };
-          const session: ToolGatewaySession = {
-            ...currentSession, id: `sandbox-broker:${input.runId}:${gateway.id}`,
-            gatewayId: gateway.id, gatewayPublicId: gateway.gatewayPublicId,
-            gatewayName: gateway.name, gatewayProfileId: gateway.profileId,
-          };
-          const visibleTools = (await listToolsForContext(session)).filter(tool => {
-            if (tool.connectionId !== connection.id || tool.providerType !== "mcp_remote_http") return false;
-            if (profile.defaultAction === "allow") return !profileEntries.some(entry => entry.effect === "exclude" && matches(entry, tool));
-            return profileEntries.some(entry => entry.effect === "include" && matches(entry, tool)) &&
-              !profileEntries.some(entry => entry.effect === "exclude" && matches(entry, tool));
-          });
-          const dispatchableTools: ToolGatewayDescriptor[] = [];
-          for (const tool of visibleTools) {
-            const decision = await policyService.decide(policyInputForTool({ session, tool }));
-            if (decision.allowed) dispatchableTools.push(tool);
-          }
-          if (dispatchableTools.length) eligible.push({ gateway, tools: dispatchableTools });
-        }
-        eligible.sort((a, b) => a.gateway.gatewayPublicId.localeCompare(b.gateway.gatewayPublicId));
-        const selected = eligible[0];
-        if (!selected) throw new ToolGatewayHttpError(409, "No current assigned gateway tools match the credential binding", "sandbox_broker_tools_unavailable");
-        authorizedConnectionGrantHashes[binding.connectionId] = grantVersionHash;
-        resolved.push({
-          connectionId: binding.connectionId, grantVersionHash,
-          gatewayPublicId: selected.gateway.gatewayPublicId,
-          endpointPath: `/mcp/gateways/${selected.gateway.gatewayPublicId}`,
-          allowedTools: selected.tools.map(tool => tool.name).sort(),
-          destination: { hostname: endpoint.hostname, port, method: "POST", path },
-        });
-      }
-      return { authorizedConnectionGrantHashes, bindings: resolved };
+      return resolveSandboxCredentialBrokerBindingsWithDecision(input, policyService.decide);
+    },
+    /** Current grant/secret and assigned Gateway metadata for server-side
+     * sandbox policy compilation. This route projection is not a dispatch
+     * authorization; `resolveSandboxCredentialBrokerBindings` remains the
+     * full current-operation check used when minting or consuming capability. */
+    async resolveSandboxCredentialBrokerPolicyBindings(input: {
+      companyId: string;
+      agentId: string;
+      runId: string;
+      responsibleUserId: string;
+      presenceId: string;
+      bindings: SandboxPolicy["credentials"]["bindings"];
+    }): Promise<{ authorizedConnectionGrantHashes: Record<string, string>; bindings: SandboxCredentialBrokerBinding[] }> {
+      return resolveSandboxCredentialBrokerBindingsWithDecision(input, policyService.decideForPolicyCompilation);
     },
     async recordRuntimeMcpDeliveryDiagnostic(input: {
       companyId: string;

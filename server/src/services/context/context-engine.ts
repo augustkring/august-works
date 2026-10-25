@@ -706,7 +706,7 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
         delegatedSource.actor.companyId !== rawInput.companyId || delegatedSource.actor.agentId !== rawInput.agentId ||
         delegatedSource.actor.onBehalfOfUserId !== rawInput.responsibleUserId))
         throw forbidden("Delegated Context providers require their active original authorization owner.");
-      const input = { ...rawInput, query, authorizationActor: delegatedSource?.actor ?? inspectionActor,
+      const input = { ...rawInput, query, authorizationActor: delegatedSource?.actor ?? inspectionActor ?? rawInput.authorizationActor,
         authorizationDecision: delegatedSource?.decide ?? inspectionAuthority?.decide };
       if (inspectionActor && input.delegatedExecution) throw forbidden("Human Context inspection cannot create delegated runtime provenance");
       const asOf = rawInput.asOf ?? new Date();
@@ -784,6 +784,7 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
           agentId: input.agentId,
           issueId: input.issueId ?? null,
           responsibleUserId: input.responsibleUserId ?? null,
+          ...(input.authorizationActor ? { authorizationActor: input.authorizationActor } : {}),
           ...(input.delegatedExecution ? { delegatedExecution: input.delegatedExecution } : {}),
           projectId: input.projectId ?? null,
           query: input.query,

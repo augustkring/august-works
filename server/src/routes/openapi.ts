@@ -1743,7 +1743,7 @@ function resolveOperationAuthLevel(
 ): OpenApiAuthLevel {
   const key = operationKey(method, path);
   if (PUBLIC_OPERATIONS.has(key)) return "public";
-  if (key === "POST /runtime-tools/model/messages") return "worker_model";
+  if (key === "POST /runtime-tools/model/messages" || key === "POST /runtime-tools/model/anthropic-messages" || key === "POST /runtime-tools/model/v1/messages") return "worker_model";
   if (key === "POST /api/companies/{companyId}/workflow-authoring") return "agent_run";
   if (key === "POST /api/mcp/project-tools" || key === "POST /api/companies/{companyId}/slack/tasks/{issueId}/tools" ||
     key === "POST /api/companies/{companyId}/workflow-runs/{runId}/nodes/{nodeId}/task-result" ||
@@ -10603,6 +10603,29 @@ registerCurrentRoute({
   responses: {
     200: { description: "Bounded worker result; no Task completion certification", content: {
       "application/json": { schema: workerModelResultSchema },
+    } },
+    400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 409: r.conflict, 422: r.unprocessable,
+  },
+});
+
+registerCurrentRoute({
+  method: "post", path: "/runtime-tools/model/anthropic-messages", tags: ["orchestration"],
+  summary: "Dispatch one reserved managed Anthropic Messages inference for an authorized Native worker",
+  body: z.record(z.string(), z.unknown()),
+  responses: {
+    200: { description: "Validated, bounded Anthropic SSE response after reservation settlement", content: {
+      "text/event-stream": { schema: z.string() },
+    } },
+    400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 409: r.conflict, 422: r.unprocessable,
+  },
+});
+registerCurrentRoute({
+  method: "post", path: "/runtime-tools/model/v1/messages", tags: ["orchestration"],
+  summary: "Dispatch one reserved managed Anthropic Messages inference for an authorized Native worker",
+  body: z.record(z.string(), z.unknown()),
+  responses: {
+    200: { description: "Validated, bounded Anthropic SSE response after reservation settlement", content: {
+      "text/event-stream": { schema: z.string() },
     } },
     400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 409: r.conflict, 422: r.unprocessable,
   },

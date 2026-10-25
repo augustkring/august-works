@@ -10,6 +10,7 @@ import { and, eq } from "drizzle-orm";
 import {
   activityLog,
   agents,
+  agentPresenceRuntimeBindings,
   agentProviderBindings,
   authSessions,
   billingAccounts,
@@ -62,7 +63,9 @@ import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import { environmentRuntimeService } from "../services/environment-runtime.js";
 import { createSandboxBrokerJwt, verifyLocalAgentJwt, verifySandboxBrokerJwt, verifySandboxExecJwt } from "../agent-auth-jwt.js";
 import { createToolGatewayService } from "../services/tool-gateway.js";
+import { registerAssignedMcpGateway } from "../services/native-runtime/assigned-mcp-tools.js";
 import { mcpGatewayProtocolRoutes } from "../routes/tool-gateway.js";
+import { secretService } from "../services/secrets.js";
 
 const support = await getEmbeddedPostgresTestSupport();
 const image = "fixture.invalid/openshell@sha256:" + "a".repeat(64);
@@ -594,6 +597,10 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       });
       const created = await agentIdentityService(db).create(f.actor, { name: "Sandbox admission Task fixture", homeCompanyId: f.home });
       const presence = created.presence;
+      const [runtimePresence] = await db.select({ id: agentPresenceRuntimeBindings.id }).from(agentPresenceRuntimeBindings).where(and(
+        eq(agentPresenceRuntimeBindings.companyId, f.home), eq(agentPresenceRuntimeBindings.agentId, presence.id), eq(agentPresenceRuntimeBindings.status, "active"),
+      )).limit(1);
+      expect(runtimePresence).toBeTruthy();
       const providerService = agentProviderBindingService(db);
       const provider = await providerService.create(f.actor, f.home, presence.id, { providerType: "paperclip_native", providerAgentRef: presence.id, providerEndpointRef: null, isolationMode: "isolated_per_presence" });
       const newCellId = randomUUID();
@@ -611,15 +618,23 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       await db.update(issues).set({ executionRunId: run!.id }).where(eq(issues.id, task!.id));
       const manifest = await agentRuntimeFabricService(db).prepare({ companyId: f.home, agentId: presence.id, runId: run!.id, responsibleUserId: f.userId, issueId: task!.id, query: task!.title });
       expect(manifest).toBeTruthy();
+      const providerSecretValue = `provider-secret-${randomUUID()}`;
+      const providerSecret = await secretService(db).create(f.home, {
+        name: `Brokered provider secret ${randomUUID()}`,
+        key: `brokered_provider_secret_${randomUUID().replace(/-/g, "")}`,
+        provider: "local_encrypted", value: providerSecretValue,
+      });
       const applicationKey = `brokered-${randomUUID().replace(/-/g, "")}`;
       const [application] = await db.insert(toolApplications).values({ companyId: f.home, applicationKey, name: "Brokered provider fixture", type: "mcp_http", status: "active" }).returning();
       const [connection] = await db.insert(toolConnections).values({
         companyId: f.home, applicationId: application!.id, name: "Brokered provider fixture", uid: `fixture/${randomUUID()}`,
         transport: "mcp_remote", status: "active", enabled: true, healthStatus: "ok",
         config: { url: "https://provider.example.test/mcp" }, transportConfig: { url: "https://provider.example.test/mcp" },
-        credentialRefs: [], credentialSecretRefs: [],
+        credentialRefs: [{ name: "credentials.authorization", secretId: providerSecret.id, version: "latest", placement: "header", key: "Authorization", prefix: "Bearer " }],
+        credentialSecretRefs: [{ secretId: providerSecret.id, versionSelector: "latest", configPath: "credentials.authorization", required: true, label: "Brokered provider token" }],
       }).returning();
-      await db.insert(connectionGrants).values({ companyId: f.home, connectionId: connection!.id, kind: "organization", credentialSecretRefs: [], status: "active", isDefault: true });
+      await secretService(db).createBinding({ companyId: f.home, secretId: providerSecret.id, targetType: "tool_connection", targetId: connection!.id, configPath: "credentials.authorization", versionSelector: "latest", required: true, label: "Brokered provider token" });
+      const [brokerGrant] = await db.insert(connectionGrants).values({ companyId: f.home, connectionId: connection!.id, kind: "organization", credentialSecretRefs: connection!.credentialSecretRefs, status: "active", isDefault: true }).returning();
       await db.insert(toolCatalogEntries).values({
         companyId: f.home, applicationId: application!.id, connectionId: connection!.id, entryKind: "tool",
         name: `read_record-${randomUUID()}`, toolName: "read_record", title: "Read record", description: "Read a fixture record",
@@ -627,28 +642,45 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         annotations: { readOnlyHint: true }, riskLevel: "read", isReadOnly: true, isWrite: false, isDestructive: false,
         status: "active", versionHash: randomUUID(), quarantinedAt: null,
       });
-      const [agentToolProfile] = await db.insert(toolProfiles).values({ companyId: f.home, profileKey: `broker-agent-${randomUUID()}`, name: "Brokered agent tool profile", defaultAction: "allow" }).returning();
+      const [agentToolProfile] = await db.insert(toolProfiles).values({ companyId: f.home, profileKey: `broker-agent-${randomUUID()}`, name: "Brokered agent tool profile", defaultAction: "deny" }).returning();
       await db.insert(toolProfileBindings).values({ companyId: f.home, profileId: agentToolProfile!.id, targetType: "agent", targetId: presence.id });
+      const expectedBrokerToolName = `mcp.${applicationKey.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}-${connection!.id.replace(/-/g, "").slice(0, 8)}:read-record`;
+      await db.insert(toolProfileEntries).values({ companyId: f.home, profileId: agentToolProfile!.id, selectorType: "tool_name", effect: "include", toolName: expectedBrokerToolName });
       const [gatewayProfile] = await db.insert(toolProfiles).values({ companyId: f.home, profileKey: `broker-gateway-${randomUUID()}`, name: "Brokered gateway profile", defaultAction: "deny" }).returning();
       await db.insert(toolProfileEntries).values({ companyId: f.home, profileId: gatewayProfile!.id, selectorType: "connection", effect: "include", connectionId: connection!.id });
-      const dispatchedBrokerCalls: Array<{ url: string; body: string | null }> = [];
-      const gateway = createToolGatewayService(db, {
+      const dispatchedBrokerCalls: Array<{ url: string; body: string | null; authorization: string | null }> = [];
+      let nextProviderBarrier: { started: () => void; wait: Promise<void> } | null = null;
+      const deferNextProviderResponse = () => {
+        let markStarted!: () => void, release!: () => void;
+        const started = new Promise<void>(resolve => { markStarted = resolve; });
+        const wait = new Promise<void>(resolve => { release = resolve; });
+        nextProviderBarrier = { started: markStarted, wait };
+        return { started, release };
+      };
+      const gatewayOptions: Parameters<typeof createToolGatewayService>[1] = {
         toolActionSigningSecret: "v7-sandbox-broker-fixture",
         remoteHttpRequest: async (url, init) => {
-          dispatchedBrokerCalls.push({ url, body: typeof init.body === "string" ? init.body : null });
-          return new Response(JSON.stringify({ jsonrpc: "2.0", id: "broker-fixture", result: { content: [{ type: "text", text: "read ok" }], structuredContent: { ok: true } } }), { status: 200, headers: { "content-type": "application/json" } });
+          const body = typeof init.body === "string" ? init.body : null;
+          const authorization = new Headers(init.headers).get("authorization");
+          dispatchedBrokerCalls.push({ url, body, authorization });
+          const barrier = nextProviderBarrier;
+          if (barrier) { nextProviderBarrier = null; barrier.started(); await barrier.wait; }
+          const requestId = body ? (JSON.parse(body) as { id?: unknown }).id ?? "broker-fixture" : "broker-fixture";
+          return new Response(JSON.stringify({ jsonrpc: "2.0", id: requestId, result: { content: [{ type: "text", text: "read ok" }], structuredContent: { ok: true } } }), { status: 200, headers: { "content-type": "application/json" } });
         },
-      });
+      };
+      const gateway = createToolGatewayService(db, gatewayOptions);
+      registerAssignedMcpGateway(db, gateway, scopedDb => createToolGatewayService(scopedDb, gatewayOptions));
       const namedGateway = await gateway.createNamedGateway({ companyId: f.home, body: { name: "Native task broker fixture", profileId: gatewayProfile!.id } });
       const initialBrokerBinding = {
         connectionId: connection!.id, grantVersionHash: "0".repeat(64), hostname: "provider.example.test", port: 443,
-        methods: ["POST"] as const, pathPrefixes: ["/mcp"], binary: null, ttlSeconds: 30,
+        methods: ["POST"] as const, pathPrefixes: ["/mcp"], binary: null, ttlSeconds: 120,
       };
-      const initialBrokerResolution = await gateway.resolveSandboxCredentialBrokerBindings({
+      const initialBrokerResolution = await gateway.resolveSandboxCredentialBrokerPolicyBindings({
         companyId: f.home, agentId: presence.id, runId: run!.id, responsibleUserId: f.userId,
-        presenceId: presence.id, bindings: [initialBrokerBinding],
+        presenceId: runtimePresence!.id, bindings: [initialBrokerBinding],
       });
-      expect(initialBrokerResolution.bindings[0]?.allowedTools[0]).toContain(":read_record");
+      expect(initialBrokerResolution.bindings[0]?.allowedTools).toContain(expectedBrokerToolName);
       const boundary = supportedPolicy();
       boundary.riskClass = "C3";
       boundary.credentials = { mode: "brokered", bindings: [{ ...initialBrokerBinding, grantVersionHash: initialBrokerResolution.authorizedConnectionGrantHashes[connection!.id]! }] };
@@ -670,7 +702,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       const candidatePolicy = structuredClone(boundary);
       candidatePolicy.riskClass = "C3";
       const compiled = await executionSandboxService(db, serviceOptions).compile(f.actor, f.home, sandboxBinding.id, { expectedVersion: 2, executionManifestId: manifest!.record.id, candidatePolicy });
-      expect(compiled.status).toBe("qualified");
+      expect(compiled.status, JSON.stringify({ proverResult: compiled.compilation.proverResult, failedBoundaries: compiled.compilation.failedBoundaries, unsupportedFeatures: compiled.compilation.unsupportedFeatures })).toBe("qualified");
       const runtime = runtimeControlService(db, {
         runtime: { suspectSeconds: 90, unreachableSeconds: 600, relayPort: 3102 },
       } as SaasPlatformConfig, undefined, { credentialBrokerOrigin: "https://paperclip.example.test/" });
@@ -731,7 +763,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         const executeThroughAdapter = () => environmentRuntime.execute({
           environment: executionEnvironment,
           lease: lease as any,
-          command: "node", args: ["-e", "process.stdout.write('fixture')"], cwd: "/workspace", timeoutMs: 10000,
+          command: "node", args: ["-e", "process.stdout.write('fixture')"], cwd: "/workspace", timeoutMs: 60000,
           onLog: async (stream, chunk) => { streamed.push([stream, chunk]); },
         });
         const streamed: Array<[string, string]> = [];
@@ -754,16 +786,18 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
           parentRequestId: firstCommand.request.requestId, bindingId: sandboxBinding.id,
           cellId: admissionCell!.id, generation: admissionCell!.generation.toString(),
           runId: run!.id, manifestId: manifest!.record.id, manifestHash: manifest!.record.hash,
-          policySnapshotId: compiled.id,
+          policySnapshotId: compiled.id, endpointOrigin: "https://paperclip.example.test/",
         });
         expect(firstCommand.request.env.PAPERCLIP_SANDBOX_BROKER_TOKEN).toBeUndefined();
         expect(JSON.stringify(firstCommand.request.argv)).not.toContain(brokerToken);
-        expect(brokerClaims?.sandbox_broker.bindings[0]?.allowedTools).toContain(brokerToolName);
+        expect(JSON.stringify(firstCommand.request.brokerCredential)).not.toContain(providerSecretValue);
+        expect(JSON.stringify(firstCommand.request.env)).not.toContain(providerSecretValue);
+        expect(brokerClaims?.sandbox_broker.bindings[0]?.allowedTools).toContain(expectedBrokerToolName);
         const brokerOperation = (token: string, gatewayPublicId: string, operationId = randomUUID()) => request(brokerApp)
           .post(`/mcp/gateways/${gatewayPublicId}`)
           .set("authorization", `Bearer ${token}`)
           .send({ jsonrpc: "2.0", id: operationId, method: "tools/call", params: {
-            name: brokerToolName, arguments: { id: "fixture-record" }, _meta: { "paperclip/operationId": operationId },
+            name: expectedBrokerToolName, arguments: { id: "fixture-record" }, _meta: { "paperclip/operationId": operationId },
           } });
         const dispatchedBeforeDeniedCalls = dispatchedBrokerCalls.length;
         await brokerOperation(brokerToken!, `${namedGateway.gatewayPublicId}-wrong`).expect(403);
@@ -782,6 +816,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         expect(dispatched.body.result.isError).toBe(false);
         expect(dispatched.body.result.content[0].text).toContain("read ok");
         expect(dispatchedBrokerCalls).toHaveLength(dispatchedBeforeDeniedCalls + 1);
+        expect(dispatchedBrokerCalls[0]?.authorization).toBe(`Bearer ${providerSecretValue}`);
         await brokerOperation(brokerToken!, namedGateway.gatewayPublicId, operationId).expect(200);
         expect(dispatchedBrokerCalls).toHaveLength(dispatchedBeforeDeniedCalls + 1);
         await db.update(toolConnections).set({
@@ -796,12 +831,32 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         }).where(eq(toolConnections.id, connection!.id));
         await db.update(connectionGrants).set({ status: "revoked", revokedAt: new Date() }).where(eq(connectionGrants.connectionId, connection!.id));
         await brokerOperation(brokerToken!, namedGateway.gatewayPublicId).expect(409);
+        await brokerOperation(brokerToken!, namedGateway.gatewayPublicId, operationId).expect(409);
         expect(dispatchedBrokerCalls).toHaveLength(dispatchedBeforeDeniedCalls + 1);
-        await db.update(connectionGrants).set({ status: "active", revokedAt: null }).where(eq(connectionGrants.connectionId, connection!.id));
-        relayHost.send(JSON.stringify({ type: "exec_output", channelId: firstCommand.channelId, stream: "stdout", base64: Buffer.from("Task output").toString("base64") }));
+        await db.update(connectionGrants).set({ status: "active", revokedAt: null, updatedAt: brokerGrant!.updatedAt }).where(eq(connectionGrants.connectionId, connection!.id));
+        const inFlightBarrier = deferNextProviderResponse();
+        const inFlightOperationId = randomUUID();
+        const inFlightResponse = brokerOperation(brokerToken!, namedGateway.gatewayPublicId, inFlightOperationId).then(response => response);
+        await inFlightBarrier.started;
+        await db.update(connectionGrants).set({ status: "revoked", revokedAt: new Date() }).where(eq(connectionGrants.connectionId, connection!.id));
+        inFlightBarrier.release();
+        const fencedResponse = await inFlightResponse;
+        expect(fencedResponse.status).toBe(409);
+        expect(dispatchedBrokerCalls).toHaveLength(dispatchedBeforeDeniedCalls + 2);
+        await db.update(connectionGrants).set({ status: "active", revokedAt: null, updatedAt: brokerGrant!.updatedAt }).where(eq(connectionGrants.connectionId, connection!.id));
+        await brokerOperation(brokerToken!, namedGateway.gatewayPublicId, inFlightOperationId).expect(409);
+        expect(dispatchedBrokerCalls).toHaveLength(dispatchedBeforeDeniedCalls + 2);
+        const outputWithBrokerCapability = Buffer.from(`Task output ${brokerToken}`, "utf8");
+        const capabilitySplit = Math.floor(outputWithBrokerCapability.length / 2);
+        relayHost.send(JSON.stringify({ type: "exec_output", channelId: firstCommand.channelId, stream: "stdout", base64: outputWithBrokerCapability.subarray(0, capabilitySplit).toString("base64") }));
+        relayHost.send(JSON.stringify({ type: "exec_output", channelId: firstCommand.channelId, stream: "stdout", base64: outputWithBrokerCapability.subarray(capabilitySplit).toString("base64") }));
         relayHost.send(JSON.stringify({ type: "exec_exit", channelId: firstCommand.channelId, exitCode: 0, timedOut: false }));
-        await expect(firstExecution).resolves.toMatchObject({ exitCode: 0, stdout: "Task output", stderr: "" });
-        expect(streamed).toEqual([["stdout", "Task output"]]);
+        const firstExecutionResult = await firstExecution;
+        expect(firstExecutionResult).toMatchObject({ exitCode: 0, stderr: "" });
+        expect(firstExecutionResult!.stdout).toContain("Task output");
+        expect(firstExecutionResult!.stdout).not.toContain(brokerToken);
+        expect(streamed.map(([, chunk]) => chunk).join("")).toContain("Task output");
+        expect(streamed.map(([, chunk]) => chunk).join("")).not.toContain(brokerToken);
         const [successfulExecClaim] = await db.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.idempotencyKey, firstCommand.request.requestId));
         expect(successfulExecClaim).toMatchObject({ status: "SUCCEEDED", safeResult: { exitCode: 0, timedOut: false } });
         expect(JSON.stringify(successfulExecClaim?.safeResult)).not.toContain("Task output");
@@ -818,8 +873,8 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         const uncertainCommand = await secondFrame;
         await db.update(heartbeatRuns).set({ status: "paused" }).where(eq(heartbeatRuns.id, run!.id));
         relayHost.send(JSON.stringify({ type: "exec_output", channelId: uncertainCommand.channelId, stream: "stdout", base64: Buffer.from("revoked output").toString("base64") }));
-        await expect(uncertainExecution).rejects.toThrow("Sandbox execution authority changed before output delivery");
-        expect(streamed).toEqual([["stdout", "Task output"]]);
+        await expect(uncertainExecution).rejects.toThrow("Current active native Task run is required");
+        expect(streamed.map(([, chunk]) => chunk).join("")).not.toContain("revoked output");
         await db.update(heartbeatRuns).set({ status: "running" }).where(eq(heartbeatRuns.id, run!.id));
         const [uncertainClaim] = await db.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.idempotencyKey, uncertainCommand.request.requestId));
         expect(uncertainClaim?.status).toBe("CLAIMED");

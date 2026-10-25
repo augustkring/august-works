@@ -57,6 +57,8 @@ export async function assembleFreshNativeGovernedContext(
   const result = await assemble({
     companyId: input.companyId,
     agentId: input.agentId,
+    authorizationActor: { type: "agent", source: "none", companyId: input.companyId,
+      agentId: input.agentId, runId: input.runId, onBehalfOfUserId: input.responsibleUserId ?? null },
     responsibleUserId: input.responsibleUserId ?? null,
     enforceResponsibleUserIntersection: true,
     runId: input.runId,

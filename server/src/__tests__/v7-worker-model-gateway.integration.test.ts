@@ -44,6 +44,7 @@ import {
 import {
   PROVIDER_CAPABILITY_FEATURES,
   agentAuthoringContentSchema, AUTHORED_AGENT_DEFINITION_KEY,
+  nativePayloadSourceSnapshotSchema,
   type WorkerModelBinding,
 } from "@paperclipai/shared";
 import { instanceSettingsService } from "../services/instance-settings.js";
@@ -427,10 +428,20 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         description: "Retain one internal draft for human review.",
         status: "todo",
         workMode: "standard",
-        assigneeAgentId: f.presence.id,
         responsibleUserId: f.userId,
         createdByUserId: f.userId,
-      }, db, undefined, { manualInputActor: sourceActor });
+      }, db, undefined, { manualInputActor: sourceActor, privacyActor: sourceActor, sourceAccessActor: sourceActor });
+      expect(task.payloadSourceSnapshot, "manual Task producer must retain its canonical source snapshot before assignment").toBeTruthy();
+      task = await issueService(db).update(task.id, {
+        assigneeAgentId: f.presence.id,
+        actorUserId: f.userId,
+        privacyActor: sourceActor,
+      });
+      if (!task) throw new Error("Canonical Task assignment was not stored");
+      const [persistedTask] = await db.select({ payloadSourceSnapshot: issues.payloadSourceSnapshot })
+        .from(issues).where(eq(issues.id, task.id));
+      expect(nativePayloadSourceSnapshotSchema.safeParse(persistedTask?.payloadSourceSnapshot).success,
+        "assignment must preserve the unchanged human-authored Task snapshot").toBe(true);
       plan = await orchestrationService(db).create(f.actor, f.home, {
         issueId: task.id,
         expectedIssueUpdatedAt: task.updatedAt.toISOString(),
@@ -444,11 +455,20 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         budgets,
         workers: [{ key: "native-writer", issueId: task.id }],
       });
-      return orchestrationService(db).decide(f.actor, f.home, plan.id, {
+      const assertCurrentTaskSnapshot = async (phase: string) => {
+        const [current] = await db.select({ payloadSourceSnapshot: issues.payloadSourceSnapshot })
+          .from(issues).where(eq(issues.id, task.id));
+        expect(nativePayloadSourceSnapshotSchema.safeParse(current?.payloadSourceSnapshot).success,
+          `canonical human Task source snapshot must remain current ${phase}`).toBe(true);
+      };
+      await assertCurrentTaskSnapshot("after plan creation");
+      const started = await orchestrationService(db).decide(f.actor, f.home, plan.id, {
         expectedVersion: plan.version,
         action: "start",
         rationale: "Start only the operator-qualified bounded internal draft",
       });
+      await assertCurrentTaskSnapshot("after plan start");
+      return started;
     }
 
     it("qualifies only the explicit private Native draft selector without decrypting or spending", async () => {
@@ -565,6 +585,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         .select()
         .from(heartbeatRuns)
         .where(eq(heartbeatRuns.id, attempts[0]!.runId!));
+      expect(actualRun?.issueId, "the exercised scheduler run must retain the canonical human-authored Task").toBe(task.id);
       expect(actualRun).toMatchObject({
         status: "succeeded",
         runtimeMode: "native",
@@ -575,6 +596,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       expect(substitution).not.toHaveBeenCalled();
       expect(calls).toBe(1);
       expect(observedBody).toContain("assignedRuntimeContext");
+      expect(observedBody).not.toContain("## Pinned execution inventory");
       expect(observedBody).not.toContain(credential);
       expect(
         (await documentService(db).getIssueDocumentByKey(task.id, "result"))

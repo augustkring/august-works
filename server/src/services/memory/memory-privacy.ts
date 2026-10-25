@@ -748,8 +748,10 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
 /** Called in the source Task deletion transaction, even when Memory is off. */
 export async function forgetMemoryForDeletedIssue(db: Db, companyId: string, issueId: string) {
   await lockMemoryPrivacy(db, companyId);
-  await db.insert(memoryDeletionMarkers).values({ companyId, kind: "source",
-    key: memoryDeletionKey(companyId, "source", ["august_works_issue", `issue://${issueId}`]) }).onConflictDoNothing();
+  await db.insert(memoryDeletionMarkers).values([
+    { companyId, kind: "source", key: memoryDeletionKey(companyId, "source", ["august_works_issue", `issue://${issueId}`]) },
+    { companyId, kind: "source", key: memoryDeletionKey(companyId, "source", ["august_works_tasks", `issue://${issueId}`]) },
+  ]).onConflictDoNothing();
   const roots = await db.select({ id: memoryEvidence.memoryRecordId }).from(memoryEvidence).where(and(
     eq(memoryEvidence.companyId, companyId), inArray(memoryEvidence.sourceProvider, ["august_works_memory_agent_tool", "august_works_post_run_extraction"]),
     sql`${memoryEvidence.sourceRef} like ${`run://%/issue/${issueId}`}`));

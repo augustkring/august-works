@@ -25,8 +25,9 @@ import { withV5ActivityTransaction } from "./v5-mutations.js";
 import { playbookResolverService } from "./playbook-resolver.js";
 import {playbookService} from "./playbooks.js";
 import { logActivity } from "./activity-log.js";
+import { jevSkillSuggestionService, type JevSkillSuggestionProfile } from "./jev-skill-suggestions.js";
 
-export function agentRuntimeFabricService(db: Db) {
+export function agentRuntimeFabricService(db: Db, decisionShadow?: { sourceSha: string; profiles?: readonly JevSkillSuggestionProfile[] }) {
   async function currentPayload(actor:AuthorizationActor,companyId:string,runId:string,erased=false,reader:Db=db){
     if(erased||!await heartbeatMemoryPayloadRetained(reader,companyId,runId))throw forbidden("Runtime manifest Source payload was erased",{code:"analytical_source_access_lost"});
     await assertAnalyticalContextPayloadAccess(reader,companyId,actor,{runId},actor.type==="agent"?"task":undefined);
@@ -40,15 +41,22 @@ export function agentRuntimeFabricService(db: Db) {
     if (!row || row.company.status !== "active" || row.identity.status !== "active" || !["idle", "running", "error"].includes(row.agent.status)) throw forbidden("An active, invokable local presence and logical identity are required");
     return row;
   }
-  async function freshContext(actor: AuthorizationActor, scope: AgentExecutionScope, query: string, runId: string, issueId: string | null, scopeRequestId: string | null, taskOnly = false) {
+  async function freshContext(actor: AuthorizationActor, scope: AgentExecutionScope, query: string, runId: string, issueId: string | null, scopeRequestId: string | null, taskOnly = false, nativeBootstrap = false) {
     if (scope.delegatedScopes.length) {
       if (!scopeRequestId) throw forbidden("Delegated execution requires its claimed scope request");
       const packet = await crossCompanyContextService(db).assemble(actor, { executionScope: scope, query, intent: "v5_runtime_execution", maxEstimatedTokens: 8000 }, { runId, issueId, scopeRequestId });
-      return { refs: packet.manifests, markdown: packet.evidence.map((e) => `### ${e.title ?? e.sourceType}\nSource company: ${e.sourceCompanyName} (${e.sourceCompanyId})\nClassification: ${e.shareClassification}; use: ${e.crossCompanyUsePolicy}\n${e.excerpt}\nCitation: ${e.citation.label}`).join("\n\n"), warnings: packet.warnings };
+      return { refs: packet.manifests, markdown: packet.evidence.map((e) => `### ${e.title ?? e.sourceType}\nSource company: ${e.sourceCompanyName} (${e.sourceCompanyId})\nClassification: ${e.shareClassification}; use: ${e.crossCompanyUsePolicy}\n${e.excerpt}\nCitation: ${e.citation.label}`).join("\n\n"), warnings: packet.warnings, sourceMarkdown: null, sourceWitness: undefined };
     }
-    const result = await contextEngineService(db).assemble({ companyId: scope.primaryCompanyId, agentId: scope.primaryAgentPresenceId, responsibleUserId: actor.onBehalfOfUserId ?? actor.userId ?? null, enforceResponsibleUserIntersection: true, runId, issueId, query, intent: "v5_runtime_execution", includeFoundation: !taskOnly, ...(taskOnly ? { sourceScope: "task_only" as const } : {}), sensitivityCeiling: "internal" });
+    const contextOwner = contextEngineService(db);
+    const assemble = nativeBootstrap && issueId ? contextOwner.assembleNativeBootstrap : contextOwner.assemble;
+    const result = await assemble({ companyId: scope.primaryCompanyId, agentId: scope.primaryAgentPresenceId,
+      responsibleUserId: actor.onBehalfOfUserId ?? actor.userId ?? null, authorizationActor: actor,
+      enforceResponsibleUserIntersection: true, runId, issueId, query, intent: "v5_runtime_execution",
+      includeFoundation: !taskOnly, ...(taskOnly ? { sourceScope: "task_only" as const } : {}), sensitivityCeiling: "internal" });
     if (!result.packet.manifest) throw conflict("Runtime context requires persisted provenance");
-    return { refs: [{ companyId: scope.primaryCompanyId, contextManifestId: result.packet.manifest.id }], markdown: result.markdown, warnings: [] as string[] };
+    return { refs: [{ companyId: scope.primaryCompanyId, contextManifestId: result.packet.manifest.id }], markdown: result.markdown,
+      sourceMarkdown: result.decisions.length ? result.markdown : null,
+      sourceWitness: result.nativeBootstrapWitness, warnings: [] as string[] };
   }
   return {
     loadSkill:async(actor:AuthorizationActor,companyId:string,runId:string,skillId:string)=>{
@@ -126,9 +134,13 @@ export function agentRuntimeFabricService(db: Db) {
       const [stored] = await db.select().from(agentExecutionManifests).where(and(eq(agentExecutionManifests.companyId, input.companyId), eq(agentExecutionManifests.runId, input.runId))).limit(1);
       if (await hasOrchestrationPlan(db, input.companyId, input.issueId)) await assertV7Enabled(db, "orchestration_v7");
       if (!stored && !v5FeatureEnabled(flags, "agent_runtime_fabric_v5")) return null;
-      const actor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: input.companyId, agentId: input.agentId, runId: input.runId, onBehalfOfUserId: input.responsibleUserId };
+      // This producer has no incoming JWT to preserve. Bind the internal actor
+      // to the persisted native run and current responsible Human below; never
+      // describe a DB-derived identity as an authenticated Agent credential.
+      const actor: AuthorizationActor = { type: "agent", source: "none", companyId: input.companyId, agentId: input.agentId, runId: input.runId, onBehalfOfUserId: input.responsibleUserId };
       const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.id, input.runId))).limit(1);
-      if (!run || run.responsibleUserId !== input.responsibleUserId) throw forbidden("Execution authority does not match the persisted run");
+      if (!run || run.responsibleUserId !== input.responsibleUserId)
+        throw forbidden("Execution authority does not match the persisted run and responsible Human");
       await currentPayload(actor,input.companyId,input.runId,(stored?.manifest as unknown as Record<string,unknown>|undefined)?.payloadDeleted===true);
       const local = await primary(actor, input.companyId, input.agentId);
       const authored = await readAuthoredAgentDefinition(db, local.agent);
@@ -189,7 +201,7 @@ export function agentRuntimeFabricService(db: Db) {
       if (authored && !procedures && (resolvedSkills.skills.length || resolvedPlaybooks.pins.length))
         throw conflict("The existing run contains behavior outside this authored version");
       const capabilities = authored ? [] : await capabilityResolverService(db).search(actor, input.companyId, "");
-      const context = await freshContext(actor, scope, query, input.runId, input.issueId, claimedScopeRequestId, Boolean(authored));
+      const context = await freshContext(actor, scope, query, input.runId, input.issueId, claimedScopeRequestId, Boolean(authored), !scope.delegatedScopes.length && Boolean(input.issueId));
       if (stored) {
         if (stored.agentId !== input.agentId || stored.agentIdentityId !== local.identity.id || hashContextPolicySnapshot(stored.manifest.providers) !== hashContextPolicySnapshot(providers)) throw conflict("Pinned provider identity/profile changed; start a new execution");
         for (const pin of stored.manifest.skills) await skillResolverService(db).authorizedVersion(actor, input.companyId, pin.skillId, pin.versionId, Boolean(test && pin.skillId === test.skillId && pin.versionId === test.skillVersionId),"task");
@@ -254,7 +266,16 @@ export function agentRuntimeFabricService(db: Db) {
         return row!;
       });
 
-      return { record, manifest, inputContextManifests: context.refs, inputRolePackSources, contextMarkdown: `${inventory}\n\n${context.markdown}`, testSelected: Boolean(test && manifest.skills.some((p) => p.skillId === test.skillId)), providerRuntime: { providerType: provider.provider.providerType, providerBindingId: provider.provider.id, providerAgentRef: provider.provider.providerAgentRef, providerProfileRef: provider.runtime.providerProfileRef, sessionNamespace: provider.runtime.providerSessionNamespace, isolationMode: provider.provider.isolationMode as "isolated_per_presence" | "shared_trusted_runtime", capabilitySnapshotHash: provider.provider.capabilitySnapshot!.hash } };
+      if (!stored && decisionShadow?.sourceSha && input.issueId && input.responsibleUserId) {
+        const shadowActor: AuthorizationActor = { type: "agent", source: "none", companyId: input.companyId, agentId: input.agentId, runId: input.runId, onBehalfOfUserId: input.responsibleUserId };
+        void jevSkillSuggestionService(db, decisionShadow).shadow(shadowActor, {
+          companyId: input.companyId, agentId: input.agentId, runId: input.runId, issueId: input.issueId, query,
+          requirements: rolePack?.items ?? [], baselineSkillIds: manifest.skills.map(pin => pin.skillId), manifestHash: record.hash,
+        }).catch(() => {});
+      }
+      return { record, manifest, inputContextManifests: context.refs, inputRolePackSources, contextMarkdown: `${inventory}\n\n${context.markdown}`,
+        inputContextSourceMarkdown: context.sourceMarkdown, inputContextSourceWitness: context.sourceWitness,
+        testSelected: Boolean(test && manifest.skills.some((p) => p.skillId === test.skillId)), providerRuntime: { providerType: provider.provider.providerType, providerBindingId: provider.provider.id, providerAgentRef: provider.provider.providerAgentRef, providerProfileRef: provider.runtime.providerProfileRef, sessionNamespace: provider.runtime.providerSessionNamespace, isolationMode: provider.provider.isolationMode as "isolated_per_presence" | "shared_trusted_runtime", capabilitySnapshotHash: provider.provider.capabilitySnapshot!.hash } };
     },
   };
 }

@@ -38,6 +38,7 @@ import { agentIdentityRoutes } from "./routes/agent-identities.js";
 import { slackToolRoutes } from "./routes/slack-tools.js";
 import { agentAvatarRoutes } from "./routes/agent-avatars.js";
 import { aiConnectionRoutes } from "./routes/ai-connections.js";
+import { jevDecisionRoutes } from "./routes/jev-decisions.js";
 import { projectToolRoutes } from "./routes/project-tools.js";
 import { emailChannelService } from "./services/email-channels.js";
 import { emailRoutes, emailWebhookRoutes } from "./routes/email.js";
@@ -555,6 +556,8 @@ export async function createApp(
     pluginMigrationDb?: Db;
     pluginWorkerManager?: PluginWorkerManager;
     decisionServiceOptions: DecisionServiceOptions;
+    /** Server-owned operator qualification registry; absent profiles fail closed. */
+    decisionShadow?: { sourceSha: string; profiles: readonly import("./services/jev-skill-suggestions.js").JevSkillSuggestionProfile[] };
     betterAuthHandler?: express.RequestHandler;
     resolveSession?: (
       req: ExpressRequest,
@@ -664,6 +667,7 @@ export async function createApp(
   const connectionIntentHeartbeat = heartbeatService(db, {
     pluginWorkerManager: workerManager,
     sandboxExec: opts.saasPlatform?.runtime.executeSandboxTask,
+    decisionShadow: opts.decisionShadow,
   });
   const chatChannels = chatChannelService(db, {
     notificationDelivery: opts.saasPlatform?.notifications?.channelDelivery,
@@ -785,7 +789,7 @@ export async function createApp(
       eq(agentPresenceRuntimeBindings.companyId, companyId), eq(agentPresenceRuntimeBindings.agentId, manifest.agentId), eq(agentPresenceRuntimeBindings.status, "active"),
     )).limit(1) : [];
     if (!manifest || !run?.responsibleUserId || !presence) throw new Error("sandbox_broker_run_source_unavailable");
-    return await getAssignedMcpGateway(db).resolveSandboxCredentialBrokerBindings({
+    return await getAssignedMcpGateway(db).resolveSandboxCredentialBrokerPolicyBindings({
       companyId, agentId: manifest.agentId, runId: run.id, responsibleUserId: run.responsibleUserId,
       presenceId: presence.id, bindings: compiled.credentials.bindings,
     });
@@ -1014,6 +1018,7 @@ export async function createApp(
   const toolActionDeliveries = toolActionDeliveryService(db, heartbeatService(db, {
     pluginWorkerManager: workerManager,
     sandboxExec: opts.saasPlatform?.runtime.executeSandboxTask,
+    decisionShadow: opts.decisionShadow,
   }));
   const toolGateway = createToolGatewayService(db, {
     onToolActionSettled: (id) => toolActionDeliveries.deliver(id),
@@ -1041,10 +1046,19 @@ export async function createApp(
   }));
   api.use(slackToolRoutes(db, opts.authPublicBaseUrl));
   app.locals.toolGateway = toolGateway;
-  registerAssignedMcpGateway(db, toolGateway);
+  registerAssignedMcpGateway(db, toolGateway, (scopedDb) => createToolGatewayService(scopedDb, {
+    // Runtime authorization re-resolves broker grants inside its current
+    // transaction. Keep the same deployment/policy posture while binding the
+    // metadata-only resolver to that transaction; provider dispatch continues
+    // through the configured root service above.
+    deploymentMode: opts.deploymentMode,
+    deploymentExposure: opts.deploymentExposure,
+    trustedLocalStdioRuntimeHost,
+  }));
   app.locals.toolActionDeliveries = toolActionDeliveries;
   app.use(mcpGatewayProtocolRoutes(toolGateway));
   api.use(aiConnectionRoutes(db, { deploymentMode: opts.deploymentMode, deploymentExposure: opts.deploymentExposure, trustedLocalStdioRuntimeHost }));
+  api.use(jevDecisionRoutes(db));
   api.use(
     toolAccessRoutes(db, {
       deploymentMode: opts.deploymentMode,

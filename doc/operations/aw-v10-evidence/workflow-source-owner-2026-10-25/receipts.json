@@ -2114,6 +2114,208 @@
         "Duration  20.86s (transform 11.47s, setup 75ms, import 16.10s, tests 4.49s, environment 0ms)"
       ],
       "sourceCommit": "39f9694cafbfdafa41aed5722dc32c7cb3dfb00f"
+    },
+    {
+      "name": "v10-backup-identity-roundtrip",
+      "exitCode": 0,
+      "exitSidecar": "v10-backup-identity-roundtrip.exit",
+      "rawSha256": "a0cce08d0bc18d3f7e98884e8aa771e210e8fd7d85c81108f405cd15eeb93448",
+      "sanitizedSha256": "a0cce08d0bc18d3f7e98884e8aa771e210e8fd7d85c81108f405cd15eeb93448",
+      "archiveSha256": "255d14070375d1684a3dd20852480a4244400ec4d42cf43c425101b25f241ea0",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  8 passed (8)",
+        "Duration  56.76s (transform 2.16s, setup 0ms, import 3.95s, tests 52.69s, environment 0ms)"
+      ],
+      "sourceCommit": "bf361bbe1c9bdb25927b21e46dcbe30f66a3cdad"
+    },
+    {
+      "name": "context-engine-integration-final-nativeactor",
+      "exitCode": 0,
+      "exitSidecar": "context-engine-integration-final-nativeactor.exit",
+      "rawSha256": "f81d4829f51dead7e9a7427478829bb3821669e4392efe0ef1bc864fa0336190",
+      "sanitizedSha256": "84fe06b915d84c548e6e2fdc6459966a99733ead58b3f706a43c99cae922b584",
+      "archiveSha256": "ee300349e166e98d56a91b250461e47be3cb86fb584288cacd78345bf9b66489",
+      "redactions": {
+        "ansi": 36,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  8 passed (8)",
+        "Duration  44.83s (transform 10.80s, setup 73ms, import 14.95s, tests 29.70s, environment 0ms)"
+      ],
+      "sourceCommit": "bf361bbe1c9bdb25927b21e46dcbe30f66a3cdad"
+    },
+    {
+      "name": "up04-plugin-lifecycle-delivery2-2026-10-25",
+      "exitCode": 0,
+      "exitSidecar": "up04-plugin-lifecycle-delivery2-2026-10-25.exit",
+      "rawSha256": "e179fec182f837f120370193ee772b56153eabde855361828882651c24669e37",
+      "sanitizedSha256": "1742f4b8c9fd06e7e593965db74a7aeb6c762b2901cf590355d2ea77629266bc",
+      "archiveSha256": "9aa62668c688203f2ccd66bc81b9e3f193238503071b39fc0a137b2eda213a59",
+      "redactions": {
+        "ansi": 18,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  16 passed (16)",
+        "Duration  9.06s (transform 2.59s, setup 86ms, import 4.61s, tests 4.24s, environment 0ms)"
+      ],
+      "sourceCommit": "bf361bbe1c9bdb25927b21e46dcbe30f66a3cdad"
+    },
+    {
+      "name": "up04-runtime-state-integration10-2026-10-25",
+      "exitCode": 0,
+      "exitSidecar": "up04-runtime-state-integration10-2026-10-25.exit",
+      "rawSha256": "2cc38caa441c5da03580b75c15a9b6cdf45de9ff986b63bb71f591b08781fb86",
+      "sanitizedSha256": "2cc38caa441c5da03580b75c15a9b6cdf45de9ff986b63bb71f591b08781fb86",
+      "archiveSha256": "a02e63e5c594db03de63e4164a8f4c745bda41d08f4ae0e98e322848205edb06",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  7 passed (7)",
+        "Duration  20.28s (transform 9.45s, setup 72ms, import 13.45s, tests 6.65s, environment 0ms)"
+      ],
+      "sourceCommit": "bf361bbe1c9bdb25927b21e46dcbe30f66a3cdad"
+    },
+    {
+      "name": "up04-sdk-lifecycle-focused4-2026-10-25",
+      "exitCode": 0,
+      "exitSidecar": "up04-sdk-lifecycle-focused4-2026-10-25.exit",
+      "rawSha256": "8922d7cbb25c0565c76f4747756fe5607756509c42a40ff64be30d728d967e54",
+      "sanitizedSha256": "8922d7cbb25c0565c76f4747756fe5607756509c42a40ff64be30d728d967e54",
+      "archiveSha256": "f45b8fced111b26cff7184e1591c90ad37dc96e99a79ea8d7216b1e543af9bc2",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  39 passed (39)",
+        "Duration  490ms (transform 267ms, setup 0ms, import 330ms, tests 172ms, environment 0ms)"
+      ],
+      "sourceCommit": "bf361bbe1c9bdb25927b21e46dcbe30f66a3cdad"
+    },
+    {
+      "name": "up04-plugin-sdk-build4-2026-10-25",
+      "exitCode": 0,
+      "exitSidecar": "up04-plugin-sdk-build4-2026-10-25.exit",
+      "rawSha256": "d6505e5a64c75c793a9bd7c06d1813b73722e4cdf8f23290daa21066c51bef91",
+      "sanitizedSha256": "d6505e5a64c75c793a9bd7c06d1813b73722e4cdf8f23290daa21066c51bef91",
+      "archiveSha256": "f12285211b146b29d08171485b1ed6c1576d8af38c13b91e165d5d3df3b69f54",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "bf361bbe1c9bdb25927b21e46dcbe30f66a3cdad"
+    },
+    {
+      "name": "up04-runtime-redaction-focused2-2026-10-25",
+      "exitCode": 0,
+      "exitSidecar": "up04-runtime-redaction-focused2-2026-10-25.exit",
+      "rawSha256": "6d8536b564a213b7f7d6889665a9f83722438322b66d1a527c6c5c32331a2f06",
+      "sanitizedSha256": "6d8536b564a213b7f7d6889665a9f83722438322b66d1a527c6c5c32331a2f06",
+      "archiveSha256": "56f868897fd31bc3ee67d55b9132a782e6c12f5b6609681b369563612c9e6d32",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed (1)",
+        "Duration  13.74s (transform 9.85s, setup 77ms, import 13.55s, tests 6ms, environment 0ms)"
+      ],
+      "sourceCommit": "bf361bbe1c9bdb25927b21e46dcbe30f66a3cdad"
+    },
+    {
+      "name": "v10-sandbox-host-provider-tests",
+      "exitCode": 0,
+      "exitSidecar": "v10-sandbox-host-provider-tests.exit",
+      "rawSha256": "88b7145d89a14af911c130fd387824a37883b3b62ca67fa21aa2857875ac6a75",
+      "sanitizedSha256": "88b7145d89a14af911c130fd387824a37883b3b62ca67fa21aa2857875ac6a75",
+      "archiveSha256": "df5f88e1277a6dbff06ae6714b03111f776dd4c5eb9e4ee394f246a655ef48f2",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "bf361bbe1c9bdb25927b21e46dcbe30f66a3cdad"
+    },
+    {
+      "name": "sandbox-broker-policy-final",
+      "exitCode": 0,
+      "exitSidecar": "sandbox-broker-policy-final.exit",
+      "rawSha256": "ad76bcf9d8734d5ba0aeb2b0afef34c1c7032b40b8eac5fe0950bf14fbf4c51a",
+      "sanitizedSha256": "ad76bcf9d8734d5ba0aeb2b0afef34c1c7032b40b8eac5fe0950bf14fbf4c51a",
+      "archiveSha256": "f28b798492baa3a21a213862bc6e2ce07de5b32a092fe3175a2fb7751f9f6fce",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  36 passed (36)",
+        "Duration  2.97s (transform 1.76s, setup 95ms, import 2.70s, tests 33ms, environment 0ms)"
+      ],
+      "sourceCommit": "bf361bbe1c9bdb25927b21e46dcbe30f66a3cdad"
+    },
+    {
+      "name": "sandbox-broker-native-http-full",
+      "exitCode": 0,
+      "exitSidecar": "sandbox-broker-native-http-full.exit",
+      "rawSha256": "546ab2a806821c8e09f2924a4414f6de88a4dbdda48fe07e13773e8692450a38",
+      "sanitizedSha256": "546ab2a806821c8e09f2924a4414f6de88a4dbdda48fe07e13773e8692450a38",
+      "archiveSha256": "5cb43a1c68485d4782803ab593bdd50bd25f748072dfdc05105585a817dbb6d1",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  13 passed (13)",
+        "Duration  35.24s (transform 9.64s, setup 70ms, import 13.74s, tests 21.32s, environment 0ms)"
+      ],
+      "sourceCommit": "bf361bbe1c9bdb25927b21e46dcbe30f66a3cdad"
     }
   ],
   "updates": [
@@ -2406,6 +2608,46 @@
         "sandbox-broker-policy-focused",
         "sandbox-broker-resolver-focused",
         "sandbox-broker-resolver-focused-rerun"
+      ]
+    },
+    {
+      "sourceCommit": "bf361bbe1c9bdb25927b21e46dcbe30f66a3cdad",
+      "meaning": "Original JavaScript backup full8PASS; identity modes/ownership/large IDs/sequence state and new trigger inserts survive actual gzip restore",
+      "logs": [
+        "v10-backup-identity-roundtrip"
+      ]
+    },
+    {
+      "sourceCommit": "bf361bbe1c9bdb25927b21e46dcbe30f66a3cdad",
+      "meaning": "Scoped complete Context8PASS with current original actor source/erasure; later cold optional-memory timeout observation remains under optimization",
+      "logs": [
+        "context-engine-integration-final-nativeactor"
+      ]
+    },
+    {
+      "sourceCommit": "bf361bbe1c9bdb25927b21e46dcbe30f66a3cdad",
+      "meaning": "UP04 software lifecycle16/runtime-state7/SDK39 and redaction1; not hosted consumer or final workspace acceptance",
+      "logs": [
+        "up04-plugin-lifecycle-delivery2-2026-10-25",
+        "up04-runtime-state-integration10-2026-10-25",
+        "up04-sdk-lifecycle-focused4-2026-10-25",
+        "up04-plugin-sdk-build4-2026-10-25",
+        "up04-runtime-redaction-focused2-2026-10-25"
+      ]
+    },
+    {
+      "sourceCommit": "bf361bbe1c9bdb25927b21e46dcbe30f66a3cdad",
+      "meaning": "Host native provider20/policy36 software controls; HTTP broker final suite still under validation, no physical host qualification",
+      "logs": [
+        "v10-sandbox-host-provider-tests",
+        "sandbox-broker-policy-final"
+      ]
+    },
+    {
+      "sourceCommit": "bf361bbe1c9bdb25927b21e46dcbe30f66a3cdad",
+      "meaning": "Actual sandbox broker HTTP software integration only; not physical host/provider qualification",
+      "logs": [
+        "sandbox-broker-native-http-full"
       ]
     }
   ],

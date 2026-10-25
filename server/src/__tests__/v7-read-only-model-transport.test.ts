@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
 import {
+  anthropicManagedMessagesCall,
   anthropicReadOnlyCall,
   readOnlyModelEnvelopeBytes,
 } from "../services/orchestration/read-only-model-transport.js";
@@ -207,5 +208,66 @@ describe("finite text-only provider transport", () => {
     controller.abort();
     await expect(promise).rejects.toThrow("invalid_response");
     expect(cancelled).toBe(true);
+  });
+});
+
+describe("managed Anthropic Messages broker transport", () => {
+  const managedRequest = {
+    model: "fixture-exact-model-20261005",
+    max_tokens: 256,
+    stream: true,
+    system: "Use only the declared tools for the assigned task.",
+    messages: [{ role: "user", content: "Please inspect the task." }],
+    tools: [{ name: "paperclip__task_read", description: "Read the assigned task", input_schema: { type: "object", properties: {} } }],
+    tool_choice: { type: "auto" },
+  };
+  const toolResponse = {
+    id: "msg_fixture",
+    type: "message",
+    role: "assistant",
+    model: "fixture-exact-model-20261005",
+    content: [{ type: "tool_use", id: "tool_fixture", name: "paperclip__task_read", input: {} }],
+    stop_reason: "tool_use",
+    usage: { input_tokens: 20, output_tokens: 10 },
+  };
+  it("pins the exact request to one fixed provider call and returns validated tool-use SSE only after complete usage", async () => {
+    const onWireDispatch = vi.fn();
+    const fetch = vi.fn(async () => json(toolResponse));
+    const result = await anthropicManagedMessagesCall(managedRequest, {
+      model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000,
+    }, key, new AbortController().signal, { fetch, onWireDispatch });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const [url, init, options] = fetch.mock.calls[0]! as unknown as [string, RequestInit, Record<string, unknown>];
+    expect(url).toBe("https://api.anthropic.com/v1/messages");
+    expect(init).toMatchObject({ method: "POST", redirect: "manual", headers: { "x-api-key": key } });
+    expect(options).toMatchObject({ allowPrivateNetwork: false, connectTimeoutMs: 5000, responseTimeoutMs: 15000 });
+    expect(JSON.parse(String(init.body))).toMatchObject({ model: request.model, max_tokens: 256, stream: false, service_tier: "standard_only", tools: managedRequest.tools });
+    expect(result.usage).toEqual({ inputTokens: 20, outputTokens: 10 });
+    expect(result.sse).toContain('event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{}"}}');
+    expect(result.sse).toContain("event: message_stop");
+    expect(JSON.stringify(onWireDispatch.mock.calls)).not.toContain(key);
+  });
+  it("fails closed on wrong model, envelope overflow, provider redirects and output usage over the reservation", async () => {
+    const fetch = vi.fn(async () => json(toolResponse));
+    await expect(anthropicManagedMessagesCall({ ...managedRequest, model: "other" }, {
+      model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000,
+    }, key, new AbortController().signal, { fetch })).rejects.toThrow();
+    expect(fetch).not.toHaveBeenCalled();
+    await expect(anthropicManagedMessagesCall({ ...managedRequest, messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/png", data: "AA==" } }] }] }, {
+      model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000,
+    }, key, new AbortController().signal, { fetch })).rejects.toThrow("invalid_response");
+    await expect(anthropicManagedMessagesCall({ ...managedRequest, messages: [{ role: "user", content: [{ type: "text", text: "x", cache_control: { type: "ephemeral" } }] }] }, {
+      model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000,
+    }, key, new AbortController().signal, { fetch })).rejects.toThrow("invalid_response");
+    expect(fetch).not.toHaveBeenCalled();
+    await expect(anthropicManagedMessagesCall({ ...managedRequest, messages: [{ role: "user", content: "x".repeat(2000) }] }, {
+      model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 1024, maximumInputTokens: 1000,
+    }, key, new AbortController().signal, { fetch })).rejects.toThrow("response_limit");
+    await expect(anthropicManagedMessagesCall(managedRequest, {
+      model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000,
+    }, key, new AbortController().signal, { fetch: async () => new Response("", { status: 307, headers: { location: "https://attacker.invalid" } }) })).rejects.toThrow("provider_unavailable");
+    await expect(anthropicManagedMessagesCall(managedRequest, {
+      model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000,
+    }, key, new AbortController().signal, { fetch: async () => json({ ...toolResponse, usage: { input_tokens: 1001, output_tokens: 10 } }) })).rejects.toThrow("invalid_response");
   });
 });

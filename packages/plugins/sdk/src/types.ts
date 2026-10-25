@@ -1708,7 +1708,6 @@ export interface PluginAgentRuntimeState {
 
 /** Safe, bounded effective assignment snapshot; contains no credentials or schemas. */
 export interface PluginAgentConnectionAssignments {
-  features: { publicMcp: boolean; chatConnectors: boolean };
   connections: Array<{ id: string; name: string; transport: string; enabled: boolean; status: string }>;
   profileIds: string[];
 }

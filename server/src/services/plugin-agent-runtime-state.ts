@@ -7,6 +7,7 @@ import {
   pluginCompanySettings,
   pluginConfig,
   plugins,
+  companies,
   heartbeatRuns,
   agentExecutionManifests,
   resourceLifecycleEvents,
@@ -17,9 +18,6 @@ import { conflict, forbidden } from "../errors.js";
 import { agentService } from "./agents.js";
 import { agentInstructionsService } from "./agent-instructions.js";
 import { companySkillService } from "./company-skills.js";
-import { readPaperclipSkillSyncPreference } from "@paperclipai/adapter-utils/server-utils";
-import { skillVersionSelectionMap } from "./runtime-skill-selections.js";
-import { instanceSettingsService } from "./instance-settings.js";
 import { pluginAgentConnectionAssignments } from "./plugin-agent-connections.js";
 import type { AuthorizationActor } from "./authorization.js";
 import { assertV5Authorization } from "./v5-authorization.js";
@@ -27,16 +25,19 @@ import { agentRuntimeFabricService } from "./agent-runtime-fabric.js";
 import type { Agent } from "@paperclipai/shared";
 import { redactAgentAdapterConfig, redactEventPayload } from "../redaction.js";
 
-type BaseState = Omit<PluginAgentRuntimeState, "skills" | "connectionAssignments"> & {
+type BaseState = Omit<PluginAgentRuntimeState, "skills" | "connectionAssignments" | "skillsReady"> & {
   activeRunId: string | null;
-  responsibleUserId: string;
+  responsibleUserId: string | null;
   hasExecutionManifest: boolean;
 };
 
+type RuntimeAgentData = Agent & { lifecycleRequiredPluginIds?: string[]; errorReason?: string | null };
+
 /** Preserve the canonical API redaction boundary for lifecycle-owner reads. */
-export function redactPluginAgentRuntimeAgent(agent: Agent): Agent {
+export function redactPluginAgentRuntimeAgent(agent: RuntimeAgentData): Agent {
   const safe = { ...agent } as Agent & { lifecycleRequiredPluginIds?: string[] };
   delete safe.lifecycleRequiredPluginIds;
+  delete safe.errorReason;
   const redacted = redactEventPayload(safe as unknown as Record<string, unknown>) ?? {};
   return {
     ...redacted,
@@ -55,6 +56,8 @@ async function readBaseState(
       .where(and(eq(agents.companyId, companyId), eq(agents.id, agentId)))
       .for("share");
     if (!row) return null;
+    const [company] = await tx.select({ defaultResponsibleUserId: companies.defaultResponsibleUserId })
+      .from(companies).where(eq(companies.id, companyId));
     const [plugin] = await tx.select({ status: plugins.status, manifest: plugins.manifestJson })
       .from(plugins).where(eq(plugins.id, pluginId));
     const [configuration] = await tx.select({ id: pluginConfig.id }).from(pluginConfig)
@@ -76,26 +79,28 @@ async function readBaseState(
         eq(heartbeatRuns.status, "running"),
         eq(heartbeatRuns.runtimeMode, "native"),
       )).orderBy(desc(heartbeatRuns.startedAt)).limit(1);
-    const responsibleUserId = run?.responsibleUserId ?? row.responsibleUserId;
-    if (!responsibleUserId) throw forbidden("Agent runtime state requires its current responsible Human");
-    const [human] = await tx.select({ id: authUsers.id }).from(authUsers).where(and(
-      eq(authUsers.id, responsibleUserId),
-      sql`NOT EXISTS (SELECT 1 FROM ${accountDeletionOperations} deletion WHERE deletion.user_id = ${authUsers.id})`,
-    )).for("share", { noWait: true });
-    const [membership] = await tx.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
-      eq(companyMemberships.companyId, companyId),
-      eq(companyMemberships.principalType, "user"),
-      eq(companyMemberships.principalId, responsibleUserId),
-      eq(companyMemberships.status, "active"),
-    )).for("share", { noWait: true });
-    if (!human || !membership) throw forbidden("Agent runtime state requires its current active Human membership");
-    const actor: AuthorizationActor = {
-      type: "agent", source: "none", agentId, companyId, onBehalfOfUserId: responsibleUserId,
-      ...(run ? { runId: run.id } : {}),
-    };
-    await assertV5Authorization(tx as unknown as Db, actor, companyId, "agent_config:read", {
-      type: "agent", companyId, agentId,
-    });
+    const responsibleUserId = run?.responsibleUserId ?? company?.defaultResponsibleUserId ?? null;
+    if (run && !responsibleUserId) throw forbidden("Active native runtime has no responsible Human");
+    if (responsibleUserId) {
+      const [human] = await tx.select({ id: authUsers.id }).from(authUsers).where(and(
+        eq(authUsers.id, responsibleUserId),
+        sql`NOT EXISTS (SELECT 1 FROM ${accountDeletionOperations} deletion WHERE deletion.user_id = ${authUsers.id})`,
+      )).for("share", { noWait: true });
+      const [membership] = await tx.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
+        eq(companyMemberships.companyId, companyId),
+        eq(companyMemberships.principalType, "user"),
+        eq(companyMemberships.principalId, responsibleUserId),
+        eq(companyMemberships.status, "active"),
+      )).for("share", { noWait: true });
+      if (!human || !membership) throw forbidden("Agent runtime state requires its current active Human membership");
+      const actor: AuthorizationActor = {
+        type: "agent", source: "none", agentId, companyId, onBehalfOfUserId: responsibleUserId,
+        ...(run ? { runId: run.id } : {}),
+      };
+      await assertV5Authorization(tx as unknown as Db, actor, companyId, "agent_config:read", {
+        type: "agent", companyId, agentId,
+      });
+    }
     const [manifest] = run ? await tx.select({ id: agentExecutionManifests.id }).from(agentExecutionManifests)
       .where(and(eq(agentExecutionManifests.companyId, companyId), eq(agentExecutionManifests.runId, run.id))).limit(1) : [];
     const [latest] = await tx.select({ id: resourceLifecycleEvents.id }).from(resourceLifecycleEvents)
@@ -133,28 +138,15 @@ export async function pluginAgentRuntimeState(
     const actor: AuthorizationActor = {
       type: "agent", source: "none", agentId, companyId,
       ...(state.activeRunId ? { runId: state.activeRunId } : {}),
-      onBehalfOfUserId: state.responsibleUserId,
+      ...(state.responsibleUserId ? { onBehalfOfUserId: state.responsibleUserId } : {}),
     };
     const execution = state.activeRunId && state.hasExecutionManifest
       ? await agentRuntimeFabricService(db).getManifest(actor, companyId, state.activeRunId)
       : null;
-    const preference = readPaperclipSkillSyncPreference(state.agent.adapterConfig);
-    const settings = await instanceSettingsService(db).getExperimental();
-    const resolvedSkills = state.activeRunId ? await companySkillService(db).listRuntimeSkillEntries(companyId, {
-        actor,
-        readScope: "task",
-        selectionConfig: state.agent.adapterConfig,
-        includeLegacy: state.agent.adapterType !== "paperclip_runner",
-        snapshotLatest: true,
-        ...(execution ? {
-          selectedSkillKeys: new Set(execution.manifest.skills.map((pin) => pin.key)),
-          versionSelections: new Map<string, string | null>(execution.manifest.skills.map((pin) => [pin.key, pin.versionId])),
-        } : {
-          versionSelections: skillVersionSelectionMap(preference.desiredSkillEntries, {
-            versionPinsEnabled: settings.enableBetaSkills,
-          }),
-        }),
-      }) : [];
+    const skillsService = companySkillService(db);
+    const resolvedSkills = state.activeRunId && execution
+      ? await skillsService.listRuntimeSkillEntriesForCurrentExecution(companyId, actor, state.activeRunId)
+      : [];
     const skills = resolvedSkills.map((skill) => ({
       key: skill.key,
       runtimeName: skill.runtimeName,
@@ -164,22 +156,15 @@ export async function pluginAgentRuntimeState(
       sourceStatus: skill.sourceStatus === "missing" ? "missing" as const : "available" as const,
       missingDetail: skill.missingDetail ?? null,
     }));
-    const connectionAssignments = await pluginAgentConnectionAssignments(db, companyId, agentId, {
-      publicMcp: settings.enablePublicMcp,
-      chatConnectors: settings.enableChatConnectors,
-    });
+    const connectionAssignments = await pluginAgentConnectionAssignments(db, companyId, agentId);
     const current = await readBaseState(db, pluginId, companyId, agentId);
     if (!current) return null;
     if (current.revision === state.revision && current.activeRunId === state.activeRunId && current.responsibleUserId === state.responsibleUserId) {
-      const publicState = { ...current } as typeof current & {
-        activeRunId?: string;
-        responsibleUserId?: string;
-        hasExecutionManifest?: boolean;
-      };
-      delete publicState.activeRunId;
-      delete publicState.responsibleUserId;
-      delete publicState.hasExecutionManifest;
-      return { ...publicState, skillsReady: state.activeRunId !== null, skills, connectionAssignments };
+      const { activeRunId, responsibleUserId, hasExecutionManifest, ...publicState } = current;
+      void activeRunId;
+      void responsibleUserId;
+      void hasExecutionManifest;
+      return { ...publicState, skillsReady: state.activeRunId !== null && state.hasExecutionManifest, skills, connectionAssignments };
     }
   }
   throw conflict("Agent runtime changed while resolving synchronization inputs; retry");

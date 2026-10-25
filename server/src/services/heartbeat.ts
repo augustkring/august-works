@@ -9220,6 +9220,8 @@ export type HeartbeatEnvironmentRuntime = ReturnType<
 >;
 
 export interface HeartbeatServiceOptions {
+  /** Server-owned qualification registry for the opt-in Jev shadow evaluator. */
+  decisionShadow?: { sourceSha: string; profiles: readonly import("./jev-skill-suggestions.js").JevSkillSuggestionProfile[] };
   /** Test seam before the atomic native runtime handoff. */
   beforeNativeRuntimeSelection?: (runId: string) => Promise<void>;
   /** Test seam immediately before the durable chat-control admission check. */
@@ -21343,7 +21345,7 @@ export function heartbeatService(
       } else {
         delete context.paperclipSecrets;
       }
-      const v5Fabric = await agentRuntimeFabricService(db).prepare({
+      const v5Fabric = await agentRuntimeFabricService(db, options.decisionShadow).prepare({
         companyId: agent.companyId, agentId: agent.id, runId: run.id,
         responsibleUserId: run.responsibleUserId, issueId: issueRef?.id ?? null,
         query: [safeWakeCommentContext?.body, issueRef?.title, issueRef?.description].filter(Boolean).join("\n").slice(0, 500),
@@ -23563,11 +23565,19 @@ export function heartbeatService(
                   safeWakeCommentContext?.body ??
                   null,
               });
-            governedContextMarkdown = v5Fabric?.contextMarkdown ?? freshGovernedContext?.markdown ?? null;
+            const awTextDraftSelected = nativeRuntimeResolution.profile.backend === "aw_text_messages";
+            // AW receives only the exact rendered Context body that has a
+            // native source witness. The separate V5 inventory is not part
+            // of this bounded draft profile's model input.
+            governedContextMarkdown = v5Fabric
+              ? awTextDraftSelected ? v5Fabric.inputContextSourceMarkdown : v5Fabric.contextMarkdown
+              : freshGovernedContext?.markdown ?? null;
             // A reused V5 inventory can name an older Context. Retain the fresh
             // references that actually produced this bootstrap's markdown.
             nativeBootstrapContextManifests = v5Fabric?.contextMarkdown != null
-              ? v5Fabric.inputContextManifests ?? null
+              ? awTextDraftSelected && !v5Fabric.inputContextSourceMarkdown
+                ? []
+                : v5Fabric.inputContextManifests ?? null
               : freshGovernedContext
                 ? freshGovernedContext.manifest
                   ? [{ companyId: agent.companyId, contextManifestId: freshGovernedContext.manifest.id }]
@@ -23684,7 +23694,7 @@ export function heartbeatService(
             const nativeTaskWakeSource = capturedTaskSource?.input.kind === "task" && issueRef
               ? captureNativeTaskWakeSource({ companyId: agent.companyId, runId: run.id, issueId: issueRef.id,
                 sourceVersion: capturedTaskSource.input.sourceVersion,
-                wakeReason: readNonEmptyString(parseObject(context.paperclipWake).reason),
+                persistedWakeReason: readNonEmptyString(parseObject(run.contextSnapshot).wakeReason),
                 task: { id: issueRef.id, identifier: issueRef.identifier, title: issueRef.title,
                   description: issueContext?.description ?? null, status: issueRef.status,
                   priority: issueRef.priority, workMode: issueRef.workMode }, payload: context.paperclipWake })
@@ -23732,7 +23742,8 @@ export function heartbeatService(
                 ...(nativeTaskWakeSource ? [nativeTaskWakeSource] : [])] : null,
               contextManifestIds: nativeBootstrapContextManifests,
               governedContextMarkdown,
-              contextWitness: freshGovernedContext?.sourceWitness ?? null,
+              contextWitnessMarkdown: v5Fabric?.inputContextSourceMarkdown ?? governedContextMarkdown,
+              contextWitness: v5Fabric?.inputContextSourceWitness ?? freshGovernedContext?.sourceWitness ?? null,
               rolePackInputs: v5Fabric ? v5Fabric.inputRolePackSources : [],
               unsupportedInputPresent: Object.values(nativeBootstrapUnsupported).some(Boolean),
             });
@@ -24323,10 +24334,12 @@ export function heartbeatService(
               await dispatchResolvedInteractionContinuationWithAtomicGate(
                 async (markDispatchStarted) => {
                   const nativeDispatchIssueId = issueRef?.id ?? null;
-                  if (nativeDispatchIssueId && freshGovernedContext?.sourceWitness && governedContextMarkdown?.trim() && nativeBootstrapContextManifests) {
-                    await revalidateNativeBootstrapContextWitness(db, { witness: freshGovernedContext.sourceWitness,
+                  const contextWitness = v5Fabric?.inputContextSourceWitness ?? freshGovernedContext?.sourceWitness;
+                  const contextWitnessMarkdown = v5Fabric?.inputContextSourceMarkdown ?? governedContextMarkdown;
+                  if (nativeDispatchIssueId && contextWitness && contextWitnessMarkdown?.trim() && nativeBootstrapContextManifests) {
+                    await revalidateNativeBootstrapContextWitness(db, { witness: contextWitness,
                       companyId: agent.companyId, runId: run.id, agentId: agent.id, issueId: nativeDispatchIssueId,
-                      renderedMarkdown: governedContextMarkdown, manifestIds: nativeBootstrapContextManifests });
+                      renderedMarkdown: contextWitnessMarkdown, manifestIds: nativeBootstrapContextManifests });
                   }
                   const nativeDraftBackend = nativeExecution.provider.kind === "aw_text_only"
                     ? await selectNativeHeartbeatBackend(db, nativeExecution, nativeBootstrapSourceClosure)

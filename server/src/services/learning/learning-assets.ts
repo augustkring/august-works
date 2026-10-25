@@ -57,7 +57,10 @@ export async function assertRuntimeSkillSourceRetained(db:Db,companyId:string,ac
  const {assertAnalyticalContextPayloadAccess}=await import("../analytical-context-authority.js");
  await assertAnalyticalContextPayloadAccess(db,companyId,actor,{runId:actor.runId},"task");
  const {skillResolverService}=await import("../skill-resolver.js");
- const selected=await skillResolverService(db).authorizedVersion(actor,companyId,skillId,versionId,pin.test_current,"task");
+ const resolver=skillResolverService(db);
+ const selected=pin.test_current
+  ? await resolver.authorizedVersion(actor,companyId,skillId,versionId,true,"task")
+  : await resolver.authorizedCurrentManifestVersion(actor,companyId,skillId,versionId,"task");
  const source=await assertLearnedAssetAnalyticalSources(db,companyId,"skill_version",versionId,actor,"task");
  for(const cycle of source.cycles){
   const [coverage]=await db.execute<{covered:number}>(sql`select count(distinct d.source_manifest_id)::int as covered from learning_analytical_dependencies d where d.company_id=${companyId}::uuid and d.cycle_id=${cycle.id}::uuid and exists(select 1 from analytical_context_dependencies a join context_manifest_memory_roots r on r.company_id=a.company_id and r.memory_record_id=a.memory_record_id where a.company_id=d.company_id and a.source_manifest_id=d.source_manifest_id and r.manifest_id=${pin.context_id}::uuid)`);

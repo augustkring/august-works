@@ -130,7 +130,7 @@ export async function revalidateStoredContextManifestSources(db: Db, input: {
       status: heartbeatRuns.status }).from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId),
       eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.agentId, input.agentId))).for("share");
     if (!run || run.status !== "running" || run.responsibleUserId !== input.actor.onBehalfOfUserId ||
-      input.actor.type !== "agent" || input.actor.source !== "agent_jwt" || input.actor.runId !== run.id ||
+      input.actor.type !== "agent" || (input.actor.source !== "agent_jwt" && input.actor.source !== "none") || input.actor.runId !== run.id ||
       manifest.issueId !== (run.nativeIssueId ?? run.issueId))
       throw forbidden("Native bootstrap Context accountability changed");
   }
@@ -232,7 +232,8 @@ export async function revalidateNativeBootstrapContextWitness(db: Db, input: {
       eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.agentId, input.agentId),
     )).for("share");
     if (!run || run.status !== "running" || run.responsibleUserId !== actor.onBehalfOfUserId ||
-      run.nativeIssueId !== input.issueId && run.issueId !== input.issueId || actor.type !== "agent" || actor.source !== "agent_jwt" ||
+      run.nativeIssueId !== input.issueId && run.issueId !== input.issueId || actor.type !== "agent" ||
+      (actor.source !== "agent_jwt" && actor.source !== "none") ||
       actor.companyId !== input.companyId || actor.agentId !== input.agentId || actor.runId !== input.runId)
       throw forbidden("Native bootstrap Context accountability changed before dispatch");
     const companyAccess = await authorizationService(tx).decide({ actor, action: "company_scope:read",
@@ -256,6 +257,8 @@ export interface CreateContextManifestInput {
   issueId?: string | null;
   projectId?: string | null;
   responsibleUserId?: string | null;
+  /** Server-owned original actor for source admission. Never supplied by HTTP. */
+  authorizationActor?: AuthorizationActor;
   delegatedExecution?: DelegatedContextExecutionBindingInput;
   query: string;
   policySnapshot: unknown;
@@ -550,7 +553,16 @@ export function contextManifestService(db: Db) {
             throw forbidden("Context requires its actual accountable run");
           if (input.issueId && input.issueId !== run.issueId) throw forbidden("Context task does not match its actual run");
           issueId = run.issueId;
-          sourceActor = {type:"agent",source:"agent_jwt",companyId:input.companyId,agentId:input.agentId,runId:run.id,onBehalfOfUserId:run.responsibleUserId};
+          if (nativeBootstrap && !input.authorizationActor)
+            throw forbidden("Native bootstrap Context requires its original server-held actor");
+          sourceActor = input.authorizationActor ?? {
+            type: "agent", source: "agent_jwt", companyId: input.companyId, agentId: input.agentId,
+            runId: run.id, onBehalfOfUserId: run.responsibleUserId,
+          };
+          if (sourceActor.type !== "agent" || sourceActor.companyId !== input.companyId || sourceActor.agentId !== input.agentId ||
+            sourceActor.runId !== run.id || sourceActor.onBehalfOfUserId !== run.responsibleUserId ||
+            (sourceActor.source !== "agent_jwt" && sourceActor.source !== "none"))
+            throw forbidden("Context actor does not match its actual accountable run");
         }
         // Retrieval may have waited while membership or sharing changed. The
         // original privacy transaction owns admission of the retained copy.
