@@ -1,6 +1,6 @@
 import { logger } from "../middleware/logger.js";
 import { exportCompanyStateV7 } from "./enterprise/portability.js";
-import { authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, issueReadSqlCondition, projectReadSqlCondition, type AuthorizationActor } from "./authorization.js";
+import { authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, issueReadSqlCondition, pinCurrentBoardActor, projectReadSqlCondition, type AuthorizationActor } from "./authorization.js";
 import { assertAnalyticalContextPayloadAccess } from "./analytical-context-authority.js";
 import { assertNativeDocumentRevisionCurrentSourceAccess } from "./native-direct-input.js";
 import { agentAppearanceSchema } from "@paperclipai/shared";
@@ -5538,9 +5538,6 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     assertInlineSourceComplete(input.source);
     const mode = resolveImportMode(options);
     let effectsStarted = false;
-    const cancellationCheckpoint = async () => {
-      if (await options?.checkCancellation?.()) throw new ImportCancellationError(effectsStarted);
-    };
     const plan = await buildPreview(input, options);
     if (input.expectedSourceFingerprint && input.expectedSourceFingerprint !== plan.preview.sourceFingerprint)
       throw new ImportSourceChangedError();
@@ -5568,6 +5565,32 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     const sourceReleaseReviewed = input.sourceReleaseReview?.confirmed === true
       && input.sourceReleaseReview.sourceFingerprint === plan.preview.sourceFingerprint
       && input.expectedSourceFingerprint === plan.preview.sourceFingerprint;
+    let checkpointTargetCompanyId = input.target.mode === "existing_company" ? input.target.companyId : null;
+    const cancellationCheckpoint = async () => {
+      if (await options?.checkCancellation?.()) throw new ImportCancellationError(effectsStarted);
+      // Actor identity passed by the API is the only live authority to recheck.
+      // The legacy actorUserId argument is a result/audit identity and cannot
+      // reconstruct a credential for direct internal service callers.
+      if (!options?.actor) return;
+      await db.transaction(async (tx) => {
+        let currentActor = importActor;
+        if (importActor.type === "board" && importActor.source !== "local_implicit" && importActor.source !== "cloud_tenant") {
+          const pinned = await pinCurrentBoardActor(tx, importActor);
+          if (!pinned || pinned.credentialExpiresAt !== null && pinned.credentialExpiresAt <= Date.now()) {
+            throw forbidden("The current import requester credential is unavailable");
+          }
+          currentActor = pinned.actor;
+        }
+        await validateCopySources(sourceManifest, input.target, include, currentActor, options?.privateWorkAdmission,
+          sourceReleaseReviewed, tx);
+        if (checkpointTargetCompanyId && isUuidLike(checkpointTargetCompanyId)) {
+          const targetDecision = await authorizationService(tx).decide({ actor: currentActor,
+            action: "company_scope:read", resource: { type: "company", companyId: checkpointTargetCompanyId },
+            enforceResponsibleUserIntersection: true });
+          if (!targetDecision.allowed) throw forbidden("Current target organization access is required");
+        }
+      });
+    };
     let copySources: Awaited<ReturnType<typeof validateCopySources>>;
     try {
       copySources = await validateCopySources(sourceManifest, input.target, include, importActor, options?.privateWorkAdmission,
@@ -5718,6 +5741,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           ? (sourceManifest.company?.feedbackDataSharingTermsVersion ?? null)
           : null,
       });
+      checkpointTargetCompanyId = created.id;
       await options?.onSourceReleaseTargetBound?.(created.id);
       if (mode === "agent_safe" && options?.sourceCompanyId) {
         await cancellationCheckpoint();
@@ -5760,6 +5784,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
 
     if (!targetCompany) throw notFound("Target company not found");
     const targetCompanyId = targetCompany.id;
+    checkpointTargetCompanyId = targetCompanyId;
 
     const importedAgentEnvSlugs = new Set(
       plan.preview.plan.agentPlans

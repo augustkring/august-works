@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { agents, assets, companies, createDb, documentRevisions, documents, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, heartbeatRuns, issueDocuments, memoryDeletionMarkers,
+import { agents, assets, companies, contextManifests, createDb, documentRevisions, documents, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, heartbeatRuns, issueDocuments, memoryDeletionMarkers,
   issueAttachments, issueComments, issuePrivacySources, issues, learningCycles, learningHypotheses, learningEvaluations, learningDomainCandidates, learningRetainedAssets, memoryBindings, memoryEvidence, memoryRecords, pluginManagedResources, plugins, projects } from "@paperclipai/db";
 import { roadmapPolicySchema, type NativePayloadSourceSnapshot } from "@paperclipai/shared";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
@@ -99,6 +99,20 @@ describe("Native payload source snapshot binds its original payload owner", () =
     expect(edges).toContainEqual({ sourceKind: "run_copy", sourceId: run!.id });
     expect(edges).not.toContainEqual({ sourceKind: "run", sourceId: run!.id });
     expect(edges).not.toContainEqual({ sourceKind: "issue", sourceId: parent.id });
+    const [manifest] = await db.insert(contextManifests).values({ companyId, runId: run!.id, agentId: agent!.id,
+      issueId: parent.id, queryHash: "d".repeat(64), policySnapshotHash: "e".repeat(64) }).returning();
+    const [unqualified] = await db.insert(issues).values({ companyId, title: "Unqualified legacy V1 output",
+      createdByAgentId: agent!.id, originKind: "manual", originRunId: run!.id,
+      originId: `paperclip-runner:create-task:${parent.id}:legacy-v1-fixture`, payloadSourceProtocolVersion: 1 }).returning();
+    const legacyPolicy: NativePayloadSourceSnapshot["policy"] = { issueIds: [], projectIds: [], runIds: [run!.id], memoryIds: [], foundationRevisionIds: [] };
+    const legacyContext: NativePayloadSourceSnapshot["inputs"][number] = { kind: "context", manifestId: manifest!.id,
+      queryHash: manifest!.queryHash, policySnapshotHash: manifest!.policySnapshotHash };
+    await db.update(issues).set({ payloadSourceSnapshot: await snapshot(unqualified!, {}, { policy: legacyPolicy, inputs: [legacyContext] }) })
+      .where(eq(issues.id, unqualified!.id));
+    const legacyEdges = await db.select({ sourceKind: issuePrivacySources.sourceKind, sourceId: issuePrivacySources.sourceId }).from(issuePrivacySources)
+      .where(eq(issuePrivacySources.issueId, unqualified!.id));
+    expect(legacyEdges).toContainEqual({ sourceKind: "run", sourceId: run!.id });
+    expect(legacyEdges).not.toContainEqual({ sourceKind: "run_copy", sourceId: run!.id });
   });
   it("retains a bound snapshot across operational updates but rejects silently replacing its body", async () => {
     const row = await insert();

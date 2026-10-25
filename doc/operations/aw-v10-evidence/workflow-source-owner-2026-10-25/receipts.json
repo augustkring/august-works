@@ -2611,6 +2611,61 @@
         "Duration  14.03s (transform 10.19s, setup 74ms, import 13.83s, tests 8ms, environment 0ms)"
       ],
       "sourceCommit": "3c56d2c2bc2e4d9272482e20d9065a9d1f4ccafa"
+    },
+    {
+      "name": "managed-source-closure-package-build",
+      "exitCode": 0,
+      "exitSidecar": "managed-source-closure-package-build.exit",
+      "rawSha256": "f36551bbff2e57d5f8d61f00174bd5ab3faa44fad8f01b938ebb1eef0ef6f552",
+      "sanitizedSha256": "f36551bbff2e57d5f8d61f00174bd5ab3faa44fad8f01b938ebb1eef0ef6f552",
+      "archiveSha256": "fa78e71732e2147aab3d6f981b68eeabc2548aec820a2c573aa9e10fb73721ee",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "b56ef80b411cec061de8fe34273a5ad4a1e64c4c"
+    },
+    {
+      "name": "managed-source-closure-server-tsc",
+      "exitCode": 0,
+      "exitSidecar": "managed-source-closure-server-tsc.exit",
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "b56ef80b411cec061de8fe34273a5ad4a1e64c4c"
+    },
+    {
+      "name": "managed-source-closure-runtime-test2",
+      "exitCode": 0,
+      "exitSidecar": "managed-source-closure-runtime-test2.exit",
+      "rawSha256": "33f60f19360cdc27af5a399969de1badaea0dceabf340acc430270d47fff292f",
+      "sanitizedSha256": "33f60f19360cdc27af5a399969de1badaea0dceabf340acc430270d47fff292f",
+      "archiveSha256": "8f22e39a43bf643442e48a907b629fb1a3541f942502abcf76e556345574c4b7",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  12 passed | 130 skipped (142)",
+        "Duration  1.18s (transform 851ms, setup 0ms, import 1.01s, tests 35ms, environment 0ms)"
+      ],
+      "sourceCommit": "b56ef80b411cec061de8fe34273a5ad4a1e64c4c"
     }
   ],
   "updates": [
@@ -3000,6 +3055,15 @@
         "up06-native-runner-handoff-retry-20261025",
         "up06-descriptor-reconstruction-latest-20261025",
         "up06-remote-selected-source-20261025"
+      ]
+    },
+    {
+      "sourceCommit": "b56ef80b411cec061de8fe34273a5ad4a1e64c4c",
+      "meaning": "Observed runner build, server compiler and 12 prepared-turn runtime tests; source still changing, not final whole-workspace proof.",
+      "logs": [
+        "managed-source-closure-package-build",
+        "managed-source-closure-server-tsc",
+        "managed-source-closure-runtime-test2"
       ]
     }
   ],

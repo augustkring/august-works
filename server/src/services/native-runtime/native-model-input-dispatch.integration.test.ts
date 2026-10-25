@@ -27,7 +27,7 @@ import { nativeSha256 } from "./canonical.js";
 import { currentNativeControllerIdentity } from "./native-restart-recovery.js";
 import { buildNativeModelEnvelope } from "@paperclipai/paperclip-runner";
 import { buildNativeExecutionInput, buildNativeBootstrapSourceSet, prepareNativeTurnWithContext } from "./native-execution-input.js";
-import { nativeRuntimeContextFixture } from "./runtime-context.test-fixture.js";
+import { buildRetainedNativeRuntimeContext, type NativeRuntimeAuthoredSourceCapture } from "./runtime-context.js";
 import { issueService } from "../issues.js";
 import type { NativeTaskSourceCapture } from "../issues.js";
 import { canActorReadIssuePrivacy } from "../authorization.js";
@@ -39,6 +39,7 @@ import { errorHandler } from "../../middleware/error-handler.js";
 import { issueRoutes } from "../../routes/issues.js";
 import { ensureNativeCompletionContract } from "./completion-contracts.js";
 import { contextEngineService } from "../context/context-engine.js";
+import { resolveDefaultAgentWorkspaceDir } from "../../home-paths.js";
 
 describe("native model input dispatch intent", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
@@ -431,6 +432,8 @@ describe("native model input dispatch intent", () => {
       createdByUserId: userId,
     }, db, undefined, { manualInputActor: actor });
     const seeded = await seed({ existingIssueId: createdIssue.id, responsibleUserId: userId });
+    await db.update(issues).set({ status: "in_progress", assigneeAgentId: agentId, executionRunId: seeded.runId })
+      .where(and(eq(issues.companyId, companyId), eq(issues.id, createdIssue.id)));
     let selectedTask: NonNullable<Awaited<ReturnType<typeof getIssueExecutionContext>>> | null = null;
     const taskCaptureHolder: { value: NativeTaskSourceCapture | null } = { value: null };
     selectedTask = await getIssueExecutionContext(db, companyId, createdIssue.id, capture => { taskCaptureHolder.value = capture; });
@@ -448,6 +451,12 @@ describe("native model input dispatch intent", () => {
       query: "Rendered native task", intent: "native_task_execution", includeFoundation: false,
       sensitivityCeiling: "internal" });
     expect(governedContext.nativeBootstrapWitness).toBeDefined();
+    const [runtimeAgent] = await db.select().from(agents).where(and(eq(agents.companyId, companyId), eq(agents.id, agentId)));
+    expect(runtimeAgent).toBeDefined();
+    let runtimeSourceCapture: NativeRuntimeAuthoredSourceCapture | null = null;
+    const runtimeContext = await buildRetainedNativeRuntimeContext({ db, agent: runtimeAgent!, runId: seeded.runId,
+      runtimeConfig: {}, runtimeSkillEntries: [], onAuthoredSourceCapture: capture => { runtimeSourceCapture = capture; } });
+    const runtimeInputs = runtimeSourceCapture?.inputs ?? [];
     const renderedReferences: Array<{ kind: "task" | "comment" | "document_revision" | "attachment" | "unknown"; id: string }> = [];
     const renderedMarkdown = buildPaperclipTaskMarkdown({
       issue: { id: createdIssue.id, identifier: selectedTask!.identifier, title: selectedTask!.title, description: selectedTask!.description, workMode: "standard" },
@@ -460,16 +469,22 @@ describe("native model input dispatch intent", () => {
     expect(taskCapture!.payloadSourceSnapshot).toMatchObject({ owner: { kind: "issue", companyId, id: createdIssue.id } });
     expect(revisionCapture!.payloadSourceSnapshot).toMatchObject({ owner: { kind: "document_revision", companyId, id: revisionCapture!.input.revisionId } });
     const renderedDigest = createHash("sha256").update(renderedMarkdown!, "utf8").digest("hex");
+    const nativeWorkspace = { cwd: resolveDefaultAgentWorkspaceDir(agentId), repoUrl: null, repoRef: null, branchName: null };
     const sourceSet = buildNativeBootstrapSourceSet({ companyId, renderedMarkdown: renderedMarkdown!, runId: seeded.runId,
       agentId, issueId: createdIssue.id, renderedMarkdownDigest: renderedDigest,
       references: renderedReferences,
       candidates: [
         { kind: "task", id: createdIssue.id, input: taskCapture!.input, payloadSourceSnapshot: taskCapture!.payloadSourceSnapshot },
         { kind: "document_revision", id: revisionCapture!.input.revisionId, input: revisionCapture!.input, payloadSourceSnapshot: revisionCapture!.payloadSourceSnapshot },
-      ], runtimeInputs: [], contextManifestIds: [{ companyId, contextManifestId: governedContext.packet.manifest!.id }],
+      ], runtimeInputs, contextManifestIds: [{ companyId, contextManifestId: governedContext.packet.manifest!.id }],
       governedContextMarkdown: governedContext.markdown, contextWitness: governedContext.nativeBootstrapWitness,
+      additionalInputs: [{ kind: "workspace_metadata", runId: seeded.runId, executionWorkspaceId: seeded.runId,
+        origin: "agent_home", sourceVersion: `agent-home:${agentId}:v1`,
+        contentHash: createHash("sha256").update(JSON.stringify(nativeWorkspace), "utf8").digest("hex") }],
       rolePackInputs: [], unsupportedInputPresent: false });
-    expect(sourceSet?.inputs.map(value => value.kind)).toEqual(["task", "document_revision", "context"]);
+    expect(sourceSet?.inputs.map(value => value.kind)).toEqual(expect.arrayContaining([
+      "task", "document_revision", "workspace_metadata", "context", "runtime_instructions",
+    ]));
     const completion = await ensureNativeCompletionContract({ db, companyId,
       issue: { id: createdIssue.id, title: selectedTask!.title, description: selectedTask!.description }, actorId: agentId });
     await db.update(heartbeatRuns).set({ completionContractId: completion.row.id,
@@ -477,18 +492,21 @@ describe("native model input dispatch intent", () => {
     const execution = buildNativeExecutionInput({ companyId, runId: seeded.runId, agentId,
       issue: { id: createdIssue.id, identifier: selectedTask!.identifier, title: selectedTask!.title, description: selectedTask!.description, workMode: "standard" },
       taskPrompt: renderedMarkdown!, governedContextMarkdown: governedContext.markdown,
-      workspace: { id: seeded.runId, cwd: "/native", repoUrl: null, repoRef: null, branchName: null },
+      workspace: { id: seeded.runId, ...nativeWorkspace },
       normalizedSessionId: null, provider: "claude_managed", model: "claude-sonnet-5",
       managedProfile: { profileId: "profile", anthropicAgentId: "agent_01", agentVersion: "1", environmentId: "environment", betaVersion: "managed-agents-2026-04-01" },
       maxSessionListCostUsd: 1, completionContract: { id: completion.row.id, sha256: completion.row.canonicalSha256,
         schemaVersion: completion.row.schemaVersion, contract: completion.contract },
-      runtimeContext: nativeRuntimeContextFixture() });
+      runtimeContext });
     await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeExecutionInput: execution } }).where(eq(heartbeatRuns.id, seeded.runId));
     const envelope = buildNativeModelEnvelope(execution);
     const turnInput = { message: { role: "user" as const, text: JSON.stringify(envelope) }, requestedCollaborationMode: "default" as const };
     const closure = { sourceSet: sourceSet!, taskEnvelopeDigest: createHash("sha256").update(JSON.stringify(execution.task), "utf8").digest("hex") };
     const dispatchId = await recordNativeModelInputDispatchIntent({ ...dispatchArgs(seeded, turnInput), bootstrapSourceClosure: closure });
     await recordNativeModelInputDispatchAcknowledgement({ ...acknowledgementArgs(seeded, dispatchId, turnInput), sourceClosure: closure });
+    const [runAfterBootstrap] = await db.select({ nativeInputSourceProtocolVersion: heartbeatRuns.nativeInputSourceProtocolVersion })
+      .from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
+    expect(runAfterBootstrap!.nativeInputSourceProtocolVersion).toBe(1);
     const refreshedContext = await contextEngineService(db).assembleNativeBootstrap({ companyId, agentId,
       authorizationActor: { type: "agent", source: "none", companyId, agentId, runId: seeded.runId, onBehalfOfUserId: userId },
       responsibleUserId: userId, runId: seeded.runId, issueId: createdIssue.id, projectId: null,

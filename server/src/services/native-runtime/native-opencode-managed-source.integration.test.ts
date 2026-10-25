@@ -55,7 +55,7 @@ import { nativeCompletionContractInput } from "./completion-contracts.js";
 import { resolveDefaultAgentWorkspaceDir } from "../../home-paths.js";
 import { createOpenCodeNativeSessionBackend } from "@paperclipai/paperclip-runner";
 
-const OPENCODE = "/workspace/.cloud-setup/lockfile/node_modules/.pnpm/opencode-linux-x64@1.18.32/node_modules/opencode-linux-x64/bin/opencode";
+const QUALIFIED_OPENCODE_SHA256 = "513f500a1a5ea1dc7d865547ac87b32a8936334e8d5abd5b3ff585c45a170080";
 const sourceSha = "a".repeat(40);
 const credential = `e2e-only-${randomUUID()}`;
 
@@ -64,6 +64,13 @@ function toolName(value: unknown): string {
   for (const prefix of ["paperclip__", "paperclip_", "paperclip."])
     if (name.startsWith(prefix)) return name.slice(prefix.length);
   return name;
+}
+
+function qualifiedOpenCodeBinary(): string {
+  const configured = process.env.PAPERCLIP_QUALIFIED_OPENCODE_BINARY?.trim();
+  if (configured) return configured;
+  try { return execFileSync("which", ["opencode"], { encoding: "utf8" }).trim(); }
+  catch { throw new Error("Set PAPERCLIP_QUALIFIED_OPENCODE_BINARY or install the qualified OpenCode binary on PATH."); }
 }
 
 async function makeFixtureTreeWritable(target: string): Promise<void> {
@@ -78,6 +85,7 @@ describe("managed OpenCode source-closure binary integration", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
   let db: ReturnType<typeof createDb>;
   let root: string;
+  let preserveDebugArtifacts = false;
 
   beforeAll(async () => {
     if (process.platform !== "linux") throw new Error("This fixture pins the installed Linux OpenCode binary.");
@@ -97,14 +105,16 @@ describe("managed OpenCode source-closure binary integration", () => {
   afterAll(async () => {
     await database?.cleanup();
     vi.unstubAllEnvs();
-    if (root) {
+    if (root && !preserveDebugArtifacts) {
       await makeFixtureTreeWritable(root);
       await rm(root, { recursive: true, force: true });
     }
   }, 30_000);
 
   it("executes a governed document write through OpenCode 1.18.32 and the real managed Messages route", async () => {
-    expect(execFileSync(OPENCODE, ["--version"], { encoding: "utf8" }).trim()).toBe("1.18.32");
+    const opencodeBinary = qualifiedOpenCodeBinary();
+    expect(execFileSync(opencodeBinary, ["--version"], { encoding: "utf8" }).trim()).toBe("1.18.32");
+    expect(createHash("sha256").update(await readFile(opencodeBinary)).digest("hex")).toBe(QUALIFIED_OPENCODE_SHA256);
     const runRoot = await mkdtemp(join(root, "run-"));
     const keyPath = join(runRoot, "broker-key.pem");
     const certPath = join(runRoot, "broker-cert.pem");
@@ -305,12 +315,20 @@ describe("managed OpenCode source-closure binary integration", () => {
     });
     const address = broker.address();
     if (!address || typeof address === "string") throw new Error("Expected local HTTPS listener.");
-    const runnerEnvironment = { PATH: `${dirname(OPENCODE)}:${process.env.PATH ?? ""}`, SSL_CERT_FILE: certBundlePath,
+    const runnerEnvironment = { PATH: `${dirname(opencodeBinary)}:${process.env.PATH ?? ""}`, SSL_CERT_FILE: certBundlePath,
       OPENCODE_DISABLE_DEFAULT_PLUGINS: "true", OPENCODE_DISABLE_MODELS_FETCH: "true",
       PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: `https://127.0.0.1:${address.port}` };
     const diagnostics: string[] = [];
     const backend = createOpenCodeNativeSessionBackend(execution, { runtimeDirectory: join(runRoot, "opencode-runtime"),
-      environment: runnerEnvironment, command: OPENCODE, runnerInstanceId: prepared.runnerInstanceId,
+      environment: runnerEnvironment, command: opencodeBinary, runnerInstanceId: prepared.runnerInstanceId,
+      onSpawn: async ({ pid }) => {
+        diagnostics.push(`OpenCode pid ${pid}`);
+        const environment = (await readFile(`/proc/${pid}/environ`, "utf8").catch(() => "")).split("\0");
+        diagnostics.push(environment.filter(value => value.startsWith("OPENCODE_DISABLE_") ||
+          value.startsWith("XDG_CONFIG_HOME=") || value.startsWith("XDG_DATA_HOME=")).join("; "));
+        const processState = await readFile(`/proc/${pid}/wchan`, "utf8").catch(() => "unknown");
+        diagnostics.push(`OpenCode wait channel ${processState.trim()}`);
+      },
       onDiagnostic: message => diagnostics.push(message), fetch: async (input, init) => {
         const url = new URL(String(input));
         const method = init?.method ?? "GET";
@@ -328,7 +346,8 @@ describe("managed OpenCode source-closure binary integration", () => {
       const result = await executePaperclipNativeSession({ db, execution, backend, bootstrapSourceClosure,
         runnerInstanceId: prepared.runnerInstanceId, leaseOwner, turnTimeoutMs: 90_000, adapterType: "paperclip_runner",
         runnerEnvironment }).catch(error => {
-          throw new Error(`${error instanceof Error ? error.message : String(error)}\n${diagnostics.join("\n")}\nBroker: ${brokerRequests.join(", ")}`);
+          preserveDebugArtifacts = true;
+          throw new Error(`${error instanceof Error ? error.message : String(error)}\n${diagnostics.join("\n")}\nBroker: ${brokerRequests.join(", ")}\nArtifacts: ${runRoot}`);
         });
       expect(result.exitCode).toBe(0);
       expect(responseCount).toBeGreaterThanOrEqual(2);

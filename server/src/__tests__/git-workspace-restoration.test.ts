@@ -273,4 +273,39 @@ describe("managed project worktree restoration recipe", () => {
     await expect(fs.access(path.join(path.dirname(workspace.cwd!), `.${path.basename(workspace.cwd!)}.tmp`)))
       .rejects.toMatchObject({ code: "ENOENT" });
   });
+
+  it("keeps an interrupted exact worktree intact and lets the original recipe finish restoration", async () => {
+    const { workspace, settings, nestedSource } = await fixture();
+    const resolveGitAuth = async () => null;
+    const recipe: GitCacheRestoration = await inspectGitCacheRecipe(workspace, resolveGitAuth, undefined, {
+      managedCheckouts: [],
+      proveManagedCheckout: async (checkoutPath, name, signal) => {
+        await assertReproducibleManagedCheckout(checkoutPath, { repoUrl: nestedSource.repoUrl, resolveGitAuth, signal });
+        return readManagedCheckoutContents(checkoutPath, name, nestedSource, signal);
+      },
+    });
+    await execFile("git", ["-C", recipe.sourcePath, "worktree", "remove", "--force", workspace.cwd!]);
+    const persisted = { ...workspace, metadata: { ...workspace.metadata, [GIT_CACHE_RESTORATION_KEY]: recipe } };
+    let mutationChecks = 0;
+    await expect(restoreManagedGitCacheWorktree({
+      workspace: persisted,
+      baseCwd: recipe.sourcePath,
+      resolveGitAuth,
+      beforeMutation: async () => {
+        if (++mutationChecks === 2) throw new Error("simulated interruption after worktree publication");
+      },
+      authorizeSource: async () => {},
+      prepareLocalSource: async () => async () => {},
+    })).rejects.toThrow("simulated interruption");
+
+    // The canonical path and registration still point to the exact saved commit;
+    // the next owner retry completes encrypted local-content restoration.
+    expect(await git(workspace.cwd!, "rev-parse", "HEAD")).toBe(recipe.commit);
+    expect((await git(recipe.sourcePath, "worktree", "list", "--porcelain"))).toContain(`worktree ${workspace.cwd}`);
+    await restoreManagedGitCacheWorktree({ workspace: persisted, baseCwd: recipe.sourcePath,
+      resolveGitAuth, beforeMutation: async () => {}, authorizeSource: async () => {},
+      prepareLocalSource: async () => async () => {} });
+    expect(await git(workspace.cwd!, "rev-parse", "HEAD")).toBe(recipe.commit);
+    expect(await fs.readFile(path.join(workspace.cwd!, ".claude/settings.local.json"))).toEqual(settings);
+  });
 });

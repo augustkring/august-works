@@ -7103,7 +7103,11 @@ export async function renewNativeSessionExecutionLease(input: {
 async function nativeTurnFrameMatchesSourceClosure(tx: Parameters<Parameters<Db["transaction"]>[0]>[0],
   run: typeof heartbeatRuns.$inferSelect, turnInput: Parameters<NativeSession["startTurn"]>[0],
   closure: NativeBootstrapSourceClosure | null | undefined, rawNativeExecutionInput: unknown) {
-  const no = (_reason: string) => false;
+  const no = (reason: string) => {
+    if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTIC === "1")
+      process.stderr.write(`native_source_closure_reject:${reason}\n`);
+    return false;
+  };
   if (!closure || turnInput.continuation === true || turnInput.message.role !== "user") return no("frame_kind");
   let frame: Record<string, unknown>, parsedExecution: ReturnType<typeof parseNativeExecutionInput>, expected: unknown;
   try {
@@ -7135,11 +7139,15 @@ async function nativeTurnFrameMatchesSourceClosure(tx: Parameters<Parameters<Db[
   if (createHash("sha256").update(JSON.stringify(task), "utf8").digest("hex") !== closure.taskEnvelopeDigest) return no("envelope_task_digest");
   const workspaceSource = closure.sourceSet.inputs.find((input): input is Extract<NativePayloadSourceInput, { kind: "workspace_metadata" }> =>
     input.kind === "workspace_metadata" && input.runId === run.id);
-  if (!workspaceSource || workspaceSource.executionWorkspaceId !== parsedExecution.binding.executionWorkspaceId ||
-    !frame.workspace || typeof frame.workspace !== "object" || Array.isArray(frame.workspace) ||
-    !isDeepStrictEqual(frame.workspace, { cwd: parsedExecution.workspace.cwd })) return no("workspace_source");
+  if (!workspaceSource) return no("workspace_source_missing");
+  if (workspaceSource.executionWorkspaceId !== parsedExecution.binding.executionWorkspaceId) return no("workspace_id_mismatch");
+  const workspaceIsSerialized = parsedExecution.provider.kind !== "claude_managed" && parsedExecution.provider.kind !== "aws_agentcore";
   const workspaceTuple = { cwd: parsedExecution.workspace.cwd, repoUrl: parsedExecution.workspace.repoUrl,
     repoRef: parsedExecution.workspace.repoRef, branchName: parsedExecution.workspace.branchName };
+  if (workspaceIsSerialized) {
+    if (!frame.workspace || typeof frame.workspace !== "object" || Array.isArray(frame.workspace)) return no("workspace_frame_missing");
+    if (!isDeepStrictEqual(frame.workspace, { cwd: parsedExecution.workspace.cwd })) return no("workspace_frame_shape");
+  } else if (frame.workspace !== null) return no("workspace_frame_shape");
   if (createHash("sha256").update(JSON.stringify(workspaceTuple), "utf8").digest("hex") !== workspaceSource.contentHash)
     return no("workspace_digest");
   let workspaceProjectId: string | null = null;

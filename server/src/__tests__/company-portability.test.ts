@@ -5,8 +5,8 @@ import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { authUsers, companies, companyMemberships, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, issueRelations, issues, principalPermissionGrants, projectWorkspaces, projects } from "@paperclipai/db";
-import { eq } from "drizzle-orm";
+import { authUsers, companies, companyMemberships, createDb, documentRevisions, documents, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, issueDocuments, issueRelations, issues, principalPermissionGrants, projectWorkspaces, projects } from "@paperclipai/db";
+import { and, eq } from "drizzle-orm";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import type { CompanyPortabilityFileEntry, CompanyPortabilityImportRequest } from "@paperclipai/shared";
 
@@ -926,6 +926,47 @@ describe("company portability", () => {
     } finally {
       await nativeDb.update(companyMemberships).set({ status: "active" })
         .where(eq(companyMemberships.principalId, nativeUserId));
+    }
+  });
+
+  itNative("stops a pending agent import when the current Human loses target membership", async () => {
+    useNativeExportCompany();
+    const portability = companyPortabilityService(nativeDb);
+    const exported = await portability.exportBundle(nativeCompanyId, {
+      include: { company: true, agents: true, projects: false, issues: false, skills: false },
+    }, { actor: nativeActor });
+    agentSvc.list.mockResolvedValue([]);
+    let revoked = false;
+
+    try {
+      await expect(portability.importBundle({
+        source: { type: "inline", rootPath: exported.rootPath, files: exported.files },
+        include: { company: false, agents: true, projects: false, issues: false, skills: false },
+        target: { mode: "existing_company", companyId: nativeCompanyId },
+        agents: "all",
+        collisionStrategy: "rename",
+      }, nativeUserId, {
+        actor: nativeActor,
+        checkCancellation: async () => {
+          if (!revoked) {
+            revoked = true;
+            await nativeDb.delete(companyMemberships).where(and(
+              eq(companyMemberships.companyId, nativeCompanyId),
+              eq(companyMemberships.principalType, "user"),
+              eq(companyMemberships.principalId, nativeUserId),
+            ));
+          }
+          return false;
+        },
+      })).rejects.toMatchObject({ status: 403 });
+      expect(revoked).toBe(true);
+      expect(agentSvc.create).not.toHaveBeenCalled();
+    } finally {
+      await nativeDb.insert(companyMemberships).values({ companyId: nativeCompanyId, principalType: "user",
+        principalId: nativeUserId, status: "active", membershipRole: "owner" }).onConflictDoUpdate({
+        target: [companyMemberships.companyId, companyMemberships.principalType, companyMemberships.principalId],
+        set: { status: "active", membershipRole: "owner" },
+      });
     }
   });
 
@@ -4518,7 +4559,19 @@ describe("company portability", () => {
     );
   });
 
-  function mockTaskFidelityExportSources() {
+  async function mockTaskFidelityExportSources() {
+    const sourceIssueId = nativeSourceUuid("issue", "issue-1");
+    const documentId = nativeSourceUuid("document", "document-1");
+    const revisionId = nativeSourceUuid("revision", "revision-1");
+    await seedNativeBoardTask({ id: sourceIssueId, number: 9001, title: "Alpha task", description: null });
+    await nativeDb.insert(documents).values({ id: documentId, companyId: nativeCompanyId, title: "Spec",
+      format: "markdown", latestBody: "# Spec\n\nDetails.", latestRevisionId: revisionId, latestRevisionNumber: 1,
+      createdByUserId: nativeUserId, updatedByUserId: nativeUserId }).onConflictDoNothing();
+    await nativeDb.insert(documentRevisions).values({ id: revisionId, companyId: nativeCompanyId, documentId,
+      revisionNumber: 1, title: "Spec", format: "markdown", body: "# Spec\n\nDetails.", createdByUserId: nativeUserId })
+      .onConflictDoNothing();
+    await nativeDb.insert(issueDocuments).values({ companyId: nativeCompanyId, issueId: sourceIssueId,
+      documentId, key: "spec" }).onConflictDoNothing();
     projectSvc.list.mockResolvedValue([]);
     projectSvc.listWorkspaces.mockResolvedValue([]);
     issueSvc.list.mockResolvedValue([
@@ -4590,7 +4643,7 @@ describe("company portability", () => {
             title: "Spec",
             format: "markdown",
             body: "# Spec\n\nDetails.",
-            latestRevisionId: "revision-1",
+            latestRevisionId: nativeSourceUuid("revision", "revision-1"),
             latestRevisionNumber: 1,
           },
         ]
@@ -4650,7 +4703,7 @@ describe("company portability", () => {
   it("carries blockers, documents, work products, and monitors through export and import", async () => {
     const { monitorUpdates } = fakeImportDb();
     const portability = currentHumanExportPortability();
-    mockTaskFidelityExportSources();
+    await mockTaskFidelityExportSources();
 
     const exported = await portability.exportBundle(nativeCompanyId, {
       include: { company: true, agents: false, projects: false, issues: true },
@@ -4804,7 +4857,7 @@ describe("company portability", () => {
   it("skips blockers and documents of tasks excluded from the import selection", async () => {
     const { db, insertedRelationValues } = fakeImportDb();
     const portability = currentHumanExportPortability();
-    mockTaskFidelityExportSources();
+    await mockTaskFidelityExportSources();
 
     const exported = await portability.exportBundle(nativeCompanyId, {
       include: { company: true, agents: false, projects: false, issues: true },
@@ -4938,6 +4991,9 @@ describe("company portability", () => {
     expect(extension).not.toContain("issue-outside");
 
     const importedCompanyId = "f2bd2ca4-1ac8-4e75-9ea8-f54a8a0fa3a8";
+    await nativeDb.insert(companies).values({ id: importedCompanyId, name: "Imported hierarchy target", issuePrefix: "IMP" }).onConflictDoNothing();
+    await nativeDb.insert(companyMemberships).values({ companyId: importedCompanyId, principalType: "user",
+      principalId: nativeUserId, status: "active", membershipRole: "owner" }).onConflictDoNothing();
     companySvc.create.mockResolvedValue({ id: importedCompanyId, name: "Imported" });
     accessSvc.ensureMembership.mockResolvedValue(undefined);
     agentSvc.list.mockResolvedValue([]);
@@ -5710,7 +5766,7 @@ describe("company portability", () => {
   });
 
   it("imports a legacy package carrying the retired brand color and attachment limit", async () => {
-    const portability = companyPortabilityService({} as any);
+    const portability = companyPortabilityService(nativeDb);
 
     companySvc.create.mockResolvedValue({ id: "company-imported", name: "Legacy Import" });
     accessSvc.ensureMembership.mockResolvedValue(undefined);

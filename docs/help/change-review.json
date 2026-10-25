@@ -413,10 +413,10 @@
     {
       "source": "server/src/services/memory/memory-privacy.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "26a3946bd9e417b1823b266365edf93b1212233230d14ca9981d9857c40bdc4e",
-      "articleSha256": "f4a921bd0683d97d5d7c4cb8ef15a1af9494d6df8ec6bf4cf366ede6da2771cb",
-      "decision": "no_change",
-      "rationale": "Reviewed bounded callback-local paused safe-test Memory admission: selected original sources retain current Human and transitive source checks. Export contents, private-share approval, recipient access and deletion guidance are unchanged."
+      "sourceSha256": "f467a374b56bdb4c5f2547321dfc1cb1c9fd55a23acf530800b20fe3f4cafc72",
+      "articleSha256": "c1dc8377806263baff1cd3fbddc16c2f0e68c6afb3dbcd48ebbf3bf8099b31df",
+      "decision": "updated",
+      "rationale": "Reviewed source erasure for saved outputs: deleting a source removes copied text from results that used it, while independent person-authored tasks and documents remain. The paired Help article now explains both outcomes."
     },
     {
       "source": "ui/src/pages/SaasBilling.tsx",
@@ -1149,10 +1149,10 @@
     {
       "source": "server/src/services/memory/memory-privacy.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "26a3946bd9e417b1823b266365edf93b1212233230d14ca9981d9857c40bdc4e",
-      "articleSha256": "0deb4c9a8300bff2bfc69e3bd20d6e0478909ec6ceece03fe50cf2bef856ee01",
-      "decision": "no_change",
-      "rationale": "Reviewed bounded callback-local paused safe-test Memory admission: selected original sources retain current Human and transitive source checks. Export contents, private-share approval, recipient access and deletion guidance are unchanged."
+      "sourceSha256": "f467a374b56bdb4c5f2547321dfc1cb1c9fd55a23acf530800b20fe3f4cafc72",
+      "articleSha256": "97e45e5e71a15f914ce5b3bfb5f092534f52f63bb01529c3c7b28e62743b05b5",
+      "decision": "updated",
+      "rationale": "Reviewed source erasure for saved outputs: deleting a source removes copied text from results that used it, while independent person-authored tasks and documents remain. The paired Help article now explains both outcomes."
     },
     {
       "source": "ui/src/pages/SaasBilling.tsx",
