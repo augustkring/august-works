@@ -158,7 +158,9 @@ const support = await getEmbeddedPostgresTestSupport();
       price: ModelTariffCeiling | null,
       currentHash: string,
       supportFunding: CompanyPurposeFunding | null,
+      jevFunding: CompanyPurposeFunding | null,
       supportAuthorityHash: string,
+      jevAuthorityHash: string,
       supportAuthorityResponses: string[] | null,
       supportPackageVersionId: string,
       lateProofEnabled: boolean,
@@ -240,10 +242,13 @@ const support = await getEmbeddedPostgresTestSupport();
       price = tariff();
       currentHash = authorityHash;
       supportAuthorityHash = authorityHash;
+      jevAuthorityHash = authorityHash;
       supportAuthorityResponses = null;
       lateProofEnabled = false;
       lateProofAccountMismatch = false;
       supportFunding = makeSupportFunding(f.home);
+      jevFunding = null;
+      jevFunding = null;
       const [task] = await db
         .insert(issues)
         .values({
@@ -272,10 +277,11 @@ const support = await getEmbeddedPostgresTestSupport();
         sourceSha,
         qualifiedTariff: async () => price,
         currentAuthority: async () => currentHash,
-        qualifiedCompanyPurposeFunding: () => supportFunding,
+        qualifiedCompanyPurposeFunding: ({ purpose }) => purpose === "decision_skill_suggestion" ? jevFunding : supportFunding,
         firstPartySupportVersionId: supportPackageVersionId,
-        currentCompanyPurposeAuthority: async () =>
-          supportAuthorityResponses?.shift() ?? supportAuthorityHash,
+        currentCompanyPurposeAuthority: async (_tx, _actor, input) => input.purpose === "decision_skill_suggestion"
+          ? jevAuthorityHash
+          : supportAuthorityResponses?.shift() ?? supportAuthorityHash,
         reconcileCompanyPurposeOutcome: async (_tx, { reservation, funding }) => lateProofEnabled ? ({
           companyId: reservation.companyId,
           reservationId: reservation.id,
@@ -335,6 +341,18 @@ const support = await getEmbeddedPostgresTestSupport();
         maxCalls: 10,
         tariff: { ...tariff(), expiresAt: new Date(Date.now() + 60 * 60_000).toISOString() },
         ...overrides,
+      };
+      const { profileHash: _profileHash, ...immutable } = base;
+      return { ...base, profileHash: nativeSha256(immutable) };
+    };
+    const makeJevFunding = (companyId: string, overrides: Partial<CompanyPurposeFunding> = {}): CompanyPurposeFunding => {
+      const base = {
+        companyId, purpose: "decision_skill_suggestion" as const, funder: "company_connection" as const,
+        profileId: "fixture-jev-skill-profile", profileHash: "f".repeat(64), providerAccountId: "fixture-company-openrouter-account",
+        credentialBindingHash: "a".repeat(64), periodKey: "fixture-jev-period", periodStartsAt: new Date(Date.now() - 60_000).toISOString(),
+        periodEndsAt: new Date(Date.now() + 60 * 60_000).toISOString(), maxCostMinor: 5, maxCalls: 3,
+        tariff: { ...tariff(), provider: "openrouter" as const, model: "typesafe/jev-1.13", inputMinorPerMillion: 1000, outputMinorPerMillion: 1000,
+          expiresAt: new Date(Date.now() + 60 * 60_000).toISOString() }, ...overrides,
       };
       const { profileHash: _profileHash, ...immutable } = base;
       return { ...base, profileHash: nativeSha256(immutable) };
@@ -584,6 +602,31 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(await db.select().from(orchestrationCompanyPurposeBudgets).where(eq(orchestrationCompanyPurposeBudgets.companyId, f.home))).toHaveLength(0);
       expect(await db.select().from(orchestrationCompanyPurposeReservations).where(eq(orchestrationCompanyPurposeReservations.companyId, f.home))).toHaveLength(0);
       expect(await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.companyId, f.home))).toHaveLength(0);
+    });
+    it("admits only the registered Jev Skill purpose through the same taskless budget owner without a Support package pin", async () => {
+      const broker = service(), requestInput = { ...supportRequest("jev-setup-sample"), purpose: "decision_skill_suggestion" as const };
+      jevFunding = null;
+      await expect(broker.reserveCompanyPurpose(f.actor, requestInput)).rejects.toMatchObject({ status: 403 });
+      jevFunding = makeJevFunding(f.home, { maxCalls: 1 });
+      const invalidFunding = makeJevFunding(f.home, { funder: "blentera_platform" as "company_connection" });
+      jevFunding = invalidFunding;
+      await expect(broker.reserveCompanyPurpose(f.actor, requestInput)).rejects.toThrow();
+      expect(await db.select().from(orchestrationCompanyPurposeBudgets).where(eq(orchestrationCompanyPurposeBudgets.companyId, f.home))).toHaveLength(0);
+      jevFunding = makeJevFunding(f.home, { maxCalls: 1 });
+      const outcomes = await Promise.allSettled([
+        broker.reserveCompanyPurpose(f.actor, { ...requestInput, idempotencyKey: "jev-setup-one" }),
+        broker.reserveCompanyPurpose(f.actor, { ...requestInput, idempotencyKey: "jev-setup-two" }),
+      ]);
+      expect(outcomes.filter(item => item.status === "fulfilled")).toHaveLength(1);
+      expect(outcomes.filter(item => item.status === "rejected")).toHaveLength(1);
+      const [reservation] = await db.select().from(orchestrationCompanyPurposeReservations).where(eq(orchestrationCompanyPurposeReservations.companyId, f.home));
+      const [budget] = await db.select().from(orchestrationCompanyPurposeBudgets).where(eq(orchestrationCompanyPurposeBudgets.companyId, f.home));
+      expect(reservation).toMatchObject({ purpose: "decision_skill_suggestion", packageVersionId: null, status: "reserved" });
+      expect(budget).toMatchObject({ purpose: "decision_skill_suggestion", funder: "company_connection", reservedCalls: 1, maxCalls: 1, reservedMinor: 1, maxCostMinor: 5 });
+      await broker.claimCompanyPurposeForDispatch(f.actor, f.home, reservation!.id);
+      await broker.recordCompanyPurposeOutcome(f.home, reservation!.id, { status: "unknown", providerResponseHash: null, usage: null });
+      expect((await db.select().from(orchestrationCompanyPurposeReservations).where(eq(orchestrationCompanyPurposeReservations.id, reservation!.id)))[0]).toMatchObject({ status: "unknown", purpose: "decision_skill_suggestion" });
+      expect((await db.select().from(orchestrationCompanyPurposeBudgets).where(eq(orchestrationCompanyPurposeBudgets.id, budget!.id)))[0]).toMatchObject({ reservedMinor: 1, reservedCalls: 1 });
     });
     it("serializes concurrent platform budget-profile creation and rejects overlapping period keys", async () => {
       // Synthetic operator rows exercise only the native database budget guard.

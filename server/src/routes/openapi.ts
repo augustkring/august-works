@@ -176,6 +176,8 @@ import {
   resolveBudgetIncidentSchema,
   // Sidebar
   upsertSidebarOrderPreferenceSchema,
+  setPreferredCoworkerPreferenceSchema,
+  preferredCoworkerPreferenceSchema,
   // Announcements
   announcementIdSchema,
   announcementSchema,
@@ -1418,6 +1420,7 @@ const BOARD_ONLY_OPERATIONS = new Set([
   "PUT /api/companies/{companyId}/ai-connections/default",
   "GET /api/companies/{companyId}/ai-connections/{connectionId}/active-runs",
   "GET /api/companies/{companyId}/ai-connections/login/{sessionId}",
+  "POST /api/companies/import/jobs/{jobId}/cancel",
 
   "GET /api/companies/{companyId}/project-repositories",
   "PUT /api/projects/{id}/repositories",
@@ -2211,6 +2214,14 @@ function registerV4Operation(method: string, path: string, summary: string, para
   });
 }
 const v4CompanyParams = z.object({ companyId: z.string().uuid() });
+const jevDecisionBase = "/api/companies/{companyId}/jev-decisions";
+registerV4Operation("get", jevDecisionBase, "Read optional Jev Skill-decision settings and eligible company OpenRouter connections", v4CompanyParams, { board: true });
+registerV4Operation("put", jevDecisionBase, "Save disabled-by-default Jev Skill-decision settings", v4CompanyParams, { board: true,
+  body: z.object({ mode: z.enum(["off", "shadow", "suggestions"]), allowBackground: z.boolean().optional(), connectionId: z.string().uuid().nullable(), grantId: z.string().uuid().nullable() }).strict() });
+registerV4Operation("post", `${jevDecisionBase}/test`, "Run one disclosed, capped Jev connection setup sample", v4CompanyParams, { board: true,
+  body: z.object({ disclosedPaidTestConsent: z.literal(true) }).strict(), description: "Uses a fixed harmless sample and the selected shared company OpenRouter account. Requires a current operator-qualified Jev profile, current company processing policy and current connection-manager authority. It does not enable background work or qualify Skill suggestions." });
+registerV4Operation("get", `${jevDecisionBase}/history`, "Read recent Jev setup-test reservation and usage history", v4CompanyParams, { board: true,
+  description: "Returns bounded purpose-specific reservation ceilings and token usage. It does not claim provider billing settlement." });
 registerV4Operation("post", "/api/companies/{companyId}/workflow-authoring", "Author a workflow draft with the current Native run's typed SDK", v4CompanyParams, {
   body: workflowAuthoringApiCommandSchema,
   description: "Use create_workflow, add_trigger, add_step and connect_steps to save an explicit typed draft, then inspect its Original revision. Each mutation requires the exact current draft revision and current workflows:edit authority intersected with the actual responsible user. Requires a running Native Agent JWT and all existing AI authoring feature gates. test_step validates only; prepare_publish returns a Human publication request. This endpoint cannot publish, execute, grant access or replace a whole graph. After saving, return the workflow link for Human review, access, test and publish.",
@@ -6423,6 +6434,27 @@ registry.registerPath({
   responses: { 200: r.ok(), 400: r.badRequest, 401: r.unauthorized },
 });
 
+registry.registerPath({
+  method: "get",
+  path: "/api/companies/{companyId}/sidebar-preferences/preferred-coworker/me",
+  tags: ["sidebar"],
+  summary: "Get the current user's preferred Co-worker for a company",
+  request: { params: z.object({ companyId: z.string() }) },
+  responses: { 200: r.ok(preferredCoworkerPreferenceSchema), 401: r.unauthorized, 403: r.forbidden },
+});
+
+registry.registerPath({
+  method: "put",
+  path: "/api/companies/{companyId}/sidebar-preferences/preferred-coworker/me",
+  tags: ["sidebar"],
+  summary: "Set or clear the current user's preferred Co-worker for a company",
+  request: {
+    params: z.object({ companyId: z.string() }),
+    body: jsonBody(setPreferredCoworkerPreferenceSchema),
+  },
+  responses: { 200: r.ok(preferredCoworkerPreferenceSchema), 400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound },
+});
+
 // ─── Announcements ───────────────────────────────────────────────────────────
 
 const announcementResponseHeaders = {
@@ -9885,7 +9917,7 @@ registerCurrentRoute({
   summary: "Revoke a board API key",
 });
 
-registry.registerPath({
+registerCurrentRoute({
   method: "get",
   path: "/api/companies/import/jobs/{jobId}",
   tags: ["companies"],
@@ -9895,7 +9927,6 @@ registry.registerPath({
     "tenant identity from the async import submission. Any other caller gets the same 404 as an " +
     "unknown id. Job identity and status are durable. Full result detail is process-local and may " +
     "expire; an interrupted job requires reconciliation rather than automatic replay.",
-  request: { params: z.object({ jobId: z.string() }) },
   responses: {
     200: r.ok(),
     400: r.badRequest,
@@ -9910,8 +9941,7 @@ registerCurrentRoute({
   tags: ["companies"],
   summary: "Request cancellation of a company import",
   description: "Cancellation before import effects start is confirmed immediately. Once effects begin, the native portability owner checks safe checkpoints; completed effects are not rolled back, and an interrupted partial result remains inconclusive until reconciled.",
-  request: { params: z.object({ jobId: z.string() }) },
-  responses: { 200: r.ok(), 401: r.unauthorized, 404: r.notFound },
+  responses: { 200: r.ok(), 401: r.unauthorized, 403: r.forbidden, 404: r.notFound },
 });
 
 for (const route of [

@@ -10232,6 +10232,8 @@ export function issueRoutes(
     const docs = await documentsSvc.listIssueDocuments(issue.id, {
       includeSystem: req.query.includeSystem === "true",
     });
+    const currentIssue = await svc.getById(issue.id);
+    if (!currentIssue || !(await assertIssueReadAllowed(req, res, currentIssue))) return;
     res.json(docs);
   });
 
@@ -10261,6 +10263,8 @@ export function issueRoutes(
       issue.id,
       keyParsed.data,
     );
+    const currentIssue = await svc.getById(issue.id);
+    if (!currentIssue || !(await assertIssueReadAllowed(req, res, currentIssue))) return;
     if (!doc) {
       res.status(404).json({ error: "Document not found" });
       return;
@@ -10885,6 +10889,8 @@ export function issueRoutes(
       issue.id,
       keyParsed.data,
     );
+    const currentIssue = await svc.getById(issue.id);
+    if (!currentIssue || !(await assertIssueReadAllowed(req, res, currentIssue))) return;
     res.json(revisions);
   });
 

@@ -58,13 +58,15 @@ import { visibleIssueCondition } from "./issue-visibility.js";
 import { createGitRemoteAuthProvider } from "./git-credentials.js";
 import { GIT_CACHE_RESTORATION_KEY } from "./git-workspace-restoration.js";
 import {
+  createGitWorkspaceCleanupProof,
   assertReproducibleManagedCheckout,
   inspectGitCacheRecipe,
   readGitCacheRestoration,
   restoreManagedGitCacheWorktree,
+  verifyRemoteGitCommit,
   type GitCacheRestoration,
 } from "./git-workspace-restoration.js";
-import { readManagedCheckoutContents, type ManagedCheckoutContents } from "./git-workspace-contents.js";
+import { assertGitWorkspaceContentsUnchanged, readManagedCheckoutContents, type ManagedCheckoutContents } from "./git-workspace-contents.js";
 import { managedProjectCheckoutName } from "./managed-project-checkout-name.js";
 import { localRepositoryPath } from "./local-repository-path.js";
 import { readProjectWorkspaceRuntimeConfig } from "./project-workspace-runtime-config.js";
@@ -84,6 +86,62 @@ type ExecutionWorkspaceRow = typeof executionWorkspaces.$inferSelect;
 type WorkspaceRuntimeServiceRow = typeof workspaceRuntimeServices.$inferSelect;
 type RuntimeServiceReadDb = Pick<Db, "select">;
 type DbTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
+async function currentExecutionWorkspaceSourceAllowed(input: {
+  tx: DbTransaction;
+  workspace: ExecutionWorkspaceRow;
+  issueId: string;
+  actor: AuthorizationActor;
+}) {
+  const { tx, workspace, issueId, actor } = input;
+  if (actor.type === "none") return false;
+  const sourceWorkspace = workspace.projectWorkspaceId
+    ? await tx.select().from(projectWorkspaces).where(and(
+      eq(projectWorkspaces.companyId, workspace.companyId), eq(projectWorkspaces.id, workspace.projectWorkspaceId),
+    )).for("share").then(rows => rows[0] ?? null)
+    : null;
+  if (workspace.projectId) {
+    if (!sourceWorkspace || sourceWorkspace.projectId !== workspace.projectId
+      || sourceWorkspace.repoUrl !== workspace.repoUrl
+      || (sourceWorkspace.repoRef !== null && sourceWorkspace.repoRef !== workspace.baseRef)) return false;
+  } else if (workspace.projectWorkspaceId || workspace.repoUrl) return false;
+  if (workspace.strategyType === "git_worktree" && !workspace.repoUrl && !sourceWorkspace?.cwd) return false;
+
+  const issueIds = [...new Set([issueId, ...(workspace.sourceIssueId ? [workspace.sourceIssueId] : [])])];
+  return authorizationService(tx).withReadSources(workspace.companyId, issueIds,
+    workspace.projectId ? [workspace.projectId] : [], async owner => {
+      let sourceActor = actor;
+      if (actor.type === "board" && actor.source !== "local_implicit") {
+        const pinned = await pinCurrentBoardActor(tx, actor);
+        if (!pinned) return false;
+        sourceActor = pinned.actor;
+      }
+      const issueRows = await tx.select().from(issues).where(and(
+        eq(issues.companyId, workspace.companyId), inArray(issues.id, issueIds),
+      )).for("share");
+      const byId = new Map(issueRows.map(current => [current.id, current]));
+      const target = byId.get(issueId);
+      if (!target || target.executionWorkspaceId !== workspace.id || target.projectId !== workspace.projectId
+        || (target.projectWorkspaceId && target.projectWorkspaceId !== workspace.projectWorkspaceId)) return false;
+      if (workspace.sourceIssueId && !byId.has(workspace.sourceIssueId)) return false;
+      if (workspace.projectId) {
+        const [project] = await tx.select({ id: projects.id, companyId: projects.companyId }).from(projects).where(and(
+          eq(projects.companyId, workspace.companyId), eq(projects.id, workspace.projectId),
+        )).for("share");
+        if (!project || !(await owner.decide({ actor: sourceActor, action: "project:read",
+          resource: { type: "project", companyId: workspace.companyId, projectId: workspace.projectId } })).allowed) return false;
+      }
+      const { assertAnalyticalContextPayloadAccess } = await import("./analytical-context-authority.js");
+      for (const current of issueIds.map(id => byId.get(id)!)) {
+        const decision = await owner.decide({ actor: sourceActor, action: "issue:read",
+          resource: { type: "issue", companyId: current.companyId, issueId: current.id, projectId: current.projectId,
+            parentIssueId: current.parentId, assigneeAgentId: current.assigneeAgentId, assigneeUserId: current.assigneeUserId,
+            originKind: current.originKind, originId: current.originId, status: current.status } });
+        if (!decision.allowed) return false;
+        await assertAnalyticalContextPayloadAccess(tx as unknown as Db, workspace.companyId, sourceActor, { issueId: current.id });
+      }
+      return true;
+    });
+}
 const execFileAsync = promisify(execFile);
 const TERMINAL_ISSUE_STATUSES = new Set(["done", "cancelled"]);
 
@@ -3036,6 +3094,110 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
     // the row in the issue scope, rebuilds the worktree, and only then publishes
     // the row as "active". A rebuild failure keeps the row closed and returns an
     // error, so the caller never dispatches a run against a broken workspace.
+    prepareGitWorkspaceCleanupProof: async (input: {
+      workspaceId: string;
+      actor: AuthorizationActor;
+    }) => {
+      if (input.actor.type === "none") return null;
+      const row = await db.select().from(executionWorkspaces)
+        .where(eq(executionWorkspaces.id, input.workspaceId)).then(rows => rows[0] ?? null);
+      if (!row || row.providerType !== "git_worktree" || row.strategyType !== "git_worktree"
+        || row.mode !== "isolated_workspace" || !row.projectId || !row.projectWorkspaceId
+        || !row.sourceIssueId || !row.cwd || !row.repoUrl || !row.branchName) return null;
+      const authorizeCurrentWorkspace = async () => db.transaction(async tx => {
+        const [fresh] = await tx.select().from(executionWorkspaces)
+          .where(and(eq(executionWorkspaces.id, row.id), eq(executionWorkspaces.companyId, row.companyId))).for("share");
+        if (!fresh || fresh.status !== "archived" || fresh.projectId !== row.projectId
+          || fresh.projectWorkspaceId !== row.projectWorkspaceId || fresh.repoUrl !== row.repoUrl
+          || fresh.sourceIssueId !== row.sourceIssueId || fresh.cwd !== row.cwd || fresh.providerRef !== row.providerRef
+          || fresh.branchName !== row.branchName
+          || readExecutionWorkspaceLifecycleGeneration(fresh.metadata as Record<string, unknown> | null)
+            !== readExecutionWorkspaceLifecycleGeneration(row.metadata as Record<string, unknown> | null)
+          || !isRuntimeOwnedGitBranch(fresh.metadata as Record<string, unknown> | null)) throw new Error("workspace_source_changed");
+        if (!(await currentExecutionWorkspaceSourceAllowed({ tx, workspace: fresh, issueId: row.sourceIssueId!, actor: input.actor }))) {
+          throw new Error("workspace_source_access_revoked");
+        }
+      });
+      await authorizeCurrentWorkspace();
+      const sourceRows = await db.select().from(projectWorkspaces)
+        .where(and(eq(projectWorkspaces.companyId, row.companyId), eq(projectWorkspaces.projectId, row.projectId)));
+      const authorizeNestedSource = async (source: { id: string; repoUrl: string; repoRef: string | null; cwd: string | null; sourceType: string; visibility: string }) => {
+        await authorizeCurrentWorkspace();
+        const current = await db.select().from(projectWorkspaces)
+          .where(and(eq(projectWorkspaces.id, source.id), eq(projectWorkspaces.companyId, row.companyId)))
+          .then(rows => rows[0] ?? null);
+        if (!current || current.projectId !== row.projectId || current.repoUrl !== source.repoUrl
+          || current.repoRef !== source.repoRef || current.cwd !== source.cwd || current.sourceType !== source.sourceType
+          || current.visibility !== source.visibility) throw new Error("workspace_nested_source_changed");
+      };
+      const gitAuth = createGitRemoteAuthProvider(db, row.companyId, {
+        issueId: row.sourceIssueId, heartbeatRunId: input.actor.type === "agent" ? input.actor.runId : null,
+        responsibleUserId: input.actor.type === "board" ? input.actor.userId ?? null : input.actor.onBehalfOfUserId ?? null,
+        agentId: input.actor.type === "agent" ? input.actor.agentId : null,
+      });
+      let baseCwd = (await db.select().from(projectWorkspaces)
+        .where(and(eq(projectWorkspaces.id, row.projectWorkspaceId), eq(projectWorkspaces.companyId, row.companyId)))
+        .then(rows => rows[0]?.cwd ?? null));
+      if (!baseCwd) {
+        const { ensureManagedProjectWorkspace } = await import("./heartbeat.js");
+        baseCwd = (await ensureManagedProjectWorkspace({ companyId: row.companyId, projectId: row.projectId,
+          repoUrl: row.repoUrl, beforeUse: authorizeCurrentWorkspace, beforePublish: authorizeCurrentWorkspace,
+          strictSourceAuth: true, resolveGitAuth: gitAuth })).cwd;
+      }
+      const workspace = { ...row, sourceRepoRef: sourceRows.find(source => source.id === row.projectWorkspaceId)?.repoRef ?? null,
+        sourceCwd: sourceRows.find(source => source.id === row.projectWorkspaceId)?.cwd ?? null,
+        sourceType: sourceRows.find(source => source.id === row.projectWorkspaceId)?.sourceType ?? null,
+        sourceVisibility: sourceRows.find(source => source.id === row.projectWorkspaceId)?.visibility ?? null,
+        metadata: row.metadata as Record<string, unknown> | null };
+      const byCheckout = new Map(sourceRows.filter(source => source.repoUrl).map(source => [
+        managedProjectCheckoutName({ id: source.id, repoUrl: source.repoUrl!, repoRef: source.repoRef, cwd: source.cwd }), source,
+      ]));
+      const inspectCurrentRecipe = async () => {
+        const currentManagedCheckouts: ManagedCheckoutContents[] = [];
+        const currentRecipe = await inspectGitCacheRecipe(workspace, gitAuth, undefined, {
+        managedCheckouts: currentManagedCheckouts,
+        proveManagedCheckout: async (checkoutPath, name, signal) => {
+          const source = byCheckout.get(name);
+          if (!source?.repoUrl) throw new Error("workspace_nested_source_missing");
+          const identity = { id: source.id, repoUrl: source.repoUrl, repoRef: source.repoRef, cwd: source.cwd,
+            sourceType: source.sourceType, visibility: source.visibility };
+          await authorizeNestedSource(identity);
+          await assertReproducibleManagedCheckout(checkoutPath, { repoUrl: source.repoUrl, resolveGitAuth: gitAuth, signal });
+          currentManagedCheckouts.push(await readManagedCheckoutContents(checkoutPath, name, identity, signal));
+        },
+      });
+        return { recipe: currentRecipe, checkouts: currentManagedCheckouts };
+      };
+      const { recipe } = await inspectCurrentRecipe();
+      await authorizeCurrentWorkspace();
+      const [savedRecipe] = await db.update(executionWorkspaces).set({ metadata: { ...((row.metadata as Record<string, unknown> | null) ?? {}),
+        [GIT_CACHE_RESTORATION_KEY]: recipe }, updatedAt: new Date() })
+        .where(and(eq(executionWorkspaces.id, row.id), eq(executionWorkspaces.companyId, row.companyId), eq(executionWorkspaces.status, "archived")))
+        .returning({ id: executionWorkspaces.id });
+      if (!savedRecipe) throw new Error("workspace_archive_state_changed");
+      return createGitWorkspaceCleanupProof(recipe, async (boundary) => {
+        await authorizeCurrentWorkspace();
+        if (boundary !== "before_branch_delete") {
+          const live = await inspectCurrentRecipe();
+          if (live.recipe.commit !== recipe.commit || live.recipe.branchName !== recipe.branchName
+            || live.recipe.sourcePath !== recipe.sourcePath || live.recipe.worktreePath !== recipe.worktreePath) {
+            throw new Error("workspace_recipe_changed");
+          }
+          await assertGitWorkspaceContentsUnchanged(row.cwd!, { companyId: row.companyId, workspaceId: row.id },
+            recipe.contents, live.checkouts);
+        } else {
+          const branchTip = (await gitCacheCommand(baseCwd!, ["rev-parse", `refs/heads/${recipe.branchName}`])).trim();
+          if (branchTip !== recipe.commit) throw new Error("workspace_branch_tip_changed");
+        }
+        await authorizeCurrentWorkspace();
+        await verifyRemoteGitCommit(row.repoUrl!, recipe.commit, gitAuth);
+        for (const checkout of recipe.contents?.checkouts ?? []) {
+          await authorizeNestedSource(checkout.source);
+          await verifyRemoteGitCommit(checkout.source.repoUrl, checkout.commit, gitAuth);
+        }
+      });
+    },
+
     reopenClosedIsolatedExecutionWorkspaceForIssue: async (input: {
       workspaceId: string;
       issue: { id: string; companyId: string; projectId: string | null };
@@ -3072,64 +3234,7 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
           return { ok: false, code: "not_reopenable", message: "Execution workspace is not reopenable" };
         }
 
-        const currentSourceAllowed = async () => {
-          if (actor.type === "none") return false;
-          const sourceWorkspace = row.projectWorkspaceId
-            ? await tx.select().from(projectWorkspaces).where(and(
-              eq(projectWorkspaces.companyId, row.companyId),
-              eq(projectWorkspaces.id, row.projectWorkspaceId),
-            )).for("share").then(rows => rows[0] ?? null)
-            : null;
-          if (row.projectId) {
-            if (!sourceWorkspace || sourceWorkspace.projectId !== row.projectId
-              || sourceWorkspace.repoUrl !== row.repoUrl
-              || (sourceWorkspace.repoRef !== null && sourceWorkspace.repoRef !== row.baseRef)) return false;
-          } else if (row.projectWorkspaceId || row.repoUrl) {
-            return false;
-          }
-          if (row.strategyType === "git_worktree" && !row.repoUrl && !sourceWorkspace?.cwd) return false;
-
-          const issueIds = [...new Set([issue.id, ...(row.sourceIssueId ? [row.sourceIssueId] : [])])];
-          const projectIds = row.projectId ? [row.projectId] : [];
-          return authorizationService(tx).withReadSources(row.companyId, issueIds, projectIds, async owner => {
-            let sourceActor = actor;
-            if (actor.type === "board" && actor.source !== "local_implicit") {
-              const pinned = await pinCurrentBoardActor(tx, actor);
-              if (!pinned) return false;
-              sourceActor = pinned.actor;
-            }
-            const issueRows = await tx.select().from(issues).where(and(
-              eq(issues.companyId, row.companyId),
-              inArray(issues.id, issueIds),
-            )).for("share");
-            const byId = new Map(issueRows.map(current => [current.id, current]));
-            const target = byId.get(issue.id);
-            if (!target || target.executionWorkspaceId !== row.id || target.projectId !== row.projectId
-              || (target.projectWorkspaceId && target.projectWorkspaceId !== row.projectWorkspaceId)) return false;
-            if (row.sourceIssueId && !byId.has(row.sourceIssueId)) return false;
-
-            if (row.projectId) {
-              const [project] = await tx.select({ id: projects.id, companyId: projects.companyId }).from(projects).where(and(
-                eq(projects.companyId, row.companyId), eq(projects.id, row.projectId),
-              )).for("share");
-              if (!project) return false;
-              const decision = await owner.decide({ actor: sourceActor, action: "project:read",
-                resource: { type: "project", companyId: row.companyId, projectId: row.projectId } });
-              if (!decision.allowed) return false;
-            }
-            for (const current of issueIds.map(id => byId.get(id)!)) {
-              const decision = await owner.decide({ actor: sourceActor, action: "issue:read",
-                resource: { type: "issue", companyId: current.companyId, issueId: current.id,
-                  projectId: current.projectId, parentIssueId: current.parentId,
-                  assigneeAgentId: current.assigneeAgentId, assigneeUserId: current.assigneeUserId,
-                  originKind: current.originKind, originId: current.originId, status: current.status } });
-              if (!decision.allowed) return false;
-              const { assertAnalyticalContextPayloadAccess } = await import("./analytical-context-authority.js");
-              await assertAnalyticalContextPayloadAccess(tx as unknown as Db, row.companyId, sourceActor, { issueId: current.id });
-            }
-            return true;
-          });
-        };
+        const currentSourceAllowed = () => currentExecutionWorkspaceSourceAllowed({ tx, workspace: row, issueId: issue.id, actor });
         const requireCurrentSource = async () => {
           if (!(await currentSourceAllowed())) throw new Error("Current execution workspace source access is unavailable");
         };

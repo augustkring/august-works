@@ -22,6 +22,7 @@ export const SUPPORTED_MCP_PROTOCOL_VERSIONS = new Set([
   "2025-11-25",
   "2025-06-18",
   "2025-03-26",
+  "2024-11-05",
 ]);
 
 /** Select a mutually supported revision for a server-side initialize response. */
@@ -82,7 +83,7 @@ export async function initializeMcpHttpSession(input: {
       params: {
         protocolVersion: MCP_PROTOCOL_VERSION,
         capabilities: {},
-        clientInfo: { name: "paperclip", version: "1" },
+        clientInfo: { name: "blentera", version: "1" },
       },
     }),
   });

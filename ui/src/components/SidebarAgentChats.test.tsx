@@ -7,12 +7,16 @@ import type { Agent } from "@paperclipai/shared";
 import { SidebarAgentChats } from "./SidebarAgentChats";
 import { queryKeys } from "@/lib/queryKeys";
 
-const state = vi.hoisted(() => ({ companyId: "company-a", navigate: vi.fn(), closeSidebar: vi.fn(), list: vi.fn() }));
+const state = vi.hoisted(() => ({ companyId: "company-a", navigate: vi.fn(), closeSidebar: vi.fn(), list: vi.fn(), getPreferred: vi.fn(), setPreferred: vi.fn() }));
 vi.mock("@/context/CompanyContext", () => ({ useCompany: () => ({ selectedCompanyId: state.companyId }) }));
 vi.mock("@/context/SidebarContext", () => ({ useSidebar: () => ({ isMobile: true, setSidebarOpen: state.closeSidebar }) }));
 vi.mock("@/lib/router", () => ({ useLocation: () => ({ pathname: "/A/dashboard" }), useNavigate: () => state.navigate }));
 vi.mock("@/api/agents", () => ({ agentsApi: { list: state.list } }));
 vi.mock("@/api/auth", () => ({ authApi: { getSession: () => ({ user: { id: "user-a" } }) } }));
+vi.mock("@/api/sidebarPreferences", () => ({ sidebarPreferencesApi: {
+  getPreferredCoworker: state.getPreferred,
+  updatePreferredCoworker: state.setPreferred,
+} }));
 vi.mock("@/hooks/useResourceMemberships", () => ({
   useResourceMemberships: () => ({ data: { starredAgentIds: [] } }),
   useResourceMembershipMutation: () => ({ mutate: vi.fn() }),
@@ -36,6 +40,8 @@ beforeEach(() => {
   state.companyId = "company-a";
   state.navigate.mockClear();
   state.closeSidebar.mockClear();
+  state.getPreferred.mockResolvedValue({ agentId: null, updatedAt: null });
+  state.setPreferred.mockImplementation(async (_company: string, input: { agentId: string | null }) => ({ agentId: input.agentId, updatedAt: null }));
   client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   client.setQueryData(queryKeys.auth.session, { user: { id: "user-a" } });
   client.setQueryData(queryKeys.agents.list("company-a"), [agent("alice", "company-a"), agent("never-visited", "company-a")]);
@@ -81,5 +87,26 @@ describe("SidebarAgentChats", () => {
     state.companyId = "company-a";
     await render();
     expect(document.querySelector("[role=dialog]")).toBeNull();
+  });
+
+  it("saves a company-specific preferred Co-worker and routes Ask Blentera to it", async () => {
+    await render();
+    await openPicker();
+    const preference = document.querySelector<HTMLSelectElement>("#preferred-coworker")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(preference, "alice");
+      preference.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(state.setPreferred).toHaveBeenCalledWith("company-a", { agentId: "alice" });
+    await act(async () => {
+      document.dispatchEvent(new Event("paperclip:ask-generalist"));
+    });
+    expect(state.navigate).toHaveBeenCalledWith("/chats/alice");
+  });
+
+  it("opens the Co-worker chooser for Ask Blentera when no preference is saved", async () => {
+    await render();
+    await act(async () => document.dispatchEvent(new Event("paperclip:ask-generalist")));
+    expect(document.querySelector("[role=dialog]")).not.toBeNull();
   });
 });

@@ -18,13 +18,13 @@ const issueAccessGrantRevokeBodySchema = z.strictObject({}).default({});
 const issuePrivacyConstraintsSchema = z.strictObject({ publicBlockedBy: z.enum(["parent", "project"]).nullable(), leavesPersonalProject: z.boolean() });
 const importJobId = z.string().regex(/^(?:tenant-)?import-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i);
 const importOperationReceiptSchema = z.strictObject({ id: importJobId, operationType: z.literal("company_import"), domain: z.literal("company_portability"),
-  domainOperationRef: z.string().nullable(), status: z.enum(["admitted", "running", "succeeded", "failed", "inconclusive"]),
+  domainOperationRef: z.string().nullable(), status: z.enum(["admitted", "running", "cancel_requested", "cancelled", "succeeded", "failed", "inconclusive"]),
   progressStage: z.string().min(1).max(100), attempt: z.number().int().min(1), unknownOutcome: z.boolean(),
   createdAt: z.iso.datetime(), updatedAt: z.iso.datetime(), completedAt: z.iso.datetime().nullable() });
 const importJobResultSchema = z.strictObject({ companyId: z.uuid(), agentCount: z.number().int().nonnegative(),
   warningCount: z.number().int().nonnegative(), companyAction: z.enum(["none", "create", "update"]) });
 const importJobListItemSchema = z.strictObject({
-  job: z.strictObject({ id: importJobId, status: z.enum(["running", "succeeded", "failed", "needs_reconciliation"]),
+  job: z.strictObject({ id: importJobId, status: z.enum(["running", "cancelled", "succeeded", "failed", "needs_reconciliation"]),
     createdAt: z.iso.datetime(), updatedAt: z.iso.datetime(), completedAt: z.iso.datetime().optional(),
     target: z.strictObject({ mode: z.literal("new_company"), result: z.literal("not_confirmed") }).optional(),
     result: importJobResultSchema.optional(), error: z.strictObject({ message: z.string() }).optional() }),
@@ -225,6 +225,10 @@ export const v6ApiPaths: {
   {
     method: "get", path: "/api/companies/{companyId}/import/jobs", successStatus: 200, auth: "native",
     query: importJobListQuerySchema, result: importJobListSchema,
+  },
+  {
+    method: "post", path: "/api/companies/import/jobs/{jobId}/cancel", successStatus: 200, auth: "native",
+    query: z.strictObject({}), body: z.strictObject({}), result: z.unknown(), privateResponse: true,
   },
   {
     method: "get", path: "/api/companies/{companyId}/support/assistant", successStatus: 200, auth: "native",

@@ -2181,15 +2181,16 @@ export function CompanyImport() {
             </div>
           )}
           {importMutation.isError && !importMutation.isPending && (
-            <div className="mx-5 mt-3 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2.5">
-              <p className="text-xs text-destructive">
-                {importOutcomeIsUnknown(importMutation.error) ? "Import outcome unknown:" : "Import failed:"}{" "}
-                {importMutation.error instanceof Error
-                  ? importMutation.error.message
-                  : "the request did not complete."}{" "}
-                {importOutcomeIsUnknown(importMutation.error)
-                  ? "Reconcile the existing import before trying again. Some changes may already exist."
-                  : "Nothing may have been created, or the import stopped partway — check the target company before retrying."}
+            <div className={cn("mx-5 mt-3 rounded-md border px-3 py-2.5", importMutation.error instanceof ImportCancelledError
+              ? "border-border bg-muted/30" : "border-destructive/40 bg-destructive/5")}>
+              <p className={cn("text-xs", importMutation.error instanceof ImportCancelledError ? "text-muted-foreground" : "text-destructive")}>
+                {importMutation.error instanceof ImportCancelledError ? t("companyImport.cancelled")
+                  : importOutcomeIsUnknown(importMutation.error) ? "Import outcome unknown:" : "Import failed:"}{" "}
+                {importMutation.error instanceof ImportCancelledError
+                  ? t("companyImport.cancelledBeforeEffects")
+                  : `${importMutation.error instanceof Error ? importMutation.error.message : "the request did not complete."} ${importOutcomeIsUnknown(importMutation.error)
+                    ? "Reconcile the existing import before trying again. Some changes may already exist."
+                    : "Nothing may have been created, or the import stopped partway — check the target company before retrying."}`}
               </p>
             </div>
           )}

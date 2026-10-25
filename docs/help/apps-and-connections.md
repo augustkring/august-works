@@ -9,10 +9,10 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: en
-last_verified_at: 2026-10-24
+last_verified_at: 2026-10-25
 review_trigger: App connection, provider authorization, credential renewal, or access review changes
 security_or_privacy_sensitive: true
-linked_source_files: [ui/src/pages/apps/Connections.tsx, ui/src/pages/apps/AppNotConnected.tsx, ui/src/pages/apps/AppDetail.tsx, ui/src/pages/apps/app-detail/PermissionsPanel.tsx]
+linked_source_files: [ui/src/pages/apps/Connections.tsx, ui/src/pages/apps/AppNotConnected.tsx, ui/src/pages/apps/AppDetail.tsx, ui/src/pages/apps/app-detail/PermissionsPanel.tsx, ui/src/components/JevSkillSuggestionSettings.tsx, server/src/routes/jev-decisions.ts, server/src/services/jev-skill-suggestions.ts]
 ---
 
 Open **Apps** or **Company settings → Apps and data** to view connections available to your company. The apps, sign-in methods, and controls shown depend on the current deployment.
@@ -28,3 +28,9 @@ A connection is permission to use the selected account and scope. It does not me
 If a connection says **Reconnect** or **Reconnect required**, open that connection and use its reconnect action. Sign in to the same provider account and review the current access request. Some apps may ask you to replace credentials or choose a workspace again; the details vary by provider.
 
 Check the connection status after returning. Do not paste passwords, API keys, or recovery codes into a task or support request. If reconnect is not available or the status remains unclear, contact [human support](/help/index) with the app name and the non-secret status shown on screen.
+
+## Optional Jev Skill decisions
+
+Company connection managers can select a shared OpenRouter API-key connection under **Company settings → Optional Jev Skill suggestions**. Jev is off by default. Saving the connection does not start background requests. Background shadow checks require both **Shadow evaluation** and the separate **Allow background shadow checks** control. Native Skill resolution remains authoritative, and required Skills do not change.
+
+The setup test sends only a fixed harmless sample to the selected OpenRouter account. OpenRouter bills that account up to **$0.05 per test**. Review the disclosure and give explicit consent for each test. A successful response proves connectivity only; it does not qualify or enable Skill suggestions. A current operator-qualified Jev profile and company processing policy are required. EU-only processing policies block this OpenRouter route.

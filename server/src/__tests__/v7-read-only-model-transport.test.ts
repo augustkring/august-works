@@ -259,6 +259,9 @@ describe("managed Anthropic Messages broker transport", () => {
     await expect(anthropicManagedMessagesCall({ ...managedRequest, messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/png", data: "AA==" } }] }] }, {
       model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000,
     }, key, new AbortController().signal, { fetch })).rejects.toThrow("invalid_response");
+    await expect(anthropicManagedMessagesCall({ ...managedRequest, messages: [{ role: "user", content: [{ type: "document", source: { type: "url", url: "https://example.test/file.pdf" } }] }] }, {
+      model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000,
+    }, key, new AbortController().signal, { fetch })).rejects.toThrow("invalid_response");
     await expect(anthropicManagedMessagesCall({ ...managedRequest, messages: [{ role: "user", content: [{ type: "text", text: "x", cache_control: { type: "ephemeral" } }] }] }, {
       model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000,
     }, key, new AbortController().signal, { fetch })).rejects.toThrow("invalid_response");
@@ -275,5 +278,25 @@ describe("managed Anthropic Messages broker transport", () => {
     await expect(anthropicManagedMessagesCall(managedRequest, {
       model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000,
     }, key, new AbortController().signal, { fetch: async () => json({ ...toolResponse, content: [{ ...toolResponse.content[0], name: "undeclared_tool" }] }) })).rejects.toThrow("invalid_response");
+    for (const usage of [
+      { ...toolResponse.usage, cache_creation_input_tokens: 1 },
+      { ...toolResponse.usage, server_tool_use: { web_search_requests: 1 } },
+      { ...toolResponse.usage, service_tier: "priority" },
+      { ...toolResponse.usage, unqualified_counter: 0 },
+    ]) await expect(anthropicManagedMessagesCall(managedRequest, {
+      model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000,
+    }, key, new AbortController().signal, { fetch: async () => json({ ...toolResponse, usage }) })).rejects.toThrow("invalid_response");
+  });
+  it("accepts documented standard-tier and zero-only ancillary usage counters", async () => {
+    const fetch = vi.fn(async () => json({
+      ...toolResponse,
+      service_tier: "standard",
+      usage: { ...toolResponse.usage, cache_creation_input_tokens: 0, cache_read_input_tokens: 0,
+        cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 0 },
+        server_tool_use: { web_search_requests: 0, web_fetch_requests: 0 }, service_tier: "standard" },
+    }));
+    await expect(anthropicManagedMessagesCall(managedRequest, {
+      model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000,
+    }, key, new AbortController().signal, { fetch })).resolves.toMatchObject({ usage: { inputTokens: 20, outputTokens: 10 } });
   });
 });

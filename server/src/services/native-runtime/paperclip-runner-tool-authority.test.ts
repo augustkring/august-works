@@ -49,11 +49,14 @@ describe("PaperclipRunnerToolAuthority", () => {
     const companyId = randomUUID(), agentId = randomUUID(), issueId = randomUUID(), runId = randomUUID();
     const issuePrefix = `RDR${companyId.slice(0, 4).toUpperCase()}`;
     await db.insert(companies).values({ id: companyId, name: "Document source reader", issuePrefix });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId,
+      membershipRole: "admin", status: "active" });
     await db.insert(agents).values({ id: agentId, companyId, name: "Document source reader", adapterType: "paperclip_runner", status: "active" });
     await db.insert(issues).values({ id: issueId, companyId, issueNumber: 1, identifier: `${issuePrefix}-1`,
-      title: "Read document source", status: "in_progress", workMode: "standard", assigneeAgentId: agentId });
+      title: "Read document source", status: "in_progress", workMode: "standard", assigneeAgentId: agentId,
+      responsibleUserId: userId });
     await db.insert(heartbeatRuns).values({ id: runId, companyId, agentId, status: "running", runtimeMode: "native",
-      nativeIssueId: issueId, invocationSource: "assignment", triggerDetail: "system", contextSnapshot: { issueId } });
+      nativeIssueId: issueId, responsibleUserId: userId, invocationSource: "assignment", triggerDetail: "system", contextSnapshot: { issueId } });
     await db.update(issues).set({ executionRunId: runId }).where(eq(issues.id, issueId));
     return { companyId, agentId, issueId, runId,
       authority: new PaperclipRunnerToolAuthority(db, { companyId, agentId, issueId, runId }) };
@@ -345,6 +348,31 @@ describe("PaperclipRunnerToolAuthority", () => {
     await expect(fixture.authority.execute({ tool: "read_document", callId: "read-callback-failure", arguments: { key } }, {
       onDocumentRead: async () => { throw new Error("capture persistence rejected"); },
     })).rejects.toThrow("capture persistence rejected");
+  });
+
+  it("rechecks the accountable reader after document capture and withholds on access revocation", async () => {
+    const fixture = await seedDocumentReader();
+    const key = `access-revoked-${randomUUID()}`;
+    await documentService(db).upsertIssueDocument({ issueId: fixture.issueId, key, title: "Revoked reader", format: "markdown", body: "Must not escape." });
+    await expect(fixture.authority.execute({ tool: "read_document", callId: "read-after-revocation", arguments: { key } }, {
+      onDocumentRead: async () => {
+        await db.delete(companyMemberships).where(and(eq(companyMemberships.companyId, fixture.companyId),
+          eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, userId)));
+      },
+    })).rejects.toThrow();
+  });
+
+  it("withholds a document result when its selected revision is replaced before delivery", async () => {
+    const fixture = await seedDocumentReader();
+    const key = `revision-replaced-${randomUUID()}`;
+    const original = await documentService(db).upsertIssueDocument({ issueId: fixture.issueId, key,
+      title: "Original", format: "markdown", body: "Original source body." });
+    await expect(fixture.authority.execute({ tool: "read_document", callId: "read-replaced-revision", arguments: { key } }, {
+      onDocumentRead: async () => {
+        await documentService(db).upsertIssueDocument({ issueId: fixture.issueId, key, title: "Replacement", format: "markdown",
+          body: "Replacement source body.", baseRevisionId: original.document.latestRevisionId });
+      },
+    })).rejects.toThrow("The selected document revision changed or was erased before delivery");
   });
 
   it("returns public task URLs from the current claimed origin in context and search results", async () => {

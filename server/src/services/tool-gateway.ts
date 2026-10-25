@@ -127,6 +127,8 @@ import { secretService } from "./secrets.js";
 import { railwayCommandBudgetMs, createRailwayClient, isRailwayConnection, isRailwayEndpoint, isRailwayToolBlocked, normalizeRailwayToolName, RAILWAY_API_URL, RAILWAY_TOOL_PREFIX, RailwayError } from "./railway.js";
 import { RAILWAY_SSH_SECRET_PATH, runRailwaySshCommand } from "./railway-ssh.js";
 import {
+  MCP_PROTOCOL_VERSION,
+  SUPPORTED_MCP_PROTOCOL_VERSIONS,
   initializeMcpHttpSession,
   getMcpHttpSession,
   forgetMcpHttpSessions,
@@ -5721,11 +5723,18 @@ export function createToolGatewayService(
       return promise;
     };
     try {
-      await request("initialize", {
-        protocolVersion: "2024-11-05",
+      const initialized = await request("initialize", {
+        protocolVersion: MCP_PROTOCOL_VERSION,
         capabilities: {},
-        clientInfo: { name: "paperclip-tool-gateway", version: "0.3.1" },
+        clientInfo: { name: "blentera-tool-gateway", version: "0.3.1" },
       });
+      const negotiatedProtocol = asRecord(initialized)?.protocolVersion;
+      if (typeof negotiatedProtocol !== "string" || !SUPPORTED_MCP_PROTOCOL_VERSIONS.has(negotiatedProtocol)) {
+        throw stdioProtocolError("Local stdio MCP selected an unsupported protocol version", {
+          connectionId: input.connection.id,
+          catalogEntryId: input.entry?.id ?? null,
+        });
+      }
       child.stdin.write(
         `${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized", params: {} })}\n`,
       );

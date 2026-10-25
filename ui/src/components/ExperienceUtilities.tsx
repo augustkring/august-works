@@ -41,7 +41,7 @@ export function ExperienceUtilities({ safetyRecovery = false }: { safetyRecovery
           type="button"
           className="min-h-11"
           onClick={() =>
-            document.dispatchEvent(new Event("paperclip:open-command"))
+            document.dispatchEvent(new Event("paperclip:ask-generalist"))
           }
         >
           {t("ask")}

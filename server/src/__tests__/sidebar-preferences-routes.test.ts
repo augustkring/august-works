@@ -7,6 +7,8 @@ const mockSidebarPreferenceService = vi.hoisted(() => ({
   upsertCompanyOrder: vi.fn(),
   getProjectOrder: vi.fn(),
   upsertProjectOrder: vi.fn(),
+  getPreferredCoworker: vi.fn(),
+  setPreferredCoworker: vi.fn(),
 }));
 const mockLogActivity = vi.hoisted(() => vi.fn());
 
@@ -63,6 +65,8 @@ describe("sidebar preference routes", () => {
       orderedIds: ORDERED_IDS,
       updatedAt: null,
     });
+    mockSidebarPreferenceService.getPreferredCoworker.mockResolvedValue({ agentId: null, updatedAt: null });
+    mockSidebarPreferenceService.setPreferredCoworker.mockImplementation(async (_companyId, _userId, agentId) => ({ agentId, updatedAt: null }));
   });
 
   it("returns company rail order for board users", async () => {
@@ -172,5 +176,54 @@ describe("sidebar preference routes", () => {
 
     expect(res.status).toBe(403);
     expect(mockSidebarPreferenceService.getCompanyOrder).not.toHaveBeenCalled();
+  });
+
+  it("reads the signed-in user's preferred Co-worker within the selected company", async () => {
+    const app = await createApp({
+      type: "board", userId: "user-1", source: "session", isInstanceAdmin: false,
+      companyIds: ["company-1"],
+    });
+    mockSidebarPreferenceService.getPreferredCoworker.mockResolvedValue({
+      agentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", updatedAt: null,
+    });
+    const res = await request(app).get("/api/companies/company-1/sidebar-preferences/preferred-coworker/me");
+    expect(res.status).toBe(200);
+    expect(res.headers["cache-control"]).toBe("private, no-store");
+    expect(res.body.agentId).toBe("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+    expect(mockSidebarPreferenceService.getPreferredCoworker).toHaveBeenCalledWith("company-1", "user-1");
+  });
+
+  it("saves or clears the preferred Co-worker as a preference without changing grants", async () => {
+    const app = await createApp({
+      type: "board", userId: "user-1", source: "session", isInstanceAdmin: false,
+      companyIds: ["company-1"],
+    });
+    const agentId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const res = await request(app)
+      .put("/api/companies/company-1/sidebar-preferences/preferred-coworker/me")
+      .send({ agentId });
+    expect(res.status).toBe(200);
+    expect(mockSidebarPreferenceService.setPreferredCoworker).toHaveBeenCalledWith("company-1", "user-1", agentId);
+    expect(mockLogActivity).toHaveBeenCalledWith({} as never, expect.objectContaining({
+      companyId: "company-1",
+      action: "sidebar_preferences.preferred_coworker_updated",
+      details: { userId: "user-1", preferredAgentId: agentId },
+    }));
+    await request(app)
+      .put("/api/companies/company-1/sidebar-preferences/preferred-coworker/me")
+      .send({ agentId: null });
+    expect(mockSidebarPreferenceService.setPreferredCoworker).toHaveBeenLastCalledWith("company-1", "user-1", null);
+  });
+
+  it("rejects malformed preferred Co-worker IDs", async () => {
+    const app = await createApp({
+      type: "board", userId: "user-1", source: "session", isInstanceAdmin: false,
+      companyIds: ["company-1"],
+    });
+    const res = await request(app)
+      .put("/api/companies/company-1/sidebar-preferences/preferred-coworker/me")
+      .send({ agentId: "not-a-uuid" });
+    expect(res.status).toBe(400);
+    expect(mockSidebarPreferenceService.setPreferredCoworker).not.toHaveBeenCalled();
   });
 });

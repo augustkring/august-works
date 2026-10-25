@@ -67,7 +67,7 @@ export function companyImportJobService(db: Db) {
           if (existing.inputHash !== input.inputHash) throw conflict("Import request key already refers to different input", { code: "import_request_changed" });
           if (existing.status === "needs_reconciliation") throw conflict("The import outcome is unknown. Reconcile the existing import before trying again.",
             { code: "import_outcome_unknown", operationId: existing.id });
-          if (existing.status !== "failed" || existing.progressStage !== "rejected_before_import")
+          if (existing.status !== "cancelled" && (existing.status !== "failed" || existing.progressStage !== "rejected_before_import"))
             return finish({ job: existing, replay: true });
         }
         const [uncertainTransfer] = await tx.select({ id: companyTransferRuns.id }).from(companyTransferRuns).where(and(
@@ -92,6 +92,7 @@ export function companyImportJobService(db: Db) {
           const [resumed] = await tx.update(customerOperations).set({ status: "running", progressStage: "admitted",
             attempt: sql`${customerOperations.attempt} + 1`, attemptId: randomUUID(), errorCode: null,
             startedAt: null, completedAt: null, resultRef: null, domainOperationRef: input.transferId ?? null,
+            cancelRequestedAt: null,
             updatedAt: sql`clock_timestamp()`, progressAt: sql`clock_timestamp()` })
             .where(and(eq(customerOperations.id, existing.id), eq(customerOperations.attemptId, existing.attemptId)))
             .returning();

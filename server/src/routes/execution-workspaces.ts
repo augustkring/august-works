@@ -1276,6 +1276,9 @@ export function executionWorkspaceRoutes(db: Db, opts: { pluginWorkerManager?: P
           workspaceId: id,
           capturedGeneration,
           destroy: async () => {
+            const gitRestorationProof = existing.providerType === "git_worktree"
+              ? await svc.prepareGitWorkspaceCleanupProof?.({ workspaceId: id, actor: req.actor }) ?? null
+              : null;
             await environmentRuntime.destroyReusableSandboxLeases({
               companyId: existing.companyId,
               executionWorkspaceId: existing.id,
@@ -1295,6 +1298,8 @@ export function executionWorkspaceRoutes(db: Db, opts: { pluginWorkerManager?: P
                 companyId: existing.companyId,
                 executionWorkspaceId: existing.id,
               }),
+              runCleanupCommands: existing.providerType !== "git_worktree",
+              ...(gitRestorationProof ? { gitRestorationProof } : {}),
             });
           },
         });

@@ -1328,6 +1328,7 @@ export type {
   UserProfileWindowStats,
   SidebarBadges,
   SidebarOrderPreference,
+  PreferredCoworkerPreference,
   InboxDismissal,
   InboxDismissalKind,
   AccessUserProfile,
@@ -1739,7 +1740,10 @@ export {
 export {
   sidebarOrderPreferenceSchema,
   upsertSidebarOrderPreferenceSchema,
+  preferredCoworkerPreferenceSchema,
+  setPreferredCoworkerPreferenceSchema,
   type UpsertSidebarOrderPreference,
+  type SetPreferredCoworkerPreference,
 } from "./validators/sidebar-preferences.js";
 export {
   resourceMembershipStateSchema,

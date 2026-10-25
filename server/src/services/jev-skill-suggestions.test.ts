@@ -67,6 +67,7 @@ describe("Jev Skill shadow admission", () => {
     const now = new Date(), sourceSha = "a".repeat(40), hash = "b".repeat(64);
     const base = { companyId, connectionId, grantId, profileId: "jev-fixture", credentialBindingHash: hash, sourceSha,
       qualificationHash: hash, processor: "openrouter" as const, processorTermsHash: hash, retentionPolicyHash: hash, retentionDays: 0,
+      setupCostCapMinor: 5, setupMaxCalls: 3,
       testedAt: new Date(now.getTime() - 1_000).toISOString(), expiresAt: new Date(now.getTime() + 60_000).toISOString(), processingRegion: "us" as const,
       tariff: { provider: "openrouter" as const, model: "typesafe/jev-1.13", currency: "USD" as const, inputMinorPerMillion: 1, outputMinorPerMillion: 1,
         fixedMinor: 0, qualificationHash: hash, sourceSha, testedAt: new Date(now.getTime() - 1_000).toISOString(), expiresAt: new Date(now.getTime() + 60_000).toISOString() },
@@ -95,6 +96,7 @@ describe("Jev Skill shadow admission", () => {
     const now = new Date(), sourceSha = "c".repeat(40), hash = "d".repeat(64), expiresAt = new Date(now.getTime() + 60_000).toISOString();
     const base = { companyId, connectionId, grantId, profileId: "jev-software-fixture", credentialBindingHash: createHash("sha256").update("test-key").digest("hex"), sourceSha,
       qualificationHash: hash, processor: "openrouter" as const, processorTermsHash: hash, retentionPolicyHash: hash, retentionDays: 0,
+      setupCostCapMinor: 5, setupMaxCalls: 3,
       testedAt: new Date(now.getTime() - 1_000).toISOString(), expiresAt, processingRegion: "us" as const,
       tariff: { provider: "openrouter" as const, model: "typesafe/jev-1.13", currency: "USD" as const, inputMinorPerMillion: 1, outputMinorPerMillion: 1,
         fixedMinor: 0, qualificationHash: hash, sourceSha, testedAt: new Date(now.getTime() - 1_000).toISOString(), expiresAt },

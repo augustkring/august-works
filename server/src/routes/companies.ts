@@ -300,13 +300,11 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     return importResultCache.get(id)?.result;
   }
 
-  async function runImportJob(job: CompanyImportJob, operation: (checkCancellation: () => Promise<void>) => Promise<CompanyPortabilityImportResult>,
+  async function runImportJob(job: CompanyImportJob, operation: (checkCancellation: () => Promise<boolean>) => Promise<CompanyPortabilityImportResult>,
     domainInvoked: () => boolean, sourceActor: Request["actor"]) {
     try {
       if (!(await importJobs.start(job, sourceActor))) return;
-      const result = await operation(async () => {
-        if (await importJobs.cancellationRequested(job)) throw new Error("import_cancel_requested");
-      });
+      const result = await operation(() => importJobs.cancellationRequested(job));
       const settled = await importJobs.succeed(job, result);
       if (!settled) throw conflict("The original import operation is unavailable", { code: "import_outcome_unknown" });
       importResultCache.set(job.id, { result, expiresAt: Date.now() + 60 * 60_000 });
@@ -744,7 +742,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     const actor = getActorInfo(req);
     const boardUserId = req.actor.type === "board" ? req.actor.userId : null;
     let domainInvoked = false;
-    const operation = async (checkCancellation: () => Promise<void>) => {
+    const operation = async (checkCancellation: () => Promise<boolean>) => {
       try {
         const importBody = companyPortabilityImportSchema.parse(rawImportBody);
         assertImportTargetAccess(req, importBody.target);
@@ -773,7 +771,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
       } catch (error) {
         // Only the native pre-effect proof can turn an invoked owner into a
         // known rejection. Ordinary throws remain an unknown outcome.
-        if (error instanceof ImportPreflightError) domainInvoked = false;
+        if (error instanceof ImportPreflightError || (error instanceof ImportCancellationError && !error.effectsStarted)) domainInvoked = false;
         if (domainInvoked) await hooks?.onFailure?.(errorMessage(error));
         else await hooks?.onConflict?.();
         throw error;

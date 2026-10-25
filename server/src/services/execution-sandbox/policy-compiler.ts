@@ -35,6 +35,7 @@ export function compileSandboxPolicy(input: { boundary: SandboxPolicy; candidate
   }
   if (candidate.credentials.mode === "none" && candidate.credentials.bindings.length || candidate.credentials.mode === "legacy_injected" && candidate.credentials.bindings.length) failures.push("credential_mode_inconsistent");
   let compiledPolicy = candidate;
+  let modelBrokerEndpoint: SandboxPolicyCompilation["modelBrokerEndpoint"];
   if (candidate.credentials.mode === "brokered") {
     if (candidate.credentials.bindings.length === 0) failures.push("credential_broker_binding_missing");
     let origin: URL | null = null;
@@ -84,6 +85,32 @@ export function compileSandboxPolicy(input: { boundary: SandboxPolicy; candidate
   } else if (resolvedBrokerBindings.length > 0) {
     failures.push("credential_broker_bindings_without_brokered_mode");
   }
+  if (caps?.modelBrokerProviderProfile) {
+    let origin: URL | null = null;
+    try {
+      origin = new URL(input.credentialBrokerOrigin ?? "");
+      if (origin.protocol !== "https:" || origin.username || origin.password || origin.search || origin.hash || origin.pathname !== "/") origin = null;
+    } catch { origin = null; }
+    if (!origin) unsupported.push("managed_model_broker_origin_unavailable");
+    if (caps.backend !== "openshell") unsupported.push("managed_model_broker_requires_openshell");
+    const candidateModelDestinations = origin ? candidate.network.destinations.filter(destination => destination.hostname === origin!.hostname && destination.port === Number(origin!.port || 443)) : [];
+    const exactModelDestination = candidateModelDestinations.length === 1 && candidateModelDestinations[0]!.methods.length === 1 &&
+      candidateModelDestinations[0]!.methods[0] === "POST" && candidateModelDestinations[0]!.pathPrefixes.length === 1 &&
+      candidateModelDestinations[0]!.pathPrefixes[0] === "/runtime-tools/model/v1/messages";
+    if (candidateModelDestinations.length && !exactModelDestination) failures.push("managed_model_broker_egress_broadened");
+    if (candidate.network.destinations.some(destination => destination.hostname === "anthropic.com" || destination.hostname.endsWith(".anthropic.com")))
+      failures.push("managed_model_provider_direct_egress");
+    if (origin && !exactModelDestination) {
+      modelBrokerEndpoint = { hostname: origin.hostname, port: Number(origin.port || 443), path: "/runtime-tools/model/v1/messages" };
+      compiledPolicy = {
+        ...compiledPolicy,
+        network: { ...compiledPolicy.network, destinations: [...compiledPolicy.network.destinations, {
+          hostname: modelBrokerEndpoint.hostname, port: modelBrokerEndpoint.port,
+          methods: ["POST"], pathPrefixes: [modelBrokerEndpoint.path],
+        }] },
+      };
+    }
+  }
   for (const key of ["cpuMillis", "memoryBytes", "diskBytes", "pidsLimit", "wallClockSeconds"] as const) if (candidate.resources[key] > boundary.resources[key]) failures.push(`resource_${key}_expansion`);
   if (!subset(boundary.requiredControls, candidate.requiredControls)) failures.push("required_control_removed");
   const required = new Set(compiledPolicy.requiredControls);
@@ -94,7 +121,7 @@ export function compileSandboxPolicy(input: { boundary: SandboxPolicy; candidate
   required.add("networkDestinationPolicy");
   if (candidate.process.allowedSyscalls.length) required.add("syscallPolicy");
   if (candidate.broadAutonomy || rank[candidate.profile] >= 2) for (const control of ["filesystemPolicy", "syscallPolicy", "networkDestinationPolicy", "credentialBrokering"] as const) required.add(control);
-  if (compiledPolicy.credentials.mode === "brokered") required.add("credentialBrokering");
+  if (compiledPolicy.credentials.mode === "brokered" || modelBrokerEndpoint) required.add("credentialBrokering");
   if (compiledPolicy.network.destinations.some(d => ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"].some(method => !d.methods.includes(method as typeof d.methods[number])) || !d.pathPrefixes.includes("/"))) required.add("networkLayer7Policy");
   if (!caps) unsupported.push("capability_snapshot_missing");
   else {
@@ -105,10 +132,15 @@ export function compileSandboxPolicy(input: { boundary: SandboxPolicy; candidate
     if (required.has("filesystemPolicy") && caps.filesystemEnforcementMode !== "hard_requirement") unsupported.push("filesystem_hard_enforcement_missing");
     if (compiledPolicy.credentials.mode === "brokered") for (const dimension of ["company", "presence", "host", "port", "method", "path", "expiry", "revocation"] as const) if (!caps.credentialBindingDimensions.includes(dimension)) unsupported.push(`credential_${dimension}_binding_missing`);
     if (compiledPolicy.credentials.mode === "brokered" && !caps.credentialBrokerProviderProfile) unsupported.push("credential_broker_provider_profile_unqualified");
+    if (modelBrokerEndpoint && !caps.modelBrokerProviderProfile) unsupported.push("managed_model_broker_provider_profile_unqualified");
     if (compiledPolicy.credentials.bindings.some(binding => binding.binary !== null) && !caps.credentialBindingDimensions.includes("binary")) unsupported.push("credential_binary_binding_missing");
     if (candidate.profile === "high_assurance_managed" && (!caps.policyProverBoundaryCheck || [...required].some(control => !caps.policyProverCoverage.includes(control)))) unsupported.push("backend_boundary_prover_coverage_missing");
   }
   if ((compiledPolicy.broadAutonomy || rank[compiledPolicy.profile] >= 2) && compiledPolicy.credentials.mode === "legacy_injected") failures.push("raw_credential_exposure");
+  const sourcePolicyRefs = [...new Set([...input.sourcePolicyRefs, ...(caps?.modelBrokerProviderProfile && modelBrokerEndpoint ? [
+    `managed-model-broker-origin:https://${modelBrokerEndpoint.hostname}:${modelBrokerEndpoint.port}`,
+    `managed-model-broker-profile:${caps.modelBrokerProviderProfile.id}:${caps.modelBrokerProviderProfile.hash}`,
+  ] : [])])].sort();
   const candidatePolicyHash = nativeSha256(compiledPolicy);
-  return { schemaVersion: 1, compilerVersion: "aw-v7.2", boundaryPolicyHash: nativeSha256(boundary), candidatePolicyHash, staticPolicyFingerprint: nativeSha256({ filesystem: compiledPolicy.filesystem, process: compiledPolicy.process, resources: compiledPolicy.resources, credentials: compiledPolicy.credentials, brokerEgress: compiledPolicy.network.destinations }), proverResult: failures.length ? "fail" : unsupported.length ? "unsupported" : "pass", failedBoundaries: [...new Set(failures)].sort(), unsupportedFeatures: [...new Set(unsupported)].sort(), enforcementProfile: compiledPolicy.profile, sourcePolicyRefs: [...new Set(input.sourcePolicyRefs)].sort(), compiledPolicy };
+  return { schemaVersion: 1, compilerVersion: "aw-v7.2", boundaryPolicyHash: nativeSha256(boundary), candidatePolicyHash, staticPolicyFingerprint: nativeSha256({ filesystem: compiledPolicy.filesystem, process: compiledPolicy.process, resources: compiledPolicy.resources, credentials: compiledPolicy.credentials, brokerEgress: compiledPolicy.network.destinations, modelBrokerProfile: modelBrokerEndpoint ? caps?.modelBrokerProviderProfile : null }), proverResult: failures.length ? "fail" : unsupported.length ? "unsupported" : "pass", failedBoundaries: [...new Set(failures)].sort(), unsupportedFeatures: [...new Set(unsupported)].sort(), enforcementProfile: compiledPolicy.profile, sourcePolicyRefs, compiledPolicy, ...(modelBrokerEndpoint ? { modelBrokerEndpoint } : {}) };
 }

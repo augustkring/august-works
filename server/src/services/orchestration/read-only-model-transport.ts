@@ -69,7 +69,6 @@ const managedMessagesSchema = z.object({
   top_p: z.number().min(0).max(1).optional(),
   top_k: z.number().int().positive().max(1000).optional(),
   stop_sequences: z.array(z.string().max(1024)).max(16).optional(),
-  metadata: z.object({ user_id: z.string().max(128).optional() }).strict().optional(),
 }).strict();
 
 function assertBoundedJson(value: unknown) {
@@ -108,6 +107,9 @@ export function validateAnthropicManagedMessagesRequest(
         throw new ReadOnlyModelTransportError("invalid_response");
   const toolNames = request.tools?.map((tool) => tool.name) ?? [];
   if (new Set(toolNames).size !== toolNames.length)
+    throw new ReadOnlyModelTransportError("invalid_response");
+  if (request.tool_choice?.type === "tool" && !toolNames.includes(request.tool_choice.name) ||
+    request.tool_choice?.type === "any" && toolNames.length === 0)
     throw new ReadOnlyModelTransportError("invalid_response");
   return { request, providerRequest, body, toolNames };
 }
@@ -374,12 +376,25 @@ export async function anthropicManagedMessagesCall(
       usage: z.object({
         input_tokens: z.number().int().safe().nonnegative(),
         output_tokens: z.number().int().safe().nonnegative(),
-        cache_creation_input_tokens: z.number().int().safe().nonnegative().optional(),
-        cache_read_input_tokens: z.number().int().safe().nonnegative().optional(),
+        cache_creation_input_tokens: z.literal(0).optional(),
+        cache_read_input_tokens: z.literal(0).optional(),
+        cache_creation: z.object({
+          ephemeral_5m_input_tokens: z.literal(0).optional(),
+          ephemeral_1h_input_tokens: z.literal(0).optional(),
+        }).strict().optional(),
+        service_tier: z.literal("standard").optional(),
+        server_tool_use: z.object({
+          web_search_requests: z.literal(0),
+          web_fetch_requests: z.literal(0).optional(),
+        }).strict().optional(),
       }).strict(),
-    }).passthrough().parse(JSON.parse(text));
+      service_tier: z.literal("standard").optional(),
+    }).strict().parse(JSON.parse(text));
+    assertBoundedJson(parsed);
     if (parsed.usage.output_tokens > request.max_tokens || parsed.usage.input_tokens > input.maximumInputTokens ||
-      (parsed.usage.cache_creation_input_tokens ?? 0) !== 0 || (parsed.usage.cache_read_input_tokens ?? 0) !== 0)
+      (parsed.usage.cache_creation_input_tokens ?? 0) !== 0 || (parsed.usage.cache_read_input_tokens ?? 0) !== 0 ||
+      (parsed.usage.cache_creation?.ephemeral_5m_input_tokens ?? 0) !== 0 ||
+      (parsed.usage.cache_creation?.ephemeral_1h_input_tokens ?? 0) !== 0)
       throw new ReadOnlyModelTransportError("invalid_response");
     const toolIds = new Set<string>();
     for (const block of parsed.content) if (block.type === "tool_use") {

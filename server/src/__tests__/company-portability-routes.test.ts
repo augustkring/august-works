@@ -73,6 +73,9 @@ vi.mock("../services/companies.js", () => ({
 
 vi.mock("../services/company-portability.js", () => ({
   companyPortabilityService: () => mockCompanyPortabilityService,
+  ImportCancellationError: class ImportCancellationError extends Error {
+    constructor(readonly effectsStarted: boolean) { super("Import cancellation requested"); }
+  },
 }));
 
 vi.mock("../services/feedback.js", () => ({
@@ -1387,6 +1390,43 @@ describe.sequential("company portability routes", () => {
 
     expect(res.status).toBe(404);
     expect(res.body.error).toBe("Import job not found");
+  });
+
+  it.sequential("requests cancellation only for the original current actor and reports partial work as inconclusive", async () => {
+    const app = await createBoardApp();
+    let entered!: () => void;
+    let continueImport!: () => void;
+    const importEntered = new Promise<void>((resolve) => { entered = resolve; });
+    const cancellationGate = new Promise<void>((resolve) => { continueImport = resolve; });
+    mockCompanyPortabilityService.importBundle.mockImplementationOnce(async (_input: unknown, _userId: unknown, options: { checkCancellation: () => Promise<boolean> }) => {
+      entered();
+      await options.checkCancellation();
+      await cancellationGate;
+      if (await options.checkCancellation()) throw new ImportCancellationError(true);
+      return createImportResult("updated");
+    });
+
+    const accepted = await request(app).post("/api/companies/import?async=1")
+      .set(TEST_USER_HEADER, "board-user-a").send(importRequest);
+    expect(accepted.status).toBe(202);
+    await importEntered;
+
+    const cancellation = await request(app).post(`/api/companies/import/jobs/${accepted.body.job.id}/cancel`)
+      .set(TEST_USER_HEADER, "board-user-a").send({});
+    expect(cancellation.status).toBe(200);
+    expect(cancellation.body.job.status).toBe("running");
+    expect(cancellation.body.operation.status).toBe("cancel_requested");
+
+    const foreign = await request(app).post(`/api/companies/import/jobs/${accepted.body.job.id}/cancel`)
+      .set(TEST_USER_HEADER, "board-user-b").send({});
+    expect(foreign.status).toBe(404);
+
+    continueImport();
+    const settled = await waitForImportJobStatusAs(app, accepted.body.statusUrl, "needs_reconciliation", {
+      [TEST_USER_HEADER]: "board-user-a",
+    });
+    expect(settled.body.operation.status).toBe("inconclusive");
+    expect(settled.body.job.error.message).toContain("outcome is unknown");
   });
 
   it.sequential("forwards pauseAutomations from CEO-safe import apply bodies to the portability service", async () => {

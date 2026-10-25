@@ -780,7 +780,7 @@ type ImportBehaviorOptions = {
   mode?: ImportMode;
   sourceCompanyId?: string | null;
   pauseAutomations?: boolean;
-  checkCancellation?: () => Promise<void>;
+  checkCancellation?: () => Promise<boolean>;
 };
 
 export class ImportCancellationError extends Error {
@@ -5477,10 +5477,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     const mode = resolveImportMode(options);
     let effectsStarted = false;
     const cancellationCheckpoint = async () => {
-      if (options?.checkCancellation) {
-        try { await options.checkCancellation(); }
-        catch { throw new ImportCancellationError(effectsStarted); }
-      }
+      if (await options?.checkCancellation?.()) throw new ImportCancellationError(effectsStarted);
     };
     const plan = await buildPreview(input, options);
     if (input.expectedSourceFingerprint && input.expectedSourceFingerprint !== plan.preview.sourceFingerprint)
@@ -5583,6 +5580,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
               manifestCompanyName,
               (await companies.list()).map((company) => company.name),
             ));
+      await cancellationCheckpoint();
       effectsStarted = true;
       const created = await companies.create({
         name: companyName,
@@ -5604,10 +5602,13 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           : null,
       });
       if (mode === "agent_safe" && options?.sourceCompanyId) {
+        await cancellationCheckpoint();
         await access.copyActiveUserMemberships(options.sourceCompanyId, created.id);
       } else {
         const ownerPrincipalId = actorUserId ?? "board";
+        await cancellationCheckpoint();
         await access.ensureMembership(created.id, "user", ownerPrincipalId, "owner", "active");
+        await cancellationCheckpoint();
         await access.ensureRoleDefaultGrants(
           created.id,
           ownerPrincipalId,
@@ -5621,6 +5622,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       targetCompany = await companies.getById(input.target.companyId);
       if (!targetCompany) throw notFound("Target company not found");
       if (include.company && sourceManifest.company && mode === "board_full") {
+        await cancellationCheckpoint();
         effectsStarted = true;
         const updated = await companies.update(targetCompany.id, {
           name: sourceManifest.company.name,
@@ -5677,6 +5679,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         await cancellationCheckpoint();
         const logoPath = sourceManifest.company?.logoPath ?? null;
         if (!logoPath) {
+          await cancellationCheckpoint();
           const cleared = await companies.update(targetCompany.id, { logoAssetId: null });
           targetCompany = cleared ?? targetCompany;
         } else {
@@ -5694,6 +5697,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             } else {
               try {
                 const body = portableFileToBuffer(logoFile, logoPath);
+                await cancellationCheckpoint();
                 const stored = await storage.putFile({
                   companyId: targetCompany.id,
                   namespace: "assets/companies",
@@ -5701,6 +5705,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
                   contentType,
                   body,
                 });
+                await cancellationCheckpoint();
                 const createdAsset = await assetRecords.create(targetCompany.id, {
                   provider: stored.provider,
                   objectKey: stored.objectKey,
@@ -5711,6 +5716,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
                   createdByAgentId: null,
                   createdByUserId: actorUserId ?? null,
                 });
+                await cancellationCheckpoint();
                 const updated = await companies.update(targetCompany.id, {
                   logoAssetId: createdAsset.id,
                 });
@@ -5735,6 +5741,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           warnings.push(`Skipped ${manifestEmbeddedAssets.length} embedded image asset${manifestEmbeddedAssets.length === 1 ? "" : "s"} because storage is unavailable; their references were left unchanged.`);
         } else {
           for (const embeddedAsset of manifestEmbeddedAssets) {
+            await cancellationCheckpoint();
             const embeddedAssetLabel = embeddedAsset.originalFilename ?? embeddedAsset.assetId;
             const blobPath = portableBlobPath(embeddedAsset.sha256);
             const blobFile = plan.source.files[blobPath];
@@ -5746,6 +5753,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             // entry hashes to its path, which this entry's sha256 derives.
             const body = portableFileToBuffer(blobFile, blobPath);
             try {
+              await cancellationCheckpoint();
               const stored = await storage.putFile({
                 companyId: targetCompany.id,
                 namespace: "assets/general",
@@ -5753,6 +5761,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
                 contentType: embeddedAsset.contentType,
                 body,
               });
+              await cancellationCheckpoint();
               const createdAsset = await assetRecords.create(targetCompany.id, {
                 provider: stored.provider,
                 objectKey: stored.objectKey,
@@ -5795,11 +5804,14 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         existingProjectSlugToId.set(existing.urlKey, existing.id);
       }
 
-      const importedSkills = include.skills || include.agents
-        ? await companySkills.importPackageFiles(targetCompany.id, pickTextFiles(plan.source.files), {
-            onConflict: resolveSkillConflictStrategy(mode, plan.collisionStrategy),
-          })
-        : [];
+      let importedSkills: Awaited<ReturnType<typeof companySkills.importPackageFiles>> = [];
+      if (include.skills || include.agents) {
+        await cancellationCheckpoint();
+        effectsStarted = true;
+        importedSkills = await companySkills.importPackageFiles(targetCompany.id, pickTextFiles(plan.source.files), {
+          onConflict: resolveSkillConflictStrategy(mode, plan.collisionStrategy),
+        });
+      }
       const desiredSkillRefMap = new Map<string, string>();
       for (const importedSkill of importedSkills) {
         desiredSkillRefMap.set(importedSkill.originalKey, importedSkill.skill.key);
@@ -5813,6 +5825,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
 
       if (include.agents) {
         await cancellationCheckpoint();
+        effectsStarted = true;
         for (const planAgent of plan.preview.plan.agentPlans) {
           await cancellationCheckpoint();
           const manifestAgent = plan.selectedAgents.find((agent) => agent.slug === planAgent.slug);
@@ -5856,6 +5869,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           }
           if (embeddedAssetIdMap.size > 0) {
             for (const [relativePath, content] of Object.entries(bundleFiles)) {
+              await cancellationCheckpoint();
               bundleFiles[relativePath] = rewriteEmbeddedAssetUrls(content, embeddedAssetIdMap);
             }
           }
@@ -5902,6 +5916,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             : {};
 
           if (planAgent.action === "update" && planAgent.existingAgentId) {
+            await cancellationCheckpoint();
             let updated = await agents.update(planAgent.existingAgentId, {
               ...patch,
               ...automationPausePatch,
@@ -5918,14 +5933,17 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
               continue;
             }
             try {
+              await cancellationCheckpoint();
               const materialized = await instructions.materializeManagedBundle(updated, bundleFiles, {
                 clearLegacyPromptTemplate: true,
                 replaceExisting: true,
               });
+              await cancellationCheckpoint();
               updated = await agents.update(updated.id, { adapterConfig: materialized.adapterConfig }) ?? updated;
             } catch (err) {
               warnings.push(`Failed to materialize instructions bundle for ${manifestAgent.slug}: ${err instanceof Error ? err.message : String(err)}`);
             }
+            await cancellationCheckpoint();
             await applyImportedAgentPermissionGrants(
               targetCompany.id,
               updated.id,
@@ -5933,6 +5951,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
               actorUserId ?? null,
             );
             agentStatusById.set(updated.id, updated.status ?? agentStatusById.get(updated.id) ?? null);
+            await cancellationCheckpoint();
             await secrets.syncEnvBindingsForTarget?.(
               targetCompany.id,
               { targetType: "agent", targetId: updated.id },
@@ -5950,12 +5969,15 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             continue;
           }
 
+          await cancellationCheckpoint();
           let created = await agents.create(targetCompany.id, {
             ...patch,
             ...automationPausePatch,
             status: pauseAutomations ? "paused" : "idle",
           });
+          await cancellationCheckpoint();
           await access.ensureMembership(targetCompany.id, "agent", created.id, "member", "active");
+          await cancellationCheckpoint();
           await access.setPrincipalPermission(
             targetCompany.id,
             "agent",
@@ -5965,14 +5987,17 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             actorUserId ?? null,
           );
           try {
+            await cancellationCheckpoint();
             const materialized = await instructions.materializeManagedBundle(created, bundleFiles, {
               clearLegacyPromptTemplate: true,
               replaceExisting: true,
             });
+            await cancellationCheckpoint();
             created = await agents.update(created.id, { adapterConfig: materialized.adapterConfig }) ?? created;
           } catch (err) {
             warnings.push(`Failed to materialize instructions bundle for ${manifestAgent.slug}: ${err instanceof Error ? err.message : String(err)}`);
           }
+          await cancellationCheckpoint();
           await applyImportedAgentPermissionGrants(
             targetCompany.id,
             created.id,
@@ -5980,6 +6005,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             actorUserId ?? null,
           );
           agentStatusById.set(created.id, created.status ?? (pauseAutomations ? "paused" : "idle"));
+          await cancellationCheckpoint();
           await secrets.syncEnvBindingsForTarget?.(
             targetCompany.id,
             { targetType: "agent", targetId: created.id },
@@ -5998,6 +6024,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
 
         // Apply reporting links once all imported agent ids are available.
         for (const manifestAgent of plan.selectedAgents) {
+          await cancellationCheckpoint();
           const agentId = importedSlugToAgentId.get(manifestAgent.slug);
           if (!agentId) continue;
           const managerSlug = manifestAgent.reportsToSlug;
@@ -6019,6 +6046,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
               : null);
           if (!managerId || managerId === agentId) continue;
           try {
+            await cancellationCheckpoint();
             await agents.update(agentId, { reportsTo: managerId });
           } catch {
             const managerRef =
@@ -6032,6 +6060,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
 
       if (include.projects) {
         await cancellationCheckpoint();
+        effectsStarted = true;
         for (const planProject of plan.preview.plan.projectPlans) {
           await cancellationCheckpoint();
           const manifestProject = sourceManifest.projects.find((project) => project.slug === planProject.slug);
@@ -6139,6 +6168,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           );
 
           for (const workspace of manifestProject.workspaces) {
+            await cancellationCheckpoint();
             const createdWorkspace = await projects.createWorkspace(projectId, {
               name: workspace.name,
               sourceType: workspace.sourceType ?? undefined,
@@ -6175,6 +6205,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
 
       if (include.issues) {
         await cancellationCheckpoint();
+        effectsStarted = true;
         const routines = routineService(db);
 
         // Resolve label names against the target company before creating
@@ -6202,6 +6233,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           for (const label of targetLabels) existingTargetLabelIds.add(label.id);
           const keptColorNames: string[] = [];
           for (const name of Array.from(referencedLabelNames).sort((left, right) => left.localeCompare(right))) {
+            await cancellationCheckpoint();
             const existing = targetLabelByName.get(name);
             if (existing) {
               labelIdByName.set(name, existing.id);
@@ -6322,6 +6354,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
               warnings.push(`Routine ${manifestIssue.slug} was imported without an assignee and will stay paused until one is set.`);
             }
             for (const trigger of routineDefinition.triggers) {
+              await cancellationCheckpoint();
               if (trigger.kind === "schedule") {
                 await routines.createTrigger(createdRoutine.id, {
                   kind: "schedule",
@@ -6371,6 +6404,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           }
           const resolvedLabelIds: string[] = [];
           for (const name of manifestIssue.labelNames ?? []) {
+            await cancellationCheckpoint();
             const labelId = labelIdByName.get(name);
             if (labelId && !resolvedLabelIds.includes(labelId)) resolvedLabelIds.push(labelId);
           }
@@ -6380,6 +6414,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             warnings.push(`Task ${manifestIssue.slug} dropped ${unresolvedLegacyCount} label reference${unresolvedLegacyCount === 1 ? "" : "s"} because the bundle carries raw label ids that do not exist in the target company.`);
           }
           for (const labelId of legacyLabelIds) {
+            await cancellationCheckpoint();
             if (existingTargetLabelIds.has(labelId) && !resolvedLabelIds.includes(labelId)) {
               resolvedLabelIds.push(labelId);
             }
@@ -6392,6 +6427,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           // entries can resolve their commentIndex against them.
           const createdCommentIds: Array<string | null> = [];
           for (const comment of manifestIssue.comments ?? []) {
+            await cancellationCheckpoint();
             const authorAgentId = comment.authorType === "agent" && comment.authorAgentSlug
               ? importedSlugToAgentId.get(comment.authorAgentSlug)
                 ?? existingSlugToAgentId.get(comment.authorAgentSlug)
@@ -6431,6 +6467,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             parentSlugBySlug.set(manifestIssue.slug, manifestIssue.parentSlug);
           }
           for (const documentEntry of manifestIssue.documents ?? []) {
+            await cancellationCheckpoint();
             const documentBody = readPortableTextFile(plan.source.files, documentEntry.path);
             if (documentBody === null) {
               warnings.push(`Task ${manifestIssue.slug} document ${documentEntry.key} was skipped because its file is missing from the package: ${documentEntry.path}`);
@@ -6450,6 +6487,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             });
           }
           for (const workProductEntry of manifestIssue.workProducts ?? []) {
+            await cancellationCheckpoint();
             workProductRows.push({
               companyId: targetCompany.id,
               issueId,
@@ -6485,6 +6523,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             unarmedMonitorCount += 1;
           }
           for (const attachmentEntry of manifestIssue.attachments ?? []) {
+            await cancellationCheckpoint();
             const attachmentLabel = attachmentEntry.originalFilename ?? attachmentEntry.sha256;
             if (!storage) {
               attachmentsSkippedNoStorage += 1;
@@ -6639,6 +6678,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         // handful per table. Empty buffers are skipped so an issues-free import
         // (e.g. routines only) issues no writes at all.
         const publications: ActivityPublication[] = [];
+        await cancellationCheckpoint();
         await db.transaction(async (tx) => {
           await lockIssuePrivacyTree(tx, targetCompanyId);
           await validateCopySources(sourceManifest, input.target, include, importActor, options?.privateWorkAdmission, tx);
@@ -6688,9 +6728,11 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           };
           const relationRows: Array<{ issueId: string; relatedIssueId: string }> = [];
           for (const [slug, blockerSlugs] of blockedByBySlug) {
+            await cancellationCheckpoint();
             const blockedIssueId = importedIssueIdBySlug.get(slug);
             if (!blockedIssueId) continue;
             for (const blockerSlug of blockerSlugs) {
+              await cancellationCheckpoint();
               const blockerIssueId = importedIssueIdBySlug.get(blockerSlug);
               if (!blockerIssueId) {
                 warnings.push(`Task ${slug} blocker ${blockerSlug} was skipped because that task was not imported.`);

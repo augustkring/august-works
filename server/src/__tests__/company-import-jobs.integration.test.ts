@@ -221,6 +221,9 @@ describeEmbeddedPostgres("native company import job ledger", () => {
     expect(cancelled).toMatchObject({ status: "cancelled", progressStage: "cancelled", cancelRequestedAt: expect.any(Date) });
     expect(await service.start(admitted.job, actor)).toBe(false);
     expect((await service.requestCancellation(admitted.job.id, authority.actorKey, actor))?.status).toBe("cancelled");
+    const retried = await service.admit(admission(authority), actor);
+    expect(retried).toMatchObject({ replay: false, job: { id: admitted.job.id, status: "running", attempt: admitted.job.attempt + 1 } });
+    expect(await service.start(retried.job, actor)).toBe(true);
   }, 90_000);
 
   it("keeps cancellation requested during effects and makes restart inconclusive", async () => {
@@ -235,6 +238,20 @@ describeEmbeddedPostgres("native company import job ledger", () => {
     expect(await service.cancellationRequested(admitted.job)).toBe(true);
     await service.recoverInterrupted();
     expect((await service.get(admitted.job.id, authority.actorKey))?.status).toBe("needs_reconciliation");
+  }, 90_000);
+
+  it("requires the original current session and company access to request cancellation", async () => {
+    const authority = await seedAuthority(true);
+    const actor = authority.actor!;
+    const other = await seedAuthority(true);
+    const service = companyImportJobService(db);
+    const admitted = await service.admit(admission(authority), actor);
+    expect(await service.requestCancellation(admitted.job.id, other.actorKey, other.actor!)).toBeNull();
+
+    await db.delete(companyMemberships).where(and(eq(companyMemberships.companyId, authority.companyId),
+      eq(companyMemberships.principalId, authority.userId)));
+    await expect(service.requestCancellation(admitted.job.id, authority.actorKey, actor)).rejects.toMatchObject({ status: 403 });
+    expect((await service.get(admitted.job.id, authority.actorKey))?.status).toBe("running");
   }, 90_000);
 
 });

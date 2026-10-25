@@ -18,6 +18,7 @@ import type { heartbeatService } from "../services/heartbeat.js";
 import { assertBoard, assertCompanyAccess } from "./authz.js";
 import { resolveGitHubOperationCredentials } from "../services/github-operation-credentials.js";
 import { workerModelCallSchema } from "@paperclipai/shared";
+import { selectMcpProtocolVersion } from "../services/mcp-http.js";
 import type { workerModelGateway } from "../services/orchestration/worker-model-gateway.js";
 
 function bearer(req: Request) {
@@ -106,7 +107,7 @@ export function runtimeConnectionIntentRoutes(db: Db, workerModels?: ReturnType<
 
   router.get("/mcp/runtime-tools", async (req, res) => {
     await service.validate(runtimeClaims(req));
-    res.json({ name: "paperclip-runtime-tools", protocolVersion: "2025-03-26" });
+    res.json({ name: "blentera-runtime-tools", protocolVersion: "2026-07-28" });
   });
 
   router.post("/mcp/runtime-tools", async (req, res) => {
@@ -122,9 +123,10 @@ export function runtimeConnectionIntentRoutes(db: Db, workerModels?: ReturnType<
         jsonrpc: "2.0",
         id,
         result: {
-          protocolVersion: "2025-03-26",
+          protocolVersion: selectMcpProtocolVersion(request.params && typeof request.params === "object"
+            ? (request.params as Record<string, unknown>).protocolVersion : undefined),
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: "paperclip-runtime-tools", version: "1" },
+          serverInfo: { name: "blentera-runtime-tools", version: "1" },
         },
       });
       return;

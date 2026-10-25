@@ -48,8 +48,9 @@ export type GitCacheRestoration = {
 type InspectedGitCacheRestoration = GitCacheRestoration & { [inspectedRecipeBrand]: true };
 export type GitWorkspaceCleanupProof = {
   readonly workspaceId: string;
+  readonly branchHeadSha: string;
   readonly [cleanupProofBrand]: true;
-  readonly recheck: () => Promise<void>;
+  readonly recheck: (boundary: "before_cleanup" | "before_worktree_remove" | "before_branch_delete") => Promise<void>;
 };
 type Workspace = {
   id: string; companyId: string; projectId: string | null; projectWorkspaceId: string | null;
@@ -406,14 +407,21 @@ export async function inspectGitCacheRecipe(workspace: Workspace, resolveGitAuth
 
 /** Mint only from a live inspection, never from JSON metadata. The recheck runs
  * at the destructive boundary while the caller holds the lifecycle lock. */
-export function createGitWorkspaceCleanupProof(recipe: GitCacheRestoration, recheck: () => Promise<void>): GitWorkspaceCleanupProof {
+export function createGitWorkspaceCleanupProof(
+  recipe: GitCacheRestoration,
+  recheck: GitWorkspaceCleanupProof["recheck"],
+): GitWorkspaceCleanupProof {
   if (!(inspectedRecipeBrand in recipe)) throw new GitCacheRestorationFailure();
-  return Object.freeze({ workspaceId: recipe.workspaceId, recheck, [cleanupProofBrand]: true as const });
+  return Object.freeze({ workspaceId: recipe.workspaceId, branchHeadSha: recipe.commit, recheck, [cleanupProofBrand]: true as const });
 }
 
-export async function assertGitWorkspaceCleanupProof(proof: GitWorkspaceCleanupProof | undefined, workspaceId: string) {
+export async function assertGitWorkspaceCleanupProof(
+  proof: GitWorkspaceCleanupProof | undefined,
+  workspaceId: string,
+  boundary: "before_cleanup" | "before_worktree_remove" | "before_branch_delete" = "before_cleanup",
+) {
   if (!proof || !(cleanupProofBrand in proof) || proof.workspaceId !== workspaceId) throw new GitCacheRestorationFailure();
-  await proof.recheck();
+  await proof.recheck(boundary);
 }
 
 export async function ensureSavedGitCommit(cwd: string, repoUrl: string, commit: string, resolveGitAuth: GitRemoteAuthProvider) {

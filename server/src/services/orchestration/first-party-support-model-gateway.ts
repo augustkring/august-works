@@ -243,6 +243,7 @@ export function firstPartySupportModelGateway(db: Db, options: GatewayOptions) {
     });
     const reservation = await reservations.reserveCompanyPurpose(actor, {
       companyId,
+      purpose: "first_party_support",
       idempotencyKey: request.requestId,
       inputHash,
       authorityHash: initialAuthority,

@@ -4061,6 +4061,16 @@ export async function cleanupExecutionWorkspaceArtifacts(input: {
     const status = await runGit(["-c", "core.fsmonitor=false", "status", "--porcelain=v1", "--untracked-files=all", "--ignored=matching", "-z"], workspacePath);
     if (status) throw new Error("Workspace files require preservation before cleanup.");
   };
+  const assertLocalContentsSafe = async () => {
+    if (input.workspace.providerType !== "local_fs" || input.workspace.metadata?.createdByRuntime !== true || !workspacePath) return;
+    const target = path.resolve(workspacePath);
+    const stat = await fs.lstat(target).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return null;
+      throw error;
+    });
+    if (stat && (!stat.isDirectory() || stat.isSymbolicLink())) throw new Error("unsafe_local_workspace_path");
+    if (stat && (await fs.readdir(target)).length > 0) throw new Error("local_workspace_contains_files");
+  };
   await input.assertSafeToCleanup?.();
   if (input.workspace.providerType === "git_worktree") {
     try {
@@ -4071,9 +4081,14 @@ export async function cleanupExecutionWorkspaceArtifacts(input: {
     }
   }
   try {
-    await assertGitContentsSafe();
+    if (input.workspace.providerType !== "git_worktree") await assertGitContentsSafe();
+    await assertLocalContentsSafe();
   } catch {
-    return { cleanedPath: workspacePath, cleaned: false, warnings: ["Workspace files could not be verified for cleanup; the workspace was kept."] };
+    return { cleanedPath: workspacePath, cleaned: false, warnings: [
+      input.workspace.providerType === "local_fs"
+        ? "Workspace files require preservation before cleanup; the workspace was kept."
+        : "Workspace files could not be verified for cleanup; the workspace was kept.",
+    ] };
   }
   let worktreeInstancePointer: WorktreeInstancePointer | null = null;
   let expectedWorktreeInstanceId: string | null = null;
@@ -4155,7 +4170,7 @@ export async function cleanupExecutionWorkspaceArtifacts(input: {
       } else {
         try {
           await input.assertSafeToCleanup?.();
-          await assertGitContentsSafe();
+          await assertGitWorkspaceCleanupProof(input.gitRestorationProof, input.workspace.id, "before_worktree_remove");
           await recordGitOperation(input.recorder, {
             phase: "worktree_cleanup",
             args: [
@@ -4185,6 +4200,7 @@ export async function cleanupExecutionWorkspaceArtifacts(input: {
       } else {
         try {
           await input.beforeBranchDelete?.();
+          await assertGitWorkspaceCleanupProof(input.gitRestorationProof, input.workspace.id, "before_branch_delete");
           const metadata = {
             workspaceId: input.workspace.id,
             workspacePath,

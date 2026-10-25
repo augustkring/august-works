@@ -107,7 +107,7 @@ async function fixture(work, hooks = {}) {
         return { stdout: JSON.stringify(hooks.modelBrokerProfile ?? hooks.brokerProfile ?? {}) };
       if (command[0] === "provider" && command[1] === "create") {
         assert.ok(!args.some(value => String(value).includes(hooks.brokerToken ?? "__never__")));
-        assert.equal(options.env.PAPERCLIP_SANDBOX_BROKER_TOKEN, hooks.brokerToken);
+        assert.equal(options.env.PAPERCLIP_SANDBOX_BROKER_TOKEN ?? options.env.PAPERCLIP_SANDBOX_MODEL_TOKEN, hooks.brokerToken, `provider env keys: ${Object.keys(options.env).join(",")}`);
         return { stdout: "provider created" };
       }
       if (command[0] === "provider" && command[1] === "update") return { stdout: "provider updated" };

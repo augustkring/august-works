@@ -1985,7 +1985,7 @@ describe("company portability", () => {
     };
 
     const beforeEffect = portability.importBundle(request, "user-1", {
-      checkCancellation: async () => { throw new Error("cancel requested"); },
+      checkCancellation: async () => true,
     });
     await expect(beforeEffect).rejects.toBeInstanceOf(ImportCancellationError);
     await expect(beforeEffect).rejects.toMatchObject({ effectsStarted: false });
@@ -1994,7 +1994,7 @@ describe("company portability", () => {
     companySvc.create.mockResolvedValue({ id: "company-import-checkpoint", name: "Import checkpoint" });
     let checks = 0;
     const afterEffect = portability.importBundle(request, "user-1", {
-      checkCancellation: async () => { if (++checks === 2) throw new Error("cancel requested"); },
+      checkCancellation: async () => ++checks === 2,
     });
     await expect(afterEffect).rejects.toBeInstanceOf(ImportCancellationError);
     await expect(afterEffect).rejects.toMatchObject({ effectsStarted: true });

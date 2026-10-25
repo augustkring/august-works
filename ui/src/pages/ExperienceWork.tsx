@@ -49,7 +49,7 @@ export function ExperienceWork() {
       <Button
         className="min-h-11"
         onClick={() =>
-          document.dispatchEvent(new Event("paperclip:open-command"))
+          document.dispatchEvent(new Event("paperclip:ask-generalist"))
         }
       >
         {t("ask")}

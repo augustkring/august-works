@@ -1058,7 +1058,7 @@ export async function createApp(
   app.locals.toolActionDeliveries = toolActionDeliveries;
   app.use(mcpGatewayProtocolRoutes(toolGateway));
   api.use(aiConnectionRoutes(db, { deploymentMode: opts.deploymentMode, deploymentExposure: opts.deploymentExposure, trustedLocalStdioRuntimeHost }));
-  api.use(jevDecisionRoutes(db));
+  api.use(jevDecisionRoutes(db, { sourceSha: opts.decisionShadow?.sourceSha, profiles: opts.decisionShadow?.profiles }));
   api.use(
     toolAccessRoutes(db, {
       deploymentMode: opts.deploymentMode,

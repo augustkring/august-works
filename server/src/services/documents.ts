@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { documentRevisions, documents, issueDocuments, issues, heartbeatRuns, orchestrationModelReservations } from "@paperclipai/db";
@@ -58,8 +59,8 @@ async function persistNativeAwDocumentCapture(tx: DocumentTx, input: {
     intent.callId !== capture.dispatch.callId || intent.requestHash !== capture.dispatch.requestHash ||
     intent.wireBodyHash !== capture.dispatch.wireBodyHash || intent.endpoint !== "https://api.anthropic.com/v1/messages" ||
     intent.method !== "POST" ||
-    JSON.stringify(bootstrap.policy) !== JSON.stringify(capture.sourceSet.policy) ||
-    JSON.stringify(bootstrap.inputs) !== JSON.stringify(capture.sourceSet.inputs))
+    !isDeepStrictEqual(bootstrap.policy, capture.sourceSet.policy) ||
+    !isDeepStrictEqual(bootstrap.inputs, capture.sourceSet.inputs))
     throw forbidden("The Native draft source or exact wire receipt changed before document capture");
 
   const inputs = [...capture.sourceSet.inputs, capture.dispatch];

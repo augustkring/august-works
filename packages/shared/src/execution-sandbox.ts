@@ -52,4 +52,5 @@ export interface SandboxPolicyCompilation {
   schemaVersion: 1; compilerVersion: "aw-v7.2"; boundaryPolicyHash: string; candidatePolicyHash: string; staticPolicyFingerprint: string;
   proverResult: "pass" | "fail" | "unsupported"; unsupportedFeatures: string[]; failedBoundaries: string[];
   enforcementProfile: SandboxPolicy["profile"]; sourcePolicyRefs: string[]; compiledPolicy: SandboxPolicy;
+  modelBrokerEndpoint?: { hostname: string; port: number; path: "/runtime-tools/model/v1/messages" };
 }

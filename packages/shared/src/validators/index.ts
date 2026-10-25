@@ -129,7 +129,10 @@ export {
 export {
   sidebarOrderPreferenceSchema,
   upsertSidebarOrderPreferenceSchema,
+  preferredCoworkerPreferenceSchema,
+  setPreferredCoworkerPreferenceSchema,
   type UpsertSidebarOrderPreference,
+  type SetPreferredCoworkerPreference,
 } from "./sidebar-preferences.js";
 export {
   resourceMembershipStateSchema,

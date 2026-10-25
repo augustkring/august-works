@@ -109,7 +109,7 @@ export function ExperienceNavigation() {
           variant="ghost"
           className="min-h-11 w-full justify-start"
           onClick={() =>
-            document.dispatchEvent(new Event("paperclip:open-command"))
+            document.dispatchEvent(new Event("paperclip:ask-generalist"))
           }
         >
           <Search className="mr-2 h-4 w-4" />

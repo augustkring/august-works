@@ -2354,6 +2354,23 @@
       },
       "summary": [],
       "sourceCommit": "f6ab0bdd93a5aadfd29664ed8123cb6dd11f3b49"
+    },
+    {
+      "name": "v10-recovery-build",
+      "exitCode": 2,
+      "exitSidecar": "v10-recovery-build.exit",
+      "rawSha256": "e4134022c7b764f4a62dc965f65000110ad2375c3bcc1ac3a5d64521d81f13ae",
+      "sanitizedSha256": "99b9d705baa93a96851d2977dca24199afbc317989de4499e3f859de02bd3b7f",
+      "archiveSha256": "fbedb26b9407a334396707b746838450bddd74e84a8c0fc34e381cced273a412",
+      "redactions": {
+        "ansi": 72,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "0b5223edcce06c03f2242c4ac95993ac75d5a4b3"
     }
   ],
   "updates": [
@@ -2700,6 +2717,13 @@
       "meaning": "Serial whole-workspace diagnostic during active integration; failed server has transport variable and import DTO/OpenAPI errors, not final acceptance",
       "logs": [
         "v10-recovery-workspace-typecheck"
+      ]
+    },
+    {
+      "sourceCommit": "0b5223edcce06c03f2242c4ac95993ac75d5a4b3",
+      "meaning": "Whole-workspace build diagnostic during new Jev setup and import API integration; expected failed compiler output retained, fixes in progress",
+      "logs": [
+        "v10-recovery-build"
       ]
     }
   ],

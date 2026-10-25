@@ -40,7 +40,7 @@ import { authorizationService } from "../services/authorization.js";
 import type { AuthorizationActor } from "../services/authorization.js";
 import { projectRoutes } from "../routes/projects.js";
 import { errorHandler } from "../middleware/error-handler.js";
-import { GIT_CACHE_RESTORATION_KEY, inspectGitCacheRecipe } from "../services/git-workspace-restoration.js";
+import { cleanupExecutionWorkspaceArtifacts } from "../services/workspace-runtime.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -402,27 +402,38 @@ describeEmbeddedPostgres("reopen archived isolated execution workspace", () => {
       await db.update(executionWorkspaces).set({ sourceIssueId: issueId })
         .where(eq(executionWorkspaces.id, workspaceId));
 
-      // Capture a real recipe from this linked worktree and its actual commit
-      // before simulating the reaper removing the worktree. This exercises the
-      // same immutable recipe verifier used by the reopen owner; no mutable
-      // branch-head fallback can satisfy the test.
+      // Exercise the same archive owner path that must persist a recipe before
+      // destroying a clean worktree, then reopen through the existing issue owner.
       execFileSync("git", ["-C", managedDir, "worktree", "add", deletedWorktree, branchName], { stdio: "ignore" });
-      const [workspaceRow] = await db.select().from(executionWorkspaces).where(eq(executionWorkspaces.id, workspaceId));
-      const [sourceRow] = await db.select().from(projectWorkspaces).where(eq(projectWorkspaces.id, projectWorkspaceId));
-      const metadata = { ...(workspaceRow.metadata as Record<string, unknown>), createdByRuntime: true,
+      const metadata = { [EXECUTION_WORKSPACE_LIFECYCLE_GENERATION_METADATA_KEY]: 1, createdByRuntime: true,
         gitBranchOwnershipVersion: 1 };
-      const recipe = await inspectGitCacheRecipe({
-        id: workspaceId, companyId, projectId, projectWorkspaceId, sourceIssueId: issueId,
-        repoUrl, baseRef: null, sourceRepoRef: sourceRow.repoRef, sourceCwd: sourceRow.cwd,
-        sourceType: sourceRow.sourceType, sourceVisibility: sourceRow.visibility,
-        mode: "isolated_workspace", strategyType: "git_worktree", branchName,
-        cwd: deletedWorktree, providerRef: deletedWorktree, metadata,
-      }, async () => null);
-      execFileSync("git", ["-C", managedDir, "worktree", "remove", "--force", deletedWorktree], { stdio: "ignore" });
-      await db.update(executionWorkspaces).set({ metadata: { ...metadata, [GIT_CACHE_RESTORATION_KEY]: recipe } })
+      await db.update(executionWorkspaces).set({ providerType: "git_worktree", metadata })
         .where(eq(executionWorkspaces.id, workspaceId));
 
       const svc = executionWorkspaceService(db);
+      let proof = await svc.prepareGitWorkspaceCleanupProof({ workspaceId, actor: localBoardActor });
+      expect(proof).toBeTruthy();
+      // A source identity change after recipe capture invalidates the cleanup
+      // capability at the destructive boundary and leaves the original worktree.
+      await db.update(projectWorkspaces).set({ repoRef: "withdrawn-source" })
+        .where(eq(projectWorkspaces.id, projectWorkspaceId));
+      const archived = await readWorkspace(workspaceId);
+      const refused = await cleanupExecutionWorkspaceArtifacts({
+        workspace: archived!, projectWorkspace: { cwd: null, cleanupCommand: null },
+        gitRestorationProof: proof!, forceWorktreeRemoval: false,
+      });
+      expect(refused.cleaned).toBe(false);
+      expect((await stat(deletedWorktree)).isDirectory()).toBe(true);
+      await db.update(projectWorkspaces).set({ repoRef: null }).where(eq(projectWorkspaces.id, projectWorkspaceId));
+      proof = await svc.prepareGitWorkspaceCleanupProof({ workspaceId, actor: localBoardActor });
+      expect(proof).toBeTruthy();
+      const cleanup = await cleanupExecutionWorkspaceArtifacts({
+        workspace: archived!, projectWorkspace: { cwd: null, cleanupCommand: null },
+        gitRestorationProof: proof!, forceWorktreeRemoval: false,
+      });
+      expect(cleanup.cleaned).toBe(true);
+      await expect(stat(deletedWorktree)).rejects.toThrow();
+
       const result = await svc.reopenClosedIsolatedExecutionWorkspaceForIssue({
         workspaceId,
         issue: { id: issueId, companyId, projectId },

@@ -308,7 +308,9 @@ export function Sidebar({ children }: { children?: ReactNode }) {
         ) : null}
 
         {children}
-        {agentChatEnabled && !children && <SidebarAgentChats />}
+        {/* Keep the Ask action's preference/picker listener mounted even when
+            chat navigation itself is disabled or supplied by a child layout. */}
+        <SidebarAgentChats enabled={agentChatEnabled} showNavigation={agentChatEnabled && !children} />
 
         {streamlinedUiEnabled ? (
           <SidebarRecentTasks companyId={selectedCompanyId} liveIssueIds={liveIssueIds} />

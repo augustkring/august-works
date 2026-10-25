@@ -19,12 +19,13 @@ const profileSchema = z.object({
   qualificationHash: z.string().regex(/^[a-f0-9]{64}$/), processor: z.literal("openrouter"), processorTermsHash: z.string().regex(/^[a-f0-9]{64}$/),
   retentionPolicyHash: z.string().regex(/^[a-f0-9]{64}$/), retentionDays: z.number().int().min(0).max(365),
   testedAt: z.iso.datetime(), expiresAt: z.iso.datetime(), processingRegion: z.literal("us"),
+  setupCostCapMinor: z.number().int().min(1).max(1000), setupMaxCalls: z.number().int().min(1).max(100),
   tariff: modelTariffCeilingSchema, inputTokensUpperBound: z.number().int().min(1).max(32_000), maxOutputTokens: z.number().int().min(1).max(2048),
 }).strict();
 export type JevSkillSuggestionProfile = z.infer<typeof profileSchema>;
-function digestCredential(value: string) { return createHash("sha256").update(value).digest("hex"); }
+export function jevCredentialBindingHash(value: string) { return createHash("sha256").update(value).digest("hex"); }
 function hmacInput(key: string, value: unknown) { return createHmac("sha256", key).update(JSON.stringify(value)).digest("hex"); }
-function profileCurrent(profile: JevSkillSuggestionProfile, input: { companyId: string; connectionId: string; grantId: string; sourceSha: string }, now: Date) {
+export function jevProfileCurrent(profile: JevSkillSuggestionProfile, input: { companyId: string; connectionId: string; grantId: string; sourceSha: string }, now: Date) {
   const parsed = profileSchema.safeParse(profile);
   if (!parsed.success) return false;
   const p = parsed.data;
@@ -33,6 +34,17 @@ function profileCurrent(profile: JevSkillSuggestionProfile, input: { companyId: 
     p.tariff.sourceSha === input.sourceSha && p.tariff.provider === "openrouter" && p.tariff.model === JEV_DECISION_MODEL &&
     p.tariff.qualificationHash === p.qualificationHash && Date.parse(p.testedAt) <= now.getTime() && Date.parse(p.expiresAt) > now.getTime() &&
     Date.parse(p.expiresAt) - Date.parse(p.testedAt) <= 7 * 86_400_000 && profileHash === nativeSha256(contract);
+}
+/** Operator-owned deployment profile input. Invalid or stale rows fail closed
+ * as unavailable; request data can never create or update these profiles. */
+export function configuredJevSkillSuggestionProfiles(raw: string | undefined, sourceSha: string, now = new Date()): JevSkillSuggestionProfile[] {
+  if (!raw) return [];
+  let decoded: unknown;
+  try { decoded = JSON.parse(raw); } catch { return []; }
+  const parsed = z.array(profileSchema).safeParse(decoded);
+  return parsed.success ? parsed.data.filter(profile => jevProfileCurrent(profile, {
+    companyId: profile.companyId, connectionId: profile.connectionId, grantId: profile.grantId, sourceSha,
+  }, now)) : [];
 }
 function currentMode(row: typeof jevDecisionSettings.$inferSelect | undefined): JevDecisionMode { return row?.mode ?? "off"; }
 async function allowsProcessingRegion(db: Db, companyId: string, region: string, sourceSha: string, now = new Date()) {
@@ -70,7 +82,7 @@ export function jevSkillSuggestionService(db: Db, options: {
   const provider = options.provider ?? runJevDecision;
   function profileFor(input: { companyId: string; connectionId: string; grantId: string }, now: Date) {
     const matches = (options.profiles ?? []).filter(p => p.companyId === input.companyId && p.connectionId === input.connectionId && p.grantId === input.grantId);
-    if (matches.length !== 1 || !profileCurrent(matches[0]!, { ...input, sourceSha: options.sourceSha }, now)) return null;
+    if (matches.length !== 1 || !jevProfileCurrent(matches[0]!, { ...input, sourceSha: options.sourceSha }, now)) return null;
     return matches[0]!;
   }
   type Candidate = { skillId: string; versionId: string; key: string; name: string };
@@ -122,7 +134,7 @@ export function jevSkillSuggestionService(db: Db, options: {
       connectionId: config.connectionId, grantId: config.grantId });
     const key = await aiConnectionService(db).credential(selected, { responsibleUserId: first.run.responsibleUserId, actorType: "agent", actorId: input.agentId,
       issueId: input.issueId, heartbeatRunId: input.runId });
-    if (digestCredential(key) !== profile.credentialBindingHash) return { dispatched: false as const, reason: "unqualified_account" as const };
+    if (jevCredentialBindingHash(key) !== profile.credentialBindingHash) return { dispatched: false as const, reason: "unqualified_account" as const };
     const candidates = first.candidates;
     const criteria = Object.fromEntries([...candidates.map(candidate => [candidate.skillId, `${candidate.name} (${candidate.key})`]), ["none", "No suitable Skill"]]);
     const request = jevDecisionRequestSchema.parse({ state: { taskIntent: input.query, eligibleSkillCandidates: candidates.map(({ skillId, versionId, key: skillKey, name }) => ({ skillId, versionId, key: skillKey, name })), deterministicBaselineSkillIds: input.baselineSkillIds },
@@ -150,7 +162,7 @@ export function jevSkillSuggestionService(db: Db, options: {
           credentialExpiresAt: credentialExpiry(currentConnection.grant), now: Date.now() });
         return latest.settings?.mode === "shadow" && latest.settings.allowBackground && latest.settings.connectionId === config.connectionId && latest.settings.grantId === config.grantId &&
           nativeSha256(latest.candidates.map(item => [item.skillId, item.versionId, item.key, item.name])) === nativeSha256(candidateSet) &&
-          digestCredential(currentCredential) === profile.credentialBindingHash &&
+          jevCredentialBindingHash(currentCredential) === profile.credentialBindingHash &&
           currentWork?.plan.id === reservationInput.planId && currentWork.worker.id === work.worker.id && currentWork.attempt.id === work.attempt.id &&
           currentDeadline! > Date.now() && deadlineAt > Date.now() &&
           await allowsProcessingRegion(tx, input.companyId, profile.processingRegion, options.sourceSha) ? authorityHash : "";
@@ -172,7 +184,7 @@ export function jevSkillSuggestionService(db: Db, options: {
     timeout.unref();
     const recheck = async () => {
       controller.signal.throwIfAborted();
-      if (!profileCurrent(profile, { companyId: input.companyId, connectionId: config.connectionId!, grantId: config.grantId!, sourceSha: options.sourceSha }, new Date())) throw forbidden("The operator-qualified Jev profile expired or changed");
+      if (!jevProfileCurrent(profile, { companyId: input.companyId, connectionId: config.connectionId!, grantId: config.grantId!, sourceSha: options.sourceSha }, new Date())) throw forbidden("The operator-qualified Jev profile expired or changed");
       const latest = await current(actor, input);
       if (latest.settings?.mode !== "shadow" || latest.settings.allowBackground !== true || latest.settings.connectionId !== config.connectionId || latest.settings.grantId !== config.grantId) throw forbidden("Jev shadow was disabled or its connection changed");
       if (nativeSha256(latest.candidates.map(item => [item.skillId, item.versionId, item.key, item.name])) !== nativeSha256(candidateSet)) throw forbidden("The current eligible Skill candidate set changed");
@@ -181,7 +193,7 @@ export function jevSkillSuggestionService(db: Db, options: {
         connectionId: config.connectionId!, grantId: config.grantId! });
       const currentCredential = await aiConnectionService(db).credential(currentConnection, { responsibleUserId: first.run.responsibleUserId,
         actorType: "agent", actorId: input.agentId, issueId: input.issueId, heartbeatRunId: input.runId });
-      if (digestCredential(currentCredential) !== profile.credentialBindingHash) throw forbidden("The qualified Jev connection credential changed");
+      if (jevCredentialBindingHash(currentCredential) !== profile.credentialBindingHash) throw forbidden("The qualified Jev connection credential changed");
       const latestWork = await readActiveWork(db, input);
       if (!latestWork || latestWork.plan.id !== work.plan.id || latestWork.worker.id !== work.worker.id || latestWork.attempt.id !== work.attempt.id ||
         executionDeadline({ run: latest.run, plan: latestWork.plan, profile,
@@ -199,7 +211,7 @@ export function jevSkillSuggestionService(db: Db, options: {
           connectionId: config.connectionId!, grantId: config.grantId! });
         const latestKey = await aiConnectionService(db).credential(latestSelection, { responsibleUserId: first.run.responsibleUserId, actorType: "agent", actorId: input.agentId,
           issueId: input.issueId, heartbeatRunId: input.runId });
-        if (digestCredential(latestKey) !== profile.credentialBindingHash) throw forbidden("The qualified Jev connection credential changed");
+        if (jevCredentialBindingHash(latestKey) !== profile.credentialBindingHash) throw forbidden("The qualified Jev connection credential changed");
         await recheck();
         providerStarted = true;
         const result = await provider({ model: JEV_DECISION_MODEL, apiKey: latestKey, request, signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]) });

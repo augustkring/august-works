@@ -12,7 +12,7 @@ locale: da
 last_verified_at: 2026-10-25
 review_trigger: Ændringer i appforbindelser, udbydergodkendelse, fornyelse af adgang eller adgangskontrol
 security_or_privacy_sensitive: true
-linked_source_files: [ui/src/pages/apps/Connections.tsx, ui/src/pages/apps/AppNotConnected.tsx, ui/src/pages/apps/AppDetail.tsx, ui/src/pages/apps/app-detail/PermissionsPanel.tsx]
+linked_source_files: [ui/src/pages/apps/Connections.tsx, ui/src/pages/apps/AppNotConnected.tsx, ui/src/pages/apps/AppDetail.tsx, ui/src/pages/apps/app-detail/PermissionsPanel.tsx, ui/src/components/JevSkillSuggestionSettings.tsx, server/src/routes/jev-decisions.ts, server/src/services/jev-skill-suggestions.ts]
 ---
 
 Åbn **Apps** eller **Company settings → Apps and data** for at se de forbindelser, virksomheden kan bruge. Apps, loginmetoder og kontroller afhænger af den aktuelle installation.
@@ -28,3 +28,9 @@ En forbindelse giver adgang til den valgte konto og det viste omfang. Det betyde
 Hvis en forbindelse viser **Reconnect** eller **Reconnect required**, skal du åbne den og bruge handlingen til at genoprette forbindelsen. Log ind på den samme udbyderkonto, og gennemgå den aktuelle adgangsanmodning. Nogle apps kan bede dig om at erstatte adgangsoplysninger eller vælge en arbejdsplads igen. Detaljerne varierer mellem udbydere.
 
 Kontrollér forbindelsens status, når du vender tilbage. Indsæt ikke adgangskoder, API-nøgler eller gendannelseskoder i en opgave eller supportanmodning. Hvis genforbindelse ikke er tilgængelig, eller status stadig er uklar, kan du kontakte [menneskelig support](/da/help/index) med appens navn og den ikke-hemmelige status, der vises.
+
+## Valgfrie Jev-beslutninger om Skills
+
+Virksomhedens forbindelsesadministratorer kan vælge en delt OpenRouter API-nøgle under **Virksomhedsindstillinger → Valgfrie Jev-forslag til Skills**. Jev er slået fra som standard. Når forbindelsen gemmes, starter baggrundskald ikke. Baggrundskontroller i skyggetilstand kræver både **Skyggevaluering** og den særskilte indstilling **Tillad baggrundskontroller i skyggetilstand**. Den native Skill-løsning er fortsat bestemmende, og påkrævede Skills ændres ikke.
+
+Opsætningstesten sender kun en fast, harmløs prøve til den valgte OpenRouter-konto. OpenRouter fakturerer kontoen op til **0,05 USD pr. test**. Gennemgå meddelelsen, og giv udtrykkeligt samtykke for hver test. Et vellykket svar bekræfter kun forbindelsen; det kvalificerer eller aktiverer ikke Skill-forslag. Der kræves en aktuel operatørkvalificeret Jev-profil og virksomhedens behandlingspolitik. EU-begrænsede politikker blokerer denne OpenRouter-rute.
