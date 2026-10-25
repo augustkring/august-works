@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { resolveManagedProjectWorkspaceDir } from "../home-paths.js";
@@ -46,7 +46,7 @@ async function git(cwd: string, ...args: string[]) {
   return (await execFile("git", ["-c", "core.fsmonitor=false", "-C", cwd, ...args])).stdout.trim();
 }
 
-async function fixture() {
+async function fixture(options: { nestedSettings?: boolean } = {}) {
   const workspaceId = randomUUID();
   const projectWorkspaceId = randomUUID();
   const nestedWorkspaceId = randomUUID();
@@ -88,9 +88,11 @@ async function fixture() {
   await fs.mkdir(path.dirname(nestedPath), { recursive: true });
   await execFile("git", ["clone", "--", nestedRepoUrl, nestedPath]);
   const nestedSettings = Buffer.from('{"permissions":{"deny":["Write"]}}\n');
-  await fs.mkdir(path.join(nestedPath, ".claude"), { recursive: true });
-  await fs.writeFile(path.join(nestedPath, ".claude/settings.local.json"), nestedSettings, { mode: 0o600 });
-  await fs.chmod(path.join(nestedPath, ".claude/settings.local.json"), 0o640);
+  if (options.nestedSettings !== false) {
+    await fs.mkdir(path.join(nestedPath, ".claude"), { recursive: true });
+    await fs.writeFile(path.join(nestedPath, ".claude/settings.local.json"), nestedSettings, { mode: 0o600 });
+    await fs.chmod(path.join(nestedPath, ".claude/settings.local.json"), 0o640);
+  }
   const workspace = {
     id: workspaceId, companyId, projectId, projectWorkspaceId, sourceIssueId, repoUrl, baseRef: "main",
     sourceRepoRef: "main", sourceCwd: null, sourceType: "remote_managed", sourceVisibility: "default",
@@ -238,11 +240,95 @@ describe("managed project worktree restoration recipe", () => {
     await restoreManagedGitCacheWorktree({ workspace: persisted, baseCwd: recipe.sourcePath,
       resolveGitAuth: async () => null, beforeMutation: async () => {}, authorizeSource: async () => {},
       prepareLocalSource: async () => async () => {} });
+    const priorKey = process.env.PAPERCLIP_SECRETS_MASTER_KEY;
     process.env.PAPERCLIP_SECRETS_MASTER_KEY = "abcdef0123456789abcdef0123456789";
-    await expect(restoreGitWorkspaceContents({ companyId: workspace.companyId, workspaceId: workspace.id,
-      cwd: workspace.cwd!, contents: recipe.contents, resolveGitAuth: async () => null,
-      authorizeSource: async () => {} })).rejects.toThrow("saved workspace commit could not be restored");
-    expect(await fs.readFile(path.join(workspace.cwd!, "README.md"), "utf8")).toBe("saved tree\n");
+    try {
+      await expect(restoreGitWorkspaceContents({ companyId: workspace.companyId, workspaceId: workspace.id,
+        cwd: workspace.cwd!, contents: recipe.contents, resolveGitAuth: async () => null,
+        authorizeSource: async () => {} })).rejects.toThrow("saved workspace commit could not be restored");
+      expect(await fs.readFile(path.join(workspace.cwd!, "README.md"), "utf8")).toBe("saved tree\n");
+      expect(await fs.readFile(path.join(workspace.cwd!, ".claude/settings.local.json"))).toEqual(Buffer.from('{"permissions":{"allow":["Read"]}}\n'));
+    } finally {
+      if (priorKey === undefined) delete process.env.PAPERCLIP_SECRETS_MASTER_KEY;
+      else process.env.PAPERCLIP_SECRETS_MASTER_KEY = priorKey;
+    }
+  });
+
+  it("recovers interrupted settings publication and removes only its exact temporary link", async () => {
+    const { workspace, settings, nestedSource, nestedName } = await fixture();
+    const resolveGitAuth = async () => null;
+    const checkouts: ManagedCheckoutContents[] = [];
+    const recipe: GitCacheRestoration = await inspectGitCacheRecipe(workspace, resolveGitAuth, undefined, {
+      managedCheckouts: checkouts,
+      proveManagedCheckout: async (checkoutPath, name, signal) => {
+        await assertReproducibleManagedCheckout(checkoutPath, { repoUrl: nestedSource.repoUrl, resolveGitAuth, signal });
+        const contents = await readManagedCheckoutContents(checkoutPath, name, nestedSource, signal);
+        checkouts.push(contents);
+        return contents;
+      },
+    });
+    const saved = recipe.contents!.settings!;
+    const temporaryName = `.settings-restore-${createHash("sha256").update(JSON.stringify(saved)).digest("hex")}`;
+    const claudeDir = path.join(workspace.cwd!, ".claude");
+    const temporary = path.join(claudeDir, temporaryName);
+    const target = path.join(claudeDir, "settings.local.json");
+
+    // Simulate a process exit after writing a prefix but before publishing.
+    await fs.rm(target, { force: true });
+    await fs.writeFile(temporary, settings.subarray(0, Math.floor(settings.length / 2)), { mode: 0o600 });
+    await restoreGitWorkspaceContents({ companyId: workspace.companyId, workspaceId: workspace.id,
+      cwd: workspace.cwd!, contents: recipe.contents, resolveGitAuth, authorizeSource: async () => {} });
+    expect(await fs.readFile(target)).toEqual(settings);
+    await expect(fs.access(temporary)).rejects.toMatchObject({ code: "ENOENT" });
+
+    // Simulate a process exit after the hard-link publication but before the
+    // temporary name is removed. Recovery recognizes only the same inode/bytes.
+    await fs.rm(target);
+    await fs.writeFile(temporary, settings, { mode: 0o600 });
+    await fs.chmod(temporary, 0o600);
+    await fs.link(temporary, target);
+    await restoreGitWorkspaceContents({ companyId: workspace.companyId, workspaceId: workspace.id,
+      cwd: workspace.cwd!, contents: recipe.contents, resolveGitAuth, authorizeSource: async () => {} });
+    expect(await fs.readFile(target)).toEqual(settings);
+    await expect(fs.access(temporary)).rejects.toMatchObject({ code: "ENOENT" });
+    expect(await fs.readFile(path.join(workspace.cwd!, PROJECT_REPOSITORIES_DIR, nestedName, ".claude/settings.local.json")))
+      .toEqual(Buffer.from('{"permissions":{"deny":["Write"]}}\n'));
+  });
+
+  it("retries after a saved-settings key failure without overwriting later workspace edits", async () => {
+    const { workspace, settings, sourcePath, nestedSource } = await fixture({ nestedSettings: false });
+    const resolveGitAuth = async () => null;
+    const recipe: GitCacheRestoration = await inspectGitCacheRecipe(workspace, resolveGitAuth, undefined, {
+      managedCheckouts: [],
+      proveManagedCheckout: async (checkoutPath, name, signal) => {
+        await assertReproducibleManagedCheckout(checkoutPath, { repoUrl: nestedSource.repoUrl, resolveGitAuth, signal });
+        return readManagedCheckoutContents(checkoutPath, name, nestedSource, signal);
+      },
+    });
+    await execFile("git", ["-C", recipe.sourcePath, "worktree", "remove", "--force", workspace.cwd!]);
+    const persisted = { ...workspace, metadata: { ...workspace.metadata, [GIT_CACHE_RESTORATION_KEY]: recipe } };
+
+    const priorKey = process.env.PAPERCLIP_SECRETS_MASTER_KEY;
+    try {
+      process.env.PAPERCLIP_SECRETS_MASTER_KEY = "abcdef0123456789abcdef0123456789";
+      await expect(restoreManagedGitCacheWorktree({ workspace: persisted, baseCwd: sourcePath,
+        resolveGitAuth, beforeMutation: async () => {}, authorizeSource: async () => {},
+        prepareLocalSource: async () => async () => {} })).rejects.toThrow("saved workspace commit could not be restored");
+      expect(await git(workspace.cwd!, "rev-parse", "HEAD")).toBe(recipe.commit);
+      const laterEdit = Buffer.from("later operator edit\n");
+      await fs.writeFile(path.join(workspace.cwd!, "later-edit.txt"), laterEdit);
+
+      process.env.PAPERCLIP_SECRETS_MASTER_KEY = "0123456789abcdef0123456789abcdef";
+      await restoreManagedGitCacheWorktree({ workspace: persisted, baseCwd: sourcePath,
+        resolveGitAuth, beforeMutation: async () => {}, authorizeSource: async () => {},
+        prepareLocalSource: async () => async () => {} });
+      expect(await git(workspace.cwd!, "rev-parse", "HEAD")).toBe(recipe.commit);
+      expect(await fs.readFile(path.join(workspace.cwd!, ".claude/settings.local.json"))).toEqual(settings);
+      expect(await fs.readFile(path.join(workspace.cwd!, "later-edit.txt"))).toEqual(laterEdit);
+    } finally {
+      if (priorKey === undefined) delete process.env.PAPERCLIP_SECRETS_MASTER_KEY;
+      else process.env.PAPERCLIP_SECRETS_MASTER_KEY = priorKey;
+    }
   });
 
   it("rechecks source authority after preparation and before publishing a restored checkout", async () => {

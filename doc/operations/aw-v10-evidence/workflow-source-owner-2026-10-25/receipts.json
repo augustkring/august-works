@@ -2767,6 +2767,120 @@
         "Duration  26.72s (transform 10.31s, setup 68ms, import 14.00s, tests 12.53s, environment 0ms)"
       ],
       "sourceCommit": "a41d639eb585f0c1ec6a8ddd8b4176953ddc494f"
+    },
+    {
+      "name": "native-v1-output-physical-erasure-selected",
+      "exitCode": null,
+      "exitSidecar": null,
+      "rawSha256": "1e08ca53bfc5e64b7ba5d4735c776f7e88448ffbfb511525c57d2bfe9c387b31",
+      "sanitizedSha256": "1e08ca53bfc5e64b7ba5d4735c776f7e88448ffbfb511525c57d2bfe9c387b31",
+      "archiveSha256": "588f4cd8076a33ab24eb5927ec9d9e2cfddff5ff9a6c902f0cf98cf9ff313da0",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 64 skipped (65)",
+        "Duration  34.65s (transform 11.81s, setup 79ms, import 16.53s, tests 17.92s, environment 0ms)"
+      ],
+      "sourceCommit": "52f3482de74f7964c5a19cf43dee70d7fa236720"
+    },
+    {
+      "name": "v10-integrated-build-next",
+      "exitCode": 0,
+      "exitSidecar": "v10-integrated-build-next.exit",
+      "rawSha256": "95e45df085ecc4bc608b10b848abf43e8eca3200dba6d09216b8142d07954d61",
+      "sanitizedSha256": "c818e79768587644ed3a031077a5975bfe14bd2d9126cb7dc94fb59388939efe",
+      "archiveSha256": "03f7fe79a49ae0881b24cce97dd55a68ca86bfa6ce2dbc20e4703a214f3a4f8c",
+      "redactions": {
+        "ansi": 72,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "52f3482de74f7964c5a19cf43dee70d7fa236720"
+    },
+    {
+      "name": "v10-runtime-bundle-next",
+      "exitCode": 0,
+      "exitSidecar": "v10-runtime-bundle-next.exit",
+      "rawSha256": "fd9071232697260ce2653bde90f6ba2b3fdf66fb36faa961cfdf4cc3add4d83f",
+      "sanitizedSha256": "fd9071232697260ce2653bde90f6ba2b3fdf66fb36faa961cfdf4cc3add4d83f",
+      "archiveSha256": "e3bb198a27a6a3c8c91e48239895f769ed6558fbeb327c056961348d7f0e3b35",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "52f3482de74f7964c5a19cf43dee70d7fa236720"
+    },
+    {
+      "name": "v10-runtime-boot-next",
+      "exitCode": 0,
+      "exitSidecar": "v10-runtime-boot-next.exit",
+      "rawSha256": "7a925aa0eecfebb277ca1d7ff20b9286ac24d0666e808532f687c24e9aa32ccc",
+      "sanitizedSha256": "7a925aa0eecfebb277ca1d7ff20b9286ac24d0666e808532f687c24e9aa32ccc",
+      "archiveSha256": "3e1e8bf540a2b0ece0ae9ad22ceeecbd9a006b105c03f8c192b68319f89602f3",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "52f3482de74f7964c5a19cf43dee70d7fa236720"
+    },
+    {
+      "name": "up03-typed-routine-owner-export",
+      "exitCode": 0,
+      "exitSidecar": "up03-typed-routine-owner-export.exit",
+      "rawSha256": "c847b3ba7833660961c9b968048e8cb6d209e4833c3996080f2ae71f51d41c3b",
+      "sanitizedSha256": "c847b3ba7833660961c9b968048e8cb6d209e4833c3996080f2ae71f51d41c3b",
+      "archiveSha256": "29135b181a1935fa7a7fc3538f075731c83af200411549d900c7a013da129dbd",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 17 skipped (18)",
+        "Duration  22.47s (transform 10.38s, setup 68ms, import 14.05s, tests 8.24s, environment 0ms)"
+      ],
+      "sourceCommit": "52f3482de74f7964c5a19cf43dee70d7fa236720"
+    },
+    {
+      "name": "import-current-authority-route-rerun-20261025",
+      "exitCode": 0,
+      "exitSidecar": "import-current-authority-route-rerun-20261025.log.exit",
+      "rawSha256": "b18c515e99f584a25a1d7982c303e520d50468b44cf2a22770c4661c5c6c8267",
+      "sanitizedSha256": "6e7bcaf9974a5e10fc4294fc1902985672f4a736efec2242f15870b84dc05edc",
+      "archiveSha256": "2bab226c9c6833411c2c4b22283b68e51fb46affe364256dc7f9000e3a68207f",
+      "redactions": {
+        "ansi": 42,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  48 passed (48)",
+        "Duration  21.36s (transform 13.08s, setup 98ms, import 3.98s, tests 17.14s, environment 0ms)"
+      ],
+      "sourceCommit": "52f3482de74f7964c5a19cf43dee70d7fa236720"
     }
   ],
   "updates": [
@@ -3188,6 +3302,36 @@
       "meaning": "Complete native dispatch integration file 40/40, including canonical runtime inputs and two actual Context dispatches; not complete private temporal output coverage.",
       "logs": [
         "native-context-dispatch-full"
+      ]
+    },
+    {
+      "sourceCommit": "52f3482de74f7964c5a19cf43dee70d7fa236720",
+      "meaning": "Earlier actual AW model-output erasure selected run: raw summary 1 passed/64 filtered, original numeric exit not retained; distinct from later all-skipped selector.",
+      "logs": [
+        "native-v1-output-physical-erasure-selected"
+      ]
+    },
+    {
+      "sourceCommit": "52f3482de74f7964c5a19cf43dee70d7fa236720",
+      "meaning": "Whole workspace pnpm build exit0 at changing source checkpoint52f3482de; no final unchanged-source gate claim.",
+      "logs": [
+        "v10-integrated-build-next"
+      ]
+    },
+    {
+      "sourceCommit": "52f3482de74f7964c5a19cf43dee70d7fa236720",
+      "meaning": "Fresh actual production runtime bundle builds and boots isolated PostgreSQL migrations/readiness, generates actual avatar-worker PNG, and exits cleanly on SIGTERM. Changing source checkpoint, no final runtime/provider qualification.",
+      "logs": [
+        "v10-runtime-bundle-next",
+        "v10-runtime-boot-next",
+        "up03-typed-routine-owner-export"
+      ]
+    },
+    {
+      "sourceCommit": "52f3482de74f7964c5a19cf43dee70d7fa236720",
+      "meaning": "Complete current import route suite48 passed after canonical UUID actor fixture repair; raw observed exit0.",
+      "logs": [
+        "import-current-authority-route-rerun-20261025"
       ]
     }
   ],

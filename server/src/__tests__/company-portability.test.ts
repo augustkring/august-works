@@ -1,11 +1,11 @@
 import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { authUsers, companies, companyMemberships, createDb, documentRevisions, documents, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, issueDocuments, issueRelations, issues, principalPermissionGrants, projectWorkspaces, projects } from "@paperclipai/db";
+import { authSessions, authUsers, companies, companyMemberships, createDb, documentRevisions, documents, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, issueDocuments, issueRelations, issues, principalPermissionGrants, projectWorkspaces, projects } from "@paperclipai/db";
 import { and, eq } from "drizzle-orm";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import type { CompanyPortabilityFileEntry, CompanyPortabilityImportRequest } from "@paperclipai/shared";
@@ -929,27 +929,33 @@ describe("company portability", () => {
     }
   });
 
-  itNative("stops a pending agent import when the current Human loses target membership", async () => {
+  itNative("stops a pending agent import when the current Human session or target membership is revoked", async () => {
     useNativeExportCompany();
     const portability = companyPortabilityService(nativeDb);
     const exported = await portability.exportBundle(nativeCompanyId, {
       include: { company: true, agents: true, projects: false, issues: false, skills: false },
     }, { actor: nativeActor });
     agentSvc.list.mockResolvedValue([]);
-    let revoked = false;
+    const sessionId = randomUUID();
+    const now = new Date();
+    await nativeDb.insert(authSessions).values({ id: sessionId, userId: nativeUserId, token: randomUUID(),
+      expiresAt: new Date(now.getTime() + 60_000), createdAt: now, updatedAt: now });
+    const sessionActor = { ...nativeActor, sessionId };
+    const request = {
+      source: { type: "inline" as const, rootPath: exported.rootPath, files: exported.files },
+      include: { company: false, agents: true, projects: false, issues: false, skills: false },
+      target: { mode: "existing_company" as const, companyId: nativeCompanyId },
+      agents: "all" as const,
+      collisionStrategy: "rename" as const,
+    };
 
     try {
-      await expect(portability.importBundle({
-        source: { type: "inline", rootPath: exported.rootPath, files: exported.files },
-        include: { company: false, agents: true, projects: false, issues: false, skills: false },
-        target: { mode: "existing_company", companyId: nativeCompanyId },
-        agents: "all",
-        collisionStrategy: "rename",
-      }, nativeUserId, {
-        actor: nativeActor,
+      let membershipRevoked = false;
+      await expect(portability.importBundle(request, nativeUserId, {
+        actor: sessionActor,
         checkCancellation: async () => {
-          if (!revoked) {
-            revoked = true;
+          if (!membershipRevoked) {
+            membershipRevoked = true;
             await nativeDb.delete(companyMemberships).where(and(
               eq(companyMemberships.companyId, nativeCompanyId),
               eq(companyMemberships.principalType, "user"),
@@ -959,7 +965,21 @@ describe("company portability", () => {
           return false;
         },
       })).rejects.toMatchObject({ status: 403 });
-      expect(revoked).toBe(true);
+      expect(membershipRevoked).toBe(true);
+      expect(agentSvc.create).not.toHaveBeenCalled();
+
+      await nativeDb.insert(companyMemberships).values({ companyId: nativeCompanyId, principalType: "user",
+        principalId: nativeUserId, status: "active", membershipRole: "owner" }).onConflictDoUpdate({
+        target: [companyMemberships.companyId, companyMemberships.principalType, companyMemberships.principalId],
+        set: { status: "active", membershipRole: "owner" },
+      });
+      await expect(portability.importBundle(request, nativeUserId, {
+        actor: sessionActor,
+        checkCancellation: async () => {
+          await nativeDb.delete(authSessions).where(eq(authSessions.id, sessionId));
+          return false;
+        },
+      })).rejects.toMatchObject({ status: 403 });
       expect(agentSvc.create).not.toHaveBeenCalled();
     } finally {
       await nativeDb.insert(companyMemberships).values({ companyId: nativeCompanyId, principalType: "user",
@@ -967,6 +987,7 @@ describe("company portability", () => {
         target: [companyMemberships.companyId, companyMemberships.principalType, companyMemberships.principalId],
         set: { status: "active", membershipRole: "owner" },
       });
+      await nativeDb.delete(authSessions).where(eq(authSessions.id, sessionId));
     }
   });
 

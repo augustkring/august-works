@@ -1914,13 +1914,25 @@ async function startRuntime(input: {
   const username = "paperclip";
   const authHeader = `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
   const configHome = join(input.root, "config");
+  const configDirectory = join(configHome, "opencode");
+  const configPath = join(configDirectory, "opencode.json");
+  const sourcePluginPath = join(configDirectory, "plugins", "paperclip-source-witness.js");
   const dataHome = join(input.root, "data");
   const cacheHome = join(input.root, "cache");
   await Promise.all([
-    mkdir(join(configHome, "opencode", "plugins"), { recursive: true, mode: 0o700 }),
+    mkdir(configDirectory, { recursive: true, mode: 0o700 }),
     mkdir(dataHome, { recursive: true, mode: 0o700 }),
     mkdir(cacheHome, { recursive: true, mode: 0o700 }),
   ]);
+  // OpenCode 1.18.32 checks this directory's write bit before it starts a
+  // background `npm install @opencode-ai/plugin`. Pre-create its ignore file,
+  // write the server-owned config/plugin, then make the managed XDG directory
+  // read-only before spawn so cold starts never fetch npm dependencies.
+  await chmod(configDirectory, 0o700);
+  await mkdir(join(configDirectory, "plugins"), { recursive: true, mode: 0o700 });
+  await makePrivateFileWritable(join(configDirectory, ".gitignore"));
+  await writeFile(join(configDirectory, ".gitignore"), "node_modules\npackage.json\npackage-lock.json\nbun.lock\n.gitignore", { mode: 0o600 });
+  await chmod(join(configDirectory, ".gitignore"), 0o400);
   // HOME contains a read-only skill snapshot, whose destination must be fresh.
   // Keep OpenCode's XDG data stable for provider-session recovery while giving
   // every launch (including retries and recovery) a new isolated HOME.
@@ -1964,8 +1976,9 @@ async function startRuntime(input: {
   );
   const managedModel = Boolean((input.options.environment ?? process.env).PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN?.trim());
   if (managedModel) {
-    const pluginPath = join(configHome, "opencode", "plugins", "paperclip-source-witness.js");
-    await writeFile(pluginPath, managedSourceWitnessPlugin(input.options.systemInstructions ?? CODEX_SKILLLESS_BASE_INSTRUCTIONS), { mode: 0o400 });
+    await makePrivateFileWritable(sourcePluginPath);
+    await writeFile(sourcePluginPath, managedSourceWitnessPlugin(input.options.systemInstructions ?? CODEX_SKILLLESS_BASE_INSTRUCTIONS), { mode: 0o400 });
+    await chmod(sourcePluginPath, 0o400);
   }
   const config = {
     $schema: "https://opencode.ai/config.json",
@@ -2024,11 +2037,10 @@ async function startRuntime(input: {
         : {}),
     },
   };
-  await writeFile(
-    join(configHome, "opencode", "opencode.json"),
-    `${JSON.stringify(config, null, 2)}\n`,
-    { mode: 0o600 },
-  );
+  await makePrivateFileWritable(configPath);
+  await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+  await chmod(configPath, 0o400);
+  if (managedModel) await chmod(configDirectory, 0o500);
   const environment = sanitizedEnvironment(
     input.options.environment ?? process.env,
     {
@@ -2037,10 +2049,11 @@ async function startRuntime(input: {
       XDG_DATA_HOME: dataHome,
       XDG_CACHE_HOME: cacheHome,
       OPENCODE_DISABLE_PROJECT_CONFIG: "true",
-      // These two pinned 1.18.32 controls keep a cold isolated runtime from
-      // reaching the public plugin registry or model catalog. They are
+      // These pinned 1.18.32 controls keep a cold isolated runtime from
+      // reaching the public updater, plugin registry, or model catalog. They are
       // hard-coded for the managed child and are included in the diagnostic
       // environment allowlist below; callers cannot use them to re-enable IO.
+      OPENCODE_DISABLE_AUTOUPDATE: "true",
       OPENCODE_DISABLE_DEFAULT_PLUGINS: "true",
       OPENCODE_DISABLE_MODELS_FETCH: "true",
       OPENCODE_SERVER_USERNAME: username,
@@ -2167,10 +2180,7 @@ async function startRuntime(input: {
             child.kill("SIGKILL");
           }
         }
-        await rm(join(configHome, "opencode", "opencode.json"), {
-          force: true,
-        }).catch(() => undefined);
-        await rm(join(configHome, "opencode", "plugins", "paperclip-source-witness.js"), { force: true }).catch(() => undefined);
+        await cleanupManagedOpenCodeConfig(configDirectory, configPath, sourcePluginPath);
         await rm(isolatedHome, { recursive: true, force: true }).catch(
           () => undefined,
         );
@@ -2182,10 +2192,7 @@ async function startRuntime(input: {
   } catch (error) {
     await bridge.close().catch(() => {});
     child.kill("SIGKILL");
-    await rm(join(configHome, "opencode", "opencode.json"), {
-      force: true,
-    }).catch(() => undefined);
-    await rm(join(configHome, "opencode", "plugins", "paperclip-source-witness.js"), { force: true }).catch(() => undefined);
+    await cleanupManagedOpenCodeConfig(configDirectory, configPath, sourcePluginPath);
     await rm(isolatedHome, { recursive: true, force: true }).catch(
       () => undefined,
     );
@@ -2212,7 +2219,7 @@ function resolveManagedModelProviderConfiguration(
   return {
     anthropic: {
       options: {
-        baseURL: `${origin.origin}/runtime-tools/model`,
+        baseURL: `${origin.origin}/runtime-tools/model/v1`,
         // The OpenShell host injects the scoped Authorization capability
         // only for the exact endpoint. This placeholder is not a credential.
         apiKey: "paperclip-managed-model-broker",
@@ -2588,6 +2595,7 @@ function sanitizedEnvironment(
     "SSL_CERT_FILE",
     "SSL_CERT_DIR",
     "OPENROUTER_API_KEY",
+    "OPENCODE_DISABLE_AUTOUPDATE",
     "OPENCODE_DISABLE_DEFAULT_PLUGINS",
     "OPENCODE_DISABLE_MODELS_FETCH",
   ];
@@ -2595,6 +2603,28 @@ function sanitizedEnvironment(
   for (const key of allowed)
     if (source[key] !== undefined) result[key] = source[key];
   return { ...result, ...overrides };
+}
+
+async function makePrivateFileWritable(path: string): Promise<void> {
+  try {
+    await chmod(path, 0o600);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+}
+
+async function cleanupManagedOpenCodeConfig(
+  configDirectory: string,
+  configPath: string,
+  sourcePluginPath: string,
+): Promise<void> {
+  // The managed XDG config directory is read-only for the child. Restore its
+  // owner write bit before removing server-owned files on every exit path.
+  await chmod(configDirectory, 0o700).catch(() => undefined);
+  await Promise.all([
+    rm(configPath, { force: true }).catch(() => undefined),
+    rm(sourcePluginPath, { force: true }).catch(() => undefined),
+  ]);
 }
 
 function sanitizedEnvironmentKeys(): string[] {
@@ -2611,6 +2641,7 @@ function sanitizedEnvironmentKeys(): string[] {
     "SSL_CERT_FILE",
     "SSL_CERT_DIR",
     "OPENROUTER_API_KEY",
+    "OPENCODE_DISABLE_AUTOUPDATE",
     "OPENCODE_DISABLE_DEFAULT_PLUGINS",
     "OPENCODE_DISABLE_MODELS_FETCH",
   ];

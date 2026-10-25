@@ -3,6 +3,7 @@ import { exportCompanyStateV7 } from "./enterprise/portability.js";
 import { assertCompanyCeoAgentOrBoard, authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, issueReadSqlCondition, pinCurrentBoardActor, projectReadSqlCondition, type AuthorizationActor } from "./authorization.js";
 import { assertAnalyticalContextPayloadAccess } from "./analytical-context-authority.js";
 import { assertNativeDocumentRevisionCurrentSourceAccess } from "./native-direct-input.js";
+import { withCurrentTaskSourceRead } from "./task-source-read-scope.js";
 import { agentAppearanceSchema } from "@paperclipai/shared";
 import { createHash, randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
@@ -130,6 +131,10 @@ import { customerSupportCaseService } from "./experience/support-cases.js";
 const EXPORT_READ_CONCURRENCY = 8;
 const EXPORT_ISSUE_READ_CONCURRENCY = 2;
 const SUPPORT_CASE_ARCHIVE_PATH = "blentera-support-cases-v1.json";
+// A bulk export needs one transaction-bound source scope for both its SQL
+// selection and the output materialized from those rows. This marker is only
+// set by the current-source owner callback below; request options cannot set it.
+const activeSourceScopedExports = new WeakSet<object>();
 
 async function mapWithConcurrency<T, R>(
   items: readonly T[],
@@ -4106,6 +4111,20 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           : input.include?.issues,
       skills: input.skills && input.skills.length > 0 ? true : input.include?.skills,
     });
+    if (include.issues && options.actor && options.actor.type !== "none"
+      && options.actor.source !== "local_implicit" && !activeSourceScopedExports.has(db as object)) {
+      return withCurrentTaskSourceRead(db, companyId, options.actor, async (queryDb) => {
+        activeSourceScopedExports.add(queryDb as object);
+        try {
+          // Rebind the owner to the transaction that holds the current Routine
+          // and Workflow source scopes. The callback covers source selection,
+          // materialization and final source revalidation.
+          return await companyPortabilityService(queryDb, storage).exportBundle(companyId, input, options);
+        } finally {
+          activeSourceScopedExports.delete(queryDb as object);
+        }
+      });
+    }
     const company = await companies.getById(companyId);
     if (!company) throw notFound("Company not found");
 

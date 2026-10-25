@@ -109,7 +109,7 @@ describe("OpenCodeServerDriver", () => {
     )).toEqual({
       anthropic: {
         options: {
-          baseURL: "https://paperclip.example/runtime-tools/model",
+          baseURL: "https://paperclip.example/runtime-tools/model/v1",
           apiKey: "paperclip-managed-model-broker",
         },
         models: { "claude-fixture-2026": { name: "claude-fixture-2026" } },

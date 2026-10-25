@@ -29,6 +29,7 @@ import { errorHandler } from "../middleware/error-handler.js";
 import { lockMemoryPrivacy, purgeDerivedWorkflowMemory } from "../services/memory/memory-privacy.js";
 import { routineAuthoringToolsService } from "../services/routine-authoring-tools.js";
 import { routineService } from "../services/routines.js";
+import { companyPortabilityService } from "../services/company-portability.js";
 import { workflowAuthoringToolsService } from "../services/workflows/workflow-authoring-tools.js";
 import { workflowService } from "../services/workflows/workflow-service.js";
 import { workflowExecutorService } from "../services/workflows/workflow-executor.js";
@@ -171,6 +172,26 @@ describe("typed routine Task private source graph", () => {
     expect(await canActorReadIssuePrivacy(db, ownerActor(), task)).toBe(true);
     expect(await canActorReadIssuePrivacy(db, bobActor(), task)).toBe(false);
   }, 90_000);
+
+  it("exports a private typed Routine Task only to its current source owner and stops after source withdrawal", async () => {
+    const source = await createRoutineAndRun("typed-routine-owner-export");
+    const task = await createTypedTask(source);
+    const input = { include: { company: true, agents: false, projects: false, issues: true } };
+    const ownerExport = await companyPortabilityService(db).exportBundle(f.home, input, { actor: ownerActor() });
+    expect(ownerExport.manifest.issues.some(issue => issue.sourceIssueId === task.id || issue.title === task.title)).toBe(true);
+    expect(JSON.stringify(ownerExport.files)).toContain("PRIVATE execution detail");
+
+    const otherExport = await companyPortabilityService(db).exportBundle(f.home, input, { actor: bobActor() });
+    expect(JSON.stringify(otherExport.manifest.issues)).not.toContain(task.title);
+    expect(JSON.stringify(otherExport.files)).not.toContain("PRIVATE execution detail");
+
+    await db.update(issues).set({ conversationRetiredAt: new Date(), hiddenAt: new Date(), status: "cancelled",
+      assigneeAgentId: null, assigneeUserId: null, executionRunId: null, conversationAgentId: null,
+      conversationUserId: null, conversationState: null }).where(eq(issues.id, conversationId));
+    const afterWithdrawal = await companyPortabilityService(db).exportBundle(f.home, input, { actor: ownerActor() });
+    expect(JSON.stringify(afterWithdrawal.manifest.issues)).not.toContain(task.title);
+    expect(JSON.stringify(afterWithdrawal.files)).not.toContain("PRIVATE execution detail");
+  }, 120_000);
 
   it("withdraws the copied Task for both readers when its actual authoring source is erased", async () => {
     const source = await createRoutineAndRun();

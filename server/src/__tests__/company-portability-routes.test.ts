@@ -2,7 +2,7 @@ import express from "express";
 import { ImportPreflightError, ImportSourceChangedError, unprocessable } from "../errors.js";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { authUsers, companies, companyMemberships, createDb, customerOperations, instanceUserRoles } from "@paperclipai/db";
+import { agents, authUsers, companies, companyMemberships, createDb, customerOperations, instanceUserRoles } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 
 const mockCompanyService = vi.hoisted(() => ({
@@ -134,8 +134,8 @@ const companyId = "11111111-1111-4111-8111-111111111111";
 const otherCompanyId = "22222222-2222-4222-8222-222222222222";
 let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
 let db: ReturnType<typeof createDb>;
-const ceoAgentId = "ceo-agent";
-const engineerAgentId = "engineer-agent";
+const ceoAgentId = "33333333-3333-4333-8333-333333333331";
+const engineerAgentId = "33333333-3333-4333-8333-333333333332";
 
 const exportRequest = {
   include: { company: true, agents: true, projects: true },
@@ -361,6 +361,10 @@ describe.sequential("company portability routes", () => {
     await db.insert(companyMemberships).values(userIds.map((principalId) => ({ companyId,
       principalType: "user", principalId, membershipRole: "owner", status: "active" })));
     await db.insert(instanceUserRoles).values({ userId: "instance-admin", role: "instance_admin" });
+    await db.insert(agents).values([
+      { id: ceoAgentId, companyId, name: "Portability CEO", role: "ceo", adapterType: "paperclip_runner" },
+      { id: engineerAgentId, companyId, name: "Portability Engineer", role: "engineer", adapterType: "paperclip_runner" },
+    ]);
   }, 90_000);
 
   afterAll(async () => { await database?.cleanup(); }, 30_000);

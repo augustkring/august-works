@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { createServer as createHttpsServer } from "node:https";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -53,7 +53,7 @@ import { workerModelProfileSchema, type WorkerModelProfile } from "../orchestrat
 import { currentNativeControllerIdentity } from "./native-restart-recovery.js";
 import { nativeCompletionContractInput } from "./completion-contracts.js";
 import { resolveDefaultAgentWorkspaceDir } from "../../home-paths.js";
-import { createOpenCodeNativeSessionBackend } from "@paperclipai/paperclip-runner";
+import { createOpenCodeNativeSessionBackend, OpenCodeServerDriver } from "@paperclipai/paperclip-runner";
 
 const QUALIFIED_OPENCODE_SHA256 = "513f500a1a5ea1dc7d865547ac87b32a8936334e8d5abd5b3ff585c45a170080";
 const sourceSha = "a".repeat(40);
@@ -319,9 +319,22 @@ describe("managed OpenCode source-closure binary integration", () => {
       OPENCODE_DISABLE_DEFAULT_PLUGINS: "true", OPENCODE_DISABLE_MODELS_FETCH: "true",
       PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: `https://127.0.0.1:${address.port}` };
     const diagnostics: string[] = [];
-    const backend = createOpenCodeNativeSessionBackend(execution, { runtimeDirectory: join(runRoot, "opencode-runtime"),
+    const runtimeDirectory = join(runRoot, "opencode-runtime");
+    const configDirectory = join(runtimeDirectory, prepared.normalizedSessionId, "config", "opencode");
+    const assertManagedConfigIsReadOnlyBeforeSpawn = async () => {
+      const [directory, ignore, config, plugin] = await Promise.all([
+        stat(configDirectory), stat(join(configDirectory, ".gitignore")),
+        stat(join(configDirectory, "opencode.json")), stat(join(configDirectory, "plugins", "paperclip-source-witness.js")),
+      ]);
+      const modes = [directory.mode & 0o777, ignore.mode & 0o777, config.mode & 0o777, plugin.mode & 0o777];
+      if (modes.some((mode, index) => mode !== [0o500, 0o400, 0o400, 0o400][index]))
+        throw new Error(`managed_opencode_config_not_read_only_before_spawn:${modes.map(mode => mode.toString(8)).join(",")}`);
+      diagnostics.push(`managed config modes before spawn: ${modes.map(mode => mode.toString(8)).join(",")}`);
+    };
+    const backend = createOpenCodeNativeSessionBackend(execution, { runtimeDirectory,
       environment: runnerEnvironment, command: opencodeBinary, runnerInstanceId: prepared.runnerInstanceId,
       onSpawn: async ({ pid }) => {
+        await assertManagedConfigIsReadOnlyBeforeSpawn();
         diagnostics.push(`OpenCode pid ${pid}`);
         const environment = (await readFile(`/proc/${pid}/environ`, "utf8").catch(() => "")).split("\0");
         diagnostics.push(environment.filter(value => value.startsWith("OPENCODE_DISABLE_") ||
@@ -351,6 +364,26 @@ describe("managed OpenCode source-closure binary integration", () => {
         });
       expect(result.exitCode).toBe(0);
       expect(responseCount).toBeGreaterThanOrEqual(2);
+      const assertManagedConfigCleanup = async () => {
+        expect((await stat(configDirectory)).mode & 0o777).toBe(0o700);
+        expect((await stat(join(configDirectory, ".gitignore"))).mode & 0o777).toBe(0o400);
+        await expect(stat(join(configDirectory, "opencode.json"))).rejects.toMatchObject({ code: "ENOENT" });
+        await expect(stat(join(configDirectory, "plugins", "paperclip-source-witness.js"))).rejects.toMatchObject({ code: "ENOENT" });
+      };
+      await assertManagedConfigCleanup();
+      // Reopen the same normalized session directory to exercise warm XDG
+      // reuse: the driver must restore owner write bits before replacing its
+      // files, then return the directory and ignore file to read-only before
+      // OpenCode starts and attempts its implicit SDK install.
+      const warmDriver = new OpenCodeServerDriver({ model: execution.provider.model!,
+        runtimeDirectory, command: opencodeBinary, runnerInstanceId: prepared.runnerInstanceId,
+        systemInstructions: "Warm managed runtime startup probe.", environment: runnerEnvironment,
+        onSpawn: assertManagedConfigIsReadOnlyBeforeSpawn,
+        onDiagnostic: message => diagnostics.push(message) });
+      const warmSession = await warmDriver.openSession({ runId: run!.id,
+        normalizedSessionId: prepared.normalizedSessionId, workingDirectory: execution.workspace.cwd });
+      await warmSession.close();
+      await assertManagedConfigCleanup();
     } finally {
       broker.closeAllConnections();
       await new Promise<void>(resolveClose => broker.close(() => resolveClose()));

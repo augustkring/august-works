@@ -905,6 +905,65 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
     expect(queuedRuns).toHaveLength(1);
   });
 
+  it("restores the saved deadline after coordinator restart and recovers a direct writer update across two servers", async () => {
+    const { actor, agentId, companyId, routine, svc, wakeup, wakeups } = await seedFixture();
+    const independentSvc = routineService(db, { sourceActor: actor, heartbeat: { wakeup } });
+    const { trigger } = await svc.createTrigger(routine.id, {
+      kind: "schedule", cronExpression: "* * * * *", timezone: "UTC",
+    }, {});
+    const originalDeadline = new Date(Date.now() + 10 * 60_000);
+    await db.update(routineTriggers).set({ nextRunAt: originalDeadline }).where(eq(routineTriggers.id, trigger.id));
+    const makeCoordinator = (service: typeof svc) => {
+      const coordinator = createDeliveryWorkCoordinator({
+        owner: db,
+        canRun: () => true,
+        onError: error => { throw error; },
+      });
+      const workers = registerScheduledWork(coordinator, db, {
+        retryMs: 60_000,
+        tickTimers: async () => {},
+        tickRoutines: signal => service.tickScheduledTriggers(new Date(), signal),
+      });
+      return { coordinator, workers };
+    };
+
+    // A new coordinator reconstructs its timer from the persisted absolute
+    // deadline, as a server does after restart.
+    const restarted = makeCoordinator(svc);
+    await Promise.all([restarted.workers.routines.ready, restarted.workers.timers.ready]);
+    expect(restarted.coordinator.nextWakeAt()).toBe(originalDeadline.getTime());
+    await restarted.coordinator.stop();
+
+    // Two server instances are now live. A direct/other-process SQL writer
+    // moves the deadline earlier without an in-process notification. Their
+    // periodic reconciliation wakeups must discover the durable update.
+    const dueDeadline = new Date(Date.now() + 1_500);
+    await db.update(routineTriggers).set({ nextRunAt: dueDeadline }).where(eq(routineTriggers.id, trigger.id));
+    const first = makeCoordinator(svc);
+    const second = makeCoordinator(independentSvc);
+    try {
+      await Promise.all([first.workers.routines.ready, first.workers.timers.ready,
+        second.workers.routines.ready, second.workers.timers.ready]);
+      expect(first.coordinator.nextWakeAt()).toBe(dueDeadline.getTime());
+      expect(second.coordinator.nextWakeAt()).toBe(dueDeadline.getTime());
+
+      await vi.waitFor(async () => {
+        expect(await db.select().from(routineRuns).where(eq(routineRuns.routineId, routine.id))).toHaveLength(1);
+      }, { timeout: 10_000 });
+      const runs = await db.select().from(routineRuns).where(eq(routineRuns.routineId, routine.id));
+      const tasks = await db.select().from(issues).where(eq(issues.originRunId, runs[0]!.id));
+      const queuedRuns = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, agentId));
+      expect(runs).toHaveLength(1);
+      expect(runs[0]).toMatchObject({ source: "schedule", status: "issue_created", linkedIssueId: expect.any(String) });
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0]).toMatchObject({ companyId, assigneeAgentId: agentId, originKind: "routine_execution", originId: routine.id });
+      expect(queuedRuns).toHaveLength(1);
+      expect(wakeups).toHaveLength(1);
+    } finally {
+      await Promise.all([first.coordinator.stop(), second.coordinator.stop()]);
+    }
+  }, 90_000);
+
   it("retains a due schedule through the original task drain and dispatches after drain cancellation", async () => {
     stopTaskDrain();
     const { routine, svc, wakeups } = await seedFixture();

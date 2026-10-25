@@ -413,6 +413,11 @@ describeEmbeddedPostgres("reopen archived isolated execution workspace", () => {
       const svc = executionWorkspaceService(db);
       let proof = await svc.prepareGitWorkspaceCleanupProof({ workspaceId, actor: localBoardActor });
       expect(proof).toBeTruthy();
+      const capturedBeforeCleanup = await readWorkspace(workspaceId);
+      expect(capturedBeforeCleanup?.metadata).toHaveProperty("gitCacheRestoration.schema", "paperclip.git-cache-restoration.v1");
+      expect(capturedBeforeCleanup?.metadata).toHaveProperty("gitCacheRestoration.commit");
+      expect((capturedBeforeCleanup?.metadata as Record<string, unknown> | undefined)?.gitCacheRestoration)
+        .toMatchObject({ branchName, worktreePath: deletedWorktree });
       // A source identity change after recipe capture invalidates the cleanup
       // capability at the destructive boundary and leaves the original worktree.
       await db.update(projectWorkspaces).set({ repoRef: "withdrawn-source" })
