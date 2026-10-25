@@ -1,0 +1,24 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "8782c64cfe11843797073ef7d3c4565088bf3ba3",
+  "meaning": "Whole workspace build completed with exit 0. It began at 1999747a0 while bounded support/native runtime edits overlapped; this is not a stable-source final PR receipt or full test/V10 acceptance.",
+  "logs": [
+    {
+      "name": "v10-current-build",
+      "exitCode": 0,
+      "rawSha256": "6a8ed86a75da201844ec0143aa6405e0d1de1e784a1d39ee4035093e7d74a30c",
+      "sanitizedSha256": "cb97eafa8dc19514e73a5285e093efbeb263710ab80730e9db58de2f02f6fc86",
+      "archiveSha256": "a45abb2d4cb0b43b8d0278fdf001410abf6738e00d7b2dc03b4ccea35cf38b81",
+      "redactions": {
+        "ansi": 72,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    }
+  ],
+  "startCommit": "1999747a09dc0a0f57b9cb801ab3f80101cc8686",
+  "sourceStability": "concurrent edits; repeat required before final handoff"
+}

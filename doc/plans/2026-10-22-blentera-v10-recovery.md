@@ -1413,3 +1413,12 @@ The native production UI/cookie/PostgreSQL/Chromium journey passes in both langu
 The Memory core fixture now persists its actual Human account and active owner membership. Its two Human controls pass; twenty-one Agent cases still lack an actual native Run/Task/Context and fail admission. No fabricated Run or source qualification was added. Evidence: `doc/operations/aw-v10-evidence/memory-core-identity-2026-10-25/receipts.json`.
 
 All implementation changes through80aa7a914 are pushed to the V10 branch. Full native source/temporal provenance, Readiness, complete import lifecycle, support delivery and grounded assistant, broader Find and the remaining V10 acceptance contracts are open. No complete V10, full-current test pass, PR-ready, merge or deployment claim.
+
+
+### 2026-10-25 — Preserve unknown support delivery after an expired lease
+
+The original scheduled support maintenance transitions expired sending attempts to unknown while preserving attempt/provider identity. It neither sends nor automatically retries. It acquires company, case and event locks in native order, skips busy roots and uses a bounded transaction. The customer projection remains pending for an active attempt and unknown for an expired one. Paired English/Danish Help guidance explains preserving the reference and contacting support directly without duplicating an uncertain delivery.
+
+Native authenticated HTTP/PostgreSQL suite55PASS includes two actual database connections, locked company/case skipping and transition after release, future leases, unchanged delivered/pending states and repeated maintenance. Documentation metadata/catalog checks pass. Evidence: `doc/operations/aw-v10-evidence/support-delivery-lease-2026-10-25/receipts.json`. The provider-neutral gateway, actual outbound dispatch/reconciliation, returned operator messages and provider erasure remain open; no external messages were sent.
+
+Whole workspace build completed with exit0, beginning at1999747a0. Support/native edits overlapped that run, so the archive explicitly records that it is not a stable-source final PR receipt. The complete UI suite is running separately. Full native Source/Readiness and other V10 gates remain open.
