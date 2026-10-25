@@ -118,6 +118,8 @@ export interface ContextProviderInput {
   request: AssembleContextInput;
   signal: AbortSignal;
   deadlineAt: number;
+  /** The provider's own deadline, bounded by the total Context deadline. */
+  providerDeadlineAt: number;
 }
 
 export interface ContextProviderResult {
@@ -225,7 +227,8 @@ export async function runContextProviders(
       try {
         const result = await withProviderDeadline(
           provider.key,
-          (signal) => provider.retrieve({ request, signal, deadlineAt }),
+          (signal) => provider.retrieve({ request, signal, deadlineAt,
+            providerDeadlineAt: Math.min(deadlineAt, Date.now() + timeoutMs) }),
           timeoutMs,
         );
         const evidence = evidenceItemsSchema.parse(result.evidence);
@@ -386,7 +389,7 @@ function foundationProvider(db: Db): ContextProvider {
   return {
     key: "foundation",
     requirement: "optional",
-    async retrieve({ request }) {
+    async retrieve({ request, signal, providerDeadlineAt }) {
       const decision = await (request.authorizationDecision ?? access.decide)({
         enforceResponsibleUserIntersection: request.enforceResponsibleUserIntersection,
         actor: request.authorizationActor ?? {
@@ -497,6 +500,8 @@ function memoryContextProvider(db: Db): ContextProvider {
         asOf: request.asOf ?? new Date(),
         topK: 24,
         sensitivityCeiling: request.sensitivityCeiling ?? "internal",
+        signal,
+        deadlineAt: providerDeadlineAt,
       });
 
       return {

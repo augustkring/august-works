@@ -21,7 +21,8 @@
         "Test Files  2 failed | 3 passed (5)",
         "Tests  4 failed | 80 passed (84)",
         "Duration  49.11s (transform 11.64s, setup 137ms, import 20.25s, tests 26.56s, environment 1.59s)"
-      ]
+      ],
+      "sourceCommit": "80aa7a9140bbae2b03668ea4640bd29d67f59431"
     },
     {
       "name": "help-locale-focused-final",
@@ -40,7 +41,8 @@
         "Test Files  4 passed (4)",
         "Tests  78 passed (78)",
         "Duration  27.32s (transform 4.25s, setup 93ms, import 9.58s, tests 15.43s, environment 1.72s)"
-      ]
+      ],
+      "sourceCommit": "80aa7a9140bbae2b03668ea4640bd29d67f59431"
     },
     {
       "name": "help-locale-shared-decoder",
@@ -59,7 +61,8 @@
         "Test Files  3 passed (3)",
         "Tests  45 passed (45)",
         "Duration  13.26s (transform 1.77s, setup 28ms, import 5.03s, tests 6.29s, environment 1.56s)"
-      ]
+      ],
+      "sourceCommit": "80aa7a9140bbae2b03668ea4640bd29d67f59431"
     },
     {
       "name": "help-locale-native-browser",
@@ -74,7 +77,8 @@
         "credential_field": 0,
         "url_credential": 0
       },
-      "summary": []
+      "summary": [],
+      "sourceCommit": "80aa7a9140bbae2b03668ea4640bd29d67f59431"
     },
     {
       "name": "help-locale-ui-typecheck-final",
@@ -89,7 +93,8 @@
         "credential_field": 0,
         "url_credential": 0
       },
-      "summary": []
+      "summary": [],
+      "sourceCommit": "80aa7a9140bbae2b03668ea4640bd29d67f59431"
     },
     {
       "name": "help-locale-token-gates",
@@ -104,7 +109,8 @@
         "credential_field": 0,
         "url_credential": 0
       },
-      "summary": []
+      "summary": [],
+      "sourceCommit": "80aa7a9140bbae2b03668ea4640bd29d67f59431"
     },
     {
       "name": "help-locale-server-typecheck",
@@ -119,7 +125,8 @@
         "credential_field": 0,
         "url_credential": 0
       },
-      "summary": []
+      "summary": [],
+      "sourceCommit": "80aa7a9140bbae2b03668ea4640bd29d67f59431"
     },
     {
       "name": "help-locale-shared-build",
@@ -134,7 +141,8 @@
         "credential_field": 0,
         "url_credential": 0
       },
-      "summary": []
+      "summary": [],
+      "sourceCommit": "80aa7a9140bbae2b03668ea4640bd29d67f59431"
     },
     {
       "name": "help-locale-node-final",
@@ -149,7 +157,8 @@
         "credential_field": 0,
         "url_credential": 0
       },
-      "summary": []
+      "summary": [],
+      "sourceCommit": "80aa7a9140bbae2b03668ea4640bd29d67f59431"
     },
     {
       "name": "help-locale-docs-final",
@@ -164,7 +173,8 @@
         "credential_field": 0,
         "url_credential": 0
       },
-      "summary": []
+      "summary": [],
+      "sourceCommit": "80aa7a9140bbae2b03668ea4640bd29d67f59431"
     },
     {
       "name": "help-locale-docs-check-final",
@@ -179,7 +189,8 @@
         "credential_field": 0,
         "url_credential": 0
       },
-      "summary": []
+      "summary": [],
+      "sourceCommit": "80aa7a9140bbae2b03668ea4640bd29d67f59431"
     },
     {
       "name": "help-locale-review-final",
@@ -194,7 +205,77 @@
         "credential_field": 0,
         "url_credential": 0
       },
-      "summary": []
+      "summary": [],
+      "sourceCommit": "80aa7a9140bbae2b03668ea4640bd29d67f59431"
+    },
+    {
+      "name": "company-enterprise-help-structure-20261025",
+      "exitCode": 0,
+      "exitSidecar": "company-enterprise-help-structure-20261025.log.exit",
+      "rawSha256": "400154533b2f266c494a57ee480fe073567dafa2e87b826ac0cb0676b46885bc",
+      "sanitizedSha256": "400154533b2f266c494a57ee480fe073567dafa2e87b826ac0cb0676b46885bc",
+      "archiveSha256": "9fc8ba837b9bf91304d8cb7d8f50559a74c76354fdbd9b6b6428562554a47350",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "3185a7b1598f4efc9e91957536d16f22ab8eba08"
+    },
+    {
+      "name": "company-enterprise-help-tests-20261025",
+      "exitCode": 0,
+      "exitSidecar": "company-enterprise-help-tests-20261025.log.exit",
+      "rawSha256": "bb707e60bb49b2a109e87a407cf3ea7b2687396d16228b46f7004a507704a1a8",
+      "sanitizedSha256": "bb707e60bb49b2a109e87a407cf3ea7b2687396d16228b46f7004a507704a1a8",
+      "archiveSha256": "1207d7ec74d8f7ffaab1b109c10397bf37917480df26468913f89f72f3b56927",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "3185a7b1598f4efc9e91957536d16f22ab8eba08"
+    },
+    {
+      "name": "company-enterprise-help-source-review-20261025",
+      "exitCode": 1,
+      "exitSidecar": "company-enterprise-help-source-review-20261025.log.exit",
+      "rawSha256": "84921464d786f960b39e6b697a033d609a25f891a13693f4daed567e8e370ed4",
+      "sanitizedSha256": "84921464d786f960b39e6b697a033d609a25f891a13693f4daed567e8e370ed4",
+      "archiveSha256": "06423c821dbd55c980b73a99a6fa49131a1ddf1be731010a188f8a3a758fd4aa",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "3185a7b1598f4efc9e91957536d16f22ab8eba08"
+    }
+  ],
+  "sourceCommitMeaning": "Archive checkout identity; scoped runs may predate it. Only separately recorded unchanged-source gates establish final tested source identity.",
+  "updates": [
+    {
+      "sourceCommit": "3185a7b1598f4efc9e91957536d16f22ab8eba08",
+      "meaning": "Paired company settings Help updated with company language/timezone fallback and current Enterprise operating-fact disclosure; Help structure validation passed and generated search catalog was refreshed.",
+      "logs": [
+        "company-enterprise-help-structure-20261025",
+        "company-enterprise-help-tests-20261025"
+      ]
+    },
+    {
+      "sourceCommit": "3185a7b1598f4efc9e91957536d16f22ab8eba08",
+      "meaning": "The source-review checker was run against committed HEAD while linked Help articles and their linked sources are still uncommitted in the shared working tree; it correctly reports HEAD-byte hash mismatches. Do not treat this as final source-review validation; refresh and rerun after the owners commit final source.",
+      "logs": [
+        "company-enterprise-help-source-review-20261025"
+      ]
     }
   ]
 }

@@ -85,7 +85,7 @@ import {
   workflowRetryDelayMs,
   workflowStepIdempotencyKey,
 } from "./workflow-execution-policy.js";
-import { workflowNodeDefinitions, workflowNodeRegistryService } from "./workflow-node-registry.js";
+import { workflowNodeDefinitionByType, workflowNodeRegistryService } from "./workflow-node-registry.js";
 import { resolveToolActionWait, scheduleToolActionWait } from "./workflow-tool-action-wait.js";
 import { executeNativeWorkflowQuery } from "./workflow-native-nodes.js";
 import { executeWorkflowHttpRequest } from "./workflow-http-request.js";
@@ -614,12 +614,9 @@ async function claimQueuedRun(
 
 type WorkflowNode = WorkflowGraphV1["nodes"][number];
 
-const WORKFLOW_NODE_DEFINITIONS = new Map(
-  workflowNodeDefinitions().map((definition) => [definition.type, definition]),
-);
-
 function workflowNodeDefinition(node: WorkflowNode) {
-  const definition = WORKFLOW_NODE_DEFINITIONS.get(node.type);
+  // Resolve after module initialization: routine imports also reach this registry.
+  const definition = workflowNodeDefinitionByType(node.type);
   if (!definition) {
     throw new WorkflowCheckpointError(
       "workflow_node_definition_missing",

@@ -113,7 +113,13 @@ export async function withNativeMemoryCaptureSources<T>(db: Db, companyId: strin
 
 /** Current source authority, independent of a Memory record's display scope.
  * A shared/corrected copy keeps every original root. Unknown history is withheld. */
-const memorySourceReads=new AsyncLocalStorage<{active:Set<string>;deadline:number;work:number}>();
+type MemorySourceReadBudget = { signal?: AbortSignal; deadlineAt?: number };
+type MemorySourceReadScope = { active:Set<string>;deadline:number;work:number;signal?:AbortSignal };
+function assertMemorySourceReadActive(state: MemorySourceReadScope) {
+  if (state.signal?.aborted) throw state.signal.reason ?? new Error("Memory source read was cancelled");
+  if (performance.now() > state.deadline) throw new Error("Memory source read deadline exceeded");
+}
+const memorySourceReads=new AsyncLocalStorage<MemorySourceReadScope>();
 export function memoryShareContentFingerprint(record:typeof memoryRecords.$inferSelect):string {
   return createHash("sha256").update(JSON.stringify({
     companyId:record.companyId,bindingId:record.bindingId,memoryType:record.memoryType,scopeType:record.scopeType,scopeId:record.scopeId,
@@ -123,8 +129,13 @@ export function memoryShareContentFingerprint(record:typeof memoryRecords.$infer
     retentionPolicy:record.retentionPolicy,expiresAt:record.expiresAt?.toISOString()??null,
   })).digest("hex");
 }
-export async function canActorReadMemorySources(db: Db, companyId: string, actor: AuthorizationActor | undefined, recordId: string):Promise<boolean> {
-  const inherited=memorySourceReads.getStore(),state=inherited??{active:new Set<string>(),deadline:performance.now()+8000,work:0};
+export async function canActorReadMemorySources(db: Db, companyId: string, actor: AuthorizationActor | undefined, recordId: string,
+  budget: MemorySourceReadBudget = {}):Promise<boolean> {
+  const inherited=memorySourceReads.getStore(),state=inherited??{active:new Set<string>(),deadline:performance.now()+8000,work:0,
+    ...(budget.signal ? { signal: budget.signal } : {})};
+  if (budget.deadlineAt !== undefined) state.deadline = Math.min(state.deadline, performance.now() + Math.max(0, budget.deadlineAt - Date.now()));
+  if (budget.signal && !state.signal) state.signal = budget.signal;
+  try { assertMemorySourceReadActive(state); } catch { return false; }
   const key=`${companyId}:${recordId}`;
   if(state.active.has(key) || performance.now()>state.deadline || state.work>=256)return false;
   const read=async()=>{
@@ -157,7 +168,7 @@ async function memorySourceActorCurrent(db:Db,companyId:string,actor:Authorizati
   return (await authorizationService(db).decide({actor,action:"company_scope:read",resource:{type:"company",companyId},enforceResponsibleUserIntersection:true})).allowed;
 }
 async function inspectMemorySourceAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,recordId:string,
-  state:{deadline:number;work:number}):Promise<boolean> {
+  state:MemorySourceReadScope):Promise<boolean> {
   if (!actor) return false;
   const { authorizationService, canActorReadIssuePrivacy, canActorReadProjectPrivacy, canActorReadHeartbeatRunPrivacy } = await import("../authorization.js");
   const admitted = () => memorySourceActorCurrent(db,companyId,actor,recordId);
@@ -170,6 +181,7 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
   };
   const deadline = state.deadline;
   const visit = async (id:string,ancestor=false,authorizedPrivateOwnerEdge=false):Promise<boolean> => {
+    try { assertMemorySourceReadActive(state); } catch { return false; }
     if (active.has(id) || performance.now()>deadline || visited.size>=256 || state.work>=256) return false;
     // A row reached through the exact published edge is not equivalent to the
     // same row reached as a sibling source. Cache the edge context, never only
@@ -268,7 +280,10 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
     }
     const publishedSourceId=await publishedShareSourceEdge(db,companyId,row);
     if(publishedSourceId===false)return false;
-    for (const source of row.sourceMemoryIds) if (!await visit(source,true,source===publishedSourceId)) return false;
+    for (const source of row.sourceMemoryIds) {
+      try { assertMemorySourceReadActive(state); } catch { return false; }
+      if (!await visit(source,true,source===publishedSourceId)) return false;
+    }
     active.delete(id);
     const scopedReads=[...runChecks.values(),...taskChecks.values()].reduce((count,scopes)=>count+scopes.size,0);
     return visited.size+scopedReads+projectIds.size+revisions.size<=256;
@@ -276,20 +291,26 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
   if (!await visit(recordId)) return false;
   const {withReadMemoryTemporalSources}=await import("../authorization.js");
   for (const [id,owners] of runChecks) for (const [ownerId,encoded] of owners) {
+    try { assertMemorySourceReadActive(state); } catch { return false; }
     const check=()=>canActorReadHeartbeatRunPrivacy(db,actor,{companyId,id});
     if (performance.now()>deadline || (encoded===null ? !await check()
       : !await withReadMemoryTemporalSources(db,actor,companyId,ownerId,check))) return false;
   }
   for (const [id,owners] of taskChecks) for (const [ownerId,encoded] of owners) {
+    try { assertMemorySourceReadActive(state); } catch { return false; }
     const check=()=>canActorReadIssuePrivacy(db,actor,{companyId,id});
     if (performance.now()>deadline || (encoded===null ? !await check()
       : !await withReadMemoryTemporalSources(db,actor,companyId,ownerId,check))) return false;
   }
-  for (const id of projectIds) if (performance.now()>deadline || !await canActorReadProjectPrivacy(db,actor,{companyId,id})) return false;
+  for (const id of projectIds) {
+    try { assertMemorySourceReadActive(state); } catch { return false; }
+    if (performance.now()>deadline || !await canActorReadProjectPrivacy(db,actor,{companyId,id})) return false;
+  }
   if (revisions.size) {
     if (!(await authorizationService(db).decide({actor,action:"foundation:read",resource:{type:"company",companyId},enforceResponsibleUserIntersection:true})).allowed) return false;
     const {assertLearnedAssetAnalyticalSources} = await import("../learning/learning-analytical-sources.js");
     for (const id of revisions) {
+      try { assertMemorySourceReadActive(state); } catch { return false; }
       if (performance.now()>deadline) return false;
       const [source] = await db.select({id:documentRevisions.id}).from(documentRevisions).where(and(eq(documentRevisions.companyId,companyId),eq(documentRevisions.id,id)));
       if (!source) return false;

@@ -74,6 +74,7 @@ import {
   normalizeAgentUrlKey,
   PERMISSION_KEYS,
   isUuidLike,
+  portabilityCompanyManifestEntrySchema,
   portabilityIssueManifestEntrySchema,
   portabilityProjectManifestEntrySchema,
 } from "@paperclipai/shared";
@@ -3189,6 +3190,34 @@ function buildManifestFromPackageFiles(
     ?? normalizeAgentUrlKey(companyName)
     ?? "company";
 
+  const parsedCompanyManifest = portabilityCompanyManifestEntrySchema.safeParse({
+    path: resolvedCompanyPath,
+    name: companyName,
+    description: asString(companyFrontmatter.description),
+    logoPath: asString(paperclipCompany.logoPath) ?? asString(paperclipCompany.logo) ?? null,
+    locale: paperclipCompany.locale,
+    timezone: paperclipCompany.timezone,
+    requireBoardApprovalForNewAgents:
+      typeof paperclipCompany.requireBoardApprovalForNewAgents === "boolean"
+        ? paperclipCompany.requireBoardApprovalForNewAgents
+        : readCompanyApprovalDefault(companyFrontmatter),
+    feedbackDataSharingEnabled:
+      typeof paperclipCompany.feedbackDataSharingEnabled === "boolean"
+        ? paperclipCompany.feedbackDataSharingEnabled
+        : false,
+    feedbackDataSharingConsentAt:
+      typeof paperclipCompany.feedbackDataSharingConsentAt === "string"
+        ? paperclipCompany.feedbackDataSharingConsentAt
+        : null,
+    feedbackDataSharingConsentByUserId:
+      asString(paperclipCompany.feedbackDataSharingConsentByUserId) ?? null,
+    feedbackDataSharingTermsVersion:
+      asString(paperclipCompany.feedbackDataSharingTermsVersion) ?? null,
+  });
+  if (!parsedCompanyManifest.success) {
+    throw unprocessable("Company package contains invalid company settings.");
+  }
+
   const includeEntries = readIncludeEntries(companyFrontmatter);
   const referencedAgentPaths = includeEntries
     .map((entry) => resolvePortablePath(resolvedCompanyPath, entry.path))
@@ -3230,28 +3259,7 @@ function buildManifestFromPackageFiles(
       issues: taskPaths.length > 0,
       skills: skillPaths.length > 0,
     },
-    company: {
-      path: resolvedCompanyPath,
-      name: companyName,
-      description: asString(companyFrontmatter.description),
-      logoPath: asString(paperclipCompany.logoPath) ?? asString(paperclipCompany.logo),
-      requireBoardApprovalForNewAgents:
-        typeof paperclipCompany.requireBoardApprovalForNewAgents === "boolean"
-          ? paperclipCompany.requireBoardApprovalForNewAgents
-          : readCompanyApprovalDefault(companyFrontmatter),
-      feedbackDataSharingEnabled:
-        typeof paperclipCompany.feedbackDataSharingEnabled === "boolean"
-          ? paperclipCompany.feedbackDataSharingEnabled
-          : false,
-      feedbackDataSharingConsentAt:
-        typeof paperclipCompany.feedbackDataSharingConsentAt === "string"
-          ? paperclipCompany.feedbackDataSharingConsentAt
-          : null,
-      feedbackDataSharingConsentByUserId:
-        asString(paperclipCompany.feedbackDataSharingConsentByUserId),
-      feedbackDataSharingTermsVersion:
-        asString(paperclipCompany.feedbackDataSharingTermsVersion),
-    },
+    company: parsedCompanyManifest.data,
     sidebar: paperclipSidebar,
     labels: paperclipLabels,
     blobs: paperclipBlobs,
@@ -4999,6 +5007,8 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         schemaVersion: BUNDLE_SCHEMA_VERSION,
         company: stripEmptyValues({
           logoPath: companyLogoPath,
+          locale: company.locale,
+          timezone: company.timezone,
           requireBoardApprovalForNewAgents: company.requireBoardApprovalForNewAgents ? true : undefined,
           feedbackDataSharingEnabled: company.feedbackDataSharingEnabled ? true : undefined,
           feedbackDataSharingConsentAt: company.feedbackDataSharingConsentAt?.toISOString() ?? null,
@@ -5748,6 +5758,8 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       const created = await companies.create({
         name: companyName,
         description: include.company ? (sourceManifest.company?.description ?? null) : null,
+        locale: include.company ? (sourceManifest.company?.locale ?? "en") : "en",
+        timezone: include.company ? (sourceManifest.company?.timezone ?? "UTC") : "UTC",
         requireBoardApprovalForNewAgents: include.company
           ? (sourceManifest.company?.requireBoardApprovalForNewAgents ?? false)
           : false,
@@ -5796,6 +5808,8 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         const updated = await companies.update(targetCompany.id, {
           name: sourceManifest.company.name,
           description: sourceManifest.company.description,
+          locale: sourceManifest.company.locale,
+          timezone: sourceManifest.company.timezone,
           requireBoardApprovalForNewAgents: sourceManifest.company.requireBoardApprovalForNewAgents,
           feedbackDataSharingEnabled: sourceManifest.company.feedbackDataSharingEnabled,
           feedbackDataSharingConsentAt: sourceManifest.company.feedbackDataSharingConsentAt

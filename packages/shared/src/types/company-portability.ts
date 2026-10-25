@@ -37,6 +37,10 @@ export interface CompanyPortabilityCompanyManifestEntry {
   name: string;
   description: string | null;
   logoPath: string | null;
+  /** Company fallback language; absent in older packages and defaults to English. */
+  locale: "en" | "da";
+  /** Company fallback timezone; absent in older packages and defaults to UTC. */
+  timezone: string;
   requireBoardApprovalForNewAgents: boolean;
   feedbackDataSharingEnabled: boolean;
   feedbackDataSharingConsentAt: string | null;

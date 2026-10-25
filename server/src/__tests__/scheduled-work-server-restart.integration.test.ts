@@ -6,14 +6,15 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { agentWakeupRequests, companies, createDb, heartbeatRuns, issues, routineRuns, routineTriggers, type Db } from "@paperclipai/db";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
-import { seedV5Presences } from "./helpers/v5-fixtures.js";
+import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
 import { seedCurrentHumanSourceActor, createCanonicalHumanProject } from "./helpers/current-human-source-fixture.js";
 import { agentService } from "../services/agents.js";
 import { routineService } from "../services/routines.js";
+import { instanceSettingsService } from "../services/instance-settings.js";
 
 const support=await getEmbeddedPostgresTestSupport();
 const serverRoot=fileURLToPath(new URL("../../",import.meta.url));
@@ -46,6 +47,10 @@ describe.skipIf(!support.supported)("UP13 assembled built server scheduled resta
     for(const relative of ["index.ts","services/scheduled-work.ts","services/routines.ts","services/delivery-work-coordinator.ts"])
       sourceHashes[relative]=createHash("sha256").update(await fs.readFile(path.join(serverRoot,"src",relative))).digest("hex");
     database=await startEmbeddedPostgresTestDatabase("aw-up13-full-server-");db=createDb(database.connectionString,{maxConnections:3});
+    const settings=instanceSettingsService(db);
+    await settings.getExperimental(); // Ensure the canonical singleton exists before the shared helper updates it.
+    await enableV5ForTest(db);
+    expect(await settings.getExperimental()).toMatchObject({agent_identities_v5:true,agent_multi_company_presence_v5:true,enableFoundationV1:true,enableContextEngineV1:true});
     tempRoot=await fs.mkdtemp(path.join(os.tmpdir(),"aw-up13-full-server-"));port=await availablePort();
     configPath=path.join(tempRoot,"config.json");
     await fs.writeFile(configPath,JSON.stringify({$meta:{version:1,updatedAt:new Date().toISOString(),source:"doctor"},
@@ -106,10 +111,14 @@ describe.skipIf(!support.supported)("UP13 assembled built server scheduled resta
     expect(occurrences[0]).toMatchObject({source:"schedule",status:"issue_created",linkedIssueId:expect.any(String)});
     const tasks=await db.select().from(issues).where(eq(issues.originRunId,occurrences[0]!.id));
     expect(tasks).toHaveLength(1);expect(tasks[0]).toMatchObject({id:occurrences[0]!.linkedIssueId,originKind:"routine_execution",originId:routineId});
-    const wakeups=await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.idempotencyKey,`routine-assignment:${occurrences[0]!.id}`));
+    const wakeups=await db.select().from(agentWakeupRequests).where(and(
+      eq(agentWakeupRequests.companyId,occurrences[0]!.companyId),
+      sql`${agentWakeupRequests.payload}->>'issueId' = ${tasks[0]!.id}`,
+      sql`${agentWakeupRequests.payload}->'executionWait'->>'requestedIdempotencyKey' = ${`routine-assignment:${occurrences[0]!.id}`}`));
     expect(wakeups).toHaveLength(1);
     expect(wakeups[0]).toMatchObject({agentId:tasks[0]!.assigneeAgentId,source:"assignment",status:"skipped",
-      reason:"heartbeat.wakeOnDemand.disabled",payload:{issueId:tasks[0]!.id}});
+      reason:"heartbeat.wakeOnDemand.disabled",idempotencyKey:expect.stringMatching(/^execution-wait:[0-9a-f]{64}$/),
+      payload:{issueId:tasks[0]!.id,executionWait:{wakeOnDemand:false,requestedIdempotencyKey:`routine-assignment:${occurrences[0]!.id}`}}});
     return {runId:occurrences[0]!.id,taskId:tasks[0]!.id};
   }
   it("recovers a deadline saved while stopped and never duplicates its canonical occurrence on another full restart",async()=>{
@@ -125,7 +134,9 @@ describe.skipIf(!support.supported)("UP13 assembled built server scheduled resta
     const routine=await routines.create(f.home,{projectId:project.id,goalId:null,parentIssueId:null,title:"Persisted restart occurrence",
       description:"Create the saved offline Task once",assigneeAgentId:f.presence.id,priority:"medium",status:"active",
       concurrencyPolicy:"coalesce_if_active",catchUpPolicy:"skip_missed"},{userId:f.userId});
+    expect(routine).toMatchObject({status:"active",executionTargetKind:"agent_task",responsibleUserId:f.userId,latestRevisionId:expect.any(String)});
     const {trigger}=await routines.createTrigger(routine.id,{kind:"schedule",cronExpression:"0 0 1 1 *",timezone:"UTC"},{userId:f.userId});
+    expect(trigger).toMatchObject({enabled:true,archived:false,setupPending:false,nextRunAt:expect.any(Date)});
     await startServer();
     expect(await db.select().from(routineRuns).where(eq(routineRuns.routineId,routine.id))).toEqual([]);
     await stopServer();

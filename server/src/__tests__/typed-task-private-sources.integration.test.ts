@@ -143,7 +143,7 @@ describe("typed routine Task private source graph", () => {
       expectedDraftRevisionId: changed.draftRevisionId!, expectedPublishedRevisionId: null,
     }, actor);
     const execution = await workflowExecutorService(db).startManualRun(
-      f.home, published.id, { input: {} }, actor, randomUUID(),
+      f.home, published.id, { input: {} }, { ...actor, authorizationActor: userId === f.userId ? ownerActor() : bobActor() }, randomUUID(),
     );
     const [task] = await db.select().from(issues).where(and(
       eq(issues.companyId, f.home), eq(issues.originKind, "workflow_task"), eq(issues.originRunId, execution.run.id),

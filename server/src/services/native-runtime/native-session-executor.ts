@@ -9778,6 +9778,14 @@ async function executePaperclipNativeSessionWithinScope(
       // transitions the run into "failed". Read after the transaction
       // commits, so a rolled-back write never reports a false failure.
       let terminalRunToReport: typeof heartbeatRuns.$inferSelect | null = null;
+      // Preserve the execution error even if recording its state later fails
+      // on a separate database lock or storage error.
+      await attemptFailureStep(() =>
+        input.onLog?.(
+          "stderr",
+          `[paperclip-runner] native session execution failed: ${executionFailureMessage}\n`,
+        ),
+      );
       await input.db.transaction(async (tx) => {
         await tx.execute(
           sql`select set_config('statement_timeout', '15000', true), set_config('lock_timeout', '1000', true)`,
@@ -10030,12 +10038,6 @@ async function executePaperclipNativeSessionWithinScope(
       if (terminalRunToReport) void reportRunFailure(input.db, terminalRunToReport);
       await boundedExecutionCleanup(async () => {
         await stoppedLeaseRenewal;
-        await attemptFailureStep(() =>
-          input.onLog?.(
-            "stderr",
-            `[paperclip-runner] native session execution failed: ${executionFailureMessage}\n`,
-          ),
-        );
         if (runnerSessionStartupScope) {
           await attemptFailureStep(() =>
             trace.end(runnerSessionStartupScope!, {

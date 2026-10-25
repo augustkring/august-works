@@ -480,29 +480,50 @@ async function getRecordDetail(db: Db, companyId: string, recordId: string) {
   return { ...recordDetail(record, evidence), ...(safeScope?{privateShareReview:safeScope}:{}) };
 }
 
-async function visibleMemorySources(db:Db,companyId:string,rows:(typeof memoryRecords.$inferSelect)[],actor:MemoryMutationActor) {
+type MemoryReadBudget = { signal?: AbortSignal; deadlineAt?: number };
+function assertMemoryReadActive(budget: MemoryReadBudget = {}) {
+  if (budget.signal?.aborted) throw budget.signal.reason ?? new Error("Memory retrieval was cancelled");
+  if (budget.deadlineAt !== undefined && budget.deadlineAt <= Date.now())
+    throw new Error("Memory retrieval deadline exceeded");
+}
+async function setMemoryReadStatementBudget(db: Db, budget: MemoryReadBudget = {}) {
+  assertMemoryReadActive(budget);
+  const remaining = budget.deadlineAt === undefined ? 8_000 : Math.min(8_000, budget.deadlineAt - Date.now());
+  if (remaining <= 0) throw new Error("Memory retrieval deadline exceeded");
+  await db.execute(sql`select set_config('statement_timeout', ${`${Math.max(1, Math.floor(remaining))}ms`}, true)`);
+  assertMemoryReadActive(budget);
+}
+async function visibleMemorySources(db:Db,companyId:string,rows:(typeof memoryRecords.$inferSelect)[],actor:MemoryMutationActor,
+  budget: MemoryReadBudget = {}) {
   const reader=memorySourceActor(companyId,actor),visible:typeof rows=[];
-  for(const row of rows)if(await canActorReadMemorySources(db,companyId,reader,row.id))visible.push(row);
+  for(const row of rows) {
+    assertMemoryReadActive(budget);
+    if(await canActorReadMemorySources(db,companyId,reader,row.id,budget))visible.push(row);
+  }
   return visible;
 }
 // Apply the public result limit after source qualification. Stable batches
 // avoid loading the company's complete Memory merely to find its first match.
 async function visibleMemoryPage(db:Db,companyId:string,actor:MemoryMutationActor,limit:number,
-  page:(db:Db,offset:number)=>Promise<(typeof memoryRecords.$inferSelect)[]>) {
+  page:(db:Db,offset:number)=>Promise<(typeof memoryRecords.$inferSelect)[]>, budget: MemoryReadBudget = {},
+  candidateFilter?: (record: typeof memoryRecords.$inferSelect) => boolean) {
   return db.transaction(async rawTx=>{
     const tx=rawTx as unknown as Db;
-    await tx.execute(sql`set local statement_timeout='8s'`);
+    await setMemoryReadStatementBudget(tx, budget);
     await lockAnalyticalCompany(tx,companyId); await lockMemoryPrivacy(tx,companyId);
+    await setMemoryReadStatementBudget(tx, budget);
     await assertActorCompanyScope(tx,companyId,actor);
     const deadline=performance.now()+8000;
     const visible:(typeof memoryRecords.$inferSelect)[]=[];
     for(let offset=0;;offset+=100){
+      await setMemoryReadStatementBudget(tx, budget);
       const rows=await page(tx,offset);
-      visible.push(...await visibleMemorySources(tx,companyId,rows,actor));
+      const candidates=candidateFilter ? rows.filter(candidateFilter) : rows;
+      visible.push(...await visibleMemorySources(tx,companyId,candidates,actor,budget));
       if(performance.now()>deadline)throw conflict("Complete Memory source review exceeded its budget");
       if(visible.length>=limit || rows.length<100){
         // A later source may wait while an earlier reader grant is withdrawn.
-        const current=await visibleMemorySources(tx,companyId,visible.slice(0,limit),actor);
+        const current=await visibleMemorySources(tx,companyId,visible.slice(0,limit),actor,budget);
         if(performance.now()>deadline)throw conflict("Complete Memory source review exceeded its budget");
         return current;
       }
@@ -1239,14 +1260,18 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
       companyId: string,
       recordId: string,
       actor: MemoryMutationActor,
+      budget: MemoryReadBudget = {},
     ) => {
-      await assertActorCompanyScope(db, companyId, actor);
+      assertMemoryReadActive(budget);
       return db.transaction(async rawTx=>{
-        const tx=rawTx as unknown as Db;await lockAnalyticalCompany(tx,companyId); await lockMemoryPrivacy(tx,companyId);
+        const tx=rawTx as unknown as Db;await setMemoryReadStatementBudget(tx,budget);
+        await lockAnalyticalCompany(tx,companyId); await lockMemoryPrivacy(tx,companyId);
+        await setMemoryReadStatementBudget(tx,budget); await assertActorCompanyScope(tx,companyId,actor);
         const detail=await getRecordDetail(tx,companyId,recordId);
         if(!detail)return null;
         assertPrivateMemoryReadAllowed(detail.record,actor);
-        if(!await canActorReadMemorySources(tx,companyId,memorySourceActor(companyId,actor),recordId))return null;
+        assertMemoryReadActive(budget);
+        if(!await canActorReadMemorySources(tx,companyId,memorySourceActor(companyId,actor),recordId,budget))return null;
         return detail;
       });
     },
@@ -2227,10 +2252,14 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
         asOf?: Date;
         limit?: number;
         sensitivityCeiling?: EvidenceSensitivity;
+        signal?: AbortSignal;
+        deadlineAt?: number;
+        /** Internal retrieval prefilter; only matching candidates are source-checked and returned. */
+        candidateFilter?: (record: typeof memoryRecords.$inferSelect) => boolean;
       },
       actor: MemoryMutationActor,
     ) => {
-      await assertActorCompanyScope(db, companyId, actor);
+      assertMemoryReadActive(input);
       if (input.scopeId !== undefined && !input.scopeType) {
         throw unprocessable("Memory scope id requires an explicit scope type");
       }
@@ -2285,7 +2314,7 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
           ),
         )
         .orderBy(desc(memoryRecords.observedAt),memoryRecords.id)
-        .limit(100).offset(offset));
+        .limit(100).offset(offset), input, input.candidateFilter);
     },
   };
 }

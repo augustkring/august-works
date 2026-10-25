@@ -7,6 +7,7 @@ import {
   issueCommentPresentationSchema,
 } from "./issue.js";
 import { routineVariableSchema } from "./routine.js";
+import { companyLocaleSchema, companyTimeZoneSchema } from "./company.js";
 
 export const portabilityIncludeSchema = z
   .object({
@@ -48,6 +49,8 @@ export const portabilityCompanyManifestEntrySchema = z.object({
   name: z.string().min(1),
   description: z.string().nullable(),
   logoPath: z.string().nullable(),
+  locale: companyLocaleSchema.default("en"),
+  timezone: companyTimeZoneSchema.default("UTC"),
   requireBoardApprovalForNewAgents: z.boolean(),
   feedbackDataSharingEnabled: z.boolean().default(false),
   feedbackDataSharingConsentAt: z.string().datetime().nullable().default(null),

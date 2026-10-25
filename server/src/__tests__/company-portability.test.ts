@@ -844,6 +844,49 @@ describe("company portability", () => {
     expect(exported.warnings).toContain("Agent claudecoder PATH override was omitted from export because it is system-dependent.");
   });
 
+  itNative("round-trips company locale and timezone defaults while preserving legacy package fallbacks", async () => {
+    useNativeExportCompany({ locale: "da", timezone: "Europe/Copenhagen" });
+    const portability = companyPortabilityService(nativeDb);
+    const include = { company: true, agents: false, projects: false, issues: false, skills: false };
+    const exported = await portability.exportBundle(nativeCompanyId, { include }, { actor: nativeActor });
+
+    expect(exported.manifest.company).toMatchObject({ locale: "da", timezone: "Europe/Copenhagen" });
+    expect(asTextFile(exported.files[".paperclip.yaml"]))
+      .toContain('locale: "da"');
+    expect(asTextFile(exported.files[".paperclip.yaml"]))
+      .toContain('timezone: "Europe/Copenhagen"');
+
+    agentSvc.list.mockResolvedValue([]);
+    projectSvc.list.mockResolvedValue([]);
+    companySvc.create.mockResolvedValue({ id: "company-imported-settings", name: "Imported settings" });
+    accessSvc.ensureMembership.mockResolvedValue(undefined);
+    accessSvc.ensureRoleDefaultGrants.mockResolvedValue(undefined);
+    await portability.importBundle({
+      source: { type: "inline", rootPath: exported.rootPath, files: exported.files },
+      include,
+      target: { mode: "new_company", newCompanyName: "Imported settings" },
+      collisionStrategy: "rename",
+      agents: "all",
+    }, "user-1");
+    expect(companySvc.create).toHaveBeenCalledWith(expect.objectContaining({
+      locale: "da",
+      timezone: "Europe/Copenhagen",
+    }));
+
+    companySvc.create.mockClear();
+    await portability.importBundle({
+      source: {
+        type: "inline",
+        files: { "COMPANY.md": ['---', 'schema: "agentcompanies/v1"', 'name: "Legacy settings"', "---", ""].join("\n") },
+      },
+      include,
+      target: { mode: "new_company", newCompanyName: "Legacy settings" },
+      collisionStrategy: "rename",
+      agents: "all",
+    }, "user-1");
+    expect(companySvc.create).toHaveBeenCalledWith(expect.objectContaining({ locale: "en", timezone: "UTC" }));
+  });
+
   itNative("does not load or emit skills when agents are included but skills are disabled", async () => {
     const portability = companyPortabilityService(nativeDb);
 
@@ -3262,6 +3305,8 @@ describe("company portability", () => {
 
     expect(companySvc.create).toHaveBeenCalledWith(expect.objectContaining({
       name: "Imported Paperclip (3)",
+      locale: "en",
+      timezone: "UTC",
     }));
   });
 

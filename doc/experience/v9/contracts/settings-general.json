@@ -34,6 +34,26 @@
   },
   "inputs": [
     {
+      "id": "company-name",
+      "label": "Organization name",
+      "dataType": "Text",
+      "required": true,
+      "default": "Current company name",
+      "help": "The display name for the selected company.",
+      "validation": "Must not be blank.",
+      "autofillOrPrefill": "Prefilled from the selected company"
+    },
+    {
+      "id": "company-description",
+      "label": "Description",
+      "dataType": "Text",
+      "required": false,
+      "default": "Current company description or empty",
+      "help": "Optional description shown in the company profile.",
+      "validation": "Nullable text accepted by the Company API.",
+      "autofillOrPrefill": "Prefilled from the selected company"
+    },
+    {
       "id": "company-locale",
       "label": "Default language",
       "dataType": "Single select",
@@ -82,7 +102,7 @@
     "stale": "Do not save values for a prior company after selection changes; refresh values from the current company response.",
     "validation_error": "Preserve other entered values, identify the field problem and associate it programmatically with the control.",
     "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
-    "permission_denied": "Suppress retained private data and unavailable controls; do not infer additional grants from profile or navigation.",
+    "permission_denied": "Withhold changes that the current actor cannot make; do not infer write authority from the selected company alone.",
     "recovering": "Re-resolve canonical state/version and the original request identity before permitting another effect.",
     "success": "Show company defaults from the persisted Company response. Do not imply that changing the company timezone rewrites existing schedules or that changing company language overwrites personal language preferences."
   },
@@ -95,7 +115,7 @@
   "accessibility": {
     "initialFocus": "Focus the Company page heading after the current authorized read; a category hash deep link moves focus to that category heading.",
     "focusAfterError": "Error summary or first invalid control, with a programmatically associated explanation.",
-    "focusAfterSuccess": "There is no mutation-success state here; focus remains at the current Company or requested category heading.",
+    "focusAfterSuccess": "Keep focus at the General section and make the saved state available to assistive technology.",
     "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
     "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
     "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
@@ -113,17 +133,16 @@
       "Company identity and locale/timezone defaults returned by the Company API."
     ],
     "dataCollected": [
-      "Company language/timezone values are persisted by the existing Company owner; no server-side search text is stored."
+      "Company name, description, language and timezone are written by the existing Company owner; standard company.updated audit activity records changed fields."
     ],
     "sensitiveFields": [
       "Membership, role, configuration, provider, security metadata and source references remain in their Original owner."
     ],
-    "loggingConstraints": "Do not log search text, account query values, private domain payloads, credentials, destination responses or raw errors."
+    "loggingConstraints": "Use the existing Company audit event for changed fields; do not add credentials, unrelated account data or raw validation errors to logs."
   },
   "analytics": {
     "allowedEvents": [],
     "prohibitedPayloads": [
-      "Search text",
       "Company configuration",
       "Membership or role data",
       "Provider and security details",

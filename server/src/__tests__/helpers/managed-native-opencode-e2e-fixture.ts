@@ -8,7 +8,7 @@ import { basename, dirname, join } from "node:path";
 import express from "express";
 import request from "supertest";
 import postgres from "postgres";
-import { and, eq, gte, inArray } from "drizzle-orm";
+import { and, eq, gte, inArray, sql } from "drizzle-orm";
 import { expect } from "vitest";
 
 import {
@@ -261,6 +261,32 @@ export async function runManagedNativeOpenCodeFixture(input: {
   onPreserveDebugArtifacts?: () => void;
 }) {
   const { db, root, instanceId } = input;
+  let contextProbeCallId: string | null = null;
+  let pendingContextProbeCallId: string | null = null;
+  let pendingContextProbeStartedAt: number | null = null;
+  let contextProbeStartedAt: number | null = null;
+  let contextProbeSamples = 0;
+  const contextTransactionOwners = new Set<string>();
+  const ownerDb = db as typeof db & { transaction: typeof db.transaction };
+  const originalRootTransaction = ownerDb.transaction.bind(ownerDb);
+  const instrumentedRootTransaction = (async (...args: Parameters<typeof db.transaction>) => {
+    const [callback, config] = args;
+    return originalRootTransaction(async tx => {
+      if (contextProbeCallId) {
+        const stack = new Error().stack ?? "";
+        const serviceFrame = stack.split("\n").map(line => line.trim()).find(line =>
+          /server\/src\/services\/[A-Za-z0-9_./-]+\.ts:\d+:\d+/.test(line));
+        const sourceLocation = serviceFrame && /server\/src\/services\/([A-Za-z0-9_./-]+\.ts):(\d+):\d+/.exec(serviceFrame);
+        const moduleName = sourceLocation?.[1]?.split("/").at(-1)?.replace(/\.ts$/, "") ?? "service";
+        const lineNumber = sourceLocation?.[2] ?? "0";
+        const ownerLabel = `fx.${moduleName}:${lineNumber}`.slice(0, 63);
+        contextTransactionOwners.add(ownerLabel);
+        await tx.execute(sql`select set_config('application_name', ${ownerLabel}, true)`);
+      }
+      return callback(tx);
+    }, config);
+  }) as typeof db.transaction;
+  Object.defineProperty(ownerDb, "transaction", { configurable: true, writable: true, value: instrumentedRootTransaction });
   await instanceSettingsService(db).getExperimental();
   await enableV5ForTest(db);
   await instanceSettingsService(db).updateExperimental({ enableWorkflowsV1: true,
@@ -615,6 +641,18 @@ export async function runManagedNativeOpenCodeFixture(input: {
         const tools = (body.tools as Array<Record<string, unknown>>) ?? [];
         const step = modelSteps[responseCount - 1];
         if (!step) throw new Error("Managed fixture provider exhausted its configured model steps.");
+        if (step.tool === "read_context") {
+          pendingContextProbeCallId = step.id ?? `managed-e2e-${step.tool}-${responseCount - 1}`;
+          pendingContextProbeStartedAt = Date.now();
+          if (pgMonitorTimer) {
+            clearInterval(pgMonitorTimer);
+            pgMonitorTimer = undefined;
+          }
+          if (contextProbeTimer) clearInterval(contextProbeTimer);
+          if (contextInvocationWatchTimer) clearInterval(contextInvocationWatchTimer);
+          contextInvocationWatchTimer = setInterval(() => { void watchContextInvocation(); }, 50);
+          void watchContextInvocation();
+        }
         const findTool = (name: ManagedNativeOpenCodeModelStep["tool"]) => tools.find(tool => {
           if (name === "paperclip_finish") return tool.name === "paperclip_finish" || toolName(tool.name) === "finish";
           return toolName(tool.name) === name;
@@ -1036,15 +1074,21 @@ export async function runManagedNativeOpenCodeFixture(input: {
     const observedOpenCodePids = new Set<number>();
     let managedProviderConfigReported = false;
     const pgMonitor = postgres(input.connectionString, { max: 1 });
+    let pgMonitorStartedAt: number | null = null;
     let pgMonitorTimer: ReturnType<typeof setInterval> | undefined;
+    let contextProbeTimer: ReturnType<typeof setInterval> | undefined;
+    let contextInvocationWatchTimer: ReturnType<typeof setInterval> | undefined;
     let pgMonitorInFlight = false;
+    let contextInvocationWatchInFlight = false;
     const inspectPostgresWaits = async () => {
       if (pgMonitorInFlight) return;
       pgMonitorInFlight = true;
       try {
         const [sample] = await pgMonitor<{ active: number; idleInTransaction: number; waiters: Array<{
           pid: number; waitEventType: string | null; waitEvent: string | null; blockedBy: number[]; queryKind: string;
-        }> }[]>`
+        }>; sessions: Array<{ pid: number; applicationName: string; state: string | null; backendType: string | null;
+          waitEventType: string | null; waitEvent: string | null; xactAgeMs: number | null; queryAgeMs: number | null;
+          queryKind: string; advisoryLockCount: number; relationLockCount: number }> }[]>`
           select count(*) filter (where state = 'active')::int as active,
             count(*) filter (where state = 'idle in transaction')::int as "idleInTransaction",
             coalesce(json_agg(json_build_object('pid', pid, 'waitEventType', wait_event_type,
@@ -1053,16 +1097,104 @@ export async function runManagedNativeOpenCodeFixture(input: {
                 when query ilike '%heartbeat_runs%' then 'heartbeat_runs'
                 when query ilike '%native_run_finalizations%' then 'run_finalizations'
                 else lower(split_part(query, ' ', 1)) end))
-              filter (where state = 'active' and wait_event_type is not null), '[]'::json) as waiters
+              filter (where state = 'active' and wait_event_type is not null), '[]'::json) as waiters,
+            coalesce((select json_agg(json_build_object('pid', tracked.pid,
+              'applicationName', left(regexp_replace(coalesce(tracked.application_name, ''), '[^A-Za-z0-9_.-]', '', 'g'), 64),
+              'state', tracked.state, 'backendType', tracked.backend_type,
+              'waitEventType', tracked.wait_event_type, 'waitEvent', tracked.wait_event,
+              'xactAgeMs', case when tracked.xact_start is null then null
+                else greatest(0, (extract(epoch from clock_timestamp() - tracked.xact_start) * 1000)::int) end,
+              'queryAgeMs', case when tracked.query_start is null then null
+                else greatest(0, (extract(epoch from clock_timestamp() - tracked.query_start) * 1000)::int) end,
+              'queryKind', case when tracked.query ilike '%issues%' then 'issues'
+                when tracked.query ilike '%heartbeat_runs%' then 'heartbeat_runs'
+                when tracked.query ilike '%native_run_finalizations%' then 'run_finalizations'
+                else lower(split_part(tracked.query, ' ', 1)) end,
+              'advisoryLockCount', (select count(*)::int from pg_locks where pid = tracked.pid and locktype = 'advisory'),
+              'relationLockCount', (select count(*)::int from pg_locks where pid = tracked.pid and locktype = 'relation')))
+              from (select activity.* from pg_stat_activity activity
+                where activity.datname = current_database() and activity.pid <> pg_backend_pid()
+                and (activity.state = 'idle in transaction' or activity.wait_event_type is not null or exists (
+                  select 1 from pg_locks held where held.pid = activity.pid and held.granted
+                ))
+                order by activity.pid limit 40) tracked), '[]'::json) as sessions
           from pg_stat_activity where datname = current_database() and pid <> pg_backend_pid()
         `;
-        if (sample) diagnostics.push(`independent PG wait sample: ${JSON.stringify(sample)}`);
+        if (sample) {
+          contextProbeSamples += contextProbeCallId ? 1 : 0;
+          const contextInvocation = contextProbeCallId
+            ? (await pgMonitor<{ status: string }[]>`
+              select status from tool_invocations where company_id = ${companyId}::uuid
+                and idempotency_key = ${`aw-native-tool:${run!.id}:${contextProbeCallId}`} limit 1
+            `)[0] ?? null
+            : null;
+          const sampleFacts = {
+            elapsedSinceSessionStartMs: pgMonitorStartedAt === null ? null : Math.max(0, Date.now() - pgMonitorStartedAt),
+            contextProbeElapsedMs: contextProbeStartedAt === null ? null : Math.max(0, Date.now() - contextProbeStartedAt),
+            contextProbeSample: contextProbeCallId ? contextProbeSamples : null,
+            contextInvocationStatus: contextInvocation?.status ?? (contextProbeCallId ? "not_started" : null),
+            ...sample,
+          };
+          if (!contextProbeCallId || sample.waiters.length || sample.sessions.length || contextProbeSamples <= 1 ||
+            contextInvocation?.status && contextInvocation.status !== "executing")
+            diagnostics.push(`independent PG wait sample: ${JSON.stringify(sampleFacts)}`);
+          if (contextProbeCallId && (contextInvocation?.status && contextInvocation.status !== "executing" ||
+            contextProbeStartedAt !== null && Date.now() - contextProbeStartedAt >= 5_000)) {
+            if (contextProbeTimer) clearInterval(contextProbeTimer);
+            contextProbeTimer = undefined;
+            contextProbeCallId = null;
+          }
+        }
       } catch (error) {
         const code = error && typeof error === "object" && "code" in error && typeof error.code === "string"
           ? error.code : "unavailable";
         diagnostics.push(`independent PG wait sample unavailable: ${code}`);
       } finally {
         pgMonitorInFlight = false;
+      }
+    };
+    const watchContextInvocation = async () => {
+      if (!pendingContextProbeCallId || contextInvocationWatchInFlight) return;
+      contextInvocationWatchInFlight = true;
+      try {
+        const callId = pendingContextProbeCallId;
+        const contextInvocation = (await pgMonitor<{ status: string }[]>`
+          select status from tool_invocations where company_id = ${companyId}::uuid
+            and idempotency_key = ${`aw-native-tool:${run!.id}:${callId}`} limit 1
+        `)[0] ?? null;
+        if (contextInvocation?.status === "executing") {
+          contextProbeCallId = callId;
+          pendingContextProbeCallId = null;
+          contextProbeStartedAt = Date.now();
+          contextProbeSamples = 0;
+          if (contextInvocationWatchTimer) clearInterval(contextInvocationWatchTimer);
+          contextInvocationWatchTimer = undefined;
+          contextProbeTimer = setInterval(() => { void inspectPostgresWaits(); }, 150);
+          void inspectPostgresWaits();
+          return;
+        }
+        if (contextInvocation?.status && contextInvocation.status !== "executing") {
+          diagnostics.push(`managed Context invocation completed before detailed wait sampling: ${JSON.stringify({
+            status: contextInvocation.status,
+            elapsedMs: pendingContextProbeStartedAt === null ? null : Date.now() - pendingContextProbeStartedAt,
+          })}`);
+          pendingContextProbeCallId = null;
+          if (contextInvocationWatchTimer) clearInterval(contextInvocationWatchTimer);
+          contextInvocationWatchTimer = undefined;
+          return;
+        }
+        if (pendingContextProbeStartedAt !== null && Date.now() - pendingContextProbeStartedAt >= 30_000) {
+          diagnostics.push(`managed Context invocation start was not observed within bound: ${JSON.stringify({ elapsedMs: 30_000 })}`);
+          pendingContextProbeCallId = null;
+          if (contextInvocationWatchTimer) clearInterval(contextInvocationWatchTimer);
+          contextInvocationWatchTimer = undefined;
+        }
+      } catch (error) {
+        const code = error && typeof error === "object" && "code" in error && typeof error.code === "string"
+          ? error.code : "unavailable";
+        diagnostics.push(`managed Context invocation status probe unavailable: ${code}`);
+      } finally {
+        contextInvocationWatchInFlight = false;
       }
     };
     const findManagedOpenCodeConfig = async (directory: string, depth = 0): Promise<string | null> => {
@@ -1231,6 +1363,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
                 if (event.eventType === "session.started")
                   void assertManagedConfigIsReadOnlyBeforeSpawn().catch(() => diagnostics.push("managed config probe unavailable"));
                 if (event.eventType === "session.started" && !pgMonitorTimer) {
+                  pgMonitorStartedAt = Date.now();
                   pgMonitorTimer = setInterval(() => { void inspectPostgresWaits(); }, 5_000);
                   void inspectPostgresWaits();
                 }
@@ -1482,6 +1615,46 @@ export async function runManagedNativeOpenCodeFixture(input: {
             canActorReadMemorySources: canReadSources, aliceMemoryServiceRead: aliceCanRead,
             aliceOutputSourceValidation, aliceOutputSourceFailure };
         }));
+        const allowedContextStages = new Set([
+          "authorization", "provider_retrieval", "context_manifest", "context_inspection", "context_audit",
+        ]);
+        const contextInvocationFacts = invocations.filter(value => value.toolName === "read_context").map(value => {
+          let result: Record<string, unknown> = {};
+          try {
+            const parsed = typeof value.workflowResultJson === "string"
+              ? JSON.parse(value.workflowResultJson) : value.workflowResultJson;
+            result = parsed && typeof parsed === "object" && !Array.isArray(parsed)
+              ? parsed as Record<string, unknown> : {};
+          } catch { /* bounded failure diagnostic */ }
+          const details = result.details && typeof result.details === "object" && !Array.isArray(result.details)
+            ? result.details as Record<string, unknown> : {};
+          return { status: value.status, errorCode: safeCode(value.errorCode), resultKeys: Object.keys(result).sort(),
+            resultCode: safeCode(result.code), resultReason: safeCode(result.reason),
+            stage: typeof result.stage === "string" && allowedContextStages.has(result.stage) ? result.stage : undefined,
+            detailsStage: typeof details.stage === "string" && allowedContextStages.has(details.stage)
+              ? details.stage : undefined };
+        });
+        const privateRootMemoryId = privateRootRef.current?.memoryId ?? null;
+        const contextReadSourceFacts = captures.filter(value => toolName(value.tool) === "read_context").map(value => {
+          const contextRead = value.contextRead && typeof value.contextRead === "object" && !Array.isArray(value.contextRead)
+            ? value.contextRead as Record<string, unknown> : {};
+          const sourceSet = contextRead.sourceSet && typeof contextRead.sourceSet === "object" && !Array.isArray(contextRead.sourceSet)
+            ? contextRead.sourceSet as Record<string, unknown> : {};
+          const policy = sourceSet.policy && typeof sourceSet.policy === "object" && !Array.isArray(sourceSet.policy)
+            ? sourceSet.policy as Record<string, unknown> : {};
+          const memoryIds = Array.isArray(policy.memoryIds) ? policy.memoryIds.filter((item): item is string => typeof item === "string") : [];
+          const sourceInputs = Array.isArray(sourceSet.inputs)
+            ? sourceSet.inputs.filter((item): item is Record<string, unknown> => item !== null && typeof item === "object" && !Array.isArray(item))
+            : [];
+          const manifestIds = Array.isArray(contextRead.manifestIds) ? contextRead.manifestIds : [];
+          return { contextCapturePresent: Object.keys(contextRead).length > 0,
+            manifestCount: manifestIds.length,
+            sourceInputCount: sourceInputs.length,
+            sourceInputKinds: sourceInputs.map(source => typeof source.kind === "string" ? source.kind : "unknown").sort(),
+            selectedMemoryCount: memoryIds.length,
+            selectedPrivateRoot: privateRootMemoryId !== null && memoryIds.includes(privateRootMemoryId),
+            contentDigestPresent: typeof contextRead.contentDigest === "string" && /^[0-9a-f]{64}$/.test(contextRead.contentDigest) };
+        });
         const writeInvocationStatusCounts = Object.fromEntries(["executing", "succeeded", "failed", "cancelled"].map(status =>
           [status, invocations.filter(value => value.toolName === "write_document" && value.status === status).length]));
         diagnostics.push(`managed write capture facts: ${JSON.stringify({ providerWriteUseCount: writeUses.length,
@@ -1498,6 +1671,9 @@ export async function runManagedNativeOpenCodeFixture(input: {
         diagnostics.push(`managed memory prefix facts: ${JSON.stringify(memoryPrefixFacts)}`);
         diagnostics.push(`managed memory output qualification facts: ${JSON.stringify(memoryOutputQualificationFacts)}`);
         diagnostics.push(`managed memory output source facts: ${JSON.stringify(memoryOutputSourceFacts)}`);
+        diagnostics.push(`managed context invocation facts: ${JSON.stringify(contextInvocationFacts)}`);
+        diagnostics.push(`managed Context source facts: ${JSON.stringify(contextReadSourceFacts)}`);
+        diagnostics.push(`managed context transaction owners: ${JSON.stringify([...contextTransactionOwners].slice(0, 40))}`);
         throw new Error(`managed_opencode_runner_exit_${result.exitCode}; providerResponses=${responseCount}; fakeFetchEntrances=${JSON.stringify(fakeFetchEntrances)}\n${diagnostics.join("\n")}\nBroker: ${brokerRequests.join(", ")}\nArtifacts: ${runRoot}`);
       }
       completedNativeFinalization = (result as unknown as Record<string, unknown>).nativeFinalization as NonNullable<typeof completedNativeFinalization>;
@@ -1528,6 +1704,8 @@ export async function runManagedNativeOpenCodeFixture(input: {
     } finally {
       for (const timer of processTreeTimers) clearInterval(timer);
       if (pgMonitorTimer) clearInterval(pgMonitorTimer);
+      if (contextProbeTimer) clearInterval(contextProbeTimer);
+      if (contextInvocationWatchTimer) clearInterval(contextInvocationWatchTimer);
       await pgMonitor.end({ timeout: 1 });
       broker.closeAllConnections();
       await new Promise<void>(resolveClose => broker.close(() => resolveClose()));

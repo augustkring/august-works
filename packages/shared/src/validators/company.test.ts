@@ -85,5 +85,27 @@ describe("portability company manifest tolerance", () => {
     expect(parsed).not.toHaveProperty("brandColor");
     expect(parsed).not.toHaveProperty("attachmentMaxBytes");
     expect(parsed.name).toBe("Acme");
+    expect(parsed).toMatchObject({ locale: "en", timezone: "UTC" });
+  });
+
+  it("validates portable company locale and IANA timezone values", () => {
+    expect(portabilityCompanyManifestEntrySchema.parse({
+      path: "COMPANY.md",
+      name: "Acme",
+      description: null,
+      logoPath: null,
+      locale: "da",
+      timezone: "Europe/Copenhagen",
+      requireBoardApprovalForNewAgents: false,
+    })).toMatchObject({ locale: "da", timezone: "Europe/Copenhagen" });
+    expect(portabilityCompanyManifestEntrySchema.safeParse({
+      path: "COMPANY.md",
+      name: "Acme",
+      description: null,
+      logoPath: null,
+      locale: "da",
+      timezone: "+01:00",
+      requireBoardApprovalForNewAgents: false,
+    }).success).toBe(false);
   });
 });

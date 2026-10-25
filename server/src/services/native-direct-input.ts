@@ -95,9 +95,11 @@ export function nativeMemoryReviewTransitionStateHash(memory: NativeMemoryRecord
 async function assertNativeMemoryReviewTransitionEvidence(db: Db | Transaction, companyId: string,
   source: Extract<NativePayloadSourceInput, { kind: "memory" }>, evidence: Extract<NativePayloadSourceInput, { kind: "tool_result" }> | undefined,
   memory: NativeMemoryRecord): Promise<boolean> {
+  const capturedVersion = Date.parse(source.sourceVersion);
   if (!evidence || evidence.toolName !== "paperclip-self:remember" || evidence.invocationId === null ||
     source.reviewStateAtCapture !== "pending" || source.verificationStateAtCapture !== "unverified" ||
     !source.reviewTransitionStateHash || memory.reviewState !== "accepted" || memory.verificationState !== "human_verified" ||
+    !Number.isFinite(capturedVersion) || memory.updatedAt.getTime() <= capturedVersion ||
     nativeMemoryReviewTransitionStateHash(memory) !== source.reviewTransitionStateHash) return false;
   const [invocation] = await db.select({ runId: toolInvocations.runId, toolName: toolInvocations.toolName,
     idempotencyKey: toolInvocations.idempotencyKey, status: toolInvocations.status,

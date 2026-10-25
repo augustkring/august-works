@@ -107,6 +107,28 @@ describe("Context provider deadline policy", () => {
     });
   });
 
+  it("exposes the same bounded provider deadline and abort signal to cleanup-aware providers", async () => {
+    let capturedSignal: AbortSignal | undefined;
+    let providerDeadlineAt: number | undefined;
+    const started = Date.now();
+    const provider: ContextProvider = {
+      key: "cleanup_aware",
+      requirement: "optional",
+      timeoutMs: 20,
+      retrieve: async ({ signal, providerDeadlineAt: deadline }) => {
+        capturedSignal = signal;
+        providerDeadlineAt = deadline;
+        return new Promise(() => undefined);
+      },
+    };
+
+    await runContextProviders([provider], request, started + 200);
+    expect(capturedSignal?.aborted).toBe(true);
+    expect(providerDeadlineAt).toBeDefined();
+    expect(providerDeadlineAt).toBeLessThanOrEqual(started + 200);
+    expect(providerDeadlineAt).toBeLessThan(started + 100);
+  });
+
   it("fails closed when a mandatory provider hangs", async () => {
     const provider: ContextProvider = {
       key: "mandatory_governance",

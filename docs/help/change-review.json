@@ -1446,49 +1446,49 @@
       "source": "ui/src/components/access/CompanySettingsNav.tsx",
       "articleId": "people-and-company-access",
       "sourceSha256": "040df1c9b646731d1f21961f00b270a3929352ff9e8ffee5019c86bab160ea2d",
-      "articleSha256": "9b9250457bf790d4c79f60c44122bc3c73f940e630b61c727f91b18b1018c0be",
+      "articleSha256": "1d34534ded3a06d051a286e6714e44007065e458a0715e862d6707384b875ab2",
       "decision": "updated",
-      "rationale": "Replaced org-chart instructions with current member, invite, join-request, role, status, and reassignment controls."
+      "rationale": "The paired article now covers the personal-language precedence, timezone fallback only for new schedules, current operating-fact entry and separate identity qualification; existing membership controls remain accurate."
     },
     {
       "source": "ui/src/components/access/InvitesSection.tsx",
       "articleId": "people-and-company-access",
       "sourceSha256": "7e77e3029b2ac1cfc55978678bd21488e22cc31fb180d061c50569c5ba75fa79",
-      "articleSha256": "9b9250457bf790d4c79f60c44122bc3c73f940e630b61c727f91b18b1018c0be",
+      "articleSha256": "1d34534ded3a06d051a286e6714e44007065e458a0715e862d6707384b875ab2",
       "decision": "updated",
-      "rationale": "Replaced org-chart instructions with current member, invite, join-request, role, status, and reassignment controls."
+      "rationale": "The paired article now covers the personal-language precedence, timezone fallback only for new schedules, current operating-fact entry and separate identity qualification; existing membership controls remain accurate."
     },
     {
       "source": "ui/src/pages/CompanyAccess.tsx",
       "articleId": "people-and-company-access",
       "sourceSha256": "9a17414a949ed4ed796eef2fe4d08dab8ff6309be6917a619cf33dc467f28b3d",
-      "articleSha256": "9b9250457bf790d4c79f60c44122bc3c73f940e630b61c727f91b18b1018c0be",
+      "articleSha256": "1d34534ded3a06d051a286e6714e44007065e458a0715e862d6707384b875ab2",
       "decision": "updated",
-      "rationale": "Replaced org-chart instructions with current member, invite, join-request, role, status, and reassignment controls."
+      "rationale": "The paired article now covers the personal-language precedence, timezone fallback only for new schedules, current operating-fact entry and separate identity qualification; existing membership controls remain accurate."
     },
     {
       "source": "ui/src/components/access/CompanySettingsNav.tsx",
       "articleId": "people-and-company-access-da",
       "sourceSha256": "040df1c9b646731d1f21961f00b270a3929352ff9e8ffee5019c86bab160ea2d",
-      "articleSha256": "88ba84f74c32ece0a07c14328c2b5871fca759fb9b22f21dbe90b36a9613a9a2",
+      "articleSha256": "dc70eb5048340883d961ff245928a6d992178a9cdad86bb79d870ecf3b140392",
       "decision": "updated",
-      "rationale": "Danish translation of people-and-company-access: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "rationale": "Danish guidance now covers the actual company language fallback, new-schedule timezone fallback, current operating-fact entry and distinct identity qualification; existing membership controls remain accurate."
     },
     {
       "source": "ui/src/components/access/InvitesSection.tsx",
       "articleId": "people-and-company-access-da",
       "sourceSha256": "7e77e3029b2ac1cfc55978678bd21488e22cc31fb180d061c50569c5ba75fa79",
-      "articleSha256": "88ba84f74c32ece0a07c14328c2b5871fca759fb9b22f21dbe90b36a9613a9a2",
+      "articleSha256": "dc70eb5048340883d961ff245928a6d992178a9cdad86bb79d870ecf3b140392",
       "decision": "updated",
-      "rationale": "Danish translation of people-and-company-access: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "rationale": "Danish guidance now covers the actual company language fallback, new-schedule timezone fallback, current operating-fact entry and distinct identity qualification; existing membership controls remain accurate."
     },
     {
       "source": "ui/src/pages/CompanyAccess.tsx",
       "articleId": "people-and-company-access-da",
       "sourceSha256": "9a17414a949ed4ed796eef2fe4d08dab8ff6309be6917a619cf33dc467f28b3d",
-      "articleSha256": "88ba84f74c32ece0a07c14328c2b5871fca759fb9b22f21dbe90b36a9613a9a2",
+      "articleSha256": "dc70eb5048340883d961ff245928a6d992178a9cdad86bb79d870ecf3b140392",
       "decision": "updated",
-      "rationale": "Danish translation of people-and-company-access: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "rationale": "Danish guidance now covers the actual company language fallback, new-schedule timezone fallback, current operating-fact entry and distinct identity qualification; existing membership controls remain accurate."
     },
     {
       "source": "packages/shared/src/v9-feature-flags.ts",
@@ -2065,6 +2065,102 @@
       "articleSha256": "8e0134f5d6252ebe1d322edf7114b58b737e4be412d77ff3655c37a0d82d2d46",
       "decision": "updated",
       "rationale": "Danish version checked against the same current source behavior: reviewed the actual normal Heartbeat terminal-cleanup callsite: after Native dispatch and before local lease release, it asks the exact local PID/process-group owner to compare-clear only after OS absence is confirmed; remote, warm, resumed, and restart-suspended runs do not receive that receipt here."
+    },
+    {
+      "source": "ui/src/pages/CompanySettings.tsx",
+      "articleId": "people-and-company-access",
+      "sourceSha256": "3063818fca9d6c7fad491f6134ff8c08a96323252bf2eb904cfc188c373609a6",
+      "articleSha256": "1d34534ded3a06d051a286e6714e44007065e458a0715e862d6707384b875ab2",
+      "decision": "updated",
+      "rationale": "The paired article now covers the personal-language precedence, timezone fallback only for new schedules, current operating-fact entry and separate identity qualification; existing membership controls remain accurate."
+    },
+    {
+      "source": "ui/src/components/AccountExperienceLanguageSelect.tsx",
+      "articleId": "people-and-company-access",
+      "sourceSha256": "c092cbd38652b71157cc39e706140bfbe7a4e463d5c4897369842d399be8c1e3",
+      "articleSha256": "1d34534ded3a06d051a286e6714e44007065e458a0715e862d6707384b875ab2",
+      "decision": "updated",
+      "rationale": "The paired article now covers the personal-language precedence, timezone fallback only for new schedules, current operating-fact entry and separate identity qualification; existing membership controls remain accurate."
+    },
+    {
+      "source": "ui/src/components/routine-triggers/RoutineTriggers.tsx",
+      "articleId": "people-and-company-access",
+      "sourceSha256": "851e6d36f19e1e2fcc4e414dccdb4b5e230f57b86c7fab44c7f32ee77c84a800",
+      "articleSha256": "1d34534ded3a06d051a286e6714e44007065e458a0715e862d6707384b875ab2",
+      "decision": "updated",
+      "rationale": "The paired article now covers the personal-language precedence, timezone fallback only for new schedules, current operating-fact entry and separate identity qualification; existing membership controls remain accurate."
+    },
+    {
+      "source": "ui/src/pages/Enterprise.tsx",
+      "articleId": "people-and-company-access",
+      "sourceSha256": "667e64f241169d7bef3ba8d886a12b70ced778af2bf57dcf34c94b4d2111576f",
+      "articleSha256": "1d34534ded3a06d051a286e6714e44007065e458a0715e862d6707384b875ab2",
+      "decision": "updated",
+      "rationale": "The paired article now covers the personal-language precedence, timezone fallback only for new schedules, current operating-fact entry and separate identity qualification; existing membership controls remain accurate."
+    },
+    {
+      "source": "server/src/services/enterprise/identity-policy.ts",
+      "articleId": "people-and-company-access",
+      "sourceSha256": "c501c14f3af4f9d3b200200cc2fd1e48dd74f7b3c7ae340782ee874e09608032",
+      "articleSha256": "1d34534ded3a06d051a286e6714e44007065e458a0715e862d6707384b875ab2",
+      "decision": "updated",
+      "rationale": "The paired article now covers the personal-language precedence, timezone fallback only for new schedules, current operating-fact entry and separate identity qualification; existing membership controls remain accurate."
+    },
+    {
+      "source": "server/src/services/routines.ts",
+      "articleId": "people-and-company-access",
+      "sourceSha256": "09615773b9ecf49d696a29ca4244f6a8f3a59c163d664b9297efb26f28023abe",
+      "articleSha256": "1d34534ded3a06d051a286e6714e44007065e458a0715e862d6707384b875ab2",
+      "decision": "updated",
+      "rationale": "The paired article now covers the personal-language precedence, timezone fallback only for new schedules, current operating-fact entry and separate identity qualification; existing membership controls remain accurate."
+    },
+    {
+      "source": "ui/src/pages/CompanySettings.tsx",
+      "articleId": "people-and-company-access-da",
+      "sourceSha256": "3063818fca9d6c7fad491f6134ff8c08a96323252bf2eb904cfc188c373609a6",
+      "articleSha256": "dc70eb5048340883d961ff245928a6d992178a9cdad86bb79d870ecf3b140392",
+      "decision": "updated",
+      "rationale": "Danish guidance now covers the actual company language fallback, new-schedule timezone fallback, current operating-fact entry and distinct identity qualification; existing membership controls remain accurate."
+    },
+    {
+      "source": "ui/src/components/AccountExperienceLanguageSelect.tsx",
+      "articleId": "people-and-company-access-da",
+      "sourceSha256": "c092cbd38652b71157cc39e706140bfbe7a4e463d5c4897369842d399be8c1e3",
+      "articleSha256": "dc70eb5048340883d961ff245928a6d992178a9cdad86bb79d870ecf3b140392",
+      "decision": "updated",
+      "rationale": "Danish guidance now covers the actual company language fallback, new-schedule timezone fallback, current operating-fact entry and distinct identity qualification; existing membership controls remain accurate."
+    },
+    {
+      "source": "ui/src/components/routine-triggers/RoutineTriggers.tsx",
+      "articleId": "people-and-company-access-da",
+      "sourceSha256": "851e6d36f19e1e2fcc4e414dccdb4b5e230f57b86c7fab44c7f32ee77c84a800",
+      "articleSha256": "dc70eb5048340883d961ff245928a6d992178a9cdad86bb79d870ecf3b140392",
+      "decision": "updated",
+      "rationale": "Danish guidance now covers the actual company language fallback, new-schedule timezone fallback, current operating-fact entry and distinct identity qualification; existing membership controls remain accurate."
+    },
+    {
+      "source": "ui/src/pages/Enterprise.tsx",
+      "articleId": "people-and-company-access-da",
+      "sourceSha256": "667e64f241169d7bef3ba8d886a12b70ced778af2bf57dcf34c94b4d2111576f",
+      "articleSha256": "dc70eb5048340883d961ff245928a6d992178a9cdad86bb79d870ecf3b140392",
+      "decision": "updated",
+      "rationale": "Danish guidance now covers the actual company language fallback, new-schedule timezone fallback, current operating-fact entry and distinct identity qualification; existing membership controls remain accurate."
+    },
+    {
+      "source": "server/src/services/enterprise/identity-policy.ts",
+      "articleId": "people-and-company-access-da",
+      "sourceSha256": "c501c14f3af4f9d3b200200cc2fd1e48dd74f7b3c7ae340782ee874e09608032",
+      "articleSha256": "dc70eb5048340883d961ff245928a6d992178a9cdad86bb79d870ecf3b140392",
+      "decision": "updated",
+      "rationale": "Danish guidance now covers the actual company language fallback, new-schedule timezone fallback, current operating-fact entry and distinct identity qualification; existing membership controls remain accurate."
+    },
+    {
+      "source": "server/src/services/routines.ts",
+      "articleId": "people-and-company-access-da",
+      "sourceSha256": "09615773b9ecf49d696a29ca4244f6a8f3a59c163d664b9297efb26f28023abe",
+      "articleSha256": "dc70eb5048340883d961ff245928a6d992178a9cdad86bb79d870ecf3b140392",
+      "decision": "updated",
+      "rationale": "Danish guidance now covers the actual company language fallback, new-schedule timezone fallback, current operating-fact entry and distinct identity qualification; existing membership controls remain accurate."
     }
   ]
 }

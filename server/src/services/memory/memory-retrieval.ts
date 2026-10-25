@@ -28,6 +28,9 @@ export interface RetrieveEligibleMemoryInput {
   asOf?: Date;
   topK: number;
   sensitivityCeiling: EvidenceSensitivity;
+  /** Optional cancellation/deadline inherited from the Context provider. */
+  signal?: AbortSignal;
+  deadlineAt?: number;
 }
 
 export interface RetrievedMemoryRecord {
@@ -199,6 +202,12 @@ export async function retrieveEligibleMemory(
         asOf,
         limit: ELIGIBLE_SCOPE_SCAN_LIMIT,
         sensitivityCeiling: input.sensitivityCeiling,
+        ...(input.signal ? { signal: input.signal } : {}),
+        ...(input.deadlineAt ? { deadlineAt: input.deadlineAt } : {}),
+        // Relevance is a safe prefilter: an ineligible source can never be
+        // returned, while every candidate that could be returned is still
+        // checked against current source owners before ranking/limiting.
+        candidateFilter: (record) => memoryRelevanceScore(record, input.query) > 0,
       },
       actor,
     );
@@ -224,7 +233,11 @@ export async function retrieveEligibleMemory(
 
   const result: RetrievedMemoryRecord[] = [];
   for (const { record, score } of ranked) {
-    const detail = await service.get(input.companyId, record.id, actor);
+    if (input.signal?.aborted) throw input.signal.reason ?? new Error("Memory retrieval was cancelled");
+    const detail = await service.get(input.companyId, record.id, actor, {
+      ...(input.signal ? { signal: input.signal } : {}),
+      ...(input.deadlineAt ? { deadlineAt: input.deadlineAt } : {}),
+    });
     if (
       detail &&
       recordStillEligible(detail.record, asOf, input.sensitivityCeiling)
