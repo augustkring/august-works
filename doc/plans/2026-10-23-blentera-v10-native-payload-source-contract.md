@@ -555,3 +555,8 @@ autocommit-built SQL expression, a different connection, or an escaped callback.
 This inventory is implementation groundwork. It supplies no new permission,
 complete producer-input receipt, source qualification or private-source bypass.
 The selected private Memory and temporal-body counterexamples remain open.
+
+
+### 2026-10-25 — Actual backend turn identity checkpoint
+
+Native chosen-input intents have unique persisted dispatch UUIDs. After backend startTurn returns, the original runtime carries that exact invocation key and detached chosen-input identity into the native acknowledgement writer. The writer binds the returned turn ID under the original event/attempt/digest and current coordinator lease. Native PG27PASS and full runtime142PASS; exact evidence is retained in `../operations/aw-v10-evidence/native-turn-acknowledgement-2026-10-25/receipts.json`. This closes the missing acknowledgement identity fact only. Intent/acknowledgement does not establish model consumption, complete sources, later tool/output binding or Source qualification; the live-graph temporal counterexamples remain open.
