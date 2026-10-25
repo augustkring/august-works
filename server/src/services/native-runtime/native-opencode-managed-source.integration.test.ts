@@ -44,6 +44,7 @@ import { makeProviderCapabilitySnapshot, providerConformanceRequirements } from 
 import { runtimeConnectionIntentRoutes } from "../../routes/connection-intents.js";
 import { errorHandler } from "../../middleware/error-handler.js";
 import { issueRoutes } from "../../routes/issues.js";
+import { setupRunnerPrpWebSocketServer } from "../../realtime/runner-prp-ws.js";
 import { prepareNativeHeartbeatRun } from "./prepare-native-run.js";
 import { executePaperclipNativeSession } from "./native-session-executor.js";
 import { buildNativeExecutionInput, buildNativeBootstrapSourceSet } from "./native-execution-input.js";
@@ -85,6 +86,7 @@ describe("managed OpenCode source-closure binary integration", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
   let db: ReturnType<typeof createDb>;
   let root: string;
+  let instanceId: string;
   let preserveDebugArtifacts = false;
 
   beforeAll(async () => {
@@ -92,7 +94,8 @@ describe("managed OpenCode source-closure binary integration", () => {
     root = await mkdtemp(join(tmpdir(), "managed-opencode-source-e2e-"));
     await chmod(root, 0o700);
     vi.stubEnv("PAPERCLIP_HOME", root);
-    vi.stubEnv("PAPERCLIP_INSTANCE_ID", `managed-opencode-${randomUUID()}`);
+    instanceId = `managed-opencode-${randomUUID()}`;
+    vi.stubEnv("PAPERCLIP_INSTANCE_ID", instanceId);
     vi.stubEnv("PAPERCLIP_AGENT_JWT_SECRET", `managed-opencode-e2e-${randomUUID()}-${randomUUID()}`);
     database = await startEmbeddedPostgresTestDatabase("managed-opencode-source-e2e-");
     db = createDb(database.connectionString);
@@ -350,13 +353,14 @@ describe("managed OpenCode source-closure binary integration", () => {
     });
     const address = broker.address();
     if (!address || typeof address === "string") throw new Error("Expected local HTTPS listener.");
+    setupRunnerPrpWebSocketServer(broker, { apiUrl: `https://127.0.0.1:${address.port}` });
     const runnerEnvironment = { PATH: `${dirname(opencodeBinary)}:${process.env.PATH ?? ""}`, SSL_CERT_FILE: certBundlePath,
       OPENCODE_DISABLE_DEFAULT_PLUGINS: "true", OPENCODE_DISABLE_MODELS_FETCH: "true",
       PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: String(profile.inputTokensUpperBound),
       PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: String(profile.maxOutputTokens),
       PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: `https://127.0.0.1:${address.port}` };
     const diagnostics: string[] = [];
-    const runtimeDirectory = join(root, "runtime", "paperclip-runner", "opencode");
+    const runtimeDirectory = join(root, "instances", instanceId, "runtime", "paperclip-runner", "opencode");
     const configDirectory = join(runtimeDirectory, prepared.normalizedSessionId, "config", "opencode");
     const assertManagedConfigIsReadOnlyBeforeSpawn = async () => {
       const [directory, ignore, config, plugin] = await Promise.all([

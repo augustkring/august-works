@@ -78,6 +78,10 @@ import {
   nativeSystemInstructions,
   nativeTaskConstraints,
   createCodexTaskEnvelope,
+  PRP_COMPLETION_TOOL_NAME,
+  PRP_BLOCK_TOOL_NAME,
+  PRP_COMPLETION_RESULT_PROVIDER_INPUT_SCHEMA,
+  PRP_BLOCK_RESULT_PROVIDER_INPUT_SCHEMA,
   applyNativeSessionGoalControl,
   buildNativeModelEnvelope,
   inspectWarmRunTransition,
@@ -11592,6 +11596,15 @@ async function createRunnerdBackendWithinSessionClaim(
       if (!allowedNames.has(name)) return [];
       return [{ ...structuredClone(raw), name }];
     });
+    // The pinned OpenCode MCP bridge appends these canonical terminal tools at
+    // discovery time. Include the same server-owned definitions in the
+    // immutable tool catalog/hash so the broker can verify that exact list.
+    schemas.push(
+      { name: PRP_COMPLETION_TOOL_NAME, description: "Return the semantic completion result.",
+        inputSchema: PRP_COMPLETION_RESULT_PROVIDER_INPUT_SCHEMA },
+      { name: PRP_BLOCK_TOOL_NAME, description: "Return the semantic blocked result.",
+        inputSchema: PRP_BLOCK_RESULT_PROVIDER_INPUT_SCHEMA },
+    );
     const names = schemas.map((tool) => tool.name);
     if (!names.includes("read_document") || !names.includes("write_document") || !names.includes("create_task") ||
       !names.includes("paperclip_finish") || !names.includes("paperclip_block") || new Set(names).size !== names.length)
