@@ -1,0 +1,47 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "2eb615224eb2a7b8e1322588c47117ad89fd3a12",
+  "meaning": "Only the native Human identity fixture was repaired: UUID authUser plus active owner membership. Original23FAIL becomes2PASS21FAIL; Human boundary and erasure controls pass, remaining Agent Memory writes still lack actual accountable producer execution/source capture. No invented run, Source/Ready flags, altered Agent assertions or skips. This preserves genuine missing Agent capture coverage rather than qualifying it. Actual original task tools/post-run native job producer paths still need migration/evidence.",
+  "logs": [
+    {
+      "name": "memory-service-admission-diagnosis-current",
+      "exitCode": 1,
+      "rawSha256": "22e3e39196ce164d0de51e4b0b10a91a51170550b2a23b067e9048e3e0cd9691",
+      "sanitizedSha256": "22e3e39196ce164d0de51e4b0b10a91a51170550b2a23b067e9048e3e0cd9691",
+      "archiveSha256": "b78856643c1ef3f78cc159f96f1a4aad297278b0055f9267825d81934747d812",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 23 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  23 failed (23)",
+        "Duration  9.21s (transform 2.86s, setup 94ms, import 4.79s, tests 4.19s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "memory-service-admission-identity-only",
+      "exitCode": 1,
+      "rawSha256": "52883e5f6779fb56527b3b63c2c077fbd600ec1300d243469cdddb3404c6d33f",
+      "sanitizedSha256": "52883e5f6779fb56527b3b63c2c077fbd600ec1300d243469cdddb3404c6d33f",
+      "archiveSha256": "906bbbaae02e7b3360f8dbcfcbc6ebbd7c277ebfabc24de04ea3b552306fb7e1",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 21 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  21 failed | 2 passed (23)",
+        "Duration  9.88s (transform 2.66s, setup 70ms, import 4.61s, tests 5.08s, environment 0ms)"
+      ]
+    }
+  ]
+}

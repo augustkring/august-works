@@ -1,0 +1,200 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "80aa7a9140bbae2b03668ea4640bd29d67f59431",
+  "meaning": "Native bilingual Help, locale-scoped Find and Cmd+K, checked documentation navigation; scoped software and browser receipts only.",
+  "logs": [
+    {
+      "name": "help-locale-focused",
+      "exitCode": 1,
+      "rawSha256": "1257dbb06336e59492eb4dfc5144253193bf5ae2e5d0da371667e33d7268066f",
+      "sanitizedSha256": "1257dbb06336e59492eb4dfc5144253193bf5ae2e5d0da371667e33d7268066f",
+      "archiveSha256": "1a204b157d129b561ba2c988497089e6aa6c5245a9b203af217f12b4ca451906",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 4 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  2 failed | 3 passed (5)",
+        "Tests  4 failed | 80 passed (84)",
+        "Duration  49.11s (transform 11.64s, setup 137ms, import 20.25s, tests 26.56s, environment 1.59s)"
+      ]
+    },
+    {
+      "name": "help-locale-focused-final",
+      "exitCode": 0,
+      "rawSha256": "4e149b8cd9f8794df86e894b09ab75bf7a0b7e26a650cb7c9f9e1097c5a6145d",
+      "sanitizedSha256": "4e149b8cd9f8794df86e894b09ab75bf7a0b7e26a650cb7c9f9e1097c5a6145d",
+      "archiveSha256": "65bd6a8a6d228774b9ac44fa540d8e90c2ce61e3a9243fe48a0ee5b982a6b34f",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  4 passed (4)",
+        "Tests  78 passed (78)",
+        "Duration  27.32s (transform 4.25s, setup 93ms, import 9.58s, tests 15.43s, environment 1.72s)"
+      ]
+    },
+    {
+      "name": "help-locale-shared-decoder",
+      "exitCode": 0,
+      "rawSha256": "113631530de262071f68b0b91ba1fd628ca7862bd9db0952cd1bd087c9d9cd15",
+      "sanitizedSha256": "113631530de262071f68b0b91ba1fd628ca7862bd9db0952cd1bd087c9d9cd15",
+      "archiveSha256": "e175c093618da21e1e06256d826ee0214d3d5defaeb0c5f743548aab6e890966",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  3 passed (3)",
+        "Tests  45 passed (45)",
+        "Duration  13.26s (transform 1.77s, setup 28ms, import 5.03s, tests 6.29s, environment 1.56s)"
+      ]
+    },
+    {
+      "name": "help-locale-native-browser",
+      "exitCode": 0,
+      "rawSha256": "55c0cc2842f8dcd6db9a6140f0bd0776541c552c203d2298c3a24becce504235",
+      "sanitizedSha256": "55c0cc2842f8dcd6db9a6140f0bd0776541c552c203d2298c3a24becce504235",
+      "archiveSha256": "68ac44d62a88f37218ebbd7a05c2ca1a9a6498c4f26e5259ba9d52484bcb760c",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "help-locale-ui-typecheck-final",
+      "exitCode": 0,
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "help-locale-token-gates",
+      "exitCode": 0,
+      "rawSha256": "e593d94fd920c3403cbfc7b0a549ae3b06c78d6ec0d2be065e5e056d2f309d11",
+      "sanitizedSha256": "e593d94fd920c3403cbfc7b0a549ae3b06c78d6ec0d2be065e5e056d2f309d11",
+      "archiveSha256": "b2acf30d7116322e944203f8bc1d232e1bfdc22cab71a2fe1f8c2a38f13664e2",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "help-locale-server-typecheck",
+      "exitCode": 0,
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "help-locale-shared-build",
+      "exitCode": 0,
+      "rawSha256": "8c612bf8dafcc6a5b519cc989b95247f84aea29b05d59a8f9e1242c5a012d9cf",
+      "sanitizedSha256": "8c612bf8dafcc6a5b519cc989b95247f84aea29b05d59a8f9e1242c5a012d9cf",
+      "archiveSha256": "514a8441061a64104d9e3e12944d0eebb71652c1a5c83aed6c0266f79647f272",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "help-locale-node-final",
+      "exitCode": 0,
+      "rawSha256": "b1177b7d93114fc0a37990fd7aad28ba42a9b2d7101c4f9a966e3fbebc7ed6b0",
+      "sanitizedSha256": "b1177b7d93114fc0a37990fd7aad28ba42a9b2d7101c4f9a966e3fbebc7ed6b0",
+      "archiveSha256": "e4d59f19beb29e2bab3b1ebc7d4bde3d3fa3698a02bc55917a61334d580d2b8a",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "help-locale-docs-final",
+      "exitCode": 0,
+      "rawSha256": "400154533b2f266c494a57ee480fe073567dafa2e87b826ac0cb0676b46885bc",
+      "sanitizedSha256": "400154533b2f266c494a57ee480fe073567dafa2e87b826ac0cb0676b46885bc",
+      "archiveSha256": "9fc8ba837b9bf91304d8cb7d8f50559a74c76354fdbd9b6b6428562554a47350",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "help-locale-docs-check-final",
+      "exitCode": 0,
+      "rawSha256": "400154533b2f266c494a57ee480fe073567dafa2e87b826ac0cb0676b46885bc",
+      "sanitizedSha256": "400154533b2f266c494a57ee480fe073567dafa2e87b826ac0cb0676b46885bc",
+      "archiveSha256": "9fc8ba837b9bf91304d8cb7d8f50559a74c76354fdbd9b6b6428562554a47350",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "help-locale-review-final",
+      "exitCode": 0,
+      "rawSha256": "73d875af961fcb48274dfa241f51d9eb57ae0a487292d052153f024c088d5c71",
+      "sanitizedSha256": "73d875af961fcb48274dfa241f51d9eb57ae0a487292d052153f024c088d5c71",
+      "archiveSha256": "7743ecf1964d84a42c4d0d4f3d657b9ab6fcd344c5b5d57f0124d743830d54c1",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    }
+  ]
+}
