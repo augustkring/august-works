@@ -101,6 +101,8 @@ test("native CLI consent and account settings use real session and authenticator
   const card = page.locator("section", { has: page.locator("#native-authenticator-heading") }).last();
   await expect(page.locator("#native-authenticator-heading")).toBeVisible();
   await page.locator("#native-authenticator-password").fill(password);
+  await expect(page.locator("#native-authenticator-password")).toHaveValue(password);
+  await expect(page.getByRole("button", { name: "Set up an authenticator", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "Set up an authenticator", exact: true }).click();
   await expect(page.locator("#native-authenticator-setup-key")).toBeVisible();
   const setupKey = await page.locator("#native-authenticator-setup-key").inputValue();
@@ -198,8 +200,12 @@ test("native CLI consent and account settings use real session and authenticator
   await json(await page.request.post("/api/auth/sign-in/email", { data: { email, password } }));
   expect(await json(await page.request.get("/api/auth/passkey/list-user-passkeys"))).toEqual([]);
   } finally {
-    await cdp.send("WebAuthn.removeVirtualAuthenticator", { authenticatorId });
-    await cdp.detach();
+    await cdp.send("WebAuthn.removeVirtualAuthenticator", { authenticatorId }).catch(error => {
+      if (!page.isClosed()) throw error;
+    });
+    await cdp.detach().catch(error => {
+      if (!page.isClosed()) throw error;
+    });
   }
 
 });

@@ -55,6 +55,10 @@ export function nativeAuthenticationAssurancePlugin(db: Db, schema: NativeAuthen
       }),
       authenticationSecurity: createAuthEndpoint("/security", { method: "GET", use: [sessionMiddleware] }, async ctx => {
         const { user, session } = ctx.context.session;
+        const authenticatedCredentialExpiresAt = session.expiresAt.getTime();
+        if (!Number.isFinite(authenticatedCredentialExpiresAt)) throw new APIError("UNAUTHORIZED", {
+          code: "AUTHENTICATION_STATE_CHANGED", message: "Authenticate again to continue",
+        });
         assertExpectedAuthenticationUser(ctx, user.id);
         assertExpectedAuthenticationSession(ctx, session.id);
         const [status] = await db.execute<{ userId: string; hasPassword: boolean; twoFactorEnabled: boolean; phishingResistantRequired: boolean; enterpriseBound: boolean }>(sql`
@@ -63,11 +67,13 @@ export function nativeAuthenticationAssurancePlugin(db: Db, schema: NativeAuthen
             exists(select 1 from enterprise_subject_bindings b where b.user_id=u.id and b.status='active') as "enterpriseBound"
           from "user" u join "session" s on s.user_id=u.id
           where u.id=${user.id} and s.id=${session.id} and s.expires_at>clock_timestamp()
+            and ${authenticatedCredentialExpiresAt}::double precision>extract(epoch from clock_timestamp())*1000
             and not exists(select 1 from account_deletion_operations where user_id=u.id)
         `);
         if (!status) throw new APIError("UNAUTHORIZED", { code: "AUTHENTICATION_STATE_CHANGED", message: "Authenticate again to continue" });
         if (ctx.getHeader("X-Blentera-Expected-Session") !== null) await assertHumanAuthentication(db,
-          { type: "board", source: "session", userId: user.id, sessionId: session.id },
+          { type: "board", source: "session", userId: user.id, sessionId: session.id,
+            authenticatedCredentialExpiresAt },
           { requireRecent: false, phishingResistant: operatorUserIds.includes(user.id) }).catch(rethrowAuthenticationFailure);
         ctx.setHeader("Cache-Control", "no-store");
         return ctx.json(nativeAuthenticationSecuritySchema.parse({ ...status,

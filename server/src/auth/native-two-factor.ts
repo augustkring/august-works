@@ -16,6 +16,7 @@ type Operation = "enable" | "disable" | "codes" | "uri" | "totp" | "backup_code"
 type FactorSnapshot = {
   userId: string; version: number; enabled: boolean; phishingResistantRequired: boolean; factorId: string | null;
   secret: string | null; verified: boolean | null; sessionId?: string; sessionToken?: string;
+  authenticatedCredentialExpiresAt?: number;
 };
 
 function deny(): never {
@@ -74,7 +75,8 @@ export function nativeTwoFactorPlugin(db: Db, schema: NativeAuthenticationSchema
       if (!cancelling || owner.factorId) assertExpectedAuthenticationSession(ctx, session?.session.id);
       if (session) {
         await assertHumanAuthentication(tx, { type: "board", source: "session", userId: owner.userId,
-          sessionId: session.session.id }, { requireRecent: !reserveAttempt || owner.verified !== true,
+          sessionId: session.session.id, authenticatedCredentialExpiresAt: session.session.expiresAt.getTime() },
+          { requireRecent: !reserveAttempt || owner.verified !== true,
           phishingResistant: operatorUserIds.includes(owner.userId) });
       } else if (operatorUserIds.includes(owner.userId)) {
         // A password challenge plus TOTP cannot authenticate a platform operator.
@@ -98,7 +100,8 @@ export function nativeTwoFactorPlugin(db: Db, schema: NativeAuthenticationSchema
     if (result.limited) throw new APIError("TOO_MANY_REQUESTS", {
       code: "REAUTHENTICATION_RATE_LIMITED", message: "Too many confirmation attempts; try again later",
     });
-    return { ...result.owner, sessionId: session?.session.id, sessionToken: session?.session.token };
+    return { ...result.owner, sessionId: session?.session.id, sessionToken: session?.session.token,
+      authenticatedCredentialExpiresAt: session?.session.expiresAt.getTime() };
   }
 
   async function rotate(ctx: GenericEndpointContext, tx: Pick<Db, "execute">, owner: FactorSnapshot,
@@ -143,7 +146,8 @@ export function nativeTwoFactorPlugin(db: Db, schema: NativeAuthenticationSchema
           and authenticator_version=${owner.version} for update nowait`);
         if (!current || !owner.sessionId) deny();
         const proof = await assertHumanAuthentication(tx, { type: "board", source: "session",
-          userId: owner.userId, sessionId: owner.sessionId }, { requireRecent: true,
+          userId: owner.userId, sessionId: owner.sessionId,
+          authenticatedCredentialExpiresAt: owner.authenticatedCredentialExpiresAt }, { requireRecent: true,
           phishingResistant: operatorUserIds.includes(owner.userId) });
         if (operation === "enable" && (owner.enabled || owner.verified)) throw new APIError("CONFLICT", {
           code: "FACTOR_ALREADY_ENABLED", message: "Use your existing factor before replacing it",
@@ -184,7 +188,8 @@ export function nativeTwoFactorPlugin(db: Db, schema: NativeAuthenticationSchema
           if (!valid || valid.secret !== owner.secret) deny();
           if (operation === "totp" && owner.verified && owner.sessionId) {
             await assertHumanAuthentication(tx, { type: "board", source: "session", userId: owner.userId,
-              sessionId: owner.sessionId }, { requireRecent: false, phishingResistant: false });
+              sessionId: owner.sessionId, authenticatedCredentialExpiresAt: owner.authenticatedCredentialExpiresAt },
+              { requireRecent: false, phishingResistant: false });
           }
           return valid;
         }
@@ -249,7 +254,8 @@ export function nativeTwoFactorPlugin(db: Db, schema: NativeAuthenticationSchema
           and authenticator_version=${owner.version} and not two_factor_enabled for update nowait`);
         if (!current || !owner.sessionId) deny();
         const proof = await assertHumanAuthentication(tx, { type: "board", source: "session",
-          userId: owner.userId, sessionId: owner.sessionId }, { requireRecent: true,
+          userId: owner.userId, sessionId: owner.sessionId,
+          authenticatedCredentialExpiresAt: owner.authenticatedCredentialExpiresAt }, { requireRecent: true,
           phishingResistant: operatorUserIds.includes(owner.userId) });
         if (owner.enabled || owner.verified) throw new APIError("CONFLICT", {
           code: "FACTOR_ALREADY_ENABLED", message: "Use the enabled authenticator settings",
@@ -283,16 +289,25 @@ export function nativeTwoFactorPlugin(db: Db, schema: NativeAuthenticationSchema
           for update of u,s nowait`);
         if (!current) deny();
         const strong = current.enabled || current.phishingResistantRequired || operatorUserIds.includes(current.userId);
+        const sourceCredentialExpiresAt = Math.min(active.session.expiresAt.getTime(),
+          new Date(current.credentialExpiresAt).getTime());
+        if (!Number.isFinite(sourceCredentialExpiresAt)) deny();
         const proof = strong ? await assertHumanAuthentication(tx, { type: "board", source: "session",
-          userId: current.userId, sessionId: active.session.id }, { requireRecent: true,
+          userId: current.userId, sessionId: active.session.id,
+          authenticatedCredentialExpiresAt: active.session.expiresAt.getTime() }, { requireRecent: true,
           phishingResistant: operatorUserIds.includes(current.userId) }) : null;
+        if (!proof) {
+          const [sourceStillActive] = await tx.execute<{ active: boolean }>(sql`select
+            ${active.session.expiresAt.getTime()}::double precision>extract(epoch from clock_timestamp())*1000 as active`);
+          if (!sourceStillActive?.active) deny();
+        }
         const response = await invoke(ctx, nativeChangePassword);
         const [clock] = await tx.execute<{ at: Date | string }>(sql`select clock_timestamp() as at`);
         const session = await rotate(ctx, tx, { ...current, sessionToken: active.session.token }, current.version+1, {
           authenticationMethod: proof?.method ?? "password", authenticatedAt: proof?.authenticatedAt ?? new Date(clock!.at),
         });
         await assertPinnedAuthenticationDeadline(tx, proof ?? {
-          authenticatedAt: new Date(clock!.at), credentialExpiresAt: new Date(current.credentialExpiresAt),
+          authenticatedAt: new Date(clock!.at), credentialExpiresAt: new Date(sourceCredentialExpiresAt),
         });
         return { ...response, sessionId: session.id, token: session.token, user: parseUserOutput(ctx.context.options, ctx.context.session!.user) };
       }).catch(nativeFailure);

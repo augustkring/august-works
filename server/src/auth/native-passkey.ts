@@ -21,7 +21,7 @@ function failure(error: unknown): never {
   if (error && typeof error === "object" && "status" in error && error.status === 403) deny();
   throw error;
 }
-type Owner = { userId: string; version: number; sessionId?: string; sessionToken?: string };
+type Owner = { userId: string; version: number; sessionId?: string; sessionToken?: string; authenticatedCredentialExpiresAt?: number };
 type Ceremony = { userId: string; credentialId?: string; operation: "registration" | "authentication"; verified: boolean };
 type NativeEndpoint = ReturnType<typeof passkey>["endpoints"][keyof ReturnType<typeof passkey>["endpoints"]];
 type NativeResponse = { headers: Headers; response: Record<string, unknown>; status: Parameters<GenericEndpointContext["setStatus"]>[0] };
@@ -65,9 +65,12 @@ export function nativePasskeyPlugin(db: Db, schema: NativeAuthenticationSchema, 
       and s.id=${active.session.id} and s.expires_at>clock_timestamp()
       and not exists(select 1 from account_deletion_operations where user_id=u.id)`);
     if (!current) deny();
-    return { userId: active.user.id, version: current.version, sessionId: active.session.id, sessionToken: active.session.token };
+    return { userId: active.user.id, version: current.version, sessionId: active.session.id,
+      sessionToken: active.session.token, authenticatedCredentialExpiresAt: active.session.expiresAt.getTime() };
   }
   async function pin(tx: Pick<Db, "execute">, source: Owner, ctx: GenericEndpointContext, exclusive = true) {
+    if (source.sessionId && (source.authenticatedCredentialExpiresAt === undefined ||
+      !Number.isFinite(source.authenticatedCredentialExpiresAt))) deny();
     const [current] = await tx.execute<{ id: string }>(sql`select id from "user" where id=${source.userId}
       and authenticator_version=${source.version}
       and not exists(select 1 from account_deletion_operations where user_id=${source.userId})
@@ -76,13 +79,24 @@ export function nativePasskeyPlugin(db: Db, schema: NativeAuthenticationSchema, 
     if (!current) deny();
     if (source.sessionId) {
       const [active] = await tx.execute(sql`select id from "session" where id=${source.sessionId}
-        and user_id=${source.userId} and expires_at>clock_timestamp() for share nowait`);
+        and user_id=${source.userId} and expires_at>clock_timestamp()
+        and (${source.authenticatedCredentialExpiresAt ?? null}::double precision is null or
+          ${source.authenticatedCredentialExpiresAt ?? null}::double precision>extract(epoch from clock_timestamp())*1000)
+        for share nowait`);
       if (!active) deny();
     }
   }
+  async function assertSourceCredentialDeadline(tx: Pick<Db, "execute">, source: Owner) {
+    if (source.authenticatedCredentialExpiresAt === undefined) return;
+    if (!Number.isFinite(source.authenticatedCredentialExpiresAt)) deny();
+    const [active] = await tx.execute<{ active: boolean }>(sql`select
+      ${source.authenticatedCredentialExpiresAt}::double precision>extract(epoch from clock_timestamp())*1000 as active`);
+    if (!active?.active) deny();
+  }
   function recent(tx: Pick<Db, "execute">, source: Owner) {
     return assertHumanAuthentication(tx, { type: "board", source: "session", userId: source.userId,
-      sessionId: source.sessionId }, { requireRecent: true, phishingResistant: operatorUserIds.includes(source.userId) });
+      sessionId: source.sessionId, authenticatedCredentialExpiresAt: source.authenticatedCredentialExpiresAt },
+      { requireRecent: true, phishingResistant: operatorUserIds.includes(source.userId) });
   }
   async function challenge(ctx: GenericEndpointContext, operation: Ceremony["operation"]) {
     const cookie = ctx.context.createAuthCookie("better-auth-passkey");
@@ -221,7 +235,8 @@ export function nativePasskeyPlugin(db: Db, schema: NativeAuthenticationSchema, 
             return { source, limited: budget.count>10 };
           });
           if (captured.limited) throw new APIError("TOO_MANY_REQUESTS", { code: "REAUTHENTICATION_RATE_LIMITED", message: "Too many confirmation attempts; try again later" });
-          const source = { ...captured.source, sessionId: active?.session.id, sessionToken: active?.session.token };
+          const source = { ...captured.source, sessionId: active?.session.id, sessionToken: active?.session.token,
+            authenticatedCredentialExpiresAt: active?.session.expiresAt.getTime() };
           return await withConsumedChallenge(ctx, pending, () => withNativeAuthenticationTransaction(db, ctx, schema, async tx => {
             await pin(tx, source, ctx);
             const [key] = await tx.execute(sql`select id from passkey where user_id=${source.userId} and credential_id=${credentialId} for update nowait`);
@@ -232,6 +247,7 @@ export function nativePasskeyPlugin(db: Db, schema: NativeAuthenticationSchema, 
             if (operatorUserIds.includes(source.userId)) await tx.execute(sql`update "user" set phishing_resistant_required=true where id=${source.userId}`);
             const [{ at }] = await tx.execute<{ at: string }>(sql`select clock_timestamp() as at`);
             const session = await replacement(ctx, source, source.version, { authenticationMethod: "passkey", authenticatedAt: new Date(at) });
+            await assertSourceCredentialDeadline(tx, source);
             return { userId: source.userId, sessionId: session.id };
           }));
         } catch (error) { await consumeAfterRejection(ctx, pending.nonce); return failure(error); }
@@ -245,6 +261,7 @@ export function nativePasskeyPlugin(db: Db, schema: NativeAuthenticationSchema, 
           .orderBy(authPasskeys.createdAt, authPasskeys.id).limit(17);
         if (rows.length>16) deny();
         ctx.setHeader("Cache-Control", "no-store");
+        await assertSourceCredentialDeadline(tx, source);
         return rows.map(row => passkeySummary(row));
       }).catch(failure);
     }),
