@@ -688,7 +688,7 @@ export interface PaperclipPluginManifestV1 {
   /** Capabilities this plugin requires from the host. Enforced at runtime. */
   capabilities: PluginCapability[];
   /** Durable lifecycle events this plugin handles; requires events.subscribe. */
-  resourceLifecycle?: Array<"agent" | "project">;
+  resourceLifecycle?: Array<"agent" | "project" | "agent_runtime">;
   /** Entrypoint paths relative to the package root. */
   entrypoints: {
     /** Path to the worker entrypoint (required). */

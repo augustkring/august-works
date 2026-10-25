@@ -665,7 +665,7 @@ export function openShellHostEngine({
       request.argv.some(value => typeof value !== "string" || !value.length || value.length > 8192) ||
       typeof request.cwd !== "string" || !path.isAbsolute(request.cwd) ||
       !request.env || typeof request.env !== "object" || Array.isArray(request.env) || Object.keys(request.env).length > 64 ||
-      Object.entries(request.env).some(([key, value]) => !/^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(key) || typeof value !== "string" || value.length > 8192 || /(?:TOKEN|SECRET|PASSWORD|CREDENTIAL|API[_-]?KEY|PRIVATE[_-]?KEY|AUTHORIZATION)/i.test(key)) ||
+      Object.entries(request.env).some(([key, value]) => !/^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(key) || typeof value !== "string" || value.length > 8192 || key !== "PAPERCLIP_SANDBOX_BROKER_TOKEN" && /(?:TOKEN|SECRET|PASSWORD|CREDENTIAL|API[_-]?KEY|PRIVATE[_-]?KEY|AUTHORIZATION)/i.test(key)) ||
       typeof request.stdinBase64 !== "string" || request.stdinBase64.length > 512 * 1024 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(request.stdinBase64) ||
       typeof input.capabilityToken !== "string" || input.capabilityToken.length > 16384 ||
       typeof onOutput !== "function") throw new Error("sandbox_scope_changed");

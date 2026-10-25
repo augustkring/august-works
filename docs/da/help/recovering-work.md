@@ -33,6 +33,8 @@ Hvis en opgave ikke kan genåbne sit gemte arbejdsområde, skal du bede en proje
 
 Hvis den gemte kilde eller historik ikke kan gendannes, skal du kontakte [menneskelig support](/da/help/index) med opgave-id’et og beskeden på skærmen.
 
+Hvis oprydningen af arbejdsområdet melder, at filer er bevaret, skal du bede projektejeren gennemgå dem, før du fjerner arbejdsområdet.
+
 ## Mens et stop afventer
 
 Lad opgaven stå åben, mens stophandlingen afventer. Vent, indtil kørsels- og opgavestatus opdateres. Hvis siden melder om et ukendt resultat, skal du genindlæse den oprindelige opgave og gennemgå den seneste kørsel, før du sender en ny instruktion eller starter erstatningsarbejde.

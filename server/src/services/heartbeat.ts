@@ -23698,6 +23698,17 @@ export function heartbeatService(
             // onto a compact or otherwise substituted prompt.
             const selectedMarkdown = nativeBootstrapTaskMarkdownSourceMap
               ? selectedNativeTaskPrompt : "";
+            const nativeBootstrapUnsupported = {
+              review: Boolean(nativeReviewRequest), directPrompt: Boolean(directAgentPrompt),
+              previousRun: Boolean(previousNativeRun), persistedInput: Boolean(persistedNativeExecutionInput),
+              resume: Boolean(nativeResumeCheckpoint), initialGuidance: Boolean("initialCommunicationGuidance" in nativeExecution && nativeExecution.initialCommunicationGuidance),
+              continuation: Boolean("continuationPrompt" in nativeExecution && nativeExecution.continuationPrompt),
+              interaction: Boolean(nativeExecution.interactionResponses.length), planning: Boolean("planningContext" in nativeExecution && nativeExecution.planningContext),
+              conversation: isConversation(issueContext), wake: Boolean(context.paperclipWake), projectPaths: projectRepositoryPaths.length > 0,
+              authoredContextManifests: Boolean(capturedAuthoredSources?.contextManifests.length), missingTask: !capturedTaskSource,
+            };
+            if (process.env.NODE_ENV === "test" && Object.values(nativeBootstrapUnsupported).some(Boolean))
+              logger.warn({ nativeBootstrapUnsupported }, "Native bootstrap source closure has unsupported inputs");
             const nativeBootstrapSourceSet = buildNativeBootstrapSourceSet({
               companyId: agent.companyId,
               runId: run.id,
@@ -23715,14 +23726,7 @@ export function heartbeatService(
               governedContextMarkdown,
               contextWitness: freshGovernedContext?.sourceWitness ?? null,
               rolePackInputs: v5Fabric ? v5Fabric.inputRolePackSources : [],
-              unsupportedInputPresent: Boolean(nativeReviewRequest || directAgentPrompt || previousNativeRun ||
-                persistedNativeExecutionInput || nativeResumeCheckpoint || governedContextMarkdown?.trim() ||
-                ("initialCommunicationGuidance" in nativeExecution && nativeExecution.initialCommunicationGuidance) ||
-                ("continuationPrompt" in nativeExecution && nativeExecution.continuationPrompt) ||
-                nativeExecution.interactionResponses.length || ("planningContext" in nativeExecution && nativeExecution.planningContext) ||
-                isConversation(issueContext) || context.paperclipWake || projectRepositoryPaths.length > 0 ||
-                Boolean(governedContextMarkdown?.trim() && !freshGovernedContext?.sourceWitness) ||
-                capturedAuthoredSources?.contextManifests.length || !capturedTaskSource),
+              unsupportedInputPresent: Object.values(nativeBootstrapUnsupported).some(Boolean),
             });
             nativeBootstrapSourceClosure = nativeBootstrapSourceSet
               ? { sourceSet: nativeBootstrapSourceSet,

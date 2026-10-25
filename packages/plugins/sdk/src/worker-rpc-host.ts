@@ -1723,6 +1723,10 @@ export function startWorkerRpcHost(options: WorkerRpcHostOptions): WorkerRpcHost
     currentConfig = params.config;
     databaseNamespace = params.databaseNamespace ?? null;
 
+    if (manifest.resourceLifecycle?.length && !plugin.definition.onResourceLifecycle) {
+      throw new Error("Plugin manifest declares resourceLifecycle but the worker does not implement onResourceLifecycle");
+    }
+
     // Call the plugin's setup function
     await plugin.definition.setup(ctx);
 

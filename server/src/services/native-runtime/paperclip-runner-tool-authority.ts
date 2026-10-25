@@ -33,6 +33,7 @@ import { assetService } from "../assets.js";
 import { workspaceFileResourceService } from "../workspace-file-resources.js";
 import { badRequest, forbidden } from "../../errors.js";
 import { searchRunnerApi } from "./runner-api-catalog.js";
+import type { NativeAwModelOutputCapture } from "./native-execution-input.js";
 import { executeRunnerApi, validateRunnerApiCall, runnerApiUrl, RUNNER_API_MAX_BYTES, type RunnerApiFile } from "./runner-api-client.js";
 import { and, desc, eq, isNull, notInArray, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
@@ -103,6 +104,8 @@ const NATIVE_REVIEW_READ_TOOLS = new Set([
 type Binding = {
   /** Controller-owned turn revocation. Never obtained from tool arguments. */
   authoritySignal?: AbortSignal;
+  /** Exact AW output dispatch capture; never read from tool arguments. */
+  awOutputCapture?: { readonly value: NativeAwModelOutputCapture | null };
   /** Server-derived scope for one addressed native completion review. */
   nativeReview?: NativeReviewAssignmentContext;
   companyId: string;
@@ -985,6 +988,7 @@ export class PaperclipRunnerToolAuthority {
           : requiredString(input.changeSummary),
         createdByAgentId: this.binding.agentId,
         createdByRunId: this.binding.runId,
+        nativeAwOutputCapture: this.binding.awOutputCapture?.value ?? undefined,
       });
       const activity = await persistActivity(tx, {
         companyId: this.binding.companyId,

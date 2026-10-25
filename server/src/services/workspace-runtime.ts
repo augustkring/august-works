@@ -4052,9 +4052,19 @@ export async function cleanupExecutionWorkspaceArtifacts(input: {
     workspace: input.workspace,
     projectWorkspaceCwd: input.projectWorkspace?.cwd ?? null,
   });
-  // Callers can require the workspace to match an assessed snapshot before
-  // cleanup begins. Destructive paths recheck immediately before removal.
+  // Archive and failed setup must not erase edits or unique ignored files.
+  // An assessed cleanup owner can additionally validate its exact saved recipe.
+  const assertGitContentsSafe = async () => {
+    if (input.workspace.providerType !== "git_worktree" || !workspacePath || !await directoryExists(workspacePath)) return;
+    const status = await runGit(["-c", "core.fsmonitor=false", "status", "--porcelain=v1", "--untracked-files=all", "--ignored=matching", "-z"], workspacePath);
+    if (status) throw new Error("Workspace files require preservation before cleanup.");
+  };
   await input.assertSafeToCleanup?.();
+  try {
+    await assertGitContentsSafe();
+  } catch {
+    return { cleanedPath: workspacePath, cleaned: false, warnings: ["Workspace files could not be verified for cleanup; the workspace was kept."] };
+  }
   let worktreeInstancePointer: WorktreeInstancePointer | null = null;
   let expectedWorktreeInstanceId: string | null = null;
   if (input.workspace.providerType === "git_worktree" && workspacePath) {
@@ -4135,12 +4145,13 @@ export async function cleanupExecutionWorkspaceArtifacts(input: {
       } else {
         try {
           await input.assertSafeToCleanup?.();
+          await assertGitContentsSafe();
           await recordGitOperation(input.recorder, {
             phase: "worktree_cleanup",
             args: [
               "worktree",
               "remove",
-              ...(input.forceWorktreeRemoval === false ? [] : ["--force"]),
+              ...(input.forceWorktreeRemoval === true ? ["--force"] : []),
               workspacePath,
             ],
             cwd: repoRoot,
@@ -4158,7 +4169,7 @@ export async function cleanupExecutionWorkspaceArtifacts(input: {
         }
       }
     }
-    if (branchCreatedByRuntime && input.workspace.branchName) {
+    if (branchCreatedByRuntime && input.workspace.branchName && !await directoryExists(workspacePath)) {
       if (!repoRoot) {
         warnings.push(`Could not resolve git repo root to delete branch "${input.workspace.branchName}".`);
       } else {

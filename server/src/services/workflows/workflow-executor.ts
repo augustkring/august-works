@@ -6870,11 +6870,29 @@ async function executeClaimedRun(
   // A recovery worker owns the lease, but does not become the authority for
   // effects. Keep the initiating principal and recheck its current membership.
   if (run.executionPrincipal) {
-    actor = {
+    const originalAuthorizationActor = actor.authorizationActor;
+    const candidateActor: WorkflowRunActor = {
       principal: run.executionPrincipal,
       runId: run.executionAgentRunId,
       responsibleUserId: run.responsibleUserId,
     };
+    const matchingVerifiedCarrier = originalAuthorizationActor &&
+      isDeepStrictEqual(actor.principal, run.executionPrincipal) &&
+      (actor.runId ?? null) === (run.executionAgentRunId ?? null) &&
+      workflowSourceActor(run.companyId, {
+        ...candidateActor,
+        authorizationActor: originalAuthorizationActor,
+      })
+        ? originalAuthorizationActor
+        : undefined;
+    if (originalAuthorizationActor && !matchingVerifiedCarrier) {
+      await failRun(db, run, candidateActor, "workflow_execution_actor_mismatch",
+        "The original authenticated Workflow actor does not match this execution");
+      return;
+    }
+    actor = matchingVerifiedCarrier
+      ? { ...candidateActor, authorizationActor: matchingVerifiedCarrier }
+      : candidateActor;
     try {
       await assertActorCompanyScope(db, run.companyId, actor);
     } catch {

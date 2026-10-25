@@ -15,6 +15,7 @@ import { runSandboxQualification } from "./qualification.js";
 import { existingCellContainerBackend } from "./compatibility-backend.js";
 import { SANDBOX_PROBE_CASES, type ExecutionSandboxBackend, type SandboxIdentity } from "./backend.js";
 import { fenceSandboxAdmissionOutcome, releaseSandboxAdmissionClaim } from "./sandbox-guardian.js";
+import { createToolGatewayService, type SandboxCredentialBrokerBinding } from "../tool-gateway.js";
 
 type Binding = typeof runtimeSandboxBindings.$inferSelect;
 function sandboxCapabilityFacts(value: ReturnType<typeof sandboxCapabilitySnapshotSchema.parse>) {
@@ -23,6 +24,7 @@ function sandboxCapabilityFacts(value: ReturnType<typeof sandboxCapabilitySnapsh
 }
 export function executionSandboxService(db: Db, options: {
   operatorUserIds?: readonly string[];
+  credentialBrokerOrigin?: string | null;
   runtimeSuspectSeconds?: number;
   backendFor?: (binding: Binding, actor: AuthorizationActor) => ExecutionSandboxBackend | undefined;
   nativeOperation?: (companyId: string, cellId: string, userId: string, action: "stop" | "delete", idempotencyKey: string) => Promise<{ id: string }>;
@@ -113,7 +115,7 @@ export function executionSandboxService(db: Db, options: {
     const [cellRow] = await tx.select().from(runtimeCells).where(and(
       eq(runtimeCells.companyId, input.companyId), eq(runtimeCells.id, cellRef[1]!), eq(runtimeCells.generation, BigInt(cellRef[2]!)),
       eq(runtimeCells.status, "HEALTHY"), isNull(runtimeCells.deletedAt),
-    )).for("share");
+    )).for("update");
     if (!cellRow?.runtimeHostId || cellRow.suspendedReason) throw conflict("Current managed runtime cell is unavailable");
     const [sandboxBinding] = await tx.select().from(runtimeSandboxBindings).where(and(
       eq(runtimeSandboxBindings.companyId, input.companyId), eq(runtimeSandboxBindings.runtimeCellId, cellRow.id),
@@ -137,9 +139,13 @@ export function executionSandboxService(db: Db, options: {
       eq(runtimePolicySnapshots.companyId, input.companyId), eq(runtimePolicySnapshots.bindingId, sandboxBinding.id),
       eq(runtimePolicySnapshots.executionManifestId, manifest.id),
     )).orderBy(desc(runtimePolicySnapshots.policyVersion)).limit(1).for("share");
+    const credentials = policy?.compilation.compiledPolicy.credentials;
+    const brokerDimensions = ["company", "presence", "host", "port", "method", "path", "expiry", "revocation"] as const;
     if (!policy || policy.status !== "qualified" || policy.expiresAt <= now || policy.authorityHash !== source.authorityHash ||
-      policy.capabilitySnapshotHash !== sandboxBinding.capabilitySnapshotHash || policy.compilation.compiledPolicy.credentials.mode !== "none" ||
-      policy.compilation.compiledPolicy.credentials.bindings.length !== 0 || policy.compilation.sourcePolicyRefs.find(ref => ref.startsWith("manifest:")) !== `manifest:${manifest.id}:${manifest.hash}`)
+      policy.capabilitySnapshotHash !== sandboxBinding.capabilitySnapshotHash || !credentials ||
+      credentials.mode === "legacy_injected" || (credentials.mode === "none" && credentials.bindings.length !== 0) ||
+      (credentials.mode === "brokered" && (!credentials.bindings.length || brokerDimensions.some(dimension => !capability.credentialBindingDimensions.includes(dimension)))) ||
+      policy.compilation.sourcePolicyRefs.find(ref => ref.startsWith("manifest:")) !== `manifest:${manifest.id}:${manifest.hash}`)
       throw conflict("Current unexpired OpenShell policy is not bound to this exact Task manifest");
     const [host] = await tx.select().from(runtimeHosts).where(and(
       eq(runtimeHosts.id, cellRow.runtimeHostId), isNull(runtimeHosts.fencedAt), isNull(runtimeHosts.credentialRevokedAt), isNull(runtimeHosts.retiredAt),
@@ -454,7 +460,20 @@ export function executionSandboxService(db: Db, options: {
         if (Number(input.candidatePolicy.riskClass.slice(1)) < riskFloor) throw conflict("Policy cannot lower the execution's current risk class");
         if (row.capabilitySnapshot && (row.capabilitySnapshot.sandboxImageDigest !== (current.activeImageDigest ?? current.desiredImageDigest) || row.capabilitySnapshot.backend !== row.backend)) throw conflict("Runtime image or backend changed; repeat qualification");
         const refs = [`manifest:${source.record.id}:${source.record.hash}`, `cell:${current.id}:${row.cellGeneration}`, `boundary:${row.boundaryPolicyHash}`, `authority:${source.authorityHash}`];
-        const compilation = compileSandboxPolicy({ boundary: row.boundaryPolicy, candidate: input.candidatePolicy, capabilities: row.capabilitySnapshot, authorizedConnectionGrantHashes: {}, sourcePolicyRefs: refs });
+        let authorizedConnectionGrantHashes: Record<string, string> = {};
+        let credentialBrokerBindings: SandboxCredentialBrokerBinding[] = [];
+        if (input.candidatePolicy.credentials.mode === "brokered") {
+          const broker = await createToolGatewayService(tx as unknown as Db).resolveSandboxCredentialBrokerBindings({
+            companyId, agentId: source.record.agentId, runId: source.run.id,
+            responsibleUserId: source.run.responsibleUserId!, presenceId: source.runtime.id,
+            bindings: input.candidatePolicy.credentials.bindings,
+          });
+          authorizedConnectionGrantHashes = broker.authorizedConnectionGrantHashes;
+          credentialBrokerBindings = broker.bindings;
+          for (const [connectionId, grantHash] of Object.entries(authorizedConnectionGrantHashes)) refs.push(`credential-grant:${connectionId}:${grantHash}`);
+          for (const brokerBinding of credentialBrokerBindings) refs.push(`credential-broker-route:${brokerBinding.gatewayPublicId}:${brokerBinding.endpointPath}`);
+        }
+        const compilation = compileSandboxPolicy({ boundary: row.boundaryPolicy, candidate: input.candidatePolicy, capabilities: row.capabilitySnapshot, authorizedConnectionGrantHashes, credentialBrokerOrigin: options.credentialBrokerOrigin, credentialBrokerBindings, sourcePolicyRefs: refs });
         const [latest] = await tx.select().from(runtimePolicySnapshots).where(and(eq(runtimePolicySnapshots.companyId, companyId), eq(runtimePolicySnapshots.bindingId, id))).orderBy(desc(runtimePolicySnapshots.policyVersion)).limit(1);
         if (latest?.status === "qualified") await tx.update(runtimePolicySnapshots).set({ status: "superseded" }).where(eq(runtimePolicySnapshots.id, latest.id));
         const expiresAt = new Date(Math.min((source.run.startedAt?.getTime() ?? source.run.createdAt.getTime()) + compilation.compiledPolicy.resources.wallClockSeconds * 1000, plan?.startedAt ? plan.startedAt.getTime() + plan.budgets.maxWallClockSeconds * 1000 : Infinity));

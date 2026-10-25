@@ -42,7 +42,7 @@ import { projectToolRoutes } from "./routes/project-tools.js";
 import { emailChannelService } from "./services/email-channels.js";
 import { emailRoutes, emailWebhookRoutes } from "./routes/email.js";
 import { toolActionDeliveryService } from "./services/tool-action-delivery.js";
-import { registerAssignedMcpGateway } from "./services/native-runtime/assigned-mcp-tools.js";
+import { getAssignedMcpGateway, registerAssignedMcpGateway } from "./services/native-runtime/assigned-mcp-tools.js";
 import express, { Router, type Request as ExpressRequest } from "express";
 import {
   createServer as createHttpServer,
@@ -52,6 +52,8 @@ import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Db } from "@paperclipai/db";
+import { agentExecutionManifests, agentPresenceRuntimeBindings, heartbeatRuns } from "@paperclipai/db";
+import { and, eq } from "drizzle-orm";
 import {
   derivePaperclipViteHmrPort,
   type AwDeploymentProfile,
@@ -219,6 +221,8 @@ import {
 import { subscribeAllCompanyLiveEvents } from "./services/live-events.js";
 import { heartbeatService } from "./services/heartbeat.js";
 import { pluginLifecycleManager } from "./services/plugin-lifecycle.js";
+import { createDeliveryWorkCoordinator } from "./services/delivery-work-coordinator.js";
+import { registerPluginLifecycleDelivery } from "./services/plugin-lifecycle-delivery.js";
 import { createPluginJobCoordinator } from "./services/plugin-job-coordinator.js";
 import {
   buildHostServices,
@@ -765,11 +769,35 @@ export async function createApp(
   api.use(aiGovernanceRoutes(db));
   api.use(enterpriseRoutes(db, opts.saasPlatform ? { operatorUserIds: opts.saasPlatform.config.operatorUserIds, sourceSha: opts.saasPlatform.config.deployment.sourceSha, protectedEvidenceOrigin: opts.saasPlatform.config.objects.endpoint, appOrigin: opts.saasPlatform.origins.primaryAppOrigin } : undefined));
   api.use(agentPackageRoutes(db, { operatorUserIds: opts.saasPlatform?.config.operatorUserIds, protectedEvidenceOrigin: opts.saasPlatform?.config.objects.endpoint, sourceSha: opts.saasPlatform?.config.deployment.sourceSha }));
+  const resolveSandboxBrokerBindings = async (companyId: string, policy: import("@paperclipai/shared").SandboxPolicyCompilation) => {
+    const compiled = policy.compiledPolicy;
+    if (compiled.credentials.mode !== "brokered") return { authorizedConnectionGrantHashes: {}, bindings: [] };
+    const manifestRef = policy.sourcePolicyRefs.find(ref => ref.startsWith("manifest:"));
+    const match = manifestRef ? /^manifest:([0-9a-f-]{36}):([a-f0-9]{64})$/i.exec(manifestRef) : null;
+    if (!match) throw new Error("sandbox_broker_manifest_source_unavailable");
+    const [manifest] = await db.select().from(agentExecutionManifests).where(and(
+      eq(agentExecutionManifests.companyId, companyId), eq(agentExecutionManifests.id, match[1]!), eq(agentExecutionManifests.hash, match[2]!),
+    )).limit(1);
+    const [run] = manifest ? await db.select().from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, manifest.runId), eq(heartbeatRuns.agentId, manifest.agentId), eq(heartbeatRuns.status, "running"),
+    )).limit(1) : [];
+    const [presence] = manifest ? await db.select().from(agentPresenceRuntimeBindings).where(and(
+      eq(agentPresenceRuntimeBindings.companyId, companyId), eq(agentPresenceRuntimeBindings.agentId, manifest.agentId), eq(agentPresenceRuntimeBindings.status, "active"),
+    )).limit(1) : [];
+    if (!manifest || !run?.responsibleUserId || !presence) throw new Error("sandbox_broker_run_source_unavailable");
+    return await getAssignedMcpGateway(db).resolveSandboxCredentialBrokerBindings({
+      companyId, agentId: manifest.agentId, runId: run.id, responsibleUserId: run.responsibleUserId,
+      presenceId: presence.id, bindings: compiled.credentials.bindings,
+    });
+  };
   api.use(executionSandboxRoutes(db, {
     operatorUserIds: opts.saasPlatform?.config.operatorUserIds,
+    credentialBrokerOrigin: opts.saasPlatform?.origins.primaryAppOrigin,
     backendFor: opts.saasPlatform?.config.runtime.openshellProver ? (binding, actor) => binding.backend === "openshell" ? openShellBackend({
       identity: { companyId: binding.companyId, bindingId: binding.id, cellId: binding.runtimeCellId, cellGeneration: binding.cellGeneration, sandboxRef: binding.sandboxRef ?? `aw-v7-${binding.id}` },
       boundary: binding.boundaryPolicy, bridge: opts.saasPlatform!.sandboxHosts.bridge(actor), evidenceKind: "protected_host_report", prover: opts.saasPlatform!.config.runtime.openshellProver!,
+      credentialBrokerOrigin: opts.saasPlatform!.origins.primaryAppOrigin,
+      resolveCredentialBrokerBindings: (policy) => resolveSandboxBrokerBindings(binding.companyId, policy),
     }) : undefined : undefined,
     nativeOperation: opts.saasPlatform ? (companyId, cellId, userId, action, idempotencyKey) => opts.saasPlatform!.runtime.request(companyId, cellId, userId, { action, idempotencyKey }) : undefined,
     assertRuntimeStartAdmission: opts.saasPlatform?.runtime.assertSandboxStartAdmission
@@ -962,6 +990,12 @@ export async function createApp(
   setPluginEventBus(eventBus);
   const jobStore = pluginJobStore(db);
   const lifecycle = pluginLifecycleManager(db, { workerManager });
+  const pluginLifecycleWork = createDeliveryWorkCoordinator({
+    owner: db,
+    canRun: () => true,
+    onError: (err, queue) => logger.error({ err, queue }, "Plugin lifecycle outbox recovery failed"),
+  });
+  const resourceLifecycleDelivery = registerPluginLifecycleDelivery(pluginLifecycleWork, db, workerManager, lifecycle);
   const scheduler = createPluginJobScheduler({
     db,
     jobStore,
@@ -1468,7 +1502,8 @@ export async function createApp(
     })
     .catch((err) => {
       logger.error({ err }, "Failed to load ready plugins on startup");
-    });
+    })
+    .finally(() => resourceLifecycleDelivery.wake());
   app.locals.bundledPluginsStartup = bundledPluginsStartup;
   // The shutdown hook runs at most once. It caches the in-flight promise, so a
   // second caller (for example the `exit` handler) awaits the same completion
@@ -1481,6 +1516,8 @@ export async function createApp(
       // awaited teardown, so no tick runs after the caller ends the pool.
       scheduler.stop();
       jobCoordinator.stop();
+      resourceLifecycleDelivery.dispose();
+      await pluginLifecycleWork.stop();
       disableFeedbackExportFlushes();
       unsubscribeChatPublicationSignals();
       chatReconciliation.stop();

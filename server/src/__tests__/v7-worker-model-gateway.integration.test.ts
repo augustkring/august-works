@@ -37,6 +37,7 @@ import {
   toolInvocations,
   issueDocuments,
   documents,
+  documentRevisions,
   issueThreadInteractions,
   memoryDeletionMarkers,
 } from "@paperclipai/db";
@@ -80,6 +81,8 @@ import { documentService } from "../services/documents.js";
 import { agentService } from "../services/agents.js";
 import { compileAuthoredAgentDefinition, readAuthoredAgentDefinition } from "../services/agents/authored-definition.js";
 import { issueThreadInteractionService } from "../services/issue-thread-interactions.js";
+import { issueService } from "../services/issues.js";
+import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 import { makeProviderCapabilitySnapshot, providerConformanceRequirements } from "../services/provider-capabilities.js";
 import { hashContextPolicySnapshot } from "../services/context/context-manifest.js";
 import {
@@ -418,17 +421,16 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         .update(heartbeatRuns)
         .set({ status: "failed", finishedAt: new Date() })
         .where(eq(heartbeatRuns.id, run.id));
-      [task] = (await db
-        .insert(issues)
-        .values({
-          companyId: f.home,
-          title: "Produce the scheduler's single internal draft",
-          status: "todo",
-          workMode: "standard",
-          assigneeAgentId: f.presence.id,
-          responsibleUserId: f.userId,
-        })
-        .returning()) as [typeof task];
+      const sourceActor = await seedCurrentHumanSourceActor(db, [f.home], f.userId);
+      task = await issueService(db).create(f.home, {
+        title: "Produce the scheduler's single internal draft",
+        description: "Retain one internal draft for human review.",
+        status: "todo",
+        workMode: "standard",
+        assigneeAgentId: f.presence.id,
+        responsibleUserId: f.userId,
+        createdByUserId: f.userId,
+      }, db, undefined, { manualInputActor: sourceActor });
       plan = await orchestrationService(db).create(f.actor, f.home, {
         issueId: task.id,
         expectedIssueUpdatedAt: task.updatedAt.toISOString(),
@@ -578,6 +580,20 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         (await documentService(db).getIssueDocumentByKey(task.id, "result"))
           ?.body,
       ).toBe("Retained bounded draft");
+      const [revision] = await db.select({ revision: documentRevisions }).from(issueDocuments)
+        .innerJoin(documents, and(eq(documents.companyId, issueDocuments.companyId), eq(documents.id, issueDocuments.documentId)))
+        .innerJoin(documentRevisions, and(eq(documentRevisions.companyId, documents.companyId),
+          eq(documentRevisions.id, documents.latestRevisionId), eq(documentRevisions.documentId, documents.id)))
+        .where(and(eq(issueDocuments.issueId, task.id), eq(issueDocuments.key, "result")));
+      expect(revision?.revision.payloadSourceProtocolVersion).toBe(1);
+      expect(revision?.revision.payloadSourceSnapshot?.inputs.map((source) => source.kind)).toEqual(
+        expect.arrayContaining(["task", "completion_contract", "runtime_instructions", "worker_model_dispatch"]),
+      );
+      const wireDispatch = ((actualRun!.runnerProfileJson as Record<string, unknown>).nativeAwModelWireIntents as Array<Record<string, unknown>>)[0];
+      expect(revision?.revision.payloadSourceSnapshot?.inputs).toContainEqual(expect.objectContaining({
+        kind: "worker_model_dispatch", runId: actualRun!.id, requestHash: wireDispatch!.requestHash,
+        wireBodyHash: wireDispatch!.wireBodyHash,
+      }));
       const [current] = await db
         .select()
         .from(orchestrationPlans)

@@ -16,9 +16,10 @@ export interface LocalAgentJwtClaims {
   key_scope?: AgentApiKeyScope | null;
   /** Server-minted, one HTTP effect binding for an authenticated native tool call. */
   native_tool_effect?: NativeToolEffectClaim;
-  /** Dedicated one-use OpenShell process-execution audience. */
-  purpose?: "sandbox_exec";
+  /** Dedicated non-API capability audiences. */
+  purpose?: "sandbox_exec" | "sandbox_broker";
   sandbox_exec?: SandboxExecCapabilityClaim;
+  sandbox_broker?: SandboxBrokerCapabilityClaim;
   iat: number;
   exp: number;
   iss?: string;
@@ -43,6 +44,40 @@ export interface SandboxExecCapabilityClaim {
   policyHash: string;
   commandDigest: string;
   deadlineAt: string;
+}
+
+export interface SandboxBrokerCapabilityClaim {
+  parentRequestId: string;
+  bindingId: string;
+  cellId: string;
+  generation: string;
+  hostId: string;
+  hostEpoch: number;
+  runId: string;
+  attemptId: string | null;
+  attempt: number;
+  manifestId: string;
+  manifestHash: string;
+  policySnapshotId: string;
+  policyHash: string;
+  brokerSessionId: string;
+  endpointOrigin: string;
+  bindings: SandboxBrokerBindingClaim[];
+  expiresAt: string;
+}
+
+export interface SandboxBrokerBindingClaim {
+  connectionId: string;
+  grantVersionHash: string;
+  gatewayPublicId: string;
+  endpointPath: string;
+  allowedTools: string[];
+  destination: {
+    hostname: string;
+    port: number;
+    method: "POST";
+    path: string;
+  };
 }
 
 export interface NativeToolEffectClaim {
@@ -252,6 +287,48 @@ export function createSandboxExecJwt(input: {
   return `${signingInput}.${signPayload(deriveCompanySigningKey(config.secret, input.companyId, config.instanceId), signingInput)}`;
 }
 
+/** A per-exec attenuated capability for assigned ToolGateway operations. */
+export function createSandboxBrokerJwt(input: {
+  agentId: string;
+  companyId: string;
+  adapterType: string;
+  runId: string;
+  responsibleUserId: string | null;
+  claim: SandboxBrokerCapabilityClaim;
+  parentExpiresAt: Date;
+  nativeLeaseExpiresAt: Date;
+  execDeadlineAt: Date;
+}) {
+  const config = jwtConfig();
+  if (!config || !parseSandboxBrokerCapabilityClaim(input.claim)) return null;
+  const now = Math.floor(Date.now() / 1000);
+  const exp = Math.min(
+    now + 60,
+    Math.floor(input.parentExpiresAt.getTime() / 1000),
+    Math.floor(input.nativeLeaseExpiresAt.getTime() / 1000),
+    Math.floor(input.execDeadlineAt.getTime() / 1000),
+    Math.floor(Date.parse(input.claim.expiresAt) / 1000),
+  );
+  if (exp <= now) return null;
+  const claims: LocalAgentJwtClaims = {
+    sub: input.agentId,
+    company_id: input.companyId,
+    adapter_type: input.adapterType,
+    run_id: input.runId,
+    responsible_user_id: input.responsibleUserId,
+    purpose: "sandbox_broker",
+    sandbox_broker: input.claim,
+    iat: now,
+    exp,
+    iss: config.issuer,
+    aud: "paperclip-sandbox-broker",
+    instance_id: config.instanceId,
+    jti: input.claim.parentRequestId,
+  };
+  const signingInput = `${base64UrlEncode(JSON.stringify({ alg: JWT_ALGORITHM, typ: "JWT" }))}.${base64UrlEncode(JSON.stringify(claims))}`;
+  return `${signingInput}.${signPayload(deriveCompanySigningKey(config.secret, input.companyId, config.instanceId), signingInput)}`;
+}
+
 function verifySignedLocalAgentJwt(token: string): LocalAgentJwtClaims | null {
   if (!token) return null;
   const config = jwtConfig();
@@ -266,11 +343,21 @@ function verifySignedLocalAgentJwt(token: string): LocalAgentJwtClaims | null {
 
   const claims = parseJson(base64UrlDecode(claimsB64));
   if (!claims) return null;
-  if ((Object.hasOwn(claims, "purpose") && claims.purpose !== "sandbox_exec") ||
-    (Object.hasOwn(claims, "sandbox_exec") && claims.purpose !== "sandbox_exec")) return null;
+  const hasSandboxExec = Object.hasOwn(claims, "sandbox_exec");
+  const hasSandboxBroker = Object.hasOwn(claims, "sandbox_broker");
+  if ((Object.hasOwn(claims, "purpose") && !["sandbox_exec", "sandbox_broker"].includes(String(claims.purpose))) ||
+    (hasSandboxExec && (claims.purpose !== "sandbox_exec" || hasSandboxBroker)) ||
+    (hasSandboxBroker && (claims.purpose !== "sandbox_broker" || hasSandboxExec)) ||
+    (claims.purpose === "sandbox_exec" && !hasSandboxExec) ||
+    (claims.purpose === "sandbox_broker" && !hasSandboxBroker)) return null;
 
   const claimedCompanyId = typeof claims.company_id === "string" ? claims.company_id : null;
   if (!claimedCompanyId) return null;
+  const dedicatedPurpose = claims.purpose === "sandbox_exec" || claims.purpose === "sandbox_broker";
+  if (dedicatedPurpose && (claims.iss !== config.issuer || claims.instance_id !== config.instanceId ||
+    claims.aud !== (claims.purpose === "sandbox_exec" ? "paperclip-sandbox-exec" : "paperclip-sandbox-broker") ||
+    !Number.isSafeInteger(claims.iat) || !Number.isSafeInteger(claims.exp) ||
+    (claims.exp as number) <= (claims.iat as number) || (claims.exp as number) - (claims.iat as number) > 60)) return null;
 
   const signingInput = `${headerB64}.${claimsB64}`;
   // Try the per-instance, per-company derived key first (current tokens),
@@ -293,7 +380,7 @@ function verifySignedLocalAgentJwt(token: string): LocalAgentJwtClaims | null {
   const perCompanyKey = deriveCompanySigningKey(config.secret, claimedCompanyId, config.instanceId);
   const perCompanySig = signPayload(perCompanyKey, signingInput);
   let signatureOk = safeCompare(signature, perCompanySig);
-  if (!signatureOk && !config.disableLegacyFallback) {
+  if (!signatureOk && !dedicatedPurpose && !config.disableLegacyFallback) {
     const legacySig = signPayload(config.secret, signingInput);
     signatureOk = safeCompare(signature, legacySig);
   }
@@ -319,13 +406,14 @@ function verifySignedLocalAgentJwt(token: string): LocalAgentJwtClaims | null {
   const companyId = claimedCompanyId;
 
   const now = Math.floor(Date.now() / 1000);
-  if (exp <= now) return null;
+  if (exp <= now || (dedicatedPurpose && iat! > now)) return null;
 
   const issuer = typeof claims.iss === "string" ? claims.iss : undefined;
   const audience = typeof claims.aud === "string" ? claims.aud : undefined;
   if (issuer && issuer !== config.issuer) return null;
   if (audience && audience !== config.audience &&
-    !(claims.purpose === "sandbox_exec" && audience === "paperclip-sandbox-exec")) return null;
+    !(claims.purpose === "sandbox_exec" && audience === "paperclip-sandbox-exec") &&
+    !(claims.purpose === "sandbox_broker" && audience === "paperclip-sandbox-broker")) return null;
 
   // Enforce the minting instance when the claim is present. The instance-scoped
   // signing key above is the real cryptographic boundary; this claim check is
@@ -345,7 +433,9 @@ function verifySignedLocalAgentJwt(token: string): LocalAgentJwtClaims | null {
     ...(keyScopeClaim !== undefined ? { key_scope: keyScopeClaim } : {}),
     ...(nativeToolEffect ? { native_tool_effect: nativeToolEffect } : {}),
     ...(claims.purpose === "sandbox_exec" ? { purpose: "sandbox_exec" as const } : {}),
-    ...(Object.hasOwn(claims, "sandbox_exec") ? { sandbox_exec: parseSandboxExecCapabilityClaim(claims.sandbox_exec) ?? undefined } : {}),
+    ...(claims.purpose === "sandbox_broker" ? { purpose: "sandbox_broker" as const } : {}),
+    ...(hasSandboxExec ? { sandbox_exec: parseSandboxExecCapabilityClaim(claims.sandbox_exec) ?? undefined } : {}),
+    ...(hasSandboxBroker ? { sandbox_broker: parseSandboxBrokerCapabilityClaim(claims.sandbox_broker) ?? undefined } : {}),
     iat,
     exp,
     ...(issuer ? { iss: issuer } : {}),
@@ -358,7 +448,7 @@ function verifySignedLocalAgentJwt(token: string): LocalAgentJwtClaims | null {
 /** Ordinary API authentication must never accept an execution-only JWT. */
 export function verifyLocalAgentJwt(token: string): LocalAgentJwtClaims | null {
   const claims = verifySignedLocalAgentJwt(token);
-  return claims && claims.purpose !== "sandbox_exec" && !claims.sandbox_exec ? claims : null;
+  return claims && !claims.purpose && !claims.sandbox_exec && !claims.sandbox_broker ? claims : null;
 }
 
 export function verifySandboxExecJwt(token: string): LocalAgentJwtClaims & {
@@ -366,8 +456,17 @@ export function verifySandboxExecJwt(token: string): LocalAgentJwtClaims & {
   sandbox_exec: SandboxExecCapabilityClaim;
 } | null {
   const claims = verifySignedLocalAgentJwt(token);
-  if (!claims || claims.purpose !== "sandbox_exec" || !claims.sandbox_exec || claims.aud !== "paperclip-sandbox-exec") return null;
+  if (!claims || claims.purpose !== "sandbox_exec" || !claims.sandbox_exec || claims.sandbox_broker || claims.aud !== "paperclip-sandbox-exec") return null;
   return claims as LocalAgentJwtClaims & { purpose: "sandbox_exec"; sandbox_exec: SandboxExecCapabilityClaim };
+}
+
+export function verifySandboxBrokerJwt(token: string): LocalAgentJwtClaims & {
+  purpose: "sandbox_broker";
+  sandbox_broker: SandboxBrokerCapabilityClaim;
+} | null {
+  const claims = verifySignedLocalAgentJwt(token);
+  if (!claims || claims.purpose !== "sandbox_broker" || !claims.sandbox_broker || claims.sandbox_exec || claims.aud !== "paperclip-sandbox-broker") return null;
+  return claims as LocalAgentJwtClaims & { purpose: "sandbox_broker"; sandbox_broker: SandboxBrokerCapabilityClaim };
 }
 
 function parseSandboxExecCapabilityClaim(value: unknown): SandboxExecCapabilityClaim | null {
@@ -385,6 +484,48 @@ function parseSandboxExecCapabilityClaim(value: unknown): SandboxExecCapabilityC
     !["manifestHash", "policyHash", "commandDigest"].every(key => typeof claim[key] === "string" && digest.test(claim[key] as string)) ||
     typeof claim.deadlineAt !== "string" || !Number.isFinite(Date.parse(claim.deadlineAt))) return null;
   return claim as unknown as SandboxExecCapabilityClaim;
+}
+
+function parseSandboxBrokerCapabilityClaim(value: unknown): SandboxBrokerCapabilityClaim | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const claim = value as Record<string, unknown>;
+  const keys = ["parentRequestId", "bindingId", "cellId", "generation", "hostId", "hostEpoch", "runId", "attemptId", "attempt", "manifestId", "manifestHash", "policySnapshotId", "policyHash", "brokerSessionId", "endpointOrigin", "bindings", "expiresAt"];
+  const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
+  const digest = /^[a-f0-9]{64}$/;
+  let endpoint: URL | null = null;
+  try { endpoint = new URL(String(claim.endpointOrigin)); } catch { /* closed below */ }
+  const bindings = Array.isArray(claim.bindings) ? claim.bindings as unknown[] : [];
+  const bindingsValid = bindings.length >= 1 && bindings.length <= 32 && bindings.every(value => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const binding = value as Record<string, unknown>;
+    const destination = binding.destination;
+    if (!destination || typeof destination !== "object" || Array.isArray(destination)) return false;
+    const target = destination as Record<string, unknown>;
+    const tools = binding.allowedTools;
+    return Object.keys(binding).sort().join(",") === "allowedTools,connectionId,destination,endpointPath,gatewayPublicId,grantVersionHash" &&
+      typeof binding.connectionId === "string" && uuid.test(binding.connectionId) &&
+      typeof binding.grantVersionHash === "string" && digest.test(binding.grantVersionHash) &&
+      typeof binding.gatewayPublicId === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(binding.gatewayPublicId) &&
+      binding.endpointPath === `/mcp/gateways/${binding.gatewayPublicId}` &&
+      Array.isArray(tools) && tools.length >= 1 && tools.length <= 64 && tools.every(tool => typeof tool === "string" && /^[A-Za-z0-9_.:-]{1,128}$/.test(tool)) &&
+      new Set(tools).size === tools.length &&
+      Object.keys(target).sort().join(",") === "hostname,method,path,port" &&
+      typeof target.hostname === "string" && target.hostname.length <= 253 && /^[A-Za-z0-9.-]+$/.test(target.hostname) &&
+      Number.isSafeInteger(target.port) && (target.port as number) >= 1 && (target.port as number) <= 65535 &&
+      target.method === "POST" && typeof target.path === "string" && target.path.startsWith("/") && target.path.length <= 2048;
+  });
+  if (Object.keys(claim).length !== keys.length || keys.some(key => !Object.hasOwn(claim, key)) ||
+    !["parentRequestId", "bindingId", "cellId", "hostId", "runId", "manifestId", "policySnapshotId", "brokerSessionId"].every(key => typeof claim[key] === "string" && uuid.test(claim[key] as string)) ||
+    !(claim.attemptId === null || typeof claim.attemptId === "string" && uuid.test(claim.attemptId)) ||
+    !Number.isSafeInteger(claim.attempt) || (claim.attempt as number) < 1 ||
+    typeof claim.generation !== "string" || !/^[1-9][0-9]{0,18}$/.test(claim.generation) ||
+    !Number.isSafeInteger(claim.hostEpoch) || (claim.hostEpoch as number) < 1 ||
+    !["manifestHash", "policyHash"].every(key => typeof claim[key] === "string" && digest.test(claim[key] as string)) ||
+    !endpoint || !["http:", "https:"].includes(endpoint.protocol) || endpoint.username || endpoint.password || endpoint.pathname !== "/" || endpoint.search || endpoint.hash ||
+    typeof claim.endpointOrigin !== "string" || claim.endpointOrigin.length > 512 || `${endpoint.protocol}//${endpoint.host}/` !== claim.endpointOrigin ||
+    !bindingsValid ||
+    typeof claim.expiresAt !== "string" || !Number.isFinite(Date.parse(claim.expiresAt))) return null;
+  return claim as unknown as SandboxBrokerCapabilityClaim;
 }
 
 function parseNativeToolEffectClaim(value: unknown): NativeToolEffectClaim | null {

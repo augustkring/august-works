@@ -22,6 +22,7 @@ import {
   workerModelBindingSchema,
   workerModelCallSchema,
   workerModelResultSchema,
+  nativeRunInputSourceReceiptSchema,
   type WorkerModelBinding,
   type WorkerModelCall,
 } from "@paperclipai/shared";
@@ -765,10 +766,40 @@ export function workerModelGateway(db: Db, options: Options) {
           request,
           credential,
           controller.signal,
-          { fetch: options.fetch, onWireDispatch: (wire) => internal?.onWireDispatch?.({
-            ...wire, reservationId: reservation.id, callId: input.callId,
-            requestHash: nativeSha256(request),
-          }) },
+          { fetch: options.fetch, onWireDispatch: async (wire) => {
+            if (!internal?.onWireDispatch) return;
+            const receipt: WorkerModelDispatchWireReceipt = {
+              ...wire, reservationId: reservation.id, callId: input.callId,
+              requestHash: nativeSha256(request),
+            };
+            await db.transaction(async (tx) => {
+              const fresh = await current(tx, bound);
+              if (fresh.authorityHash !== state.authorityHash)
+                throw forbidden("Worker source authority changed before wire dispatch");
+              const [run] = await tx.select().from(heartbeatRuns).where(and(
+                eq(heartbeatRuns.companyId, claims.company_id), eq(heartbeatRuns.id, claims.run_id),
+                eq(heartbeatRuns.agentId, claims.sub), eq(heartbeatRuns.status, "running"),
+              )).for("update");
+              const profile = run?.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson)
+                ? run.runnerProfileJson as Record<string, unknown> : null;
+              const sourceReceipt = profile && nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+              const rawPrevious = profile?.nativeAwModelWireIntents;
+              const previous = rawPrevious === undefined ? [] : rawPrevious;
+              if (!run || !profile || !sourceReceipt?.success || !Array.isArray(previous) || previous.length >= 64 ||
+                previous.some((item) => item && typeof item === "object" && !Array.isArray(item) &&
+                  (item as Record<string, unknown>).reservationId === receipt.reservationId))
+                throw forbidden("The Native source receipt cannot bind this model dispatch");
+              const intents = [...previous, {
+                reservationId: receipt.reservationId, callId: receipt.callId, requestHash: receipt.requestHash,
+                wireBodyHash: receipt.bodySha256, endpoint: receipt.endpoint, method: receipt.method,
+              }];
+              if (Buffer.byteLength(JSON.stringify(intents), "utf8") > 256 * 1024)
+                throw forbidden("The Native model wire receipt exceeds its bound");
+              await tx.update(heartbeatRuns).set({ runnerProfileJson: { ...profile, nativeAwModelWireIntents: intents }, updatedAt: new Date() })
+                .where(and(eq(heartbeatRuns.companyId, run.companyId), eq(heartbeatRuns.id, run.id), eq(heartbeatRuns.status, "running")));
+            });
+            internal?.onWireDispatch?.(receipt);
+          } },
         );
         // A known provider charge survives access withdrawal. Settle its
         // bounded receipt before checking whether the result may be disclosed.

@@ -1,8 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, asc, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { documentRevisions, documents, issueDocuments, issues } from "@paperclipai/db";
-import { isSystemIssueDocumentKey, issueDocumentKeySchema, nativePayloadSourceSnapshotSchema, type NativePayloadSourceInput, type NativePayloadSourceSnapshot } from "@paperclipai/shared";
+import { documentRevisions, documents, issueDocuments, issues, heartbeatRuns, orchestrationModelReservations } from "@paperclipai/db";
+import { isSystemIssueDocumentKey, issueDocumentKeySchema, nativePayloadSourceInputSchema, nativePayloadSourceSnapshotSchema,
+  nativeRunInputSourceReceiptSchema, type NativePayloadSourceInput, type NativePayloadSourceSnapshot } from "@paperclipai/shared";
 import { conflict, forbidden, notFound, unprocessable } from "../errors.js";
 import { isUniqueViolation } from "../db-errors.js";
 import { insertRowsInChunks } from "./batch-insert.js";
@@ -16,6 +17,68 @@ import { assertHumanAuthentication } from "../auth/authenticator-assurance.js";
 import { assertDirectInputSessionCurrent, directHumanPayloadSnapshotSql } from "./native-direct-input.js";
 import { persistActivity, publishActivity, type ActivityPublication } from "./activity-log.js";
 import { logger } from "../middleware/logger.js";
+import type { NativeAwModelOutputCapture } from "./native-runtime/native-execution-input.js";
+
+type DocumentTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+/** Persist the exact AW dispatch alongside the source closure captured by the
+ * Native run. It remains useful evidence only when all current source owners
+ * continue to validate the retained inputs. */
+async function persistNativeAwDocumentCapture(tx: DocumentTx, input: {
+  companyId: string; issueId: string; documentId: string; revisionId: string; runId: string;
+  capture: NativeAwModelOutputCapture;
+}) {
+  const capture = input.capture;
+  if (capture.runId !== input.runId || capture.dispatch.runId !== input.runId ||
+    capture.dispatch.kind !== "worker_model_dispatch" ||
+    !nativePayloadSourceInputSchema.safeParse(capture.dispatch).success ||
+    capture.dispatch.callId !== `aw-draft:${input.runId}` ||
+    !capture.sourceSet.inputs.some(source => source.kind === "task" && source.issueId === input.issueId))
+    throw forbidden("The Native draft output capture is not bound to its Task and run");
+  const [run] = await tx.select().from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId),
+    eq(heartbeatRuns.nativeIssueId, input.issueId), eq(heartbeatRuns.runtimeMode, "native"),
+  )).for("share");
+  const profile = run?.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson)
+    ? run.runnerProfileJson as Record<string, unknown> : null;
+  const receipt = profile && nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+  const intents = profile?.nativeAwModelWireIntents;
+  const intent = Array.isArray(intents) ? intents.find((value) => value && typeof value === "object" && !Array.isArray(value) &&
+    (value as Record<string, unknown>).reservationId === capture.dispatch.reservationId) as Record<string, unknown> | undefined : undefined;
+  const [reservation] = await tx.select().from(orchestrationModelReservations).where(and(
+    eq(orchestrationModelReservations.companyId, input.companyId),
+    eq(orchestrationModelReservations.id, capture.dispatch.reservationId),
+    eq(orchestrationModelReservations.purpose, "worker_model"),
+    eq(orchestrationModelReservations.status, "completed"),
+  )).for("share");
+  const bootstrap = receipt?.success ? receipt.data.bootstrap : null;
+  if (!run || !receipt?.success || !intent || !reservation ||
+    reservation.inputHash !== capture.dispatch.requestHash || reservation.providerResponseHash !== capture.dispatch.responseHash ||
+    reservation.idempotencyKey !== `worker-model:${input.runId}:${capture.dispatch.callId}` ||
+    intent.callId !== capture.dispatch.callId || intent.requestHash !== capture.dispatch.requestHash ||
+    intent.wireBodyHash !== capture.dispatch.wireBodyHash || intent.endpoint !== "https://api.anthropic.com/v1/messages" ||
+    intent.method !== "POST" ||
+    JSON.stringify(bootstrap.policy) !== JSON.stringify(capture.sourceSet.policy) ||
+    JSON.stringify(bootstrap.inputs) !== JSON.stringify(capture.sourceSet.inputs))
+    throw forbidden("The Native draft source or exact wire receipt changed before document capture");
+
+  const inputs = [...capture.sourceSet.inputs, capture.dispatch];
+  const parsedInputs = nativePayloadSourceInputSchema.array().safeParse(inputs);
+  if (!parsedInputs.success) throw forbidden("The Native draft source set is malformed");
+  const value = sql`jsonb_build_object('version',1,'owner',jsonb_build_object(
+    'kind','document_revision','companyId',${documentRevisions.companyId}::text,'id',${documentRevisions.id}::text,
+    'contentHash',public.aw_native_payload_body_hash('document_revision',to_jsonb(${documentRevisions}))),
+    'policy',${JSON.stringify(capture.sourceSet.policy)}::jsonb,'inputs',${JSON.stringify(parsedInputs.data)}::jsonb)`;
+  const snapshot = sql`(with captured as (select ${value} as value)
+    select value || jsonb_build_object('digest',encode(sha256(convert_to(value::text,'UTF8')),'hex')) from captured)`;
+  const [stored] = await tx.update(documentRevisions).set({ payloadSourceSnapshot: snapshot })
+    .where(and(eq(documentRevisions.companyId, input.companyId), eq(documentRevisions.id, input.revisionId),
+      eq(documentRevisions.documentId, input.documentId), eq(documentRevisions.payloadSourceProtocolVersion, 1),
+      isNull(documentRevisions.payloadSourceSnapshot), eq(documentRevisions.payloadSourceSnapshotInvalidated, false)))
+    .returning({ payloadSourceSnapshot: documentRevisions.payloadSourceSnapshot });
+  if (!stored?.payloadSourceSnapshot || !nativePayloadSourceSnapshotSchema.safeParse(stored.payloadSourceSnapshot).success)
+    throw forbidden("The Native draft output source snapshot could not be stored");
+}
 
 /** Selected native revision data, separate from every public document DTO.
  * A matching rendition and hash identify input bytes, never current access. */
@@ -245,8 +308,12 @@ export function documentService(db: Db) {
       lockedDocumentStrategy?: "conflict" | "create_new_document";
       /** Actual request actor; author attribution alone is not input capture. */
       manualInputActor?: AuthorizationActor;
+      /** Server-only output witness supplied by the fixed AW text backend. */
+      nativeAwOutputCapture?: NativeAwModelOutputCapture;
     }) => {
       const candidate = input.manualInputActor;
+      if (input.nativeAwOutputCapture && (candidate || !input.createdByRunId || !input.createdByAgentId))
+        throw forbidden("The AW Native output capture requires its original agent run");
       const manualActor = candidate?.type === "board" && candidate.source === "session" && candidate.userId && candidate.sessionId &&
         candidate.userId === input.createdByUserId && !candidate.runId && !input.createdByAgentId && !input.createdByRunId &&
         !input.baseRevisionId && input.lockedDocumentStrategy !== "create_new_document" ? { ...candidate } : null;
@@ -355,6 +422,7 @@ export function documentService(db: Db) {
                     companyId: issue.companyId,
                     documentId: document.id,
                     revisionNumber: 1,
+                    ...(input.nativeAwOutputCapture ? { payloadSourceProtocolVersion: 1 } : {}),
                     title: input.title ?? null,
                     format: input.format,
                     body: input.body,
@@ -365,6 +433,11 @@ export function documentService(db: Db) {
                     createdAt: now,
                   })
                   .returning();
+
+                if (input.nativeAwOutputCapture) await persistNativeAwDocumentCapture(tx, {
+                  companyId: issue.companyId, issueId: issue.id, documentId: document.id, revisionId: revision.id,
+                  runId: input.createdByRunId!, capture: input.nativeAwOutputCapture,
+                });
 
                 await tx
                   .update(documents)
@@ -435,6 +508,7 @@ export function documentService(db: Db) {
                 companyId: issue.companyId,
                 documentId: existing.id,
                 revisionNumber: nextRevisionNumber,
+                  ...(input.nativeAwOutputCapture ? { payloadSourceProtocolVersion: 1 } : {}),
                 title: input.title ?? null,
                 format: input.format,
                 body: input.body,
@@ -445,6 +519,11 @@ export function documentService(db: Db) {
                 createdAt: now,
               })
               .returning();
+
+            if (input.nativeAwOutputCapture) await persistNativeAwDocumentCapture(tx, {
+              companyId: issue.companyId, issueId: issue.id, documentId: existing.id, revisionId: revision.id,
+              runId: input.createdByRunId!, capture: input.nativeAwOutputCapture,
+            });
 
             await tx
               .update(documents)
@@ -518,7 +597,7 @@ export function documentService(db: Db) {
               companyId: issue.companyId,
               documentId: document.id,
               revisionNumber: 1,
-              ...(manualActor ? { payloadSourceProtocolVersion: 1 } : {}),
+              ...(manualActor || input.nativeAwOutputCapture ? { payloadSourceProtocolVersion: 1 } : {}),
               title: input.title ?? null,
               format: input.format,
               body: input.body,
@@ -529,6 +608,11 @@ export function documentService(db: Db) {
               createdAt: now,
             })
             .returning();
+
+          if (input.nativeAwOutputCapture) await persistNativeAwDocumentCapture(tx, {
+            companyId: issue.companyId, issueId: issue.id, documentId: document.id, revisionId: revision.id,
+            runId: input.createdByRunId!, capture: input.nativeAwOutputCapture,
+          });
 
           await tx
             .update(documents)

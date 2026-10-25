@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createLocalAgentJwt, createSandboxExecJwt, verifyLocalAgentJwt, verifySandboxExecJwt } from "../agent-auth-jwt.js";
+import { createLocalAgentJwt, createSandboxBrokerJwt, createSandboxExecJwt, verifyLocalAgentJwt, verifySandboxBrokerJwt, verifySandboxExecJwt } from "../agent-auth-jwt.js";
 
 describe("agent local JWT", () => {
   const secretEnv = "PAPERCLIP_AGENT_JWT_SECRET";
@@ -103,6 +103,65 @@ describe("agent local JWT", () => {
     const tampered = JSON.parse(Buffer.from(body!, "base64url").toString("utf8"));
     tampered.sandbox_exec.commandDigest = "d".repeat(64);
     expect(verifySandboxExecJwt(`${header}.${Buffer.from(JSON.stringify(tampered)).toString("base64url")}.${signature}`)).toBeNull();
+  });
+
+  it("does not allow dedicated sandbox capabilities through legacy master-secret fallback or another instance", () => {
+    const claim = {
+      requestId: "11111111-1111-4111-8111-111111111111",
+      bindingId: "22222222-2222-4222-8222-222222222222",
+      cellId: "33333333-3333-4333-8333-333333333333",
+      generation: "7", hostId: "44444444-4444-4444-8444-444444444444", hostEpoch: 9,
+      runId: "55555555-5555-4555-8555-555555555555", attemptId: null, attempt: 1,
+      manifestId: "77777777-7777-4777-8777-777777777777", manifestHash: "a".repeat(64),
+      policySnapshotId: "88888888-8888-4888-8888-888888888888", policyHash: "b".repeat(64),
+      commandDigest: "c".repeat(64), deadlineAt: new Date(Date.now() + 30_000).toISOString(),
+    };
+    process.env.PAPERCLIP_INSTANCE_ID = "sandbox-capability-other-instance";
+    const forkToken = createSandboxExecJwt({
+      agentId: "agent-1", companyId: "company-1", adapterType: "paperclip_runner", runId: claim.runId,
+      responsibleUserId: "user-1", claim, parentExpiresAt: new Date(Date.now() + 60_000),
+      nativeLeaseExpiresAt: new Date(Date.now() + 45_000),
+    })!;
+    process.env.PAPERCLIP_INSTANCE_ID = "sandbox-capability-current-instance";
+    expect(verifySandboxExecJwt(forkToken)).toBeNull();
+
+    const [header, body] = forkToken.split(".");
+    const signingInput = `${header}.${body}`;
+    const legacySignature = createHmac("sha256", process.env.PAPERCLIP_AGENT_JWT_SECRET!)
+      .update(signingInput).digest("base64url");
+    expect(verifySandboxExecJwt(`${signingInput}.${legacySignature}`)).toBeNull();
+  });
+
+  it("issues a short sandbox broker capability bound to an exact gateway destination and rejects API auth", () => {
+    const now = new Date("2026-01-01T00:00:00.000Z");
+    vi.setSystemTime(now);
+    const claim = {
+      parentRequestId: "11111111-1111-4111-8111-111111111111",
+      bindingId: "22222222-2222-4222-8222-222222222222",
+      cellId: "33333333-3333-4333-8333-333333333333",
+      generation: "7", hostId: "44444444-4444-4444-8444-444444444444", hostEpoch: 9,
+      runId: "55555555-5555-4555-8555-555555555555", attemptId: null, attempt: 1,
+      manifestId: "77777777-7777-4777-8777-777777777777", manifestHash: "a".repeat(64),
+      policySnapshotId: "88888888-8888-4888-8888-888888888888", policyHash: "b".repeat(64),
+      brokerSessionId: "99999999-9999-4999-8999-999999999999", endpointOrigin: "https://paperclip.example/",
+      bindings: [{ connectionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", grantVersionHash: "c".repeat(64), gatewayPublicId: "assigned-gateway", endpointPath: "/mcp/gateways/assigned-gateway", allowedTools: ["read_issue"], destination: { hostname: "api.example.com", port: 443, method: "POST" as const, path: "/v1/read" } }],
+      expiresAt: new Date(now.getTime() + 30_000).toISOString(),
+    };
+    const token = createSandboxBrokerJwt({
+      agentId: "agent-1", companyId: "company-1", adapterType: "paperclip_runner", runId: claim.runId,
+      responsibleUserId: "user-1", claim,
+      parentExpiresAt: new Date(now.getTime() + 60_000), nativeLeaseExpiresAt: new Date(now.getTime() + 45_000),
+      execDeadlineAt: new Date(now.getTime() + 40_000),
+    });
+    expect(token).toBeTruthy();
+    expect(verifyLocalAgentJwt(token!)).toBeNull();
+    expect(verifySandboxExecJwt(token!)).toBeNull();
+    expect(verifySandboxBrokerJwt(token!)).toMatchObject({ purpose: "sandbox_broker", aud: "paperclip-sandbox-broker", sandbox_broker: claim, exp: Math.floor((now.getTime() + 30_000) / 1000) });
+    const [header, body] = token!.split(".");
+    const signingInput = `${header}.${body}`;
+    const legacySignature = createHmac("sha256", process.env.PAPERCLIP_AGENT_JWT_SECRET!)
+      .update(signingInput).digest("base64url");
+    expect(verifySandboxBrokerJwt(`${signingInput}.${legacySignature}`)).toBeNull();
   });
 
   it("round-trips a skill_test run scope", () => {

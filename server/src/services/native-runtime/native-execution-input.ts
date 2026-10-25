@@ -56,6 +56,69 @@ export type NativeBootstrapSourceClosure = {
   taskEnvelopeDigest: string;
 };
 
+/** Server-only AW document capture. The model call identity and hashes are
+ * observations; source authority still comes from sourceSet and its owners. */
+export type NativeAwModelOutputCapture = {
+  runId: string;
+  sourceSet: NativePayloadSourceSet;
+  dispatch: Extract<NativePayloadSourceInput, { kind: "worker_model_dispatch" }>;
+};
+
+/** Capture only the closed no-comment Task wake profile. Any additional wake
+ * source, annotation, interaction, continuation or unclassified key stays
+ * unknown and prevents the bootstrap source set from closing. */
+export function captureNativeTaskWakeSource(input: {
+  runId: string;
+  issueId: string;
+  sourceVersion: string;
+  task: { id: string; identifier: string | null; title: string; description: string | null; status: string;
+    priority: string; workMode: string };
+  payload: unknown;
+}): Extract<NativePayloadSourceInput, { kind: "native_task_wake" }> | null {
+  if (!/^[0-9a-f-]{36}$/.test(input.runId) || !/^[0-9a-f-]{36}$/.test(input.issueId) ||
+    !input.sourceVersion || input.task.id !== input.issueId || !input.payload || typeof input.payload !== "object" || Array.isArray(input.payload))
+    return null;
+  const payload = input.payload as Record<string, unknown>;
+  const keys = ["reason", "executionContinuation", "attachmentOmissions", "externalChatProvider", "recovery", "issue",
+    "agentMessage", "childIssueSummaries", "childIssueSummaryTruncated", "dispositionRepair", "livenessContinuation",
+    "interactionKind", "interactionStatus", "interactionId", "sourceRunId", "externalChatQuestionResponse",
+    "externalInteractionContinuation", "checkboxSelection", "checkedOutByHarness", "externalChatExecutionBound",
+    "simplifiedEnglishInteractions", "dependencyBlockedInteraction", "treeHoldInteraction", "activeTreeHold",
+    "unresolvedBlockerIssueIds", "unresolvedBlockerSummaries", "executionStage", "taskWatchdog", "skillTest",
+    "continuationSummary", "commentIds", "latestCommentId", "comments", "annotationDeltas", "planReviewContext",
+    "documentReviewContext", "commentWindow", "truncated", "fallbackFetchNeeded"].sort();
+  if (JSON.stringify(Object.keys(payload).sort()) !== JSON.stringify(keys)) return null;
+  const issue = payload.issue;
+  if (!issue || typeof issue !== "object" || Array.isArray(issue)) return null;
+  const wakeIssue = issue as Record<string, unknown>;
+  const issueKeys = ["id", "identifier", "title", "description", "descriptionTruncated", "status", "priority", "workMode"].sort();
+  if (JSON.stringify(Object.keys(wakeIssue).sort()) !== JSON.stringify(issueKeys) ||
+    JSON.stringify({ id: wakeIssue.id, identifier: wakeIssue.identifier, title: wakeIssue.title,
+      description: wakeIssue.description, status: wakeIssue.status, priority: wakeIssue.priority, workMode: wakeIssue.workMode }) !==
+    JSON.stringify(input.task) || wakeIssue.descriptionTruncated !== false) return null;
+  const emptyObject = (value: unknown) => value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0;
+  if ((payload.reason !== null && typeof payload.reason !== "string") || payload.executionContinuation !== null ||
+    !Array.isArray(payload.attachmentOmissions) || payload.attachmentOmissions.length !== 0 || payload.externalChatProvider !== null ||
+    payload.recovery !== null || payload.agentMessage !== null || !Array.isArray(payload.childIssueSummaries) || payload.childIssueSummaries.length !== 0 ||
+    payload.childIssueSummaryTruncated !== false || payload.dispositionRepair !== null || payload.livenessContinuation !== null ||
+    payload.interactionKind !== null || payload.interactionStatus !== null || payload.interactionId !== null || payload.sourceRunId !== null ||
+    payload.externalChatQuestionResponse !== null || payload.externalInteractionContinuation !== false || payload.checkboxSelection !== null ||
+    payload.checkedOutByHarness !== false || payload.externalChatExecutionBound !== false || payload.simplifiedEnglishInteractions !== false ||
+    payload.dependencyBlockedInteraction !== false || payload.treeHoldInteraction !== false || !emptyObject(payload.activeTreeHold) ||
+    !Array.isArray(payload.unresolvedBlockerIssueIds) || payload.unresolvedBlockerIssueIds.length !== 0 ||
+    !Array.isArray(payload.unresolvedBlockerSummaries) || payload.unresolvedBlockerSummaries.length !== 0 || payload.executionStage !== null ||
+    payload.taskWatchdog !== null || payload.skillTest !== null || payload.continuationSummary !== null ||
+    !Array.isArray(payload.commentIds) || payload.commentIds.length !== 0 || payload.latestCommentId !== null ||
+    !Array.isArray(payload.comments) || payload.comments.length !== 0 || !Array.isArray(payload.annotationDeltas) || payload.annotationDeltas.length !== 0 ||
+    payload.planReviewContext !== null || payload.documentReviewContext !== null || payload.truncated !== false || payload.fallbackFetchNeeded !== false)
+    return null;
+  const commentWindow = payload.commentWindow;
+  if (!commentWindow || typeof commentWindow !== "object" || Array.isArray(commentWindow) ||
+    JSON.stringify(commentWindow) !== JSON.stringify({ requestedCount: 0, includedCount: 0, missingCount: 0 })) return null;
+  return { kind: "native_task_wake", runId: input.runId, issueId: input.issueId,
+    sourceVersion: input.sourceVersion, contentHash: createHash("sha256").update(JSON.stringify(payload), "utf8").digest("hex") };
+}
+
 /** Resolve only references emitted by the real Markdown renderer. Missing,
  * ambiguous, unsupported, or source-history-unknown references stay unknown. */
 export function buildNativeBootstrapSourceSet(input: {

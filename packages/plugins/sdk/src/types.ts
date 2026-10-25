@@ -590,6 +590,7 @@ export type ResourceLifecycleEvent = {
 } & (
   | { resourceType: "agent"; action: "create" | "pause" | "resume" | "terminate" }
   | { resourceType: "project"; action: "create" | "update" | "archive" | "delete" }
+  | { resourceType: "agent_runtime"; action: "update" | "delete" }
 );
 
 export interface ResourceLifecycleResult {

@@ -33,6 +33,8 @@ If a task cannot reopen its saved workspace, ask a project owner to check your c
 
 If the saved source or history cannot be recovered, contact [human support](/help/index) with the task identifier and the message shown on screen.
 
+If workspace cleanup reports that files were kept, ask the project owner to review them before removing the workspace.
+
 ## When a stop is pending
 
 Keep the task open while a stop action is pending. Wait for the run and task status to update. If the page reports an unknown outcome, refresh the original task and inspect its latest run before sending another instruction or starting replacement work.

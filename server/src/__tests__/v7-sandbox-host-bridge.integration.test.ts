@@ -1,7 +1,10 @@
 import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
-import { constants, generateKeyPairSync, privateDecrypt, randomUUID } from "node:crypto";
+import { constants, createHash, generateKeyPairSync, privateDecrypt, randomBytes, randomUUID, sign } from "node:crypto";
+import { createServer } from "node:http";
+import { once } from "node:events";
 import express from "express";
 import request from "supertest";
+import { WebSocket } from "ws";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import {
@@ -14,6 +17,7 @@ import {
   billingSubscriptions,
   companyMemberships,
   createDb,
+  environmentLeases,
   runtimeCells,
   runtimeOperations,
   heartbeatRuns,
@@ -21,10 +25,11 @@ import {
   runtimeCapacityProfiles,
   runtimeHostCommands,
   runtimeHosts,
+  runtimeHostRequestNonces,
   runtimeSandboxBindings,
   runtimeVersionCatalog,
 } from "@paperclipai/db";
-import { PROVIDER_CAPABILITY_FEATURES, SANDBOX_CONTROLS, SANDBOX_HOST_COMMAND, sandboxCapabilitySnapshotSchema } from "@paperclipai/shared";
+import { PROVIDER_CAPABILITY_FEATURES, SANDBOX_CONTROLS, SANDBOX_HOST_COMMAND, runtimeRequestSigningInput, sandboxCapabilitySnapshotSchema } from "@paperclipai/shared";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -47,9 +52,18 @@ import { discoverNativeCapabilities } from "../services/native-provider-conforma
 import { runtimeControlService } from "../services/runtime/control.js";
 import { errorHandler } from "../middleware/index.js";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
+import { environmentRuntimeService } from "../services/environment-runtime.js";
+import { verifyLocalAgentJwt, verifySandboxExecJwt } from "../agent-auth-jwt.js";
 
 const support = await getEmbeddedPostgresTestSupport();
 const image = "fixture.invalid/openshell@sha256:" + "a".repeat(64);
+function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof generateKeyPairSync>["privateKey"]) {
+  const fields = { hostId, epoch: 1, timestamp: String(Date.now()), nonce: randomBytes(32).toString("base64url") };
+  const raw = Buffer.from(JSON.stringify({ hostId, epoch: 1 }));
+  const message = runtimeRequestSigningInput("WS", "/api/internal/runtime/relay", createHash("sha256").update(raw).digest("hex"), fields);
+  const signature = sign("sha256", Buffer.from(message), { key: privateKey, padding: constants.RSA_PKCS1_PSS_PADDING, saltLength: 32 }).toString("base64url");
+  return { proof: { ...fields, signature }, nonce: fields.nonce };
+}
 (support.supported ? describe : describe.skip)(
   "native signed OpenShell command lane",
   () => {
@@ -584,7 +598,7 @@ const image = "fixture.invalid/openshell@sha256:" + "a".repeat(64);
       const features = Object.fromEntries(PROVIDER_CAPABILITY_FEATURES.map(key => [key, false])) as Record<(typeof PROVIDER_CAPABILITY_FEATURES)[number], boolean>;
       await providerService.recordDiscovery(f.home, presence.id, { provider: "paperclip_native", version: "ci-software-fixture", features, skills: [], tools: [], discoveredAt: new Date().toISOString() }, { connect: true, identity: true, start: true, stream: true, wait: true, cancel: true, memoryScoping: true });
       const [task] = await db.insert(issues).values({ companyId: f.home, title: "Run through the qualified sandbox", status: "in_progress", assigneeAgentId: presence.id, responsibleUserId: f.userId }).returning();
-      const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: presence.id, status: "running", runtimeMode: "native", runtimeModeResolvedAt: new Date(), nativeIssueId: task!.id, responsibleUserId: f.userId, contextSnapshot: { issueId: task!.id } }).returning();
+      const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: presence.id, status: "running", startedAt: new Date(), runtimeMode: "native", runtimeModeResolvedAt: new Date(), nativeIssueId: task!.id, responsibleUserId: f.userId, contextSnapshot: { issueId: task!.id } }).returning();
       await db.update(issues).set({ executionRunId: run!.id }).where(eq(issues.id, task!.id));
       const manifest = await agentRuntimeFabricService(db).prepare({ companyId: f.home, agentId: presence.id, runId: run!.id, responsibleUserId: f.userId, issueId: task!.id, query: task!.title });
       expect(manifest).toBeTruthy();
@@ -634,17 +648,97 @@ const image = "fixture.invalid/openshell@sha256:" + "a".repeat(64);
       expect(admitted.binding).toMatchObject({ status: "running", version: 5 });
       expect((await db.select().from(runtimeCells).where(eq(runtimeCells.id, admissionCell!.id)))[0]).toMatchObject({ status: "HEALTHY" });
       expect((await db.select().from(runtimeOperations).where(eq(runtimeOperations.runtimeCellId, admissionCell!.id))).map(row => [row.operationType, row.status])).toEqual([["start", "SUCCEEDED"]]);
+      const previousJwtSecret = process.env.PAPERCLIP_AGENT_JWT_SECRET;
+      process.env.PAPERCLIP_AGENT_JWT_SECRET = "v7-sandbox-exec-software-fixture-secret";
+      const relayServer = createServer();
+      runtime.relay.attach(relayServer);
+      relayServer.listen(0, "127.0.0.1");
+      await once(relayServer, "listening");
+      await runtime.relay.listen(0);
+      const relayHost = new WebSocket(`ws://127.0.0.1:${(relayServer.address() as import("node:net").AddressInfo).port}/api/internal/runtime/relay`);
+      let stopResult: any = null;
+      try {
+        await once(relayHost, "open");
+        const relayProof = signedRuntimeRelayProof(host!.id, keys.privateKey);
+        relayHost.send(JSON.stringify({ type: "hello", proof: relayProof.proof }));
+        let authenticated = false;
+        for (let index = 0; index < 100; index++) {
+          if ((await db.select({ nonce: runtimeHostRequestNonces.nonce }).from(runtimeHostRequestNonces).where(eq(runtimeHostRequestNonces.nonce, relayProof.nonce))).length) { authenticated = true; break; }
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        expect(authenticated).toBe(true);
+        const [lease] = await db.insert(environmentLeases).values({
+          companyId: f.home, issueId: task!.id, heartbeatRunId: run!.id, status: "active",
+          expiresAt: new Date(Date.now() + 60000), metadata: { driver: "sandbox" },
+        }).returning();
+        const environmentRuntime = environmentRuntimeService(db, { executeSandboxTask: runtime.executeSandboxTask });
+        const executionEnvironment = { id: randomUUID(), driver: "sandbox", config: {}, envVars: {}, metadata: null } as any;
+        const executeThroughAdapter = () => environmentRuntime.execute({
+          environment: executionEnvironment,
+          lease: lease as any,
+          command: "node", args: ["-e", "process.stdout.write('fixture')"], cwd: "/workspace", timeoutMs: 10000,
+          onLog: async (stream, chunk) => { streamed.push([stream, chunk]); },
+        });
+        const streamed: Array<[string, string]> = [];
+        const firstFrame = new Promise<Record<string, any>>(resolve => relayHost.on("message", raw => {
+          const message = JSON.parse(raw.toString());
+          if (message.type === "exec_open") resolve(message);
+        }));
+        const firstExecution = executeThroughAdapter();
+        const firstCommand = await firstFrame;
+        const execClaims = verifySandboxExecJwt(firstCommand.capabilityToken);
+        expect(verifyLocalAgentJwt(firstCommand.capabilityToken)).toBeNull();
+        expect(execClaims?.sandbox_exec).toMatchObject({
+          requestId: firstCommand.request.requestId, bindingId: sandboxBinding.id, cellId: admissionCell!.id,
+          runId: run!.id, manifestId: manifest!.record.id, manifestHash: manifest!.record.hash,
+          policySnapshotId: compiled.id,
+        });
+        relayHost.send(JSON.stringify({ type: "exec_output", channelId: firstCommand.channelId, stream: "stdout", base64: Buffer.from("Task output").toString("base64") }));
+        relayHost.send(JSON.stringify({ type: "exec_exit", channelId: firstCommand.channelId, exitCode: 0, timedOut: false }));
+        await expect(firstExecution).resolves.toMatchObject({ exitCode: 0, stdout: "Task output", stderr: "" });
+        expect(streamed).toEqual([["stdout", "Task output"]]);
+        const [successfulExecClaim] = await db.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.idempotencyKey, firstCommand.request.requestId));
+        expect(successfulExecClaim).toMatchObject({ status: "SUCCEEDED", safeResult: { exitCode: 0, timedOut: false } });
+        expect(JSON.stringify(successfulExecClaim?.safeResult)).not.toContain("Task output");
+        await expect(runtime.relay.executeOpenShell({
+          cellId: admissionCell!.id, generation: admissionCell!.generation.toString(), request: firstCommand.request,
+          capabilityToken: firstCommand.capabilityToken, onOutput: () => {},
+        })).rejects.toThrow();
+
+        const secondFrame = new Promise<Record<string, any>>(resolve => relayHost.on("message", raw => {
+          const message = JSON.parse(raw.toString());
+          if (message.type === "exec_open") resolve(message);
+        }));
+        const uncertainExecution = executeThroughAdapter();
+        const uncertainCommand = await secondFrame;
+        const relayClosed = once(relayHost, "close");
+        relayHost.terminate();
+        await relayClosed;
+        await expect(uncertainExecution).rejects.toThrow("runtime_unavailable");
+        const [uncertainClaim] = await db.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.idempotencyKey, uncertainCommand.request.requestId));
+        expect(uncertainClaim?.status).toBe("CLAIMED");
+        await expect(executeThroughAdapter()).rejects.toThrow("previous sandbox execution");
+
+        const service = executionSandboxService(db, {
+          ...serviceOptions,
+          recordRuntimeWorkloadState: (tx, input) => runtime.recordSandboxWorkloadState(tx, input),
+        });
+        stopResult = await driveHost(service.stop(f.actor, f.home, sandboxBinding.id, "fixture-user-stop"), admissionCell!.id);
+        expect(stopResult.binding.status).toBe("stopped");
+        const [quiescedExecClaim] = await db.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.idempotencyKey, uncertainCommand.request.requestId));
+        expect(quiescedExecClaim).toMatchObject({ status: "CANCELED", errorCode: "sandbox_exec_quiesced_by_stop" });
+      } finally {
+        relayHost.terminate();
+        await runtime.relay.stop();
+        await new Promise<void>(resolve => relayServer.close(() => resolve()));
+        if (previousJwtSecret === undefined) delete process.env.PAPERCLIP_AGENT_JWT_SECRET;
+        else process.env.PAPERCLIP_AGENT_JWT_SECRET = previousJwtSecret;
+      }
       await new Promise(resolve => setTimeout(resolve, 5));
-      const service = executionSandboxService(db, {
-        ...serviceOptions,
-        recordRuntimeWorkloadState: (tx, input) => runtime.recordSandboxWorkloadState(tx, input),
-      });
-      const stopped = await driveHost(service.stop(f.actor, f.home, sandboxBinding.id, "fixture-user-stop"), admissionCell!.id);
-      expect(stopped.binding.status).toBe("stopped");
+      expect(stopResult.binding.status).toBe("stopped");
       expect((await db.select().from(runtimeCells).where(eq(runtimeCells.id, admissionCell!.id)))[0]).toMatchObject({ status: "STOPPED", activeSince: null });
       expect((await db.select().from(runtimeOperations).where(eq(runtimeOperations.runtimeCellId, admissionCell!.id))).map(row => [row.operationType, row.status])).toEqual([["start", "SUCCEEDED"], ["stop", "SUCCEEDED"]]);
       expect((await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.home), eq(activityLog.entityId, admissionCell!.id)))).some(event => event.action === "runtime.sandbox_workload_started")).toBe(true);
-      await runtime.relay.stop();
     }, 60000);
     it("rejects a late completion after host fencing and expires bounded pending work", async () => {
       const transport = nativeSandboxHostTransport(db, { operatorUserIds: [f.userId] }),

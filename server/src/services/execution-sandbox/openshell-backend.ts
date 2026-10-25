@@ -1,8 +1,8 @@
-import { sandboxCapabilitySnapshotSchema, type SandboxCapabilitySnapshot, type SandboxPolicy } from "@paperclipai/shared";
+import { sandboxCapabilitySnapshotSchema, type SandboxCapabilitySnapshot, type SandboxPolicy, type SandboxPolicyCompilation } from "@paperclipai/shared";
 import { conflict, forbidden } from "../../errors.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import type { ExecutionSandboxBackend, PreparedSandbox, SandboxIdentity, SandboxObservation, SandboxProbeCase, SandboxProbeResult } from "./backend.js";
-import { compileSandboxPolicy } from "./policy-compiler.js";
+import { compileSandboxPolicy, type ResolvedSandboxBrokerBinding } from "./policy-compiler.js";
 import { projectOpenShellPolicy, type OpenShellPolicyDocument } from "./openshell-policy.js";
 import { checkOpenShellBoundary } from "./openshell-prover.js";
 
@@ -26,6 +26,8 @@ export function openShellBackend(options: {
   identity: SandboxIdentity; boundary: SandboxPolicy; bridge: OpenShellHostBridge;
   evidenceKind?: SandboxCapabilitySnapshot["evidenceKind"];
   prover: { executable: string; executableSha256: string };
+  credentialBrokerOrigin?: string | null;
+  resolveCredentialBrokerBindings?: (policy: SandboxPolicyCompilation) => Promise<{ authorizedConnectionGrantHashes: Record<string, string>; bindings: ResolvedSandboxBrokerBinding[] }>;
 }): ExecutionSandboxBackend {
   const { bridge, identity } = options;
   function scope(input: SandboxIdentity) {
@@ -75,7 +77,8 @@ export function openShellBackend(options: {
       if (!Number.isFinite(Date.parse(input.expiresAt)) || new Date(input.expiresAt) <= new Date()) throw forbidden("Original unexpired execution deadline is required before policy application");
       if (input.policy.proverResult !== "pass" || input.policy.boundaryPolicyHash !== nativeSha256(options.boundary)) throw conflict("An unchanged authoritative boundary and passing compilation are required");
       const currentCaps = await capabilities();
-      const freshCompilation = compileSandboxPolicy({ boundary: options.boundary, candidate: input.policy.compiledPolicy, capabilities: currentCaps, authorizedConnectionGrantHashes: {}, sourcePolicyRefs: input.policy.sourcePolicyRefs });
+      const broker = input.policy.compiledPolicy.credentials.mode === "brokered" ? await options.resolveCredentialBrokerBindings?.(input.policy) : undefined;
+      const freshCompilation = compileSandboxPolicy({ boundary: options.boundary, candidate: input.policy.compiledPolicy, capabilities: currentCaps, authorizedConnectionGrantHashes: broker?.authorizedConnectionGrantHashes ?? {}, credentialBrokerOrigin: options.credentialBrokerOrigin, credentialBrokerBindings: broker?.bindings, sourcePolicyRefs: input.policy.sourcePolicyRefs });
       if (freshCompilation.proverResult !== "pass") throw conflict("OpenShell enforcement qualification changed", { code: "sandbox_current_controls_required" });
       const projection = projectOpenShellPolicy(input.policy.compiledPolicy);
       if (projection.unsupportedFeatures.length) return { applied: false, requiresRecreate: false, observedPolicyHash: null, unsupportedFeatures: projection.unsupportedFeatures };
@@ -100,7 +103,8 @@ export function openShellBackend(options: {
       scoped(input);
       if (input.policy.proverResult !== "pass" || input.policy.boundaryPolicyHash !== nativeSha256(options.boundary) || !Number.isFinite(Date.parse(input.expiresAt)) || new Date(input.expiresAt) <= new Date()) throw forbidden("Current policy and original unexpired execution deadline are required");
       const currentCaps = await capabilities();
-      const freshCompilation = compileSandboxPolicy({ boundary: options.boundary, candidate: input.policy.compiledPolicy, capabilities: currentCaps, authorizedConnectionGrantHashes: {}, sourcePolicyRefs: input.policy.sourcePolicyRefs });
+      const broker = input.policy.compiledPolicy.credentials.mode === "brokered" ? await options.resolveCredentialBrokerBindings?.(input.policy) : undefined;
+      const freshCompilation = compileSandboxPolicy({ boundary: options.boundary, candidate: input.policy.compiledPolicy, capabilities: currentCaps, authorizedConnectionGrantHashes: broker?.authorizedConnectionGrantHashes ?? {}, credentialBrokerOrigin: options.credentialBrokerOrigin, credentialBrokerBindings: broker?.bindings, sourcePolicyRefs: input.policy.sourcePolicyRefs });
       if (freshCompilation.proverResult !== "pass") throw conflict("OpenShell enforcement qualification changed", { code: "sandbox_current_controls_required" });
       const projection = projectOpenShellPolicy(input.policy.compiledPolicy);
       if (projection.unsupportedFeatures.length) throw forbidden("OpenShell cannot enforce every requested control");

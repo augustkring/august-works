@@ -37,6 +37,8 @@ import {
   nativeRunResults,
   agentRuntimeState,
   agentWakeupRequests,
+  companySkills,
+  companySkillVersions,
 } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
@@ -81,6 +83,8 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     for (const drain of activeNativeMemoryRunDrains.splice(0)) await drain();
     await db.delete(activityLog);
     await db.delete(agentRuntimeState);
+    await db.delete(companySkills);
+    await db.delete(companySkillVersions);
     await db.delete(workflows);
     await db.delete(contextManifestItems);
     await db.delete(memoryEvidence);
@@ -181,6 +185,8 @@ describeEmbeddedPostgres("Context Engine integration", () => {
   }) {
     const previousSecret = process.env.PAPERCLIP_AGENT_JWT_SECRET;
     process.env.PAPERCLIP_AGENT_JWT_SECRET = randomUUID();
+    const previousMemorySettings = await instanceSettingsService(db).getExperimental();
+    await instanceSettingsService(db).updateExperimental({ enablePrivateAgentMemoryV1: true });
     let releaseTurn!: () => void;
     let signalTurnStarted!: () => void;
     const turnGate = new Promise<void>((resolve) => { releaseTurn = resolve; });
@@ -195,7 +201,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
         return {
           identity: () => openInput.identity,
           async capabilities() { return { resume: false, typedEvents: true, steering: false, interruption: true, structuredResult: true }; },
-          async *events() {},
+          async *events() { await turnGate; },
           async startTurn() {
             signalTurnStarted();
             await turnGate;
@@ -217,17 +223,26 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       const run = await heartbeat.invoke(input.agentId, "on_demand", { issueId: input.issueId }, "manual",
         { actorType: "user", actorId: input.userId });
       if (!run) throw new Error("Canonical Heartbeat owner did not create the Memory producer run");
+      let backendWaitTimer: ReturnType<typeof setTimeout> | undefined;
       const backendWait = new Promise<never>((_, reject) => {
         const timer = setTimeout(() => reject(new Error("Canonical Heartbeat run did not reach its native backend")), 15_000);
+        backendWaitTimer = timer;
         timer.unref();
       });
-      await Promise.race([turnStarted, backendWait]);
+      try {
+        await Promise.race([turnStarted, backendWait]);
+      } finally {
+        if (backendWaitTimer) clearTimeout(backendWaitTimer);
+      }
 
       const currentRunRows = await db.select({ id: heartbeatRuns.id, status: heartbeatRuns.status,
+        runtimeMode: heartbeatRuns.runtimeMode, nativeIssueId: heartbeatRuns.nativeIssueId,
+        responsibleUserId: heartbeatRuns.responsibleUserId,
         activeIdentityContextId: heartbeatRuns.activeIdentityContextId }).from(heartbeatRuns)
         .where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.agentId, input.agentId)));
       const returnedRun = currentRunRows.find((candidate) => candidate.id === run.id);
-      if (returnedRun?.status !== "running")
+      if (returnedRun?.status !== "running" || returnedRun.runtimeMode !== "native" ||
+        returnedRun.nativeIssueId !== input.issueId || returnedRun.responsibleUserId !== input.userId)
         throw new Error(`Canonical Memory producer run is not active: ${JSON.stringify({returnedRun, currentRunRows})}`);
 
       const token = createLocalAgentJwt(input.agentId, input.companyId, "paperclip_runner", run.id, input.userId);
@@ -253,9 +268,16 @@ describeEmbeddedPostgres("Context Engine integration", () => {
           observedAt: input.observedAt.toISOString(), expiresAt: input.expiresAt?.toISOString() ?? null,
           idempotencyKey: randomUUID() } });
       if (result.status !== "completed" || !result.result || typeof result.result !== "object" ||
-        !("record" in result.result) || !(result.result as { record?: { id?: string } }).record?.id)
-        throw new Error("The real Tool Gateway Memory producer returned no record");
-      const recordId = (result.result as { record: { id: string } }).record.id;
+        !("data" in result.result) || typeof (result.result as { data?: unknown }).data !== "object" ||
+        !("record" in ((result.result as { data: Record<string, unknown> }).data)) ||
+        !((result.result as { data: { record?: { id?: string } } }).data.record?.id))
+        throw new Error(`The real Tool Gateway Memory producer returned no record: ${JSON.stringify({
+          status: result.status, reasonCode: "reasonCode" in result ? result.reasonCode : null,
+          resultKeys: result.result && typeof result.result === "object" ? Object.keys(result.result) : [],
+          dataKeys: result.result && typeof result.result === "object" && "data" in result.result &&
+            result.result.data && typeof result.result.data === "object" ? Object.keys(result.result.data) : [],
+        })}`);
+      const recordId = (result.result as { data: { record: { id: string } } }).data.record.id;
       const [record] = await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, input.companyId),
         eq(memoryRecords.id, recordId)));
       if (!record) throw new Error("The real Tool Gateway Memory producer record was not persisted");
@@ -282,6 +304,9 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       }
       if (previousSecret === undefined) delete process.env.PAPERCLIP_AGENT_JWT_SECRET;
       else process.env.PAPERCLIP_AGENT_JWT_SECRET = previousSecret;
+      await instanceSettingsService(db).updateExperimental({
+        enablePrivateAgentMemoryV1: previousMemorySettings.enablePrivateAgentMemoryV1,
+      });
     }
   }
 
@@ -320,20 +345,26 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     const human=await seedCurrentHumanSourceActor(db,[input.companyId],userId);
     if(human.type!=="board"||human.source!=="session"||!human.userId)throw new Error("Canonical Memory Human fixture lacks its verified session");
     if(scope==="company"){
-      // Shared Memory comes from the supported Human authoring path. Its
-      // evidence is an explicit Human-entered source, not an Agent Run or a
-      // manufactured native qualification receipt.
+      // Shared Memory uses a current, canonical Human-authored Task as its
+      // evidence source; no synthetic/manual URI stands in for source access.
       await db.insert(principalPermissionGrants).values({companyId:input.companyId,principalType:"agent",principalId:input.agentId,
         permissionKey:"company_scope:read"}).onConflictDoNothing();
+      await db.insert(principalPermissionGrants).values({companyId:input.companyId,principalType:"user",principalId:userId,
+        permissionKey:"company_scope:read"}).onConflictDoNothing();
+      const sourceTask=await issueService(db).create(input.companyId,{
+        title:`Human Memory evidence ${randomUUID()}`,description:`${input.content}\n\nThis is the source Task for the reviewed Memory candidate.`,
+        createdByUserId:userId,responsibleUserId:userId,
+      },db,undefined,{manualInputActor:human,privacyActor:human,sourceAccessActor:human});
       const humanActor={principal:{type:"user" as const,userId},authorizationActor:human};
       const candidate=await memoryService(db).createCandidate(input.companyId,{
         bindingId:binding!.id,memoryType:"lesson",scope:{type:"company",id:null},subject:{type:"company",id:input.companyId},
         ownerAgentId:null,title:null,content:input.content,summary:null,sensitivity:input.sensitivity??"internal",importance:50,
         confidenceScore:0.8,validFrom:null,validUntil:null,observedAt:observedAt.toISOString(),retentionPolicy:"standard",
         expiresAt:input.expiresAt?.toISOString()??null,createdByOperationId:null,metadata:{},evidence:[{
-          sourceClass:"task",sourceProvider:"native_orchestration_fixture",sourceType:"human_input",sourceRef:`manual://${randomUUID()}`,
-          sourceVersion:"1",sourceUpdatedAt:null,observedAt:observedAt.toISOString(),
-          excerptHash:createHash("sha256").update(input.content).digest("hex"),citation:{label:"Current Human fixture input"},
+          sourceClass:"task",sourceProvider:"august_works_tasks",sourceType:"issue",sourceRef:`issue://${sourceTask.id}`,
+          sourceVersion:sourceTask.updatedAt.toISOString(),sourceUpdatedAt:sourceTask.updatedAt.toISOString(),observedAt:observedAt.toISOString(),
+          excerptHash:createHash("sha256").update(JSON.stringify({id:sourceTask.id,updatedAt:sourceTask.updatedAt.toISOString()})).digest("hex"),
+          citation:{label:`${sourceTask.identifier}: ${sourceTask.title}`},
           trustLevel:"low",relation:"supports"}],
       },humanActor);
       let record=candidate.record;

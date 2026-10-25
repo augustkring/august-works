@@ -583,6 +583,58 @@ describeEmbeddedPostgres("tool gateway acceptance", () => {
     await tempDb?.cleanup();
   });
 
+  it("resolves broker bindings from the current run grant and assigned gateway without returning secrets", async () => {
+    const company = await createCompany(db);
+    const agent = await createAgent(db, company.id);
+    const { application, connection, catalogEntry } = await createRemoteMcpTool(db, company.id, {
+      url: "https://mcp.example.test/mcp", toolName: "read_record", riskLevel: "read",
+    });
+    const toolName = expectedConnectedToolName({ applicationKey: application.applicationKey, connectionId: connection.id, toolName: catalogEntry.toolName });
+    await allowToolsForAgent(db, company.id, agent.id, [toolName]);
+    const { project, issue, run } = await createIssueAndRun(db, company.id, agent.id);
+    const responsibleUserId = `user-${randomUUID()}`;
+    const presenceId = randomUUID();
+    await createActiveMember(db, company.id, responsibleUserId);
+    await db.update(heartbeatRuns).set({ nativeIssueId: issue.id, responsibleUserId }).where(eq(heartbeatRuns.id, run.id));
+    const [gatewayProfile] = await db.insert(toolProfiles).values({
+      companyId: company.id, profileKey: `broker-${randomUUID()}`, name: `Broker ${randomUUID()}`, defaultAction: "deny",
+    }).returning();
+    await db.insert(toolProfileEntries).values({
+      companyId: company.id, profileId: gatewayProfile!.id, selectorType: "connection", effect: "include", connectionId: connection.id,
+    });
+    const gateway = createTestToolGatewayService(db);
+    const named = await gateway.createNamedGateway({ companyId: company.id, body: { name: "Broker", profileId: gatewayProfile!.id } });
+    const policyBinding = {
+      connectionId: connection.id, grantVersionHash: "0".repeat(64), hostname: "mcp.example.test", port: 443,
+      methods: ["POST"] as const, pathPrefixes: ["/mcp"], binary: null, ttlSeconds: 60,
+    };
+    const resolved = await gateway.resolveSandboxCredentialBrokerBindings({
+      companyId: company.id, agentId: agent.id, runId: run.id, responsibleUserId,
+      presenceId, bindings: [policyBinding],
+    });
+    expect(resolved.bindings).toEqual([expect.objectContaining({
+      connectionId: connection.id, gatewayPublicId: named.gatewayPublicId,
+      endpointPath: `/mcp/gateways/${named.gatewayPublicId}`, allowedTools: [toolName],
+      destination: { hostname: "mcp.example.test", port: 443, method: "POST", path: "/mcp" },
+    })]);
+    const firstHash = resolved.authorizedConnectionGrantHashes[connection.id];
+    expect(firstHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(JSON.stringify(resolved)).not.toContain("token");
+    await db.update(connectionGrants).set({ updatedAt: new Date(Date.now() + 1000) }).where(and(
+      eq(connectionGrants.companyId, company.id), eq(connectionGrants.connectionId, connection.id),
+    ));
+    const rotated = await gateway.resolveSandboxCredentialBrokerBindings({
+      companyId: company.id, agentId: agent.id, runId: run.id, responsibleUserId,
+      presenceId, bindings: [policyBinding],
+    });
+    expect(rotated.authorizedConnectionGrantHashes[connection.id]).not.toBe(firstHash);
+    await expect(gateway.resolveSandboxCredentialBrokerBindings({
+      companyId: company.id, agentId: agent.id, runId: run.id, responsibleUserId, presenceId,
+      bindings: [{ ...policyBinding, hostname: "evil.example.test" }],
+    })).rejects.toMatchObject({ reasonCode: "sandbox_broker_destination_changed" });
+    expect(project.id).toBe(issue.projectId);
+  });
+
   it("preserves provider tool errors in MCP responses and failed invocation audits", async () => {
     const company = await createCompany(db);
     const remote = await startFakeRemoteMcpServer(({ body }) => ({

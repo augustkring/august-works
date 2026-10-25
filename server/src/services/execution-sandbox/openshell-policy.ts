@@ -25,7 +25,9 @@ export function projectOpenShellPolicy(raw: SandboxPolicy) {
   // implement a general process-execution or custom syscall allowlist.
   if (policy.process.allowedBinaries.length) unsupported.push("process_binary_allowlist_requires_outer_enforcement");
   if (policy.process.allowedSyscalls.length) unsupported.push("custom_syscall_allowlist_requires_outer_enforcement");
-  if (policy.credentials.mode !== "none" || policy.credentials.bindings.length) unsupported.push("native_credential_broker_projection_required");
+  if (policy.credentials.mode === "legacy_injected") unsupported.push("raw_credential_exposure");
+  if (policy.credentials.mode === "brokered" && !policy.credentials.bindings.length) unsupported.push("credential_broker_binding_missing");
+  if (policy.credentials.mode === "none" && policy.credentials.bindings.length) unsupported.push("credential_mode_inconsistent");
   if (policy.network.destinations.length && !policy.process.allowedBinaries.length) unsupported.push("network_calling_binary_missing");
   const document: OpenShellPolicyDocument = {
     version: 1, filesystem_policy: { include_workdir: false, read_only: [...policy.filesystem.readPaths].sort(), read_write: [...policy.filesystem.writePaths].sort() },

@@ -1,4 +1,4 @@
-import { bigint, check, index, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigint, check, foreignKey, index, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { companies } from "./companies.js";
 import { plugins } from "./plugins.js";
@@ -9,9 +9,11 @@ export const resourceLifecycleEvents = pgTable("resource_lifecycle_events", {
   resourceType: text("resource_type").$type<"agent" | "project" | "agent_runtime">().notNull(),
   resourceId: uuid("resource_id").notNull(),
   action: text("action").$type<"create" | "update" | "archive" | "delete" | "pause" | "resume" | "terminate">().notNull(),
+  recipientPluginIds: uuid("recipient_plugin_ids").array().notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, table => ({
   companyIdx: index("resource_lifecycle_events_company_idx").on(table.companyId, table.id),
+  companyEventUq: uniqueIndex("resource_lifecycle_events_company_event_uq").on(table.companyId, table.id),
   resourceOrderIdx: index("resource_lifecycle_events_resource_order_idx").on(table.companyId, table.resourceType, table.resourceId, table.id),
   creationIdx: uniqueIndex("resource_lifecycle_events_creation_idx").on(table.companyId, table.resourceType, table.resourceId).where(sql`${table.action} = 'create'`),
   typeCheck: check("resource_lifecycle_events_resource_type_check", sql`${table.resourceType} IN ('agent', 'project', 'agent_runtime')`),
@@ -21,9 +23,10 @@ export const resourceLifecycleEvents = pgTable("resource_lifecycle_events", {
 export const pluginLifecycleAcknowledgments = pgTable("plugin_lifecycle_acknowledgments", {
   companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
   pluginId: uuid("plugin_id").notNull().references(() => plugins.id, { onDelete: "cascade" }),
-  eventId: bigint("event_id", { mode: "bigint" }).notNull().references(() => resourceLifecycleEvents.id, { onDelete: "cascade" }),
+  eventId: bigint("event_id", { mode: "bigint" }).notNull(),
   acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true }).notNull().defaultNow(),
 }, table => ({
   pk: uniqueIndex("plugin_lifecycle_acknowledgments_pk").on(table.companyId, table.pluginId, table.eventId),
   eventIdx: index("plugin_lifecycle_acknowledgments_event_idx").on(table.eventId),
+  companyEventFk: foreignKey({ columns: [table.companyId, table.eventId], foreignColumns: [resourceLifecycleEvents.companyId, resourceLifecycleEvents.id], name: "plugin_lifecycle_acknowledgments_company_event_fk" }).onDelete("cascade"),
 }));

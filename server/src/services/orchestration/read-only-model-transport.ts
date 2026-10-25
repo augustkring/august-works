@@ -40,7 +40,7 @@ export async function anthropicReadOnlyCall(
   signal: AbortSignal,
   options: {
     fetch?: typeof guardedRemoteHttpFetch;
-    onWireDispatch?: (receipt: ReadOnlyModelWireReceipt) => void;
+    onWireDispatch?: (receipt: ReadOnlyModelWireReceipt) => void | Promise<void>;
   } = {},
 ) {
   const input = requestSchema.parse(raw);
@@ -64,7 +64,8 @@ export async function anthropicReadOnlyCall(
     throw new ReadOnlyModelTransportError("credential_boundary");
   // Report only a digest of the exact canonical body. Callers cannot use this
   // as source authority; the transport still sends the same immutable string.
-  options.onWireDispatch?.({
+  signal.throwIfAborted();
+  await options.onWireDispatch?.({
     method: "POST",
     endpoint: "https://api.anthropic.com/v1/messages",
     bodySha256: createHash("sha256").update(body, "utf8").digest("hex"),

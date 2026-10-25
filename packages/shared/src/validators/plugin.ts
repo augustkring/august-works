@@ -782,7 +782,7 @@ export const pluginManifestV1Schema = z.object({
     "minimumPaperclipVersion must follow semver (e.g. 1.0.0)",
   ).optional(),
   capabilities: z.array(z.enum(PLUGIN_CAPABILITIES)).min(1),
-  resourceLifecycle: z.array(z.enum(["agent", "project"])).min(1).max(2).optional(),
+  resourceLifecycle: z.array(z.enum(["agent", "project", "agent_runtime"])).min(1).max(3).optional(),
   entrypoints: z.object({
     worker: z.string().min(1),
     ui: z.string().min(1).optional(),
@@ -808,6 +808,9 @@ export const pluginManifestV1Schema = z.object({
 }).superRefine((manifest, ctx) => {
   if (manifest.resourceLifecycle && !manifest.capabilities.includes("events.subscribe")) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Resource lifecycle delivery requires events.subscribe", path: ["capabilities"] });
+  }
+  if (manifest.resourceLifecycle?.includes("agent_runtime") && !manifest.capabilities.includes("agents.lifecycle.manage")) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Agent runtime lifecycle delivery requires agents.lifecycle.manage", path: ["capabilities"] });
   }
   // ── Entrypoint ↔ UI slot consistency ──────────────────────────────────
   // Plugins that declare UI slots must also declare a UI entrypoint so the

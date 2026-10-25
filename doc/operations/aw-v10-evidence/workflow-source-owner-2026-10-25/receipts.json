@@ -1860,6 +1860,99 @@
       },
       "summary": [],
       "sourceCommit": "f67d4b9ddcbdfb593d694a190c5a390a166f11df"
+    },
+    {
+      "name": "v10-runtime-relay-tests",
+      "exitCode": 0,
+      "exitSidecar": "v10-runtime-relay-tests.exit",
+      "rawSha256": "7ff4a4fdeec876603bfa725d8b6e304a4104d618a4a3392fd922e918c299120a",
+      "sanitizedSha256": "7ff4a4fdeec876603bfa725d8b6e304a4104d618a4a3392fd922e918c299120a",
+      "archiveSha256": "76ef0356adde348d2a9866e276ef53f2ddd148d787f970a32391283a567db271",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  6 passed (6)",
+        "Duration  5.36s (transform 1.94s, setup 102ms, import 3.06s, tests 2.06s, environment 0ms)"
+      ],
+      "sourceCommit": "923f181297e291cb39aa7088329b090039600006"
+    },
+    {
+      "name": "v10-current-token-gates",
+      "exitCode": 0,
+      "exitSidecar": "v10-current-token-gates.exit",
+      "rawSha256": "56e0a50b41173d0ba8e8f4fa615171699416bc772149facee12d2a331f72cdf5",
+      "sanitizedSha256": "56e0a50b41173d0ba8e8f4fa615171699416bc772149facee12d2a331f72cdf5",
+      "archiveSha256": "3e3e1368d204954b1213ea76597557d40173876c412b3de51c5c05931e437aaf",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "923f181297e291cb39aa7088329b090039600006"
+    },
+    {
+      "name": "v10-current-module-gates",
+      "exitCode": 0,
+      "exitSidecar": "v10-current-module-gates.exit",
+      "rawSha256": "935dd5340a4daa50d11012fcb35360c0b991990728b27a26e94fcdf025ae93ca",
+      "sanitizedSha256": "935dd5340a4daa50d11012fcb35360c0b991990728b27a26e94fcdf025ae93ca",
+      "archiveSha256": "28ffaeb6deae42b712200366e5abf9e845dcf6f1559cde1626bd85ecb9f3086d",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "923f181297e291cb39aa7088329b090039600006"
+    },
+    {
+      "name": "v10-current-help-gates",
+      "exitCode": 0,
+      "exitSidecar": "v10-current-help-gates.exit",
+      "rawSha256": "400154533b2f266c494a57ee480fe073567dafa2e87b826ac0cb0676b46885bc",
+      "sanitizedSha256": "400154533b2f266c494a57ee480fe073567dafa2e87b826ac0cb0676b46885bc",
+      "archiveSha256": "9fc8ba837b9bf91304d8cb7d8f50559a74c76354fdbd9b6b6428562554a47350",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "923f181297e291cb39aa7088329b090039600006"
+    },
+    {
+      "name": "workspace-cleanup-preserve-files",
+      "exitCode": 0,
+      "exitSidecar": "workspace-cleanup-preserve-files.exit",
+      "rawSha256": "077a50f2b1334c4ed8023d0f178d04f56f596a988b9c19d163d0ef8c18033198",
+      "sanitizedSha256": "077a50f2b1334c4ed8023d0f178d04f56f596a988b9c19d163d0ef8c18033198",
+      "archiveSha256": "d5b280eaf7729b4ce99b8d30a3eff43893fc7de8ef2718fa62b663ba18e149be",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  11 passed | 153 skipped (164)",
+        "Duration  24.17s (transform 16.27s, setup 116ms, import 21.87s, tests 2.05s, environment 0ms)"
+      ],
+      "sourceCommit": "923f181297e291cb39aa7088329b090039600006"
     }
   ],
   "updates": [
@@ -2103,6 +2196,29 @@
       "meaning": "Host exec software stream/no-shell/no-journal-output/duplicate/Stop-preflight regression only, not physical host qualification",
       "logs": [
         "v10-sandbox-exec-host-tests"
+      ]
+    },
+    {
+      "sourceCommit": "923f181297e291cb39aa7088329b090039600006",
+      "meaning": "Bounded host relay software stream, one-use and unknown disconnect controls only",
+      "logs": [
+        "v10-runtime-relay-tests"
+      ]
+    },
+    {
+      "sourceCommit": "923f181297e291cb39aa7088329b090039600006",
+      "meaning": "Current scoped design-token, feature-module and Help registry consistency checks; not final unchanged-source workspace gates",
+      "logs": [
+        "v10-current-token-gates",
+        "v10-current-module-gates",
+        "v10-current-help-gates"
+      ]
+    },
+    {
+      "sourceCommit": "923f181297e291cb39aa7088329b090039600006",
+      "meaning": "Shared Git cleanup preserves modified/untracked/ignored files before commands; non-forced default and branch retention controls only",
+      "logs": [
+        "workspace-cleanup-preserve-files"
       ]
     }
   ],

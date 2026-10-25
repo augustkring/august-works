@@ -3716,6 +3716,35 @@ describe("realizeExecutionWorkspace", () => {
     expect(worktreeOp!.metadata!.baseRef).toBe("origin/master");
   }, 10_000);
 
+  it.each(["modified", "untracked", "ignored"])("keeps %s workspace files before cleanup commands or branch removal", async (kind) => {
+    const repoRoot = await createTempRepo();
+    await fs.writeFile(path.join(repoRoot, ".gitignore"), "private-settings.txt\n");
+    await runGit(repoRoot, ["add", ".gitignore"]);
+    await runGit(repoRoot, ["commit", "-m", "Ignore local settings"]);
+    const worktree = path.join(repoRoot, "../", `preserved-worktree-${randomUUID()}`);
+    const branch = `preserve-${randomUUID()}`;
+    await runGit(repoRoot, ["worktree", "add", "-b", branch, worktree]);
+    const file = kind === "modified" ? "README.md" : kind === "ignored" ? "private-settings.txt" : "unsaved.txt";
+    await fs.writeFile(path.join(worktree, file), "unique work\n");
+    try {
+      const result = await cleanupExecutionWorkspaceArtifacts({
+        workspace: { id: "preserved-workspace", cwd: worktree, providerType: "git_worktree", providerRef: worktree,
+          branchName: branch, repoUrl: null, baseRef: "main", projectId: null, projectWorkspaceId: null,
+          sourceIssueId: null, metadata: RUNTIME_OWNED_GIT_BRANCH_METADATA },
+        projectWorkspace: { cwd: repoRoot, cleanupCommand: null },
+        cleanupCommand: "touch cleanup-was-run",
+        forceWorktreeRemoval: true,
+      });
+      expect(result.cleaned).toBe(false);
+      expect(result.warnings).toHaveLength(1);
+      expect(await fs.readFile(path.join(worktree, file), "utf8")).toBe("unique work\n");
+      expect(existsSync(path.join(worktree, "cleanup-was-run"))).toBe(false);
+      expect(await readGit(repoRoot, ["rev-parse", `refs/heads/${branch}`])).toBeTruthy();
+    } finally {
+      await runGit(repoRoot, ["worktree", "remove", "--force", worktree]);
+    }
+  });
+
   it("removes a created git worktree and branch during cleanup", async () => {
     const repoRoot = await createTempRepo();
 

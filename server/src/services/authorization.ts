@@ -1001,10 +1001,20 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
       union all
       select 1 from bounded n where
         n.kind not in ('issue','project','run','workflow_run','routine_run')
-        or (n.kind='issue' and not exists(select 1 from issues i where i.id=n.id and i.company_id=${company}
-          and i.conversation_retired_at is null and ((i.conversation_agent_id is null and i.conversation_user_id is null)
-            or ${conversationIdentity})
-          and (i.visibility='open' or ${issuePrincipalAccess(actor, sql`i.id`, sql`${company}`)})))
+        or (n.kind='issue' and not exists(
+          -- Resolve the exact company/id row first. Folding these privacy
+          -- predicates into the base lookup makes PostgreSQL choose the
+          -- conversation-identity index for common NULL identities, scanning
+          -- every such Task for each root instead of using the unique id key.
+          with exact_issue as materialized (
+            select source.id,source.company_id,source.conversation_retired_at,source.conversation_agent_id,
+              source.conversation_user_id,source.visibility,source.privacy_parent_issue_id,source.responsible_user_id,
+              source.created_by_user_id,source.assignee_user_id,source.assignee_agent_id,source.project_id
+            from issues source where source.id=n.id and source.company_id=${company}
+          )
+          select 1 from exact_issue i where i.conversation_retired_at is null
+            and ((i.conversation_agent_id is null and i.conversation_user_id is null) or ${conversationIdentity})
+            and (i.visibility='open' or ${issuePrincipalAccess(actor, sql`i.id`, sql`${company}`)})))
         or (n.kind='project' and not exists(select 1 from projects p where p.id=n.id and p.company_id=${company}
           and p.source_provenance_qualified and (p.visibility='open' or ${projectPrincipalAccess(actor, sql`p.id`, sql`${company}`)})))
           or (n.kind='run' and not exists(select 1 from ${heartbeatRuns} r where r.id=n.id and r.company_id=${company}

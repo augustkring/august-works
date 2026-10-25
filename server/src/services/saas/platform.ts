@@ -112,6 +112,7 @@ export function saasPlatform(
     db,
     config,
     notifications.notifyCompany,
+    { credentialBrokerOrigin: origins.primaryAppOrigin },
   );
   const sandboxHosts = nativeSandboxHostTransport(db, {
     suspectSeconds: config.runtime.suspectSeconds,

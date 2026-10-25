@@ -1,6 +1,7 @@
 import { assertRoadmapFieldOwnership } from "./roadmap-field-ownership.js";
 import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
 import { lockBusinessEventCompany, suppressBusinessEventsForObject } from "./business-event-privacy.js";
+import { DELIVERY_QUEUES, notifyDeliveryWork } from "./delivery-work-notifications.js";
 import { and, asc, desc, eq, getTableColumns, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
@@ -612,7 +613,7 @@ export function projectService(db: Db) {
     privacyTx?: DbTransaction,
     actor?: AuthorizationActor,
   ): Promise<ProjectWithGoals> => {
-    if ((data.visibility === "private" || actor) && !privacyTx) return db.transaction(tx => createProject(companyId, data, tx, actor));
+    if (!privacyTx) return db.transaction(tx => createProject(companyId, data, tx, actor));
     if (privacyTx && actor) {
       await lockIssuePrivacyTree(privacyTx, companyId);
       await pinProjectMutationHuman(privacyTx, actor, companyId);
@@ -655,6 +656,7 @@ export function projectService(db: Db) {
       .values({ ...projectData, goalId: legacyGoalId, companyId })
       .returning()
       .then((rows) => rows[0]);
+    await notifyDeliveryWork(executor, DELIVERY_QUEUES.pluginLifecycle);
 
     if (ids && ids.length > 0) {
       await syncGoalLinks(executor, row.id, companyId, ids);
@@ -1014,6 +1016,7 @@ export function projectService(db: Db) {
         .returning()
         .then((rows) => rows[0] ?? null);
       if (!row) return null;
+      await notifyDeliveryWork(executor, DELIVERY_QUEUES.pluginLifecycle);
       if (actor && !(await canActorReadProjectPrivacy(privacyTx, actor, row))) throw unprocessable("Project source graph is unavailable");
 
       if (ids !== undefined) {
@@ -1047,6 +1050,7 @@ export function projectService(db: Db) {
         .where(eq(projects.id, id))
         .returning();
         if (!row) return null;
+        await notifyDeliveryWork(tx, DELIVERY_QUEUES.pluginLifecycle);
         await suppressBusinessEventsForObject(tx, row.companyId, "project", row.id);
         return { ...row, urlKey: deriveProjectUrlKey(row.name, row.id) };
       }),

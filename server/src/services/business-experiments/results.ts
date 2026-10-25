@@ -1,14 +1,14 @@
 import { and, eq } from "drizzle-orm";
 import { businessExperimentAnalyses, businessExperimentInterpretations, businessExperimentOutcomes, businessExperimentTransitions, type Db } from "@paperclipai/db";
-import type { BusinessExperimentAnalysisView, BusinessExperimentInvariantDiagnostic, NativeBusinessExperimentCapture } from "@paperclipai/shared";
+import type { BusinessExperimentAnalysisView, BusinessExperimentInvariantDiagnostic, BusinessMetricQuery, NativeBusinessExperimentCapture } from "@paperclipai/shared";
 import type { AuthorizationActor } from "../authorization.js";
 import { conflict, notFound } from "../../errors.js";
-import { nativeSha256 } from "../native-runtime/canonical.js";
+import { canonicalNativeJson, nativeSha256 } from "../native-runtime/canonical.js";
 import { inspectDecisionSourceAuthority } from "../decision-intelligence.js";
 import { businessMetricService } from "../business-metrics/service.js";
-import { prepareNativeMetric } from "../business-metrics/native-engine.js";
+import { prepareNativeMetric, prepareNativeMetricInput, type PreparedNativeMetricInput } from "../business-metrics/native-engine.js";
 import { exactExperimentInvariantBalance, evaluateNativeBusinessExperiment } from "./kernel.js";
-import { EXPERIMENT_OWNER_ENGINE, experimentBudget, experimentEdges, loadExperimentLineage, verifyExperimentReceipt, type ExperimentEdge, type ExperimentVersion, type ExperimentAssignment, type ExperimentExposure, type ExperimentExecution, type ExperimentCompletion } from "./receipts.js";
+import { EXPERIMENT_OWNER_ENGINE, experimentBudget, experimentEdges, experimentOutcomeSourceHashFromCanonicalSnapshot, loadExperimentLineage, verifyExperimentReceipt, type ExperimentEdge, type ExperimentVersion, type ExperimentAssignment, type ExperimentExposure, type ExperimentExecution, type ExperimentCompletion } from "./receipts.js";
 export type ExperimentAnalysis = typeof businessExperimentAnalyses.$inferSelect;
 export type ExperimentOutcome = typeof businessExperimentOutcomes.$inferSelect;
 export type ExperimentInterpretation = typeof businessExperimentInterpretations.$inferSelect;
@@ -57,19 +57,24 @@ export async function inspectBusinessExperimentResults(tx:Db,companyId:string,ac
   if(outcomes.length!==expected)throw notFound("Experiment intention-to-treat outcome receipt set is unavailable");
   const definitions=new Map<string,Awaited<ReturnType<ReturnType<typeof businessMetricService>["inspectPublishedDefinition"]>>>();
   for(const pin of metrics)definitions.set(pin.key,await businessMetricService(tx).inspectPublishedDefinition(companyId,actor,pin.metricId,pin.metricVersionId));
-  const calculations=new Map(metrics.map(pin=>[pin.key,prepareNativeMetric(definitions.get(pin.key)!.version.definition,{metricId:pin.metricId,versionId:pin.metricVersionId,from:version.definition.sampleOrDurationPlan.from,until:version.definition.sampleOrDurationPlan.until,dimensions:[],maxRows:1})]));
+  const metricQuery:BusinessMetricQuery={metricId:metrics[0]?.metricId??version.id,versionId:metrics[0]?.metricVersionId??version.id,from:version.definition.sampleOrDurationPlan.from,until:version.definition.sampleOrDurationPlan.until,dimensions:[],maxRows:1};
+  const calculations=new Map(metrics.map(pin=>[pin.key,prepareNativeMetric(definitions.get(pin.key)!.version.definition,{...metricQuery,metricId:pin.metricId,versionId:pin.metricVersionId})]));
   const lineage=await loadExperimentLineage(tx,companyId,outcomes.map(outcome=>outcome.lineageManifestId),deadline),assignments=new Map(receipts.assignments.map(assignment=>[assignment.id,assignment])),authorityEdges=new Map<string,ExperimentEdge>();
   // Reuse only immutable lineage calculations within this inspection. Each
   // outcome still verifies its own actual retained edges, signed material and
   // current Source authority. Include the exact outcome project in the key so
   // a changed or forged project cannot inherit another outcome's comparison.
-  const inheritedHashes=new Map<string,string>(), expectedHashes=new Map<string,Map<string|null,string>>();
+  const inheritedHashes=new Map<string,string>(), expectedHashes=new Map<string,Map<string|null,string>>(),preparedSnapshots=new Map<string,{canonical:string;input:PreparedNativeMetricInput}>();
   for(const outcome of outcomes){
     experimentBudget(deadline);const assignment=assignments.get(outcome.assignmentId),metric=definitions.get(outcome.key),pin=metrics.find(p=>p.key===outcome.key);
     if(!assignment||!metric||!pin||outcome.metricId!==pin.metricId||outcome.metricVersionId!==pin.metricVersionId||outcome.capturedAt.getTime()!==analysis.analyzedAt.getTime()||outcome.sourceSnapshot.id!==assignment.unitId||outcome.sourceSnapshot.createdAt!==assignment.sourceSnapshot.createdAt)throw notFound("Experiment outcome exact identity or capture time is unavailable");
     verifyExperimentReceipt("outcome",experimentOutcomeMaterial(outcome,assignment.receiptHash,version.contentHash),outcome);
-    const calculation=calculations.get(outcome.key)!([outcome.sourceSnapshot]);
-    if(calculation.status!=="observed"||calculation.value!==outcome.value||calculation.inputHash!==outcome.inputHash||outcome.sourceHash!==nativeSha256({snapshot:outcome.sourceSnapshot,metricHash:pin.contentHash,inputHash:outcome.inputHash,value:outcome.value}))throw notFound("Experiment native outcome material is unavailable");
+    const snapshotCanonical=canonicalNativeJson(outcome.sourceSnapshot);
+    let prepared=preparedSnapshots.get(assignment.id);
+    if(!prepared){prepared={canonical:snapshotCanonical,input:prepareNativeMetricInput(metricQuery,[outcome.sourceSnapshot])};preparedSnapshots.set(assignment.id,prepared);}
+    else if(prepared.canonical!==snapshotCanonical)throw notFound("Experiment metric outcomes do not share the exact captured native snapshot");
+    const calculation=calculations.get(outcome.key)!(prepared.input);
+    if(calculation.status!=="observed"||calculation.value!==outcome.value||calculation.inputHash!==outcome.inputHash||outcome.sourceHash!==experimentOutcomeSourceHashFromCanonicalSnapshot(prepared.canonical,pin.contentHash,outcome.inputHash,outcome.value))throw notFound("Experiment native outcome material is unavailable");
     const manifest=lineage.manifests.get(outcome.lineageManifestId),edges=lineage.edges.get(outcome.lineageManifestId)??[],inherited=receipts.assignmentLineage.get(assignment.lineageManifestId);
     if(!inherited)throw notFound("Experiment exact assignment lineage is unavailable");
     let inheritedHash=inheritedHashes.get(assignment.lineageManifestId);

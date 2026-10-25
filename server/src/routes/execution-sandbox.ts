@@ -9,6 +9,7 @@ import { executionSandboxService } from "../services/execution-sandbox/sandbox-s
 
 export function executionSandboxRoutes(db: Db, options: {
   operatorUserIds?: string[];
+  credentialBrokerOrigin?: NonNullable<Parameters<typeof executionSandboxService>[1]>["credentialBrokerOrigin"];
   backendFor?: NonNullable<Parameters<typeof executionSandboxService>[1]>["backendFor"];
   nativeOperation?: NonNullable<Parameters<typeof executionSandboxService>[1]>["nativeOperation"];
   assertRuntimeStartAdmission?: NonNullable<Parameters<typeof executionSandboxService>[1]>["assertRuntimeStartAdmission"];
