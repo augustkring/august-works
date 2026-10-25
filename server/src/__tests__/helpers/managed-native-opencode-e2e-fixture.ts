@@ -43,13 +43,18 @@ import { agentProviderBindingService } from "../../services/agent-provider-bindi
 import { agentRuntimeFabricService } from "../../services/agent-runtime-fabric.js";
 import { aiConnectionService } from "../../services/ai-connections.js";
 import { issueService } from "../../services/issues.js";
+import { environmentService } from "../../services/environments.js";
+import { environmentRuntimeService } from "../../services/environment-runtime.js";
 import { documentService } from "../../services/documents.js";
-import { memoryService } from "../../services/memory/memory-service.js";
+import { memoryService, type MemoryMutationActor } from "../../services/memory/memory-service.js";
 import { canActorReadMemorySources } from "../../services/memory/memory-privacy.js";
+import type { AuthorizationActor } from "../../services/authorization.js";
 import { instanceSettingsService } from "../../services/instance-settings.js";
 import { orchestrationService } from "../../services/orchestration/orchestration-service.js";
 import { workerModelGateway } from "../../services/orchestration/worker-model-gateway.js";
 import { createToolGatewayService } from "../../services/tool-gateway.js";
+import { createNativePrivateMemoryThroughHeartbeat } from "./native-private-memory-producer.js";
+import { recordNativeLocalProcessStopAfterExit } from "../../services/native-local-process-stop.js";
 import { getAssignedMcpGateway, registerAssignedMcpGateway } from "../../services/native-runtime/assigned-mcp-tools.js";
 import { hashContextPolicySnapshot } from "../../services/context/context-manifest.js";
 import { discoverNativeCapabilities } from "../../services/native-provider-conformance.js";
@@ -64,7 +69,7 @@ import { PaperclipControlPlanePort } from "../../services/native-runtime/papercl
 import { finalizeNativeRun } from "../../services/native-runtime/native-run-finalizer.js";
 import { buildNativeExecutionInput, buildNativeBootstrapSourceSet } from "../../services/native-runtime/native-execution-input.js";
 import { buildRetainedNativeRuntimeContext } from "../../services/native-runtime/runtime-context.js";
-import { getIssueExecutionContext, buildPaperclipTaskMarkdown } from "../../services/heartbeat.js";
+import { getIssueExecutionContext, buildPaperclipTaskMarkdown, persistHeartbeatRunProcessMetadata } from "../../services/heartbeat.js";
 import { workerModelProfileSchema, type WorkerModelProfile } from "../../services/orchestration/worker-model-profiles.js";
 import { currentNativeControllerIdentity } from "../../services/native-runtime/native-restart-recovery.js";
 import { nativeCompletionContractInput } from "../../services/native-runtime/completion-contracts.js";
@@ -234,6 +239,15 @@ export type ManagedNativeOpenCodeHumanAction = {
   action: "accept_memory_candidate";
 };
 
+type ManagedNativePrivateRoot = {
+  producerRunId: string;
+  issueId: string;
+  memoryId: string;
+  content: string;
+  producerActor: AuthorizationActor;
+  memoryActor: MemoryMutationActor;
+};
+
 export async function runManagedNativeOpenCodeFixture(input: {
   db: ReturnType<typeof createDb>;
   connectionString: string;
@@ -241,6 +255,8 @@ export async function runManagedNativeOpenCodeFixture(input: {
   instanceId: string;
   steps?: ManagedNativeOpenCodeModelStep[];
   humanActions?: ManagedNativeOpenCodeHumanAction[];
+  /** Create a canonical Agent-private Context root before the managed run. */
+  privateContextContent?: string;
   reuseIdentity?: { companyId: string; agentId: string; aliceUserId: string; bobUserId: string };
   onPreserveDebugArtifacts?: () => void;
 }) {
@@ -322,8 +338,8 @@ export async function runManagedNativeOpenCodeFixture(input: {
     if (!bobMembership) throw new Error("Temporal Bob company membership is unavailable.");
     const bobActor = { type: "board" as const, source: "session" as const, userId: bobUserId,
       companyIds: [companyId], sessionId: bobSessionId, memberships: [bobMembership] };
-    const aliceMemoryActor = { principal: { type: "user" as const, userId: aliceUserId } };
-    const bobMemoryActor = { principal: { type: "user" as const, userId: bobUserId } };
+    const aliceMemoryActor = { principal: { type: "user" as const, userId: aliceUserId }, authorizationActor: human };
+    const bobMemoryActor = { principal: { type: "user" as const, userId: bobUserId }, authorizationActor: bobActor };
     const containsRemember = modelSteps.some(step => step.tool === "self_remember");
     if (containsRemember) {
       const memories = memoryService(db);
@@ -376,6 +392,30 @@ export async function runManagedNativeOpenCodeFixture(input: {
     humanApp.use(express.json());
     humanApp.use((req, _res, next) => { req.actor = human as typeof req.actor; next(); });
     humanApp.use("/api", issueRoutes(db, {} as never)); humanApp.use(errorHandler);
+    let privateRoot: ManagedNativePrivateRoot | null = null;
+    if (input.privateContextContent) {
+      const privateTaskResponse = await request(humanApp).post(`/api/companies/${companyId}/issues`)
+        .send({ title: `Private Context source ${randomUUID()}`, description: input.privateContextContent,
+          visibility: "private", assigneeAgentId: agentId, responsibleUserId: aliceUserId });
+      expect(privateTaskResponse.status, JSON.stringify(privateTaskResponse.body)).toBe(201);
+      const privateTask = privateTaskResponse.body as { id: string };
+      const [persistedPrivateTask] = await db.select({ visibility: issues.visibility, assigneeAgentId: issues.assigneeAgentId,
+        responsibleUserId: issues.responsibleUserId }).from(issues)
+        .where(and(eq(issues.companyId, companyId), eq(issues.id, privateTask.id)));
+      if (!persistedPrivateTask || persistedPrivateTask.visibility !== "private" ||
+        persistedPrivateTask.assigneeAgentId !== agentId || persistedPrivateTask.responsibleUserId !== aliceUserId)
+        throw new Error("managed_fixture_private_context_task_binding_invalid");
+      const produced = await createNativePrivateMemoryThroughHeartbeat({ db, companyId, agentId,
+        userId: aliceUserId, issueId: privateTask.id, content: input.privateContextContent,
+        bindingKey: `managed-opencode-private-context-${randomUUID()}` });
+      const memoryActor: MemoryMutationActor = {
+        principal: { type: "agent", agentId, responsibleUserId: aliceUserId },
+        runId: produced.runId, authorizationActor: produced.actor,
+      };
+      privateRoot = { producerRunId: produced.runId, issueId: privateTask.id,
+        memoryId: produced.record.id, content: input.privateContextContent,
+        producerActor: produced.actor, memoryActor };
+    }
     const createTaskResponse = await request(humanApp).post(`/api/companies/${companyId}/issues`)
       .send({ title: "Save a private source-bound note", description: "Create a short internal note and finish the task.",
         responsibleUserId: aliceUserId });
@@ -386,6 +426,11 @@ export async function runManagedNativeOpenCodeFixture(input: {
     const task = (await db.select().from(issues).where(eq(issues.id, createdTask.id)))[0]!;
     const [run] = await db.insert(heartbeatRuns).values({ companyId, agentId, responsibleUserId: aliceUserId,
       status: "running", runtimeMode: "native", nativeIssueId: task.id, contextSnapshot: { issueId: task.id } }).returning();
+    const localEnvironment = await environmentService(db).ensureLocalEnvironment();
+    const runtimeEnvironment = environmentRuntimeService(db);
+    const acquiredEnvironment = await runtimeEnvironment.acquireRunLease({ companyId, environment: localEnvironment,
+      issueId: task.id, agentId, heartbeatRunId: run!.id, persistedExecutionWorkspace: null,
+      executionWorkspaceSettings: null, adapterType: "paperclip_runner" });
     const manifest = await agentRuntimeFabricService(db).prepare({ companyId, agentId, runId: run!.id,
       responsibleUserId: aliceUserId, issueId: task.id, query: task.title });
     const plan = await orchestrationService(db).create(human, companyId, {
@@ -410,7 +455,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
     const [contractRow] = await db.select().from(completionContracts)
       .where(and(eq(completionContracts.companyId, companyId), eq(completionContracts.issueId, task.id)));
     if (!contractRow) throw new Error("Native completion contract was not persisted.");
-    const prepared = await prepareNativeHeartbeatRun({ db, run: run!, issue: task, environmentLeaseId: randomUUID() });
+    const prepared = await prepareNativeHeartbeatRun({ db, run: run!, issue: task, environmentLeaseId: acquiredEnvironment.lease.id });
     let runtimeInputs: NativePayloadSourceInput[] = [];
     const agent = (await db.select().from(agents).where(eq(agents.id, agentId)))[0]!;
     const runtimeContext = await buildRetainedNativeRuntimeContext({ db, agent, runId: run!.id,
@@ -588,7 +633,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
           ? data.record as Record<string, unknown> : {};
         if (typeof record.id !== "string" || !/^[0-9a-f-]{36}$/i.test(record.id) || record.reviewState !== "pending")
           throw new Error("managed_fixture_memory_candidate_unavailable");
-        await memoryService(db).reviewCandidate(companyId, record.id, { decision: "accept" }, human);
+        await memoryService(db).reviewCandidate(companyId, record.id, { decision: "accept" }, aliceMemoryActor);
         acceptedMemoryIds.push(record.id);
         completedHumanActions.add(callId);
         brokerRequests.push(`human-action completed ${action.action}`);
@@ -959,7 +1004,9 @@ export async function runManagedNativeOpenCodeFixture(input: {
         managedProviderConfigReported = true;
       }
     };
-    const onSpawn = async ({ pid }: { pid: number }) => {
+    const onSpawn = async (meta: { pid: number; processGroupId: number | null; startedAt: string }) => {
+      await persistHeartbeatRunProcessMetadata(db, run!.id, meta);
+      const { pid } = meta;
       diagnostics.push(`runner process pid ${pid}`);
       const observed = new Set<number>();
       const inspect = async () => {
@@ -1360,6 +1407,8 @@ export async function runManagedNativeOpenCodeFixture(input: {
     const [terminalRun] = await db.select({ status: heartbeatRuns.status, nativePhase: heartbeatRuns.nativePhase })
       .from(heartbeatRuns).where(eq(heartbeatRuns.id, run!.id));
     expect(terminalRun?.status).toBe("succeeded");
+    expect(await recordNativeLocalProcessStopAfterExit(db, companyId, run!.id)).toBe(true);
+    await runtimeEnvironment.releaseRunLeases(run!.id, "released");
     expect(completedHumanActions.size).toBe(input.humanActions?.length ?? 0);
     const bobApp = express();
     bobApp.use(express.json());
@@ -1402,8 +1451,10 @@ export async function runManagedNativeOpenCodeFixture(input: {
         if (typeof invocation.idempotencyKey !== "string" || !invocation.idempotencyKey.startsWith(`aw-native-tool:${run!.id}:`)) return [];
         const result = (typeof invocation.workflowResultJson === "string"
           ? JSON.parse(invocation.workflowResultJson) : invocation.workflowResultJson) as Record<string, unknown>;
-        const record = result.record && typeof result.record === "object" ? result.record as Record<string, unknown> : null;
-        const task = result.task && typeof result.task === "object" ? result.task as Record<string, unknown> : null;
+        const data = result.data && typeof result.data === "object" && !Array.isArray(result.data)
+          ? result.data as Record<string, unknown> : result;
+        const record = data.record && typeof data.record === "object" ? data.record as Record<string, unknown> : null;
+        const task = data.task && typeof data.task === "object" ? data.task as Record<string, unknown> : null;
         return [{ invocationId: invocation.id, callId: invocation.idempotencyKey.slice(`aw-native-tool:${run!.id}:`.length),
           toolName: invocation.toolName, status: invocation.status, result,
           memoryId: typeof record?.id === "string" ? record.id : null,
@@ -1442,5 +1493,6 @@ export async function runManagedNativeOpenCodeFixture(input: {
       modelCalls: modelCalls.length,
       completedRun: terminalRun,
       nativeFinalization,
+      privateRoot,
     };
 }

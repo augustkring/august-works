@@ -1,6 +1,6 @@
 import * as nativeExecutor from "./native-runtime/native-session-executor.js";
 import { appendHeartbeatRunEvent } from "./heartbeat-run-events.js";
-import { recordNativeLocalProcessStop, hasNativeLocalProcessStop, PROCESS_START_REQUESTED } from "./native-local-process-stop.js";
+import { recordNativeLocalProcessStop, recordNativeLocalProcessStopAfterExit, hasNativeLocalProcessStop, PROCESS_START_REQUESTED } from "./native-local-process-stop.js";
 import { remoteTerminationReceipt } from "./remote-execution-termination.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
@@ -563,6 +563,53 @@ const support = await getEmbeddedPostgresTestSupport();
       eventType: PROCESS_START_REQUESTED });
     // No PID was stored for the new launch, as when the server dies after spawn.
     expect(await admit(f, true)).toBeNull();
+  });
+
+  it("records the ordinary local Native child exit with an exact PID clear", async () => {
+    const f = await seed();
+    const child = (await import("node:child_process")).spawn(process.execPath,
+      ["-e", "setTimeout(() => {}, 50)"], { detached: true, stdio: "ignore" });
+    if (!child.pid) throw new Error("Test child did not expose a PID");
+    const childClosed = new Promise<void>(resolve => child.once("close", () => resolve()));
+    await persistHeartbeatRunProcessMetadata(db, f.sourceRunId, {
+      pid: child.pid, processGroupId: child.pid, startedAt: new Date().toISOString(),
+    });
+    await db.update(heartbeatRuns).set({ status: "succeeded", finishedAt: new Date() }).where(eq(heartbeatRuns.id, f.sourceRunId));
+    await db.insert(environmentLeases).values({ companyId: f.companyId, heartbeatRunId: f.sourceRunId,
+      provider: "local", status: "released", releasedAt: new Date(), cleanupStatus: "succeeded", leasePolicy: "ephemeral" });
+    await childClosed;
+
+    expect(await recordNativeLocalProcessStopAfterExit(db, f.companyId, f.sourceRunId)).toBe(true);
+    const [stopped] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, f.sourceRunId));
+    expect(stopped).toMatchObject({ processPid: null, processGroupId: null, processStartedAt: null });
+    expect(await hasNativeLocalProcessStop(db, f.companyId, f.sourceRunId)).toBe(true);
+  });
+
+  it("does not infer an ordinary Native Stop from an unknown or still-live process", async () => {
+    const unknown = await seed();
+    await db.insert(environmentLeases).values({ companyId: unknown.companyId, heartbeatRunId: unknown.sourceRunId,
+      provider: "local", status: "released", releasedAt: new Date(), cleanupStatus: "succeeded", leasePolicy: "ephemeral" });
+    expect(await recordNativeLocalProcessStopAfterExit(db, unknown.companyId, unknown.sourceRunId)).toBe(false);
+    expect(await hasNativeLocalProcessStop(db, unknown.companyId, unknown.sourceRunId)).toBe(false);
+
+    const active = await seed();
+    const child = (await import("node:child_process")).spawn(process.execPath,
+      ["-e", "setInterval(() => {}, 1000)"], { detached: true, stdio: "ignore" });
+    if (!child.pid) throw new Error("Test child did not expose a PID");
+    const childClosed = new Promise<void>(resolve => child.once("close", () => resolve()));
+    await persistHeartbeatRunProcessMetadata(db, active.sourceRunId, {
+      pid: child.pid, processGroupId: child.pid, startedAt: new Date().toISOString(),
+    });
+    await db.update(heartbeatRuns).set({ status: "succeeded", finishedAt: new Date() }).where(eq(heartbeatRuns.id, active.sourceRunId));
+    await db.insert(environmentLeases).values({ companyId: active.companyId, heartbeatRunId: active.sourceRunId,
+      provider: "local", status: "released", releasedAt: new Date(), cleanupStatus: "succeeded", leasePolicy: "ephemeral" });
+    try {
+      expect(await recordNativeLocalProcessStopAfterExit(db, active.companyId, active.sourceRunId)).toBe(false);
+      expect(await hasNativeLocalProcessStop(db, active.companyId, active.sourceRunId)).toBe(false);
+    } finally {
+      child.kill("SIGTERM");
+      await childClosed;
+    }
   });
 
   it.each(["live", "remote", "provider_event"])("does not accept invalid local stop proof: %s", async kind => {

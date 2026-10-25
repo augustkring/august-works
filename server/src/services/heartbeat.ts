@@ -20,7 +20,7 @@ import { toolActionDeliveryService } from "./tool-action-delivery.js";
 import { githubBotConnectionIdsForRun } from "./chat-github-tools.js";
 import { readQueuedInteractionResponse } from "./queued-interaction-response.js";
 import { AGENT_CHAT_DIRECTIVE, type NativeCommentSourceCapture, conversationReplay, isConversation, isConversationExecutionWake, isWaitingConversation, prepareConversationTurn, settleConversationTurn } from "./agent-conversations.js";
-import { PROCESS_IDENTITY_RECORDED, recordNativeLocalProcessStop } from "./native-local-process-stop.js";
+import { PROCESS_IDENTITY_RECORDED, recordNativeLocalProcessStop, recordNativeLocalProcessStopAfterExit } from "./native-local-process-stop.js";
 import { hasAcknowledgedNativeReassignmentStopIntent, hasAcknowledgedNativeStopIntent, isAcknowledgedNativeStop, acknowledgedNativeStopExecutionHasStopped } from "./acknowledged-native-stop.js";
 import { legacyControllerBootId, legacyControllerClaim, renewLegacyControllerLease, hasLiveLegacyController, revokeExpiredLegacyController, watchLegacyControllerLease } from "./legacy-controller-lease.js";
 import { completeTerminatedRemoteNativeSessionCleanup } from "../vendor/paperclip-runner/index.js";
@@ -8854,6 +8854,7 @@ export async function persistHeartbeatRunProcessMetadata(
       companyId: run.companyId, runId, agentId: run.agentId,
       eventType: PROCESS_IDENTITY_RECORDED, stream: "system", level: "info",
       message: "Process identity recorded; prior stop evidence no longer applies.",
+      payload: { processPid: meta.pid, processGroupId: meta.processGroupId, processStartedAt: startedAt.toISOString() },
     });
     return run;
   });
@@ -26255,6 +26256,16 @@ export function heartbeatService(
             providerResourceDispositionForRun,
             latestRun?.status,
           );
+        if (latestRun?.runtimeMode === "native" && isHeartbeatRunTerminalStatus(latestRun.status) &&
+          nativeDispatchStarted && !nativeSessionResumeScheduled && !nativeWorkspaceFinalizeScheduled &&
+          !nativeOwnershipHeld && !shutdownInProgress) {
+          try {
+            await recordNativeLocalProcessStopAfterExit(db, run.companyId, run.id);
+          } catch (stopReceiptError) {
+            logger.warn({ err: stopReceiptError, runId: run.id },
+              "could not record the completed Native local process stop before lease release");
+          }
+        }
         if (
           !nativeSessionResumeScheduled &&
           !nativeWorkspaceFinalizeScheduled &&

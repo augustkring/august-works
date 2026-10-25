@@ -3436,6 +3436,57 @@
         "Duration  8.83s (transform 2.31s, setup 0ms, import 4.20s, tests 4.51s, environment 0ms)"
       ],
       "sourceCommit": "36188589ae67abeccec6148de3c2da70ef0b44e9"
+    },
+    {
+      "name": "v10-token-gates-b76",
+      "exitCode": 0,
+      "exitSidecar": "v10-token-gates-b76.exit",
+      "rawSha256": "6afc6ad896a24825708eb6e5f73f4787bcb6da8c5ed681b9916431439e0bc780",
+      "sanitizedSha256": "6afc6ad896a24825708eb6e5f73f4787bcb6da8c5ed681b9916431439e0bc780",
+      "archiveSha256": "54cb5fcb68faef60e731259e2486419a024cbc683cd5dd47dca7b8ba0d18a3a9",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "b76e4884dbb5836940bad531895953cc20acaf28"
+    },
+    {
+      "name": "v10-coverage-b76",
+      "exitCode": 0,
+      "exitSidecar": "v10-coverage-b76.exit",
+      "rawSha256": "31d6e2a42462dae0e95b3cf6f81493480a03bfb93148934ef8387c3921b70740",
+      "sanitizedSha256": "31d6e2a42462dae0e95b3cf6f81493480a03bfb93148934ef8387c3921b70740",
+      "archiveSha256": "2d67000db0c86fa570319fa11114800db053de8a14bd1a6d9c70f2883b66c591",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "b76e4884dbb5836940bad531895953cc20acaf28"
+    },
+    {
+      "name": "v10-help-docs-b76",
+      "exitCode": 1,
+      "exitSidecar": "v10-help-docs-b76.exit",
+      "rawSha256": "835d75c61949239a7dc19046cfe6098bb804ba6f120e0b1e99a9268c1038d8d6",
+      "sanitizedSha256": "835d75c61949239a7dc19046cfe6098bb804ba6f120e0b1e99a9268c1038d8d6",
+      "archiveSha256": "3d76a016ca8d37af0b5c1a163d647c144eddc26badc01973cdcf2a6372cb4719",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "b76e4884dbb5836940bad531895953cc20acaf28"
     }
   ],
   "updates": [
@@ -3980,6 +4031,15 @@
         "managed-opencode-fixture-extraction-tsc3",
         "v10-worker-workspaces-b-36188589a",
         "v5-identities-migration-fixture-fk-final-20261025"
+      ]
+    },
+    {
+      "sourceCommit": "b76e4884dbb5836940bad531895953cc20acaf28",
+      "meaning": "Intermediate source/static gates at pushed b76e4884d; Help generated catalog failure follows concurrent article edits and remains unresolved until regeneration. Source coverage checks structure, with 70 pending evidence surfaces, not release acceptance.",
+      "logs": [
+        "v10-token-gates-b76",
+        "v10-coverage-b76",
+        "v10-help-docs-b76"
       ]
     }
   ],

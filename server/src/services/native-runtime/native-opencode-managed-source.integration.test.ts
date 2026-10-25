@@ -46,7 +46,6 @@ describe("managed OpenCode source-closure binary integration", () => {
     const privateRootContent = `private_context_root_${randomUUID()}`;
     const documentAId = "managed-e2e-document-a";
     const memoryAId = "managed-e2e-memory-a";
-    const privateMemoryId = "managed-e2e-private-root";
     const contextReadId = "managed-e2e-read-context";
     const memoryBId = "managed-e2e-memory-b";
     const result = await runManagedNativeOpenCodeFixture({ db, connectionString: database.connectionString,
@@ -59,8 +58,6 @@ describe("managed OpenCode source-closure binary integration", () => {
         { tool: "self_remember", id: memoryAId, input: { scope: "company", memoryType: "outcome",
           title: "Earlier shared managed output A", content: "Public managed output A, before private Context.",
           idempotencyKey: randomUUID() } },
-        { tool: "self_remember", id: privateMemoryId, input: { scope: "private", memoryType: "lesson",
-          title: "Actual private Context root", content: privateRootContent, idempotencyKey: randomUUID() } },
         { tool: "read_context", id: contextReadId, input: { query: privateRootContent } },
         { tool: "self_remember", id: memoryBId, input: { scope: "company", memoryType: "outcome",
           title: "Later shared managed output B", content: "Managed output B derived after private Context selection.",
@@ -74,6 +71,7 @@ describe("managed OpenCode source-closure binary integration", () => {
       // A shared Memory is born as a pending proposal. Accept it through the
       // normal Human review service after its real Gateway call and before
       // the next model request consumes that tool_result in Context.
+      privateContextContent: privateRootContent,
       humanActions: [{ afterModelToolCallId: memoryAId, action: "accept_memory_candidate" }],
       onPreserveDebugArtifacts: () => { preserveDebugArtifacts = true; } });
     expect(result.runId).toMatch(/^[0-9a-f-]{36}$/);
@@ -87,15 +85,15 @@ describe("managed OpenCode source-closure binary integration", () => {
     ]));
     const toolResult = (callId: string) => result.toolResults.find(value => value.callId === callId);
     const memoryA = toolResult(memoryAId);
-    const privateRoot = toolResult(privateMemoryId);
+    const privateRoot = result.privateRoot;
     const memoryB = toolResult(memoryBId);
     expect(memoryA?.memoryId).toMatch(/^[0-9a-f-]{36}$/);
     expect(privateRoot?.memoryId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(privateRoot?.producerRunId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(privateRoot?.issueId).toMatch(/^[0-9a-f-]{36}$/);
     expect(memoryB?.memoryId).toMatch(/^[0-9a-f-]{36}$/);
     const memories = memoryService(db);
-    for (const item of [memoryA, memoryB]) {
-      await memories.reviewCandidate(result.companyId, item!.memoryId!, { decision: "accept" }, result.aliceMemoryActor);
-    }
+    await memories.reviewCandidate(result.companyId, memoryB!.memoryId!, { decision: "accept" }, result.aliceMemoryActor);
     expect((await memories.get(result.companyId, memoryA!.memoryId!, result.aliceMemoryActor))?.record.id)
       .toBe(memoryA!.memoryId);
     expect((await memories.get(result.companyId, memoryA!.memoryId!, result.bobMemoryActor))?.record.id)

@@ -41,7 +41,6 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
       documentA: `temporal-document-a-${randomUUID()}`,
       taskA: `temporal-task-a-${randomUUID()}`,
       memoryA: `temporal-memory-a-${randomUUID()}`,
-      privateRoot: `temporal-private-root-${randomUUID()}`,
       contextR: `temporal-context-r-${randomUUID()}`,
       taskB: `temporal-task-b-${randomUUID()}`,
       memoryB: `temporal-memory-b-${randomUUID()}`,
@@ -55,8 +54,6 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
           description: "Independent model-created Task A before the private Context read." } },
         { tool: "self_remember", id: ids.memoryA, input: { scope: "company", memoryType: "outcome",
           title: "Earlier shared Memory A", content: "Memory A predates the private Context read.", idempotencyKey: randomUUID() } },
-        { tool: "self_remember", id: ids.privateRoot, input: { scope: "private", memoryType: "lesson",
-          title: "Private Memory root R", content: privateRootContent, idempotencyKey: randomUUID() } },
         { tool: "read_context", id: ids.contextR, input: { query: privateRootContent } },
         { tool: "create_task", id: ids.taskB, input: { idempotencyKey: randomUUID(), title: taskBTitle,
           description: `Copied body after governed Context read: ${randomUUID()}.` } },
@@ -65,13 +62,14 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
           idempotencyKey: randomUUID() } },
         { tool: "paperclip_finish", id: `temporal-finish-first-${randomUUID()}` },
       ],
+      privateContextContent: privateRootContent,
       humanActions: [{ afterModelToolCallId: ids.memoryA, action: "accept_memory_candidate" }],
     });
     expect(first.contextResultConsumers).toContainEqual({ callId: ids.contextR, consumed: true });
     const firstToolResult = (callId: string) => first.toolResults.find(value => value.callId === callId);
     const taskAId = firstToolResult(ids.taskA)?.taskId;
     const memoryAId = firstToolResult(ids.memoryA)?.memoryId;
-    const privateRootId = firstToolResult(ids.privateRoot)?.memoryId;
+    const privateRootId = first.privateRoot?.memoryId;
     const taskBId = firstToolResult(ids.taskB)?.taskId;
     const memoryBId = firstToolResult(ids.memoryB)?.memoryId;
     for (const id of [taskAId, memoryAId, privateRootId, taskBId, memoryBId])
@@ -99,6 +97,18 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
           idempotencyKey: randomUUID() } },
         { tool: "paperclip_finish", id: `temporal-finish-second-${randomUUID()}` },
       ] });
+    const firstContextCapture = first.contextReadCaptures.find(value => value.callId === ids.contextR)?.contextRead as {
+      manifestIds?: Array<{ contextManifestId: string }>;
+      sourceSet?: { policy?: { memoryIds?: string[] }; inputs?: Array<{ kind?: string; memoryId?: string }> };
+    } | undefined;
+    const firstManifestId = firstContextCapture?.manifestIds?.[0]?.contextManifestId;
+    if (!firstContextCapture || !firstManifestId) throw new Error("The first managed run has no actual private Context manifest");
+    const firstSelectedItems = await db.select().from(contextManifestItems).where(and(
+      eq(contextManifestItems.companyId, first.companyId), eq(contextManifestItems.manifestId, firstManifestId)));
+    expect(firstSelectedItems.some(item => item.sourceProvider === "august_works_memory" &&
+      item.sourceRef === `memory://record/${privateRootId}`)).toBe(true);
+    expect(firstContextCapture.sourceSet?.policy?.memoryIds).toContain(privateRootId);
+
     const contextCapture = second.contextReadCaptures[0]?.contextRead as {
       manifestIds?: Array<{ contextManifestId: string }>;
       sourceSet?: { policy?: { memoryIds?: string[] }; inputs?: Array<{ kind?: string; memoryId?: string }> };
@@ -172,12 +182,17 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
   });
 
   it("erases exact Task and Memory copies while preserving independent earlier Task, Memory, and document", async () => {
-    const { first, documentKey, taskAId, taskBId, memoryAId, memoryBId, privateRootId, memoryCId } = temporal;
+    const { first, second, documentKey, taskAId, taskBId, memoryAId, memoryBId, privateRootId, memoryCId } = temporal;
     const providerDb = join(managedOpenCodeRuntimeDirectory({ companyId: first.companyId, runId: first.runId }),
       "managed-session-1", "data", "opencode.db");
+    const laterProviderDb = join(managedOpenCodeRuntimeDirectory({ companyId: second.companyId, runId: second.runId }),
+      "managed-session-1", "data", "opencode.db");
     expect((await readFile(providerDb)).byteLength).toBeGreaterThan(0);
+    expect((await readFile(laterProviderDb)).byteLength).toBeGreaterThan(0);
     const memories = memoryService(db);
-    const erased = await memories.forget(first.companyId, privateRootId, first.aliceMemoryActor);
+    const privateRoot = first.privateRoot;
+    if (!privateRoot || privateRoot.memoryId !== privateRootId) throw new Error("The actual private Memory root is unavailable");
+    const erased = await memories.forget(first.companyId, privateRootId, privateRoot.memoryActor);
     expect(erased.deletedRecordCount).toBeGreaterThan(1);
     expect((await memories.get(first.companyId, memoryAId, first.aliceMemoryActor))?.record.id).toBe(memoryAId);
     expect((await memories.get(first.companyId, memoryAId, first.bobMemoryActor))?.record.id).toBe(memoryAId);
@@ -220,7 +235,11 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
     await memoryJobService(db).tick({ limit: 10, companyId: first.companyId });
     const [providerEraseJob] = await db.select().from(memoryJobs).where(and(eq(memoryJobs.companyId, first.companyId),
       eq(memoryJobs.jobKey, `runtime-asset-erasure:v1:${first.runId}`)));
+    const [laterProviderEraseJob] = await db.select().from(memoryJobs).where(and(eq(memoryJobs.companyId, first.companyId),
+      eq(memoryJobs.jobKey, `runtime-asset-erasure:v1:${second.runId}`)));
     expect(providerEraseJob?.status).toBe("succeeded");
+    expect(laterProviderEraseJob?.status).toBe("succeeded");
     await expect(stat(providerDb)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(stat(laterProviderDb)).rejects.toMatchObject({ code: "ENOENT" });
   });
 });

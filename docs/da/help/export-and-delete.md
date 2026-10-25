@@ -12,7 +12,7 @@ locale: da
 last_verified_at: 2026-10-25
 review_trigger: Ændringer i eksport, sletning, opbevaring, privat Memory-deling eller kildeadgang
 security_or_privacy_sensitive: true
-linked_source_files: [ui/src/pages/CompanyExport.tsx, ui/src/pages/SaasDeletion.tsx, ui/src/pages/SaasAccount.tsx, server/src/services/saas/account-deletion.ts, server/src/services/saas/offboarding.ts, server/src/services/saas/company-purge.ts, ui/src/pages/Memory.tsx, server/src/routes/memory.ts, server/src/services/memory/memory-service.ts, server/src/services/memory/memory-privacy.ts]
+linked_source_files: [ui/src/pages/CompanyExport.tsx, ui/src/pages/SaasDeletion.tsx, ui/src/pages/SaasAccount.tsx, server/src/services/saas/account-deletion.ts, server/src/services/saas/offboarding.ts, server/src/services/saas/company-purge.ts, ui/src/pages/Memory.tsx, server/src/routes/memory.ts, server/src/services/memory/memory-service.ts, server/src/services/memory/memory-privacy.ts, server/src/services/memory/memory-jobs.ts, server/src/services/native-runtime/runtime-asset-retention.ts, server/src/services/native-local-process-stop.ts]
 ---
 
 Blentera har særskilte handlinger til at eksportere en virksomhed, slette en organisation og slette din personlige konto. Kontrollér, hvilke data og hvilken identitet du mener, før du fortsætter.
@@ -39,3 +39,5 @@ Hvis en tidligere anmodning har et ukendt resultat, skal du bruge gendannelsen p
 Når Memory er slået til, viser et forslag om privat deling det præcise indhold og destinationen. Gennemgå begge dele, før du vælger **Godkend og del**. Kun den oprindelige ejer kan godkende delingen fra sin aktuelle konto. Almindelig gennemgang af Memory udvider ikke adgangen til private kilder.
 
 Den private original forbliver privat. Modtagere skal fortsat have aktuel adgang til destinationen og de bevarede kilder. Deling af Memory offentliggør ikke en underliggende privat opgave. En delt kopi kan blive utilgængelig, hvis kilden ændres, udløber, trækkes tilbage eller slettes. Et gemt resultat kan også miste tekst, det har kopieret fra en kilde, når kilden slettes. Det sletter ikke en selvstændig opgave eller et dokument skrevet af en person, blot fordi resultatet er knyttet til det. Sletning af den delte kopi sletter ikke den private original.
+
+Hvis du vælger **Forget permanently**, slettes det valgte Memory-indhold og dets afledte rettelses- og delingsposter. Hvis Memory stammer fra en administreret OpenCode-kørsel, sætter Blentera også afviklingens app-administrerede runtimefiler i kø til sletning. Filoprydningen venter, indtil Native har bekræftet, at kørslen er stoppet. Handlingen omfatter ikke data hos eksterne udbydere uden for Blenteras administrerede runtime-lager.
