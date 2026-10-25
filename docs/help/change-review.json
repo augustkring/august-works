@@ -493,10 +493,10 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "21f100a85b0378c02885179254f89f83175d15a8e5b0374e8a4c0531b208cbed",
+      "sourceSha256": "a527172a1b0484d66f6136e6a81b6c6154881df830f910efc1267bd200606e6d",
       "articleSha256": "a6601c43c0b37a662474bb499bc08c7f2bcc909b93a31ea62aafa334363b9640",
       "decision": "updated",
-      "rationale": "Reviewed the original Task mutation owner: its native body hash detects Agent body changes and refuses uncaptured restricted run sources before the write; recovery guidance says the old content is retained and asks for review before repeating the update."
+      "rationale": "Reviewed original Task monitor producer notification before the locked update. Nested/outer transaction settlement supplies a wake hint; native status, Stop, source-preserving updates and recovery actions remain authoritative. The recovery guide remains accurate and does not promise timely provider execution."
     },
     {
       "source": "ui/src/App.tsx",
@@ -613,10 +613,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "ff126a96d0f07320bf99867689c887bf4319af1cba90421dbe44cf4896c8ed69",
+      "sourceSha256": "fe402560178693691ad1302a0b5706ea7035f0762d8bea618c78b500144d3a72",
       "articleSha256": "7db4ab48ab595554d9c6d838f803d0bf70b4e931bf6e428f526e048031f64fe1",
       "decision": "no_change",
-      "rationale": "Reviewed native Routine source inspection before Find counts, snippets and extraction limits, bounded fail-closed overflow and original credential/source rechecks. Help-only queries retain current company authority and skip unrelated Task source enumeration; localized Help article behavior remains as documented."
+      "rationale": "Reviewed the shared native current Routine read scope for Find and Task/Project collections, SQL-before-limit/count behavior, current cache/attention metrics, narrow Agent admission and original credential fences. Help-only queries still skip unrelated Task sources; localized Help behavior is unchanged."
     },
     {
       "source": "packages/shared/src/types/search.ts",
@@ -1229,10 +1229,10 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "21f100a85b0378c02885179254f89f83175d15a8e5b0374e8a4c0531b208cbed",
+      "sourceSha256": "a527172a1b0484d66f6136e6a81b6c6154881df830f910efc1267bd200606e6d",
       "articleSha256": "58d909a279f9ccb7f90e42dab3b19567a078671a70a365ae5e523a431be5d011",
       "decision": "updated",
-      "rationale": "Danish translation of recovering-work: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "rationale": "Reviewed original Task monitor producer notification before the locked update. Nested/outer transaction settlement supplies a wake hint; native status, Stop, source-preserving updates and recovery actions remain authoritative. The recovery guide remains accurate and does not promise timely provider execution."
     },
     {
       "source": "ui/src/App.tsx",
@@ -1349,10 +1349,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "ff126a96d0f07320bf99867689c887bf4319af1cba90421dbe44cf4896c8ed69",
+      "sourceSha256": "fe402560178693691ad1302a0b5706ea7035f0762d8bea618c78b500144d3a72",
       "articleSha256": "e9ef1d13e8079524d3e58d816ed9f43d0221a3edf777605aa0e19a93a60c76fd",
       "decision": "no_change",
-      "rationale": "Reviewed native Routine source inspection before Find counts, snippets and extraction limits, bounded fail-closed overflow and original credential/source rechecks. Help-only queries retain current company authority and skip unrelated Task source enumeration; localized Help article behavior remains as documented."
+      "rationale": "Reviewed the shared native current Routine read scope for Find and Task/Project collections, SQL-before-limit/count behavior, current cache/attention metrics, narrow Agent admission and original credential fences. Help-only queries still skip unrelated Task sources; localized Help behavior is unchanged."
     },
     {
       "source": "packages/shared/src/types/search.ts",
