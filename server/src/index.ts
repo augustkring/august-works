@@ -1,3 +1,5 @@
+import { createDeliveryWorkCoordinator } from "./services/delivery-work-coordinator.js";
+import { registerScheduledWork } from "./services/scheduled-work.js";
 import { eraseExpiredExperienceObservations } from "./services/experience/observations.js";
 import { securityEventExportService } from "./services/enterprise/security-events.js";
 import { reconcileSandboxSafety } from "./services/execution-sandbox/sandbox-guardian.js";
@@ -1201,6 +1203,7 @@ async function startServerWithDatabaseTeardown(
     drainRunIds?: string[];
   }>) | null = null;
   let heartbeatSchedulerStopped = false;
+  let scheduledWorkCoordinator: ReturnType<typeof createDeliveryWorkCoordinator> | null = null;
   let heartbeatSchedulerInterval: ReturnType<typeof setInterval> | null = null;
   const heartbeatSchedulerInFlight = new Set<Promise<void>>();
   const trackHeartbeatSchedulerWork = (work: Promise<unknown>) => {
@@ -1759,6 +1762,23 @@ async function startServerWithDatabaseTeardown(
     // restart, so a leaked sandbox does not stay allocated across the restart.
     await runEnvironmentLeaseCleanupSweep(0);
 
+    // Housekeeping has completed. Restore each durable owner independently;
+    // periodic wakes below remain recovery for other-process/direct DB writes.
+    await heartbeat.resolveSchedulingSuppression();
+    scheduledWorkCoordinator = createDeliveryWorkCoordinator({
+      owner: db,
+      canRun: () => !heartbeatSchedulerStopped && !heartbeat.schedulingSuppressionSnapshot().suppressed,
+      canReconcile: () => !heartbeatSchedulerStopped &&
+        [null, "task_drain"].includes(heartbeat.schedulingSuppressionSnapshot().reason),
+      onError: (err, queue) => logger.error({ err, queue }, "scheduled work recovery failed"),
+    });
+    const scheduledWorkers = registerScheduledWork(scheduledWorkCoordinator, db, {
+      retryMs: config.heartbeatSchedulerIntervalMs,
+      tickTimers: signal => heartbeat.tickIssueMonitors(new Date(), signal),
+      tickRoutines: signal => routines.tickScheduledTriggers(new Date(), signal),
+    });
+    trackHeartbeatSchedulerWork(Promise.all([scheduledWorkers.routines.ready, scheduledWorkers.timers.ready]));
+
     const runRetentionSweep = async () => {
       const activeCompanies = await db.select({ id: companies.id }).from(companies).where(eq(companies.status, "active"));
       let archived = 0;
@@ -1800,7 +1820,7 @@ async function startServerWithDatabaseTeardown(
 
         if (!(await heartbeat.resolveSchedulingSuppression()).suppressed) {
           trackHeartbeatSchedulerWork(heartbeat
-            .tickTimers(new Date())
+            .tickTimers(new Date(), { includeIssueMonitors: false })
             .then((result) => {
               if (result.enqueued > 0) {
                 logger.info({ ...result }, "heartbeat timer tick enqueued runs");
@@ -1824,16 +1844,10 @@ async function startServerWithDatabaseTeardown(
         scheduleEnvironmentLeaseCleanupSweep();
 
         if (heartbeatSchedulerStopped) return;
-        trackHeartbeatSchedulerWork(routines
-          .tickScheduledTriggers(new Date())
-          .then((result) => {
-            if (result.triggered > 0) {
-              logger.info({ ...result }, "routine scheduler tick enqueued runs");
-            }
-          })
-          .catch((err) => {
-            logger.error({ err }, "routine scheduler tick failed");
-          }));
+        if (!heartbeat.schedulingSuppressionSnapshot().suppressed) {
+          scheduledWorkers.routines.wake();
+          scheduledWorkers.timers.wake();
+        }
 
         if (heartbeatSchedulerStopped) return;
         trackHeartbeatSchedulerWork((async () => {
@@ -2079,6 +2093,8 @@ async function startServerWithDatabaseTeardown(
       clearInterval(heartbeatSchedulerInterval);
       heartbeatSchedulerInterval = null;
     }
+
+    await scheduledWorkCoordinator?.stop();
 
     const heartbeatShutdown = await coordinateHeartbeatSchedulerShutdown({
       signal,

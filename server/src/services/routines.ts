@@ -77,6 +77,7 @@ import { trackRoutineRun } from "@paperclipai/shared/telemetry";
 import { conflict, forbidden, notFound, unauthorized, unprocessable, HttpError } from "../errors.js";
 import { logger } from "../middleware/logger.js";
 import { getTelemetryClient } from "../telemetry.js";
+import { DELIVERY_QUEUES, notifyDeliveryWork } from "./delivery-work-notifications.js";
 import { getConfiguredSecretProvider } from "../secrets/configured-provider.js";
 import { issueService } from "./issues.js";
 import { assertAssignableAgent } from "./agent-assignability.js";
@@ -2957,6 +2958,11 @@ export function routineService(
           code: "PRIVATE_ROUTINE_HANDOFF_UNSUPPORTED",
         });
       }
+      const scheduled = await executor.select({ id: routineTriggers.id }).from(routineTriggers).where(and(
+        eq(routineTriggers.companyId, companyId), eq(routineTriggers.routineId, locked.id),
+        eq(routineTriggers.kind, "schedule"), eq(routineTriggers.enabled, true), eq(routineTriggers.archived, false),
+      )).limit(1);
+      if (scheduled.length) await notifyDeliveryWork(executor, DELIVERY_QUEUES.routineSchedules);
       const [updated] = await executor
         .update(routines)
         .set({
@@ -2989,6 +2995,11 @@ export function routineService(
       if (!locked || locked.responsibleUserId !== expectedResponsibleUserId || locked.status !== "active") {
         throw conflict("Routine state changed before access revocation; reload and retry");
       }
+      const scheduled = await executor.select({ id: routineTriggers.id }).from(routineTriggers).where(and(
+        eq(routineTriggers.companyId, companyId), eq(routineTriggers.routineId, locked.id),
+        eq(routineTriggers.kind, "schedule"), eq(routineTriggers.enabled, true), eq(routineTriggers.archived, false),
+      )).limit(1);
+      if (scheduled.length) await notifyDeliveryWork(executor, DELIVERY_QUEUES.routineSchedules);
       const [updated] = await executor
         .update(routines)
         .set({
@@ -3091,6 +3102,14 @@ export function routineService(
           .where(eq(routines.id, id))
           .then((rows) => rows[0] ?? null);
         if (!locked) return null;
+
+        if (patch.status !== undefined || targetChanged || patch.projectId !== undefined) {
+          const [scheduled] = await txDb.select({ id: routineTriggers.id }).from(routineTriggers).where(and(
+            eq(routineTriggers.companyId, locked.companyId), eq(routineTriggers.routineId, locked.id),
+            eq(routineTriggers.kind, "schedule"), eq(routineTriggers.enabled, true), eq(routineTriggers.archived, false),
+          )).limit(1);
+          if (scheduled) await notifyDeliveryWork(tx, DELIVERY_QUEUES.routineSchedules);
+        }
 
         if (patch.baseRevisionId && patch.baseRevisionId !== locked.latestRevisionId) {
           throw conflict("Routine was updated by someone else", {
@@ -3250,6 +3269,7 @@ export function routineService(
       const { trigger, revision } = await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
         await tx.execute(sql`select id from ${routines} where ${routines.id} = ${routine.id} for update`);
+        if (input.kind === "schedule") await notifyDeliveryWork(tx, DELIVERY_QUEUES.routineSchedules);
         const [createdTrigger] = await txDb
           .insert(routineTriggers)
           .values({
@@ -3325,6 +3345,7 @@ export function routineService(
       const result = await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
         await tx.execute(sql`select id from ${routines} where ${routines.id} = ${existing.routineId} for update`);
+        if (existing.kind === "schedule") await notifyDeliveryWork(tx, DELIVERY_QUEUES.routineSchedules);
         const [updated] = await txDb
           .update(routineTriggers)
           .set({
@@ -3365,6 +3386,7 @@ export function routineService(
       const result = await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
         await tx.execute(sql`select id from ${routines} where ${routines.id} = ${existing.routineId} for update`);
+        if (existing.kind === "schedule") await notifyDeliveryWork(tx, DELIVERY_QUEUES.routineSchedules);
         await txDb.delete(routineTriggers).where(eq(routineTriggers.id, id));
         const routine = await txDb
           .select()
@@ -3529,6 +3551,14 @@ export function routineService(
           throw conflict("Selected revision is already the latest revision", {
             currentRevisionId: locked.latestRevisionId,
           });
+        }
+
+        if (snapshot.triggers.some((trigger) => trigger.kind === "schedule")
+          || await txDb.select({ id: routineTriggers.id }).from(routineTriggers).where(and(
+            eq(routineTriggers.companyId, locked.companyId), eq(routineTriggers.routineId, locked.id),
+            eq(routineTriggers.kind, "schedule"),
+          )).limit(1).then(rows => rows.length > 0)) {
+          await notifyDeliveryWork(tx, DELIVERY_QUEUES.routineSchedules);
         }
 
         const currentTriggers = await txDb
@@ -4003,7 +4033,8 @@ export function routineService(
       }));
     },
 
-    tickScheduledTriggers: async (now: Date = new Date()) => {
+    tickScheduledTriggers: async (now: Date = new Date(), signal?: AbortSignal) => {
+      if (signal?.aborted) return { triggered: 0 };
       const pending = await db.select({ id: routineRuns.id, companyId: routineRuns.companyId })
         .from(routineRuns)
         .innerJoin(issues, and(eq(issues.companyId, routineRuns.companyId), eq(issues.id, routineRuns.linkedIssueId),
@@ -4012,9 +4043,11 @@ export function routineService(
         .where(and(eq(routineRuns.status, "received"), isNotNull(routineRuns.linkedIssueId)))
         .orderBy(asc(routineRuns.triggeredAt), asc(routineRuns.id)).limit(100);
       for (const item of pending) {
+        if (signal?.aborted) return { triggered: 0 };
         try { await finishRoutineIssueIntent(item.companyId, item.id); }
         catch { logger.warn({ routineRunId: item.id }, "routine assignment intent remains pending"); }
       }
+      if (signal?.aborted) return { triggered: 0 };
       const worktreeActivation = isTruthyRuntimeEnvValue(runtimeEnv.PAPERCLIP_IN_WORKTREE)
         ? await resolveWorktreeRunExecutionActivationState({
           getExperimental: instanceSettings.getExperimental,
@@ -4044,6 +4077,7 @@ export function routineService(
 
       let triggered = 0;
       for (const row of due) {
+        if (signal?.aborted) return { triggered };
         if (!row.trigger.nextRunAt || !row.trigger.cronExpression || !row.trigger.timezone) continue;
 
         // Suppress scheduled firings while the routine's project is paused. The tick is still
@@ -4064,12 +4098,18 @@ export function routineService(
             let cursor: Date | null = row.trigger.nextRunAt;
             runCount = 0;
             while (cursor && cursor <= now && runCount < MAX_CATCH_UP_RUNS) {
+              if (signal?.aborted) return { triggered };
               runCount += 1;
               claimedNextRunAt = nextCronTickInTimeZone(row.trigger.cronExpression, row.trigger.timezone, cursor);
               cursor = claimedNextRunAt;
             }
           }
         }
+
+        // Cancellation may prevent claiming another occurrence, but once the
+        // claim commits below its durable dispatch/suppression intent must be
+        // recorded even if shutdown starts while that write is in flight.
+        if (signal?.aborted) return { triggered };
 
         const claimed = await db
           .update(routineTriggers)

@@ -6,11 +6,13 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   authUsers,
   authSessions,
+  agents,
   companyMemberships,
   createDb,
   EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
   heartbeatRuns,
   issuePrivacySources,
+  issueRelations,
   issues,
   memoryDeletionMarkers,
   principalPermissionGrants,
@@ -20,6 +22,7 @@ import { authorizationService, canActorReadIssuePrivacy, issueReadSqlCondition }
 import { canActorReadTypedTaskSourcePrivacy } from "../services/authorization.js";
 import { issueService } from "../services/issues.js";
 import { issueRoutes } from "../routes/issues.js";
+import { projectRoutes } from "../routes/projects.js";
 import { errorHandler } from "../middleware/error-handler.js";
 import { lockMemoryPrivacy, purgeDerivedWorkflowMemory } from "../services/memory/memory-privacy.js";
 import { routineAuthoringToolsService } from "../services/routine-authoring-tools.js";
@@ -90,8 +93,14 @@ describe("typed routine Task private source graph", () => {
     return { routineId: created.routineId, revisionId: created.currentRevisionId!, run: run! };
   }
 
-  async function createTypedTask(source: Awaited<ReturnType<typeof createRoutineAndRun>>) {
+  async function createTypedTask(
+    source: Awaited<ReturnType<typeof createRoutineAndRun>>,
+    options: { projectId?: string; status?: string; assigneeAgentId?: string } = {},
+  ) {
     return issueService(db).create(f.home, { title: "PRIVATE copied execution Task", description: "PRIVATE execution detail",
+      ...(options.projectId ? { projectId: options.projectId } : {}),
+      ...(options.status ? { status: options.status } : {}),
+      ...(options.assigneeAgentId ? { assigneeAgentId: options.assigneeAgentId } : {}),
       originKind: "routine_execution", originId: source.routineId, originRunId: source.run.id,
       createdByUserId: f.userId, responsibleUserId: f.userId, actorResponsibleUserId: f.userId,
       trustExplicitResponsibleUserId: true }, db, undefined, { privacyActor: ownerActor() });
@@ -102,8 +111,10 @@ describe("typed routine Task private source graph", () => {
 
   function appFor(actor: Express.Request["actor"]) {
     const app = express();
+    app.use(express.json());
     app.use((req, _res, next) => { req.actor = actor; next(); });
     app.use("/api", issueRoutes(db, {} as never));
+    app.use("/api", projectRoutes(db));
     app.use(errorHandler);
     return request(app);
   }
@@ -180,6 +191,184 @@ describe("typed routine Task private source graph", () => {
         })).toBe(false);
       });
     });
+  }, 90_000);
+
+  it("keeps assigned narrow Agent Task reads available while withholding private Routine-backed rows", async () => {
+    const ownerHttp = appFor(ownerActor());
+    const project = await ownerHttp.post(`/api/companies/${f.home}/projects`)
+      .send({ name: "Low-trust Routine boundary" }).expect(201);
+    const source = await createRoutineAndRun();
+    const privateTask = await createTypedTask(source, { assigneeAgentId: f.presence.id, projectId: project.body.id });
+    const assignedTask = await issueService(db).create(f.home, {
+      title: "Assigned Agent public Task control",
+      assigneeAgentId: f.presence.id,
+      projectId: project.body.id,
+      createdByUserId: f.userId,
+      responsibleUserId: f.userId,
+    });
+    await db.update(issues).set({ updatedAt: new Date(Date.now() + 2_000) }).where(eq(issues.id, privateTask.id));
+    await db.update(agents).set({ permissions: {
+      trustPreset: "low_trust_review",
+      authorizationPolicy: {
+        managedBy: "core-trust-preset",
+        trustBoundary: { mode: "low_trust_review", companyId: f.home, projectIds: [project.body.id] },
+      },
+    } }).where(eq(agents.id, f.presence.id));
+    const narrowAgent = {
+      type: "agent" as const,
+      source: "agent_jwt" as const,
+      companyId: f.home,
+      agentId: f.presence.id,
+      runId: authoringRunId,
+    };
+    expect((await authorizationService(db).decide({
+      actor: narrowAgent,
+      action: "company_scope:read",
+      resource: { type: "company", companyId: f.home },
+    })).allowed).toBe(false);
+
+    const response = await appFor(narrowAgent)
+      .get(`/api/companies/${f.home}/issues?limit=1&projectId=${project.body.id}`)
+      .expect(200);
+    expect(response.body.map((row: { id: string }) => row.id)).toContain(assignedTask.id);
+    expect(response.body.map((row: { id: string }) => row.id)).not.toContain(privateTask.id);
+    expect(JSON.stringify(response.body)).not.toContain("PRIVATE execution detail");
+  }, 90_000);
+
+  it("filters Routine-backed Tasks before issue list limits, blocked counts, and project metrics", async () => {
+    const ownerHttp = appFor(ownerActor());
+    const projectResponse = await ownerHttp
+      .post(`/api/companies/${f.home}/projects`)
+      .send({ name: "Routine private task metrics" })
+      .expect(201);
+    const projectId = projectResponse.body.id as string;
+    const source = await createRoutineAndRun();
+    const privateTask = await createTypedTask(source, {
+      projectId,
+      status: "blocked",
+    });
+    const privateBlocker = await issueService(db).create(
+      f.home,
+      {
+        title: "Private Task's unassigned blocker",
+        status: "todo",
+        projectId,
+        createdByUserId: f.userId,
+        responsibleUserId: f.userId,
+      },
+      db,
+      undefined,
+      { privacyActor: ownerActor() },
+    );
+    const publicTask = await issueService(db).create(
+      f.home,
+      {
+        title: "Public blocked control",
+        status: "blocked",
+        projectId,
+        createdByUserId: f.userId,
+        responsibleUserId: f.userId,
+      },
+      db,
+      undefined,
+      { privacyActor: ownerActor() },
+    );
+    const publicBlocker = await issueService(db).create(
+      f.home,
+      {
+        title: "Public unassigned blocker",
+        status: "todo",
+        projectId,
+        createdByUserId: f.userId,
+        responsibleUserId: f.userId,
+      },
+      db,
+      undefined,
+      { privacyActor: ownerActor() },
+    );
+    await db.insert(issueRelations).values([
+      {
+        companyId: f.home,
+        issueId: privateBlocker.id,
+        relatedIssueId: privateTask.id,
+        type: "blocks",
+      },
+      {
+        companyId: f.home,
+        issueId: publicBlocker.id,
+        relatedIssueId: publicTask.id,
+        type: "blocks",
+      },
+    ]);
+    const listSortBase = Date.now();
+    await db
+      .update(issues)
+      .set({ updatedAt: new Date(listSortBase + 5_000) })
+      .where(eq(issues.id, privateTask.id));
+    await db
+      .update(issues)
+      .set({ updatedAt: new Date(listSortBase + 4_000) })
+      .where(eq(issues.id, publicTask.id));
+
+    const taskListPath = `/api/companies/${f.home}/issues?projectId=${projectId}&limit=1`;
+    const ownerList = await ownerHttp.get(taskListPath).expect(200);
+    expect(ownerList.body[0]?.id).toBe(privateTask.id);
+
+    const bobHttp = appFor(bobActor());
+    const bobList = await bobHttp.get(taskListPath).expect(200);
+    expect(bobList.body).toHaveLength(1);
+    expect(bobList.body[0]?.id).toBe(publicTask.id);
+    expect(JSON.stringify(bobList.body)).not.toContain("PRIVATE execution detail");
+
+    const ownerCount = await ownerHttp
+      .get(`/api/companies/${f.home}/issues/count`)
+      .query({ attention: "blocked", projectId })
+      .expect(200);
+    const bobCount = await bobHttp
+      .get(`/api/companies/${f.home}/issues/count`)
+      .query({ attention: "blocked", projectId })
+      .expect(200);
+    expect(ownerCount.body.count).toBe(2);
+    expect(bobCount.body.count).toBe(1);
+
+    const ownerProject = (await ownerHttp
+      .get(`/api/companies/${f.home}/projects`)
+      .expect(200)).body.find((row: { id: string }) => row.id === projectId);
+    const bobProject = (await bobHttp
+      .get(`/api/companies/${f.home}/projects`)
+      .expect(200)).body.find((row: { id: string }) => row.id === projectId);
+    expect(ownerProject?.taskCount).toBe(4);
+    expect(bobProject?.taskCount).toBe(3);
+  }, 90_000);
+
+  it("rejects Task and Project list/count reads after the original Human session expires", async () => {
+    const ownerHttp = appFor(ownerActor());
+    const projectResponse = await ownerHttp
+      .post(`/api/companies/${f.home}/projects`)
+      .send({ name: "Expired Routine reader" })
+      .expect(201);
+    const source = await createRoutineAndRun();
+    await createTypedTask(source, {
+      projectId: projectResponse.body.id as string,
+      status: "blocked",
+    });
+    await db
+      .update(authSessions)
+      .set({ expiresAt: new Date(Date.now() - 1_000) })
+      .where(eq(authSessions.id, ownerActor().sessionId!));
+
+    const list = await ownerHttp
+      .get(`/api/companies/${f.home}/issues?attention=blocked`)
+      .expect(403);
+    const count = await ownerHttp
+      .get(`/api/companies/${f.home}/issues/count?attention=blocked`)
+      .expect(403);
+    const projects = await ownerHttp
+      .get(`/api/companies/${f.home}/projects`)
+      .expect(403);
+    for (const response of [list, count, projects]) {
+      expect(JSON.stringify(response.body)).not.toContain("PRIVATE execution detail");
+    }
   }, 90_000);
 
   it("keeps public local search usable without granting private Routine authority", async () => {

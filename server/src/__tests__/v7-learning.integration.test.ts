@@ -26,7 +26,7 @@ import {agentRuntimeFabricService} from "../services/agent-runtime-fabric.js";
 import {agentExecutionManifests} from "@paperclipai/db";
 import {agentExecutionManifestSchema} from "@paperclipai/shared";
 import {contextManifestService} from "../services/context/context-manifest.js";
-import {authUsers,analyticalContextRoots,contextManifests} from "@paperclipai/db";
+import {authUsers,authSessions,analyticalContextRoots,contextManifests} from "@paperclipai/db";
 import {assertNativeAnalyticalRunPayloadAccess} from "../services/analytical-context-authority.js";
 import {automationArtifactService} from "../services/automation-artifacts/automation-artifact-service.js";
 import {automationArtifactRuntimeService} from "../services/automation-artifacts/automation-artifact-runtime.js";
@@ -39,6 +39,7 @@ import { companies, agents, agentIdentities, heartbeatRuns, contextManifestMemor
 import { learningChangeSchema, createGovernedSkillSchema, createPlaybookSchema, roadmapPolicySchema, type LearningChange } from "@paperclipai/shared";
 import { learningService } from "../services/learning/learning-service.js";
 import {assertAnalyticalContextPayloadAccess} from "../services/analytical-context-authority.js";
+import {authorizationService} from "../services/authorization.js";
 import {businessMetricService} from "../services/business-metrics/service.js";
 import {businessMetricObservations,learningAnalyticalDependencies,memoryJobs} from "@paperclipai/db";
 import {metricDefinition} from "./helpers/business-metric-fixture.js";
@@ -207,18 +208,23 @@ const support = await getEmbeddedPostgresTestSupport();
   it.each(["verified_memory","artifact_signal","workflow_signal","promoted_artifact_signal","expired_artifact_signal"] as const)("retains current Optimizer source authority and erases native compiler copies: %s", async sourceKind => {
     const generated=sourceKind==="artifact_signal"||sourceKind==="promoted_artifact_signal"||sourceKind==="expired_artifact_signal";
     const signal=sourceKind==="verified_memory"?null:await analyticalSignal();
-    const service = workflowService(db), created = await service.create(companyId, { name: "Reviewed pure transform" }, principal);
+    await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:"local-board",status:"active",membershipRole:"owner"}).onConflictDoNothing();
+    await db.insert(principalPermissionGrants).values(["company_scope:read","workflows:read","issue:read","agent:read"].map(permissionKey=>({companyId,principalType:"user",principalId:"local-board",permissionKey}))).onConflictDoNothing();
+    const sourceActor={type:"board" as const,source:"session" as const,userId:"local-board"};
+    const sourceRunActor={principal:{type:"user" as const,userId:"local-board"}};
+    await expect(authorizationService(db).decide({actor:sourceActor,action:"company_scope:read",resource:{type:"company",companyId},enforceResponsibleUserIntersection:true})).resolves.toMatchObject({allowed:true});
+    const service = workflowService(db), created = await service.create(companyId, { name: "Reviewed pure transform" }, sourceRunActor);
     const draft = await service.updateDraft(companyId, created.id, { expectedRevisionId: created.draftRevisionId!, graph: {
       version: 1, nodes: [
         { id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} },
         { id: "copy", type: "core.transform", name: "Copy", position: { x: 100, y: 0 }, config: { mapping: { value: "{{input.value}}" } } },
-      ], edges: [{ id: "e", source: "start", target: "copy" }], variables: [], settings: {} } }, principal);
+      ], edges: [{ id: "e", source: "start", target: "copy" }], variables: [], settings: {} } }, sourceRunActor);
     let currentDraft=draft.draftRevisionId!;
     if(sourceKind==="workflow_signal"){
       const graph={...draft.draftRevision!.graph,nodes:draft.draftRevision!.graph.nodes.map(node=>({...node,name:`Reviewed ${node.name}`}))};
       currentDraft=(await domainProposal(created.id,`workflow://${created.id}/${currentDraft}`,{targetDomain:"workflow",draft:{expectedRevisionId:currentDraft,graph,changeSummary:"Native verified outcomes and current signal inform the exact transform"}},[signal!.pin])).candidateId;
     }
-    const published = await service.publish(companyId, created.id, { expectedDraftRevisionId: currentDraft, expectedPublishedRevisionId: null, approvalId: null }, principal);
+    const published = await service.publish(companyId, created.id, { expectedDraftRevisionId: currentDraft, expectedPublishedRevisionId: null, approvalId: null }, sourceRunActor);
     // A separate real Native fixture identity exercises runtime consumer rebinding;
     // the source-authoritative local operator reviews these synthetic outcomes.
     const reviewerNow = new Date();
@@ -228,18 +234,31 @@ const support = await getEmbeddedPostgresTestSupport();
     const executor = workflowExecutorService(db);
     // These are actual local engine runs reviewed against the declared fixture contract, not customer pilot evidence.
     for (let index = 1; index <= 3; index++) {
-      const run = await executor.startManualRun(companyId, created.id, { input: { value: index } }, principal, `learning-source-${index}`);
-      await reviewWorkflowRun(db, companyId, run.run.id, { humanCorrection: false, correctedOutputs: {}, reason: "Verified the saved engine output against the copy contract" }, principal);
+      const run = await executor.startManualRun(companyId, created.id, { input: { value: index } }, sourceRunActor, `learning-source-${index}`);
+      await reviewWorkflowRun(db, companyId, run.run.id, { humanCorrection: false, correctedOutputs: {}, reason: "Verified the saved engine output against the copy contract" }, sourceRunActor);
+      if(sourceKind==="verified_memory"&&index===1){
+        const now=new Date(),sessionId=randomUUID(),verifiedDeadline=now.getTime()+1500;
+        await db.insert(authSessions).values({id:sessionId,userId:"local-board",token:randomUUID(),createdAt:now,updatedAt:now,
+          expiresAt:new Date(now.getTime()+60_000)});
+        const expiringActor={...sourceActor,sessionId,authenticatedCredentialExpiresAt:verifiedDeadline};
+        let callbackEntered=false;
+        await expect(db.transaction(async tx=>authorizationService(tx).withReadWorkflowSources(companyId,expiringActor,[run.run.id],async()=>{
+          callbackEntered=true;
+          await tx.execute(sql`select pg_sleep(2)`);
+        }))).rejects.toMatchObject({status:403});
+        expect(callbackEntered).toBe(true);
+      }
     }
-    const suggestion = (await optimizerSuggestionService(db).forWorkflow(companyId, created.id, owner))!.suggestions.find(item => item.operationTypes.length === 1 && item.operationTypes[0] === "core.transform")!;
-    const request = await proposeOptimizerCandidate(db, companyId, created.id, suggestion.id,owner);
+    const suggestion = (await optimizerSuggestionService(db).forWorkflow(companyId, created.id, sourceActor))!.suggestions.find(item => item.operationTypes.length === 1 && item.operationTypes[0] === "core.transform")!;
+    const request = await proposeOptimizerCandidate(db, companyId, created.id, suggestion.id,sourceActor);
     if(generated){
       // Native TypeScript classification prerequisite, not a model suggestion.
       await instanceSettingsService(db).updateExperimental({enableAutomationArtifactCodeExecutionV1:true});
       await db.update(workflowOptimizerSuggestions).set({candidateType:"typescript"}).where(eq(workflowOptimizerSuggestions.id,suggestion.id));
       request.kind="typescript";request.sourceCode="export default (input: { value: number }) => ({ value: input.value });";
     }
-    const optimizer = optimizerEvaluationService(db), replay = await optimizer.compile(companyId, created.id, suggestion.id, request, principal);
+    const optimizer = optimizerEvaluationService(db), replay = await optimizer.compile(companyId, created.id, suggestion.id, request,
+      { principal: { type: "user", userId: "local-board" }, sourceActor });
     expect(replay.gatesPassed).toBe(true);
     const [evaluation] = await db.select().from(workflowOptimizerEvaluations).where(eq(workflowOptimizerEvaluations.id, replay.evaluationId));
     const link = await domainProposal(created.id, `optimizer://${created.id}/${published.publishedRevisionId}`, { targetDomain: "automation_artifact", optimizerEvaluationId: replay.evaluationId, expectedArtifactVersionId: replay.artifactVersionId, expectedContentHash: evaluation!.contentHash },generated?[signal!.pin]:undefined);
@@ -257,53 +276,60 @@ const support = await getEmbeddedPostgresTestSupport();
     let descendantVersionId:string|null=null, artifactChildTaskId:string|null=null, sourcefulRunId:string|null=null;
     const additionalSourceRunIds:string[]=[];
     if(signal){
+      // Source-aware reads require an actual current Human identity. The local
+      // implicit board fixture has no user to intersect with private Source
+      // ACLs, so use the same current company member who owns this signal.
+      await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:"local-board",status:"active",membershipRole:"owner"}).onConflictDoNothing();
+      await db.insert(principalPermissionGrants).values(["company_scope:read","workflows:read","issue:read","agent:read"].map(permissionKey=>({companyId,principalType:"user",principalId:"local-board",permissionKey}))).onConflictDoNothing();
+      const sourceOwner={type:"board" as const,source:"session" as const,userId:"local-board"};
+      const artifactActor={principal:{type:"user" as const,userId:"local-board"},sourceActor:sourceOwner};
       const [consumer] = await db.select().from(workflowRuns).where(and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.workflowId, created.id)));
       // Actual native owner IDs; the association is a software provenance
       // prerequisite, not a performed promoted Artifact execution or trial.
       await db.update(workflowStepRuns).set({ automationArtifactVersionId: replay.artifactVersionId })
         .where(and(eq(workflowStepRuns.companyId, companyId), eq(workflowStepRuns.workflowRunId, consumer!.id), eq(workflowStepRuns.nodeId, "copy")));
-      expect((await executor.getRun(companyId, consumer!.id, owner))!.steps.find(step => step.nodeId === "copy")!.automationArtifactVersionId).toBe(replay.artifactVersionId);
+      expect((await executor.getRun(companyId, consumer!.id, sourceActor))!.steps.find(step => step.nodeId === "copy")!.automationArtifactVersionId).toBe(replay.artifactVersionId);
       // Software retained child-copy prerequisite on real native owner IDs;
       // the original Artifact has not been promoted/executed by this Workflow.
       const [child] = await db.insert(issues).values({ companyId, title: "Historical Artifact-informed task", description: "Copied private analytical procedure", originKind: "workflow_task", originId: created.id, originRunId: consumer!.id }).returning();
       artifactChildTaskId = child!.id;
-      await expect(assertAnalyticalContextPayloadAccess(db,companyId,owner,{issueId:artifactChildTaskId})).resolves.toBeUndefined();
+      await expect(assertAnalyticalContextPayloadAccess(db,companyId,sourceOwner,{issueId:artifactChildTaskId})).resolves.toBeUndefined();
 
       await expect(executor.getRun(companyId, consumer!.id)).rejects.toMatchObject({ details: { code: "analytical_source_access_lost" } });
-      expect((await artifacts.getDetail(companyId,replay.artifactId,principal))!.latestVersion!.sourceCode).not.toBe("");
-      expect(await artifacts.list(companyId,principal)).toHaveLength(1);
-      expect(await optimizer.list(companyId,created.id,owner)).toHaveLength(1);
+      expect((await artifacts.getDetail(companyId,replay.artifactId,artifactActor))!.latestVersion!.sourceCode).not.toBe("");
+      expect(await artifacts.list(companyId,artifactActor)).toHaveLength(1);
+      expect(await optimizer.list(companyId,created.id,sourceActor)).toHaveLength(1);
       await expect(optimizer.evaluate(companyId,replay.evaluationId)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
-      expect((await optimizer.evaluate(companyId,replay.evaluationId,principal)).gatesPassed).toBe(true);
+      expect((await optimizer.evaluate(companyId,replay.evaluationId,artifactActor)).gatesPassed).toBe(true);
       await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,signal.sourceId));
-      for(const read of [()=>optimizer.list(companyId,created.id,owner),()=>optimizer.evaluate(companyId,replay.evaluationId,principal),()=>optimizer.startShadow(companyId,replay.evaluationId,principal),()=>optimizer.requestPromotionApproval(companyId,replay.evaluationId,principal),()=>optimizer.prepareCanary(companyId,replay.evaluationId,principal),()=>optimizer.activate(companyId,replay.evaluationId,principal)])await expect(read()).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+      for(const read of [()=>optimizer.list(companyId,created.id,sourceActor),()=>optimizer.evaluate(companyId,replay.evaluationId,artifactActor),()=>optimizer.startShadow(companyId,replay.evaluationId,artifactActor),()=>optimizer.requestPromotionApproval(companyId,replay.evaluationId,artifactActor),()=>optimizer.prepareCanary(companyId,replay.evaluationId,artifactActor),()=>optimizer.activate(companyId,replay.evaluationId,artifactActor)])await expect(read()).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
       if(sourceKind==="workflow_signal"){
-        await expect(proposeOptimizerCandidate(db,companyId,created.id,suggestion.id,owner)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
-        await expect(optimizer.compile(companyId,created.id,suggestion.id,request,principal)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+        await expect(proposeOptimizerCandidate(db,companyId,created.id,suggestion.id,sourceActor)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+        await expect(optimizer.compile(companyId,created.id,suggestion.id,request,artifactActor)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
         expect(await db.select().from(automationArtifacts).where(eq(automationArtifacts.companyId,companyId))).toHaveLength(1);
       }
-      expect(await artifacts.list(companyId,principal)).toEqual([]);
-      await expect(artifacts.getDetail(companyId,replay.artifactId,principal)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
-      await expect(executor.getRun(companyId, consumer!.id, owner)).rejects.toMatchObject({ details: { code: "analytical_source_access_lost" } });
-      await expect(assertAnalyticalContextPayloadAccess(db,companyId,owner,{issueId:artifactChildTaskId!})).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+      expect(await artifacts.list(companyId,artifactActor)).toEqual([]);
+      await expect(artifacts.getDetail(companyId,replay.artifactId,artifactActor)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+      await expect(executor.getRun(companyId, consumer!.id, sourceActor)).rejects.toMatchObject({ details: { code: "analytical_source_access_lost" } });
+      await expect(assertAnalyticalContextPayloadAccess(db,companyId,sourceOwner,{issueId:artifactChildTaskId!})).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
 
-      await expect(executor.listRuns(companyId, created.id, 10, owner)).rejects.toMatchObject({ details: { code: "analytical_source_access_lost" } });
-      await expect(artifacts.transitionStatus(companyId,replay.artifactId,{expectedStatus:"testing",expectedLatestVersionId:replay.artifactVersionId,status:"candidate"},principal)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
-      await expect(artifacts.archive(companyId,replay.artifactId,{expectedLatestVersionId:replay.artifactVersionId},principal)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
-      const promotion={companyId,suggestionId:suggestion.id,artifactId:replay.artifactId,expectedArtifactVersionId:replay.artifactVersionId,actor:{principal:{type:"system" as const,service:"workflow-optimizer"}},sourceActor:owner,policy:{allowLowRiskAutoPromotion:false,fallbackKind:"published_workflow" as const},evidence:{replayEvaluation:replay.replayEvaluation,shadowEvaluation:optimizerShadowSummary([]),rollbackAvailable:true,driftGuardAvailable:true,humanApproved:false,canaryPassed:false}};
+      await expect(executor.listRuns(companyId, created.id, 10, sourceActor)).rejects.toMatchObject({ details: { code: "analytical_source_access_lost" } });
+      await expect(artifacts.transitionStatus(companyId,replay.artifactId,{expectedStatus:"testing",expectedLatestVersionId:replay.artifactVersionId,status:"candidate"},artifactActor)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+      await expect(artifacts.archive(companyId,replay.artifactId,{expectedLatestVersionId:replay.artifactVersionId},artifactActor)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+      const promotion={companyId,suggestionId:suggestion.id,artifactId:replay.artifactId,expectedArtifactVersionId:replay.artifactVersionId,actor:{principal:{type:"system" as const,service:"workflow-optimizer"}},sourceActor,policy:{allowLowRiskAutoPromotion:false,fallbackKind:"published_workflow" as const},evidence:{replayEvaluation:replay.replayEvaluation,shadowEvaluation:optimizerShadowSummary([]),rollbackAvailable:true,driftGuardAvailable:true,humanApproved:false,canaryPassed:false}};
       await expect(optimizerPromotionService(db).prepareCanary(promotion)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
       await expect(optimizerPromotionService(db).activate(promotion)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
       expect((await db.select().from(workflowOptimizerEvaluations).where(eq(workflowOptimizerEvaluations.id,replay.evaluationId)))[0]!.status).toBe("testing");
       await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,signal.sourceId));
-      expect((await executor.getRun(companyId, consumer!.id, owner))!.steps.find(step => step.nodeId === "copy")!.outputJson).toEqual({ value: expect.any(Number) });
-      await expect(assertAnalyticalContextPayloadAccess(db,companyId,owner,{issueId:artifactChildTaskId!})).resolves.toBeUndefined();
+      expect((await executor.getRun(companyId, consumer!.id, sourceActor))!.steps.find(step => step.nodeId === "copy")!.outputJson).toEqual({ value: expect.any(Number) });
+      await expect(assertAnalyticalContextPayloadAccess(db,companyId,sourceActor,{issueId:artifactChildTaskId!})).resolves.toBeUndefined();
       if (sourceKind === "artifact_signal" || sourceKind === "expired_artifact_signal") {
         // Active lifecycle is an explicit software prerequisite for isolating
         // runtime admission. This is not an Optimizer promotion/approval proof.
         await db.update(automationArtifacts).set({ status: "active" }).where(eq(automationArtifacts.id,replay.artifactId));
         // Same declared Human as the analytical Source; membership is a
         // software identity prerequisite, not a browser/JWT session proof.
-        await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:"local-board",status:"active",membershipRole:"owner"});
+        await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:"local-board",status:"active",membershipRole:"owner"}).onConflictDoNothing();
         const human = { principal: { type: "user" as const, userId: "local-board" } };
         try {
           const runtime = automationArtifactRuntimeService(db);
@@ -403,7 +429,7 @@ const support = await getEmbeddedPostgresTestSupport();
       await instanceSettingsService(db).updateExperimental({enableWorkflowOptimizerPromotion:true});
       // Current declared Source owner and native company membership are
       // software identity prerequisites, not a browser/JWT or Human trial.
-      await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:"local-board",status:"active",membershipRole:"owner"});
+      await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:"local-board",status:"active",membershipRole:"owner"}).onConflictDoNothing();
       const human={principal:{type:"user" as const,userId:"local-board"}};
       await expect(optimizer.requestPromotionApproval(companyId,replay.evaluationId,human)).rejects.toMatchObject({status:409});
       for(const value of [9,10]){
@@ -456,12 +482,14 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(artifactRun.steps.find(step=>step.nodeId==="artifact")).toMatchObject({outputJson:{value:44},automationArtifactVersionId:replay.artifactVersionId});
       additionalSourceRunIds.push(artifactRun.run.id);
       await db.update(companyMemberships).set({status:"inactive"}).where(and(eq(companyMemberships.companyId,companyId),eq(companyMemberships.principalType,"user"),eq(companyMemberships.principalId,human.principal.userId)));
-      await expect(executor.startManualRun(companyId,ordinary.id,{input:{value:45}},agentActor,null)).resolves.toMatchObject({run:{status:"failed"}});
-      const fallback=await executor.startManualRun(companyId,created.id,{input:{value:45}},agentActor,null);
-      expect(fallback.run.status).toBe("succeeded");
-      expect(fallback.steps.find(step=>step.nodeId==="copy")).toMatchObject({outputJson:{value:45},automationArtifactVersionId:null});
-      expect(await db.select().from(workflowOptimizerObservations).where(eq(workflowOptimizerObservations.workflowRunId,fallback.run.id))).toHaveLength(0);
+      await expect(executor.startManualRun(companyId,ordinary.id,{input:{value:45}},agentActor,null)).rejects.toMatchObject({status:403});
       await db.update(companyMemberships).set({status:"active"}).where(and(eq(companyMemberships.companyId,companyId),eq(companyMemberships.principalType,"user"),eq(companyMemberships.principalId,human.principal.userId)));
+      const restored=await executor.startManualRun(companyId,created.id,{input:{value:45}},agentActor,null);
+      expect(restored.run.status).toBe("succeeded");
+      expect(restored.steps.find(step=>step.nodeId==="copy")).toMatchObject({outputJson:{value:45},automationArtifactVersionId:replay.artifactVersionId});
+      expect(await db.select().from(workflowOptimizerObservations).where(eq(workflowOptimizerObservations.workflowRunId,restored.run.id))).toMatchObject([
+        {evaluationId:replay.evaluationId,mode:"active",candidateUsed:true,passed:true,fallback:false},
+      ]);
       await expect(fs.lstat(artifactWorkspaceDirectory({companyId,versionId:replay.artifactVersionId}))).rejects.toMatchObject({code:"ENOENT"});
     }
     if(signal){
@@ -543,6 +571,7 @@ const support = await getEmbeddedPostgresTestSupport();
   it.each(["verified_memory","workflow_signal"] as const)("erases actual no-wait Workflow Tasks and native/preparation child copies: %s",async sourceKind=>{
     const signal=sourceKind==="workflow_signal"?await analyticalSignal():null;
     await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:"local-board",membershipRole:"owner",status:"active"});
+    await db.insert(principalPermissionGrants).values(["company_scope:read","workflows:read","issue:read","agent:read"].map(permissionKey=>({companyId,principalType:"user",principalId:"local-board",permissionKey}))).onConflictDoNothing();
     const human={principal:{type:"user" as const,userId:"local-board"}},service=workflowService(db);
     const created=await service.create(companyId,{name:"Retained no-wait Task procedure"},human);
     const graph={version:1 as const,nodes:[
@@ -759,7 +788,9 @@ const support = await getEmbeddedPostgresTestSupport();
     await expect(contextManifestService(db).create({...input,issueId:otherTask!.id,policySnapshot:{intent:input.intent},selected:assembled.decisions.map(decision=>({decision}))})).rejects.toMatchObject({status:403,message:"Context task does not match its actual run"});
     expect(await db.select().from(contextManifests).where(eq(contextManifests.companyId,companyId))).toHaveLength(contexts.length);expect(await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId))).toHaveLength(1);
     await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,signal.sourceId));await expect(assertNativeAnalyticalRunPayloadAccess(db,companyId,run!.id)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
-    const before=await db.select().from(contextManifests).where(eq(contextManifests.companyId,companyId));await expect(contextEngineService(db).assemble(input)).rejects.toMatchObject({status:403});expect(await db.select().from(contextManifests).where(eq(contextManifests.companyId,companyId))).toHaveLength(before.length);
+    const before=await db.select().from(contextManifests).where(eq(contextManifests.companyId,companyId));
+    await expect(contextEngineService(db).assemble(input)).rejects.toMatchObject({status:503,details:{providerKey:"foundation",reason:"provider_failed"}});
+    expect(await db.select().from(contextManifests).where(eq(contextManifests.companyId,companyId))).toHaveLength(before.length);
     await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,signal.sourceId));await expect(assertNativeAnalyticalRunPayloadAccess(db,companyId,run!.id)).resolves.toBeUndefined();
     await db.update(heartbeatRuns).set({...(stage==="native"?{runtimeMode:"native" as const,runtimeModeResolvedAt:new Date(),nativeIssueId:task!.id}:{}),resultJson:{procedure:"Copied original learned procedure"}}).where(eq(heartbeatRuns.id,run!.id));
     await instanceSettingsService(db).updateExperimental({learning_engine_v7:false,cognitive_memory_v7:false,memory_observations_v7:false,management_reviews_v8:false,business_metrics_v8:false,analytical_lineage_v8:false,enableCollectiveMemoryV1:false,enablePrivateAgentMemoryV1:false});await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));

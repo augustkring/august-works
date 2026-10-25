@@ -50,6 +50,7 @@ import { assertEnvironmentSelectionForCompany } from "./environment-selection.js
 import { environmentService } from "../services/environments.js";
 import { secretService } from "../services/secrets.js";
 import { authorizationService, canActorReadIssuePrivacy, canActorReadProjectPrivacy, issueReadSqlCondition, projectReadSqlCondition, pinCurrentBoardActor } from "../services/authorization.js";
+import { withCurrentTaskSourceRead } from "../services/task-source-read-scope.js";
 import { ensureProjectAccessMember, pinProjectMutationHuman } from "../services/projects.js";
 import { lockIssuePrivacyTree } from "../services/issues.js";
 import { assertHumanAuthentication } from "../auth/authenticator-assurance.js";
@@ -169,9 +170,16 @@ export function projectRoutes(db: Db) {
     if (isUuidLike(rawId)) return rawId;
     const companyId = await resolveCompanyIdForProjectReference(req);
     if (!companyId) return rawId;
-    const resolved = await svc.resolveByReference(companyId, rawId, {
-      readCondition: await projectReadSqlCondition(db, req.actor),
-    });
+    const resolved = await withCurrentTaskSourceRead(
+      db,
+      companyId,
+      req.actor,
+      async (queryDb) => projectService(queryDb).resolveByReference(companyId, rawId, {
+        readCondition: await projectReadSqlCondition(queryDb, req.actor),
+      }),
+      true,
+      false,
+    );
     if (resolved.ambiguous) {
       throw conflict("Project shortname is ambiguous in this company. Use the project ID.");
     }
@@ -225,9 +233,9 @@ export function projectRoutes(db: Db) {
     return false;
   }
 
-  async function filterProjectsForActor<T extends { id: string; companyId: string }>(req: Request, rows: T[]) {
+  async function filterProjectsForActor<T extends { id: string; companyId: string }>(req: Request, rows: T[], executor: Db = db) {
     const decisions = await Promise.all(rows.map((project) =>
-      access.decide({
+      accessService(executor).decide({
         actor: req.actor,
         action: "project:read",
         resource: { type: "project", companyId: project.companyId, projectId: project.id },
@@ -271,12 +279,27 @@ export function projectRoutes(db: Db) {
     const companyId = req.params.companyId as string;
     assertCompanyAccess(req, companyId);
     const includeArchived = req.query.includeArchived === "true";
-    const result = await svc.list(companyId, {
-      includeArchived,
-      readCondition: await projectReadSqlCondition(db, req.actor),
-      issueReadCondition: await issueReadSqlCondition(db, req.actor),
-    });
-    res.json((await filterProjectsForActor(req, result)).map(publicNativePayloadRow));
+    const result = await withCurrentTaskSourceRead(
+      db,
+      companyId,
+      req.actor,
+      async (queryDb) => {
+        const queryService = projectService(queryDb);
+        const [readCondition, issueReadCondition] = await Promise.all([
+          projectReadSqlCondition(queryDb, req.actor),
+          issueReadSqlCondition(queryDb, req.actor),
+        ]);
+        const rows = await queryService.list(companyId, {
+          includeArchived,
+          readCondition,
+          issueReadCondition,
+        });
+        return filterProjectsForActor(req, rows, queryDb);
+      },
+      true,
+      false,
+    );
+    res.json(result.map(publicNativePayloadRow));
   });
 
   router.get("/projects/:id", async (req, res) => {

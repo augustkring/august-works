@@ -242,6 +242,7 @@ export function optimizerEvaluationService(db: Db) {
     },
 
     evaluate: async (companyId: string, evaluationId: string, actor?:AutomationArtifactMutationActor) => {
+      if (!actor?.principal) throw forbidden("A current Workflow source reader is required", { code: "analytical_source_access_lost" });
       const sourceActor=actor?learningActorFromPrincipal(companyId,actor.principal,actor.runId):undefined;
       const bound = await assertOptimizerEvaluationBinding(db, companyId, evaluationId, false,sourceActor);
       const { evaluation, artifact, version } = bound;

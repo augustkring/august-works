@@ -1,3 +1,5 @@
+import { readTaskDrain, computeTaskDrain, applyTaskDrain, startTaskDrain, stopTaskDrain, idleWorkSnapshot } from "./task-admission.js";
+export { computeTaskDrain, applyTaskDrain, startTaskDrain, stopTaskDrain } from "./task-admission.js";
 import { isCompanyCapacityWait } from "./billing/capacity-admission.js";
 import { reconcileAgentDraftTest } from "./agents/authoring-test-recovery.js";
 import { governedNativeTaskRunFields } from "./ai-governance/execution-gate.js";
@@ -1317,62 +1319,6 @@ const nativeSessionResumeDispatchTimers = new Map<
   string,
   ReturnType<typeof setTimeout>
 >();
-// Task drain: an operator-controlled hold on new run admission, so a caller
-// can wait for active work to finish before it stops the process. The state
-// lives in process memory only — a process restart clears it — and it sits at
-// module scope like activeRunExecutions above, so both the pure
-// resolveHeartbeatSchedulingSuppression() check and every heartbeatService()
-// instance see the same drain.
-let taskDrainState: { startedAt: Date; expiresAt: Date | null } | null = null;
-
-function readTaskDrain(
-  now: Date,
-): { startedAt: Date; expiresAt: Date | null } | null {
-  if (
-    taskDrainState &&
-    taskDrainState.expiresAt !== null &&
-    taskDrainState.expiresAt.getTime() <= now.getTime()
-  ) {
-    taskDrainState = null;
-  }
-  return taskDrainState;
-}
-
-/** Compute the drain a start call would apply, without changing state. */
-export function computeTaskDrain(opts: { ttlMs?: number | null } = {}): {
-  startedAt: Date;
-  expiresAt: Date | null;
-} {
-  const startedAt = new Date();
-  const ttlMs = opts.ttlMs ?? null;
-  const expiresAt =
-    ttlMs === null ? null : new Date(startedAt.getTime() + ttlMs);
-  return { startedAt, expiresAt };
-}
-
-/** Assign the given drain as the current task-drain state. */
-export function applyTaskDrain(drain: {
-  startedAt: Date;
-  expiresAt: Date | null;
-}): void {
-  taskDrainState = drain;
-}
-
-export function startTaskDrain(opts: { ttlMs?: number | null } = {}): {
-  startedAt: Date;
-  expiresAt: Date | null;
-} {
-  const drain = computeTaskDrain(opts);
-  applyTaskDrain(drain);
-  return drain;
-}
-
-export function stopTaskDrain(): { wasActive: boolean } {
-  const wasActive = readTaskDrain(new Date()) !== null;
-  taskDrainState = null;
-  return { wasActive };
-}
-
 /**
  * Report the task-drain state for this process only. `activeRuns` and
  * `pendingWakes` count in-process work. A process restart clears both
@@ -1396,7 +1342,7 @@ export function getTaskDrainStatus(): {
     expiresAt: state?.expiresAt ?? null,
     activeRuns,
     pendingWakes,
-    quiescent: activeRuns === 0 && pendingWakes === 0,
+    quiescent: activeRuns === 0 && pendingWakes === 0 && idleWorkSnapshot().active === 0,
   };
 }
 
@@ -11913,7 +11859,7 @@ export function heartbeatService(
     });
   }
 
-  async function tickDueIssueMonitors(now = new Date()) {
+  async function tickDueIssueMonitors(now = new Date(), signal?: AbortSignal) {
     const staleClaimThreshold = new Date(now.getTime() - 5 * 60 * 1000);
     const dueMonitors = await db
       .select(issueMonitorDispatchColumns)
@@ -11940,6 +11886,7 @@ export function heartbeatService(
     let skipped = 0;
 
     for (const due of dueMonitors) {
+      if (signal?.aborted || shutdownInProgress || (await getSchedulingSuppression()).suppressed) break;
       const claimed = await db.transaction(async (tx) => {
         const [updated] = await tx
           .update(issues)
@@ -29834,6 +29781,16 @@ export function heartbeatService(
     // run-execution experimental setting). Callers outside the service that
     // gate on suppression should prefer this over the env-only resolver.
     resolveSchedulingSuppression: getSchedulingSuppression,
+    // A passive timer hint only. Actual dispatch still rechecks this owner's
+    // current asynchronous admission, cutoff, grants, Stop and atomic claims.
+    schedulingSuppressionSnapshot: () => resolveHeartbeatSchedulingSuppression(runtimeEnv, {
+      allowWorktreeRunExecution: cachedWorktreeRunExecutionOverride.allowed,
+    }),
+    tickIssueMonitors: async (now = new Date(), signal?: AbortSignal) => {
+      if (shutdownInProgress || signal?.aborted || (await getSchedulingSuppression()).suppressed)
+        return { checked: 0, triggered: 0, skipped: 0 };
+      return tickDueIssueMonitors(now, signal);
+    },
     drainRunningRunsForShutdown,
     drainActiveRunExecutions,
     startTaskDrain,
@@ -29886,7 +29843,7 @@ export function heartbeatService(
 
     buildRunOutputSilence,
 
-    tickTimers: async (now = new Date()) => {
+    tickTimers: async (now = new Date(), options: { includeIssueMonitors?: boolean } = {}) => {
       if ((await getSchedulingSuppression()).suppressed) {
         return {
           checked: 0,
@@ -29964,7 +29921,9 @@ export function heartbeatService(
         else skipped += 1;
       }
 
-      const issueMonitors = await tickDueIssueMonitors(now);
+      const issueMonitors = options.includeIssueMonitors === false
+        ? { checked: 0, triggered: 0, skipped: 0 }
+        : await tickDueIssueMonitors(now);
 
       return {
         checked: checked + issueMonitors.checked,

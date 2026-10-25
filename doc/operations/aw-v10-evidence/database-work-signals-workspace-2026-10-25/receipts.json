@@ -1,0 +1,46 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "a40fdff26db51ce63294be2f38e697db2e2b0cdc",
+  "meaning": "Stable original full DB suite197PASS/50files on finalworksignal source after lifetime fence. Earlier broad run overlapped lifetime edit and failed newcallback test196PASS/1FAIL; both preserved. Not wholeworkspace/V10 qualification.",
+  "logs": [
+    {
+      "name": "database-work-signals-workspace",
+      "exitCode": 1,
+      "rawSha256": "1b2c1db2c987bc0399610f94847288c585f4c439bb419c3d791e0fffea691352",
+      "sanitizedSha256": "1b2c1db2c987bc0399610f94847288c585f4c439bb419c3d791e0fffea691352",
+      "archiveSha256": "75865de6265003d371e275b012b555a0235b4779e30f33885426ae3766dc8fa4",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed | 49 passed (50)",
+        "Tests  1 failed | 196 passed (197)",
+        "Duration  399.73s (transform 4.93s, setup 0ms, import 77.26s, tests 316.20s, environment 5ms)"
+      ]
+    },
+    {
+      "name": "database-work-signals-workspace-stable-final",
+      "exitCode": 0,
+      "rawSha256": "72645012ff5f454c4350a5906d9a7003af074a653c223a30daef95ebac861c6f",
+      "sanitizedSha256": "72645012ff5f454c4350a5906d9a7003af074a653c223a30daef95ebac861c6f",
+      "archiveSha256": "7811833561b02acb6f7d1eb01b9d950c86ef3649198658174eb5490efc68b07c",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  50 passed (50)",
+        "Tests  197 passed (197)",
+        "Duration  419.21s (transform 4.67s, setup 0ms, import 81.44s, tests 330.85s, environment 4ms)"
+      ]
+    }
+  ]
+}

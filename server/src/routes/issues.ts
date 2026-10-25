@@ -289,6 +289,7 @@ import {
   type IssuePostCommitAction,
 } from "../services/issues.js";
 import { authorizationDeniedDetails, authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, issueReadSqlCondition, projectReadSqlCondition } from "../services/authorization.js";
+import { withCurrentTaskSourceRead } from "../services/task-source-read-scope.js";
 import { persistActivity } from "../services/activity-log.js";
 import { stalledReviewDecisionService } from "../services/stalled-review-decisions.js";
 import { environmentService } from "../services/environments.js";
@@ -3318,6 +3319,7 @@ async function coordinateIssueListGet(input: {
   companyId: string;
   requestKey: ReturnType<typeof issueListRequestKey>;
   allowTtlCache: boolean;
+  bypassSharedResult?: boolean;
   diagnostics?: IssueListDiagnostics;
   compute: () => Promise<IssueListPreparedResponse>;
 }): Promise<{
@@ -3329,7 +3331,7 @@ async function coordinateIssueListGet(input: {
   const now = Date.now();
   pruneIssueListResponseCache(now);
 
-  const cached = input.allowTtlCache
+  const cached = input.allowTtlCache && !input.bypassSharedResult
     ? issueListResponseCache.get(input.requestKey.key)
     : undefined;
   if (cached && cached.expiresAt > now) {
@@ -3341,7 +3343,9 @@ async function coordinateIssueListGet(input: {
     };
   }
 
-  const existing = issueListInflight.get(input.requestKey.key);
+  const existing = input.bypassSharedResult
+    ? undefined
+    : issueListInflight.get(input.requestKey.key);
   if (existing) {
     existing.waiterCount += 1;
     const identicalInFlightCount = existing.waiterCount + 1;
@@ -3376,7 +3380,7 @@ async function coordinateIssueListGet(input: {
   const actorClientInflight =
     issueListActorClientInflight.get(actorClientKey) ?? 0;
   if (actorClientInflight >= ISSUE_LIST_MAX_ACTOR_CLIENT_INFLIGHT) {
-    if (cached && cached.staleUntil > now) {
+    if (!input.bypassSharedResult && cached && cached.staleUntil > now) {
       touchIssueListResponseCacheEntry(input.requestKey.key, cached);
       return {
         response: cached.response,
@@ -3406,11 +3410,13 @@ async function coordinateIssueListGet(input: {
     waiterCount: 0,
     stormLogged: false,
   };
-  issueListInflight.set(input.requestKey.key, inflightEntry);
+  if (!input.bypassSharedResult) {
+    issueListInflight.set(input.requestKey.key, inflightEntry);
+  }
 
   try {
     const response = await promise;
-    if (input.allowTtlCache) {
+    if (input.allowTtlCache && !input.bypassSharedResult) {
       setIssueListResponseCacheEntry(input.requestKey.key, {
         response,
         expiresAt: Date.now() + ISSUE_LIST_SERVER_CACHE_TTL_MS,
@@ -3419,7 +3425,7 @@ async function coordinateIssueListGet(input: {
     }
     return { response, cacheStatus: "miss", identicalInFlightCount: 1 };
   } finally {
-    if (issueListInflight.get(input.requestKey.key) === inflightEntry) {
+    if (!input.bypassSharedResult && issueListInflight.get(input.requestKey.key) === inflightEntry) {
       issueListInflight.delete(input.requestKey.key);
     }
     decrementIssueListActorClientInflight(actorClientKey);
@@ -3604,50 +3610,8 @@ export function issueRoutes(
     opts.searchRateLimiter ?? defaultCompanySearchRateLimiter;
   async function runCompanySearchRead<T>(req: Request, companyId: string,
     read: (queryDb: Db, search: CompanySearchService) => Promise<T>, needsTaskSources = true): Promise<T> {
-    // Isolated route tests inject a service and deliberately omit a database.
-    // This path preserves that service seam without claiming native authority.
-    if (typeof (db as { transaction?: unknown }).transaction !== "function") {
-      return read(db, getSearchService(db));
-    }
-    return db.transaction(async rawTx => {
-      const tx = rawTx as unknown as Db;
-      return authorizationService(tx).withReadCompany(companyId, async owner => {
-        const decision = await owner.decide({
-          actor: req.actor,
-          action: "company_scope:read",
-          resource: { type: "company", companyId },
-        });
-        if (!decision.allowed) throw forbidden("Company search is outside this actor's authorization boundary",
-          authorizationDeniedDetails(decision));
-        const search = getSearchService(tx);
-        // Credential-free local administration retains the ordinary SQL policy:
-        // public rows remain usable and private Routine sources stay withheld.
-        if (!needsTaskSources || req.actor.type === "none" || req.actor.source === "local_implicit") return read(tx, search);
-        const routineRows = await tx.execute<{ ids: string[]; overflow: boolean }>(sql`
-          with referenced as materialized (
-            select case when i.origin_run_id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
-              then i.origin_run_id::uuid end as id
-            from issues i where i.company_id=${companyId} and i.origin_kind='routine_execution'
-            union
-            select s.source_id as id from issue_privacy_sources s
-              join issues i on i.company_id=s.company_id and i.id=s.issue_id
-              where s.company_id=${companyId} and s.source_kind='routine_run'
-          ), conversation_runs as materialized (
-            select distinct r.id from referenced ref
-              join routine_runs r on r.id=ref.id and r.company_id=${companyId}
-              join routines p on p.id=r.routine_id and p.company_id=r.company_id
-              where p.origin_kind='conversation_draft'
-          ), bounded as materialized (select id from conversation_runs order by id limit 257)
-          select coalesce(array_agg(id::text order by id),array[]::text[]) as ids, count(*)>256 as overflow from bounded
-        `);
-        const candidateRoutineRunIds = routineRows[0]?.ids ?? [];
-        if (routineRows[0]?.overflow) throw forbidden("Search sources are unavailable for a complete current access review.");
-        return candidateRoutineRunIds.length
-          ? authorizationService(tx).withReadRoutineSources(companyId, req.actor, candidateRoutineRunIds,
-            async () => read(tx, search))
-          : read(tx, search);
-      });
-    });
+    return withCurrentTaskSourceRead(db, companyId, req.actor,
+      (queryDb) => read(queryDb, getSearchService(queryDb)), needsTaskSources);
   }
   const instanceSettings = instanceSettingsService(db);
   const agentsSvc = agentService(db);
@@ -5107,8 +5071,9 @@ export function issueRoutes(
       status: string;
     },
     action: "issue:comment" | "issue:read" | "issue:mutate",
+    executor: Db = db,
   ) {
-    return access.decide({
+    return accessService(executor).decide({
       actor: req.actor,
       action,
       resource: {
@@ -5331,21 +5296,21 @@ export function issueRoutes(
 
   async function filterIssuesForActor<
     T extends Parameters<typeof decideIssueAccess>[1],
-  >(req: Request, rows: T[]) {
+  >(req: Request, rows: T[], executor: Db = db) {
     const decisions = await Promise.all(
-      rows.map((issue) => decideIssueAccess(req, issue, "issue:read")),
+      rows.map((issue) => decideIssueAccess(req, issue, "issue:read", executor)),
     );
     return rows.filter((_, index) => decisions[index]?.allowed);
   }
 
-  async function readableIssueEdgeIds(req: Request, companyId: string, ids: Iterable<string>) {
+  async function readableIssueEdgeIds(req: Request, companyId: string, ids: Iterable<string>, executor: Db = db) {
     const unique = [...new Set(ids)].filter(isUuidLike);
     if (!unique.length) return new Set<string>();
-    const rows = await db.select({ id: issueRows.id, companyId: issueRows.companyId,
+    const rows = await executor.select({ id: issueRows.id, companyId: issueRows.companyId,
       projectId: issueRows.projectId, parentId: issueRows.parentId, assigneeAgentId: issueRows.assigneeAgentId,
       assigneeUserId: issueRows.assigneeUserId, status: issueRows.status }).from(issueRows)
       .where(and(eq(issueRows.companyId, companyId), inArray(issueRows.id, unique)));
-    return new Set((await filterIssuesForActor(req, rows)).map(row => row.id));
+    return new Set((await filterIssuesForActor(req, rows, executor)).map(row => row.id));
   }
 
   async function requireIssuePrivacyOwner(executor: Db, req: Request, issue: typeof issueRows.$inferSelect) {
@@ -5386,7 +5351,7 @@ export function issueRoutes(
     id: string; blockedBy?: IssueRelationIssueSummary[]; blocks?: IssueRelationIssueSummary[];
     blockedByIssueIds?: string[]; blockerAttention?: CompactIssue["blockerAttention"];
     blockedInboxAttention?: CompactIssue["blockedInboxAttention"]; activeRecoveryAction?: CompactIssue["activeRecoveryAction"];
-  }>(req: Request, companyId: string, rows: T[]): Promise<Array<Omit<T, "payloadSourceProtocolVersion" | "payloadSourceSnapshot" | "payloadSourceSnapshotInvalidated">>> {
+  }>(req: Request, companyId: string, rows: T[], executor: Db = db): Promise<Array<Omit<T, "payloadSourceProtocolVersion" | "payloadSourceSnapshot" | "payloadSourceSnapshotInvalidated">>> {
     const ids = new Set(rows.map(row => row.id));
     const pending = rows.flatMap(row => [...(row.blockedBy ?? []), ...(row.blocks ?? [])]);
     for (const row of rows) {
@@ -5410,7 +5375,7 @@ export function issueRoutes(
       }
       pending.push(...(issue.terminalBlockers ?? []));
     }
-    const readable = await readableIssueEdgeIds(req, companyId, ids);
+    const readable = await readableIssueEdgeIds(req, companyId, ids, executor);
     return rows.map(row => {
       const projected = { ...row };
       const projectRelations = (relations: IssueRelationIssueSummary[]) => relations
@@ -5444,20 +5409,32 @@ export function issueRoutes(
   async function currentIssueListBody<T extends Parameters<typeof redactIssueRelationEdgesOnRows>[2][number] & { liveDescendantCount?: number }>(
     req: Request, companyId: string, rows: T[],
   ) {
-    const currentIds = await readableIssueEdgeIds(req, companyId, rows.map(issue => issue.id));
-    const currentRows = rows.filter(issue => currentIds.has(issue.id));
-    const include = { blockers: currentRows.some(row => row.blockerAttention !== undefined),
-      inbox: currentRows.some(row => row.blockedInboxAttention !== undefined),
-      descendants: currentRows.some(row => row.liveDescendantCount !== undefined) };
-    if (!include.blockers && !include.inbox && !include.descendants) return redactIssueRelationEdgesOnRows(req, companyId, currentRows);
-    // Cached counts and attention also depend on other Tasks' current ACLs.
-    const metrics = await svc.currentReadMetrics(companyId, currentRows.map(row => row.id),
-      await issueReadSqlCondition(db, req.actor), include);
-    return redactIssueRelationEdgesOnRows(req, companyId, currentRows.map(row => ({ ...row,
-      ...(row.blockerAttention !== undefined ? { blockerAttention: metrics.blockers.get(row.id) } : {}),
-      ...(row.blockedInboxAttention !== undefined ? { blockedInboxAttention: metrics.inbox.get(row.id) ?? null } : {}),
-      ...(row.liveDescendantCount !== undefined ? { liveDescendantCount: metrics.descendants.get(row.id) ?? 0 } : {}),
-    })));
+    return withCurrentTaskSourceRead(db, companyId, req.actor, async (queryDb) => {
+      const currentIds = await readableIssueEdgeIds(req, companyId, rows.map(issue => issue.id), queryDb);
+      const currentRows = rows.filter(issue => currentIds.has(issue.id));
+      const include = { blockers: currentRows.some(row => row.blockerAttention !== undefined),
+        inbox: currentRows.some(row => row.blockedInboxAttention !== undefined),
+        descendants: currentRows.some(row => row.liveDescendantCount !== undefined) };
+      if (!include.blockers && !include.inbox && !include.descendants) return redactIssueRelationEdgesOnRows(req, companyId, currentRows, queryDb);
+      // Cached counts and attention also depend on other Tasks' current ACLs.
+      const metrics = await issueService(queryDb).currentReadMetrics(companyId, currentRows.map(row => row.id),
+        await issueReadSqlCondition(queryDb, req.actor), include);
+      return redactIssueRelationEdgesOnRows(req, companyId, currentRows.map(row => ({ ...row,
+        ...(row.blockerAttention !== undefined ? { blockerAttention: metrics.blockers.get(row.id) } : {}),
+        ...(row.blockedInboxAttention !== undefined ? { blockedInboxAttention: metrics.inbox.get(row.id) ?? null } : {}),
+        ...(row.liveDescendantCount !== undefined ? { liveDescendantCount: metrics.descendants.get(row.id) ?? 0 } : {}),
+      })), queryDb);
+    }, true, false);
+  }
+
+  async function currentBlockerAttentionForIssue(req: Request, issue: typeof issueRows.$inferSelect) {
+    return withCurrentTaskSourceRead(db, issue.companyId, req.actor, async (queryDb) =>
+      issueService(queryDb).listBlockerAttention(
+        issue.companyId,
+        [issue],
+        queryDb,
+        await issueReadSqlCondition(queryDb, req.actor),
+      ).then((map) => map.get(issue.id) ?? null), true, false);
   }
 
   async function redactIssueReferenceEdges<T extends {
@@ -8324,7 +8301,6 @@ export function issueRoutes(
     const offset = parsedOffset ?? 0;
 
     const listFilters: IssueFilters = {
-      readCondition: await issueReadSqlCondition(db, req.actor),
       attention: attention === "blocked" ? "blocked" : undefined,
       status: req.query.status as string | string[] | undefined,
       assigneeAgentId,
@@ -8379,15 +8355,26 @@ export function issueRoutes(
         view: compactView ? "compact" : undefined,
       },
     });
-    const coordinated = await coordinateIssueListGet({
-      req,
+    const coordinated = await withCurrentTaskSourceRead(
+      db,
       companyId,
-      requestKey,
-      allowTtlCache: compactView,
-      diagnostics: opts.issueListDiagnostics,
-      compute: async () => {
-        const rawResult = await svc.list(companyId, listFilters);
-        const result = await filterIssuesForActor(req, rawResult);
+      req.actor,
+      async (queryDb, hasRoutineReferences) => {
+        const queryService = issueService(queryDb);
+        const scopedListFilters: IssueFilters = {
+          ...listFilters,
+          readCondition: await issueReadSqlCondition(queryDb, req.actor),
+        };
+        return coordinateIssueListGet({
+          req,
+          companyId,
+          requestKey,
+          allowTtlCache: compactView && !hasRoutineReferences,
+          bypassSharedResult: hasRoutineReferences,
+          diagnostics: opts.issueListDiagnostics,
+          compute: async () => {
+        const rawResult = await queryService.list(companyId, scopedListFilters);
+        const result = await filterIssuesForActor(req, rawResult, queryDb);
         const issueIds = result.map((issue) => issue.id);
         if (compactView) {
           const [handoffStates, recoveryActionByIssue] = await Promise.all([
@@ -8452,8 +8439,12 @@ export function issueRoutes(
             activeRecoveryAction: recoveryActionByIssue.get(issue.id) ?? null,
           })),
         };
+          },
+        });
       },
-    });
+      true,
+      false,
+    );
 
     res.setHeader("X-Paperclip-Request-Cache", coordinated.cacheStatus);
     if (!coordinated.response) {
@@ -8557,7 +8548,6 @@ export function issueRoutes(
     }
 
     const blockedCountFilters = {
-      readCondition: await issueReadSqlCondition(db, req.actor),
       attention: "blocked",
       status: req.query.status as string | string[] | undefined,
       assigneeAgentId: req.query.assigneeAgentId as string | undefined,
@@ -8590,47 +8580,58 @@ export function issueRoutes(
       q: req.query.q as string | undefined,
     } as const;
 
-    if (!(await actorCanReadCompanyScope(req, companyId))) {
-      const trustResolution =
-        req.actor.type === "agent"
-          ? await resolveAgentTrustForIssue(
-              {
-                agentId: req.actor.agentId,
-                runId: req.actor.runId,
-              },
-              companyId,
-              null,
-            )
-          : null;
-      if (trustResolution?.kind === "denied") {
-        throw forbidden(trustResolution.detail);
-      }
-      if (trustResolution?.kind === "low_trust_review") {
-        const count = await svc.count(companyId, {
+    const canReadCompanyScope = await actorCanReadCompanyScope(req, companyId);
+    const count = await withCurrentTaskSourceRead(
+      db,
+      companyId,
+      req.actor,
+      async (queryDb) => {
+        const queryService = issueService(queryDb);
+        const scopedFilters = {
           ...blockedCountFilters,
-          lowTrustBoundary: trustResolution.boundary,
-        });
-        res.json({ count });
-        return;
-      }
+          readCondition: await issueReadSqlCondition(queryDb, req.actor),
+        };
+        if (!canReadCompanyScope) {
+          const trustResolution =
+            req.actor.type === "agent"
+              ? await resolveAgentTrustForIssue(
+                  {
+                    agentId: req.actor.agentId,
+                    runId: req.actor.runId,
+                  },
+                  companyId,
+                  null,
+                )
+              : null;
+          if (trustResolution?.kind === "denied") {
+            throw forbidden(trustResolution.detail);
+          }
+          if (trustResolution?.kind === "low_trust_review") {
+            return queryService.count(companyId, {
+              ...scopedFilters,
+              lowTrustBoundary: trustResolution.boundary,
+            });
+          }
 
-      let offset = 0;
-      let visibleCount = 0;
-      while (true) {
-        const rows = await svc.list(companyId, {
-          ...blockedCountFilters,
-          limit: ISSUE_LIST_MAX_LIMIT,
-          offset,
-        });
-        visibleCount += (await filterIssuesForActor(req, rows)).length;
-        if (rows.length < ISSUE_LIST_MAX_LIMIT) break;
-        offset += rows.length;
-      }
-      res.json({ count: visibleCount });
-      return;
-    }
-
-    const count = await svc.count(companyId, blockedCountFilters);
+          let offset = 0;
+          let visibleCount = 0;
+          while (true) {
+            const rows = await queryService.list(companyId, {
+              ...scopedFilters,
+              limit: ISSUE_LIST_MAX_LIMIT,
+              offset,
+            });
+            visibleCount += (await filterIssuesForActor(req, rows, queryDb)).length;
+            if (rows.length < ISSUE_LIST_MAX_LIMIT) break;
+            offset += rows.length;
+          }
+          return visibleCount;
+        }
+        return queryService.count(companyId, scopedFilters);
+      },
+      true,
+      false,
+    );
     res.json({ count });
   });
 
@@ -8817,9 +8818,7 @@ export function issueRoutes(
       svc.getCommentCursor(issue.id),
       wakeCommentId ? svc.getComment(wakeCommentId) : null,
       svc.getRelationSummaries(issue.id),
-      svc
-        .listBlockerAttention(issue.companyId, [issue], db, await issueReadSqlCondition(db, req.actor))
-        .then((map) => map.get(issue.id) ?? null),
+      currentBlockerAttentionForIssue(req, issue),
       svc
         .listReviewAttention(issue.companyId, [issue])
         .then((map) => map.get(issue.id) ?? null),
@@ -9291,9 +9290,7 @@ export function issueRoutes(
       svc.findMentionedProjectIds(issue.id, { includeCommentBodies: false }),
       documentsSvc.getIssueDocumentPayload(issue),
       svc.getRelationSummaries(issue.id),
-      svc
-        .listBlockerAttention(issue.companyId, [issue], db, await issueReadSqlCondition(db, req.actor))
-        .then((map) => map.get(issue.id) ?? null),
+      currentBlockerAttentionForIssue(req, issue),
       svc
         .listReviewAttention(issue.companyId, [issue])
         .then((map) => map.get(issue.id) ?? null),

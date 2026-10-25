@@ -4,7 +4,7 @@ import {assertLearnedAssetAnalyticalSources,learningActorFromPrincipal} from "..
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { assertLearnedWorkflowPayloadAccess } from "../analytical-context-authority.js";
 import { admitOrchestrationWorkflow } from "../orchestration/orchestration-admission.js";
-import type { AuthorizationActor } from "../authorization.js";
+import { authorizationService, type AuthorizationActor } from "../authorization.js";
 import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 import { WorkflowCheckpointError } from "./workflow-errors.js";
 import { assertWorkflowTaskAssignmentAuthorized } from "./workflow-task-authority.js";
@@ -2437,9 +2437,10 @@ async function createWorkflowTask(
         : null);
   let deduplicated = false;
   const publications: ActivityPublication[] = [];
+  const privacyActor = learningActorFromPrincipal(run.companyId, actor.principal, actor.runId);
 
   const issue = await db.transaction(async (tx) => {
-    const created = await issueService(db).create(
+    const create = () => issueService(db).create(
       run.companyId,
       {
         title: config.title,
@@ -2453,6 +2454,7 @@ async function createWorkflowTask(
         originRunId: run.id,
         originFingerprint: idempotencyKey,
         responsibleUserId,
+        ...(actor.principal.type === "agent" ? { actorRunId: actor.runId ?? null } : {}),
         ...actorFields,
         actorResponsibleUserId: responsibleUserId,
         trustExplicitResponsibleUserId: Boolean(responsibleUserId),
@@ -2463,7 +2465,13 @@ async function createWorkflowTask(
         },
       },
       tx as unknown as Db,
+      undefined,
+      privacyActor ? { privacyActor } : {},
     );
+    const created = privacyActor
+      ? await authorizationService(tx as unknown as Db).withReadWorkflowSources(
+        run.companyId, privacyActor, [run.id], create)
+      : await create();
 
     if (!deduplicated) {
       const { publication } = await persistWorkflowActivity(

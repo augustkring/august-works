@@ -633,6 +633,9 @@ function heartbeatRunTaskBindingCondition(row: SQL): SQL<boolean> {
 function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "project" | "run" | "workflow_run" | "routine_run", id: SQL, company: SQL, actor: AuthorizationActor): SQL<boolean> {
   const routineScope = nativeRoutineReadScopes.get(db as object);
   const routineCapabilityActive = routineScope?.active && routineScope.companyId && routineScope.routineActorKey === routineActorKey(actor);
+  const workflowScope = nativeWorkflowReadScopes.get(db as object);
+  const workflowCapabilityActive = !!workflowScope?.active && !!workflowScope.companyId &&
+    workflowScope.workflowActorKey === workflowActorKey(actor);
   const conversationRoutine = routineCapabilityActive
     ? sql`(p.origin_kind='manual' or (p.origin_kind='conversation_draft'
       and current_setting('paperclip.native_routine_actor_hash',true)=${routineActorHash(actor)}
@@ -650,6 +653,12 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
   const humanId = actor.type === "board" ? actor.userId : actor.onBehalfOfUserId;
   const conversationIdentity = sql`(${privatePrincipalCurrent(actor, company)} and i.conversation_user_id=${humanId ?? null}
     and ${actor.type === "board" ? sql`true` : actor.type === "agent" && actor.agentId ? sql`i.conversation_agent_id=${actor.agentId}` : sql`false`})`;
+  const workflowRunScope = workflowCapabilityActive
+    ? sql`current_setting('paperclip.native_workflow_actor_hash',true)=${workflowActorHash(actor)}
+        and current_setting('paperclip.native_workflow_scope_token',true)=${workflowScope.workflowScopeToken ?? ""}
+        and exists(select 1 from workflow_runs scoped_wr where scoped_wr.id=n.id and scoped_wr.company_id=${company}
+          and scoped_wr.id=any(string_to_array(nullif(current_setting('paperclip.native_workflow_run_ids',true),''),',')::uuid[]))`
+    : sql`false`;
   const edges = sql`        select 'issue'::text as kind,i.privacy_parent_issue_id as id from issues i
           where n.kind='issue' and i.id=n.id and i.company_id=${company} and i.privacy_parent_issue_id is not null
         union all select 'issue',i.privacy_root_issue_id from issues i
@@ -753,9 +762,10 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
           join workflows w on w.id=wr.workflow_id and w.company_id=wr.company_id
           join workflow_revisions v on v.id=wr.workflow_revision_id and v.workflow_id=wr.workflow_id and v.company_id=wr.company_id
           where wr.id=n.id and wr.company_id=${company}
-            and w.authoring_source_run_ids='[]'::jsonb and wr.authoring_source_workflow_ids='[]'::jsonb
-            and wr.memory_record_ids='[]'::jsonb and not exists(select 1 from workflow_step_runs step
-              where step.company_id=wr.company_id and step.workflow_run_id=wr.id and step.memory_record_ids is distinct from '[]'::jsonb)
+            and ((w.authoring_source_run_ids='[]'::jsonb and wr.authoring_source_workflow_ids='[]'::jsonb
+              and wr.memory_record_ids='[]'::jsonb and not exists(select 1 from workflow_step_runs step
+                where step.company_id=wr.company_id and step.workflow_run_id=wr.id and step.memory_record_ids is distinct from '[]'::jsonb))
+              or ${workflowRunScope})
             and not aw_workflow_authoring_source_erased(w.company_id,w.id)
             and not aw_workflow_run_authoring_source_erased(wr.company_id,wr.id)))
         or (n.kind='routine_run' and not exists(select 1 from routine_runs rr
@@ -913,8 +923,9 @@ type ReadSourceDecisionInput = {
 export type NativeContextInspectionOwner = { decide(input: ReadSourceDecisionInput): Promise<AuthorizationDecision> };
 type ReadSourceOwner = NativeContextInspectionOwner & {
   readRoutineSources?(runIds: string[], actor: AuthorizationActor): Promise<string[]>;
+  readWorkflowSources?(runIds: string[], actor: AuthorizationActor): Promise<string[]>;
 };
-type ReadScopePurpose = "task_sources" | "company_search" | "context_inspection" | "routine_sources";
+type ReadScopePurpose = "task_sources" | "company_search" | "context_inspection" | "routine_sources" | "workflow_sources";
 type ReadSourceRows = {
   companyId: string;
   agentId: string | null;
@@ -929,14 +940,23 @@ type ReadSourceRows = {
   routineActor?: AuthorizationActor;
   routineAgentIds?: Set<string>;
   routineScopeToken?: string;
+  workflowRunIds?: Set<string>;
+  workflowActorKey?: string;
+  workflowScopeToken?: string;
 };
 const nativeRoutineReadScopes = new WeakMap<object, ReadSourceRows>();
+const nativeWorkflowReadScopes = new WeakMap<object, ReadSourceRows>();
 function routineActorKey(actor: AuthorizationActor) {
   return JSON.stringify(actor);
 }
 function routineActorHash(actor: AuthorizationActor) {
   return createHash("sha256").update(routineActorKey(actor)).digest("hex");
 }
+function workflowActorKey(actor: AuthorizationActor) {
+  const { isInstanceAdmin: _instanceAdminProjection, ...identity } = actor;
+  return JSON.stringify(identity);
+}
+function workflowActorHash(actor: AuthorizationActor) { return createHash("sha256").update(workflowActorKey(actor)).digest("hex"); }
 const issueReadColumns = {
   id: issues.id, companyId: issues.companyId, projectId: issues.projectId, parentId: issues.parentId,
   assigneeAgentId: issues.assigneeAgentId, assigneeUserId: issues.assigneeUserId, checkoutRunId: issues.checkoutRunId,
@@ -990,6 +1010,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       projects: new Map(locked && purpose !== "context_inspection" ? requestedProjects.map(id => [id, null]) : []),
     };
     if (purpose === "routine_sources") context.routineScopeToken = randomUUID();
+    if (purpose === "workflow_sources") context.workflowScopeToken = randomUUID();
     const owner: ReadSourceOwner = createAuthorizationService(db, context);
     owner.readRoutineSources = async (runIds, actor) => {
       if (purpose !== "routine_sources" || !locked || !context.active || context.companyId !== companyId)
@@ -1070,6 +1091,33 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       await db.execute(sql`select set_config('paperclip.native_routine_source_ids', ${[...authorized].join(",")}, true)`);
       return [...authorized];
     };
+    owner.readWorkflowSources = async (runIds, actor) => {
+      if (purpose !== "workflow_sources" || !locked || !context.active || context.companyId !== companyId || !context.workflowScopeToken)
+        throw forbidden("Private Workflow reads require their original native source scope.");
+      if (actor.type === "none" || runIds.length > 256 || new Set(runIds).size !== runIds.length ||
+        runIds.some(id => !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)))
+        throw forbidden("The native Workflow source population is incomplete.");
+      await db.execute(sql`select set_config('paperclip.native_workflow_run_ids', '', true),
+        set_config('paperclip.native_workflow_actor_hash', ${workflowActorHash(actor)}, true),
+        set_config('paperclip.native_workflow_scope_token', ${context.workflowScopeToken}, true)`);
+      const sourceActor = await pinReadSourceActor(actor, companyId);
+      if (!sourceActor) throw forbidden("The current Workflow reader is unavailable.");
+      context.credentialUserId = sourceActor.type === "board" ? sourceActor.userId ?? null
+        : sourceActor.type === "agent" ? sourceActor.onBehalfOfUserId ?? null : null;
+      context.workflowActorKey = workflowActorKey(actor);
+      const company = await owner.decide({ actor: sourceActor, action: "company_scope:read",
+        resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true });
+      if (!company.allowed) throw forbidden("Current company access to Workflow sources is unavailable.");
+      const { assertWorkflowRunPayloadSourceAccess } = await import("./workflows/workflow-authoring-sources.js");
+      const authorized = new Set<string>();
+      for (const runId of runIds) {
+        await assertWorkflowRunPayloadSourceAccess(db as unknown as Db, companyId, runId, sourceActor, "task");
+        authorized.add(runId);
+      }
+      context.workflowRunIds = authorized;
+      await db.execute(sql`select set_config('paperclip.native_workflow_run_ids', ${[...authorized].sort().join(",")}, true)`);
+      return [...authorized];
+    };
     if (purpose === "context_inspection") {
       if (!locked || !preflightActor || preflightActor.type !== "board") throw forbidden("Human Context inspection requires its original native actor.");
       const company = await owner.decide({ actor: preflightActor, action: "company_scope:read",
@@ -1094,12 +1142,20 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     for (const row of projectRows) context.projects.set(row.id, row);
     try {
       if (purpose === "routine_sources") nativeRoutineReadScopes.set(db as object, context);
+      if (purpose === "workflow_sources") nativeWorkflowReadScopes.set(db as object, context);
       const result = await read(owner);
       if (purpose === "routine_sources" && context.routineActor) {
         const before = [...(context.routineRunIds ?? [])].sort();
         const after = await owner.readRoutineSources(before, context.routineActor);
         if (before.length !== after.length || before.some((id, index) => id !== after[index]))
           throw forbidden("Current Routine source authority changed during the read.");
+      }
+      if (purpose === "workflow_sources" && context.workflowActorKey) {
+        const before = [...(context.workflowRunIds ?? [])].sort();
+        const after = await owner.readWorkflowSources!(before, preflightActor!);
+        const sortedAfter = [...after].sort();
+        if (before.length !== sortedAfter.length || before.some((id, index) => id !== sortedAfter[index]))
+          throw forbidden("Current Workflow source authority changed during the read.");
       }
       if (context.credentialExpiresAt !== null || context.credentialUserId !== null) {
         const deadlineCurrent = context.credentialExpiresAt === null ? sql`true`
@@ -1122,6 +1178,14 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
           context.active = false;
           if (nativeRoutineReadScopes.get(db as object) === context) nativeRoutineReadScopes.delete(db as object);
         }
+      } else if (purpose === "workflow_sources") {
+        try { await db.execute(sql`select set_config('paperclip.native_workflow_run_ids', '', true),
+          set_config('paperclip.native_workflow_actor_hash', '', true),
+          set_config('paperclip.native_workflow_scope_token', '', true)`); }
+        finally {
+          context.active = false;
+          if (nativeWorkflowReadScopes.get(db as object) === context) nativeWorkflowReadScopes.delete(db as object);
+        }
       } else {
         context.active = false;
         if (nativeRoutineReadScopes.get(db as object) === context) nativeRoutineReadScopes.delete(db as object);
@@ -1142,6 +1206,49 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     return withReadScope(companyId, [], [], "routine_sources", async owner => {
       if (!owner.readRoutineSources) throw forbidden("Private Routine reader is unavailable.");
       await owner.readRoutineSources(runIds, actor);
+      return read(owner);
+    }, null, actor);
+  }
+  async function withReadWorkflowSources<T>(companyId: string, actor: AuthorizationActor, runIds: string[],
+    read: (owner: ReadSourceOwner) => Promise<T>) {
+    if (!is(db, PgTransaction)) throw forbidden("Private Workflow reads require a native transaction.");
+    const existing = nativeWorkflowReadScopes.get(db as object);
+    if (existing?.active) {
+      if (existing.companyId !== companyId || existing.workflowActorKey !== workflowActorKey(actor))
+        throw forbidden("Nested Workflow source authority changed.");
+      const owner: ReadSourceOwner = createAuthorizationService(db, existing);
+      owner.readWorkflowSources = async (ids, currentActor) => {
+        if (!existing.active || currentActor.type === "none" || !existing.workflowScopeToken)
+          throw forbidden("Nested Workflow source authority is unavailable.");
+        const combined = [...new Set([...(existing.workflowRunIds ?? []), ...ids])].sort();
+        if (!combined.length || combined.length > 256) throw forbidden("The complete nested Workflow source population exceeds its bound.");
+        await db.execute(sql`select set_config('paperclip.native_workflow_run_ids', '', true),
+          set_config('paperclip.native_workflow_actor_hash', ${workflowActorHash(currentActor)}, true),
+          set_config('paperclip.native_workflow_scope_token', ${existing.workflowScopeToken}, true)`);
+        const sourceActor = await pinReadSourceActor(currentActor, companyId);
+        if (!sourceActor) throw forbidden("The nested Workflow reader is unavailable.");
+        const company = await owner.decide({ actor: sourceActor, action: "company_scope:read",
+          resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true });
+        if (!company.allowed) throw forbidden("Current company access to Workflow sources is unavailable.");
+        const { assertWorkflowRunPayloadSourceAccess } = await import("./workflows/workflow-authoring-sources.js");
+        for (const id of combined) await assertWorkflowRunPayloadSourceAccess(db as unknown as Db, companyId, id, sourceActor, "task");
+        existing.workflowRunIds = new Set(combined);
+        existing.credentialUserId = sourceActor.type === "board" ? sourceActor.userId ?? null
+          : sourceActor.type === "agent" ? sourceActor.onBehalfOfUserId ?? null : null;
+        await db.execute(sql`select set_config('paperclip.native_workflow_run_ids', ${combined.join(",")}, true)`);
+        return combined;
+      };
+      await owner.readWorkflowSources(runIds, actor);
+      return read(owner);
+    }
+    if (nativeRoutineReadScopes.get(db as object)?.active)
+      throw forbidden("Nested Workflow and Routine source scopes are unavailable.");
+    if (!runIds.length || runIds.length > 256 || new Set(runIds).size !== runIds.length ||
+      runIds.some(id => !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)))
+      throw forbidden("The native Workflow source population is incomplete.");
+    return withReadScope(companyId, [], [], "workflow_sources", async owner => {
+      if (!owner.readWorkflowSources) throw forbidden("Private Workflow reader is unavailable.");
+      await owner.readWorkflowSources(runIds, actor);
       return read(owner);
     }, null, actor);
   }
@@ -3125,6 +3232,8 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       );
       const routineSourceRead = readSources.purpose === "routine_sources" && input.action === "company_scope:read"
         && input.resource.type === "company" && (!input.scope || Object.keys(input.scope).length === 0);
+      const workflowSourceRead = readSources.purpose === "workflow_sources" && input.action === "company_scope:read"
+        && input.resource.type === "company" && (!input.scope || Object.keys(input.scope).length === 0);
       const routineAgentRead = readSources.purpose === "routine_sources" && input.action === "agent:read"
         && input.resource.type === "agent" && Boolean(input.resource.agentId && readSources.routineAgentIds?.has(input.resource.agentId));
       const routineIssueRead = readSources.purpose === "routine_sources" && input.action === "issue:read"
@@ -3132,6 +3241,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       const readScopeAllows = readSources.purpose === "company_search" ? companySearchRead
         : readSources.purpose === "context_inspection" ? contextInspectionRead
           : readSources.purpose === "routine_sources" ? routineSourceRead || routineAgentRead || routineIssueRead
+            : readSources.purpose === "workflow_sources" ? workflowSourceRead
             : (["issue:read", "project:read"].includes(input.action) || foundationRead);
       if (companyIdForResource(input.resource) !== readSources.companyId || !readScopeAllows) {
         return deny({ action: input.action, reason: "deny_scope", explanation: "This native Source row scope admits same-company reads only." });
@@ -3164,7 +3274,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       // A source label alone does not prove an HTTP credential was verified.
       const credential = input.actor.keyId != null || input.actor.authenticatedKeyHash != null
         || input.actor.authenticatedCredentialExpiresAt != null || input.actor.sessionId != null || input.actor.source === "board_key";
-      if (input.action === "foundation:read" || readSources.purpose === "company_search" || credential) {
+      if (input.action === "foundation:read" || readSources.purpose === "company_search" || readSources.purpose === "workflow_sources" || credential) {
         const actor = await pinReadSourceActor(input.actor, readSources.companyId);
         if (!actor) return deny({ action: input.action, reason: "deny_unauthenticated", explanation: "Current native Source principal is unavailable." });
         readSources.credentialUserId = actor.type === "board" ? actor.userId ?? null
@@ -3206,6 +3316,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     withReadSources,
     withReadCompany,
     withReadRoutineSources,
+    withReadWorkflowSources,
     withReadContextInspection,
   };
 }

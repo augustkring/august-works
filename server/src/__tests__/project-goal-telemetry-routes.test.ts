@@ -97,7 +97,13 @@ async function createApp(routeType: "project" | "goal") {
     const { projectRoutes } = await vi.importActual<typeof import("../routes/projects.js")>(
       "../routes/projects.js",
     );
-    app.use("/api", projectRoutes({ transaction: async (effect: (tx: unknown) => unknown) => effect({}) } as any));
+    // The project route must acquire the real privacy serialization boundary
+    // and perform its canonical visibility probe inside the same transaction.
+    const tx = {
+      execute: vi.fn().mockResolvedValue([]),
+      select: vi.fn(() => ({ from: () => ({ where: () => ({ limit: async () => [{ id: "project-1" }] }) }) })),
+    };
+    app.use("/api", projectRoutes({ transaction: async (effect: (tx: unknown) => unknown) => effect(tx) } as any));
   } else {
     const { goalRoutes } = await vi.importActual<typeof import("../routes/goals.js")>(
       "../routes/goals.js",
@@ -136,6 +142,8 @@ describe("project and goal telemetry routes", () => {
       name: "Telemetry project",
       description: null,
       status: "backlog",
+      sourceProvenanceQualified: true,
+      sourceIssueIds: [],
     });
     mockGoalService.create.mockResolvedValue({
       id: "goal-1",

@@ -126,6 +126,7 @@ import {
 import { conflict, forbidden, HttpError, notFound, unprocessable } from "../errors.js";
 import { isForeignKeyViolation } from "../db-errors.js";
 import { logger } from "../middleware/logger.js";
+import { DELIVERY_QUEUES, notifyDeliveryWork } from "./delivery-work-notifications.js";
 import { parseObject } from "../adapters/utils.js";
 import {
   hydrateSuccessfulRunHandoffLiveness,
@@ -11627,6 +11628,15 @@ export function issueService(db: Db) {
             patch.payloadSourceSnapshot = null;
           }
         }
+        const monitorSchedulingFields = [
+          "monitorNextCheckAt", "monitorWakeRequestedAt", "monitorLastTriggeredAt",
+          "monitorAttemptCount", "monitorNotes", "monitorScheduledBy",
+        ] as const;
+        const monitorScheduleChanged = monitorSchedulingFields.some(field => Object.hasOwn(patch, field))
+          || (patch.status !== undefined && patch.status !== receiptExisting.status)
+          || (patch.assigneeAgentId !== undefined && patch.assigneeAgentId !== receiptExisting.assigneeAgentId)
+          || (patch.assigneeUserId !== undefined && patch.assigneeUserId !== receiptExisting.assigneeUserId);
+        if (monitorScheduleChanged) await notifyDeliveryWork(tx, DELIVERY_QUEUES.issueMonitors);
         const updated = await tx
           .update(issues)
           .set(patch)
