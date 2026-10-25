@@ -630,6 +630,133 @@
         "Duration  427ms (transform 144ms, setup 91ms, import 0ms, tests 0ms, environment 0ms)"
       ],
       "sourceCommit": "4cbca4f20f551937e442e60cf2a3e034c306112f"
+    },
+    {
+      "name": "routine-cron-human-diagnostic",
+      "exitCode": 1,
+      "exitSidecar": "routine-cron-human-diagnostic.exit",
+      "rawSha256": "d2d58eca89b1736983a38191844b362011835f1f1ec4e8443e763ad38c4cb4b9",
+      "sanitizedSha256": "d2d58eca89b1736983a38191844b362011835f1f1ec4e8443e763ad38c4cb4b9",
+      "archiveSha256": "a2228bdc380089dfd833f30938a0aa87b5d2a809467bd3bf3cb04bcabf227aa3",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 10 skipped (11)",
+        "Duration  30.97s (transform 17.79s, setup 112ms, import 24.66s, tests 6.04s, environment 0ms)"
+      ],
+      "sourceCommit": "e6f69a25aefaffb5170fc79b2c65df2f1e8c0581"
+    },
+    {
+      "name": "routine-cron-human-full",
+      "exitCode": 0,
+      "exitSidecar": "routine-cron-human-full.exit",
+      "rawSha256": "3d69231e1736ae4db7202b0f5a6c72bc9ac6c3585043859dbdaa62421feb4fd9",
+      "sanitizedSha256": "3d69231e1736ae4db7202b0f5a6c72bc9ac6c3585043859dbdaa62421feb4fd9",
+      "archiveSha256": "35c63bcb6e77b382c931772e9015d0d859dfdd7a600d98f639c2dbdf94388a59",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  11 passed (11)",
+        "Duration  29.46s (transform 12.32s, setup 69ms, import 17.14s, tests 12.12s, environment 0ms)"
+      ],
+      "sourceCommit": "e6f69a25aefaffb5170fc79b2c65df2f1e8c0581"
+    },
+    {
+      "name": "project-tool-rendition-diagnostic",
+      "exitCode": 0,
+      "exitSidecar": "project-tool-rendition-diagnostic.exit",
+      "rawSha256": "de0a1ff4120f5fca62902da2f8238828ace2af585316d90f9d25a192d219f5f0",
+      "sanitizedSha256": "de0a1ff4120f5fca62902da2f8238828ace2af585316d90f9d25a192d219f5f0",
+      "archiveSha256": "c11032f589d270df2a999b602f5c3d97dff5a9172d543af7b798b956c6baa1b9",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 13 skipped (14)",
+        "Duration  41.64s (transform 26.37s, setup 149ms, import 35.91s, tests 5.36s, environment 0ms)"
+      ],
+      "sourceCommit": "e6f69a25aefaffb5170fc79b2c65df2f1e8c0581"
+    },
+    {
+      "name": "learning-worker-native-sandbox-systempaths",
+      "exitCode": 0,
+      "exitSidecar": "learning-worker-native-sandbox-systempaths.exit",
+      "rawSha256": "1d8309cfd818102c3d031abdc3e73fa26b0ede8d5be4a0cb333c4ed7c0fb0eab",
+      "sanitizedSha256": "8528fd3a442ada74a6dd3a54ed70e479e75ae41ddc8d8eefdbf64900298b426d",
+      "archiveSha256": "c3917d0e48268a074e0085b4e367b45cd362fdbe69ce1b1e830343bf1c45bef6",
+      "redactions": {
+        "ansi": 56,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 28 skipped (29)",
+        "Duration  640ms (transform 173ms, setup 89ms, import 323ms, tests 78ms, environment 0ms)"
+      ],
+      "sourceCommit": "e6f69a25aefaffb5170fc79b2c65df2f1e8c0581"
+    },
+    {
+      "name": "learning-worker-native-sandbox-full",
+      "exitCode": 0,
+      "exitSidecar": "learning-worker-native-sandbox-full.exit",
+      "rawSha256": "3c36fe20ecdc1d42ee47464f99886b3c5ee8e633c885cb28a69eda1d1245b503",
+      "sanitizedSha256": "9e65a65970145c0511ca66bf1766d9d8ecb87eb461b30c67eecc8e875c1ae577",
+      "archiveSha256": "39775edc18d149d78fe43c0288f8b44616458e75f5ca14d9f680e5f65feff0b5",
+      "redactions": {
+        "ansi": 48,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  29 passed (29)",
+        "Duration  1.70s (transform 172ms, setup 94ms, import 330ms, tests 1.15s, environment 0ms)"
+      ],
+      "sourceCommit": "e6f69a25aefaffb5170fc79b2c65df2f1e8c0581"
+    },
+    {
+      "name": "learning-artifact-isolated-worker-qualified-boundary",
+      "exitCode": 1,
+      "exitSidecar": "learning-artifact-isolated-worker-qualified-boundary.exit",
+      "rawSha256": "c6871640cf383bba44930ef6c7e8c15dd7e19a8014006d5fff600518c4954ffc",
+      "sanitizedSha256": "ac1b10346c2cd13d49b2317ce0212845778a5d7d3f79d59a9c0f2ead5deaabb3",
+      "archiveSha256": "791a52f6428f805e2916cb184707db63b39484b2100a61ebc3baee9286124f4d",
+      "redactions": {
+        "ansi": 110,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files   (1)",
+        "Tests  40 skipped (42)",
+        "Duration  75.29s (transform 13.91s, setup 81ms, import 19.77s, tests 0ms, environment 0ms)"
+      ],
+      "sourceCommit": "e6f69a25aefaffb5170fc79b2c65df2f1e8c0581"
     }
   ],
   "updates": [
@@ -699,6 +826,18 @@
         "learning-artifact-isolated-worker-diagnostic",
         "learning-artifact-isolated-worker-diagnostic2",
         "learning-worker-native-sandbox-direct"
+      ]
+    },
+    {
+      "sourceCommit": "e6f69a25aefaffb5170fc79b2c65df2f1e8c0581",
+      "meaning": "Scoped original owner proof and incomplete diagnostic runs; no final whole-workspace acceptance.",
+      "logs": [
+        "routine-cron-human-diagnostic",
+        "routine-cron-human-full",
+        "project-tool-rendition-diagnostic",
+        "learning-worker-native-sandbox-systempaths",
+        "learning-worker-native-sandbox-full",
+        "learning-artifact-isolated-worker-qualified-boundary"
       ]
     }
   ],
