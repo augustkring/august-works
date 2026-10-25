@@ -1,4 +1,4 @@
-import { enqueueCompanyRuntimeAssetErasure } from "../native-runtime/runtime-asset-retention.js";
+import { assertCompanyManagedOpenCodeRuntimeDataErased, enqueueCompanyRuntimeAssetErasure } from "../native-runtime/runtime-asset-retention.js";
 import { enqueueSkillVersionFileErasure } from "../learning/skill-file-erasure.js";
 import { and, eq, inArray, is, sql, type SQL } from "drizzle-orm";
 import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
@@ -39,6 +39,7 @@ export async function purgeCompanyContent(
     await tx.execute(sql`set local statement_timeout='8s'`);
     await lockAnalyticalCompany(tx,companyId);
     await lockMemoryPrivacy(tx as unknown as Db,companyId);
+    await assertCompanyManagedOpenCodeRuntimeDataErased(tx as unknown as Db, companyId);
     let platformModelFunding: Record<string, string> | undefined;
     const [hasFunding] = await tx.select({ id: orchestrationCompanyPurposeBudgets.id })
       .from(orchestrationCompanyPurposeBudgets)

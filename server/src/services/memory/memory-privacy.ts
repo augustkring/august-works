@@ -742,6 +742,17 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
   if(affected.length)await db.update(workflowRunReviews).set({correctedOutputs:{},reason:"Source payload erased"}).where(and(eq(workflowRunReviews.companyId,companyId),inArray(workflowRunReviews.workflowRunId,[...new Set(affected.map(row=>row.workflowRunId))])));
   if (childIds.length) {
     for (const child of children) {
+      // Provider-local data homes are retained for exact session recovery and
+      // share the same run-scoped Native asset outbox as generated context files.
+      // The worker waits for the existing Native Stop/lease receipts before it
+      // removes any managed provider bytes.
+      const runtimeAssetJobKey = `runtime-asset-erasure:v1:${child.id}`;
+      await db.insert(memoryJobs).values({ companyId, operationType: "retention", jobKey: runtimeAssetJobKey,
+        sourceRefJson: { kind: "runtime_asset_erasure", runId: child.id, legacyDigests: [] } }).onConflictDoNothing();
+      await db.update(memoryJobs).set({ status: "queued", finishedAt: null, resultJson: null, resultSummary: null,
+        error: null, errorCode: null, sourceRefJson: { kind: "runtime_asset_erasure", runId: child.id, legacyDigests: [] }, updatedAt: now })
+        .where(and(eq(memoryJobs.companyId, companyId), eq(memoryJobs.jobKey, runtimeAssetJobKey), eq(memoryJobs.attemptNumber, 1),
+          inArray(memoryJobs.status, ["succeeded", "failed", "cancelled"])));
       if (child.logRef && child.logStore === "local_file") {
         // Transactional outbox: content-free identities only, independent of
         // feature flags and retained after source-job payloads are erased.

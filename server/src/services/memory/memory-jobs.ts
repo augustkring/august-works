@@ -646,6 +646,10 @@ export function memoryJobService(
       const digests = source.legacyDigests as string[];
       const suffix = digests.length ? `:${createHash("sha256").update([...new Set(digests)].sort().join(",")).digest("hex")}` : "";
       if (job.jobKey !== `runtime-asset-erasure:v1:${source.runId}${suffix}`) throw unprocessable("Invalid native runtime asset erasure binding");
+      const { closeWarmNativeSessionsForRun } = await import("../native-runtime/native-session-executor.js");
+      const stop = await closeWarmNativeSessionsForRun({ companyId: job.companyId, runId: source.runId,
+        reason: "source erasure" });
+      if (stop.busy || stop.failed) throw new Error("Managed Native provider Stop is still pending for source erasure");
       const { eraseNativeRuntimeAssets } = await import("../native-runtime/runtime-asset-retention.js");
       await eraseNativeRuntimeAssets(db, { companyId: job.companyId, runId: source.runId }, source.legacyDigests as string[]);
       return { summary: "Erased the native run's generated runtime assets.", result: { processedRunCount: 1 } };

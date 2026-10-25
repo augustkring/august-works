@@ -11,7 +11,7 @@ import { skillLifecycleService } from "../services/skill-lifecycle.js";
 import { companySkillService } from "../services/company-skills.js";
 import { buildRetainedNativeRuntimeContext, withRetainedNativeRuntimeAssets, materializeAsset, readNativeRuntimeAssetText } from "../services/native-runtime/runtime-context.js";
 import { applyConnectorSkills, prepareRetainedConnectorSkills } from "../services/connector-runtime.js";
-import { nativeRuntimeAssetsRoot, eraseNativeRuntimeAssets } from "../services/native-runtime/runtime-asset-retention.js";
+import { nativeRuntimeAssetsRoot, managedOpenCodeRuntimeDirectory, eraseNativeRuntimeAssets } from "../services/native-runtime/runtime-asset-retention.js";
 import {projects,decisions,businessExperiments} from "@paperclipai/db";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -26,6 +26,7 @@ import {projectRoutes} from "../routes/projects.js";
 import {errorHandler} from "../middleware/index.js";
 import {randomUUID} from "node:crypto";
 import {createServer} from "node:http";
+import {spawn} from "node:child_process";
 import {once} from "node:events";
 import {WebSocket} from "ws";
 import {setupLiveEventsWebSocketServer} from "../realtime/live-events-ws.js";
@@ -34,7 +35,7 @@ import {analyticalLiveEventForReader} from "../services/analytical-live-events.j
 import {appendHeartbeatRunEvent} from "../services/heartbeat-run-events.js";
 import type {LiveEvent} from "@paperclipai/shared";
 import {and,eq,sql} from "drizzle-orm";
-import {agents,authSessions,authUsers,companies,companyMemberships,heartbeatRuns,heartbeatRunEvents,issues,issuePrivacySources,issueComments,businessMetrics,businessMetricVersions,businessMetricPublications,businessMetricObservations,governanceObligations,analyticalLineageManifests,analyticalContextRoots,analyticalContextDependencies,memoryRecords,contextManifestMemoryRoots,providerTraceRecords,memoryJobs,createDb} from "@paperclipai/db";
+import {agents,authSessions,authUsers,companies,companyMemberships,heartbeatRuns,heartbeatRunEvents,issues,issuePrivacySources,issueComments,businessMetrics,businessMetricVersions,businessMetricPublications,businessMetricObservations,governanceObligations,analyticalLineageManifests,analyticalContextRoots,analyticalContextDependencies,memoryRecords,contextManifestMemoryRoots,providerTraceRecords,memoryJobs,nativeRunFinalizations,createDb} from "@paperclipai/db";
 import {afterAll,beforeAll,beforeEach,describe,expect,it,vi} from "vitest";
 import {instanceSettingsService} from "../services/instance-settings.js";
 import {businessMetricService} from "../services/business-metrics/service.js";
@@ -61,6 +62,7 @@ import {getEmbeddedPostgresTestSupport,startEmbeddedPostgresTestDatabase} from "
 import {seedNativePasskeySession} from "./helpers/native-authentication-fixtures.js";
 import type {AuthorizationActor} from "../services/authorization.js";
 import {authorizationService} from "../services/authorization.js";
+import {recordNativeLocalProcessStop} from "../services/native-local-process-stop.js";
 const support=await getEmbeddedPostgresTestSupport(),board={type:"board" as const,source:"local_implicit" as const};
 describe.skipIf(!support.supported)("Native analytical Context retention on PostgreSQL",()=>{
  let database:Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>,db:ReturnType<typeof createDb>,companyId:string,userId:string,agentId:string,issueId:string,runId:string,reader:AuthorizationActor;
@@ -342,11 +344,17 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
    const profile={nativeExecutionInput:{runtimeContext:{instructions:{bundle:legacy},skills:[]}}};
    await db.insert(heartbeatRuns).values({id:otherRun,companyId:otherCompany,agentId:otherAgent,status:"running",runnerProfileJson:profile});
    const otherOwner={companyId:otherCompany,runId:otherRun},otherBundle=await materializeAsset([{path:"SKILL.md",content:Buffer.from("Independent tenant run-owned procedure"),mode:0o444}],otherOwner);
+   const providerHome=managedOpenCodeRuntimeDirectory(owner),providerDb=path.join(providerHome,"managed-session-1","data","opencode.db"),outsideUserData=path.join(home,"operator-owned.sqlite");
+   await fs.mkdir(path.dirname(providerDb),{recursive:true});await fs.writeFile(providerDb,"Synthetic private OpenCode transcript bytes");
+   await fs.writeFile(outsideUserData,"Independent operator data");
+   await db.insert(memoryJobs).values({companyId,operationType:"retention",jobKey:`runtime-asset-erasure:v1:${runId}`,
+     status:"succeeded",attemptNumber:1,finishedAt:new Date(),sourceRefJson:{kind:"runtime_asset_erasure",runId,legacyDigests:[]}});
+   await expect(purgeCompanyContent(db,companyId)).rejects.toMatchObject({status:409});
+   await expect(db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,runId))).resolves.toHaveLength(1);
    // Persisted native historical profile fixture owns the old shared reference;
    // newly published run-owned files exist even before the final profile write.
    await db.update(heartbeatRuns).set({runnerProfileJson:profile}).where(eq(heartbeatRuns.id,runId));
    const runRoot=nativeRuntimeAssetsRoot(owner),companyRoot=path.dirname(runRoot),saved=companyRoot+".saved";
-   await fs.rename(companyRoot,saved);await fs.symlink(saved,companyRoot);
    await instanceSettingsService(db).updateExperimental({management_chat_tools_v8:false,management_reviews_v8:false,business_metrics_v8:false,analytical_lineage_v8:false,enableCollectiveMemoryV1:false,enablePrivateAgentMemoryV1:false});
    await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));await db.delete(issues).where(eq(issues.id,f.sourceId));
    expect(await heartbeatMemoryPayloadRetained(db,companyId,runId)).toBe(false);
@@ -355,11 +363,36 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
    expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,runId)))[0]!.runnerProfileJson).toBeNull();
    const failed=await db.select().from(memoryJobs).where(and(eq(memoryJobs.companyId,companyId),sql`${memoryJobs.sourceRefJson}->>'kind'='runtime_asset_erasure'`));
    expect(failed.length).toBeGreaterThan(0);expect(failed.every(job=>job.status==="failed")).toBe(true);
+   await expect(fs.readFile(providerDb,"utf8")).resolves.toBe("Synthetic private OpenCode transcript bytes");
+   // A source receipt alone does not prove the local provider process stopped.
+   // Advance the existing native Stop owner with an observed-absent local PID,
+   // then persist the normal terminal finalization before retrying deletion.
+   const stoppedProcess=spawn(process.execPath,["-e","setTimeout(()=>process.exit(0),25)"],{detached:true,stdio:"ignore"});
+   if(!stoppedProcess.pid)throw new Error("Could not start local Stop test process");
+   const [stoppedCode]=await once(stoppedProcess,"exit");expect(stoppedCode).toBe(0);
+   const stoppedPid=stoppedProcess.pid;
+   await db.update(heartbeatRuns).set({driverKind:"opencode_server",status:"interrupted",processPid:stoppedPid,
+     processGroupId:stoppedPid,controllerLeaseExpiresAt:null}).where(eq(heartbeatRuns.id,runId));
+   const [stoppingRun]=await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,runId));
+   expect(await recordNativeLocalProcessStop(db,stoppingRun!)).toBe(true);
+   await db.update(heartbeatRuns).set({processPid:null,processGroupId:null}).where(eq(heartbeatRuns.id,runId));
+   await db.insert(nativeRunFinalizations).values({companyId,issueId,runId,phase:"committed",leaseOwner:null,leaseExpiresAt:null});
+   await fs.rename(companyRoot,saved);await fs.symlink(saved,companyRoot);
+   await db.update(memoryJobs).set({updatedAt:new Date(Date.now()-61000)}).where(and(eq(memoryJobs.companyId,companyId),sql`${memoryJobs.sourceRefJson}->>'kind'='runtime_asset_erasure'`));
+   await memoryJobService(db).tick({limit:100});
    await fs.unlink(companyRoot);await fs.rename(saved,companyRoot);
+   await db.update(memoryJobs).set({updatedAt:new Date(Date.now()-61000)}).where(and(eq(memoryJobs.companyId,companyId),sql`${memoryJobs.sourceRefJson}->>'kind'='runtime_asset_erasure'`));
+   const providerSaved=providerHome+".saved";
+   await fs.rename(providerHome,providerSaved);await fs.symlink(providerSaved,providerHome);
+   await memoryJobService(db).tick({limit:100});
+   await expect(fs.readFile(path.join(providerSaved,"managed-session-1","data","opencode.db"),"utf8")).resolves.toBe("Synthetic private OpenCode transcript bytes");
+   await fs.unlink(providerHome);await fs.rename(providerSaved,providerHome);
    await db.update(memoryJobs).set({updatedAt:new Date(Date.now()-61000)}).where(and(eq(memoryJobs.companyId,companyId),sql`${memoryJobs.sourceRefJson}->>'kind'='runtime_asset_erasure'`));
    await memoryJobService(db).tick({limit:100});
    expect((await db.select().from(memoryJobs).where(and(eq(memoryJobs.companyId,companyId),sql`${memoryJobs.sourceRefJson}->>'kind'='runtime_asset_erasure'`))).every(job=>job.status==="succeeded")).toBe(true);
    await expect(fs.stat(runRoot)).rejects.toMatchObject({code:"ENOENT"});
+   await expect(fs.stat(providerHome)).rejects.toMatchObject({code:"ENOENT"});
+   await expect(fs.readFile(outsideUserData,"utf8")).resolves.toBe("Independent operator data");
    await expect(fs.stat(connector.paperclipRuntimeSkills[0].source)).rejects.toMatchObject({code:"ENOENT"});
    await expect(prepareRetainedConnectorSkills(db,binding,{},[])).rejects.toThrow("native_runtime_asset_source_unavailable");
    await expect(buildRetainedNativeRuntimeContext(input)).rejects.toThrow("native_runtime_asset_source_unavailable");

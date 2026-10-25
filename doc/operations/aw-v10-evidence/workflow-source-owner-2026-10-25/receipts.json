@@ -3376,6 +3376,66 @@
         "Duration  54.78s (transform 2.44s, setup 0ms, import 4.35s, tests 50.31s, environment 0ms)"
       ],
       "sourceCommit": "b1497ccabb4449c66bea49c69cd9b9bd931a72f0"
+    },
+    {
+      "name": "managed-opencode-fixture-extraction-tsc3",
+      "exitCode": 0,
+      "exitSidecar": "managed-opencode-fixture-extraction-tsc3.exit",
+      "rawSha256": "464cff9f8f6f6066784728727deccb809d43b245fb971c731da1d67edb23d916",
+      "sanitizedSha256": "464cff9f8f6f6066784728727deccb809d43b245fb971c731da1d67edb23d916",
+      "archiveSha256": "f91c7a8af92370d22b1fe0ad8dc456a664c8874535dcce8589576181a0595c65",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "36188589ae67abeccec6148de3c2da70ef0b44e9"
+    },
+    {
+      "name": "v10-worker-workspaces-b-36188589a",
+      "exitCode": 1,
+      "exitSidecar": "v10-worker-workspaces-b-36188589a.exit",
+      "rawSha256": "de1a73848439b5bb24da1d469e32282c3a718d7cdbe4f0beef95b180008e488a",
+      "sanitizedSha256": "a8e586fcd47eaaf20b488a9b06b92ea9e84213b578b9373ee7fa0f899f01b27c",
+      "archiveSha256": "59674991ef644ef81d73da7ec3099f867d8c54da2f3a0d280ddaa54c1d58f4f6",
+      "redactions": {
+        "ansi": 12980,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed | 49 passed (50)",
+        "Tests  1 failed | 198 passed (199)",
+        "Duration  490.79s (transform 3.44s, setup 0ms, import 74.13s, tests 410.57s, environment 4ms)"
+      ],
+      "sourceCommit": "36188589ae67abeccec6148de3c2da70ef0b44e9"
+    },
+    {
+      "name": "v5-identities-migration-fixture-fk-final-20261025",
+      "exitCode": 0,
+      "exitSidecar": "v5-identities-migration-fixture-fk-final-20261025.log.exit",
+      "rawSha256": "cafeb5ca01615c36aa9e752a92a731ff3aa073ba1271c3e2f574c1d73892e433",
+      "sanitizedSha256": "cafeb5ca01615c36aa9e752a92a731ff3aa073ba1271c3e2f574c1d73892e433",
+      "archiveSha256": "e7e7863f608083083e979764bd5ec42624332e48ff7209d3a6bb4f0eebe2ec3f",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed (1)",
+        "Duration  8.83s (transform 2.31s, setup 0ms, import 4.20s, tests 4.51s, environment 0ms)"
+      ],
+      "sourceCommit": "36188589ae67abeccec6148de3c2da70ef0b44e9"
     }
   ],
   "updates": [
@@ -3911,6 +3971,15 @@
         "slack-managed-focused-20261025-final2",
         "slack-managed-route-pg-20261025-final10",
         "cli-company-import-export-process-group-final3-20261025"
+      ]
+    },
+    {
+      "sourceCommit": "36188589ae67abeccec6148de3c2da70ef0b44e9",
+      "meaning": "Server scoped typecheck green after Context read/fixture extraction; broad nonserverB stopped at one historical V5 fixture FK failure (198 DB tests passed), exact fixture repair focused1/1 pass; no broadB pass claimed.",
+      "logs": [
+        "managed-opencode-fixture-extraction-tsc3",
+        "v10-worker-workspaces-b-36188589a",
+        "v5-identities-migration-fixture-fk-final-20261025"
       ]
     }
   ],

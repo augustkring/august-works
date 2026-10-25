@@ -18,6 +18,7 @@ import { stoppedCodexTurnIsTextOnly } from "./stopped-codex-turn.js";
 import { prepareVerifiedRemoteProviderPack } from "./remote-provider-pack.js";
 import { readNativeLocalProcessStop, PROCESS_START_REQUESTED } from "../native-local-process-stop.js";
 import { remoteLeaseCleanupScope } from "../remote-execution-termination.js";
+import { managedOpenCodeRuntimeDirectory } from "./runtime-asset-retention.js";
 import { resolveConnectorAssignments, isConnectorSkill } from "../connector-runtime.js";
 import {
   boundedExecutionCleanup,
@@ -53,9 +54,9 @@ import type {
   AdapterExecutionResult,
   AdapterRuntimeEvent,
 } from "../../adapters/index.js";
-import { nativePayloadSourceInputSchema, nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema,
+import { nativePayloadSourceInputSchema, nativePayloadSourcePolicySchema, nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema,
   type NativeFinalizationResult, type NativePayloadSourceInput, type NativeRunInputSourceReceipt } from "@paperclipai/shared";
-import type { NativeBootstrapSourceClosure, NativeModelOutputCapture, NativePayloadSourceSet } from "./native-execution-input.js";
+import type { NativeBootstrapSourceClosure, NativeConsumedSourceComponent, NativeModelOutputCapture, NativePayloadSourceSet } from "./native-execution-input.js";
 import type {
   HarnessRuntimeRequestResolution,
   NativeExecutionInput,
@@ -139,7 +140,8 @@ import { appendHeartbeatRunEvent } from "../heartbeat-run-events.js";
 import { nativeSha256 } from "./canonical.js";
 import { resolveDefaultAgentWorkspaceDir } from "../../home-paths.js";
 import { assertAnalyticalContextPayloadAccess } from "../analytical-context-authority.js";
-import { assertNativeMemorySourceInputCurrent, assertNativePayloadSourceSetCurrent } from "../native-direct-input.js";
+import { assembleNativeContextRead, assertNativeManagedConsumedSourceSetCurrent, assertNativeMemorySourceInputCurrent,
+  assertNativePayloadSourceSetCurrent, type NativeContextReadBinding } from "../native-direct-input.js";
 import { canActorReadIssuePrivacy, type AuthorizationActor } from "../authorization.js";
 import { PaperclipRunnerToolAuthority, resolveNativeInputDispatchReceiptIdentity, type NativeDocumentToolResultSource,
   type NativeProjectToolResultSource } from "./paperclip-runner-tool-authority.js";
@@ -165,6 +167,7 @@ import { reportRunFailure } from "../run-failure-report.js";
 import { persistActivity, publishActivity } from "../activity-log.js";
 import { commitNativeStatusDecision } from "./status-decision-committer.js";
 import { resolvePaperclipInstanceRoot } from "../../home-paths.js";
+import { assertRuntimeStorageDirectories } from "../runtime-skill-cache.js";
 import { documentService, type DocumentRevisionSourceCapture } from "../documents.js";
 import { issueThreadInteractionService } from "../issue-thread-interactions.js";
 import { issueService } from "../issues.js";
@@ -416,6 +419,7 @@ type WarmNativeSession = {
   ownerToken: symbol;
   configDigest: string;
   companyId: string;
+  runId: string;
   environmentId: string | null;
   busy: boolean;
   closeOnReleaseReason?: string;
@@ -449,6 +453,15 @@ export async function closeWarmNativeSessionsForEnvironment(input: {
   return closeIdleWarmNativeSessions(input);
 }
 
+/** Source erasure closes the exact run-owned warm provider before its data home is removed. */
+export async function closeWarmNativeSessionsForRun(input: {
+  companyId: string;
+  runId: string;
+  reason: string;
+}): Promise<{ closed: number; busy: number; failed: number }> {
+  return closeIdleWarmNativeSessions({ ...input, closeBusyOnRelease: true });
+}
+
 /** Suspend idle owners and persist their remote backup before a controller
  * exits. Active turns keep their separate authenticated restart handoff. */
 export async function closeIdleWarmNativeSessionsForRestart(): Promise<{
@@ -462,6 +475,8 @@ export async function closeIdleWarmNativeSessionsForRestart(): Promise<{
 
 async function closeIdleWarmNativeSessions(input: {
   environmentId?: string;
+  companyId?: string;
+  runId?: string;
   reason: string;
   closeBusyOnRelease?: boolean;
 }): Promise<{ closed: number; busy: number; failed: number }> {
@@ -472,6 +487,8 @@ async function closeIdleWarmNativeSessions(input: {
     if (input.environmentId !== undefined && entry.environmentId !== input.environmentId) {
       continue;
     }
+    if ((input.companyId !== undefined && entry.companyId !== input.companyId) ||
+      (input.runId !== undefined && entry.runId !== input.runId)) continue;
     if (entry.busy || executingRunnerdSessionScopes.has(sessionId)) {
       // A busy turn can complete while another idle session is checkpointing.
       // Fence that entry now so its eventual release cannot leave a new idle
@@ -1446,7 +1463,8 @@ class SessionToolAuthorityEpoch {
     private readonly onDocumentRead?: (source: NativeDocumentToolResultSource) => Promise<void>,
     private readonly onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>,
     private readonly onNativeToolCall?: (call: { tool: string; callId: string; turnId: string; argumentsHash: string }) => Promise<void>,
-    private readonly onManagedOpenCodeToolResult?: (call: { tool: "read_document" | "write_document" | "create_task" | "self_remember"; callId: string; turnId: string; argumentsHash: string; result: unknown }) => Promise<void>) {
+    private readonly onManagedOpenCodeToolResult?: (call: { tool: "read_document" | "write_document" | "create_task" | "self_remember" | "read_context"; callId: string; turnId: string; argumentsHash: string; result: unknown; contextRead?: NativeContextReadBinding }) => Promise<void>,
+    private readonly managedContextReadCapture?: { value: NativeContextReadBinding | null }) {
     this.runId = runId;
     this.#authority = authority;
   }
@@ -1478,8 +1496,9 @@ class SessionToolAuthorityEpoch {
         ...(call.turnId ? { nativeToolCallIdentity: { tool: call.tool, callId: call.callId, turnId: call.turnId } } : {}),
       });
       if (call.turnId && (call.tool === "read_document" || call.tool === "write_document" ||
-        call.tool === "create_task" || call.tool === "self_remember"))
-        await this.onManagedOpenCodeToolResult?.({ tool: call.tool, callId: call.callId, turnId: call.turnId, argumentsHash, result });
+        call.tool === "create_task" || call.tool === "self_remember" || call.tool === "read_context"))
+        await this.onManagedOpenCodeToolResult?.({ tool: call.tool, callId: call.callId, turnId: call.turnId, argumentsHash, result,
+          ...(call.tool === "read_context" && this.managedContextReadCapture?.value ? { contextRead: this.managedContextReadCapture.value } : {}) });
       return result;
     };
     const run = async () => this.toolTrace ? this.toolTrace.execute(call, execute) : execute();
@@ -1507,6 +1526,12 @@ function nativeSessionKey(execution: NativeExecutionInput): string {
     execution.session.normalizedSessionId ??
     `session-${execution.binding.runId}`
   );
+}
+
+function managedOpenCodeRuntimeDataIsolated(execution: NativeExecutionInput, environment: NodeJS.ProcessEnv) {
+  return execution.provider.kind === "opencode" &&
+    typeof environment.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === "string" &&
+    environment.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN.trim().length > 0;
 }
 
 function nativeSessionWorkspaceScope(execution: NativeExecutionInput) {
@@ -5207,7 +5232,9 @@ function nativeSessionConfigDigest(
 function hasIdleWarmNativeSessionOwner(input: {
   execution: NativeExecutionInput;
   runnerExecutionTarget?: AdapterExecutionTarget | null;
+  runnerEnvironment?: NodeJS.ProcessEnv;
 }): boolean {
+  if (managedOpenCodeRuntimeDataIsolated(input.execution, input.runnerEnvironment ?? process.env)) return false;
   if (input.execution.session.lifecyclePolicy.mode !== "warm") return false;
   const entry = warmNativeSessions.get(nativeSessionScopeKey(input.execution));
   if (!entry || entry.busy) return false;
@@ -7559,7 +7586,8 @@ export async function recordNativeToolCallDispatchAssociation(input: Parameters<
 
 async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
   agentId: string; turnId: string; callId: string; argumentsHash: string;
-  tool: "read_document" | "write_document" | "create_task" | "self_remember"; result: unknown;
+  tool: "read_document" | "write_document" | "create_task" | "self_remember" | "read_context"; result: unknown;
+  contextRead?: NativeContextReadBinding;
 }): Promise<void> {
   const digest = nativeSha256(input.result);
   try {
@@ -7649,6 +7677,18 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
             runId: input.runId, onBehalfOfUserId: run.responsibleUserId ?? undefined }, source: memorySource });
         returnedMemorySource = memorySource;
       }
+      let contextReadCapture: Record<string, unknown> | null = null;
+      if (input.tool === "read_context") {
+        const visible = record(input.result);
+        const context = input.contextRead;
+        const contextInputs = context?.sourceSet.inputs.filter(source => source.kind === "context") ?? [];
+        if (!context || typeof visible.markdown !== "string" || visible.markdown !== context.markdown ||
+          Object.keys(visible).length !== 1 || contextInputs.length !== 1 || context.sourceSet.inputs.length !== 1 ||
+          context.manifestIds.length !== 1 || context.manifestIds[0]?.contextManifestId !== contextInputs[0]?.manifestId ||
+          context.manifestIds[0]?.companyId !== input.companyId || context.markdown.length > 64_000)
+          throw new Error("managed_opencode_tool_result_binding_invalid");
+        contextReadCapture = { manifestIds: context.manifestIds, sourceSet: context.sourceSet, contentDigest: digest };
+      }
       let returnedDocumentSource: Extract<NativePayloadSourceInput, { kind: "document_revision" }> | null = null;
       if (input.tool === "read_document") {
         const readCaptures = Array.isArray(profile.nativeToolResultSourceCaptures)
@@ -7703,17 +7743,23 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         turnId: input.turnId, callId: input.callId, tool: input.tool, resultDigest: contentHash,
         source: { kind: "tool_result", runId: input.runId, callId: input.callId, toolName: invocationToolName,
           invocationId: invocation.id, contentHash }, documentRevision,
-        taskRef: createdTask ? { issueId: createdTask.id } : null, managedOpenCode: true }];
+        taskRef: createdTask ? { issueId: createdTask.id } : null,
+        ...(contextReadCapture ? { contextRead: contextReadCapture } : {}), managedOpenCode: true }];
       const { digest: _receiptDigest, ...body } = parsed.data;
       const updatedReceiptBody = { ...body, additionalInputs: [...parsed.data.additionalInputs, {
         responsibleUserId: run.responsibleUserId,
-        // The tool_result.runId is provenance for this invocation, not a consumed
-        // retained_run source. Only returned Task/document owners add source policy.
-        policy: { issueIds: [...new Set([...(createdTask ? [createdTask.id] : []),
-          ...(returnedDocumentSource?.issueId ? [returnedDocumentSource.issueId] : [])])],
-          projectIds: [], runIds: [], memoryIds: returnedMemorySource ? [returnedMemorySource.memoryId] : [], foundationRevisionIds: [] },
-        inputs: [inputSource, ...(returnedDocumentSource ? [returnedDocumentSource] : []),
-          ...(createdTask ? [createdTask.source] : []), ...(returnedMemorySource ? [returnedMemorySource] : [])],
+        ...(input.tool === "read_context" && input.contextRead ? {
+          policy: input.contextRead.sourceSet.policy,
+          inputs: [inputSource, ...input.contextRead.sourceSet.inputs],
+        } : {
+          // The tool_result.runId is provenance for this invocation, not a consumed
+          // retained_run source. Only returned Task/document owners add source policy.
+          policy: { issueIds: [...new Set([...(createdTask ? [createdTask.id] : []),
+            ...(returnedDocumentSource?.issueId ? [returnedDocumentSource.issueId] : [])])],
+            projectIds: [], runIds: [], memoryIds: returnedMemorySource ? [returnedMemorySource.memoryId] : [], foundationRevisionIds: [] },
+          inputs: [inputSource, ...(returnedDocumentSource ? [returnedDocumentSource] : []),
+            ...(createdTask ? [createdTask.source] : []), ...(returnedMemorySource ? [returnedMemorySource] : [])],
+        }),
       }] };
       const receipt = { ...updatedReceiptBody, digest: await postgresJsonbSha256(tx, updatedReceiptBody) };
       if (!nativeRunInputSourceReceiptSchema.safeParse(receipt).success || Buffer.byteLength(JSON.stringify(nextCaptures)) > 2 * 1024 * 1024)
@@ -7828,20 +7874,23 @@ async function prepareManagedOpenCodeOutputCapture(input: Parameters<typeof rene
   const matchingDispatches = dispatches.filter(dispatch => dispatch.inputs.some(source => source.kind === "worker_model_dispatch" &&
     source.reservationId === reservation.id && source.callId === intent.callId && source.requestHash === intent.requestHash &&
     source.wireBodyHash === intent.wireBodyHash && source.responseHash === reservation.providerResponseHash));
-  if (matchingDispatches.length !== 1) throw new Error("managed_opencode_output_capture_dispatch_unavailable");
-  const historyInputs = [
-    ...receipt.data.bootstrap.inputs,
-    ...dispatches.flatMap(dispatch => dispatch.inputs).filter(source =>
-      source.kind !== "worker_model_dispatch" || source.reservationId !== reservation.id),
-    ...receipt.data.additionalInputs.flatMap(entry => entry.inputs),
-  ];
-  const sourceSet: NativePayloadSourceSet = {
-    policy: matchingDispatches[0]!.policy,
-    inputs: nativePayloadSourceInputSchema.array().parse([...new Map(historyInputs.map(source => [JSON.stringify(source), source])).values()]),
-  };
+  if (matchingDispatches.length < 1) throw new Error("managed_opencode_output_capture_dispatch_unavailable");
+  const consumedRaw = record(intent.consumedSourceSet);
+  const consumedPolicy = nativePayloadSourcePolicySchema.safeParse(consumedRaw.policy);
+  const consumedInputs = nativePayloadSourceInputSchema.array().safeParse(consumedRaw.inputs);
+  const sourceComponents = intent.consumedSourceComponents;
+  if (!consumedPolicy.success || !consumedInputs.success || !Array.isArray(sourceComponents) ||
+    intent.consumedSourceSetHash !== nativeSha256({ policy: consumedPolicy.data, inputs: consumedInputs.data }))
+    throw new Error("managed_opencode_output_capture_consumed_sources_invalid");
+  const sourceSet: NativePayloadSourceSet = { policy: consumedPolicy.data, inputs: consumedInputs.data };
+  const typedComponents = sourceComponents as NativeConsumedSourceComponent[];
+  await assertNativeManagedConsumedSourceSetCurrent(input.db, { companyId: input.companyId, issueId: input.issueId,
+    runId: input.runId, actor: { type: "agent", source: "none", companyId: input.companyId,
+      agentId: input.agentId, runId: input.runId }, components: typedComponents, sourceSet });
   return {
     runId: input.runId,
     sourceSet,
+    consumedSourceComponents: typedComponents,
     dispatch: dispatchInput,
     managedOpenCodeToolUse: {
       callId: input.callId,
@@ -8914,8 +8963,12 @@ async function executePaperclipNativeSessionWithinScope(
     mode: "per_turn" as const,
     idleTimeoutMs: null,
   };
+  const managedOpenCodeDataHome = managedOpenCodeRuntimeDataIsolated(
+    input.execution,
+    input.runnerEnvironment ?? process.env,
+  );
   const warmSessionId =
-    lifecyclePolicy.mode === "warm"
+    lifecyclePolicy.mode === "warm" && !managedOpenCodeDataHome
       ? nativeSessionScopeKey(input.execution)
       : null;
   const warmConfigDigest =
@@ -9111,6 +9164,14 @@ async function executePaperclipNativeSessionWithinScope(
     const managedOpenCodeOutputCaptureRef = input.execution.provider.kind === "opencode" &&
       (input.runnerEnvironment ?? process.env).PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN?.trim()
       ? { value: null as NativeModelOutputCapture | null } : undefined;
+    const managedContextReadCaptureRef = managedOpenCodeOutputCaptureRef ? { value: null as NativeContextReadBinding | null } : undefined;
+    if (managedOpenCodeDataHome) {
+      await assertRuntimeStorageDirectories(
+        managedOpenCodeRuntimeDirectory({ companyId: input.execution.binding.companyId, runId }),
+        resolvePaperclipInstanceRoot(),
+        true,
+      );
+    }
     const runnerdBackend =
       input.useRunnerd && input.backend === undefined
         ? await createRunnerdBackend({
@@ -9122,6 +9183,7 @@ async function executePaperclipNativeSessionWithinScope(
             runnerInstanceId: effectiveRunnerInstanceId,
             durableEnvironmentLeaseId: durableRunnerBinding?.environmentLeaseId,
             nativeModelOutputCapture: managedOpenCodeOutputCaptureRef,
+            managedNativeContextReadCapture: managedContextReadCaptureRef,
             trace,
             toolTrace,
             onDocumentRead: async capture => {
@@ -9149,6 +9211,7 @@ async function executePaperclipNativeSessionWithinScope(
             onNativeToolCall: async call => {
               if (managedOpenCodeOutputCaptureRef) {
                 managedOpenCodeOutputCaptureRef.value = null;
+                if (managedContextReadCaptureRef) managedContextReadCaptureRef.value = null;
                 await assertManagedOpenCodeToolCallCurrent({ db: input.db, runId, companyId: input.execution.binding.companyId,
                   issueId: input.execution.binding.issueId, agentId: input.execution.binding.agentId,
                   leaseOwner, attempt, controller, ...call });
@@ -9175,7 +9238,10 @@ async function executePaperclipNativeSessionWithinScope(
                       companyId: input.execution.binding.companyId, issueId: input.execution.binding.issueId,
                       agentId: input.execution.binding.agentId, leaseOwner, attempt, controller,
                       ...call });
-                  } finally { if (managedOpenCodeOutputCaptureRef) managedOpenCodeOutputCaptureRef.value = null; }
+                  } finally {
+                    if (managedOpenCodeOutputCaptureRef) managedOpenCodeOutputCaptureRef.value = null;
+                    if (managedContextReadCaptureRef) managedContextReadCaptureRef.value = null;
+                  }
                   await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
                   await renewNativeSessionExecutionLease({ db: input.db, runId,
                     companyId: input.execution.binding.companyId, issueId: input.execution.binding.issueId,
@@ -9291,12 +9357,15 @@ async function executePaperclipNativeSessionWithinScope(
                 onSpawn: input.onSpawn,
                 opencodeEnvironment: input.runnerEnvironment ?? process.env,
                 acpxEnvironment: input.runnerEnvironment ?? process.env,
-                opencodeRuntimeDirectory: resolve(
-                  resolvePaperclipInstanceRoot(),
-                  "runtime",
-                  "paperclip-runner",
-                  "opencode",
-                ),
+                opencodeRuntimeDirectory: managedOpenCodeDataHome
+                  ? managedOpenCodeRuntimeDirectory({ companyId: input.execution.binding.companyId,
+                    runId: input.execution.binding.runId })
+                  : resolve(
+                      resolvePaperclipInstanceRoot(),
+                      "runtime",
+                      "paperclip-runner",
+                      "opencode",
+                    ),
                 acpxRuntimeDirectory: resolve(
                   resolvePaperclipInstanceRoot(),
                   "runtime",
@@ -9442,6 +9511,7 @@ async function executePaperclipNativeSessionWithinScope(
                     ownerToken: warmSessionOwnerToken,
                     configDigest: warmConfigDigest,
                     companyId: input.execution.binding.companyId,
+                    runId: input.execution.binding.runId,
                     environmentId:
                       input.runnerExecutionTarget?.environmentId ?? null,
                     busy: true,
@@ -11478,6 +11548,7 @@ export async function createRunnerdBackend(input: {
   restartRecovery?: NativeRestartRecoveryClaim;
   durableEnvironmentLeaseId?: string;
   nativeModelOutputCapture?: { readonly value: NativeModelOutputCapture | null };
+  managedNativeContextReadCapture?: { value: NativeContextReadBinding | null };
   onSpawn?: (meta: {
     pid: number;
     processGroupId: number | null;
@@ -11500,7 +11571,7 @@ export async function createRunnerdBackend(input: {
   onDocumentRead?: (source: NativeDocumentToolResultSource) => Promise<void>;
   onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>;
   onNativeToolCall?: (call: { tool: string; callId: string; turnId: string; argumentsHash: string }) => Promise<void>;
-  onManagedOpenCodeToolResult?: (call: { tool: "read_document" | "write_document" | "create_task" | "self_remember"; callId: string; turnId: string; argumentsHash: string; result: unknown }) => Promise<void>;
+  onManagedOpenCodeToolResult?: (call: { tool: "read_document" | "write_document" | "create_task" | "self_remember" | "read_context"; callId: string; turnId: string; argumentsHash: string; result: unknown; contextRead?: NativeContextReadBinding }) => Promise<void>;
   onLog?: (stream: "stdout" | "stderr", chunk: string) => Promise<void>;
   stopTaskForReassignment?: (target: { companyId: string; issueId: string; agentId: string; runId: string | null }) => Promise<void>;
   enqueueWakeup?: (
@@ -11566,6 +11637,10 @@ async function createRunnerdBackendWithinSessionClaim(
   sessionScopeId: string,
   retainedTransition?: VerifiedWarmTransitionBinding,
 ): Promise<NativeSessionBackend & { bindManagedSession(session: NativeSession): NativeSession }> {
+  const managedOpenCodeDataHome = managedOpenCodeRuntimeDataIsolated(
+    input.execution,
+    input.runnerEnvironment ?? process.env,
+  );
   let recoveryPending = retainedTransition !== undefined;
   const target = input.runnerExecutionTarget ?? { kind: "local" as const };
   const remoteTarget = target.kind === "remote" ? target : null;
@@ -11646,6 +11721,27 @@ async function createRunnerdBackendWithinSessionClaim(
     currentWakeComments: currentWakeComments ?? undefined,
     chatAttachmentReadScope: input.chatAttachmentReadScope,
     nativeModelOutputCapture: input.nativeModelOutputCapture,
+    managedNativeContextReadCapture: input.managedNativeContextReadCapture,
+    ...(input.managedNativeContextReadCapture ? { managedNativeContextRead: async (query: string) => {
+      const [current] = await input.db.select({ projectId: issues.projectId, responsibleUserId: heartbeatRuns.responsibleUserId })
+        .from(heartbeatRuns).innerJoin(issues, and(eq(issues.companyId, heartbeatRuns.companyId),
+          eq(issues.id, input.execution.binding.issueId))).where(and(
+          eq(heartbeatRuns.companyId, input.execution.binding.companyId),
+          eq(heartbeatRuns.id, input.execution.binding.runId),
+          eq(heartbeatRuns.agentId, input.execution.binding.agentId),
+        ));
+      if (!current) throw new Error("managed_native_context_read_binding_invalid");
+      const binding = await assembleNativeContextRead(input.db, {
+        companyId: input.execution.binding.companyId, agentId: input.execution.binding.agentId,
+        runId: input.execution.binding.runId, issueId: input.execution.binding.issueId,
+        projectId: current.projectId ?? null, responsibleUserId: current.responsibleUserId ?? null,
+        actor: { type: "agent", source: "none", companyId: input.execution.binding.companyId,
+          agentId: input.execution.binding.agentId, runId: input.execution.binding.runId,
+          onBehalfOfUserId: current.responsibleUserId ?? undefined }, query,
+      });
+      input.managedNativeContextReadCapture!.value = binding;
+      return { markdown: binding.markdown };
+    } } : {}),
     stopTaskForReassignment: input.stopTaskForReassignment,
     enqueueWakeup: input.enqueueWakeup,
   });
@@ -11657,6 +11753,7 @@ async function createRunnerdBackendWithinSessionClaim(
     input.onProjectToolResult,
     input.onNativeToolCall,
     input.onManagedOpenCodeToolResult,
+    input.managedNativeContextReadCapture,
   );
   let dynamicTools: Awaited<
     ReturnType<SessionToolAuthorityEpoch["definitions"]>
@@ -11672,7 +11769,7 @@ async function createRunnerdBackendWithinSessionClaim(
   let managedOpenCodeTools: Readonly<Record<string, unknown>>[] | null = null;
   let managedOpenCodeDynamicTools: Readonly<Record<string, unknown>>[] | null = null;
   if (managedOpenCode) {
-    const allowedNames = new Set(["read_document", "write_document", "create_task", "self_remember", "paperclip_finish", "paperclip_block"]);
+    const allowedNames = new Set(["read_document", "write_document", "create_task", "self_remember", "read_context", "paperclip_finish", "paperclip_block"]);
     const schemas: Array<Record<string, unknown>> = dynamicTools.flatMap((raw): Array<Record<string, unknown>> => {
       if (typeof raw.name !== "string") return [];
       let name = raw.name;
@@ -11703,6 +11800,7 @@ async function createRunnerdBackendWithinSessionClaim(
     const names = schemas.map((tool) => tool.name);
     if (!names.includes("read_document") || !names.includes("write_document") || !names.includes("create_task") ||
       (input.nativeModelOutputCapture && !names.includes("self_remember")) ||
+      (input.nativeModelOutputCapture && !names.includes("read_context")) ||
       !names.includes("paperclip_finish") || !names.includes("paperclip_block") || new Set(names).size !== names.length)
       throw new Error("managed_opencode_source_profile_tools_incomplete");
     managedOpenCodeTools = schemas;
@@ -11710,12 +11808,13 @@ async function createRunnerdBackendWithinSessionClaim(
     // terminal controls. Keep them in the broker's exact catalog proof, but
     // pass only Paperclip CRUD tools to the bridge to avoid duplicate names.
     managedOpenCodeDynamicTools = schemas.filter((tool) =>
-      ["read_document", "write_document", "create_task", "self_remember"].includes(String(tool.name)));
+      ["read_document", "write_document", "create_task", "self_remember", "read_context"].includes(String(tool.name)));
     const resumeToolNames = managedOpenCodeDynamicTools.map((tool) => String(tool.name));
     if (new Set(resumeToolNames).size !== resumeToolNames.length ||
       !["read_document", "write_document", "create_task"].every(name => resumeToolNames.includes(name)) ||
       (input.nativeModelOutputCapture && !resumeToolNames.includes("self_remember")) ||
-      resumeToolNames.some(name => !["read_document", "write_document", "create_task", "self_remember"].includes(name)))
+      (input.nativeModelOutputCapture && !resumeToolNames.includes("read_context")) ||
+      resumeToolNames.some(name => !["read_document", "write_document", "create_task", "self_remember", "read_context"].includes(name)))
       throw new Error("managed_opencode_resume_tool_catalog_invalid");
     const taskEnvelope = createCodexTaskEnvelope({
       objective: input.execution.completionContract.contract.objective,
@@ -11871,6 +11970,9 @@ async function createRunnerdBackendWithinSessionClaim(
   const remoteRunnerFilesystemRoot = remoteSessionRoot
     ? posix.join(remoteSessionRoot, "filesystem")
     : null;
+  if (managedOpenCodeDataHome && remoteRunnerFilesystemRoot) {
+    throw new Error("Managed OpenCode provider data erasure is not qualified for remote runner storage");
+  }
   const persistenceProfile = resolveNativeHarnessPersistenceProfile(
     input.execution,
   );

@@ -2,11 +2,13 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import type { Dir } from "node:fs";
 import { and, eq, sql } from "drizzle-orm";
-import { heartbeatRuns, memoryJobs, type Db } from "@paperclipai/db";
+import { heartbeatRuns, memoryJobs, nativeRunFinalizations, type Db } from "@paperclipai/db";
 import { resolvePaperclipInstanceRoot } from "../../home-paths.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
+import { hasNativeLocalProcessStop } from "../native-local-process-stop.js";
 import { assertRuntimeStorageDirectories, removeRuntimeStorageTree } from "../runtime-skill-cache.js";
+import { conflict } from "../../errors.js";
 
 export type NativeRuntimeAssetOwner = { companyId: string; runId: string };
 const digestPattern = /^[a-f0-9]{64}$/;
@@ -18,6 +20,26 @@ export function nativeRuntimeAssetsRoot(owner?: NativeRuntimeAssetOwner) {
   // Pure constructor fixtures use readable IDs; production admission verifies native UUID rows.
   if (![owner.companyId, owner.runId].every(id => /^[a-zA-Z0-9_-]+$/.test(id))) throw new Error("Invalid native runtime asset owner");
   return path.join(root, "runs", owner.companyId, owner.runId);
+}
+
+/** Managed OpenCode provider state is private to one canonical Native run. */
+export function managedOpenCodeRuntimeDirectory(owner: NativeRuntimeAssetOwner) {
+  return path.join(nativeRuntimeAssetsRoot(owner), "provider-opencode");
+}
+
+/** Company purge may delete Run owners only after their managed provider homes are gone. */
+export async function assertCompanyManagedOpenCodeRuntimeDataErased(db: Db, companyId: string) {
+  const runs = await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(eq(heartbeatRuns.companyId, companyId));
+  for (const run of runs) {
+    try {
+      await assertRuntimeStorageDirectories(managedOpenCodeRuntimeDirectory({ companyId, runId: run.id }),
+        resolvePaperclipInstanceRoot());
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+      throw conflict("Unsafe managed OpenCode runtime storage blocks company content purge");
+    }
+    throw conflict("Managed OpenCode runtime data must be erased before company content purge");
+  }
 }
 
 export async function enqueueCompanyRuntimeAssetErasure(tx: Db, companyId: string) {
@@ -37,9 +59,34 @@ export async function eraseNativeRuntimeAssets(db: Db, owner: NativeRuntimeAsset
     const tx = rawTx as unknown as Db;
     await lockAnalyticalCompany(tx, owner.companyId); await lockMemoryPrivacy(tx, owner.companyId);
     const [run] = await tx.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, owner.companyId), eq(heartbeatRuns.id, owner.runId)));
+    const providerHome = managedOpenCodeRuntimeDirectory(owner);
+    let providerHomeExists = false;
+    try {
+      await assertRuntimeStorageDirectories(providerHome, resolvePaperclipInstanceRoot());
+      providerHomeExists = true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+    if (providerHomeExists && !run) throw new Error("Managed OpenCode data erasure has no current Run Stop owner");
     if (run) {
       const [source] = await tx.execute<{ erased: boolean }>(sql`select aw_workflow_memory_erased(${owner.companyId}::uuid,${owner.runId}::uuid,NULL) as erased`);
       if (!source?.erased) throw new Error("Native runtime assets have no Source erasure receipt");
+      if (providerHomeExists) {
+        if (run.runtimeMode !== "native" || run.driverKind !== "opencode_server" ||
+          !["succeeded", "interrupted", "failed", "cancelled", "timed_out"].includes(run.status) ||
+          run.processPid !== null || run.processGroupId !== null || run.controllerLeaseExpiresAt !== null) {
+          throw new Error("Managed OpenCode data erasure awaits confirmed Native Stop");
+        }
+        const [finalization] = await tx.select({ phase: nativeRunFinalizations.phase,
+          leaseOwner: nativeRunFinalizations.leaseOwner, leaseExpiresAt: nativeRunFinalizations.leaseExpiresAt })
+          .from(nativeRunFinalizations).where(and(eq(nativeRunFinalizations.companyId, owner.companyId),
+            eq(nativeRunFinalizations.runId, owner.runId)));
+        if (!finalization || !["committed", "terminal_failure"].includes(finalization.phase) ||
+          finalization.leaseOwner !== null || finalization.leaseExpiresAt !== null ||
+          !await hasNativeLocalProcessStop(tx, owner.companyId, owner.runId)) {
+          throw new Error("Managed OpenCode data erasure awaits Native Stop receipt");
+        }
+      }
     }
     const storageRoot = resolvePaperclipInstanceRoot(), runRoot = nativeRuntimeAssetsRoot(owner);
     try {

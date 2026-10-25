@@ -51,6 +51,11 @@ export type NativePayloadSourceSet = {
   inputs: NativePayloadSourceInput[];
 };
 
+export type NativeConsumedSourceComponent =
+  | { kind: "bootstrap" }
+  | { kind: "dispatch"; executionInputDigest: string; policy: NativePayloadSourcePolicy; inputs: NativePayloadSourceInput[] }
+  | { kind: "additional_input"; responsibleUserId: string; policy: NativePayloadSourcePolicy; inputs: NativePayloadSourceInput[] };
+
 export type NativeBootstrapSourceClosure = {
   sourceSet: NativePayloadSourceSet;
   taskEnvelopeDigest: string;
@@ -63,6 +68,8 @@ export type NativeBootstrapSourceClosure = {
 export type NativeModelOutputCapture = {
   runId: string;
   sourceSet: NativePayloadSourceSet;
+  /** Exact receipt components that compose the source set consumed by this request. */
+  consumedSourceComponents?: NativeConsumedSourceComponent[];
   dispatch: Extract<NativePayloadSourceInput, { kind: "worker_model_dispatch" }>;
   /** Present only when the output came from the pinned managed OpenCode tool boundary. */
   managedOpenCodeToolUse?: { callId: string; toolName: string; argumentsHash: string; responseContentHash: string };

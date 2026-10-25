@@ -27,6 +27,7 @@ import {
   workerModelResultSchema,
   nativeRunInputSourceReceiptSchema,
   nativePayloadSourceInputSchema,
+  nativePayloadSourcePolicySchema,
   type WorkerModelBinding,
   type WorkerModelCall,
   type NativePayloadSourceInput,
@@ -43,6 +44,8 @@ import { agentProviderBindingService } from "../agent-provider-bindings.js";
 import { assertV7Authorization, assertV7Enabled } from "../v7-authorization.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
+import type { NativeConsumedSourceComponent } from "../native-runtime/native-execution-input.js";
+import { assertNativeContextReadSourceSetCurrent, type NativeContextReadBinding } from "../native-direct-input.js";
 import {
   lockMemoryPrivacy,
   heartbeatMemoryPayloadRetained,
@@ -75,6 +78,25 @@ import { agentRuntimeCandidateConformanceService } from "../agents/authoring-run
 type BoundClaims = RuntimeToolsTokenClaims & {
   worker_model: WorkerModelBinding;
 };
+type ManagedSourceComponent = NativeConsumedSourceComponent;
+
+function mergeManagedSourceComponents(components: ManagedSourceComponent[], bootstrap: { policy: unknown; inputs: unknown[] }) {
+  const ids = { issueIds: new Set<string>(), projectIds: new Set<string>(), runIds: new Set<string>(),
+    memoryIds: new Set<string>(), foundationRevisionIds: new Set<string>() };
+  const inputs: unknown[] = [];
+  for (const component of components) {
+    const sourceSet = component.kind === "bootstrap" ? bootstrap : component;
+    const policy = managedRecord(sourceSet.policy);
+    for (const key of Object.keys(ids) as Array<keyof typeof ids>)
+      for (const value of Array.isArray(policy[key]) ? policy[key] as unknown[] : [])
+        if (typeof value === "string") ids[key].add(value);
+    for (const value of Array.isArray(sourceSet.inputs) ? sourceSet.inputs : [])
+      if (!inputs.some(existing => isDeepStrictEqual(existing, value))) inputs.push(value);
+  }
+  const policy = Object.fromEntries(Object.entries(ids).map(([key, values]) => [key, [...values].sort()])) as Record<string, string[]>;
+  return { policy, inputs };
+}
+
 export type WorkerModelDispatchWireReceipt = ReadOnlyModelWireReceipt & {
   reservationId: string;
   callId: string;
@@ -89,7 +111,10 @@ type Options = {
 
 function managedToolName(value: string): string {
   for (const prefix of ["paperclip__", "paperclip_", "paperclip."]) {
-    if (value.startsWith(prefix)) return value.slice(prefix.length);
+    if (value.startsWith(prefix)) {
+      const stripped = value.slice(prefix.length);
+      return stripped === "self_read_context" ? "read_context" : stripped;
+    }
   }
   return value;
 }
@@ -130,6 +155,8 @@ function managedSqlFailureDetails(error: unknown): Record<string, string> {
 async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, request: Record<string, unknown>): Promise<{
   promptHash: string;
   sourceSetHash: string;
+  consumedSourceSet: { policy: Record<string, string[]>; inputs: NativePayloadSourceInput[] };
+  consumedSourceComponents: NativeConsumedSourceComponent[];
 }> {
   await assertNativeAnalyticalRunPayloadAccess(db, claims.company_id, claims.run_id);
   const [run] = await db.select().from(heartbeatRuns).where(and(
@@ -196,7 +223,7 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
       input_schema: tool.input_schema };
   }).sort((a, b) => a.name.localeCompare(b.name));
   if (!isDeepStrictEqual(actualTools, expectedTools) ||
-    actualTools.some((tool) => !["read_document", "write_document", "create_task", "self_remember", "paperclip_finish", "paperclip_block"].includes(tool.name)))
+    actualTools.some((tool) => !["read_document", "write_document", "create_task", "self_remember", "read_context", "paperclip_finish", "paperclip_block"].includes(tool.name)))
     throw forbidden("Managed OpenCode tool schemas do not match the exact current Native catalog");
 
   const intents = Array.isArray(profile.nativeAwModelWireIntents) ? profile.nativeAwModelWireIntents.map(managedRecord) : [];
@@ -204,6 +231,7 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
   const associations = Array.isArray(profile.nativeToolCallDispatchAssociations) ? profile.nativeToolCallDispatchAssociations.map(managedRecord) : [];
   let sawAuthorizedUserPrompt = false;
   let currentPromptBinding: { promptHash: string; sourceSetHash: string } | null = null;
+  const consumedSourceComponents: ManagedSourceComponent[] = [];
   const priorProviderToolUses = new Set<string>();
   const consumedProviderToolUses = new Set<string>();
   for (const messageValue of Array.isArray(request.messages) ? request.messages : []) {
@@ -230,11 +258,22 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
       // provider replies could otherwise make a prior assistant frame ambiguous.
       if (qualifiedIntents.length !== 1)
         throw forbidden("Managed OpenCode assistant history is not an exact persisted provider response");
+      const priorIntent = qualifiedIntents[0]!;
       const toolUses = qualifiedIntents[0]!.responseToolUses;
       if (Array.isArray(toolUses)) for (const call of toolUses) {
         const id = managedRecord(call).id;
         if (typeof id === "string") priorProviderToolUses.add(id);
       }
+      const reservationId = typeof priorIntent.reservationId === "string" ? priorIntent.reservationId : "";
+      const exactPrefixes = receipt.data.dispatches.filter(dispatch => dispatch.inputs.some(source =>
+        source.kind === "worker_model_dispatch" && source.reservationId === reservationId &&
+        source.callId === priorIntent.callId && source.requestHash === priorIntent.requestHash &&
+        source.wireBodyHash === priorIntent.wireBodyHash));
+      if (!reservationId || exactPrefixes.length === 0)
+        throw forbidden("Managed OpenCode assistant history has no exact dispatch source prefix");
+      const prefix = exactPrefixes[0]!;
+      consumedSourceComponents.push({ kind: "dispatch", executionInputDigest: prefix.executionInputDigest,
+        policy: prefix.policy, inputs: prefix.inputs });
     } else if (message.role === "user") {
       for (const block of blocks) {
         if (block.type === "text") {
@@ -248,6 +287,7 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
           currentPromptBinding = { promptHash, sourceSetHash: bindingHash };
           const bootstrapSourceSet = { policy: receipt.data.bootstrap.policy, inputs: receipt.data.bootstrap.inputs };
           if (bindingHash === nativeSha256(bootstrapSourceSet)) {
+            consumedSourceComponents.push({ kind: "bootstrap" });
             await assertNativePayloadSourceSetCurrent(db, { companyId: claims.company_id,
               issueId: run.nativeIssueId!, runId: claims.run_id,
               actor: { type: "agent", source: "agent_jwt", companyId: claims.company_id, agentId: claims.sub,
@@ -256,13 +296,16 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
           } else {
             const sourceSets = receipt.data.additionalInputs.filter((entry) =>
               nativeSha256({ policy: entry.policy, inputs: entry.inputs }) === bindingHash);
-            if (sourceSets.length === 0) throw forbidden("Managed OpenCode prompt source set is not in its original receipt");
+            if (sourceSets.length !== 1) throw forbidden("Managed OpenCode prompt source set is not uniquely in its original receipt");
             for (const sourceSet of sourceSets)
               await assertNativePayloadSourceSetCurrent(db, { companyId: claims.company_id,
                 issueId: run.nativeIssueId!, runId: claims.run_id,
                 actor: { type: "agent", source: "agent_jwt", companyId: claims.company_id, agentId: claims.sub,
                   runId: claims.run_id, onBehalfOfUserId: claims.responsible_user_id },
                 policy: sourceSet.policy, inputs: sourceSet.inputs });
+            const sourceSet = sourceSets[0]!;
+            consumedSourceComponents.push({ kind: "additional_input", responsibleUserId: sourceSet.responsibleUserId,
+              policy: sourceSet.policy, inputs: sourceSet.inputs });
           }
           sawAuthorizedUserPrompt = true;
           continue;
@@ -283,7 +326,7 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
         }
         const capture = captures.find((item) => item.managedOpenCode === true && item.callId === block.tool_use_id &&
           item.tool === toolName && typeof item.resultDigest === "string");
-        if (!capture || !["read_document", "write_document", "create_task", "self_remember"].includes(toolName) ||
+        if (!capture || !["read_document", "write_document", "create_task", "self_remember", "read_context"].includes(toolName) ||
           !associations.some((item) => item.callId === block.tool_use_id && item.tool === toolName && typeof item.turnId === "string"))
           throw forbidden("Managed OpenCode tool result has no original qualified invocation receipt");
         const source = managedRecord(capture.source);
@@ -309,6 +352,12 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
           eq(toolInvocations.resultHash, contentHash),
         ));
         if (!invocation) throw forbidden("Managed OpenCode source tool invocation is no longer current");
+        const consumedEntries = receipt.data.additionalInputs.filter(entry => entry.inputs.some(value =>
+          value.kind === "tool_result" && isDeepStrictEqual(value, source)));
+        if (consumedEntries.length !== 1) throw forbidden("Managed OpenCode tool result source entry is ambiguous");
+        const consumedEntry = consumedEntries[0]!;
+        consumedSourceComponents.push({ kind: "additional_input", responsibleUserId: consumedEntry.responsibleUserId,
+          policy: consumedEntry.policy, inputs: consumedEntry.inputs });
         if (toolName === "create_task") {
           const taskRef = managedRecord(capture.taskRef);
           const taskId = taskRef.issueId;
@@ -331,6 +380,29 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
           }, claims.company_id, "issue:read", { type: "issue", companyId: claims.company_id,
             issueId: task.id, projectId: task.projectId, parentIssueId: task.parentId,
             assigneeAgentId: task.assigneeAgentId, assigneeUserId: null, status: task.status });
+        } else if (toolName === "read_context") {
+          const contextCapture = managedRecord(capture.contextRead);
+          const sourceSet = managedRecord(contextCapture.sourceSet);
+          const policy = sourceSet.policy;
+          const sources = Array.isArray(sourceSet.inputs) ? sourceSet.inputs : [];
+          const manifestIds = contextCapture.manifestIds;
+          const contextSources = sources.filter((value) => managedRecord(value).kind === "context");
+          const receiptEntries = receipt.data.additionalInputs.filter(entry => entry.inputs.some(value =>
+            value.kind === "tool_result" && isDeepStrictEqual(value, source)));
+          if (capture.managedOpenCode !== true || contextCapture.contentDigest !== contentHash ||
+            !nativePayloadSourcePolicySchema.safeParse(policy).success || !nativePayloadSourceInputSchema.array().safeParse(sources).success ||
+            contextSources.length !== 1 || sources.length !== 1 || !Array.isArray(manifestIds) || receiptEntries.length !== 1 ||
+            !isDeepStrictEqual(receiptEntries[0]!.policy, policy) ||
+            !receiptEntries[0]!.inputs.some(value => value.kind === "context" && isDeepStrictEqual(value, contextSources[0])) ||
+            source.toolName !== "read_context")
+            throw forbidden("Managed OpenCode Context tool result capture is incomplete");
+          await assertNativeContextReadSourceSetCurrent(db, { companyId: claims.company_id, agentId: claims.sub,
+            runId: claims.run_id, issueId: run.nativeIssueId!, actor: {
+              type: "agent", source: "agent_jwt", companyId: claims.company_id, agentId: claims.sub,
+              runId: claims.run_id, onBehalfOfUserId: claims.responsible_user_id,
+            }, sourceSet: { policy: policy as NativeContextReadBinding["sourceSet"]["policy"],
+              inputs: sources as NativeContextReadBinding["sourceSet"]["inputs"] },
+            manifestIds: manifestIds as NativeContextReadBinding["manifestIds"] });
         } else {
           let documentRef: Record<string, unknown>;
           if (toolName === "read_document") {
@@ -362,7 +434,18 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
   }
   if (!sawAuthorizedUserPrompt) throw forbidden("Managed OpenCode request is missing its server-owned task input");
   if (!currentPromptBinding) throw forbidden("Managed OpenCode request is missing its current Native prompt binding");
-  return currentPromptBinding;
+  const consumedSourceSet = mergeManagedSourceComponents(consumedSourceComponents, {
+    policy: receipt.data.bootstrap.policy, inputs: receipt.data.bootstrap.inputs,
+  });
+  const parsedPolicy = nativePayloadSourcePolicySchema.safeParse(consumedSourceSet.policy);
+  const parsedInputs = nativePayloadSourceInputSchema.array().max(256).safeParse(consumedSourceSet.inputs);
+  if (!parsedPolicy.success || !parsedInputs.success ||
+    Buffer.byteLength(JSON.stringify(consumedSourceComponents), "utf8") > 512 * 1024)
+    throw forbidden("Managed OpenCode consumed source set exceeds its bound");
+  return { ...currentPromptBinding,
+    consumedSourceSet: { policy: parsedPolicy.data, inputs: parsedInputs.data },
+    consumedSourceComponents,
+  };
 }
 
 /** A Native worker's single inference boundary. It never supplies a provider
@@ -1345,6 +1428,9 @@ export function workerModelGateway(db: Db, options: Options) {
                 requestHash: receipt.requestHash, wireBodyHash: receipt.bodySha256, endpoint: receipt.endpoint,
                 method: receipt.method, sourcePolicyHash, sourceDispatchDigest,
                 sourceSetHash: requestSourceBinding.sourceSetHash,
+                consumedSourceSet: requestSourceBinding.consumedSourceSet,
+                consumedSourceSetHash: nativeSha256(requestSourceBinding.consumedSourceSet),
+                consumedSourceComponents: requestSourceBinding.consumedSourceComponents,
                 idempotencyKey: reservation.idempotencyKey }];
               if (Buffer.byteLength(JSON.stringify(intents), "utf8") > 256 * 1024)
                 throw forbidden("The Native model wire receipt exceeds its bound");
@@ -1416,27 +1502,30 @@ export function workerModelGateway(db: Db, options: Options) {
             runId: claims.run_id, reservationId: reservation.id, callId: existing.callId,
             requestHash: existing.requestHash, wireBodyHash: existing.wireBodyHash, responseHash: result.responseHash });
           managedFailureStage = "response_source_union";
-          const allInputs = [
-            ...sourceReceipt.data.bootstrap.inputs,
-            ...sourceReceipt.data.dispatches.flatMap((dispatch) => dispatch.inputs),
-            ...sourceReceipt.data.additionalInputs.flatMap((entry) => entry.inputs),
+          const consumedRaw = managedRecord(existing.consumedSourceSet);
+          const consumedPolicy = nativePayloadSourcePolicySchema.safeParse(consumedRaw.policy);
+          const consumedInputs = nativePayloadSourceInputSchema.array().max(256).safeParse(consumedRaw.inputs);
+          const consumedComponents = existing.consumedSourceComponents;
+          if (!consumedPolicy.success || !consumedInputs.success || !Array.isArray(consumedComponents) ||
+            consumedComponents.length < 1 || consumedComponents.length > 64 ||
+            existing.consumedSourceSetHash !== nativeSha256({ policy: consumedPolicy.data, inputs: consumedInputs.data }) ||
+            Buffer.byteLength(JSON.stringify(consumedComponents), "utf8") > 512 * 1024)
+            throw forbidden("The managed model response lost its immutable consumed-source binding");
+          const sourcePolicy = consumedPolicy.data;
+          const uniqueInputs = nativePayloadSourceInputSchema.array().max(256).parse([
+            ...consumedInputs.data,
             providerDispatch,
-          ];
-          const uniqueInputs = [...new Map(allInputs.map((source) => [JSON.stringify(source), source])).values()];
-          const policyKeys = ["issueIds", "projectIds", "runIds", "memoryIds", "foundationRevisionIds"] as const;
-          const sourcePolicy = Object.fromEntries(policyKeys.map((key) => [key, [...new Set([
-            ...sourceReceipt.data.bootstrap.policy[key],
-            ...sourceReceipt.data.dispatches.flatMap((dispatch) => dispatch.policy[key]),
-            ...sourceReceipt.data.additionalInputs.flatMap((entry) => entry.policy[key]),
-          ])].sort()])) as typeof sourceReceipt.data.bootstrap.policy;
+          ]);
           const dispatch = {
             // Receipt dispatches are append-only. Bind this provider response
             // to the acknowledged Native input turn that actually carried its
-            // prompt, rather than the broader bootstrap execution-input hash.
+            // prompt and the exact source closure captured before the provider
+            // request. Later receipt inputs must not retroactively become
+            // sources for this response.
             executionInputDigest: sourceDispatchDigest,
             responsibleUserId: run.responsibleUserId,
             policy: sourcePolicy,
-            inputs: nativePayloadSourceInputSchema.array().parse(uniqueInputs),
+            inputs: uniqueInputs,
           };
           const { digest: _oldDigest, ...receiptBody } = sourceReceipt.data;
           const nextReceiptBody = { ...receiptBody, dispatches: [...receiptBody.dispatches, dispatch] };

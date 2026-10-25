@@ -36,6 +36,7 @@ import { workspaceFileResourceService } from "../workspace-file-resources.js";
 import { badRequest, forbidden } from "../../errors.js";
 import { searchRunnerApi } from "./runner-api-catalog.js";
 import type { NativeModelOutputCapture } from "./native-execution-input.js";
+import { assembleNativeContextRead, type NativeContextReadBinding } from "../native-direct-input.js";
 import { executeRunnerApi, validateRunnerApiCall, runnerApiUrl, RUNNER_API_MAX_BYTES, type RunnerApiFile } from "./runner-api-client.js";
 import { and, desc, eq, isNull, notInArray, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
@@ -108,6 +109,7 @@ const IMPLEMENTED_OPERATIONS = new Set([
 ]);
 const MANAGED_NATIVE_REMEMBER_TOOL = "self_remember";
 const MANAGED_NATIVE_REMEMBER_GATEWAY_TOOL = "paperclip-self:remember";
+const MANAGED_NATIVE_CONTEXT_READ_TOOL = "read_context";
 
 const NATIVE_REVIEW_READ_TOOLS = new Set([
   "get_task_context", "get_task_history", "list_documents", "read_document", "list_document_revisions",
@@ -120,6 +122,9 @@ type Binding = {
   awOutputCapture?: { readonly value: NativeModelOutputCapture | null };
   /** Exact provider-bound model output capture; never read from tool arguments. */
   nativeModelOutputCapture?: { readonly value: NativeModelOutputCapture | null };
+  /** Managed-only ContextEngine read callback with a server-owned witness carrier. */
+  managedNativeContextRead?: (query: string) => Promise<{ markdown: string }>;
+  managedNativeContextReadCapture?: { value: NativeContextReadBinding | null };
   /** Server-derived scope for one addressed native completion review. */
   nativeReview?: NativeReviewAssignmentContext;
   companyId: string;
@@ -376,6 +381,12 @@ export class PaperclipRunnerToolAuthority {
         description: remember.description,
         inputSchema: structuredClone(remember.parametersSchema),
       });
+      if (this.binding.managedNativeContextRead) definitions.push({
+        name: MANAGED_NATIVE_CONTEXT_READ_TOOL,
+        description: "Read the current governed task Context for a focused query. Returns only the rendered Context; source IDs and access are resolved by Paperclip.",
+        inputSchema: { type: "object", properties: { query: { type: "string", minLength: 1, maxLength: 4000 } },
+          required: ["query"], additionalProperties: false },
+      });
     }
     if(this.binding.managementToolsEnabled)definitions.push(...MANAGEMENT_ANALYTICAL_TOOL_DEFINITIONS);
     const connectionTools = [...RUNTIME_CONNECTION_TOOL_DEFINITIONS,
@@ -547,6 +558,7 @@ export class PaperclipRunnerToolAuthority {
     if (
       !IMPLEMENTED_OPERATIONS.has(call.tool) &&
       !(call.tool === MANAGED_NATIVE_REMEMBER_TOOL && this.binding.nativeModelOutputCapture) &&
+      !(call.tool === MANAGED_NATIVE_CONTEXT_READ_TOOL && this.binding.nativeModelOutputCapture && this.binding.managedNativeContextRead) &&
       call.tool !== READ_CURRENT_WAKE_COMMENTS_TOOL_NAME &&
       call.tool !== LIST_CHAT_ATTACHMENTS_TOOL_NAME &&
       call.tool !== REUSE_CHAT_ATTACHMENT_TOOL_NAME &&
@@ -569,6 +581,22 @@ export class PaperclipRunnerToolAuthority {
       agentId: this.binding.agentId, runId: this.binding.runId, onBehalfOfUserId: context.run.responsibleUserId };
     if(isManagementAnalyticalTool(call.tool))return executeManagementAnalyticalTool(this.db,this.binding.companyId,{type:"agent",source:"agent_jwt",companyId:this.binding.companyId,agentId:this.binding.agentId,runId:this.binding.runId,onBehalfOfUserId:context.run.responsibleUserId},call.tool,call.arguments);
     const input = record(call.arguments);
+    if (call.tool === MANAGED_NATIVE_CONTEXT_READ_TOOL) {
+      if (!this.binding.nativeModelOutputCapture || !this.binding.managedNativeContextRead ||
+        !this.binding.managedNativeContextReadCapture ||
+        Object.keys(input).length !== 1 || typeof input.query !== "string" || !input.query.trim() || input.query.length > 4_000)
+        throw forbidden("Managed Context read arguments are invalid");
+      return this.binding.managedNativeContextRead(input.query);
+    }
+    if (call.tool === MANAGED_NATIVE_REMEMBER_TOOL) {
+      if (!this.binding.nativeModelOutputCapture)
+        throw forbidden("Managed Memory output capture is unavailable");
+      // This managed-only descriptor is supplied by Tool Gateway and is
+      // intentionally not part of the general semantic-operation catalog.
+      // Its original Gateway policy, approval and current-source checks remain
+      // authoritative inside #rememberManagedNativeMemory.
+      return this.#rememberManagedNativeMemory(call);
+    }
     if (call.tool === READ_CHAT_ATTACHMENT_TOOL_NAME) {
       const scope = this.binding.chatAttachmentReadScope;
       const identityKeys = ["companyId", "issueId", "runId", "agentId"] as const;

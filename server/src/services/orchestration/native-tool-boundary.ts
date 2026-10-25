@@ -54,6 +54,7 @@ const reads = new Set([
   "get_task_history",
   "list_documents",
   "read_document",
+  "read_context",
   "list_document_revisions",
   "paperclip_search_assigned_tools",
 ]);
