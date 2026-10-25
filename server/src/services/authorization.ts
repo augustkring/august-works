@@ -302,6 +302,7 @@ type IssueAuthorizationRow = {
   privacyParentIssueId: string | null;
   responsibleUserId: string | null;
   createdByUserId: string | null;
+  hiddenAt: Date | null;
 };
 
 function evaluateAuthorizationPolicyForAssignment(
@@ -639,6 +640,8 @@ function pipelineAutomationRoutineSourceCondition(company: SQL): SQL<boolean> {
   const payload = sql`rr.trigger_payload`;
   const taskIds = sql`case when jsonb_typeof(${payload}->'contextPack'->'taskSourceIssueIds')='array'
     then ${payload}->'contextPack'->'taskSourceIssueIds' else '[]'::jsonb end`;
+  const outputItems = sql`case when jsonb_typeof(${payload}->'contextPack'->'outputSummaries'->'items')='array'
+    then ${payload}->'contextPack'->'outputSummaries'->'items' else '[]'::jsonb end`;
   return sql<boolean>`(
     jsonb_typeof(${payload})='object'
     and jsonb_typeof(${payload}->'contextPack')='object'
@@ -651,6 +654,10 @@ function pipelineAutomationRoutineSourceCondition(company: SQL): SQL<boolean> {
     and ${payload}->'automation'->>'automationExecutionId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
     and jsonb_typeof(${payload}->'contextPack'->'taskSourceIssueIds')='array'
     and jsonb_array_length(${taskIds})<=256
+    and jsonb_typeof(${payload}->'contextPack'->'outputSummaries'->'items')='array'
+    and jsonb_array_length(${outputItems})<=5
+    and jsonb_array_length(${outputItems})=(select count(distinct output.item->>'id')
+      from jsonb_array_elements(${outputItems}) output(item))
     and not exists(select 1 from jsonb_array_elements_text(${taskIds}) source(id)
       where source.id !~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$')
     and exists(select 1 from pipeline_automation_executions e
@@ -668,6 +675,17 @@ function pipelineAutomationRoutineSourceCondition(company: SQL): SQL<boolean> {
         and e.generation::text=${payload}->'automation'->>'generation'
         and e.triggering_event_id=case when ${payload}->>'triggeringEventId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
           then (${payload}->>'triggeringEventId')::uuid end
+        and ${payload}->'contextPack'->'case'->>'sourceUserId' is not distinct from c.created_by_user_id
+        and ${payload}->'contextPack'->'case'->>'sourceAgentId' is not distinct from c.created_by_agent_id::text
+        and ${payload}->'contextPack'->'case'->>'sourceRunId' is not distinct from c.origin_run_id::text
+        and ((c.created_by_user_id is not null and c.created_by_agent_id is null and c.origin_run_id is null
+              and exists(select 1 from "user" u join company_memberships m on m.principal_type='user'
+                and m.principal_id=u.id and m.company_id=c.company_id and m.status='active'
+                where u.id=c.created_by_user_id and u.email_verified=true))
+          or (c.created_by_user_id is null and c.created_by_agent_id is not null and c.origin_run_id is not null
+              and exists(select 1 from heartbeat_runs producer_run
+                where producer_run.id=c.origin_run_id and producer_run.company_id=c.company_id
+                  and producer_run.agent_id=c.created_by_agent_id)))
         and (select count(distinct source.id) from jsonb_array_elements_text(${taskIds}) source(id))
           =(select count(distinct link.issue_id) from pipeline_case_issue_links link
             where link.company_id=e.company_id and link.case_id=c.id and link.created_at<=e.created_at)
@@ -679,7 +697,54 @@ function pipelineAutomationRoutineSourceCondition(company: SQL): SQL<boolean> {
             join issues source_issue on source_issue.company_id=link.company_id and source_issue.id=link.issue_id
             where link.company_id=e.company_id and link.case_id=c.id and link.created_at<=e.created_at
               and link.issue_id::text=source.id and source_issue.hidden_at is null
-              and source_issue.cancelled_at is null and source_issue.status<>'cancelled')))
+              and source_issue.cancelled_at is null and source_issue.status<>'cancelled'))
+        and not exists(select 1 from jsonb_array_elements(${outputItems}) output(item) where not (
+          output.item->'sourceIssue'->>'id' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+          and exists(select 1 from jsonb_array_elements_text(${taskIds}) source(id)
+            where source.id=output.item->'sourceIssue'->>'id')
+          and case output.item->>'kind'
+            when 'document' then output.item->>'id' ~* '^document:[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+              and output.item->>'revisionId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+              and exists(select 1 from issue_documents link
+                join documents d on d.company_id=link.company_id and d.id=link.document_id
+                join issues source_issue on source_issue.company_id=link.company_id and source_issue.id=link.issue_id
+                join document_revisions rev on rev.company_id=d.company_id and rev.document_id=d.id
+                  and rev.id=case when output.item->>'revisionId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+                    then (output.item->>'revisionId')::uuid end
+                where link.company_id=e.company_id
+                  and link.issue_id=case when output.item->'sourceIssue'->>'id' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+                    then (output.item->'sourceIssue'->>'id')::uuid end
+                  and link.document_id=case when output.item->>'id' ~* '^document:[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+                    then substring(output.item->>'id' from 10)::uuid end
+                  and link.key=output.item->>'key'
+                  and coalesce(d.source_trust,source_issue.source_trust,'null'::jsonb)
+                    is not distinct from coalesce(output.item->'sourceTrust','null'::jsonb))
+            when 'work_product' then output.item->>'id' ~* '^work_product:[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+              and exists(select 1 from issue_work_products wp
+                join issues source_issue on source_issue.company_id=wp.company_id and source_issue.id=wp.issue_id
+                where wp.company_id=e.company_id
+                and wp.id=case when output.item->>'id' ~* '^work_product:[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+                  then substring(output.item->>'id' from 14)::uuid end
+                and wp.issue_id=case when output.item->'sourceIssue'->>'id' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+                  then (output.item->'sourceIssue'->>'id')::uuid end
+                and wp.type=output.item->>'key' and wp.title=output.item->>'title'
+                and coalesce(wp.source_trust,source_issue.source_trust,'null'::jsonb)
+                  is not distinct from coalesce(output.item->'sourceTrust','null'::jsonb))
+            when 'attachment' then output.item->>'id' ~* '^attachment:[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+              and exists(select 1 from issue_attachments attachment
+                join assets asset on asset.company_id=attachment.company_id and asset.id=attachment.asset_id
+                join issues source_issue on source_issue.company_id=attachment.company_id and source_issue.id=attachment.issue_id
+                where attachment.company_id=e.company_id
+                  and attachment.id=case when output.item->>'id' ~* '^attachment:[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+                    then substring(output.item->>'id' from 12)::uuid end
+                  and attachment.issue_id=case when output.item->'sourceIssue'->>'id' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+                    then (output.item->'sourceIssue'->>'id')::uuid end
+                  and asset.original_filename is not distinct from nullif(output.item->>'key',output.item->>'contentType')
+                  and coalesce(source_issue.source_trust,'null'::jsonb)
+                    is not distinct from coalesce(output.item->'sourceTrust','null'::jsonb))
+            else false
+          end
+        )))
   )`;
 }
 
@@ -760,6 +825,13 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
           where n.kind='routine_run' and rr.id=n.id and rr.company_id=${company}
             and rr.trigger_payload->'automation'->>'automationExecutionId' is not null
             and source.id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+        union all select 'run',case when rr.trigger_payload->'contextPack'->'case'->>'sourceRunId'
+            ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+          then (rr.trigger_payload->'contextPack'->'case'->>'sourceRunId')::uuid end
+          from routine_runs rr join routines p on p.id=rr.routine_id and p.company_id=rr.company_id
+          where n.kind='routine_run' and rr.id=n.id and rr.company_id=${company}
+            and rr.trigger_payload->'automation'->>'automationExecutionId' is not null
+            and ${pipelineAutomationRoutineSourceCondition(sql`${company}::uuid`)}
         union all select 'issue',source.id from projects p cross join lateral unnest(p.source_issue_ids) source(id)
           where n.kind='project' and p.id=n.id and p.company_id=${company}
         union all select 'project',source.id from projects p cross join lateral unnest(p.source_project_ids) source(id)
@@ -1022,7 +1094,7 @@ type ReadSourceDecisionInput = {
 };
 export type NativeContextInspectionOwner = { decide(input: ReadSourceDecisionInput): Promise<AuthorizationDecision> };
 type ReadSourceOwner = NativeContextInspectionOwner & {
-  withTaskPrivacyBatch<T>(actor: AuthorizationActor, issueIds: string[], projectIds: string[], read: () => Promise<T>): Promise<T>;
+  assertTaskPrivacyBatch(actor: AuthorizationActor, issueIds: string[], projectIds: string[]): Promise<void>;
   readRoutineSources?(runIds: string[], actor: AuthorizationActor): Promise<string[]>;
   readWorkflowSources?(runIds: string[], actor: AuthorizationActor, mode?: "strict" | "task_candidates"): Promise<string[]>;
 };
@@ -1097,6 +1169,7 @@ const issueReadColumns = {
   status: issues.status, executionPolicy: issues.executionPolicy, originKind: issues.originKind, originId: issues.originId,
   visibility: issues.visibility, privacyRootIssueId: issues.privacyRootIssueId, privacyParentIssueId: issues.privacyParentIssueId,
   responsibleUserId: issues.responsibleUserId, createdByUserId: issues.createdByUserId,
+  hiddenAt: issues.hiddenAt,
 };
 const projectReadColumns = { id: projects.id, companyId: projects.companyId, executionWorkspacePolicy: projects.executionWorkspacePolicy, visibility: projects.visibility };
 
@@ -1247,6 +1320,14 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
                 assigneeAgentId: sourceIssue.assigneeAgentId, assigneeUserId: sourceIssue.assigneeUserId },
               enforceResponsibleUserIntersection: true });
             if (!decision.allowed) { readable = false; break; }
+          }
+          const caseContext = contextPack && typeof contextPack === "object" && !Array.isArray(contextPack)
+            ? (contextPack as Record<string, unknown>).case : null;
+          const sourceRunId = caseContext && typeof caseContext === "object" && !Array.isArray(caseContext)
+            ? (caseContext as Record<string, unknown>).sourceRunId : null;
+          if (readable && sourceRunId != null) {
+            if (typeof sourceRunId !== "string" || !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(sourceRunId) ||
+              !await canActorReadHeartbeatRunPrivacy(db, sourceActor!, { id: sourceRunId, companyId })) readable = false;
           }
           if (readable) authorized.add(runId);
           continue;
@@ -1450,15 +1531,15 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
   async function withReadSources<T>(companyId: string, issueIds: string[], projectIds: string[], read: (owner: ReadSourceOwner) => Promise<T>) {
     return withReadScope(companyId, issueIds, projectIds, "task_sources", read);
   }
-  async function withTaskPrivacyBatch<T>(actor: AuthorizationActor, issueIds: string[], projectIds: string[], read: () => Promise<T>) {
-    const batchStartedAt = performance.now();
+  async function assertTaskPrivacyBatch(actor: AuthorizationActor, issueIds: string[], projectIds: string[]) {
     if (!readSources || !is(db, PgTransaction) || !readSources.active || readSources.purpose !== "task_sources")
       throw forbidden("Batched Task privacy checks require their active native source scope.");
     const companyId = readSources.companyId;
     const idsValid = (ids: string[]) => ids.length <= 20065 && new Set(ids).size === ids.length && ids.every(id =>
       /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id));
+    const exactProjectIds = [...new Set([...projectIds, ...issueIds.map(id => readSources.issues.get(id)?.projectId).filter((id): id is string => id !== null && id !== undefined)])];
     if (!idsValid(issueIds) || !idsValid(projectIds) || issueIds.some(id => !readSources.issues.has(id) || !readSources.issues.get(id)) ||
-      projectIds.some(id => !readSources.projects.has(id) || !readSources.projects.get(id)))
+      !idsValid(exactProjectIds) || exactProjectIds.some(id => !readSources.projects.has(id) || !readSources.projects.get(id)))
       throw forbidden("Batched Task privacy input is not the complete captured native population.");
 
     const valuesFor = (ids: string[]) => sql.join(ids.map(id => sql`(${id}::uuid)`), sql`, `);
@@ -1488,8 +1569,8 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
           if (issue && await canActorReadIssuePrivacy(db, actor, { id, companyId })) issuesById.set(id, true);
         }
       }
-      for (let offset = 0; offset < projectIds.length; offset += 512) {
-        const ids = projectIds.slice(offset, offset + 512);
+      for (let offset = 0; offset < exactProjectIds.length; offset += 512) {
+        const ids = exactProjectIds.slice(offset, offset + 512);
         const roots = valuesFor(ids);
         const rows = await db.execute<{ id: string; allowed: boolean }>(sql`
           select selected.id::text as id, (${projectCondition}) as allowed
@@ -1501,26 +1582,49 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       return { issues: issuesById, projects: projectsById };
     };
 
-    const initial = await evaluate();
-    process.stdout.write(`Task privacy batch initial ${JSON.stringify({ issues: issueIds.length, projects: projectIds.length, ms: Math.round(performance.now() - batchStartedAt) })}\n`);
-    if (issueIds.some(id => initial.issues.get(id) !== true) || projectIds.some(id => initial.projects.get(id) !== true))
-      throw forbidden("A Task source is outside the current privacy boundary.");
-    const batch: NativeTaskPrivacyBatch = { active: true, companyId, actorKey: routineActorKey(actor), decisionMemo: createNativeTaskDecisionMemo(), ...initial };
+    // This private provisional map exists only while this closed owner method
+    // evaluates the canonical action/policy for every exact source. It is not
+    // passed to caller code or returned as an access grant. The complete
+    // retained-source privacy predicate runs once, after every base decision,
+    // and must pass before this owner returns.
+    const batch: NativeTaskPrivacyBatch = {
+      active: true,
+      companyId,
+      actorKey: routineActorKey(actor),
+      decisionMemo: createNativeTaskDecisionMemo(),
+      issues: new Map(issueIds.map(id => [id, true])),
+      projects: new Map(exactProjectIds.map(id => [id, true])),
+    };
     nativeTaskPrivacyBatches.set(db as object, batch);
     try {
-      const result = await read();
-      process.stdout.write(`Task privacy batch callback ${JSON.stringify({ issues: issueIds.length, ms: Math.round(performance.now() - batchStartedAt) })}\n`);
-      batch.active = false;
-      nativeTaskPrivacyBatches.delete(db as object);
-      const final = await evaluate();
-      process.stdout.write(`Task privacy batch final ${JSON.stringify({ issues: issueIds.length, ms: Math.round(performance.now() - batchStartedAt) })}\n`);
-      if (issueIds.some(id => final.issues.get(id) !== true) || projectIds.some(id => final.projects.get(id) !== true))
-        throw forbidden("Task source privacy changed during the complete read.");
-      return result;
+      const checks = [
+        ...issueIds.map(id => async () => {
+          const issue = readSources.issues.get(id)!;
+          if (issue.hiddenAt) throw forbidden("A hidden Task cannot contribute to a metric.");
+          const decision = await decide({ actor, action: "issue:read", enforceResponsibleUserIntersection: true, resource: {
+            type: "issue", companyId, issueId: id, projectId: issue.projectId, parentIssueId: issue.parentId,
+            assigneeAgentId: issue.assigneeAgentId, assigneeUserId: issue.assigneeUserId, status: issue.status,
+            originKind: issue.originKind, originId: issue.originId,
+          } });
+          if (!decision.allowed) throw forbidden("A Task source is outside the current authorization boundary.");
+        }),
+        ...exactProjectIds.map(id => async () => {
+          const decision = await decide({ actor, action: "project:read", enforceResponsibleUserIntersection: true,
+            resource: { type: "project", companyId, projectId: id } });
+          if (!decision.allowed) throw forbidden("A Project source is outside the current authorization boundary.");
+        }),
+      ];
+      for (let offset = 0; offset < checks.length; offset += 32) {
+        const decisions = await Promise.allSettled(checks.slice(offset, offset + 32).map(check => check()));
+        for (const decision of decisions) if (decision.status === "rejected") throw decision.reason;
+      }
     } finally {
       batch.active = false;
       nativeTaskPrivacyBatches.delete(db as object);
     }
+    const final = await evaluate();
+    if (issueIds.some(id => final.issues.get(id) !== true) || exactProjectIds.some(id => final.projects.get(id) !== true))
+      throw forbidden("Task source privacy changed during the complete read.");
   }
   async function withReadCompany<T>(companyId: string, read: (owner: ReadSourceOwner) => Promise<T>) {
     if (!is(db, PgTransaction)) throw forbidden("Company search requires a native read transaction.");
@@ -3724,7 +3828,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     decide,
     decidePrincipalGrant,
     withReadSources,
-    withTaskPrivacyBatch,
+    assertTaskPrivacyBatch,
     withReadCompany,
     withReadRoutineSources,
     withReadWorkflowSources,

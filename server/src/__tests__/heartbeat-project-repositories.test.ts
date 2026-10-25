@@ -5,15 +5,21 @@ import { execFileSync } from "node:child_process";
 import { mkdtemp, mkdir, writeFile, readFile, realpath, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import express, { type RequestHandler } from "express";
+import request from "supertest";
 import { pathToFileURL } from "node:url";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { agents, companies, createDb, heartbeatRuns, issues, projects, projectWorkspaces } from "@paperclipai/db";
+import { agents, authUsers, companies, companyMemberships, createDb, heartbeatRuns, issues, principalPermissionGrants, projectWorkspaces } from "@paperclipai/db";
 import { runLocalGit, setExpensiveWorkspaceGitExecutor } from "@paperclipai/adapter-utils/git-workspace-sync";
 import { WorkspaceGitScanError } from "../services/workspace-git-operation-scheduler.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { heartbeatService } from "../services/heartbeat.ts";
 import { instanceSettingsService } from "../services/instance-settings.ts";
 import { drainHeartbeatRunsToQuiescence } from "./helpers/drain-heartbeat-runs.js";
+import { projectRoutes } from "../routes/projects.js";
+import { errorHandler } from "../middleware/index.js";
+import { grantsForHumanRole } from "../services/company-member-roles.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 
 const execute = vi.hoisted(() => vi.fn(async (_input: any) => ({ exitCode: 0, signal: null, timedOut: false })));
 vi.mock("../adapters/index.js", () => ({
@@ -57,22 +63,49 @@ suite("task project repository provisioning", () => {
     });
   });
 
+  async function seedNativeHuman(companyId: string, userId: string) {
+    await db.insert(authUsers).values({ id: userId, name: "Repository fixture owner",
+      email: `${userId}@example.test`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId,
+      status: "active", membershipRole: "owner" });
+    await db.insert(principalPermissionGrants).values(grantsForHumanRole("owner").map(grant => ({
+      companyId, principalType: "user" as const, principalId: userId, ...grant,
+    })));
+    return seedNativePasskeySession(db, userId);
+  }
+
+  async function createNativeProject(companyId: string, userId: string, sessionId: string, name: string,
+    executionWorkspacePolicy?: Record<string, unknown>) {
+    const app = express();
+    app.use(express.json());
+    app.use(((req, _res, next) => { req.actor = { type: "board", source: "session", userId, sessionId,
+      companyIds: [companyId], memberships: [{ companyId, membershipRole: "owner", status: "active" }] }; next(); }) as RequestHandler);
+    app.use("/api", projectRoutes(db));
+    app.use(errorHandler);
+    const created = await request(app).post(`/api/companies/${companyId}/projects`).send({ name });
+    if (created.status !== 201) throw new Error(`Canonical Human Project creation failed: ${created.status}`);
+    if (executionWorkspacePolicy) {
+      const updated = await request(app).patch(`/api/projects/${created.body.id}`).send({ executionWorkspacePolicy });
+      if (updated.status !== 200) throw new Error(`Canonical Human Project policy update failed: ${updated.status}`);
+    }
+    return created.body.id as string;
+  }
+
   it.each([
     { scenario: "no configured workspace", configuredWorkspace: false, explicitIsolation: null },
     { scenario: "configured Git workspace", configuredWorkspace: true, explicitIsolation: null },
     { scenario: "explicit issue isolation without a workspace", configuredWorkspace: false, explicitIsolation: "issue" },
     { scenario: "explicit project isolation without a workspace", configuredWorkspace: false, explicitIsolation: "project" },
   ] as const)("applies default isolation safely with $scenario", async ({ configuredWorkspace, explicitIsolation }) => {
-    const companyId = randomUUID(), projectId = randomUUID(), agentId = randomUUID(), issueId = randomUUID();
+    const companyId = randomUUID(), agentId = randomUUID(), issueId = randomUUID(), responsibleUserId = randomUUID();
     await instanceSettingsService(db).updateExperimental({
       enableIsolatedWorkspaces: true,
       enableIsolatedWorkspacesByDefault: true,
     });
-    await db.insert(companies).values({ id: companyId, name: "Research", issuePrefix: `R${companyId.slice(0, 6)}`, defaultResponsibleUserId: "responsible-user" });
-    await db.insert(projects).values({
-      id: projectId, companyId, name: "Research", status: "in_progress",
-      executionWorkspacePolicy: explicitIsolation === "project" ? { enabled: true, defaultMode: "isolated_workspace" } : null,
-    });
+    await db.insert(companies).values({ id: companyId, name: "Research", issuePrefix: `R${companyId.slice(0, 6)}`, defaultResponsibleUserId: responsibleUserId });
+    const sessionId = await seedNativeHuman(companyId, responsibleUserId);
+    const projectId = await createNativeProject(companyId, responsibleUserId, sessionId, "Research",
+      explicitIsolation === "project" ? { enabled: true, defaultMode: "isolated_workspace" } : undefined);
     if (configuredWorkspace) {
       const source = path.join(root, companyId, "source");
       await mkdir(source, { recursive: true });
@@ -122,7 +155,7 @@ suite("task project repository provisioning", () => {
     { code: "workspace_git_scan_cancelled", scenario: "cancelled", retryable: false },
     { code: "workspace_git_scan_failed", scenario: "permanent", retryable: false },
   ] as const)("handles $scenario $code during local-source preparation", async ({ code, scenario, retryable }) => {
-    const companyId = randomUUID(), projectId = randomUUID(), agentId = randomUUID(), issueId = randomUUID();
+    const companyId = randomUUID(), agentId = randomUUID(), issueId = randomUUID(), responsibleUserId = randomUUID();
     const source = path.join(root, companyId, "source");
     await mkdir(source, { recursive: true });
     const git = (...args: string[]) => execFileSync("git", args, { cwd: source, stdio: "ignore" });
@@ -133,8 +166,9 @@ suite("task project repository provisioning", () => {
     git("-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "seed");
     await writeFile(path.join(source, "README.md"), "preserved dirty work");
     await writeFile(path.join(source, "private.secret"), "must not copy");
-    await db.insert(companies).values({ id: companyId, name: "Bootstrap recovery", issuePrefix: `R${companyId.slice(0, 6)}`, defaultResponsibleUserId: "responsible-user" });
-    await db.insert(projects).values({ id: projectId, companyId, name: "Local source", status: "in_progress" });
+    await db.insert(companies).values({ id: companyId, name: "Bootstrap recovery", issuePrefix: `R${companyId.slice(0, 6)}`, defaultResponsibleUserId: responsibleUserId });
+    const sessionId = await seedNativeHuman(companyId, responsibleUserId);
+    const projectId = await createNativeProject(companyId, responsibleUserId, sessionId, "Local source");
     await db.insert(projectWorkspaces).values([
       { id: randomUUID(), companyId, projectId, name: "Anchor", sourceType: "local_path", cwd: source, isPrimary: true, createdAt: new Date(Date.now() - 1000) },
       { id: randomUUID(), companyId, projectId, name: "Source copy", sourceType: "git_repo", repoUrl: pathToFileURL(source).href, cwd: source, isPrimary: false },
@@ -208,9 +242,9 @@ suite("task project repository provisioning", () => {
 
   it.each([1, 2])("gives a task all %i repositories without any configured local folders", async (count) => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
     const agentId = randomUUID();
     const issueId = randomUUID();
+    const responsibleUserId = randomUUID();
     const repositoryRows = [];
     for (let index = 0; index < count; index++) {
       const source = path.join(root, companyId, `source-${index}`);
@@ -222,8 +256,9 @@ suite("task project repository provisioning", () => {
       git("-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "seed");
       repositoryRows.push({ id: randomUUID(), companyId, projectId, name: `Repo ${index}`, sourceType: "git_repo", repoUrl: pathToFileURL(source).href, cwd: null, isPrimary: index === 0 });
     }
-    await db.insert(companies).values({ id: companyId, name: "Repo test", issuePrefix: `R${companyId.slice(0, 6)}`, defaultResponsibleUserId: "responsible-user" });
-    await db.insert(projects).values({ id: projectId, companyId, name: "Multi-repo", status: "in_progress" });
+    await db.insert(companies).values({ id: companyId, name: "Repo test", issuePrefix: `R${companyId.slice(0, 6)}`, defaultResponsibleUserId: responsibleUserId });
+    const sessionId = await seedNativeHuman(companyId, responsibleUserId);
+    const projectId = await createNativeProject(companyId, responsibleUserId, sessionId, "Multi-repo");
     await db.insert(projectWorkspaces).values(repositoryRows);
     await db.insert(agents).values({ id: agentId, companyId, name: "Test", role: "engineer", status: "idle", adapterType: "codex_local", adapterConfig: mockedCodexAdapterConfig, runtimeConfig: {}, permissions: {} });
     await db.insert(issues).values({ id: issueId, companyId, projectId, title: "Use project repositories", status: "todo", assigneeAgentId: agentId });

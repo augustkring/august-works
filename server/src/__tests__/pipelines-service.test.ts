@@ -53,6 +53,7 @@ import { instanceSettingsService } from "../services/instance-settings.ts";
 import { projectRoutes } from "../routes/projects.ts";
 import { errorHandler } from "../middleware/error-handler.ts";
 import { canActorReadTypedTaskSourcePrivacy, type AuthorizationActor } from "../services/authorization.ts";
+import { grantsForHumanRole } from "../services/company-member-roles.ts";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -1780,6 +1781,21 @@ describeEmbeddedPostgres("pipelineService", () => {
     expect(await canActorReadTypedTaskSourcePrivacy(db, sourceActor, {
       sourceKind: "routine_run", id: routineRun!.id, companyId: company.id,
     })).toBe(true);
+    const outsiderId = randomUUID();
+    const outsiderSessionId = randomUUID();
+    await db.insert(authUsers).values({ id: outsiderId, name: "Pipeline source outsider",
+      email: `${outsiderId}@pipeline.test`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
+    await db.insert(companyMemberships).values({ companyId: company.id, principalType: "user", principalId: outsiderId,
+      status: "active", membershipRole: "owner" });
+    await db.insert(principalPermissionGrants).values(grantsForHumanRole("owner").map(grant => ({
+      companyId: company.id, principalType: "user" as const, principalId: outsiderId, ...grant,
+    })));
+    await db.insert(authSessions).values({ id: outsiderSessionId, userId: outsiderId, token: randomUUID(),
+      createdAt: new Date(), updatedAt: new Date(), expiresAt: new Date(Date.now() + 60 * 60_000) });
+    const outsiderActor: AuthorizationActor = { ...sourceActor, userId: outsiderId, sessionId: outsiderSessionId };
+    expect(await canActorReadTypedTaskSourcePrivacy(db, outsiderActor, {
+      sourceKind: "routine_run", id: routineRun!.id, companyId: company.id,
+    })).toBe(false);
     const [sourceLink] = await db.select().from(pipelineCaseIssueLinks)
       .where(eq(pipelineCaseIssueLinks.issueId, sourceIssueId));
     await db.update(pipelineCaseIssueLinks).set({ retiredAt: new Date() })

@@ -27,9 +27,15 @@ type NativePopulationReads = {
 export async function authorizeStrategyReference(tx: Db, companyId: string, actor: AuthorizationActor, ref: StrategyExecutionReference, sensitivity: "internal" | "confidential", includeNativeSnapshot=false) {
   return authorizeReference(tx, companyId, actor, ref, sensitivity, includeNativeSnapshot);
 }
-async function authorizeReference(tx: Db, companyId: string, actor: AuthorizationActor, ref: StrategyExecutionReference, sensitivity: "internal" | "confidential", includeNativeSnapshot=false, reads?: NativePopulationReads) {
+/** Capture-only form keeps the original metric owner's exact admitted lineage
+ * rows in the same transaction so retention does not refetch them. */
+export async function authorizeStrategyReferenceForCapture(tx:Db,companyId:string,actor:AuthorizationActor,ref:StrategyExecutionReference,sensitivity:"internal"|"confidential") {
+  return authorizeReference(tx,companyId,actor,ref,sensitivity,false,undefined,true);
+}
+async function authorizeReference(tx: Db, companyId: string, actor: AuthorizationActor, ref: StrategyExecutionReference, sensitivity: "internal" | "confidential", includeNativeSnapshot=false, reads?: NativePopulationReads, includeMetricLineage=false) {
   const issueIds = new Set<string>(), projectIds = new Set<string>();
   let metricObservation: BusinessMetricResult | undefined;
+  let metricObservationLineage: Awaited<ReturnType<ReturnType<typeof businessMetricService>["inspectCurrentObservationWithLineage"]>> | undefined;
   let nativeObject:{snapshot:NativeMetricInput;archived:boolean}|undefined;
   async function authorizeSource(action: "issue:read" | "project:read", resource: AuthorizationResource) {
     if (!reads?.authority) return assertV7Authorization(tx, actor, companyId, action, resource);
@@ -115,10 +121,11 @@ async function authorizeReference(tx: Db, companyId: string, actor: Authorizatio
       await metric(ref.metricId, ref.metricVersionId);
       // The measurement owner reauthorizes every retained lineage source, not
       // only the selected project or a copied aggregate.
-      metricObservation = await businessMetricService(tx).inspectCurrentObservation(companyId, actor, ref.id); break;
+      if(includeMetricLineage){metricObservationLineage=await businessMetricService(tx).inspectCurrentObservationWithLineage(companyId,actor,ref.id);metricObservation=metricObservationLineage.result;}
+      else metricObservation = await businessMetricService(tx).inspectCurrentObservation(companyId, actor, ref.id); break;
     }
   }
-  return { issueIds: [...issueIds], projectIds: [...projectIds], ...(metricObservation ? { metricObservation } : {}),...(nativeObject?{nativeObject}:{}) };
+  return { issueIds: [...issueIds], projectIds: [...projectIds], ...(metricObservation ? { metricObservation } : {}),...(metricObservationLineage?{metricObservationLineage}:{}),...(nativeObject?{nativeObject}:{}) };
 }
 
 

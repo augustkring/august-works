@@ -837,6 +837,44 @@
       },
       "summary": [],
       "sourceCommit": "fb2e755f81486f5854d8d228c28964f52b036a0d"
+    },
+    {
+      "name": "learning-artifact-isolated-worker-reduced-heap",
+      "exitCode": 0,
+      "exitSidecar": "learning-artifact-isolated-worker-reduced-heap.exit",
+      "rawSha256": "5543dba9ea1e66a3460658745326fe8ceb624ad186da845cbd2a431551ec2f7a",
+      "sanitizedSha256": "64d43699becbb02b8177d074ae255d5c95811338b47d8a05edba518bdf6db318",
+      "archiveSha256": "9927fc159482086cf4e9e448ce2e331718f40da74d6be31a2afa598ccff53302",
+      "redactions": {
+        "ansi": 78,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  2 passed | 40 skipped (42)",
+        "Duration  248.31s (transform 11.04s, setup 137ms, import 15.90s, tests 232.14s, environment 0ms)"
+      ],
+      "sourceCommit": "9239f756eb11f27e33a8d77611444e2c441d3117"
+    },
+    {
+      "name": "v10-typecheck-checkpoint-99b7",
+      "exitCode": 1,
+      "exitSidecar": "v10-typecheck-checkpoint-99b7.exit",
+      "rawSha256": "19a6bc3bafe46c3cfc367e1c2055daa46aebccaa6cc9fda890e8a944114b5522",
+      "sanitizedSha256": "19a6bc3bafe46c3cfc367e1c2055daa46aebccaa6cc9fda890e8a944114b5522",
+      "archiveSha256": "7a2e4ddf57426111afb468af01c79de5d32bb0a9b5ac3c0d808dbaa9e626c4dc",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "9239f756eb11f27e33a8d77611444e2c441d3117"
     }
   ],
   "updates": [
@@ -934,6 +972,14 @@
       "meaning": "Interrupted concurrent diagnostic only: SIGINT deliberately stopped the old mixed-source workspace run; status130 overrides wrapper zero, no global passing gate.",
       "logs": [
         "v10-workspace-tests"
+      ]
+    },
+    {
+      "sourceCommit": "9239f756eb11f27e33a8d77611444e2c441d3117",
+      "meaning": "Exact isolated worker source hashes are recorded in learning-worker-provenance.json; scoped software proof only, not latest source or final workspace acceptance.",
+      "logs": [
+        "learning-artifact-isolated-worker-reduced-heap",
+        "v10-typecheck-checkpoint-99b7"
       ]
     }
   ],

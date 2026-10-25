@@ -299,14 +299,13 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
   const beforeObservations=(await db.select().from(businessMetricObservations).where(eq(businessMetricObservations.companyId,companyId))).length;
   const beforeManifests=(await db.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.companyId,companyId))).length;
   const manifestId=randomUUID(),observationId=randomUUID(),now=new Date(),hash="a".repeat(64);
-  await expect(db.transaction(async tx=>authorizationService(tx).withReadSources(companyId,[f.sourceId],[],async owner=>
-   owner.withTaskPrivacyBatch(actor(),[f.sourceId],[],async()=>{
+  await expect(db.transaction(async tx=>authorizationService(tx).withReadSources(companyId,[f.sourceId],[],async owner=>{
     await tx.insert(analyticalLineageManifests).values({id:manifestId,companyId,analysisType:"business_metric",analysisRef:observationId,engineVersion:"native-test",inputHash:hash,definitionHash:hash,requestedBy:userId,sourceWatermark:"fixture",sourceCount:1,parameters:{},createdAt:now,expiresAt:new Date(now.getTime()+60000)});
     await tx.insert(analyticalLineageEdges).values({companyId,manifestId,inputType:"issue",inputRef:f.sourceId,inputHash:hash,relationship:"source"});
     await tx.insert(issuePrivacySources).values({companyId,issueId:f.sourceId,sourceKind:"issue",sourceId:privateIssueId});
+    await owner.assertTaskPrivacyBatch(actor(),[f.sourceId],[]);
     return "staged metric output";
-   })
-  ))).rejects.toMatchObject({status:403});
+  }))).rejects.toMatchObject({status:403});
   expect(await db.select().from(businessMetricObservations).where(eq(businessMetricObservations.companyId,companyId))).toHaveLength(beforeObservations);
   expect(await db.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.companyId,companyId))).toHaveLength(beforeManifests);
   expect(await db.select().from(analyticalLineageEdges).where(eq(analyticalLineageEdges.manifestId,manifestId))).toHaveLength(0);

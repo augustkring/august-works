@@ -17,7 +17,6 @@ import {
   issues,
   plugins,
   principalPermissionGrants,
-  projects,
   projectWorkspaces,
 } from "@paperclipai/db";
 import {

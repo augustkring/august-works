@@ -1400,6 +1400,9 @@ function buildPipelineCaseContextPack(input: {
     case: {
       id: input.case.id,
       caseKey: input.case.caseKey,
+      sourceUserId: input.case.createdByUserId,
+      sourceAgentId: input.case.createdByAgentId,
+      sourceRunId: input.case.originRunId,
       title: input.case.title,
       version: input.case.version,
       deepLink: buildCaseDeepLink({ pipelineId: input.pipeline.id, caseId: input.case.id }),
