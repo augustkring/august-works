@@ -4,8 +4,9 @@ import { conversationRecoveryActionPredicate, getConversationOwnershipBlocker } 
 import { persistActivity } from "./activity-log.js";
 import { appendHeartbeatRunEvent } from "./heartbeat-run-events.js";
 import { logger } from "../middleware/logger.js";
-import { and, eq, inArray, isNull, not, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, not, or, sql } from "drizzle-orm";
 import {
+  activityLog,
   chatActions,
   environmentLeases,
   heartbeatRuns,
@@ -96,6 +97,23 @@ export async function validateExecutionReconciliation(input: {
     if (!destruction || destruction.receiptHash !== decision.workspaceReconstruction.destructionReceiptHash) {
       throw conflict("The original native workspace destruction receipt is not current or verifiable.");
     }
+    const [binding] = await db.select().from(runtimeSandboxBindings).where(and(
+      eq(runtimeSandboxBindings.companyId, companyId), eq(runtimeSandboxBindings.id, destruction.bindingId),
+      eq(runtimeSandboxBindings.runtimeCellId, destruction.cellId), eq(runtimeSandboxBindings.cellGeneration, destruction.generation),
+    )).for("update");
+    if (!binding || !["stopped", "deleted"].includes(binding.status)) {
+      throw conflict("The destroyed native workspace still has a live or changing sandbox owner.");
+    }
+    if (binding.status === "stopped") {
+      const [fenced] = await db.update(runtimeSandboxBindings).set({ status: "deleted", version: binding.version + 1, updatedAt: new Date() })
+        .where(and(eq(runtimeSandboxBindings.companyId, companyId), eq(runtimeSandboxBindings.id, binding.id),
+          eq(runtimeSandboxBindings.version, binding.version), eq(runtimeSandboxBindings.status, "stopped"))).returning({ id: runtimeSandboxBindings.id });
+      if (!fenced) throw conflict("The destroyed native workspace changed before it could be fenced.");
+    }
+    await db.update(runtimePolicySnapshots).set({ status: "revoked" }).where(and(
+      eq(runtimePolicySnapshots.companyId, companyId), eq(runtimePolicySnapshots.bindingId, destruction.bindingId),
+      inArray(runtimePolicySnapshots.status, ["draft", "qualified"]),
+    ));
     const selected = decision.workspaceReconstruction.selectedSources;
     const selectedIds = selected.map(source => source.attachmentId);
     if (new Set(selectedIds).size !== selectedIds.length) throw conflict("Selected reconstruction sources contain duplicates.");
@@ -114,11 +132,29 @@ export async function validateExecutionReconciliation(input: {
       const snapshot = nativePayloadSourceSnapshotSchema.safeParse(attachment.payloadSourceSnapshot);
       const asset = assetById.get(attachment.assetId);
       const selectedSource = selected.find(source => source.attachmentId === attachment.id);
-      const captured = snapshot.success ? snapshot.data.inputs.find(input => input.kind === "attachment" && input.attachmentId === attachment.id) : null;
+      const captured = snapshot.success
+        ? snapshot.data.inputs.filter((input): input is Extract<typeof input, { kind: "attachment" }> => input.kind === "attachment")
+            .find(input => input.attachmentId === attachment.id) ?? null
+        : null;
+      const [directUploadReceipt] = asset?.createdByUserId && snapshot.success
+        ? await db.select({ id: activityLog.id, actorType: activityLog.actorType, actorId: activityLog.actorId,
+          details: activityLog.details }).from(activityLog).where(and(
+          eq(activityLog.companyId, companyId), eq(activityLog.action, "attachment.payload_source_captured"),
+          eq(activityLog.entityType, "issue"), eq(activityLog.entityId, issueId),
+          eq(activityLog.actorType, "user"), eq(activityLog.actorId, asset.createdByUserId),
+          sql`${activityLog.details}->>'producer' = 'direct_manual_upload'`,
+          sql`${activityLog.details}->>'attachmentId' = ${attachment.id}`,
+          sql`${activityLog.details}->>'assetId' = ${asset.id}`,
+          sql`${activityLog.details}->>'contentHash' = ${snapshot.data.owner.contentHash}`,
+          sql`${activityLog.details}->>'digest' = ${snapshot.data.digest}`,
+        )).limit(1)
+        : [];
+      const sourceWasCaptured = captured?.kind === "attachment" && captured.disposition === "delivered"
+        && captured.assetId === asset?.id && captured.sha256 === asset?.sha256 && captured.byteSize === asset?.byteSize
+        || Boolean(directUploadReceipt);
       if (!asset || !selectedSource || attachment.payloadSourceProtocolVersion !== 1 || attachment.payloadSourceSnapshotInvalidated
         || !snapshot.success || snapshot.data.owner.kind !== "attachment" || snapshot.data.owner.companyId !== companyId
-        || snapshot.data.owner.id !== attachment.id || captured?.kind !== "attachment" || captured.disposition !== "delivered"
-        || captured.assetId !== asset.id || captured.sha256 !== asset.sha256 || captured.byteSize !== asset.byteSize
+        || snapshot.data.owner.id !== attachment.id || !sourceWasCaptured
         || selectedSource.sha256 !== asset.sha256) {
         throw conflict("A selected saved file no longer matches its captured source hash and access snapshot.");
       }
@@ -197,8 +233,15 @@ export async function verifyNativeWorkspaceDestructionReceipt(input: {
   const policies = await input.db.select().from(runtimePolicySnapshots).where(and(
     eq(runtimePolicySnapshots.companyId, input.companyId),
     eq(runtimePolicySnapshots.executionManifestId, manifest.id),
-  ));
-  for (const policy of policies) {
+  )).orderBy(desc(runtimePolicySnapshots.createdAt));
+  const seenPolicyBindings = new Set<string>();
+  const latestPolicyByBinding = policies.filter(policy => {
+    if (seenPolicyBindings.has(policy.bindingId)) return false;
+    seenPolicyBindings.add(policy.bindingId);
+    return true;
+  });
+  const receiptParts: unknown[] = [];
+  for (const policy of latestPolicyByBinding) {
     if (policy.agentId !== manifest.agentId) continue;
     const [binding] = await input.db.select().from(runtimeSandboxBindings).where(and(
       eq(runtimeSandboxBindings.companyId, input.companyId), eq(runtimeSandboxBindings.id, policy.bindingId),
@@ -212,12 +255,20 @@ export async function verifyNativeWorkspaceDestructionReceipt(input: {
     if (!cell || cell.deletedAt || cell.generation.toString() !== generation) continue;
     const [host] = cell.runtimeHostId ? await input.db.select().from(runtimeHosts).where(eq(runtimeHosts.id, cell.runtimeHostId)).limit(1) : [];
     if (!host || host.credentialRevokedAt || host.fencedAt || host.retiredAt) continue;
+    const [activeOperation] = await input.db.select({ id: runtimeOperations.id }).from(runtimeOperations).where(and(
+      eq(runtimeOperations.companyId, input.companyId), eq(runtimeOperations.runtimeCellId, cell.id),
+      inArray(runtimeOperations.status, ["REQUESTED", "RUNNING", "WAITING_FOR_CAPACITY", "NEEDS_RECONCILIATION"]),
+      sql`${runtimeOperations.desiredState}->>'sandboxBindingId' = ${policy.bindingId}`,
+      sql`${runtimeOperations.desiredState}->>'generation' = ${generation}`,
+    )).limit(1);
+    if (activeOperation) continue;
     const operations = await input.db.select().from(runtimeOperations).where(and(
       eq(runtimeOperations.companyId, input.companyId), eq(runtimeOperations.runtimeCellId, cell.id),
       eq(runtimeOperations.operationType, "stop"), eq(runtimeOperations.status, "SUCCEEDED"),
       sql`${runtimeOperations.desiredState}->>'sandboxBindingId' = ${policy.bindingId}`,
       sql`${runtimeOperations.desiredState}->>'generation' = ${generation}`,
       sql`${runtimeOperations.desiredState}->>'executionManifestId' = ${manifest.id}`,
+      sql`${runtimeOperations.desiredState}->>'policySnapshotId' = ${policy.id}`,
     ));
     for (const operation of operations) {
       const stopCommandId = (operation.desiredState as Record<string, unknown>).sandboxHostCommandId;
@@ -252,17 +303,41 @@ export async function verifyNativeWorkspaceDestructionReceipt(input: {
           && result?.action === "destroy" && result.destroyed === true && command.completedAt !== null;
       });
       if (!destroyCommand) continue;
-      return {
-        receiptHash: nativeSha256({ runId: input.runId, manifestId: manifest.id, policySnapshotId: policy.id,
-          bindingId: policy.bindingId, cellId: cell.id, generation,
-          hostId: host.id, hostEpoch: host.credentialVersion, stopOperationId: operation.id,
-          stopCommandId: stopCommand.id, destroyCommandId: destroyCommand.id,
-          stopCompletedAt: stopCommand.completedAt?.toISOString(), destroyCompletedAt: destroyCommand.completedAt?.toISOString() }),
+      const [laterStart] = await input.db.select({ id: runtimeHostCommands.id }).from(runtimeHostCommands).where(and(
+        eq(runtimeHostCommands.runtimeHostId, host.id), eq(runtimeHostCommands.companyId, input.companyId),
+        eq(runtimeHostCommands.runtimeCellId, cell.id), eq(runtimeHostCommands.cellGeneration, BigInt(generation)),
+        eq(runtimeHostCommands.commandType, SANDBOX_HOST_COMMAND),
+        sql`${runtimeHostCommands.payload}->>'action' = 'start'`,
+        sql`${runtimeHostCommands.payload}->'scope'->>'bindingId' = ${policy.bindingId}`,
+        or(
+          inArray(runtimeHostCommands.status, ["PENDING", "CLAIMED"]),
+          sql`${runtimeHostCommands.createdAt} > ${destroyCommand.completedAt.toISOString()}`,
+        ),
+      )).limit(1);
+      if (laterStart) continue;
+      const [unsettledCommand] = await input.db.select({ id: runtimeHostCommands.id }).from(runtimeHostCommands).where(and(
+        eq(runtimeHostCommands.runtimeHostId, host.id), eq(runtimeHostCommands.companyId, input.companyId),
+        eq(runtimeHostCommands.runtimeCellId, cell.id), eq(runtimeHostCommands.cellGeneration, BigInt(generation)),
+        eq(runtimeHostCommands.commandType, SANDBOX_HOST_COMMAND), inArray(runtimeHostCommands.status, ["PENDING", "CLAIMED"]),
+        sql`${runtimeHostCommands.payload}->'scope'->>'bindingId' = ${policy.bindingId}`,
+      )).limit(1);
+      if (unsettledCommand) continue;
+      receiptParts.push({ runId: input.runId, manifestId: manifest.id, policySnapshotId: policy.id,
         bindingId: policy.bindingId, cellId: cell.id, generation,
-      };
+        hostId: host.id, hostEpoch: host.credentialVersion, stopOperationId: operation.id,
+        stopCommandId: stopCommand.id, destroyCommandId: destroyCommand.id,
+        stopCompletedAt: stopCommand.completedAt?.toISOString(), destroyCompletedAt: destroyCommand.completedAt?.toISOString() });
+      break;
     }
   }
-  return null;
+  const uniqueBindings = new Set(latestPolicyByBinding.map(policy => policy.bindingId));
+  if (!uniqueBindings.size || new Set(receiptParts.map(part => (part as { bindingId: string }).bindingId)).size !== uniqueBindings.size) return null;
+  const first = receiptParts[0] as { bindingId: string; cellId: string; generation: string };
+  if (receiptParts.some(part => {
+    const row = part as typeof first;
+    return row.cellId !== first.cellId || row.generation !== first.generation;
+  })) return null;
+  return { receiptHash: nativeSha256({ schema: "paperclip.native-workspace-destruction.v1", receipts: receiptParts }), ...first };
 }
 
 /** Durable delivery marker lives on the existing source-scoped recovery action. */

@@ -6,9 +6,9 @@ import type { KvStateSnapshot } from "./store.js";
 
 const servers: KvDemoHttpServer[] = [];
 
-async function startServer(token?: string) {
+async function startServer(token?: string, bindHost = "127.0.0.1") {
   const instance = createKvDemoHttpServer({ token });
-  const port = await instance.listen(0, "127.0.0.1");
+  const port = await instance.listen(0, bindHost);
   servers.push(instance);
   return { instance, base: `http://127.0.0.1:${port}` };
 }
@@ -20,6 +20,14 @@ async function mcpClient(base: string, headers?: Record<string, string>) {
   const client = new Client({ name: "test", version: "0.0.0" });
   await client.connect(transport);
   return client;
+}
+
+async function readRpcBody(response: Response): Promise<unknown> {
+  const body = await response.text();
+  const data = response.headers.get("content-type")?.includes("text/event-stream")
+    ? body.split(/\r?\n/).find((line) => line.startsWith("data:"))?.slice("data:".length).trim()
+    : body;
+  return JSON.parse(data ?? "{}");
 }
 
 afterEach(async () => {
@@ -47,12 +55,12 @@ describe("kv demo HTTP server", () => {
       params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "legacy-fixture", version: "1" } },
     });
     expect(initialized.status).toBe(200);
-    const initBody = await initialized.json() as { result?: { protocolVersion?: string } };
+    const initBody = await readRpcBody(initialized) as { result?: { protocolVersion?: string } };
     expect(initBody.result?.protocolVersion).toBe("2025-06-18");
 
     const listed = await send({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }, "2025-06-18");
     expect(listed.status).toBe(200);
-    expect((await listed.json() as { result?: { tools?: Array<{ name: string }> } }).result?.tools?.map((tool) => tool.name)).toContain("kv_get");
+    expect((await readRpcBody(listed) as { result?: { tools?: Array<{ name: string }> } }).result?.tools?.map((tool) => tool.name)).toContain("kv_get");
   });
 
   it("keeps the loopback Origin guard in front of the v2 HTTP handler", async () => {
@@ -63,6 +71,28 @@ describe("kv demo HTTP server", () => {
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
     });
     expect(response.status).toBe(403);
+  });
+
+  it("keeps remote-bind host behavior behind bearer auth and same-origin checks", async () => {
+    const token = "remote-bind-token";
+    const { base } = await startServer(token, "0.0.0.0");
+    const rejected = await fetch(`${base}/mcp`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        origin: "https://attacker.example",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
+    });
+    expect(rejected.status).toBe(403);
+
+    const client = await mcpClient(base, {
+      authorization: `Bearer ${token}`,
+      origin: base,
+    });
+    expect((await client.listTools()).tools.map((tool) => tool.name)).toContain("kv_get");
+    await client.close();
   });
 
   it("reflects an MCP tool write in GET /api/state (shared process state)", async () => {

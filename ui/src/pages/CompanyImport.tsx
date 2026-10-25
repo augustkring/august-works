@@ -910,6 +910,8 @@ export function CompanyImport() {
 
   // Post-import success / activation state
   const [pauseAutomations, setPauseAutomations] = useState(true);
+  const [sourceReleaseConfirmed, setSourceReleaseConfirmed] = useState(false);
+  useEffect(() => setSourceReleaseConfirmed(false), [selectedCompanyId]);
   const [importOutcome, setImportOutcome] = useState<
     | {
         kind: "full";
@@ -1122,6 +1124,7 @@ export function CompanyImport() {
     onSuccess: (result, generation) => {
       if (generation !== previewGenerationRef.current) return;
       setImportPreview(result);
+      setSourceReleaseConfirmed(false);
 
       // Build conflicts and set default name overrides with prefix
       const conflicts = buildConflictList(result);
@@ -1227,6 +1230,7 @@ export function CompanyImport() {
     mutationFn: async (variables: {
       previewForImport: CompanyPortabilityPreviewResult | null;
       pauseAutomations: boolean;
+      sourceReleaseConfirmed: boolean;
       /** Re-attach to a job stored by a previous page load instead of submitting. */
       resume?: { jobId: string; storageKey: string };
     }) => {
@@ -1236,6 +1240,9 @@ export function CompanyImport() {
       const meta = {
         ...buildImportMetaCommon(),
         expectedSourceFingerprint: variables.previewForImport?.sourceFingerprint,
+        ...(variables.sourceReleaseConfirmed && variables.previewForImport?.sourceFingerprint
+          ? { sourceReleaseReview: { confirmed: true as const, sourceFingerprint: variables.previewForImport.sourceFingerprint } }
+          : {}),
         nameOverrides: buildFinalNameOverrides(),
         selectedFiles: buildSelectedFiles(),
         adapterOverrides: buildFinalAdapterOverrides(),
@@ -1383,6 +1390,7 @@ export function CompanyImport() {
     resumeImportWatch({
       previewForImport: null,
       pauseAutomations: stored.pauseAutomations,
+      sourceReleaseConfirmed: false,
       resume: { jobId: stored.jobId, storageKey: stored.storageKey },
     });
   }, [selectedCompanyId, resumeImportWatch]);
@@ -1405,6 +1413,7 @@ export function CompanyImport() {
   function resetImportFlowState() {
     previewGenerationRef.current += 1;
     setImportPreview(null);
+    setSourceReleaseConfirmed(false);
     resetMutationState();
   }
 
@@ -1461,6 +1470,17 @@ export function CompanyImport() {
 
   const totalFiles = useMemo(() => countFiles(tree), [tree]);
   const selectedCount = checkedFiles.size;
+  const selectedSourceProjectCount = importPreview
+    ? importPreview.manifest.projects.filter(project => checkedFiles.has(ensureMarkdownPath(project.path))).length : 0;
+  const selectedSourceTaskCount = importPreview
+    ? importPreview.manifest.issues.filter(task => checkedFiles.has(ensureMarkdownPath(task.path))).length : 0;
+  const selectedNativeSourceCompanyIds = importPreview ? new Set([
+    ...importPreview.manifest.issues.filter(task => checkedFiles.has(ensureMarkdownPath(task.path))).map(task => task.sourceCompanyId),
+    ...importPreview.manifest.projects.filter(project => checkedFiles.has(ensureMarkdownPath(project.path))).map(project => project.sourceCompanyId),
+  ].filter((companyId): companyId is string => typeof companyId === "string" && companyId.length > 0)) : new Set<string>();
+  const sourceReleaseReviewRequired = selectedSourceProjectCount + selectedSourceTaskCount > 0
+    && (targetMode === "new" || selectedNativeSourceCompanyIds.size !== 1
+      || !selectedNativeSourceCompanyIds.has(selectedCompanyId ?? ""));
 
   function handleToggleDir(path: string) {
     setExpandedDirs((prev) => {
@@ -1474,6 +1494,7 @@ export function CompanyImport() {
   function handleToggleCheck(path: string, kind: "file" | "dir") {
     if (!importPreview) return;
     resetMutationState();
+    setSourceReleaseConfirmed(false);
     setCheckedFiles((prev) => {
       const next = new Set(prev);
       if (kind === "file") {
@@ -1529,6 +1550,7 @@ export function CompanyImport() {
 
   function handleConflictToggleSkip(slug: string, filePath: string | null) {
     resetMutationState();
+    setSourceReleaseConfirmed(false);
     setSkippedSlugs((prev) => {
       const next = new Set(prev);
       const wasSkipped = next.has(slug);
@@ -2137,6 +2159,17 @@ export function CompanyImport() {
 
           {/* Import button — below renames */}
           <div className="mx-5 mt-3 flex flex-wrap items-center justify-end gap-3">
+            {sourceReleaseReviewRequired && (
+              <div className="w-full rounded-md border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                <p>{t("companyImport.sourceReleaseSummary", { fingerprint: importPreview.sourceFingerprint ?? "unavailable",
+                  projectCount: selectedSourceProjectCount, taskCount: selectedSourceTaskCount })}</p>
+                <label className="mt-2 flex items-start gap-2">
+                  <input type="checkbox" checked={sourceReleaseConfirmed}
+                    onChange={(e) => setSourceReleaseConfirmed(e.target.checked)} className="mt-0.5 accent-foreground" />
+                  <span>{t("companyImport.sourceReleaseReview")}</span>
+                </label>
+              </div>
+            )}
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
               <input
                 type="checkbox"
@@ -2158,8 +2191,10 @@ export function CompanyImport() {
               )}
               <Button
                 size="sm"
-                onClick={() => { setCancellationRequested(false); importMutation.mutate({ previewForImport: importPreview, pauseAutomations }); }}
-                disabled={importMutation.isPending || importOutcomeIsUnknown(importMutation.error) || hasErrors || selectedCount === 0}
+                onClick={() => { setCancellationRequested(false); importMutation.mutate({ previewForImport: importPreview, pauseAutomations,
+                  sourceReleaseConfirmed }); }}
+                disabled={importMutation.isPending || importOutcomeIsUnknown(importMutation.error) || hasErrors || selectedCount === 0
+                  || (sourceReleaseReviewRequired && !sourceReleaseConfirmed)}
               >
                 <Download className="mr-1.5 h-3.5 w-3.5" />
                 {importMutation.isPending

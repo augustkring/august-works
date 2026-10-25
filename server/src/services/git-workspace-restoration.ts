@@ -9,7 +9,6 @@ import { resolveManagedProjectWorkspaceDir, resolvePaperclipInstanceRoot } from 
 import { promisify } from "node:util";
 import type { GitRemoteAuthProvider } from "./git-credentials.js";
 import { isRuntimeOwnedGitBranch } from "./execution-workspace-branch-ownership.js";
-import { findRegenerableWorkspaceDirs } from "./workspace-compaction.js";
 import { PROJECT_REPOSITORIES_DIR } from "@paperclipai/adapter-utils/git-workspace-sync";
 import { deriveRepoNameFromRepoUrl } from "./managed-project-checkout-name.js";
 import { gitWorkspaceRestoreCredentialArgs, gitWorkspaceRestoreEnv, isSupportedRestorationGitSource } from "./git-workspace-auth-env.js";
@@ -310,9 +309,11 @@ export async function assertReproducibleGitFiles(cwd: string, signal?: AbortSign
   if ((await gitCacheCommand(cwd, ["ls-files", "-v"], signal)).split("\n").some(line => /^[a-zS] /.test(line))) throw new Error("unsupported_index_flags");
   const localConfig = await gitCacheCommand(cwd, ["config", "--local", "--name-only", "--list"], signal);
   if (localConfig.split("\n").filter(Boolean).some(key => !/^(core\.(repositoryformatversion|filemode|bare|logallrefupdates|ignorecase|precomposeunicode)|remote\.origin\.(url|fetch)|branch\.[^.]+\.(remote|merge))$/.test(key))) throw new Error("unsupported_local_git_config");
-  const regenerable = await findRegenerableWorkspaceDirs(cwd, { signal });
   const ignored = (await gitCacheCommand(cwd, ["ls-files", "--others", "--ignored", "--exclude-standard", "-z"], signal)).split("\0").filter(Boolean);
-  const unexplained = ignored.filter(file => !(options.preserveSettings && file === PAPERCLIP_CLAUDE_SETTINGS_FILE) && !regenerable.some(dir => file.startsWith(`${dir}/`)));
+  // A regenerable directory name is not proof that its bytes are disposable.
+  // Keep every ignored entry unless this recipe captures that exact settings
+  // file or the whole path is an authorized managed nested checkout.
+  const unexplained = ignored.filter(file => !(options.preserveSettings && file === PAPERCLIP_CLAUDE_SETTINGS_FILE));
   const checkouts = new Set<string>();
   for (const file of unexplained) {
     const [namespace, name, rest] = file.split("/", 3);
@@ -367,7 +368,6 @@ export async function assertReproducibleGitFiles(cwd: string, signal?: AbortSign
   for (const commit of new Set((await gitCacheCommand(cwd, ["reflog", "show", "--format=%H", "HEAD"], signal)).split("\n").filter(Boolean))) {
     await gitCacheCommand(cwd, ["merge-base", "--is-ancestor", commit, "HEAD"], signal).catch(() => { throw new Error("unique_reflog_commits"); });
   }
-  return regenerable;
 }
 
 export async function inspectGitCacheRecipe(workspace: Workspace, resolveGitAuth: GitRemoteAuthProvider, signal?: AbortSignal,

@@ -3237,7 +3237,9 @@
     "cancelPendingBody": "Checking the import owner for a safe stop point. Completed changes will not be rolled back.",
     "cancelFinishedTitle": "Import already finished",
     "cancelFinishedBody": "The current import result is shown when status refreshes.",
-    "cancelErrorStatus": "The import is checking for a safe stop point; completed changes will not be rolled back."
+    "cancelErrorStatus": "The import is checking for a safe stop point; completed changes will not be rolled back.",
+    "sourceReleaseReview": "I have reviewed this exact package and approve releasing the included open projects and tasks to the selected company. I have current authority to manage the target or create it on this instance, and I currently own native sources or am authorized to release the reviewed open external work. Private or restricted work remains blocked.",
+    "sourceReleaseSummary": "Exact package fingerprint {{fingerprint}}. This selection contains {{projectCount}} project(s) and {{taskCount}} task(s). Native sources are checked against current ownership and access; external files require your review that the content is open and yours to release."
   },
   "supportCases": {
     "exportInclude": "Include support cases you can currently view, with their full customer-visible history. Internal notes, credentials and support-access grants are excluded. This archive cannot restore live cases.",
@@ -3365,7 +3367,7 @@
     "test": "Run disclosed setup test",
     "testing": "Testing…",
     "testSuccess": "The qualified Jev route answered. This confirms connectivity only; it does not qualify Skill suggestions.",
-    "testUnknown": "The provider outcome is unknown. Keep this test reference and wait for reconciliation; do not start another paid test while its charge is unresolved.",
+    "testUnknown": "The provider outcome is unknown, so the maximum reserved amount remains held. Keep this test reference and do not start another paid test until an administrator verifies the charge.",
     "testFailed": "The setup test did not complete. Review the connection and try again.",
     "history": "Recent Jev setup tests",
     "historyError": "Could not load Jev setup-test accounting.",

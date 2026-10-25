@@ -23,6 +23,19 @@ export const customerOperations = pgTable("customer_operations", {
   resultRef: jsonb("result_ref").$type<{ companyId: string; agentCount: number; warningCount: number; companyAction: "created" | "updated" | "unchanged" }>(),
   errorCode: text("error_code"),
   cancelRequestedAt: timestamp("cancel_requested_at", { withTimezone: true }),
+  sourceReleaseReview: jsonb("source_release_review").$type<{
+    version: 1;
+    sourceMode: "native_owner" | "manual_open_content";
+    sourceCompanyIds: string[];
+    sourceItems: Array<{ kind: "issue" | "project"; id: string; slug: string }>;
+    sourceAccess: "verified_current_acl" | "reviewed_open_external";
+    targetMode: "new_company" | "existing_company";
+    targetCompanyId: string | null;
+    previewFingerprint: string;
+    selectedPayloadFingerprint: string;
+    reviewedByUserId: string;
+    reviewedAt: string;
+  }>(),
   startedAt: timestamp("started_at", { withTimezone: true }),
   progressAt: timestamp("progress_at", { withTimezone: true }).notNull().defaultNow(),
   completedAt: timestamp("completed_at", { withTimezone: true }),
@@ -37,4 +50,21 @@ export const customerOperations = pgTable("customer_operations", {
   check("customer_operations_state_check", sql`${t.status} in ('running','cancelled','succeeded','failed','needs_reconciliation')`),
   check("customer_operations_hash_check", sql`${t.requesterKeyHash} ~ '^[a-f0-9]{64}$' AND ${t.inputHash} ~ '^[a-f0-9]{64}$'`),
   check("customer_operations_attempt_check", sql`${t.attempt}>=1`),
+  check("customer_operations_source_release_review_check", sql`${t.sourceReleaseReview} IS NULL OR CASE
+    WHEN jsonb_typeof(${t.sourceReleaseReview}) <> 'object' THEN false
+    WHEN ${t.sourceReleaseReview}->>'version' <> '1' THEN false
+    WHEN ${t.sourceReleaseReview}->>'sourceMode' NOT IN ('native_owner','manual_open_content') THEN false
+    WHEN jsonb_typeof(${t.sourceReleaseReview}->'sourceCompanyIds') <> 'array'
+      OR jsonb_array_length(${t.sourceReleaseReview}->'sourceCompanyIds') > 1 THEN false
+    WHEN jsonb_typeof(${t.sourceReleaseReview}->'sourceItems') <> 'array'
+      OR jsonb_array_length(${t.sourceReleaseReview}->'sourceItems') > 1000 THEN false
+    WHEN ${t.sourceReleaseReview}->>'sourceAccess' NOT IN ('verified_current_acl','reviewed_open_external') THEN false
+    WHEN (${t.sourceReleaseReview}->>'sourceMode'='native_owner') <> (${t.sourceReleaseReview}->>'sourceAccess'='verified_current_acl') THEN false
+    WHEN ${t.sourceReleaseReview}->>'targetMode' NOT IN ('new_company','existing_company') THEN false
+    WHEN ${t.sourceReleaseReview}->>'targetMode'='existing_company' AND ${t.sourceReleaseReview}->>'targetCompanyId' IS NULL THEN false
+    WHEN ${t.sourceReleaseReview}->>'previewFingerprint' !~ '^[a-f0-9]{64}$'
+      OR ${t.sourceReleaseReview}->>'selectedPayloadFingerprint' !~ '^[a-f0-9]{64}$' THEN false
+    WHEN length(coalesce(${t.sourceReleaseReview}->>'reviewedByUserId','')) NOT BETWEEN 1 AND 256 THEN false
+    WHEN length(coalesce(${t.sourceReleaseReview}->>'reviewedAt','')) NOT BETWEEN 1 AND 64 THEN false
+    ELSE true END`),
 ]);

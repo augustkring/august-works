@@ -5,10 +5,10 @@ import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { authUsers, companies, companyMemberships, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, issues, principalPermissionGrants, projects } from "@paperclipai/db";
+import { authUsers, companies, companyMemberships, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, issues, principalPermissionGrants, projectWorkspaces, projects } from "@paperclipai/db";
 import { eq } from "drizzle-orm";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
-import type { CompanyPortabilityFileEntry } from "@paperclipai/shared";
+import type { CompanyPortabilityFileEntry, CompanyPortabilityImportRequest } from "@paperclipai/shared";
 
 const companySvc = {
   getById: vi.fn(),
@@ -235,14 +235,124 @@ describe("company portability", () => {
     });
   }
 
+  const sourceFixtureWrapper = Symbol("sourceFixtureWrapper");
+  function nativeSourceUuid(kind: string, sourceId: string) {
+    const raw = createHash("sha256").update(`${kind}:${sourceId}`).digest("hex").slice(0, 32).split("");
+    raw[12] = "4";
+    raw[16] = "8";
+    const hex = raw.join("");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+
+  async function seedProjectSource(id: string) {
+    await nativeDb.insert(projects).values({ id, companyId: nativeCompanyId, name: `Source ${id}`,
+      visibility: "open", privacyOwnerUserId: nativeUserId, personalOwnerUserId: null,
+      sourceIssueIds: [], sourceProjectIds: [], sourceProvenanceQualified: true }).onConflictDoNothing();
+  }
+
+  function nativeWorkspaceUuid(projectId: string, sourceWorkspaceId: string) {
+    return nativeSourceUuid("workspace", `${projectId}:${sourceWorkspaceId}`);
+  }
+
+  async function seedProjectWorkspaceSource(projectId: string, workspace: Record<string, any>) {
+    const id = nativeWorkspaceUuid(projectId, String(workspace.id));
+    await nativeDb.insert(projectWorkspaces).values({ id, companyId: nativeCompanyId, projectId,
+      name: String(workspace.name ?? "Source workspace"), sourceType: String(workspace.sourceType ?? "local_path"),
+      cwd: typeof workspace.cwd === "string" ? workspace.cwd : null,
+      repoUrl: typeof workspace.repoUrl === "string" ? workspace.repoUrl : null,
+      repoRef: typeof workspace.repoRef === "string" ? workspace.repoRef : null,
+      defaultRef: typeof workspace.defaultRef === "string" ? workspace.defaultRef : null,
+      visibility: String(workspace.visibility ?? "default"), setupCommand: typeof workspace.setupCommand === "string" ? workspace.setupCommand : null,
+      cleanupCommand: typeof workspace.cleanupCommand === "string" ? workspace.cleanupCommand : null,
+      remoteProvider: typeof workspace.remoteProvider === "string" ? workspace.remoteProvider : null,
+      remoteWorkspaceRef: typeof workspace.remoteWorkspaceRef === "string" ? workspace.remoteWorkspaceRef : null,
+      sharedWorkspaceKey: typeof workspace.sharedWorkspaceKey === "string" ? workspace.sharedWorkspaceKey : null,
+      metadata: workspace.metadata ?? null, isPrimary: workspace.isPrimary === true }).onConflictDoNothing();
+    return id;
+  }
+
+  async function normalizeProjectExportSources(rows: unknown) {
+    if (!Array.isArray(rows)) return [];
+    const normalized = [];
+    for (const source of rows as Array<Record<string, any>>) {
+      const id = typeof source.id === "string" && /^[0-9a-f-]{36}$/i.test(source.id) ? source.id : nativeSourceUuid("project", String(source.id));
+      await seedProjectSource(id);
+      const sourceWorkspaces = Array.isArray(source.workspaces) ? source.workspaces as Array<Record<string, any>> : [];
+      const normalizedWorkspaces = [];
+      for (const workspace of sourceWorkspaces) {
+        const workspaceId = await seedProjectWorkspaceSource(id, workspace);
+        normalizedWorkspaces.push({ ...workspace, id: workspaceId, companyId: nativeCompanyId, projectId: id });
+      }
+      const policy = source.executionWorkspacePolicy && typeof source.executionWorkspacePolicy === "object"
+        ? source.executionWorkspacePolicy as Record<string, any> : null;
+      const defaultWorkspace = policy?.defaultProjectWorkspaceId;
+      normalized.push({ ...source, id, companyId: nativeCompanyId, visibility: "open", privacyOwnerUserId: nativeUserId,
+        personalOwnerUserId: null, sourceIssueIds: [], sourceProjectIds: [], sourceProvenanceQualified: true,
+        executionWorkspacePolicy: policy && typeof defaultWorkspace === "string"
+          ? { ...policy, defaultProjectWorkspaceId: nativeWorkspaceUuid(id, defaultWorkspace) } : source.executionWorkspacePolicy,
+        workspaces: Array.isArray(source.workspaces) ? normalizedWorkspaces : source.workspaces });
+    }
+    return normalized;
+  }
+
+  async function normalizeIssueExportSources(rows: unknown) {
+    if (!Array.isArray(rows)) return [];
+    const normalized = [];
+    for (const source of rows as Array<Record<string, any>>) {
+      const id = typeof source.id === "string" && /^[0-9a-f-]{36}$/i.test(source.id) ? source.id : nativeSourceUuid("issue", String(source.id));
+      const sourceProjectId = typeof source.projectId === "string" && source.projectId !== ""
+        ? (/^[0-9a-f-]{36}$/i.test(source.projectId) ? source.projectId : nativeSourceUuid("project", source.projectId)) : null;
+      if (sourceProjectId) await seedProjectSource(sourceProjectId);
+      const projectWorkspaceId = sourceProjectId && typeof source.projectWorkspaceId === "string"
+        ? nativeWorkspaceUuid(sourceProjectId, source.projectWorkspaceId) : source.projectWorkspaceId ?? null;
+      const number = Number.parseInt(createHash("sha256").update(id).digest("hex").slice(0, 7), 16) % 900_000_000 + 1;
+      await nativeDb.insert(issues).values({ id, companyId: nativeCompanyId, projectId: sourceProjectId, title: String(source.title ?? "Source task"),
+        description: typeof source.description === "string" ? source.description : null, status: "todo", issueNumber: number,
+        identifier: `SRC-${number}`, visibility: "open", privacyRootIssueId: id, privacyParentIssueId: null,
+        createdByUserId: nativeUserId, responsibleUserId: nativeUserId }).onConflictDoNothing();
+      normalized.push({ ...source, id, companyId: nativeCompanyId, projectId: sourceProjectId, projectWorkspaceId,
+        visibility: "open", privacyRootIssueId: id, privacyParentIssueId: null, privacySources: [],
+        responsibleUserId: nativeUserId, createdByUserId: nativeUserId });
+    }
+    return normalized;
+  }
+
+  function installCurrentHumanSourceFixtures() {
+    for (const [mock, normalize] of [[projectSvc.list, normalizeProjectExportSources], [issueSvc.list, normalizeIssueExportSources]] as const) {
+      const configured = mock.getMockImplementation() as (typeof mock.getMockImplementation extends (...args: any[]) => infer T ? T : never) & { [sourceFixtureWrapper]?: unknown };
+      const original = configured?.[sourceFixtureWrapper] ?? configured ?? (async () => []);
+      const wrapped = async (...args: unknown[]) => normalize(await (original as (...args: unknown[]) => unknown)(...args));
+      Object.defineProperty(wrapped, sourceFixtureWrapper, { value: original });
+      mock.mockImplementation(wrapped as never);
+    }
+  }
+
   function currentHumanExportPortability() {
     useNativeExportCompany();
+    installCurrentHumanSourceFixtures();
     const service = companyPortabilityService(nativeDb);
     return {
       ...service,
       exportBundle: (companyId: string, input: Parameters<typeof service.exportBundle>[1], options?: Parameters<typeof service.exportBundle>[2]) =>
         service.exportBundle(nativeCompanyId, input, { ...options, actor: nativeActor }),
+      importBundle: async (input: Parameters<typeof service.importBundle>[0], actorUserId: string | null | undefined,
+        options?: Parameters<typeof service.importBundle>[2]) => {
+        const hasWork = (input.include?.projects ?? input.source.type === "inline")
+          && (input.include?.issues ?? input.source.type === "inline");
+        const request = input.target.mode === "new_company" && hasWork && !input.sourceReleaseReview
+          ? await reviewExactPackageAsCurrentHuman(service, input as CompanyPortabilityImportRequest) : input;
+        return service.importBundle(request, actorUserId === null || actorUserId === undefined ? actorUserId : nativeUserId,
+          { ...options, actor: nativeActor, privateWorkAdmission: "closed" });
+      },
     };
+  }
+
+  async function reviewExactPackageAsCurrentHuman(portability: ReturnType<typeof companyPortabilityService>,
+    request: CompanyPortabilityImportRequest) {
+    const preview = await portability.previewImport(request, { actor: nativeActor });
+    if (!preview.sourceFingerprint) throw new Error("Preview did not bind a source fingerprint");
+    return { ...request, expectedSourceFingerprint: preview.sourceFingerprint,
+      sourceReleaseReview: { confirmed: true as const, sourceFingerprint: preview.sourceFingerprint } };
   }
 
   async function seedNativeBoardProject(input: { id: string; name: string; description?: string }) {
@@ -1577,7 +1687,7 @@ describe("company portability", () => {
       title: "Write launch task",
     });
 
-    await portability.importBundle({
+    const importRequest = await reviewExactPackageAsCurrentHuman(portability, {
       source: {
         type: "inline",
         rootPath: exported.rootPath,
@@ -1594,7 +1704,8 @@ describe("company portability", () => {
         newCompanyName: "Imported Paperclip",
       },
       collisionStrategy: "rename",
-    }, "user-1");
+    });
+    await portability.importBundle(importRequest, nativeUserId, { actor: nativeActor, privateWorkAdmission: "closed" });
 
     expect(projectSvc.createWorkspace).toHaveBeenCalledWith("project-imported", expect.objectContaining({
       name: "Main Repo",
@@ -1624,7 +1735,7 @@ describe("company portability", () => {
   });
 
   it("normalizes invalid imported project icon names to null", async () => {
-    const portability = companyPortabilityService({} as any);
+    const portability = companyPortabilityService(nativeDb);
 
     companySvc.create.mockResolvedValue({
       id: "company-imported",
@@ -1662,12 +1773,13 @@ describe("company portability", () => {
       ].join("\n"),
     };
 
-    await portability.importBundle({
+    const importRequest = await reviewExactPackageAsCurrentHuman(portability, {
       source: { type: "inline", rootPath: "paperclip-demo", files },
       include: { company: true, agents: false, projects: true, issues: false },
       target: { mode: "new_company", newCompanyName: "Imported Paperclip" },
       collisionStrategy: "rename",
-    }, "user-1");
+    });
+    await portability.importBundle(importRequest, nativeUserId, { actor: nativeActor, privateWorkAdmission: "closed" });
 
     expect(projectSvc.create).toHaveBeenCalledWith("company-imported", expect.objectContaining({
       icon: null,
@@ -2009,6 +2121,56 @@ describe("company portability", () => {
     await expect(afterEffect).rejects.toBeInstanceOf(ImportCancellationError);
     await expect(afterEffect).rejects.toMatchObject({ effectsStarted: true });
     expect(companySvc.create).toHaveBeenCalledTimes(1);
+  });
+
+  itNative("requires an exact current-Human review before manual cross-company work and denies private claims", async () => {
+    const portability = companyPortabilityService(nativeDb);
+    const request: CompanyPortabilityImportRequest = {
+      source: { type: "inline", rootPath: "manual-source", files: {
+        "COMPANY.md": "---\nname: Manual source\n---\n",
+        "projects/review/PROJECT.md": "---\nname: Review\n---\n",
+      } },
+      include: { company: true, agents: false, projects: true, issues: false },
+      target: { mode: "new_company", newCompanyName: "Reviewed destination" },
+      collisionStrategy: "rename",
+    };
+    await expect(portability.importBundle(request, nativeUserId, { actor: nativeActor, privateWorkAdmission: "closed" }))
+      .rejects.toMatchObject({ status: 422, message: expect.stringContaining("exact package") });
+    expect(companySvc.create).not.toHaveBeenCalled();
+
+    const reviewed = await reviewExactPackageAsCurrentHuman(portability, request);
+    const changed = { ...reviewed, source: { ...reviewed.source, files: { ...reviewed.source.files,
+      "projects/review/PROJECT.md": "---\nname: Changed after review\n---\n" } } };
+    await expect(portability.importBundle(changed, nativeUserId, { actor: nativeActor, privateWorkAdmission: "closed" }))
+      .rejects.toMatchObject({ status: 409, message: expect.stringContaining("changed after preview") });
+    expect(companySvc.create).not.toHaveBeenCalled();
+
+    const privateRequest: CompanyPortabilityImportRequest = { ...request, source: { ...request.source, files: {
+      ...request.source.files,
+      ".paperclip.yaml": "schema: \"paperclip/v1\"\nprojects:\n  review:\n    visibility: \"private\"\n",
+    } } };
+    const privateReview = await reviewExactPackageAsCurrentHuman(portability, privateRequest);
+    await expect(portability.importBundle(privateReview, nativeUserId, { actor: nativeActor, privateWorkAdmission: "closed" }))
+      .rejects.toMatchObject({ status: 422, message: expect.stringContaining("Private or restricted") });
+    expect(companySvc.create).not.toHaveBeenCalled();
+
+    const receipts: unknown[] = [];
+    const targets: string[] = [];
+    await portability.importBundle(reviewed, nativeUserId, { actor: nativeActor, privateWorkAdmission: "closed",
+      onSourceReleaseReview: async receipt => { receipts.push(receipt); },
+      onSourceReleaseTargetBound: async companyId => { targets.push(companyId); },
+    });
+    expect(receipts).toEqual([expect.objectContaining({
+      sourceMode: "manual_open_content", sourceCompanyIds: [],
+      sourceItems: [{ kind: "project", id: "external:review", slug: "review" }],
+      sourceAccess: "reviewed_open_external", targetMode: "new_company", targetCompanyId: null,
+      reviewedByUserId: nativeUserId,
+    })]);
+    expect(targets).toEqual(["company-imported"]);
+    expect(projectSvc.create).toHaveBeenCalledWith("company-imported", expect.objectContaining({
+      sourceIssueIds: [], sourceProjectIds: [], sourceProvenanceQualified: false,
+      visibility: "open", privacyOwnerUserId: nativeUserId,
+    }), nativeActor);
   });
 
   it("materializes required agent env inputs from import secretValues as company secrets", async () => {
@@ -2829,7 +2991,7 @@ describe("company portability", () => {
   });
 
   it("imports recurring task packages as routines instead of one-time issues", async () => {
-    const portability = companyPortabilityService({} as any);
+    const portability = companyPortabilityService(nativeDb);
 
     companySvc.create.mockResolvedValue({
       id: "company-imported",
@@ -2917,13 +3079,14 @@ describe("company portability", () => {
       }),
     ]);
 
-    const result = await portability.importBundle({
+    const importRequest = await reviewExactPackageAsCurrentHuman(portability, {
       source: { type: "inline", rootPath: "paperclip-demo", files },
       include: { company: true, agents: true, projects: true, issues: true, skills: false },
       target: { mode: "new_company", newCompanyName: "Imported Paperclip" },
       agents: "all",
       collisionStrategy: "rename",
-    }, "user-1");
+    });
+    const result = await portability.importBundle(importRequest, nativeUserId, { actor: nativeActor, privateWorkAdmission: "closed" });
 
     expect(routineSvc.create).toHaveBeenCalledWith("company-imported", expect.objectContaining({
       projectId: "project-created",
@@ -3043,7 +3206,7 @@ describe("company portability", () => {
   });
 
   it("pauses imported agents and routines when pauseAutomations is requested", async () => {
-    const portability = companyPortabilityService({} as any);
+    const portability = companyPortabilityService(nativeDb);
 
     companySvc.create.mockResolvedValue({
       id: "company-imported",
@@ -3090,13 +3253,16 @@ describe("company portability", () => {
       ].join("\n"),
     };
 
-    const result = await portability.importBundle({
+    const importRequest = await reviewExactPackageAsCurrentHuman(portability, {
       source: { type: "inline", rootPath: "paperclip-demo", files },
       include: { company: true, agents: true, projects: true, issues: true, skills: false },
       target: { mode: "new_company", newCompanyName: "Imported Paperclip" },
       agents: "all",
       collisionStrategy: "rename",
-    }, "user-1", { pauseAutomations: true });
+      pauseAutomations: true,
+    });
+    const result = await portability.importBundle(importRequest, nativeUserId,
+      { actor: nativeActor, privateWorkAdmission: "closed", pauseAutomations: true });
 
     expect(agentSvc.create).toHaveBeenCalledWith("company-imported", expect.objectContaining({
       status: "paused",
@@ -3115,7 +3281,7 @@ describe("company portability", () => {
   });
 
   it("leaves imported agents and routines active when pauseAutomations is absent", async () => {
-    const portability = companyPortabilityService({} as any);
+    const portability = companyPortabilityService(nativeDb);
 
     companySvc.create.mockResolvedValue({
       id: "company-imported",
@@ -3161,13 +3327,14 @@ describe("company portability", () => {
       ].join("\n"),
     };
 
-    const result = await portability.importBundle({
+    const importRequest = await reviewExactPackageAsCurrentHuman(portability, {
       source: { type: "inline", rootPath: "paperclip-demo", files },
       include: { company: true, agents: true, projects: true, issues: true, skills: false },
       target: { mode: "new_company", newCompanyName: "Imported Paperclip" },
       agents: "all",
       collisionStrategy: "rename",
-    }, "user-1");
+    });
+    const result = await portability.importBundle(importRequest, nativeUserId, { actor: nativeActor, privateWorkAdmission: "closed" });
 
     expect(agentSvc.create).toHaveBeenCalledTimes(1);
     const [, createdAgentInput] = agentSvc.create.mock.calls[0]!;
@@ -3184,7 +3351,7 @@ describe("company portability", () => {
   });
 
   it("migrates legacy schedule.recurrence imports into routine triggers", async () => {
-    const portability = companyPortabilityService({} as any);
+    const portability = companyPortabilityService(nativeDb);
 
     companySvc.create.mockResolvedValue({
       id: "company-imported",
@@ -3241,13 +3408,14 @@ describe("company portability", () => {
       legacyRecurrence: expect.objectContaining({ frequency: "weekly" }),
     }));
 
-    await portability.importBundle({
+    const importRequest = await reviewExactPackageAsCurrentHuman(portability, {
       source: { type: "inline", rootPath: "paperclip-demo", files },
       include: { company: true, agents: true, projects: true, issues: true, skills: false },
       target: { mode: "new_company", newCompanyName: "Imported Paperclip" },
       agents: "all",
       collisionStrategy: "rename",
-    }, "user-1");
+    });
+    await portability.importBundle(importRequest, nativeUserId, { actor: nativeActor, privateWorkAdmission: "closed" });
 
     expect(routineSvc.createTrigger).toHaveBeenCalledWith("routine-created", expect.objectContaining({
       kind: "schedule",
@@ -3258,7 +3426,7 @@ describe("company portability", () => {
   });
 
   it("imports recurring tasks without a project or assignee as paused routines", async () => {
-    const portability = companyPortabilityService({} as any);
+    const portability = companyPortabilityService(nativeDb);
 
     companySvc.create.mockResolvedValue({
       id: "company-imported",
@@ -3293,7 +3461,8 @@ describe("company portability", () => {
       "Recurring task monday-review has no assignee; the routine will stay paused until one is set.",
     );
 
-    const result = await portability.importBundle(request, "user-1");
+    const importRequest = await reviewExactPackageAsCurrentHuman(portability, request);
+    const result = await portability.importBundle(importRequest, nativeUserId, { actor: nativeActor, privateWorkAdmission: "closed" });
     expect(routineSvc.create).toHaveBeenCalledWith("company-imported", expect.objectContaining({
       projectId: null,
       assigneeAgentId: null,

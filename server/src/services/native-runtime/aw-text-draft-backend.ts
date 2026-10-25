@@ -317,6 +317,7 @@ function draftSession(
     turnId: string;
   } | null = null;
   let usage: Record<string, unknown> | null = null;
+  let debugStage = "provider_dispatch";
   const turnId = `aw-draft:${randomUUID()}`;
   const wake = () => {
     for (const notify of waiters) notify();
@@ -455,6 +456,7 @@ function draftSession(
             ),
           );
           const exactWireReceipt = wireReceipt.value;
+          debugStage = "wire_receipt_validation";
           if (input.sourceClosure) {
             if (!exactWireReceipt || exactWireReceipt.callId !== modelCallId ||
               exactWireReceipt.reservationId !== response.reservationId)
@@ -474,8 +476,11 @@ function draftSession(
             };
           }
           controller.signal.throwIfAborted();
+          debugStage = "parse_model_output";
           const output = parseAgentDraftOutput(response.text, taskReview);
+          debugStage = "verify_agent";
           await assertAuthoredAgentSnapshotCurrent(db, authoredAgent);
+          debugStage = "verify_contract";
           const current = await retainedOrchestrationContract(
             tools.db,
             identity.companyId,
@@ -488,6 +493,7 @@ function draftSession(
           )
             throw forbidden("Text draft contract or output changed");
           controller.signal.throwIfAborted();
+          debugStage = "write_document";
           const write = documentResult.parse(
             await tools.execute({
               tool: "write_document",
@@ -583,7 +589,12 @@ function draftSession(
           event("run.result.proposed", result);
           event("turn.completed");
           event("run.terminal", terminal);
-        } catch {
+        } catch (error) {
+          const failure = error && typeof error === "object" ? error as { name?: unknown; code?: unknown } : null;
+          console.warn("[test-only] AW draft failed stage", debugStage,
+            typeof failure?.name === "string" ? failure.name : "unknown_error",
+            typeof failure?.code === "string" ? failure.code : "no_error_code",
+            error instanceof Error ? error.stack?.split("\n").slice(1, 5) : []);
           if (!revoked) {
             report = null;
             await gateway.abandon(claims).catch(() => {});

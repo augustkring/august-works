@@ -39,7 +39,7 @@ function CompanyAgentChats({ companyId, userId, showNavigation, enabled }: { com
   const agentsQuery = useQuery({
     queryKey: queryKeys.agents.list(companyId!),
     queryFn: () => agentsApi.list(companyId!),
-    enabled: !!companyId,
+    enabled: !!companyId && enabled,
   });
   const agents = agentsQuery.data ?? [];
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -57,7 +57,7 @@ function CompanyAgentChats({ companyId, userId, showNavigation, enabled }: { com
   const preferredQuery = useQuery({
     queryKey: preferenceKey,
     queryFn: () => sidebarPreferencesApi.getPreferredCoworker(companyId!),
-    enabled: Boolean(companyId && userId),
+    enabled: Boolean(companyId && userId && enabled),
   });
   const preferredMutation = useMutation({
     mutationFn: (agentId: string | null) => sidebarPreferencesApi.updatePreferredCoworker(companyId!, { agentId }),
@@ -67,7 +67,7 @@ function CompanyAgentChats({ companyId, userId, showNavigation, enabled }: { com
   });
   useEffect(() => {
     const ask = async () => {
-      if (!enabled) {
+      if (!enabled || !companyId) {
         document.dispatchEvent(new Event("paperclip:open-command"));
         return;
       }
@@ -87,7 +87,7 @@ function CompanyAgentChats({ companyId, userId, showNavigation, enabled }: { com
     };
     document.addEventListener("paperclip:ask-generalist", ask);
     return () => document.removeEventListener("paperclip:ask-generalist", ask);
-  }, [agentsQuery, enabled, navigate, preferredQuery, userId]);
+  }, [agentsQuery, companyId, enabled, navigate, preferredQuery, userId]);
   const activeRef = location.pathname.match(/\/chats\/([^/]+)/)?.[1];
   const active = agents.find((agent) => agent.id === activeRef || agentRouteRef(agent) === activeRef);
   return (

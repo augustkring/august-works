@@ -742,6 +742,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     const actor = getActorInfo(req);
     const boardUserId = req.actor.type === "board" ? req.actor.userId : null;
     let domainInvoked = false;
+    let admittedJob: CompanyImportJob | null = null;
     const operation = async (checkCancellation: () => Promise<boolean>) => {
       try {
         const importBody = companyPortabilityImportSchema.parse(rawImportBody);
@@ -753,6 +754,8 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
           privateWorkAdmission: "closed",
           pauseAutomations: importBody.pauseAutomations === true,
           checkCancellation,
+          onSourceReleaseReview: admittedJob ? receipt => importJobs.recordSourceReleaseReview(admittedJob!, receipt, req.actor) : undefined,
+          onSourceReleaseTargetBound: admittedJob ? companyId => importJobs.bindSourceReleaseTarget(admittedJob!, companyId, req.actor) : undefined,
         });
         // The import is committed. Settlement (hooks) runs before the
         // best-effort audit entry so a logging failure cannot make a
@@ -792,6 +795,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
           inputHash: signature, scopeKey: companyId ?? "new_company", companyId,
           idempotencyKey: req.header("idempotency-key") ?? undefined, transferId: hooks?.transferId ?? null }, req.actor);
       } catch (error) { await hooks?.onConflict?.(); throw error; }
+      admittedJob = admitted.job;
       const record = importJobRecord(admitted.job);
       if (admitted.replay) await hooks?.onConflict?.();
       if (admitted.replay && admitted.job.status === "running") {

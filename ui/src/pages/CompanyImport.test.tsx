@@ -322,6 +322,14 @@ describe("CompanyImport", () => {
     await flushReact();
   }
 
+  async function confirmSourceReleaseReview() {
+    const review = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'))
+      .find(input => input.closest("label")?.textContent?.includes("reviewed this exact package"));
+    if (!review || review.checked) return;
+    await act(async () => { review.click(); });
+    await flushReact();
+  }
+
   async function renderPage() {
     root = createRoot(container);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -373,6 +381,9 @@ describe("CompanyImport", () => {
     expect(pauseLabel).toBeTruthy();
     expect(pauseLabel?.querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked).toBe(true);
 
+    expect(findButton((text) => text.startsWith("Import 3 file"))?.disabled).toBe(true);
+    await confirmSourceReleaseReview();
+    expect(findButton((text) => text.startsWith("Import 3 file"))?.disabled).toBe(false);
     await clickButton((text) => text.startsWith("Import 3 file"));
     await settle();
   }
@@ -381,7 +392,8 @@ describe("CompanyImport", () => {
     await renderPageAndImport();
 
     expect(mockCompaniesApi.importBundleAsync).toHaveBeenCalledWith(
-      expect.objectContaining({ pauseAutomations: true, expectedSourceFingerprint: "a".repeat(64) }),
+      expect.objectContaining({ pauseAutomations: true, expectedSourceFingerprint: "a".repeat(64),
+        sourceReleaseReview: { confirmed: true, sourceFingerprint: "a".repeat(64) } }),
     );
     // The page polls the job it was handed and runs the same activation path
     // the synchronous response used to drive.
@@ -468,6 +480,7 @@ describe("CompanyImport", () => {
     expect(mockCompaniesApi.importPreview).not.toHaveBeenCalled();
     expect(mockCompaniesApi.importPreviewPackage.mock.calls[0]![0]).toBe(file);
 
+    await confirmSourceReleaseReview();
     await clickButton((text) => text.startsWith("Import 3 file"));
     await settle();
 
@@ -552,6 +565,7 @@ describe("CompanyImport", () => {
     expect(mockCompaniesApi.importPreviewPackage).not.toHaveBeenCalled();
     expect(container.textContent).toContain("Import preview");
 
+    await confirmSourceReleaseReview();
     await clickButton((text) => text.startsWith("Import 3 file"));
     await vi.waitFor(() => {
       expect(mockCompaniesApi.importTransferApply).toHaveBeenCalledTimes(1);
@@ -706,6 +720,7 @@ describe("CompanyImport", () => {
     await enterGithubUrl();
     await clickButton((text) => text === "Preview import");
 
+    await confirmSourceReleaseReview();
     await clickButton((text) => text.startsWith("Import 3 file"));
 
     expect(container.textContent).toContain("Import running on the server");
@@ -775,6 +790,7 @@ describe("CompanyImport", () => {
 
     // The pause toggle feeds the request payload too: after another failed
     // attempt, toggling it also supersedes the request and clears the panel.
+    await confirmSourceReleaseReview();
     await clickButton((text) => text.startsWith("Import 3 file"));
     await act(async () => {
       rejectImport(new Error("second failure"));
@@ -795,6 +811,7 @@ describe("CompanyImport", () => {
     expect(container.textContent).not.toContain("Import failed:");
 
     // File-selection edits feed the payload too and supersede a failure.
+    await confirmSourceReleaseReview();
     await clickButton((text) => text.startsWith("Import 3 file"));
     await act(async () => {
       rejectImport(new Error("third failure"));
@@ -833,6 +850,7 @@ describe("CompanyImport", () => {
         }),
     );
     mockCompaniesApi.getImportJob.mockResolvedValue(buildSucceededJob("job-final"));
+    await confirmSourceReleaseReview();
     await clickButton((text) => text.startsWith("Import 3 file"));
 
     expect(mockCompaniesApi.importBundleAsync).toHaveBeenLastCalledWith(
@@ -883,6 +901,7 @@ describe("CompanyImport", () => {
     await renderPage();
     await enterGithubUrl();
     await clickButton((text) => text === "Preview import");
+    await confirmSourceReleaseReview();
     await clickButton((text) => text.startsWith("Import 3 file"));
     await settle();
 
@@ -922,6 +941,7 @@ describe("CompanyImport", () => {
     await renderPage();
     await enterGithubUrl();
     await clickButton((text) => text === "Preview import");
+    await confirmSourceReleaseReview();
     await clickButton((text) => text.startsWith("Import 3 file"));
     await settle();
 
@@ -945,6 +965,7 @@ describe("CompanyImport", () => {
     await renderPage();
     await enterGithubUrl();
     await clickButton((text) => text === "Preview import");
+    await confirmSourceReleaseReview();
     await clickButton((text) => text.startsWith("Import 3 file"));
     await settle();
 
@@ -1026,6 +1047,7 @@ describe("CompanyImport", () => {
     await renderPage();
     await enterGithubUrl();
     await clickButton((text) => text === "Preview import");
+    await confirmSourceReleaseReview();
     await clickButton((text) => text.startsWith("Import 3 file"));
     await settle();
 
@@ -1047,6 +1069,7 @@ describe("CompanyImport", () => {
     await renderPage();
     await enterGithubUrl();
     await clickButton((text) => text === "Preview import");
+    await confirmSourceReleaseReview();
     await clickButton((text) => text.startsWith("Import 3 file"));
     await settle();
 
@@ -1130,6 +1153,7 @@ describe("CompanyImport", () => {
     // The picker shows each agent's source adapter, not a coerced CEO default.
     expect(findAdapterSelects().map((select) => select.value)).toEqual(["claude_local", "codex_local"]);
 
+    await confirmSourceReleaseReview();
     await clickButton((text) => text.startsWith("Import 3 file"));
     await settle();
 
@@ -1150,6 +1174,7 @@ describe("CompanyImport", () => {
     });
     await flushReact();
 
+    await confirmSourceReleaseReview();
     await clickButton((text) => text.startsWith("Import 3 file"));
     await settle();
 
@@ -1196,6 +1221,7 @@ describe("CompanyImport", () => {
     expect(container.textContent).toContain("will use Claude Code");
     expect(findAdapterSelects().map((select) => select.value)).toEqual(["claude_local", "claude_local"]);
 
+    await confirmSourceReleaseReview();
     await clickButton((text) => text.startsWith("Import 3 file"));
     await settle();
 
@@ -1216,6 +1242,7 @@ describe("CompanyImport", () => {
     expect(container.textContent).toContain("source adapter codex_local is not installed here");
     expect(findAdapterSelects().map((select) => select.value)).toEqual(["gemini_local", "gemini_local"]);
 
+    await confirmSourceReleaseReview();
     await clickButton((text) => text.startsWith("Import 3 file"));
     await settle();
 
@@ -1234,6 +1261,7 @@ describe("CompanyImport", () => {
     expect(container.textContent).not.toContain("is not installed here");
     expect(findAdapterSelects().map((select) => select.value)).toEqual(["claude_local", "codex_local"]);
 
+    await confirmSourceReleaseReview();
     await clickButton((text) => text.startsWith("Import 3 file"));
     await settle();
 

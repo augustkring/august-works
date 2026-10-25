@@ -125,6 +125,7 @@ interface OpenCodeRuntime {
   bridge: OpenCodeMcpBridge;
   trace: ProviderTraceFileSink | null;
   sensitiveValues: readonly string[];
+  managedModel: boolean;
   close(input?: {
     finalizeTrace?: boolean;
     reason?: string | null;
@@ -159,8 +160,10 @@ const CAPABILITIES: NativeSessionCapabilities = {
 // Hook names and mutable output shapes are qualified against OpenCode 1.18.32.
 // The gateway treats these as observations and independently validates the
 // final Messages body against current server-owned sources and tool results.
-const MANAGED_SOURCE_WITNESS_PLUGIN = `
+function managedSourceWitnessPlugin(systemInstructions: string): string {
+return `
 import { createHash } from "node:crypto";
+const PAPERCLIP_SYSTEM_PROMPT = ${JSON.stringify(systemInstructions)};
 const stable = (value) => {
   if (Array.isArray(value)) return value.map(stable);
   if (value && typeof value === "object") return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stable(value[key])]));
@@ -181,7 +184,7 @@ export const PaperclipSourceWitness = async () => {
   let ordinal = 0;
   return {
     "experimental.chat.messages.transform": async (_input, output) => { try { messages = output.messages; hash(messages); } catch { invalid = true; } },
-    "experimental.chat.system.transform": async (_input, output) => { try { system = [...output.system]; hash(system); } catch { invalid = true; } },
+    "experimental.chat.system.transform": async (_input, output) => { try { output.system.splice(0, output.system.length, PAPERCLIP_SYSTEM_PROMPT); system = [...output.system]; hash(system); } catch { invalid = true; } },
     "tool.definition": async (input, output) => { try { tools.set(input.toolID, hash({ description: output.description, parameters: output.parameters })); } catch { invalid = true; } },
     "tool.execute.before": async (input, output) => { try { pending.set(input.callID, { tool: input.tool, argsHash: hash(output.args) }); } catch { invalid = true; } },
     "tool.execute.after": async (input, output) => {
@@ -197,7 +200,6 @@ export const PaperclipSourceWitness = async () => {
         version: 1,
         driver: "opencode_server",
         driverVersion: "1.18.32",
-        pluginRevision: "paperclip-opencode-source-witness-v1",
         ordinal,
         pluginRevision: "paperclip-opencode-source-witness-v1",
         sessionID: input.sessionID,
@@ -211,6 +213,13 @@ export const PaperclipSourceWitness = async () => {
         toolCallCount: calls.length,
         toolCallChainHash: hash(calls),
         pendingToolCallCount: pending.size,
+        // Hook-visible hashes are observations, not current-owner source refs.
+        // The broker must keep OpenCode source closure absent until it can
+        // structurally bind the final body to canonical task/history/tool
+        // receipts and revalidate those owners.
+        sourceClosure: "unsupported",
+        sourceRefs: [],
+        missingSourceFamilies: ["task", "history", "tool_result", "tool_schema"],
         unsupported: invalid,
       };
       const encoded = JSON.stringify(witness);
@@ -219,6 +228,7 @@ export const PaperclipSourceWitness = async () => {
   };
 };
 `;
+}
 
 export class OpenCodeServerDriver implements HarnessDriver {
   readonly #options: OpenCodeServerDriverOptions;
@@ -647,7 +657,7 @@ class OpenCodeHarnessSession implements HarnessSession {
           // This exact OpenCode version passed the native-question conformance
           // suite. question.asked is adapted into PRP v2 and its reply/reject API
           // remains private to this driver.
-          tools: { question: true },
+          ...(this.#runtime.managedModel ? {} : { tools: { question: true } }),
           ...(this.#sendFullContext
             ? { system: this.#systemInstructions }
             : {}),
@@ -1955,7 +1965,7 @@ async function startRuntime(input: {
   const managedModel = Boolean((input.options.environment ?? process.env).PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN?.trim());
   if (managedModel) {
     const pluginPath = join(configHome, "opencode", "plugins", "paperclip-source-witness.js");
-    await writeFile(pluginPath, MANAGED_SOURCE_WITNESS_PLUGIN, { mode: 0o400 });
+    await writeFile(pluginPath, managedSourceWitnessPlugin(input.options.systemInstructions ?? CODEX_SKILLLESS_BASE_INSTRUCTIONS), { mode: 0o400 });
   }
   const config = {
     $schema: "https://opencode.ai/config.json",
@@ -2122,6 +2132,7 @@ async function startRuntime(input: {
       process: child,
       bridge,
       trace: input.trace,
+      managedModel,
       sensitiveValues: [
         password,
         input.options.environment?.OPENROUTER_API_KEY,

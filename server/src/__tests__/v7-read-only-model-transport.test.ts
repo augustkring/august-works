@@ -243,6 +243,7 @@ describe("managed Anthropic Messages broker transport", () => {
     expect(options).toMatchObject({ allowPrivateNetwork: false, connectTimeoutMs: 5000, responseTimeoutMs: 15000 });
     expect(JSON.parse(String(init.body))).toMatchObject({ model: request.model, max_tokens: 256, stream: false, service_tier: "standard_only", tools: managedRequest.tools });
     expect(result.usage).toEqual({ inputTokens: 20, outputTokens: 10 });
+    expect(result.responseContent).toEqual(toolResponse.content);
     expect(result.sse).toContain('event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{}"}}');
     expect(result.sse).toContain("event: message_stop");
     expect(JSON.stringify(onWireDispatch.mock.calls)).not.toContain(key);

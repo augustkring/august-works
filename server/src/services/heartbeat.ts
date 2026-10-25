@@ -12,7 +12,7 @@ import { heartbeatMemoryPayloadRetained, heartbeatMemoryPayloadVisible } from ".
 import { assertNativeAnalyticalRunPayloadAccess } from "./analytical-context-authority.js";
 import { applyWorkspaceRestoreFailure } from "@paperclipai/adapter-utils/workspace-restore-result";
 import { hasWorkspaceRestoreFailure } from "@paperclipai/shared";
-import type { NativePayloadSourceInput } from "@paperclipai/shared";
+import type { ExecutionReconciliation, NativePayloadSourceInput } from "@paperclipai/shared";
 import { externalConversationStateSql, nonIdleSlackIssueCondition } from "./slack-conversation-state.js";
 import { settleSlackConversation } from "./slack-conversation-lifecycle.js";
 import { publicChatTaskUrl } from "./chat-task-url.js";
@@ -23747,6 +23747,10 @@ export function heartbeatService(
               rolePackInputs: v5Fabric ? v5Fabric.inputRolePackSources : [],
               unsupportedInputPresent: Object.values(nativeBootstrapUnsupported).some(Boolean),
             });
+            console.warn("[test-only] bootstrap Context binding facts", Boolean(v5Fabric), Boolean(v5Fabric?.inputContextSourceWitness),
+              Boolean(freshGovernedContext?.sourceWitness), nativeBootstrapContextManifests?.length ?? null,
+              Boolean(governedContextMarkdown?.trim()), Boolean(v5Fabric?.inputContextSourceMarkdown?.trim()),
+              Boolean(nativeBootstrapSourceSet));
             nativeBootstrapSourceClosure = nativeBootstrapSourceSet
               ? { sourceSet: nativeBootstrapSourceSet,
                   taskEnvelopeDigest: createHash("sha256").update(JSON.stringify(nativeExecution.task), "utf8").digest("hex") }
@@ -27319,8 +27323,24 @@ export function heartbeatService(
               eq(heartbeatRuns.companyId, issue.companyId), eq(heartbeatRuns.id, sourceRunId),
             ));
             if (hasWorkspaceRestoreFailure(reconciledRun?.resultJson)) {
-              if ((readNonEmptyString(decision.workspaceRepairEvidence)?.length ?? 0) < 20)
+              const reconstruction = parseObject(decision.workspaceReconstruction);
+              if (reconstruction.confirmed === true) {
+                // Recheck the original physical-destruction receipt, current
+                // attachment source snapshots, task authority and retry state
+                // at the owner admission boundary. The dispatch worker's
+                // earlier validation is not a durable grant.
+                const { validateExecutionReconciliation } = await import("./execution-recovery-resolution.js");
+                await validateExecutionReconciliation({
+                  db: tx as unknown as Db,
+                  companyId: issue.companyId,
+                  issueId: issue.id,
+                  agentId,
+                  sourceRunId,
+                  decision: decision as unknown as ExecutionReconciliation,
+                });
+              } else if ((readNonEmptyString(decision.workspaceRepairEvidence)?.length ?? 0) < 20) {
                 return { kind: "skipped" as const };
+              }
               // Repair does not reset the remaining automatic retry budget.
               reconciledRestoreRetryCount = executionFailureRetryCount(reconciledRun!);
             }

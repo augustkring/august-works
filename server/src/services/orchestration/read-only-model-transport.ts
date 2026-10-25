@@ -423,6 +423,7 @@ export async function anthropicManagedMessagesCall(
     return {
       usage: { inputTokens: parsed.usage.input_tokens, outputTokens: parsed.usage.output_tokens },
       responseHash: createHash("sha256").update(text, "utf8").digest("hex"),
+      responseContent: parsed.content,
       sse: events.map(([event, data]) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`).join(""),
     };
   } catch (error) {

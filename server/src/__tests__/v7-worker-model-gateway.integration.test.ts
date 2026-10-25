@@ -27,6 +27,8 @@ import {
   issues,
   agentExecutionManifests,
   contextManifestMemoryRoots,
+  contextManifests,
+  contextManifestItems,
   memoryBindings,
   memoryRecords,
   orchestrationPlans,
@@ -120,7 +122,8 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       inputTokens: number,
       modelOutput: string,
       duringCall: (() => Promise<void>) | undefined,
-      issueSnapshotUpdates: Array<{ changed: string[]; snapshotNull: boolean }>;
+      issueSnapshotUpdates: Array<{ changed: string[]; snapshotNull: boolean }>,
+      contextSnapshotBinding: Array<{ count: number; roots: number; snapshotPresent: boolean; exactSnapshotMatches: boolean; contextSnapshotSchemaValid: boolean; taskSnapshotSchemaValid: boolean; taskSnapshotInputKinds: string[] }>;
     beforeAll(async () => {
       home = await mkdtemp(join(tmpdir(), "aw-v7-worker-model-fixture-"));
       vi.stubEnv("PAPERCLIP_HOME", home);
@@ -132,6 +135,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       database = await startEmbeddedPostgresTestDatabase("aw-v7-worker-model-");
       db = createDb(database.connectionString);
       issueSnapshotUpdates = [];
+      contextSnapshotBinding = [];
       await db.execute(sql.raw("create table public.test_issue_snapshot_update_log(issue_id uuid, changed_columns text[], snapshot_cleared boolean)"));
       await db.execute(sql.raw(`create function public.test_issue_snapshot_update_monitor() returns trigger language plpgsql as $$
         declare changed text[] := array[]::text[]; col text; begin
@@ -371,6 +375,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       modelOutput = "Retained bounded draft";
       duringCall = undefined;
       issueSnapshotUpdates.length = 0;
+      contextSnapshotBinding.length = 0;
     });
     afterEach(() => registerNativeDraftGateway(db, undefined));
 
@@ -608,6 +613,24 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         .select()
         .from(orchestrationWorkerAttempts)
         .where(eq(orchestrationWorkerAttempts.planId, plan.id));
+      const [contextTask] = await db.select({ payloadSourceSnapshot: issues.payloadSourceSnapshot })
+        .from(issues).where(eq(issues.id, task.id));
+      const runManifests = await db.select({ id: contextManifests.id }).from(contextManifests)
+        .where(and(eq(contextManifests.companyId, f.home), eq(contextManifests.runId, attempts[0]?.runId ?? "")));
+      const contextItems = runManifests.length ? await db.select({ provider: contextManifestItems.sourceProvider,
+        payloadSourceSnapshot: contextManifestItems.payloadSourceSnapshot }).from(contextManifestItems)
+        .where(and(eq(contextManifestItems.companyId, f.home), eq(contextManifestItems.manifestId, runManifests[0]!.id))) : [];
+      const contextRoots = runManifests.length ? await db.select().from(contextManifestMemoryRoots)
+        .where(and(eq(contextManifestMemoryRoots.companyId, f.home), eq(contextManifestMemoryRoots.manifestId, runManifests[0]!.id))) : [];
+      contextSnapshotBinding.push({ count: contextItems.length, roots: contextRoots.length,
+        snapshotPresent: contextItems.some(item => item.provider === "august_works_tasks" && item.payloadSourceSnapshot !== null),
+        exactSnapshotMatches: contextItems.some(item => item.provider === "august_works_tasks" && item.payloadSourceSnapshot !== null &&
+          hashContextPolicySnapshot(item.payloadSourceSnapshot) === hashContextPolicySnapshot(contextTask?.payloadSourceSnapshot)),
+        contextSnapshotSchemaValid: nativePayloadSourceSnapshotSchema.safeParse(contextItems.find(item => item.provider === "august_works_tasks")?.payloadSourceSnapshot).success,
+        taskSnapshotSchemaValid: nativePayloadSourceSnapshotSchema.safeParse(contextTask?.payloadSourceSnapshot).success,
+        taskSnapshotInputKinds: contextItems.find(item => item.provider === "august_works_tasks")?.payloadSourceSnapshot?.inputs.map(source => source.kind) ?? [],
+      });
+      process.stderr.write(`[test-only] Context Task source snapshot binding ${JSON.stringify(contextSnapshotBinding)}\n`);
       issueSnapshotUpdates.push(...(await db.execute<{ changed_columns: string[]; snapshot_cleared: boolean }>(sql`
         select changed_columns, snapshot_cleared from public.test_issue_snapshot_update_log where issue_id=${task.id}`)).map(row => ({
         changed: row.changed_columns, snapshotNull: row.snapshot_cleared,
@@ -618,6 +641,11 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         .select()
         .from(heartbeatRuns)
         .where(eq(heartbeatRuns.id, attempts[0]!.runId!));
+      const sourceProfile = actualRun?.runnerProfileJson && typeof actualRun.runnerProfileJson === "object"
+        ? actualRun.runnerProfileJson as Record<string, unknown> : {};
+      process.stderr.write(`[test-only] AW provider dispatch facts ${JSON.stringify({ calls,
+        receiptPresent: sourceProfile.nativeInputSourceReceipt !== undefined,
+        wireIntentCount: Array.isArray(sourceProfile.nativeAwModelWireIntents) ? sourceProfile.nativeAwModelWireIntents.length : null })}\n`);
       expect(actualRun?.issueId, "the exercised scheduler run must retain the canonical human-authored Task").toBe(task.id);
       expect(actualRun).toMatchObject({
         status: "succeeded",

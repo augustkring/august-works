@@ -590,7 +590,7 @@ export function modelReservationService(
         status: "completed" | "failed" | "unknown";
         providerResponseHash: string | null;
         usage: { inputTokens: number; outputTokens: number } | null;
-        accounting?: { actualCostCents: string | null; costStatus: "reported" | "estimated" | "unpriced" };
+        accounting?: { actualCostAmount: string | null; costStatus: "reported" | "estimated" | "unpriced" };
       },
       now = new Date(),
     ): Promise<CompanyPurposeReservation> {
@@ -598,7 +598,7 @@ export function modelReservationService(
         status: z.enum(["completed", "failed", "unknown"]),
         providerResponseHash: z.string().regex(/^[a-f0-9]{64}$/).nullable(),
         usage: z.object({ inputTokens: z.number().int().nonnegative(), outputTokens: z.number().int().nonnegative() }).strict().nullable(),
-        accounting: z.object({ actualCostCents: z.string().regex(/^\d+(?:\.\d{1,7})?$/).nullable(), costStatus: z.enum(["reported", "estimated", "unpriced"]) }).strict().optional(),
+        accounting: z.object({ actualCostAmount: z.string().regex(/^\d+(?:\.\d{1,7})?(?:[eE][+-]?\d+)?$/).nullable(), costStatus: z.enum(["reported", "estimated", "unpriced"]) }).strict().optional(),
       }).strict().parse(raw);
       return withV7ActivityTransaction(db, async (tx, publications) => {
         const [record] = await tx.select().from(orchestrationCompanyPurposeReservations).where(and(
@@ -630,7 +630,7 @@ export function modelReservationService(
             status: updated!.status,
             pricingEnvelopeExceeded: Boolean(overQuote),
             maximumMinor: record.maximumMinor,
-            actualCostCents: input.accounting?.actualCostCents ?? null,
+            actualCostAmount: input.accounting?.actualCostAmount ?? null,
             costStatus: input.accounting?.costStatus ?? "unpriced",
             debitRetained: true,
           },

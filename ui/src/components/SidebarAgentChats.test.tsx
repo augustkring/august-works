@@ -27,8 +27,8 @@ let root: Root;
 let container: HTMLDivElement;
 let client: QueryClient;
 const agent = (id: string, companyId: string) => ({ id, companyId, name: id, urlKey: id, role: "engineer", title: "Engineer", icon: null, status: "idle" } as Agent);
-async function render() {
-  await act(async () => { root.render(<QueryClientProvider client={client}><SidebarAgentChats /></QueryClientProvider>); });
+async function render(enabled = true) {
+  await act(async () => { root.render(<QueryClientProvider client={client}><SidebarAgentChats enabled={enabled} /></QueryClientProvider>); });
 }
 async function openPicker() {
   await act(async () => container.querySelector("button")!.click());
@@ -113,5 +113,17 @@ describe("SidebarAgentChats", () => {
     await render();
     await act(async () => document.dispatchEvent(new Event("paperclip:ask-generalist")));
     expect(document.querySelector("[role=dialog]")).not.toBeNull();
+  });
+
+  it("keeps chat feature gating in place and falls back to the command palette", async () => {
+    const openCommand = vi.fn();
+    document.addEventListener("paperclip:open-command", openCommand);
+    state.list.mockClear();
+    await render(false);
+    await act(async () => document.dispatchEvent(new Event("paperclip:ask-generalist")));
+    expect(openCommand).toHaveBeenCalledOnce();
+    expect(state.navigate).not.toHaveBeenCalled();
+    expect(state.list).not.toHaveBeenCalled();
+    document.removeEventListener("paperclip:open-command", openCommand);
   });
 });

@@ -23,6 +23,8 @@ import {
   runtimeCells,
   runtimeOperations,
   heartbeatRuns,
+  issueRecoveryActions,
+  assets,
   issues,
   runtimeCapacityProfiles,
   runtimeHostCommands,
@@ -58,7 +60,7 @@ import { agentProviderBindingService } from "../services/agent-provider-bindings
 import { agentRuntimeFabricService } from "../services/agent-runtime-fabric.js";
 import { discoverNativeCapabilities } from "../services/native-provider-conformance.js";
 import { runtimeControlService } from "../services/runtime/control.js";
-import { verifyNativeWorkspaceDestructionReceipt } from "../services/execution-recovery-resolution.js";
+import { deliverReconciledExecutions, markExecutionReconciliation, validateExecutionReconciliation, verifyNativeWorkspaceDestructionReceipt } from "../services/execution-recovery-resolution.js";
 import { errorHandler } from "../middleware/index.js";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import { environmentRuntimeService } from "../services/environment-runtime.js";
@@ -67,6 +69,7 @@ import { createToolGatewayService } from "../services/tool-gateway.js";
 import { registerAssignedMcpGateway } from "../services/native-runtime/assigned-mcp-tools.js";
 import { mcpGatewayProtocolRoutes } from "../routes/tool-gateway.js";
 import { secretService } from "../services/secrets.js";
+import { issueService } from "../services/issues.js";
 
 const support = await getEmbeddedPostgresTestSupport();
 const image = "fixture.invalid/openshell@sha256:" + "a".repeat(64);
@@ -887,15 +890,70 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         });
         stopResult = await driveHost(service.stop(f.actor, f.home, sandboxBinding.id, "fixture-user-stop"), admissionCell!.id);
         expect(stopResult.binding.status).toBe("stopped");
-        await db.update(heartbeatRuns).set({ status: "failed", resultJson: { workspaceRestoreFailure: "workspace_lost" } })
+        await db.update(heartbeatRuns).set({ status: "failed", resultJson: { workspaceRestoreFailure: "restore_failed" } })
           .where(eq(heartbeatRuns.id, run!.id));
         const destruction = await driveHost(
           transportForTest.bridge(f.actor).destroy({ ...sandboxIdentity, idempotencyKey: "fixture-physical-workspace-destroy" }),
           admissionCell!.id,
         );
         expect(destruction.operationId).toMatch(/^[0-9a-f-]{36}$/i);
-        expect(await verifyNativeWorkspaceDestructionReceipt({ db, companyId: f.home, runId: run!.id }))
-          .toMatchObject({ bindingId: sandboxBinding.id, cellId: admissionCell!.id, generation: admissionCell!.generation.toString() });
+        const destructionReceipt = await verifyNativeWorkspaceDestructionReceipt({ db, companyId: f.home, runId: run!.id });
+        expect(destructionReceipt).toMatchObject({ bindingId: sandboxBinding.id, cellId: admissionCell!.id, generation: admissionCell!.generation.toString() });
+        expect(destructionReceipt?.receiptHash).toMatch(/^[a-f0-9]{64}$/);
+
+        // Continue only from an exact, same-task captured attachment. This
+        // drives the real failed-run recovery owner after the signed host
+        // Stop+Destroy producer above; the continuation is a fresh bounded run.
+        const savedBytes = Buffer.from("saved reconstruction source\n");
+        const savedHash = createHash("sha256").update(savedBytes).digest("hex");
+        // Use the real current-human upload owner. The original issue service
+        // verifies these bytes, captures the access snapshot, and records its
+        // producer receipt; the test never fabricates a sealed source row.
+        const savedAttachment = await issueService(db).createAttachment({
+          issueId: task!.id, provider: "local_fixture", objectKey: `recovery/${randomUUID()}`,
+          contentType: "text/plain", byteSize: savedBytes.byteLength, sha256: savedHash,
+          originalFilename: "saved-source.txt", createdByUserId: f.userId,
+        }, { actor: { ...f.actor }, bytes: savedBytes });
+        await db.update(heartbeatRuns).set({ status: "failed", scheduledRetryAttempt: 1,
+          scheduledRetryReason: "transient_failure", resultJson: { workspaceRestoreFailure: "restore_failed" } })
+          .where(eq(heartbeatRuns.id, run!.id));
+        await db.update(issues).set({ status: "todo", executionRunId: null }).where(eq(issues.id, task!.id));
+        await instanceSettingsService(db).updateExperimental({ enableAgentChat: true });
+        await db.update(agents).set({ status: "active", runtimeConfig: { heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 } } })
+          .where(eq(agents.id, presence.id));
+        const [recoveryAction] = await db.insert(issueRecoveryActions).values({
+          companyId: f.home, sourceIssueId: task!.id, kind: "active_run_watchdog", status: "resolved",
+          ownerType: "agent", ownerAgentId: presence.id, returnOwnerAgentId: presence.id,
+          cause: "continuation_evidence_incomplete", fingerprint: randomUUID(), evidence: {},
+          nextAction: "Continue from the selected saved files.", outcome: "restored",
+        }).returning();
+        const reconstructionDecision = {
+          runId: run!.id, providerStopped: true as const, actionOutcome: "not_performed" as const,
+          outcomeEvidence: "The signed native host receipt confirms Stop and physical Destroy; no external action was replayed.",
+          workspaceReconstruction: { confirmed: true as const, destructionReceiptHash: destructionReceipt!.receiptHash,
+            selectedSources: [{ attachmentId: savedAttachment!.id, sha256: savedHash }] },
+        };
+        await expect(validateExecutionReconciliation({ db, companyId: f.home, issueId: task!.id,
+          agentId: presence.id, sourceRunId: run!.id, decision: { ...reconstructionDecision,
+            workspaceReconstruction: { ...reconstructionDecision.workspaceReconstruction,
+              selectedSources: [{ attachmentId: savedAttachment!.id, sha256: "d".repeat(64) }] } } }))
+          .rejects.toThrow("captured source hash and access snapshot");
+        await validateExecutionReconciliation({ db, companyId: f.home, issueId: task!.id,
+          agentId: presence.id, sourceRunId: run!.id, decision: reconstructionDecision });
+        await markExecutionReconciliation(db, recoveryAction!, reconstructionDecision, f.userId);
+        await deliverReconciledExecutions(db, heartbeatService(db).wakeup);
+        const [successor] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.retryOfRunId, run!.id));
+        expect(successor).toMatchObject({ status: "queued", scheduledRetryAttempt: 1, scheduledRetryReason: "transient_failure" });
+        expect(successor?.contextSnapshot).toMatchObject({ recoveryActionId: recoveryAction!.id, previousRunId: run!.id, retryOfRunId: run!.id });
+        const [stillFailed] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, run!.id));
+        expect(stillFailed).toMatchObject({ status: "failed", resultJson: { workspaceRestoreFailure: "restore_failed" } });
+        // The production binding trigger invalidates the captured source when
+        // its backing asset identity changes. The current owner gate must then
+        // refuse another reconstruction attempt.
+        await db.update(assets).set({ sha256: "e".repeat(64) }).where(eq(assets.id, savedAttachment!.assetId));
+        await expect(validateExecutionReconciliation({ db, companyId: f.home, issueId: task!.id,
+          agentId: presence.id, sourceRunId: run!.id, decision: reconstructionDecision }))
+          .rejects.toThrow("captured source hash and access snapshot");
         const [quiescedExecClaim] = await db.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.idempotencyKey, uncertainCommand.request.requestId));
         expect(quiescedExecClaim).toMatchObject({ status: "CANCELED", errorCode: "sandbox_exec_quiesced_by_stop" });
       } finally {

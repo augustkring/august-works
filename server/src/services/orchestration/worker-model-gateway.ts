@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { assertAuthoredProceduresCurrent } from "../agents/authoring-procedures.js";
 import { assertAuthoredAgentManifestCurrent } from "../agents/authored-definition.js";
 import { and, eq, or } from "drizzle-orm";
@@ -7,15 +8,19 @@ import {
   agentIdentities,
   companies,
   agentExecutionManifests,
+  documents,
   companyMemberships,
   principalPermissionGrants,
   companySecrets,
   companySecretVersions,
   heartbeatRuns,
   issues,
+  issueDocuments,
+  documentRevisions,
   orchestrationPlans,
   orchestrationWorkers,
   orchestrationWorkerAttempts,
+  toolInvocations,
   type Db,
 } from "@paperclipai/db";
 import {
@@ -78,6 +83,138 @@ type Options = {
   protectedEvidenceOrigin: string;
   fetch?: typeof guardedRemoteHttpFetch;
 };
+
+function managedToolName(value: string): string {
+  for (const prefix of ["paperclip__", "paperclip_", "paperclip."]) {
+    if (value.startsWith(prefix)) return value.slice(prefix.length);
+  }
+  return value;
+}
+
+function managedRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, request: Record<string, unknown>) {
+  const [run] = await db.select().from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.companyId, claims.company_id), eq(heartbeatRuns.id, claims.run_id),
+    eq(heartbeatRuns.agentId, claims.sub), eq(heartbeatRuns.status, "running"),
+  ));
+  const profile = managedRecord(run?.runnerProfileJson);
+  const authority = managedRecord(profile.nativeOpenCodeSourceAuthority);
+  const receipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+  const schemas = authority.toolSchemas;
+  const prompts = authority.authorizedPromptHashes;
+  const system = request.system;
+  const systemText = typeof system === "string" ? system : Array.isArray(system) && system.every((part) =>
+    managedRecord(part).type === "text" && typeof managedRecord(part).text === "string")
+    ? (system as Array<{ text: string }>).map((part) => part.text).join("") : null;
+  if (!run || authority.version !== 1 || !receipt.success || !Array.isArray(schemas) || !Array.isArray(prompts) ||
+    prompts.length === 0 || prompts.length > 64 || prompts.some((value) => typeof value !== "string" || !/^[0-9a-f]{64}$/.test(value)) ||
+    authority.executionInputHash !== nativeSha256(profile.nativeExecutionInput) ||
+    !Array.isArray(authority.toolSchemas) || authority.toolSchemasHash !== nativeSha256(schemas) ||
+    typeof authority.systemInstructionsHash !== "string" || systemText === null ||
+    nativeSha256(systemText) !== authority.systemInstructionsHash ||
+    receipt.data.binding.companyId !== claims.company_id || receipt.data.binding.runId !== claims.run_id ||
+    receipt.data.binding.agentId !== claims.sub || receipt.data.binding.responsibleUserId !== claims.responsible_user_id ||
+    !receipt.data.bootstrap.inputs.some((source) => source.kind === "task") ||
+    !receipt.data.bootstrap.inputs.some((source) => source.kind === "completion_contract") ||
+    !receipt.data.bootstrap.inputs.some((source) => source.kind === "runtime_instructions"))
+    throw forbidden("Managed OpenCode source closure is missing or no longer current");
+
+  const expectedTools = schemas.map((value) => {
+    const tool = managedRecord(value);
+    return { name: typeof tool.name === "string" ? tool.name : "",
+      ...(typeof tool.description === "string" ? { description: tool.description } : {}),
+      input_schema: tool.inputSchema };
+  }).sort((a, b) => a.name.localeCompare(b.name));
+  const actualTools = (Array.isArray(request.tools) ? request.tools : []).map((value) => {
+    const tool = managedRecord(value);
+    return { name: typeof tool.name === "string" ? managedToolName(tool.name) : "",
+      ...(typeof tool.description === "string" ? { description: tool.description } : {}),
+      input_schema: tool.input_schema };
+  }).sort((a, b) => a.name.localeCompare(b.name));
+  if (!isDeepStrictEqual(actualTools, expectedTools) ||
+    actualTools.some((tool) => !["read_document", "write_document", "paperclip_finish", "paperclip_block"].includes(tool.name)))
+    throw forbidden("Managed OpenCode tool schemas do not match the exact current Native catalog");
+
+  const intents = Array.isArray(profile.nativeAwModelWireIntents) ? profile.nativeAwModelWireIntents.map(managedRecord) : [];
+  const captures = Array.isArray(profile.nativeToolResultSourceCaptures) ? profile.nativeToolResultSourceCaptures.map(managedRecord) : [];
+  const associations = Array.isArray(profile.nativeToolCallDispatchAssociations) ? profile.nativeToolCallDispatchAssociations.map(managedRecord) : [];
+  for (const messageValue of Array.isArray(request.messages) ? request.messages : []) {
+    const message = managedRecord(messageValue);
+    const blocks = typeof message.content === "string" ? [{ type: "text", text: message.content }] :
+      Array.isArray(message.content) ? message.content.map(managedRecord) : [];
+    if (message.role === "assistant") {
+      if (!intents.some((intent) => typeof intent.responseContentHash === "string" && nativeSha256(message.content) === intent.responseContentHash))
+        throw forbidden("Managed OpenCode assistant history is not an exact persisted provider response");
+    } else if (message.role === "user") {
+      for (const block of blocks) {
+        if (block.type === "text") {
+          if (typeof block.text !== "string" || !prompts.includes(nativeSha256(block.text)))
+            throw forbidden("Managed OpenCode user history is outside the current server-owned prompt receipts");
+          continue;
+        }
+        if (block.type !== "tool_result" || typeof block.tool_use_id !== "string")
+          throw forbidden("Managed OpenCode history contains an unsupported user content block");
+        let toolName = "";
+        for (const intent of intents) {
+          const calls = intent.responseToolUses;
+          if (Array.isArray(calls)) {
+            const call = calls.map(managedRecord).find((part) => part.id === block.tool_use_id);
+            if (call && typeof call.name === "string") toolName = managedToolName(call.name);
+          }
+        }
+        const capture = captures.find((item) => item.managedOpenCode === true && item.callId === block.tool_use_id &&
+          item.tool === toolName && typeof item.resultDigest === "string");
+        if (!capture || !["read_document", "write_document"].includes(toolName) ||
+          !associations.some((item) => item.callId === block.tool_use_id && item.tool === toolName && typeof item.turnId === "string"))
+          throw forbidden("Managed OpenCode tool result has no original qualified invocation receipt");
+        const source = managedRecord(capture.source);
+        const content = typeof block.content === "string" ? block.content : Array.isArray(block.content)
+          ? block.content.map((part) => typeof managedRecord(part).text === "string" ? managedRecord(part).text : "").join("") : "";
+        let result: unknown;
+        try { result = JSON.parse(content); } catch { throw forbidden("Managed OpenCode tool result is not its canonical source result"); }
+        const contentHash = nativeSha256(result);
+        const invocationId = source.invocationId;
+        if (contentHash !== capture.resultDigest || source.kind !== "tool_result" || source.contentHash !== contentHash ||
+          source.callId !== block.tool_use_id || source.toolName !== toolName || typeof invocationId !== "string")
+          throw forbidden("Managed OpenCode tool result does not match its persisted source capture");
+        const [invocation] = await db.select().from(toolInvocations).where(and(
+          eq(toolInvocations.companyId, claims.company_id), eq(toolInvocations.id, invocationId),
+          eq(toolInvocations.runId, claims.run_id), eq(toolInvocations.agentId, claims.sub),
+          eq(toolInvocations.toolName, toolName), eq(toolInvocations.status, "succeeded"),
+          eq(toolInvocations.resultHash, contentHash),
+        ));
+        if (!invocation) throw forbidden("Managed OpenCode source tool invocation is no longer current");
+        let documentRef: Record<string, unknown> | null = null;
+        if (toolName === "read_document") {
+          const priorRead = captures.find((item) => item.managedOpenCode !== true && item.callId === block.tool_use_id && item.tool === "read_document");
+          const readSource = managedRecord(priorRead?.source);
+          const inputSource = managedRecord(readSource.input);
+          if (inputSource.kind !== "document_revision" || inputSource.issueId !== run.nativeIssueId ||
+            readSource.returnedResultDigest !== capture.resultDigest) throw forbidden("Managed OpenCode document source capture is incomplete");
+          documentRef = { issueId: inputSource.issueId, documentId: inputSource.documentId, revisionId: inputSource.revisionId };
+        } else {
+          const ref = managedRecord(capture.documentRevision);
+          if (ref.issueId !== run.nativeIssueId || typeof ref.documentId !== "string" || typeof ref.revisionId !== "string")
+            throw forbidden("Managed OpenCode document write source capture is incomplete");
+          documentRef = ref;
+        }
+        const [document] = await db.select({ latestRevisionId: documents.latestRevisionId,
+          revisionId: documentRevisions.id, invalidated: documentRevisions.payloadSourceSnapshotInvalidated,
+        }).from(issueDocuments)
+          .innerJoin(documents, and(eq(documents.companyId, issueDocuments.companyId), eq(documents.id, issueDocuments.documentId)))
+          .innerJoin(documentRevisions, and(eq(documentRevisions.companyId, documents.companyId),
+            eq(documentRevisions.documentId, documents.id), eq(documentRevisions.id, documentRef.revisionId as string)))
+          .where(and(eq(issueDocuments.companyId, claims.company_id), eq(issueDocuments.issueId, run.nativeIssueId!),
+            eq(issueDocuments.documentId, documentRef.documentId as string)));
+        if (!document || document.latestRevisionId !== document.revisionId || document.invalidated)
+          throw forbidden("Managed OpenCode document source is no longer current");
+      }
+    }
+  }
+}
 
 /** A Native worker's single inference boundary. It never supplies a provider
  * key, session URL or tariff to the worker. Unsupported managed/CLI transports
@@ -915,6 +1052,7 @@ export function workerModelGateway(db: Db, options: Options) {
         maxOutputTokens: state.profile.maxOutputTokens,
         maximumEnvelopeBytes: state.profile.maximumEnvelopeBytes,
       });
+      await assertManagedOpenCodeRequestSources(db, bound, qualifiedInput.request as unknown as Record<string, unknown>);
       const inputHash = nativeSha256(qualifiedInput.providerRequest);
       const callId = `messages:${inputHash}`;
       const reservations = modelReservationService(db, {
@@ -1014,6 +1152,31 @@ export function workerModelGateway(db: Db, options: Options) {
         });
         financiallySettled = true;
         if (outcome.status !== "completed") throw conflict("Worker model charge could not be confirmed");
+        const responseContentHash = nativeSha256(result.responseContent);
+        await db.transaction(async (tx) => {
+          const [run] = await tx.select().from(heartbeatRuns).where(and(
+            eq(heartbeatRuns.companyId, claims.company_id), eq(heartbeatRuns.id, claims.run_id),
+            eq(heartbeatRuns.agentId, claims.sub), eq(heartbeatRuns.status, "running"),
+          )).for("update");
+          const profile = run?.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson)
+            ? run.runnerProfileJson as Record<string, unknown> : null;
+          const previous = profile?.nativeAwModelWireIntents;
+          if (!run || !profile || !Array.isArray(previous)) throw forbidden("The managed model response has no original wire intent");
+          const matches = previous.map((value, index) => ({ value, index })).filter(({ value }) =>
+            value && typeof value === "object" && !Array.isArray(value) &&
+            (value as Record<string, unknown>).reservationId === reservation.id);
+          if (matches.length !== 1) throw forbidden("The managed model response does not match one original wire intent");
+          const existing = matches[0]!.value as Record<string, unknown>;
+          if (existing.responseContentHash !== undefined && existing.responseContentHash !== responseContentHash)
+            throw forbidden("The managed model response changed after its original capture");
+          const responseToolUses = result.responseContent.flatMap((block) => block.type === "tool_use"
+            ? [{ id: block.id, name: block.name }] : []);
+          const intents = previous.map((value, index) => index === matches[0]!.index
+            ? { ...existing, responseContentHash, responseBlockCount: result.responseContent.length, responseToolUses }
+            : value);
+          await tx.update(heartbeatRuns).set({ runnerProfileJson: { ...profile, nativeAwModelWireIntents: intents }, updatedAt: new Date() })
+            .where(and(eq(heartbeatRuns.companyId, run.companyId), eq(heartbeatRuns.id, run.id), eq(heartbeatRuns.status, "running")));
+        });
         await assertCurrent();
         return { reservationId: reservation.id, sse: result.sse };
       } catch {

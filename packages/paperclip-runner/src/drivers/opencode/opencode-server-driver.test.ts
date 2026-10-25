@@ -128,6 +128,43 @@ describe("OpenCodeServerDriver", () => {
       { PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://paperclip.example/untrusted" },
     )).toThrow("managed_model_broker_origin_invalid");
   });
+  it("pins the managed source plugin and removes OpenCode built-ins from actual prompt payloads", async () => {
+    await chmod(fixture, 0o755);
+    const root = await mkdtemp(join(tmpdir(), "paperclip-opencode-managed-source-"));
+    const workspace = await mkdtemp(join(tmpdir(), "paperclip-opencode-managed-workspace-"));
+    roots.push(root, workspace);
+    let promptPayload: Record<string, unknown> | null = null;
+    const driver = new OpenCodeServerDriver({
+      model: "anthropic/claude-fixture-2026",
+      systemInstructions: "CANONICAL_FROZEN_SOURCE_PROMPT",
+      runtimeDirectory: root,
+      command: fixture,
+      fetch: async (input, init) => {
+        if (String(input).endsWith("/prompt_async")) promptPayload = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return fetch(input, init);
+      },
+      environment: { PATH: process.env.PATH, PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://paperclip.example.test" },
+    });
+    const session = await driver.openSession({ runId: "managed-source", normalizedSessionId: "managed-source", workingDirectory: workspace });
+    const config = JSON.parse(await readFile(join(root, "managed-source", "config", "opencode", "opencode.json"), "utf8"));
+    const pluginPath = join(root, "managed-source", "config", "opencode", "plugins", "paperclip-source-witness.js");
+    const plugin = await readFile(pluginPath, "utf8");
+    expect(config.tools).toEqual({ "*": false, "paperclip_*": true });
+    expect(config.permission).toMatchObject({ "*": "deny", "paperclip_*": "allow", "external_directory": "deny" });
+    expect(plugin).toContain("CANONICAL_FROZEN_SOURCE_PROMPT");
+    expect(plugin).toContain("experimental.chat.messages.transform");
+    expect(plugin).toContain("experimental.chat.system.transform");
+    expect(plugin).toContain("tool.definition");
+    expect(plugin).toContain("tool.execute.before");
+    expect(plugin).toContain("tool.execute.after");
+    expect(plugin).toContain("x-paperclip-opencode-source-witness");
+    expect(plugin).toContain('sourceClosure: "unsupported"');
+    expect(plugin).toContain('missingSourceFamilies: ["task", "history", "tool_result", "tool_schema"]');
+    expect((await stat(pluginPath)).mode & 0o777).toBe(0o400);
+    await session.startTurn({ message: { role: "user", text: "finish" } });
+    expect(promptPayload).not.toHaveProperty("tools");
+    await session.close();
+  });
   it("advertises within-turn plans as unsupported", async () => {
     const driver = new OpenCodeServerDriver({
       model: "openrouter/deepseek/deepseek-v4-flash-0731",

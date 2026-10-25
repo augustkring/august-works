@@ -9496,7 +9496,12 @@ registry.registerPath({
     "`?async=1` query parameter. Either way the server responds 202 with a job id and status " +
     "URL instead of holding the connection open for the whole import. While a board actor " +
     "already has an async job running, a resubmit returns 409 carrying the running job's id " +
-    "and status URL. Jobs are held in memory and are lost on restart.",
+    "and status URL. Operation identity/status are durable across restart; detailed result " +
+    "content is temporary and an unknown partial outcome requires reconciliation. Cross-company " +
+    "project or task imports require an explicit current-Human source-release review bound to the " +
+    "exact preview fingerprint and selected payload. Native source ownership/access and current " +
+    "target authority are rechecked at apply; external packages require manual open-content review " +
+    "and receive canonical target provenance. Private or restricted work remains blocked.",
   request: {
     query: z.object({ async: z.enum(["1"]).optional() }),
     body: importRequestBody(companyPortabilityImportSchema),
@@ -9941,7 +9946,7 @@ registerCurrentRoute({
   path: "/api/companies/import/jobs/{jobId}/cancel",
   tags: ["companies"],
   summary: "Request cancellation of a company import",
-  description: "Cancellation before import effects start is confirmed immediately. Once effects begin, the native portability owner checks safe checkpoints; completed effects are not rolled back, and an interrupted partial result remains inconclusive until reconciled.",
+  description: "Only the original requester with a current session and required company or instance authority may request cancellation. Before import effects start it is confirmed immediately. After effects start, the native portability owner checks safe checkpoints; completed effects are not rolled back, and an inconclusive partial result requires reconciliation.",
   responses: { 200: r.ok(), 401: r.unauthorized, 403: r.forbidden, 404: r.notFound },
 });
 

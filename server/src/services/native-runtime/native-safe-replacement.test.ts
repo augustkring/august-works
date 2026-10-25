@@ -127,7 +127,7 @@ const support = externalDatabaseUrl
     }
     it("does not allow reconstruction from saved attachments without an exact native Stop and Destroy receipt", async () => {
       const source = await seed();
-      await db.update(heartbeatRuns).set({ resultJson: { workspaceRestoreFailure: "workspace_lost" } })
+      await db.update(heartbeatRuns).set({ resultJson: { workspaceRestoreFailure: "restore_failed" } })
         .where(eq(heartbeatRuns.id, source.runId));
       const decision = {
         runId: source.runId,

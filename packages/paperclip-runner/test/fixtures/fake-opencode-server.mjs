@@ -362,11 +362,14 @@ const server = createServer(async (request, response) => {
     request.on("data", (chunk) => chunks.push(chunk));
     request.on("end", () => {
       const promptPayload = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-      if (
-        promptPayload.providerID !== "openrouter" ||
-        promptPayload.modelID !== "deepseek/deepseek-v4-flash-0731" ||
-        "model" in promptPayload
-      ) {
+      const managedAnthropic = typeof runtimeConfig.provider?.anthropic?.options?.baseURL === "string";
+      const validModel = managedAnthropic
+        ? promptPayload.providerID === "anthropic" &&
+          promptPayload.modelID === "claude-fixture-2026" &&
+          !("tools" in promptPayload)
+        : promptPayload.providerID === "openrouter" &&
+          promptPayload.modelID === "deepseek/deepseek-v4-flash-0731";
+      if (!validModel || "model" in promptPayload) {
         return json(response, 400, {
           error: "OpenCode 1.18 prompt model fields must be top-level",
         });

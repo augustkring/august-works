@@ -40,7 +40,7 @@
     "build": "tsc",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run src"
   },
   "dependencies": {
     "@paperclipai/shared": "workspace:*",

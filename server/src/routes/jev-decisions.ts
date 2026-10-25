@@ -18,7 +18,7 @@ import type { AuthorizationActor } from "../services/authorization.js";
 const jevSetupConsentSchema = z.object({ disclosedPaidTestConsent: z.literal(true), connectionId: z.string().uuid(), grantId: z.string().uuid(),
   profileHash: z.string().regex(/^[a-f0-9]{64}$/), requestId: z.string().uuid() }).strict();
 
-export function jevDecisionRoutes(db: Db, options: { sourceSha?: string; profiles?: readonly JevSkillSuggestionProfile[] } = {}) {
+export function jevDecisionRoutes(db: Db, options: { sourceSha?: string; profiles?: readonly JevSkillSuggestionProfile[]; fetch?: typeof fetch } = {}) {
   const router = Router();
   async function manager(companyId: string, userId: string, reader: Db = db) {
     const access = accessService(reader);
@@ -68,7 +68,7 @@ export function jevDecisionRoutes(db: Db, options: { sourceSha?: string; profile
       details.purpose === "decision_skill_suggestion" ? [[details.reservationId, details] as const] : []));
     res.json(rows.map(({ reservation }) => ({ id: reservation.id, model: reservation.quote.model, status: reservation.status,
       reservedCostCents: (reservation.maximumMinor / 100).toFixed(2), currency: reservation.quote.currency,
-      actualCostCents: accounting.get(reservation.id)?.actualCostCents ?? null,
+      actualCostAmount: accounting.get(reservation.id)?.actualCostAmount ?? null,
       costStatus: accounting.get(reservation.id)?.costStatus ?? "unpriced",
       inputTokens: reservation.usage?.inputTokens ?? null, outputTokens: reservation.usage?.outputTokens ?? null,
       createdAt: reservation.createdAt.toISOString(), completedAt: reservation.completedAt?.toISOString() ?? null })));
@@ -117,7 +117,8 @@ export function jevDecisionRoutes(db: Db, options: { sourceSha?: string; profile
     if (policy?.status !== "qualified" || !qualification || qualification.sourceRevision !== sourceSha || Date.parse(qualification.expiresAt) <= Date.now() || !policy.operatingEnvelope.awProcessingRegions.includes(profile.processingRegion))
       throw forbidden("The company processing policy does not permit this Jev provider route");
     const request = jevDecisionRequestSchema.parse({ state: { purpose: "disclosed Jev connection setup test", sample: "Choose yes only when 2 is greater than 1." },
-      questions: { sample: { type: "boolean", instructions: "For this harmless setup sample only, is 2 greater than 1? Do not infer permissions, settings, or actions." } } });
+      questions: { sample: { type: "choice", instructions: "For this harmless setup sample only, choose yes if 2 is greater than 1; otherwise choose no. Do not infer permissions, settings, or actions.",
+        criteria: { yes: "2 is greater than 1", no: "2 is not greater than 1" } } } });
     const inputHash = nativeSha256({ request, profileHash: profile.profileHash, model: JEV_DECISION_MODEL });
     const now = new Date(), dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
     const periodEndsAt = new Date(Math.min(dayStart.getTime() + 86_400_000, Date.parse(profile.expiresAt), Date.parse(profile.tariff.expiresAt)));
@@ -156,7 +157,7 @@ export function jevDecisionRoutes(db: Db, options: { sourceSha?: string; profile
     const reservation = await broker.reserveCompanyPurpose(actor, reservationInput);
     if (reservation.status !== "reserved") {
       return res.json({ status: reservation.status, model: JEV_DECISION_MODEL, inputTokens: reservation.usage?.inputTokens ?? null,
-        outputTokens: reservation.usage?.outputTokens ?? null, costCents: null, costStatus: "unpriced", errorCode: reservation.status === "unknown" ? "unknown_outcome" : null });
+        outputTokens: reservation.usage?.outputTokens ?? null, costAmount: null, costStatus: "unpriced", errorCode: reservation.status === "unknown" ? "unknown_outcome" : null });
     }
     await broker.claimCompanyPurposeForDispatch(actor, companyId, reservation.id);
     const oauth = (selected.grant.providerTenant as { oauth?: { accessTokenExpiresAt?: string | null } } | null)?.oauth;
@@ -186,24 +187,25 @@ export function jevDecisionRoutes(db: Db, options: { sourceSha?: string; profile
       const latestKey = await checkCurrent();
       providerStarted = true;
       const result = await runJevDecision({ model: JEV_DECISION_MODEL, apiKey: latestKey, request,
-        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(Math.max(1, deadlineAt - Date.now()))]) });
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(Math.max(1, deadlineAt - Date.now()))]) }, options.fetch ? { fetch: options.fetch } : {});
       const knownUsage = result.receipt.inputTokens !== null && result.receipt.outputTokens !== null;
-      const knownCost = result.receipt.costCents !== null && result.receipt.costStatus !== "unpriced";
-      const overPrice = result.receipt.costCents !== null && Number(result.receipt.costCents) > funding.maxCostMinor / 100;
+      const knownCost = result.receipt.costAmount !== null && result.receipt.costStatus !== "unpriced";
+      const reportedCost = result.receipt.costAmount === null ? null : Number(result.receipt.costAmount);
+      const overPrice = reportedCost !== null && (!Number.isFinite(reportedCost) || reportedCost > reservation.maximumMinor / 100 || reportedCost > funding.maxCostMinor / 100);
       const status = result.noProviderWork ? "failed" : overPrice ? "unknown" : result.answers ? "completed" : knownUsage || knownCost ? "failed" : "unknown";
       const usage = knownUsage ? { inputTokens: result.receipt.inputTokens!, outputTokens: result.receipt.outputTokens! } : null;
       const outcome = await broker.recordCompanyPurposeOutcome(companyId, reservation.id, { status,
         providerResponseHash: providerStarted ? nativeSha256({ reservationId: reservation.id, errorCode: result.errorCode ?? null,
-          inputTokens: result.receipt.inputTokens, outputTokens: result.receipt.outputTokens, costCents: result.receipt.costCents, costStatus: result.receipt.costStatus }) : null,
-        usage, accounting: { actualCostCents: result.receipt.costCents, costStatus: result.receipt.costStatus } });
+          inputTokens: result.receipt.inputTokens, outputTokens: result.receipt.outputTokens, costAmount: result.receipt.costAmount, costStatus: result.receipt.costStatus }) : null,
+        usage, accounting: { actualCostAmount: result.receipt.costAmount, costStatus: result.receipt.costStatus } });
       if (outcome.status === "completed") await broker.assertCompanyPurposeResponseReturn(actor, companyId, reservation.id);
       res.json({ status: outcome.status, model: JEV_DECISION_MODEL, inputTokens: result.receipt.inputTokens, outputTokens: result.receipt.outputTokens,
-        costCents: result.receipt.costCents, costStatus: result.receipt.costStatus, errorCode: result.errorCode ?? null });
+        costAmount: result.receipt.costAmount, costStatus: result.receipt.costStatus, errorCode: result.errorCode ?? null });
     } catch (error) {
       await broker.recordCompanyPurposeOutcome(companyId, reservation.id, { status: providerStarted ? "unknown" : "failed",
         providerResponseHash: null, usage: null }).catch(() => {});
       if (!providerStarted) throw error;
-      res.json({ status: "unknown", model: JEV_DECISION_MODEL, inputTokens: null, outputTokens: null, costCents: null, costStatus: "unpriced", errorCode: "provider_failed" });
+      res.json({ status: "unknown", model: JEV_DECISION_MODEL, inputTokens: null, outputTokens: null, costAmount: null, costStatus: "unpriced", errorCode: "provider_failed" });
     } finally { clearTimeout(timer); clearInterval(watch); }
   });
   return router;

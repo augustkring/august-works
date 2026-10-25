@@ -22,7 +22,7 @@ import type {
   ContextAuthorityDecision,
   EvidenceItem,
 } from "@paperclipai/shared";
-import { agentExecutionScopeSchema, crossCompanyPolicySchema, type AgentExecutionScope } from "@paperclipai/shared";
+import { agentExecutionScopeSchema, crossCompanyPolicySchema, nativePayloadSourceSnapshotSchema, type AgentExecutionScope } from "@paperclipai/shared";
 import { conflict, forbidden, unprocessable } from "../../errors.js";
 import { learningAssetRoots,retainLearnedAssetsInContext } from "../learning/learning-assets.js";
 import { memoryPayloadVisible, canActorReadMemorySources, lockMemoryPrivacy } from "../memory/memory-privacy.js";
@@ -745,11 +745,21 @@ export function contextManifestService(db: Db) {
 
         // Insert immutable items after the selected Task and Memory bodies
         // have been pinned. Caller evidence metadata never supplies snapshots.
-        const items = values.length > 0
-          ? await tx.insert(contextManifestItems).values(values.map(value => ({ ...value,
-              payloadSourceSnapshot: selectedPayloadSnapshots.get(sourceKey(value.sourceProvider,value.sourceRef)) ?? null,
-            }))).returning()
-          : [];
+        let items: typeof contextManifestItems.$inferSelect[] = [];
+        if (values.length > 0) {
+          const insertedItems = await tx.insert(contextManifestItems).values(values.map(value => ({ ...value,
+            payloadSourceSnapshot: selectedPayloadSnapshots.get(sourceKey(value.sourceProvider,value.sourceRef)) ?? null,
+          }))).returning();
+          const insertedTask = insertedItems.find(item => item.sourceProvider === "august_works_tasks");
+          console.warn("[test-only] Context returned source snapshot", insertedTask ? Object.keys(insertedTask) : [],
+            insertedTask?.payloadSourceSnapshot !== null && nativePayloadSourceSnapshotSchema.safeParse(insertedTask?.payloadSourceSnapshot).success);
+          items = await tx.select().from(contextManifestItems).where(and(
+            eq(contextManifestItems.companyId, input.companyId), eq(contextManifestItems.manifestId, manifest!.id),
+          )).orderBy(contextManifestItems.rank);
+          const selectedTask = items.find(item => item.sourceProvider === "august_works_tasks");
+          console.warn("[test-only] Context selected source snapshot", selectedTask ? Object.keys(selectedTask) : [],
+            selectedTask?.payloadSourceSnapshot !== null && nativePayloadSourceSnapshotSchema.safeParse(selectedTask?.payloadSourceSnapshot).success);
+        }
 
         if (delegated) {
           const sourceSnapshotHash = hashContextPolicySnapshot({ items: input.selected.map(({ decision }, rank) => ({

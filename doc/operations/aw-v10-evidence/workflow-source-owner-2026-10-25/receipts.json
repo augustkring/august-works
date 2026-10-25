@@ -2409,6 +2409,69 @@
       },
       "summary": [],
       "sourceCommit": "e8d714d3053717936ae74fe34cc4df14314b8842"
+    },
+    {
+      "name": "jev-http-route-tests5",
+      "exitCode": 0,
+      "exitSidecar": "jev-http-route-tests5.exit",
+      "rawSha256": "cd2b38a5600281fe19908be206486f0c41cdd60b52a7f8e2688bec19c8f3d501",
+      "sanitizedSha256": "cd2b38a5600281fe19908be206486f0c41cdd60b52a7f8e2688bec19c8f3d501",
+      "archiveSha256": "ec09b8275bc635ffd687ffe63e4798ff15bea36b14b7c040366e3206161506c9",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  7 passed (7)",
+        "Duration  24.78s (transform 10.26s, setup 76ms, import 14.75s, tests 9.84s, environment 0ms)"
+      ],
+      "sourceCommit": "9dd1402e25e0b74654f955ae707cf2bb088799c7"
+    },
+    {
+      "name": "jev-ui-consent-tests2",
+      "exitCode": 0,
+      "exitSidecar": "jev-ui-consent-tests2.exit",
+      "rawSha256": "80f2ecb8c897a4eca7d07e97ed134d08bd44fa0115f54cfb44d7bb844ffd15bf",
+      "sanitizedSha256": "80f2ecb8c897a4eca7d07e97ed134d08bd44fa0115f54cfb44d7bb844ffd15bf",
+      "archiveSha256": "f552689357339f6f1ec54ade30fae1945cfa98c6404941a4bdc3d2c467afecf5",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed (1)",
+        "Duration  3.56s (transform 1.54s, setup 19ms, import 2.68s, tests 191ms, environment 556ms)"
+      ],
+      "sourceCommit": "9dd1402e25e0b74654f955ae707cf2bb088799c7"
+    },
+    {
+      "name": "jev-original-reservation-and-ui-typecheck",
+      "exitCode": 0,
+      "exitSidecar": "jev-original-reservation-and-ui-typecheck.exit",
+      "rawSha256": "89267b47fe4786cec8e1b8a8f2d60305e0d093c83b0fd5e5f4a702c5cd196f80",
+      "sanitizedSha256": "89267b47fe4786cec8e1b8a8f2d60305e0d093c83b0fd5e5f4a702c5cd196f80",
+      "archiveSha256": "a3b54a51ca7bccfb4999b5b7ec188041d1f4892ca26a71ccfe393f202f139de6",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  25 passed (25)",
+        "Duration  37.71s (transform 9.99s, setup 81ms, import 14.16s, tests 23.35s, environment 0ms)"
+      ],
+      "sourceCommit": "9dd1402e25e0b74654f955ae707cf2bb088799c7"
     }
   ],
   "updates": [
@@ -2776,6 +2839,15 @@
       "meaning": "Full OpenShell host model capability injection software checks, not a physical host/provider qualification",
       "logs": [
         "v10-host-model-provider-injection-check"
+      ]
+    },
+    {
+      "sourceCommit": "9dd1402e25e0b74654f955ae707cf2bb088799c7",
+      "meaning": "Jev original mounted HTTP/consent/budget owner software regressions with fake provider fetch; no real provider qualification",
+      "logs": [
+        "jev-http-route-tests5",
+        "jev-ui-consent-tests2",
+        "jev-original-reservation-and-ui-typecheck"
       ]
     }
   ],

@@ -4,16 +4,17 @@ import { type JevDecisionAnswer, type JevDecisionRequest } from "@paperclipai/sh
 
 export interface JevDecisionReceipt {
   inputTokens: number | null; outputTokens: number | null; providerRequestId: string | null;
-  costCents: string | null; costStatus: "reported" | "estimated" | "unpriced";
+  costAmount: string | null; costStatus: "reported" | "estimated" | "unpriced";
   pricingProvenance: { source: "provider_reported" | "unknown"; evidence?: string };
 }
 export interface JevDecisionOutcome { noProviderWork?: boolean; answers?: Record<string, JevDecisionAnswer>; errorCode?: string; receipt: JevDecisionReceipt }
 const record = (v: unknown): Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : {};
 const tokenCount = (v: unknown) => typeof v === "number" && Number.isSafeInteger(v) && v >= 0 && v <= 2_147_483_647 ? v : null;
-function usdToCents(value: number) {
-  const units = BigInt(Math.round(value * 1_000_000_000));
-  const digits = units.toString().padStart(8, "0");
-  return `${digits.slice(0, -7)}.${digits.slice(-7)}`;
+function usdAmount(value: number) {
+  const scaled = value * 10_000_000;
+  return Number.isFinite(scaled) && Math.abs(scaled) <= Number.MAX_SAFE_INTEGER
+    ? (Math.round(scaled) / 10_000_000).toFixed(7)
+    : value.toString();
 }
 function rejectedResponseData(error: unknown) {
   const value = record(error);
@@ -34,10 +35,10 @@ export function decisionReceipt(result: unknown): JevDecisionReceipt {
   const reported = record(record(metadata.openrouter).usage).cost;
   const base = { inputTokens, outputTokens, providerRequestId: typeof response.id === "string" ? response.id.slice(0, 250) : typeof headers["x-request-id"] === "string" ? headers["x-request-id"].slice(0, 250) : null };
   if (typeof reported === "number" && Number.isFinite(reported) && reported >= 0) {
-    return { ...base, costCents: usdToCents(reported), costStatus: "reported", pricingProvenance: { source: "provider_reported" } };
+    return { ...base, costAmount: usdAmount(reported), costStatus: "reported", pricingProvenance: { source: "provider_reported" } };
   }
   // V1 uses the official default endpoint and bounded short text requests. Decisions has its own rate, not the chat model's rate.
-  return { ...base, costCents: null, costStatus: "unpriced", pricingProvenance: { source: "unknown" } };
+  return { ...base, costAmount: null, costStatus: "unpriced", pricingProvenance: { source: "unknown" } };
 }
 export async function runJevDecision(input: {
   model: string; apiKey: string; request: JevDecisionRequest; signal: AbortSignal;
@@ -84,7 +85,7 @@ export async function runJevDecision(input: {
     // An explicit authentication/validation rejection occurs before model work.
     // Server errors and network failures remain unresolved: their charge is unknown.
     const noProviderWork = receipt.costStatus === "unpriced" && [400, 401, 403, 404, 422, 429].includes(Number(status));
-    if (noProviderWork) receipt = { ...receipt, inputTokens: 0, outputTokens: 0, costCents: "0.0000000", costStatus: "estimated",
+    if (noProviderWork) receipt = { ...receipt, inputTokens: 0, outputTokens: 0, costAmount: "0.0000000", costStatus: "estimated",
       pricingProvenance: { source: "unknown", evidence: `Provider rejected request before model work (HTTP ${status})` } };
     return { errorCode, receipt, noProviderWork };
   }

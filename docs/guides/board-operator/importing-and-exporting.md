@@ -59,7 +59,7 @@ For GitHub packages, the preview shows the exact source commit. All package file
 
 Keep **Start imported agents and routines paused** selected while reviewing a package. An import does not authorize imported credentials or scripts. Review each selected Co-worker and routine before activation.
 
-Task and project content currently requires retained source access in its original company. Moving that content to another company requires an authorized publication flow, which this import page does not provide. A new-company package can contain company and Co-worker configuration without those work items. A source-access refusal before import changes begin is a rejected request; it does not mean work items were copied.
+Task and project content can be copied to a different company only after you review the exact package and confirm that the included open work is yours to release. For native source items, Blentera rechecks current source-company access, original ownership, and source privacy before applying changes, and confirms that you still manage the existing target or can create the new one. External packages without native provenance require your manual review of the exact package fingerprint and an attestation that the content is open and yours to release. Claims of hidden roots, native IDs, private ownership, or restricted lineage are rejected. Imported external tasks and projects receive new target-company privacy roots and no invented native source links. Private or restricted work remains blocked. A source-access refusal before import changes begin is a rejected request; it does not mean work items were copied.
 
 ## Recover an interrupted import
 

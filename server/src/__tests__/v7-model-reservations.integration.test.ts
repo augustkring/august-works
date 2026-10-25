@@ -626,9 +626,9 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(budget).toMatchObject({ purpose: "decision_skill_suggestion", funder: "company_connection", reservedCalls: 1, maxCalls: 1, reservedMinor: 1, maxCostMinor: 5 });
       await broker.claimCompanyPurposeForDispatch(f.actor, f.home, reservation!.id);
       await broker.recordCompanyPurposeOutcome(f.home, reservation!.id, { status: "failed", providerResponseHash: "a".repeat(64),
-        usage: { inputTokens: 12, outputTokens: 2 }, accounting: { actualCostCents: "0.0005166", costStatus: "reported" } });
+        usage: { inputTokens: 12, outputTokens: 2 }, accounting: { actualCostAmount: "0.0005166", costStatus: "reported" } });
       expect((await db.select().from(activityLog).where(eq(activityLog.action, "orchestration.company_purpose_model_outcome_recorded"))).map(row => row.details)).toContainEqual(expect.objectContaining({
-        reservationId: reservation!.id, purpose: "decision_skill_suggestion", actualCostCents: "0.0005166", costStatus: "reported", debitRetained: true,
+        reservationId: reservation!.id, purpose: "decision_skill_suggestion", actualCostAmount: "0.0005166", costStatus: "reported", debitRetained: true,
       }));
       expect((await db.select().from(orchestrationCompanyPurposeReservations).where(eq(orchestrationCompanyPurposeReservations.id, reservation!.id)))[0]).toMatchObject({ status: "unknown", purpose: "decision_skill_suggestion" });
       expect((await db.select().from(orchestrationCompanyPurposeBudgets).where(eq(orchestrationCompanyPurposeBudgets.id, budget!.id)))[0]).toMatchObject({ reservedMinor: 1, reservedCalls: 1 });

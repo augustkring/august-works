@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
-import { customerOperations, companyTransferRuns, type Db } from "@paperclipai/db";
+import { customerOperations, companyTransferRuns, companyMemberships, type Db } from "@paperclipai/db";
 import type { CompanyPortabilityImportResult, CustomerOperationReceipt } from "@paperclipai/shared";
 import { conflict, forbidden } from "../errors.js";
 import { pinCurrentBoardActor, authorizationService, hasCurrentInstanceAdminRole, type AuthorizationActor } from "./authorization.js";
@@ -8,6 +8,31 @@ import { isAuthenticationStateBusy } from "../auth/authenticator-assurance.js";
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 export type CompanyImportJob = typeof customerOperations.$inferSelect;
+type SourceReleaseReview = NonNullable<CompanyImportJob["sourceReleaseReview"]>;
+const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
+function validateSourceReleaseReview(receipt: SourceReleaseReview, actor: AuthorizationActor) {
+  if (actor.type !== "board" || actor.source !== "session" || !actor.userId
+    || receipt.reviewedByUserId !== actor.userId || receipt.version !== 1
+    || !["native_owner", "manual_open_content"].includes(receipt.sourceMode)
+    || !["verified_current_acl", "reviewed_open_external"].includes(receipt.sourceAccess)
+    || (receipt.sourceMode === "native_owner") !== (receipt.sourceAccess === "verified_current_acl")
+    || receipt.sourceCompanyIds.length > 1 || receipt.sourceItems.length > 1000 || receipt.sourceItems.length === 0
+    || receipt.sourceCompanyIds.some(id => !isUuid(id))
+    || !/^[a-f0-9]{64}$/.test(receipt.previewFingerprint)
+    || !/^[a-f0-9]{64}$/.test(receipt.selectedPayloadFingerprint)
+    || (receipt.targetMode === "existing_company" && (!receipt.targetCompanyId || !isUuid(receipt.targetCompanyId)))
+    || (receipt.targetMode === "new_company" && receipt.targetCompanyId !== null)
+    || !Number.isFinite(Date.parse(receipt.reviewedAt)))
+    throw conflict("The exact source release review is invalid", { code: "import_source_review_invalid" });
+  const native = receipt.sourceMode === "native_owner";
+  if (native !== (receipt.sourceCompanyIds.length === 1)
+    || receipt.sourceItems.some(item => !["issue", "project"].includes(item.kind)
+      || typeof item.slug !== "string" || item.slug.length < 1 || item.slug.length > 128
+      || typeof item.id !== "string" || item.id.length < 1 || item.id.length > 256
+      || (native ? !isUuid(item.id) : item.id !== `external:${item.slug}`)))
+    throw conflict("The exact source release items are invalid", { code: "import_source_review_invalid" });
+}
 
 type JobTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
@@ -93,6 +118,7 @@ export function companyImportJobService(db: Db) {
             attempt: sql`${customerOperations.attempt} + 1`, attemptId: randomUUID(), errorCode: null,
             startedAt: null, completedAt: null, resultRef: null, domainOperationRef: input.transferId ?? null,
             cancelRequestedAt: null,
+            sourceReleaseReview: null,
             updatedAt: sql`clock_timestamp()`, progressAt: sql`clock_timestamp()` })
             .where(and(eq(customerOperations.id, existing.id), eq(customerOperations.attemptId, existing.attemptId)))
             .returning();
@@ -160,6 +186,79 @@ export function companyImportJobService(db: Db) {
         eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),
       )).limit(1);
       return !current || current.status !== "running" || current.cancelRequestedAt !== null;
+    },
+
+    async recordSourceReleaseReview(job: CompanyImportJob, receipt: SourceReleaseReview, actor: AuthorizationActor) {
+      return db.transaction(async tx => {
+        const pinned = await pinImportCredential(tx, actor);
+        validateSourceReleaseReview(receipt, pinned?.actor ?? actor);
+        if (actor.type !== "board" || actor.userId !== job.requestedByUserId || receipt.reviewedByUserId !== actor.userId)
+          throw forbidden("The current import requester must record source release review");
+        if (receipt.targetMode === "existing_company") {
+          const targetAccess = await authorizationService(tx).decide({ actor: pinned?.actor ?? actor,
+            action: "company_scope:read", resource: { type: "company", companyId: receipt.targetCompanyId! },
+            enforceResponsibleUserIntersection: true });
+          if (!targetAccess.allowed) throw forbidden("Current target company access is required");
+          if (actor.source !== "local_implicit") {
+            const [membership] = await tx.select({ membershipRole: companyMemberships.membershipRole })
+              .from(companyMemberships).where(and(eq(companyMemberships.companyId, receipt.targetCompanyId!),
+                eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, actor.userId),
+                eq(companyMemberships.status, "active"))).limit(1);
+            if (!membership || membership.membershipRole === "viewer") throw forbidden("Current target company manager access is required");
+          }
+        }
+        const [current] = await tx.select().from(customerOperations).where(and(
+          eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),
+          eq(customerOperations.status, "running"), isNull(customerOperations.cancelRequestedAt),
+        )).for("update");
+        if (!current) throw conflict("The import attempt is no longer active", { code: "import_attempt_changed" });
+        if (current.sourceReleaseReview) {
+          const prior = current.sourceReleaseReview;
+          if (prior.previewFingerprint !== receipt.previewFingerprint
+            || prior.selectedPayloadFingerprint !== receipt.selectedPayloadFingerprint
+            || prior.targetMode !== receipt.targetMode || prior.targetCompanyId !== receipt.targetCompanyId
+            || prior.reviewedByUserId !== receipt.reviewedByUserId
+            || prior.sourceMode !== receipt.sourceMode || prior.sourceAccess !== receipt.sourceAccess
+            || JSON.stringify(prior.sourceCompanyIds) !== JSON.stringify(receipt.sourceCompanyIds)
+            || JSON.stringify(prior.sourceItems) !== JSON.stringify(receipt.sourceItems))
+            throw conflict("A different source release review is already recorded", { code: "import_source_review_changed" });
+        }
+        const [updated] = current.sourceReleaseReview ? [current] : await tx.update(customerOperations)
+          .set({ sourceReleaseReview: receipt, updatedAt: sql`clock_timestamp()`, progressAt: sql`clock_timestamp()` })
+          .where(and(eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),
+            eq(customerOperations.status, "running"), isNull(customerOperations.cancelRequestedAt),
+            isNull(customerOperations.sourceReleaseReview))).returning();
+        await finishImportCredential(tx, pinned);
+        if (!updated) throw conflict("The import attempt changed while recording source review", { code: "import_attempt_changed" });
+        return updated;
+      });
+    },
+
+    async bindSourceReleaseTarget(job: CompanyImportJob, companyId: string, actor: AuthorizationActor) {
+      return db.transaction(async tx => {
+        const pinned = await pinImportCredential(tx, actor);
+        if (actor.type !== "board" || actor.userId !== job.requestedByUserId) throw forbidden("The current import requester is required");
+        const [current] = await tx.select().from(customerOperations).where(and(
+          eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),
+          eq(customerOperations.status, "running"), isNull(customerOperations.cancelRequestedAt),
+        )).for("update");
+        const review = current?.sourceReleaseReview;
+        if (!current || !review || review.targetMode !== "new_company")
+          throw conflict("A reviewed new-company target is unavailable", { code: "import_source_review_missing" });
+        if (actor.source !== "local_implicit" && actor.source !== "cloud_tenant"
+          && !(await hasCurrentInstanceAdminRole(tx, actor.userId)))
+          throw forbidden("Current instance admin access is required to create the import target");
+        if (review.targetCompanyId && review.targetCompanyId !== companyId)
+          throw conflict("The reviewed target company changed", { code: "import_target_changed" });
+        const [updated] = await tx.update(customerOperations).set({
+          sourceReleaseReview: { ...review, targetCompanyId: companyId },
+          updatedAt: sql`clock_timestamp()`, progressAt: sql`clock_timestamp()`,
+        }).where(and(eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),
+          eq(customerOperations.status, "running"), isNull(customerOperations.cancelRequestedAt))).returning();
+        await finishImportCredential(tx, pinned);
+        if (!updated) throw conflict("The import attempt changed while binding its target", { code: "import_attempt_changed" });
+        return updated;
+      });
     },
 
     /** Bounded discoverability for the original requester; never returns the

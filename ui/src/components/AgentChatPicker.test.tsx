@@ -46,7 +46,7 @@ describe("AgentChatPicker", () => {
     expect(options()).toHaveLength(2);
     await search("designer");
     expect(options()).toHaveLength(1);
-    expect(options()[0].textContent).toContain("Paused");
+    expect(options()[0].textContent).toContain("generalist.status.paused");
     await act(async () => {
       document.querySelector("[role=combobox]")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     });

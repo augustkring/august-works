@@ -414,6 +414,10 @@ export interface CompanyPortabilityAdapterOverride {
 
 export interface CompanyPortabilityImportRequest extends CompanyPortabilityPreviewRequest {
   expectedSourceFingerprint?: string;
+  /** Explicit, current Human review of the exact package before releasing
+   * open source work into a new company. The importer rechecks every native
+   * source row and original owner before any write. */
+  sourceReleaseReview?: { confirmed: true; sourceFingerprint: string };
   adapterOverrides?: Record<string, CompanyPortabilityAdapterOverride>;
   secretValues?: Record<string, string>;
   pauseAutomations?: boolean;

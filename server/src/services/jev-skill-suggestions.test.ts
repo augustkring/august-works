@@ -124,7 +124,7 @@ describe("Jev Skill shadow admission", () => {
     } });
     const db = createDb(false) as unknown as Db, tx = createDb(true) as unknown as Db;
     const provider = vi.fn<typeof runJevDecision>().mockResolvedValue({ answers: { skill: { type: "choice", choice: "none" } }, receipt: {
-      inputTokens: 12, outputTokens: 2, providerRequestId: "request-1", costCents: "0.0001", costStatus: "reported", pricingProvenance: { source: "provider_reported" },
+      inputTokens: 12, outputTokens: 2, providerRequestId: "request-1", costAmount: "0.0001", costStatus: "reported", pricingProvenance: { source: "provider_reported" },
     } });
     const service = jevSkillSuggestionService(db, { sourceSha, profiles: [profile], provider });
     const actor: AuthorizationActor = { type: "agent", source: "none", companyId, agentId, runId, onBehalfOfUserId: "human-1" };
@@ -160,7 +160,7 @@ describe("Jev Skill shadow admission", () => {
     run.executionControlDeadlineAt = new Date(Date.now() + 2_000);
     provider.mockReset().mockImplementation(async ({ signal }) => {
       await new Promise<void>(resolve => signal.addEventListener("abort", () => resolve(), { once: true }));
-      return { errorCode: "timeout", receipt: { inputTokens: null, outputTokens: null, providerRequestId: null, costCents: null,
+      return { errorCode: "timeout", receipt: { inputTokens: null, outputTokens: null, providerRequestId: null, costAmount: null,
         costStatus: "unpriced", pricingProvenance: { source: "unknown" } } };
     });
     mocks.recordOutcome.mockClear();

@@ -3133,11 +3133,13 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
           || current.repoRef !== source.repoRef || current.cwd !== source.cwd || current.sourceType !== source.sourceType
           || current.visibility !== source.visibility) throw new Error("workspace_nested_source_changed");
       };
-      const gitAuth = createGitRemoteAuthProvider(db, row.companyId, {
+      const gitAuthContext = {
         issueId: row.sourceIssueId, heartbeatRunId: input.actor.type === "agent" ? input.actor.runId : null,
         responsibleUserId: input.actor.type === "board" ? input.actor.userId ?? null : input.actor.onBehalfOfUserId ?? null,
         agentId: input.actor.type === "agent" ? input.actor.agentId : null,
-      });
+      };
+      const resolveCurrentGitAuth = () => createGitRemoteAuthProvider(db, row.companyId, gitAuthContext);
+      const gitAuth = resolveCurrentGitAuth();
       let baseCwd = (await db.select().from(projectWorkspaces)
         .where(and(eq(projectWorkspaces.id, row.projectWorkspaceId), eq(projectWorkspaces.companyId, row.companyId)))
         .then(rows => rows[0]?.cwd ?? null));
@@ -3155,9 +3157,9 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
       const byCheckout = new Map(sourceRows.filter(source => source.repoUrl).map(source => [
         managedProjectCheckoutName({ id: source.id, repoUrl: source.repoUrl!, repoRef: source.repoRef, cwd: source.cwd }), source,
       ]));
-      const inspectCurrentRecipe = async (signal?: AbortSignal) => {
+      const inspectCurrentRecipe = async (signal?: AbortSignal, resolveGitAuth = gitAuth) => {
         const currentManagedCheckouts: ManagedCheckoutContents[] = [];
-        const currentRecipe = await inspectGitCacheRecipe(workspace, gitAuth, signal, {
+        const currentRecipe = await inspectGitCacheRecipe(workspace, resolveGitAuth, signal, {
         managedCheckouts: currentManagedCheckouts,
         proveManagedCheckout: async (checkoutPath, name, signal) => {
           const source = byCheckout.get(name);
@@ -3165,7 +3167,7 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
           const identity = { id: source.id, repoUrl: source.repoUrl, repoRef: source.repoRef, cwd: source.cwd,
             sourceType: source.sourceType, visibility: source.visibility };
           await authorizeNestedSource(identity);
-          await assertReproducibleManagedCheckout(checkoutPath, { repoUrl: source.repoUrl, resolveGitAuth: gitAuth, signal });
+          await assertReproducibleManagedCheckout(checkoutPath, { repoUrl: source.repoUrl, resolveGitAuth, signal });
           currentManagedCheckouts.push(await readManagedCheckoutContents(checkoutPath, name, identity, signal));
         },
       });
@@ -3182,7 +3184,8 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
         const signal = AbortSignal.timeout(90_000);
         await authorizeCurrentWorkspace();
         if (boundary !== "before_branch_delete") {
-          const live = await inspectCurrentRecipe(signal);
+          const boundaryGitAuth = resolveCurrentGitAuth();
+          const live = await inspectCurrentRecipe(signal, boundaryGitAuth);
           if (live.recipe.commit !== recipe.commit || live.recipe.branchName !== recipe.branchName
             || live.recipe.sourcePath !== recipe.sourcePath || live.recipe.worktreePath !== recipe.worktreePath) {
             throw new Error("workspace_recipe_changed");
@@ -3194,10 +3197,11 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
           if (branchTip !== recipe.commit) throw new Error("workspace_branch_tip_changed");
         }
         await authorizeCurrentWorkspace();
-        await verifyRemoteGitCommit(row.repoUrl!, recipe.commit, gitAuth, signal);
+        const boundaryGitAuth = resolveCurrentGitAuth();
+        await verifyRemoteGitCommit(row.repoUrl!, recipe.commit, boundaryGitAuth, signal);
         for (const checkout of recipe.contents?.checkouts ?? []) {
           await authorizeNestedSource(checkout.source);
-          await verifyRemoteGitCommit(checkout.source.repoUrl, checkout.commit, gitAuth, signal);
+          await verifyRemoteGitCommit(checkout.source.repoUrl, checkout.commit, boundaryGitAuth, signal);
         }
       });
     },

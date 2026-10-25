@@ -42,7 +42,7 @@
     "build": "tsc",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run src"
   },
   "dependencies": {
     "googleapis": "^176.0.0",

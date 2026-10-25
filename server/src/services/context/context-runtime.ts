@@ -72,6 +72,10 @@ export async function assembleFreshNativeGovernedContext(
   });
 
   const markdown = result.markdown.trim();
+  console.warn("[test-only] fresh native Context witness result", Boolean(result.packet.manifest),
+    result.packet.foundation.length + result.packet.connectedEvidence.length + result.packet.sharedMemory.length +
+      result.packet.privateMemory.length + result.packet.taskContext.length + result.packet.artifacts.length,
+    Boolean(result.nativeBootstrapWitness));
   return markdown.length > 0 ? { markdown, manifest: result.packet.manifest,
     ...(result.nativeBootstrapWitness ? { sourceWitness: result.nativeBootstrapWitness } : {}) } : null;
 }

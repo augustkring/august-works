@@ -66,7 +66,7 @@ export function JevSkillSuggestionSettings({ companyId }: { companyId: string })
       </div>
       <div className="space-y-2"><h3 className="text-sm font-medium">{t("jevDecisions.history")}</h3>
         {history.isError ? <p className="text-xs text-destructive">{t("jevDecisions.historyError")}</p> : history.data?.length ? <ul className="space-y-1">{history.data.map(item =>
-          <li key={item.id} className="flex flex-wrap justify-between gap-2 border-b border-border py-1 text-xs"><span>{item.status} · {item.model} · {new Date(item.createdAt).toLocaleString()}</span><span>{t("jevDecisions.reservedCeiling")}: {item.reservedCostCents} {item.currency}{item.actualCostCents !== null && <> · {t("jevDecisions.actualCost", { amount: item.actualCostCents, currency: item.currency, status: item.costStatus })}</>}</span></li>)}</ul>
+          <li key={item.id} className="flex flex-wrap justify-between gap-2 border-b border-border py-1 text-xs"><span>{item.status} · {item.model} · {new Date(item.createdAt).toLocaleString()}</span><span>{t("jevDecisions.reservedCeiling")}: {item.reservedCostCents} {item.currency}{item.actualCostAmount !== null && <> · {t("jevDecisions.actualCost", { amount: item.actualCostAmount, currency: item.currency, status: item.costStatus })}</>}</span></li>)}</ul>
           : <p className="text-xs text-muted-foreground">{t("jevDecisions.historyEmpty")}</p>}
       </div>
       <p className="text-xs text-muted-foreground">{t("jevDecisions.profile")}</p>

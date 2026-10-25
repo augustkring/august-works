@@ -3237,7 +3237,9 @@
     "cancelPendingBody": "Kontrollerer, om importen kan stoppe sikkert. Gennemførte ændringer rulles ikke tilbage.",
     "cancelFinishedTitle": "Importen er allerede afsluttet",
     "cancelFinishedBody": "Det aktuelle importresultat vises, når status er opdateret.",
-    "cancelErrorStatus": "Importen kontrollerer, om den kan stoppe sikkert; gennemførte ændringer rulles ikke tilbage."
+    "cancelErrorStatus": "Importen kontrollerer, om den kan stoppe sikkert; gennemførte ændringer rulles ikke tilbage.",
+    "sourceReleaseReview": "Jeg har gennemgået denne præcise pakke og godkender frigivelsen af de inkluderede åbne projekter og opgaver til den valgte virksomhed. Jeg har aktuel adgang til at administrere målet eller oprette det på denne instans, og jeg ejer de native-kilder eller har ret til at frigive det gennemgåede åbne eksterne arbejde. Privat eller begrænset arbejde er fortsat blokeret.",
+    "sourceReleaseSummary": "Pakkens præcise fingeraftryk: {{fingerprint}}. Dette udvalg indeholder {{projectCount}} projekter og {{taskCount}} opgaver. Native-kilder kontrolleres mod aktuelt ejerskab og adgang; eksterne filer kræver din gennemgang af, at indholdet er åbent og må frigives af dig."
   },
   "supportCases": {
     "exportInclude": "Medtag supportsager, du har adgang til nu, med hele den kundevendte historik. Interne noter, legitimationsoplysninger og supportadgang er udeladt. Arkivet kan ikke genskabe aktive sager.",
@@ -3365,7 +3367,7 @@
     "test": "Kør den oplyste opsætningstest",
     "testing": "Tester…",
     "testSuccess": "Den kvalificerede Jev-forbindelse svarede. Det bekræfter kun forbindelsen og kvalificerer ikke Skill-forslag.",
-    "testUnknown": "Udbyderens resultat er ukendt. Behold denne testreference, og afvent afstemning. Start ikke en ny betalt test, mens betalingen er uafklaret.",
+    "testUnknown": "Udbyderens resultat er ukendt, så det maksimale reserverede beløb tilbageholdes. Behold testreferencen, og start ikke en ny betalt test, før en administrator har kontrolleret betalingen.",
     "testFailed": "Opsætningstesten blev ikke fuldført. Kontrollér forbindelsen, og prøv igen.",
     "history": "Seneste Jev-opsætningstests",
     "historyError": "Jev-testens regnskab kunne ikke indlæses.",

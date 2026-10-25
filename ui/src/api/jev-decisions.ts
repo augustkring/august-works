@@ -2,8 +2,8 @@ import type { JevDecisionSettings, JevDecisionSettingsUpdate } from "@paperclipa
 import { api } from "./client";
 
 export interface JevDecisionConnectionChoice { id: string; grantId: string; name: string; status: string; model: string }
-export interface JevDecisionSetupTestResult { status: string; model: string; inputTokens: number | null; outputTokens: number | null; costCents: string | null; costStatus: "reported" | "estimated" | "unpriced"; errorCode: string | null }
-export interface JevDecisionHistoryEntry { id: string; model: string; status: string; reservedCostCents: string; actualCostCents: string | null; costStatus: "reported" | "estimated" | "unpriced"; currency: string; inputTokens: number | null; outputTokens: number | null; createdAt: string; completedAt: string | null }
+export interface JevDecisionSetupTestResult { status: string; model: string; inputTokens: number | null; outputTokens: number | null; costAmount: string | null; costStatus: "reported" | "estimated" | "unpriced"; errorCode: string | null }
+export interface JevDecisionHistoryEntry { id: string; model: string; status: string; reservedCostCents: string; actualCostAmount: string | null; costStatus: "reported" | "estimated" | "unpriced"; currency: string; inputTokens: number | null; outputTokens: number | null; createdAt: string; completedAt: string | null }
 export interface JevDecisionTestProfile { profileHash: string; costCapMinor: number; currency: string }
 export const jevDecisionApi = {
   get: (companyId: string) => api.get<{ settings: JevDecisionSettings; choices: JevDecisionConnectionChoice[]; suggestionsQualified: boolean; testProfile: JevDecisionTestProfile | null }>(`/companies/${companyId}/jev-decisions`),
