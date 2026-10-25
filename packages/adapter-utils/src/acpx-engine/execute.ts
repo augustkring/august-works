@@ -1452,13 +1452,18 @@ export function resolveStalledToolTimeoutMs(
     return Math.max(1, Math.min(ACPX_MAX_STALLED_TOOL_TIMEOUT_MS, Math.round(configured * 1000)));
   }
   if (acpxAgent !== "claude") return 0;
-  const toolBounds = [env.MCP_TOOL_TIMEOUT, env.BASH_MAX_TIMEOUT_MS]
-    .map((value) => Number(value))
-    .filter((value) => Number.isFinite(value) && value > 0);
-  return Math.min(
-    ACPX_MAX_STALLED_TOOL_TIMEOUT_MS,
-    Math.max(ACPX_STALLED_TOOL_TIMEOUT_MS, ...toolBounds.map((value) => value + ACPX_STALLED_TOOL_MARGIN_MS)),
+  const configuredToolBounds = [env.MCP_TOOL_TIMEOUT, env.BASH_MAX_TIMEOUT_MS]
+    .map((value) => Number(value));
+  if (configuredToolBounds.some((value) => !Number.isNaN(value) && !Number.isFinite(value))) return 0;
+  const toolBounds = configuredToolBounds.filter((value) => Number.isFinite(value) && value > 0);
+  const requiredTimeout = Math.max(
+    ACPX_STALLED_TOOL_TIMEOUT_MS,
+    ...toolBounds.map((value) => value + ACPX_STALLED_TOOL_MARGIN_MS),
   );
+  // Do not cut off a configured healthy tool call merely to keep the watchdog
+  // active. If the required margin exceeds the approved ceiling, disable this
+  // watchdog for the run and leave the existing execution timeout in charge.
+  return requiredTimeout <= ACPX_MAX_STALLED_TOOL_TIMEOUT_MS ? requiredTimeout : 0;
 }
 
 function isPendingAcpTool(tool: { status?: string }): boolean {

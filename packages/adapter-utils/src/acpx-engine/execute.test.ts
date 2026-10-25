@@ -384,8 +384,11 @@ describe("shared ACPX engine runtime behavior", () => {
   it("keeps the Claude watchdog above tool bounds, disabled for other agents, and within the approved ceiling", () => {
     expect(resolveStalledToolTimeoutMs({}, {}, "claude")).toBe(30 * 60 * 1000);
     expect(resolveStalledToolTimeoutMs({}, { MCP_TOOL_TIMEOUT: "1800000" }, "claude")).toBe(45 * 60 * 1000);
-    expect(resolveStalledToolTimeoutMs({}, { BASH_MAX_TIMEOUT_MS: "999999999999999999999" }, "claude")).toBe(4 * 60 * 60 * 1000);
+    expect(resolveStalledToolTimeoutMs({}, { BASH_MAX_TIMEOUT_MS: "999999999999999999999" }, "claude")).toBe(0);
+    expect(resolveStalledToolTimeoutMs({}, { MCP_TOOL_TIMEOUT: "Infinity" }, "claude")).toBe(0);
     expect(resolveStalledToolTimeoutMs({ stalledToolTimeoutSec: 0 }, {}, "claude")).toBe(0);
+    expect(resolveStalledToolTimeoutMs({ stalledToolTimeoutSec: 0.0001 }, {}, "claude")).toBe(1);
+    expect(resolveStalledToolTimeoutMs({ stalledToolTimeoutSec: Number.MAX_VALUE }, {}, "claude")).toBe(4 * 60 * 60 * 1000);
     expect(resolveStalledToolTimeoutMs({ stalledToolTimeoutSec: Number.POSITIVE_INFINITY }, {}, "claude")).toBe(30 * 60 * 1000);
     expect(resolveStalledToolTimeoutMs({}, {}, "codex")).toBe(0);
     expect(resolveStalledToolTimeoutMs({ stalledToolTimeoutSec: 60 }, {}, "codex")).toBe(60_000);
