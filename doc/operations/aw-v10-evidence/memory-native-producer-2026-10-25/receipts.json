@@ -1,0 +1,102 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "1330009f003cd5da556b4f88d32b848deb0979f0",
+  "meaning": "Memory core canonical actual Agent producer fixture repair; no-run denial added, dedicated private owner writer retained, arbitrary service string cannot authorize private sources. Current24tests23PASS1 genuine explicit-publication failure retained for implementation; earlier cleanup/setup failures and mid-edit authz compiler failure retained. No all-green claim.",
+  "logs": [
+    {
+      "name": "memory-core-native-producer",
+      "exitCode": 1,
+      "rawSha256": "522ccf54ca083e0d61e5cd149bc1f22a1fcf6d8e0329ad4325dcbb7aa7fba8ee",
+      "sanitizedSha256": "522ccf54ca083e0d61e5cd149bc1f22a1fcf6d8e0329ad4325dcbb7aa7fba8ee",
+      "archiveSha256": "6cf4d0fd9b1518ae9cc216e6247c83ca55cb76c78fa9fc4748cbcfba2d8af0ce",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 23 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  23 failed (23)",
+        "Duration  16.74s (transform 2.75s, setup 69ms, import 4.71s, tests 11.84s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "memory-core-native-producer-cleanup",
+      "exitCode": 1,
+      "rawSha256": "1f8caaad6e5da882d45cf845c02c69c6a19338b7b25a4a25cf0ddc4d5713eaf2",
+      "sanitizedSha256": "1f8caaad6e5da882d45cf845c02c69c6a19338b7b25a4a25cf0ddc4d5713eaf2",
+      "archiveSha256": "6d4d2f0f38029dc78905b407f9b65851630a81154430179e1324810b998634d4",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 3 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  3 failed | 21 passed (24)",
+        "Duration  17.37s (transform 2.61s, setup 74ms, import 4.45s, tests 12.72s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "memory-core-native-private-owner",
+      "exitCode": 1,
+      "rawSha256": "40b229ad76ee85078ddfa2693e1c8c5ae4f38254fb8bbacb3509d90e76e9f716",
+      "sanitizedSha256": "40b229ad76ee85078ddfa2693e1c8c5ae4f38254fb8bbacb3509d90e76e9f716",
+      "archiveSha256": "b64f134bb20e2c589e6c5d5fabbc065fccc4e11bab3948fe9c99046434916b6f",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 2 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  2 failed | 22 passed (24)",
+        "Duration  17.53s (transform 2.32s, setup 73ms, import 4.09s, tests 13.24s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "memory-core-native-producer-scoped-current",
+      "exitCode": 1,
+      "rawSha256": "ffa021c6ba7b3c8e7d80c187ba042d09e82b4949db7f574d93beafa6f1925369",
+      "sanitizedSha256": "ffa021c6ba7b3c8e7d80c187ba042d09e82b4949db7f574d93beafa6f1925369",
+      "archiveSha256": "1fa6c818c94844583986e5c92e6a9ac6a5b265f5e5dfe8d27a6b2711e810190b",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 23 passed (24)",
+        "Duration  16.29s (transform 2.39s, setup 70ms, import 4.20s, tests 11.89s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "native-memory-fixture-typecheck",
+      "exitCode": 1,
+      "rawSha256": "45b71a476732c038e6816516f8c1db64e0e20343bb2efb522ef6f689d988a5a2",
+      "sanitizedSha256": "45b71a476732c038e6816516f8c1db64e0e20343bb2efb522ef6f689d988a5a2",
+      "archiveSha256": "df322886b1444942c7fe116182a35e260a09aed47cba3ee38bb666d82fd038a5",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    }
+  ]
+}

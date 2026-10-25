@@ -1,0 +1,137 @@
+# Blentera V10 upstream integration register
+
+Implementation register required by the pinned V10 rev4.0 §7.1. Target branch: `codex/blentera-v10`; fork base: `81d3445b98b1cd80ff400ede6bd44ea71d88d735`. This records implementation evidence separately from upstream selection. An `adapted` row can remain incomplete; it does not establish beta or provider qualification. `deferred` below records outstanding implementation/reconciliation, except the explicit Muse deferral authorized by the brief. It does not remove a required V10 acceptance obligation.
+
+Source: [pinned brief](../reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md), SHA-256 `7f4387338e6c9ce82359801a92c802c55b9af5c92cd65d1b6271f8ae68970c22`. The complete incremental source/disposition tables remain in §§7.17, 7.19 and 7.20; the package sections below retain every full SHA stated in the corresponding section. References lacking a full SHA in that section are not assigned an invented identity.
+
+## UP-01 — ambiguous SQL outcomes, sensitive headers and authentication audit
+
+- Fork owner: `packages/db/src/client.ts`; HTTP redaction; JWT audit owner
+- Source PR / full commit: [#14773](https://github.com/paperclipai/paperclip/pull/14773) `98d8a6ccac82d1605ac10dcea17f351c385814e5`; [#14413](https://github.com/paperclipai/paperclip/pull/14413) `6f40e23536ad9f80c6379543acc22871380fdc25`; [#13183](https://github.com/paperclipai/paperclip/pull/13183) `514d8738cfa66f5ce5bb07d196a4c7412c0a42b8`
+- Disposition: **adapted**. Generic ambiguous SQL replay removed; original logging/authentication audit owners retain bounded redaction and current run admission. Dependency behavior and test receipts are in [recovery ledger](2026-10-22-blentera-v10-recovery.md).
+- Migrations: no upstream historical migration/journal imported for these changes.
+- Verification / commit: original DB wire/PostgreSQL ambiguity regressions and scoped logging/JWT evidence in `../operations/aw-v10-evidence/recovery-2026-10-22/`; current full DB workspace183PASS in `db-workspace-2026-10-25`. Full hosted traffic and production qualification remain unestablished.
+- Qualified runtime profiles: none newly qualified by this register. Software fixtures and provider-supplied upstream results do not qualify a deployment.
+
+## UP-02 — Board CLI consent and key lifecycle
+
+- Fork owner: Board auth/access; CLI Board auth; native account consent UI
+- Source PR / full commit: [#16482](https://github.com/paperclipai/paperclip/pull/16482) `2befcd9a0a087ef82506e1649140dd307b90e96a`
+- Disposition: **adapted**, remaining lifecycle inventory must be reconciled. Original Board consent/key/audit path and descriptor lifetime repair retained; original request expiry now survives subsequent session extension.
+- Migrations: retain the fork-forward history; no upstream journal replacement. Exact historical slice evidence: `recovery-2026-10-22/board-cli-checkpoint.json`.
+- Verification / commit: `3d3fb4736`, `67e5ca24e`; native lifetime14PASS; native two-factor21PASS; isolated actual cookie/TOTP/software-WebAuthn/CLI-consent journey1PASS. See `../operations/aw-v10-evidence/native-auth-carrier-2026-10-25/receipts.json`. No physical-authenticator or hosted provider qualification.
+- Qualified runtime profiles: none newly qualified by this register. Software fixtures and provider-supplied upstream results do not qualify a deployment.
+
+## UP-03 — private tasks and current authorization
+
+- Fork owner: `authorization.ts`; original Task/Project/Memory/Context and source owners
+- Source PR / full commit: [#14717](https://github.com/paperclipai/paperclip/pull/14717) `b67db12d90c1bd191f99975e35cc5c84137858e4`; [#10633](https://github.com/paperclipai/paperclip/pull/10633) `3a726e676fe47f4725d03037e823d7f057760708`; [#14718](https://github.com/paperclipai/paperclip/pull/14718) `b31558064093564fb937cf046596d1d497f5be27`
+- Disposition: **adapted, incomplete**. Canonical private Task/Project storage, pre-limit current policies and derivative/erasure restrictions remain authoritative. Human Readiness now uses original readonly source authority through commit; runtime still requires the actual native Run.
+- Migrations: fork-forward0503 and subsequent native/source migrations through0526 are retained; no historical upstream SQL/journal imported. This row does not claim every later migration completes this package.
+- Verification / commit: `60689b666`, `1330009f0`; Readiness9PASS, original Context/policy32PASS, complete Agent Package115PASS. Native mutation identity33PASS is a separate partial fact. See `../operations/aw-v10-evidence/readiness-human-2026-10-25/receipts.json` and `package-readiness-canonical-2026-10-25/receipts.json`.
+- Open dependencies: private typed Routine current policy, temporal source closure and exact body-bound private outputs, all input families, complete cross-channel source matrix. Source protocol/qualification remains disabled; no private-work launch approval.
+- Qualified runtime profiles: none newly qualified by this register. Software fixtures and provider-supplied upstream results do not qualify a deployment.
+
+## UP-04 — durable runtime, instruction, Skills and assignment synchronization
+
+- Fork owner: V5 provider bindings; V6 runtime lifecycle; original execution resolver/journal
+- Source PR / full commit: [#15631](https://github.com/paperclipai/paperclip/pull/15631) `2dd9811e8be1dab59cccd86cdb25e8953b02fe07`; [#16203](https://github.com/paperclipai/paperclip/pull/16203) `db65a0863ea54292ceca3d60cf019ac64ec29357`; [#16499](https://github.com/paperclipai/paperclip/pull/16499) `9f4a956b90687dc55f51aa8b22279af2d946f4af`; [#16501](https://github.com/paperclipai/paperclip/pull/16501) `5fbece9dcc9d1f0fa7bfd3c9e425c6aa7a30af36`; [#16603](https://github.com/paperclipai/paperclip/pull/16603) `5f5602bba7000c950421f030664182a0c36e4017`; [#16602](https://github.com/paperclipai/paperclip/pull/16602) `190080642ee4ea33336b6cd97b608b6c0534bddb`
+- Disposition: **deferred**. Required behavior and existing equivalence still need package-level reconciliation and acceptance. Existing similarly named fork features are not treated as proof of upstream dependency closure.
+- Dependency disposition: preserve the exact package requirements in the linked brief; no wholesale upstream merge, duplicated domain owner, policy weakening or invented default provider.
+- Migrations: no additional migration generated by this register. Any missing schema requires a new fork-forward migration with actual compatibility evidence.
+- Tests / commit / build: package completion evidence not established by this register. Historical scoped evidence in the recovery ledger remains scoped; full final workspace/compiler/build and required restart/concurrency/provider journeys remain outstanding.
+- Qualified runtime profiles: none newly qualified by this register. Software fixtures and provider-supplied upstream results do not qualify a deployment.
+
+## UP-05 — accepted messages, queue recovery and truthful completion
+
+- Fork owner: Original wake queue; heartbeat run control; native finalization/recovery
+- Source PR / full commit: [#16673](https://github.com/paperclipai/paperclip/pull/16673) `391dd15ff26f43c27f3a3414b876dd4345791560`; [#16679](https://github.com/paperclipai/paperclip/pull/16679) `d30648dee89720358271c276b9fc28cf83f18be7`; [#16622](https://github.com/paperclipai/paperclip/pull/16622) `32ee2e9a6a35da4cbde0c7f57df92f4d7eda5444`
+- Disposition: **deferred**. Required behavior and existing equivalence still need package-level reconciliation and acceptance. Existing similarly named fork features are not treated as proof of upstream dependency closure.
+- Dependency disposition: preserve the exact package requirements in the linked brief; no wholesale upstream merge, duplicated domain owner, policy weakening or invented default provider.
+- Migrations: no additional migration generated by this register. Any missing schema requires a new fork-forward migration with actual compatibility evidence.
+- Tests / commit / build: package completion evidence not established by this register. Historical scoped evidence in the recovery ledger remains scoped; full final workspace/compiler/build and required restart/concurrency/provider journeys remain outstanding.
+- Qualified runtime profiles: none newly qualified by this register. Software fixtures and provider-supplied upstream results do not qualify a deployment.
+
+## UP-06 — preserve work, restore exact sources, reconstruct only when loss is proven
+
+- Fork owner: Original execution workspace; native sync/finalization; Git restoration owners
+- Source PR / full commit: [#16583](https://github.com/paperclipai/paperclip/pull/16583) `f5534717b020e9c627324d0c11464a70731c696d`; [#16586](https://github.com/paperclipai/paperclip/pull/16586) `73659c6b27c1d97226f2da9ca39f256eefddac66`; [#16614](https://github.com/paperclipai/paperclip/pull/16614) `dc499ae02b80a5d3ea9d30d77d1622d24da385ce`; [#16621](https://github.com/paperclipai/paperclip/pull/16621) `5555817c2b18a1a5ebc3a3b01883c1b12b86df5a`; [#16691](https://github.com/paperclipai/paperclip/pull/16691) `790b729086420ad4ad3f4e8a475ac1f08d6711f9`; [#16695](https://github.com/paperclipai/paperclip/pull/16695) `1678aae8628e246d5121555ea7b39ed637421a2a`; [#16690](https://github.com/paperclipai/paperclip/pull/16690) `7c7d2d8d2cfca96aa956b85d086f067bc9fd8880`; [#16696](https://github.com/paperclipai/paperclip/pull/16696) `69ac928d2b06875c1ec81942348221717cf2bcb1`
+- Disposition: **deferred**. Required behavior and existing equivalence still need package-level reconciliation and acceptance. Existing similarly named fork features are not treated as proof of upstream dependency closure.
+- Dependency disposition: preserve the exact package requirements in the linked brief; no wholesale upstream merge, duplicated domain owner, policy weakening or invented default provider.
+- Migrations: no additional migration generated by this register. Any missing schema requires a new fork-forward migration with actual compatibility evidence.
+- Tests / commit / build: package completion evidence not established by this register. Historical scoped evidence in the recovery ledger remains scoped; full final workspace/compiler/build and required restart/concurrency/provider journeys remain outstanding.
+- Qualified runtime profiles: none newly qualified by this register. Software fixtures and provider-supplied upstream results do not qualify a deployment.
+
+## UP-07 — stalled tool calls and diagnostics
+
+- Fork owner: ACPX engine; native cancellation/settlement; run failure diagnostics
+- Source PR / full commit: [#16671](https://github.com/paperclipai/paperclip/pull/16671) `938a441944c828205dd8ff115f9d3585ee63eb7f`; [#16688](https://github.com/paperclipai/paperclip/pull/16688) `63306f666020408f8175886faf54c3ad9ea6b1a2`
+- Disposition: **deferred**. Required behavior and existing equivalence still need package-level reconciliation and acceptance. Existing similarly named fork features are not treated as proof of upstream dependency closure.
+- Dependency disposition: preserve the exact package requirements in the linked brief; no wholesale upstream merge, duplicated domain owner, policy weakening or invented default provider.
+- Migrations: no additional migration generated by this register. Any missing schema requires a new fork-forward migration with actual compatibility evidence.
+- Tests / commit / build: package completion evidence not established by this register. Historical scoped evidence in the recovery ledger remains scoped; full final workspace/compiler/build and required restart/concurrency/provider journeys remain outstanding.
+- Qualified runtime profiles: none newly qualified by this register. Software fixtures and provider-supplied upstream results do not qualify a deployment.
+
+## UP-08 — easier connections, personal generalist and useful outputs
+
+- Fork owner: Original connections/OAuth; personal routing; Task/artifact; Skills owners
+- Source PR / full commit: [#14811](https://github.com/paperclipai/paperclip/pull/14811) `467125fafb47a8520856504fecc48d6e32055db1`; [#14859](https://github.com/paperclipai/paperclip/pull/14859) `6d654f63d1c9e38f78a9e779c8d5324b73b088fe`; [#15254](https://github.com/paperclipai/paperclip/pull/15254) `b43073d11fae2f62771144580a9c63a6734a4018`; [#14740](https://github.com/paperclipai/paperclip/pull/14740) `25c422ba7e30f9e4bfb34ddeff88ce4bd6b2773e`; [#15413](https://github.com/paperclipai/paperclip/pull/15413) `d66acb7ac157c3db2e1d389de4513a7809977725`; [#15679](https://github.com/paperclipai/paperclip/pull/15679) `f0e12c851971a21f7aadf0835b016bfaf2067314`; [#15216](https://github.com/paperclipai/paperclip/pull/15216) `4857799a88914cd9597655da56af312808d0474d`; [#15470](https://github.com/paperclipai/paperclip/pull/15470) `ae6f95ed7a777069717b90230d651e7ed1060d35`; [#15749](https://github.com/paperclipai/paperclip/pull/15749) `f329b24ee12496e710ad17377ec7716e0eee22ef`; [#15447](https://github.com/paperclipai/paperclip/pull/15447) `1640c5b6abe7373b75606433c5f4a34450123170`; [#15445](https://github.com/paperclipai/paperclip/pull/15445) `083073703086dd699f3f2bfd852e56c7150c2d09`; [#15964](https://github.com/paperclipai/paperclip/pull/15964) `762d680daf3563d42a0c4c280761c233b21713c7`; [#14713](https://github.com/paperclipai/paperclip/pull/14713) `d432dc7fa355c526a64a43c03120806c11d47b71`; [#16288](https://github.com/paperclipai/paperclip/pull/16288) `df4ee06e2f613649f8331cc18a1b587e6146f8a8`; [#15634](https://github.com/paperclipai/paperclip/pull/15634) `98e3cec78e8461774022a5ba0a777b09d4d16b96`
+- Disposition: **deferred**. Required behavior and existing equivalence still need package-level reconciliation and acceptance. Existing similarly named fork features are not treated as proof of upstream dependency closure.
+- Dependency disposition: preserve the exact package requirements in the linked brief; no wholesale upstream merge, duplicated domain owner, policy weakening or invented default provider.
+- Migrations: no additional migration generated by this register. Any missing schema requires a new fork-forward migration with actual compatibility evidence.
+- Tests / commit / build: package completion evidence not established by this register. Historical scoped evidence in the recovery ledger remains scoped; full final workspace/compiler/build and required restart/concurrency/provider journeys remain outstanding.
+- Qualified runtime profiles: none newly qualified by this register. Software fixtures and provider-supplied upstream results do not qualify a deployment.
+
+## UP-09 — optional external MCP and session-local stdio
+
+- Fork owner: Original Tool Gateway; external OAuth; native session tools
+- Source PR / full commit: [#14846](https://github.com/paperclipai/paperclip/pull/14846) `e34abee670069cca84afb2efb86041bce7dccbec`; [#16526](https://github.com/paperclipai/paperclip/pull/16526) `6f8ad3d77bc9032d7a6d518eb0a9580fc607c23d`
+- Disposition: **deferred**. Required behavior and existing equivalence still need package-level reconciliation and acceptance. Existing similarly named fork features are not treated as proof of upstream dependency closure.
+- Dependency disposition: preserve the exact package requirements in the linked brief; no wholesale upstream merge, duplicated domain owner, policy weakening or invented default provider.
+- Migrations: no additional migration generated by this register. Any missing schema requires a new fork-forward migration with actual compatibility evidence.
+- Tests / commit / build: package completion evidence not established by this register. Historical scoped evidence in the recovery ledger remains scoped; full final workspace/compiler/build and required restart/concurrency/provider journeys remain outstanding.
+- Qualified runtime profiles: none newly qualified by this register. Software fixtures and provider-supplied upstream results do not qualify a deployment.
+
+## UP-10 — performance without weaker checks
+
+- Fork owner: Production build; plugin watcher; guarded retained readers; idle admission
+- Source PR / full commit: [#16672](https://github.com/paperclipai/paperclip/pull/16672) `27ab902d3db2770ada79c9f42a9c06e1d346f34b`; [#16677](https://github.com/paperclipai/paperclip/pull/16677) `bebeb389f1fecf51a81f4b040facbb1a4fba638b`; [#16424](https://github.com/paperclipai/paperclip/pull/16424) `ea4aa185b0f3bc30be1c5fc160cdfd0eb433fe41`; [#16683](https://github.com/paperclipai/paperclip/pull/16683) `1f27427ffdefaf5fb2760d1d53c0d78cb9683d4c`; [#16685](https://github.com/paperclipai/paperclip/pull/16685) `63fbb714e62d025eeb69773f9f2262578d2f5653`
+- Disposition: **deferred**. Required behavior and existing equivalence still need package-level reconciliation and acceptance. Existing similarly named fork features are not treated as proof of upstream dependency closure.
+- Dependency disposition: preserve the exact package requirements in the linked brief; no wholesale upstream merge, duplicated domain owner, policy weakening or invented default provider.
+- Migrations: no additional migration generated by this register. Any missing schema requires a new fork-forward migration with actual compatibility evidence.
+- Tests / commit / build: package completion evidence not established by this register. Historical scoped evidence in the recovery ledger remains scoped; full final workspace/compiler/build and required restart/concurrency/provider journeys remain outstanding.
+- Qualified runtime profiles: none newly qualified by this register. Software fixtures and provider-supplied upstream results do not qualify a deployment.
+
+## UP-11 — Jev decision-model seam
+
+- Fork owner: Original connections/secret store/model gateway/cost ledger
+- Source PR / full commit: [#15473](https://github.com/paperclipai/paperclip/pull/15473) `a7a244ab33cea9e8c68d2c1fa54c4879361bfc07`
+- Disposition: **deferred**. Required behavior and existing equivalence still need package-level reconciliation and acceptance. Existing similarly named fork features are not treated as proof of upstream dependency closure.
+- Dependency disposition: preserve the exact package requirements in the linked brief; no wholesale upstream merge, duplicated domain owner, policy weakening or invented default provider.
+- Migrations: no additional migration generated by this register. Any missing schema requires a new fork-forward migration with actual compatibility evidence.
+- Tests / commit / build: package completion evidence not established by this register. Historical scoped evidence in the recovery ledger remains scoped; full final workspace/compiler/build and required restart/concurrency/provider journeys remain outstanding.
+- Qualified runtime profiles: none newly qualified by this register. Software fixtures and provider-supplied upstream results do not qualify a deployment.
+
+## UP-12 — personal Muse and other new providers
+
+- Fork owner: Existing provider extension boundary; customer enablement remains deferred
+- Source PR / full commit: [#16448](https://github.com/paperclipai/paperclip/pull/16448) `e6dcc6b0959bdfc3bc93239c3d95e14c9fc8d457`; [#16450](https://github.com/paperclipai/paperclip/pull/16450) `896f3c7f3bca5502ccb38c759ef356d799c0a60d`
+- Disposition: **deferred**. Customer Muse enablement/UI explicitly deferred by §7.14; preserve existing providers and the extension seam.
+- Dependency disposition: preserve the exact package requirements in the linked brief; no wholesale upstream merge, duplicated domain owner, policy weakening or invented default provider.
+- Migrations: no additional migration generated by this register. Any missing schema requires a new fork-forward migration with actual compatibility evidence.
+- Tests / commit / build: package completion evidence not established by this register. Historical scoped evidence in the recovery ledger remains scoped; full final workspace/compiler/build and required restart/concurrency/provider journeys remain outstanding.
+- Qualified runtime profiles: none newly qualified by this register. Software fixtures and provider-supplied upstream results do not qualify a deployment.
+
+## UP-13 — dispatch routines and monitors at their saved deadlines
+
+- Fork owner: `index.ts`; original Routines/Task monitors/heartbeat; workflow schedules
+- Source PR / full commit: [#16514](https://github.com/paperclipai/paperclip/pull/16514) `78b833c4958465b5e345b0e337018011b00dab72`; [#16589](https://github.com/paperclipai/paperclip/pull/16589) `d1463fb79ecd72f53fd36c31b50076da9d73aebd`; [#15625](https://github.com/paperclipai/paperclip/pull/15625) `835a022936ddc7a152b9feab0c0420d02249a6d1`; [#15802](https://github.com/paperclipai/paperclip/pull/15802) `19e9facc5bd459ab790d53373612cfde1a2c9ec3`
+- Disposition: **deferred**. Required behavior and existing equivalence still need package-level reconciliation and acceptance. Existing similarly named fork features are not treated as proof of upstream dependency closure.
+- Dependency disposition: preserve the exact package requirements in the linked brief; no wholesale upstream merge, duplicated domain owner, policy weakening or invented default provider.
+- Migrations: no additional migration generated by this register. Any missing schema requires a new fork-forward migration with actual compatibility evidence.
+- Tests / commit / build: package completion evidence not established by this register. Historical scoped evidence in the recovery ledger remains scoped; full final workspace/compiler/build and required restart/concurrency/provider journeys remain outstanding.
+- Qualified runtime profiles: none newly qualified by this register. Software fixtures and provider-supplied upstream results do not qualify a deployment.
+
+## Incremental and standing dispositions
+
+The complete 19-commit 18 October table (§7.17), 32-commit 17 October table (§7.19) and retained residual candidates (§7.20) remain binding inputs. Comment-only/test-only/conditional-performance items retain their stated applicability. No source is labeled merged; a matching PR number alone is not evidence that its behavior was adopted. Final reconciliation must attach exact fork commits, generated migration filenames, completed dependency behavior and applicable runtime evidence to each adopted component before PR-ready status.
