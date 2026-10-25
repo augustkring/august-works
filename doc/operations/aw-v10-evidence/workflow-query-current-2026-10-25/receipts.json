@@ -1,0 +1,117 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861",
+  "meaning": "Current native mixed-source/full17 and companion11 pass; overlap telemetry fixtures and budget-negative controls retained without production bypass",
+  "logs": [
+    {
+      "name": "workflow-task-source-full-typed-private-budget-current",
+      "exitCode": 0,
+      "rawSha256": "f40782cc226f58a69526c5ce19a2a465278a8350c4467c2ae52726182753c77d",
+      "sanitizedSha256": "b87da0609f2355fd71cfc1aabd02b67980dacbb0e236c879644e9104bbc81984",
+      "archiveSha256": "a88c5efe777522de9422e98824b6213bcd730ebb5b2383e46638fb9bb379e877",
+      "redactions": {
+        "ansi": 30,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  17 passed (17)",
+        "Duration  64.79s (transform 13.92s, setup 86ms, import 18.11s, tests 46.47s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "workflow-task-source-companion-callers-final",
+      "exitCode": 0,
+      "exitSidecar": "workflow-task-source-companion-callers-final.log.exit",
+      "rawSha256": "07b3764d67bcb50230dbfbbd579859bb1b6f9d002a591e6b98b96bcf8feba421",
+      "sanitizedSha256": "07b3764d67bcb50230dbfbbd579859bb1b6f9d002a591e6b98b96bcf8feba421",
+      "archiveSha256": "12c7dad529f07ca18d6ed469e5c4782e4773fa3bf63c51a5ce8c93d71d4bcc36",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  4 passed (4)",
+        "Tests  11 passed (11)",
+        "Duration  37.14s (transform 15.58s, setup 247ms, import 9.06s, tests 27.26s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "workflow-task-source-issue-telemetry-diagnostic",
+      "exitCode": 1,
+      "exitSidecar": "workflow-task-source-issue-telemetry-diagnostic.log.exit",
+      "rawSha256": "5127d1a76d56bf90912925e32881c8db5b778da2fe483e16e7e6b5fc19f9d073",
+      "sanitizedSha256": "5127d1a76d56bf90912925e32881c8db5b778da2fe483e16e7e6b5fc19f9d073",
+      "archiveSha256": "8230b212cae664416d1c831a4d97824d20d440cd89d8fb643d4072d2d75b47f7",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 2 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  2 failed (2)",
+        "Duration  15.00s (transform 11.96s, setup 76ms, import 78ms, tests 14.73s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "workflow-task-source-review-budget-abort-final",
+      "exitCode": 0,
+      "rawSha256": "a1219506f3fecbc0e1984d1192dec3ceca98d0e657cbd6e285486ddd104de431",
+      "sanitizedSha256": "f0a98a9517c6a000e07e830ea4c7146fa99ac203c742b3ecb3848fe0895c4666",
+      "archiveSha256": "7601835d28095c3127aaee6caaae02a51c3a2da818fa6993d1863a897d209585",
+      "redactions": {
+        "ansi": 12,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 16 skipped (17)",
+        "Duration  48.96s (transform 14.45s, setup 104ms, import 19.06s, tests 29.67s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "workflow-task-source-help-review",
+      "exitCode": 0,
+      "rawSha256": "1f4cf8340cda77903d2c37a4df1d64aa6479e774d464c345c45f9efcd7426aa6",
+      "sanitizedSha256": "1f4cf8340cda77903d2c37a4df1d64aa6479e774d464c345c45f9efcd7426aa6",
+      "archiveSha256": "06e52e269cfb532e2dda4043813d0d7e4ec67da41419aa951ea48d9c7f75d9ba",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    }
+  ],
+  "sourceCommitMeaning": "Archive checkout identity; scoped runs may predate it. Only separately recorded unchanged-source gates establish final tested source identity.",
+  "updates": [
+    {
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861",
+      "meaning": "Recorded actual .log.exit sidecars from original commands; no inferred status or rerun",
+      "logs": [
+        "workflow-task-source-companion-callers-final",
+        "workflow-task-source-issue-telemetry-diagnostic"
+      ]
+    }
+  ]
+}

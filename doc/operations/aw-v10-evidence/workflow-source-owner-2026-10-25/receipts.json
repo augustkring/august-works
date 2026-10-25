@@ -20,7 +20,8 @@
         "Test Files  1 passed (1)",
         "Tests  18 passed (18)",
         "Duration  69.27s (transform 9.10s, setup 74ms, import 12.58s, tests 56.50s, environment 0ms)"
-      ]
+      ],
+      "sourceCommit": "dbe3e7c89fcf38d9980019682e76c23ec43205ef"
     },
     {
       "name": "workflow-source-executor-current-final",
@@ -39,7 +40,8 @@
         "Test Files  1 passed (1)",
         "Tests  51 passed (51)",
         "Duration  38.83s (transform 9.96s, setup 69ms, import 14.03s, tests 24.61s, environment 0ms)"
-      ]
+      ],
+      "sourceCommit": "dbe3e7c89fcf38d9980019682e76c23ec43205ef"
     },
     {
       "name": "learning-workflow-source-final42-current",
@@ -59,7 +61,8 @@
         "Test Files  1 failed (1)",
         "Tests  3 failed | 39 passed (42)",
         "Duration  443.78s (transform 9.51s, setup 75ms, import 13.48s, tests 430.10s, environment 0ms)"
-      ]
+      ],
+      "sourceCommit": "dbe3e7c89fcf38d9980019682e76c23ec43205ef"
     },
     {
       "name": "workflow-source-checkpoint-server-typecheck",
@@ -74,7 +77,249 @@
         "credential_field": 0,
         "url_credential": 0
       },
-      "summary": []
+      "summary": [],
+      "sourceCommit": "dbe3e7c89fcf38d9980019682e76c23ec43205ef"
+    },
+    {
+      "name": "learning-workflow-promoted-300-current",
+      "exitCode": 0,
+      "rawSha256": "2d43eb7d92a102741b8c6ec87f99b5c1e6f8aecde41039823e8bd4662337cd2d",
+      "sanitizedSha256": "7645b5c4e86e99d60c0f8347831bc3cc36f3a6725c8ece0fdb263da66dba32cd",
+      "archiveSha256": "2e3e229b30b01960ba592892a854f5b4249defe99e0684e9c251feecd7fc7efc",
+      "redactions": {
+        "ansi": 6,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 41 skipped (42)",
+        "Duration  233.59s (transform 10.08s, setup 78ms, import 14.16s, tests 219.23s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "learning-workflow-source-final42-300",
+      "exitCode": 1,
+      "rawSha256": "065e7aba0118b4622ec0e3afe491a97395a8a0ed937c792aa571c4d91cbd8788",
+      "sanitizedSha256": "6128f6b4e2eea3ab36f9011c13810500ab3f68294ac56a309b0c686d005218aa",
+      "archiveSha256": "789438c4a5b195ff8de445655c7dae61377b7c254fe23b323f29ffd1284f8294",
+      "redactions": {
+        "ansi": 36,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 41 passed (42)",
+        "Duration  645.55s (transform 9.23s, setup 71ms, import 13.01s, tests 632.36s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "learning-workflow-source-artifact-roots-final",
+      "exitCode": 1,
+      "exitSidecar": "learning-workflow-source-artifact-roots-final.exit",
+      "rawSha256": "41c728a72abb30aa870cc311a151b50f87f500ff2c2189018ea9460ba9bcbd73",
+      "sanitizedSha256": "41c728a72abb30aa870cc311a151b50f87f500ff2c2189018ea9460ba9bcbd73",
+      "archiveSha256": "a66e9aca349a8ab9fca40e8c268e5c972563ecb2f91890e07a26c15a2ebcca97",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 2 passed | 39 skipped (42)",
+        "Duration  313.33s (transform 9.25s, setup 71ms, import 13.11s, tests 300.04s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "learning-workflow-source-artifact-roots-optimized",
+      "exitCode": 1,
+      "exitSidecar": "learning-workflow-source-artifact-roots-optimized.exit",
+      "rawSha256": "8e0c7601648c8d035d9b969f7cb18276cf70a20297fbc4995ed560ee3377e643",
+      "sanitizedSha256": "8e0c7601648c8d035d9b969f7cb18276cf70a20297fbc4995ed560ee3377e643",
+      "archiveSha256": "2489f173ad5ca5e81f04e9aa5b54979e074785fe8080492ca52bf0663fd9b6cb",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 2 passed | 39 skipped (42)",
+        "Duration  265.35s (transform 9.11s, setup 80ms, import 12.89s, tests 252.24s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "learning-workflow-promoted-timing",
+      "exitCode": 1,
+      "exitSidecar": "learning-workflow-promoted-timing.exit",
+      "rawSha256": "836dbcf0512629ac5690eb84901d5123bf5a3648aa4b6df262555410dda34af5",
+      "sanitizedSha256": "836dbcf0512629ac5690eb84901d5123bf5a3648aa4b6df262555410dda34af5",
+      "archiveSha256": "1a4f4bc636f0690ce5871eb9f4af64c8dee451f266c6a8e23a3423accfc8c89c",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 41 skipped (42)",
+        "Duration  138.03s (transform 9.33s, setup 69ms, import 13.23s, tests 124.61s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "learning-workflow-promoted-phases",
+      "exitCode": 1,
+      "exitSidecar": "learning-workflow-promoted-phases.exit",
+      "rawSha256": "e8361bb80bb6660e001916380f213c8fb304a514a061c9cffe8e850d78d1da21",
+      "sanitizedSha256": "e8361bb80bb6660e001916380f213c8fb304a514a061c9cffe8e850d78d1da21",
+      "archiveSha256": "a1c230efc01d2aae4ad9acb1656370ebef4695a9a9e6125d04f3993acdace926",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 41 skipped (42)",
+        "Duration  138.31s (transform 9.68s, setup 72ms, import 13.59s, tests 124.51s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "learning-workflow-promoted-180-current",
+      "exitCode": 1,
+      "exitSidecar": "learning-workflow-promoted-180-current.exit",
+      "rawSha256": "f138cca286afc560b48e41af9e8195590f8ee510a04133060181ad76cff51894",
+      "sanitizedSha256": "f138cca286afc560b48e41af9e8195590f8ee510a04133060181ad76cff51894",
+      "archiveSha256": "2110b0e1082f13f79c52f4a05d395cac574be9fa1de8ea736444d36201ae95ff",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 41 skipped (42)",
+        "Duration  199.82s (transform 10.58s, setup 73ms, import 14.74s, tests 184.88s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "learning-workflow-promoted-live-phases-run",
+      "exitCode": 1,
+      "exitSidecar": "learning-workflow-promoted-live-phases-run.exit",
+      "rawSha256": "dc4a03fc43bbf1bd609d648b0f9698a1fc4e1b399ad8cdb9a10a38a886af7e11",
+      "sanitizedSha256": "dc4a03fc43bbf1bd609d648b0f9698a1fc4e1b399ad8cdb9a10a38a886af7e11",
+      "archiveSha256": "5a5adf53cfbc6b4c65b88f69b0928ca44ee005c46abc97f38f8eaa45e7144a87",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 41 skipped (42)",
+        "Duration  199.79s (transform 10.21s, setup 73ms, import 14.47s, tests 185.12s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "learning-workflow-promoted-50pct",
+      "exitCode": 1,
+      "exitSidecar": "learning-workflow-promoted-50pct.exit",
+      "rawSha256": "4b509375ffb9717788b406e9737cfe98f78ec878383e758729b207e92e487bd2",
+      "sanitizedSha256": "4b509375ffb9717788b406e9737cfe98f78ec878383e758729b207e92e487bd2",
+      "archiveSha256": "9440c9933356af318b2266c6b66c82f5aafa6f091b68ca857018a3703410c3a0",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 41 skipped (42)",
+        "Duration  202.78s (transform 12.46s, setup 95ms, import 17.19s, tests 185.33s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "learning-workflow-signal-180",
+      "exitCode": 0,
+      "exitSidecar": "learning-workflow-signal-180.exit",
+      "rawSha256": "f58f0437f56bc316e4418ee20d65993d772daecd2acb46f3df05664806422888",
+      "sanitizedSha256": "f58f0437f56bc316e4418ee20d65993d772daecd2acb46f3df05664806422888",
+      "archiveSha256": "a2121179276b8bb7716c1d2fe9a0b0ef45325183127a9c191a2621269ce5afc5",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  2 passed | 40 skipped (42)",
+        "Duration  132.42s (transform 9.48s, setup 73ms, import 13.49s, tests 118.74s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
     }
-  ]
+  ],
+  "updates": [
+    {
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861",
+      "meaning": "Measured long native promotion passes219s under300s harness; full42 reaches41pass1workflow_signal120s timeout under concurrent compiler, now isolated for diagnosis",
+      "logs": [
+        "learning-workflow-promoted-300-current",
+        "learning-workflow-source-final42-300"
+      ]
+    },
+    {
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861",
+      "meaning": "Available timeout/phase diagnostics and isolated workflow_signal118.74s measured harness evidence; temporary instrumentation removed, full42 isolated rerun ongoing",
+      "logs": [
+        "learning-workflow-source-artifact-roots-final",
+        "learning-workflow-source-artifact-roots-optimized",
+        "learning-workflow-promoted-timing",
+        "learning-workflow-promoted-phases",
+        "learning-workflow-promoted-180-current",
+        "learning-workflow-promoted-live-phases-run",
+        "learning-workflow-promoted-50pct",
+        "learning-workflow-signal-180"
+      ]
+    }
+  ],
+  "sourceCommitMeaning": "Archive checkout identity; scoped runs may predate it. Only separately recorded unchanged-source gates establish final tested source identity."
 }

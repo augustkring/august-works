@@ -20,7 +20,8 @@
         "Test Files  3 passed (3)",
         "Tests  186 passed (186)",
         "Duration  28.94s (transform 11.61s, setup 188ms, import 19.83s, tests 8.53s, environment 0ms)"
-      ]
+      ],
+      "sourceCommit": "3b06cc3c52a5ed2f8cb95bd37f6354fdae8ed28e"
     },
     {
       "name": "up05-stranded-native-queue-owner",
@@ -39,7 +40,8 @@
         "Test Files  3 passed (3)",
         "Tests  210 passed (210)",
         "Duration  29.87s (transform 11.55s, setup 200ms, import 19.66s, tests 9.61s, environment 0ms)"
-      ]
+      ],
+      "sourceCommit": "3b06cc3c52a5ed2f8cb95bd37f6354fdae8ed28e"
     },
     {
       "name": "up05-live-legacy-controller-deadline",
@@ -58,7 +60,214 @@
         "Test Files  1 passed (1)",
         "Tests  5 passed (5)",
         "Duration  15.99s (transform 2.74s, setup 79ms, import 4.70s, tests 11.08s, environment 0ms)"
+      ],
+      "sourceCommit": "3b06cc3c52a5ed2f8cb95bd37f6354fdae8ed28e"
+    },
+    {
+      "name": "up05-native-cleanup-and-assembled-queue",
+      "exitCode": 1,
+      "rawSha256": "7451a6cb5f3394901c87d3e5f6e4cf9fd161288cb945bff14375064cd9a79cc9",
+      "sanitizedSha256": "2dd57602e5dd6c4501ac82cc59e3f759a1e7fe258c599b13bc6d2723f2570b26",
+      "archiveSha256": "612a3dee3a031cbf1c2a89284ceaf8eff7339ac5b5a747d4e7e121d67a2c7a46",
+      "redactions": {
+        "ansi": 378,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed | 4 passed (5)",
+        "Tests  1 failed | 136 passed (137)",
+        "Duration  130.09s (transform 13.66s, setup 297ms, import 32.27s, tests 96.90s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "up05-native-non-assignee-queue-trace",
+      "exitCode": 1,
+      "rawSha256": "9e044ad1b960c2c88e7e9a0f622ac9310e9d45773602efcdf8fbfcce7513d003",
+      "sanitizedSha256": "90b593da45f1f78abdbb6a62286644a97b494375b01eccb5d6796f3ed03c98d6",
+      "archiveSha256": "b656a95d071fcf8be66dad815997a3ccb36e151f19aa2c8e518057379db162d8",
+      "redactions": {
+        "ansi": 12,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 2 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  2 failed | 48 skipped (50)",
+        "Duration  25.96s (transform 12.50s, setup 72ms, import 17.20s, tests 8.58s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "up05-native-non-assignee-queue-dispatch-wait",
+      "exitCode": 0,
+      "rawSha256": "5d254e829746111f8c0a65f8b2ae4347e21163d09b128417fd940c63aaca815d",
+      "sanitizedSha256": "6672b483f54dcbb2ece3cc10e973d396e5983d782ba3ee80c46757297977060a",
+      "archiveSha256": "96485b516350587b37568e28732ed7746d1658573575b02aad3c8f12bdd696bd",
+      "redactions": {
+        "ansi": 12,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  2 passed | 48 skipped (50)",
+        "Duration  51.90s (transform 28.16s, setup 86ms, import 38.00s, tests 13.67s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "up05-native-cleanup-and-assembled-queue-final",
+      "exitCode": 0,
+      "rawSha256": "ba0a5a66817bd220a6fb8858c52dba9bdf27e9fae2f0838477fcf3bdfc902e1b",
+      "sanitizedSha256": "6b15f3988fd0cdacad9e084533d9f4d9ec391d256fab821acd637ca680515625",
+      "archiveSha256": "c2c0c8be777fe621e5f8e3740bfc55d704b82d9bfffb70d9c923fa6c7d75b1b1",
+      "redactions": {
+        "ansi": 378,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  5 passed (5)",
+        "Tests  137 passed (137)",
+        "Duration  138.91s (transform 11.69s, setup 348ms, import 31.31s, tests 106.48s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "up05-environment-runtime-complete",
+      "exitCode": 0,
+      "rawSha256": "7beb816203b97868c3d212f063bd67e28a1ce63e8a967a46352fff77c9faf788",
+      "sanitizedSha256": "7d51f1aceca9bb67aa8f2cd21b747e28f1c85a56133a512794a5f8e9ce44f256",
+      "archiveSha256": "82c456361210ab21d5ca0c54d853cd07d13cfea303bd6607c36a83ec3bdc711e",
+      "redactions": {
+        "ansi": 84,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  111 passed (111)",
+        "Duration  46.15s (transform 24.02s, setup 236ms, import 34.24s, tests 11.40s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "up05-native-stop-unknown-adapter-review",
+      "exitCode": 0,
+      "exitSidecar": "up05-native-stop-unknown-adapter-review.log.exit",
+      "rawSha256": "6c4bfaca141c244625ef6b93dd8a7e2a35080dfc67da8194e214c782827c54b9",
+      "sanitizedSha256": "6c4bfaca141c244625ef6b93dd8a7e2a35080dfc67da8194e214c782827c54b9",
+      "archiveSha256": "e118b190b07e3f8e43721ee1b666f84d78fe09844ca2472316dfe91cf04c2d17",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  84 passed (84)",
+        "Duration  27.34s (transform 12.04s, setup 89ms, import 17.27s, tests 9.83s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "up05-native-stop-unknown-focused-final",
+      "exitCode": 0,
+      "exitSidecar": "up05-native-stop-unknown-focused-final.log.exit",
+      "rawSha256": "9c4eca68ad045474b0399e605cb21a737df68fc774dace42042c052c202a484b",
+      "sanitizedSha256": "9c4eca68ad045474b0399e605cb21a737df68fc774dace42042c052c202a484b",
+      "archiveSha256": "1246f7f16dc9a45bbe85fc21c608d9fb805fbbf1b9d43f5ff4774667c52ac98c",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  2 passed | 82 skipped (84)",
+        "Duration  26.62s (transform 15.03s, setup 117ms, import 21.07s, tests 5.26s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "queued-comment-execution-wait-mutation-final",
+      "exitCode": 0,
+      "rawSha256": "939b325aea83fed6df3f1238605fa366c17fcab5c9f0916386a265f5718e9931",
+      "sanitizedSha256": "939b325aea83fed6df3f1238605fa366c17fcab5c9f0916386a265f5718e9931",
+      "archiveSha256": "a6173db351efd9f05a8337b6d06e1bb70143f85c26b482838e967a8955b46292",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  6 passed (6)",
+        "Duration  8.99s (transform 2.58s, setup 76ms, import 4.52s, tests 4.28s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "v10-up05-workflow-workspace-typecheck",
+      "exitCode": 0,
+      "rawSha256": "9bb5d6c5906353387fd91d759a1a8fd3f2ed0a64ce4fb5a0594551755a03aa98",
+      "sanitizedSha256": "9bb5d6c5906353387fd91d759a1a8fd3f2ed0a64ce4fb5a0594551755a03aa98",
+      "archiveSha256": "dfccba991db059f5c97754b37fb3db6f0360812df5d23241bb8e97269d0eb94e",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    }
+  ],
+  "updates": [
+    {
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861",
+      "meaning": "Final assembled137 and environment-runtime111 pass; native Stop/unknown-outcome controls preserved; earlier136pass1race and focuseddispatch trace retained",
+      "logs": [
+        "up05-native-cleanup-and-assembled-queue",
+        "up05-native-non-assignee-queue-trace",
+        "up05-native-non-assignee-queue-dispatch-wait",
+        "up05-native-cleanup-and-assembled-queue-final",
+        "up05-environment-runtime-complete",
+        "up05-native-stop-unknown-adapter-review",
+        "up05-native-stop-unknown-focused-final",
+        "queued-comment-execution-wait-mutation-final",
+        "v10-up05-workflow-workspace-typecheck"
+      ]
+    },
+    {
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861",
+      "meaning": "Recorded actual .log.exit sidecars from original native guard commands; no inferred status or rerun",
+      "logs": [
+        "up05-native-stop-unknown-adapter-review",
+        "up05-native-stop-unknown-focused-final"
       ]
     }
-  ]
+  ],
+  "sourceCommitMeaning": "Archive checkout identity; scoped runs may predate it. Only separately recorded unchanged-source gates establish final tested source identity."
 }
