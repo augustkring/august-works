@@ -5,7 +5,15 @@ import {
   MCP_PROTOCOL_VERSION,
   mcpHttpRequestHeaders,
   parseMcpHttpResponseBody,
+  selectMcpProtocolVersion,
 } from "../services/mcp-http.js";
+
+describe("MCP protocol revision selection", () => {
+  it("keeps a mutually supported legacy revision and chooses the current revision otherwise", () => {
+    expect(selectMcpProtocolVersion("2025-06-18")).toBe("2025-06-18");
+    expect(selectMcpProtocolVersion("2099-01-01")).toBe(MCP_PROTOCOL_VERSION);
+  });
+});
 
 describe("mcpHttpRequestHeaders", () => {
   it("advertises both JSON and SSE on every request", () => {

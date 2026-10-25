@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Field, ToggleField } from "./agent-config-primitives";
@@ -20,11 +20,25 @@ export function JevSkillSuggestionSettings({ companyId }: { companyId: string })
   }, [query.data]);
   const mutation = useMutation({ mutationFn: (input: JevDecisionSettingsUpdate) => jevDecisionApi.update(companyId, input),
     onSuccess: async () => { await client.invalidateQueries({ queryKey: ["jev-skill-decisions", companyId] }); } });
-  const [consent, setConsent] = useState(false);
-  const setupTest = useMutation({ mutationFn: () => jevDecisionApi.setupTest(companyId), onSuccess: async () => {
+  const [consentedScope, setConsentedScope] = useState("");
+  const setupRequestId = useRef<string | null>(null);
+  const selected = query.data?.choices.find(item => item.id === connectionId && item.grantId === grantId);
+  const testProfile = query.data?.testProfile ?? null;
+  const selectedSaved = Boolean(selected && query.data?.settings.connectionId === selected.id && query.data?.settings.grantId === selected.grantId);
+  const consentScope = `${companyId}:${connectionId}:${grantId}:${testProfile?.profileHash ?? "unqualified"}`;
+  const consent = consentedScope === consentScope;
+  const setupTest = useMutation({ mutationFn: () => {
+    if (!selected || !selectedSaved || !testProfile) throw new Error("The displayed company account or Jev profile changed.");
+    setupRequestId.current ??= crypto.randomUUID();
+    return jevDecisionApi.setupTest(companyId, { connectionId: selected.id, grantId: selected.grantId, profileHash: testProfile.profileHash, requestId: setupRequestId.current });
+  }, onSuccess: async result => {
+    if (!["unknown", "dispatched", "reserved"].includes(result.status)) {
+      setupRequestId.current = null;
+      setConsentedScope("");
+    }
     await client.invalidateQueries({ queryKey: ["jev-skill-decisions-history", companyId] });
   } });
-  const selected = query.data?.choices.find(item => item.id === connectionId && item.grantId === grantId);
+  useEffect(() => { setupRequestId.current = null; setConsentedScope(""); setupTest.reset(); }, [companyId, connectionId, grantId, testProfile?.profileHash]);
   const next = { mode, allowBackground, connectionId: connectionId || null, grantId: grantId || null } satisfies JevDecisionSettingsUpdate;
   return <section className="max-w-2xl space-y-4" aria-labelledby="jev-skill-suggestions-title">
     <div className="space-y-1"><h2 id="jev-skill-suggestions-title" className="text-sm font-medium">{t("jevDecisions.title")}</h2>
@@ -44,15 +58,15 @@ export function JevSkillSuggestionSettings({ companyId }: { companyId: string })
       </Field>
       <ToggleField label={t("jevDecisions.background")} hint={t("jevDecisions.backgroundHint")} checked={allowBackground} onChange={setAllowBackground} />
       <div className="space-y-2 rounded-md border border-border p-3">
-        <p className="text-xs text-muted-foreground">{t("jevDecisions.disclosure")}</p>
-        <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={consent} onChange={event => setConsent(event.target.checked)} />{t("jevDecisions.consent")}</label>
-        <Button size="sm" disabled={!consent || !selected || setupTest.isPending} onClick={() => setupTest.mutate()}>{setupTest.isPending ? t("jevDecisions.testing") : t("jevDecisions.test")}</Button>
-        {setupTest.isSuccess && <p role="status" className="text-xs text-muted-foreground">{setupTest.data.status === "completed" ? t("jevDecisions.testSuccess") : t("jevDecisions.testFailed")}</p>}
+        <p className="text-xs text-muted-foreground">{t("jevDecisions.disclosure", { cap: testProfile ? (testProfile.costCapMinor / 100).toFixed(2) : "—", currency: testProfile?.currency ?? "USD" })}</p>
+        <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={consent} onChange={event => setConsentedScope(event.target.checked ? consentScope : "")} />{t("jevDecisions.consent", { cap: testProfile ? (testProfile.costCapMinor / 100).toFixed(2) : "—", currency: testProfile?.currency ?? "USD" })}</label>
+        <Button size="sm" disabled={!consent || !selectedSaved || !testProfile || setupTest.isPending} onClick={() => setupTest.mutate()}>{setupTest.isPending ? t("jevDecisions.testing") : t("jevDecisions.test")}</Button>
+        {setupTest.isSuccess && <p role="status" className="text-xs text-muted-foreground">{setupTest.data.status === "completed" ? t("jevDecisions.testSuccess") : setupTest.data.status === "unknown" ? t("jevDecisions.testUnknown") : t("jevDecisions.testFailed")}</p>}
         {setupTest.isError && <p role="alert" className="text-xs text-destructive">{t("jevDecisions.testFailed")}</p>}
       </div>
       <div className="space-y-2"><h3 className="text-sm font-medium">{t("jevDecisions.history")}</h3>
         {history.isError ? <p className="text-xs text-destructive">{t("jevDecisions.historyError")}</p> : history.data?.length ? <ul className="space-y-1">{history.data.map(item =>
-          <li key={item.id} className="flex flex-wrap justify-between gap-2 border-b border-border py-1 text-xs"><span>{item.status} · {item.model} · {new Date(item.createdAt).toLocaleString()}</span><span>{t("jevDecisions.reservedCeiling")}: {item.reservedCostCents} {item.currency}</span></li>)}</ul>
+          <li key={item.id} className="flex flex-wrap justify-between gap-2 border-b border-border py-1 text-xs"><span>{item.status} · {item.model} · {new Date(item.createdAt).toLocaleString()}</span><span>{t("jevDecisions.reservedCeiling")}: {item.reservedCostCents} {item.currency}{item.actualCostCents !== null && <> · {t("jevDecisions.actualCost", { amount: item.actualCostCents, currency: item.currency, status: item.costStatus })}</>}</span></li>)}</ul>
           : <p className="text-xs text-muted-foreground">{t("jevDecisions.historyEmpty")}</p>}
       </div>
       <p className="text-xs text-muted-foreground">{t("jevDecisions.profile")}</p>

@@ -119,7 +119,8 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       observedBody: string,
       inputTokens: number,
       modelOutput: string,
-      duringCall: (() => Promise<void>) | undefined;
+      duringCall: (() => Promise<void>) | undefined,
+      issueSnapshotUpdates: Array<{ changed: string[]; snapshotNull: boolean }>;
     beforeAll(async () => {
       home = await mkdtemp(join(tmpdir(), "aw-v7-worker-model-fixture-"));
       vi.stubEnv("PAPERCLIP_HOME", home);
@@ -130,10 +131,29 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       );
       database = await startEmbeddedPostgresTestDatabase("aw-v7-worker-model-");
       db = createDb(database.connectionString);
+      issueSnapshotUpdates = [];
+      await db.execute(sql.raw("create table public.test_issue_snapshot_update_log(issue_id uuid, changed_columns text[], snapshot_cleared boolean)"));
+      await db.execute(sql.raw(`create function public.test_issue_snapshot_update_monitor() returns trigger language plpgsql as $$
+        declare changed text[] := array[]::text[]; col text; begin
+          for col in select key from jsonb_each(to_jsonb(new)) loop
+            if (to_jsonb(new)->col) is distinct from (to_jsonb(old)->col) then changed := array_append(changed,col); end if;
+          end loop;
+          if old.payload_source_snapshot is not null and new.payload_source_snapshot is null then
+            insert into public.test_issue_snapshot_update_log(issue_id, changed_columns, snapshot_cleared) values(new.id, changed, true);
+          end if;
+          return new;
+        end $$`));
+      await db.execute(sql.raw(`create trigger test_issue_snapshot_update_monitor after update on public.issues
+        for each row execute function public.test_issue_snapshot_update_monitor()`));
       await instanceSettingsService(db).getExperimental();
       await enableV5ForTest(db);
     }, 60000);
     afterAll(async () => {
+      if (db) {
+        await db.execute(sql.raw("drop trigger if exists test_issue_snapshot_update_monitor on public.issues"));
+        await db.execute(sql.raw("drop function if exists public.test_issue_snapshot_update_monitor()"));
+        await db.execute(sql.raw("drop table if exists public.test_issue_snapshot_update_log"));
+      }
       await database?.cleanup();
       vi.unstubAllEnvs();
       if (home) {
@@ -350,6 +370,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       inputTokens = 10;
       modelOutput = "Retained bounded draft";
       duringCall = undefined;
+      issueSnapshotUpdates.length = 0;
     });
     afterEach(() => registerNativeDraftGateway(db, undefined));
 
@@ -575,6 +596,10 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
           "manual",
           { actorType: "user", actorId: f.userId },
         );
+        issueSnapshotUpdates.push(...(await db.execute<{ issue_id: string; changed_columns: string[]; snapshot_cleared: boolean }>(sql`
+          select issue_id, changed_columns, snapshot_cleared from public.test_issue_snapshot_update_log where issue_id=${task.id}`)).map(row => ({
+          changed: row.changed_columns, snapshotNull: row.snapshot_cleared,
+        })));
         await heartbeat.drainActiveRunExecutions();
       } finally {
         await heartbeat.drainActiveRunExecutions();
@@ -583,6 +608,11 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         .select()
         .from(orchestrationWorkerAttempts)
         .where(eq(orchestrationWorkerAttempts.planId, plan.id));
+      issueSnapshotUpdates.push(...(await db.execute<{ changed_columns: string[]; snapshot_cleared: boolean }>(sql`
+        select changed_columns, snapshot_cleared from public.test_issue_snapshot_update_log where issue_id=${task.id}`)).map(row => ({
+        changed: row.changed_columns, snapshotNull: row.snapshot_cleared,
+      })));
+      process.stderr.write(`[test-only] issue source snapshot clear monitor ${JSON.stringify(issueSnapshotUpdates)}\n`);
       expect(attempts).toHaveLength(1);
       const [actualRun] = await db
         .select()

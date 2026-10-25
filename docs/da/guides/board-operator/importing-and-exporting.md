@@ -67,6 +67,8 @@ En accepteret import har et gemt operations-id. Når siden genindlæses, kontrol
 
 Hvis en import til en ny virksomhed stadig kører, eller resultatet er ukendt, før målvirksomheden er bekræftet, kan den oprindelige anmoder finde operationen i Import history for en virksomhed, vedkommende aktuelt har adgang til. Indgangen viser **New company, result not yet confirmed**. Den identificerer eller beviser ikke, at en virksomhed er oprettet. Når målet er bekræftet, vises operationen i den pågældende virksomheds historik, hvis du har aktuel adgang.
 
+Annullering er kun tilgængelig for den oprindelige anmoder, mens den aktuelle session og den krævede virksomheds- eller instansadgang stadig er gyldig.
+
 - **Running:** Vent på den gemte operation. Brug **Annuller import** for at anmode om et sikkert stop. Hvis du forlader siden, fortsætter importen.
 - **Annullering anmodet:** Importen stopper ved et kontrolpunkt i den oprindelige importproces. Allerede gennemførte ændringer rulles ikke tilbage. Hvis processen ikke kan bekræfte en fuldstændig annulleringskvittering, forbliver resultatet ukendt og skal afklares.
 - **Annulleret:** Annulleringen blev bekræftet, før importændringerne begyndte. Ingen importeffekter blev udført.

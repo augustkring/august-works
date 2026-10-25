@@ -3767,6 +3767,20 @@
       "when": 1792940000001,
       "tag": "0539_jev_decision_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 540,
+      "version": "7",
+      "when": 1792940000002,
+      "tag": "0540_little_kabuki",
+      "breakpoints": true
+    },
+    {
+      "idx": 541,
+      "version": "7",
+      "when": 1792940000003,
+      "tag": "0541_wet_spectrum",
+      "breakpoints": true
     }
   ]
 }

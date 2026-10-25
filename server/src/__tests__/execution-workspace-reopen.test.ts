@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { mkdtemp, rm, stat } from "node:fs/promises";
+import { appendFile, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -427,6 +427,37 @@ describeEmbeddedPostgres("reopen archived isolated execution workspace", () => {
       await db.update(projectWorkspaces).set({ repoRef: null }).where(eq(projectWorkspaces.id, projectWorkspaceId));
       proof = await svc.prepareGitWorkspaceCleanupProof({ workspaceId, actor: localBoardActor });
       expect(proof).toBeTruthy();
+      const ownerNotes = join(deletedWorktree, "owner-notes.txt");
+      await writeFile(ownerNotes, "keep these notes\n");
+      const commonGitDir = execFileSync("git", ["-C", deletedWorktree, "rev-parse", "--path-format=absolute", "--git-common-dir"], { encoding: "utf8" }).trim();
+      const excludeFile = join(commonGitDir, "info", "exclude");
+      const excludeBytes = await readFile(excludeFile).catch(() => Buffer.alloc(0));
+      await appendFile(excludeFile, "\n/owner-notes.txt\n");
+      const ignoredMutation = await cleanupExecutionWorkspaceArtifacts({
+        workspace: archived!, projectWorkspace: { cwd: null, cleanupCommand: null }, gitRestorationProof: proof!,
+      });
+      expect(ignoredMutation.cleaned).toBe(false);
+      expect((await readFile(ownerNotes, "utf8"))).toBe("keep these notes\n");
+      expect((await stat(deletedWorktree)).isDirectory()).toBe(true);
+      expect(execFileSync("git", ["-C", managedDir, "rev-parse", `refs/heads/${branchName}`], { encoding: "utf8" }).trim()).toMatch(/^[0-9a-f]{40,64}$/);
+      await rm(ownerNotes);
+      await writeFile(excludeFile, excludeBytes);
+
+      proof = await svc.prepareGitWorkspaceCleanupProof({ workspaceId, actor: localBoardActor });
+      const trackedFiles = execFileSync("git", ["-C", deletedWorktree, "ls-files", "-z"], { encoding: "utf8" })
+        .split("\0").filter(Boolean);
+      expect(trackedFiles.length).toBeGreaterThan(0);
+      const trackedPath = join(deletedWorktree, trackedFiles[0]!);
+      const trackedBytes = await readFile(trackedPath);
+      await appendFile(trackedPath, "\nowner edit\n");
+      const trackedMutation = await cleanupExecutionWorkspaceArtifacts({
+        workspace: archived!, projectWorkspace: { cwd: null, cleanupCommand: null }, gitRestorationProof: proof!,
+      });
+      expect(trackedMutation.cleaned).toBe(false);
+      expect((await readFile(trackedPath)).byteLength).toBeGreaterThan(trackedBytes.byteLength);
+      await writeFile(trackedPath, trackedBytes);
+
+      proof = await svc.prepareGitWorkspaceCleanupProof({ workspaceId, actor: localBoardActor });
       const cleanup = await cleanupExecutionWorkspaceArtifacts({
         workspace: archived!, projectWorkspace: { cwd: null, cleanupCommand: null },
         gitRestorationProof: proof!, forceWorktreeRemoval: false,

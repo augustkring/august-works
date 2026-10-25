@@ -235,6 +235,16 @@ describe("company portability", () => {
     });
   }
 
+  function currentHumanExportPortability() {
+    useNativeExportCompany();
+    const service = companyPortabilityService(nativeDb);
+    return {
+      ...service,
+      exportBundle: (companyId: string, input: Parameters<typeof service.exportBundle>[1], options?: Parameters<typeof service.exportBundle>[2]) =>
+        service.exportBundle(nativeCompanyId, input, { ...options, actor: nativeActor }),
+    };
+  }
+
   async function seedNativeBoardProject(input: { id: string; name: string; description?: string }) {
     const [row] = await nativeDb.insert(projects).values({
       id: input.id,
@@ -1413,7 +1423,7 @@ describe("company portability", () => {
   });
 
   it("exports portable project workspace metadata and remaps it on import", async () => {
-    const portability = companyPortabilityService({} as any);
+    const portability = currentHumanExportPortability();
 
     projectSvc.list.mockResolvedValue([
       {
@@ -1503,7 +1513,7 @@ describe("company portability", () => {
       },
     ]);
 
-    const exported = await portability.exportBundle("company-1", {
+    const exported = await portability.exportBundle(nativeCompanyId, {
       include: {
         company: true,
         agents: false,
@@ -1757,7 +1767,7 @@ describe("company portability", () => {
   });
 
   it("collapses repeated task workspace warnings into one summary per missing workspace", async () => {
-    const portability = companyPortabilityService({} as any);
+    const portability = currentHumanExportPortability();
 
     projectSvc.list.mockResolvedValue([
       {
@@ -1844,7 +1854,7 @@ describe("company portability", () => {
       },
     ]);
 
-    const exported = await portability.exportBundle("company-1", {
+    const exported = await portability.exportBundle(nativeCompanyId, {
       include: {
         company: false,
         agents: false,
@@ -1994,7 +2004,7 @@ describe("company portability", () => {
     companySvc.create.mockResolvedValue({ id: "company-import-checkpoint", name: "Import checkpoint" });
     let checks = 0;
     const afterEffect = portability.importBundle(request, "user-1", {
-      checkCancellation: async () => ++checks === 2,
+      checkCancellation: async () => ++checks === 3,
     });
     await expect(afterEffect).rejects.toBeInstanceOf(ImportCancellationError);
     await expect(afterEffect).rejects.toMatchObject({ effectsStarted: true });
@@ -2505,7 +2515,7 @@ describe("company portability", () => {
   });
 
   it("reads project env inputs back from .paperclip.yaml during preview import", async () => {
-    const portability = companyPortabilityService({} as any);
+    const portability = currentHumanExportPortability();
 
     projectSvc.list.mockResolvedValue([
       {
@@ -2529,7 +2539,7 @@ describe("company portability", () => {
       },
     ]);
 
-    const exported = await portability.exportBundle("company-1", {
+    const exported = await portability.exportBundle(nativeCompanyId, {
       include: {
         company: false,
         agents: false,
@@ -2572,7 +2582,7 @@ describe("company portability", () => {
   });
 
   it("exports routines as recurring task packages with Paperclip routine extensions", async () => {
-    const portability = companyPortabilityService({} as any);
+    const portability = currentHumanExportPortability();
 
     projectSvc.list.mockResolvedValue([
       {
@@ -2665,7 +2675,7 @@ describe("company portability", () => {
       },
     ]);
 
-    const exported = await portability.exportBundle("company-1", {
+    const exported = await portability.exportBundle(nativeCompanyId, {
       include: {
         company: true,
         agents: true,
@@ -2702,7 +2712,7 @@ describe("company portability", () => {
   });
 
   it("skips built-in managed agents and routines during export", async () => {
-    const portability = companyPortabilityService({} as any);
+    const portability = currentHumanExportPortability();
 
     agentSvc.list.mockResolvedValue([
       {
@@ -2799,7 +2809,7 @@ describe("company portability", () => {
       },
     ]);
 
-    const exported = await portability.exportBundle("company-1", {
+    const exported = await portability.exportBundle(nativeCompanyId, {
       include: {
         company: true,
         agents: true,
@@ -4078,7 +4088,7 @@ describe("company portability", () => {
   });
 
   it("carries labels by name through export and import round-trip", async () => {
-    const portability = companyPortabilityService({} as any);
+    const portability = currentHumanExportPortability();
 
     projectSvc.list.mockResolvedValue([
       {
@@ -4115,7 +4125,7 @@ describe("company portability", () => {
       { id: "label-b", companyId: "company-1", name: "urgent", color: "#00ff00" },
     ]);
 
-    const exported = await portability.exportBundle("company-1", {
+    const exported = await portability.exportBundle(nativeCompanyId, {
       include: { company: true, agents: false, projects: true, issues: true },
     });
 
@@ -4167,7 +4177,7 @@ describe("company portability", () => {
   });
 
   it("reuses existing target labels on name collision and keeps the target color", async () => {
-    const portability = companyPortabilityService({} as any);
+    const portability = currentHumanExportPortability();
 
     projectSvc.list.mockResolvedValue([]);
     projectSvc.listWorkspaces.mockResolvedValue([]);
@@ -4193,7 +4203,7 @@ describe("company portability", () => {
       { id: "label-b", companyId: "company-1", name: "urgent", color: "#00ff00" },
     ]);
 
-    const exported = await portability.exportBundle("company-1", {
+    const exported = await portability.exportBundle(nativeCompanyId, {
       include: { company: true, agents: false, projects: false, issues: true },
     });
 
@@ -4416,10 +4426,10 @@ describe("company portability", () => {
 
   it("carries blockers, documents, work products, and monitors through export and import", async () => {
     const { db, insertedRelationValues, monitorUpdates } = fakeImportDb();
-    const portability = companyPortabilityService(db);
+    const portability = currentHumanExportPortability();
     mockTaskFidelityExportSources();
 
-    const exported = await portability.exportBundle("company-1", {
+    const exported = await portability.exportBundle(nativeCompanyId, {
       include: { company: true, agents: false, projects: false, issues: true },
     });
 
@@ -4543,10 +4553,10 @@ describe("company portability", () => {
 
   it("skips blockers and documents of tasks excluded from the import selection", async () => {
     const { db, insertedRelationValues } = fakeImportDb();
-    const portability = companyPortabilityService(db);
+    const portability = currentHumanExportPortability();
     mockTaskFidelityExportSources();
 
-    const exported = await portability.exportBundle("company-1", {
+    const exported = await portability.exportBundle(nativeCompanyId, {
       include: { company: true, agents: false, projects: false, issues: true },
     });
 
@@ -4639,10 +4649,10 @@ describe("company portability", () => {
 
   it("carries task timestamps and parent links through export and import", async () => {
     const { db } = fakeImportDb();
-    const portability = companyPortabilityService(db);
+    const portability = currentHumanExportPortability();
     mockTaskHierarchyExportSources();
 
-    const exported = await portability.exportBundle("company-1", {
+    const exported = await portability.exportBundle(nativeCompanyId, {
       include: { company: true, agents: false, projects: false, issues: true },
     });
 
@@ -4886,11 +4896,11 @@ describe("company portability", () => {
 
   it("carries issue attachments as content-addressed blobs through export and import", async () => {
     const storage = fakeAttachmentStorage();
-    const portability = companyPortabilityService({} as any, storage as any);
+    const portability = currentHumanExportPortability();
     mockAttachmentExportSources();
     const sha = sha256Of("png-bytes");
 
-    const exported = await portability.exportBundle("company-1", {
+    const exported = await portability.exportBundle(nativeCompanyId, {
       include: { company: true, agents: false, projects: false, issues: true },
     });
 
@@ -4978,10 +4988,10 @@ describe("company portability", () => {
   });
 
   it("skips attachment export with a per-task warning when storage is unavailable", async () => {
-    const portability = companyPortabilityService({} as any);
+    const portability = currentHumanExportPortability();
     mockAttachmentExportSources();
 
-    const exported = await portability.exportBundle("company-1", {
+    const exported = await portability.exportBundle(nativeCompanyId, {
       include: { company: true, agents: false, projects: false, issues: true },
     });
 
@@ -4994,9 +5004,9 @@ describe("company portability", () => {
 
   it("skips all attachment imports with one warning when the target has no storage", async () => {
     const storage = fakeAttachmentStorage();
-    const exporting = companyPortabilityService({} as any, storage as any);
+    const exporting = currentHumanExportPortability();
     mockAttachmentExportSources();
-    const exported = await exporting.exportBundle("company-1", {
+    const exported = await exporting.exportBundle(nativeCompanyId, {
       include: { company: true, agents: false, projects: false, issues: true },
     });
 
@@ -5020,11 +5030,11 @@ describe("company portability", () => {
 
   it("fails closed when a bundle blob does not match its declared sha256", async () => {
     const storage = fakeAttachmentStorage();
-    const portability = companyPortabilityService({} as any, storage as any);
+    const portability = currentHumanExportPortability();
     mockAttachmentExportSources();
     const sha = sha256Of("png-bytes");
 
-    const exported = await portability.exportBundle("company-1", {
+    const exported = await portability.exportBundle(nativeCompanyId, {
       include: { company: true, agents: false, projects: false, issues: true },
     });
     exported.files[`blobs/${sha}`] = {
@@ -5079,7 +5089,7 @@ describe("company portability", () => {
       ]);
       const sha = sha256Of("png-bytes");
 
-      const exported = await portability.exportBundle("company-1", {
+      const exported = await portability.exportBundle(nativeCompanyId, {
         include: { company: true, agents: false, projects: false, issues: true },
       });
       delete exported.files[`blobs/${sha}`];
@@ -5179,11 +5189,11 @@ describe("company portability", () => {
 
   it("carries embedded asset images through export and import with rewritten references", async () => {
     const storage = fakeAttachmentStorage();
-    const portability = companyPortabilityService({} as any, storage as any);
+    const portability = currentHumanExportPortability();
     mockEmbeddedAssetExportSources();
     const sha = sha256Of("embedded-image-bytes");
 
-    const exported = await portability.exportBundle("company-1", {
+    const exported = await portability.exportBundle(nativeCompanyId, {
       include: { company: true, agents: false, projects: false, issues: true },
     });
 
@@ -5263,7 +5273,7 @@ describe("company portability", () => {
 
   it("skips embedded image references that are foreign or dangling with one aggregate warning", async () => {
     const storage = fakeAttachmentStorage();
-    const portability = companyPortabilityService({} as any, storage as any);
+    const portability = currentHumanExportPortability();
     const foreignAssetId = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
     const missingAssetId = "12345678-1234-4123-8123-123456789abc";
     mockEmbeddedAssetExportSources(
@@ -5288,7 +5298,7 @@ describe("company portability", () => {
         : null
     ));
 
-    const exported = await portability.exportBundle("company-1", {
+    const exported = await portability.exportBundle(nativeCompanyId, {
       include: { company: true, agents: false, projects: false, issues: true },
     });
 
@@ -5303,11 +5313,11 @@ describe("company portability", () => {
 
   it("leaves embedded image references untouched when their blob is missing at import", async () => {
     const storage = fakeAttachmentStorage();
-    const portability = companyPortabilityService({} as any, storage as any);
+    const portability = currentHumanExportPortability();
     mockEmbeddedAssetExportSources();
     const sha = sha256Of("embedded-image-bytes");
 
-    const exported = await portability.exportBundle("company-1", {
+    const exported = await portability.exportBundle(nativeCompanyId, {
       include: { company: true, agents: false, projects: false, issues: true },
     });
     delete exported.files[`blobs/${sha}`];
@@ -5337,18 +5347,18 @@ describe("company portability", () => {
 
   it("prunes embedded asset entries and blobs when the referencing files are excluded from the export selection", async () => {
     const storage = fakeAttachmentStorage();
-    const portability = companyPortabilityService({} as any, storage as any);
+    const portability = currentHumanExportPortability();
     mockEmbeddedAssetExportSources();
     const sha = sha256Of("embedded-image-bytes");
 
-    const kept = await portability.exportBundle("company-1", {
+    const kept = await portability.exportBundle(nativeCompanyId, {
       include: { company: true, agents: false, projects: false, issues: true },
       selectedFiles: ["COMPANY.md", ".paperclip.yaml", "tasks/pap-1/TASK.md", "tasks/pap-1/documents/spec.md", `blobs/${sha}`],
     });
     expect(asTextFile(kept.files[".paperclip.yaml"])).toContain("embeddedAssets:");
     expect(kept.files[`blobs/${sha}`]).toBeDefined();
 
-    const pruned = await portability.exportBundle("company-1", {
+    const pruned = await portability.exportBundle(nativeCompanyId, {
       include: { company: true, agents: false, projects: false, issues: true },
       selectedFiles: ["COMPANY.md", ".paperclip.yaml"],
     });
@@ -5496,7 +5506,7 @@ describe("company portability", () => {
   });
 
   it("preserves issue comment presentation fields through export and import", async () => {
-    const portability = companyPortabilityService({} as any);
+    const portability = currentHumanExportPortability();
     const presentation = { kind: "system_notice", tone: "warning", detailsDefaultOpen: false };
     const metadata = {
       version: 1,
@@ -5538,7 +5548,7 @@ describe("company portability", () => {
       },
     ]);
 
-    const exported = await portability.exportBundle("company-1", {
+    const exported = await portability.exportBundle(nativeCompanyId, {
       include: { company: true, agents: false, projects: false, issues: true },
     });
 
@@ -5575,7 +5585,7 @@ describe("company portability", () => {
   });
 
   it("does not export raw comment author user ids", async () => {
-    const portability = companyPortabilityService({} as any);
+    const portability = currentHumanExportPortability();
 
     projectSvc.list.mockResolvedValue([]);
     projectSvc.listWorkspaces.mockResolvedValue([]);
@@ -5612,7 +5622,7 @@ describe("company portability", () => {
       },
     ]);
 
-    const exported = await portability.exportBundle("company-1", {
+    const exported = await portability.exportBundle(nativeCompanyId, {
       include: { company: true, agents: false, projects: false, issues: true },
     });
 
@@ -5622,7 +5632,7 @@ describe("company portability", () => {
   });
 
   it("downgrades user-authored imported comments to system when no importing user exists", async () => {
-    const portability = companyPortabilityService({} as any);
+    const portability = currentHumanExportPortability();
 
     projectSvc.list.mockResolvedValue([]);
     projectSvc.listWorkspaces.mockResolvedValue([]);
@@ -5659,7 +5669,7 @@ describe("company portability", () => {
       },
     ]);
 
-    const exported = await portability.exportBundle("company-1", {
+    const exported = await portability.exportBundle(nativeCompanyId, {
       include: { company: true, agents: false, projects: false, issues: true },
     });
 
@@ -6168,7 +6178,7 @@ describe("company portability", () => {
   });
 
   it("resolves issue assignee to existing agent when agent is skipped", async () => {
-    const portability = companyPortabilityService({} as any);
+    const portability = currentHumanExportPortability();
 
     projectSvc.list.mockResolvedValue([{
       id: "project-1", companyId: "company-1", name: "TestProject", urlKey: "testproject",
@@ -6183,7 +6193,7 @@ describe("company portability", () => {
       executionWorkspaceSettings: null, assigneeAdapterOverrides: null, metadata: null,
     }]);
 
-    const exported = await portability.exportBundle("company-1", {
+    const exported = await portability.exportBundle(nativeCompanyId, {
       include: { company: false, agents: true, projects: true, issues: true },
     });
 

@@ -1276,9 +1276,6 @@ export function executionWorkspaceRoutes(db: Db, opts: { pluginWorkerManager?: P
           workspaceId: id,
           capturedGeneration,
           destroy: async () => {
-            const gitRestorationProof = existing.providerType === "git_worktree"
-              ? await svc.prepareGitWorkspaceCleanupProof?.({ workspaceId: id, actor: req.actor }) ?? null
-              : null;
             await environmentRuntime.destroyReusableSandboxLeases({
               companyId: existing.companyId,
               executionWorkspaceId: existing.id,
@@ -1289,6 +1286,17 @@ export function executionWorkspaceRoutes(db: Db, opts: { pluginWorkerManager?: P
               executionWorkspaceId: existing.id,
               workspaceCwd: existing.cwd,
             });
+            // Quiesce runtime owners even when current Git source authorization
+            // has been withdrawn. A missing proof keeps files, while stop
+            // failures still surface and abort the lifecycle transition.
+            let gitRestorationProof: Awaited<ReturnType<NonNullable<typeof svc.prepareGitWorkspaceCleanupProof>>> | null = null;
+            if (existing.providerType === "git_worktree") {
+              try {
+                gitRestorationProof = await svc.prepareGitWorkspaceCleanupProof?.({ workspaceId: id, actor: req.actor }) ?? null;
+              } catch {
+                gitRestorationProof = null;
+              }
+            }
             return cleanupExecutionWorkspaceArtifacts({
               workspace: existing,
               projectWorkspace,

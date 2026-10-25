@@ -1,5 +1,5 @@
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { Client } from "@modelcontextprotocol/client";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { createKvDemoHttpServer, type KvDemoHttpServer } from "./http.js";
 import type { KvStateSnapshot } from "./store.js";
@@ -30,6 +30,41 @@ afterEach(async () => {
 });
 
 describe("kv demo HTTP server", () => {
+  it("serves an explicitly negotiated 2025 protocol client through the SDK v2 legacy path", async () => {
+    const { base } = await startServer();
+    const send = (payload: Record<string, unknown>, protocolVersion?: string) => fetch(`${base}/mcp`, {
+      method: "POST",
+      headers: {
+        accept: "application/json, text/event-stream",
+        "content-type": "application/json",
+        ...(protocolVersion ? { "mcp-protocol-version": protocolVersion } : {}),
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const initialized = await send({
+      jsonrpc: "2.0", id: 1, method: "initialize",
+      params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "legacy-fixture", version: "1" } },
+    });
+    expect(initialized.status).toBe(200);
+    const initBody = await initialized.json() as { result?: { protocolVersion?: string } };
+    expect(initBody.result?.protocolVersion).toBe("2025-06-18");
+
+    const listed = await send({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }, "2025-06-18");
+    expect(listed.status).toBe(200);
+    expect((await listed.json() as { result?: { tools?: Array<{ name: string }> } }).result?.tools?.map((tool) => tool.name)).toContain("kv_get");
+  });
+
+  it("keeps the loopback Origin guard in front of the v2 HTTP handler", async () => {
+    const { base } = await startServer();
+    const response = await fetch(`${base}/mcp`, {
+      method: "POST",
+      headers: { origin: "https://attacker.example", "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
+    });
+    expect(response.status).toBe(403);
+  });
+
   it("reflects an MCP tool write in GET /api/state (shared process state)", async () => {
     const { base } = await startServer();
     const client = await mcpClient(base);

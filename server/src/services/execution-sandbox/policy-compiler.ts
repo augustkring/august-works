@@ -14,6 +14,11 @@ export type ResolvedSandboxBrokerBinding = {
 export function compileSandboxPolicy(input: { boundary: SandboxPolicy; candidate: SandboxPolicy; capabilities: SandboxCapabilitySnapshot | null; authorizedConnectionGrantHashes: Record<string, string>; credentialBrokerOrigin?: string | null; credentialBrokerBindings?: ResolvedSandboxBrokerBinding[]; sourcePolicyRefs: string[]; now?: Date }): SandboxPolicyCompilation {
   const boundary = sandboxPolicySchema.parse(input.boundary), candidate = sandboxPolicySchema.parse(input.candidate), failures: string[] = [], unsupported: string[] = [];
   const caps = input.capabilities ? sandboxCapabilitySnapshotSchema.parse(input.capabilities) : null, now = input.now ?? new Date();
+  let modelOrigin: URL | null = null;
+  if (caps?.modelBrokerProviderProfile) try {
+    modelOrigin = new URL(input.credentialBrokerOrigin ?? "");
+    if (modelOrigin.protocol !== "https:" || modelOrigin.username || modelOrigin.password || modelOrigin.search || modelOrigin.hash || modelOrigin.pathname !== "/") modelOrigin = null;
+  } catch { modelOrigin = null; }
   if (candidate.riskClass === "C4") failures.push("domain_overlay_not_qualified");
   const rank = { development: 0, compatibility: 1, standard_managed: 2, high_assurance_managed: 3 };
   if (rank[candidate.profile] < rank[boundary.profile]) failures.push("assurance_downgrade");
@@ -24,7 +29,10 @@ export function compileSandboxPolicy(input: { boundary: SandboxPolicy; candidate
   if (!boundary.filesystem.deniedPaths.every(path => candidate.filesystem.deniedPaths.some(deny => within(path, deny)))) failures.push("filesystem_deny_removed");
   if (candidate.process.uid !== boundary.process.uid || !subset(candidate.process.allowedBinaries, boundary.process.allowedBinaries) || !subset(candidate.process.allowedSyscalls, boundary.process.allowedSyscalls)) failures.push("process_expansion");
   for (const destination of candidate.network.destinations) {
-    if (!boundary.network.destinations.some(allowed => allowed.hostname === destination.hostname && allowed.port === destination.port && subset(destination.methods, allowed.methods) && pathsWithin(destination.pathPrefixes, allowed.pathPrefixes))) failures.push("network_expansion");
+    const exactManagedModelRoute = Boolean(caps?.modelBrokerProviderProfile && modelOrigin && destination.hostname === modelOrigin.hostname &&
+      destination.port === Number(modelOrigin.port || 443) && destination.methods.length === 1 && destination.methods[0] === "POST" &&
+      destination.pathPrefixes.length === 1 && destination.pathPrefixes[0] === "/runtime-tools/model/v1/messages");
+    if (!exactManagedModelRoute && !boundary.network.destinations.some(allowed => allowed.hostname === destination.hostname && allowed.port === destination.port && subset(destination.methods, allowed.methods) && pathsWithin(destination.pathPrefixes, allowed.pathPrefixes))) failures.push("network_expansion");
   }
   if (candidate.credentials.mode !== "none" && candidate.credentials.mode !== boundary.credentials.mode) failures.push("credential_mode_change");
   const resolvedBrokerBindings = input.credentialBrokerBindings ?? [];
@@ -86,11 +94,7 @@ export function compileSandboxPolicy(input: { boundary: SandboxPolicy; candidate
     failures.push("credential_broker_bindings_without_brokered_mode");
   }
   if (caps?.modelBrokerProviderProfile) {
-    let origin: URL | null = null;
-    try {
-      origin = new URL(input.credentialBrokerOrigin ?? "");
-      if (origin.protocol !== "https:" || origin.username || origin.password || origin.search || origin.hash || origin.pathname !== "/") origin = null;
-    } catch { origin = null; }
+    const origin = modelOrigin;
     if (!origin) unsupported.push("managed_model_broker_origin_unavailable");
     if (caps.backend !== "openshell") unsupported.push("managed_model_broker_requires_openshell");
     const candidateModelDestinations = origin ? candidate.network.destinations.filter(destination => destination.hostname === origin!.hostname && destination.port === Number(origin!.port || 443)) : [];
@@ -100,7 +104,12 @@ export function compileSandboxPolicy(input: { boundary: SandboxPolicy; candidate
     if (candidateModelDestinations.length && !exactModelDestination) failures.push("managed_model_broker_egress_broadened");
     if (candidate.network.destinations.some(destination => destination.hostname === "anthropic.com" || destination.hostname.endsWith(".anthropic.com")))
       failures.push("managed_model_provider_direct_egress");
-    if (origin && !exactModelDestination) {
+    if (origin && exactModelDestination) {
+      modelBrokerEndpoint = { hostname: origin.hostname, port: Number(origin.port || 443), path: "/runtime-tools/model/v1/messages" };
+    }
+    if (origin && !exactModelDestination && candidate.network.destinations.length >= 64)
+      unsupported.push("managed_model_broker_network_destination_capacity");
+    if (origin && !exactModelDestination && candidate.network.destinations.length < 64) {
       modelBrokerEndpoint = { hostname: origin.hostname, port: Number(origin.port || 443), path: "/runtime-tools/model/v1/messages" };
       compiledPolicy = {
         ...compiledPolicy,

@@ -13,6 +13,7 @@ const mockExecutionWorkspaceService = vi.hoisted(() => ({
   getCloseReadiness: vi.fn(),
   archiveWorkspaceUnderLifecycleLock: vi.fn(),
   fenceClosedWorkspaceDestruction: vi.fn(),
+  prepareGitWorkspaceCleanupProof: vi.fn(),
   reconcileExecutionWorkspaceBranch: vi.fn(),
   update: vi.fn(),
   updateFromApi: vi.fn(),
@@ -119,6 +120,7 @@ describe.sequential("execution workspace routes", () => {
     mockExecutionWorkspaceService.getById.mockResolvedValue(null);
     mockExecutionWorkspaceService.updateFromApi.mockResolvedValue(null);
     mockExecutionWorkspaceService.reconcileExecutionWorkspaceBranch.mockResolvedValue(null);
+    mockExecutionWorkspaceService.prepareGitWorkspaceCleanupProof.mockResolvedValue(null);
     mockHeartbeatService.wakeup.mockResolvedValue(null);
   });
 
@@ -596,6 +598,33 @@ describe.sequential("execution workspace routes", () => {
         failureReason: "execution_workspace_closed",
       }),
     );
+  });
+
+  it("still quiesces runtime owners when Git restoration proof is unavailable", async () => {
+    const archivedWorkspace = {
+      id: "workspace-1", companyId: "company-1", sourceIssueId: "issue-1", status: "archived",
+      mode: "isolated_workspace", providerType: "git_worktree", projectWorkspaceId: null,
+      projectId: null, cwd: "/tmp/worktree",
+    };
+    mockExecutionWorkspaceService.getById.mockResolvedValue({ ...archivedWorkspace, status: "active" });
+    mockExecutionWorkspaceService.getCloseReadiness.mockResolvedValue({ state: "ready", blockingReasons: [] });
+    mockExecutionWorkspaceService.archiveWorkspaceUnderLifecycleLock.mockResolvedValue({
+      outcome: "archived", workspace: archivedWorkspace, capturedGeneration: 3,
+    });
+    mockExecutionWorkspaceService.prepareGitWorkspaceCleanupProof.mockRejectedValue(new Error("source access revoked"));
+    mockExecutionWorkspaceService.fenceClosedWorkspaceDestruction.mockImplementation(
+      async ({ destroy }: { destroy: () => Promise<unknown> }) => ({ skippedReopened: false, result: await destroy() }),
+    );
+
+    const res = await request(createApp()).patch("/api/execution-workspaces/workspace-1").send({ status: "archived" });
+
+    expect(res.status).toBe(200);
+    expect(mockEnvironmentRuntimeService.destroyReusableSandboxLeases).toHaveBeenCalledTimes(1);
+    expect(mockWorkspaceRuntimeTeardown.stopRuntimeServicesForExecutionWorkspace).toHaveBeenCalledTimes(1);
+    expect(mockWorkspaceRuntimeTeardown.cleanupExecutionWorkspaceArtifacts).toHaveBeenCalledWith(
+      expect.objectContaining({ workspace: expect.objectContaining({ id: "workspace-1", providerType: "git_worktree" }) }),
+    );
+    expect(mockWorkspaceRuntimeTeardown.cleanupExecutionWorkspaceArtifacts.mock.calls[0]?.[0]?.gitRestorationProof).toBeUndefined();
   });
 
   it("keeps the reusable sandbox leases when a reopen makes the fence skip the archive teardown", async () => {

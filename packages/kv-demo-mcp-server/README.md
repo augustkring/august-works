@@ -1,5 +1,7 @@
 # KV Demo MCP Server
 
+The server uses the stable MCP TypeScript SDK v2 (`@modelcontextprotocol/server` 2.4.0; current protocol `2026-07-28`). Its stateless HTTP endpoint keeps the v2 SDK's legacy request path and performs configured bearer-token and loopback Host/Origin checks before the MCP handler.
+
 A standalone, self-contained MCP server for demos. One process exposes four
 key/value MCP tools **and** a tiny web UI that renders the values those tools
 mutate — so you can call a tool from a Paperclip agent and watch the value

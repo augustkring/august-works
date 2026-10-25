@@ -58,8 +58,8 @@ describe("AgentChatPicker", () => {
     await render();
     await search("accountant");
     expect(options()).toHaveLength(0);
-    expect(document.body.textContent).toContain("No agents match");
-    const clear = [...document.querySelectorAll("button")].find((b) => b.textContent === "Clear search")!;
+    expect(document.body.textContent).toContain("generalist.noMatch");
+    const clear = [...document.querySelectorAll("button")].find((b) => b.textContent?.includes("generalist.clearSearch"))!;
     await act(async () => clear.click());
     expect(options()).toHaveLength(2);
     await search("designer");
@@ -80,6 +80,6 @@ describe("AgentChatPicker", () => {
     await act(async () => [...document.querySelectorAll("button")].find((b) => b.textContent === "Retry")!.click());
     expect(retry).toHaveBeenCalledOnce();
     await render({ error: null, agents: [] });
-    expect(document.body.textContent).toContain("Create an agent from the Agents page");
+    expect(document.body.textContent).toContain("generalist.noCoworkers");
   });
 });

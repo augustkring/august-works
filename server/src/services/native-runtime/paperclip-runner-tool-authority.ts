@@ -44,6 +44,7 @@ import {
   agentWakeupRequests,
   chatEndpoints,
   chatConversations,
+  documents,
   documentRevisions,
   heartbeatRuns,
   issueApprovals,

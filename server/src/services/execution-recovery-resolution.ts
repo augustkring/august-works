@@ -1,4 +1,4 @@
-import { hasWorkspaceRestoreFailure } from "@paperclipai/shared";
+import { hasWorkspaceRestoreFailure, nativePayloadSourceSnapshotSchema } from "@paperclipai/shared";
 import { randomUUID } from "node:crypto";
 import { conversationRecoveryActionPredicate, getConversationOwnershipBlocker } from "./conversation-continuation.js";
 import { persistActivity } from "./activity-log.js";
@@ -9,9 +9,18 @@ import {
   chatActions,
   environmentLeases,
   heartbeatRuns,
+  agentExecutionManifests,
+  assets,
+  issueAttachments,
   issueRecoveryActions,
   issues,
   nativeRunFinalizations,
+  runtimeCells,
+  runtimeHostCommands,
+  runtimeHosts,
+  runtimeOperations,
+  runtimePolicySnapshots,
+  runtimeSandboxBindings,
   type Db,
 } from "@paperclipai/db";
 import { conflict } from "../errors.js";
@@ -22,6 +31,8 @@ import {
 } from "@paperclipai/shared";
 import { parseIssueExecutionState } from "./issue-execution-policy.js";
 import { isSupersededConversationRun } from "./agent-conversations.js";
+import { SANDBOX_HOST_COMMAND } from "@paperclipai/shared";
+import { nativeSha256 } from "./native-runtime/canonical.js";
 
 /** An operator records observed outcomes; this is not permission to blindly retry. */
 export async function validateExecutionReconciliation(input: {
@@ -73,7 +84,45 @@ export async function validateExecutionReconciliation(input: {
   }
   if (hasWorkspaceRestoreFailure(run.resultJson) &&
       (!decision.workspaceRepairEvidence || decision.workspaceRepairEvidence.trim().length < 20)) {
-    throw conflict("Verify safe workspace staging or repair and record workspaceRepairEvidence before continuing this run.");
+    if (!decision.workspaceReconstruction) {
+      throw conflict("Verify safe workspace staging or repair and record workspaceRepairEvidence before continuing this run.");
+    }
+  }
+  if (decision.workspaceReconstruction) {
+    if (!hasWorkspaceRestoreFailure(run.resultJson) || !decision.workspaceReconstruction.confirmed) {
+      throw conflict("Saved-file reconstruction is available only for a failed run with a lost workspace.");
+    }
+    const destruction = await verifyNativeWorkspaceDestructionReceipt({ db, companyId, runId: run.id });
+    if (!destruction || destruction.receiptHash !== decision.workspaceReconstruction.destructionReceiptHash) {
+      throw conflict("The original native workspace destruction receipt is not current or verifiable.");
+    }
+    const selected = decision.workspaceReconstruction.selectedSources;
+    const selectedIds = selected.map(source => source.attachmentId);
+    if (new Set(selectedIds).size !== selectedIds.length) throw conflict("Selected reconstruction sources contain duplicates.");
+    const attachmentRows = await db.select().from(issueAttachments).where(and(
+      eq(issueAttachments.companyId, companyId), eq(issueAttachments.issueId, issueId),
+      inArray(issueAttachments.id, selectedIds),
+    ));
+    if (attachmentRows.length !== selectedIds.length) throw conflict("A selected saved file is no longer available on this task.");
+    const assetIds = attachmentRows.map(row => row.assetId);
+    const assetRows = await db.select().from(assets).where(and(
+      eq(assets.companyId, companyId), inArray(assets.id, assetIds),
+    ));
+    if (assetRows.length !== selectedIds.length) throw conflict("A selected saved file belongs to another source or company.");
+    const assetById = new Map(assetRows.map(asset => [asset.id, asset]));
+    for (const attachment of attachmentRows) {
+      const snapshot = nativePayloadSourceSnapshotSchema.safeParse(attachment.payloadSourceSnapshot);
+      const asset = assetById.get(attachment.assetId);
+      const selectedSource = selected.find(source => source.attachmentId === attachment.id);
+      const captured = snapshot.success ? snapshot.data.inputs.find(input => input.kind === "attachment" && input.attachmentId === attachment.id) : null;
+      if (!asset || !selectedSource || attachment.payloadSourceProtocolVersion !== 1 || attachment.payloadSourceSnapshotInvalidated
+        || !snapshot.success || snapshot.data.owner.kind !== "attachment" || snapshot.data.owner.companyId !== companyId
+        || snapshot.data.owner.id !== attachment.id || captured?.kind !== "attachment" || captured.disposition !== "delivered"
+        || captured.assetId !== asset.id || captured.sha256 !== asset.sha256 || captured.byteSize !== asset.byteSize
+        || selectedSource.sha256 !== asset.sha256) {
+        throw conflict("A selected saved file no longer matches its captured source hash and access snapshot.");
+      }
+    }
   }
   for (const pid of [
     run.processPid,
@@ -132,6 +181,90 @@ export async function validateExecutionReconciliation(input: {
   return run;
 }
 
+/** Return a receipt only when the failed run's exact native sandbox generation
+ * has a durable completed Stop operation and a successful signed-host Destroy
+ * completion. Host command replies are stored only after the native host
+ * signature/epoch verifier accepts them. */
+export async function verifyNativeWorkspaceDestructionReceipt(input: {
+  db: Db;
+  companyId: string;
+  runId: string;
+}): Promise<{ receiptHash: string; bindingId: string; cellId: string; generation: string } | null> {
+  const [manifest] = await input.db.select().from(agentExecutionManifests).where(and(
+    eq(agentExecutionManifests.companyId, input.companyId), eq(agentExecutionManifests.runId, input.runId),
+  )).limit(1);
+  if (!manifest) return null;
+  const policies = await input.db.select().from(runtimePolicySnapshots).where(and(
+    eq(runtimePolicySnapshots.companyId, input.companyId),
+    eq(runtimePolicySnapshots.executionManifestId, manifest.id),
+  ));
+  for (const policy of policies) {
+    if (policy.agentId !== manifest.agentId) continue;
+    const [binding] = await input.db.select().from(runtimeSandboxBindings).where(and(
+      eq(runtimeSandboxBindings.companyId, input.companyId), eq(runtimeSandboxBindings.id, policy.bindingId),
+      eq(runtimeSandboxBindings.runtimeCellId, policy.runtimeCellId),
+    )).limit(1);
+    if (!binding) continue;
+    const generation = binding.cellGeneration;
+    const [cell] = await input.db.select().from(runtimeCells).where(and(
+      eq(runtimeCells.companyId, input.companyId), eq(runtimeCells.id, policy.runtimeCellId),
+    )).limit(1);
+    if (!cell || cell.deletedAt || cell.generation.toString() !== generation) continue;
+    const [host] = cell.runtimeHostId ? await input.db.select().from(runtimeHosts).where(eq(runtimeHosts.id, cell.runtimeHostId)).limit(1) : [];
+    if (!host || host.credentialRevokedAt || host.fencedAt || host.retiredAt) continue;
+    const operations = await input.db.select().from(runtimeOperations).where(and(
+      eq(runtimeOperations.companyId, input.companyId), eq(runtimeOperations.runtimeCellId, cell.id),
+      eq(runtimeOperations.operationType, "stop"), eq(runtimeOperations.status, "SUCCEEDED"),
+      sql`${runtimeOperations.desiredState}->>'sandboxBindingId' = ${policy.bindingId}`,
+      sql`${runtimeOperations.desiredState}->>'generation' = ${generation}`,
+      sql`${runtimeOperations.desiredState}->>'executionManifestId' = ${manifest.id}`,
+    ));
+    for (const operation of operations) {
+      const stopCommandId = (operation.desiredState as Record<string, unknown>).sandboxHostCommandId;
+      if (typeof stopCommandId !== "string" || !operation.completedAt) continue;
+      const [stopCommand] = await input.db.select().from(runtimeHostCommands).where(and(
+        eq(runtimeHostCommands.id, stopCommandId), eq(runtimeHostCommands.runtimeHostId, host.id),
+        eq(runtimeHostCommands.companyId, input.companyId), eq(runtimeHostCommands.runtimeCellId, cell.id),
+        eq(runtimeHostCommands.cellGeneration, BigInt(generation)),
+        eq(runtimeHostCommands.commandType, SANDBOX_HOST_COMMAND), eq(runtimeHostCommands.status, "SUCCEEDED"),
+      )).limit(1);
+      if (!stopCommand) continue;
+      const stopRequest = stopCommand.payload as Record<string, any>;
+      const stopResult = stopCommand.safeResult as Record<string, unknown> | null;
+      if (stopRequest.action !== "stop" || stopRequest.hostEpoch !== host.credentialVersion
+        || stopRequest.scope?.bindingId !== policy.bindingId || stopRequest.scope?.cellId !== cell.id
+        || stopRequest.scope?.cellGeneration !== generation
+        || stopResult?.action !== "stop" || stopResult.stopped !== true) continue;
+
+      const destroyCommands = await input.db.select().from(runtimeHostCommands).where(and(
+        eq(runtimeHostCommands.runtimeHostId, host.id), eq(runtimeHostCommands.companyId, input.companyId),
+        eq(runtimeHostCommands.runtimeCellId, cell.id), eq(runtimeHostCommands.cellGeneration, BigInt(generation)),
+        eq(runtimeHostCommands.commandType, SANDBOX_HOST_COMMAND), eq(runtimeHostCommands.status, "SUCCEEDED"),
+        sql`${runtimeHostCommands.payload}->>'action' = 'destroy'`,
+      ));
+      const destroyCommand = destroyCommands.find(command => {
+        const request = command.payload as Record<string, any>;
+        const result = command.safeResult as Record<string, unknown> | null;
+        return request.hostEpoch === host.credentialVersion
+          && request.scope?.bindingId === policy.bindingId
+          && request.scope?.cellId === cell.id
+          && request.scope?.cellGeneration === generation
+          && result?.action === "destroy" && result.destroyed === true && command.completedAt !== null;
+      });
+      if (!destroyCommand) continue;
+      return {
+        receiptHash: nativeSha256({ runId: input.runId, manifestId: manifest.id, policySnapshotId: policy.id,
+          bindingId: policy.bindingId, cellId: cell.id, generation,
+          hostId: host.id, hostEpoch: host.credentialVersion, stopOperationId: operation.id,
+          stopCommandId: stopCommand.id, destroyCommandId: destroyCommand.id,
+          stopCompletedAt: stopCommand.completedAt?.toISOString(), destroyCompletedAt: destroyCommand.completedAt?.toISOString() }),
+        bindingId: policy.bindingId, cellId: cell.id, generation,
+      };
+    }
+  }
+  return null;
+}
+
 /** Durable delivery marker lives on the existing source-scoped recovery action. */
 export async function markExecutionReconciliation(
   db: Db,
@@ -142,6 +275,7 @@ export async function markExecutionReconciliation(
   decision: ExecutionReconciliation,
   actorId: string,
   deliveryOwner?: { kind: "chat_failed_run_retry"; actionId: string },
+  requestHash?: string,
 ) {
   if (deliveryOwner) {
     const [retry] = await db
@@ -187,6 +321,7 @@ export async function markExecutionReconciliation(
           actorId,
           recordedAt: new Date().toISOString(),
         },
+        ...(decision.workspaceReconstruction && requestHash ? { workspaceReconstructionRequestHash: requestHash } : {}),
         continuationDelivery: deliveryOwner ? "delegated" : "pending",
         ...(deliveryOwner ? { continuationDeliveryOwner: deliveryOwner } : {}),
       },
@@ -247,6 +382,21 @@ export async function deliverReconciledExecutions(
           .where(pendingDecision);
         continue;
       }
+      try {
+        await validateExecutionReconciliation({
+          db,
+          companyId: action.companyId,
+          issueId: task.id,
+          agentId: task.assigneeAgentId,
+          sourceRunId: decision.runId,
+          decision,
+        });
+      } catch {
+        await db.update(issueRecoveryActions).set({
+          evidence: sql`${issueRecoveryActions.evidence} || '{"continuationDelivery":"invalidated"}'::jsonb`,
+        }).where(pendingDecision);
+        continue;
+      }
       const run = await wake(action.returnOwnerAgentId, {
         source: "automation",
         triggerDetail: "system",
@@ -264,6 +414,7 @@ export async function deliverReconciledExecutions(
           forceFreshSession: true,
           wakeReason: "issue_recovery_action_restored",
           source: "execution.reconciled",
+          ...(decision.workspaceReconstruction ? { selectedSavedSources: decision.workspaceReconstruction.selectedSources } : {}),
         },
       });
       if (run)

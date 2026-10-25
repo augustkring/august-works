@@ -3818,6 +3818,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     secretValues: Record<string, string> | null | undefined,
     actorUserId: string | null | undefined,
     createdSecretIds: string[] = [],
+    checkCancellation?: () => Promise<void>,
   ) {
     if (envInputs.length === 0) return;
     const missingRequired = envInputs.filter((input) => {
@@ -3830,6 +3831,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     }
 
     for (const input of envInputs) {
+      await checkCancellation?.();
       const value = envInputValue(input, secretValues);
       if (value === null || value.trim().length === 0) continue;
 
@@ -5673,6 +5675,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         input.secretValues,
         actorUserId,
         createdImportSecretIds,
+        cancellationCheckpoint,
       );
 
       if (include.company) {

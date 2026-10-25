@@ -1,5 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { isIP } from "node:net";
+import { toNodeHandler, localhostHostValidation, localhostOriginValidation } from "@modelcontextprotocol/node";
+import { createMcpHandler } from "@modelcontextprotocol/server";
 import { createGoogleSheetsMcpServer } from "./index.js";
 import type { GoogleSheetsMcpConfig } from "./config.js";
 import { createGoogleSheetsClient, type GoogleSheetsClient } from "./google-client.js";
@@ -20,6 +22,24 @@ export interface GoogleSheetsMcpHttpServer {
 
 const MCP_PATH = "/mcp";
 
+function originMatchesHost(req: IncomingMessage, res: ServerResponse): boolean {
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  try {
+    if (new URL(origin).hostname.toLowerCase() === new URL(`http://${req.headers.host ?? ""}`).hostname.toLowerCase()) return true;
+  } catch {
+    // Reject malformed Origin or Host values.
+  }
+  res.writeHead(403, { "content-type": "application/json" });
+  res.end(JSON.stringify({ error: "Origin does not match request host." }));
+  return false;
+}
+
+function isLoopbackHost(host: string): boolean {
+  const value = host.trim().toLowerCase().replace(/^\[(.*)\]$/, "$1");
+  return value === "localhost" || value === "::1" || (isIP(value) === 4 && value.startsWith("127."));
+}
+
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   const payload = JSON.stringify(body);
   res.writeHead(status, {
@@ -35,54 +55,19 @@ function presentedToken(req: IncomingMessage): string | null {
   return null;
 }
 
-async function readJsonBody(req: IncomingMessage): Promise<unknown> {
-  const chunks: Buffer[] = [];
-  let size = 0;
-  for await (const chunk of req) {
-    const buffer = chunk as Buffer;
-    size += buffer.length;
-    if (size > 1_000_000) throw new Error("Request body too large.");
-    chunks.push(buffer);
-  }
-  if (chunks.length === 0) return undefined;
-  const raw = Buffer.concat(chunks).toString("utf8").trim();
-  if (!raw) return undefined;
-  return JSON.parse(raw);
-}
-
-async function handleMcp(
-  req: IncomingMessage,
-  res: ServerResponse,
-  config: GoogleSheetsMcpConfig,
-  client: GoogleSheetsClient,
-): Promise<void> {
-  let parsedBody: unknown;
-  try {
-    parsedBody = req.method === "POST" ? await readJsonBody(req) : undefined;
-  } catch (error) {
-    sendJson(res, 400, {
-      jsonrpc: "2.0",
-      error: { code: -32700, message: error instanceof Error ? error.message : "Parse error" },
-      id: null,
-    });
-    return;
-  }
-
-  const { server } = createGoogleSheetsMcpServer(config, { client });
-  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-  res.on("close", () => {
-    void transport.close();
-    void server.close();
-  });
-  await server.connect(transport);
-  await transport.handleRequest(req, res, parsedBody);
-}
-
 export function createGoogleSheetsMcpHttpServer(
   options: GoogleSheetsMcpHttpOptions,
 ): GoogleSheetsMcpHttpServer {
   const requiredToken = options.token?.trim() || null;
   const client = options.client ?? createGoogleSheetsClient(options.config.serviceAccount);
+  const mcpHandler = createMcpHandler(
+    () => createGoogleSheetsMcpServer(options.config, { client }).server,
+    { legacy: "stateless" },
+  );
+  const handleMcp = toNodeHandler(mcpHandler);
+  const validateHost = localhostHostValidation();
+  const validateOrigin = localhostOriginValidation();
+  let loopbackBind = true;
 
   const server = createServer((req, res) => {
     void (async () => {
@@ -99,7 +84,10 @@ export function createGoogleSheetsMcpHttpServer(
           return;
         }
 
-        await handleMcp(req, res, options.config, client);
+        if (loopbackBind) {
+          if (!validateHost(req, res) || !validateOrigin(req, res)) return;
+        } else if (!originMatchesHost(req, res)) return;
+        await handleMcp(req, res);
       } catch (error) {
         if (!res.headersSent) {
           sendJson(res, 500, { error: error instanceof Error ? error.message : "Internal error." });
@@ -112,18 +100,22 @@ export function createGoogleSheetsMcpHttpServer(
 
   return {
     server,
-    listen: (port, host = "127.0.0.1") =>
-      new Promise<number>((resolve, reject) => {
+    listen: (port, host = "127.0.0.1") => {
+      loopbackBind = isLoopbackHost(host);
+      return new Promise<number>((resolve, reject) => {
         server.once("error", reject);
         server.listen(port, host, () => {
           server.off("error", reject);
           const address = server.address();
           resolve(typeof address === "object" && address ? address.port : port);
         });
-      }),
-    close: () =>
-      new Promise<void>((resolve, reject) => {
+      });
+    },
+    close: async () => {
+      await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));
-      }),
+      });
+      await mcpHandler.close();
+    },
   };
 }

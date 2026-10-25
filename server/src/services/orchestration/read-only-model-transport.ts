@@ -87,7 +87,9 @@ export function validateAnthropicManagedMessagesRequest(
   raw: unknown,
   input: { model: string; maxOutputTokens: number; maximumEnvelopeBytes: number },
 ) {
-  const request = managedMessagesSchema.parse(raw);
+  let request: z.infer<typeof managedMessagesSchema>;
+  try { request = managedMessagesSchema.parse(raw); }
+  catch { throw new ReadOnlyModelTransportError("invalid_response"); }
   assertBoundedJson(request);
   if (
     !/^[a-zA-Z0-9_.:-]{1,200}$/.test(input.model) ||

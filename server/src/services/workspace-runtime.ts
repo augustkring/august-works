@@ -4043,6 +4043,7 @@ export async function cleanupExecutionWorkspaceArtifacts(input: {
   forceWorktreeRemoval?: boolean;
 }) {
   const warnings: string[] = [];
+  const verifiedBranchHeadSha = input.gitRestorationProof?.branchHeadSha ?? null;
   const workspacePath = input.workspace.providerRef ?? input.workspace.cwd;
   const repoRoot = input.workspace.providerType === "git_worktree" && workspacePath
     ? await resolveGitRepoRootForWorkspaceCleanup(
@@ -4207,11 +4208,12 @@ export async function cleanupExecutionWorkspaceArtifacts(input: {
             branchName: input.workspace.branchName,
             cleanupAction: "branch_delete",
           };
-          if (input.expectedBranchHeadSha) {
+          const expectedBranchHeadSha = input.expectedBranchHeadSha ?? verifiedBranchHeadSha;
+          if (expectedBranchHeadSha) {
             await deleteGitBranchAtVerifiedTip({
               repoRoot,
               branchName: input.workspace.branchName,
-              expectedHeadSha: input.expectedBranchHeadSha,
+              expectedHeadSha: expectedBranchHeadSha,
               recorder: input.recorder,
               metadata,
             });

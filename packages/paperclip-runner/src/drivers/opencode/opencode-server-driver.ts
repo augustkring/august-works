@@ -156,6 +156,70 @@ const CAPABILITIES: NativeSessionCapabilities = {
   unsupported: ["steering", "goals", "threadLineage"],
 };
 
+// Hook names and mutable output shapes are qualified against OpenCode 1.18.32.
+// The gateway treats these as observations and independently validates the
+// final Messages body against current server-owned sources and tool results.
+const MANAGED_SOURCE_WITNESS_PLUGIN = `
+import { createHash } from "node:crypto";
+const stable = (value) => {
+  if (Array.isArray(value)) return value.map(stable);
+  if (value && typeof value === "object") return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stable(value[key])]));
+  return value;
+};
+const hash = (value) => {
+  const encoded = JSON.stringify(stable(value));
+  if (encoded === undefined || encoded.length > 4_000_000) throw new Error("source witness limit");
+  return createHash("sha256").update(encoded).digest("hex");
+};
+export const PaperclipSourceWitness = async () => {
+  let system = null;
+  let messages = null;
+  const tools = new Map();
+  const pending = new Map();
+  const calls = [];
+  let invalid = false;
+  let ordinal = 0;
+  return {
+    "experimental.chat.messages.transform": async (_input, output) => { try { messages = output.messages; hash(messages); } catch { invalid = true; } },
+    "experimental.chat.system.transform": async (_input, output) => { try { system = [...output.system]; hash(system); } catch { invalid = true; } },
+    "tool.definition": async (input, output) => { try { tools.set(input.toolID, hash({ description: output.description, parameters: output.parameters })); } catch { invalid = true; } },
+    "tool.execute.before": async (input, output) => { try { pending.set(input.callID, { tool: input.tool, argsHash: hash(output.args) }); } catch { invalid = true; } },
+    "tool.execute.after": async (input, output) => {
+      const before = pending.get(input.callID);
+      pending.delete(input.callID);
+      if (!before || calls.length >= 128) { invalid = true; return; }
+      try { calls.push({ callID: input.callID, tool: input.tool, argsHash: before.argsHash, resultHash: hash(output) }); }
+      catch { invalid = true; }
+    },
+    "chat.headers": async (input, output) => {
+      ordinal += 1;
+      const witness = {
+        version: 1,
+        driver: "opencode_server",
+        driverVersion: "1.18.32",
+        pluginRevision: "paperclip-opencode-source-witness-v1",
+        ordinal,
+        pluginRevision: "paperclip-opencode-source-witness-v1",
+        sessionID: input.sessionID,
+        messageID: input.message.id,
+        model: { providerID: input.model.providerID, modelID: input.model.modelID },
+        systemHash: system === null ? null : hash(system),
+        messageHistoryHash: messages === null ? null : hash(messages),
+        messageCount: Array.isArray(messages) ? messages.length : null,
+        toolDefinitionCount: tools.size,
+        toolDefinitionsHash: hash([...tools].sort(([a], [b]) => a.localeCompare(b))),
+        toolCallCount: calls.length,
+        toolCallChainHash: hash(calls),
+        pendingToolCallCount: pending.size,
+        unsupported: invalid,
+      };
+      const encoded = JSON.stringify(witness);
+      output.headers["x-paperclip-opencode-source-witness"] = encoded.length <= 6_000 ? encoded : "unsupported:limit";
+    },
+  };
+};
+`;
+
 export class OpenCodeServerDriver implements HarnessDriver {
   readonly #options: OpenCodeServerDriverOptions;
 
@@ -1843,7 +1907,7 @@ async function startRuntime(input: {
   const dataHome = join(input.root, "data");
   const cacheHome = join(input.root, "cache");
   await Promise.all([
-    mkdir(join(configHome, "opencode"), { recursive: true, mode: 0o700 }),
+    mkdir(join(configHome, "opencode", "plugins"), { recursive: true, mode: 0o700 }),
     mkdir(dataHome, { recursive: true, mode: 0o700 }),
     mkdir(cacheHome, { recursive: true, mode: 0o700 }),
   ]);
@@ -1888,6 +1952,11 @@ async function startRuntime(input: {
     input.options.model,
     input.options.environment ?? process.env,
   );
+  const managedModel = Boolean((input.options.environment ?? process.env).PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN?.trim());
+  if (managedModel) {
+    const pluginPath = join(configHome, "opencode", "plugins", "paperclip-source-witness.js");
+    await writeFile(pluginPath, MANAGED_SOURCE_WITNESS_PLUGIN, { mode: 0o400 });
+  }
   const config = {
     $schema: "https://opencode.ai/config.json",
     model: input.options.model,
@@ -1901,10 +1970,16 @@ async function startRuntime(input: {
     // catalog. Bind the already-qualified exact model slug into the built-in
     // provider instead of silently falling back or rejecting a newer model.
     provider: providerConfiguration,
-    tools: {
-      question: true,
-    },
-    permission: {
+    // Managed OpenCode exposes only its assigned Paperclip MCP tools. Built-in
+    // filesystem, shell, web and question tools have no qualified provenance
+    // producer and stay absent from every model request in this profile.
+    tools: managedModel ? { "*": false, "paperclip_*": true } : { question: true },
+    permission: managedModel ? {
+      "*": "deny",
+      "paperclip_*": "allow",
+      "mcp__paperclip__*": "allow",
+      external_directory: "deny",
+    } : {
       "*": input.options.permissionMode ?? "allow",
       question: "allow",
       "paperclip_*": "allow",
@@ -2075,6 +2150,7 @@ async function startRuntime(input: {
         await rm(join(configHome, "opencode", "opencode.json"), {
           force: true,
         }).catch(() => undefined);
+        await rm(join(configHome, "opencode", "plugins", "paperclip-source-witness.js"), { force: true }).catch(() => undefined);
         await rm(isolatedHome, { recursive: true, force: true }).catch(
           () => undefined,
         );
@@ -2089,6 +2165,7 @@ async function startRuntime(input: {
     await rm(join(configHome, "opencode", "opencode.json"), {
       force: true,
     }).catch(() => undefined);
+    await rm(join(configHome, "opencode", "plugins", "paperclip-source-witness.js"), { force: true }).catch(() => undefined);
     await rm(isolatedHome, { recursive: true, force: true }).catch(
       () => undefined,
     );

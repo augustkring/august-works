@@ -590,6 +590,30 @@ function buildAttachmentContentPath(attachmentId: string): string {
   return `/api/attachments/${attachmentId}/content`;
 }
 
+async function verifySelectedSavedAttachmentBytes(input: {
+  storage: StorageService;
+  companyId: string;
+  objectKey: string;
+  sha256: string;
+  byteSize: number;
+}) {
+  if (!Number.isSafeInteger(input.byteSize) || input.byteSize < 0 || input.byteSize > 32 * 1024 * 1024) {
+    throw conflict("A selected saved file exceeds the reconstruction size limit.");
+  }
+  const stored = await input.storage.getObject(input.companyId, input.objectKey);
+  const digest = createHash("sha256");
+  let size = 0;
+  for await (const chunk of stored.stream) {
+    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += bytes.byteLength;
+    if (size > input.byteSize || size > 32 * 1024 * 1024) throw conflict("A selected saved file changed after it was captured.");
+    digest.update(bytes);
+  }
+  if (size !== input.byteSize || digest.digest("hex") !== input.sha256) {
+    throw conflict("A selected saved file no longer matches its captured bytes.");
+  }
+}
+
 const GENERIC_RESPONSE_ATTACHMENT_CONTENT_TYPES = new Set(
   GENERIC_ATTACHMENT_CONTENT_TYPES,
 );
@@ -9382,7 +9406,8 @@ export function issueRoutes(
       externalChannelBinding,
     };
     const [projected] = await redactIssueRelationEdgesOnRows(req, issue.companyId, [response]);
-    if (!(await assertIssueReadAllowed(req, res, issue))) return;
+    const latestIssue = await svc.getById(issue.id);
+    if (!latestIssue || !(await assertIssueReadAllowed(req, res, latestIssue))) return;
     res.json(projected);
   });
 
@@ -9589,6 +9614,45 @@ export function issueRoutes(
         resolutionNote,
         executionReconciliation,
       } = req.body;
+      const workspaceReconstructionRequestHash = executionReconciliation?.workspaceReconstruction
+        ? createHash("sha256").update(JSON.stringify({
+            actionId: actionId ?? null,
+            outcome,
+            sourceIssueStatus,
+            resolutionNote: resolutionNote ?? null,
+            executionReconciliation: {
+              ...executionReconciliation,
+              workspaceReconstruction: {
+                ...executionReconciliation.workspaceReconstruction,
+                selectedSources: [...executionReconciliation.workspaceReconstruction.selectedSources]
+                  .sort((a, b) => a.attachmentId.localeCompare(b.attachmentId)),
+              },
+            },
+          })).digest("hex")
+        : null;
+      if (executionReconciliation?.workspaceReconstruction) {
+        // Reconstruction is a deliberate task-owner choice. Verify the actual
+        // selected object bytes now; the transaction below rechecks current
+        // issue, tenant, source snapshot, and provider receipt before commit.
+        assertBoard(req);
+        if (executionReconciliation.actionOutcome === "mixed" && req.actor.isInstanceAdmin !== true) {
+          throw forbidden("An administrator must reconcile incomplete external-effect evidence before reconstruction.");
+        }
+        let selectedBytes = 0;
+        for (const selected of executionReconciliation.workspaceReconstruction.selectedSources) {
+          const attachment = await svc.getAttachmentById(selected.attachmentId);
+          if (!attachment || attachment.companyId !== existing.companyId || attachment.issueId !== existing.id
+            || attachment.sha256 !== selected.sha256) {
+            throw conflict("A selected saved file is no longer available on this task.");
+          }
+          selectedBytes += attachment.byteSize;
+          if (selectedBytes > 64 * 1024 * 1024) throw conflict("Selected saved files exceed the reconstruction size limit.");
+          await verifySelectedSavedAttachmentBytes({
+            storage, companyId: existing.companyId, objectKey: attachment.objectKey,
+            sha256: selected.sha256, byteSize: attachment.byteSize,
+          });
+        }
+      }
       if (outcome === "false_positive" || outcome === "cancelled") {
         assertBoard(req);
       }
@@ -9640,6 +9704,13 @@ export function issueRoutes(
             );
             const automatic = settled.evidence.automaticRecovery as
               { replay?: string } | undefined;
+            const priorReconstructionHash = settled.evidence.workspaceReconstructionRequestHash;
+            if (typeof priorReconstructionHash === "string"
+              && priorReconstructionHash !== workspaceReconstructionRequestHash) {
+              throw conflict("This reconstruction request already has a receipt with different sources or decisions.", {
+                code: "workspace_reconstruction_idempotency_conflict",
+              });
+            }
             if (automatic?.replay === "blocked" && executionReconciliation) {
               // An automatic no-replay disposition is final until new evidence
               // arrives. Keep the supported evidence API usable without a dialog.
@@ -9817,6 +9888,7 @@ export function issueRoutes(
             chatRetry
               ? { kind: "chat_failed_run_retry", actionId: chatRetry.actionId }
               : undefined,
+            workspaceReconstructionRequestHash ?? undefined,
           );
         }
         let issue = lockedIssue;
@@ -10282,6 +10354,8 @@ export function issueRoutes(
           includeComments: shouldIncludeDocumentAnnotationComments(req),
         },
       );
+    const latestIssue = await svc.getById(issue.id);
+    if (!latestIssue || !(await assertIssueReadAllowed(req, res, latestIssue))) return;
     res.json({ ...doc, annotations });
   });
 
@@ -10319,6 +10393,8 @@ export function issueRoutes(
         includeComments: parseBooleanQuery(req.query.includeComments),
       },
     );
+    const currentIssue = await svc.getById(issue.id);
+    if (!currentIssue || !(await assertIssueReadAllowed(req, res, currentIssue))) return;
     res.json(threads);
   });
 

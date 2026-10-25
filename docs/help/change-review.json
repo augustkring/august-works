@@ -206,63 +206,63 @@
       "source": "ui/src/App.tsx",
       "articleId": "company-import-export",
       "sourceSha256": "a18f03eba75b3cd5837cc27e83577a941324f1a2aadd7cb8452a0bb54db0deb8",
-      "articleSha256": "c51a73bf02851b92d2dae42dbfe6855ede800542dacbe01fe854817a8a7a83fe",
+      "articleSha256": "908dc235901a7a71c307482baffc49e9fe8dcb97876b3af79864844e7d15646d",
       "decision": "no_change",
       "rationale": "Reviewed App.tsx: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
     {
       "source": "ui/src/pages/CompanyImport.tsx",
       "articleId": "company-import-export",
-      "sourceSha256": "e035bd1c6197d83465c8c0584be3931c15a6cd96199ae089eaf3d7ecc76c67ed",
-      "articleSha256": "c51a73bf02851b92d2dae42dbfe6855ede800542dacbe01fe854817a8a7a83fe",
+      "sourceSha256": "58715c719c013616f5893ff0cfb3187cdb0256e834cacebbee94d474e31162f5",
+      "articleSha256": "908dc235901a7a71c307482baffc49e9fe8dcb97876b3af79864844e7d15646d",
       "decision": "updated",
-      "rationale": "Reviewed the original GitHub resolver and Import preview: the guide now explains the displayed immutable commit, changed-revision confirmation, complete tree checks and unsupported selected submodules."
+      "rationale": "The guide now matches the explicit Cancel import action, durable cancel-requested and confirmed-cancelled states, and the rule that leaving the page does not cancel."
     },
     {
       "source": "ui/src/pages/CompanyImportHistory.tsx",
       "articleId": "company-import-export",
-      "sourceSha256": "848676297a26bb77b3f53b31256f8bbfcfb296421cc5ce1c0d4dc61827fda7fa",
-      "articleSha256": "c51a73bf02851b92d2dae42dbfe6855ede800542dacbe01fe854817a8a7a83fe",
+      "sourceSha256": "9906b3d6e9b78b5f3ee0a73232532e83f55cb3df54b14eca2eeafbcea6d06803",
+      "articleSha256": "908dc235901a7a71c307482baffc49e9fe8dcb97876b3af79864844e7d15646d",
       "decision": "updated",
-      "rationale": "Extended authorized Import history to find the original requester’s unbound new-company receipt; the article now states the honest target label and its limits."
+      "rationale": "The guide matches saved history receipt labels and explains that confirmed cancellation means import effects never began."
     },
     {
       "source": "server/src/routes/companies.ts",
       "articleId": "company-import-export",
-      "sourceSha256": "a20708388cc5e06ce6bd834407b95b62a1ee7463b0401c1be22c6f5787f07ac7",
-      "articleSha256": "c51a73bf02851b92d2dae42dbfe6855ede800542dacbe01fe854817a8a7a83fe",
+      "sourceSha256": "2d88f2f07db516021dcccc12c41f5c30be6dd15eb2400069e8ca6a301d6c5bf0",
+      "articleSha256": "908dc235901a7a71c307482baffc49e9fe8dcb97876b3af79864844e7d15646d",
       "decision": "updated",
-      "rationale": "Reviewed the original GitHub resolver and Import preview: the guide explains the displayed immutable commit, changed-revision confirmation, complete tree checks, unsupported selected submodules and known source refusal before any effect; ordinary uncertain outcomes still require reconciliation."
+      "rationale": "The guide reflects the requester-bound cancellation route and distinguishes a pending request, confirmed pre-effect cancellation, and uncertain partial results."
     },
     {
       "source": "server/src/services/company-import-jobs.ts",
       "articleId": "company-import-export",
-      "sourceSha256": "37682d39ad51f1ade89469c8812bf9347138d5115db026d1e273dbcc7d2e33e3",
-      "articleSha256": "c51a73bf02851b92d2dae42dbfe6855ede800542dacbe01fe854817a8a7a83fe",
+      "sourceSha256": "d2c1dea6c8f7346219e1214b868b032059000b1dcb4f58e551e0d23c97289d05",
+      "articleSha256": "908dc235901a7a71c307482baffc49e9fe8dcb97876b3af79864844e7d15646d",
       "decision": "updated",
-      "rationale": "Extended authorized Import history to find the original requester’s unbound new-company receipt; the article now states the honest target label and its limits."
+      "rationale": "The guide reflects durable cancellation requests, confirmed cancellation only before effects, and reconciliation for uncertain outcomes."
     },
     {
       "source": "server/src/services/company-import-transfers.ts",
       "articleId": "company-import-export",
       "sourceSha256": "30e1043a913d7960b2d6a4338c69ea766066c8a41ac2778e007b0743b8be52e2",
-      "articleSha256": "c51a73bf02851b92d2dae42dbfe6855ede800542dacbe01fe854817a8a7a83fe",
+      "articleSha256": "908dc235901a7a71c307482baffc49e9fe8dcb97876b3af79864844e7d15646d",
       "decision": "no_change",
       "rationale": "Reviewed company-import-transfers.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
     {
       "source": "server/src/services/company-portability.ts",
       "articleId": "company-import-export",
-      "sourceSha256": "530451cbb380b6ff45862b73b3f46b6c97dda4dd00b1999c7b16a384a37a2f71",
-      "articleSha256": "c51a73bf02851b92d2dae42dbfe6855ede800542dacbe01fe854817a8a7a83fe",
+      "sourceSha256": "b995893afc5527c03fb267eab6fb952d1265a428a2a12d9c435d0bfdab85e102",
+      "articleSha256": "908dc235901a7a71c307482baffc49e9fe8dcb97876b3af79864844e7d15646d",
       "decision": "updated",
-      "rationale": "Reviewed the original GitHub resolver and Import preview: the guide explains the displayed immutable commit, changed-revision confirmation, complete tree checks, unsupported selected submodules and known source refusal before any effect; ordinary uncertain outcomes still require reconciliation."
+      "rationale": "The guide reflects native cancellation checkpoints and preserves completed effects without promising rollback."
     },
     {
       "source": "server/src/services/company-export-readme.ts",
       "articleId": "company-import-export",
       "sourceSha256": "7cb1334151504af8c56bdfb906bbae318eb468b18268cd24a85f5721f9f1a481",
-      "articleSha256": "c51a73bf02851b92d2dae42dbfe6855ede800542dacbe01fe854817a8a7a83fe",
+      "articleSha256": "908dc235901a7a71c307482baffc49e9fe8dcb97876b3af79864844e7d15646d",
       "decision": "no_change",
       "rationale": "Reviewed company-export-readme.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
@@ -270,7 +270,7 @@
       "source": "packages/shared/src/customer-operations.ts",
       "articleId": "company-import-export",
       "sourceSha256": "04380661ffda0dc43419e19c1f8ba7a7247a09c30d9cd4cc90fd03155e9d0bfd",
-      "articleSha256": "c51a73bf02851b92d2dae42dbfe6855ede800542dacbe01fe854817a8a7a83fe",
+      "articleSha256": "908dc235901a7a71c307482baffc49e9fe8dcb97876b3af79864844e7d15646d",
       "decision": "no_change",
       "rationale": "Reviewed customer-operations.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
@@ -278,7 +278,7 @@
       "source": "packages/shared/src/company-import-transfer.ts",
       "articleId": "company-import-export",
       "sourceSha256": "dbeeea0632b22d2bf0cd4b7e6ae7eded1883ed930a10ed48483f8c6c6576c370",
-      "articleSha256": "c51a73bf02851b92d2dae42dbfe6855ede800542dacbe01fe854817a8a7a83fe",
+      "articleSha256": "908dc235901a7a71c307482baffc49e9fe8dcb97876b3af79864844e7d15646d",
       "decision": "no_change",
       "rationale": "Reviewed company-import-transfer.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
@@ -286,7 +286,7 @@
       "source": "cli/src/commands/client/company.ts",
       "articleId": "company-import-export",
       "sourceSha256": "2a859ee4e334ddfbdb76d32e511a76cb665fd4f46b7a8d1e689ee1e7996225d6",
-      "articleSha256": "c51a73bf02851b92d2dae42dbfe6855ede800542dacbe01fe854817a8a7a83fe",
+      "articleSha256": "908dc235901a7a71c307482baffc49e9fe8dcb97876b3af79864844e7d15646d",
       "decision": "no_change",
       "rationale": "Reviewed company.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
@@ -294,7 +294,7 @@
       "source": "server/src/errors.ts",
       "articleId": "company-import-export",
       "sourceSha256": "ca1aa21e985ea9ae479038441040be65916af3fe4d3fcf533fd8cdeae2e56fca",
-      "articleSha256": "c51a73bf02851b92d2dae42dbfe6855ede800542dacbe01fe854817a8a7a83fe",
+      "articleSha256": "908dc235901a7a71c307482baffc49e9fe8dcb97876b3af79864844e7d15646d",
       "decision": "updated",
       "rationale": "Reviewed native preflight error identity: the guide distinguishes verified rejection before effects from an unknown import outcome after effects may have started."
     },
@@ -302,7 +302,7 @@
       "source": "packages/shared/src/types/company-portability.ts",
       "articleId": "company-import-export",
       "sourceSha256": "1b0ed12dadfe3466d2b4a19b6c7e750fe7060a577bc067792cd5cbbfd281c2e1",
-      "articleSha256": "c51a73bf02851b92d2dae42dbfe6855ede800542dacbe01fe854817a8a7a83fe",
+      "articleSha256": "908dc235901a7a71c307482baffc49e9fe8dcb97876b3af79864844e7d15646d",
       "decision": "updated",
       "rationale": "Reviewed the shared preview contract: the guide explains the actual GitHub sourceRevision and commit-bound sourceFingerprint without granting source publication authority."
     },
@@ -310,7 +310,7 @@
       "source": "server/src/services/github-fetch.ts",
       "articleId": "company-import-export",
       "sourceSha256": "9b65647b3ee53f51eeff5ac130ae7a5f26f7b345e5303d05cea07564280d54fb",
-      "articleSha256": "c51a73bf02851b92d2dae42dbfe6855ede800542dacbe01fe854817a8a7a83fe",
+      "articleSha256": "908dc235901a7a71c307482baffc49e9fe8dcb97876b3af79864844e7d15646d",
       "decision": "updated",
       "rationale": "Reviewed GitHub and Enterprise API/raw transport URL owners: the guide describes commit-bound package reads and preserves unsupported source limits."
     },
@@ -942,63 +942,63 @@
       "source": "ui/src/App.tsx",
       "articleId": "company-import-export-da",
       "sourceSha256": "a18f03eba75b3cd5837cc27e83577a941324f1a2aadd7cb8452a0bb54db0deb8",
-      "articleSha256": "979069b32685f301d1a0d8feb494200d1192c8676bf837e2092c7e5be710bf89",
+      "articleSha256": "760f8417f832d95b70372b83153cbe2ab2deca797e245687f80ec525de73b145",
       "decision": "updated",
       "rationale": "Danish translation of company-import-export: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
     {
       "source": "ui/src/pages/CompanyImport.tsx",
       "articleId": "company-import-export-da",
-      "sourceSha256": "e035bd1c6197d83465c8c0584be3931c15a6cd96199ae089eaf3d7ecc76c67ed",
-      "articleSha256": "979069b32685f301d1a0d8feb494200d1192c8676bf837e2092c7e5be710bf89",
+      "sourceSha256": "58715c719c013616f5893ff0cfb3187cdb0256e834cacebbee94d474e31162f5",
+      "articleSha256": "760f8417f832d95b70372b83153cbe2ab2deca797e245687f80ec525de73b145",
       "decision": "updated",
-      "rationale": "Danish translation of company-import-export: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "rationale": "Danish guide checked against the current cancellation behavior. The guide now matches the explicit Cancel import action, durable cancel-requested and confirmed-cancelled states, and the rule that leaving the page does not cancel."
     },
     {
       "source": "ui/src/pages/CompanyImportHistory.tsx",
       "articleId": "company-import-export-da",
-      "sourceSha256": "848676297a26bb77b3f53b31256f8bbfcfb296421cc5ce1c0d4dc61827fda7fa",
-      "articleSha256": "979069b32685f301d1a0d8feb494200d1192c8676bf837e2092c7e5be710bf89",
+      "sourceSha256": "9906b3d6e9b78b5f3ee0a73232532e83f55cb3df54b14eca2eeafbcea6d06803",
+      "articleSha256": "760f8417f832d95b70372b83153cbe2ab2deca797e245687f80ec525de73b145",
       "decision": "updated",
-      "rationale": "Danish translation of company-import-export: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "rationale": "Danish guide checked against the current cancellation behavior. The guide matches saved history receipt labels and explains that confirmed cancellation means import effects never began."
     },
     {
       "source": "server/src/routes/companies.ts",
       "articleId": "company-import-export-da",
-      "sourceSha256": "a20708388cc5e06ce6bd834407b95b62a1ee7463b0401c1be22c6f5787f07ac7",
-      "articleSha256": "979069b32685f301d1a0d8feb494200d1192c8676bf837e2092c7e5be710bf89",
+      "sourceSha256": "2d88f2f07db516021dcccc12c41f5c30be6dd15eb2400069e8ca6a301d6c5bf0",
+      "articleSha256": "760f8417f832d95b70372b83153cbe2ab2deca797e245687f80ec525de73b145",
       "decision": "updated",
-      "rationale": "Danish translation of company-import-export: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "rationale": "Danish guide checked against the current cancellation behavior. The guide reflects the requester-bound cancellation route and distinguishes a pending request, confirmed pre-effect cancellation, and uncertain partial results."
     },
     {
       "source": "server/src/services/company-import-jobs.ts",
       "articleId": "company-import-export-da",
-      "sourceSha256": "37682d39ad51f1ade89469c8812bf9347138d5115db026d1e273dbcc7d2e33e3",
-      "articleSha256": "979069b32685f301d1a0d8feb494200d1192c8676bf837e2092c7e5be710bf89",
+      "sourceSha256": "d2c1dea6c8f7346219e1214b868b032059000b1dcb4f58e551e0d23c97289d05",
+      "articleSha256": "760f8417f832d95b70372b83153cbe2ab2deca797e245687f80ec525de73b145",
       "decision": "updated",
-      "rationale": "Danish translation of company-import-export: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "rationale": "Danish guide checked against the current cancellation behavior. The guide reflects durable cancellation requests, confirmed cancellation only before effects, and reconciliation for uncertain outcomes."
     },
     {
       "source": "server/src/services/company-import-transfers.ts",
       "articleId": "company-import-export-da",
       "sourceSha256": "30e1043a913d7960b2d6a4338c69ea766066c8a41ac2778e007b0743b8be52e2",
-      "articleSha256": "979069b32685f301d1a0d8feb494200d1192c8676bf837e2092c7e5be710bf89",
+      "articleSha256": "760f8417f832d95b70372b83153cbe2ab2deca797e245687f80ec525de73b145",
       "decision": "updated",
       "rationale": "Danish translation of company-import-export: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
     {
       "source": "server/src/services/company-portability.ts",
       "articleId": "company-import-export-da",
-      "sourceSha256": "530451cbb380b6ff45862b73b3f46b6c97dda4dd00b1999c7b16a384a37a2f71",
-      "articleSha256": "979069b32685f301d1a0d8feb494200d1192c8676bf837e2092c7e5be710bf89",
+      "sourceSha256": "b995893afc5527c03fb267eab6fb952d1265a428a2a12d9c435d0bfdab85e102",
+      "articleSha256": "760f8417f832d95b70372b83153cbe2ab2deca797e245687f80ec525de73b145",
       "decision": "updated",
-      "rationale": "Danish translation of company-import-export: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "rationale": "Danish guide checked against the current cancellation behavior. The guide reflects native cancellation checkpoints and preserves completed effects without promising rollback."
     },
     {
       "source": "server/src/services/company-export-readme.ts",
       "articleId": "company-import-export-da",
       "sourceSha256": "7cb1334151504af8c56bdfb906bbae318eb468b18268cd24a85f5721f9f1a481",
-      "articleSha256": "979069b32685f301d1a0d8feb494200d1192c8676bf837e2092c7e5be710bf89",
+      "articleSha256": "760f8417f832d95b70372b83153cbe2ab2deca797e245687f80ec525de73b145",
       "decision": "updated",
       "rationale": "Danish translation of company-import-export: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
@@ -1006,7 +1006,7 @@
       "source": "packages/shared/src/customer-operations.ts",
       "articleId": "company-import-export-da",
       "sourceSha256": "04380661ffda0dc43419e19c1f8ba7a7247a09c30d9cd4cc90fd03155e9d0bfd",
-      "articleSha256": "979069b32685f301d1a0d8feb494200d1192c8676bf837e2092c7e5be710bf89",
+      "articleSha256": "760f8417f832d95b70372b83153cbe2ab2deca797e245687f80ec525de73b145",
       "decision": "updated",
       "rationale": "Danish translation of company-import-export: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
@@ -1014,7 +1014,7 @@
       "source": "packages/shared/src/company-import-transfer.ts",
       "articleId": "company-import-export-da",
       "sourceSha256": "dbeeea0632b22d2bf0cd4b7e6ae7eded1883ed930a10ed48483f8c6c6576c370",
-      "articleSha256": "979069b32685f301d1a0d8feb494200d1192c8676bf837e2092c7e5be710bf89",
+      "articleSha256": "760f8417f832d95b70372b83153cbe2ab2deca797e245687f80ec525de73b145",
       "decision": "updated",
       "rationale": "Danish translation of company-import-export: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
@@ -1022,7 +1022,7 @@
       "source": "cli/src/commands/client/company.ts",
       "articleId": "company-import-export-da",
       "sourceSha256": "2a859ee4e334ddfbdb76d32e511a76cb665fd4f46b7a8d1e689ee1e7996225d6",
-      "articleSha256": "979069b32685f301d1a0d8feb494200d1192c8676bf837e2092c7e5be710bf89",
+      "articleSha256": "760f8417f832d95b70372b83153cbe2ab2deca797e245687f80ec525de73b145",
       "decision": "updated",
       "rationale": "Danish translation of company-import-export: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
@@ -1030,7 +1030,7 @@
       "source": "server/src/errors.ts",
       "articleId": "company-import-export-da",
       "sourceSha256": "ca1aa21e985ea9ae479038441040be65916af3fe4d3fcf533fd8cdeae2e56fca",
-      "articleSha256": "979069b32685f301d1a0d8feb494200d1192c8676bf837e2092c7e5be710bf89",
+      "articleSha256": "760f8417f832d95b70372b83153cbe2ab2deca797e245687f80ec525de73b145",
       "decision": "updated",
       "rationale": "Danish translation of company-import-export: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
@@ -1038,7 +1038,7 @@
       "source": "packages/shared/src/types/company-portability.ts",
       "articleId": "company-import-export-da",
       "sourceSha256": "1b0ed12dadfe3466d2b4a19b6c7e750fe7060a577bc067792cd5cbbfd281c2e1",
-      "articleSha256": "979069b32685f301d1a0d8feb494200d1192c8676bf837e2092c7e5be710bf89",
+      "articleSha256": "760f8417f832d95b70372b83153cbe2ab2deca797e245687f80ec525de73b145",
       "decision": "updated",
       "rationale": "Danish translation of company-import-export: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
@@ -1046,7 +1046,7 @@
       "source": "server/src/services/github-fetch.ts",
       "articleId": "company-import-export-da",
       "sourceSha256": "9b65647b3ee53f51eeff5ac130ae7a5f26f7b345e5303d05cea07564280d54fb",
-      "articleSha256": "979069b32685f301d1a0d8feb494200d1192c8676bf837e2092c7e5be710bf89",
+      "articleSha256": "760f8417f832d95b70372b83153cbe2ab2deca797e245687f80ec525de73b145",
       "decision": "updated",
       "rationale": "Danish translation of company-import-export: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { agentsApi } from "@/api/agents";
 import { authApi } from "@/api/auth";
@@ -43,6 +43,8 @@ function CompanyAgentChats({ companyId, userId, showNavigation, enabled }: { com
   });
   const agents = agentsQuery.data ?? [];
   const [pickerOpen, setPickerOpen] = useState(false);
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
   const navigate = useNavigate();
   const client = useQueryClient();
   const { isMobile, setSidebarOpen } = useSidebar();
@@ -59,15 +61,24 @@ function CompanyAgentChats({ companyId, userId, showNavigation, enabled }: { com
   });
   const preferredMutation = useMutation({
     mutationFn: (agentId: string | null) => sidebarPreferencesApi.updatePreferredCoworker(companyId!, { agentId }),
-    onSuccess: (preference) => client.setQueryData(preferenceKey, preference),
+    onSuccess: (preference) => {
+      if (mountedRef.current) client.setQueryData(preferenceKey, preference);
+    },
   });
   useEffect(() => {
-    const ask = () => {
+    const ask = async () => {
       if (!enabled) {
         document.dispatchEvent(new Event("paperclip:open-command"));
         return;
       }
-      const preferred = agents.find((agent) => agent.id === preferredQuery.data?.agentId);
+      const [freshAgents, freshPreference] = await Promise.all([
+        agentsQuery.refetch(),
+        userId ? preferredQuery.refetch() : Promise.resolve(null),
+      ]);
+      if (!mountedRef.current) return;
+      const preferred = freshAgents.isSuccess && freshPreference?.isSuccess
+        ? freshAgents.data.find((agent) => agent.id === freshPreference.data?.agentId && agent.status !== "terminated")
+        : undefined;
       if (preferred) {
         navigate(`/chats/${encodeURIComponent(agentRouteRef(preferred))}`);
       } else {
@@ -76,7 +87,7 @@ function CompanyAgentChats({ companyId, userId, showNavigation, enabled }: { com
     };
     document.addEventListener("paperclip:ask-generalist", ask);
     return () => document.removeEventListener("paperclip:ask-generalist", ask);
-  }, [agents, enabled, navigate, preferredQuery.data?.agentId]);
+  }, [agentsQuery, enabled, navigate, preferredQuery, userId]);
   const activeRef = location.pathname.match(/\/chats\/([^/]+)/)?.[1];
   const active = agents.find((agent) => agent.id === activeRef || agentRouteRef(agent) === activeRef);
   return (
@@ -104,9 +115,10 @@ function CompanyAgentChats({ companyId, userId, showNavigation, enabled }: { com
         error={agentsQuery.error}
         onRetry={() => { void agentsQuery.refetch(); }}
         preferredAgentId={preferredQuery.data?.agentId ?? null}
-        onSetPreferredAgent={(agentId) => preferredMutation.mutate(agentId)}
+        onSetPreferredAgent={userId ? (agentId) => preferredMutation.mutate(agentId) : undefined}
         savingPreferred={preferredMutation.isPending}
         preferenceError={preferredMutation.error instanceof Error ? preferredMutation.error.message : null}
+        preferenceLoadError={preferredQuery.isError}
         onSelect={(agent) => {
           if (isMobile) setSidebarOpen(false);
           navigate(`/chats/${encodeURIComponent(agentRouteRef(agent))}`);

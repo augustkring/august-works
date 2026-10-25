@@ -9,6 +9,8 @@ import {
   agents,
   approvals,
   companies,
+  contextManifests,
+  contextManifestItems,
   createDb,
   documents,
   heartbeatRuns,
@@ -18,6 +20,7 @@ import {
   issueComments,
   issueThreadInteractions,
   issues,
+  issuePrivacySources,
 } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { initializeRunIdentity, reserveSteeredIdentity, reconcileSteeredIdentity } from "../run-identity.js";
@@ -54,9 +57,11 @@ describe("PaperclipRunnerToolAuthority", () => {
     await db.insert(agents).values({ id: agentId, companyId, name: "Document source reader", adapterType: "paperclip_runner", status: "active" });
     await db.insert(issues).values({ id: issueId, companyId, issueNumber: 1, identifier: `${issuePrefix}-1`,
       title: "Read document source", status: "in_progress", workMode: "standard", assigneeAgentId: agentId,
-      responsibleUserId: userId });
+      responsibleUserId: userId, visibility: "private" });
     await db.insert(heartbeatRuns).values({ id: runId, companyId, agentId, status: "running", runtimeMode: "native",
       nativeIssueId: issueId, responsibleUserId: userId, invocationSource: "assignment", triggerDetail: "system", contextSnapshot: { issueId } });
+    await db.insert(contextManifests).values({ id: randomUUID(), companyId, runId, agentId, issueId,
+      projectId: null, queryHash: "a".repeat(64), policySnapshotHash: "b".repeat(64), createdAt: new Date() });
     await db.update(issues).set({ executionRunId: runId }).where(eq(issues.id, issueId));
     return { companyId, agentId, issueId, runId,
       authority: new PaperclipRunnerToolAuthority(db, { companyId, agentId, issueId, runId }) };
@@ -352,6 +357,15 @@ describe("PaperclipRunnerToolAuthority", () => {
 
   it("rechecks the accountable reader after document capture and withholds on access revocation", async () => {
     const fixture = await seedDocumentReader();
+    const [manifest] = await db.select().from(contextManifests).where(and(eq(contextManifests.companyId, fixture.companyId),
+      eq(contextManifests.issueId, fixture.issueId)));
+    if (!manifest) throw new Error("fixture_context_manifest_missing");
+    await db.insert(contextManifestItems).values({ companyId: fixture.companyId, manifestId: manifest.id,
+      sourceClass: "task", sourceProvider: "august_works_tasks", sourceRef: `issue://${fixture.issueId}`,
+      sourceVersion: new Date().toISOString(), contentHash: "c".repeat(64), trustLevel: "high", sensitivity: "internal",
+      rank: 0, selectionReason: "test" });
+    await db.insert(issuePrivacySources).values({ companyId: fixture.companyId, issueId: fixture.issueId,
+      sourceKind: "issue", sourceId: issueId, contextManifestId: manifest.id });
     const key = `access-revoked-${randomUUID()}`;
     await documentService(db).upsertIssueDocument({ issueId: fixture.issueId, key, title: "Revoked reader", format: "markdown", body: "Must not escape." });
     await expect(fixture.authority.execute({ tool: "read_document", callId: "read-after-revocation", arguments: { key } }, {

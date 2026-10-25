@@ -58,6 +58,7 @@ import { agentProviderBindingService } from "../services/agent-provider-bindings
 import { agentRuntimeFabricService } from "../services/agent-runtime-fabric.js";
 import { discoverNativeCapabilities } from "../services/native-provider-conformance.js";
 import { runtimeControlService } from "../services/runtime/control.js";
+import { verifyNativeWorkspaceDestructionReceipt } from "../services/execution-recovery-resolution.js";
 import { errorHandler } from "../middleware/index.js";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import { environmentRuntimeService } from "../services/environment-runtime.js";
@@ -886,6 +887,15 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         });
         stopResult = await driveHost(service.stop(f.actor, f.home, sandboxBinding.id, "fixture-user-stop"), admissionCell!.id);
         expect(stopResult.binding.status).toBe("stopped");
+        await db.update(heartbeatRuns).set({ status: "failed", resultJson: { workspaceRestoreFailure: "workspace_lost" } })
+          .where(eq(heartbeatRuns.id, run!.id));
+        const destruction = await driveHost(
+          transportForTest.bridge(f.actor).destroy({ ...sandboxIdentity, idempotencyKey: "fixture-physical-workspace-destroy" }),
+          admissionCell!.id,
+        );
+        expect(destruction.operationId).toMatch(/^[0-9a-f-]{36}$/i);
+        expect(await verifyNativeWorkspaceDestructionReceipt({ db, companyId: f.home, runId: run!.id }))
+          .toMatchObject({ bindingId: sandboxBinding.id, cellId: admissionCell!.id, generation: admissionCell!.generation.toString() });
         const [quiescedExecClaim] = await db.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.idempotencyKey, uncertainCommand.request.requestId));
         expect(quiescedExecClaim).toMatchObject({ status: "CANCELED", errorCode: "sandbox_exec_quiesced_by_stop" });
       } finally {

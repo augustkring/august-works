@@ -13,6 +13,7 @@ import {
   validateExecutionReconciliation,
   markExecutionReconciliation,
   deliverReconciledExecutions,
+  verifyNativeWorkspaceDestructionReceipt,
 } from "../execution-recovery-resolution.js";
 import { randomUUID } from "node:crypto";
 import { appendHeartbeatRunEvent } from "../heartbeat-run-events.js";
@@ -124,6 +125,27 @@ const support = externalDatabaseUrl
       });
       return { companyId, agentId, issueId, runId };
     }
+    it("does not allow reconstruction from saved attachments without an exact native Stop and Destroy receipt", async () => {
+      const source = await seed();
+      await db.update(heartbeatRuns).set({ resultJson: { workspaceRestoreFailure: "workspace_lost" } })
+        .where(eq(heartbeatRuns.id, source.runId));
+      const decision = {
+        runId: source.runId,
+        providerStopped: true as const,
+        actionOutcome: "not_performed" as const,
+        outcomeEvidence: "No uncertain external action was replayed.",
+        workspaceReconstruction: {
+          confirmed: true as const,
+          destructionReceiptHash: "a".repeat(64),
+          selectedSources: [{ attachmentId: randomUUID(), sha256: "b".repeat(64) }],
+        },
+      };
+      expect(await verifyNativeWorkspaceDestructionReceipt({ db, companyId: source.companyId, runId: source.runId })).toBeNull();
+      await expect(validateExecutionReconciliation({
+        db, companyId: source.companyId, issueId: source.issueId, agentId: source.agentId,
+        sourceRunId: source.runId, decision,
+      })).rejects.toThrow("destruction receipt is not current or verifiable");
+    });
     it.each(["verified", "unproven", "unknown_action"] as const)(
       "preserves saved work and a queued request at a controlled recovery boundary (%s)",
       async (mode) => {

@@ -55,6 +55,40 @@ describe("V7 policy subset proofs, distinct from physical boundary qualification
     const wrongDestination = compileSandboxPolicy({ boundary: p, candidate: p, capabilities: caps(), authorizedConnectionGrantHashes: { [p.credentials.bindings[0]!.connectionId]: p.credentials.bindings[0]!.grantVersionHash }, credentialBrokerOrigin: "https://paperclip.example.test/", credentialBrokerBindings: [{ ...resolved[0]!, destination: { ...resolved[0]!.destination, hostname: "other-provider.example.test" } }], sourcePolicyRefs: ["fixture-only"], now });
     expect(wrongDestination.failedBoundaries).toContain("credential_broker_binding_resolution_mismatch");
   });
+  it("adds the exact managed Messages route from its separate host profile without ToolGateway bindings", () => {
+    const p = policyFixture();
+    p.network.destinations = [];
+    p.credentials = { mode: "none", bindings: [] };
+    const capability = caps();
+    capability.modelBrokerProviderProfile = { id: "paperclip-model-broker", hash: "e".repeat(64) };
+    capability.evidenceKind = "protected_host_report";
+    const result = compileSandboxPolicy({ boundary: p, candidate: p, capabilities: capability,
+      authorizedConnectionGrantHashes: {}, credentialBrokerOrigin: "https://paperclip.example.test/",
+      sourcePolicyRefs: ["fixture-only"], now });
+    expect(result.proverResult).toBe("pass");
+    expect(result.compiledPolicy.credentials.bindings).toEqual([]);
+    expect(result.modelBrokerEndpoint).toEqual({ hostname: "paperclip.example.test", port: 443, path: "/runtime-tools/model/v1/messages" });
+    expect(result.compiledPolicy.network.destinations).toEqual([{ hostname: "paperclip.example.test", port: 443,
+      methods: ["POST"], pathPrefixes: ["/runtime-tools/model/v1/messages"] }]);
+    const projection = projectOpenShellPolicy(result.compiledPolicy, result.modelBrokerEndpoint);
+    expect(projection.document.network_policies.aw_0?.endpoints[0]?.rules).toEqual([
+      { allow: { method: "POST", path: "/runtime-tools/model/v1/messages" } },
+    ]);
+    const predeclared = structuredClone(p);
+    predeclared.network.destinations = [{ hostname: "paperclip.example.test", port: 443, methods: ["POST"], pathPrefixes: ["/runtime-tools/model/v1/messages"] }];
+    expect(compileSandboxPolicy({ boundary: predeclared, candidate: predeclared, capabilities: capability, authorizedConnectionGrantHashes: {},
+      credentialBrokerOrigin: "https://paperclip.example.test", sourcePolicyRefs: [], now }).modelBrokerEndpoint).toEqual(result.modelBrokerEndpoint);
+    expect(compileSandboxPolicy({ boundary: p, candidate: p, capabilities: capability, authorizedConnectionGrantHashes: {},
+      credentialBrokerOrigin: "http://paperclip.example.test", sourcePolicyRefs: [], now }).unsupportedFeatures).toContain("managed_model_broker_origin_unavailable");
+    const broad = structuredClone(p);
+    broad.network.destinations = [{ hostname: "paperclip.example.test", port: 443, methods: ["POST"], pathPrefixes: ["/"] }];
+    expect(compileSandboxPolicy({ boundary: broad, candidate: broad, capabilities: capability, authorizedConnectionGrantHashes: {},
+      credentialBrokerOrigin: "https://paperclip.example.test/", sourcePolicyRefs: [], now }).failedBoundaries).toContain("managed_model_broker_egress_broadened");
+    const direct = structuredClone(p);
+    direct.network.destinations = [{ hostname: "api.anthropic.com", port: 443, methods: ["POST"], pathPrefixes: ["/v1/messages"] }];
+    expect(compileSandboxPolicy({ boundary: direct, candidate: direct, capabilities: capability, authorizedConnectionGrantHashes: {},
+      credentialBrokerOrigin: "https://paperclip.example.test/", sourcePolicyRefs: [], now }).failedBoundaries).toContain("managed_model_provider_direct_egress");
+  });
   it("blocks direct provider egress and broad predeclared broker origins", () => {
     const p = policyFixture();
     p.credentials = { mode: "brokered", bindings: [{ connectionId: "11111111-1111-4111-8111-111111111111", grantVersionHash: "b".repeat(64), hostname: "provider.example.com", port: 443, methods: ["POST"], pathPrefixes: ["/mcp"], binary: null, ttlSeconds: 30 }] };

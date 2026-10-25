@@ -9,7 +9,7 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: en
-last_verified_at: 2026-10-24
+last_verified_at: 2026-10-25
 review_trigger: Import source, receipt, recovery, authorization, or retention behavior changes
 security_or_privacy_sensitive: true
 linked_source_files: [ui/src/App.tsx, ui/src/pages/CompanyImport.tsx, ui/src/pages/CompanyImportHistory.tsx, server/src/routes/companies.ts, server/src/services/company-import-jobs.ts, server/src/services/company-import-transfers.ts, server/src/services/company-portability.ts, server/src/services/company-export-readme.ts, packages/shared/src/customer-operations.ts, packages/shared/src/company-import-transfer.ts, cli/src/commands/client/company.ts, server/src/errors.ts, packages/shared/src/types/company-portability.ts, server/src/services/github-fetch.ts]
@@ -66,6 +66,8 @@ Task and project content currently requires retained source access in its origin
 An accepted import has a saved operation ID. Reloading the page checks that operation instead of submitting the package again. Signing in as another user does not give access to the original user's import receipt.
 
 If a new-company import is still running or its result is unknown before a target company is confirmed, its original requester can find the operation in the Import history for a company they can currently access. The entry says **New company, result not yet confirmed**. It does not identify or prove that a company was created. Once the target is confirmed, the operation appears in that company's history when you have current access.
+
+Cancellation is available only to the original requester while their current session and required company or instance authority remain valid.
 
 - **Running:** wait for the saved operation. Use **Cancel import** to request a safe stop; leaving the page does not cancel it.
 - **Cancellation requested:** the import stops at a native checkpoint. Changes already completed are not rolled back. If the owner cannot prove a complete cancellation receipt, the operation remains unknown and must be reconciled.

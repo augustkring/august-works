@@ -185,7 +185,7 @@ export function companyImportJobService(db: Db) {
           isNull(customerOperations.companyId), isNull(customerOperations.resultRef),
           eq(customerOperations.scopeKey, "new_company"),
           eq(customerOperations.requestedByUserId, input.requestedByUserId),
-          inArray(customerOperations.status, ["running", "needs_reconciliation"]),
+          inArray(customerOperations.status, ["running", "cancelled", "needs_reconciliation"]),
         );
         const rows = await tx.select({ job: customerOperations,
           cursorCreatedAt: sql<string>`to_char(${customerOperations.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,

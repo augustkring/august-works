@@ -15,6 +15,7 @@ export interface AgentChatPickerProps {
   onSetPreferredAgent?: (agentId: string | null) => void;
   savingPreferred?: boolean;
   preferenceError?: string | null;
+  preferenceLoadError?: boolean;
   loading?: boolean;
   error?: Error | null;
   onRetry?: () => void;
@@ -38,7 +39,7 @@ export function AgentChatPicker({ open, onOpenChange, ...props }: AgentChatPicke
   );
 }
 
-function AgentChatPickerResults({ agents, onSelect, loading, error, onRetry, preferredAgentId, onSetPreferredAgent, savingPreferred, preferenceError }: Omit<AgentChatPickerProps, "open" | "onOpenChange">) {
+function AgentChatPickerResults({ agents, onSelect, loading, error, onRetry, preferredAgentId, onSetPreferredAgent, savingPreferred, preferenceError, preferenceLoadError }: Omit<AgentChatPickerProps, "open" | "onOpenChange">) {
   const { t } = useTranslation("experience");
   const [search, setSearch] = useState("");
   return (
@@ -81,9 +82,9 @@ function AgentChatPickerResults({ agents, onSelect, loading, error, onRetry, pre
                   <span className="truncate font-medium">{agent.name}</span>
                   <span className="truncate text-xs text-muted-foreground">{agent.title ?? agent.role}</span>
                 </span>
-                {agent.status === "paused" && <span className="text-xs text-(--status-agent-paused)">Paused</span>}
-                {agent.status === "terminated" && <span className="text-xs text-muted-foreground">Terminated</span>}
-                {agent.status === "pending_approval" && <span className="text-xs text-muted-foreground">Awaiting approval</span>}
+                {agent.status === "paused" && <span className="text-xs text-(--status-agent-paused)">{t("generalist.status.paused")}</span>}
+                {agent.status === "terminated" && <span className="text-xs text-muted-foreground">{t("generalist.status.terminated")}</span>}
+                {agent.status === "pending_approval" && <span className="text-xs text-muted-foreground">{t("generalist.status.pendingApproval")}</span>}
                 {preferredAgentId === agent.id && <span className="text-xs text-muted-foreground">{t("generalist.preferred")}</span>}
               </CommandItem>
             ))}
@@ -107,6 +108,7 @@ function AgentChatPickerResults({ agents, onSelect, loading, error, onRetry, pre
           </select>
         </div>
       )}
+      {preferenceLoadError && <p role="alert" className="px-4 pb-3 text-sm text-destructive">{t("generalist.preferenceLoadFailed")}</p>}
       {preferenceError && <p role="alert" className="px-4 pb-3 text-sm text-destructive">{t("generalist.preferenceFailed")}</p>}
     </Command>
   );

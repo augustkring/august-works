@@ -1,5 +1,7 @@
 # Google Sheets MCP Server
 
+The server uses the stable MCP TypeScript SDK v2 (`@modelcontextprotocol/server` 2.4.0; current protocol `2026-07-28`). Stdio serves compatible legacy clients, and the stateless HTTP endpoint preserves the v2 SDK's legacy request path. HTTP bearer-token checks remain in the host before the MCP handler.
+
 First-party MCP server for Google Sheets API v4. It can run as a Paperclip
 `local_stdio` gallery connection or as a local Streamable HTTP server for
 Paperclip's `remote_http` connect-by-link flow.

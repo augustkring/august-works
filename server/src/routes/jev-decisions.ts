@@ -1,8 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
-import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import { z } from "zod";
-import { companyMemberships, enterpriseIdentityPolicies, jevDecisionSettings, orchestrationCompanyPurposeReservations, type Db } from "@paperclipai/db";
+import { activityLog, companyMemberships, enterpriseIdentityPolicies, jevDecisionSettings, orchestrationCompanyPurposeReservations, type Db } from "@paperclipai/db";
 import { companyPurposeFundingSchema, companyPurposeReservationInputSchema, jevDecisionRequestSchema, jevDecisionSettingsUpdateSchema, JEV_DECISION_MODEL } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
 import { assertBoard, assertCompanyAccess, getActorInfo } from "./authz.js";
@@ -45,8 +44,12 @@ export function jevDecisionRoutes(db: Db, options: { sourceSha?: string; profile
     const qualification = options.sourceSha && saved.connectionId && saved.grantId ? (options.profiles ?? []).filter(profile =>
       profile.companyId === companyId && profile.connectionId === saved.connectionId && profile.grantId === saved.grantId &&
       jevProfileCurrent(profile, { companyId, connectionId: saved.connectionId!, grantId: saved.grantId!, sourceSha: options.sourceSha! }, new Date())) : [];
-    const testProfile = qualification.length === 1 ? { profileHash: qualification[0]!.profileHash, costCapMinor: qualification[0]!.setupCostCapMinor,
-      currency: qualification[0]!.tariff.currency } : null;
+    const [identityPolicy] = await db.select().from(enterpriseIdentityPolicies).where(eq(enterpriseIdentityPolicies.companyId, companyId));
+    const identityQualification = identityPolicy?.qualification;
+    const policyCurrent = identityPolicy?.status === "qualified" && Boolean(identityQualification) && identityQualification!.sourceRevision === options.sourceSha &&
+      Date.parse(identityQualification!.expiresAt) > Date.now();
+    const testProfile = qualification.length === 1 && policyCurrent && identityPolicy.operatingEnvelope.awProcessingRegions.includes(qualification[0]!.processingRegion)
+      ? { profileHash: qualification[0]!.profileHash, costCapMinor: qualification[0]!.setupCostCapMinor, currency: qualification[0]!.tariff.currency } : null;
     res.json({ settings: saved, choices, suggestionsQualified: false, testProfile });
   });
   router.get("/companies/:companyId/jev-decisions/history", async (req, res) => {
@@ -58,8 +61,15 @@ export function jevDecisionRoutes(db: Db, options: { sourceSha?: string; profile
         eq(orchestrationCompanyPurposeReservations.companyId, companyId),
         eq(orchestrationCompanyPurposeReservations.purpose, "decision_skill_suggestion"),
       )).orderBy(desc(orchestrationCompanyPurposeReservations.createdAt)).limit(50);
+    const accountingRows = await db.select({ details: activityLog.details }).from(activityLog).where(and(
+      eq(activityLog.companyId, companyId), eq(activityLog.action, "orchestration.company_purpose_model_outcome_recorded"),
+    )).orderBy(desc(activityLog.createdAt)).limit(250);
+    const accounting = new Map(accountingRows.flatMap(({ details }) => typeof details?.reservationId === "string" &&
+      details.purpose === "decision_skill_suggestion" ? [[details.reservationId, details] as const] : []));
     res.json(rows.map(({ reservation }) => ({ id: reservation.id, model: reservation.quote.model, status: reservation.status,
       reservedCostCents: (reservation.maximumMinor / 100).toFixed(2), currency: reservation.quote.currency,
+      actualCostCents: accounting.get(reservation.id)?.actualCostCents ?? null,
+      costStatus: accounting.get(reservation.id)?.costStatus ?? "unpriced",
       inputTokens: reservation.usage?.inputTokens ?? null, outputTokens: reservation.usage?.outputTokens ?? null,
       createdAt: reservation.createdAt.toISOString(), completedAt: reservation.completedAt?.toISOString() ?? null })));
   });
@@ -118,7 +128,7 @@ export function jevDecisionRoutes(db: Db, options: { sourceSha?: string; profile
       maxCostMinor: profile.setupCostCapMinor, maxCalls: profile.setupMaxCalls, tariff: profile.tariff };
     const funding = companyPurposeFundingSchema.parse({ ...fundingBody, profileHash: nativeSha256(fundingBody) });
     const authorityHash = nativeSha256({ companyId, userId, purpose: "decision_skill_suggestion", connectionId: settings.connectionId, grantId: settings.grantId,
-      profileHash: funding.profileHash, consent: true });
+      profileHash: funding.profileHash, setupRequestId: consent.requestId, consent: true });
     const actor: AuthorizationActor = req.actor;
     const broker = modelReservationService(db, {
       sourceSha: sourceSha!, qualifiedTariff: async () => null, currentAuthority: async () => { throw forbidden(); },
@@ -141,29 +151,60 @@ export function jevDecisionRoutes(db: Db, options: { sourceSha?: string; profile
     const reservationInput = companyPurposeReservationInputSchema.parse({ companyId, purpose: "decision_skill_suggestion", idempotencyKey: `jev-setup:${consent.requestId}`,
       inputHash, authorityHash, inputTokensUpperBound: profile.inputTokensUpperBound, maxOutputTokens: Math.min(16, profile.maxOutputTokens) });
     await db.transaction(tx => logActivity(tx, { companyId, actorType: "user", actorId: userId, action: "jev_skill_decisions.setup_test_consented", entityType: "company", entityId: companyId,
-      details: { purpose: "decision_skill_suggestion", connectionId: settings.connectionId, maximumCostMinor: funding.maxCostMinor, currency: "USD" } }));
+      details: { purpose: "decision_skill_suggestion", setupRequestId: consent.requestId, profileHash: funding.profileHash,
+        connectionId: settings.connectionId, maximumCostMinor: funding.maxCostMinor, currency: funding.tariff.currency } }));
     const reservation = await broker.reserveCompanyPurpose(actor, reservationInput);
     if (reservation.status !== "reserved") {
       return res.json({ status: reservation.status, model: JEV_DECISION_MODEL, inputTokens: reservation.usage?.inputTokens ?? null,
         outputTokens: reservation.usage?.outputTokens ?? null, costCents: null, costStatus: "unpriced", errorCode: reservation.status === "unknown" ? "unknown_outcome" : null });
     }
-    const claimed = await broker.claimCompanyPurposeForDispatch(actor, companyId, reservation.id);
-    const latestSelection = await aiConnectionService(db).selectDecision({ companyId, userId, connectionId: settings.connectionId, grantId: settings.grantId });
-    const latestKey = await aiConnectionService(db).credential(latestSelection, { responsibleUserId: userId, actorType: "user", actorId: userId });
-    if (jevCredentialBindingHash(latestKey) !== profile.credentialBindingHash) {
-      await broker.recordCompanyPurposeOutcome(companyId, reservation.id, { status: "failed", providerResponseHash: null, usage: null });
-      throw forbidden("The selected Jev account changed before dispatch");
-    }
-    const result = await runJevDecision({ model: JEV_DECISION_MODEL, apiKey: latestKey, request, signal: AbortSignal.timeout(30_000) });
-    const overPrice = result.receipt.costCents !== null && Number(result.receipt.costCents) > funding.maxCostMinor / 100;
-    const completed = Boolean(result.answers) && !overPrice;
-    const outcome = await broker.recordCompanyPurposeOutcome(companyId, reservation.id, { status: result.noProviderWork ? "failed" : completed ? "completed" : "unknown",
-      providerResponseHash: result.answers ? nativeSha256({ reservationId: reservation.id, answers: result.answers, usage: result.receipt }) : null,
-      usage: result.receipt.inputTokens !== null && result.receipt.outputTokens !== null ? { inputTokens: result.receipt.inputTokens, outputTokens: result.receipt.outputTokens } : null });
-    void claimed;
-    if (outcome.status === "completed") await broker.assertCompanyPurposeResponseReturn(actor, companyId, reservation.id);
-    res.json({ status: outcome.status, model: JEV_DECISION_MODEL, inputTokens: result.receipt.inputTokens, outputTokens: result.receipt.outputTokens,
-      costCents: result.receipt.costCents, costStatus: result.receipt.costStatus, errorCode: result.errorCode ?? null });
+    await broker.claimCompanyPurposeForDispatch(actor, companyId, reservation.id);
+    const oauth = (selected.grant.providerTenant as { oauth?: { accessTokenExpiresAt?: string | null } } | null)?.oauth;
+    const credentialExpiresAt = oauth?.accessTokenExpiresAt ? Date.parse(oauth.accessTokenExpiresAt) : Number.POSITIVE_INFINITY;
+    const deadlineAt = Math.min(Date.now() + 30_000, Date.parse(profile.expiresAt), Date.parse(profile.tariff.expiresAt),
+      Number.isFinite(credentialExpiresAt) ? credentialExpiresAt : Number.POSITIVE_INFINITY, reservation.expiresAt.getTime());
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), Math.max(1, deadlineAt - Date.now())); timer.unref();
+    const checkCurrent = async () => {
+      if (controller.signal.aborted || Date.now() >= deadlineAt || !jevProfileCurrent(profile,
+        { companyId, connectionId: settings.connectionId!, grantId: settings.grantId!, sourceSha: sourceSha! }, new Date())) throw forbidden("The Jev setup-test authority or qualification expired");
+      await manager(companyId, userId);
+      const [currentSettings] = await db.select().from(jevDecisionSettings).where(eq(jevDecisionSettings.companyId, companyId));
+      if (currentSettings?.connectionId !== settings.connectionId || currentSettings.grantId !== settings.grantId) throw forbidden("The saved Jev company account changed");
+      const currentSelection = await aiConnectionService(db).selectDecision({ companyId, userId, connectionId: settings.connectionId!, grantId: settings.grantId! });
+      const currentKey = await aiConnectionService(db).credential(currentSelection, { responsibleUserId: userId, actorType: "user", actorId: userId });
+      if (jevCredentialBindingHash(currentKey) !== profile.credentialBindingHash) throw forbidden("The qualified Jev account credential changed");
+      const [currentPolicy] = await db.select().from(enterpriseIdentityPolicies).where(eq(enterpriseIdentityPolicies.companyId, companyId));
+      const currentQualification = currentPolicy?.qualification;
+      if (currentPolicy?.status !== "qualified" || !currentQualification || currentQualification.sourceRevision !== sourceSha ||
+        Date.parse(currentQualification.expiresAt) <= Date.now() || !currentPolicy.operatingEnvelope.awProcessingRegions.includes(profile.processingRegion)) throw forbidden("The company processing policy changed");
+      return currentKey;
+    };
+    let providerStarted = false, checking = false;
+    const watch = setInterval(() => { if (checking) return; checking = true; void checkCurrent().catch(() => controller.abort()).finally(() => { checking = false; }); }, 1000); watch.unref();
+    try {
+      const latestKey = await checkCurrent();
+      providerStarted = true;
+      const result = await runJevDecision({ model: JEV_DECISION_MODEL, apiKey: latestKey, request,
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(Math.max(1, deadlineAt - Date.now()))]) });
+      const knownUsage = result.receipt.inputTokens !== null && result.receipt.outputTokens !== null;
+      const knownCost = result.receipt.costCents !== null && result.receipt.costStatus !== "unpriced";
+      const overPrice = result.receipt.costCents !== null && Number(result.receipt.costCents) > funding.maxCostMinor / 100;
+      const status = result.noProviderWork ? "failed" : overPrice ? "unknown" : result.answers ? "completed" : knownUsage || knownCost ? "failed" : "unknown";
+      const usage = knownUsage ? { inputTokens: result.receipt.inputTokens!, outputTokens: result.receipt.outputTokens! } : null;
+      const outcome = await broker.recordCompanyPurposeOutcome(companyId, reservation.id, { status,
+        providerResponseHash: providerStarted ? nativeSha256({ reservationId: reservation.id, errorCode: result.errorCode ?? null,
+          inputTokens: result.receipt.inputTokens, outputTokens: result.receipt.outputTokens, costCents: result.receipt.costCents, costStatus: result.receipt.costStatus }) : null,
+        usage, accounting: { actualCostCents: result.receipt.costCents, costStatus: result.receipt.costStatus } });
+      if (outcome.status === "completed") await broker.assertCompanyPurposeResponseReturn(actor, companyId, reservation.id);
+      res.json({ status: outcome.status, model: JEV_DECISION_MODEL, inputTokens: result.receipt.inputTokens, outputTokens: result.receipt.outputTokens,
+        costCents: result.receipt.costCents, costStatus: result.receipt.costStatus, errorCode: result.errorCode ?? null });
+    } catch (error) {
+      await broker.recordCompanyPurposeOutcome(companyId, reservation.id, { status: providerStarted ? "unknown" : "failed",
+        providerResponseHash: null, usage: null }).catch(() => {});
+      if (!providerStarted) throw error;
+      res.json({ status: "unknown", model: JEV_DECISION_MODEL, inputTokens: null, outputTokens: null, costCents: null, costStatus: "unpriced", errorCode: "provider_failed" });
+    } finally { clearTimeout(timer); clearInterval(watch); }
   });
   return router;
 }

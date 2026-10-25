@@ -564,6 +564,13 @@ export const resolveIssueRecoveryActionSchema = z
         actionOutcome: z.enum(["completed", "not_performed", "mixed"]),
         outcomeEvidence: z.string().trim().min(20).max(12000),
         workspaceRepairEvidence: z.string().trim().min(20).max(12000).optional(),
+        workspaceReconstruction: z.object({
+          confirmed: z.literal(true),
+          destructionReceiptHash: z.string().regex(/^[a-f0-9]{64}$/),
+          selectedSources: z.array(z.object({
+            attachmentId: z.string().guid(), sha256: z.string().regex(/^[a-f0-9]{64}$/),
+          }).strict()).min(1).max(32),
+        }).strict().optional(),
       })
       .strict()
       .optional(),

@@ -317,7 +317,6 @@ function draftSession(
     turnId: string;
   } | null = null;
   let usage: Record<string, unknown> | null = null;
-  let debugStage = "provider_dispatch";
   const turnId = `aw-draft:${randomUUID()}`;
   const wake = () => {
     for (const notify of waiters) notify();
@@ -456,7 +455,6 @@ function draftSession(
             ),
           );
           const exactWireReceipt = wireReceipt.value;
-          debugStage = "wire_receipt_validation";
           if (input.sourceClosure) {
             if (!exactWireReceipt || exactWireReceipt.callId !== modelCallId ||
               exactWireReceipt.reservationId !== response.reservationId)
@@ -476,11 +474,8 @@ function draftSession(
             };
           }
           controller.signal.throwIfAborted();
-          debugStage = "parse_model_output";
           const output = parseAgentDraftOutput(response.text, taskReview);
-          debugStage = "verify_agent";
           await assertAuthoredAgentSnapshotCurrent(db, authoredAgent);
-          debugStage = "verify_contract";
           const current = await retainedOrchestrationContract(
             tools.db,
             identity.companyId,
@@ -493,7 +488,6 @@ function draftSession(
           )
             throw forbidden("Text draft contract or output changed");
           controller.signal.throwIfAborted();
-          debugStage = "write_document";
           const write = documentResult.parse(
             await tools.execute({
               tool: "write_document",
@@ -590,7 +584,6 @@ function draftSession(
           event("turn.completed");
           event("run.terminal", terminal);
         } catch {
-          console.warn("aw_text_draft_failed_stage", debugStage);
           if (!revoked) {
             report = null;
             await gateway.abandon(claims).catch(() => {});

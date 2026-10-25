@@ -669,7 +669,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     const jobs = page.jobs.map(job => {
       const record = importJobRecord(job);
       const unconfirmedNewCompany = job.companyId === null && job.scopeKey === "new_company" &&
-        (job.status === "running" || job.status === "needs_reconciliation");
+        (job.status === "running" || job.status === "cancelled" || job.status === "needs_reconciliation");
       return { job: {
         id: record.id, status: record.status, createdAt: record.createdAt, updatedAt: record.updatedAt,
         ...(record.completedAt ? { completedAt: record.completedAt } : {}),

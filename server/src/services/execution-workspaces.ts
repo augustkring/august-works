@@ -60,6 +60,7 @@ import { GIT_CACHE_RESTORATION_KEY } from "./git-workspace-restoration.js";
 import {
   createGitWorkspaceCleanupProof,
   assertReproducibleManagedCheckout,
+  gitCacheCommand,
   inspectGitCacheRecipe,
   readGitCacheRestoration,
   restoreManagedGitCacheWorktree,
@@ -3107,7 +3108,9 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
       const authorizeCurrentWorkspace = async () => db.transaction(async tx => {
         const [fresh] = await tx.select().from(executionWorkspaces)
           .where(and(eq(executionWorkspaces.id, row.id), eq(executionWorkspaces.companyId, row.companyId))).for("share");
-        if (!fresh || fresh.status !== "archived" || fresh.projectId !== row.projectId
+        if (!fresh || fresh.status !== "archived" || fresh.providerType !== row.providerType
+          || fresh.strategyType !== row.strategyType || fresh.mode !== row.mode
+          || fresh.projectId !== row.projectId
           || fresh.projectWorkspaceId !== row.projectWorkspaceId || fresh.repoUrl !== row.repoUrl
           || fresh.sourceIssueId !== row.sourceIssueId || fresh.cwd !== row.cwd || fresh.providerRef !== row.providerRef
           || fresh.branchName !== row.branchName
@@ -3152,9 +3155,9 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
       const byCheckout = new Map(sourceRows.filter(source => source.repoUrl).map(source => [
         managedProjectCheckoutName({ id: source.id, repoUrl: source.repoUrl!, repoRef: source.repoRef, cwd: source.cwd }), source,
       ]));
-      const inspectCurrentRecipe = async () => {
+      const inspectCurrentRecipe = async (signal?: AbortSignal) => {
         const currentManagedCheckouts: ManagedCheckoutContents[] = [];
-        const currentRecipe = await inspectGitCacheRecipe(workspace, gitAuth, undefined, {
+        const currentRecipe = await inspectGitCacheRecipe(workspace, gitAuth, signal, {
         managedCheckouts: currentManagedCheckouts,
         proveManagedCheckout: async (checkoutPath, name, signal) => {
           const source = byCheckout.get(name);
@@ -3168,7 +3171,7 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
       });
         return { recipe: currentRecipe, checkouts: currentManagedCheckouts };
       };
-      const { recipe } = await inspectCurrentRecipe();
+      const { recipe } = await inspectCurrentRecipe(AbortSignal.timeout(90_000));
       await authorizeCurrentWorkspace();
       const [savedRecipe] = await db.update(executionWorkspaces).set({ metadata: { ...((row.metadata as Record<string, unknown> | null) ?? {}),
         [GIT_CACHE_RESTORATION_KEY]: recipe }, updatedAt: new Date() })
@@ -3176,9 +3179,10 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
         .returning({ id: executionWorkspaces.id });
       if (!savedRecipe) throw new Error("workspace_archive_state_changed");
       return createGitWorkspaceCleanupProof(recipe, async (boundary) => {
+        const signal = AbortSignal.timeout(90_000);
         await authorizeCurrentWorkspace();
         if (boundary !== "before_branch_delete") {
-          const live = await inspectCurrentRecipe();
+          const live = await inspectCurrentRecipe(signal);
           if (live.recipe.commit !== recipe.commit || live.recipe.branchName !== recipe.branchName
             || live.recipe.sourcePath !== recipe.sourcePath || live.recipe.worktreePath !== recipe.worktreePath) {
             throw new Error("workspace_recipe_changed");
@@ -3186,14 +3190,14 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
           await assertGitWorkspaceContentsUnchanged(row.cwd!, { companyId: row.companyId, workspaceId: row.id },
             recipe.contents, live.checkouts);
         } else {
-          const branchTip = (await gitCacheCommand(baseCwd!, ["rev-parse", `refs/heads/${recipe.branchName}`])).trim();
+          const branchTip = (await gitCacheCommand(baseCwd!, ["rev-parse", `refs/heads/${recipe.branchName}`], signal)).trim();
           if (branchTip !== recipe.commit) throw new Error("workspace_branch_tip_changed");
         }
         await authorizeCurrentWorkspace();
-        await verifyRemoteGitCommit(row.repoUrl!, recipe.commit, gitAuth);
+        await verifyRemoteGitCommit(row.repoUrl!, recipe.commit, gitAuth, signal);
         for (const checkout of recipe.contents?.checkouts ?? []) {
           await authorizeNestedSource(checkout.source);
-          await verifyRemoteGitCommit(checkout.source.repoUrl, checkout.commit, gitAuth);
+          await verifyRemoteGitCommit(checkout.source.repoUrl, checkout.commit, gitAuth, signal);
         }
       });
     },

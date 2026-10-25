@@ -366,7 +366,7 @@ export function modelReservationService(
     input: CompanyPurposeRequest,
   ) {
     if (!options.currentCompanyPurposeAuthority) {
-      throw forbidden("Current support source authority is unavailable");
+      throw forbidden("Current company-purpose source authority is unavailable");
     }
     const userId = v7HumanActorId(actor);
     await assertV7Enabled(tx, "orchestration_v7");
@@ -378,7 +378,7 @@ export function modelReservationService(
     await assertV7Authorization(tx, actor, input.companyId, "company_scope:read");
     const authorityHash = await options.currentCompanyPurposeAuthority(tx, actor, input);
     if (authorityHash !== input.authorityHash) {
-      throw conflict("Support source or principal authority changed");
+      throw conflict("Company-purpose source or principal authority changed");
     }
     return userId;
   }
@@ -429,7 +429,7 @@ export function modelReservationService(
       budget.qualificationHash !== funding.tariff.qualificationHash ||
       budget.tariffHash !== nativeSha256(funding.tariff) ||
       budget.maxCostMinor !== funding.maxCostMinor || budget.maxCalls !== funding.maxCalls) {
-      throw conflict("The platform support funding period changed after reservations were recorded");
+      throw conflict("The company-purpose funding period changed after reservations were recorded");
     }
     return budget;
   }
@@ -469,14 +469,14 @@ export function modelReservationService(
         }
         if (budget.reservedMinor + quote.maximumMinor > budget.maxCostMinor ||
           budget.reservedCalls + 1 > budget.maxCalls) {
-          throw forbidden("The platform support budget period is exhausted");
+          throw forbidden("The company-purpose budget period is exhausted");
         }
         const expiresAt = new Date(Math.min(
           Date.parse(quote.expiresAt),
           now.getTime() + 300_000,
           funding.periodEndsAt ? Date.parse(funding.periodEndsAt) : Infinity,
         ));
-        if (expiresAt <= now) throw forbidden("The platform support reservation period has expired");
+        if (expiresAt <= now) throw forbidden("The company-purpose reservation period has expired");
         const [reservation] = await tx.insert(orchestrationCompanyPurposeReservations).values({
           companyId: input.companyId,
           budgetId: budget.id,
@@ -548,10 +548,10 @@ export function modelReservationService(
           initial.id,
         )).for("update");
         if (!record || record.status !== "reserved" || record.expiresAt <= now) {
-          throw conflict("This support reservation cannot dispatch again");
+          throw conflict("This company-purpose reservation cannot dispatch again");
         }
         if (nativeSha256(quote) !== nativeSha256(record.quote)) {
-          throw conflict("Platform funding tariff or profile changed before dispatch");
+          throw conflict("Company-purpose funding tariff or profile changed before dispatch");
         }
         const [dispatched] = await tx.update(orchestrationCompanyPurposeReservations)
           .set({ status: "dispatched", dispatchedAt: now })
@@ -590,6 +590,7 @@ export function modelReservationService(
         status: "completed" | "failed" | "unknown";
         providerResponseHash: string | null;
         usage: { inputTokens: number; outputTokens: number } | null;
+        accounting?: { actualCostCents: string | null; costStatus: "reported" | "estimated" | "unpriced" };
       },
       now = new Date(),
     ): Promise<CompanyPurposeReservation> {
@@ -597,6 +598,7 @@ export function modelReservationService(
         status: z.enum(["completed", "failed", "unknown"]),
         providerResponseHash: z.string().regex(/^[a-f0-9]{64}$/).nullable(),
         usage: z.object({ inputTokens: z.number().int().nonnegative(), outputTokens: z.number().int().nonnegative() }).strict().nullable(),
+        accounting: z.object({ actualCostCents: z.string().regex(/^\d+(?:\.\d{1,7})?$/).nullable(), costStatus: z.enum(["reported", "estimated", "unpriced"]) }).strict().optional(),
       }).strict().parse(raw);
       return withV7ActivityTransaction(db, async (tx, publications) => {
         const [record] = await tx.select().from(orchestrationCompanyPurposeReservations).where(and(
@@ -604,7 +606,7 @@ export function modelReservationService(
           eq(orchestrationCompanyPurposeReservations.id, id),
         )).for("update");
         if (!record || record.status !== "dispatched") {
-          throw conflict("Only an unreconciled support dispatch may record an outcome");
+          throw conflict("Only an unreconciled company-purpose dispatch may record an outcome");
         }
         const overQuote = input.usage && (
           input.usage.inputTokens > record.quote.inputTokensUpperBound ||
@@ -624,9 +626,12 @@ export function modelReservationService(
           entityId: companyId,
           details: {
             reservationId: id,
+            purpose: record.purpose,
             status: updated!.status,
             pricingEnvelopeExceeded: Boolean(overQuote),
             maximumMinor: record.maximumMinor,
+            actualCostCents: input.accounting?.actualCostCents ?? null,
+            costStatus: input.accounting?.costStatus ?? "unpriced",
             debitRetained: true,
           },
         }, publications);
@@ -649,16 +654,16 @@ export function modelReservationService(
         if (!record) throw notFound("Company-purpose model reservation not found");
         if (record.status === "completed" || record.status === "failed") return record;
         if (record.status !== "unknown" || record.providerResponseHash !== null || record.usage !== null) {
-          throw conflict("This unknown support outcome has no safely reconcilable original dispatch proof");
+          throw conflict("This unknown company-purpose outcome has no safely reconcilable original dispatch proof");
         }
         if (!options.reconcileCompanyPurposeOutcome) {
-          throw conflict("The original support provider account cannot prove this dispatch outcome");
+          throw conflict("The original company-purpose provider account cannot prove this dispatch outcome");
         }
         const [funding] = await tx.select().from(orchestrationCompanyPurposeBudgets).where(and(
           eq(orchestrationCompanyPurposeBudgets.companyId, companyId),
           eq(orchestrationCompanyPurposeBudgets.id, record.budgetId),
         )).for("share");
-        if (!funding) throw conflict("The original support funding receipt is unavailable");
+        if (!funding) throw conflict("The original company-purpose funding receipt is unavailable");
         const verified = await options.reconcileCompanyPurposeOutcome(tx, { reservation: record, funding });
         const expected = {
           companyId,

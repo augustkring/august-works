@@ -2371,6 +2371,44 @@
       },
       "summary": [],
       "sourceCommit": "0b5223edcce06c03f2242c4ac95993ac75d5a4b3"
+    },
+    {
+      "name": "rt03-model-policy-transport-2026-10-25",
+      "exitCode": 0,
+      "exitSidecar": "rt03-model-policy-transport-2026-10-25.exit",
+      "rawSha256": "aedddfe488d0267bed58f242a29e9ae8e14de351f2ef452e0de3705a00b120a9",
+      "sanitizedSha256": "aedddfe488d0267bed58f242a29e9ae8e14de351f2ef452e0de3705a00b120a9",
+      "archiveSha256": "a0eeccef088dbe71e889ef0774c67a2d73d09c112719c1d42f33a5d8b2b168d9",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  52 passed (52)",
+        "Duration  2.67s (transform 1.31s, setup 125ms, import 2.19s, tests 106ms, environment 0ms)"
+      ],
+      "sourceCommit": "e8d714d3053717936ae74fe34cc4df14314b8842"
+    },
+    {
+      "name": "v10-host-model-provider-injection-check",
+      "exitCode": 0,
+      "exitSidecar": "v10-host-model-provider-injection-check.exit",
+      "rawSha256": "215aaf5457eac4f9d8f046610fa305adaac528745dcf8283a65ea52c2f657627",
+      "sanitizedSha256": "215aaf5457eac4f9d8f046610fa305adaac528745dcf8283a65ea52c2f657627",
+      "archiveSha256": "9c37bc70977b125fc4f26023ff26f03c88a2b40b59dd031916c5534383e1d39a",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "e8d714d3053717936ae74fe34cc4df14314b8842"
     }
   ],
   "updates": [
@@ -2724,6 +2762,20 @@
       "meaning": "Whole-workspace build diagnostic during new Jev setup and import API integration; expected failed compiler output retained, fixes in progress",
       "logs": [
         "v10-recovery-build"
+      ]
+    },
+    {
+      "sourceCommit": "e8d714d3053717936ae74fe34cc4df14314b8842",
+      "meaning": "Managed model request validation and policy projection software checks; actual full native source producer and physical deployment remain unqualified",
+      "logs": [
+        "rt03-model-policy-transport-2026-10-25"
+      ]
+    },
+    {
+      "sourceCommit": "e8d714d3053717936ae74fe34cc4df14314b8842",
+      "meaning": "Full OpenShell host model capability injection software checks, not a physical host/provider qualification",
+      "logs": [
+        "v10-host-model-provider-injection-check"
       ]
     }
   ],

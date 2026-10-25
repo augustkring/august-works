@@ -8,7 +8,7 @@ import { Link } from "../lib/router";
 
 function isUnconfirmedNewCompany(job: CompanyImportJobStatus["job"]) {
   return job.target?.mode === "new_company" && job.target.result === "not_confirmed" &&
-    (job.status === "running" || job.status === "needs_reconciliation") && !job.result && !job.importResult;
+    (job.status === "running" || job.status === "cancelled" || job.status === "needs_reconciliation") && !job.result && !job.importResult;
 }
 
 /** Saved receipts only. Reading this page never dispatches or retries an import. */
@@ -35,9 +35,9 @@ export function CompanyImportHistory({ active = true }: { active?: boolean } = {
     staleTime: 0, gcTime: 0, retry: false,
   });
   const labels = da ? {
-    running: "Import i gang", succeeded: "Import fuldført", failed: "Afvist før import", needs_reconciliation: "Udfaldet er ikke bekræftet",
+    running: "Import i gang", cancelled: "Import annulleret", succeeded: "Import fuldført", failed: "Afvist før import", needs_reconciliation: "Udfaldet er ikke bekræftet",
   } : {
-    running: "Import in progress", succeeded: "Import complete", failed: "Rejected before import", needs_reconciliation: "Outcome not confirmed",
+    running: "Import in progress", cancelled: "Import cancelled", succeeded: "Import complete", failed: "Rejected before import", needs_reconciliation: "Outcome not confirmed",
   };
   const newCompanyNotConfirmed = da ? "Ny virksomhed, resultatet er endnu ikke bekræftet" : "New company, result not yet confirmed";
   const jobs = current() ? query.data?.pages.flatMap(page => page.jobs) ?? [] : [];
@@ -60,6 +60,7 @@ export function CompanyImportHistory({ active = true }: { active?: boolean } = {
         <p className="break-all text-sm">{da ? "Kvittering" : "Receipt"}: {job.id}</p>
         {job.error && <p className="text-sm">{job.error.message}</p>}
         {job.status === "needs_reconciliation" && <p className="text-sm">{da ? "Nogle ændringer kan allerede være gemt. Behold kvitteringen, og kontakt support, før du importerer igen." : "Some changes may already be saved. Keep this receipt and contact support before importing again."}</p>}
+        {job.status === "cancelled" && <p className="text-sm">{da ? "Annulleringen blev bekræftet, før importændringerne begyndte." : "Cancellation was confirmed before import changes began."}</p>}
       </li>)}</ul>
       {query.hasNextPage && <Button variant="outline" disabled={query.isFetching} onClick={() => void query.fetchNextPage()}>{da ? "Vis flere" : "Show more"}</Button>}
     </>}

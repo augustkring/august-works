@@ -252,6 +252,14 @@ describeEmbeddedPostgres("native company import job ledger", () => {
       eq(companyMemberships.principalId, authority.userId)));
     await expect(service.requestCancellation(admitted.job.id, authority.actorKey, actor)).rejects.toMatchObject({ status: 403 });
     expect((await service.get(admitted.job.id, authority.actorKey))?.status).toBe("running");
+
+    const expiredAuthority = await seedAuthority(true);
+    const expiredActor = expiredAuthority.actor!;
+    const expiredJob = await service.admit(admission(expiredAuthority), expiredActor);
+    await db.update(authSessions).set({ expiresAt: new Date(Date.now() - 1000) })
+      .where(eq(authSessions.id, expiredAuthority.sessionId!));
+    await expect(service.requestCancellation(expiredJob.job.id, expiredAuthority.actorKey, expiredActor)).rejects.toMatchObject({ status: 403 });
+    expect((await service.get(expiredJob.job.id, expiredAuthority.actorKey))?.status).toBe("running");
   }, 90_000);
 
 });

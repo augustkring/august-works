@@ -1045,7 +1045,7 @@ describe.sequential("company portability routes", () => {
     expect(accepted.body.retryAfterMs).toBe(1000);
     await waitForCondition(() => mockCompanyPortabilityService.importBundle.mock.calls.length === 1, "import job start");
     expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledWith(importRequest, "cloud-user-1", {
-      pauseAutomations: false, actor: cloudTenantActor(), privateWorkAdmission: "closed",
+      pauseAutomations: false, actor: cloudTenantActor(), privateWorkAdmission: "closed", checkCancellation: expect.any(Function),
     });
     expect(mockLogActivity).not.toHaveBeenCalled();
 
@@ -1207,7 +1207,7 @@ describe.sequential("company portability routes", () => {
     expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledWith(
       { ...importRequest, pauseAutomations: true },
       "cloud-user-1",
-      { pauseAutomations: true, actor: cloudTenantActor(), privateWorkAdmission: "closed" },
+      { pauseAutomations: true, actor: cloudTenantActor(), privateWorkAdmission: "closed", checkCancellation: expect.any(Function) },
     );
   });
 
@@ -1232,7 +1232,7 @@ describe.sequential("company portability routes", () => {
     expect(accepted.body.statusUrl).not.toMatch(/\/jobs\/tenant-import-/);
     await waitForCondition(() => mockCompanyPortabilityService.importBundle.mock.calls.length === 1, "board import start");
     expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledWith(importRequest, "board-user-a", {
-      pauseAutomations: false, actor: boardActor("board-user-a"), privateWorkAdmission: "closed",
+      pauseAutomations: false, actor: boardActor("board-user-a"), privateWorkAdmission: "closed", checkCancellation: expect.any(Function),
     });
 
     const fullResult = createImportResult("created");
@@ -1472,7 +1472,7 @@ describe.sequential("company portability routes", () => {
     expect(call[0]).toEqual({ ...importMeta, source: { type: "inline", rootPath: "paperclip", files } });
     expect(call[1]).toBe("board-user-a");
     expect(call[2]).toEqual({
-      pauseAutomations: false, actor: boardActor("board-user-a"), privateWorkAdmission: "closed",
+      pauseAutomations: false, actor: boardActor("board-user-a"), privateWorkAdmission: "closed", checkCancellation: expect.any(Function),
     });
   });
 

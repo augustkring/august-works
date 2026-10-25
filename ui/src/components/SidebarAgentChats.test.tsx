@@ -40,6 +40,9 @@ beforeEach(() => {
   state.companyId = "company-a";
   state.navigate.mockClear();
   state.closeSidebar.mockClear();
+  state.list.mockImplementation(async (companyId: string) => companyId === "company-a"
+    ? [agent("alice", "company-a"), agent("never-visited", "company-a")]
+    : [agent("bob", "company-b")]);
   state.getPreferred.mockResolvedValue({ agentId: null, updatedAt: null });
   state.setPreferred.mockImplementation(async (_company: string, input: { agentId: string | null }) => ({ agentId: input.agentId, updatedAt: null }));
   client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
@@ -98,8 +101,10 @@ describe("SidebarAgentChats", () => {
       preference.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(state.setPreferred).toHaveBeenCalledWith("company-a", { agentId: "alice" });
+    state.getPreferred.mockResolvedValue({ agentId: "alice", updatedAt: null });
     await act(async () => {
       document.dispatchEvent(new Event("paperclip:ask-generalist"));
+      await new Promise((resolve) => setTimeout(resolve, 0));
     });
     expect(state.navigate).toHaveBeenCalledWith("/chats/alice");
   });
