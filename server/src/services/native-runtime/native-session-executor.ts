@@ -121,7 +121,7 @@ import {
 import { PaperclipControlPlanePort } from "./paperclip-control-plane-port.js";
 import { appendHeartbeatRunEvent } from "../heartbeat-run-events.js";
 import { nativeSha256 } from "./canonical.js";
-import { PaperclipRunnerToolAuthority, type NativeDocumentToolResultSource } from "./paperclip-runner-tool-authority.js";
+import { PaperclipRunnerToolAuthority, resolveNativeInputDispatchReceiptIdentity, type NativeDocumentToolResultSource } from "./paperclip-runner-tool-authority.js";
 import {nativeManagementToolsAvailable} from "./management-analytical-tools.js";
 import { createAssignedMcpTools, getAssignedMcpGateway } from "./assigned-mcp-tools.js";
 import { getNativeReviewAssignment, readNativeReviewAssignmentContext } from "./native-review-participant.js";
@@ -7248,7 +7248,8 @@ export async function recordNativeDocumentToolResultIntent(input: Parameters<typ
   try {
     const capture = input.capture;
     if (!Number.isSafeInteger(input.eventSeq) || input.eventSeq < 0 || capture.tool !== "read_document" ||
-      !/^[\x21-\x7e]{1,240}$/.test(capture.callId) || !/^[0-9a-f]{64}$/.test(capture.resultDigest))
+      !/^[\x21-\x7e]{1,240}$/.test(capture.callId) || !/^[0-9a-f]{64}$/.test(capture.resultDigest) ||
+      capture.turnId !== null && (typeof capture.turnId !== "string" || !/^[\x21-\x7e]{1,240}$/.test(capture.turnId)))
       throw new Error("native_document_tool_capture_binding_invalid");
     const source = capture.source === null ? null : {
       input: nativePayloadSourceInputSchema.parse(capture.source.input),
@@ -7277,7 +7278,14 @@ export async function recordNativeDocumentToolResultIntent(input: Parameters<typ
       const profile = record(run.runnerProfileJson), previous = profile.nativeDocumentToolResultSources ?? [];
       if (!Array.isArray(previous) || previous.length >= 256)
         throw new Error("native_document_tool_capture_budget_exceeded");
+      const selectedDispatch = resolveNativeInputDispatchReceiptIdentity(profile, capture.turnId === null ? null
+        : { turnId: capture.turnId, callId: capture.callId, tool: capture.tool }, capture.tool);
+      // A call from a prior launch/attempt cannot bind to the current result.
+      // Missing or ambiguous native identity remains unknown, never retrobound.
+      const nativeInputDispatch = selectedDispatch?.eventSeq === launch.seq && selectedDispatch.attempt === input.attempt
+        ? selectedDispatch : null;
       const captures = [...previous, { eventSeq: launch.seq, attempt: input.attempt,
+        turnId: capture.turnId, nativeInputDispatch,
         responsibleUserId: run.responsibleUserId ?? null, callId: capture.callId, tool: capture.tool,
         resultDigest: capture.resultDigest, source }];
       if (Buffer.byteLength(JSON.stringify(captures)) > 2 * 1024 * 1024)

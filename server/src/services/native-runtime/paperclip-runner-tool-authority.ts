@@ -157,6 +157,8 @@ type NativeBackendToolCallIdentity = { tool: string; callId: string; turnId: str
 const nativeBackendToolCallIdentity = new AsyncLocalStorage<NativeBackendToolCallIdentity | null>();
 
 export type NativeDocumentToolResultSource = {
+  /** Authenticated backend identity, never document arguments. Null stays unknown. */
+  turnId: string | null;
   callId: string;
   tool: "read_document";
   resultDigest: string;
@@ -167,6 +169,41 @@ function record(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
+}
+
+export function resolveNativeInputDispatchReceiptIdentity(
+  runnerProfile: unknown,
+  call: NativeBackendToolCallIdentity | null | undefined,
+  operationId: string,
+): NativeInputDispatchReceiptIdentity | null {
+  if (!call || call.tool !== operationId || !/^[\x21-\x7e]{1,240}$/.test(call.callId) ||
+    !/^[\x21-\x7e]{1,240}$/.test(call.turnId)) return null;
+  const profile = record(runnerProfile);
+  const rawAssociations = profile.nativeToolCallDispatchAssociations;
+  const rawIntents = profile.nativeModelInputDispatchIntents;
+  if (!Array.isArray(rawAssociations) || rawAssociations.length > 512 ||
+    !Array.isArray(rawIntents) || rawIntents.length > 64) return null;
+  const associations = rawAssociations.map(value => record(value)).filter(value =>
+    value.callId === call.callId && value.turnId === call.turnId);
+  if (associations.length !== 1 || associations[0]!.tool !== call.tool) return null;
+  const association = associations[0]!;
+  const uuidV4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  if (typeof association.dispatchId !== "string" || !uuidV4.test(association.dispatchId) ||
+    !Number.isSafeInteger(association.eventSeq) || (association.eventSeq as number) < 0 ||
+    !Number.isSafeInteger(association.attempt) || (association.attempt as number) < 1) return null;
+  const intents = rawIntents.map(value => record(value)).filter(value => value.turnId === call.turnId);
+  if (intents.length !== 1) return null;
+  const intent = intents[0]!;
+  if (intent.dispatchId !== association.dispatchId || intent.eventSeq !== association.eventSeq ||
+    intent.attempt !== association.attempt || typeof intent.turnInputDigest !== "string" ||
+    !/^[0-9a-f]{64}$/.test(intent.turnInputDigest)) return null;
+  return {
+    dispatchId: association.dispatchId,
+    eventSeq: association.eventSeq as number,
+    attempt: association.attempt as number,
+    turnId: call.turnId,
+    callId: call.callId,
+  };
 }
 
 function canonicalJson(value: unknown): string {
@@ -294,7 +331,7 @@ export class PaperclipRunnerToolAuthority {
         () => this.#executeAdmitted(call, source => { documentSource = source; }),
         call.tool !== "paperclip_search_assigned_tools" && (this.binding.assignedMcpTools?.has(call.tool) ?? false));
       if (call.tool === "read_document" && options.onDocumentRead) {
-        await options.onDocumentRead({ callId: call.callId, tool: "read_document",
+        await options.onDocumentRead({ turnId: boundNativeCall?.turnId ?? null, callId: call.callId, tool: "read_document",
           resultDigest: createHash("sha256").update(JSON.stringify(result)).digest("hex"), source: documentSource });
       }
       return result;
@@ -1562,7 +1599,7 @@ export class PaperclipRunnerToolAuthority {
         if (!currentIssue) throw new Error("paperclip_runner_tool_binding_not_authorized");
         this.#assertConversationGeneration({ issue: currentIssue, run: context.run });
         await this.#assertMutationSourceCurrent(tx as unknown as Db, context);
-        const nativeInputDispatch = this.#nativeInputDispatchReceiptIdentity(context.run, operationId);
+        const nativeInputDispatch = resolveNativeInputDispatchReceiptIdentity(context.run.runnerProfileJson, nativeBackendToolCallIdentity.getStore(), operationId);
         receipts[idempotencyKey] = {
           operationId,
           input,
@@ -1582,41 +1619,6 @@ export class PaperclipRunnerToolAuthority {
         throw error;
       }
     });
-  }
-
-  #nativeInputDispatchReceiptIdentity(
-    run: typeof heartbeatRuns.$inferSelect,
-    operationId: string,
-  ): NativeInputDispatchReceiptIdentity | null {
-    const call = nativeBackendToolCallIdentity.getStore();
-    if (!call || call.tool !== operationId || !/^[\x21-\x7e]{1,240}$/.test(call.callId) ||
-      !/^[\x21-\x7e]{1,240}$/.test(call.turnId)) return null;
-    const profile = record(run.runnerProfileJson);
-    const rawAssociations = profile.nativeToolCallDispatchAssociations;
-    const rawIntents = profile.nativeModelInputDispatchIntents;
-    if (!Array.isArray(rawAssociations) || rawAssociations.length > 512 ||
-      !Array.isArray(rawIntents) || rawIntents.length > 64) return null;
-    const associations = rawAssociations.map(value => record(value)).filter(value =>
-      value.callId === call.callId && value.turnId === call.turnId);
-    if (associations.length !== 1 || associations[0]!.tool !== call.tool) return null;
-    const association = associations[0]!;
-    const uuidV4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-    if (typeof association.dispatchId !== "string" || !uuidV4.test(association.dispatchId) ||
-      !Number.isSafeInteger(association.eventSeq) || (association.eventSeq as number) < 0 ||
-      !Number.isSafeInteger(association.attempt) || (association.attempt as number) < 1) return null;
-    const intents = rawIntents.map(value => record(value)).filter(value => value.turnId === call.turnId);
-    if (intents.length !== 1) return null;
-    const intent = intents[0]!;
-    if (intent.dispatchId !== association.dispatchId || intent.eventSeq !== association.eventSeq ||
-      intent.attempt !== association.attempt || typeof intent.turnInputDigest !== "string" ||
-      !/^[0-9a-f]{64}$/.test(intent.turnInputDigest)) return null;
-    return {
-      dispatchId: association.dispatchId,
-      eventSeq: association.eventSeq as number,
-      attempt: association.attempt as number,
-      turnId: call.turnId,
-      callId: call.callId,
-    };
   }
 
   #assertConversationGeneration(context: { issue: typeof issues.$inferSelect; run: typeof heartbeatRuns.$inferSelect }) {

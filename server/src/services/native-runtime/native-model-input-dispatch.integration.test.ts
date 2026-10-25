@@ -107,7 +107,7 @@ describe("native model input dispatch intent", () => {
 
   function documentArgs(seeded: Awaited<ReturnType<typeof seed>>, source: DocumentRevisionSourceCapture | null = null) {
     const { turnInput: _turnInput, ...binding } = dispatchArgs(seeded, { message: { role: "user", text: "unused" } });
-    return { ...binding, capture: { callId: "actual-document-read", tool: "read_document" as const,
+    return { ...binding, capture: { turnId: null as string | null, callId: "actual-document-read", tool: "read_document" as const,
       resultDigest: nativeSha256({ document: null }), source } };
   }
 
@@ -144,6 +144,43 @@ describe("native model input dispatch intent", () => {
     expect(run!.nativeInputSourceProtocolVersion).toBe(0);
     expect(run!.runnerProfileJson).not.toHaveProperty("nativeInputSourceReceipt");
   });
+
+  it.each(["missing_ack", "missing_call", "other_tool", "ambiguous_turn", "prior_attempt", "prior_launch"] as const)(
+    "keeps the document dispatch unknown for %s without retroactive rebinding", async kind => {
+      const seeded = await seed(), args = documentArgs(seeded);
+      args.capture.turnId = "actual-document-turn";
+      const turnInput = { message: { role: "user" as const, text: "Actual document selection" } };
+      const dispatchId = await recordNativeModelInputDispatchIntent(dispatchArgs(seeded, turnInput));
+      if (kind !== "missing_ack") {
+        await recordNativeModelInputDispatchAcknowledgement(acknowledgementArgs(seeded, dispatchId, turnInput, args.capture.turnId));
+        if (kind !== "missing_call") await recordNativeToolCallDispatchAssociation({ ...dispatchArgs(seeded, turnInput),
+          turnId: args.capture.turnId, callId: args.capture.callId, tool: kind === "other_tool" ? "create_task" : "read_document" });
+      }
+      if (kind === "ambiguous_turn") {
+        const duplicate = await recordNativeModelInputDispatchIntent(dispatchArgs(seeded, turnInput));
+        await recordNativeModelInputDispatchAcknowledgement(acknowledgementArgs(seeded, duplicate, turnInput, args.capture.turnId));
+      }
+      if (kind === "prior_attempt" || kind === "prior_launch") {
+        const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
+        const profile = run!.runnerProfileJson!;
+        for (const field of ["nativeModelInputDispatchIntents", "nativeToolCallDispatchAssociations"]) {
+          profile[field] = (profile[field] as Record<string, unknown>[]).map(value => ({ ...value,
+            ...(kind === "prior_attempt" ? { attempt: seeded.attempt - 1 } : { eventSeq: seeded.eventSeq - 1 }) }));
+        }
+        await db.update(heartbeatRuns).set({ runnerProfileJson: profile }).where(eq(heartbeatRuns.id, seeded.runId));
+      }
+      await recordNativeDocumentToolResultIntent(args);
+      if (kind === "missing_ack") {
+        await recordNativeModelInputDispatchAcknowledgement(acknowledgementArgs(seeded, dispatchId, turnInput, args.capture.turnId));
+        await recordNativeToolCallDispatchAssociation({ ...dispatchArgs(seeded, turnInput),
+          turnId: args.capture.turnId, callId: args.capture.callId, tool: "read_document" });
+      }
+      const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
+      expect(run!.runnerProfileJson!.nativeDocumentToolResultSources).toEqual([
+        expect.objectContaining({ turnId: args.capture.turnId, nativeInputDispatch: null }),
+      ]);
+      expect(run!.nativeInputSourceProtocolVersion).toBe(0);
+    });
 
   it("retains an actual direct Human revision snapshot and rejects a substituted owner", async () => {
     const seeded = await seed(), userId = randomUUID(), sessionId = randomUUID(), now = new Date();

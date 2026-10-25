@@ -26,7 +26,7 @@ import type { DocumentRevisionSourceCapture } from "../documents.js";
 import { issueService } from "../issues.js";
 import { issueThreadInteractionService } from "../issue-thread-interactions.js";
 import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
-import { recordNativeModelInputDispatchIntent, recordNativeModelInputDispatchAcknowledgement, recordNativeToolCallDispatchAssociation } from "./native-session-executor.js";
+import { recordNativeModelInputDispatchIntent, recordNativeModelInputDispatchAcknowledgement, recordNativeToolCallDispatchAssociation, recordNativeDocumentToolResultIntent } from "./native-session-executor.js";
 import { PROCESS_START_REQUESTED } from "../native-local-process-stop.js";
 import { currentNativeControllerIdentity } from "./native-restart-recovery.js";
 import { createAssignedMcpTools } from "./assigned-mcp-tools.js";
@@ -83,7 +83,8 @@ describe("PaperclipRunnerToolAuthority", () => {
       if (expectAssociation) expect(associationRecorded).toBe(true);
       return { tool, callId, turnId, dispatchId, eventSeq, attempt };
     };
-    return { ...fixture, bindCall };
+    return { ...fixture, bindCall, documentCaptureBinding: { db, runId: fixture.runId, companyId: fixture.companyId,
+      issueId: fixture.issueId, agentId: fixture.agentId, leaseOwner, attempt, controller, eventSeq } };
   }
 
   beforeEach(() => {
@@ -284,6 +285,32 @@ describe("PaperclipRunnerToolAuthority", () => {
       onDocumentRead: async capture => { captures.push(capture); },
     });
     expect(captures).toHaveLength(1);
+  });
+
+  it("binds a returned document to its authenticated dispatch and never to model arguments", async () => {
+    const fixture = await seedDispatchBoundAuthority(), key = `dispatch-read-${randomUUID()}`;
+    const created = await documentService(db).upsertIssueDocument({ issueId: fixture.issueId, key,
+      title: "Native dispatch document", format: "markdown", body: "Exact selected document" });
+    const nativeCall = await fixture.bindCall("read_document", "native-read-call", "native-read-turn");
+    const result = await fixture.authority.execute({ tool: "read_document", callId: nativeCall.callId,
+      arguments: { key, turnId: "model-supplied-turn", dispatchId: randomUUID() } }, {
+      nativeToolCallIdentity: nativeCall,
+      onDocumentRead: capture => recordNativeDocumentToolResultIntent({ ...fixture.documentCaptureBinding, capture }),
+    });
+    await fixture.authority.execute({ tool: "read_document", callId: "read-without-native-identity",
+      arguments: { key, turnId: nativeCall.turnId, dispatchId: nativeCall.dispatchId } }, {
+      onDocumentRead: capture => recordNativeDocumentToolResultIntent({ ...fixture.documentCaptureBinding, capture }),
+    });
+    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
+    expect(run!.runnerProfileJson!.nativeDocumentToolResultSources).toEqual([
+      expect.objectContaining({ callId: nativeCall.callId, turnId: nativeCall.turnId,
+        resultDigest: createHash("sha256").update(JSON.stringify(result)).digest("hex"),
+        nativeInputDispatch: { dispatchId: nativeCall.dispatchId, eventSeq: nativeCall.eventSeq,
+          attempt: nativeCall.attempt, turnId: nativeCall.turnId, callId: nativeCall.callId },
+        source: expect.objectContaining({ input: expect.objectContaining({ revisionId: created.document.latestRevisionId }) }) }),
+      expect.objectContaining({ callId: "read-without-native-identity", turnId: null, nativeInputDispatch: null }),
+    ]);
+    expect(run!.nativeInputSourceProtocolVersion).toBe(0);
   });
 
   it("keeps concurrent read_document source captures local to their calls", async () => {

@@ -212,7 +212,8 @@ vi.mock("@paperclipai/adapter-codex-local/server", async (importOriginal) => ({
   copyBackCodexAuth: state.copyBackCodexAuth,
 }));
 
-vi.mock("./paperclip-runner-tool-authority.js", () => ({
+vi.mock("./paperclip-runner-tool-authority.js", async importOriginal => ({
+  resolveNativeInputDispatchReceiptIdentity: (await importOriginal<typeof import("./paperclip-runner-tool-authority.js")>()).resolveNativeInputDispatchReceiptIdentity,
   PaperclipRunnerToolAuthority: class {
     readonly binding: Record<string, unknown>;
 
@@ -8117,7 +8118,7 @@ describe("runnerd provider runtime wiring", () => {
     const result = { document: { body: "PRIVATE_DOCUMENT_RESULT" } };
     const digest = createHash("sha256").update(JSON.stringify(result)).digest("hex");
     state.toolAuthorityExecute.mockReset().mockImplementation(async (_binding, call, options) => {
-      await options.onDocumentRead({ callId: call.callId, tool: "read_document", resultDigest: digest, source: null });
+      await options.onDocumentRead({ turnId: options.nativeToolCallIdentity?.turnId ?? null, callId: call.callId, tool: "read_document", resultDigest: digest, source: null });
       return result;
     });
     state.execute.mockReset().mockImplementationOnce(async options => {
