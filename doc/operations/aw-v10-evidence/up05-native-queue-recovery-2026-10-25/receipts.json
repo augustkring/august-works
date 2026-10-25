@@ -1,0 +1,64 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "3b06cc3c52a5ed2f8cb95bd37f6354fdae8ed28e",
+  "meaning": "Original paused-recipient queue186, extended stranded/native-cleanup queue210 and live-controller deadline5 pass; assembled heartbeat/environment acceptance ongoing",
+  "logs": [
+    {
+      "name": "up05-paused-recipient-native-queue",
+      "exitCode": 0,
+      "rawSha256": "06f554067b9bb014d1239968d708fb432284678dc6cfe42dde492ec803229144",
+      "sanitizedSha256": "06f554067b9bb014d1239968d708fb432284678dc6cfe42dde492ec803229144",
+      "archiveSha256": "ed6b3c5b6fac5b612d725a54aa198f6eab3fb1aceef1176e3f83f75a61acb250",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  3 passed (3)",
+        "Tests  186 passed (186)",
+        "Duration  28.94s (transform 11.61s, setup 188ms, import 19.83s, tests 8.53s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "up05-stranded-native-queue-owner",
+      "exitCode": 0,
+      "rawSha256": "7c8423bd3cbadfa91f3a98e228f11cdc7fe9879bff00ee74254c8bfabbd63d4d",
+      "sanitizedSha256": "7c8423bd3cbadfa91f3a98e228f11cdc7fe9879bff00ee74254c8bfabbd63d4d",
+      "archiveSha256": "741b8747fe6e9970e68e4c372750ee90e016542f3175f04f62c799f83ace6c61",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  3 passed (3)",
+        "Tests  210 passed (210)",
+        "Duration  29.87s (transform 11.55s, setup 200ms, import 19.66s, tests 9.61s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "up05-live-legacy-controller-deadline",
+      "exitCode": 0,
+      "rawSha256": "c5c03d73faf51ffe342ea7678af75f27036682493d8634d7932cc56265697891",
+      "sanitizedSha256": "c5c03d73faf51ffe342ea7678af75f27036682493d8634d7932cc56265697891",
+      "archiveSha256": "fe691a4d6fa9972e83bb237a166b05e01de46193289f21440805fde6b43f935e",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  5 passed (5)",
+        "Duration  15.99s (transform 2.74s, setup 79ms, import 4.70s, tests 11.08s, environment 0ms)"
+      ]
+    }
+  ]
+}
