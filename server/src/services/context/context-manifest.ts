@@ -23,7 +23,9 @@ import { learningAssetRoots,retainLearnedAssetsInContext } from "../learning/lea
 import { memoryPayloadVisible, canActorReadMemorySources } from "../memory/memory-privacy.js";
 import { modelLineage, observationLineage } from "../memory/derived-memory.js";
 import { lockIssuePrivacyTree } from "../issues.js";
-import {authorizationService,canActorReadHeartbeatRunPrivacy,canActorReadIssuePrivacy,canActorReadProjectPrivacy,type AuthorizationActor} from "../authorization.js";
+import { foundationIndexService } from "../foundation/foundation-index.js";
+import { approvedFoundationView, foundationService } from "../foundation/foundation-service.js";
+import {authorizationService,canActorReadHeartbeatRunPrivacy,canActorReadIssuePrivacy,canActorReadProjectPrivacy,type AuthorizationActor,type NativeContextInspectionOwner} from "../authorization.js";
 
 type JsonScalar = string | number | boolean | null;
 type CanonicalJson = JsonScalar | CanonicalJson[] | { [key: string]: CanonicalJson };
@@ -177,8 +179,170 @@ async function assertManifestReferences(db: Db, input: CreateContextManifestInpu
   return run;
 }
 
+/** Human readiness's no-write Source gate. Runtime manifests keep their
+ * separate actual-run create path and its strict retention writes. The caller
+ * owns the physical authorization and privacy transaction. */
+async function verifyContextSelection(db: Db, input: CreateContextManifestInput, actor: AuthorizationActor,
+  options: { rejectUnsupportedProviders: boolean }) {
+  const selectedTaskIds: string[] = [];
+  const selectedPayloadSnapshots = new Map<string, typeof issues.$inferSelect["payloadSourceSnapshot"]>();
+  const expectedRoots = new Map<string, string>();
+  const learnedAssets: Array<{ type: string; id: string }> = [];
+  const sourceKey = (provider: string, ref: string) => `${provider}:${ref.toLowerCase()}`;
+  const foundationEvidence = input.selected.filter(({ decision }) => decision.evidence.sourceProvider === "august_works_foundation");
+  if (options.rejectUnsupportedProviders && foundationEvidence.length) {
+    const refs = foundationEvidence.map(({ decision }) => {
+      const match = /^foundation:\/\/([a-f0-9-]{36})\/([a-f0-9-]{36})(?:\/\d+)?$/i.exec(decision.evidence.sourceRef);
+      if (!match || decision.evidence.sourceVersion !== match[2]) throw forbidden("Foundation Context requires its pinned canonical revision");
+      return { documentId: match[1]!, revisionId: match[2]! };
+    });
+    await foundationService(db).pinApprovedRevisions(input.companyId, refs, actor);
+  }
+  const canonicalFoundationRows = foundationEvidence.length ? await foundationIndexService(db).search(input.companyId, {
+    query: input.query.slice(0, 500), limit: 12, scope: "approved",
+  }, actor, "task") : [];
+  const wholeFoundationRows = foundationEvidence.some(({ decision }) => decision.evidence.sourceRef.match(/^foundation:\/\/[^/]+\/[^/]+$/))
+    ? (await foundationService(db).list(input.companyId, actor)).map(approvedFoundationView).filter((item) => item !== null)
+    : [];
+  const supported = new Set(["august_works_tasks", "august_works_foundation", "august_works_memory", "august_works_derived_memory"]);
+
+  for (const { decision, retrievalScore, selectionReason } of input.selected) {
+    const evidence = decision.evidence;
+    const reason = selectionReason ?? decision.reason;
+    if (evidence.companyId !== input.companyId || !reason.trim() || reason.length > 500 ||
+      retrievalScore != null && !Number.isFinite(retrievalScore) || options.rejectUnsupportedProviders && !supported.has(evidence.sourceProvider))
+      throw forbidden("Context source evidence is unavailable");
+    const nowMs = Date.now();
+    if (evidence.validFrom && new Date(evidence.validFrom).getTime() > nowMs ||
+      evidence.validUntil && new Date(evidence.validUntil).getTime() <= nowMs)
+      throw conflict("Context source is outside its current validity window");
+    if (evidence.sourceProvider === "august_works_tasks") {
+      const ref = /^issue:\/\/([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})$/i.exec(evidence.sourceRef);
+      if (!ref) throw forbidden("Context requires its canonical Task reference");
+      const [current] = await db.select({ id: issues.id, updatedAt: issues.updatedAt,
+        payloadSourceSnapshot: issues.payloadSourceSnapshot }).from(issues).where(and(
+          eq(issues.companyId, input.companyId), eq(issues.id, ref[1]!))).for("share");
+      if (!current || current.updatedAt.toISOString() !== evidence.sourceVersion ||
+        !await canActorReadIssuePrivacy(db, actor, { companyId: input.companyId, id: current.id }))
+        throw conflict("Context Task source changed or is unavailable");
+      selectedTaskIds.push(current.id);
+      selectedPayloadSnapshots.set(sourceKey(evidence.sourceProvider, evidence.sourceRef), current.payloadSourceSnapshot);
+    } else if (evidence.sourceProvider === "august_works_foundation") {
+      const ref = /^foundation:\/\/([a-f0-9-]{36})\/([a-f0-9-]{36})(?:\/(\d+))?$/i.exec(evidence.sourceRef);
+      if (!ref || evidence.sourceVersion !== ref[2]) throw forbidden("Foundation Context requires its pinned canonical revision");
+      if (ref[3] === undefined) {
+        const document = wholeFoundationRows.find(candidate => candidate.id === ref[1] && candidate.canonicalRevision?.id === ref[2]);
+        if (!document || !document.canonicalRevision || document.authorityLevel !== "canonical" || !["public", "internal"].includes(document.sensitivity) ||
+          document.body !== evidence.excerpt || document.title !== evidence.title ||
+          new Date(document.lastReviewedAt ?? document.canonicalRevision.createdAt).toISOString() !== evidence.sourceUpdatedAt)
+          throw conflict("Approved Foundation revision changed or is unavailable");
+      } else {
+        const row = canonicalFoundationRows.find(candidate => candidate.foundationDocumentId === ref[1] &&
+          candidate.documentRevisionId === ref[2] && String(candidate.ordinal) === ref[3]);
+        const expectedTitle = row ? (row.headingPath.length ? row.headingPath.join(" > ") : row.title ?? row.foundationKey) : null;
+        if (!row || row.excerpt !== evidence.excerpt || expectedTitle !== evidence.title ||
+          row.sourceUpdatedAt !== evidence.sourceUpdatedAt || row.contentHash !== evidence.metadata.contentHash)
+          throw conflict("Foundation Context source changed during assembly");
+      }
+      learnedAssets.push({ type: "document_revision", id: ref[2]! });
+      for (const root of await learningAssetRoots(db, input.companyId, "document_revision", ref[2]!,
+        typeof (input.policySnapshot as { intent?: unknown })?.intent === "string" ? (input.policySnapshot as { intent: string }).intent : "general_work", actor, "task")) {
+        const version = root.record.updatedAt.toISOString();
+        if (expectedRoots.has(root.id) && expectedRoots.get(root.id) !== version)
+          throw conflict("Learned Context roots have conflicting versions");
+        expectedRoots.set(root.id, version);
+      }
+    } else if (evidence.sourceProvider === "august_works_memory") {
+      const ref = /^memory:\/\/record\/([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})$/i.exec(evidence.sourceRef);
+      if (!ref || !evidence.sourceVersion || expectedRoots.has(ref[1]!) && expectedRoots.get(ref[1]!) !== evidence.sourceVersion)
+        throw forbidden("Context requires its canonical Memory reference and version");
+      expectedRoots.set(ref[1]!, evidence.sourceVersion);
+    } else if (evidence.sourceProvider === "august_works_derived_memory") {
+      const ref = /^memory:\/\/(memory_model|memory_observation)\/([a-f0-9-]{36})$/i.exec(evidence.sourceRef);
+      if (!ref) throw forbidden("Derived Context requires its native reference");
+      const roots = await (async () => {
+        if (ref[1] === "memory_model") {
+          const [row] = await db.select().from(memoryModels).where(and(eq(memoryModels.companyId, input.companyId), eq(memoryModels.id, ref[2]!))).for("share");
+          if (!row || row.erasedAt || row.status !== "active" || String(row.version) !== evidence.sourceVersion)
+            throw conflict("Derived Context review changed during assembly");
+          return (await modelLineage(db, actor, row)).roots;
+        }
+        const [row] = await db.select().from(memoryObservations).where(and(eq(memoryObservations.companyId, input.companyId), eq(memoryObservations.id, ref[2]!))).for("share");
+        if (!row || row.erasedAt || row.status !== "accepted" || String(row.version) !== evidence.sourceVersion)
+          throw conflict("Derived Context review changed during assembly");
+        return (await observationLineage(db, actor, row)).roots;
+      })();
+      for (const root of roots) {
+        const version = root.updatedAt.toISOString();
+        if (expectedRoots.has(root.id) && expectedRoots.get(root.id) !== version)
+          throw conflict("Context Memory source versions conflict");
+        expectedRoots.set(root.id, version);
+      }
+    } else if (options.rejectUnsupportedProviders) {
+      throw forbidden("Context source provider is not supported for Human inspection");
+    }
+  }
+
+  const rootIds = [...expectedRoots.keys()];
+  if (rootIds.length > 256) throw forbidden("Complete Context Memory roots exceed their source budget");
+  if (rootIds.length) {
+    const roots = await db.select({ id: memoryRecords.id, updatedAt: memoryRecords.updatedAt, scopeType: memoryRecords.scopeType,
+      ownerAgentId: memoryRecords.ownerAgentId, payloadSourceSnapshot: memoryRecords.payloadSourceSnapshot,
+      validUntil: memoryRecords.validUntil, expiresAt: memoryRecords.expiresAt }).from(memoryRecords).where(and(
+        eq(memoryRecords.companyId, input.companyId), inArray(memoryRecords.id, rootIds), memoryPayloadVisible())).for("share");
+    if (roots.length !== rootIds.length) throw forbidden("Context Memory roots cross a company boundary or were erased");
+    for (const root of roots) {
+      if (root.scopeType === "agent" && root.ownerAgentId !== input.agentId)
+        throw forbidden("Context private Memory belongs to another agent");
+      if (root.validUntil && root.validUntil.getTime() <= Date.now() || root.expiresAt && root.expiresAt.getTime() <= Date.now())
+        throw conflict("Context Memory source expired during assembly");
+      if (root.updatedAt.toISOString() !== expectedRoots.get(root.id) ||
+        !await canActorReadMemorySources(db, input.companyId, actor, root.id))
+        throw forbidden("Context Memory source access is unavailable");
+      selectedPayloadSnapshots.set(sourceKey("august_works_memory", `memory://record/${root.id}`), root.payloadSourceSnapshot);
+    }
+  }
+  return { selectedTaskIds, selectedPayloadSnapshots, expectedRoots, learnedAssets };
+}
+
 export function contextManifestService(db: Db) {
   return {
+    /** Validate a Human-owned, non-execution Context selection without creating
+     * a manifest or retaining Task/Memory/analytical dependency edges. Runtime
+     * callers continue to use create(), which requires the real accountable run. */
+    inspectReadOnly: async (input: CreateContextManifestInput, actor: AuthorizationActor, authority: NativeContextInspectionOwner) => {
+      if (input.runId) throw forbidden("Read-only Context inspection cannot claim an execution run");
+      return db.transaction(async rawTx => {
+        const tx = rawTx as unknown as Db;
+        const assertOriginalHumanCurrent = async () => {
+          if (actor.type !== "board") throw forbidden("Read-only Context inspection requires its original Human actor");
+          const company = await authority.decide({ actor, action: "company_scope:read",
+            resource: { type: "company", companyId: input.companyId }, enforceResponsibleUserIntersection: true });
+          const agentRead = await authority.decide({ actor, action: "agent:read",
+            resource: { type: "agent", companyId: input.companyId, agentId: input.agentId } });
+          if (!company.allowed || !agentRead.allowed) throw forbidden("Context inspection authority is unavailable");
+          return actor;
+        };
+        const sourceActor = await assertOriginalHumanCurrent();
+        // Pin the original User/credential before taking Task privacy-tree locks.
+        await lockIssuePrivacyTree(rawTx, input.companyId);
+        await assertManifestReferences(tx, input);
+        const verified = await verifyContextSelection(tx, input, sourceActor, { rejectUnsupportedProviders: true });
+        await assertOriginalHumanCurrent();
+        if (input.issueId && !await canActorReadIssuePrivacy(tx, sourceActor, { companyId: input.companyId, id: input.issueId }))
+          throw forbidden("Context inspection source access changed during assembly");
+        for (const id of verified.selectedTaskIds) if (!await canActorReadIssuePrivacy(tx, sourceActor, { companyId: input.companyId, id }))
+          throw forbidden("Context inspection Task access changed during assembly");
+        for (const id of verified.expectedRoots.keys()) if (!await canActorReadMemorySources(tx, input.companyId, sourceActor, id))
+          throw forbidden("Context inspection Memory access changed during assembly");
+
+        const sourceSnapshotHash = sha256(JSON.stringify(input.selected.map(({ decision }) => ({
+          sourceProvider: decision.evidence.sourceProvider, sourceRef: decision.evidence.sourceRef,
+          sourceVersion: decision.evidence.sourceVersion, contentHash: hashEvidenceContent(decision.evidence),
+        })).sort((a, b) => `${a.sourceProvider}:${a.sourceRef}`.localeCompare(`${b.sourceProvider}:${b.sourceRef}`))));
+        return { policySnapshotHash: hashContextPolicySnapshot(input.policySnapshot), sourceSnapshotHash };
+      });
+    },
     create: async (input: CreateContextManifestInput) => {
       const queryHash = hashContextQuery(input.query);
       const policySnapshotHash = hashContextPolicySnapshot(input.policySnapshot);

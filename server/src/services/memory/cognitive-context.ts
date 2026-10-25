@@ -7,8 +7,9 @@ export function cognitiveContextProvider(db: Db): ContextProvider {
   return { key: "cognitive_memory", requirement: "optional", async retrieve({ request, signal }) {
     const flags = await instanceSettingsService(db).getExperimental();
     if (!v7FeatureEnabled(flags, "cognitive_memory_v7")) return { evidence: [] };
-    const actor = { type: "agent" as const, companyId: request.companyId, agentId: request.agentId, source: "agent_jwt" as const,
-      runId: request.runId ?? null, onBehalfOfUserId: request.responsibleUserId ?? null };
+    const actor = request.authorizationActor ?? { type: "agent" as const, companyId: request.companyId,
+      agentId: request.agentId, source: "agent_jwt" as const, runId: request.runId ?? null,
+      onBehalfOfUserId: request.responsibleUserId ?? null };
     const service = cognitiveMemoryService(db), status = await service.status(actor, request.companyId);
     const bindings = status.bindings.filter((binding) => binding.scopeType === "company"
       || (binding.scopeType === "project" && binding.scopeId === request.projectId)

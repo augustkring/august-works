@@ -853,10 +853,12 @@ type ReadSourceDecisionInput = {
   scope?: Record<string, unknown> | null;
   enforceResponsibleUserIntersection?: boolean;
 };
-type ReadSourceOwner = { decide(input: ReadSourceDecisionInput): Promise<AuthorizationDecision> };
-type ReadScopePurpose = "task_sources" | "company_search";
+export type NativeContextInspectionOwner = { decide(input: ReadSourceDecisionInput): Promise<AuthorizationDecision> };
+type ReadSourceOwner = NativeContextInspectionOwner;
+type ReadScopePurpose = "task_sources" | "company_search" | "context_inspection";
 type ReadSourceRows = {
   companyId: string;
+  agentId: string | null;
   issues: Map<string, IssueAuthorizationRow | null>;
   projects: Map<string, ProjectAuthorizationRow | null>;
   active: boolean;
@@ -905,26 +907,40 @@ export async function pinCurrentBoardActor(db: Db | DbTransaction, actor: Author
 // cannot supply row facts, policies, authorization results or a read capability.
 function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSourceRows, sourceAuthorityPins = false) {
   async function withReadScope<T>(companyId: string, issueIds: string[], projectIds: string[], purpose: ReadScopePurpose,
-    read: (owner: ReadSourceOwner) => Promise<T>): Promise<T> {
+    read: (owner: ReadSourceOwner) => Promise<T>, agentId: string | null = null, preflightActor?: AuthorizationActor): Promise<T> {
     const locked = is(db, PgTransaction);
     const requestedIssues = [...new Set(issueIds)], requestedProjects = [...new Set(projectIds)];
     if (requestedIssues.length + requestedProjects.length > 20065) throw new Error("Native Source row transport exceeds its complete-population bound");
+    const context: ReadSourceRows = {
+      companyId, agentId, active: true, credentialExpiresAt: null, credentialUserId: null, purpose,
+      // Context inspection pins the original Human and current role before
+      // reading any Task/Project Source row. Other scopes retain their historic order.
+      issues: new Map(locked && purpose !== "context_inspection" ? requestedIssues.map(id => [id, null]) : []),
+      projects: new Map(locked && purpose !== "context_inspection" ? requestedProjects.map(id => [id, null]) : []),
+    };
+    const owner = createAuthorizationService(db, context);
+    if (purpose === "context_inspection") {
+      if (!locked || !preflightActor || preflightActor.type !== "board") throw forbidden("Human Context inspection requires its original native actor.");
+      const company = await owner.decide({ actor: preflightActor, action: "company_scope:read",
+        resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true });
+      const agent = await owner.decide({ actor: preflightActor, action: "agent:read",
+        resource: { type: "agent", companyId, agentId: agentId! }, enforceResponsibleUserIntersection: true });
+      if (!company.allowed || !agent.allowed) throw forbidden("Human Context inspection authority is unavailable");
+    }
     const issueRows = locked && requestedIssues.length ? await db.select(issueReadColumns).from(issues)
       .where(and(eq(issues.companyId, companyId), inArray(issues.id, requestedIssues))).for("share") : [];
     const projectRefs = [...new Set([...requestedProjects, ...issueRows.map(row => row.projectId).filter((id): id is string => id !== null)])];
     if (requestedIssues.length + projectRefs.length > 20065) throw new Error("Native Source row transport exceeds its complete-population bound");
     const projectRows = locked && projectRefs.length ? await db.select(projectReadColumns).from(projects)
       .where(and(eq(projects.companyId, companyId), inArray(projects.id, projectRefs))).for("share") : [];
-    const context: ReadSourceRows = {
-      companyId, active: true, credentialExpiresAt: null, credentialUserId: null, purpose,
-      // Outside a real transaction, keep the original per-call reads. An
-      // autocommit FOR SHARE cannot qualify reusable current Source facts.
-      issues: new Map((locked ? requestedIssues : []).map(id => [id, null])),
-      projects: new Map((locked ? projectRefs : []).map(id => [id, null])),
-    };
+    // Outside a real transaction, keep the original per-call reads. An
+    // autocommit FOR SHARE cannot qualify reusable current Source facts.
+    if (locked) {
+      for (const id of requestedIssues) if (!context.issues.has(id)) context.issues.set(id, null);
+      for (const id of projectRefs) if (!context.projects.has(id)) context.projects.set(id, null);
+    }
     for (const row of issueRows) context.issues.set(row.id, row);
     for (const row of projectRows) context.projects.set(row.id, row);
-    const owner = createAuthorizationService(db, context);
     try {
       const result = await read({ decide: owner.decide });
       if (context.credentialExpiresAt !== null || context.credentialUserId !== null) {
@@ -947,6 +963,18 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
   async function withReadCompany<T>(companyId: string, read: (owner: ReadSourceOwner) => Promise<T>) {
     if (!is(db, PgTransaction)) throw forbidden("Company search requires a native read transaction.");
     return withReadScope(companyId, [], [], "company_search", read);
+  }
+  async function withReadContextInspection<T>(companyId: string, agentId: string, issueIds: string[], projectIds: string[],
+    actor: AuthorizationActor, read: (owner: ReadSourceOwner) => Promise<T>) {
+    if (!is(db, PgTransaction)) throw forbidden("Human Context inspection requires a native read transaction.");
+    return withReadScope(companyId, issueIds, projectIds, "context_inspection", async owner => {
+      const company = await owner.decide({ actor, action: "company_scope:read", resource: { type: "company", companyId },
+        enforceResponsibleUserIntersection: true });
+      const agent = await owner.decide({ actor, action: "agent:read", resource: { type: "agent", companyId, agentId },
+        enforceResponsibleUserIntersection: true });
+      if (!company.allowed || !agent.allowed) throw forbidden("Human Context inspection authority is unavailable");
+      return read(owner);
+    }, agentId, actor);
   }
   function prepareSourceInstanceAdminRead() {
     return db.select({ id: instanceUserRoles.id }).from(instanceUserRoles).where(and(
@@ -2909,8 +2937,15 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
         && (!input.scope || Object.keys(input.scope).length === 0);
       const companySearchRead = readSources.purpose === "company_search" && input.action === "company_scope:read"
         && input.resource.type === "company" && (!input.scope || Object.keys(input.scope).length === 0);
-      if (companyIdForResource(input.resource) !== readSources.companyId || (readSources.purpose === "company_search"
-        ? !companySearchRead : (![ "issue:read", "project:read" ].includes(input.action) && !foundationRead))) {
+      const contextInspectionRead = readSources.purpose === "context_inspection" && (
+        input.action === "company_scope:read" && input.resource.type === "company" && (!input.scope || Object.keys(input.scope).length === 0)
+        || input.action === "agent:read" && input.resource.type === "agent" && input.resource.agentId === readSources.agentId
+        || input.action === "issue:read" || input.action === "project:read" || foundationRead
+      );
+      const readScopeAllows = readSources.purpose === "company_search" ? companySearchRead
+        : readSources.purpose === "context_inspection" ? contextInspectionRead
+          : (["issue:read", "project:read"].includes(input.action) || foundationRead);
+      if (companyIdForResource(input.resource) !== readSources.companyId || !readScopeAllows) {
         return deny({ action: input.action, reason: "deny_scope", explanation: "This native Source row scope admits same-company reads only." });
       }
     }
@@ -2982,5 +3017,6 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     decidePrincipalGrant,
     withReadSources,
     withReadCompany,
+    withReadContextInspection,
   };
 }

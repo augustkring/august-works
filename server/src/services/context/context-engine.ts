@@ -39,6 +39,8 @@ import { retrieveEligibleMemory } from "../memory/memory-retrieval.js";
 import { cognitiveContextProvider } from "../memory/cognitive-context.js";
 import { derivedMemoryContextProvider } from "../memory/derived-context.js";
 import {assertAnalyticalContextPayloadAccess} from "../analytical-context-authority.js";
+import { authorizationService, type AuthorizationActor, type NativeContextInspectionOwner } from "../authorization.js";
+import { cognitiveMemoryActor } from "../memory/cognitive-memory.js";
 
 export const DEFAULT_CONTEXT_TOTAL_DEADLINE_MS = 1_500;
 export const DEFAULT_CONTEXT_PROVIDER_TIMEOUT_MS = 900;
@@ -102,6 +104,10 @@ export interface AssembleContextInput {
   budget?: ContextBudget;
   authorityPolicy?: ContextAuthorityPolicy;
   totalDeadlineMs?: number;
+  /** Set only by the read-only human inspection entry point. */
+  authorizationActor?: AuthorizationActor;
+  /** Native read-scope capability; server-created only and valid in one callback. */
+  authorizationDecision?: NativeContextInspectionOwner["decide"];
 }
 
 export interface ContextProviderInput {
@@ -131,6 +137,15 @@ export interface ContextAssemblyResult {
   packet: ContextPacket;
   decisions: ContextAuthorityDecision[];
   markdown: string;
+  inspection?: { policySnapshotHash: string; sourceSnapshotHash: string };
+  /** Additional evidence inspected for a bounded decision such as readiness,
+   * kept separate from the normal Context packet budget. */
+  inspectionEvidence?: EvidenceItem[];
+}
+
+export interface ContextInspectionHooks<T> {
+  addEvidence?: (db: Db, authority: NativeContextInspectionOwner) => Promise<EvidenceItem[]>;
+  complete?: (assembly: ContextAssemblyResult, db: Db) => Promise<T>;
 }
 
 class ProviderDeadlineError extends Error {
@@ -196,8 +211,7 @@ export async function runContextProviders(
   request: AssembleContextInput,
   deadlineAt: number,
 ): Promise<ContextProviderRunResult> {
-  const outcomes = await Promise.all(
-    providers.map(async (provider) => {
+  const runOne = async (provider: ContextProvider) => {
       const timeoutMs = Math.min(
         provider.timeoutMs ?? DEFAULT_CONTEXT_PROVIDER_TIMEOUT_MS,
         Math.max(0, deadlineAt - Date.now()),
@@ -242,8 +256,13 @@ export async function runContextProviders(
         };
         return { evidence: [] as EvidenceItem[], warnings: [warning] };
       }
-    }),
-  );
+    };
+  const outcomes: Array<{ evidence: EvidenceItem[]; warnings: ContextProviderWarning[] }> = [];
+  if (request.authorizationActor) {
+    // Human inspection runs on one native transaction. Sequential provider
+    // reads avoid overlapping savepoints on that transaction connection.
+    for (const provider of providers) outcomes.push(await runOne(provider));
+  } else outcomes.push(...await Promise.all(providers.map(runOne)));
   return {
     evidence: outcomes.flatMap((outcome) => outcome.evidence),
     warnings: outcomes.flatMap((outcome) => outcome.warnings),
@@ -362,9 +381,9 @@ function foundationProvider(db: Db): ContextProvider {
     key: "foundation",
     requirement: "optional",
     async retrieve({ request }) {
-      const decision = await access.decide({
+      const decision = await (request.authorizationDecision ?? access.decide)({
         enforceResponsibleUserIntersection: request.enforceResponsibleUserIntersection,
-        actor: {
+        actor: request.authorizationActor ?? {
           type: "agent",
           agentId: request.agentId,
           companyId: request.companyId,
@@ -389,7 +408,7 @@ function foundationProvider(db: Db): ContextProvider {
         query: request.query.slice(0, 500),
         limit: 12,
         scope: "approved",
-      },{type:"agent",source:"agent_jwt",companyId:request.companyId,agentId:request.agentId,runId:request.runId??undefined,onBehalfOfUserId:request.responsibleUserId??null},"task");
+      },request.authorizationActor ?? {type:"agent",source:"agent_jwt",companyId:request.companyId,agentId:request.agentId,runId:request.runId??undefined,onBehalfOfUserId:request.responsibleUserId??null},"task");
       const observedAt = new Date().toISOString();
       return {
         evidence: rows.map((row) => ({
@@ -461,6 +480,7 @@ function memoryContextProvider(db: Db): ContextProvider {
       const ranked = await retrieveEligibleMemory(db, {
         companyId: request.companyId,
         agentId: request.agentId,
+        ...(request.authorizationActor ? { actor: cognitiveMemoryActor(request.authorizationActor) } : {}),
         runId: request.runId ?? null,
         responsibleUserId: request.responsibleUserId ?? null,
         projectId: request.projectId ?? null,
@@ -549,16 +569,14 @@ function taskProvider(db: Db): ContextProvider {
           .then((rows) => rows[0] ?? null);
         if (!issueScope) throw notFound("Context task not found");
 
-        const decision = await access.decide({
+        const sourceActor = request.authorizationActor ?? {
+          type: "agent" as const, source: "agent_jwt" as const, companyId: request.companyId,
+          agentId: request.agentId, runId: request.runId ?? null,
+          onBehalfOfUserId: request.responsibleUserId ?? null,
+        };
+        const decision = await (request.authorizationDecision ?? access.decide)({
         enforceResponsibleUserIntersection: request.enforceResponsibleUserIntersection,
-          actor: {
-            type: "agent",
-            agentId: request.agentId,
-            companyId: request.companyId,
-            runId: request.runId ?? null,
-            onBehalfOfUserId: request.responsibleUserId ?? null,
-            source: "agent_jwt",
-          },
+          actor: sourceActor,
           action: "issue:read",
           resource: {
             type: "issue",
@@ -580,7 +598,7 @@ function taskProvider(db: Db): ContextProvider {
           });
         }
 
-        await assertAnalyticalContextPayloadAccess(txDb,request.companyId,{type:"agent",source:"agent_jwt",companyId:request.companyId,agentId:request.agentId,runId:request.runId??undefined,onBehalfOfUserId:request.responsibleUserId??null},{issueId:issueScope.id},"task");
+        await assertAnalyticalContextPayloadAccess(txDb,request.companyId,sourceActor,{issueId:issueScope.id},"task");
         const issue = await txDb
           .select({
             id: issues.id,
@@ -662,11 +680,11 @@ export function defaultConnectedKnowledgeContextProviders(
 }
 
 export function contextEngineService(db: Db, options: { providers?: ContextProvider[] } = {}) {
-  const manifests = contextManifestService(db);
-  const access = accessService(db);
-
-  return {
-    assemble: async (rawInput: AssembleContextInput): Promise<ContextAssemblyResult> => {
+  const assemble = async (rawInput: AssembleContextInput, inspectionActor?: AuthorizationActor,
+    activeDb: Db = db, inspectionAuthority?: NativeContextInspectionOwner,
+    inspectionHooks?: ContextInspectionHooks<unknown>): Promise<ContextAssemblyResult> => {
+      const manifests = contextManifestService(activeDb);
+      const access = accessService(activeDb);
       if (rawInput.sourceScope !== undefined && rawInput.sourceScope !== "task_only")
         throw unprocessable("Unknown context source scope");
       const query = rawInput.query.trim();
@@ -676,7 +694,8 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
         throw unprocessable("Context total deadline must be between 1 and 30000 ms");
       }
 
-      const input = { ...rawInput, query };
+      const input = { ...rawInput, query, authorizationActor: inspectionActor,
+        authorizationDecision: inspectionAuthority?.decide };
       const asOf = rawInput.asOf ?? new Date();
       const sensitivityCeiling = rawInput.sensitivityCeiling ?? "internal";
       const budget = rawInput.budget ?? DEFAULT_CONTEXT_BUDGET;
@@ -685,9 +704,9 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
 
       const principalDecision = await withContextStageDeadline(
         "authorization",
-        () => access.decide({
+        () => (input.authorizationDecision ?? access.decide)({
           enforceResponsibleUserIntersection: input.enforceResponsibleUserIntersection,
-          actor: {
+          actor: input.authorizationActor ?? {
             type: "agent",
             agentId: input.agentId,
             companyId: input.companyId,
@@ -708,14 +727,18 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
       }
 
       const providers = options.providers ?? [
-        ...(input.issueId ? [taskProvider(db)] : []),
+        ...(input.issueId ? [taskProvider(activeDb)] : []),
         ...(input.sourceScope === "task_only" ? [] : [
-          ...(input.includeFoundation === false ? [] : [foundationProvider(db)]),
-          memoryContextProvider(db), cognitiveContextProvider(db), derivedMemoryContextProvider(db),
-          ...defaultConnectedKnowledgeContextProviders(db, input),
+          ...(input.includeFoundation === false ? [] : [foundationProvider(activeDb)]),
+          memoryContextProvider(activeDb), cognitiveContextProvider(activeDb), derivedMemoryContextProvider(activeDb),
+          ...(!inspectionActor ? defaultConnectedKnowledgeContextProviders(activeDb, input) : []),
         ]),
       ];
+      if (inspectionActor && options.providers)
+        throw forbidden("Human Context inspection cannot use an unscoped provider override");
       const providerResult = await runContextProviders(providers, input, deadlineAt);
+      if (inspectionActor && input.issueId) providerResult.warnings.push({ providerKey: "connected_knowledge",
+        code: "source_unavailable", message: "External Context was withheld because no accountable execution binds this Human inspection." });
       const eligibility = filterEligibleEvidence(dedupeEvidence(providerResult.evidence), {
         asOf,
         sensitivityCeiling,
@@ -724,6 +747,15 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
         resolveEvidenceAuthority(eligibility.eligible, authorityPolicy),
       );
       const budgeted = fitEvidenceToBudget(ordered, budget);
+      let inspectionEvidence: EvidenceItem[] = [];
+      if (inspectionActor && inspectionHooks?.addEvidence) {
+        if (!inspectionAuthority) throw forbidden("Human Context inspection authority is unavailable");
+        inspectionEvidence = await inspectionHooks.addEvidence(activeDb, inspectionAuthority);
+      }
+      const inspectedExtra = inspectionEvidence.length
+        ? filterEligibleEvidence(dedupeEvidence(inspectionEvidence), { asOf, sensitivityCeiling }).eligible
+        : [];
+      const inspectedExtraDecisions = resolveEvidenceAuthority(inspectedExtra, authorityPolicy);
 
       const remainingMs = deadlineAt - Date.now();
       if (remainingMs <= 0) {
@@ -733,9 +765,7 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
         });
       }
 
-      const manifestResult = await withContextStageDeadline(
-        "context_manifest",
-        () => manifests.create({
+      const contextSourceInput = {
           companyId: input.companyId,
           runId: input.runId ?? null,
           agentId: input.agentId,
@@ -757,7 +787,7 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
             subjectRefs: [...new Set(input.subjectRefs ?? [])].sort(),
             asOf: asOf.toISOString(),
           },
-          selected: budgeted.selected.map((decision) => {
+          selected: [...budgeted.selected, ...inspectedExtraDecisions].map((decision) => {
             const rawScore = decision.evidence.metadata.retrievalScore;
             const retrievalScore =
               typeof rawScore === "number" && Number.isFinite(rawScore)
@@ -765,19 +795,21 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
                 : null;
             return { decision, retrievalScore };
           }),
-        }),
-        deadlineAt,
-      );
+        };
+      const manifestResult = inspectionActor ? null : await withContextStageDeadline(
+        "context_manifest", () => manifests.create(contextSourceInput), deadlineAt);
+      const inspectionResult = inspectionActor ? await withContextStageDeadline(
+        "context_inspection", () => manifests.inspectReadOnly(contextSourceInput, inspectionActor, inspectionAuthority!), deadlineAt) : null;
 
       const packet = packetFromDecisions(budgeted.selected, {
         sensitivityCeiling,
         asOf,
         warnings: providerResult.warnings,
-        manifest: {
+        manifest: manifestResult ? {
           id: manifestResult.manifest.id,
           queryHash: manifestResult.manifest.queryHash,
           policySnapshotHash: manifestResult.manifest.policySnapshotHash,
-        },
+        } : null,
         selectedEstimatedTokens: budgeted.selectedEstimatedTokens,
       });
 
@@ -790,10 +822,10 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
           ]),
       );
       const auditRemainingMs = deadlineAt - Date.now();
-      if (auditRemainingMs > 0) {
+      if (manifestResult && auditRemainingMs > 0) {
         await withProviderDeadline(
           "context_audit",
-          () => logActivity(db, {
+          () => logActivity(activeDb, {
             companyId: input.companyId,
             actorType: "agent",
             actorId: input.agentId,
@@ -820,11 +852,46 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
         ).catch(() => undefined);
       }
 
-      return {
+      const result: ContextAssemblyResult = {
         packet,
         decisions: budgeted.selected,
         markdown: serializeContextPacket(packet),
+        ...(inspectionResult ? { inspection: inspectionResult } : {}),
+        ...(inspectionEvidence.length ? { inspectionEvidence: inspectedExtra } : {}),
       };
-    },
+      if (inspectionActor && inspectionHooks?.complete) {
+        if (!inspectionAuthority || !inspectionResult) throw forbidden("Human Context inspection authority is unavailable");
+        await inspectionHooks.complete(result, activeDb);
+        // Re-read every exact source after assessment persistence. Native
+        // source locks remain held until the enclosing owner callback exits.
+        const current = await manifests.inspectReadOnly(contextSourceInput, inspectionActor, inspectionAuthority);
+        if (current.policySnapshotHash !== inspectionResult.policySnapshotHash ||
+          current.sourceSnapshotHash !== inspectionResult.sourceSnapshotHash)
+          throw forbidden("Context evidence changed before readiness was recorded");
+      }
+      return result;
+  };
+  return {
+    assemble: (rawInput: AssembleContextInput) => assemble(rawInput),
+    inspectReadOnly: async <T = ContextAssemblyResult>(rawInput: AssembleContextInput, actor: AuthorizationActor,
+      hooks?: ContextInspectionHooks<T>): Promise<T> => db.transaction(async rawTx => {
+      const txDb = rawTx as unknown as Db;
+      if (actor.type !== "board") throw forbidden("Read-only Context inspection requires its original Human actor");
+      return authorizationService(txDb).withReadContextInspection(rawInput.companyId, rawInput.agentId,
+        rawInput.issueId ? [rawInput.issueId] : [], rawInput.projectId ? [rawInput.projectId] : [], actor,
+        async authority => {
+          let completion: T | undefined;
+          let didComplete = false;
+          const internalHooks: ContextInspectionHooks<unknown> | undefined = hooks ? {
+            addEvidence: hooks.addEvidence,
+            complete: hooks.complete ? async (assembly, sourceDb) => {
+              completion = await hooks.complete!(assembly, sourceDb);
+              didComplete = true;
+            } : undefined,
+          } : undefined;
+          const assembly = await assemble(rawInput, actor, txDb, authority, internalHooks);
+          return didComplete ? completion as T : assembly as T;
+        });
+    }),
   };
 }

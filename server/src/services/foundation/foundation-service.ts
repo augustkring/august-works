@@ -4,8 +4,8 @@ import {lockAnalyticalCompany} from "../analytical-privacy.js";
 import type {AuthorizationActor} from "../authorization.js";
 import {assertLearnedAssetAnalyticalSources,assertLearningCandidateAnalyticalSources,learningActorFromPrincipal} from "../learning/learning-analytical-sources.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { and, asc, desc, eq, is, sql } from "drizzle-orm";
+import { alias, PgTransaction } from "drizzle-orm/pg-core";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
@@ -343,6 +343,28 @@ export function foundationService(db: Db) {
     get,
     getByKey,
     listRevisions,
+
+    /** Hold the canonical Foundation pointer and exact immutable revisions
+     * through a bounded read decision. This is only valid on the caller's
+     * native transaction; it grants no read permission by itself. */
+    pinApprovedRevisions: async (companyId: string, refs: Array<{ documentId: string; revisionId: string }>, actor: AuthorizationActor) => {
+      if (!is(db, PgTransaction)) throw forbidden("Foundation source pin requires a native read transaction");
+      const unique = [...new Map(refs.map(ref => [`${ref.documentId}:${ref.revisionId}`, ref])).values()]
+        .sort((a, b) => `${a.documentId}:${a.revisionId}`.localeCompare(`${b.documentId}:${b.revisionId}`));
+      if (unique.length > 256) throw forbidden("Foundation source pin exceeds its inspection budget");
+      for (const ref of unique) {
+        const [pointer] = await db.select({ documentId: foundationDocuments.documentId, approvedRevisionId: foundationDocuments.approvedRevisionId })
+          .from(foundationDocuments).where(and(eq(foundationDocuments.companyId, companyId), eq(foundationDocuments.id, ref.documentId)))
+          .for("share");
+        if (!pointer || pointer.approvedRevisionId !== ref.revisionId)
+          throw conflict("Approved Foundation revision changed during inspection");
+        const [revision] = await db.select({ id: documentRevisions.id, documentId: documentRevisions.documentId })
+          .from(documentRevisions).where(and(eq(documentRevisions.companyId, companyId), eq(documentRevisions.id, ref.revisionId),
+            eq(documentRevisions.documentId, pointer.documentId))).for("share");
+        if (!revision) throw conflict("Approved Foundation revision is unavailable");
+        await assertLearnedAssetAnalyticalSources(db, companyId, "document_revision", ref.revisionId, actor);
+      }
+    },
 
     list: async (companyId: string,actor?:AuthorizationActor) => {
       const rows = await db

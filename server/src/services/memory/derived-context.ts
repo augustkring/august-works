@@ -7,7 +7,9 @@ export function derivedMemoryContextProvider(db: Db): ContextProvider {
   return { key: "derived_memory", requirement: "optional", async retrieve({ request }) {
     const flags = await instanceSettingsService(db).getExperimental();
     if (!v7FeatureEnabled(flags, "memory_observations_v7")) return { evidence: [] };
-    const actor = { type: "agent" as const, companyId: request.companyId, agentId: request.agentId, source: "agent_jwt" as const, runId: request.runId ?? null, onBehalfOfUserId: request.responsibleUserId ?? null };
+    const actor = request.authorizationActor ?? { type: "agent" as const, companyId: request.companyId,
+      agentId: request.agentId, source: "agent_jwt" as const, runId: request.runId ?? null,
+      onBehalfOfUserId: request.responsibleUserId ?? null };
     const service = derivedMemoryService(db), purpose = request.intent ?? "general_work";
     const observations = (await service.listObservations(actor, request.companyId)).filter((row) => row.status === "accepted");
     const models = v7FeatureEnabled(flags, "memory_models_v7") ? (await service.listModels(actor, request.companyId)).filter((row) => row.status === "active") : [];
