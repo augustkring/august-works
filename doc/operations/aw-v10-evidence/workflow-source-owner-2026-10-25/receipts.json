@@ -316,6 +316,48 @@
         "Duration  571.20s (transform 9.48s, setup 81ms, import 13.19s, tests 557.82s, environment 0ms)"
       ],
       "sourceCommit": "102ae29e96061744df46c84b3850aacf532f6ab1"
+    },
+    {
+      "name": "workflow-source-owner-final-optimized",
+      "exitCode": 0,
+      "exitSidecar": "workflow-source-owner-final-optimized.exit",
+      "rawSha256": "81b75417e74dca8a82ec8d209b7e6aba1cbdd87b3a9303aa4d80c1641e2e94e6",
+      "sanitizedSha256": "81b75417e74dca8a82ec8d209b7e6aba1cbdd87b3a9303aa4d80c1641e2e94e6",
+      "archiveSha256": "2405aaef5da8ca364a0762710a808bee08a3bbf836131c4ba51c16e07e58cac9",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  18 passed (18)",
+        "Duration  69.88s (transform 11.58s, setup 68ms, import 15.44s, tests 54.25s, environment 0ms)"
+      ],
+      "sourceCommit": "7b6a662f30661ecda31f8cee4c5bf2e407c0035c"
+    },
+    {
+      "name": "workflow-source-executor-final-optimized",
+      "exitCode": 0,
+      "exitSidecar": "workflow-source-executor-final-optimized.exit",
+      "rawSha256": "837b1b351ae678720e10e26cd95664a3dc752ae6d5d95458eb2911370478bc73",
+      "sanitizedSha256": "d80f224613fd55e77c1790a0caa163f96fe00b469c6330a469d84fadde2166eb",
+      "archiveSha256": "ae65bb389a4974d1e4d48fb3d0654b61b4e7442741943b70df20bcb0ca55a505",
+      "redactions": {
+        "ansi": 6,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  51 passed (51)",
+        "Duration  35.71s (transform 8.81s, setup 75ms, import 12.51s, tests 23.02s, environment 0ms)"
+      ],
+      "sourceCommit": "7b6a662f30661ecda31f8cee4c5bf2e407c0035c"
     }
   ],
   "updates": [
@@ -346,6 +388,14 @@
       "meaning": "Final complete42 Learning suite passes on scoped measured harness limits without compiler contention; productionSource8s unchanged",
       "logs": [
         "learning-workflow-source-final42-scoped"
+      ]
+    },
+    {
+      "sourceCommit": "7b6a662f30661ecda31f8cee4c5bf2e407c0035c",
+      "meaning": "Final complete owner and executor reruns after final source error-code and duplicate-review fixes; no complete V10 qualification.",
+      "logs": [
+        "workflow-source-owner-final-optimized",
+        "workflow-source-executor-final-optimized"
       ]
     }
   ],

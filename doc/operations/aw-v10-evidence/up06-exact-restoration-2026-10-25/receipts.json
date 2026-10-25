@@ -1,0 +1,68 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "262aa27cb75fe5705140b80359c03062ce36fb65",
+  "sourceCommitMeaning": "Archive checkout identity; scoped runs may predate it. Only separately recorded unchanged-source gates establish final tested source identity.",
+  "meaning": "Shared original checkout helper; exact commit prepublication and source-denial/race negatives. Expiration/restoration package remains incomplete and automatic Git destruction remains disabled.",
+  "logs": [
+    {
+      "name": "up06-managed-checkout-publication",
+      "exitCode": 0,
+      "exitSidecar": "up06-managed-checkout-publication.exit",
+      "rawSha256": "36ea2492a27406490d3eedb31877a391a463859f22924fe285bd55a944cdc0c5",
+      "sanitizedSha256": "269797118112a5da123a2cbfec7a9ee7f960bba929c47b52851f5931d2046b81",
+      "archiveSha256": "d5b0ff6cd4e30e84859bc723182e232dc61dfcb3f47de4f8d2290297176ce3bd",
+      "redactions": {
+        "ansi": 24,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  16 passed (16)",
+        "Duration  14.38s (transform 9.90s, setup 76ms, import 13.41s, tests 780ms, environment 0ms)"
+      ]
+    },
+    {
+      "name": "up06-managed-checkout-final",
+      "exitCode": 0,
+      "exitSidecar": "up06-managed-checkout-final.exit",
+      "rawSha256": "febf4057f043a4a88e10d5ba3949361dfdad1778bc64ac8360dadf8f0302ed43",
+      "sanitizedSha256": "a6026be888d2dbb788161172854e0a477979917b1071a4131f8b0b244300378f",
+      "archiveSha256": "069bc23c5b68fde58e9ae2b353a20d6464d0f66fc1c674f57e87d91c3a5cbddc",
+      "redactions": {
+        "ansi": 24,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  18 passed (18)",
+        "Duration  14.54s (transform 9.65s, setup 74ms, import 13.32s, tests 1.03s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "up06-execution-workspaces-service-full3",
+      "exitCode": 0,
+      "exitSidecar": "up06-execution-workspaces-service-full3.exit",
+      "rawSha256": "bd62471da11c035cc5baa7337c6761a4f19a6e6a9ddf8e8ae7d7b0303d007b56",
+      "sanitizedSha256": "6d5a5eb4e7d60b9b15613b5c9ea883271ea89b590d7e132a1030c344c4bd0a49",
+      "archiveSha256": "3f6e8326bc2dbcfb486ee89eff25fe9aac20b9f1f4f10ff4fd7279de1d1bba37",
+      "redactions": {
+        "ansi": 516,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  68 passed (68)",
+        "Duration  32.06s (transform 10.20s, setup 82ms, import 14.32s, tests 17.52s, environment 0ms)"
+      ]
+    }
+  ]
+}
