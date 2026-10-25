@@ -866,7 +866,7 @@ describeEmbeddedPostgres("companySearchService", () => {
     const makeQuery = (scope: "help" | "all", offset = "0", extra: Record<string, string> = {}) =>
       companySearchQuerySchema.parse({ q: "company", scope, limit: "1", offset, ...extra });
     const expectedHelpCount = COMPANY_SEARCH_HELP_ARTICLES.filter((article) =>
-      `${article.title} ${article.summary} ${article.body}`.toLowerCase().includes("company"),
+      article.locale === "en" && `${article.title} ${article.summary} ${article.body}`.toLowerCase().includes("company"),
     ).length;
     const first = await svc.search(companyId, makeQuery("help"));
     const last = await svc.search(companyId, makeQuery("help", String(expectedHelpCount - 1)));
@@ -909,5 +909,23 @@ describeEmbeddedPostgres("companySearchService", () => {
       const recovery = await svc.search(companyId, companySearchQuerySchema.parse({ q, scope: "help" }));
       expect(recovery.results.map((row) => row.id), `query=${q}`).toContain("company-import-export");
     }
+  });
+
+  it("filters checked Help by the requested locale before counting and paging", async () => {
+    const companyId = await createCompany("Bilingual Help");
+    const svc = companySearchService(db);
+    const danish = await svc.search(companyId, companySearchQuerySchema.parse({ q: "hjælp", scope: "help", locale: "da", limit: "50" }));
+    expect(danish.results.map(row => row.id)).toContain("help-and-human-support-da");
+    expect(danish.results.every(row => row.helpArticle?.locale === "da")).toBe(true);
+    expect(danish.countsByType.help).toBe(danish.results.length);
+    const first = await svc.search(companyId, companySearchQuerySchema.parse({ q: "hjælp", scope: "help", locale: "da", limit: "1" }));
+    expect(first.countsByType.help).toBe(danish.countsByType.help);
+    expect(first.results).toHaveLength(1);
+    expect(first.hasMore).toBe(danish.results.length > 1);
+    const english = await svc.search(companyId, companySearchQuerySchema.parse({ q: "help", scope: "help" }));
+    expect(english.results.length).toBeGreaterThan(0);
+    expect(english.results.every(row => row.helpArticle?.locale === "en")).toBe(true);
+    expect(companySearchQuerySchema.safeParse({ q: "help", locale: "fr" }).success).toBe(false);
+    expect(companySearchQuerySchema.safeParse({ q: "help", locale: ["en", "da"] }).success).toBe(false);
   });
 });

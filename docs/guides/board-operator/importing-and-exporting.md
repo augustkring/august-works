@@ -49,7 +49,7 @@ Both flows are also available in the web UI as company settings pages: **Export*
 
 The **Export** page lets you pick exactly which files go into the bundle before downloading it. Above the file tree it shows a **"Not included in this export"** panel — the export fidelity report — listing data the bundle will not carry (for example attachments, approvals, cost history, or activity log entries), with blocking issues highlighted.
 
-The **Import** page previews the package, lets you resolve name collisions and adapter assignments, and applies the import. A **"Start imported agents and routines paused"** checkbox (on by default) makes imported agents and routines land paused instead of live. After the import finishes, an **"Activate imported agents and routines"** panel lists everything that was imported paused so you can resume the agents and activate the routines you select — nothing starts running until you say so.
+The **Import** page previews the package, lets you resolve name collisions and adapter assignments, and applies the import. A **"Start imported agents and routines paused"** checkbox (on by default) makes imported agents and routines land paused instead of live. After the import finishes, an **"Activate imported agents and routines"** panel lists everything that was imported paused so you can resume the agents and activate the routines you select — with this option selected, those imported agents and routines stay paused until you activate them.
 
 ## Confirm the reviewed package
 
@@ -116,7 +116,7 @@ paperclipai company export abc123 --out ./skills-only --include skills --skills 
 - Skill packages (as references or vendored content)
 - Adapter type and env input declarations in `.paperclip.yaml`
 
-Secret values, machine-local paths, and database IDs are **never** exported.
+Stored secret values and machine-local paths are omitted. Task and project exports include source identity references needed to validate a restore; those references grant no access. Review the selected content for sensitive information before sharing a package.
 
 ## Importing a Company
 
@@ -154,7 +154,7 @@ paperclipai company import org/repo/companies/acme
 
 ### Target Modes
 
-- **`new`** — Creates a fresh company from the package. Good for duplicating a company template.
+- **`new`** — Creates a fresh company from company and Co-worker configuration. Task and project content requires the source publication flow described above.
 - **`existing`** — Merges the package into an existing company. Use `--company-id` to specify the target.
 
 If `--target` is not specified, Paperclip infers it: if a `--company-id` is provided (or one exists in context), it defaults to `existing`; otherwise `new`.

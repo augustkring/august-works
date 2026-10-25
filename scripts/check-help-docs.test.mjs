@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { parseRestrictedFrontmatter, validateHelpDocs } from "./check-help-docs.mjs";
+import { parseRestrictedFrontmatter, readHelpArticleSources, validateHelpDocs } from "./check-help-docs.mjs";
 
 const NOW = new Date("2026-10-24T12:00:00Z");
 
@@ -18,7 +18,7 @@ function fixture() {
   return root;
 }
 
-function article(id, body = "Article text.") {
+function article(id, body = "Article text.", locale = "en") {
   return `---
 help_article_id: ${id}
 title: Example help
@@ -28,7 +28,7 @@ screen_contract_refs: []
 owner: help-team
 maturity: preview
 applicable_product_versions: [V10]
-locale: en
+locale: ${locale}
 last_verified_at: 2026-10-24
 review_trigger: Relevant customer behavior changes
 security_or_privacy_sensitive: false
@@ -38,6 +38,32 @@ linked_source_files: []
 ${body}
 `;
 }
+
+test("checks Help articles under native English and Danish language navigation", t => {
+  const root = fixture();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(root, "docs/da/help"), { recursive: true });
+  fs.writeFileSync(path.join(root, "docs/da/help/article.md"), article("one-da", "Dansk vejledning. Se [næste vejledning](/da/help/second).", "da"));
+  fs.writeFileSync(path.join(root, "docs/da/help/second.md"), article("two-da", "Næste danske vejledning.", "da"));
+  fs.writeFileSync(path.join(root, "docs/docs.json"), JSON.stringify({ navigation: { languages: [
+    { language: "en", default: true, tabs: [{ tab: "Help Center", groups: [{ group: "Help", pages: ["help/article"] }] }] },
+    { language: "da", tabs: [{ tab: "Hjælp", groups: [{ group: "Hjælp", pages: ["help/article", "help/second"] }] }] },
+  ] } }));
+  assert.deepEqual(validateHelpDocs({ root, now: NOW }), []);
+  assert.deepEqual(readHelpArticleSources(root).map(article => article.locale), ["en", "da", "da"]);
+});
+
+test("rejects a Danish navigation article whose metadata declares another locale", t => {
+  const root = fixture();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(root, "docs/da/help"), { recursive: true });
+  fs.writeFileSync(path.join(root, "docs/da/help/article.md"), article("one-da", "English body.", "en"));
+  fs.writeFileSync(path.join(root, "docs/docs.json"), JSON.stringify({ navigation: { languages: [
+    { language: "en", default: true, tabs: [{ tab: "Help Center", groups: [{ group: "Help", pages: ["help/article"] }] }] },
+    { language: "da", tabs: [{ tab: "Hjælp", groups: [{ group: "Hjælp", pages: ["help/article"] }] }] },
+  ] } }));
+  assert.ok(validateHelpDocs({ root, now: NOW }).some(error => error.includes("locale en does not match da Help navigation")));
+});
 
 test("accepts restricted metadata and existing local Help Center links", t => {
   const root = fixture();

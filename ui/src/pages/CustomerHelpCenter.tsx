@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { FEEDBACK_CONTACTS, PRODUCT_IDENTITY, type CompanySearchResponse } from "@paperclipai/shared";
+import { FEEDBACK_CONTACTS, PRODUCT_IDENTITY } from "@paperclipai/shared";
 import { Link, useLocation, useNavigate } from "../lib/router";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
-import { searchApi } from "../api/search";
+import { checkedCompanyHelpResults, searchApi } from "../api/search";
 import { useCompany } from "../context/CompanyContext";
 import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
 import { useV9PrivateReadAuthority } from "../hooks/useV9PrivateReadAuthority";
@@ -13,25 +13,11 @@ import { queryKeys } from "../lib/queryKeys";
 
 const HELP_SEARCH_LIMIT = 8;
 
-function helpResults(response: CompanySearchResponse) {
-  const docsOrigin = new URL(PRODUCT_IDENTITY.docsOrigin);
-  if (response.scope !== "help" || response.limit !== HELP_SEARCH_LIMIT || response.results.length > response.limit ||
-    response.results.some(result => {
-      const article = result.helpArticle;
-      if (result.type !== "help" || !article || article.source !== "mintlify" || !article.articleId.trim() ||
-        !article.applicableProductVersions.length || !article.locale || !article.lastVerifiedAt) return true;
-      try {
-        const href = new URL(result.href);
-        return href.protocol !== "https:" || href.origin !== docsOrigin.origin || href.pathname === "/";
-      } catch { return true; }
-    })) throw new Error("Help search response is unavailable");
-  return response.results;
-}
-
 const linkClass = "inline-flex min-h-11 items-center rounded-md border border-border px-4 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 export function CustomerHelpCenter({ navigationState }: { navigationState?: unknown } = {}) {
   const { t, i18n } = useTranslation("experience");
+  const locale = (i18n.resolvedLanguage ?? i18n.language).startsWith("da") ? "da" : "en";
   const location = useLocation();
   const navigate = useNavigate();
   const { selectedCompanyId } = useCompany();
@@ -49,12 +35,12 @@ export function CustomerHelpCenter({ navigationState }: { navigationState?: unkn
   useEffect(() => { setSearchText(""); setSubmitted(null); }, [scope]);
   const submittedMatchesScope = submitted?.scope === scope;
   const ready = active && !!selectedCompanyId && !!principal && identity.settled && !identity.failed && !!identity.sessionId && authority.readReady;
-  const searchToken = submittedMatchesScope && submitted ? `${scope}:${submitted.query}` : "";
+  const searchToken = submittedMatchesScope && submitted ? `${scope}:${locale}:${submitted.query}` : "";
   const searchTokenRef = useRef(searchToken);
   searchTokenRef.current = searchToken;
   const query = useQuery({
     queryKey: [...queryKeys.companySearch.search(selectedCompanyId ?? "__no-company__", submittedMatchesScope ? submitted?.query ?? "" : "", "help", HELP_SEARCH_LIMIT, 0),
-      principal, identity.sessionId, identity.authorityEpoch, authority.epoch],
+      principal, identity.sessionId, identity.authorityEpoch, authority.epoch, locale],
     enabled: ready && !!searchToken && !!submitted,
     queryFn: async ({ signal }) => {
       const requestedScope = scopeRef.current;
@@ -63,10 +49,10 @@ export function CustomerHelpCenter({ navigationState }: { navigationState?: unkn
         searchTokenRef.current === requestedToken && authority.canRead();
       if (!current() || !submitted) throw new Error("Current Help search access is unavailable");
       const response = await authority.read(() => searchApi.search(selectedCompanyId!, {
-        q: submitted.query, scope: "help", limit: HELP_SEARCH_LIMIT,
+        q: submitted.query, scope: "help", limit: HELP_SEARCH_LIMIT, locale,
       }, signal));
       if (!current()) throw new Error("Help search access changed during the request");
-      return helpResults(response);
+      return checkedCompanyHelpResults(response, HELP_SEARCH_LIMIT, locale);
     },
     retry: false,
     staleTime: 0,
@@ -130,7 +116,7 @@ export function CustomerHelpCenter({ navigationState }: { navigationState?: unkn
         </ul>}
       </section>
       <div className="flex flex-wrap gap-3">
-        <a className={linkClass} href={PRODUCT_IDENTITY.docsOrigin} target="_blank" rel="noreferrer">
+        <a className={linkClass} href={locale === "da" ? `${PRODUCT_IDENTITY.docsOrigin}/da/help/index` : PRODUCT_IDENTITY.docsOrigin} target="_blank" rel="noreferrer">
           {t("helpCenter.browse")}
         </a>
         <Link className={linkClass} to="/company/support" state={supportState} replace data-support-help-entry

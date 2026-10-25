@@ -3,21 +3,23 @@ help_article_id: help-and-human-support
 title: Help and human support
 summary: Find guidance, view your cases, or contact a person directly
 audience: company-members
-product_capability_refs: [HELP-01, HELP-02]
+product_capability_refs: [HELP-01, HELP-02, V10-038]
 screen_contract_refs: [HELP-01, HELP-02]
 owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: en
-last_verified_at: 2026-10-24
+last_verified_at: 2026-10-25
 review_trigger: Help navigation, support intake, contacts, or recovery behavior changes
 security_or_privacy_sensitive: true
-linked_source_files: [ui/src/App.tsx, ui/src/components/ExperienceUtilities.tsx, ui/src/pages/CustomerHelpCenter.tsx, ui/src/pages/CustomerSupportCases.tsx, ui/src/lib/help-navigation.ts, server/src/routes/customer-support.ts, server/src/services/experience/customer-support.ts, server/src/services/experience/support-cases.ts, packages/shared/src/customer-support.ts, packages/shared/src/customer-feedback.ts, packages/shared/src/product-identity.ts, packages/shared/src/support-diagnostics.ts, ui/src/api/search.ts, server/src/services/company-search.ts, server/src/routes/issues.ts, packages/shared/src/types/search.ts]
+linked_source_files: [ui/src/App.tsx, ui/src/components/ExperienceUtilities.tsx, ui/src/pages/CustomerHelpCenter.tsx, ui/src/pages/CustomerSupportCases.tsx, ui/src/lib/help-navigation.ts, server/src/routes/customer-support.ts, server/src/services/experience/customer-support.ts, server/src/services/experience/support-cases.ts, packages/shared/src/customer-support.ts, packages/shared/src/customer-feedback.ts, packages/shared/src/product-identity.ts, packages/shared/src/support-diagnostics.ts, ui/src/api/search.ts, server/src/services/company-search.ts, server/src/routes/issues.ts, packages/shared/src/types/search.ts, ui/src/components/ExperienceCommandPalette.tsx, ui/src/pages/Search.tsx, packages/shared/src/validators/search.ts]
 ---
 
 Open **Help** in the app to browse guidance, open support cases, or check the configured service status page. You can contact human support directly at [support@blentera.com](mailto:support@blentera.com). You do not need to converse with an assistant first.
 
-Search product terms inside Help to find matching guidance. Open a result in a new tab to keep your work and the Help view available.
+Search product terms inside Help to find matching guidance. Help articles are available in English and Danish. Search uses your current display language. Open a result in a new tab to keep your work and the Help view available.
+
+You can also find Help articles in the current command palette. Press **Ctrl+K** on Windows or Linux, or **⌘K** on Mac, and enter a topic. Choosing a Help article opens it in a new tab and returns focus to the control you used to open the palette. The existing Work view stays available.
 
 When you open Help from signed-in work in the same company, close it to return to your original view. Do not put passwords, recovery codes, API keys, or other secrets in a support message. Review any diagnostic information before sharing it.
 

@@ -134,6 +134,8 @@ function parseUpdatedWithin(value: unknown, ctx: z.RefinementCtx): string | unde
 }
 
 export const companySearchQuerySchema = z.object({
+  // Presentation filter for public Help; it grants no resource access.
+  locale: z.enum(["en", "da"]).optional(),
   q: z.unknown()
     .optional()
     .transform((value, ctx) => (parseOptionalString(value, ctx, "q") ?? "").slice(0, COMPANY_SEARCH_MAX_QUERY_LENGTH)),

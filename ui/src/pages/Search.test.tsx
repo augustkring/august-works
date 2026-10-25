@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
-import type { ReactNode } from "react";
+import { act, type ReactNode } from "react";
+import { i18n } from "../i18n";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -182,6 +183,33 @@ describe("Search page", () => {
     container.remove();
   });
 
+  it("uses the current Help language without retaining the previous language as placeholder data", async () => {
+    let finishDanish!: (value: unknown) => void;
+    const response = (locale: "en" | "da") => ({ ...emptyResponse(), scope: "help", results: [{
+      id: `article-${locale}`, type: "help", score: 1, title: locale === "en" ? "English guidance canary" : "Dansk vejledning",
+      href: `https://docs.blentera.com/${locale === "da" ? "da/" : ""}help/index`,
+      matchedFields: ["title"], sourceLabel: "Help", snippet: "Guidance", snippets: [], updatedAt: null, previewImageUrl: null,
+      helpArticle: { articleId: `article-${locale}`, source: "mintlify", audience: "company-members", maturity: "preview",
+        applicableProductVersions: ["V10"], locale, lastVerifiedAt: "2026-10-25" },
+    }], countsByType: { ...emptyResponse().countsByType, help: 1 } });
+    searchApiMock.search.mockImplementation((_company, params) => params.locale === "da"
+      ? new Promise(resolve => { finishDanish = resolve; }) : Promise.resolve(response("en")));
+    const { root } = renderSearch("/search?q=help&scope=help", container);
+    try {
+      await waitForAssertion(() => expect(container.textContent).toContain("English guidance canary"));
+      await act(async () => { await i18n.changeLanguage("da"); });
+      await waitForAssertion(() => {
+        expect(finishDanish).toBeTypeOf("function");
+        expect(container.textContent).not.toContain("English guidance canary");
+      });
+      await act(async () => finishDanish(response("da")));
+      await waitForAssertion(() => expect(container.textContent).toContain("Dansk vejledning"));
+    } finally {
+      flushSync(() => root.unmount());
+      await act(async () => { await i18n.changeLanguage("en"); });
+    }
+  });
+
   it("issues a search request when ?q is in the URL and renders the result", async () => {
     searchApiMock.search.mockResolvedValueOnce({
       query: "auth flake",
@@ -246,6 +274,7 @@ describe("Search page", () => {
 
     await waitForAssertion(() => {
       expect(searchApiMock.search).toHaveBeenCalledWith("company-1", {
+        locale: "en",
         q: "auth flake",
         scope: "all",
         limit: 20,
@@ -393,6 +422,7 @@ describe("Search page", () => {
 
     await waitForAssertion(() => {
       expect(searchApiMock.search).toHaveBeenCalledWith("company-1", {
+        locale: "en",
         q: "launch brief",
         scope: "artifacts",
         limit: 20,
@@ -586,6 +616,7 @@ describe("Search page", () => {
 
     await waitForAssertion(() => {
       expect(searchApiMock.search).toHaveBeenCalledWith("company-1", {
+        locale: "en",
         q: "deflake",
         scope: "all",
         limit: 20,
@@ -725,6 +756,7 @@ describe("Search page", () => {
 
     await waitForAssertion(() => {
       expect(searchApiMock.search).toHaveBeenCalledWith("company-1", {
+        locale: "en",
         q: "auth",
         scope: "all",
         limit: 20,
@@ -779,6 +811,7 @@ describe("Search page", () => {
 
     await waitForAssertion(() => {
       expect(searchApiMock.search).toHaveBeenCalledWith("company-1", {
+        locale: "en",
         q: "auth",
         scope: "all",
         limit: 20,
@@ -810,6 +843,7 @@ describe("Search page", () => {
     await new Promise((resolve) => setTimeout(resolve, 350));
     await waitForAssertion(() => {
       expect(searchApiMock.search).toHaveBeenCalledWith("company-1", {
+        locale: "en",
         q: "auth",
         scope: "all",
         limit: 20,
@@ -826,7 +860,7 @@ describe("Search page", () => {
     await new Promise((resolve) => setTimeout(resolve, 350));
     await waitForAssertion(() => {
       const lastCall = searchApiMock.search.mock.calls.at(-1);
-      expect(lastCall?.[1]).toEqual({ q: "auth", scope: "all", limit: 20 });
+      expect(lastCall?.[1]).toEqual({ q: "auth", scope: "all", limit: 20, locale: "en" });
     });
 
     flushSync(() => {
@@ -849,6 +883,7 @@ describe("Search page", () => {
     await new Promise((resolve) => setTimeout(resolve, 350));
     await waitForAssertion(() => {
       expect(searchApiMock.search).toHaveBeenCalledWith("company-1", {
+        locale: "en",
         q: "auth",
         scope: "all",
         limit: 20,
@@ -874,7 +909,7 @@ describe("Search page", () => {
     await waitForAssertion(() => {
       expect(input.value).toBe("auth");
       const lastCall = searchApiMock.search.mock.calls.at(-1);
-      expect(lastCall?.[1]).toEqual({ q: "auth", scope: "all", limit: 20 });
+      expect(lastCall?.[1]).toEqual({ q: "auth", scope: "all", limit: 20, locale: "en" });
     });
 
     flushSync(() => {
@@ -973,6 +1008,7 @@ describe("Search page", () => {
 
     await waitForAssertion(() => {
       expect(searchApiMock.search).toHaveBeenCalledWith("company-1", {
+        locale: "en",
         q: "auth",
         scope: "all",
         limit: 20,
@@ -998,6 +1034,7 @@ describe("Search page", () => {
     // First request carries the status filter from the URL.
     await waitForAssertion(() => {
       expect(searchApiMock.search).toHaveBeenCalledWith("company-1", {
+        locale: "en",
         q: "auth",
         scope: "all",
         limit: 20,
@@ -1022,7 +1059,7 @@ describe("Search page", () => {
     // After removal the search re-fires with no status filter.
     await waitForAssertion(() => {
       const lastCall = searchApiMock.search.mock.calls.at(-1);
-      expect(lastCall?.[1]).toEqual({ q: "auth", scope: "all", limit: 20 });
+      expect(lastCall?.[1]).toEqual({ q: "auth", scope: "all", limit: 20, locale: "en" });
     });
 
     flushSync(() => {

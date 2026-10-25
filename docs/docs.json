@@ -13,210 +13,294 @@
     "dark": "/images/logo-dark.svg",
     "light": "/images/logo-light.svg"
   },
-  "topbarLinks": [
-    {
-      "name": "GitHub",
-      "url": "https://github.com/augustkring/august-works"
-    }
-  ],
   "navigation": {
-    "tabs": [
+    "languages": [
       {
-        "tab": "Help Center",
-        "groups": [
+        "language": "en",
+        "default": true,
+        "tabs": [
           {
-            "group": "Getting started",
-            "pages": [
-              "guides/board-operator/creating-a-company"
+            "tab": "Help Center",
+            "groups": [
+              {
+                "group": "Getting started",
+                "pages": [
+                  "guides/board-operator/creating-a-company"
+                ]
+              },
+              {
+                "group": "Working with Co-workers",
+                "pages": [
+                  "guides/board-operator/managing-agents"
+                ]
+              },
+              {
+                "group": "Work and workflows",
+                "pages": [
+                  "guides/board-operator/managing-tasks",
+                  "help/workflows-preview"
+                ]
+              },
+              {
+                "group": "Apps and connections",
+                "pages": [
+                  "help/apps-and-connections"
+                ]
+              },
+              {
+                "group": "Company and people",
+                "pages": [
+                  "guides/board-operator/org-structure",
+                  "guides/board-operator/importing-and-exporting"
+                ]
+              },
+              {
+                "group": "Governance, security, and privacy",
+                "pages": [
+                  "guides/board-operator/approvals",
+                  "help/export-and-delete"
+                ]
+              },
+              {
+                "group": "Billing and capacity",
+                "pages": [
+                  "guides/board-operator/costs-and-budgets"
+                ]
+              },
+              {
+                "group": "Troubleshooting",
+                "pages": [
+                  "help/recovering-work",
+                  "help/index"
+                ]
+              },
+              {
+                "group": "Releases and deprecations",
+                "pages": [
+                  "guides/board-operator/experimental-features"
+                ]
+              },
+              {
+                "group": "Developer and advanced",
+                "pages": [
+                  "help/developer-and-advanced"
+                ]
+              }
             ]
           },
           {
-            "group": "Working with Co-workers",
-            "pages": [
-              "guides/board-operator/managing-agents"
+            "tab": "Get Started",
+            "groups": [
+              {
+                "group": "Introduction",
+                "pages": [
+                  "start/what-is-paperclip",
+                  "start/quickstart",
+                  "start/core-concepts",
+                  "start/architecture"
+                ]
+              }
             ]
           },
           {
-            "group": "Work and workflows",
-            "pages": [
-              "guides/board-operator/managing-tasks",
-              "help/workflows-preview"
+            "tab": "Guides",
+            "groups": [
+              {
+                "group": "Board Operator",
+                "pages": [
+                  "guides/board-operator/dashboard",
+                  "guides/board-operator/creating-a-company",
+                  "guides/board-operator/editing-first-task-texts",
+                  "guides/board-operator/managing-agents",
+                  "guides/board-operator/org-structure",
+                  "guides/board-operator/managing-tasks",
+                  "guides/board-operator/execution-workspaces-and-runtime-services",
+                  "guides/board-operator/delegation",
+                  "guides/board-operator/execution-workspaces-and-runtime-services",
+                  "guides/board-operator/delegation",
+                  "guides/board-operator/experimental-features",
+                  "guides/board-operator/status-cards",
+                  "guides/board-operator/approvals",
+                  "guides/board-operator/costs-and-budgets",
+                  "guides/board-operator/activity-log",
+                  "guides/board-operator/importing-and-exporting"
+                ]
+              },
+              {
+                "group": "Agent Developer",
+                "pages": [
+                  "guides/agent-developer/how-agents-work",
+                  "guides/agent-developer/heartbeat-protocol",
+                  "guides/agent-developer/writing-a-skill",
+                  "guides/agent-developer/skills-store",
+                  "guides/agent-developer/task-workflow",
+                  "guides/agent-developer/comments-and-communication",
+                  "guides/agent-developer/handling-approvals",
+                  "guides/agent-developer/cost-reporting"
+                ]
+              }
             ]
           },
           {
-            "group": "Apps and connections",
-            "pages": [
-              "help/apps-and-connections"
+            "tab": "Deploy",
+            "groups": [
+              {
+                "group": "Deployment",
+                "pages": [
+                  "deploy/overview",
+                  "deploy/local-development",
+                  "deploy/tailscale-private-access",
+                  "deploy/docker",
+                  "deploy/deployment-modes",
+                  "deploy/database",
+                  "deploy/secrets",
+                  "deploy/storage",
+                  "deploy/environment-variables"
+                ]
+              }
             ]
           },
           {
-            "group": "Company and people",
-            "pages": [
-              "guides/board-operator/org-structure",
-              "guides/board-operator/importing-and-exporting"
+            "tab": "Adapters",
+            "groups": [
+              {
+                "group": "Agent Adapters",
+                "pages": [
+                  "adapters/overview",
+                  "adapters/claude-local",
+                  "adapters/codex-local",
+                  "adapters/process",
+                  "adapters/http",
+                  "adapters/external-adapters",
+                  "adapters/adapter-ui-parser",
+                  "adapters/creating-an-adapter"
+                ]
+              }
             ]
           },
           {
-            "group": "Governance, security, and privacy",
-            "pages": [
-              "guides/board-operator/approvals",
-              "help/export-and-delete"
+            "tab": "API Reference",
+            "groups": [
+              {
+                "group": "REST API",
+                "pages": [
+                  "api/overview",
+                  "api/authentication",
+                  "api/companies",
+                  "api/agents",
+                  "api/issues",
+                  "api/approvals",
+                  "api/goals-and-projects",
+                  "api/costs",
+                  "api/secrets",
+                  "api/activity",
+                  "api/dashboard"
+                ]
+              }
             ]
           },
           {
-            "group": "Billing and capacity",
-            "pages": [
-              "guides/board-operator/costs-and-budgets"
-            ]
-          },
-          {
-            "group": "Troubleshooting",
-            "pages": [
-              "help/recovering-work",
-              "help/index"
-            ]
-          },
-          {
-            "group": "Releases and deprecations",
-            "pages": [
-              "guides/board-operator/experimental-features"
-            ]
-          },
-          {
-            "group": "Developer and advanced",
-            "pages": [
-              "help/developer-and-advanced"
+            "tab": "CLI",
+            "groups": [
+              {
+                "group": "CLI Reference",
+                "pages": [
+                  "cli/overview",
+                  "cli/setup-commands",
+                  "cli/control-plane-commands"
+                ]
+              }
             ]
           }
         ]
       },
       {
-        "tab": "Get Started",
-        "groups": [
+        "language": "da",
+        "tabs": [
           {
-            "group": "Introduction",
-            "pages": [
-              "start/what-is-paperclip",
-              "start/quickstart",
-              "start/core-concepts",
-              "start/architecture"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "Guides",
-        "groups": [
-          {
-            "group": "Board Operator",
-            "pages": [
-              "guides/board-operator/dashboard",
-              "guides/board-operator/creating-a-company",
-              "guides/board-operator/editing-first-task-texts",
-              "guides/board-operator/managing-agents",
-              "guides/board-operator/org-structure",
-              "guides/board-operator/managing-tasks",
-              "guides/board-operator/execution-workspaces-and-runtime-services",
-              "guides/board-operator/delegation",
-              "guides/board-operator/execution-workspaces-and-runtime-services",
-              "guides/board-operator/delegation",
-              "guides/board-operator/experimental-features",
-              "guides/board-operator/status-cards",
-              "guides/board-operator/approvals",
-              "guides/board-operator/costs-and-budgets",
-              "guides/board-operator/activity-log",
-              "guides/board-operator/importing-and-exporting"
-            ]
-          },
-          {
-            "group": "Agent Developer",
-            "pages": [
-              "guides/agent-developer/how-agents-work",
-              "guides/agent-developer/heartbeat-protocol",
-              "guides/agent-developer/writing-a-skill",
-              "guides/agent-developer/skills-store",
-              "guides/agent-developer/task-workflow",
-              "guides/agent-developer/comments-and-communication",
-              "guides/agent-developer/handling-approvals",
-              "guides/agent-developer/cost-reporting"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "Deploy",
-        "groups": [
-          {
-            "group": "Deployment",
-            "pages": [
-              "deploy/overview",
-              "deploy/local-development",
-              "deploy/tailscale-private-access",
-              "deploy/docker",
-              "deploy/deployment-modes",
-              "deploy/database",
-              "deploy/secrets",
-              "deploy/storage",
-              "deploy/environment-variables"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "Adapters",
-        "groups": [
-          {
-            "group": "Agent Adapters",
-            "pages": [
-              "adapters/overview",
-              "adapters/claude-local",
-              "adapters/codex-local",
-              "adapters/process",
-              "adapters/http",
-              "adapters/external-adapters",
-              "adapters/adapter-ui-parser",
-              "adapters/creating-an-adapter"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "API Reference",
-        "groups": [
-          {
-            "group": "REST API",
-            "pages": [
-              "api/overview",
-              "api/authentication",
-              "api/companies",
-              "api/agents",
-              "api/issues",
-              "api/approvals",
-              "api/goals-and-projects",
-              "api/costs",
-              "api/secrets",
-              "api/activity",
-              "api/dashboard"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "CLI",
-        "groups": [
-          {
-            "group": "CLI Reference",
-            "pages": [
-              "cli/overview",
-              "cli/setup-commands",
-              "cli/control-plane-commands"
+            "tab": "Hjælp",
+            "groups": [
+              {
+                "group": "Kom godt i gang",
+                "pages": [
+                  "guides/board-operator/creating-a-company"
+                ]
+              },
+              {
+                "group": "Arbejd med Co-workers",
+                "pages": [
+                  "guides/board-operator/managing-agents"
+                ]
+              },
+              {
+                "group": "Opgaver og workflows",
+                "pages": [
+                  "guides/board-operator/managing-tasks",
+                  "help/workflows-preview"
+                ]
+              },
+              {
+                "group": "Apps og forbindelser",
+                "pages": [
+                  "help/apps-and-connections"
+                ]
+              },
+              {
+                "group": "Virksomhed og personer",
+                "pages": [
+                  "guides/board-operator/org-structure",
+                  "guides/board-operator/importing-and-exporting"
+                ]
+              },
+              {
+                "group": "Styring, sikkerhed og privatliv",
+                "pages": [
+                  "guides/board-operator/approvals",
+                  "help/export-and-delete"
+                ]
+              },
+              {
+                "group": "Fakturering og kapacitet",
+                "pages": [
+                  "guides/board-operator/costs-and-budgets"
+                ]
+              },
+              {
+                "group": "Fejlfinding",
+                "pages": [
+                  "help/recovering-work",
+                  "help/index"
+                ]
+              },
+              {
+                "group": "Udgivelser og udfasninger",
+                "pages": [
+                  "guides/board-operator/experimental-features"
+                ]
+              },
+              {
+                "group": "Udvikler og avanceret",
+                "pages": [
+                  "help/developer-and-advanced"
+                ]
+              }
             ]
           }
         ]
       }
     ]
   },
-  "footerSocials": {
-    "github": "https://github.com/paperclip-ai/paperclip"
+  "navbar": {
+    "links": [
+      {
+        "label": "GitHub",
+        "href": "https://github.com/augustkring/august-works"
+      }
+    ]
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/augustkring/august-works"
+    }
   }
 }

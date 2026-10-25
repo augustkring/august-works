@@ -578,6 +578,7 @@ export function companySearchService(db: Db) {
       const hasIssueOnlyFilters = issueOnlyFiltersActive(query);
       const helpRows = hasSearchText && !hasIssueOnlyFilters && scopeIncludesHelp(scope)
         ? COMPANY_SEARCH_HELP_ARTICLES.flatMap((article) => {
+          if (article.locale !== (query.locale ?? "en")) return [];
           const href = companySearchHelpHref(article.slug);
           if (!href) return [];
           const row: SimpleSearchRow = {

@@ -95,21 +95,44 @@ function readCapabilityIds(root) {
   return ids;
 }
 
-function docsForHelpTab(root) {
+function docsForHelpTabs(root) {
   const docsFile = path.join(root, "docs/docs.json");
   const docsConfig = JSON.parse(fs.readFileSync(docsFile, "utf8"));
-  const tabs = docsConfig.navigation?.tabs?.filter(tab => tab.tab === "Help Center") ?? [];
-  if (tabs.length !== 1) throw new Error("docs/docs.json: expected exactly one Help Center tab");
-  const pages = tabs[0].groups?.flatMap(group => group.pages ?? []) ?? [];
-  if (!pages.length) throw new Error("docs/docs.json: Help Center tab must list at least one article");
-  return pages.map(page => {
-    if (typeof page !== "string" || page.startsWith("/") || page.includes("..")) {
-      throw new Error(`docs/docs.json: invalid local Help Center page ${String(page)}`);
-    }
-    const candidates = [path.join(root, "docs", `${page}.md`), path.join(root, "docs", page, "index.md")];
-    const filename = candidates.find(candidate => fs.existsSync(candidate));
-    if (!filename) throw new Error(`docs/docs.json: Help Center page does not exist: ${page}`);
-    return { page, filename };
+  const navigation = docsConfig.navigation ?? {};
+  let tabSources;
+  if (Array.isArray(navigation.languages)) {
+    const seenLanguages = new Set();
+    tabSources = navigation.languages.flatMap(language => {
+      if (typeof language.language !== "string" || seenLanguages.has(language.language))
+        throw new Error("docs/docs.json: native language navigation needs unique language codes");
+      seenLanguages.add(language.language);
+      if (!Array.isArray(language.tabs)) throw new Error(`docs/docs.json: ${language.language} navigation must use native tabs`);
+      const expectedName = language.language === "en" ? "Help Center" : language.language === "da" ? "Hjælp" : null;
+      if (!expectedName) return [];
+      const tabs = language.tabs.filter(tab => tab.tab === expectedName);
+      if (tabs.length !== 1) throw new Error(`docs/docs.json: expected exactly one ${expectedName} tab for ${language.language}`);
+      return [{ locale: language.language, tab: tabs[0] }];
+    });
+    for (const locale of ["en", "da"])
+      if (!tabSources.some(source => source.locale === locale)) throw new Error(`docs/docs.json: native Help Center navigation is missing ${locale}`);
+  } else {
+    const tabs = navigation.tabs?.filter(tab => tab.tab === "Help Center") ?? [];
+    if (tabs.length !== 1) throw new Error("docs/docs.json: expected exactly one Help Center tab");
+    tabSources = [{ locale: "en", tab: tabs[0] }];
+  }
+  return tabSources.flatMap(({ locale, tab }) => {
+    const pages = tab.groups?.flatMap(group => group.pages ?? []) ?? [];
+    if (!pages.length) throw new Error(`docs/docs.json: ${locale} Help Center tab must list at least one article`);
+    return pages.map(page => {
+      if (typeof page !== "string" || page.startsWith("/") || page.includes("..")) {
+        throw new Error(`docs/docs.json: invalid local Help Center page ${String(page)}`);
+      }
+      const localizedRoot = path.join(root, "docs", ...(locale === "en" ? [] : [locale]));
+      const candidates = [path.join(localizedRoot, `${page}.md`), path.join(localizedRoot, page, "index.md")];
+      const filename = candidates.find(candidate => fs.existsSync(candidate));
+      if (!filename) throw new Error(`docs/docs.json: ${locale} Help Center page does not exist: ${page}`);
+      return { page, filename, locale };
+    });
   });
 }
 
@@ -182,17 +205,18 @@ function resolveLocalMarkdownTarget(root, sourceFile, rawTarget) {
 
 export function validateHelpDocs({ root = process.cwd(), now = new Date() } = {}) {
   const errors = [];
-  const pages = docsForHelpTab(root);
+  const pages = docsForHelpTabs(root);
   const today = now.toISOString().slice(0, 10);
   const screenIds = readScreenIds(root);
   const capabilityIds = readCapabilityIds(root);
   const seenIds = new Map();
-  for (const { page, filename } of pages) {
+  for (const { page, filename, locale } of pages) {
     const relative = path.relative(root, filename);
     let parsed;
     try { parsed = parseRestrictedFrontmatter(fs.readFileSync(filename, "utf8"), relative); }
     catch (error) { errors.push(error.message); continue; }
     errors.push(...validateMetadata(parsed.metadata, relative, { today, screenIds, capabilityIds }));
+    if (parsed.metadata.locale !== locale) errors.push(`${relative}: locale ${parsed.metadata.locale} does not match ${locale} Help navigation`);
     if (Array.isArray(parsed.metadata.linked_source_files)) {
       const seenSources = new Set();
       for (const source of parsed.metadata.linked_source_files) {
@@ -217,10 +241,19 @@ export function validateHelpDocs({ root = process.cwd(), now = new Date() } = {}
 }
 
 export function readHelpArticleSources(root = process.cwd()) {
-  return docsForHelpTab(root).map(({ filename }) => {
+  return docsForHelpTabs(root).map(({ filename, locale }) => {
     const relative = path.relative(root, filename).split(path.sep).join("/");
     const { metadata } = parseRestrictedFrontmatter(fs.readFileSync(filename, "utf8"), relative);
-    return { articleId: metadata.help_article_id, filename: relative, sourceFiles: metadata.linked_source_files };
+    return { articleId: metadata.help_article_id, filename: relative, sourceFiles: metadata.linked_source_files, locale };
+  });
+}
+
+export function readHelpArticleDocuments(root = process.cwd()) {
+  return docsForHelpTabs(root).map(({ filename, locale, page }) => {
+    const relative = path.relative(root, filename).split(path.sep).join("/");
+    const { metadata, body } = parseRestrictedFrontmatter(fs.readFileSync(filename, "utf8"), relative);
+    return { articleId: metadata.help_article_id, filename: relative, sourceFiles: metadata.linked_source_files,
+      locale, page, metadata, body };
   });
 }
 

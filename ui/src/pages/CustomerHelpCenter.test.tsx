@@ -18,7 +18,9 @@ const searchMock = vi.hoisted(() => vi.fn());
 vi.mock("../context/CompanyContext", () => ({
   useCompany: () => ({ selectedCompanyId: state.companyId, selectedCompany: { issuePrefix: "PAP" } }),
 }));
-vi.mock("../api/search", () => ({ searchApi: { search: searchMock } }));
+vi.mock("../api/search", async importOriginal => ({
+  ...await importOriginal<typeof import("../api/search")>(), searchApi: { search: searchMock },
+}));
 vi.mock("../hooks/useV9CurrentAccount", () => ({
   useV9CurrentAccount: () => ({ userId: state.userId, localImplicit: false, settled: true, failed: false,
     sessionId: state.sessionId, authorityEpoch: state.epoch }),
@@ -54,7 +56,7 @@ function ObserveLocation() {
 const articleResponse = {
   query: "imports", normalizedQuery: "imports", scope: "help", sort: "relevance", limit: 8, offset: 0,
   results: [{
-    id: "help:company-import-export", type: "help", score: 2, title: "Importing and exporting companies",
+    id: "company-import-export", type: "help", score: 2, title: "Importing and exporting companies",
     href: "https://docs.blentera.com/guides/board-operator/importing-and-exporting", matchedFields: ["title"],
     sourceLabel: "Help · Preview", snippet: "Preview and recover a company package.", snippets: [],
     helpArticle: { articleId: "company-import-export", audience: "company-administrators", maturity: "preview",
@@ -109,7 +111,7 @@ it("searches only Help in the current company and shows the genuine article prev
   expect(container!.querySelector('a[href="https://docs.blentera.com"]')).not.toBeNull();
   typeSearch("  imports  "); await submitSearch();
   await vi.waitFor(() => expect(container!.textContent).toContain("Importing and exporting companies"));
-  expect(searchMock).toHaveBeenCalledWith(state.companyId, { q: "imports", scope: "help", limit: 8 }, expect.any(AbortSignal));
+  expect(searchMock).toHaveBeenCalledWith(state.companyId, { q: "imports", scope: "help", limit: 8, locale: "en" }, expect.any(AbortSignal));
   expect(container!.querySelector('a[href="https://docs.blentera.com/guides/board-operator/importing-and-exporting"]')?.getAttribute("target")).toBe("_blank");
   expect(container!.textContent).toContain("Preview · V10 · en · last verified 2026-10-24");
   expect(lastPath).toBe("/PAP/company/help");
@@ -183,4 +185,25 @@ it("keeps the hidden Help pane idle after moving to support cases", async () => 
   await act(async () => navigate("/PAP/company/support")); await flush();
   expect(lastPath).toBe("/PAP/company/support");
   expect(searchMock).toHaveBeenCalledTimes(1);
+});
+
+
+it("uses the selected Help locale and withholds a late response from the previous language", async () => {
+  let finishEnglish!: (value: unknown) => void;
+  const danish = { ...articleResponse, results: [{ ...articleResponse.results[0],
+    id: "company-import-export-da", title: "Import og eksport af virksomheder",
+    href: "https://docs.blentera.com/da/guides/board-operator/importing-and-exporting",
+    helpArticle: { ...articleResponse.results[0].helpArticle, articleId: "company-import-export-da", locale: "da" },
+  }] };
+  searchMock.mockImplementation((_company, params) => params.locale === "da"
+    ? Promise.resolve(danish) : new Promise(resolve => { finishEnglish = resolve; }));
+  await render(); typeSearch("imports"); await submitSearch();
+  await vi.waitFor(() => expect(finishEnglish).toBeTypeOf("function"));
+  await act(async () => { await i18n.changeLanguage("da"); });
+  await vi.waitFor(() => expect(container!.textContent).toContain("Import og eksport af virksomheder"));
+  expect(searchMock).toHaveBeenLastCalledWith(state.companyId,
+    { q: "imports", scope: "help", limit: 8, locale: "da" }, expect.any(AbortSignal));
+  await act(async () => finishEnglish(articleResponse)); await flush();
+  expect(container!.textContent).not.toContain("Importing and exporting companies");
+  expect(container!.textContent).toContain("Import og eksport af virksomheder");
 });

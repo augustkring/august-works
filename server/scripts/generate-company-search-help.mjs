@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseRestrictedFrontmatter, validateHelpDocs } from "../../scripts/check-help-docs.mjs";
+import { readHelpArticleDocuments, validateHelpDocs } from "../../scripts/check-help-docs.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const checkOnly = process.argv.slice(2).includes("--check");
@@ -11,34 +11,29 @@ if (process.argv.slice(2).some((argument) => argument !== "--check") || process.
 const MAX_ARTICLE_BODY_CHARS = 20_000;
 const errors = validateHelpDocs({ root });
 if (errors.length) throw new Error(errors.join("\n"));
-const config = JSON.parse(fs.readFileSync(path.join(root, "docs/docs.json"), "utf8"));
-const pages = config.navigation.tabs.find((tab) => tab.tab === "Help Center").groups.flatMap((group) => group.pages);
-const entries = pages.flatMap((slug) => {
-  const filename = [path.join(root, "docs", `${slug}.md`), path.join(root, "docs", slug, "index.md")].find(fs.existsSync);
-  if (!filename) return [];
-  const parsed = parseRestrictedFrontmatter(fs.readFileSync(filename, "utf8"), slug);
-  const metadata = parsed.metadata;
+const documents = readHelpArticleDocuments(root);
+const entries = documents.flatMap(({ page, locale, metadata, body: rawBody }) => {
   if (!metadata.applicable_product_versions.includes("V10") || !["preview", "ga"].includes(metadata.maturity)) return [];
-  const body = parsed.body
-    .replace(/^```[^\n]*\n|^```\s*$/gm, " ")
+  const body = rawBody
+    .replace(/^(?:```|~~~)[^\n]*\n|^(?:```|~~~)\s*$/gm, " ")
     .replace(/^#{1,6}\s+/gm, "")
     .replace(/!?\[([^\]]*)\]\([^)]+\)/g, "$1")
     .replace(/[*_~`>|]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
   if (body.length > MAX_ARTICLE_BODY_CHARS) {
-    throw new Error(`${slug}: normalized Help article body exceeds ${MAX_ARTICLE_BODY_CHARS} characters`);
+    throw new Error(`${page}: normalized Help article body exceeds ${MAX_ARTICLE_BODY_CHARS} characters`);
   }
   return [{
     articleId: metadata.help_article_id,
-    slug,
+    slug: locale === "en" ? page : `${locale}/${page}`,
     title: metadata.title,
     summary: (typeof metadata.summary === "string" ? metadata.summary : body.slice(0, 400)).slice(0, 400),
     body,
     audience: metadata.audience,
     maturity: metadata.maturity,
     applicableProductVersions: metadata.applicable_product_versions,
-    locale: metadata.locale,
+    locale,
     lastVerifiedAt: metadata.last_verified_at,
   }];
 });

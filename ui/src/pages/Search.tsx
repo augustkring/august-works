@@ -20,6 +20,7 @@ import { useCompany } from "../context/CompanyContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { useDialogActions } from "../context/DialogContext";
 import { searchApi } from "../api/search";
+import { useTranslation } from "../i18n";
 import { agentsApi } from "../api/agents";
 import { authApi } from "../api/auth";
 import { issuesApi } from "../api/issues";
@@ -133,6 +134,8 @@ function shapeError(error: unknown): { message: string; status?: number } {
 }
 
 export function Search() {
+  const { i18n } = useTranslation();
+  const locale = (i18n.resolvedLanguage ?? i18n.language).startsWith("da") ? "da" : "en";
   const { selectedCompanyId } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
   const { openNewIssue } = useDialogActions();
@@ -317,17 +320,19 @@ export function Search() {
       ),
       activeFilters,
       sort,
+      locale,
     ] as const,
     queryFn: () =>
       searchApi.search(selectedCompanyId!, {
         q: trimmedQuery,
+        locale,
         scope,
         limit: COMPANY_SEARCH_DEFAULT_LIMIT,
         ...activeFilters,
         ...(sort !== "relevance" ? { sort } : {}),
       }),
     enabled: queryEnabled,
-    placeholderData: (previousData) => previousData,
+    placeholderData: (previousData, previousQuery) => previousQuery?.queryKey.at(-1) === locale ? previousData : undefined,
   });
 
   const agentsById = useMemo<ReadonlyMap<string, Pick<Agent, "id" | "name" | "appearance">>>(() => {
@@ -378,17 +383,19 @@ export function Search() {
       "preview",
       draftSheetFilters,
       sort,
+      locale,
     ] as const,
     queryFn: () =>
       searchApi.search(selectedCompanyId!, {
         q: trimmedQuery,
+        locale,
         scope,
         limit: COMPANY_SEARCH_DEFAULT_LIMIT,
         ...draftSheetFilters,
         ...(sort !== "relevance" ? { sort } : {}),
       }),
     enabled: queryEnabled && sheetOpen,
-    placeholderData: (previousData) => previousData,
+    placeholderData: (previousData, previousQuery) => previousQuery?.queryKey.at(-1) === locale ? previousData : undefined,
   });
 
   // Persist recent searches once we have a successful response with a non-empty query.

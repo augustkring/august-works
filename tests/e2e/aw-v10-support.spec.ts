@@ -186,4 +186,37 @@ test("Help retains its originating view and reload recovers requests before and 
   expect(cases.entries.map((entry: { id: string }) => entry.id)).toEqual(expect.arrayContaining([committed!.id, retriedId]));
   expect(posts).toBe(3);
   expect(await page.evaluate(() => !!history.state?.usr?.supportRequest)).toBe(false);
+
+  // Save the language through the original account owner, then exercise the
+  // actual Danish Help source and native palette after a fresh page load.
+  await json(await page.request.patch("/api/auth/preferences", { data: { expectedUserId: account.user.id, locale: "da" } }));
+  await page.goto(`/${company.issuePrefix}/work`);
+  await expect(page.getByRole("heading", { level: 1, name: "Arbejde", exact: true })).toBeVisible();
+  await helpEntry.click();
+  const danishHelp = page.getByRole("dialog");
+  await danishHelp.getByRole("searchbox", { name: "Søg i Hjælp", exact: true }).fill("hjælp");
+  const danishResponse = page.waitForResponse(response => {
+    const url = new URL(response.url());
+    return url.pathname === `/api/companies/${company.id}/search` && url.searchParams.get("locale") === "da";
+  });
+  await danishHelp.getByRole("button", { name: "Søg i Hjælp", exact: true }).click();
+  const danishResults = await json(await danishResponse);
+  expect(danishResults.results.every((result: { helpArticle: { locale: string } }) => result.helpArticle.locale === "da")).toBe(true);
+  const danishArticle = danishResults.results.find((result: { id: string }) => result.id === "help-and-human-support-da");
+  expect(danishArticle).toBeDefined();
+  await expect(danishHelp.getByRole("link", { name: danishArticle.title, exact: true })).toHaveAttribute("href", danishArticle.href);
+  await page.keyboard.press("Escape");
+  await expect(helpEntry).toBeFocused();
+  const danishWorkUrl = page.url();
+  await page.keyboard.press("Control+k");
+  const danishCommands = page.getByRole("dialog", { name: "Spørg og kommandoer", exact: true });
+  await danishCommands.getByRole("combobox", { name: "Søg eller indtast en kommando", exact: true }).fill("hjælp");
+  const danishPopupPromise = page.waitForEvent("popup");
+  await danishCommands.getByRole("option", { name: `Åbn hjælpeartikel: ${danishArticle.title}`, exact: true }).click();
+  const danishPopup = await danishPopupPromise;
+  await expect(danishPopup).toHaveURL(danishArticle.href);
+  await danishPopup.close();
+  await page.bringToFront();
+  await expect(page).toHaveURL(danishWorkUrl);
+  await expect(helpEntry).toBeFocused();
 });
