@@ -10,6 +10,7 @@ import { and, eq } from "drizzle-orm";
 import {
   activityLog,
   agents,
+  authUsers,
   approvals,
   companies,
   companyMemberships,
@@ -63,6 +64,7 @@ describePg("Workflow executor V1", () => {
     await db.delete(workflows);
     await db.delete(principalPermissionGrants);
     await db.delete(companyMemberships);
+    await db.delete(authUsers);
     await db.delete(agents);
     await db.delete(companies);
   });
@@ -73,7 +75,9 @@ describePg("Workflow executor V1", () => {
 
   async function seedPublishedManualWorkflow() {
     const companyId = randomUUID();
-    const userId = `user-${companyId}`;
+    const userId = randomUUID();
+    const now = new Date();
+    await db.insert(authUsers).values({ id: userId, name: "Workflow test Human", email: `${userId}@test.invalid`, createdAt: now, updatedAt: now });
     await db.insert(companies).values({
       id: companyId,
       name: "Executor Co",
@@ -129,8 +133,10 @@ describePg("Workflow executor V1", () => {
     expectedOutputSchema?: Record<string, unknown> | null;
   }) {
     const companyId = randomUUID();
-    const userId = `user-${companyId}`;
+    const userId = randomUUID();
     const agentId = randomUUID();
+    const now = new Date();
+    await db.insert(authUsers).values({ id: userId, name: "Workflow test Human", email: `${userId}@test.invalid`, createdAt: now, updatedAt: now });
     await db.insert(companies).values({
       id: companyId,
       name: "Agent Task Co",
@@ -237,8 +243,10 @@ describePg("Workflow executor V1", () => {
     timeoutSeconds?: number;
   } = {}) {
     const companyId = randomUUID();
-    const userId = `user-${companyId}`;
+    const userId = randomUUID();
     const agentId = randomUUID();
+    const now = new Date();
+    await db.insert(authUsers).values({ id: userId, name: "Workflow test Human", email: `${userId}@test.invalid`, createdAt: now, updatedAt: now });
     await db.insert(companies).values({
       id: companyId,
       name: "External Agent Co",
@@ -453,7 +461,9 @@ describePg("Workflow executor V1", () => {
 
   async function seedPublishedGraph(graph: WorkflowGraphV1) {
     const companyId = randomUUID();
-    const userId = `user-${companyId}`;
+    const userId = randomUUID();
+    const now = new Date();
+    await db.insert(authUsers).values({ id: userId, name: "Workflow test Human", email: `${userId}@test.invalid`, createdAt: now, updatedAt: now });
     await db.insert(companies).values({
       id: companyId,
       name: "Branch Executor Co",
@@ -1315,7 +1325,7 @@ describePg("Workflow executor V1", () => {
       variables: [],
       settings: {},
     });
-    const now = new Date("2026-09-28T15:10:00.000Z");
+    const now = new Date();
     const old = new Date(now.getTime() - 120_000);
     const [run] = await db.insert(workflowRuns).values({
       companyId: seeded.companyId,
@@ -1515,7 +1525,8 @@ describePg("Workflow executor V1", () => {
     };
     const seeded = await seedPublishedGraph(graph);
     const actor = { principal: { type: "user" as const, userId: seeded.userId } };
-    const startedAt = new Date("2026-09-28T15:40:00.000Z");
+    const startedAt = new Date();
+    const runStartedAt = new Date(startedAt.getTime() - 30 * 24 * 60 * 60 * 1_000);
     const [run] = await db.insert(workflowRuns).values({
       companyId: seeded.companyId,
       workflowId: seeded.workflow.id,
@@ -1527,8 +1538,8 @@ describePg("Workflow executor V1", () => {
       executionOwnerId: "inline:test-retry",
       leaseExpiresAt: new Date(startedAt.getTime() + 30_000),
       ownerHeartbeatAt: startedAt,
-      startedAt,
-      createdAt: startedAt,
+      startedAt: runStartedAt,
+      createdAt: runStartedAt,
       updatedAt: startedAt,
     }).returning();
 
@@ -1540,11 +1551,11 @@ describePg("Workflow executor V1", () => {
       status: "succeeded",
       inputJson: {},
       outputJson: {},
-      startedAt,
-      finishedAt: new Date(startedAt.getTime() + 5),
+      startedAt: runStartedAt,
+      finishedAt: new Date(runStartedAt.getTime() + 5),
       durationMs: 5,
-      createdAt: startedAt,
-      updatedAt: startedAt,
+      createdAt: runStartedAt,
+      updatedAt: runStartedAt,
     });
     const [runningStep] = await db.insert(workflowStepRuns).values({
       companyId: seeded.companyId,
@@ -1553,9 +1564,11 @@ describePg("Workflow executor V1", () => {
       attempt: 1,
       status: "running",
       inputJson: { expression: "true" },
-      startedAt: new Date(startedAt.getTime() + 10),
-      createdAt: new Date(startedAt.getTime() + 10),
-      updatedAt: new Date(startedAt.getTime() + 10),
+      // The worker lease is current and renewable even though this node has
+      // been active for more than PostgreSQL int32 milliseconds.
+      startedAt: new Date(runStartedAt.getTime() + 10),
+      createdAt: new Date(runStartedAt.getTime() + 10),
+      updatedAt: new Date(runStartedAt.getTime() + 10),
     }).returning();
 
     const scheduled = await scheduleWorkflowStepRetry(
@@ -1589,6 +1602,11 @@ describePg("Workflow executor V1", () => {
     const scheduledAttempt = waiting!.steps.find(
       (step) => step.nodeId === "condition" && step.attempt === 1,
     )!;
+    expect(scheduledAttempt.durationMs).toBeGreaterThan(2_147_483_647);
+    expect(scheduledAttempt.durationMs).toBe(
+      new Date(scheduledAttempt.finishedAt!).getTime() -
+        new Date(scheduledAttempt.startedAt!).getTime(),
+    );
     const scheduledAt = scheduledAttempt.finishedAt!;
     const beforeDue = new Date(new Date(scheduledAt).getTime() + 500);
     const before = await workflowExecutorService(db).recoverExpiredRuns(10, beforeDue);
@@ -2203,7 +2221,7 @@ describePg("Workflow executor V1", () => {
       variables: [],
       settings: {},
     });
-    const now = new Date("2026-09-28T20:30:00.000Z");
+    const now = new Date();
     const old = new Date(now.getTime() - 120_000);
     const [run] = await db.insert(workflowRuns).values({
       companyId: seeded.companyId,

@@ -3704,6 +3704,13 @@
       "when": 1792894310413,
       "tag": "0530_curious_lockjaw",
       "breakpoints": true
+    },
+    {
+      "idx": 531,
+      "version": "7",
+      "when": 1792896883175,
+      "tag": "0531_regular_bug",
+      "breakpoints": true
     }
   ]
 }

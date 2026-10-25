@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
+  bigint,
   check,
   index,
   integer,
@@ -198,7 +199,7 @@ export const workflowStepRuns = pgTable(
     childWorkflowRunId: uuid("child_workflow_run_id").references(() => workflowRuns.id, { onDelete: "set null" }),
     startedAt: timestamp("started_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
-    durationMs: integer("duration_ms"),
+    durationMs: bigint("duration_ms", { mode: "number" }),
     agentId: uuid("agent_id").references(() => agents.id, { onDelete: "set null" }),
     heartbeatRunId: uuid("heartbeat_run_id").references(() => heartbeatRuns.id, { onDelete: "set null" }),
     toolInvocationId: uuid("tool_invocation_id"),

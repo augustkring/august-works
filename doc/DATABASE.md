@@ -206,6 +206,20 @@ When authoring migrations or one-time backfills:
 - The repo keeps only the newest 5 snapshots. `generate` runs `prune:snapshots` afterwards to delete older ones. Drizzle only reads the newest snapshot, and each snapshot is a full copy of the schema (over 1 MB each). Older snapshots are still in git history.
 - `packages/db/src/migration-snapshot-drift.test.ts` is the enforcement backstop. It repeats the diff that `generate` performs and fails when the newest snapshot no longer matches `packages/db/src/schema/`.
 
+## Workflow step durations
+
+Migration `0531_regular_bug.sql` widens `workflow_step_runs.duration_ms` from
+`integer` to `bigint`. Existing values and nulls are preserved; long-running
+steps can retain their actual elapsed milliseconds beyond the approximately
+25-day integer limit. The application continues to expose a JavaScript number.
+This changes neither execution deadlines nor Stop, retry or budget authority.
+
+PostgreSQL may rewrite and lock this table during the type change. Schedule
+the upgrade against the actual table size and available maintenance window.
+After durations exceed the old integer range, a downcast cannot preserve the
+data. Use a compatible application rollback, a forward fix, or a tested restore
+rather than assuming the schema change can be reversed without data loss.
+
 ## Cloud runtime identity singleton
 
 The private `instance_settings` row whose singleton key is
