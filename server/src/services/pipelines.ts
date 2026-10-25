@@ -47,7 +47,7 @@ import {
   type RoutineVariable,
   type RoutineRevisionSnapshotV1,
 } from "@paperclipai/shared";
-import { conflict, HttpError, notFound, unprocessable } from "../errors.js";
+import { conflict, forbidden, HttpError, notFound, unprocessable } from "../errors.js";
 import { routineService } from "./routines.js";
 import { secretService } from "./secrets.js";
 import type { IssueAssignmentWakeupDeps } from "./issue-assignment-wakeup.js";
@@ -63,7 +63,7 @@ import {
   type WorkflowRunActor,
 } from "./workflows/workflow-executor.js";
 import { assertAssignableAgent } from "./agent-assignability.js";
-import { authorizationService, type AuthorizationActor } from "./authorization.js";
+import { authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, type AuthorizationActor } from "./authorization.js";
 import { instanceSettingsService } from "./instance-settings.js";
 import { visibleIssueCondition } from "./issue-visibility.js";
 import type { IssuePostCommitAction } from "./issues.js";
@@ -1390,6 +1390,9 @@ function buildPipelineCaseContextPack(input: {
   stage: typeof pipelineStages.$inferSelect;
   outputSummaries?: ReturnType<typeof summarizePipelineCaseOutputsForContext> | null;
   taskSourceIssueIds?: string[];
+  sourceCaseProducerRunIds?: string[];
+  sourceCaseProducerUserIds?: string[];
+  sourceCaseCapturedAt?: string;
 }) {
   return {
     pipeline: {
@@ -1403,6 +1406,9 @@ function buildPipelineCaseContextPack(input: {
       sourceUserId: input.case.createdByUserId,
       sourceAgentId: input.case.createdByAgentId,
       sourceRunId: input.case.originRunId,
+      producerRunIds: input.sourceCaseProducerRunIds ?? (input.case.originRunId ? [input.case.originRunId] : []),
+      producerUserIds: input.sourceCaseProducerUserIds ?? (input.case.createdByUserId ? [input.case.createdByUserId] : []),
+      capturedAt: input.sourceCaseCapturedAt ?? null,
       title: input.case.title,
       version: input.case.version,
       deepLink: buildCaseDeepLink({ pipelineId: input.pipeline.id, caseId: input.case.id }),
@@ -3119,6 +3125,7 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
     }
 
     const detail = await getCaseWithStageOrThrow(db, execution.companyId, execution.caseId);
+    const sourceCaseCapturedAt = nowDate();
     const automation = stageAutomation(detail.stage);
     if (!automation || automation.id !== execution.automationId || automation.target.kind !== executionTarget.kind ||
       (automation.target.kind === "workflow" && executionTarget.kind === "workflow" && automation.target.workflowId !== executionTarget.workflowId) ||
@@ -3141,7 +3148,10 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
 
     try {
       const outputSummaries = summarizePipelineCaseOutputsForContext(
-        await outputsSvc.listCaseOutputs(execution.companyId, execution.caseId),
+        await outputsSvc.listCaseOutputs(execution.companyId, execution.caseId, async (issueId, sourceRunId) => {
+          if (!privacyActor || !await canActorReadIssuePrivacy(db, privacyActor, { id: issueId, companyId: execution.companyId })) return false;
+          return sourceRunId ? canActorReadHeartbeatRunPrivacy(db, privacyActor, { id: sourceRunId, companyId: execution.companyId }) : true;
+        }),
       );
       const linkedTaskIssueIds = await db.selectDistinct({ issueId: pipelineCaseIssueLinks.issueId })
         .from(pipelineCaseIssueLinks)
@@ -3151,7 +3161,28 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
         ...linkedTaskIssueIds,
         ...outputSummaries.items.map(item => item.sourceIssue.id),
       ])].sort();
-      const contextPack = buildPipelineCaseContextPack({ ...detail, outputSummaries, taskSourceIssueIds });
+      const producerEvents = await db.select({ actorType: pipelineCaseEvents.actorType,
+        actorUserId: pipelineCaseEvents.actorUserId, runId: pipelineCaseEvents.runId })
+        .from(pipelineCaseEvents).where(and(eq(pipelineCaseEvents.companyId, execution.companyId),
+          eq(pipelineCaseEvents.caseId, execution.caseId), eq(pipelineCaseEvents.type, "updated"),
+          sql`${pipelineCaseEvents.payload}->>'materialChanged' = 'true'`,
+          sql`${pipelineCaseEvents.createdAt} <= ${sourceCaseCapturedAt.toISOString()}::timestamptz`));
+      if (producerEvents.length > 256 || producerEvents.some(event => event.actorType === "agent" && !event.runId)) {
+        throw forbidden("Pipeline case producer history is incomplete.");
+      }
+      const sourceCaseProducerRunIds = [...new Set([
+        ...(detail.case.originRunId ? [detail.case.originRunId] : []),
+        ...producerEvents.filter(event => event.actorType === "agent" && event.runId).map(event => event.runId!),
+      ])].sort();
+      const sourceCaseProducerUserIds = [...new Set([
+        ...(detail.case.createdByUserId ? [detail.case.createdByUserId] : []),
+        ...producerEvents.filter(event => event.actorType === "user" && event.actorUserId).map(event => event.actorUserId!),
+      ])].sort();
+      if (producerEvents.some(event => event.actorType === "system") || sourceCaseProducerRunIds.length > 256) {
+        throw forbidden("Pipeline case producer history is not accountable.");
+      }
+      const contextPack = buildPipelineCaseContextPack({ ...detail, outputSummaries, taskSourceIssueIds,
+        sourceCaseProducerRunIds, sourceCaseProducerUserIds, sourceCaseCapturedAt: sourceCaseCapturedAt.toISOString() });
       const variables = buildPipelineCaseVariables(detail);
       const breakdownConfig = readBreakdownConfig(stageConfig(detail.stage));
 

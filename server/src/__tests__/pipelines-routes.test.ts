@@ -6,6 +6,8 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   activityLog,
   agents,
+  authSessions,
+  authUsers,
   companies,
   companyMemberships,
   createDb,
@@ -15,6 +17,7 @@ import {
   heartbeatRuns,
   instanceSettings,
   issueComments,
+  issueDocuments,
   issues,
   pipelineAutomationExecutions,
   pipelineCaseBlockers,
@@ -43,9 +46,11 @@ import {
   PIPELINE_AUTOMATION_DEFAULT_TITLE_TEMPLATE,
   PIPELINE_CASE_EVENTS_MAX_LIMIT,
   PIPELINE_CONTEXT_PACK_EVENT_LIMIT,
+  pipelineService,
 } from "../services/pipelines.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { workflowService } from "../services/workflows/workflow-service.js";
+import { grantsForHumanRole } from "../services/company-member-roles.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe.sequential : describe.skip;
@@ -91,6 +96,8 @@ describeEmbeddedPostgres("pipeline routes", () => {
     await db.delete(projects);
     await db.delete(principalPermissionGrants);
     await db.delete(companyMemberships);
+    await db.delete(authSessions);
+    await db.delete(authUsers);
     await db.delete(agents);
     await db.delete(companies);
     await db.delete(instanceSettings);
@@ -119,6 +126,24 @@ describeEmbeddedPostgres("pipeline routes", () => {
       issuePrefix: `P${randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()}`,
     }).returning();
     return company!;
+  }
+
+  async function seedHumanMember(companyId: string, name: string) {
+    const userId = randomUUID();
+    const sessionId = randomUUID();
+    const now = new Date();
+    await db.insert(authUsers).values({ id: userId, name, email: `${userId}@pipeline.test`, emailVerified: true,
+      createdAt: now, updatedAt: now });
+    await db.insert(authSessions).values({ id: sessionId, userId, token: randomUUID(), createdAt: now,
+      updatedAt: now, expiresAt: new Date(now.getTime() + 60 * 60_000) });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId,
+      status: "active", membershipRole: "owner" });
+    await db.insert(principalPermissionGrants).values(grantsForHumanRole("owner").map(grant => ({
+      companyId, principalType: "user" as const, principalId: userId, ...grant,
+    })));
+    const actor: Express.Request["actor"] = { type: "board", source: "session", userId, sessionId,
+      companyIds: [companyId], memberships: [{ companyId, membershipRole: "owner", status: "active" }] };
+    return { userId, sessionId, actor };
   }
 
   async function seedPublishedWorkflow(companyId: string) {
@@ -959,6 +984,84 @@ describeEmbeddedPostgres("pipeline routes", () => {
         (_, index) => eventCount - PIPELINE_CONTEXT_PACK_EVENT_LIMIT + index,
       ),
     );
+  });
+
+  it("keeps company-shared manual cases visible while withholding private linked outputs and producer runs", async () => {
+    const company = await seedCompany("Pipeline source privacy");
+    const first = await seedHumanMember(company.id, "Manual case author");
+    const second = await seedHumanMember(company.id, "Other company member");
+    const setupHttp = request(app(boardActor));
+    const pipeline = await setupHttp.post(`/api/companies/${company.id}/pipelines`)
+      .send({ key: "source-privacy", name: "Source privacy" }).expect(201);
+    const manualCase = await pipelineService(db).ingestCase({ companyId: company.id, pipelineId: pipeline.body.id,
+      caseKey: "manual-shared", title: "Company shared manual case", summary: "Human-authored shared body",
+      actor: { type: "user", userId: first.userId } });
+    const taskId = randomUUID();
+    const documentId = randomUUID();
+    const revisionId = randomUUID();
+    await db.insert(issues).values({ id: taskId, companyId: company.id, title: "PRIVATE TASK TITLE",
+      description: "PRIVATE TASK BODY", status: "done", visibility: "private", createdByUserId: first.userId,
+      responsibleUserId: first.userId });
+    await db.insert(documents).values({ id: documentId, companyId: company.id, title: "PRIVATE DOCUMENT TITLE",
+      latestBody: "PRIVATE DOCUMENT EXCERPT", latestRevisionId: revisionId, latestRevisionNumber: 1 });
+    await db.insert(documentRevisions).values({ id: revisionId, companyId: company.id, documentId, revisionNumber: 1,
+      title: "PRIVATE DOCUMENT TITLE", format: "markdown", body: "PRIVATE DOCUMENT EXCERPT", createdByUserId: first.userId });
+    await db.insert(issueDocuments).values({ companyId: company.id, issueId: taskId, documentId, key: "report" });
+    await db.insert(pipelineCaseIssueLinks).values({ companyId: company.id, caseId: manualCase.case.id, issueId: taskId, role: "work" });
+
+    const firstHttp = request(app(first.actor));
+    const secondHttp = request(app(second.actor));
+    const secondCase = await secondHttp.get(`/api/cases/${manualCase.case.id}`).expect(200);
+    expect(secondCase.body.case.title).toBe("Company shared manual case");
+    expect(JSON.stringify(secondCase.body)).not.toContain(taskId);
+    expect(JSON.stringify(secondCase.body)).not.toContain("PRIVATE TASK TITLE");
+    const secondOutputs = await secondHttp.get(`/api/cases/${manualCase.case.id}/outputs`).expect(200);
+    expect(secondOutputs.body).toMatchObject({ items: [], sources: [], counts: { documents: 0, workProducts: 0, attachments: 0 } });
+    expect(JSON.stringify(secondOutputs.body)).not.toContain("PRIVATE DOCUMENT");
+    const secondContext = await secondHttp.get(`/api/cases/${manualCase.case.id}/context-pack`).expect(200);
+    expect(secondContext.body.case.title).toBe("Company shared manual case");
+    expect(secondContext.body.outputSummaries).toMatchObject({ itemCount: 0, totalItemCount: 0, items: [] });
+    expect(JSON.stringify(secondContext.body)).not.toContain(taskId);
+    expect(JSON.stringify(secondContext.body)).not.toContain("PRIVATE DOCUMENT");
+    const caseSearch = await secondHttp.get(`/api/pipelines/${pipeline.body.id}/cases?q=Company%20shared`).expect(200);
+    expect(caseSearch.body.map((row: { case: { id: string } }) => row.case.id)).toContain(manualCase.case.id);
+    const firstOutputs = await firstHttp.get(`/api/cases/${manualCase.case.id}/outputs`).expect(200);
+    expect(firstOutputs.body.items.map((item: { documentId: string }) => item.documentId)).toContain(documentId);
+    await db.delete(issueDocuments).where(eq(issueDocuments.documentId, documentId));
+    expect((await firstHttp.get(`/api/cases/${manualCase.case.id}/outputs`).expect(200)).body.items).toEqual([]);
+    const afterDocumentUnlink = await secondHttp.get(`/api/cases/${manualCase.case.id}/context-pack`).expect(200);
+    expect(JSON.stringify(afterDocumentUnlink)).not.toContain("PRIVATE DOCUMENT EXCERPT");
+    const opened = await firstHttp.post(`/api/cases/${manualCase.case.id}/open-conversation`);
+    expect([200, 201]).toContain(opened.status);
+    expect(opened.body.issue.description).toContain("PRIVATE TASK BODY");
+    expect((await secondHttp.post(`/api/cases/${manualCase.case.id}/open-conversation`)).status).toBe(404);
+
+    await db.update(issues).set({ hiddenAt: new Date() }).where(eq(issues.id, taskId));
+    expect((await firstHttp.get(`/api/cases/${manualCase.case.id}/outputs`).expect(200)).body.items).toEqual([]);
+    const postErasureConversation = await firstHttp.post(`/api/cases/${manualCase.case.id}/open-conversation`).expect(201);
+    expect(postErasureConversation.body.issue.description).not.toContain("PRIVATE TASK BODY");
+    expect(postErasureConversation.body.issue.description).not.toContain("PRIVATE DOCUMENT EXCERPT");
+
+    const agent = await seedAutomationAgent(company.id);
+    const producerRunId = randomUUID();
+    await db.insert(heartbeatRuns).values({ id: producerRunId, companyId: company.id, agentId: agent.id,
+      responsibleUserId: first.userId, nativeIssueId: taskId, scopeKind: "issue", status: "succeeded",
+      contextSnapshot: {} });
+    const agentCase = await pipelineService(db).ingestCase({ companyId: company.id, pipelineId: pipeline.body.id,
+      caseKey: "agent-private", title: "PRIVATE AGENT CASE BODY", actor: { type: "agent", agentId: agent.id, runId: producerRunId } });
+    await db.update(issues).set({ hiddenAt: null }).where(eq(issues.id, taskId));
+    expect((await firstHttp.get(`/api/cases/${agentCase.case.id}`).expect(200)).body.case.title).toBe("PRIVATE AGENT CASE BODY");
+    const agentConversation = await firstHttp.post(`/api/cases/${agentCase.case.id}/open-conversation`).expect(201);
+    expect(agentConversation.body.issue.description).toContain("PRIVATE AGENT CASE BODY");
+    expect((await secondHttp.post(`/api/cases/${agentCase.case.id}/open-conversation`)).status).toBe(404);
+    await db.update(issues).set({ hiddenAt: new Date() }).where(eq(issues.id, taskId));
+    expect((await firstHttp.post(`/api/cases/${agentCase.case.id}/open-conversation`)).status).toBe(404);
+    await db.update(issues).set({ hiddenAt: null }).where(eq(issues.id, taskId));
+    const denied = await secondHttp.get(`/api/cases/${agentCase.case.id}`);
+    expect(denied.status).toBe(404);
+    expect(JSON.stringify(denied.body)).not.toContain("PRIVATE AGENT CASE BODY");
+    const agentSearch = await secondHttp.get(`/api/pipelines/${pipeline.body.id}/cases?q=PRIVATE%20AGENT`).expect(200);
+    expect(agentSearch.body.map((row: { case: { id: string } }) => row.case.id)).not.toContain(agentCase.case.id);
   });
 
   it("returns 404 for cross-company pipeline route classes", async () => {

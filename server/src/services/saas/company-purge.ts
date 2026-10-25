@@ -1,9 +1,9 @@
 import { enqueueCompanyRuntimeAssetErasure } from "../native-runtime/runtime-asset-retention.js";
 import { enqueueSkillVersionFileErasure } from "../learning/skill-file-erasure.js";
-import { eq, is, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, is, sql, type SQL } from "drizzle-orm";
 import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
 import * as schema from "@paperclipai/db";
-import { customerFeedback, supportCases, projectRoadmapProposals, causalClaims, businessScenarios, forecastSpecs, businessMetrics, businessMetricTargets, strategyExecutionLinks, processAnalysisDefinitions, decisionContexts, companies, issues, memoryRecords, type Db } from "@paperclipai/db";
+import { customerFeedback, supportCases, projectRoadmapProposals, causalClaims, businessScenarios, forecastSpecs, businessMetrics, businessMetricTargets, strategyExecutionLinks, processAnalysisDefinitions, decisionContexts, companies, companyDeletionOperations, orchestrationCompanyPurposeBudgets, orchestrationCompanyPurposeReservations, issues, memoryRecords, type Db } from "@paperclipai/db";
 import { conflict } from "../../errors.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
@@ -33,12 +33,69 @@ const retained = new Set([
 export async function purgeCompanyContent(
   db: Db,
   companyId: string,
-  options: { restoreQuarantine?: boolean } = {},
+  options: { restoreQuarantine?: boolean; operationId?: string } = {},
 ) {
   return db.transaction(async (tx) => {
     await tx.execute(sql`set local statement_timeout='8s'`);
     await lockAnalyticalCompany(tx,companyId);
     await lockMemoryPrivacy(tx as unknown as Db,companyId);
+    let platformModelFunding: Record<string, string> | undefined;
+    const [hasFunding] = await tx.select({ id: orchestrationCompanyPurposeBudgets.id })
+      .from(orchestrationCompanyPurposeBudgets)
+      .where(eq(orchestrationCompanyPurposeBudgets.companyId, companyId)).limit(1);
+    if (hasFunding) {
+      if (!options.operationId || options.restoreQuarantine) {
+        throw conflict("Platform funding receipts require the canonical company offboarding operation");
+      }
+      const [operation] = await tx.select({ id: companyDeletionOperations.id, stage: companyDeletionOperations.stage,
+        status: companyDeletionOperations.status })
+        .from(companyDeletionOperations).where(and(
+          eq(companyDeletionOperations.id, options.operationId),
+          eq(companyDeletionOperations.companyId, companyId),
+        )).for("update");
+      if (!operation || operation.stage !== "purge" || operation.status !== "processing") {
+        throw conflict("The canonical company offboarding purge operation is required");
+      }
+      // Once company archival has fenced new calls, reserved-but-undispatched
+      // holds can be cancelled safely. Dispatched and unknown outcomes remain
+      // financial obligations and block erasure until reconciled.
+      await tx.update(orchestrationCompanyPurposeReservations)
+        .set({ status: "cancelled", completedAt: new Date() })
+        .where(and(
+          eq(orchestrationCompanyPurposeReservations.companyId, companyId),
+          eq(orchestrationCompanyPurposeReservations.status, "reserved"),
+        ));
+      const [unresolved] = await tx.select({ id: orchestrationCompanyPurposeReservations.id })
+        .from(orchestrationCompanyPurposeReservations).where(and(
+          eq(orchestrationCompanyPurposeReservations.companyId, companyId),
+          inArray(orchestrationCompanyPurposeReservations.status, ["dispatched", "unknown"]),
+        )).limit(1);
+      if (unresolved) throw conflict("Company offboarding is blocked while platform-funded model outcomes are unresolved");
+      const [receipt] = await tx.execute<{ budget_count: string; reserved_minor: string; reserved_calls: string;
+        completed_count: string; failed_count: string; cancelled_count: string; input_tokens: string; output_tokens: string }>(sql`
+        select
+          (select count(*)::text from ${orchestrationCompanyPurposeBudgets} where company_id=${companyId}::uuid) as budget_count,
+          (select coalesce(sum(reserved_minor),0)::text from ${orchestrationCompanyPurposeBudgets} where company_id=${companyId}::uuid) as reserved_minor,
+          (select coalesce(sum(reserved_calls),0)::text from ${orchestrationCompanyPurposeBudgets} where company_id=${companyId}::uuid) as reserved_calls,
+          (select count(*)::text from ${orchestrationCompanyPurposeReservations} where company_id=${companyId}::uuid and status='completed') as completed_count,
+          (select count(*)::text from ${orchestrationCompanyPurposeReservations} where company_id=${companyId}::uuid and status='failed') as failed_count,
+          (select count(*)::text from ${orchestrationCompanyPurposeReservations} where company_id=${companyId}::uuid and status='cancelled') as cancelled_count,
+          (select coalesce(sum((usage->>'inputTokens')::bigint),0)::text from ${orchestrationCompanyPurposeReservations} where company_id=${companyId}::uuid) as input_tokens,
+          (select coalesce(sum((usage->>'outputTokens')::bigint),0)::text from ${orchestrationCompanyPurposeReservations} where company_id=${companyId}::uuid) as output_tokens`);
+      platformModelFunding = {
+        budgets: receipt?.budget_count ?? "0",
+        maximumReservedMinorExposure: receipt?.reserved_minor ?? "0",
+        invocationCount: receipt?.reserved_calls ?? "0",
+        completed: receipt?.completed_count ?? "0",
+        failed: receipt?.failed_count ?? "0",
+        cancelled: receipt?.cancelled_count ?? "0",
+        settledInputTokens: receipt?.input_tokens ?? "0",
+        settledOutputTokens: receipt?.output_tokens ?? "0",
+      };
+      await tx.update(companyDeletionOperations).set({
+        evidence: sql`coalesce(${companyDeletionOperations.evidence}, '{}'::jsonb) || jsonb_build_object('platformModelFunding', ${JSON.stringify(platformModelFunding)}::jsonb)`,
+      }).where(eq(companyDeletionOperations.id, operation.id));
+    }
     if (!options.restoreQuarantine) {
       const alive = await tx.execute<{ present: boolean }>(
         sql`select exists(select 1 from runtime_cells where company_id=${companyId}::uuid and deleted_at is null) as present`,
@@ -58,6 +115,17 @@ export async function purgeCompanyContent(
     // after this transaction's company-erasure receipt; per-FK unlinking would
     // otherwise leave an invalid half-conversation and roll back the purge.
     await tx.update(issues).set({conversationAgentId:null,conversationUserId:null,conversationState:null}).where(eq(issues.companyId,companyId));
+    // These purpose-ledger rows have a native DELETE guard and a retained
+    // aggregate finance receipt above. Delete them through their owner in
+    // child-before-parent order before generic company-content cleanup.
+    const supportReservations = await tx.delete(orchestrationCompanyPurposeReservations)
+      .where(eq(orchestrationCompanyPurposeReservations.companyId, companyId))
+      .returning({ id: orchestrationCompanyPurposeReservations.id });
+    const supportBudgets = await tx.delete(orchestrationCompanyPurposeBudgets)
+      .where(eq(orchestrationCompanyPurposeBudgets.companyId, companyId))
+      .returning({ id: orchestrationCompanyPurposeBudgets.id });
+    if (supportReservations.length) deleted.push("orchestration_company_purpose_reservations");
+    if (supportBudgets.length) deleted.push("orchestration_company_purpose_budgets");
     // A planning source link is part of frozen canonical proposal material.
     // Erase the owned proposal; generic nullable-FK unlinking cannot rewrite it.
     const planning = await tx.execute(sql`delete from ${projectRoadmapProposals} where company_id=${companyId}::uuid and planning_manifest_id is not null returning id`);
@@ -169,9 +237,12 @@ export async function purgeCompanyContent(
           parents.add(ref.foreignTable);
           continue;
         }
-        // Unlink nullable intra-company references before ordering; no outside-company row is changed.
+        // Unlink nullable references only when the parent is retained/out of
+        // scope. Scoped parents are removed after this child, so mutating a
+        // live child reference would violate its native lifecycle guard.
         if (
           ref.columns.some((column) => !column.notNull) &&
+          !scopes.has(ref.foreignTable) &&
           getTableConfig(table).columns.some(
             (column) => column.name === "company_id",
           )
@@ -213,6 +284,6 @@ export async function purgeCompanyContent(
     await tx.execute(
       sql`update ${companies} set name='Deleted company',description=null,default_responsible_user_id=null,interaction_resolver_governance='{}'::jsonb,feedback_data_sharing_enabled=false,feedback_data_sharing_consent_at=null,feedback_data_sharing_consent_by_user_id=null,feedback_data_sharing_terms_version=null,status='archived',pause_reason='company_deleted',updated_at=now() where id=${companyId}::uuid`,
     );
-    return { tables: [...new Set(deleted)].sort(), companyTombstoneRetained: true };
+    return { tables: [...new Set(deleted)].sort(), companyTombstoneRetained: true, ...(platformModelFunding ? { platformModelFunding } : {}) };
   });
 }

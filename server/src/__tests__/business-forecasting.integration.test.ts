@@ -31,8 +31,11 @@ import {eraseExpiredAnalyticalLineage} from "../services/analytical-retention.js
 import {purgeCompanyContent} from "../services/saas/company-purge.js";
 import {metricDefinition,analyticalPurpose} from "./helpers/business-metric-fixture.js";
 import {getEmbeddedPostgresTestSupport,startEmbeddedPostgresTestDatabase} from "./helpers/embedded-postgres.js";
+import { createCanonicalHumanProject, seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
+import type { AuthorizationActor } from "../services/authorization.js";
+import { initializeRunIdentity } from "../services/run-identity.js";
 const support=await getEmbeddedPostgresTestSupport(),suite=support.supported?describe:describe.skip;
-const actor={type:"board" as const,source:"local_implicit" as const};
+let actor:AuthorizationActor;
 const flags={analytical_lineage_v8:true,business_metrics_v8:true,business_forecasting_v8:true,forecast_provider_statsforecast_v8:false,scenario_planning_v8:true,decision_intelligence_v8:true,enableDecisions:true,ai_use_cases_v7:true,governance_evidence_v7:true};
 const DAY=86_400_000;
 suite("Governed native business forecasts on migrated PostgreSQL",()=>{
@@ -42,9 +45,10 @@ suite("Governed native business forecasts on migrated PostgreSQL",()=>{
  afterAll(async()=>database?.cleanup());
  beforeEach(async()=>{
   nativeOwnerUserId=null;
-  await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental(flags);companyId=randomUUID();otherId=randomUUID();projectId=randomUUID();
+  await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental(flags);companyId=randomUUID();otherId=randomUUID();
   await db.insert(companies).values([{id:companyId,name:"Native forecasting test",issuePrefix:randomUUID()},{id:otherId,name:"Foreign tenant",issuePrefix:randomUUID()}]);
-  await db.insert(projects).values({id:projectId,companyId,name:"Synthetic retained historical fixture",createdAt:new Date(Date.now()-20*DAY)});
+  actor=await seedCurrentHumanSourceActor(db,[companyId,otherId]);
+  projectId=(await createCanonicalHumanProject(db,companyId,actor,"Synthetic retained historical fixture")).id;
   const policy=analyticalPurpose();policy.analyticalPurpose!.capabilities=["metrics","forecast","scenario","decision"];policyId=(await aiGovernanceService(db).obligation(actor,companyId,policy)).id;
  });
  const service=()=>businessForecastService(db);
@@ -52,7 +56,11 @@ suite("Governed native business forecasts on migrated PostgreSQL",()=>{
   const agentId=randomUUID(),issueId=randomUUID(),runId=randomUUID();
   await db.insert(agents).values({id:agentId,companyId,name:"Native proposer",role:"engineer",status:"active",adapterType:"codex_local"});
   await db.insert(issues).values({id:issueId,companyId,projectId,title:"Separate canonical decision origin",status:"todo",responsibleUserId:"local-board"});
-  await db.insert(heartbeatRuns).values({id:runId,companyId,agentId,status:"running",responsibleUserId:"local-board",contextSnapshot:{issueId}});
+  await db.insert(companyMemberships).values({companyId,principalType:"agent",principalId:agentId,status:"active",membershipRole:"member"});
+  await db.update(issues).set({status:"in_progress",assigneeAgentId:agentId}).where(eq(issues.id,issueId));
+  const [run]=await db.insert(heartbeatRuns).values({id:runId,companyId,agentId,nativeIssueId:issueId,runtimeMode:"native",invocationSource:"assignment",triggerDetail:"system",status:"running",responsibleUserId:actor.userId,contextSnapshot:{issueId}}).returning();
+  await db.update(issues).set({executionRunId:run!.id}).where(eq(issues.id,issueId));
+  await initializeRunIdentity(db,{companyId,runId,issueId,responsibleUserId:actor.userId!,cause:"instruction"});
   return decisionService(db,{wakeOriginAgent:async()=>{}}).create({companyId,actor,agentId,runId,title:"Consider retained conditional evidence?",body:"Native human choice remains separate",options:[{id:"proceed",label:"Proceed",effects:[]},{id:"defer",label:"Defer",effects:[]}]});
  }
  function decisionDefinition(source:DecisionEvidenceReference) {
@@ -77,7 +85,7 @@ suite("Governed native business forecasts on migrated PostgreSQL",()=>{
   for(let index=0;index<values.length;index++) {
    const from=new Date(start.getTime()+index*DAY),until=new Date(from.getTime()+DAY),observedAt=until,expiresAt=new Date(Date.now()+20*DAY),id=randomUUID(),manifestId=randomUUID(),inputHash=nativeSha256({index,value:values[index]});
    const ownIds=Array.from({length:values[index]},()=>randomUUID());sourceIds.push(...ownIds);
-   if(ownIds.length) await db.insert(issues).values(ownIds.map(id=>({id,companyId,projectId,title:"Fixture source prose must not be copied",status:"done",createdAt:new Date(from.getTime()+12*60*60*1000),updatedAt:new Date(from.getTime()+12*60*60*1000)})));
+   if(ownIds.length) await db.insert(issues).values(ownIds.map(id=>({id,companyId,projectId,title:"Fixture source prose must not be copied",status:"done",responsibleUserId:actor.userId,createdAt:new Date(from.getTime()+12*60*60*1000),updatedAt:new Date(from.getTime()+12*60*60*1000)})));
    await db.insert(analyticalLineageManifests).values({id:manifestId,companyId,analysisType:"business_metric",analysisRef:id,engineVersion:"aw-native-metric-v1",inputHash,definitionHash,requestedBy:"local-board",sourceWatermark:observedAt.toISOString(),sourceCount:ownIds.length,parameters:{syntheticFixture:true},createdAt:observedAt,expiresAt});
    await db.insert(analyticalLineageEdges).values([{companyId,manifestId,inputType:"metric_version",inputRef:versionId,inputHash:definitionHash,relationship:"definition"},
     {companyId,manifestId,inputType:"project",inputRef:projectId,inputHash:nativeSha256({id:projectId}),relationship:"source"},
@@ -109,7 +117,7 @@ suite("Governed native business forecasts on migrated PostgreSQL",()=>{
   const created=await service().create(companyId,actor,{key:`statistical_${randomUUID().replaceAll("-","")}`,definition:input});return {h,...created};
  }
  it.runIf(!!process.env.PAPERCLIP_STATSFORECAST_PYTHON)("uses the original no-store HTTP company and account boundary for optional profile metadata",async()=>{
-  const app=(source:"local_implicit"|"session"="local_implicit")=>{const api=express();api.use(express.json());api.use((req,_res,next)=>{req.actor={type:"board",source,userId:"local-board",companyIds:[companyId]};next();});api.use("/api",businessForecastRoutes(db));api.use(errorHandler);return api;};
+  const app=(source:"session"="session")=>{const api=express();api.use(express.json());api.use((req,_res,next)=>{req.actor={...actor,source,userId:"local-board",companyIds:[companyId]};next();});api.use("/api",businessForecastRoutes(db));api.use(errorHandler);return api;};
   const endpoint=`/api/companies/${companyId}/business-forecasts/provider-profile`;
   await request(app()).get(endpoint).expect(404);await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({forecast_provider_statsforecast_v8:true});
   await request(app()).get(`${endpoint}?expectedUserId=another-account`).expect(409);await request(app()).get(`${endpoint}?endpoint=https://example.test`).expect(400);

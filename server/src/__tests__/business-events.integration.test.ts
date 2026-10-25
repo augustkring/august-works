@@ -22,10 +22,12 @@ import { eraseBusinessEventObjectUnderMemory } from "../services/business-event-
 import { assertDatabaseRestoreAdmission, prepareRestoredQuarantine } from "../services/saas/quarantine.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { disableV8Rollout } from "./helpers/v8-rollout.js";
+import { createCanonicalHumanProject, seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
+import type { AuthorizationActor } from "../services/authorization.js";
 
 const support = await getEmbeddedPostgresTestSupport();
 const suite = support.supported ? describe : describe.skip;
-const actor = { type: "board" as const, source: "local_implicit" as const };
+let actor: AuthorizationActor;
 const timeWindow = { from: "2026-01-01T00:00:00Z", until: "2026-01-02T00:00:00Z", limit: 100 };
 suite("Native V8 business event projection on migrated PostgreSQL", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
@@ -43,20 +45,22 @@ suite("Native V8 business event projection on migrated PostgreSQL", () => {
   });
   afterAll(async () => { await database?.cleanup(); });
   beforeEach(async () => {
-    companyId = randomUUID(); otherCompanyId = randomUUID(); issueId = randomUUID(); projectId = randomUUID();
+    companyId = randomUUID(); otherCompanyId = randomUUID();
     await db.insert(companies).values([
       { id: companyId, name: "Event test", issuePrefix: randomUUID() },
       { id: otherCompanyId, name: "Other event test", issuePrefix: randomUUID() },
     ]);
-    await db.insert(projects).values({ id: projectId, companyId, name: "Project" });
-    await db.insert(issues).values({ id: issueId, companyId, projectId, title: "Issue" });
+    actor = await seedCurrentHumanSourceActor(db, [companyId, otherCompanyId]);
+    const project = await createCanonicalHumanProject(db, companyId, actor, "Project"); projectId = project.id;
+    const issue = await issueService(db).create(companyId, { projectId, title: "Issue", createdByUserId: actor.userId, responsibleUserId: actor.userId }, db, undefined, { manualInputActor: actor, privacyActor: actor, sourceAccessActor: actor });
+    issueId = issue.id;
     const policy = analyticalPurpose(); policy.citation = "Controlled process purpose";
     policy.analyticalPurpose!.purpose = "process_intelligence"; policy.analyticalPurpose!.capabilities = ["process"];
     policyId = (await aiGovernanceService(db).obligation(actor, companyId, policy)).id;
     window = { ...timeWindow, governanceObligationRefs: [policyId], retentionDays: 30 };
   });
   async function source(details: Record<string, unknown> = { status: "todo" }, overrides: Partial<typeof activityLog.$inferInsert> = {}) {
-    const [row] = await db.insert(activityLog).values({ companyId, actorType: "user", actorId: "private-identity", action: "issue.updated", entityType: "issue", entityId: issueId, createdAt: new Date("2026-01-01T12:00:00Z"), details, ...overrides }).returning();
+    const [row] = await db.insert(activityLog).values({ companyId, actorType: "user", actorId: actor.userId!, action: "issue.updated", entityType: "issue", entityId: issueId, createdAt: new Date("2026-01-01T12:00:00Z"), details, ...overrides }).returning();
     return row;
   }
   const service = () => businessEventService(db);

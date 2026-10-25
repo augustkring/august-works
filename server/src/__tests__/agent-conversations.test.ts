@@ -60,6 +60,7 @@ import {
   buildPaperclipWakePayload,
   heartbeatService,
 } from "../services/heartbeat.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 
 const support = await getEmbeddedPostgresTestSupport();
 (support.supported ? describe : describe.skip)(
@@ -69,6 +70,8 @@ const support = await getEmbeddedPostgresTestSupport();
     let db: ReturnType<typeof createDb>;
     let companyId: string;
     let agentId: string;
+    let localBoardSessionId: string;
+    const sessionIds = new Map<string, string>();
     beforeAll(async () => {
       database = await startEmbeddedPostgresTestDatabase(
         "paperclip-agent-conversations-",
@@ -93,7 +96,13 @@ const support = await getEmbeddedPostgresTestSupport();
           name: "Chats",
           issuePrefix: "CHAT",
           requireBoardApprovalForNewAgents: false,
+          defaultResponsibleUserId: "local-board",
         });
+      await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: "local-board",
+        status: "active", membershipRole: "owner" });
+      await ensureHumanRoleDefaultGrants(db, { companyId, principalId: "local-board", membershipRole: "owner", grantedByUserId: null });
+      localBoardSessionId = await seedNativePasskeySession(db, "local-board");
+      sessionIds.set("local-board", localBoardSessionId);
       await db
         .insert(agents)
         .values({
@@ -182,6 +191,7 @@ const support = await getEmbeddedPostgresTestSupport();
               type: "board",
               source: "session",
               userId,
+              sessionId: sessionIds.get(userId),
               companyIds: allowed ? [companyId] : [],
             };
             next();
@@ -195,6 +205,8 @@ const support = await getEmbeddedPostgresTestSupport();
       const colleague = randomUUID();
       const app = appFor(owner);
       for (const userId of [owner, colleague]) {
+        await db.insert(authUsers).values({ id: userId, name: "Conversation route user",
+          email: `${userId}@example.test`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
         await db
           .insert(companyMemberships)
           .values({
@@ -210,6 +222,7 @@ const support = await getEmbeddedPostgresTestSupport();
           membershipRole: "operator",
           grantedByUserId: null,
         });
+        sessionIds.set(userId, await seedNativePasskeySession(db, userId));
       }
       expect((await request(app).get(path)).body).toBeNull();
       expect(
@@ -738,7 +751,12 @@ const support = await getEmbeddedPostgresTestSupport();
           name: "Runtime chat",
           issuePrefix: queuedBeforeStop ? "RCHATQ" : "RCHAT",
           requireBoardApprovalForNewAgents: false,
+          defaultResponsibleUserId: "local-board",
         });
+      await db.insert(companyMemberships).values({ companyId: runtimeCompany, principalType: "user", principalId: "local-board",
+        status: "active", membershipRole: "owner" });
+      await ensureHumanRoleDefaultGrants(db, { companyId: runtimeCompany, principalId: "local-board",
+        membershipRole: "owner", grantedByUserId: null });
       const generations: unknown[] = [];
       const app = express();
       app.use(express.json());

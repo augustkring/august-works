@@ -1,6 +1,7 @@
 import {assertAnalyticalReader,analyticalPrincipalId,analyticalRequesterId} from "../analytical-reader.js";
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, is, isNull, sql } from "drizzle-orm";
+import { PgTransaction } from "drizzle-orm/pg-core";
 import { analyticalLineageEdges, analyticalLineageManifests, businessMetrics, businessMetricVersions, businessMetricPublications, businessMetricObservations, companyMemberships, issues, projects, type Db } from "@paperclipai/db";
 import { businessMetricDefinitionSchema, createBusinessMetricSchema, createBusinessMetricVersionSchema, publishBusinessMetricSchema, transitionBusinessMetricSchema, queryBusinessMetricSchema, v8FeatureEnabled, v7FeatureEnabled, type BusinessMetricDefinition, type BusinessMetricQuery, type BusinessMetricResult } from "@paperclipai/shared";
 import type { z } from "zod";
@@ -16,6 +17,14 @@ import { lockBusinessEventCompany } from "../business-event-privacy.js";
 import { calculateNativeMetric, NATIVE_METRIC_ENGINE_VERSION, type NativeMetricInput } from "./native-engine.js";
 import { assertAnalyticalSourcesNotErased } from "../analytical-privacy.js";
 import { currentMetricPurpose } from "./purpose.js";
+
+type CurrentMetricObservationLineage = {
+  result: BusinessMetricResult;
+  observation: typeof businessMetricObservations.$inferSelect;
+  manifest: typeof analyticalLineageManifests.$inferSelect;
+  edges: Array<typeof analyticalLineageEdges.$inferSelect>;
+  revision: typeof businessMetricVersions.$inferSelect;
+};
 
 export function businessMetricService(db: Db) {
   function queryTimeBudget(deadline: number) {
@@ -58,7 +67,8 @@ export function businessMetricService(db: Db) {
     }
     return currentMetricPurpose(tx, companyId, definition);
   }
-  async function inspectCurrentObservationWithLineage(companyId: string, actor: AuthorizationActor, observationId: string) {
+  async function inspectCurrentObservationWithLineage(companyId: string, actor: AuthorizationActor, observationId: string): Promise<CurrentMetricObservationLineage> {
+      if (!is(db, PgTransaction)) return db.transaction(async tx => businessMetricService(tx as unknown as Db).inspectCurrentObservationWithLineage(companyId, actor, observationId));
       await admit(db, companyId, actor);
       const [observation] = await db.select().from(businessMetricObservations).where(and(eq(businessMetricObservations.companyId, companyId), eq(businessMetricObservations.id, observationId))).for("share");
       if (!observation || observation.expiresAt.getTime() <= Date.now()) throw conflict("Metric observation is no longer current");
@@ -181,7 +191,7 @@ export function businessMetricService(db: Db) {
     },
     /** Internal capture variant returns the exact complete rows already read
      * and reauthorized by the original metric owner in this transaction. */
-    async inspectCurrentObservationWithLineage(companyId: string, actor: AuthorizationActor, observationId: string) {
+    async inspectCurrentObservationWithLineage(companyId: string, actor: AuthorizationActor, observationId: string): Promise<CurrentMetricObservationLineage> {
       return inspectCurrentObservationWithLineage(companyId, actor, observationId);
     },
     /** Reusable admission for pinned consumers. Call inside their native

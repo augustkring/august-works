@@ -13,6 +13,7 @@ import {
   runtimeHosts,
   runtimeOperations,
   supportSessions,
+  orchestrationCompanyPurposeReservations,
   type Db,
 } from "@paperclipai/db";
 import { companyDeletionRequestSchema } from "@paperclipai/shared";
@@ -351,6 +352,21 @@ export function saasOffboardingService(
           const [current] = await tx.select({ stage: companyDeletionOperations.stage, status: companyDeletionOperations.status })
             .from(companyDeletionOperations).where(eq(companyDeletionOperations.id, operation.id)).for("update");
           if (!current || current.stage !== "purge" || current.status === "completed") return false;
+          // Fence/cancel never-dispatched support reservations before touching
+          // external company objects. A dispatch with an unknown or pending
+          // provider outcome must settle at the original broker first.
+          await tx.update(orchestrationCompanyPurposeReservations)
+            .set({ status: "cancelled", completedAt: now })
+            .where(and(
+              eq(orchestrationCompanyPurposeReservations.companyId, operation.companyId),
+              eq(orchestrationCompanyPurposeReservations.status, "reserved"),
+            ));
+          const [supportOutcome] = await tx.select({ id: orchestrationCompanyPurposeReservations.id })
+            .from(orchestrationCompanyPurposeReservations).where(and(
+              eq(orchestrationCompanyPurposeReservations.companyId, operation.companyId),
+              inArray(orchestrationCompanyPurposeReservations.status, ["dispatched", "unknown"]),
+            )).limit(1);
+          if (supportOutcome) return false;
           const held = await tx.execute(sql`select 1 from customer_feedback_retention where company_id=${operation.companyId}::uuid
             and legal_hold and (hold_release_at is null or hold_release_at>clock_timestamp()) limit 1`);
           if (held.length) throw conflict("Feedback retention hold requires its original operator before company erasure");
@@ -365,6 +381,7 @@ export function saasOffboardingService(
         const databaseEvidence = await purgeCompanyContent(
           db,
           operation.companyId,
+          { operationId: operation.id },
         );
         await removeFeedbackImages?.(operation.companyId);
         const [pendingImage] = await db.select({ id: feedbackImageDeletions.id }).from(feedbackImageDeletions).where(and(
@@ -382,6 +399,9 @@ export function saasOffboardingService(
               ...operation.evidence,
               objects: objectEvidence,
               database: databaseEvidence,
+              ...(databaseEvidence.platformModelFunding
+                ? { platformModelFunding: databaseEvidence.platformModelFunding }
+                : {}),
               completedAt: now.toISOString(),
             },
           })

@@ -3711,6 +3711,13 @@
       "when": 1792896883175,
       "tag": "0531_regular_bug",
       "breakpoints": true
+    },
+    {
+      "idx": 532,
+      "version": "7",
+      "when": 1792915207915,
+      "tag": "0532_company_purpose_model_budgets",
+      "breakpoints": true
     }
   ]
 }

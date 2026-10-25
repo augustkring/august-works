@@ -245,6 +245,9 @@ suite("task project repository provisioning", () => {
     const agentId = randomUUID();
     const issueId = randomUUID();
     const responsibleUserId = randomUUID();
+    await db.insert(companies).values({ id: companyId, name: "Repo test", issuePrefix: `R${companyId.slice(0, 6)}`, defaultResponsibleUserId: responsibleUserId });
+    const sessionId = await seedNativeHuman(companyId, responsibleUserId);
+    const projectId = await createNativeProject(companyId, responsibleUserId, sessionId, "Multi-repo");
     const repositoryRows = [];
     for (let index = 0; index < count; index++) {
       const source = path.join(root, companyId, `source-${index}`);
@@ -256,9 +259,6 @@ suite("task project repository provisioning", () => {
       git("-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "seed");
       repositoryRows.push({ id: randomUUID(), companyId, projectId, name: `Repo ${index}`, sourceType: "git_repo", repoUrl: pathToFileURL(source).href, cwd: null, isPrimary: index === 0 });
     }
-    await db.insert(companies).values({ id: companyId, name: "Repo test", issuePrefix: `R${companyId.slice(0, 6)}`, defaultResponsibleUserId: responsibleUserId });
-    const sessionId = await seedNativeHuman(companyId, responsibleUserId);
-    const projectId = await createNativeProject(companyId, responsibleUserId, sessionId, "Multi-repo");
     await db.insert(projectWorkspaces).values(repositoryRows);
     await db.insert(agents).values({ id: agentId, companyId, name: "Test", role: "engineer", status: "idle", adapterType: "codex_local", adapterConfig: mockedCodexAdapterConfig, runtimeConfig: {}, permissions: {} });
     await db.insert(issues).values({ id: issueId, companyId, projectId, title: "Use project repositories", status: "todo", assigneeAgentId: agentId });

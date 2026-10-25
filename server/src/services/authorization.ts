@@ -642,6 +642,12 @@ function pipelineAutomationRoutineSourceCondition(company: SQL): SQL<boolean> {
     then ${payload}->'contextPack'->'taskSourceIssueIds' else '[]'::jsonb end`;
   const outputItems = sql`case when jsonb_typeof(${payload}->'contextPack'->'outputSummaries'->'items')='array'
     then ${payload}->'contextPack'->'outputSummaries'->'items' else '[]'::jsonb end`;
+  const producerRunIds = sql`case when jsonb_typeof(${payload}->'contextPack'->'case'->'producerRunIds')='array'
+    then ${payload}->'contextPack'->'case'->'producerRunIds' else '[]'::jsonb end`;
+  const producerUserIds = sql`case when jsonb_typeof(${payload}->'contextPack'->'case'->'producerUserIds')='array'
+    then ${payload}->'contextPack'->'case'->'producerUserIds' else '[]'::jsonb end`;
+  const capturedAt = sql`case when ${payload}->'contextPack'->'case'->>'capturedAt' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T.*(Z|[+-][0-9]{2}:[0-9]{2})$'
+    then (${payload}->'contextPack'->'case'->>'capturedAt')::timestamptz else 'epoch'::timestamptz end`;
   return sql<boolean>`(
     jsonb_typeof(${payload})='object'
     and jsonb_typeof(${payload}->'contextPack')='object'
@@ -658,6 +664,15 @@ function pipelineAutomationRoutineSourceCondition(company: SQL): SQL<boolean> {
     and jsonb_array_length(${outputItems})<=5
     and jsonb_array_length(${outputItems})=(select count(distinct output.item->>'id')
       from jsonb_array_elements(${outputItems}) output(item))
+    and ${payload}->'contextPack'->'case'->>'capturedAt' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T.*(Z|[+-][0-9]{2}:[0-9]{2})$'
+    and jsonb_typeof(${payload}->'contextPack'->'case'->'producerRunIds')='array'
+    and jsonb_array_length(${producerRunIds})<=256
+    and jsonb_array_length(${producerRunIds})=(select count(distinct source.id) from jsonb_array_elements_text(${producerRunIds}) source(id))
+    and jsonb_typeof(${payload}->'contextPack'->'case'->'producerUserIds')='array'
+    and jsonb_array_length(${producerUserIds})<=256
+    and jsonb_array_length(${producerUserIds})=(select count(distinct source.id) from jsonb_array_elements_text(${producerUserIds}) source(id))
+    and not exists(select 1 from jsonb_array_elements_text(${producerRunIds}) source(id)
+      where source.id !~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$')
     and not exists(select 1 from jsonb_array_elements_text(${taskIds}) source(id)
       where source.id !~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$')
     and exists(select 1 from pipeline_automation_executions e
@@ -678,14 +693,33 @@ function pipelineAutomationRoutineSourceCondition(company: SQL): SQL<boolean> {
         and ${payload}->'contextPack'->'case'->>'sourceUserId' is not distinct from c.created_by_user_id
         and ${payload}->'contextPack'->'case'->>'sourceAgentId' is not distinct from c.created_by_agent_id::text
         and ${payload}->'contextPack'->'case'->>'sourceRunId' is not distinct from c.origin_run_id::text
-        and ((c.created_by_user_id is not null and c.created_by_agent_id is null and c.origin_run_id is null
-              and exists(select 1 from "user" u join company_memberships m on m.principal_type='user'
-                and m.principal_id=u.id and m.company_id=c.company_id and m.status='active'
-                where u.id=c.created_by_user_id and u.email_verified=true))
+        and ((c.created_by_user_id is not null and c.created_by_agent_id is null and c.origin_run_id is null)
           or (c.created_by_user_id is null and c.created_by_agent_id is not null and c.origin_run_id is not null
               and exists(select 1 from heartbeat_runs producer_run
                 where producer_run.id=c.origin_run_id and producer_run.company_id=c.company_id
                   and producer_run.agent_id=c.created_by_agent_id)))
+        and (select count(distinct source.id) from jsonb_array_elements_text(${producerRunIds}) source(id))
+          =(select count(distinct expected.id) from (select c.origin_run_id::text as id where c.origin_run_id is not null
+              union all select ev.run_id::text from pipeline_case_events ev where ev.company_id=c.company_id and ev.case_id=c.id
+                and ev.type='updated' and ev.payload->>'materialChanged'='true' and ev.actor_type='agent'
+                and ev.run_id is not null and ev.created_at<=${capturedAt}) expected)
+        and not exists(select 1 from jsonb_array_elements_text(${producerRunIds}) source(id)
+          where not (source.id=c.origin_run_id::text or exists(select 1 from pipeline_case_events ev
+            where ev.company_id=c.company_id and ev.case_id=c.id and ev.type='updated'
+              and ev.payload->>'materialChanged'='true' and ev.actor_type='agent' and ev.run_id::text=source.id
+              and ev.created_at<=${capturedAt})))
+        and (select count(distinct source.id) from jsonb_array_elements_text(${producerUserIds}) source(id))
+          =(select count(distinct expected.id) from (select c.created_by_user_id as id where c.created_by_user_id is not null
+              union all select ev.actor_user_id from pipeline_case_events ev where ev.company_id=c.company_id and ev.case_id=c.id
+                and ev.type='updated' and ev.payload->>'materialChanged'='true' and ev.actor_type='user'
+                and ev.actor_user_id is not null and ev.created_at<=${capturedAt}) expected)
+        and not exists(select 1 from jsonb_array_elements_text(${producerUserIds}) source(id)
+          where not (source.id=c.created_by_user_id or exists(select 1 from pipeline_case_events ev
+            where ev.company_id=c.company_id and ev.case_id=c.id and ev.type='updated'
+              and ev.payload->>'materialChanged'='true' and ev.actor_type='user' and ev.actor_user_id=source.id
+              and ev.created_at<=${capturedAt})))
+        and not exists(select 1 from pipeline_case_events ev where ev.company_id=c.company_id and ev.case_id=c.id
+          and ev.type='updated' and ev.payload->>'materialChanged'='true' and ev.actor_type='system' and ev.created_at<=${capturedAt})
         and (select count(distinct source.id) from jsonb_array_elements_text(${taskIds}) source(id))
           =(select count(distinct link.issue_id) from pipeline_case_issue_links link
             where link.company_id=e.company_id and link.case_id=c.id and link.created_at<=e.created_at)
@@ -825,10 +859,12 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
           where n.kind='routine_run' and rr.id=n.id and rr.company_id=${company}
             and rr.trigger_payload->'automation'->>'automationExecutionId' is not null
             and source.id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
-        union all select 'run',case when rr.trigger_payload->'contextPack'->'case'->>'sourceRunId'
-            ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
-          then (rr.trigger_payload->'contextPack'->'case'->>'sourceRunId')::uuid end
+        union all select 'run',case when source.id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+            then source.id::uuid end
           from routine_runs rr join routines p on p.id=rr.routine_id and p.company_id=rr.company_id
+          cross join lateral jsonb_array_elements_text(case
+            when jsonb_typeof(rr.trigger_payload->'contextPack'->'case'->'producerRunIds')='array'
+              then rr.trigger_payload->'contextPack'->'case'->'producerRunIds' else '[]'::jsonb end) source(id)
           where n.kind='routine_run' and rr.id=n.id and rr.company_id=${company}
             and rr.trigger_payload->'automation'->>'automationExecutionId' is not null
             and ${pipelineAutomationRoutineSourceCondition(sql`${company}::uuid`)}
@@ -1323,12 +1359,20 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
           }
           const caseContext = contextPack && typeof contextPack === "object" && !Array.isArray(contextPack)
             ? (contextPack as Record<string, unknown>).case : null;
-          const sourceRunId = caseContext && typeof caseContext === "object" && !Array.isArray(caseContext)
-            ? (caseContext as Record<string, unknown>).sourceRunId : null;
-          if (readable && sourceRunId != null) {
+          const caseRecord = caseContext && typeof caseContext === "object" && !Array.isArray(caseContext)
+            ? caseContext as Record<string, unknown> : null;
+          const producerRunIds = caseRecord?.producerRunIds;
+          const producerUserIds = caseRecord?.producerUserIds;
+          if (!Array.isArray(producerRunIds) || producerRunIds.length > 256 || !Array.isArray(producerUserIds) ||
+            producerUserIds.length > 256) readable = false;
+          if (readable) for (const sourceRunId of producerRunIds as unknown[]) {
             if (typeof sourceRunId !== "string" || !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(sourceRunId) ||
-              !await canActorReadHeartbeatRunPrivacy(db, sourceActor!, { id: sourceRunId, companyId })) readable = false;
+              !await canActorReadHeartbeatRunPrivacy(db, sourceActor!, { id: sourceRunId, companyId })) {
+              readable = false; break;
+            }
           }
+          if (readable && (producerUserIds as unknown[]).some(sourceUserId => typeof sourceUserId !== "string" || sourceUserId.length === 0))
+            readable = false;
           if (readable) authorized.add(runId);
           continue;
         }
@@ -2028,6 +2072,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
         executionPolicy: issues.executionPolicy,
         originKind: issues.originKind,
         originId: issues.originId,
+        hiddenAt: issues.hiddenAt,
         visibility: issues.visibility,
         privacyRootIssueId: issues.privacyRootIssueId,
         privacyParentIssueId: issues.privacyParentIssueId,

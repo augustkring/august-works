@@ -1,8 +1,11 @@
 import { and, asc, eq, inArray, lte } from "drizzle-orm";
 import {
   issues,
+  companies,
   orchestrationPlans,
   orchestrationModelReservations,
+  orchestrationCompanyPurposeBudgets,
+  orchestrationCompanyPurposeReservations,
   agentConfigurationTests,
   type Db,
 } from "@paperclipai/db";
@@ -11,6 +14,9 @@ import {
   modelReservationQuoteSchema,
   type ModelTariffCeiling,
   type ModelReservationQuote,
+  companyPurposeFundingSchema,
+  companyPurposeReservationInputSchema,
+  type CompanyPurposeFunding,
 } from "@paperclipai/shared";
 import { z } from "zod";
 import type { AuthorizationActor } from "../authorization.js";
@@ -100,6 +106,43 @@ const requestSchema = z
   .strict();
 type Request = z.input<typeof requestSchema>;
 type Reservation = typeof orchestrationModelReservations.$inferSelect;
+type CompanyPurposeRequest = z.infer<typeof companyPurposeReservationInputSchema>;
+type CompanyPurposeReservation = typeof orchestrationCompanyPurposeReservations.$inferSelect;
+type CompanyPurposeDispatchClaim = {
+  reservation: CompanyPurposeReservation;
+  funding: Pick<CompanyPurposeFunding,
+    "funder" | "profileId" | "providerAccountId" | "credentialBindingHash" | "profileHash" | "tariff">;
+};
+type VerifiedLateCompanyPurposeOutcome = {
+  companyId: string;
+  reservationId: string;
+  inputHash: string;
+  authorityHash: string;
+  profileHash: string;
+  providerAccountId: string;
+  credentialBindingHash: string;
+  quoteHash: string;
+  status: "completed" | "failed";
+  providerResponseHash: string;
+  usage: { inputTokens: number; outputTokens: number };
+};
+
+function companyPurposeProfileHash(input: CompanyPurposeFunding) {
+  const { profileHash: _profileHash, ...immutableContract } = input;
+  return nativeSha256(immutableContract);
+}
+
+/** Company deletion must not cascade away in-flight or uncertain platform
+ * funding obligations. Budget/ledger FKs also hard-restrict deletion. */
+export async function assertCompanyPurposeFundingQuiescent(db: Db, companyId: string) {
+  const [row] = await db.select({ id: orchestrationCompanyPurposeReservations.id })
+    .from(orchestrationCompanyPurposeReservations)
+    .where(and(
+      eq(orchestrationCompanyPurposeReservations.companyId, companyId),
+      inArray(orchestrationCompanyPurposeReservations.status, ["reserved", "dispatched", "unknown"]),
+    )).limit(1);
+  if (row) throw conflict("Company offboarding is blocked while platform-funded model outcomes are unresolved");
+}
 /** Internal broker primitive, not an HTTP quote endpoint. The caller cannot
  * choose a tariff or mint a provider qualification. SDK dispatch must separately
  * consume a reservation and its current original principal/source authority. */
@@ -122,6 +165,29 @@ export function modelReservationService(
         workerAttemptId: string | null;
       },
     ): Promise<string>;
+    /** Private operator registry only. No customer-facing API supplies this
+     * funding contract; a missing profile means taskless support inference is
+     * unavailable. */
+    qualifiedCompanyPurposeFunding?(
+      input: { companyId: string; purpose: "first_party_support" },
+      now: Date,
+    ): CompanyPurposeFunding | null;
+    /** Original support caller resolves current readable source authority under
+     * this transaction. This server-held callback is required for taskless use. */
+    currentCompanyPurposeAuthority?(
+      tx: Db,
+      actor: AuthorizationActor,
+      input: CompanyPurposeRequest,
+    ): Promise<string>;
+    /** Trusted provider/account owner lookup for a late result to the exact
+     * acknowledged request. No request or response body is accepted here. */
+    reconcileCompanyPurposeOutcome?(
+      tx: Db,
+      input: {
+        reservation: CompanyPurposeReservation;
+        funding: typeof orchestrationCompanyPurposeBudgets.$inferSelect;
+      },
+    ): Promise<VerifiedLateCompanyPurposeOutcome | null>;
   },
 ) {
   async function authority(
@@ -232,7 +298,415 @@ export function modelReservationService(
       now,
     );
   }
+  function freshCompanyPurposeFunding(
+    input: CompanyPurposeRequest,
+    now: Date,
+  ) {
+    if (!options.qualifiedCompanyPurposeFunding) {
+      throw forbidden("Platform-funded support inference is not configured");
+    }
+    const raw = options.qualifiedCompanyPurposeFunding(
+      { companyId: input.companyId, purpose: "first_party_support" },
+      now,
+    );
+    if (!raw) throw forbidden("No current platform support funding profile is qualified");
+    const funding = companyPurposeFundingSchema.parse(raw);
+    if (
+      funding.companyId !== input.companyId ||
+      funding.purpose !== "first_party_support" ||
+      funding.funder !== "blentera_platform" ||
+      funding.profileHash !== companyPurposeProfileHash(funding) ||
+      funding.tariff.sourceSha !== options.sourceSha ||
+      Date.parse(funding.periodStartsAt) > now.getTime() ||
+      Date.parse(funding.periodEndsAt) <= now.getTime() ||
+      Date.parse(funding.periodEndsAt) - Date.parse(funding.periodStartsAt) >
+        366 * 24 * 60 * 60 * 1000
+    ) {
+      throw forbidden("The current platform support funding contract is invalid or expired");
+    }
+    const quote = quoteModelReservation(
+      {
+        tariff: funding.tariff,
+        sourceSha: options.sourceSha,
+        inputTokensUpperBound: input.inputTokensUpperBound,
+        maxOutputTokens: input.maxOutputTokens,
+      },
+      now,
+    );
+    if (quote.maximumMinor > funding.maxCostMinor) {
+      throw forbidden("The support call exceeds its platform-funded budget period");
+    }
+    return { funding, quote };
+  }
+  async function assertCompanyPurposeAuthority(
+    tx: Db,
+    actor: AuthorizationActor,
+    input: CompanyPurposeRequest,
+  ) {
+    if (!options.currentCompanyPurposeAuthority) {
+      throw forbidden("Current support source authority is unavailable");
+    }
+    const userId = v7HumanActorId(actor);
+    await assertV7Enabled(tx, "orchestration_v7");
+    const [company] = await tx.select({ id: companies.id, status: companies.status })
+      .from(companies).where(eq(companies.id, input.companyId)).for("share");
+    if (!company || company.status !== "active") {
+      throw forbidden("Company support is unavailable during offboarding");
+    }
+    await assertV7Authorization(tx, actor, input.companyId, "company_scope:read");
+    const authorityHash = await options.currentCompanyPurposeAuthority(tx, actor, input);
+    if (authorityHash !== input.authorityHash) {
+      throw conflict("Support source or principal authority changed");
+    }
+    return userId;
+  }
+  async function ensureCompanyPurposeBudget(
+    tx: Db,
+    funding: CompanyPurposeFunding,
+  ) {
+    await tx.insert(orchestrationCompanyPurposeBudgets).values({
+      companyId: funding.companyId,
+      purpose: funding.purpose,
+      funder: funding.funder,
+      profileId: funding.profileId,
+      profileHash: funding.profileHash,
+      providerAccountId: funding.providerAccountId,
+      credentialBindingHash: funding.credentialBindingHash,
+      periodKey: funding.periodKey,
+      periodStartsAt: new Date(funding.periodStartsAt),
+      periodEndsAt: new Date(funding.periodEndsAt),
+      provider: funding.tariff.provider,
+      model: funding.tariff.model,
+      sourceSha: funding.tariff.sourceSha,
+      qualificationHash: funding.tariff.qualificationHash,
+      tariffHash: nativeSha256(funding.tariff),
+      maxCostMinor: funding.maxCostMinor,
+      maxCalls: funding.maxCalls,
+    }).onConflictDoNothing({
+      target: [
+        orchestrationCompanyPurposeBudgets.companyId,
+        orchestrationCompanyPurposeBudgets.purpose,
+        orchestrationCompanyPurposeBudgets.profileId,
+        orchestrationCompanyPurposeBudgets.periodKey,
+      ],
+    });
+    const [budget] = await tx.select().from(orchestrationCompanyPurposeBudgets).where(and(
+      eq(orchestrationCompanyPurposeBudgets.companyId, funding.companyId),
+      eq(orchestrationCompanyPurposeBudgets.purpose, funding.purpose),
+      eq(orchestrationCompanyPurposeBudgets.profileId, funding.profileId),
+      eq(orchestrationCompanyPurposeBudgets.periodKey, funding.periodKey),
+    )).for("update");
+    if (!budget ||
+      budget.funder !== funding.funder || budget.profileHash !== funding.profileHash ||
+      budget.providerAccountId !== funding.providerAccountId ||
+      budget.credentialBindingHash !== funding.credentialBindingHash ||
+      budget.periodStartsAt.getTime() !== Date.parse(funding.periodStartsAt) ||
+      budget.periodEndsAt.getTime() !== Date.parse(funding.periodEndsAt) ||
+      budget.provider !== funding.tariff.provider || budget.model !== funding.tariff.model ||
+      budget.sourceSha !== funding.tariff.sourceSha ||
+      budget.qualificationHash !== funding.tariff.qualificationHash ||
+      budget.tariffHash !== nativeSha256(funding.tariff) ||
+      budget.maxCostMinor !== funding.maxCostMinor || budget.maxCalls !== funding.maxCalls) {
+      throw conflict("The platform support funding period changed after reservations were recorded");
+    }
+    return budget;
+  }
   return {
+    async reserveCompanyPurpose(
+      actor: AuthorizationActor,
+      raw: CompanyPurposeRequest,
+      now = new Date(),
+    ): Promise<CompanyPurposeReservation> {
+      const input = companyPurposeReservationInputSchema.parse(raw);
+      return withV7ActivityTransaction(db, async (tx, publications) => {
+        await lockAnalyticalCompany(tx, input.companyId);
+        await lockMemoryPrivacy(tx, input.companyId);
+        const userId = await assertCompanyPurposeAuthority(tx, actor, input);
+        const { funding, quote } = freshCompanyPurposeFunding(input, now);
+        const budget = await ensureCompanyPurposeBudget(tx, funding);
+        const requestHash = nativeSha256({
+          purpose: "first_party_support",
+          input,
+          principalUserId: userId,
+          funding: funding.profileHash,
+          quote,
+        });
+        const [existing] = await tx.select().from(orchestrationCompanyPurposeReservations).where(and(
+          eq(orchestrationCompanyPurposeReservations.companyId, input.companyId),
+          eq(orchestrationCompanyPurposeReservations.idempotencyKey, input.idempotencyKey),
+        ));
+        if (existing) {
+          if (existing.requestHash !== requestHash) {
+            throw conflict("Support reservation key belongs to different immutable inputs");
+          }
+          return existing;
+        }
+        if (budget.reservedMinor + quote.maximumMinor > budget.maxCostMinor ||
+          budget.reservedCalls + 1 > budget.maxCalls) {
+          throw forbidden("The platform support budget period is exhausted");
+        }
+        const expiresAt = new Date(Math.min(
+          Date.parse(quote.expiresAt),
+          now.getTime() + 300_000,
+          funding.periodEndsAt ? Date.parse(funding.periodEndsAt) : Infinity,
+        ));
+        if (expiresAt <= now) throw forbidden("The platform support reservation period has expired");
+        const [reservation] = await tx.insert(orchestrationCompanyPurposeReservations).values({
+          companyId: input.companyId,
+          budgetId: budget.id,
+          principalUserId: userId,
+          idempotencyKey: input.idempotencyKey,
+          requestHash,
+          inputHash: input.inputHash,
+          authorityHash: input.authorityHash,
+          quote,
+          maximumMinor: quote.maximumMinor,
+          expiresAt,
+          createdAt: now,
+        }).returning();
+        await logActivity(tx, {
+          companyId: input.companyId,
+          actorType: "user",
+          actorId: userId,
+          action: "orchestration.company_purpose_model_reserved",
+          entityType: "company",
+          entityId: input.companyId,
+          details: {
+            reservationId: reservation!.id,
+            purpose: "first_party_support",
+            funder: "blentera_platform",
+            maximumMinor: quote.maximumMinor,
+            currency: quote.currency,
+            tariffHash: quote.tariffHash,
+          },
+        }, publications);
+        await assertCompanyPurposeAuthority(tx, actor, input);
+        return reservation!;
+      });
+    },
+    async claimCompanyPurposeForDispatch(
+      actor: AuthorizationActor,
+      companyId: string,
+      id: string,
+      now = new Date(),
+    ): Promise<CompanyPurposeDispatchClaim> {
+      return withV7ActivityTransaction(db, async (tx, publications) => {
+        await lockAnalyticalCompany(tx, companyId);
+        await lockMemoryPrivacy(tx, companyId);
+        const [initial] = await tx.select().from(orchestrationCompanyPurposeReservations).where(and(
+          eq(orchestrationCompanyPurposeReservations.companyId, companyId),
+          eq(orchestrationCompanyPurposeReservations.id, id),
+        ));
+        if (!initial) throw notFound("Company-purpose model reservation not found");
+        const input: CompanyPurposeRequest = {
+          companyId,
+          idempotencyKey: initial.idempotencyKey,
+          inputHash: initial.inputHash,
+          authorityHash: initial.authorityHash,
+          inputTokensUpperBound: initial.quote.inputTokensUpperBound,
+          maxOutputTokens: initial.quote.maxOutputTokens,
+        };
+        const userId = await assertCompanyPurposeAuthority(tx, actor, input);
+        if (initial.principalUserId !== userId) throw forbidden("Original support principal required");
+        const { funding, quote } = freshCompanyPurposeFunding(input, now);
+        const budget = await ensureCompanyPurposeBudget(tx, funding);
+        if (budget.id !== initial.budgetId) throw conflict("The support funding profile changed before dispatch");
+        const [record] = await tx.select().from(orchestrationCompanyPurposeReservations).where(eq(
+          orchestrationCompanyPurposeReservations.id,
+          initial.id,
+        )).for("update");
+        if (!record || record.status !== "reserved" || record.expiresAt <= now) {
+          throw conflict("This support reservation cannot dispatch again");
+        }
+        if (nativeSha256(quote) !== nativeSha256(record.quote)) {
+          throw conflict("Platform funding tariff or profile changed before dispatch");
+        }
+        const [dispatched] = await tx.update(orchestrationCompanyPurposeReservations)
+          .set({ status: "dispatched", dispatchedAt: now })
+          .where(eq(orchestrationCompanyPurposeReservations.id, id))
+          .returning();
+        await logActivity(tx, {
+          companyId,
+          actorType: "user",
+          actorId: userId,
+          action: "orchestration.company_purpose_model_dispatch_claimed",
+          entityType: "company",
+          entityId: companyId,
+          details: { reservationId: id, purpose: "first_party_support", maximumMinor: record.maximumMinor },
+        }, publications);
+        await assertCompanyPurposeAuthority(tx, actor, input);
+        return {
+          reservation: dispatched!,
+          funding: {
+            funder: funding.funder,
+            profileId: funding.profileId,
+            providerAccountId: funding.providerAccountId,
+            credentialBindingHash: funding.credentialBindingHash,
+            profileHash: funding.profileHash,
+            tariff: funding.tariff,
+          },
+        };
+      });
+    },
+    async recordCompanyPurposeOutcome(
+      companyId: string,
+      id: string,
+      raw: {
+        status: "completed" | "failed" | "unknown";
+        providerResponseHash: string | null;
+        usage: { inputTokens: number; outputTokens: number } | null;
+      },
+      now = new Date(),
+    ): Promise<CompanyPurposeReservation> {
+      const input = z.object({
+        status: z.enum(["completed", "failed", "unknown"]),
+        providerResponseHash: z.string().regex(/^[a-f0-9]{64}$/).nullable(),
+        usage: z.object({ inputTokens: z.number().int().nonnegative(), outputTokens: z.number().int().nonnegative() }).strict().nullable(),
+      }).strict().parse(raw);
+      return withV7ActivityTransaction(db, async (tx, publications) => {
+        const [record] = await tx.select().from(orchestrationCompanyPurposeReservations).where(and(
+          eq(orchestrationCompanyPurposeReservations.companyId, companyId),
+          eq(orchestrationCompanyPurposeReservations.id, id),
+        )).for("update");
+        if (!record || record.status !== "dispatched") {
+          throw conflict("Only an unreconciled support dispatch may record an outcome");
+        }
+        const overQuote = input.usage && (
+          input.usage.inputTokens > record.quote.inputTokensUpperBound ||
+          input.usage.outputTokens > record.quote.maxOutputTokens
+        );
+        const [updated] = await tx.update(orchestrationCompanyPurposeReservations).set({
+          ...input,
+          status: overQuote ? "unknown" : input.status,
+          completedAt: now,
+        }).where(eq(orchestrationCompanyPurposeReservations.id, id)).returning();
+        await logActivity(tx, {
+          companyId,
+          actorType: "system",
+          actorId: "model-broker",
+          action: "orchestration.company_purpose_model_outcome_recorded",
+          entityType: "company",
+          entityId: companyId,
+          details: {
+            reservationId: id,
+            status: updated!.status,
+            pricingEnvelopeExceeded: Boolean(overQuote),
+            maximumMinor: record.maximumMinor,
+            debitRetained: true,
+          },
+        }, publications);
+        return updated!;
+      });
+    },
+    /** Reconcile an unknown dispatch only from the original trusted provider
+     * account. This never retries the model call and never accepts a supplied
+     * usage receipt or caller-created waiver. */
+    async reconcileUnknownCompanyPurposeOutcome(
+      companyId: string,
+      id: string,
+      now = new Date(),
+    ): Promise<CompanyPurposeReservation> {
+      return withV7ActivityTransaction(db, async (tx, publications) => {
+        const [record] = await tx.select().from(orchestrationCompanyPurposeReservations).where(and(
+          eq(orchestrationCompanyPurposeReservations.companyId, companyId),
+          eq(orchestrationCompanyPurposeReservations.id, id),
+        )).for("update");
+        if (!record) throw notFound("Company-purpose model reservation not found");
+        if (record.status === "completed" || record.status === "failed") return record;
+        if (record.status !== "unknown" || record.providerResponseHash !== null || record.usage !== null) {
+          throw conflict("This unknown support outcome has no safely reconcilable original dispatch proof");
+        }
+        if (!options.reconcileCompanyPurposeOutcome) {
+          throw conflict("The original support provider account cannot prove this dispatch outcome");
+        }
+        const [funding] = await tx.select().from(orchestrationCompanyPurposeBudgets).where(and(
+          eq(orchestrationCompanyPurposeBudgets.companyId, companyId),
+          eq(orchestrationCompanyPurposeBudgets.id, record.budgetId),
+        )).for("share");
+        if (!funding) throw conflict("The original support funding receipt is unavailable");
+        const verified = await options.reconcileCompanyPurposeOutcome(tx, { reservation: record, funding });
+        const expected = {
+          companyId,
+          reservationId: record.id,
+          inputHash: record.inputHash,
+          authorityHash: record.authorityHash,
+          profileHash: funding.profileHash,
+          providerAccountId: funding.providerAccountId,
+          credentialBindingHash: funding.credentialBindingHash,
+          quoteHash: nativeSha256(record.quote),
+        };
+        if (!verified || Object.entries(expected).some(([key, value]) => verified[key as keyof typeof verified] !== value)) {
+          throw conflict("The original provider account has no matching late outcome proof");
+        }
+        const proof = z.object({
+          status: z.enum(["completed", "failed"]),
+          providerResponseHash: z.string().regex(/^[a-f0-9]{64}$/),
+          usage: z.object({ inputTokens: z.number().int().nonnegative(), outputTokens: z.number().int().nonnegative() }).strict(),
+        }).strict().parse({
+          status: verified.status,
+          providerResponseHash: verified.providerResponseHash,
+          usage: verified.usage,
+        });
+        if (proof.usage.inputTokens > record.quote.inputTokensUpperBound || proof.usage.outputTokens > record.quote.maxOutputTokens) {
+          throw conflict("The late provider outcome exceeded its immutable token envelope");
+        }
+        const [updated] = await tx.update(orchestrationCompanyPurposeReservations).set({
+          status: proof.status,
+          providerResponseHash: proof.providerResponseHash,
+          usage: proof.usage,
+          completedAt: now,
+        }).where(eq(orchestrationCompanyPurposeReservations.id, id)).returning();
+        await logActivity(tx, {
+          companyId,
+          actorType: "system",
+          actorId: "model-broker",
+          action: "orchestration.company_purpose_unknown_outcome_reconciled",
+          entityType: "company",
+          entityId: companyId,
+          details: { reservationId: id, status: proof.status, debitRetained: true },
+        }, publications);
+        return updated!;
+      });
+    },
+    /** Final server-side gate before a Support Assistant returns model-derived
+     * content. The response body stays outside the financial ledger. */
+    async assertCompanyPurposeResponseReturn(
+      actor: AuthorizationActor,
+      companyId: string,
+      id: string,
+      now = new Date(),
+    ): Promise<void> {
+      await withV7ActivityTransaction(db, async (tx) => {
+        await lockAnalyticalCompany(tx, companyId);
+        await lockMemoryPrivacy(tx, companyId);
+        const [initial] = await tx.select().from(orchestrationCompanyPurposeReservations).where(and(
+          eq(orchestrationCompanyPurposeReservations.companyId, companyId),
+          eq(orchestrationCompanyPurposeReservations.id, id),
+        ));
+        if (!initial) throw notFound("Company-purpose model reservation not found");
+        const input: CompanyPurposeRequest = {
+          companyId,
+          idempotencyKey: initial.idempotencyKey,
+          inputHash: initial.inputHash,
+          authorityHash: initial.authorityHash,
+          inputTokensUpperBound: initial.quote.inputTokensUpperBound,
+          maxOutputTokens: initial.quote.maxOutputTokens,
+        };
+        const userId = await assertCompanyPurposeAuthority(tx, actor, input);
+        if (initial.principalUserId !== userId) throw forbidden("Original support principal required");
+        const { funding, quote } = freshCompanyPurposeFunding(input, now);
+        const budget = await ensureCompanyPurposeBudget(tx, funding);
+        if (budget.id !== initial.budgetId) throw conflict("The support funding profile changed before content return");
+        const [record] = await tx.select().from(orchestrationCompanyPurposeReservations).where(eq(
+          orchestrationCompanyPurposeReservations.id,
+          initial.id,
+        )).for("update");
+        if (!record || record.status !== "completed" || nativeSha256(quote) !== nativeSha256(record.quote)) {
+          throw conflict("Current completed support funding is required before content return");
+        }
+        await assertCompanyPurposeAuthority(tx, actor, input);
+      });
+    },
     async reserve(actor: AuthorizationActor, raw: Request, now = new Date()) {
       const input = requestSchema.parse(raw),
         quote = await freshQuote(input, now);
@@ -518,6 +992,26 @@ export async function expireModelReservations(db: Db, now = new Date(), limit = 
           await logActivity(tx, { companyId: row.companyId, actorType: "system", actorId: "model-broker",
             action: "orchestration.model_reservation_expired", entityType: "orchestration_plan", entityId: row.planId,
             details: { reservationId: row.id, status, maximumMinor: row.maximumMinor, debitRetained: true } }, publications);
+        }
+        const companyPurposeRows = await tx.select().from(orchestrationCompanyPurposeReservations).where(and(
+          inArray(orchestrationCompanyPurposeReservations.status, ["reserved", "dispatched"]),
+          lte(orchestrationCompanyPurposeReservations.expiresAt, now),
+        )).orderBy(asc(orchestrationCompanyPurposeReservations.expiresAt), asc(orchestrationCompanyPurposeReservations.id))
+          .limit(Math.max(1, Math.min(100, Math.trunc(limit) || 20))).for("update", { skipLocked: true });
+        for (const row of companyPurposeRows) {
+          const status = row.status === "reserved" ? "cancelled" : "unknown";
+          await tx.update(orchestrationCompanyPurposeReservations).set({ status, completedAt: now })
+            .where(eq(orchestrationCompanyPurposeReservations.id, row.id));
+          if (status === "cancelled") cancelled++; else unknown++;
+          await logActivity(tx, {
+            companyId: row.companyId,
+            actorType: "system",
+            actorId: "model-broker",
+            action: "orchestration.company_purpose_model_reservation_expired",
+            entityType: "company",
+            entityId: row.companyId,
+            details: { reservationId: row.id, purpose: "first_party_support", status, maximumMinor: row.maximumMinor, debitRetained: true },
+          }, publications);
         }
         return { cancelled, unknown };
       });

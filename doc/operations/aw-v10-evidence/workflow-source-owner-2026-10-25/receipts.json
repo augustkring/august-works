@@ -875,6 +875,146 @@
       },
       "summary": [],
       "sourceCommit": "9239f756eb11f27e33a8d77611444e2c441d3117"
+    },
+    {
+      "name": "analytical-retention-batch-typecheck-final4",
+      "exitCode": 0,
+      "exitSidecar": "analytical-retention-batch-typecheck-final4.exit",
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "9d5b9c8899382bc0db28d680219e01c8c36c3972"
+    },
+    {
+      "name": "analytical-retention-batch-full56-final",
+      "exitCode": 0,
+      "exitSidecar": "analytical-retention-batch-full56-final.exit",
+      "rawSha256": "26ccd3eae939ac011cca2c45eb6809a586ea28a17b56efe60f4e1434c150d044",
+      "sanitizedSha256": "1b33616c0036a64ad17587a232146d62ab4fb2fa5c66ec71b7ec2095e487b07f",
+      "archiveSha256": "13f7382d4e4ed1d666c92bd946ee07bae8e433f57ea64c213ceba79a8836af9f",
+      "redactions": {
+        "ansi": 18,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  56 passed (56)",
+        "Duration  222.60s (transform 10.38s, setup 69ms, import 14.33s, tests 208.09s, environment 0ms)"
+      ],
+      "sourceCommit": "9d5b9c8899382bc0db28d680219e01c8c36c3972"
+    },
+    {
+      "name": "current-human-source-57-final",
+      "exitCode": 0,
+      "exitSidecar": "current-human-source-57-final.exit",
+      "rawSha256": "cf00968bb03cde4a569bd5f9fea1f464d0acc562f4ff2b95ebbf1b92315f0284",
+      "sanitizedSha256": "cf00968bb03cde4a569bd5f9fea1f464d0acc562f4ff2b95ebbf1b92315f0284",
+      "archiveSha256": "3a359c0ff295d258d740b159e6ea10330224cfa2151a2f5105c779ed73d96aa6",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  4 passed (4)",
+        "Tests  57 passed (57)",
+        "Duration  175.32s (transform 12.67s, setup 243ms, import 27.61s, tests 146.95s, environment 0ms)"
+      ],
+      "sourceCommit": "9d5b9c8899382bc0db28d680219e01c8c36c3972"
+    },
+    {
+      "name": "pipeline-final34",
+      "exitCode": null,
+      "exitSidecar": null,
+      "rawSha256": "11842add1ba53fe18189028babd2018bc3f0179cefa30206b650699d00da2703",
+      "sanitizedSha256": "11842add1ba53fe18189028babd2018bc3f0179cefa30206b650699d00da2703",
+      "archiveSha256": "e061a36f8a64645811a828e2e72ff2c5b41df9a8646b86db2e036f53fb79f6a2",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  34 passed (34)",
+        "Duration  27.73s (transform 11.67s, setup 83ms, import 16.04s, tests 11.48s, environment 0ms)"
+      ],
+      "sourceCommit": "9d5b9c8899382bc0db28d680219e01c8c36c3972"
+    },
+    {
+      "name": "pipeline-final-tsc",
+      "exitCode": null,
+      "exitSidecar": null,
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "9d5b9c8899382bc0db28d680219e01c8c36c3972"
+    },
+    {
+      "name": "native-source-project-fixtures-attempt1",
+      "exitCode": 1,
+      "exitSidecar": "native-source-project-fixtures-attempt1.exit",
+      "rawSha256": "33dd639bce4029c72d36e44177a5adf380bfbbdc78b85655a5c9ec8faba721d0",
+      "sanitizedSha256": "93296210cbfdf66d5e488751e8a97423dcaa08b5e85c52f79009321dd6ea423b",
+      "archiveSha256": "a5cfdb260152fe37d0bbd058df59cf774a280a6478717742a3d64025c5f2391d",
+      "redactions": {
+        "ansi": 270,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 2 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed | 2 passed (3)",
+        "Tests  2 failed | 20 passed (22)",
+        "Duration  66.41s (transform 11.75s, setup 177ms, import 23.52s, tests 42.34s, environment 0ms)"
+      ],
+      "sourceCommit": "9d5b9c8899382bc0db28d680219e01c8c36c3972"
+    },
+    {
+      "name": "native-source-project-fixtures-attempt2",
+      "exitCode": 0,
+      "exitSidecar": "native-source-project-fixtures-attempt2.exit",
+      "rawSha256": "fe38f0ce972e6b4a12eba797060c9aea35b3a86edfc7a341d9c50c33436a44c9",
+      "sanitizedSha256": "a037b36da91f1fb45bc2e9f9acb181f39b28bac65c2c9c8a8e7bb0ca4d569046",
+      "archiveSha256": "4197d0eb8c61aaaee6c8128f97e2561db3d46c1353464940f9b37b1e2389b2f6",
+      "redactions": {
+        "ansi": 294,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  3 passed (3)",
+        "Tests  22 passed (22)",
+        "Duration  71.73s (transform 11.04s, setup 199ms, import 24.07s, tests 47.03s, environment 0ms)"
+      ],
+      "sourceCommit": "9d5b9c8899382bc0db28d680219e01c8c36c3972"
     }
   ],
   "updates": [
@@ -980,6 +1120,19 @@
       "logs": [
         "learning-artifact-isolated-worker-reduced-heap",
         "v10-typecheck-checkpoint-99b7"
+      ]
+    },
+    {
+      "sourceCommit": "9d5b9c8899382bc0db28d680219e01c8c36c3972",
+      "meaning": "Scoped final owner suites after canonical Human/source repair; not a final stable-source whole-workspace gate.",
+      "logs": [
+        "analytical-retention-batch-typecheck-final4",
+        "analytical-retention-batch-full56-final",
+        "current-human-source-57-final",
+        "pipeline-final34",
+        "pipeline-final-tsc",
+        "native-source-project-fixtures-attempt1",
+        "native-source-project-fixtures-attempt2"
       ]
     }
   ],

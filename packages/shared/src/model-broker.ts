@@ -31,5 +31,39 @@ export const modelReservationQuoteSchema = z
     expiresAt: z.iso.datetime(),
   })
   .strict();
+/** Server-operator supplied funding contract for taskless, first-party support
+ * assistance. This is never accepted from a customer request. */
+export const companyPurposeFundingSchema = z.object({
+  companyId: z.string().uuid(),
+  purpose: z.literal("first_party_support"),
+  funder: z.literal("blentera_platform"),
+  profileId: z.string().regex(/^[a-zA-Z0-9._:-]{1,120}$/),
+  profileHash: hash,
+  providerAccountId: z.string().regex(/^[a-zA-Z0-9._:-]{1,160}$/),
+  credentialBindingHash: hash,
+  periodKey: z.string().regex(/^[a-zA-Z0-9._:-]{1,120}$/),
+  periodStartsAt: z.iso.datetime(),
+  periodEndsAt: z.iso.datetime(),
+  maxCostMinor: z.number().int().min(1).max(1_000_000),
+  maxCalls: z.number().int().min(1).max(10_000),
+  tariff: modelTariffCeilingSchema,
+}).strict().superRefine((value, ctx) => {
+  const start = Date.parse(value.periodStartsAt), end = Date.parse(value.periodEndsAt);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end) {
+    ctx.addIssue({ code: "custom", message: "Invalid platform funding period" });
+  }
+  if (value.tariff.currency !== "USD") {
+    ctx.addIssue({ code: "custom", message: "Platform support funding requires USD tariff" });
+  }
+});
+export const companyPurposeReservationInputSchema = z.object({
+  companyId: z.string().uuid(),
+  idempotencyKey: z.string().min(1).max(200),
+  inputHash: hash,
+  authorityHash: hash,
+  inputTokensUpperBound: z.number().int().min(1).max(2_000_000),
+  maxOutputTokens: z.number().int().min(1).max(65_536),
+}).strict();
 export type ModelTariffCeiling = z.infer<typeof modelTariffCeilingSchema>;
 export type ModelReservationQuote = z.infer<typeof modelReservationQuoteSchema>;
+export type CompanyPurposeFunding = z.infer<typeof companyPurposeFundingSchema>;

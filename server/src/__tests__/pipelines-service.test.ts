@@ -1796,6 +1796,14 @@ describeEmbeddedPostgres("pipelineService", () => {
     expect(await canActorReadTypedTaskSourcePrivacy(db, outsiderActor, {
       sourceKind: "routine_run", id: routineRun!.id, companyId: company.id,
     })).toBe(false);
+    await db.update(issues).set({ visibility: "open" }).where(eq(issues.id, sourceIssueId));
+    expect(await canActorReadTypedTaskSourcePrivacy(db, outsiderActor, {
+      sourceKind: "routine_run", id: routineRun!.id, companyId: company.id,
+    })).toBe(true);
+    await db.update(issues).set({ visibility: "private" }).where(eq(issues.id, sourceIssueId));
+    expect(await canActorReadTypedTaskSourcePrivacy(db, outsiderActor, {
+      sourceKind: "routine_run", id: routineRun!.id, companyId: company.id,
+    })).toBe(false);
     const [sourceLink] = await db.select().from(pipelineCaseIssueLinks)
       .where(eq(pipelineCaseIssueLinks.issueId, sourceIssueId));
     await db.update(pipelineCaseIssueLinks).set({ retiredAt: new Date() })

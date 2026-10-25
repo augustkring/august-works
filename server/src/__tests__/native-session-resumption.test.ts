@@ -4,13 +4,17 @@ import { once } from "node:events";
 import { mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import express, { type RequestHandler } from "express";
+import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import {
   activityLog,
   agentWakeupRequests,
   agents,
+  authUsers,
   companies,
+  companyMemberships,
   completionContracts,
   createDb,
   executionWorkspaces,
@@ -24,6 +28,7 @@ import {
   nativeRunResults,
   projectWorkspaces,
   projects,
+  principalPermissionGrants,
   statusDecisionEffects,
   statusDecisions,
   workAssessments,
@@ -78,6 +83,35 @@ vi.mock("../sentry.js", async () => {
 
 import { heartbeatService } from "../services/heartbeat.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
+import { initializeRunIdentity } from "../services/run-identity.js";
+import { projectRoutes } from "../routes/projects.js";
+import { errorHandler } from "../middleware/index.js";
+import { grantsForHumanRole } from "../services/company-member-roles.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
+
+async function seedNativeRecoveryHuman(db: ReturnType<typeof createDb>, companyId: string, userId: string) {
+  await db.insert(authUsers).values({ id: userId, name: "Native recovery owner",
+    email: `${userId}@example.test`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
+  await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId,
+    status: "active", membershipRole: "owner" });
+  await db.insert(principalPermissionGrants).values(grantsForHumanRole("owner").map(grant => ({
+    companyId, principalType: "user" as const, principalId: userId, ...grant,
+  })));
+  return seedNativePasskeySession(db, userId);
+}
+
+async function createNativeRecoveryProject(db: ReturnType<typeof createDb>, companyId: string,
+  userId: string, sessionId: string, name: string) {
+  const app = express();
+  app.use(express.json());
+  app.use(((req, _res, next) => { req.actor = { type: "board", source: "session", userId, sessionId,
+    companyIds: [companyId], memberships: [{ companyId, membershipRole: "owner", status: "active" }] }; next(); }) as RequestHandler);
+  app.use("/api", projectRoutes(db));
+  app.use(errorHandler);
+  const created = await request(app).post(`/api/companies/${companyId}/projects`).send({ name });
+  if (created.status !== 201) throw new Error(`Canonical Human Project creation failed: ${created.status}`);
+  return created.body.id as string;
+}
 
 describe("P6-25 pre-result native session recovery", () => {
   let temporary: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
@@ -620,11 +654,12 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
     let staleProviderProcess: ReturnType<typeof spawn> | null = null;
     const companyId = randomUUID();
     const agentId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const projectWorkspaceId = randomUUID();
     const executionWorkspaceId = randomUUID();
     const newerExecutionWorkspaceId = randomUUID();
     const issueId = randomUUID();
+    const responsibleUserId = randomUUID();
     const freshIssueId = randomUUID();
     const runId = randomUUID();
     const contractId = randomUUID();
@@ -802,16 +837,10 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
         name: "Native same-run recovery",
         issuePrefix: "NRR",
         status: "active",
-        defaultResponsibleUserId: "responsible-user",
+        defaultResponsibleUserId: responsibleUserId,
       });
-      await db
-        .insert(projects)
-        .values({
-          id: projectId,
-          companyId,
-          name: "Recovery project",
-          status: "active",
-        });
+      const humanSessionId = await seedNativeRecoveryHuman(db, companyId, responsibleUserId);
+      projectId = await createNativeRecoveryProject(db, companyId, responsibleUserId, humanSessionId, "Recovery project");
       await db.insert(projectWorkspaces).values({
         id: projectWorkspaceId,
         companyId,
@@ -849,6 +878,7 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
         title: "Recover one native heartbeat",
         status: "in_progress",
         assigneeAgentId: agentId,
+        responsibleUserId,
         workMode: "standard",
       });
       await db.insert(executionWorkspaces).values({
@@ -917,6 +947,7 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
         companyId,
         agentId,
         nativeIssueId: issueId,
+        responsibleUserId,
         status: "running",
         runtimeMode: "native",
         runtimeModeResolverVersion: "phase6-v1",
@@ -944,6 +975,7 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
         .update(issues)
         .set({ executionRunId: runId })
         .where(eq(issues.id, issueId));
+      await initializeRunIdentity(db, { companyId, runId, issueId, responsibleUserId, cause: "restart" });
       await db.insert(nativeRunFinalizations).values({
         runId,
         companyId,
@@ -958,7 +990,7 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
           id: newerCommentId,
           companyId,
           issueId,
-          authorUserId: "responsible-user",
+          authorUserId: responsibleUserId,
           body: "Verify the newest user instruction before completing this task.",
         });
     }, 30_000);
@@ -1118,7 +1150,7 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
           reason: "issue_commented",
           idempotencyKey: newerWakeKey,
           requestedByActorType: "user",
-          requestedByActorId: "responsible-user",
+          requestedByActorId: responsibleUserId,
           payload: {
             issueId,
             commentId: newerCommentId,
@@ -1405,6 +1437,7 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
         title: "Start only after the native kill switch is off",
         status: "in_progress",
         assigneeAgentId: agentId,
+        responsibleUserId,
         workMode: "standard",
       });
       const directExecute = legacyAdapterExecute.getMockImplementation()!;

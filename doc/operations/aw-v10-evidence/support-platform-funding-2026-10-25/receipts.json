@@ -1,0 +1,105 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "9d5b9c8899382bc0db28d680219e01c8c36c3972",
+  "sourceCommitMeaning": "Archive checkout identity; scoped runs may predate it. Only separately recorded unchanged-source gates establish final tested source identity.",
+  "meaning": "Software-only platform-purpose budget/ledger and original offboarding controls; no real funding/inference profile or reconciliation verifier is configured or qualified.",
+  "logs": [
+    {
+      "name": "support-budget-reservation-full-final",
+      "exitCode": 0,
+      "exitSidecar": "support-budget-reservation-full-final.exit",
+      "rawSha256": "5c1128076fd522c365d878ee5f9469019a6f05ea8cab4d0e91dbaef93ec381f0",
+      "sanitizedSha256": "5c1128076fd522c365d878ee5f9469019a6f05ea8cab4d0e91dbaef93ec381f0",
+      "archiveSha256": "5d02098f44b76475cdd6aa46878cc3f3087740dda6ba451ce802398e177b4b2d",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  16 passed (16)",
+        "Duration  21.86s (transform 9.53s, setup 67ms, import 13.40s, tests 8.29s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "support-budget-purge-focused3",
+      "exitCode": 0,
+      "exitSidecar": "support-budget-purge-focused3.exit",
+      "rawSha256": "5ac672c55d43d98715649858bdb0c0ec354316e3280efc631bf4deabebf82377",
+      "sanitizedSha256": "5ac672c55d43d98715649858bdb0c0ec354316e3280efc631bf4deabebf82377",
+      "archiveSha256": "c09776c65e79f2e9c3cee9b58262d8c10660e49b64414549b5e4525db372cd54",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 15 skipped (16)",
+        "Duration  20.53s (transform 11.40s, setup 88ms, import 15.86s, tests 4.46s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "support-budget-server-tsc-final",
+      "exitCode": 0,
+      "exitSidecar": "support-budget-server-tsc-final.exit",
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "support-budget-native-run-purge-controls",
+      "exitCode": 0,
+      "exitSidecar": "support-budget-native-run-purge-controls.exit",
+      "rawSha256": "04213d438b9719d48d3e6b3f5a8b4799cc397585fea44e6326cebdeb1fab0fdd",
+      "sanitizedSha256": "04213d438b9719d48d3e6b3f5a8b4799cc397585fea44e6326cebdeb1fab0fdd",
+      "archiveSha256": "c6f719dfc16386712dfebfdf9d3b6799ca90fd70c1359fede8175b2b88eadc1e",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  2 passed | 70 skipped (72)",
+        "Duration  29.98s (transform 11.02s, setup 130ms, import 19.08s, tests 10.52s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "support-budget-existing-purge-regressions",
+      "exitCode": 1,
+      "exitSidecar": "support-budget-existing-purge-regressions.exit",
+      "rawSha256": "8198993e966a0b86ec512c5061b4a5d197c7b06ebc5918d63637a54620237ff6",
+      "sanitizedSha256": "a0404eea7e0c0651b9e7ad85ea3f24eda36c150dc4c02c7cebb64d43aaeec7ad",
+      "archiveSha256": "b48b752bb5f7dbe519cfc453ec5f9be81ebe75026e4aa30fe9af51e9a9fac3f0",
+      "redactions": {
+        "ansi": 6,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 7 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  2 failed | 2 passed (4)",
+        "Tests  7 failed | 42 passed (49)",
+        "Duration  62.83s (transform 11.31s, setup 254ms, import 28.13s, tests 33.90s, environment 0ms)"
+      ]
+    }
+  ]
+}

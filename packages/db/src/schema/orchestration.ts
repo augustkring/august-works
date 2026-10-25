@@ -68,3 +68,35 @@ export const orchestrationModelReservations = pgTable("orchestration_model_reser
   hashCheck: check("orchestration_model_reservation_hash_ck", sql`${t.requestHash} ~ '^[a-f0-9]{64}$' and ${t.inputHash} ~ '^[a-f0-9]{64}$' and ${t.authorityHash} ~ '^[a-f0-9]{64}$' and (${t.providerResponseHash} is null or ${t.providerResponseHash} ~ '^[a-f0-9]{64}$')`),
   pendingIdx: index("orchestration_model_reservation_pending_idx").on(t.status, t.expiresAt),
 }));
+
+/** A separate, taskless ledger owner for explicitly operator-funded first-party
+ * support calls. It does not weaken or share the plan-backed reservation FK. */
+export const orchestrationCompanyPurposeBudgets = pgTable("orchestration_company_purpose_budgets", {
+  id: uuid("id").primaryKey().defaultRandom(), companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "restrict" }),
+  purpose: text("purpose").$type<"first_party_support">().notNull(), funder: text("funder").notNull(), profileId: text("profile_id").notNull(), profileHash: text("profile_hash").notNull(), providerAccountId: text("provider_account_id").notNull(), credentialBindingHash: text("credential_binding_hash").notNull(), periodKey: text("period_key").notNull(),
+  periodStartsAt: timestamp("period_starts_at", { withTimezone: true }).notNull(), periodEndsAt: timestamp("period_ends_at", { withTimezone: true }).notNull(),
+  provider: text("provider").notNull(), model: text("model").notNull(), sourceSha: text("source_sha").notNull(), qualificationHash: text("qualification_hash").notNull(), tariffHash: text("tariff_hash").notNull(),
+  maxCostMinor: integer("max_cost_minor").notNull(), reservedMinor: integer("reserved_minor").notNull().default(0), maxCalls: integer("max_calls").notNull(), reservedCalls: integer("reserved_calls").notNull().default(0), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => ({
+  tenantUq: unique("orchestration_company_purpose_budget_tenant_uq").on(t.companyId, t.id),
+  periodUq: unique("orchestration_company_purpose_budget_period_uq").on(t.companyId, t.purpose, t.profileId, t.periodKey),
+  contractCheck: check("orchestration_company_purpose_budget_contract_ck", sql`${t.purpose}='first_party_support' and ${t.funder}='blentera_platform' and ${t.profileId} ~ '^[a-zA-Z0-9._:-]{1,120}$' and ${t.profileHash} ~ '^[a-f0-9]{64}$' and ${t.providerAccountId} ~ '^[a-zA-Z0-9._:-]{1,160}$' and ${t.credentialBindingHash} ~ '^[a-f0-9]{64}$' and ${t.periodKey} ~ '^[a-zA-Z0-9._:-]{1,120}$' and ${t.periodStartsAt}<${t.periodEndsAt} and ${t.periodEndsAt}<=${t.periodStartsAt}+interval '366 days' and ${t.provider} in ('openai','anthropic','openrouter') and length(${t.model}) between 1 and 200 and ${t.sourceSha} ~ '^[a-f0-9]{40}$' and ${t.qualificationHash} ~ '^[a-f0-9]{64}$' and ${t.tariffHash} ~ '^[a-f0-9]{64}$'`),
+  amountCheck: check("orchestration_company_purpose_budget_amount_ck", sql`${t.maxCostMinor} between 1 and 1000000 and ${t.reservedMinor} between 0 and ${t.maxCostMinor} and ${t.maxCalls} between 1 and 10000 and ${t.reservedCalls} between 0 and ${t.maxCalls}`),
+  periodIdx: index("orchestration_company_purpose_budget_period_idx").on(t.periodEndsAt),
+}));
+export const orchestrationCompanyPurposeReservations = pgTable("orchestration_company_purpose_reservations", {
+  id: uuid("id").primaryKey().defaultRandom(), companyId: uuid("company_id").notNull(), budgetId: uuid("budget_id").notNull(), principalUserId: text("principal_user_id").notNull(),
+  idempotencyKey: text("idempotency_key").notNull(), requestHash: text("request_hash").notNull(), inputHash: text("input_hash").notNull(), authorityHash: text("authority_hash").notNull(),
+  quote: jsonb("quote").$type<ModelReservationQuote>().notNull(), maximumMinor: integer("maximum_minor").notNull(),
+  status: text("status").$type<"reserved" | "dispatched" | "completed" | "failed" | "unknown" | "cancelled">().notNull().default("reserved"),
+  providerResponseHash: text("provider_response_hash"), usage: jsonb("usage").$type<{ inputTokens: number; outputTokens: number } | null>(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(), dispatchedAt: timestamp("dispatched_at", { withTimezone: true }), completedAt: timestamp("completed_at", { withTimezone: true }), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => ({
+  tenantUq: unique("orchestration_company_purpose_reservation_tenant_uq").on(t.companyId, t.id),
+  keyUq: unique("orchestration_company_purpose_reservation_key_uq").on(t.companyId, t.idempotencyKey),
+  budgetFk: foreignKey({ columns: [t.companyId, t.budgetId], foreignColumns: [orchestrationCompanyPurposeBudgets.companyId, orchestrationCompanyPurposeBudgets.id] }).onDelete("restrict"),
+  statusCheck: check("orchestration_company_purpose_reservation_status_ck", sql`${t.status} in ('reserved','dispatched','completed','failed','unknown','cancelled')`),
+  costCheck: check("orchestration_company_purpose_reservation_cost_ck", sql`${t.maximumMinor} between 0 and 1000000 and (${t.quote}->>'maximumMinor')::int=${t.maximumMinor} and ${t.expiresAt}>${t.createdAt}`),
+  hashCheck: check("orchestration_company_purpose_reservation_hash_ck", sql`${t.requestHash} ~ '^[a-f0-9]{64}$' and ${t.inputHash} ~ '^[a-f0-9]{64}$' and ${t.authorityHash} ~ '^[a-f0-9]{64}$' and (${t.providerResponseHash} is null or ${t.providerResponseHash} ~ '^[a-f0-9]{64}$')`),
+  pendingIdx: index("orchestration_company_purpose_reservation_pending_idx").on(t.status, t.expiresAt),
+}));
