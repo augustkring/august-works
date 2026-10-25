@@ -18,9 +18,10 @@ export function strategyReferenceId(ref: StrategyExecutionReference) {
 /** Current authority is checked separately from current version validity, so a
  * stale pin never makes a denied source visible through a review response. */
 const nativeProjectColumns = {id:projects.id,status:projects.status,createdAt:projects.createdAt,updatedAt:projects.updatedAt,archivedAt:projects.archivedAt};
-const nativeIssueColumns = {id:issues.id,projectId:issues.projectId,parentId:issues.parentId,assigneeAgentId:issues.assigneeAgentId,assigneeUserId:issues.assigneeUserId,status:issues.status,originKind:issues.originKind,originId:issues.originId,createdAt:issues.createdAt,updatedAt:issues.updatedAt};
+const nativeIssueColumns = {id:issues.id,projectId:issues.projectId,parentId:issues.parentId,assigneeAgentId:issues.assigneeAgentId,assigneeUserId:issues.assigneeUserId,status:issues.status,originKind:issues.originKind,originId:issues.originId,hiddenAt:issues.hiddenAt,createdAt:issues.createdAt,updatedAt:issues.updatedAt};
 type NativePopulationReads = {
   authority?: Pick<ReturnType<typeof authorizationService>, "decide">;
+  batchAdmittedSources?: boolean;
   issues: Map<string, Pick<typeof issues.$inferSelect, keyof typeof nativeIssueColumns>>;
   projects: Map<string, Pick<typeof projects.$inferSelect, keyof typeof nativeProjectColumns>>;
 };
@@ -38,6 +39,7 @@ async function authorizeReference(tx: Db, companyId: string, actor: Authorizatio
   let metricObservationLineage: Awaited<ReturnType<ReturnType<typeof businessMetricService>["inspectCurrentObservationWithLineage"]>> | undefined;
   let nativeObject:{snapshot:NativeMetricInput;archived:boolean}|undefined;
   async function authorizeSource(action: "issue:read" | "project:read", resource: AuthorizationResource) {
+    if (reads?.batchAdmittedSources) return;
     if (!reads?.authority) return assertV7Authorization(tx, actor, companyId, action, resource);
     const decision = await reads.authority.decide({ actor, action, resource, enforceResponsibleUserIntersection: true });
     if (!decision.allowed) throw forbidden(decision.explanation, { code: "permission_denied", reason: decision.reason });
@@ -141,7 +143,7 @@ export async function authorizeStrategyNativePopulation(tx: Db, companyId: strin
   if (type === "issue") for (let offset = 0; offset < unitIds.length; offset += 1000) {
     budget();
     const selected = unitIds.slice(offset, offset + 1000);
-    const rows = await tx.select(nativeIssueColumns).from(issues).where(and(eq(issues.companyId, companyId), inArray(issues.id, selected), isNull(issues.hiddenAt))).limit(selected.length + 1).for("share");
+    const rows = await tx.select(nativeIssueColumns).from(issues).where(and(eq(issues.companyId, companyId), inArray(issues.id, selected))).limit(selected.length + 1).for("share");
     for (const row of rows) reads.issues.set(row.id, row);
   }
   const projectIds = type === "project" ? unitIds : [...new Set([...reads.issues.values()].flatMap(row => row.projectId ? [row.projectId] : []))];
@@ -151,11 +153,14 @@ export async function authorizeStrategyNativePopulation(tx: Db, companyId: strin
     const rows = await tx.select(nativeProjectColumns).from(projects).where(and(eq(projects.companyId, companyId), inArray(projects.id, selected))).limit(selected.length + 1).for("share");
     for (const row of rows) reads.projects.set(row.id, row);
   }
-  // The original Source owner transports only locked current row facts and
-  // compiled SQL. Every exact root and ancestor still gets its own current
-  // actor × responsible-human decision. No permission result is reused.
+  if (type === "issue" && unitIds.some(id => !reads.issues.has(id) || reads.issues.get(id)!.hiddenAt)) throw notFound("Strategy task source is unavailable");
+  if (type === "project" && unitIds.some(id => !reads.projects.has(id))) throw notFound("Strategy project source is unavailable");
+  // Batch the canonical action plus exact private-ACL predicates once for this
+  // complete population. The owner then transports only these same-transaction
+  // share-locked rows; it does not repeat an identical decision for each row.
   return authorizationService(tx).withReadSources(companyId, type === "issue" ? unitIds : [], projectIds, async authority => {
-    const currentReads: NativePopulationReads = { ...reads, authority };
+    await authority.assertTaskPrivacyBatch(actor, type === "issue" ? unitIds : [], projectIds, deadline);
+    const currentReads: NativePopulationReads = { ...reads, authority, batchAdmittedSources: true };
     const admitted = new Map<string, Awaited<ReturnType<typeof authorizeReference>>>();
   for (let offset = 0; offset < unitIds.length; offset += 32) {
     budget();

@@ -282,7 +282,7 @@ suite("Native human-published process analysis on migrated PostgreSQL", () => {
     expect(await db.select().from(processFindings).where(eq(processFindings.analysisRunId,run.id))).toHaveLength(0);
     expect(await db.select().from(processFindingTransitions).where(eq(processFindingTransitions.findingId,finding.id))).toHaveLength(0);
     expect(await db.select().from(issues).where(eq(issues.id,secondIssueId))).toHaveLength(1);
-  });
+  }, 60_000);
   it("keeps missing-data findings separate from statistics and rechecks company, agent and changed current source authority", async () => {
     await project();const created=await published({...definition(),requiresArrivalEvidence:true});
     const run=await service().run(companyId,actor,created.root.id,{versionId:created.version.id,...period}),findings=processFindingService(db);

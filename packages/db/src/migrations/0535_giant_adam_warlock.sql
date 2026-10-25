@@ -51,11 +51,12 @@ BEGIN
     WHERE id=NEW.scope_request_id AND company_id=NEW.home_company_id AND agent_id=NEW.home_agent_id
       AND run_id=NEW.home_run_id;
   IF request.id IS NULL OR request.requested_by_user_id IS DISTINCT FROM NEW.responsible_user_id
-      OR request.scope IS DISTINCT FROM NEW.scope_snapshot THEN
+      OR request.scope IS DISTINCT FROM NEW.scope_snapshot OR request.issue_id IS DISTINCT FROM actual_run.issue_id THEN
     RAISE EXCEPTION 'Delegated Context scope request is not the exact claimed home request';
   END IF;
   IF NEW.scope_snapshot->>'primaryCompanyId' IS DISTINCT FROM NEW.home_company_id::text
       OR NEW.scope_snapshot->>'primaryAgentPresenceId' IS DISTINCT FROM NEW.home_agent_id::text
+      OR NEW.guest_company_id=NEW.home_company_id OR length(NEW.purpose)=0 OR length(NEW.purpose)>500
       OR jsonb_typeof(NEW.scope_snapshot->'delegatedScopes') IS DISTINCT FROM 'array' THEN
     RAISE EXCEPTION 'Delegated Context scope snapshot has a different home identity';
   END IF;
@@ -92,15 +93,15 @@ CREATE TRIGGER delegated_context_manifest_bindings_immutable
 -- The original company-purge owner may unlink this child before it reaches a
 -- home Run or scope-request parent. Unlinking the accountability row therefore
 -- deletes its guest-local retained Context and its item/root closure atomically.
-CREATE FUNCTION aw_delete_delegated_context_before_unlink() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE FUNCTION aw_delete_delegated_context_after_unlink() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   DELETE FROM context_manifests WHERE company_id=OLD.guest_company_id AND id=OLD.context_manifest_id;
   RETURN OLD;
 END $$;
 --> statement-breakpoint
 CREATE TRIGGER delegated_context_manifest_bindings_delete_context
-  BEFORE DELETE ON delegated_context_manifest_bindings
-  FOR EACH ROW EXECUTE FUNCTION aw_delete_delegated_context_before_unlink();
+  AFTER DELETE ON delegated_context_manifest_bindings
+  FOR EACH ROW EXECUTE FUNCTION aw_delete_delegated_context_after_unlink();
 --> statement-breakpoint
 -- Removing the accountable home execution or its exact claimed scope request
 -- removes guest-local retained copies in the same transaction. A copy without

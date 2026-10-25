@@ -2035,8 +2035,8 @@ export async function ensureAssignmentIssueAccessGrant(
 }
 
 async function retainIssuePrivacySources(tx: DbTransaction, issue: typeof issues.$inferSelect,
-  sources: Array<{ sourceKind: "issue" | "project" | "run" | "workflow_run" | "routine_run"; sourceId: string | null | undefined }>) {
-  const rows = sources.filter((source): source is { sourceKind: "issue" | "project" | "run" | "workflow_run" | "routine_run"; sourceId: string } => Boolean(source.sourceId))
+  sources: Array<{ sourceKind: "issue" | "project" | "run" | "workflow_run" | "routine_run"; sourceId: string | null | undefined; contextManifestId?: string | null }>) {
+  const rows = sources.filter((source): source is { sourceKind: "issue" | "project" | "run" | "workflow_run" | "routine_run"; sourceId: string; contextManifestId?: string | null } => Boolean(source.sourceId))
     .filter(source => source.sourceKind !== "issue" || source.sourceId !== issue.id)
     .map(source => ({ companyId: issue.companyId, issueId: issue.id, ...source }));
   if (rows.some(source => !isUuidLike(source.sourceId))) throw unprocessable("Task privacy source identity is invalid");
@@ -2052,9 +2052,11 @@ async function resolveIssuePrivacy(
   additionalIssueSources: string[] = [],
   freezeCurrentRunContext = false,
 ) {
-  const sources: Array<{ sourceKind: "issue" | "project" | "run" | "workflow_run" | "routine_run"; sourceId: string }> = [];
+  const sources: Array<{ sourceKind: "issue" | "project" | "run" | "workflow_run" | "routine_run"; sourceId: string; contextManifestId?: string | null }> = [];
   const parents = new Set([...additionalIssueSources, previous?.privacyParentIssueId, previous?.parentId, next.privacyParentIssueId,
     next.privacyRootIssueId !== next.id ? next.privacyRootIssueId : null, next.parentId].filter((id): id is string => Boolean(id)));
+  const independentParents = new Set(parents);
+  const contextOnlyParents = new Set<string>();
   const projectIds = new Set([previous?.projectId, next.projectId].filter((id): id is string => Boolean(id)));
   let privacyParentIssueId = previous?.privacyParentIssueId ?? previous?.parentId ?? next.privacyParentIssueId ?? next.parentId ?? null;
   let visibility = previous?.visibility === "private" || next.visibility === "private" ? "private" as const : "open" as const;
@@ -2099,7 +2101,7 @@ async function resolveIssuePrivacy(
   const heartbeatRunIds = new Set([actorRunId, previous?.originRunId && !typedOrigins.some(origin => origin === previous) ? previous.originRunId : null,
     next.originRunId && !typedOrigins.some(origin => origin === next) ? next.originRunId : null].filter((id): id is string => Boolean(id)));
   const temporalContextInputs: Extract<NativePayloadSourceInput, { kind: "context" }>[] = [];
-  let temporalContextComplete = freezeCurrentRunContext;
+  let temporalContextComplete = freezeCurrentRunContext && !!actorRunId;
   for (const runId of heartbeatRunIds) {
     if (!isUuidLike(runId)) throw unprocessable("Task privacy source run is invalid");
     const [run] = await tx.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.id, runId), eq(heartbeatRuns.companyId, companyId)));
@@ -2117,7 +2119,12 @@ async function resolveIssuePrivacy(
       const capture = await captureNativeTemporalContext(tx, companyId, runId, "issue");
       temporalContextComplete = temporalContextComplete && capture.complete;
       temporalContextInputs.push(...capture.inputs);
-      capture.issueIds.forEach(id => parents.add(id));
+      for (const edge of capture.issueEdges) {
+        if (edge.issueId === next.id) continue;
+        parents.add(edge.issueId);
+        if (!independentParents.has(edge.issueId)) contextOnlyParents.add(edge.issueId);
+        sources.push({ sourceKind: "issue", sourceId: edge.issueId, contextManifestId: edge.manifestId });
+      }
       capture.projectIds.forEach(id => projectIds.add(id));
     }
   }
@@ -2125,7 +2132,7 @@ async function resolveIssuePrivacy(
     if (parentId === next.id) throw unprocessable("A task cannot inherit its own privacy source");
     const [parent] = await tx.select().from(issues).where(and(eq(issues.id, parentId), eq(issues.companyId, companyId)));
     if (!parent) throw notFound("Task privacy source is unavailable");
-    sources.push({ sourceKind: "issue", sourceId: parentId });
+    if (!contextOnlyParents.has(parentId)) sources.push({ sourceKind: "issue", sourceId: parentId });
     if (!(await canActorReadIssuePrivacy(tx, { type: "none" }, parent))) {
       visibility = "private";
       privacyRootIssueId ??= parent.privacyRootIssueId ?? parent.id;

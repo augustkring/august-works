@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import type { Db } from "@paperclipai/db";
-import { sandboxBindingCreateSchema, sandboxCompileSchema } from "@paperclipai/shared";
+import { sandboxAdmissionSchema, sandboxBindingCreateSchema, sandboxCompileSchema } from "@paperclipai/shared";
 import { conflict, forbidden } from "../errors.js";
 import { validate } from "../middleware/validate.js";
 import { assertCompanyAccess } from "./authz.js";
@@ -27,5 +27,6 @@ export function executionSandboxRoutes(db: Db, options: {
   router.post("/companies/:companyId/runtime-sandboxes/:id/qualify", validate(z.object({ expectedVersion: z.number().int().positive() }).strict()), async (req, res) => { operator(req); const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId); res.json(await service.qualify(req.actor, companyId, req.params.id as string, req.body.expectedVersion)); });
   router.post("/companies/:companyId/runtime-sandboxes/:id/reconcile", validate(z.object({ expectedVersion: z.number().int().positive() }).strict()), async (req, res) => { operator(req); const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId); res.json(await service.reconcile(req.actor, companyId, req.params.id as string, req.body.expectedVersion)); });
   router.post("/companies/:companyId/runtime-sandboxes/:id/policy", validate(sandboxCompileSchema), async (req, res) => { operator(req); const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId); res.status(201).json(await service.compile(req.actor, companyId, req.params.id as string, req.body)); });
+  router.post("/companies/:companyId/runtime-sandboxes/:id/admit", validate(sandboxAdmissionSchema), async (req, res) => { operator(req); const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId); res.json(await service.admit(req.actor, companyId, req.params.id as string, req.body)); });
   return router;
 }

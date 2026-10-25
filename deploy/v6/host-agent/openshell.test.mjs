@@ -21,6 +21,14 @@ const input = (action) => ({
   requesterUserId: "fixture-owner",
   imageDigest: "fixture.invalid/image@sha256:" + "a".repeat(64),
 });
+const policyDocument = {
+  version: 1,
+  filesystem_policy: { include_workdir: false, read_only: ["/etc"], read_write: [] },
+  landlock: { compatibility: "hard_requirement" },
+  process: { run_as_user: "1000", run_as_group: "1000" },
+  network_policies: {},
+};
+const policyHash = "b".repeat(64);
 const deadline = () => new Date(Date.now() + 20000).toISOString();
 async function fixture(work) {
   const root = await mkdtemp(path.join(os.tmpdir(), "aw-v7-host-cli-"));
@@ -42,13 +50,55 @@ async function fixture(work) {
     let sandboxId = randomUUID(),
       phase = "Ready",
       wrongScope = false,
-      attached = [{ name: "fixture-provider" }];
-    const run = async (_file, args, options) => {
+      attached = [{ name: "fixture-provider" }],
+      physical = false,
+      running = false,
+      effectivePolicy = structuredClone(policyDocument),
+      configRevision = 1,
+      wrongContainerLabels = false,
+      containerImageDigest = input("inspect").imageDigest;
+    const containerId = "d".repeat(64),
+      imageId = "sha256:" + "e".repeat(64);
+    const run = async (file, args, options) => {
       calls.push({ args, options });
       assert.equal(options.env.HOME, stateHome);
-      assert.equal(options.env.PATH, "/usr/bin:/bin");
       assert.equal(options.env.OPENSHELL_GATEWAY_INSECURE, undefined);
       assert.ok(options.timeout <= 6000);
+      if (file === "docker") {
+        assert.equal(options.env.PATH, process.env.PATH);
+        assert.equal(options.env.DOCKER_HOST, "unix:///var/run/docker.sock");
+        if (args[0] === "info") return { stdout: "openshell-docker-engine-1\n" };
+        if (args[0] === "ps") return { stdout: physical ? `${containerId}\n` : "" };
+        if (args[0] === "inspect")
+          return {
+            stdout: JSON.stringify([
+              {
+                Id: containerId,
+                Image: imageId,
+                RepoDigests: [containerImageDigest],
+                Config: {
+                  Image: imageId,
+                  Labels: {
+                    "openshell.ai/managed-by": "openshell",
+                    "openshell.ai/sandbox-id": sandboxId,
+                    "openshell.ai/sandbox-name": scope.sandboxRef,
+                    "openshell.ai/sandbox-namespace": "default",
+                    "openshell.ai/sandbox-workspace": config.workspace,
+                    "openshell.ai/isolation-backend": "openshell-sandbox",
+                    "openshell.ai/isolation-role": "sandbox",
+                    "aw.company_id": wrongContainerLabels ? randomUUID() : scope.companyId,
+                    "aw.binding_id": scope.bindingId,
+                    "aw.cell_id": scope.cellId,
+                    "aw.generation": "1",
+                  },
+                },
+                State: { Running: running },
+              },
+            ]),
+          };
+        throw new Error("fixture-unexpected-docker-command");
+      }
+      assert.equal(options.env.PATH, "/usr/bin:/bin");
       const command = args.slice(4);
       if (command[0] === "--version") return { stdout: "openshell 0.1.2\n" };
       if (command[0] === "sandbox" && command[1] === "get")
@@ -68,7 +118,31 @@ async function fixture(work) {
         };
       if (command[0] === "sandbox" && command[1] === "stop") {
         phase = "Stopped";
+        running = false;
         return { stdout: "Stopped" };
+      }
+      if (command[0] === "sandbox" && command[1] === "start") {
+        phase = "Ready";
+        running = true;
+        return { stdout: "Started" };
+      }
+      if (command[0] === "policy" && command[1] === "get")
+        return {
+          stdout: JSON.stringify({
+            sandbox: scope.sandboxRef,
+            status: "effective",
+            version: 1,
+            config_revision: configRevision,
+            hash: createHash("sha256").update(JSON.stringify(effectivePolicy)).digest("hex"),
+            policy: effectivePolicy,
+          }),
+        };
+      if (command[0] === "policy" && command[1] === "set") {
+        assert.equal(command[2], scope.sandboxRef);
+        assert.equal(command[3], "--policy");
+        assert.ok((await readFile(command[4], "utf8")).length > 0);
+        effectivePolicy = JSON.parse(await readFile(command[4], "utf8"));
+        return { stdout: "Policy updated" };
       }
       if (command[1] === "provider" && command[2] === "list")
         return {
@@ -90,6 +164,11 @@ async function fixture(work) {
       run,
       replaceSandbox: () => { sandboxId = randomUUID(); },
       clearSandboxIdentity: () => { sandboxId = undefined; },
+      enablePhysical: () => { physical = true; },
+      setPhase: (value) => { phase = value; running = value === "Ready"; },
+      setWrongContainerLabels: () => { wrongContainerLabels = true; },
+      setContainerImageDigest: (value) => { containerImageDigest = value; },
+      changePolicyRevision: () => { configRevision += 1; },
       swapScope: () => {
         wrongScope = true;
       },
@@ -265,4 +344,129 @@ test("legacy unpinned observations stay fenced during journal migration", async 
       "sandbox_scope_changed");
     await assert.rejects(restarted.fenceAll(), /sandbox_host_unavailable/);
     assert.ok(calls.every(({ args }) => !args.includes("stop")));
+  }));
+
+test("apply and start use pinned OpenShell policy APIs plus exact Docker identity observations", async () =>
+  fixture(async ({ engine, calls, enablePhysical, setPhase }) => {
+    enablePhysical();
+    setPhase("Stopped");
+    const applied = await engine.execute(
+      randomUUID(),
+      { ...input("apply"), admission: { policyHash, idempotencyKey: "policy-test", document: policyDocument } },
+      deadline(),
+    );
+    assert.equal(applied.reply.action, "apply");
+    assert.equal(applied.reply.applied, true);
+    assert.equal(applied.reply.policyHash, policyHash);
+    assert.equal(applied.reply.requiresRecreate, false);
+    assert.ok(calls.some(({ args }) => args.includes("policy") && args.includes("set")));
+    const started = await engine.execute(
+      randomUUID(),
+      {
+        ...input("start"),
+        start: {
+          policyHash,
+          expiresAt: new Date(Date.now() + 50000).toISOString(),
+          idempotencyKey: "native-start-1",
+        },
+      },
+      deadline(),
+    );
+    assert.equal(started.reply.action, "start");
+    assert.equal(started.reply.started, true);
+    assert.equal(started.reply.containerId, "d".repeat(64));
+    assert.equal(started.reply.imageDigest, input("inspect").imageDigest);
+    assert.equal(started.reply.policyHash, policyHash);
+    assert.ok(calls.some(({ args }) => args.includes("sandbox") && args.includes("start")));
+  }));
+
+test("static policy changes require sandbox recreation before any policy mutation", async () =>
+  fixture(async ({ engine, calls, enablePhysical, setPhase }) => {
+    enablePhysical();
+    setPhase("Stopped");
+    const candidate = structuredClone(policyDocument);
+    candidate.process.run_as_user = "1001";
+    const result = await engine.execute(
+      randomUUID(),
+      { ...input("apply"), admission: { policyHash, idempotencyKey: "static-change", document: candidate } },
+      deadline(),
+    );
+    assert.equal(result.reply.applied, false);
+    assert.equal(result.reply.requiresRecreate, true);
+    assert.equal(calls.some(({ args }) => args.includes("policy") && args.includes("set")), false);
+  }));
+
+test("foreign Docker labels block policy mutation before any effect", async () =>
+  fixture(async ({ engine, calls, enablePhysical, setPhase, setWrongContainerLabels }) => {
+    enablePhysical();
+    setPhase("Stopped");
+    setWrongContainerLabels();
+    const result = await engine.execute(
+      randomUUID(),
+      { ...input("apply"), admission: { policyHash, idempotencyKey: "foreign-label", document: policyDocument } },
+      deadline(),
+    );
+    assert.equal(result.success, false);
+    assert.equal(result.errorCode, "sandbox_scope_changed");
+    assert.equal(calls.some(({ args }) => args.includes("policy") && args.includes("set")), false);
+  }));
+
+test("an image repository digest mismatch blocks policy mutation before any effect", async () =>
+  fixture(async ({ engine, calls, enablePhysical, setPhase, setContainerImageDigest }) => {
+    enablePhysical();
+    setPhase("Stopped");
+    setContainerImageDigest("fixture.invalid/other@sha256:" + "f".repeat(64));
+    const result = await engine.execute(
+      randomUUID(),
+      { ...input("apply"), admission: { policyHash, idempotencyKey: "wrong-image", document: policyDocument } },
+      deadline(),
+    );
+    assert.equal(result.success, false);
+    assert.equal(result.errorCode, "sandbox_scope_changed");
+    assert.equal(calls.some(({ args }) => args.includes("policy") && args.includes("set")), false);
+  }));
+
+test("a changed OpenShell policy revision blocks workload start", async () =>
+  fixture(async ({ engine, calls, enablePhysical, setPhase, changePolicyRevision }) => {
+    enablePhysical();
+    setPhase("Stopped");
+    const applied = await engine.execute(
+      randomUUID(),
+      { ...input("apply"), admission: { policyHash, idempotencyKey: "revision-test", document: policyDocument } },
+      deadline(),
+    );
+    assert.equal(applied.reply.applied, true);
+    changePolicyRevision();
+    const result = await engine.execute(
+      randomUUID(),
+      {
+        ...input("start"),
+        start: {
+          policyHash,
+          expiresAt: new Date(Date.now() + 50000).toISOString(),
+          idempotencyKey: "stale-policy-start",
+        },
+      },
+      deadline(),
+    );
+    assert.equal(result.success, false);
+    assert.equal(result.errorCode, "sandbox_scope_changed");
+    assert.equal(calls.some(({ args }) => args.includes("sandbox") && args.includes("start")), false);
+  }));
+
+test("physical inspection never promotes host observations to qualification", async () =>
+  fixture(async ({ engine, enablePhysical, setPhase }) => {
+    enablePhysical();
+    setPhase("Ready");
+    assert.deepEqual(
+      (await engine.execute(randomUUID(), input("inspect"), deadline())).reply,
+      {
+        action: "inspect",
+        state: "running",
+        policyHash: null,
+        imageDigest: input("inspect").imageDigest,
+        generation: "1",
+        controlsHealthy: false,
+      },
+    );
   }));

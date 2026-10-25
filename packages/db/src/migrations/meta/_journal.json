@@ -3739,6 +3739,13 @@
       "when": 1792922372709,
       "tag": "0535_giant_adam_warlock",
       "breakpoints": true
+    },
+    {
+      "idx": 536,
+      "version": "7",
+      "when": 1792923052473,
+      "tag": "0536_yellow_nemesis",
+      "breakpoints": true
     }
   ]
 }

@@ -133,21 +133,7 @@ export function crossCompanyContextService(db: Db) {
               homeAgentIdentityId: homeIdentityId, homeRunId: accountability.runId, scopeRequestId: accountability.scopeRequestId,
               responsibleUserId: actor.onBehalfOfUserId, guestCompanyId: local.companyId, guestAgentId: local.presence.id,
               guestAgentIdentityId: local.presence.agentIdentityId, purpose: local.purpose, accessMode: local.accessMode,
-              scope: resolved.scope,
-              assertCurrent: async (sourceDb: Db) => {
-                const current = await resolve(actor, resolved.scope, sourceDb);
-                const currentScope = current.scopes.find(candidate => candidate.companyId === local.companyId && candidate.presence.id === local.presence.id);
-                if (!currentScope || currentScope.accessMode !== local.accessMode || currentScope.purpose !== local.purpose)
-                  throw forbidden("Guest execution scope changed during Context assembly");
-                const [request] = await sourceDb.select({ id: agentExecutionScopeRequests.id, scope: agentExecutionScopeRequests.scope,
-                  issueId: agentExecutionScopeRequests.issueId }).from(agentExecutionScopeRequests).where(and(
-                  eq(agentExecutionScopeRequests.id, accountability.scopeRequestId), eq(agentExecutionScopeRequests.companyId, resolved.scope.primaryCompanyId),
-                  eq(agentExecutionScopeRequests.agentId, resolved.scope.primaryAgentPresenceId), eq(agentExecutionScopeRequests.runId, accountability.runId),
-                )).limit(1);
-                if (!request || request.issueId !== accountability.issueId ||
-                  hashContextPolicySnapshot(agentExecutionScopeSchema.parse(request.scope)) !== hashContextPolicySnapshot(resolved.scope))
-                  throw forbidden("Claimed execution scope changed during Context assembly");
-              },
+              scope: resolved.scope, homeActor: actor,
             },
           }),
           query: input.query, intent: `${input.intent}: ${local.purpose}`,

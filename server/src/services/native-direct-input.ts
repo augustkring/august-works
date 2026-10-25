@@ -16,6 +16,43 @@ export interface NativeTemporalContextCapture {
   readonly projectIds: string[];
   readonly memoryIds: string[];
   readonly foundationRevisionIds: string[];
+  readonly issueEdges: { issueId: string; manifestId: string }[];
+}
+
+function temporalContextContentHash(manifest: typeof contextManifests.$inferSelect,
+  items: (typeof contextManifestItems.$inferSelect)[], roots: (typeof contextManifestMemoryRoots.$inferSelect)[]) {
+  return createHash("sha256").update(JSON.stringify({
+    manifest: { id: manifest.id, companyId: manifest.companyId, runId: manifest.runId, agentId: manifest.agentId,
+      issueId: manifest.issueId, projectId: manifest.projectId, queryHash: manifest.queryHash,
+      policySnapshotHash: manifest.policySnapshotHash, createdAt: manifest.createdAt.toISOString() },
+    items: items.map(item => ({ id: item.id, provider: item.sourceProvider, ref: item.sourceRef,
+      version: item.sourceVersion, contentHash: item.contentHash, snapshot: item.payloadSourceSnapshot })),
+    roots: roots.map(root => ({ id: root.memoryRecordId, version: root.sourceVersion, snapshot: root.payloadSourceSnapshot })),
+  }), "utf8").digest("hex");
+}
+
+export async function assertNativeTemporalContextInputsCurrent(db: Db, companyId: string,
+  inputs: Extract<NativePayloadSourceInput, { kind: "context" }>[]) {
+  if (inputs.length > 64) throw forbidden("Captured Context source set exceeds its bound");
+  const ids = inputs.map(input => input.manifestId);
+  if (new Set(ids).size !== ids.length) throw forbidden("Captured Context source set is ambiguous");
+  const manifests = ids.length ? await db.select().from(contextManifests).where(and(
+    eq(contextManifests.companyId, companyId), inArray(contextManifests.id, ids),
+  )) : [];
+  if (manifests.length !== ids.length) throw forbidden("Captured Context source is unavailable");
+  const items = ids.length ? await db.select().from(contextManifestItems).where(and(
+    eq(contextManifestItems.companyId, companyId), inArray(contextManifestItems.manifestId, ids),
+  )).orderBy(contextManifestItems.manifestId, contextManifestItems.rank, contextManifestItems.id).limit(257) : [];
+  const roots = ids.length ? await db.select().from(contextManifestMemoryRoots).where(and(
+    eq(contextManifestMemoryRoots.companyId, companyId), inArray(contextManifestMemoryRoots.manifestId, ids),
+  )).orderBy(contextManifestMemoryRoots.manifestId, contextManifestMemoryRoots.memoryRecordId).limit(257) : [];
+  if (items.length > 256 || roots.length > 256) throw forbidden("Captured Context source set exceeds its bound");
+  for (const input of inputs) {
+    const manifest=manifests.find(row=>row.id===input.manifestId);
+    if (!manifest || manifest.queryHash!==input.queryHash || manifest.policySnapshotHash!==input.policySnapshotHash ||
+      temporalContextContentHash(manifest,items.filter(item=>item.manifestId===manifest.id),roots.filter(root=>root.manifestId===manifest.id))!==input.contentHash)
+      throw forbidden("Captured Context source changed");
+  }
 }
 
 /** Capture only same-company persisted Context roots. Unsupported providers keep
@@ -25,7 +62,7 @@ export async function captureNativeTemporalContext(db: Db, companyId: string, ru
   const manifests = await db.select().from(contextManifests).where(and(
     eq(contextManifests.companyId, companyId), eq(contextManifests.runId, runId),
   )).orderBy(contextManifests.createdAt, contextManifests.id).limit(65);
-  if (manifests.length > 64) return { complete: false, inputs: [], issueIds: [], projectIds: [], memoryIds: [], foundationRevisionIds: [] };
+  if (manifests.length > 64) return { complete: false, inputs: [], issueIds: [], projectIds: [], memoryIds: [], foundationRevisionIds: [], issueEdges: [] };
   const ids = manifests.map(row => row.id);
   const items = ids.length ? await db.select().from(contextManifestItems).where(and(
     eq(contextManifestItems.companyId, companyId), inArray(contextManifestItems.manifestId, ids),
@@ -33,9 +70,13 @@ export async function captureNativeTemporalContext(db: Db, companyId: string, ru
   const memoryRoots = ids.length ? await db.select().from(contextManifestMemoryRoots).where(and(
     eq(contextManifestMemoryRoots.companyId, companyId), inArray(contextManifestMemoryRoots.manifestId, ids),
   )).orderBy(contextManifestMemoryRoots.manifestId, contextManifestMemoryRoots.memoryRecordId).limit(257) : [];
-  if (items.length > 256 || memoryRoots.length > 256) return { complete: false, inputs: [], issueIds: [], projectIds: [], memoryIds: [], foundationRevisionIds: [] };
+  if (items.length > 256 || memoryRoots.length > 256) return { complete: false, inputs: [], issueIds: [], projectIds: [], memoryIds: [], foundationRevisionIds: [], issueEdges: [] };
   const issueIds = new Set<string>(), projectIds = new Set<string>(), memoryIds = new Set<string>(), foundationRevisionIds = new Set<string>();
-  let complete = true;
+  const issueEdges: { issueId: string; manifestId: string }[] = [];
+  // This helper pins the current Context family only. The native receipt
+  // owner does not yet prove complete consumed-input closure across runtime,
+  // workspace, history and tool effects, so this cannot seal an output body.
+  let complete = false;
   const inputRows: Extract<NativePayloadSourceInput, { kind: "context" }>[] = [];
   for (const manifest of manifests) {
     if (manifest.projectId) projectIds.add(manifest.projectId);
@@ -45,7 +86,7 @@ export async function captureNativeTemporalContext(db: Db, companyId: string, ru
       if (item.sourceProvider === "august_works_tasks") {
         const ref = /^issue:\/\/([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})$/i.exec(item.sourceRef);
         if (!ref || !item.sourceVersion || !item.contentHash) complete = false;
-        else issueIds.add(ref[1]!);
+        else { issueIds.add(ref[1]!); issueEdges.push({ issueId: ref[1]!, manifestId: manifest.id }); }
       } else if (item.sourceProvider === "august_works_foundation" && owner === "memory_record") {
         const ref = /^foundation:\/\/[0-9a-f-]{36}\/([0-9a-f-]{36})\/(?:\d+|whole)$/i.exec(item.sourceRef);
         if (!ref || item.sourceVersion !== ref[1]) complete = false;
@@ -58,21 +99,14 @@ export async function captureNativeTemporalContext(db: Db, companyId: string, ru
     }
     if (roots.length && owner !== "memory_record") complete = false;
     roots.forEach(root => memoryIds.add(root.memoryRecordId));
-    const contentHash = createHash("sha256").update(JSON.stringify({
-      manifest: { id: manifest.id, companyId: manifest.companyId, runId: manifest.runId, agentId: manifest.agentId,
-        issueId: manifest.issueId, projectId: manifest.projectId, queryHash: manifest.queryHash,
-        policySnapshotHash: manifest.policySnapshotHash, createdAt: manifest.createdAt.toISOString() },
-      items: manifestItems.map(item => ({ id: item.id, provider: item.sourceProvider, ref: item.sourceRef,
-        version: item.sourceVersion, contentHash: item.contentHash, snapshot: item.payloadSourceSnapshot })),
-      roots: roots.map(root => ({ id: root.memoryRecordId, version: root.sourceVersion, snapshot: root.payloadSourceSnapshot })),
-    }), "utf8").digest("hex");
+    const contentHash = temporalContextContentHash(manifest, manifestItems, roots);
     inputRows.push({ kind: "context", manifestId: manifest.id, queryHash: manifest.queryHash,
       policySnapshotHash: manifest.policySnapshotHash, contentHash });
   }
   const refs = issueIds.size + projectIds.size + memoryIds.size + foundationRevisionIds.size + inputRows.length;
   if (refs > 256) complete = false;
   return { complete, inputs: complete ? inputRows : [], issueIds: [...issueIds].sort(), projectIds: [...projectIds].sort(),
-    memoryIds: [...memoryIds].sort(), foundationRevisionIds: [...foundationRevisionIds].sort() };
+    memoryIds: [...memoryIds].sort(), foundationRevisionIds: [...foundationRevisionIds].sort(), issueEdges };
 }
 
 /** Bind an effect owner's source-policy facts to its actual body hash. The

@@ -24,13 +24,14 @@ import type {
 import { agentExecutionScopeSchema, crossCompanyPolicySchema, type AgentExecutionScope } from "@paperclipai/shared";
 import { conflict, forbidden, unprocessable } from "../../errors.js";
 import { learningAssetRoots,retainLearnedAssetsInContext } from "../learning/learning-assets.js";
-import { memoryPayloadVisible, canActorReadMemorySources } from "../memory/memory-privacy.js";
+import { memoryPayloadVisible, canActorReadMemorySources, lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { modelLineage, observationLineage } from "../memory/derived-memory.js";
 import { lockIssuePrivacyTree } from "../issues.js";
 import { foundationIndexService } from "../foundation/foundation-index.js";
 import { approvedFoundationView, foundationService } from "../foundation/foundation-service.js";
 import {authorizationService,canActorReadHeartbeatRunPrivacy,canActorReadIssuePrivacy,canActorReadProjectPrivacy,type AuthorizationActor,type NativeContextInspectionOwner} from "../authorization.js";
 import { crossCompanyEvidencePolicy } from "../cross-company-context-policy.js";
+import { assertAnalyticalContextPayloadAccess } from "../analytical-context-authority.js";
 
 export interface DelegatedContextExecutionBindingInput {
   homeCompanyId: string;
@@ -45,8 +46,8 @@ export interface DelegatedContextExecutionBindingInput {
   purpose: string;
   accessMode: "read" | "contribute" | "act";
   scope: AgentExecutionScope;
-  /** Re-run the original current-scope owner on this physical source tx. */
-  assertCurrent: (tx: Db) => Promise<void>;
+  /** Authenticated home actor passed by the original runtime owner. */
+  homeActor: AuthorizationActor;
 }
 
 type JsonScalar = string | number | boolean | null;
@@ -105,6 +106,98 @@ export function hashEvidenceContent(evidence: EvidenceItem): string {
       excerpt: evidence.excerpt,
     }),
   );
+}
+
+/** Revalidate the exact persisted guest Context closure through its original
+ * provider owners. This accepts only native Task, approved Foundation, and
+ * Memory providers; connected/unknown providers remain unavailable. Caller
+ * must pass the guest actor returned by the canonical cross-company resolver
+ * and its existing native transaction. */
+export async function revalidateStoredContextManifestSources(db: Db, input: {
+  companyId: string; manifestId: string; agentId: string; actor: AuthorizationActor;
+}) {
+  const [manifest] = await db.select({ id: contextManifests.id, agentId: contextManifests.agentId,
+    runId: contextManifests.runId }).from(contextManifests).where(and(
+    eq(contextManifests.companyId, input.companyId), eq(contextManifests.id, input.manifestId))).limit(1);
+  if (!manifest || manifest.agentId !== input.agentId || manifest.runId !== null)
+    throw forbidden("Delegated Context manifest is unavailable");
+  await lockIssuePrivacyTree(db, input.companyId);
+  await lockMemoryPrivacy(db, input.companyId);
+  const items = await db.select().from(contextManifestItems).where(and(
+    eq(contextManifestItems.companyId, input.companyId), eq(contextManifestItems.manifestId, input.manifestId)))
+    .orderBy(contextManifestItems.rank).limit(257);
+  if (items.length > 256) throw forbidden("Delegated Context source set exceeds its bounded review");
+  const roots = await db.select().from(contextManifestMemoryRoots).where(and(
+    eq(contextManifestMemoryRoots.companyId, input.companyId), eq(contextManifestMemoryRoots.manifestId, input.manifestId)))
+    .orderBy(contextManifestMemoryRoots.memoryRecordId).limit(257);
+  if (roots.length > 256) throw forbidden("Delegated Context Memory roots exceed their bounded review");
+
+  const expectedRoots = new Map<string, string>();
+  const foundationRefs: Array<{ documentId: string; revisionId: string }> = [];
+  const analyticalRead = (issueId: string) => assertAnalyticalContextPayloadAccess(db, input.companyId, input.actor, { issueId }, "task");
+  for (const item of items) {
+    if (item.sourceProvider === "august_works_tasks") {
+      const ref = /^issue:\/\/([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})$/i.exec(item.sourceRef);
+      if (!ref) throw forbidden("Delegated Context Task reference is invalid");
+      const [current] = await db.select({ id: issues.id, updatedAt: issues.updatedAt,
+        payloadSourceSnapshot: issues.payloadSourceSnapshot }).from(issues).where(and(
+        eq(issues.companyId, input.companyId), eq(issues.id, ref[1]!))).for("share");
+      if (!current || current.updatedAt.toISOString() !== item.sourceVersion ||
+        hashContextPolicySnapshot(current.payloadSourceSnapshot) !== hashContextPolicySnapshot(item.payloadSourceSnapshot) ||
+        !await canActorReadIssuePrivacy(db, input.actor, { companyId: input.companyId, id: current.id }))
+        throw forbidden("Delegated Context Task source changed or is unavailable");
+      await analyticalRead(current.id);
+    } else if (item.sourceProvider === "august_works_foundation") {
+      const ref = /^foundation:\/\/([a-f0-9-]{36})\/([a-f0-9-]{36})(?:\/(?:whole|\d+))?$/i.exec(item.sourceRef);
+      if (!ref || item.sourceVersion !== ref[2]) throw forbidden("Delegated Context Foundation reference is invalid");
+      foundationRefs.push({ documentId: ref[1]!, revisionId: ref[2]! });
+    } else if (item.sourceProvider === "august_works_memory") {
+      const ref = /^memory:\/\/record\/([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})$/i.exec(item.sourceRef);
+      if (!ref || !item.sourceVersion) throw forbidden("Delegated Context Memory reference is invalid");
+      expectedRoots.set(ref[1]!, item.sourceVersion);
+    } else if (item.sourceProvider === "august_works_derived_memory") {
+      const ref = /^memory:\/\/(memory_model|memory_observation)\/([a-f0-9-]{36})$/i.exec(item.sourceRef);
+      if (!ref) throw forbidden("Delegated Context derived Memory reference is invalid");
+      if (ref[1] === "memory_model") {
+        const [row] = await db.select().from(memoryModels).where(and(eq(memoryModels.companyId, input.companyId),
+          eq(memoryModels.id, ref[2]!))).for("share");
+        if (!row || row.erasedAt || row.status !== "active" || String(row.version) !== item.sourceVersion)
+          throw forbidden("Delegated Context derived Memory source is unavailable");
+        for (const root of (await modelLineage(db, input.actor, row)).roots) {
+          if (expectedRoots.has(root.id) && expectedRoots.get(root.id) !== root.updatedAt.toISOString())
+            throw forbidden("Delegated Context Memory root versions changed");
+          expectedRoots.set(root.id, root.updatedAt.toISOString());
+        }
+      } else {
+        const [row] = await db.select().from(memoryObservations).where(and(eq(memoryObservations.companyId, input.companyId),
+          eq(memoryObservations.id, ref[2]!))).for("share");
+        if (!row || row.erasedAt || row.status !== "accepted" || String(row.version) !== item.sourceVersion)
+          throw forbidden("Delegated Context derived Memory source is unavailable");
+        for (const root of (await observationLineage(db, input.actor, row)).roots) {
+          if (expectedRoots.has(root.id) && expectedRoots.get(root.id) !== root.updatedAt.toISOString())
+            throw forbidden("Delegated Context Memory root versions changed");
+          expectedRoots.set(root.id, root.updatedAt.toISOString());
+        }
+      }
+    } else {
+      throw forbidden("Delegated Context provider has no current source authorization owner");
+    }
+  }
+  if (foundationRefs.length) await foundationService(db).pinApprovedRevisions(input.companyId, foundationRefs, input.actor);
+  for (const root of roots) {
+    const [current] = await db.select({ id: memoryRecords.id, updatedAt: memoryRecords.updatedAt,
+      payloadSourceSnapshot: memoryRecords.payloadSourceSnapshot, validUntil: memoryRecords.validUntil,
+      expiresAt: memoryRecords.expiresAt }).from(memoryRecords).where(and(
+      eq(memoryRecords.companyId, input.companyId), eq(memoryRecords.id, root.memoryRecordId), memoryPayloadVisible())).for("share");
+    if (!current || current.updatedAt.toISOString() !== root.sourceVersion ||
+      hashContextPolicySnapshot(current.payloadSourceSnapshot) !== hashContextPolicySnapshot(root.payloadSourceSnapshot) ||
+      current.validUntil && current.validUntil.getTime() <= Date.now() || current.expiresAt && current.expiresAt.getTime() <= Date.now() ||
+      expectedRoots.size && expectedRoots.has(current.id) && expectedRoots.get(current.id) !== current.updatedAt.toISOString() ||
+      !await canActorReadMemorySources(db, input.companyId, input.actor, current.id))
+      throw forbidden("Delegated Context Memory source changed or is unavailable");
+  }
+  for (const [id, version] of expectedRoots) if (!roots.some(root => root.memoryRecordId === id && root.sourceVersion === version))
+    throw forbidden("Delegated Context selected Memory root closure is incomplete");
 }
 
 export interface ContextManifestSelectedEvidence {
@@ -371,7 +464,6 @@ export function contextManifestService(db: Db) {
       const policySnapshotHash = hashContextPolicySnapshot(input.policySnapshot);
 
       return db.transaction(async (tx) => {
-        await lockIssuePrivacyTree(tx,input.companyId);
         const sourceDb = tx as unknown as Db;
         const delegated = input.delegatedExecution;
         if (delegated && (input.runId || input.companyId !== delegated.guestCompanyId || input.agentId !== delegated.guestAgentId ||
@@ -400,6 +492,10 @@ export function contextManifestService(db: Db) {
           if (!home || home.agentIdentityId !== delegated.homeAgentIdentityId || !request || request.issueId !== home.issueId ||
             hashContextPolicySnapshot(agentExecutionScopeSchema.parse(request.scope)) !== hashContextPolicySnapshot(scope))
             throw forbidden("Delegated Context requires its exact current home Run and claimed scope request");
+          if (delegated.homeActor.type !== "agent" || delegated.homeActor.source !== "agent_jwt" ||
+            delegated.homeActor.companyId !== delegated.homeCompanyId || delegated.homeActor.agentId !== delegated.homeAgentId ||
+            delegated.homeActor.runId !== delegated.homeRunId || delegated.homeActor.onBehalfOfUserId !== delegated.responsibleUserId)
+            throw forbidden("Delegated Context requires its original authenticated home actor");
           const [guest] = await sourceDb.select({ agentIdentityId: agents.agentIdentityId }).from(agents).where(and(
             eq(agents.companyId, delegated.guestCompanyId), eq(agents.id, delegated.guestAgentId))).limit(1);
           if (!guest || guest.agentIdentityId !== delegated.guestAgentIdentityId || guest.agentIdentityId !== home.agentIdentityId)
@@ -427,7 +523,8 @@ export function contextManifestService(db: Db) {
               eq(agentExecutionScopeRequests.requestedByUserId, delegated.responsibleUserId)));
             if (!currentRun || !currentRequest || hashContextPolicySnapshot(agentExecutionScopeSchema.parse(currentRequest.scope)) !== hashContextPolicySnapshot(delegated.scope))
               throw forbidden("Delegated Context accountability changed during assembly");
-            await delegated.assertCurrent(sourceDb);
+            const { crossCompanyContextService } = await import("../cross-company-context.js");
+            await crossCompanyContextService(sourceDb).resolve(delegated.homeActor, delegated.scope, sourceDb);
             const [policyRow] = await sourceDb.select().from(companyCrossCompanyPolicies).where(eq(companyCrossCompanyPolicies.companyId, delegated.guestCompanyId)).limit(1);
             const currentPolicy = crossCompanyPolicySchema.parse(policyRow?.policy ?? {});
             const policyAllowsMode = delegated.accessMode === "read" ? currentPolicy.allowRead : delegated.accessMode === "contribute" ? currentPolicy.allowContribute : currentPolicy.allowAct;
@@ -451,6 +548,11 @@ export function contextManifestService(db: Db) {
             || (input.projectId && !await canActorReadProjectPrivacy(sourceDb,sourceActor,{companyId:input.companyId,id:input.projectId})))
             throw forbidden("Context source access is unavailable");
         };
+        // Pin current primary/guest authority before touching Task privacy
+        // roots, then recheck in the same physical source transaction after
+        // the privacy tree is locked.
+        if (delegated) await assertScopePrivacy();
+        await lockIssuePrivacyTree(tx,input.companyId);
         await assertScopePrivacy();
         const selectedTaskIds: string[] = [];
         const selectedPayloadSnapshots = new Map<string, typeof issues.$inferSelect["payloadSourceSnapshot"]>();
@@ -474,12 +576,6 @@ export function contextManifestService(db: Db) {
         for (const id of selectedTaskIds)
           if (!await canActorReadIssuePrivacy(sourceDb,sourceActor,{companyId:input.companyId,id}))
             throw forbidden("Context source access is unavailable");
-        // Retain copied Task roots at the original destination Task owner.
-        // Removing a Context manifest later cannot release these dependencies.
-        const copiedTaskIds=selectedTaskIds.filter(id=>id!==issueId);
-        if(issueId && copiedTaskIds.length)await tx.insert(issuePrivacySources).values(copiedTaskIds.map(sourceId=>({
-          companyId:input.companyId,issueId,sourceKind:"issue" as const,sourceId,
-        }))).onConflictDoNothing();
         const [manifest] = await tx
           .insert(contextManifests)
           .values({
@@ -492,6 +588,13 @@ export function contextManifestService(db: Db) {
             policySnapshotHash,
           })
           .returning();
+        // Keep Task source edges tenant-qualified and tied to this exact
+        // Context selection. Effect-time output snapshots choose which
+        // manifest roots are actually retained by the resulting Task.
+        const copiedTaskIds = selectedTaskIds.filter(id => id !== issueId);
+        if (issueId && copiedTaskIds.length) await tx.insert(issuePrivacySources).values(copiedTaskIds.map(sourceId => ({
+          companyId: input.companyId, issueId, sourceKind: "issue" as const, sourceId, contextManifestId: manifest!.id,
+        }))).onConflictDoNothing();
 
         const values = input.selected.map((selected, rank) => {
           const evidence = selected.decision.evidence;
@@ -529,6 +632,7 @@ export function contextManifestService(db: Db) {
         // Native references and lineage owners define the complete source set.
         // Provider metadata is descriptive; it cannot shrink retained roots.
         const expectedRoots=new Map(learnedRoots);
+        const delegatedRootSnapshot: Array<{ memoryRecordId: string; sourceVersion: string; payloadHash: string }> = [];
         for(const {decision} of input.selected){
           const item=decision.evidence;
           if(item.sourceProvider==="august_works_memory"){
@@ -575,6 +679,8 @@ export function contextManifestService(db: Db) {
           // Freeze the selected body's closure under the same version/share
           // pin, including learned/derived roots. NULL history stays unknown.
           for (const root of roots) selectedPayloadSnapshots.set(sourceKey("august_works_memory",`memory://record/${root.id}`),root.payloadSourceSnapshot);
+          delegatedRootSnapshot.push(...roots.map(root => ({ memoryRecordId: root.id, sourceVersion: root.updatedAt.toISOString(),
+            payloadHash: hashContextPolicySnapshot(root.payloadSourceSnapshot) })));
           await tx.insert(contextManifestMemoryRoots).values(roots.map((root) => ({ companyId: input.companyId, manifestId: manifest!.id,
             memoryRecordId: root.id, sourceVersion: root.updatedAt.toISOString(), payloadSourceSnapshot: root.payloadSourceSnapshot })));
         }
@@ -590,10 +696,10 @@ export function contextManifestService(db: Db) {
           : [];
 
         if (delegated) {
-          const sourceSnapshotHash = hashContextPolicySnapshot(input.selected.map(({ decision }, rank) => ({
+          const sourceSnapshotHash = hashContextPolicySnapshot({ items: input.selected.map(({ decision }, rank) => ({
             rank, sourceProvider: decision.evidence.sourceProvider, sourceRef: decision.evidence.sourceRef,
             sourceVersion: decision.evidence.sourceVersion, contentHash: hashEvidenceContent(decision.evidence),
-          })));
+          })), roots: delegatedRootSnapshot.sort((a, b) => a.memoryRecordId.localeCompare(b.memoryRecordId)) });
           await tx.insert(delegatedContextManifestBindings).values({
             guestCompanyId: delegated.guestCompanyId, contextManifestId: manifest!.id,
             homeCompanyId: delegated.homeCompanyId, homeAgentId: delegated.homeAgentId,

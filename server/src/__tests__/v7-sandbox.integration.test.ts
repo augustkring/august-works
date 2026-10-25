@@ -65,6 +65,25 @@ const support = await getEmbeddedPostgresTestSupport(), image = "fixture.invalid
   it("blocks native start bypasses on bound cells after feature rollback, and preserves Stop", async () => { await create(); await instanceSettingsService(db).updateExperimental({ sandbox_abstraction_v7: false }); const operation = { companyId: f.home, runtimeCellId: cell.id, requestedByType: "user", requestedById: f.userId, operationType: "start", idempotencyKey: "fixture-start", requestHash: "fixture", status: "REQUESTED", deadlineAt: new Date(Date.now() + 60000) }; await expect(db.insert(runtimeOperations).values(operation)).rejects.toThrow(); await db.insert(runtimeOperations).values({ ...operation, operationType: "stop", idempotencyKey: "fixture-stop" }); });
   it("reconciles missing enforcement into quarantine independently of flag rollback", async () => { const row = await create(); await instanceSettingsService(db).updateExperimental({ sandbox_abstraction_v7: false }); expect(await executionSandboxService(db, { operatorUserIds: [f.userId] }).reconcile(f.actor, f.home, row.id, 1)).toMatchObject({ status: "quarantined", version: 2 }); });
   it("requires an actual owned manifest instead of caller policy pins", async () => { const row = await create(); await expect(executionSandboxService(db, { operatorUserIds: [f.userId] }).compile(f.actor, f.home, row.id, { expectedVersion: 1, executionManifestId: "11111111-1111-4111-8111-111111111111", candidatePolicy: policyFixture() })).rejects.toMatchObject({ status: 404 }); await expect(executionSandboxService(db, { operatorUserIds: [f.userId] }).qualify(f.actor, f.home, row.id, 2)).rejects.toMatchObject({ status: 409 }); });
+  it("refuses workload admission before protected physical qualification and a current compiled manifest policy", async () => {
+    await instanceSettingsService(db).updateExperimental({ openshell_v7: true, hosted_openclaw_v6: true });
+    const service = executionSandboxService(db, { operatorUserIds: [f.userId] });
+    const binding = await service.create(f.actor, f.home, {
+      runtimeCellId: cell.id,
+      expectedCellGeneration: cell.generation.toString(),
+      backend: "openshell",
+      profile: "development",
+      boundaryPolicy: policyFixture(),
+    });
+    await expect(
+      service.admit(f.actor, f.home, binding.id, {
+        expectedVersion: binding.version,
+        policySnapshotId: "11111111-1111-4111-8111-111111111111",
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    const [unchanged] = await db.select().from(runtimeSandboxBindings).where(eq(runtimeSandboxBindings.id, binding.id));
+    expect(unchanged).toMatchObject({ status: "requested", version: binding.version });
+  });
   it("automatically quarantines a lifecycle bypass after rollout rollback and owner revocation, with a durable native system Stop", async () => {
     const binding = await create();
     await db.update(runtimeCells).set({ status: "HEALTHY" }).where(eq(runtimeCells.id, cell.id));

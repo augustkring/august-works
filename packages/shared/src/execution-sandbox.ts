@@ -32,10 +32,12 @@ export const sandboxPolicySchema = z.object({
 }).strict();
 export const sandboxBindingCreateSchema = z.object({ runtimeCellId: z.string().uuid(), expectedCellGeneration: z.string().regex(/^[1-9]\d{0,18}$/), backend: sandboxBackendSchema, profile: sandboxProfileSchema, boundaryPolicy: sandboxPolicySchema }).strict();
 export const sandboxCompileSchema = z.object({ expectedVersion: z.number().int().positive(), executionManifestId: z.string().uuid(), candidatePolicy: sandboxPolicySchema }).strict();
+export const sandboxAdmissionSchema = z.object({ expectedVersion: z.number().int().positive(), policySnapshotId: z.string().uuid() }).strict();
 export type SandboxPolicy = z.infer<typeof sandboxPolicySchema>;
 export type SandboxCapabilitySnapshot = z.infer<typeof sandboxCapabilitySnapshotSchema>;
 export type SandboxBindingCreateInput = z.infer<typeof sandboxBindingCreateSchema>;
 export type SandboxCompileInput = z.infer<typeof sandboxCompileSchema>;
+export type SandboxAdmissionInput = z.infer<typeof sandboxAdmissionSchema>;
 export interface SandboxPosture {
   runtimeCellId: string; generation: string;
   state: "legacy_boundary" | "awaiting_qualification" | "backend_qualified" | "quarantined";

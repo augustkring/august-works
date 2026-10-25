@@ -2,8 +2,8 @@ import {randomUUID} from "node:crypto";
 import {and,desc,eq,sql} from "drizzle-orm";
 import {analyticalLineageEdges,analyticalLineageManifests,businessMetricObservations,businessMetricVersions,decisionOutcomeReviews,decisionOutcomeReviewReceipts,learningEvidence,type Db} from "@paperclipai/db";
 import {scheduleDecisionOutcomeReviewSchema,transitionDecisionOutcomeReviewSchema,finishDecisionOutcomeReviewSchema,startDecisionReviewLearningSchema,type StartDecisionReviewLearning,type ScheduleDecisionOutcomeReview,type TransitionDecisionOutcomeReview,type FinishDecisionOutcomeReview,type DecisionOutcomeReviewReceipt,type DecisionOutcomeReviewView,type CapturedDecisionEvidence,type DecisionMetricComparison} from "@paperclipai/shared";
-import {conflict,notFound,unprocessable} from "../errors.js";
-import type {AuthorizationActor} from "./authorization.js";
+import {conflict,forbidden,notFound,unprocessable} from "../errors.js";
+import {pinCurrentBoardActor,type AuthorizationActor} from "./authorization.js";
 import {inspectBoundDecisionContext,inspectDecisionSourceAuthority} from "./decision-intelligence.js";
 import {authorizeStrategyReference} from "./strategy-execution/references.js";
 import {businessMetricService} from "./business-metrics/service.js";
@@ -114,6 +114,10 @@ async function inspect(tx:Db,row:Root,actor:AuthorizationActor,bound:Bound):Prom
     status:row.status==="scheduled"&&row.reviewDueAt<=new Date()?"due":row.status,reviewDueAt:row.reviewDueAt.toISOString(),reviewedAt:row.reviewedAt?.toISOString()??null,reviewedByUserId:row.reviewedByUserId,
     receipts:receipts.map(item=>item.payload),causalClaimRef:null,learningCycleId:row.learningCycleId,authorizationCheckedAt:new Date().toISOString()};
 }
+async function pinCurrentHumanCredential(tx:Db,actor:AuthorizationActor) {
+  if(actor.type!=="board"||actor.source==="local_implicit") return;
+  if(!await pinCurrentBoardActor(tx,actor)) throw forbidden("The current authenticated Human credential is unavailable");
+}
 function receipt(row:Root,actor:AuthorizationActor,action:DecisionOutcomeReviewReceipt["action"],fromState:DecisionOutcomeReviewReceipt["fromState"],rationale:string,expiresAt:Date):DecisionOutcomeReviewReceipt {
   return {revision:row.revision,action,fromState,toState:row.status,rationale,recordedBy:v7HumanActorId(actor),recordedAt:row.updatedAt.toISOString(),contextHash:row.contextHash,contentHash:"",assessment:null,actualEvidence:[],comparisons:[],nativeExecution:null,expiresAt:expiresAt.toISOString()};
 }
@@ -126,21 +130,28 @@ export function decisionOutcomeReviewService(db:Db) {
     async startLearning(companyId:string,actor:AuthorizationActor,decisionId:string,raw:StartDecisionReviewLearning) {
       v7HumanActorId(actor);const input=startDecisionReviewLearningSchema.parse(raw);
       return withV7ActivityTransaction(db,async(tx,publications)=>{
+        const timingStart=performance.now();const timing=(step:string)=>console.log("decision-outcome-learning-step",step,Math.round(performance.now()-timingStart));
         const bound=await inspectBoundDecisionContext(tx,companyId,actor,decisionId,true),prior=await root(tx,companyId,decisionId);
+        timing("bound-and-root");
         if(!prior||prior.revision!==input.expectedRevision||!["completed","inconclusive"].includes(prior.status))throw conflict("Complete the current outcome review before starting Learning");
-        await inspect(tx,prior,actor,bound);
+        const inspected=await inspect(tx,prior,actor,bound);
+        timing("initial-inspect");
         const learning=learningService(tx);
         if(prior.learningCycleId){
-          const cycle=await learning.get(actor,companyId,prior.learningCycleId);
+          const cycle=await learning.getCycleWithCurrentRoots(actor,companyId,prior.learningCycleId);
+          timing("learning-current-roots");
           const edges=await tx.select({id:learningEvidence.memoryRecordId}).from(learningEvidence).where(and(eq(learningEvidence.companyId,companyId),eq(learningEvidence.cycleId,cycle.id)));
+          timing("learning-evidence");
           if(cycle.purpose!==input.purpose||cycle.trigger!==input.trigger||cycle.maxHypotheses!==input.maxHypotheses||cycle.maxEvaluations!==input.maxEvaluations||JSON.stringify(edges.map(edge=>edge.id).sort())!==JSON.stringify([...input.memoryRecordIds].sort()))throw conflict("This review already started a Learning cycle with different inputs");
-          return {review:await inspect(tx,prior,actor,bound),cycleId:cycle.id};
+          timing("replay-validation");await pinCurrentHumanCredential(tx,actor);timing("credential-pin");return {review:{...inspected,learningCycleId:prior.learningCycleId},cycleId:cycle.id};
         }
         const {expectedRevision,...cycleInput}=input;
         const cycle=await learning.createInTransaction(actor,companyId,{...cycleInput,scope:{type:"company",id:null},analyticalSources:[{kind:"outcome_review",decisionId,revision:expectedRevision}]},publications);
+        timing("learning-create");
         const [linked]=await tx.update(decisionOutcomeReviews).set({learningCycleId:cycle.id}).where(and(eq(decisionOutcomeReviews.companyId,companyId),eq(decisionOutcomeReviews.id,prior.id))).returning();
         await logActivity(tx,{companyId,actorType:"user",actorId:v7HumanActorId(actor),action:"decision.outcome_review_learning_started",entityType:"decision",entityId:decisionId,details:{reviewId:prior.id,revision:prior.revision,cycleId:cycle.id}},publications);
-        return {review:await inspect(tx,linked!,actor,bound),cycleId:cycle.id};
+        if(!linked) throw notFound("Outcome review disappeared during Learning conversion");
+        timing("create-link");await pinCurrentHumanCredential(tx,actor);timing("credential-pin");return {review:{...inspected,learningCycleId:linked.learningCycleId},cycleId:cycle.id};
       });
     },
     async schedule(companyId:string,actor:AuthorizationActor,decisionId:string,raw:ScheduleDecisionOutcomeReview) {

@@ -11,6 +11,7 @@ import { notificationPreferenceProposals, foundationChangeProposals, foundationS
 import { eraseAnalyticalSourcesUnderMemory } from "../analytical-source-erasure.js";
 import { eraseBusinessEventObjectUnderMemory } from "../business-event-payload-erasure.js";
 import { conflict, forbidden, HttpError } from "../../errors.js";
+import { nativePayloadSourceSnapshotSchema } from "@paperclipai/shared";
 import type { AuthorizationActor } from "../authorization.js";
 import { agentAuthoringTestMemorySourceReadActive } from "../agents/authoring-test-memory-source-scope.js";
 import { invalidateCognitiveRecords } from "./cognitive-privacy.js";
@@ -161,7 +162,11 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
   const admitted = () => memorySourceActorCurrent(db,companyId,actor,recordId);
   if (!await admitted()) return false;
   const active = new Set<string>(), visited = new Set<string>();
-  const runs = new Set<string>(), tasks = new Set<string>(), projectIds = new Set<string>(), revisions = new Set<string>();
+  const runChecks = new Map<string, Map<string, string | null>>(), taskChecks = new Map<string, Map<string, string | null>>();
+  const projectIds = new Set<string>(), revisions = new Set<string>();
+  const addScoped = (map:Map<string,Map<string,string|null>>,id:string,ownerId:string,contextIds:string[]|null) => {
+    let values=map.get(id);if(!values){values=new Map();map.set(id,values);}values.set(ownerId,contextIds===null?null:JSON.stringify(contextIds));
+  };
   const deadline = state.deadline;
   const visit = async (id:string,ancestor=false,authorizedPrivateOwnerEdge=false):Promise<boolean> => {
     if (active.has(id) || performance.now()>deadline || visited.size>=256 || state.work>=256) return false;
@@ -185,7 +190,15 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
     const ids = [...row.sourceRunIds,...row.sourceIssueIds,...row.sourceProjectIds,...row.sourceMemoryIds,...row.sourceFoundationRevisionIds];
     if (ids.length>256 || ids.some(value=>typeof value!=="string" || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value))) return false;
     visited.add(visitKey);active.add(id);
-    row.sourceRunIds.forEach(value=>runs.add(value));row.sourceIssueIds.forEach(value=>tasks.add(value));
+    const capturedSnapshot=nativePayloadSourceSnapshotSchema.safeParse(row.payloadSourceSnapshot);
+    const capturedContextIds=capturedSnapshot.success&&row.payloadSourceProtocolVersion===1&&!row.payloadSourceSnapshotInvalidated
+      &&capturedSnapshot.data.owner.kind==="memory_record"&&capturedSnapshot.data.owner.companyId===companyId
+      &&capturedSnapshot.data.owner.id===row.id&&capturedSnapshot.data.policy.runIds.length===row.sourceRunIds.length
+      &&row.sourceRunIds.every(runId=>capturedSnapshot.data.policy.runIds.includes(runId))
+      &&capturedSnapshot.data.inputs.every(input=>input.kind==="context")
+      ? capturedSnapshot.data.inputs.map(input=>input.kind==="context"?input.manifestId:"").sort() : null;
+    row.sourceRunIds.forEach(value=>addScoped(runChecks,value,row.id,capturedContextIds));
+    row.sourceIssueIds.forEach(value=>addScoped(taskChecks,value,row.id,capturedContextIds));
     row.sourceProjectIds.forEach(value=>projectIds.add(value));row.sourceFoundationRevisionIds.forEach(value=>revisions.add(value));
     if (row.scopeType==="project") {
       if (!row.scopeId || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(row.scopeId)) return false;
@@ -195,11 +208,21 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
     if(publishedSourceId===false)return false;
     for (const source of row.sourceMemoryIds) if (!await visit(source,true,source===publishedSourceId)) return false;
     active.delete(id);
-    return visited.size+runs.size+tasks.size+projectIds.size+revisions.size<=256;
+    const scopedReads=[...runChecks.values(),...taskChecks.values()].reduce((count,scopes)=>count+scopes.size,0);
+    return visited.size+scopedReads+projectIds.size+revisions.size<=256;
   };
   if (!await visit(recordId)) return false;
-  for (const id of runs) if (performance.now()>deadline || !await canActorReadHeartbeatRunPrivacy(db,actor,{companyId,id})) return false;
-  for (const id of tasks) if (performance.now()>deadline || !await canActorReadIssuePrivacy(db,actor,{companyId,id})) return false;
+  const {withReadMemoryTemporalSources}=await import("../authorization.js");
+  for (const [id,owners] of runChecks) for (const [ownerId,encoded] of owners) {
+    const check=()=>canActorReadHeartbeatRunPrivacy(db,actor,{companyId,id});
+    if (performance.now()>deadline || (encoded===null ? !await check()
+      : !await withReadMemoryTemporalSources(db,actor,companyId,ownerId,check))) return false;
+  }
+  for (const [id,owners] of taskChecks) for (const [ownerId,encoded] of owners) {
+    const check=()=>canActorReadIssuePrivacy(db,actor,{companyId,id});
+    if (performance.now()>deadline || (encoded===null ? !await check()
+      : !await withReadMemoryTemporalSources(db,actor,companyId,ownerId,check))) return false;
+  }
   for (const id of projectIds) if (performance.now()>deadline || !await canActorReadProjectPrivacy(db,actor,{companyId,id})) return false;
   if (revisions.size) {
     if (!(await authorizationService(db).decide({actor,action:"foundation:read",resource:{type:"company",companyId},enforceResponsibleUserIntersection:true})).allowed) return false;

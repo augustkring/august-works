@@ -683,6 +683,8 @@ async function insertCandidate(
     .returning();
   if (!record) throw new Error("Memory candidate insert returned no row");
 
+  let persistedRecord=record;
+  await insertEvidenceRows(tx, companyId, record.id, input.evidence);
   if (freezeTemporalContext) {
     const [captured] = await tx.update(memoryRecords).set({ payloadSourceSnapshot: nativePayloadSnapshotSql(
       "memory_record", temporalContextPolicy, temporalContext!.inputs,
@@ -690,16 +692,15 @@ async function insertCandidate(
       eq(memoryRecords.payloadSourceProtocolVersion, 1), isNull(memoryRecords.payloadSourceSnapshot),
       eq(memoryRecords.payloadSourceSnapshotInvalidated, false))).returning();
     if (!captured?.payloadSourceSnapshot) throw conflict("Temporal Memory source capture was not stored");
-    return captured;
+    persistedRecord=captured;
   }
 
-  await insertEvidenceRows(tx, companyId, record.id, input.evidence);
   // Every new-row producer shares this final effect admission. An INSERT can
   // wait on a foreign key after capture, while its Agent/Human loses authority.
   if(!await canActorReadMemorySources(tx,companyId,memorySourceActor(companyId,actor),record.id))
     throw forbidden("Memory candidate source access is unavailable");
 
-  return record;
+  return persistedRecord;
 }
 
 export interface MemoryServiceOptions {

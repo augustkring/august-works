@@ -1323,6 +1323,87 @@
       },
       "summary": [],
       "sourceCommit": "1d513ed00afbf5ec0d412e1a02962e920a51abc9"
+    },
+    {
+      "name": "v10-shared-contracts-current",
+      "exitCode": 0,
+      "exitSidecar": "v10-shared-contracts-current.exit",
+      "rawSha256": "c522cc96a2b3503456d98bbd7bc070b529bb060e429910c390c6971a83e88696",
+      "sanitizedSha256": "c522cc96a2b3503456d98bbd7bc070b529bb060e429910c390c6971a83e88696",
+      "archiveSha256": "ab8bb850d9143dd81b0eaf92f0107120a0f869b7dae472447314d8566818907f",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  137 passed (137)",
+        "Tests  1205 passed (1205)",
+        "Duration  42.33s (transform 3.35s, setup 0ms, import 15.26s, tests 9.51s, environment 14ms)"
+      ],
+      "sourceCommit": "2be1b0cd777be0c7675bfaab151fa4b5d8a7f2d8"
+    },
+    {
+      "name": "v10-context-runtime-server-typecheck-current",
+      "exitCode": 0,
+      "exitSidecar": "v10-context-runtime-server-typecheck-current.exit",
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "2be1b0cd777be0c7675bfaab151fa4b5d8a7f2d8"
+    },
+    {
+      "name": "delegated-context-v5-runtime-purgefix",
+      "exitCode": 0,
+      "exitSidecar": "delegated-context-v5-runtime-purgefix.exit",
+      "rawSha256": "f6adaf98bc66891f9041d6679a95ff3076097e9eeb8f9aac3cf658add1b5702f",
+      "sanitizedSha256": "59990141d4fd03f71b470fc31086d10fb86228745b164d2e29202ff0f8669686",
+      "archiveSha256": "b165563d92417c24462cf1a56540b8da0da37816ce835f5b4d73a59e90bcf028",
+      "redactions": {
+        "ansi": 6,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  5 passed (5)",
+        "Duration  30.26s (transform 11.78s, setup 91ms, import 16.35s, tests 13.68s, environment 0ms)"
+      ],
+      "sourceCommit": "2be1b0cd777be0c7675bfaab151fa4b5d8a7f2d8"
+    },
+    {
+      "name": "native-payload-temporal-final2",
+      "exitCode": 1,
+      "exitSidecar": "native-payload-temporal-final2.exit",
+      "rawSha256": "2fc1af5435baee42368aeb32df8b05053c1b96fe3bc2ace12d1541b945062b39",
+      "sanitizedSha256": "2fc1af5435baee42368aeb32df8b05053c1b96fe3bc2ace12d1541b945062b39",
+      "archiveSha256": "2999953af50a8d15e7dfebcd16c5f98201c3c8d07e02df652e2c06bad83e3bbb",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 2 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  2 failed | 1 passed (3)",
+        "Duration  30.90s (transform 12.44s, setup 116ms, import 17.15s, tests 13.52s, environment 0ms)"
+      ],
+      "sourceCommit": "2be1b0cd777be0c7675bfaab151fa4b5d8a7f2d8"
     }
   ],
   "updates": [
@@ -1480,6 +1561,16 @@
         "learning-artifact-worker-cd1061d20",
         "worker-source-cd1061d20-update",
         "worker-source-cd1061d20-root-update"
+      ]
+    },
+    {
+      "sourceCommit": "2be1b0cd777be0c7675bfaab151fa4b5d8a7f2d8",
+      "meaning": "Scoped Shared1205PASS, current server compiler0, delegated Context software5PASS before stricter nonempty provider follow-up. Temporal2RED/1PASS remains open; no final acceptance.",
+      "logs": [
+        "v10-shared-contracts-current",
+        "v10-context-runtime-server-typecheck-current",
+        "delegated-context-v5-runtime-purgefix",
+        "native-payload-temporal-final2"
       ]
     }
   ],

@@ -3,17 +3,17 @@ import { agentExecutionScopeRequests, agents, contextManifestItems, contextManif
   contextManifests, delegatedContextManifestBindings, heartbeatRuns, type Db } from "@paperclipai/db";
 import { agentExecutionScopeSchema, type AgentExecutionScope } from "@paperclipai/shared";
 import { forbidden } from "../../errors.js";
-import { hashContextPolicySnapshot } from "./context-manifest.js";
+import type { AuthorizationActor } from "../authorization.js";
+import { hashContextPolicySnapshot, revalidateStoredContextManifestSources } from "./context-manifest.js";
 
 export interface DelegatedContextManifestResolverInput {
   homeCompanyId: string;
   homeAgentId: string;
   homeRunId: string;
   responsibleUserId: string;
+  actor: AuthorizationActor;
   /** Exact saved refs are preferred; omission enumerates at most the bounded run set. */
   manifestIds?: string[];
-  /** Must use the original cross-company authorization owner for current rights/policy. */
-  assertCurrentScope: (scope: AgentExecutionScope) => Promise<void>;
 }
 
 export interface ResolvedDelegatedContextManifest {
@@ -30,13 +30,20 @@ export interface ResolvedDelegatedContextManifest {
   sourceSnapshotHash: string;
   bindingHash: string;
   items: Array<{ rank: number; sourceProvider: string; sourceRef: string; sourceVersion: string | null; contentHash: string }>;
-  roots: Array<{ memoryRecordId: string; sourceVersion: string }>;
+  roots: Array<{ memoryRecordId: string; sourceVersion: string; payloadHash: string }>;
 }
 
 /** Resolve only manifests whose immutable binding names this exact home Run.
- * The callback is the original cross-company policy/current-presence owner;
- * this function supplies no authority by itself. */
+ * The actual actor is checked against the original run and the original
+ * cross-company owner rechecks scope, local presence, membership, and policy. */
 export async function resolveDelegatedContextManifestBindings(
+  db: Db,
+  input: DelegatedContextManifestResolverInput,
+): Promise<ResolvedDelegatedContextManifest[]> {
+  return db.transaction(async rawTx => resolveDelegatedContextManifestBindingsInScope(rawTx as unknown as Db, input));
+}
+
+async function resolveDelegatedContextManifestBindingsInScope(
   db: Db,
   input: DelegatedContextManifestResolverInput,
 ): Promise<ResolvedDelegatedContextManifest[]> {
@@ -56,6 +63,10 @@ export async function resolveDelegatedContextManifestBindings(
     .where(and(eq(heartbeatRuns.companyId, input.homeCompanyId), eq(heartbeatRuns.agentId, input.homeAgentId),
       eq(heartbeatRuns.id, input.homeRunId), eq(heartbeatRuns.responsibleUserId, input.responsibleUserId))).limit(1);
   if (!homeRun) throw forbidden("Delegated Context home accountability was erased or changed");
+  if (input.actor.type !== "agent" || input.actor.source !== "agent_jwt" ||
+    input.actor.companyId !== input.homeCompanyId || input.actor.agentId !== input.homeAgentId ||
+    input.actor.runId !== input.homeRunId || input.actor.onBehalfOfUserId !== input.responsibleUserId)
+    throw forbidden("Delegated Context reader is not its actual accountable home actor");
 
   const result: ResolvedDelegatedContextManifest[] = [];
   for (const binding of bindings) {
@@ -77,7 +88,10 @@ export async function resolveDelegatedContextManifestBindings(
       eq(agents.companyId, binding.guestCompanyId), eq(agents.id, binding.guestAgentId))).limit(1);
     if (!presence || presence.agentIdentityId !== binding.guestAgentIdentityId || presence.agentIdentityId !== homeRun.agentIdentityId)
       throw forbidden("Delegated Context guest presence was erased or changed");
-    await input.assertCurrentScope(scope);
+    const { crossCompanyContextService } = await import("../cross-company-context.js");
+    const currentScope = await crossCompanyContextService(db).resolve(input.actor, scope, db);
+    const guestActor = currentScope.scopes.find(candidate => candidate.companyId === binding.guestCompanyId)?.localActor;
+    if (!guestActor) throw forbidden("Delegated Context current guest authority is unavailable");
     const [manifest] = await db.select({ queryHash: contextManifests.queryHash, policySnapshotHash: contextManifests.policySnapshotHash,
       agentId: contextManifests.agentId, runId: contextManifests.runId }).from(contextManifests).where(and(
       eq(contextManifests.companyId, binding.guestCompanyId), eq(contextManifests.id, binding.contextManifestId))).limit(1);
@@ -89,15 +103,20 @@ export async function resolveDelegatedContextManifestBindings(
       eq(contextManifestItems.companyId, binding.guestCompanyId), eq(contextManifestItems.manifestId, binding.contextManifestId)))
       .orderBy(contextManifestItems.rank).limit(257);
     if (items.length > 256) throw forbidden("Delegated Context item set exceeds its bounded review");
-    const sourceSnapshotHash = hashContextPolicySnapshot(items.map(item => ({ rank: item.rank, sourceProvider: item.sourceProvider,
-      sourceRef: item.sourceRef, sourceVersion: item.sourceVersion, contentHash: item.contentHash })));
-    if (sourceSnapshotHash !== binding.sourceSnapshotHash)
-      throw forbidden("Delegated Context selected sources changed");
     const roots = await db.select({ memoryRecordId: contextManifestMemoryRoots.memoryRecordId,
-      sourceVersion: contextManifestMemoryRoots.sourceVersion }).from(contextManifestMemoryRoots).where(and(
+      sourceVersion: contextManifestMemoryRoots.sourceVersion,
+      payloadSourceSnapshot: contextManifestMemoryRoots.payloadSourceSnapshot }).from(contextManifestMemoryRoots).where(and(
       eq(contextManifestMemoryRoots.companyId, binding.guestCompanyId), eq(contextManifestMemoryRoots.manifestId, binding.contextManifestId)))
       .orderBy(contextManifestMemoryRoots.memoryRecordId).limit(257);
     if (roots.length > 256) throw forbidden("Delegated Context Memory roots exceed their bounded review");
+    await revalidateStoredContextManifestSources(db, { companyId: binding.guestCompanyId,
+      manifestId: binding.contextManifestId, agentId: binding.guestAgentId, actor: guestActor });
+    const sourceSnapshotHash = hashContextPolicySnapshot({ items: items.map(item => ({ rank: item.rank, sourceProvider: item.sourceProvider,
+      sourceRef: item.sourceRef, sourceVersion: item.sourceVersion, contentHash: item.contentHash })),
+      roots: roots.map(root => ({ memoryRecordId: root.memoryRecordId, sourceVersion: root.sourceVersion,
+        payloadHash: hashContextPolicySnapshot(root.payloadSourceSnapshot) })).sort((a, b) => a.memoryRecordId.localeCompare(b.memoryRecordId)) });
+    if (sourceSnapshotHash !== binding.sourceSnapshotHash)
+      throw forbidden("Delegated Context selected sources or retained roots changed");
     const bindingHash = hashContextPolicySnapshot({ guestCompanyId: binding.guestCompanyId,
       contextManifestId: binding.contextManifestId, homeCompanyId: binding.homeCompanyId,
       homeAgentId: binding.homeAgentId, homeAgentIdentityId: binding.homeAgentIdentityId,
@@ -110,7 +129,8 @@ export async function resolveDelegatedContextManifestBindings(
       guestAgentId: binding.guestAgentId, guestAgentIdentityId: binding.guestAgentIdentityId,
       scopeRequestId: binding.scopeRequestId, purpose: binding.purpose, accessMode: binding.accessMode,
       scope, queryHash: manifest.queryHash, policySnapshotHash: manifest.policySnapshotHash,
-      sourceSnapshotHash, bindingHash, items, roots });
+      sourceSnapshotHash, bindingHash, items, roots: roots.map(root => ({ memoryRecordId: root.memoryRecordId,
+        sourceVersion: root.sourceVersion, payloadHash: hashContextPolicySnapshot(root.payloadSourceSnapshot) })) });
   }
   return result;
 }

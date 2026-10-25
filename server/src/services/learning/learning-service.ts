@@ -175,6 +175,9 @@ export function learningService(db: Db) {
       const candidates = hypotheses.length ? await db.select().from(learningDomainCandidates).where(and(eq(learningDomainCandidates.companyId, companyId), inArray(learningDomainCandidates.hypothesisId, hypotheses.map((item) => item.id)))).limit(20) : [];
       return { ...row, hypotheses, evaluations, candidates: await Promise.all(candidates.map(async candidate => ({ ...candidate, promotionReceipt: await learningPromotionReceipt(db, candidate) }))) };
     },
+    getCycleWithCurrentRoots: async(actor:AuthorizationActor,companyId:string,id:string)=>{
+      const row=await cycle(actor,companyId,id);await learningRoots(db,actor,row);return row;
+    },
     createInTransaction,
     create: async (actor: AuthorizationActor, companyId: string, raw: z.input<typeof learningCycleSchema>) => {
       const input=learningCycleSchema.parse(raw);await admit(actor,companyId,db,"propose");await assertSaasDomainAdmission(db,companyId,"memory.use");

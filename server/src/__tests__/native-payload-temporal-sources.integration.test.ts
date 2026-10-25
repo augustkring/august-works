@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
+import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { agents, authUsers, companies, companyMemberships, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
-  heartbeatRuns, issues } from "@paperclipai/db";
+  contextManifests, heartbeatRuns, issues } from "@paperclipai/db";
 import type { ContextAuthorityDecision } from "@paperclipai/shared";
 import { canActorReadIssuePrivacy } from "../services/authorization.js";
 import { contextManifestService } from "../services/context/context-manifest.js";
@@ -72,6 +73,9 @@ describe("Native payload inputs retain their creation-time source closure", () =
     // Current private policy still narrows later copies. A future input cannot
     // become an input to an already committed earlier Memory body.
     expect((await memory.get(s.companyId, earlier.record.id, bobActor))?.record.id).toBe(earlier.record.id);
+    await db.delete(contextManifests).where(and(eq(contextManifests.companyId,s.companyId),eq(contextManifests.runId,s.runId)));
+    expect(await memory.get(s.companyId,later.record.id,human)).toBeNull();
+    expect((await memory.get(s.companyId,earlier.record.id,bobActor))?.record.id).toBe(earlier.record.id);
   });
 
   it("keeps an earlier derived Task readable while a new Task retains a later private input", async () => {
@@ -84,6 +88,8 @@ describe("Native payload inputs retain their creation-time source closure", () =
     expect(await canActorReadIssuePrivacy(db, s.alice, later)).toBe(true);
     expect(await canActorReadIssuePrivacy(db, s.bob, later)).toBe(false);
     expect(await canActorReadIssuePrivacy(db, s.bob, earlier)).toBe(true);
+    await db.delete(contextManifests).where(and(eq(contextManifests.companyId,s.companyId),eq(contextManifests.runId,s.runId)));
+    expect(await canActorReadIssuePrivacy(db,s.alice,later)).toBe(false);
   });
 
   it("does not release an earlier private body source when a later producer Task is assigned to another Human", async () => {

@@ -45,7 +45,7 @@ export function nativeSandboxHostTransport(
   const auth = runtimeHostAuth(db);
   const operatorUserIds = options.operatorUserIds ?? [];
   const requireRecent = (action: SandboxHostRequest["action"]) =>
-    ["prepare", "probe", "revoke_providers", "stop", "destroy"].includes(
+    ["prepare", "apply", "start", "probe", "revoke_providers", "stop", "destroy"].includes(
       action,
     );
   const assertOperator = (actor: AuthorizationActor, action: SandboxHostRequest["action"], tx?: Db) =>
@@ -134,6 +134,8 @@ export function nativeSandboxHostTransport(
     scope: SandboxIdentity,
     action: SandboxHostRequest["action"],
     probe?: SandboxHostRequest["probe"],
+    admission?: SandboxHostRequest["admission"],
+    start?: SandboxHostRequest["start"],
     idempotencyKey: string = randomUUID(),
   ) {
     scope = {
@@ -181,6 +183,8 @@ export function nativeSandboxHostTransport(
           scope,
           action,
           ...(probe ? { probe } : {}),
+          ...(admission ? { admission } : {}),
+          ...(start ? { start } : {}),
           hostEpoch: host.credentialVersion,
           imageDigest: cell.activeImageDigest ?? cell.desiredImageDigest,
           requesterUserId: userId,
@@ -319,22 +323,52 @@ export function nativeSandboxHostTransport(
             throw conflict("Native sandbox reply action changed");
           return reply.document;
         },
-        // Physical admission remains closed until the complete outer controls
-        // and credential broker can be observed, not asserted in a host file.
-        apply: async () => {
-          throw conflict("Complete physical policy admission is not qualified");
-        },
-        start: async () => {
-          throw conflict(
-            "Complete physical workload admission is not qualified",
+        apply: async (input) => {
+          const { reply } = await invoke(
+            actor,
+            input,
+            "apply",
+            undefined,
+            {
+              policyHash: input.policyHash,
+              idempotencyKey: input.idempotencyKey,
+              document: input.document,
+            },
+            undefined,
+            input.idempotencyKey,
           );
+          if (reply.action !== "apply")
+            throw conflict("Native sandbox reply action changed");
+          return {
+            applied: reply.applied,
+            policyHash: reply.policyHash,
+            requiresRecreate: reply.requiresRecreate,
+          };
+        },
+        start: async (input) => {
+          const { reply, commandId } = await invoke(
+            actor,
+            input,
+            "start",
+            undefined,
+            undefined,
+            {
+              policyHash: input.policyHash,
+              expiresAt: input.expiresAt,
+              idempotencyKey: input.idempotencyKey,
+            },
+            input.idempotencyKey,
+          );
+          if (reply.action !== "start")
+            throw conflict("Native sandbox reply action changed");
+          return { operationId: commandId };
         },
         revokeProviders: async (scope) => {
           await invoke(actor, scope, "revoke_providers");
         },
         stop: async (scope) => ({
           operationId: (
-            await invoke(actor, scope, "stop", undefined, scope.idempotencyKey)
+            await invoke(actor, scope, "stop", undefined, undefined, undefined, scope.idempotencyKey)
           ).commandId,
         }),
         destroy: async (scope) => ({
@@ -343,6 +377,8 @@ export function nativeSandboxHostTransport(
               actor,
               scope,
               "destroy",
+              undefined,
+              undefined,
               undefined,
               scope.idempotencyKey,
             )

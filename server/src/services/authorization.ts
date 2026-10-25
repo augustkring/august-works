@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 import { createHash, randomUUID } from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { isSaasDeployment } from "../deployment-profile.js";
 import { and, eq, inArray, is, isNull, sql, type SQL } from "drizzle-orm";
 import { PgTransaction } from "drizzle-orm/pg-core";
@@ -29,7 +30,11 @@ import {
   projects,
   projectAccessMembers,
   userInboxAgentPolicies,
+  memoryRecords,
+  memoryDeletionMarkers,
+  contextManifests,
 } from "@paperclipai/db";
+import { nativePayloadSourceSnapshotSchema } from "@paperclipai/shared";
 import type {
   AgentApiKeyScope,
   InboxAgentPolicyMode,
@@ -609,6 +614,12 @@ export async function issueReadSqlCondition(_db: Db | DbTransaction, actor: Auth
   return taskSourcePrivacySqlCondition(_db, "issue", sql`${issues.id}`, sql`${issues.companyId}`, actor);
 }
 
+async function issueReadSqlConditionInMemoryScope(db: Db | DbTransaction, actor: AuthorizationActor, issueId: string) {
+  const capturedContextManifestIds=activeMemoryTemporalContexts(db,actor,"issue",issueId);
+  return capturedContextManifestIds === undefined ? issueReadSqlCondition(db,actor)
+    : taskSourcePrivacySqlCondition(db,"issue",sql`${issues.id}`,sql`${issues.companyId}`,actor,capturedContextManifestIds);
+}
+
 /** Same retained-source SQL for the exact typed Workflow Run. A predicate
  * captured inside the native callback still depends on its transaction-local
  * token when executed, so the capability cannot escape callback lifetime. */
@@ -786,7 +797,9 @@ function pipelineAutomationRoutineSourceCondition(company: SQL): SQL<boolean> {
  * Private Routine sources enter through the exact callback-local native owner.
  * Empty stored arrays are relational facts only,
  * never complete-input receipts or publication authority. */
-function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "project" | "run" | "workflow_run" | "routine_run", id: SQL, company: SQL, actor: AuthorizationActor): SQL<boolean> {
+function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "project" | "run" | "workflow_run" | "routine_run", id: SQL, company: SQL, actor: AuthorizationActor,
+  capturedContextManifestIds?: readonly string[]): SQL<boolean> {
+  const contextUuidArray = (ids: readonly string[]) => sql`array[${sql.join(ids.map(value => sql`${value}::uuid`), sql`, `)}]::uuid[]`;
   const routineScope = nativeRoutineReadScopes.get(db as object);
   const routineCapabilityActive = routineScope?.active && routineScope.companyId && routineScope.routineActorKey === routineActorKey(actor);
   const workflowScope = nativeWorkflowReadScopes.get(db as object);
@@ -811,6 +824,55 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
       then substring(item.source_ref from 9)::uuid end
       from context_manifest_items item where item.company_id=c.company_id and item.manifest_id=c.id
         and item.source_provider='august_works_tasks'`;
+  const issueSnapshotValid = kind === "issue" ? sql`exists(select 1 from issues temporal_owner where temporal_owner.id=${id}
+    and temporal_owner.company_id=${company} and temporal_owner.payload_source_protocol_version=1
+    and temporal_owner.payload_source_snapshot is not null and temporal_owner.payload_source_snapshot_invalidated=false
+    and temporal_owner.payload_source_snapshot->'owner'->>'kind'='issue'
+    and temporal_owner.payload_source_snapshot->'owner'->>'id'=temporal_owner.id::text
+    and temporal_owner.payload_source_snapshot->'owner'->>'companyId'=temporal_owner.company_id::text
+    and temporal_owner.payload_source_snapshot->'owner'->>'contentHash'=public.aw_native_payload_body_hash('issue',to_jsonb(temporal_owner))
+    and temporal_owner.payload_source_snapshot->>'digest'=encode(sha256(convert_to((temporal_owner.payload_source_snapshot-'digest')::text,'UTF8')),'hex')
+    and temporal_owner.payload_source_snapshot->'policy'->'issueIds'=coalesce((select jsonb_agg(source_id::text order by source_id::text)
+      from (select distinct s.source_id from issue_privacy_sources s where s.company_id=temporal_owner.company_id
+        and s.issue_id=temporal_owner.id and s.source_kind='issue') captured_ids),'[]'::jsonb)
+    and temporal_owner.payload_source_snapshot->'policy'->'projectIds'=coalesce((select jsonb_agg(source_id::text order by source_id::text)
+      from (select distinct s.source_id from issue_privacy_sources s where s.company_id=temporal_owner.company_id
+        and s.issue_id=temporal_owner.id and s.source_kind='project') captured_ids),'[]'::jsonb)
+    and temporal_owner.payload_source_snapshot->'policy'->'runIds'=coalesce((select jsonb_agg(source_id::text order by source_id::text)
+      from (select distinct s.source_id from issue_privacy_sources s where s.company_id=temporal_owner.company_id
+        and s.issue_id=temporal_owner.id and s.source_kind='run') captured_ids),'[]'::jsonb)
+    and not exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_input
+      where captured_input->>'kind'='context' and (
+        not exists(select 1 from context_manifests captured_context
+          where captured_context.company_id=temporal_owner.company_id
+            and captured_context.id=(captured_input->>'manifestId')::uuid
+            and captured_context.query_hash=captured_input->>'queryHash'
+            and captured_context.policy_snapshot_hash=captured_input->>'policySnapshotHash'
+            and captured_context.run_id=any(array(select value::uuid from jsonb_array_elements_text(temporal_owner.payload_source_snapshot->'policy'->'runIds') refs(value))))
+        or exists(select 1 from context_manifest_items captured_item where captured_item.company_id=temporal_owner.company_id
+          and captured_item.manifest_id=(captured_input->>'manifestId')::uuid and captured_item.source_provider='august_works_tasks'
+          and not exists(select 1 from issue_privacy_sources captured_edge where captured_edge.company_id=temporal_owner.company_id
+            and captured_edge.issue_id=temporal_owner.id and captured_edge.source_kind='issue'
+            and captured_edge.source_id=case when captured_item.source_ref ~* '^issue://[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+              then substring(captured_item.source_ref from 9)::uuid end and captured_edge.context_manifest_id=(captured_input->>'manifestId')::uuid)))))` : sql`false`;
+  const capturedContextIds = capturedContextManifestIds !== undefined ? contextUuidArray(capturedContextManifestIds)
+    : kind === "issue" ? sql`array(select (captured_input->>'manifestId')::uuid
+    from issues temporal_owner cross join lateral jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_input
+    where temporal_owner.id=${id} and temporal_owner.company_id=${company} and temporal_owner.payload_source_protocol_version=1
+      and temporal_owner.payload_source_snapshot is not null and temporal_owner.payload_source_snapshot_invalidated=false
+      and temporal_owner.payload_source_snapshot->'owner'->>'kind'='issue'
+      and temporal_owner.payload_source_snapshot->'owner'->>'id'=temporal_owner.id::text
+      and captured_input->>'kind'='context')`
+    : null;
+  const issueSnapshotCorrupt = kind === "issue" ? sql`exists(select 1 from issues temporal_owner where temporal_owner.id=${id}
+    and temporal_owner.company_id=${company} and temporal_owner.payload_source_protocol_version=1
+    and temporal_owner.payload_source_snapshot is not null and temporal_owner.payload_source_snapshot_invalidated=false
+    and temporal_owner.payload_source_snapshot->'owner'->>'kind'='issue'
+    and temporal_owner.payload_source_snapshot->'owner'->>'id'=temporal_owner.id::text
+    and not ${issueSnapshotValid})` : sql`false`;
+  const currentContextAllowed = (manifestId: SQL) => kind === "issue" && capturedContextManifestIds === undefined
+    ? sql`(not ${issueSnapshotValid} or ${manifestId}=any(${capturedContextIds!}))`
+    : capturedContextManifestIds === undefined ? sql`true` : sql`${manifestId}=any(${capturedContextIds!})`;
   const humanId = actor.type === "board" ? actor.userId : actor.onBehalfOfUserId;
   const conversationIdentity = sql`(${privatePrincipalCurrent(actor, company)} and i.conversation_user_id=${humanId ?? null}
     and ${actor.type === "board" ? sql`true` : actor.type === "agent" && actor.agentId ? sql`i.conversation_agent_id=${actor.agentId}` : sql`false`})`;
@@ -872,14 +934,10 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
           where n.kind='project' and p.id=n.id and p.company_id=${company}
         union all select 'project',source.id from projects p cross join lateral unnest(p.source_project_ids) source(id)
           where n.kind='project' and p.id=n.id and p.company_id=${company}
-        union all select case when s.source_kind='run' and i.payload_source_protocol_version=1
-            and i.payload_source_snapshot_invalidated=false
-            and i.payload_source_snapshot->'owner'->>'kind'='issue'
-            and i.payload_source_snapshot->'owner'->>'id'=i.id::text
-            and i.payload_source_snapshot->'policy'->'runIds' ? s.source_id::text
-            then 'retained_run' else s.source_kind end,s.source_id from ${issuePrivacySources} s
+        union all select s.source_kind,s.source_id from ${issuePrivacySources} s
           join issues i on i.company_id=s.company_id and i.id=s.issue_id
           where n.kind='issue' and s.issue_id=n.id and s.company_id=${company}
+            and (s.context_manifest_id is null or ${currentContextAllowed(sql`s.context_manifest_id`)})
         union all select 'issue',ref.id from ${heartbeatRuns} r cross join lateral (
           select r.issue_id as id where r.issue_id is not null
           union all select r.native_issue_id where r.native_issue_id is not null
@@ -889,11 +947,11 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
             then (r.context_snapshot->>'taskId')::uuid end where r.context_snapshot ? 'taskId'
           union all select null::uuid where r.scope_kind='issue' and r.issue_id is null and r.native_issue_id is null
             and not coalesce(r.context_snapshot ? 'issueId',false) and not coalesce(r.context_snapshot ? 'taskId',false)
-        ) ref where n.kind in ('run','retained_run') and r.id=n.id and r.company_id=${company}
+        ) ref where n.kind='run' and r.id=n.id and r.company_id=${company}
         union all select root.kind,root.id from ${heartbeatRuns} r
           join context_manifests c on c.company_id=r.company_id and c.run_id=r.id
           cross join lateral (${contextRoots}) root
-          where r.company_id=${company} and ((n.kind='run' and r.id=n.id)
+          where r.company_id=${company} and ${currentContextAllowed(sql`c.id`)} and ((n.kind='run' and r.id=n.id)
             or (n.kind='issue' and coalesce(r.issue_id,r.native_issue_id)=n.id
               and (root.id is null or root.kind<>'issue' or root.id<>n.id)))
 `;
@@ -904,7 +962,7 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
       union
       select edge.kind,edge.id from privacy_nodes n cross join lateral (${enumeratedEdges}) edge
     ), bounded as materialized (select * from privacy_nodes limit 257)
-    select case when (select count(*) from bounded)>256 then false else not exists (
+    select case when (select count(*) from bounded)>256 or ${issueSnapshotCorrupt} then false else not exists (
       with recursive source_edges as materialized (
         select n.kind,n.id,edge.kind as source_kind,edge.id as source_id
         from bounded n cross join lateral (${enumeratedEdges}) edge
@@ -919,14 +977,14 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
       select 1 from reachable where kind=source_kind and id=source_id
       union all
       select 1 from bounded n where
-        n.kind not in ('issue','project','run','retained_run','workflow_run','routine_run')
+        n.kind not in ('issue','project','run','workflow_run','routine_run')
         or (n.kind='issue' and not exists(select 1 from issues i where i.id=n.id and i.company_id=${company}
           and i.conversation_retired_at is null and ((i.conversation_agent_id is null and i.conversation_user_id is null)
             or ${conversationIdentity})
           and (i.visibility='open' or ${issuePrincipalAccess(actor, sql`i.id`, sql`${company}`)})))
         or (n.kind='project' and not exists(select 1 from projects p where p.id=n.id and p.company_id=${company}
           and p.source_provenance_qualified and (p.visibility='open' or ${projectPrincipalAccess(actor, sql`p.id`, sql`${company}`)})))
-          or (n.kind in ('run','retained_run') and not exists(select 1 from ${heartbeatRuns} r where r.id=n.id and r.company_id=${company}
+          or (n.kind='run' and not exists(select 1 from ${heartbeatRuns} r where r.id=n.id and r.company_id=${company}
           and ${heartbeatRunTaskBindingCondition(sql`r`)}))
         -- Selected private Memory can narrow a derivative's audience, even when
         -- the producer's original Task is public. This is a necessary denial,
@@ -934,7 +992,7 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
         or (n.kind='run' and exists(select 1 from context_manifests c
           join context_manifest_memory_roots root on root.company_id=c.company_id and root.manifest_id=c.id
           left join memory_records m on m.company_id=root.company_id and m.id=root.memory_record_id
-          where c.company_id=${company} and c.run_id=n.id and (m.id is null
+          where c.company_id=${company} and c.run_id=n.id and ${currentContextAllowed(sql`c.id`)} and (m.id is null
             or (m.scope_type='agent' and m.private_owner_user_id is null)
             or (m.private_owner_user_id is not null and
               (m.private_owner_user_id is distinct from ${humanId ?? null} or not ${privatePrincipalCurrent(actor, company)}))
@@ -976,7 +1034,8 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
   )`;
 }
 
-export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: AuthorizationActor, issue: IssuePrivacyRow): Promise<boolean> {
+export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: AuthorizationActor, issue: IssuePrivacyRow,
+): Promise<boolean> {
   const taskPrivacyBatch = nativeTaskPrivacyBatches.get(db as object);
   if (taskPrivacyBatch?.active && taskPrivacyBatch.companyId === issue.companyId && taskPrivacyBatch.actorKey === routineActorKey(actor)) {
     return taskPrivacyBatch.issues.get(issue.id) ?? false;
@@ -1018,7 +1077,8 @@ export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: Au
       });
     }
   }
-  return (await db.select({ id: issues.id }).from(issues).where(and(eq(issues.id, issue.id), eq(issues.companyId, issue.companyId), await issueReadSqlCondition(db, actor))).limit(1)).length > 0;
+  return (await db.select({ id: issues.id }).from(issues).where(and(eq(issues.id, issue.id), eq(issues.companyId, issue.companyId),
+    await issueReadSqlConditionInMemoryScope(db, actor, issue.id))).limit(1)).length > 0;
 }
 /** Typed Task execution owners are distinct namespaces from heartbeat runs.
  * Workflow and Routine payload reads enter their original native authoring
@@ -1060,16 +1120,23 @@ export async function canActorReadProjectPrivacy(db: Db | DbTransaction, actor: 
 
 /** Original persisted run binding, never caller-supplied scope or context facts.
  * This narrows payload visibility; company/action and V8 copy checks still apply. */
-export async function canActorReadHeartbeatRunPrivacy(db: Db | DbTransaction, actor: AuthorizationActor, source: { id: string; companyId: string }): Promise<boolean> {
+export async function canActorReadHeartbeatRunPrivacy(db: Db | DbTransaction, actor: AuthorizationActor, source: { id: string; companyId: string },
+): Promise<boolean> {
   return (await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
     eq(heartbeatRuns.id, source.id), eq(heartbeatRuns.companyId, source.companyId),
-    await heartbeatRunReadSqlCondition(db, actor),
+    await heartbeatRunReadSqlConditionInMemoryScope(db, actor, source.id),
   )).limit(1)).length > 0;
 }
 
 /** Same persisted native run closure for pre-limit projections and direct reads. */
 export async function heartbeatRunReadSqlCondition(_db: Db | DbTransaction, actor: AuthorizationActor): Promise<SQL<boolean>> {
   return taskSourcePrivacySqlCondition(_db, "run", sql`${heartbeatRuns.id}`, sql`${heartbeatRuns.companyId}`, actor);
+}
+
+async function heartbeatRunReadSqlConditionInMemoryScope(db: Db | DbTransaction, actor: AuthorizationActor, runId: string) {
+  const capturedContextManifestIds=activeMemoryTemporalContexts(db,actor,"run",runId);
+  return capturedContextManifestIds === undefined ? heartbeatRunReadSqlCondition(db,actor)
+    : taskSourcePrivacySqlCondition(db,"run",sql`${heartbeatRuns.id}`,sql`${heartbeatRuns.companyId}`,actor,capturedContextManifestIds);
 }
 
 export function responsibleUserAuthzShadowMode() {
@@ -1122,6 +1189,57 @@ export function authorizationDeniedDetails(decision: AuthorizationDecision) {
 }
 
 type DbTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
+type MemoryTemporalReadScope = {
+  readonly db: object;
+  readonly companyId: string;
+  readonly recordId: string;
+  readonly actorKey: string;
+  readonly issueIds: ReadonlySet<string>;
+  readonly runIds: ReadonlySet<string>;
+  readonly contextIds: readonly string[];
+  active: boolean;
+};
+const memoryTemporalReadScopes = new AsyncLocalStorage<MemoryTemporalReadScope>();
+
+/** Bind a no-live-future-Context read to one existing immutable Memory output.
+ * This is callable only by the Memory source owner, never from request fields. */
+export async function withReadMemoryTemporalSources<T>(db: Db | DbTransaction, actor: AuthorizationActor,
+  companyId: string, recordId: string, read: () => Promise<T>): Promise<T> {
+  const [row] = await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, companyId), eq(memoryRecords.id, recordId),
+    isNull(memoryRecords.deletedAt), sql`not exists(select 1 from ${memoryDeletionMarkers} d
+      where d.company_id=${companyId} and d.record_id=${recordId})`));
+  const snapshot = row && nativePayloadSourceSnapshotSchema.safeParse(row.payloadSourceSnapshot);
+  if (!row || !snapshot?.success || !row.sourceProvenanceQualified || row.payloadSourceProtocolVersion !== 1 || row.payloadSourceSnapshotInvalidated
+    || snapshot.data.owner.kind !== "memory_record" || snapshot.data.owner.companyId !== companyId || snapshot.data.owner.id !== recordId
+    || !snapshot.data.policy.runIds.length || snapshot.data.inputs.some(input => input.kind !== "context")
+    || !isDeepStrictEqual(snapshot.data.policy.issueIds, [...row.sourceIssueIds].sort())
+    || !isDeepStrictEqual(snapshot.data.policy.projectIds, [...row.sourceProjectIds].sort())
+    || !isDeepStrictEqual(snapshot.data.policy.runIds, [...row.sourceRunIds].sort())
+    || !isDeepStrictEqual(snapshot.data.policy.memoryIds, [...row.sourceMemoryIds].sort())
+    || !isDeepStrictEqual(snapshot.data.policy.foundationRevisionIds, [...row.sourceFoundationRevisionIds].sort()))
+    throw forbidden("Captured Memory Context source is unavailable");
+  const [binding] = await db.execute<{ valid: boolean }>(sql`select
+    public.aw_native_payload_body_hash('memory_record',to_jsonb(m))=${snapshot.data.owner.contentHash}
+      and encode(sha256(convert_to((m.payload_source_snapshot-'digest')::text,'UTF8')),'hex')=${snapshot.data.digest} as valid
+    from ${memoryRecords} m where m.company_id=${companyId} and m.id=${recordId}
+      and m.payload_source_snapshot is not null and m.payload_source_snapshot_invalidated=false`);
+  if (!binding?.valid) throw forbidden("Captured Memory Context source binding is unavailable");
+  const contextInputs = snapshot.data.inputs.filter((input): input is Extract<typeof input, { kind: "context" }> => input.kind === "context");
+  const { assertNativeTemporalContextInputsCurrent } = await import("./native-direct-input.js");
+  await assertNativeTemporalContextInputsCurrent(db as Db, companyId, contextInputs);
+  const scope: MemoryTemporalReadScope = { db: db as object, companyId, recordId, actorKey: routineActorKey(actor),
+    issueIds: new Set(row.sourceIssueIds), runIds: new Set(row.sourceRunIds),
+    contextIds: contextInputs.map(input => input.manifestId).sort(), active: true };
+  try { return await memoryTemporalReadScopes.run(scope, read); }
+  finally { scope.active = false; }
+}
+
+function activeMemoryTemporalContexts(db: Db | DbTransaction, actor: AuthorizationActor,
+  kind: "issue" | "run", id: string): readonly string[] | undefined {
+  const scope = memoryTemporalReadScopes.getStore();
+  return scope?.active && scope.db === (db as object) && scope.actorKey === routineActorKey(actor)
+    && (kind === "issue" ? scope.issueIds.has(id) : scope.runIds.has(id)) ? scope.contextIds : undefined;
+}
 
 export function authorizationService(db: Db | DbTransaction) {
   return createAuthorizationService(db);

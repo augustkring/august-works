@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { createHash } from "node:crypto";
-import { readFile, stat, realpath } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { readFile, stat, realpath, writeFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import { atomicJson } from "./journal.mjs";
 
@@ -13,6 +13,8 @@ const actions = new Set([
   "prepare",
   "inspect",
   "effective_policy",
+  "apply",
+  "start",
   "probe",
   "revoke_providers",
   "stop",
@@ -46,6 +48,17 @@ export function openShellHostEngine({
       scope.sandboxRef === `aw-v7-${scope.bindingId}`
     );
   }
+  function canonical(value) {
+    if (Array.isArray(value)) return value.map(canonical);
+    if (value && typeof value === "object")
+      return Object.fromEntries(
+        Object.keys(value).sort().map((key) => [key, canonical(value[key])]),
+      );
+    return value;
+  }
+  function sameDocument(left, right) {
+    return JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
+  }
   async function privateConfiguration() {
     if (
       !config ||
@@ -77,6 +90,7 @@ export function openShellHostEngine({
       throw new Error("sandbox_host_unavailable");
     return {
       executable,
+      stateHome,
       env: { HOME: stateHome, PATH: "/usr/bin:/bin", LANG: "C", NO_COLOR: "1" },
     };
   }
@@ -96,6 +110,24 @@ export function openShellHostEngine({
         killSignal: "SIGKILL",
       },
     );
+    return json ? JSON.parse(stdout) : stdout;
+  }
+  async function docker(args, deadlineAt, json = true) {
+    const privateConfig = await privateConfiguration();
+    const remaining = new Date(deadlineAt).getTime() - Date.now();
+    if (!Number.isFinite(remaining) || remaining <= 0)
+      throw new Error("sandbox_host_unavailable");
+    const { stdout } = await run("docker", args, {
+      env: {
+        ...privateConfig.env,
+        PATH: process.env.PATH,
+        DOCKER_HOST: "unix:///var/run/docker.sock",
+      },
+      timeout: Math.min(6000, remaining),
+      maxBuffer: 262144,
+      windowsHide: true,
+      killSignal: "SIGKILL",
+    });
     return json ? JSON.parse(stdout) : stdout;
   }
   async function observed(scope, deadlineAt) {
@@ -135,6 +167,149 @@ export function openShellHostEngine({
     }
     return detail;
   }
+  async function policy(scope, deadlineAt) {
+    const result = await cli(
+      ["policy", "get", scope.sandboxRef, "--full", "--output", "json"],
+      deadlineAt,
+    );
+    if (
+      result.sandbox !== scope.sandboxRef ||
+      result.status !== "effective" ||
+      !/^[a-f0-9]{64}$/.test(result.hash ?? "") ||
+      !Number.isSafeInteger(result.version) ||
+      result.version < 0 ||
+      !Number.isSafeInteger(result.config_revision) ||
+      result.config_revision < 0 ||
+      !result.policy
+    )
+      throw new Error("sandbox_observation_unavailable");
+    await observed(scope, deadlineAt);
+    return result;
+  }
+  async function container(scope, sandbox, imageDigest, deadlineAt) {
+    const engineId = (await docker(["info", "--format", "{{.ID}}"], deadlineAt, false)).trim();
+    if (!engineId || engineId.length > 200 || /[\r\n\0]/.test(engineId))
+      throw new Error("sandbox_operation_unsupported");
+    const engineIdHash = hash(engineId);
+    const enginePin = journal.scopes[scope.bindingId]?.dockerEngineId;
+    if (enginePin && enginePin !== engineIdHash)
+      throw new Error("sandbox_scope_changed");
+    const idsOutput = await docker(
+      [
+        "ps",
+        "-aq",
+        "--filter",
+        `label=openshell.ai/sandbox-id=${sandbox.id}`,
+        "--filter",
+        "label=openshell.ai/isolation-role=sandbox",
+      ],
+      deadlineAt,
+      false,
+    );
+    const ids = idsOutput.trim().split(/\s+/).filter(Boolean);
+    if (ids.length !== 1 || !/^[a-f0-9]{64}$/.test(ids[0]))
+      throw new Error("sandbox_operation_unsupported");
+    const values = await docker(["inspect", ids[0]], deadlineAt);
+    if (!Array.isArray(values) || values.length !== 1)
+      throw new Error("sandbox_observation_unavailable");
+    const value = values[0];
+    const labels = value.Config?.Labels;
+    const expectedLabels = {
+      "openshell.ai/managed-by": "openshell",
+      "openshell.ai/sandbox-id": sandbox.id,
+      "openshell.ai/sandbox-name": scope.sandboxRef,
+      "openshell.ai/sandbox-workspace": config.workspace,
+      "openshell.ai/isolation-backend": "openshell-sandbox",
+      "openshell.ai/isolation-role": "sandbox",
+      "aw.company_id": scope.companyId,
+      "aw.binding_id": scope.bindingId,
+      "aw.cell_id": scope.cellId,
+      "aw.generation": scope.cellGeneration,
+    };
+    if (
+      value.Id !== ids[0] ||
+      Object.entries(expectedLabels).some(([key, expected]) => labels?.[key] !== expected) ||
+      !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,100}$/.test(labels?.["openshell.ai/sandbox-namespace"] ?? "") ||
+      value.Config?.Image !== value.Image ||
+      !Array.isArray(value.RepoDigests) ||
+      !value.RepoDigests.includes(imageDigest) ||
+      !/^sha256:[a-f0-9]{64}$/.test(value.Image ?? "") ||
+      typeof value.State?.Running !== "boolean"
+    )
+      throw new Error("sandbox_scope_changed");
+    const pinned = journal.scopes[scope.bindingId];
+    if (pinned.containerId && pinned.containerId !== value.Id)
+      throw new Error("sandbox_scope_changed");
+    if (pinned.imageId && pinned.imageId !== value.Image)
+      throw new Error("sandbox_scope_changed");
+    if (
+      pinned.namespace &&
+      pinned.namespace !== labels["openshell.ai/sandbox-namespace"]
+    )
+      throw new Error("sandbox_scope_changed");
+    if (!pinned.containerId || !pinned.dockerEngineId) {
+      journal.scopes[scope.bindingId] = {
+        ...pinned,
+        containerId: value.Id,
+        imageId: value.Image,
+        namespace: labels["openshell.ai/sandbox-namespace"],
+        dockerEngineId: engineIdHash,
+      };
+      await atomicJson(journalFile, journal);
+    }
+    return value;
+  }
+  async function contain(scope, imageDigest, deadlineAt) {
+    try {
+      await revokeProviders(scope, deadlineAt);
+      await cli(["sandbox", "stop", scope.sandboxRef], deadlineAt, false);
+      const stopped = await observed(scope, deadlineAt);
+      const workload = await container(scope, stopped, imageDigest, deadlineAt);
+      if (stopped.phase !== "Stopped" || workload.State.Running)
+        throw new Error("sandbox_observation_unavailable");
+    } catch {
+      throw new Error("sandbox_host_unavailable");
+    }
+  }
+  function staticPolicyMatches(left, right) {
+    return (
+      sameDocument(left.filesystem_policy, right.filesystem_policy) &&
+      sameDocument(left.landlock, right.landlock) &&
+      sameDocument(left.process, right.process)
+    );
+  }
+  async function revokeProviders(scope, deadlineAt) {
+    const before = await cli(
+      ["sandbox", "provider", "list", scope.sandboxRef, "--page-size", "4", "--output", "json"],
+      deadlineAt,
+    );
+    if (!Array.isArray(before.providers) || before.providers.length > 4 || before.next_page_token !== "")
+      throw new Error("sandbox_operation_unsupported");
+    for (const provider of before.providers) {
+      await observed(scope, deadlineAt);
+      if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,100}$/.test(provider.name ?? ""))
+        throw new Error("sandbox_observation_unavailable");
+      await cli(
+        ["sandbox", "provider", "detach", scope.sandboxRef, provider.name, "--wait", "--timeout", "2", "--output", "json"],
+        deadlineAt,
+      );
+    }
+    const after = await cli(
+      ["sandbox", "provider", "list", scope.sandboxRef, "--page-size", "4", "--output", "json"],
+      deadlineAt,
+    );
+    if (!Array.isArray(after.providers) || after.providers.length || after.next_page_token !== "")
+      throw new Error("sandbox_observation_unavailable");
+    await observed(scope, deadlineAt);
+  }
+  function samePolicyRevision(result, pinned) {
+    return (
+      result.hash === pinned.effectivePolicyHash &&
+      result.version === pinned.policyVersion &&
+      result.config_revision === pinned.configRevision &&
+      sameDocument(result.policy, pinned.document)
+    );
+  }
   async function executeAction(request, deadlineAt) {
     const scope = request.scope;
     // Neither a private JSON file nor CLI version/kernel output is physical
@@ -148,33 +323,217 @@ export function openShellHostEngine({
     if (version.trim() !== "openshell 0.1.2")
       throw new Error("sandbox_host_unavailable");
     const detail = await observed(scope, deadlineAt);
-    if (request.action === "inspect")
-      return {
-        action: "inspect",
-        state:
-          detail.phase === "Stopped"
-            ? "stopped"
-            : detail.phase === "Error"
-              ? "failed"
-              : "unknown",
-        policyHash: null,
-        imageDigest: null,
-        generation: scope.cellGeneration,
-        controlsHealthy: false,
-      };
+    if (request.action === "inspect") {
+      try {
+        const workload = await container(scope, detail, request.imageDigest, deadlineAt);
+        let policyHash = null;
+        const pinnedPolicy = journal.scopes[scope.bindingId]?.policy;
+        if (pinnedPolicy) {
+          const currentPolicy = await policy(scope, deadlineAt);
+          if (samePolicyRevision(currentPolicy, pinnedPolicy))
+            policyHash = pinnedPolicy.policyHash;
+        }
+        return {
+          action: "inspect",
+          state: detail.phase === "Error" ? "failed" :
+            detail.phase === "Stopped" && !workload.State.Running ? "stopped" :
+            detail.phase === "Ready" && workload.State.Running ? "running" : "unknown",
+          policyHash,
+          imageDigest: request.imageDigest,
+          generation: scope.cellGeneration,
+          // The command path has physical observations, but the release profile
+          // still has no complete qualified capability snapshot.
+          controlsHealthy: false,
+        };
+      } catch {
+        return {
+          action: "inspect",
+          state: "unknown",
+          policyHash: null,
+          imageDigest: null,
+          generation: scope.cellGeneration,
+          controlsHealthy: false,
+        };
+      }
+    }
     if (request.action === "effective_policy") {
-      const policy = await cli(
-        ["policy", "get", scope.sandboxRef, "--full", "--output", "json"],
+      const current = await policy(scope, deadlineAt);
+      return { action: "effective_policy", document: current.policy };
+    }
+    if (request.action === "apply") {
+      const admission = request.admission;
+      if (!admission) throw new Error("sandbox_scope_changed");
+      const workload = await container(scope, detail, request.imageDigest, deadlineAt);
+      if (detail.phase !== "Stopped" || workload.State.Running)
+        throw new Error("sandbox_operation_unsupported");
+      await revokeProviders(scope, deadlineAt);
+      const before = await policy(scope, deadlineAt);
+      if (!staticPolicyMatches(before.policy, admission.document))
+        return {
+          action: "apply",
+          applied: false,
+          policyHash: null,
+          requiresRecreate: true,
+          effectivePolicyHash: before.hash,
+        };
+      const privateConfig = await privateConfiguration();
+      const filename = path.join(privateConfig.stateHome, `policy-${randomUUID()}.json`);
+      try {
+        await writeFile(filename, JSON.stringify(admission.document), {
+          flag: "wx",
+          mode: 0o600,
+        });
+        const remaining = Math.floor(
+          (new Date(deadlineAt).getTime() - Date.now()) / 1000,
+        );
+        if (remaining < 1) throw new Error("sandbox_host_unavailable");
+        await cli(
+          [
+            "policy",
+            "set",
+            scope.sandboxRef,
+            "--policy",
+            filename,
+            "--wait",
+            "--timeout",
+            String(Math.min(6, remaining)),
+          ],
+          deadlineAt,
+          false,
+        );
+      } catch (error) {
+        let committed = false;
+        try {
+          committed = sameDocument(
+            (await policy(scope, deadlineAt)).policy,
+            admission.document,
+          );
+        } catch {}
+        if (!committed) await contain(scope, request.imageDigest, deadlineAt);
+        if (committed) {
+          const observedPolicy = await policy(scope, deadlineAt);
+          journal.scopes[scope.bindingId] = {
+            ...journal.scopes[scope.bindingId],
+            policy: {
+              policyHash: admission.policyHash,
+              effectivePolicyHash: observedPolicy.hash,
+              policyVersion: observedPolicy.version,
+              configRevision: observedPolicy.config_revision,
+              document: observedPolicy.policy,
+              appliedAt: new Date().toISOString(),
+            },
+          };
+          await atomicJson(journalFile, journal);
+          return {
+            action: "apply",
+            applied: true,
+            policyHash: admission.policyHash,
+            requiresRecreate: false,
+            effectivePolicyHash: observedPolicy.hash,
+          };
+        }
+        if ([
+          "sandbox_host_unavailable",
+          "sandbox_scope_changed",
+          "sandbox_operation_unsupported",
+          "sandbox_observation_unavailable",
+        ].includes(error?.message)) throw error;
+        throw new Error("sandbox_observation_unavailable");
+      } finally {
+        await unlink(filename).catch(() => {});
+      }
+      const after = await policy(scope, deadlineAt);
+      if (!sameDocument(after.policy, admission.document)) {
+        await contain(scope, request.imageDigest, deadlineAt);
+        throw new Error("sandbox_observation_unavailable");
+      }
+      journal.scopes[scope.bindingId] = {
+        ...journal.scopes[scope.bindingId],
+        policy: {
+          policyHash: admission.policyHash,
+          effectivePolicyHash: after.hash,
+          policyVersion: after.version,
+          configRevision: after.config_revision,
+          document: after.policy,
+          appliedAt: new Date().toISOString(),
+        },
+      };
+      await atomicJson(journalFile, journal);
+      return {
+        action: "apply",
+        applied: true,
+        policyHash: admission.policyHash,
+        requiresRecreate: false,
+        effectivePolicyHash: after.hash,
+      };
+    }
+    if (request.action === "start") {
+      const start = request.start;
+      if (
+        !start ||
+        new Date(start.expiresAt) <= new Date() ||
+        !/^[a-f0-9]{64}$/.test(start.policyHash)
+      )
+        throw new Error("sandbox_scope_changed");
+      const pinnedPolicy = journal.scopes[scope.bindingId]?.policy;
+      if (!pinnedPolicy || pinnedPolicy.policyHash !== start.policyHash)
+        throw new Error("sandbox_scope_changed");
+      await revokeProviders(scope, deadlineAt);
+      const beforePolicy = await policy(scope, deadlineAt);
+      if (!samePolicyRevision(beforePolicy, pinnedPolicy))
+        throw new Error("sandbox_scope_changed");
+      const beforeWorkload = await container(
+        scope,
+        detail,
+        request.imageDigest,
+        deadlineAt,
+      );
+      if (detail.phase === "Ready" && beforeWorkload.State.Running) {
+        return {
+          action: "start",
+          started: true,
+          operationId: hash(start.idempotencyKey),
+          sandboxId: detail.id,
+          containerId: beforeWorkload.Id,
+          imageDigest: request.imageDigest,
+          policyHash: start.policyHash,
+          effectivePolicyHash: beforePolicy.hash,
+        };
+      }
+      if (detail.phase !== "Stopped" || beforeWorkload.State.Running)
+        throw new Error("sandbox_operation_unsupported");
+      try {
+        await cli(["sandbox", "start", scope.sandboxRef], deadlineAt, false);
+      } catch {
+        // A lost CLI response is resolved from independent gateway and Docker
+        // observations below; it is never treated as success by itself.
+      }
+      const afterDetail = await observed(scope, deadlineAt);
+      const afterPolicy = await policy(scope, deadlineAt);
+      const afterWorkload = await container(
+        scope,
+        afterDetail,
+        request.imageDigest,
         deadlineAt,
       );
       if (
-        policy.sandbox !== scope.sandboxRef ||
-        policy.status !== "effective" ||
-        !policy.policy
-      )
+        afterDetail.phase !== "Ready" ||
+        !afterWorkload.State.Running ||
+        !samePolicyRevision(afterPolicy, pinnedPolicy)
+      ) {
+        await contain(scope, request.imageDigest, deadlineAt);
         throw new Error("sandbox_observation_unavailable");
-      await observed(scope, deadlineAt);
-      return { action: "effective_policy", document: policy.policy };
+      }
+      return {
+        action: "start",
+        started: true,
+        operationId: hash(start.idempotencyKey),
+        sandboxId: afterDetail.id,
+        containerId: afterWorkload.Id,
+        imageDigest: request.imageDigest,
+        policyHash: start.policyHash,
+        effectivePolicyHash: afterPolicy.hash,
+      };
     }
     if (request.action === "stop") {
       await cli(["sandbox", "stop", scope.sandboxRef], deadlineAt, false);
@@ -329,6 +688,8 @@ export function openShellHostEngine({
           throw new Error("sandbox_scope_changed");
         if (
           (request.action === "probe") !== Boolean(request.probe) ||
+          (request.action === "apply") !== Boolean(request.admission) ||
+          (request.action === "start") !== Boolean(request.start) ||
           Object.keys(request).some(
             (key) =>
               ![
@@ -339,6 +700,8 @@ export function openShellHostEngine({
                 "imageDigest",
                 "requesterUserId",
                 "probe",
+                "admission",
+                "start",
                 "claimToken",
               ].includes(key),
           )
