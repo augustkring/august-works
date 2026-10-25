@@ -1,12 +1,18 @@
 import { randomUUID } from "node:crypto";
 import express, { type Request } from "express";
 import request from "supertest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   authUsers,
+  authSessions,
   companyMemberships,
   supportSessions,
+  supportCases,
+  supportCaseEvents,
+  supportCaseDeletionMarkers,
+  companyDeletionOperations,
+  companies,
   activityLog,
   createDb,
 } from "@paperclipai/db";
@@ -950,6 +956,135 @@ const support = await getEmbeddedPostgresTestSupport();
       expect((await request(app).get(path)).status).toBe(200);
       currentActor = { ...operatorActor, sessionId: undefined };
       expect((await request(app).get(path)).status).toBe(403);
+    });
+    it("records an idempotent customer-safe operator response without granting tenant access", async () => {
+      const now = new Date();
+      const [caseRow] = await db.insert(supportCases).values({
+        companyId, openedByUserId: "owner", category: "other", subject: "Operator response test",
+        description: "customer description", customerStatus: "RECEIVED", version: 0,
+        dataPolicy: { schemaVersion: 1, policyVersion: "test.support.v1", recipientName: "Test", privacyNoticeUrl: "https://example.test/privacy", processingRegion: "test", retentionTrigger: "after_last_customer_or_support_message", retentionDays: 30, backupMaxDays: 7, restoreLagDays: 2, deletionMarkerDays: 10, legalHoldPolicyId: "test.support.hold.v1" },
+        expiresAt: new Date(now.getTime() + 29 * 86400000),
+      }).returning();
+      await db.insert(supportCaseEvents).values({ companyId, caseId: caseRow!.id, authorUserId: "owner", kind: "request", body: "customer description", customerStatus: "RECEIVED", requestKey: randomUUID(), requestHash: "a".repeat(64), deliveryState: "not_required" });
+      const currentActor: AuthorizationActor = operatorActor;
+      const app = express();
+      app.use(express.json());
+      app.use((req, _res, next) => { req.actor = currentActor; next(); });
+      app.use("/api", saasRoutes(db, { config: { environment: "staging", operatorUserIds: ["operator"] }, support: service, enabled: async () => true } as unknown as SaasPlatform));
+      app.use(errorHandler);
+      const command = { companyId, expectedVersion: 0, requestKey: randomUUID(), body: "Please confirm the connection name.", status: "WAITING_FOR_YOU" };
+      const path = `/api/saas/internal/support-cases/${caseRow!.id}/respond`;
+      const first = await request(app).post(path).send(command).expect(200);
+      expect(first.body).toMatchObject({ caseId: caseRow!.id, version: 1, status: "WAITING_FOR_YOU" });
+      expect(Object.keys(first.body).sort()).toEqual(["caseId", "eventId", "status", "version"]);
+      await request(app).post(path).query({ unexpected: "1" }).send({ ...command, requestKey: randomUUID() }).expect(400);
+      await request(app).post(path).send({ ...command, caseId: randomUUID(), requestKey: randomUUID() }).expect(400);
+      const replay = await request(app).post(path).send(command).expect(200);
+      expect(replay.body).toEqual(first.body);
+      const customerActor: AuthorizationActor = { ...actor, sessionId: await seedNativePasskeySession(db, "owner") };
+      const customerApp = express();
+      customerApp.use((req, _res, next) => { req.actor = customerActor; next(); });
+      customerApp.use("/api", customerSupportRoutes(db));
+      customerApp.use(errorHandler);
+      const customerPath = `/api/companies/${companyId}/support/cases/${caseRow!.id}?expectedUserId=owner`;
+      const customerEn = await request(customerApp).get(customerPath).set("Accept-Language", "en").expect(200);
+      const customerDa = await request(customerApp).get(customerPath).set("Accept-Language", "da").expect(200);
+      expect(customerEn.body.status).toBe("WAITING_FOR_YOU");
+      expect(customerEn.body.requestedResponse).toBe(command.body);
+      expect(customerEn.body.timeline).toContainEqual(expect.objectContaining({ kind: "status_change", body: command.body, author: "support", delivery: "not_required" }));
+      expect(customerDa.body).toEqual(customerEn.body);
+      const later = await request(app).post(path).send({ ...command, expectedVersion: 1, requestKey: randomUUID(), body: "The investigation is underway.", status: "INVESTIGATING" }).expect(200);
+      expect(later.body.version).toBe(2);
+      expect(await request(app).post(path).send(command).expect(200).then(response => response.body)).toEqual(first.body);
+      expect(await db.select().from(supportCaseEvents).where(eq(supportCaseEvents.caseId, caseRow!.id))).toHaveLength(3);
+      await request(app).post(path).send({ ...command, requestKey: randomUUID(), body: "Stale edit", status: "RESOLVED" }).expect(409);
+      await request(app).post(`/api/saas/internal/support-cases/${randomUUID()}/respond`).send({ ...command, caseId: undefined, requestKey: randomUUID() }).expect(404);
+      await request(app).post(path).send({ ...command, companyId: randomUUID(), requestKey: randomUUID() }).expect(404);
+      const old = new Date(Date.now() - 3 * 86400000);
+      const [expiredCase] = await db.insert(supportCases).values({ companyId, openedByUserId: "owner", category: "other", subject: "Expired", description: "expired request", customerStatus: "RECEIVED", version: 0,
+        dataPolicy: { schemaVersion: 1, policyVersion: "test.support.v1", recipientName: "Test", privacyNoticeUrl: "https://example.test/privacy", processingRegion: "test", retentionTrigger: "after_last_customer_or_support_message", retentionDays: 30, backupMaxDays: 7, restoreLagDays: 2, deletionMarkerDays: 10, legalHoldPolicyId: "test.support.hold.v1" },
+        createdAt: old, updatedAt: old, lastMessageAt: old, expiresAt: new Date(old.getTime() + 86400000) }).returning();
+      await request(app).post(`/api/saas/internal/support-cases/${expiredCase!.id}/respond`).send({ ...command, caseId: undefined, requestKey: randomUUID() }).expect(404);
+      const expiringSession = await seedNativePasskeySession(db, "operator");
+      await db.update(authSessions).set({ expiresAt: new Date(Date.now() + 3500) }).where(eq(authSessions.id, expiringSession));
+      await db.execute(sql.raw(`create function aw_test_support_operator_delay() returns trigger language plpgsql as $$ begin perform pg_sleep(4); return new; end $$`));
+      await db.execute(sql.raw(`create trigger z_aw_test_support_operator_delay after insert on support_case_events for each row execute function aw_test_support_operator_delay()`));
+      try {
+        const expiringApp = express();
+        expiringApp.use(express.json());
+        expiringApp.use((req, _res, next) => { req.actor = { type: "board", source: "session", userId: "operator", sessionId: expiringSession }; next(); });
+        expiringApp.use("/api", saasRoutes(db, { config: { environment: "staging", operatorUserIds: ["operator"] }, support: service, enabled: async () => true } as unknown as SaasPlatform));
+        expiringApp.use(errorHandler);
+        await request(expiringApp).post(path).send({ ...command, expectedVersion: 2, requestKey: randomUUID(), body: "Must not commit after original expiry." }).expect(403);
+        expect((await db.select().from(supportCaseEvents).where(eq(supportCaseEvents.caseId, caseRow!.id))).length).toBe(3);
+      } finally {
+        await db.execute(sql.raw("drop trigger z_aw_test_support_operator_delay on support_case_events"));
+        await db.execute(sql.raw("drop function aw_test_support_operator_delay()"));
+      }
+      const deniedApp = express();
+      deniedApp.use(express.json());
+      deniedApp.use((req, _res, next) => { req.actor = otherActor; next(); });
+      deniedApp.use("/api", saasRoutes(db, { config: { environment: "staging", operatorUserIds: ["operator"] }, support: service, enabled: async () => true } as unknown as SaasPlatform));
+      deniedApp.use(errorHandler);
+      await request(deniedApp).post(path).send({ ...command, requestKey: randomUUID() }).expect(403);
+      const staleSessionApp = express();
+      staleSessionApp.use(express.json());
+      staleSessionApp.use((req, _res, next) => { req.actor = { ...operatorActor, sessionId: undefined }; next(); });
+      staleSessionApp.use("/api", saasRoutes(db, { config: { environment: "staging", operatorUserIds: ["operator"] }, support: service, enabled: async () => true } as unknown as SaasPlatform));
+      staleSessionApp.use(errorHandler);
+      await request(staleSessionApp).post(path).send({ ...command, requestKey: randomUUID() }).expect(403);
+      const keyActorApp = express();
+      keyActorApp.use(express.json());
+      keyActorApp.use((req, _res, next) => { req.actor = { ...operatorActor, source: "board_key", sessionId: undefined, keyId: "structural-key", authenticatedKeyHash: "a".repeat(64) }; next(); });
+      keyActorApp.use("/api", saasRoutes(db, { config: { environment: "staging", operatorUserIds: ["operator"] }, support: service, enabled: async () => true } as unknown as SaasPlatform));
+      keyActorApp.use(errorHandler);
+      await request(keyActorApp).post(path).send({ ...command, requestKey: randomUUID() }).expect(403);
+      const localActorApp = express();
+      localActorApp.use(express.json());
+      localActorApp.use((req, _res, next) => { req.actor = { ...operatorActor, source: "local_implicit" }; next(); });
+      localActorApp.use("/api", saasRoutes(db, { config: { environment: "staging", operatorUserIds: ["operator"] }, support: service, enabled: async () => true } as unknown as SaasPlatform));
+      localActorApp.use(errorHandler);
+      await request(localActorApp).post(path).send({ ...command, requestKey: randomUUID() }).expect(401);
+      await db.insert(companyDeletionOperations).values({ companyId, requestedByUserId: "owner", idempotencyKey: randomUUID() });
+      const deletingSession = await seedNativePasskeySession(db, "operator");
+      const deletingApp = express();
+      deletingApp.use(express.json());
+      deletingApp.use((req, _res, next) => { req.actor = { ...operatorActor, sessionId: deletingSession }; next(); });
+      deletingApp.use("/api", saasRoutes(db, { config: { environment: "staging", operatorUserIds: ["operator"] }, support: service, enabled: async () => true } as unknown as SaasPlatform));
+      deletingApp.use(errorHandler);
+      const deletingResponse = await request(deletingApp).post(path).send({ ...command, requestKey: randomUUID() });
+      expect(deletingResponse.status, JSON.stringify(deletingResponse.body)).toBe(404);
+      await db.delete(companyDeletionOperations).where(eq(companyDeletionOperations.companyId, companyId));
+      const closedSession = await seedNativePasskeySession(db, "operator");
+      const closedApp = express();
+      closedApp.use(express.json());
+      closedApp.use((req, _res, next) => { req.actor = { ...operatorActor, sessionId: closedSession }; next(); });
+      closedApp.use("/api", saasRoutes(db, { config: { environment: "staging", operatorUserIds: ["operator"] }, support: service, enabled: async () => true } as unknown as SaasPlatform));
+      closedApp.use(errorHandler);
+      const resolved = await request(closedApp).post(path).send({ ...command, expectedVersion: 2, requestKey: randomUUID(), body: "The issue has been resolved.", status: "RESOLVED" }).expect(200);
+      expect(resolved.body).toMatchObject({ version: 3, status: "RESOLVED" });
+      const resolvedView = await request(customerApp).get(customerPath).set("Accept-Language", "en").expect(200);
+      expect(resolvedView.body.status).toBe("RESOLVED");
+      expect(resolvedView.body.resolvedAt).toBeTruthy();
+      const resolvedAt = resolvedView.body.resolvedAt;
+      const closed = await request(closedApp).post(path).send({ ...command, expectedVersion: 3, requestKey: randomUUID(), body: "The case is now closed.", status: "CLOSED" }).expect(200);
+      expect(closed.body).toMatchObject({ version: 4, status: "CLOSED" });
+      const closedView = await request(customerApp).get(customerPath).set("Accept-Language", "da").expect(200);
+      expect(closedView.body).toMatchObject({ status: "CLOSED", resolvedAt });
+      const closedResponse = await request(closedApp).post(path).send({ ...command, expectedVersion: 4, requestKey: randomUUID(), body: "Cannot add a message to closed history." });
+      expect(closedResponse.status, JSON.stringify(closedResponse.body)).toBe(409);
+      await db.delete(supportCaseEvents).where(eq(supportCaseEvents.id, first.body.eventId));
+      expect(await db.select().from(supportCaseDeletionMarkers).where(eq(supportCaseDeletionMarkers.subjectId, first.body.eventId))).toHaveLength(1);
+      await request(closedApp).post(path).send(command).expect(403);
+      await db.update(companies).set({ status: "archived" }).where(eq(companies.id, companyId));
+      const archivedSession = await seedNativePasskeySession(db, "operator");
+      const archivedApp = express();
+      archivedApp.use(express.json());
+      archivedApp.use((req, _res, next) => { req.actor = { ...operatorActor, sessionId: archivedSession }; next(); });
+      archivedApp.use("/api", saasRoutes(db, { config: { environment: "staging", operatorUserIds: ["operator"] }, support: service, enabled: async () => true } as unknown as SaasPlatform));
+      archivedApp.use(errorHandler);
+      await request(archivedApp).post(path).send({ ...command, expectedVersion: 4, requestKey: randomUUID() }).expect(404);
+      await db.update(companies).set({ status: "active" }).where(eq(companies.id, companyId));
     });
     it("reads an expired native approval as a historical limit, without claiming an active access decision", async () => {
       // The real bounded history returns ten newest approvals. Keep this older

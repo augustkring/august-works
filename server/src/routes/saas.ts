@@ -44,6 +44,7 @@ import type { SaasPlatform } from "../services/saas/platform.js";
 import { assertCompanyAccess } from "./authz.js";
 import { publicJson } from "../services/saas/crypto.js";
 import { assertConfiguredOperatorAuthentication } from "../auth/authenticator-assurance.js";
+import { supportCaseOperatorBodySchema, supportCaseOperatorReceiptSchema, supportCaseOperatorService } from "../services/saas/support-case-operator.js";
 
 export function saasRoutes(db: Db, platform: SaasPlatform) {
   const router = Router();
@@ -120,6 +121,16 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
       requireRecent: req.method !== "GET" && req.method !== "HEAD",
     });
     next();
+  });
+  router.post("/saas/internal/support-cases/:caseId/respond", async (req, res) => {
+    await gate("admin_support_v6");
+    const actor = req.actor;
+    z.strictObject({}).parse(req.query);
+    const body = supportCaseOperatorBodySchema.parse(req.body);
+    const result = await supportCaseOperatorService(db, platform.config.operatorUserIds).respond(actor, {
+      ...body, caseId: z.uuid().toLowerCase().parse(req.params.caseId),
+    });
+    res.set("Cache-Control", "private, no-store").json(supportCaseOperatorReceiptSchema.parse(result));
   });
   router.get("/saas/capabilities", async (_req, res) => {
     res.set("Cache-Control", "no-store");

@@ -11841,23 +11841,29 @@ for (const operation of v6ApiPaths) {
   registry.registerPath({
     method: operation.method,
     path: operation.path,
-    tags: [operation.auth === "session" ? "V6 SaaS" : "V6 machine ingress"],
+    tags: [operation.auth === "native" ? "Native" : operation.auth === "session" ? "V6 SaaS" : "V6 machine ingress"],
     summary: `${operation.method.toUpperCase()} ${operation.path}`,
-    description: operation.auth === "session"
-      ? "SaaS profile only, behind applicable default-off V6 gates. Requires a current verified session and native company permissions before entitlement checks. Internal operator paths additionally require the named allowlist; support actions require current owner consent."
+    description: operation.auth === "native"
+      ? "Requires the original Native actor, company and resource authority. Endpoint-specific privacy, account and rollout checks remain authoritative; a resource or receipt ID grants no access. These endpoints do not require a SaaS deployment profile."
+      : operation.auth === "session"
+      ? "SaaS profile only, behind applicable default-off V6 gates. Requires a current verified session and native company permissions before entitlement checks. Internal operator paths additionally require the named allowlist; privileged support-session actions require current owner consent."
       : operation.auth === "host"
         ? "SaaS profile and host-agent gate only. Enrollment uses a scoped one-use machine token; enrolled hosts use RSA-PSS timestamp/nonce/epoch request signatures over exact raw bytes. Cookies and host request query strings are rejected. Board authority grants no machine access."
         : "SaaS profile and provider gate only. Requires a verified Paddle or Mailgun signature over the provider payload. Board sessions grant no provider authority.",
     request: {
       params: z.object(Object.fromEntries([...operation.path.matchAll(/\{([^}]+)\}/g)].map(match => [match[1], z.string()]))),
-      ...(operation.auth === "session" ? { query: z.object({ expectedUserId: z.string().optional() }) } : {}),
-      ...(operation.body ? { body: { required: true, content: { "application/json": { schema: operation.body } } } } : {}),
+      ...(operation.query ? { query: operation.query } : operation.auth === "session" ? { query: z.object({ expectedUserId: z.string().optional() }) } : {}),
+      ...(operation.body ? { body: { required: operation.bodyRequired !== false, content: { "application/json": { schema: operation.body } } } } : {}),
     },
     responses: {
       [operation.successStatus]: {
         ...responses.ok(operation.result),
         ...(operation.privateResponse ? { headers: { "Cache-Control": { schema: { type: "string", enum: ["private, no-store"] } } } } : {}),
       },
+      ...Object.fromEntries((operation.additionalSuccessStatuses ?? []).map(status => [status, {
+        ...responses.ok(operation.result),
+        ...(operation.privateResponse ? { headers: { "Cache-Control": { schema: { type: "string", enum: ["private, no-store"] } } } } : {}),
+      }])),
       400: responses.badRequest,
       401: { description: "Current authenticated principal or valid machine proof required." },
       403: responses.forbidden,

@@ -293,6 +293,33 @@ function loadSpecRoutes() {
 }
 
 describe("openapi routes", () => {
+  it("documents Native support/access availability and the optional grant-revocation body", () => {
+    const paths = buildOpenApiSpec().paths;
+    const policy = paths["/api/companies/{companyId}/support/policy"]?.get;
+    expect(policy?.tags).toEqual(["Native"]);
+    expect(policy?.description).toContain("do not require a SaaS deployment profile");
+    expect(paths["/api/issues/{id}/access-grants/{grantId}/revoke"]?.post?.requestBody)
+      .toMatchObject({ required: false });
+    const grant = paths["/api/issues/{id}/access-grants"]?.post;
+    expect(grant?.responses).toHaveProperty("200");
+    expect(grant?.responses).toHaveProperty("201");
+  });
+  it("documents the native operator case response with path-owned case ID and exact receipt", () => {
+    const operation = buildOpenApiSpec().paths["/api/saas/internal/support-cases/{caseId}/respond"]?.post as any;
+    expect(operation).toBeDefined();
+    const body = operation.requestBody.content["application/json"].schema;
+    expect(body.properties).toHaveProperty("companyId");
+    expect(body.properties).not.toHaveProperty("caseId");
+    expect(body.additionalProperties).toBe(false);
+    expect(operation.parameters.filter((parameter: { in: string }) => parameter.in === "query")).toEqual([]);
+    expect(operation.responses["200"].content["application/json"].schema.properties).toEqual({
+      caseId: { type: "string" },
+      eventId: { type: "string" },
+      version: { type: "integer", minimum: 0 },
+      status: { type: "string", enum: ["RECEIVED", "INVESTIGATING", "WORKING_ON_IT", "WAITING_FOR_YOU", "RESOLVED", "CLOSED"] },
+    });
+    expect(operation.responses["200"].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+  });
   it("documents owned notification proposal review and exact Human baseline confirmation", () => {
     const spec = buildOpenApiSpec() as any;
     const base = "/api/companies/{companyId}/notifications/preference-proposals/{proposalId}";
