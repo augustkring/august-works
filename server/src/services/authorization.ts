@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
+import { createHash, randomUUID } from "node:crypto";
 import { isSaasDeployment } from "../deployment-profile.js";
 import { and, eq, inArray, is, isNull, sql, type SQL } from "drizzle-orm";
 import { PgTransaction } from "drizzle-orm/pg-core";
@@ -44,11 +45,12 @@ import {
   resolveCoreTrustPreset,
   type TrustPresetResolution,
 } from "./trust-preset-resolver.js";
-import { conflict, forbidden } from "../errors.js";
+import { conflict, forbidden, HttpError } from "../errors.js";
 import { logger } from "../middleware/logger.js";
 import { normalizeAgentPermissions } from "./agent-permissions.js";
 import { grantsForHumanRole, normalizeHumanRole } from "./company-member-roles.js";
 import { nativeMemoryCapturePrincipalCondition } from "./memory/memory-privacy.js";
+import { assertRoutineSourceAccess } from "./routine-source-authority.js";
 
 /** Current native role evidence. The optional lock is owned by an enclosing
  * mutation transaction; a role copied into an actor is never this evidence. */
@@ -595,7 +597,7 @@ function issuePrincipalAccess(actor: AuthorizationActor, issue: SQL, company: SQ
 
 /** Privacy narrowing only. The caller still applies company/action authorization. */
 export async function projectReadSqlCondition(_db: Db | DbTransaction, actor: AuthorizationActor): Promise<SQL<boolean>> {
-  return taskSourcePrivacySqlCondition("project", sql`${projects.id}`, sql`${projects.companyId}`, actor);
+  return taskSourcePrivacySqlCondition(_db, "project", sql`${projects.id}`, sql`${projects.companyId}`, actor);
 }
 
 /** All retained Task sources survive ordinary moves and source erasure. Nodes
@@ -603,7 +605,7 @@ export async function projectReadSqlCondition(_db: Db | DbTransaction, actor: Au
  * repeated refs cannot hide incomplete work behind a small unique population.
  * Cycles, missing/foreign sources and either overflow deny. */
 export async function issueReadSqlCondition(_db: Db | DbTransaction, actor: AuthorizationActor): Promise<SQL<boolean>> {
-  return taskSourcePrivacySqlCondition("issue", sql`${issues.id}`, sql`${issues.companyId}`, actor);
+  return taskSourcePrivacySqlCondition(_db, "issue", sql`${issues.id}`, sql`${issues.companyId}`, actor);
 }
 
 /** Every native read uses the same persisted Task binding, including recursive
@@ -625,10 +627,18 @@ function heartbeatRunTaskBindingCondition(row: SQL): SQL<boolean> {
 }
 
 /** One native Task/Project source graph; this never authorizes a company action.
- * Typed private authoring/Memory sources remain closed until their native
- * readers join this graph. Empty stored arrays are relational facts only,
+ * Private Routine sources enter through the exact callback-local native owner.
+ * Empty stored arrays are relational facts only,
  * never complete-input receipts or publication authority. */
-function taskSourcePrivacySqlCondition(kind: "issue" | "project" | "run" | "workflow_run" | "routine_run", id: SQL, company: SQL, actor: AuthorizationActor): SQL<boolean> {
+function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "project" | "run" | "workflow_run" | "routine_run", id: SQL, company: SQL, actor: AuthorizationActor): SQL<boolean> {
+  const routineScope = nativeRoutineReadScopes.get(db as object);
+  const routineCapabilityActive = routineScope?.active && routineScope.companyId && routineScope.routineActorKey === routineActorKey(actor);
+  const conversationRoutine = routineCapabilityActive
+    ? sql`(p.origin_kind='manual' or (p.origin_kind='conversation_draft'
+      and current_setting('paperclip.native_routine_actor_hash',true)=${routineActorHash(actor)}
+      and current_setting('paperclip.native_routine_scope_token',true)=${routineScope.routineScopeToken ?? ""}
+      and rr.id=any(string_to_array(nullif(current_setting('paperclip.native_routine_source_ids',true),''),',')::uuid[])))`
+    : sql`p.origin_kind='manual'`;
   const contextRoots = sql`
     select 'issue'::text as kind,case when c.agent_id=r.agent_id then c.issue_id end as id
       where c.issue_id is not null or c.agent_id<>r.agent_id
@@ -751,7 +761,7 @@ function taskSourcePrivacySqlCondition(kind: "issue" | "project" | "run" | "work
         or (n.kind='routine_run' and not exists(select 1 from routine_runs rr
           join routines p on p.id=rr.routine_id and p.company_id=rr.company_id
           join routine_revisions v on v.id=rr.routine_revision_id and v.routine_id=rr.routine_id and v.company_id=rr.company_id
-          where rr.id=n.id and rr.company_id=${company} and p.origin_kind='manual'
+          where rr.id=n.id and rr.company_id=${company} and ${conversationRoutine}
             and v.snapshot->'version'='1'::jsonb
             and lower(v.snapshot->'routine'->>'id')=rr.routine_id::text
             and lower(v.snapshot->'routine'->>'companyId')=rr.company_id::text
@@ -761,7 +771,44 @@ function taskSourcePrivacySqlCondition(kind: "issue" | "project" | "run" | "work
   )`;
 }
 
-export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: AuthorizationActor, issue: IssuePrivacyRow) {
+export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: AuthorizationActor, issue: IssuePrivacyRow): Promise<boolean> {
+  const activeRoutineScope = nativeRoutineReadScopes.get(db as object);
+  if (!activeRoutineScope?.active && actor.type !== "none" && actor.source !== "local_implicit") {
+    const [sourceRows] = await db.execute<{ ids: string[]; overflow: boolean }>(sql`
+      with recursive issue_chain(id) as (
+        select ${issue.id}::uuid
+        union
+        select parent.id from issue_chain c cross join lateral (
+          select coalesce(i.privacy_parent_issue_id,i.parent_id) as id from issues i
+            where i.id=c.id and i.company_id=${issue.companyId} and coalesce(i.privacy_parent_issue_id,i.parent_id) is not null
+          union select i.privacy_root_issue_id from issues i where i.id=c.id and i.company_id=${issue.companyId}
+            and i.privacy_root_issue_id is not null and i.privacy_root_issue_id<>i.id
+          union select s.source_id from issue_privacy_sources s where s.issue_id=c.id and s.company_id=${issue.companyId}
+            and s.source_kind='issue'
+        ) parent
+      ), bounded_nodes as materialized (select id from issue_chain limit 257), routine_ids as (
+        select i.origin_run_id::uuid as id from bounded_nodes c join issues i on i.id=c.id and i.company_id=${issue.companyId}
+          where i.origin_kind='routine_execution' and i.origin_run_id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+        union select s.source_id from bounded_nodes c join issue_privacy_sources s on s.issue_id=c.id and s.company_id=${issue.companyId}
+          where s.source_kind='routine_run'
+      ), bounded as materialized (select distinct id from routine_ids limit 257)
+      select coalesce(array_agg(id::text) filter(where id is not null),array[]::text[]) as ids,
+        ((select count(*) from bounded_nodes)>256 or (select count(*) from bounded)>256) as overflow from bounded
+    `);
+    const routineIds = sourceRows?.ids ?? [];
+    if (sourceRows?.overflow) return false;
+    if (routineIds.length) {
+      if (is(db, PgTransaction)) {
+        return authorizationService(db).withReadRoutineSources(issue.companyId, actor, routineIds, async () =>
+          canActorReadIssuePrivacy(db, actor, issue));
+      }
+      return db.transaction(async rawTx => {
+        const tx = rawTx as unknown as DbTransaction;
+        return authorizationService(tx).withReadRoutineSources(issue.companyId, actor, routineIds, async () =>
+          canActorReadIssuePrivacy(tx, actor, issue));
+      });
+    }
+  }
   return (await db.select({ id: issues.id }).from(issues).where(and(eq(issues.id, issue.id), eq(issues.companyId, issue.companyId), await issueReadSqlCondition(db, actor))).limit(1)).length > 0;
 }
 /** Typed Task execution owners are distinct namespaces from heartbeat runs.
@@ -770,8 +817,18 @@ export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: Au
 export async function canActorReadTypedTaskSourcePrivacy(db: Db | DbTransaction, actor: AuthorizationActor,
   source: { sourceKind: "workflow_run" | "routine_run"; id: string; companyId: string }): Promise<boolean> {
   const table = source.sourceKind === "workflow_run" ? workflowRuns : routineRuns;
+  if (source.sourceKind === "routine_run" && !nativeRoutineReadScopes.get(db as object)?.active
+    && actor.type !== "none" && actor.source !== "local_implicit") {
+    if (is(db, PgTransaction)) return authorizationService(db).withReadRoutineSources(source.companyId, actor, [source.id], async () =>
+      canActorReadTypedTaskSourcePrivacy(db, actor, source));
+    return db.transaction(async rawTx => {
+      const tx = rawTx as unknown as DbTransaction;
+      return authorizationService(tx).withReadRoutineSources(source.companyId, actor, [source.id], async () =>
+        canActorReadTypedTaskSourcePrivacy(tx, actor, source));
+    });
+  }
   return (await db.select({ id: table.id }).from(table).where(and(eq(table.id, source.id), eq(table.companyId, source.companyId),
-    await taskSourcePrivacySqlCondition(source.sourceKind, sql`${table.id}`, sql`${table.companyId}`, actor))).limit(1)).length > 0;
+    await taskSourcePrivacySqlCondition(db, source.sourceKind, sql`${table.id}`, sql`${table.companyId}`, actor))).limit(1)).length > 0;
 }
 export async function canActorReadProjectPrivacy(db: Db | DbTransaction, actor: AuthorizationActor, project: ProjectPrivacyRow) {
   return (await db.select({ id: projects.id }).from(projects).where(and(eq(projects.id, project.id), eq(projects.companyId, project.companyId), await projectReadSqlCondition(db, actor))).limit(1)).length > 0;
@@ -788,7 +845,7 @@ export async function canActorReadHeartbeatRunPrivacy(db: Db | DbTransaction, ac
 
 /** Same persisted native run closure for pre-limit projections and direct reads. */
 export async function heartbeatRunReadSqlCondition(_db: Db | DbTransaction, actor: AuthorizationActor): Promise<SQL<boolean>> {
-  return taskSourcePrivacySqlCondition("run", sql`${heartbeatRuns.id}`, sql`${heartbeatRuns.companyId}`, actor);
+  return taskSourcePrivacySqlCondition(_db, "run", sql`${heartbeatRuns.id}`, sql`${heartbeatRuns.companyId}`, actor);
 }
 
 export function responsibleUserAuthzShadowMode() {
@@ -854,8 +911,10 @@ type ReadSourceDecisionInput = {
   enforceResponsibleUserIntersection?: boolean;
 };
 export type NativeContextInspectionOwner = { decide(input: ReadSourceDecisionInput): Promise<AuthorizationDecision> };
-type ReadSourceOwner = NativeContextInspectionOwner;
-type ReadScopePurpose = "task_sources" | "company_search" | "context_inspection";
+type ReadSourceOwner = NativeContextInspectionOwner & {
+  readRoutineSources?(runIds: string[], actor: AuthorizationActor): Promise<string[]>;
+};
+type ReadScopePurpose = "task_sources" | "company_search" | "context_inspection" | "routine_sources";
 type ReadSourceRows = {
   companyId: string;
   agentId: string | null;
@@ -865,7 +924,19 @@ type ReadSourceRows = {
   credentialExpiresAt: number | null;
   credentialUserId: string | null;
   purpose: ReadScopePurpose;
+  routineRunIds?: Set<string>;
+  routineActorKey?: string;
+  routineActor?: AuthorizationActor;
+  routineAgentIds?: Set<string>;
+  routineScopeToken?: string;
 };
+const nativeRoutineReadScopes = new WeakMap<object, ReadSourceRows>();
+function routineActorKey(actor: AuthorizationActor) {
+  return JSON.stringify(actor);
+}
+function routineActorHash(actor: AuthorizationActor) {
+  return createHash("sha256").update(routineActorKey(actor)).digest("hex");
+}
 const issueReadColumns = {
   id: issues.id, companyId: issues.companyId, projectId: issues.projectId, parentId: issues.parentId,
   assigneeAgentId: issues.assigneeAgentId, assigneeUserId: issues.assigneeUserId, checkoutRunId: issues.checkoutRunId,
@@ -918,7 +989,88 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       issues: new Map(locked && purpose !== "context_inspection" ? requestedIssues.map(id => [id, null]) : []),
       projects: new Map(locked && purpose !== "context_inspection" ? requestedProjects.map(id => [id, null]) : []),
     };
-    const owner = createAuthorizationService(db, context);
+    if (purpose === "routine_sources") context.routineScopeToken = randomUUID();
+    const owner = createAuthorizationService(db, context) as ReadSourceOwner & {
+      readRoutineSources(runIds: string[], actor: AuthorizationActor): Promise<string[]>;
+    };
+    owner.readRoutineSources = async (runIds, actor) => {
+      if (purpose !== "routine_sources" || !locked || !context.active || context.companyId !== companyId)
+        throw forbidden("Private Routine reads require their original native source scope.");
+      if (actor.type === "none" || actor.source === "local_implicit")
+        throw forbidden("A current accountable Routine reader is required.");
+      if (runIds.length > 256 || new Set(runIds).size !== runIds.length || runIds.some(id => !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)))
+        throw forbidden("The native Routine source population is incomplete.");
+      await db.execute(sql`select set_config('paperclip.native_routine_source_ids', '', true),
+        set_config('paperclip.native_routine_actor_hash', ${routineActorHash(actor)}, true),
+        set_config('paperclip.native_routine_scope_token', ${context.routineScopeToken ?? ""}, true)`);
+      const sourceActor = actor.type === "board" && actor.source === "session" && !actor.sessionId
+        ? null : await pinReadSourceActor(actor, companyId);
+      const company = sourceActor ? await owner.decide({ actor: sourceActor, action: "company_scope:read",
+        resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true })
+        : { allowed: false } as AuthorizationDecision;
+      const authorized = new Set<string>();
+      context.routineAgentIds ??= new Set<string>();
+      if (!company.allowed) {
+        context.routineRunIds = authorized;
+        context.routineActorKey = routineActorKey(actor);
+        return [];
+      }
+      for (const runId of runIds) {
+        const [run] = await db.select({ id: routineRuns.id, routineId: routineRuns.routineId,
+          revisionId: routineRuns.routineRevisionId }).from(routineRuns).where(and(
+            eq(routineRuns.id, runId), eq(routineRuns.companyId, companyId))).for("share", { noWait: true });
+        if (!run) continue;
+        const [routine] = await db.select({ id: routines.id, companyId: routines.companyId, originKind: routines.originKind,
+          originId: routines.originId, createdByAgentId: routines.createdByAgentId, responsibleUserId: routines.responsibleUserId })
+          .from(routines).where(and(eq(routines.id, run.routineId), eq(routines.companyId, companyId))).for("share", { noWait: true });
+        if (!routine || !run.revisionId) continue;
+        const [revision] = await db.select({ id: routineRevisions.id }).from(routineRevisions).where(and(
+          eq(routineRevisions.id, run.revisionId), eq(routineRevisions.routineId, routine.id),
+          eq(routineRevisions.companyId, companyId))).for("share", { noWait: true });
+        if (!revision) continue;
+        if (routine.originKind === "conversation_draft") {
+          if (!routine.originId || !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(routine.originId)) continue;
+          const [authoringRun] = await db.select({ id: heartbeatRuns.id, agentId: heartbeatRuns.agentId,
+            userId: heartbeatRuns.responsibleUserId, issueId: heartbeatRuns.nativeIssueId,
+            snapshot: heartbeatRuns.contextSnapshot }).from(heartbeatRuns).where(and(
+              eq(heartbeatRuns.id, routine.originId), eq(heartbeatRuns.companyId, companyId))).for("share", { noWait: true });
+          const conversationId = authoringRun?.issueId ?? authoringRun?.snapshot?.issueId ?? authoringRun?.snapshot?.taskId;
+          if (!authoringRun || authoringRun.agentId !== routine.createdByAgentId ||
+            authoringRun.userId !== routine.responsibleUserId || !conversationId) continue;
+          const [conversation] = await db.select(issueReadColumns).from(issues).where(and(
+            eq(issues.id, conversationId), eq(issues.companyId, companyId))).for("share", { noWait: true });
+          if (!conversation) continue;
+          context.issues.set(conversation.id, conversation);
+          if (conversation.projectId && !context.projects.has(conversation.projectId)) {
+            const [project] = await db.select(projectReadColumns).from(projects).where(and(
+              eq(projects.id, conversation.projectId), eq(projects.companyId, companyId))).for("share", { noWait: true });
+            context.projects.set(conversation.projectId, project ?? null);
+          }
+          context.routineAgentIds.add(authoringRun.agentId);
+          const agentDecision = await owner.decide({ actor: sourceActor!, action: "agent:read",
+            resource: { type: "agent", companyId, agentId: authoringRun.agentId }, enforceResponsibleUserIntersection: true });
+          const issueDecision = await owner.decide({ actor: sourceActor!, action: "issue:read",
+            resource: { type: "issue", companyId, issueId: conversation.id, projectId: conversation.projectId,
+              parentIssueId: conversation.parentId, status: conversation.status,
+              assigneeAgentId: conversation.assigneeAgentId, assigneeUserId: conversation.assigneeUserId },
+            enforceResponsibleUserIntersection: true });
+          if (!agentDecision.allowed || !issueDecision.allowed) continue;
+        }
+        try {
+          await assertRoutineSourceAccess(db, { id: routine.id, companyId: routine.companyId, originKind: routine.originKind,
+            originId: routine.originId, createdByAgentId: routine.createdByAgentId, responsibleUserId: routine.responsibleUserId }, sourceActor!);
+        } catch (error) {
+          if (error instanceof HttpError && (error.status === 403 || error.status === 404)) continue;
+          throw error;
+        }
+        if (routine.originKind === "conversation_draft") authorized.add(runId);
+      }
+      context.routineRunIds = authorized;
+      context.routineActorKey = routineActorKey(actor);
+      context.routineActor = actor;
+      await db.execute(sql`select set_config('paperclip.native_routine_source_ids', ${[...authorized].join(",")}, true)`);
+      return [...authorized];
+    };
     if (purpose === "context_inspection") {
       if (!locked || !preflightActor || preflightActor.type !== "board") throw forbidden("Human Context inspection requires its original native actor.");
       const company = await owner.decide({ actor: preflightActor, action: "company_scope:read",
@@ -942,7 +1094,14 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     for (const row of issueRows) context.issues.set(row.id, row);
     for (const row of projectRows) context.projects.set(row.id, row);
     try {
-      const result = await read({ decide: owner.decide });
+      if (purpose === "routine_sources") nativeRoutineReadScopes.set(db as object, context);
+      const result = await read(owner);
+      if (purpose === "routine_sources" && context.routineActor) {
+        const before = [...(context.routineRunIds ?? [])].sort();
+        const after = await owner.readRoutineSources(before, context.routineActor);
+        if (before.length !== after.length || before.some((id, index) => id !== after[index]))
+          throw forbidden("Current Routine source authority changed during the read.");
+      }
       if (context.credentialExpiresAt !== null || context.credentialUserId !== null) {
         const deadlineCurrent = context.credentialExpiresAt === null ? sql`true`
           : sql`clock_timestamp() < to_timestamp(${context.credentialExpiresAt} / 1000.0)`;
@@ -955,7 +1114,20 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       }
       return result;
     }
-    finally { context.active = false; }
+    finally {
+      if (purpose === "routine_sources") {
+        try { await db.execute(sql`select set_config('paperclip.native_routine_source_ids', '', true),
+          set_config('paperclip.native_routine_actor_hash', '', true),
+          set_config('paperclip.native_routine_scope_token', '', true)`); }
+        finally {
+          context.active = false;
+          if (nativeRoutineReadScopes.get(db as object) === context) nativeRoutineReadScopes.delete(db as object);
+        }
+      } else {
+        context.active = false;
+        if (nativeRoutineReadScopes.get(db as object) === context) nativeRoutineReadScopes.delete(db as object);
+      }
+    }
   }
   async function withReadSources<T>(companyId: string, issueIds: string[], projectIds: string[], read: (owner: ReadSourceOwner) => Promise<T>) {
     return withReadScope(companyId, issueIds, projectIds, "task_sources", read);
@@ -963,6 +1135,16 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
   async function withReadCompany<T>(companyId: string, read: (owner: ReadSourceOwner) => Promise<T>) {
     if (!is(db, PgTransaction)) throw forbidden("Company search requires a native read transaction.");
     return withReadScope(companyId, [], [], "company_search", read);
+  }
+  async function withReadRoutineSources<T>(companyId: string, actor: AuthorizationActor, runIds: string[],
+    read: (owner: ReadSourceOwner) => Promise<T>) {
+    if (!is(db, PgTransaction)) throw forbidden("Private Routine reads require a native transaction.");
+    if (nativeRoutineReadScopes.get(db as object)?.active) throw forbidden("Nested Routine source scopes are unavailable.");
+    return withReadScope(companyId, [], [], "routine_sources", async owner => {
+      if (!owner.readRoutineSources) throw forbidden("Private Routine reader is unavailable.");
+      await owner.readRoutineSources(runIds, actor);
+      return read(owner);
+    }, null, actor);
   }
   async function withReadContextInspection<T>(companyId: string, agentId: string, issueIds: string[], projectIds: string[],
     actor: AuthorizationActor, read: (owner: ReadSourceOwner) => Promise<T>) {
@@ -2942,9 +3124,16 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
         || input.action === "agent:read" && input.resource.type === "agent" && input.resource.agentId === readSources.agentId
         || input.action === "issue:read" || input.action === "project:read" || foundationRead
       );
+      const routineSourceRead = readSources.purpose === "routine_sources" && input.action === "company_scope:read"
+        && input.resource.type === "company" && (!input.scope || Object.keys(input.scope).length === 0);
+      const routineAgentRead = readSources.purpose === "routine_sources" && input.action === "agent:read"
+        && input.resource.type === "agent" && Boolean(input.resource.agentId && readSources.routineAgentIds?.has(input.resource.agentId));
+      const routineIssueRead = readSources.purpose === "routine_sources" && input.action === "issue:read"
+        && input.resource.type === "issue" && Boolean(input.resource.issueId && readSources.issues.has(input.resource.issueId));
       const readScopeAllows = readSources.purpose === "company_search" ? companySearchRead
         : readSources.purpose === "context_inspection" ? contextInspectionRead
-          : (["issue:read", "project:read"].includes(input.action) || foundationRead);
+          : readSources.purpose === "routine_sources" ? routineSourceRead || routineAgentRead || routineIssueRead
+            : (["issue:read", "project:read"].includes(input.action) || foundationRead);
       if (companyIdForResource(input.resource) !== readSources.companyId || !readScopeAllows) {
         return deny({ action: input.action, reason: "deny_scope", explanation: "This native Source row scope admits same-company reads only." });
       }
@@ -3017,6 +3206,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     decidePrincipalGrant,
     withReadSources,
     withReadCompany,
+    withReadRoutineSources,
     withReadContextInspection,
   };
 }

@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   authUsers,
+  authSessions,
   companyMemberships,
   createDb,
   EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
@@ -13,7 +14,7 @@ import {
   principalPermissionGrants,
   routineRuns,
 } from "@paperclipai/db";
-import { canActorReadIssuePrivacy } from "../services/authorization.js";
+import { authorizationService, canActorReadIssuePrivacy, issueReadSqlCondition } from "../services/authorization.js";
 import { issueService } from "../services/issues.js";
 import { lockMemoryPrivacy, purgeDerivedWorkflowMemory } from "../services/memory/memory-privacy.js";
 import { routineAuthoringToolsService } from "../services/routine-authoring-tools.js";
@@ -27,11 +28,18 @@ describe("typed routine Task private source graph", () => {
   let db: ReturnType<typeof createDb>;
   let f: Awaited<ReturnType<typeof seedV5Presences>>;
   let bobId: string;
+  let bobSessionId: string;
   let conversationId: string;
   let authoringRunId: string;
 
-  const routineInput = () => ({ idempotencyKey: "private-typed-task-source", title: "Private saved routine", description: "PRIVATE routine body", priority: "medium" });
+  const routineInput = (idempotencyKey = "private-typed-task-source") => ({ idempotencyKey, title: "Private saved routine", description: "PRIVATE routine body", priority: "medium" });
   const authoringContext = () => ({ companyId: f.home, agentId: f.presence.id, runId: authoringRunId });
+  async function createSession(userId: string) {
+    const now = new Date();
+    const [session] = await db.insert(authSessions).values({ id: randomUUID(), userId, token: randomUUID(),
+      createdAt: now, updatedAt: now, expiresAt: new Date(now.getTime() + 60 * 60_000) }).returning();
+    return session!;
+  }
 
   beforeAll(async () => {
     database = await startEmbeddedPostgresTestDatabase("typed-task-private-sources-");
@@ -44,6 +52,8 @@ describe("typed routine Task private source graph", () => {
   beforeEach(async () => {
     await instanceSettingsService(db).updateExperimental({ experience_projection_v9: true, ambient_commands_v9: true });
     f = await seedV5Presences(db);
+    const ownerSession = await createSession(f.userId);
+    f = { ...f, actor: { ...f.actor, sessionId: ownerSession.id } };
     await db.insert(principalPermissionGrants).values({ companyId: f.home, principalType: "agent", principalId: f.presence.id,
       permissionKey: "tasks:assign" }).onConflictDoNothing();
     const bob = `user-${randomUUID()}`;
@@ -55,6 +65,7 @@ describe("typed routine Task private source graph", () => {
     await db.insert(principalPermissionGrants).values(grantsForHumanRole("owner").map(grant => ({ companyId: f.home,
       principalType: "user" as const, principalId: bob, ...grant })));
     bobId = bob;
+    bobSessionId = (await createSession(bobId)).id;
 
     const conversation = await issueService(db).create(f.home, { title: "Private routine authoring conversation",
       assigneeAgentId: f.presence.id, conversationAgentId: f.presence.id, conversationUserId: f.userId,
@@ -67,8 +78,8 @@ describe("typed routine Task private source graph", () => {
     await db.update(issues).set({ executionRunId: authoringRunId }).where(eq(issues.id, conversationId));
   });
 
-  async function createRoutineAndRun() {
-    const created = await routineAuthoringToolsService(db).create(authoringContext(), routineInput());
+  async function createRoutineAndRun(idempotencyKey?: string) {
+    const created = await routineAuthoringToolsService(db).create(authoringContext(), routineInput(idempotencyKey));
     const [run] = await db.insert(routineRuns).values({ companyId: f.home, routineId: created.routineId,
       routineRevisionId: created.currentRevisionId!, source: "api", status: "received", responsibleUserId: f.userId }).returning();
     return { routineId: created.routineId, revisionId: created.currentRevisionId!, run: run! };
@@ -78,11 +89,11 @@ describe("typed routine Task private source graph", () => {
     return issueService(db).create(f.home, { title: "PRIVATE copied execution Task", description: "PRIVATE execution detail",
       originKind: "routine_execution", originId: source.routineId, originRunId: source.run.id,
       createdByUserId: f.userId, responsibleUserId: f.userId, actorResponsibleUserId: f.userId,
-      trustExplicitResponsibleUserId: true });
+      trustExplicitResponsibleUserId: true }, db, undefined, { privacyActor: ownerActor() });
   }
 
   const ownerActor = () => f.actor;
-  const bobActor = () => ({ type: "board" as const, source: "session" as const, userId: bobId });
+  const bobActor = () => ({ type: "board" as const, source: "session" as const, userId: bobId, sessionId: bobSessionId });
 
   it("retains the exact typed RoutineRun edge and limits its private Task to the actual routine owner", async () => {
     const source = await createRoutineAndRun();
@@ -126,5 +137,81 @@ describe("typed routine Task private source graph", () => {
       createdByUserId: f.userId, responsibleUserId: f.userId });
     expect(await canActorReadIssuePrivacy(db, ownerActor(), task)).toBe(true);
     expect(await canActorReadIssuePrivacy(db, bobActor(), task)).toBe(true);
+  }, 90_000);
+
+  it("expires the exact Routine source capability when its native callback returns", async () => {
+    const source = await createRoutineAndRun();
+    const task = await createTypedTask(source);
+    const secondSource = await createRoutineAndRun(`private-typed-task-source-${randomUUID()}`);
+    const secondTask = await createTypedTask(secondSource);
+    let invokeAfter: (() => Promise<string[]>) | undefined;
+    let escapedCondition: Awaited<ReturnType<typeof issueReadSqlCondition>> | undefined;
+    await db.transaction(async rawTx => {
+      const tx = rawTx as unknown as typeof db;
+      await authorizationService(tx).withReadRoutineSources(f.home, ownerActor(), [source.run.id], async owner => {
+        invokeAfter = () => owner.readRoutineSources!([source.run.id], ownerActor());
+        escapedCondition = await issueReadSqlCondition(tx, ownerActor());
+        expect(await canActorReadIssuePrivacy(tx, ownerActor(), task)).toBe(true);
+      });
+      const staleRows = await tx.select({ id: issues.id }).from(issues).where(and(eq(issues.id, task.id), escapedCondition!));
+      expect(staleRows).toHaveLength(0);
+      await authorizationService(tx).withReadRoutineSources(f.home, ownerActor(), [secondSource.run.id], async () => {
+        const staleRowsInNextScope = await tx.select({ id: issues.id }).from(issues)
+          .where(and(eq(issues.id, task.id), escapedCondition!));
+        expect(staleRowsInNextScope).toHaveLength(0);
+        expect(await canActorReadIssuePrivacy(tx, ownerActor(), secondTask)).toBe(true);
+      });
+    });
+    await expect(invokeAfter!()).rejects.toThrow("original native source scope");
+  }, 90_000);
+
+  it("holds the original Human credential and source conversation through the native callback", async () => {
+    const source = await createRoutineAndRun();
+    const task = await createTypedTask(source);
+    let enter!: () => void;
+    let release!: () => void;
+    const entered = new Promise<void>(resolve => { enter = resolve; });
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const scopedRead = db.transaction(async rawTx => {
+      const tx = rawTx as unknown as typeof db;
+      return authorizationService(tx).withReadRoutineSources(f.home, ownerActor(), [source.run.id], async () => {
+        expect(await canActorReadIssuePrivacy(tx, ownerActor(), task)).toBe(true);
+        enter();
+        await gate;
+      });
+    });
+    await entered;
+    let sessionUpdateFinished = false;
+    let conversationUpdateFinished = false;
+    const sessionUpdate = db.update(authSessions).set({ expiresAt: new Date(Date.now() - 1_000) })
+      .where(eq(authSessions.id, ownerActor().sessionId!)).then(() => { sessionUpdateFinished = true; });
+    const conversationUpdate = db.update(issues).set({ conversationRetiredAt: new Date(), hiddenAt: new Date(), status: "cancelled",
+      assigneeAgentId: null, assigneeUserId: null, executionRunId: null, conversationAgentId: null,
+      conversationUserId: null, conversationState: null })
+      .where(eq(issues.id, conversationId)).then(() => { conversationUpdateFinished = true; });
+    await new Promise(resolve => setTimeout(resolve, 75));
+    expect(sessionUpdateFinished).toBe(false);
+    expect(conversationUpdateFinished).toBe(false);
+    release();
+    await scopedRead;
+    await Promise.all([sessionUpdate, conversationUpdate]);
+    expect(sessionUpdateFinished).toBe(true);
+    expect(conversationUpdateFinished).toBe(true);
+  }, 90_000);
+
+  it("refuses the native read when the original authenticated session deadline passes during the callback", async () => {
+    const source = await createRoutineAndRun();
+    const task = await createTypedTask(source);
+    const expiresAt = new Date(Date.now() + 1_200);
+    await db.update(authSessions).set({ expiresAt }).where(eq(authSessions.id, ownerActor().sessionId!));
+    const expiringActor = { ...ownerActor(), authenticatedCredentialExpiresAt: expiresAt.getTime() };
+    await expect(db.transaction(async rawTx => {
+      const tx = rawTx as unknown as typeof db;
+      return authorizationService(tx).withReadRoutineSources(f.home, expiringActor, [source.run.id], async () => {
+        expect(await canActorReadIssuePrivacy(tx, expiringActor, task)).toBe(true);
+        await new Promise(resolve => setTimeout(resolve, 1_500));
+        return true;
+      });
+    })).rejects.toMatchObject({ status: 403 });
   }, 90_000);
 });
