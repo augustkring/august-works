@@ -7607,7 +7607,6 @@ export function issueRoutes(
     outcome: "reopened" | "already-open";
     generation: number;
   } | null> {
-    const actor = getActorInfo(req);
     const result =
       await executionWorkspacesSvc.reopenClosedIsolatedExecutionWorkspaceForIssue(
         {
@@ -7617,7 +7616,7 @@ export function issueRoutes(
             companyId: issue.companyId,
             projectId: issue.projectId ?? null,
           },
-          actor: { agentId: actor.agentId, actorType: actor.actorType },
+          actor: req.actor,
         },
       );
     if (result.ok) {

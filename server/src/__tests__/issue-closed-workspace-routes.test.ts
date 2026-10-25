@@ -28,6 +28,7 @@ const mockExecutionWorkspaceService = vi.hoisted(() => ({
 }));
 
 const mockAccessService = vi.hoisted(() => ({
+  decide: vi.fn(async () => ({ allowed: true })),
   canUser: vi.fn(),
   hasPermission: vi.fn(),
 }));
@@ -52,6 +53,14 @@ const mockLogActivity = vi.hoisted(() => vi.fn(async () => undefined));
 
 function registerServiceMocks() {
   vi.doMock("../routes/authz.js", async () => vi.importActual("../routes/authz.js"));
+  vi.doMock("../services/authorization.js", async () => ({
+    ...(await vi.importActual<typeof import("../services/authorization.js")>("../services/authorization.js")),
+    canActorReadIssuePrivacy: vi.fn(async () => true),
+  }));
+  vi.doMock("../services/analytical-context-authority.js", async () => ({
+    ...(await vi.importActual<typeof import("../services/analytical-context-authority.js")>("../services/analytical-context-authority.js")),
+    assertAnalyticalContextPayloadAccess: vi.fn(async () => undefined),
+  }));
 
   vi.doMock("@paperclipai/shared/telemetry", () => ({
     trackAgentTaskCompleted: vi.fn(),
@@ -236,6 +245,7 @@ describe.sequential("closed isolated workspace issue routes", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAccessService.decide.mockResolvedValue({ allowed: true });
     mockIssueService.getById.mockResolvedValue(makeIssue());
     mockExecutionWorkspaceService.getById.mockResolvedValue(makeClosedWorkspace());
     mockExecutionWorkspaceService.refreshReopenPendingConsumption.mockResolvedValue({ refreshed: true });
@@ -262,7 +272,7 @@ describe.sequential("closed isolated workspace issue routes", () => {
     expect(mockExecutionWorkspaceService.reopenClosedIsolatedExecutionWorkspaceForIssue).toHaveBeenCalledWith({
       workspaceId: closedWorkspaceId,
       issue: { id: issueId, companyId: "company-1", projectId: null },
-      actor: expect.objectContaining({ actorType: "user" }),
+      actor: expect.objectContaining({ type: "board", source: "local_implicit", userId: "local-board" }),
     });
     // The closed-workspace dead end is gone: the comment is accepted.
     expect(res.status).toBe(201);
@@ -434,7 +444,7 @@ describe.sequential("closed isolated workspace issue routes", () => {
       workspace: { ...makeClosedWorkspace(), status: "active", closedAt: null },
       generation: 4,
     });
-    mockIssueService.checkout.mockResolvedValue(null);
+    mockIssueService.checkout.mockResolvedValue({ ...makeIssue(), status: "in_progress" });
 
     const res = await request(createApp())
       .post(`/api/issues/${issueId}/checkout`)

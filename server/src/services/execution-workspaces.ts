@@ -46,6 +46,7 @@ import { parseProjectExecutionWorkspacePolicy } from "./execution-workspace-poli
 import { issueRecoveryActionService } from "./issue-recovery-actions.js";
 import { logActivity } from "./activity-log.js";
 import type { AuthorizationActor } from "./authorization.js";
+import { authorizationService, pinCurrentBoardActor } from "./authorization.js";
 import {
   createPullRequestMergeDetailsResolver,
   extractGitHubPullRequestReferences,
@@ -3021,9 +3022,14 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
     reopenClosedIsolatedExecutionWorkspaceForIssue: async (input: {
       workspaceId: string;
       issue: { id: string; companyId: string; projectId: string | null };
-      actor: { agentId: string | null; actorType: string };
+      actor: AuthorizationActor;
     }): Promise<ReopenClosedIsolatedExecutionWorkspaceResult> => {
       const { issue, actor } = input;
+      if (actor.type === "none") {
+        return { ok: false, code: "not_reopenable", message: "Execution workspace is not reopenable" };
+      }
+      const auditActorType = actor.type === "board" ? "user" : "agent";
+      const auditActorId = actor.type === "board" ? actor.userId ?? "local-board" : actor.agentId ?? "system";
       // Bind the workspace to the issue company and project. A null project on
       // the issue must match a null project on the row (IS NOT DISTINCT FROM).
       const projectIdCondition =
@@ -3046,6 +3052,75 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
         if (!row) {
           // Wrong company, wrong project, wrong mode, or missing. Fail closed and
           // disclose no workspace detail.
+          return { ok: false, code: "not_reopenable", message: "Execution workspace is not reopenable" };
+        }
+
+        const currentSourceAllowed = async () => {
+          if (actor.type === "none") return false;
+          const sourceWorkspace = row.projectWorkspaceId
+            ? await tx.select().from(projectWorkspaces).where(and(
+              eq(projectWorkspaces.companyId, row.companyId),
+              eq(projectWorkspaces.id, row.projectWorkspaceId),
+            )).for("share").then(rows => rows[0] ?? null)
+            : null;
+          if (row.projectId) {
+            if (!sourceWorkspace || sourceWorkspace.projectId !== row.projectId
+              || sourceWorkspace.repoUrl !== row.repoUrl
+              || (sourceWorkspace.repoRef !== null && sourceWorkspace.repoRef !== row.baseRef)) return false;
+          } else if (row.projectWorkspaceId || row.repoUrl) {
+            return false;
+          }
+          if (row.strategyType === "git_worktree" && !row.repoUrl && !sourceWorkspace?.cwd) return false;
+
+          const issueIds = [...new Set([issue.id, ...(row.sourceIssueId ? [row.sourceIssueId] : [])])];
+          const projectIds = row.projectId ? [row.projectId] : [];
+          return authorizationService(tx).withReadSources(row.companyId, issueIds, projectIds, async owner => {
+            let sourceActor = actor;
+            if (actor.type === "board" && actor.source !== "local_implicit") {
+              const pinned = await pinCurrentBoardActor(tx, actor);
+              if (!pinned) return false;
+              sourceActor = pinned.actor;
+            }
+            const issueRows = await tx.select().from(issues).where(and(
+              eq(issues.companyId, row.companyId),
+              inArray(issues.id, issueIds),
+            )).for("share");
+            const byId = new Map(issueRows.map(current => [current.id, current]));
+            const target = byId.get(issue.id);
+            if (!target || target.executionWorkspaceId !== row.id || target.projectId !== row.projectId
+              || (target.projectWorkspaceId && target.projectWorkspaceId !== row.projectWorkspaceId)) return false;
+            if (row.sourceIssueId && !byId.has(row.sourceIssueId)) return false;
+
+            if (row.projectId) {
+              const [project] = await tx.select({ id: projects.id, companyId: projects.companyId }).from(projects).where(and(
+                eq(projects.companyId, row.companyId), eq(projects.id, row.projectId),
+              )).for("share");
+              if (!project) return false;
+              const decision = await owner.decide({ actor: sourceActor, action: "project:read",
+                resource: { type: "project", companyId: row.companyId, projectId: row.projectId } });
+              if (!decision.allowed) return false;
+            }
+            for (const current of issueIds.map(id => byId.get(id)!)) {
+              const decision = await owner.decide({ actor: sourceActor, action: "issue:read",
+                resource: { type: "issue", companyId: current.companyId, issueId: current.id,
+                  projectId: current.projectId, parentIssueId: current.parentId,
+                  assigneeAgentId: current.assigneeAgentId, assigneeUserId: current.assigneeUserId,
+                  originKind: current.originKind, originId: current.originId, status: current.status } });
+              if (!decision.allowed) return false;
+              const { assertAnalyticalContextPayloadAccess } = await import("./analytical-context-authority.js");
+              await assertAnalyticalContextPayloadAccess(tx as unknown as Db, row.companyId, sourceActor, { issueId: current.id });
+            }
+            return true;
+          });
+        };
+        const requireCurrentSource = async () => {
+          if (!(await currentSourceAllowed())) throw new Error("Current execution workspace source access is unavailable");
+        };
+
+        // Reopen is a source-consuming operation. Re-read current Task and
+        // project authority under the same lifecycle transaction before even
+        // resolving credentials or touching the filesystem.
+        if (!(await currentSourceAllowed())) {
           return { ok: false, code: "not_reopenable", message: "Execution workspace is not reopenable" };
         }
         if (!isClosedExecutionWorkspaceStatus(row.status)) {
@@ -3074,19 +3149,21 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
         ]);
         const [projectWorkspace, projectPolicy] = await Promise.all([
           row.projectWorkspaceId
-            ? db
+            ? tx
                 .select({ cwd: projectWorkspaces.cwd })
                 .from(projectWorkspaces)
                 .where(and(
                   eq(projectWorkspaces.companyId, row.companyId),
                   eq(projectWorkspaces.id, row.projectWorkspaceId),
                 ))
+                .for("share")
                 .then((rows) => rows[0] ?? null)
             : null,
-          db
+          tx
             .select({ executionWorkspacePolicy: projects.executionWorkspacePolicy })
             .from(projects)
             .where(and(eq(projects.companyId, row.companyId), eq(projects.id, row.projectId)))
+            .for("share")
             .then((rows) => parseProjectExecutionWorkspacePolicy(rows[0]?.executionWorkspacePolicy)),
         ]);
         // Resolve the base checkout that the rebuild spawns git in. A
@@ -3102,8 +3179,13 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
             companyId: row.companyId,
             projectId: row.projectId,
             repoUrl: row.repoUrl,
+            beforeUse: requireCurrentSource,
+            beforePublish: requireCurrentSource,
             resolveGitAuth: createGitRemoteAuthProvider(db, row.companyId, {
               issueId: row.sourceIssueId ?? issue.id,
+              heartbeatRunId: actor.type === "agent" ? actor.runId : null,
+              responsibleUserId: actor.type === "board" ? actor.userId ?? null : actor.onBehalfOfUserId ?? null,
+              agentId: actor.type === "agent" ? actor.agentId : null,
             }),
           });
           resolvedBaseCwd = managedWorkspace.cwd;
@@ -3157,10 +3239,11 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
               : null,
             agent: {
               id: actor.agentId ?? null,
-              name: actor.actorType === "user" ? "Board" : "Agent",
+              name: actor.type === "board" ? "Board" : "Agent",
               companyId: row.companyId,
             },
             recorder,
+            beforeWorkspaceMutation: requireCurrentSource,
           });
           if (!realized) {
             rebuildError = "Execution workspace could not be rebuilt";
@@ -3193,7 +3276,7 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
               executionWorkspaceId: row.id,
               issueId: issue.id,
               companyId: row.companyId,
-              actorType: actor.actorType,
+              actorType: auditActorType,
               actorAgentId: actor.agentId ?? null,
               generation: nextGeneration,
               error: rebuildError,
@@ -3202,9 +3285,9 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
           );
           await logActivity(tx as unknown as Db, {
             companyId: row.companyId,
-            actorType: actor.actorType === "user" ? "user" : "agent",
-            actorId: actor.agentId ?? "system",
-            agentId: actor.actorType === "user" ? null : actor.agentId,
+            actorType: auditActorType,
+            actorId: auditActorId,
+            agentId: actor.type === "board" ? null : actor.agentId,
             action: "execution_workspace.reopen_failed",
             entityType: "execution_workspace",
             entityId: row.id,
@@ -3214,6 +3297,19 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
               generation: nextGeneration,
             },
           });
+          return { ok: false, code: "rebuild_failed", message: "Failed to rebuild the execution workspace" };
+        }
+
+        // The filesystem owner rechecks before worktree/clone publication and
+        // before provision commands. Revalidate once more before the DB row is
+        // made active so a source withdrawal never publishes a usable reopen.
+        if (!(await currentSourceAllowed())) {
+          await tx.update(executionWorkspaces).set({
+            cleanupReason: EXECUTION_WORKSPACE_REOPEN_FAILED_REASON,
+            cleanupEligibleAt: null,
+            metadata: nextMetadata,
+            updatedAt: new Date(),
+          }).where(eq(executionWorkspaces.id, row.id));
           return { ok: false, code: "rebuild_failed", message: "Failed to rebuild the execution workspace" };
         }
 
@@ -3248,7 +3344,7 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
             executionWorkspaceId: row.id,
             issueId: issue.id,
             companyId: row.companyId,
-            actorType: actor.actorType,
+            actorType: auditActorType,
             actorAgentId: actor.agentId ?? null,
             generation: nextGeneration,
           },
@@ -3256,9 +3352,9 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
         );
         await logActivity(tx as unknown as Db, {
           companyId: row.companyId,
-          actorType: actor.actorType === "user" ? "user" : "agent",
-          actorId: actor.agentId ?? "system",
-          agentId: actor.actorType === "user" ? null : actor.agentId,
+          actorType: auditActorType,
+          actorId: auditActorId,
+          agentId: actor.type === "board" ? null : actor.agentId,
           action: "execution_workspace.reopened",
           entityType: "execution_workspace",
           entityId: row.id,

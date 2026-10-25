@@ -2962,9 +2962,11 @@ async function recordGitOperation(
     metadata?: Record<string, unknown> | null;
     successMessage?: string | null;
     failureLabel?: string | null;
+    beforeExecute?: (() => Promise<void>) | null;
   },
 ): Promise<string> {
   if (!recorder) {
+    await input.beforeExecute?.();
     return runGit(input.args, input.cwd);
   }
 
@@ -2977,6 +2979,7 @@ async function recordGitOperation(
     cwd: input.cwd,
     metadata: input.metadata ?? null,
     run: async () => {
+      await input.beforeExecute?.();
       const result = await executeProcess({
         command: "git",
         args: input.args,
@@ -3027,9 +3030,11 @@ async function recordWorkspaceCommandOperation(
     metadata?: Record<string, unknown> | null;
     successMessage?: string | null;
     onLog?: (stream: "stdout" | "stderr", chunk: string) => Promise<void>;
+    beforeExecute?: (() => Promise<void>) | null;
   },
 ) {
   if (!recorder) {
+    await input.beforeExecute?.();
     await runWorkspaceCommand(input);
     return null;
   }
@@ -3043,6 +3048,7 @@ async function recordWorkspaceCommandOperation(
     cwd: input.cwd,
     metadata: input.metadata ?? null,
     run: async () => {
+      await input.beforeExecute?.();
       const shell = resolveShell();
       const result = await executeProcess({
         command: shell,
@@ -3099,6 +3105,7 @@ async function provisionExecutionWorktree(input: {
   agent: ExecutionWorkspaceAgentRef;
   created: boolean;
   recorder?: WorkspaceOperationRecorder | null;
+  beforeWorkspaceMutation?: (() => Promise<void>) | null;
 }) {
   const provisionCommand = resolveWorkspaceProvisionCommand(input.strategy, input.repoRoot);
   if (!provisionCommand) return;
@@ -3118,6 +3125,7 @@ async function provisionExecutionWorktree(input: {
       agent: input.agent,
       created: input.created,
     }),
+    beforeExecute: input.beforeWorkspaceMutation,
     label: `Execution workspace provision command "${provisionCommand}"`,
     metadata: {
       repoRoot: input.repoRoot,
@@ -3641,6 +3649,9 @@ export async function ensurePersistedExecutionWorkspaceAvailable(input: {
   enableWorkspaceDirtyQuarantineRepair?: boolean;
   recorder?: WorkspaceOperationRecorder | null;
   resolveGitAuth?: GitRemoteAuthProvider | null;
+  /** Recheck the caller's original current source authority immediately before
+   * filesystem mutations and executable provision hooks. */
+  beforeWorkspaceMutation?: (() => Promise<void>) | null;
 }): Promise<RealizedExecutionWorkspace | null> {
   const cwd = asString(input.workspace.cwd ?? input.workspace.providerRef, "").trim();
   if (!cwd) return null;
@@ -3693,6 +3704,7 @@ export async function ensurePersistedExecutionWorkspaceAvailable(input: {
     );
   }
   const repoRoot = await runGit(["rev-parse", "--show-toplevel"], baseCwd);
+  await input.beforeWorkspaceMutation?.();
   const recordedBaseRefSha = readRecordedBaseRefSha(input.workspace.metadata);
   if (await directoryExists(cwd)) {
     const reuseBaseRef = input.workspace.baseRef ?? input.base.repoRef ?? null;
@@ -3770,6 +3782,7 @@ export async function ensurePersistedExecutionWorkspaceAvailable(input: {
     });
     realized.warnings = [...repairWarnings, ...baseRefreshWarnings, ...baseDrift.warnings];
     realized.baseRefSha = refresh.baseRefSha ?? recordedBaseRefSha ?? baseDrift.branchBaseRefSha ?? baseDrift.currentBaseRefSha;
+    await input.beforeWorkspaceMutation?.();
     await provisionExecutionWorktree({
       strategy: {
         type: "git_worktree",
@@ -3783,7 +3796,9 @@ export async function ensurePersistedExecutionWorkspaceAvailable(input: {
       agent: input.agent,
       created: false,
       recorder: input.recorder ?? null,
+      beforeWorkspaceMutation: input.beforeWorkspaceMutation,
     });
+    await input.beforeWorkspaceMutation?.();
     return realized;
   }
 
@@ -3794,12 +3809,14 @@ export async function ensurePersistedExecutionWorkspaceAvailable(input: {
   }
 
   await fs.mkdir(path.dirname(worktreePath), { recursive: true });
+  await input.beforeWorkspaceMutation?.();
   await runGit(["worktree", "prune"], repoRoot).catch(() => {});
   const restoreBaseRef = input.workspace.baseRef ?? input.base.repoRef ?? null;
   const restoreRefreshWarnings = restoreBaseRef
     ? await refreshRemoteTrackingBaseRef(repoRoot, restoreBaseRef, input.resolveGitAuth)
     : [];
   const restoreCurrentBaseRefSha = restoreBaseRef ? await resolveBaseRefSha(repoRoot, restoreBaseRef) : null;
+  await input.beforeWorkspaceMutation?.();
 
   let created = false;
   try {
@@ -3807,6 +3824,7 @@ export async function ensurePersistedExecutionWorkspaceAvailable(input: {
       phase: "worktree_prepare",
       args: ["worktree", "add", worktreePath, branchName],
       cwd: repoRoot,
+      beforeExecute: input.beforeWorkspaceMutation,
       metadata: {
         repoRoot,
         worktreePath,
@@ -3838,6 +3856,7 @@ export async function ensurePersistedExecutionWorkspaceAvailable(input: {
       phase: "worktree_prepare",
       args: ["worktree", "add", "-b", branchName, worktreePath, baseRef],
       cwd: repoRoot,
+      beforeExecute: input.beforeWorkspaceMutation,
       metadata: {
         repoRoot,
         worktreePath,
@@ -3862,6 +3881,7 @@ export async function ensurePersistedExecutionWorkspaceAvailable(input: {
     skipRefresh: true,
   });
 
+  await input.beforeWorkspaceMutation?.();
   await provisionExecutionWorktree({
     strategy: {
       type: "git_worktree",
@@ -3875,7 +3895,9 @@ export async function ensurePersistedExecutionWorkspaceAvailable(input: {
     agent: input.agent,
     created,
     recorder: input.recorder ?? null,
+    beforeWorkspaceMutation: input.beforeWorkspaceMutation,
   });
+  await input.beforeWorkspaceMutation?.();
 
   return {
     ...realized,

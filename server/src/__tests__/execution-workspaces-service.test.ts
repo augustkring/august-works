@@ -164,6 +164,7 @@ describe("execution workspace config helpers", () => {
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
+const localBoardActor = { type: "board", source: "local_implicit", userId: "local-board" } as const;
 
 if (!embeddedPostgresSupport.supported) {
   console.warn(
@@ -503,7 +504,6 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
     await runGit(repoRoot, ["worktree", "add", worktreePath, branchName]);
 
     const companyId = randomUUID();
-    const projectId = randomUUID();
     const executionWorkspaceId = randomUUID();
     const sourceIssueId = randomUUID();
     const issuePrefix = `P${companyId.slice(0, 8).toUpperCase()}`;
@@ -513,12 +513,7 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
       issuePrefix,
       requireBoardApprovalForNewAgents: false,
     });
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
-      name: "Ancestry delivery",
-      status: "in_progress",
-    });
+    const projectId = await createManualProject(companyId, "Ancestry delivery");
     await db.insert(executionWorkspaces).values({
       id: executionWorkspaceId,
       companyId,
@@ -783,6 +778,8 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
       companyId: seeded.companyId,
       projectId: seeded.projectId,
       name: "Local recovery base",
+      sourceType: "local_path",
+      repoUrl: "https://github.com/paperclipai/paperclip.git",
       cwd: seeded.repoRoot,
       isPrimary: true,
     });
@@ -821,7 +818,7 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
     const reopened = await svc.reopenClosedIsolatedExecutionWorkspaceForIssue({
       workspaceId: seeded.executionWorkspaceId,
       issue: { id: seeded.sourceIssueId, companyId: seeded.companyId, projectId: seeded.projectId },
-      actor: { agentId: null, actorType: "user" },
+      actor: localBoardActor,
     });
     expect(reopened).toMatchObject({ ok: true, reopened: true });
     await expect(fs.readFile(settingsPath, "utf8")).resolves.toBe(settingsBytes);

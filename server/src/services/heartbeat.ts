@@ -2370,6 +2370,10 @@ export async function ensureManagedProjectWorkspace(input: {
   repoUrl: string | null;
   /** Optional git credential source for cloning private repos; null/absent preserves ambient behavior. */
   resolveGitAuth?: GitRemoteAuthProvider | null;
+  /** Recheck the caller's source authority before adopting an existing checkout. */
+  beforeUse?: (() => Promise<void>) | null;
+  /** Recheck immediately before a newly materialized checkout is published. */
+  beforePublish?: (() => Promise<void>) | null;
 }): Promise<{ cwd: string; warning: string | null }> {
   const defaultCwd = resolveManagedProjectWorkspaceDir({
     companyId: input.companyId,
@@ -2384,13 +2388,23 @@ export async function ensureManagedProjectWorkspace(input: {
       cwd = `${cwd}-${createHash("sha256").update(input.repoUrl).digest("hex").slice(0, 12)}`;
     }
   }
+  if (input.repoUrl && await fs.stat(path.join(cwd, ".git")).catch(() => null)) {
+    const origin = await execFile("git", ["-C", cwd, "remote", "get-url", "origin"], { timeout: 10_000 })
+      .then((result) => result.stdout.trim()).catch(() => null);
+    if (origin !== input.repoUrl) throw new Error("Managed checkout origin does not match the requested repository");
+    await input.beforeUse?.();
+    return { cwd, warning: null };
+  }
   const inFlight = managedCheckoutMaterializations.get(cwd);
   if (inFlight) {
     await inFlight;
     // The winner may have cloned a different repository with the same basename.
     return ensureManagedProjectWorkspace(input);
   }
-  const attempt = materializeManagedProjectWorkspace(cwd, input).finally(() => {
+  const attempt = materializeManagedProjectWorkspace(cwd, {
+    ...input,
+    beforePublish: input.beforePublish ?? undefined,
+  }).finally(() => {
     managedCheckoutMaterializations.delete(cwd);
   });
   managedCheckoutMaterializations.set(cwd, attempt);
