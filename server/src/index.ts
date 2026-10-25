@@ -122,6 +122,8 @@ import {
 } from "./services/adapter-registry-bootstrap.js";
 import { createFeedbackTraceShareClientFromConfig } from "./services/feedback-share-client.js";
 import { eraseExpiredSupportCases } from "./services/experience/support-cases.js";
+import { configuredSupportCaseGateway } from "./services/experience/support-case-http-gateway.js";
+import { supportCaseDeliveryService } from "./services/experience/support-case-delivery.js";
 import { buildRuntimeApiCandidateUrls, choosePrimaryRuntimeApiUrl } from "./runtime-api.js";
 import { isLoopbackHost, rewriteLoopbackUrlPort } from "./url-utils.js";
 import { createPluginWorkerManager } from "./services/plugin-worker-manager.js";
@@ -928,6 +930,8 @@ async function startServerWithDatabaseTeardown(
   // document parsed fail-closed above (`plugins.autoInstall`). Absent env means
   // self-hosted: createApp falls back to its built-in kubernetes-only default.
   const managedPluginAutoInstall = config.deploymentProfile === "saas" ? [] : managedConfig?.plugins.autoInstall ?? null;
+  const supportCaseGateway = configuredSupportCaseGateway(process.env);
+  const supportCaseDelivery = supportCaseGateway ? supportCaseDeliveryService(db as any, supportCaseGateway) : null;
   const app = await createApp(db as any, {
     uiMode,
     serverPort: listenPort,
@@ -1254,6 +1258,7 @@ async function startServerWithDatabaseTeardown(
     }],
     ["auth_event_retention", () => pruneExpiredAuthSecurityEvents(db)],
     ["support_case_retention", () => eraseExpiredSupportCases(db)],
+    ["support_case_delivery", () => supportCaseDelivery?.deliverNext()],
     ["analytical_retention", async () => {
       const result = await eraseExpiredAnalyticalLineage(db);
       if (result.erasedManifests > 0) logger.info(result, "Analytical retention sweep removed expired manifests and dependent payloads");

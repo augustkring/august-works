@@ -6,16 +6,9 @@ import { conflict } from "../errors.js";
 import { v5HumanActorId } from "../services/v5-authorization.js";
 import { readCustomerSupportHistory } from "../services/experience/customer-support.js";
 import { customerSupportCaseService } from "../services/experience/support-cases.js";
-import { supportCaseDataPolicySchema } from "@paperclipai/shared";
+import { readSupportCaseDataPolicy } from "../services/experience/support-case-configuration.js";
 export function customerSupportRoutes(db: Db, options: { runtimeEnv?: Readonly<Record<string, string | undefined>> } = {}) {
-  const rawPolicy = (options.runtimeEnv ?? process.env).AW_SUPPORT_CASE_DATA_POLICY_JSON;
-  let dataPolicy: z.infer<typeof supportCaseDataPolicySchema> | null = null;
-  if (rawPolicy !== undefined) {
-    try {
-      if (Buffer.byteLength(rawPolicy, "utf8") > 16384) throw Error();
-      dataPolicy = supportCaseDataPolicySchema.parse(JSON.parse(rawPolicy));
-    } catch { throw Error("Invalid support case data policy configuration"); }
-  }
+  const dataPolicy = readSupportCaseDataPolicy(options.runtimeEnv ?? process.env);
   const router = Router(), cases = customerSupportCaseService(db, { dataPolicy });
   const query = z.strictObject({ expectedUserId: z.string().min(1).max(300) });
   router.use("/companies/:companyId/support", (_req, res, next) => { res.setHeader("Cache-Control", "private, no-store"); next(); });
