@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { and, eq, inArray, isNull, lte, or, sql, type SQL } from "drizzle-orm";
-import { agentExecutionManifests,providerTraceRecords, memoryDeletionMarkers, memoryEvidence, memoryJobs, memoryRecords, memoryPrivateSharePublications, memoryRetentionPolicies,
+import { agentExecutionManifests, providerTraceRecords,
+  memoryDeletionMarkers, memoryEvidence, memoryJobs, memoryRecords, memoryPrivateSharePublications, memoryRetentionPolicies,
   contextManifests, contextManifestItems, contextManifestMemoryRoots, saasRunLogs, saasRunLogChunks, activityLog, issueThreadInteractions, toolAccessAuditEvents, toolActionRequests, toolCallEvents, toolInvocations,
   heartbeatRuns, heartbeatRunEvents, agentWakeupRequests, agents, authUsers, issues, issueComments, issueDocuments, documents, documentRevisions,
   nativeRunResults, workAssessments, statusDecisions, nativeRunFinalizations, completionContracts, issueWorkProducts, agentTaskSessions, agentRuntimeState,
@@ -11,6 +12,7 @@ import { eraseAnalyticalSourcesUnderMemory } from "../analytical-source-erasure.
 import { eraseBusinessEventObjectUnderMemory } from "../business-event-payload-erasure.js";
 import { conflict, forbidden, HttpError } from "../../errors.js";
 import type { AuthorizationActor } from "../authorization.js";
+import { agentAuthoringTestMemorySourceReadActive } from "../agents/authoring-test-memory-source-scope.js";
 import { invalidateCognitiveRecords } from "./cognitive-privacy.js";
 import { invalidateDerivedMemory } from "./derived-privacy.js";
 
@@ -130,7 +132,7 @@ export async function canActorReadMemorySources(db: Db, companyId: string, actor
   };
   return inherited?read():memorySourceReads.run(state,read);
 }
-async function memorySourceActorCurrent(db:Db,companyId:string,actor:AuthorizationActor|undefined):Promise<boolean> {
+async function memorySourceActorCurrent(db:Db,companyId:string,actor:AuthorizationActor|undefined,sourceRootId?:string):Promise<boolean> {
   if(!actor)return false;
   const {authorizationService}=await import("../authorization.js");
   if (actor.type === "agent") {
@@ -141,7 +143,7 @@ async function memorySourceActorCurrent(db:Db,companyId:string,actor:Authorizati
       eq(heartbeatRuns.responsibleUserId,actor.onBehalfOfUserId),eq(heartbeatRuns.status,"running"),
       sql`${agents.status} not in ('paused','terminated','pending_approval','error')`,
     ));
-    if (!run) {
+    if (!run && !agentAuthoringTestMemorySourceReadActive(companyId, actor, sourceRootId)) {
       const [capture] = await db.execute<{allowed:boolean}>(sql`select ${nativeMemoryCapturePrincipalCondition(actor,sql`${companyId}::uuid`)} as allowed`);
       if (!capture?.allowed) return false;
     }
@@ -156,7 +158,7 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
   state:{deadline:number;work:number}):Promise<boolean> {
   if (!actor) return false;
   const { authorizationService, canActorReadIssuePrivacy, canActorReadProjectPrivacy, canActorReadHeartbeatRunPrivacy } = await import("../authorization.js");
-  const admitted = () => memorySourceActorCurrent(db,companyId,actor);
+  const admitted = () => memorySourceActorCurrent(db,companyId,actor,recordId);
   if (!await admitted()) return false;
   const active = new Set<string>(), visited = new Set<string>();
   const runs = new Set<string>(), tasks = new Set<string>(), projectIds = new Set<string>(), revisions = new Set<string>();

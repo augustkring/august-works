@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { agentConfigurationDrafts, agentConfigurationTests, agents, authUsers, billingAccounts, billingAccountCompanies, companyMemberships, companySkills, companySkillVersions, createDb, heartbeatRuns, orchestrationPlans, orchestrationModelReservations, orchestrationWorkers, toolInvocations, verificationRuns, documents, principalPermissionGrants } from "@paperclipai/db";
+import { agentConfigurationDrafts, agentConfigurationTests, agents, authSessions, authUsers, billingAccounts, billingAccountCompanies, companyMemberships, companySkills, companySkillVersions, createDb, heartbeatRuns, orchestrationPlans, orchestrationModelReservations, orchestrationWorkers, toolInvocations, verificationRuns, documents, principalPermissionGrants } from "@paperclipai/db";
 import { agentAuthoringContentSchema, type AgentAuthoringDraftView, type AgentDraftTestCommand, type VerificationReviewInput } from "@paperclipai/shared";
 import { agentAuthoringService } from "../services/agents/authoring-drafts.js";
 import { agentAuthoringTestService } from "../services/agents/authoring-tests.js";
@@ -32,6 +32,7 @@ import { heartbeatMemoryPayloadRetained, reapplyMemoryDeletionMarkers } from "..
 import { memoryJobService } from "../services/memory/memory-jobs.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
 import { seedRequiredAuthoringProcedures } from "./helpers/authoring-procedures.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 
 const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(40);
@@ -41,6 +42,7 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
   let requiredProcedures: Awaited<ReturnType<typeof seedRequiredAuthoringProcedures>>;
   let duringCall: (() => Promise<void>) | undefined, lostResponse: boolean, excessUsage: boolean;
   let selectedKnowledgeBody: string | undefined;
+  let unselectedPreferenceBody: string | undefined;
   let modelOutput: string;
   const service = () => agentAuthoringTestService(db), drafts = () => agentAuthoringService(db);
   beforeAll(async () => {
@@ -53,7 +55,9 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     calls++; expect(String(url)).toBe("https://api.anthropic.com/v1/messages"); expect(init.redirect).toBe("manual");
     expect(new Headers(init.headers).get("x-api-key")).toBe(`private-safe-test-key-${f.presence.id}`);
     const body = JSON.parse(String(init.body));
-    if (selectedPreferenceBody) expect(String(init.body)).toContain(selectedPreferenceBody); expect(body.tools).toBeUndefined(); expect(body.stream).toBe(false);
+    if (selectedPreferenceBody) expect(String(init.body)).toContain(selectedPreferenceBody);
+    if (unselectedPreferenceBody) expect(String(init.body)).not.toContain(unselectedPreferenceBody);
+    expect(body.tools).toBeUndefined(); expect(body.stream).toBe(false);
     if (selectedKnowledgeBody) {
       expect(body.messages[0].content[0].text).toContain(selectedKnowledgeBody);
       expect(body.messages[0].content[0].text).not.toContain("Unselected private company facts");
@@ -73,9 +77,13 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
   };
   beforeEach(async () => {
     selectedKnowledgeBody = undefined;
+    unselectedPreferenceBody = undefined;
     await instanceSettingsService(db).updateExperimental({ saas_deployment_profile_v6: true, billing_v6: true, agent_packages_v7: true,
       hire_agent_v9: true, enableWorkflowsV1: true, orchestration_v7: true, supervision_v7: true, readiness_engine_v7: true, verifier_v7: true });
     f = await seedV5Presences(db);
+    const sessionId = await seedNativePasskeySession(db, f.userId);
+    const [session] = await db.select({ expiresAt: authSessions.expiresAt }).from(authSessions).where(eq(authSessions.id, sessionId));
+    f.actor = { ...f.actor, sessionId, authenticatedCredentialExpiresAt: session!.expiresAt.getTime() };
     selectedPreferenceBody = null;
     requiredProcedures = await seedRequiredAuthoringProcedures(db, f.actor, f.home, f.presence.id);
     calls = 0; duringCall = undefined; lostResponse = false; excessUsage = false;
@@ -346,10 +354,41 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     expect(calls).toBe(1);
   });
   it("uses only the selected approved preference through the actual bounded test controller", async () => {
-    await selectPreference(); const { result } = await execute();
+    const selected = await selectPreference();
+    unselectedPreferenceBody = (await seedApprovedAuthoringPreference(db, f.home, f.presence.id, f.userId)).body;
+    expect(unselectedPreferenceBody).not.toBe(selected.body);
+    const { result } = await execute();
     expect(result).toMatchObject({ execution: "succeeded", runtimeCurrent: true, testQualified: false }); expect(calls).toBe(1);
     expect((await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId,result.planId)))[0]!.status).toBe("completed");
   });
+  it.each(["different-test", "stale-candidate", "revoked-human"] as const)(
+    "does not admit a paused candidate Memory read after its bound $s changes",
+    async change => {
+      await selectPreference();
+      const input = await command(), suffix = draft.id.replaceAll("-", ""), name = `aw_safe_test_memory_${suffix}`;
+      const forgedTestId = randomUUID();
+      const mutation = change === "different-test"
+        ? `update heartbeat_runs set context_snapshot=jsonb_set(context_snapshot,'{agentConfigurationTestId}',to_jsonb('${forgedTestId}'::text)) where id=new.run_id and company_id=new.company_id;`
+        : change === "stale-candidate"
+          ? `update heartbeat_runs set context_snapshot=jsonb_set(context_snapshot,'{candidateHash}',to_jsonb('${"0".repeat(64)}'::text)) where id=new.run_id and company_id=new.company_id;`
+          : `update company_memberships set status='inactive' where company_id=new.company_id and principal_type='user' and principal_id=(select created_by_user_id from agent_configuration_tests where id=new.id);`;
+      await db.execute(sql`create function public.${sql.identifier(name)}() returns trigger language plpgsql as $body$
+        begin ${sql.raw(mutation)} return new; end $body$`);
+      await db.execute(sql`create trigger ${sql.identifier(name)} after insert on agent_configuration_tests
+        for each row execute function public.${sql.identifier(name)}()`);
+      try {
+        await expect(service().start(f.actor, f.home, draft.id, input)).rejects.toMatchObject({ status: 403 });
+      } finally {
+        await db.execute(sql`drop trigger if exists ${sql.identifier(name)} on agent_configuration_tests`);
+        await db.execute(sql`drop function if exists public.${sql.identifier(name)}()`);
+      }
+      expect(calls).toBe(0);
+      expect(await db.select().from(agentConfigurationTests).where(and(eq(agentConfigurationTests.companyId, f.home),
+        eq(agentConfigurationTests.draftId, draft.id)))).toEqual([]);
+      expect(await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.companyId, f.home))).toEqual([]);
+      expect(await db.select().from(companyMemberships).where(and(eq(companyMemberships.companyId, f.home),
+        eq(companyMemberships.principalId, f.userId), eq(companyMemberships.status, "active")))).toHaveLength(1);
+    });
   it("withholds a late result after preference withdrawal while retaining the completed debit", async () => {
     const preference = await selectPreference();
     duringCall = async () => { await memoryService(db).revoke(f.home, preference.id, { reason: "Human withdrew the preference" },

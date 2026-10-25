@@ -56,6 +56,16 @@ import {
 } from "./github-pull-request-merge.js";
 import { visibleIssueCondition } from "./issue-visibility.js";
 import { createGitRemoteAuthProvider } from "./git-credentials.js";
+import { GIT_CACHE_RESTORATION_KEY } from "./git-workspace-restoration.js";
+import {
+  assertReproducibleManagedCheckout,
+  inspectGitCacheRecipe,
+  readGitCacheRestoration,
+  restoreManagedGitCacheWorktree,
+  type GitCacheRestoration,
+} from "./git-workspace-restoration.js";
+import { readManagedCheckoutContents, type ManagedCheckoutContents } from "./git-workspace-contents.js";
+import { managedProjectCheckoutName } from "./managed-project-checkout-name.js";
 import { readProjectWorkspaceRuntimeConfig } from "./project-workspace-runtime-config.js";
 import { workspaceGitOperationScheduler } from "./workspace-git-operation-scheduler.js";
 import {
@@ -175,6 +185,7 @@ const EXECUTION_WORKSPACE_SERVER_OWNED_METADATA_KEYS = [
   "configFingerprint",
   "workspaceRealizationRequest",
   "workspaceRealization",
+  GIT_CACHE_RESTORATION_KEY,
 ] as const;
 
 export function metadataHasReopenPendingConsumption(
@@ -1111,6 +1122,9 @@ function toExecutionWorkspace(
   runtimeServices: WorkspaceRuntimeService[] = [],
   deliveryState: ExecutionWorkspaceDeliveryState = "unknown",
 ): ExecutionWorkspace {
+  const internalMetadata = (row.metadata as Record<string, unknown> | null) ?? null;
+  const publicMetadata = internalMetadata ? { ...internalMetadata } : null;
+  if (publicMetadata) delete publicMetadata[GIT_CACHE_RESTORATION_KEY];
   return {
     id: row.id,
     companyId: row.companyId,
@@ -1135,7 +1149,7 @@ function toExecutionWorkspace(
     cleanupEligibleAt: row.cleanupEligibleAt ?? null,
     cleanupReason: row.cleanupReason ?? null,
     config: readExecutionWorkspaceConfig((row.metadata as Record<string, unknown> | null) ?? null),
-    metadata: (row.metadata as Record<string, unknown> | null) ?? null,
+    metadata: publicMetadata,
     runtimeServices,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -2951,9 +2965,11 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
     },
 
     create: async (data: typeof executionWorkspaces.$inferInsert) => {
+      const metadata = isRecord(data.metadata) ? { ...data.metadata } : data.metadata;
+      if (isRecord(metadata)) delete metadata[GIT_CACHE_RESTORATION_KEY];
       const row = await db
         .insert(executionWorkspaces)
-        .values(data)
+        .values({ ...data, metadata })
         .returning()
         .then((rows) => rows[0] ?? null);
       return row ? toExecutionWorkspace(row) : null;
@@ -3150,7 +3166,9 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
         const [projectWorkspace, projectPolicy] = await Promise.all([
           row.projectWorkspaceId
             ? tx
-                .select({ cwd: projectWorkspaces.cwd })
+                .select({ id: projectWorkspaces.id, companyId: projectWorkspaces.companyId,
+                  projectId: projectWorkspaces.projectId, sourceType: projectWorkspaces.sourceType,
+                  cwd: projectWorkspaces.cwd, repoUrl: projectWorkspaces.repoUrl, repoRef: projectWorkspaces.repoRef })
                 .from(projectWorkspaces)
                 .where(and(
                   eq(projectWorkspaces.companyId, row.companyId),
@@ -3190,11 +3208,67 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
           });
           resolvedBaseCwd = managedWorkspace.cwd;
         }
+        const gitAuth = createGitRemoteAuthProvider(db, row.companyId, {
+          issueId: row.sourceIssueId ?? issue.id,
+          heartbeatRunId: actor.type === "agent" ? actor.runId : null,
+          responsibleUserId: actor.type === "board" ? actor.userId ?? null : actor.onBehalfOfUserId ?? null,
+          agentId: actor.type === "agent" ? actor.agentId : null,
+        });
+        const restorationWorkspace = {
+          id: row.id, companyId: row.companyId, projectId: row.projectId,
+          projectWorkspaceId: row.projectWorkspaceId ?? null, sourceIssueId: row.sourceIssueId,
+          repoUrl: row.repoUrl, baseRef: row.baseRef, sourceCwd: projectWorkspace?.cwd ?? null,
+          sourceRepoRef: projectWorkspace?.repoRef ?? null, sourceType: projectWorkspace?.sourceType ?? null,
+          mode: row.mode, strategyType: row.strategyType,
+          branchName: row.branchName, cwd: row.cwd, providerRef: row.providerRef,
+          metadata: row.metadata as Record<string, unknown> | null,
+        };
+        const sourceRows = row.projectId ? await tx.select().from(projectWorkspaces).where(and(
+          eq(projectWorkspaces.companyId, row.companyId), eq(projectWorkspaces.projectId, row.projectId),
+        )).for("share") : [];
+        let restoredFromRecipe = false;
+        if (row.strategyType === "git_worktree" && row.cwd
+          && !(await fs.stat(row.cwd).then(() => true, () => false))) {
+          const recipe = readGitCacheRestoration(restorationWorkspace);
+          if (!recipe || !resolvedBaseCwd || !projectWorkspace || projectWorkspace.cwd !== null
+            || projectWorkspace.projectId !== row.projectId || projectWorkspace.repoUrl !== row.repoUrl
+            || (projectWorkspace.repoRef !== null && projectWorkspace.repoRef !== row.baseRef)) {
+            throw new Error("Saved managed-project workspace state is unavailable");
+          }
+          await restoreManagedGitCacheWorktree({
+            workspace: restorationWorkspace,
+            baseCwd: resolvedBaseCwd,
+            resolveGitAuth: gitAuth,
+            beforeMutation: requireCurrentSource,
+            authorizeSource: async source => {
+              if (!(await currentSourceAllowed())) throw new Error("Current source access is unavailable");
+              const current = sourceRows.find(candidate => candidate.id === source.id);
+              if (!current || current.projectId !== row.projectId || current.companyId !== row.companyId
+                || current.repoUrl !== source.repoUrl || current.repoRef !== source.repoRef || current.cwd !== source.cwd) {
+                throw new Error("Managed project source changed");
+              }
+            },
+            prepareLocalSource: async sourceCwd => {
+              await requireCurrentSource();
+              if (!sourceRows.some(source => source.cwd === sourceCwd && source.projectId === row.projectId)) {
+                throw new Error("Local project source changed");
+              }
+              return requireCurrentSource;
+            },
+          });
+          restoredFromRecipe = true;
+        }
+        // Reject malformed internal state rather than replacing it with a new
+        // package. A missing package is acceptable while the live worktree still
+        // exists; it is never a license to rebuild from the moving current ref.
+        if (restorationWorkspace.metadata?.[GIT_CACHE_RESTORATION_KEY] !== undefined) {
+          readGitCacheRestoration(restorationWorkspace);
+        }
         const config = readExecutionWorkspaceConfig(row.metadata as Record<string, unknown> | null);
         const nextGeneration = readExecutionWorkspaceLifecycleGeneration(
           row.metadata as Record<string, unknown> | null,
         ) + 1;
-        const nextMetadata = bumpExecutionWorkspaceLifecycleGeneration(
+        let nextMetadata = bumpExecutionWorkspaceLifecycleGeneration(
           row.metadata as Record<string, unknown> | null,
         );
         const recorder = workspaceOperationService(db).createRecorder({
@@ -3203,7 +3277,12 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
         });
 
         let rebuildError: string | null = null;
+        let cacheRecipe: GitCacheRestoration | null = null;
         try {
+          const runtimeMetadata = row.metadata as Record<string, unknown> | null;
+          const metadataForRuntime = restoredFromRecipe && runtimeMetadata
+            ? { ...runtimeMetadata, gitBranchOwnershipVersion: undefined }
+            : runtimeMetadata;
           const realized = await ensurePersistedExecutionWorkspaceAvailable({
             db: tx as unknown as Db,
             base: {
@@ -3225,7 +3304,7 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
               repoUrl: row.repoUrl,
               baseRef: row.baseRef,
               branchName: row.branchName,
-              metadata: row.metadata as Record<string, unknown> | null,
+              metadata: metadataForRuntime,
               config: {
                 ...config,
                 provisionCommand:
@@ -3247,6 +3326,35 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
           });
           if (!realized) {
             rebuildError = "Execution workspace could not be rebuilt";
+          } else if (row.strategyType === "git_worktree" && row.cwd && projectWorkspace
+            && projectWorkspace.cwd === null && row.projectWorkspaceId && row.projectId
+            && row.repoUrl && row.sourceIssueId && row.branchName) {
+            const sourceByCheckoutName = new Map(sourceRows.filter(source => source.repoUrl).map(source => [
+              managedProjectCheckoutName({ id: source.id, repoUrl: source.repoUrl!, repoRef: source.repoRef, cwd: source.cwd }), source,
+            ]));
+            const capturedCheckouts: ManagedCheckoutContents[] = [];
+            const authorizeCheckoutSource = async (source: { id: string; repoUrl: string; repoRef: string | null; cwd: string | null }) => {
+              await requireCurrentSource();
+              const current = sourceRows.find(candidate => candidate.id === source.id);
+              if (!current || current.projectId !== row.projectId || current.companyId !== row.companyId
+                || current.repoUrl !== source.repoUrl || current.repoRef !== source.repoRef || current.cwd !== source.cwd) {
+                throw new Error("Managed project source changed");
+              }
+            };
+            await requireCurrentSource();
+            cacheRecipe = await inspectGitCacheRecipe({ ...restorationWorkspace,
+              cwd: realized.worktreePath ?? row.cwd, branchName: realized.branchName ?? row.branchName }, gitAuth, undefined, {
+              managedCheckouts: capturedCheckouts,
+              proveManagedCheckout: async (checkoutPath, name, signal) => {
+                const source = sourceByCheckoutName.get(name);
+                if (!source?.repoUrl) throw new Error("Managed checkout source is unavailable");
+                const sourceIdentity = { id: source.id, repoUrl: source.repoUrl, repoRef: source.repoRef, cwd: source.cwd };
+                await authorizeCheckoutSource(sourceIdentity);
+                await assertReproducibleManagedCheckout(checkoutPath, { repoUrl: source.repoUrl, resolveGitAuth: gitAuth, signal });
+                capturedCheckouts.push(await readManagedCheckoutContents(checkoutPath, name, sourceIdentity, signal));
+                await authorizeCheckoutSource(sourceIdentity);
+              },
+            });
           }
         } catch (error) {
           rebuildError = error instanceof Error ? error.message : String(error);
@@ -3298,6 +3406,10 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
             },
           });
           return { ok: false, code: "rebuild_failed", message: "Failed to rebuild the execution workspace" };
+        }
+
+        if (cacheRecipe) {
+          nextMetadata = { ...nextMetadata, [GIT_CACHE_RESTORATION_KEY]: cacheRecipe };
         }
 
         // The filesystem owner rechecks before worktree/clone publication and

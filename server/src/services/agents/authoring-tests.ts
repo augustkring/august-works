@@ -183,7 +183,7 @@ export function agentAuthoringTestService(db: Db) {
           agentId, runId: run!.id, planId: plan!.id, runtimeBindingId: current.provider.runtime.id, providerBindingId: current.provider.provider.id,
           candidateHash: current.candidateHash, configurationHash: current.configurationHash, authorityHash: current.authorityHash,
           reviewHash: review.reviewHash, maximumCostMinor: review.maximumCostMinor }).returning();
-        await retainAuthoringProcedureSources(tx, row!.id, current);
+        await retainAuthoringProcedureSources(tx, row!.id, current, actor);
         await logActivity(tx, { companyId, actorType: "user", actorId: userId, agentId, runId: run!.id,
           action: "agent_configuration.test_requested", entityType: "agent_configuration_test", entityId: testId,
           details: { draftId, version: current.draft.version, scenarioIndex: input.scenarioIndex, maximumCostMinor: current.quote.maximumMinor,
