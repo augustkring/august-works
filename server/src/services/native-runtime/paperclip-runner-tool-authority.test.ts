@@ -1,7 +1,7 @@
 import * as cloudIdentity from "../cloud-runtime-identity.js";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHash, randomUUID } from "node:crypto";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   activityLog,
   authUsers,
@@ -12,6 +12,8 @@ import {
   createDb,
   documents,
   heartbeatRuns,
+  heartbeatRunEvents,
+  nativeRunFinalizations,
   issueApprovals,
   issueComments,
   issueThreadInteractions,
@@ -24,6 +26,9 @@ import type { DocumentRevisionSourceCapture } from "../documents.js";
 import { issueService } from "../issues.js";
 import { issueThreadInteractionService } from "../issue-thread-interactions.js";
 import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
+import { recordNativeModelInputDispatchIntent, recordNativeModelInputDispatchAcknowledgement, recordNativeToolCallDispatchAssociation } from "./native-session-executor.js";
+import { PROCESS_START_REQUESTED } from "../native-local-process-stop.js";
+import { currentNativeControllerIdentity } from "./native-restart-recovery.js";
 import { createAssignedMcpTools } from "./assigned-mcp-tools.js";
 import type { ToolGatewayService } from "../tool-gateway.js";
 import { READ_CURRENT_WAKE_COMMENTS_TOOL_NAME } from "./current-wake-comments.js";
@@ -52,6 +57,33 @@ describe("PaperclipRunnerToolAuthority", () => {
     await db.update(issues).set({ executionRunId: runId }).where(eq(issues.id, issueId));
     return { companyId, agentId, issueId, runId,
       authority: new PaperclipRunnerToolAuthority(db, { companyId, agentId, issueId, runId }) };
+  }
+
+  async function seedDispatchBoundAuthority() {
+    const fixture = await seedDocumentReader();
+    const controller = await currentNativeControllerIdentity();
+    const leaseOwner = `tool-receipt-owner-${randomUUID()}`;
+    const attempt = 3, eventSeq = 7;
+    await db.insert(nativeRunFinalizations).values({
+      runId: fixture.runId, companyId: fixture.companyId, issueId: fixture.issueId,
+      phase: "running", attempt, leaseOwner, leaseExpiresAt: new Date(Date.now() + 60_000),
+      controllerBootId: controller.bootId, controllerPid: controller.pid,
+      controllerProcessStartedAt: controller.processStartedAt,
+    });
+    await db.insert(heartbeatRunEvents).values({ companyId: fixture.companyId, runId: fixture.runId,
+      agentId: fixture.agentId, seq: eventSeq, eventType: PROCESS_START_REQUESTED,
+      payload: { fixture: "actual native launch event" } });
+    const bindCall = async (tool: string, callId: string, turnId: string, expectAssociation = true) => {
+      const turnInput = { message: { role: "user" as const, text: `actual native input ${turnId}` } };
+      const binding = { db, runId: fixture.runId, companyId: fixture.companyId, issueId: fixture.issueId,
+        agentId: fixture.agentId, leaseOwner, attempt, controller, eventSeq };
+      const dispatchId = await recordNativeModelInputDispatchIntent({ ...binding, turnInput });
+      await recordNativeModelInputDispatchAcknowledgement({ ...binding, dispatchId, turnInput, turnId });
+      const associationRecorded = await recordNativeToolCallDispatchAssociation({ ...binding, turnId, callId, tool });
+      if (expectAssociation) expect(associationRecorded).toBe(true);
+      return { tool, callId, turnId, dispatchId, eventSeq, attempt };
+    };
+    return { ...fixture, bindCall };
   }
 
   beforeEach(() => {
@@ -1303,6 +1335,130 @@ describe("PaperclipRunnerToolAuthority", () => {
     expect(
       await db.select().from(issues).where(eq(issues.parentId, issueId)),
     ).toHaveLength(3);
+  });
+
+  it("commits exact acknowledged dispatch identity with the native Task mutation receipt", async () => {
+    const fixture = await seedDispatchBoundAuthority();
+    const nativeCall = await fixture.bindCall("create_task", "receipt-call-exact", "provider-turn-receipt-exact");
+    const idempotencyKey = `receipt-${randomUUID()}`;
+    const result = await fixture.authority.execute({ tool: "create_task", callId: nativeCall.callId, arguments: {
+      idempotencyKey, title: "Receipt-bound child", description: "The actual Task mutation.",
+    } }, { nativeToolCallIdentity: { tool: nativeCall.tool, callId: nativeCall.callId, turnId: nativeCall.turnId } }) as { task: { id: string } };
+    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
+    const receipts = (run!.resultJson as Record<string, unknown>).semanticToolReceipts as Record<string, Record<string, unknown>>;
+    expect(receipts[idempotencyKey]).toMatchObject({ operationId: "create_task",
+      nativeInputDispatch: { dispatchId: nativeCall.dispatchId, eventSeq: nativeCall.eventSeq,
+        attempt: nativeCall.attempt, turnId: nativeCall.turnId, callId: nativeCall.callId } });
+    const [child] = await db.select().from(issues).where(eq(issues.id, result.task.id));
+    expect(child).toMatchObject({ parentId: fixture.issueId, originRunId: fixture.runId });
+  });
+
+  it("stores explicit unknown dispatch identity when no acknowledged association exists", async () => {
+    const fixture = await seedDocumentReader();
+    const idempotencyKey = `receipt-unknown-${randomUUID()}`;
+    await fixture.authority.execute({ tool: "create_task", callId: "unassociated-tool-call", arguments: {
+      idempotencyKey, title: "Unknown dispatch child",
+      nativeInputDispatch: { dispatchId: randomUUID(), turnId: "model-claim", callId: "unassociated-tool-call" },
+    } }, { nativeToolCallIdentity: { tool: "create_task", callId: "unassociated-tool-call", turnId: "unsupported-backend-turn" } });
+    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
+    const receipts = (run!.resultJson as Record<string, unknown>).semanticToolReceipts as Record<string, Record<string, unknown>>;
+    expect(receipts[idempotencyKey]).toMatchObject({ operationId: "create_task", nativeInputDispatch: null });
+    const mismatchedKey = `receipt-mismatched-call-${randomUUID()}`;
+    await fixture.authority.execute({ tool: "create_task", callId: "actual-tool-call-id", arguments: {
+      idempotencyKey: mismatchedKey, title: "Mismatched server metadata stays unknown",
+    } }, { nativeToolCallIdentity: { tool: "create_task", callId: "different-server-call-id", turnId: "unsupported-backend-turn" } });
+    const [afterMismatch] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
+    const afterReceipts = (afterMismatch!.resultJson as Record<string, unknown>).semanticToolReceipts as Record<string, Record<string, unknown>>;
+    expect(afterReceipts[mismatchedKey]!.nativeInputDispatch).toBeNull();
+  });
+
+  it("stores unknown when association history has a contradictory tool for the same call tuple", async () => {
+    const fixture = await seedDispatchBoundAuthority();
+    const nativeCall = await fixture.bindCall("create_task", "contradictory-tool-call", "provider-turn-contradictory-tool");
+    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
+    const profile = run!.runnerProfileJson as Record<string, unknown>;
+    const associations = profile.nativeToolCallDispatchAssociations as Array<Record<string, unknown>>;
+    await db.update(heartbeatRuns).set({ runnerProfileJson: { ...profile,
+      nativeToolCallDispatchAssociations: [...associations, { ...associations[0], tool: "write_document" }],
+    } }).where(eq(heartbeatRuns.id, fixture.runId));
+    const idempotencyKey = `contradictory-tool-${randomUUID()}`;
+    await fixture.authority.execute({ tool: "create_task", callId: nativeCall.callId, arguments: {
+      idempotencyKey, title: "Ambiguous association stays unknown",
+    } }, { nativeToolCallIdentity: { tool: nativeCall.tool, callId: nativeCall.callId, turnId: nativeCall.turnId } });
+    const [after] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
+    const receipts = (after!.resultJson as Record<string, unknown>).semanticToolReceipts as Record<string, Record<string, unknown>>;
+    expect(receipts[idempotencyKey]!.nativeInputDispatch).toBeNull();
+  });
+
+  it("stores unknown when a later acknowledged intent makes a previously associated turn ambiguous", async () => {
+    const fixture = await seedDispatchBoundAuthority();
+    const turnId = "provider-turn-later-duplicate-ack";
+    const first = await fixture.bindCall("create_task", "earlier-turn-call", turnId);
+    const second = await fixture.bindCall("create_task", "later-turn-call", turnId, false);
+    expect(second.dispatchId).not.toBe(first.dispatchId);
+    const idempotencyKey = `ambiguous-turn-${randomUUID()}`;
+    await fixture.authority.execute({ tool: "create_task", callId: first.callId, arguments: {
+      idempotencyKey, title: "Ambiguous turn stays unknown",
+    } }, { nativeToolCallIdentity: { tool: first.tool, callId: first.callId, turnId } });
+    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
+    const receipts = (run!.resultJson as Record<string, unknown>).semanticToolReceipts as Record<string, Record<string, unknown>>;
+    expect(receipts[idempotencyKey]!.nativeInputDispatch).toBeNull();
+  });
+
+  it("keeps concurrent mutation receipts bound to their own backend calls", async () => {
+    const fixture = await seedDispatchBoundAuthority();
+    const first = await fixture.bindCall("create_task", "concurrent-receipt-first", "provider-turn-receipt-first");
+    const second = await fixture.bindCall("create_task", "concurrent-receipt-second", "provider-turn-receipt-second");
+    const firstKey = `concurrent-first-${randomUUID()}`;
+    const secondKey = `concurrent-second-${randomUUID()}`;
+    await Promise.all([
+      fixture.authority.execute({ tool: first.tool, callId: first.callId, arguments: { idempotencyKey: firstKey, title: "First concurrent Task" } },
+        { nativeToolCallIdentity: { tool: first.tool, callId: first.callId, turnId: first.turnId } }),
+      fixture.authority.execute({ tool: second.tool, callId: second.callId, arguments: { idempotencyKey: secondKey, title: "Second concurrent Task" } },
+        { nativeToolCallIdentity: { tool: second.tool, callId: second.callId, turnId: second.turnId } }),
+    ]);
+    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
+    const receipts = (run!.resultJson as Record<string, unknown>).semanticToolReceipts as Record<string, Record<string, unknown>>;
+    expect(receipts[firstKey]!.nativeInputDispatch).toEqual({ dispatchId: first.dispatchId, eventSeq: first.eventSeq,
+      attempt: first.attempt, turnId: first.turnId, callId: first.callId });
+    expect(receipts[secondKey]!.nativeInputDispatch).toEqual({ dispatchId: second.dispatchId, eventSeq: second.eventSeq,
+      attempt: second.attempt, turnId: second.turnId, callId: second.callId });
+  });
+
+  it("preserves original dispatch identity when a semantic mutation receipt is replayed", async () => {
+    const fixture = await seedDispatchBoundAuthority();
+    const first = await fixture.bindCall("create_task", "receipt-replay-first", "provider-turn-replay-first");
+    const second = await fixture.bindCall("create_task", "receipt-replay-second", "provider-turn-replay-second");
+    const idempotencyKey = `receipt-replay-${randomUUID()}`;
+    const arguments_ = { idempotencyKey, title: "Replay retains original association" };
+    const initial = await fixture.authority.execute({ tool: "create_task", callId: first.callId, arguments: arguments_ },
+      { nativeToolCallIdentity: { tool: first.tool, callId: first.callId, turnId: first.turnId } });
+    await expect(fixture.authority.execute({ tool: "create_task", callId: second.callId, arguments: arguments_ },
+      { nativeToolCallIdentity: { tool: second.tool, callId: second.callId, turnId: second.turnId } })).resolves.toEqual(initial);
+    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
+    const receipts = (run!.resultJson as Record<string, unknown>).semanticToolReceipts as Record<string, Record<string, unknown>>;
+    expect(receipts[idempotencyKey]!.nativeInputDispatch).toEqual({ dispatchId: first.dispatchId,
+      eventSeq: first.eventSeq, attempt: first.attempt, turnId: first.turnId, callId: first.callId });
+  });
+
+  it("rolls back Task effects when the atomic mutation receipt cannot commit", async () => {
+    const fixture = await seedDispatchBoundAuthority();
+    const nativeCall = await fixture.bindCall("create_task", "receipt-rollback-call", "provider-turn-receipt-rollback");
+    const idempotencyKey = `receipt-rollback-${randomUUID()}`;
+    const originId = `paperclip-runner:create-task:${fixture.issueId}:${idempotencyKey}`;
+    const constraintName = `reject_semantic_receipt_${fixture.runId.replaceAll("-", "")}`;
+    await db.execute(sql`alter table heartbeat_runs add constraint ${sql.identifier(constraintName)}
+      check (id <> ${sql.raw(`'${fixture.runId}'::uuid`)} or not coalesce(result_json ? 'semanticToolReceipts', false))`);
+    try {
+      await expect(fixture.authority.execute({ tool: "create_task", callId: nativeCall.callId, arguments: {
+        idempotencyKey, title: "Must roll back with receipt",
+      } }, { nativeToolCallIdentity: { tool: nativeCall.tool, callId: nativeCall.callId, turnId: nativeCall.turnId } })).rejects.toThrow();
+      expect(await db.select().from(issues).where(eq(issues.originId, originId))).toHaveLength(0);
+      const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
+      expect(run!.resultJson ?? {}).not.toHaveProperty("semanticToolReceipts");
+    } finally {
+      await db.execute(sql`alter table heartbeat_runs drop constraint if exists ${sql.identifier(constraintName)}`);
+    }
   });
 
   it("rejects mutations after reassignment, run replacement, or terminalization", async () => {

@@ -1446,7 +1446,10 @@ class SessionToolAuthorityEpoch {
     this.#assertCurrent();
     const execute = async () => {
       if (call.turnId) await this.onNativeToolCall?.({ tool: call.tool, callId: call.callId, turnId: call.turnId });
-      return this.#authority.execute(call, { onDocumentRead: this.onDocumentRead });
+      return this.#authority.execute(call, {
+        onDocumentRead: this.onDocumentRead,
+        ...(call.turnId ? { nativeToolCallIdentity: { tool: call.tool, callId: call.callId, turnId: call.turnId } } : {}),
+      });
     };
     const result = this.toolTrace ? await this.toolTrace.execute(call, execute) : await execute();
     if (call.tool === "read_document") this.#assertCurrent();
