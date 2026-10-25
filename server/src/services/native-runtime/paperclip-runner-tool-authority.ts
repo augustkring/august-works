@@ -461,7 +461,9 @@ export class PaperclipRunnerToolAuthority {
     const { assertNativeDocumentRevisionCurrentSourceAccess } = await import("../native-direct-input.js");
     await assertNativeDocumentRevisionCurrentSourceAccess(this.db, {
       companyId: this.binding.companyId, issueId: this.binding.issueId, revisionId, requireLatest,
-      actor: { type: "agent", source: "agent_jwt", companyId: this.binding.companyId,
+      // This is a server-side recheck for an already validated run binding;
+      // it must not claim a JWT credential that this internal callback did not verify.
+      actor: { type: "agent", source: "none", companyId: this.binding.companyId,
         agentId: this.binding.agentId, runId: this.binding.runId, onBehalfOfUserId: bound.run.responsibleUserId },
     });
   }

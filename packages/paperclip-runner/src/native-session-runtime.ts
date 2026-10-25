@@ -186,10 +186,16 @@ export interface NativeSessionGoalControl {
 export interface ExecuteNativeSessionOptions {
   /** Durable launch intent, after cleanup admission and before provider calls. */
   onSessionAdmission?: () => Promise<void>;
-  /** Observe the finalized provider input immediately before its turn starts. */
-  onTurnInput?: (input: Parameters<NativeSession["startTurn"]>[0]) => Promise<string | void>;
+  /** Server-owned per-turn preparation may add current Context and its source closure. */
+  prepareTurn?: (input: Parameters<NativeSession["startTurn"]>[0]) => Promise<{
+    turnInput: Parameters<NativeSession["startTurn"]>[0];
+    sourceClosure?: unknown;
+  }>;
+  /** Observe the exact prepared provider input before turn start. */
+  onTurnInput?: (input: Parameters<NativeSession["startTurn"]>[0], sourceClosure?: unknown) => Promise<string | void>;
   /** Observe the provider-assigned turn identity after startTurn acknowledges. */
-  onTurnStarted?: (input: Parameters<NativeSession["startTurn"]>[0], turnId: string, dispatchId?: string) => Promise<void>;
+  onTurnStarted?: (input: Parameters<NativeSession["startTurn"]>[0], turnId: string, dispatchId?: string,
+    sourceClosure?: unknown) => Promise<void>;
   input: NativeExecutionInput;
   backend: NativeSessionBackend;
   controlPlane: ControlPlanePort;
@@ -2370,11 +2376,14 @@ export async function executeNativeSession(
             requestedCollaborationMode:
               "executionMode" in input ? input.executionMode : "default",
           };
-          const dispatchId = await options.onTurnInput?.(structuredClone(turnInput));
-          const acknowledgedInput = structuredClone(turnInput);
-          const startedTurn = await session.startTurn(turnInput);
+          const prepared = await options.prepareTurn?.(structuredClone(turnInput));
+          const preparedInput = prepared?.turnInput ?? turnInput;
+          const sourceClosure = prepared?.sourceClosure;
+          const dispatchId = await options.onTurnInput?.(structuredClone(preparedInput), sourceClosure);
+          const acknowledgedInput = structuredClone(preparedInput);
+          const startedTurn = await session.startTurn(preparedInput);
           await options.onTurnStarted?.(acknowledgedInput, startedTurn.turnId,
-            typeof dispatchId === "string" ? dispatchId : undefined);
+            typeof dispatchId === "string" ? dispatchId : undefined, sourceClosure);
           await checkpoint();
         }
       } catch (error) {

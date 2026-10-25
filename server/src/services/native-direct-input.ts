@@ -93,7 +93,7 @@ async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction
     wire.wireBodyHash !== capture.dispatch.wireBodyHash || wire.endpoint !== "https://api.anthropic.com/v1/messages" || wire.method !== "POST")
     throw forbidden("The Native output capture is not bound to its settled provider tool use");
 
-  const actor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId,
+  const actor: AuthorizationActor = { type: "agent", source: "none", companyId,
     agentId: run.agentId, runId: run.id, onBehalfOfUserId: run.responsibleUserId };
   for (const issueSourceId of capture.sourceSet.policy.issueIds) {
     nativeSourceReadWork(scope);
@@ -232,6 +232,29 @@ async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction
       throw forbidden("The Native output runtime instruction source was erased");
     });
   }
+  for (const source of capture.sourceSet.inputs) if (source.kind === "runtime_skill") {
+    const execution = profileRunExecution(run);
+    const runtime = execution?.runtimeContext && typeof execution.runtimeContext === "object" && !Array.isArray(execution.runtimeContext)
+      ? execution.runtimeContext as Record<string, unknown> : null;
+    const skills = Array.isArray(runtime?.skills) ? runtime!.skills as Record<string, unknown>[] : [];
+    const selected = skills.find(value => value.key === source.key && value.versionId === source.versionId &&
+      (value.bundle as Record<string, unknown> | undefined)?.digest === source.bundleDigest &&
+      (value.bundle as Record<string, unknown> | undefined)?.manifestDigest === source.manifestDigest);
+    const bundle = selected?.bundle as Parameters<typeof readNativeRuntimeAssetText>[0] | undefined;
+    if (!bundle) throw forbidden("The Native output runtime Skill changed");
+    await readNativeRuntimeAssetText(bundle, 256000, { companyId, runId: run.id }).catch(() => {
+      throw forbidden("The Native output runtime Skill was erased");
+    });
+    if (source.versionId) {
+      const [version] = await db.select({ id: companySkillVersions.id, skillId: companySkillVersions.companySkillId })
+        .from(companySkillVersions).where(and(eq(companySkillVersions.companyId, companyId),
+          eq(companySkillVersions.id, source.versionId)));
+      if (!version) throw forbidden("The Native output runtime Skill version is unavailable");
+      await assertRuntimeSkillSourceRetained(db as Db, companyId, actor, version.skillId, source.versionId).catch(() => {
+        throw forbidden("The Native output runtime Skill source changed");
+      });
+    }
+  }
   for (const source of capture.sourceSet.inputs) if (source.kind === "workspace_metadata") {
     const execution = profile?.nativeExecutionInput && typeof profile.nativeExecutionInput === "object" && !Array.isArray(profile.nativeExecutionInput)
       ? profile.nativeExecutionInput as Record<string, unknown> : null;
@@ -254,6 +277,11 @@ async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction
       if (!current || current.updatedAt.toISOString() !== source.sourceVersion ||
         !isDeepStrictEqual({ cwd: current.cwd, repoUrl: current.repoUrl, repoRef: current.repoRef, branchName: current.branchName }, tuple))
         throw forbidden("The Native output workspace owner changed");
+    } else if (source.origin === "task_session") {
+      // The task session has no execution_workspace row. Its exact tuple is
+      // retained in the server-owned immutable execution input for this run.
+      if (source.executionWorkspaceId !== run.id || source.sourceVersion !== `task-session:${run.id}`)
+        throw forbidden("The Native task-session workspace source changed");
     } else throw forbidden("The Native output workspace source family is unsupported");
   }
   for (const source of capture.sourceSet.inputs) {
@@ -341,7 +369,7 @@ async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction
     }
   }
   for (const source of capture.sourceSet.inputs) {
-    if (["task", "project", "memory", "context", "completion_contract", "runtime_instructions", "workspace_metadata", "worker_model_dispatch", "tool_result"].includes(source.kind)) {
+    if (["task", "project", "memory", "context", "completion_contract", "runtime_instructions", "runtime_skill", "workspace_metadata", "worker_model_dispatch", "tool_result"].includes(source.kind)) {
       if (source.kind === "worker_model_dispatch") {
         const [sourceReservation] = await db.select().from(orchestrationModelReservations).where(and(
           eq(orchestrationModelReservations.companyId, companyId), eq(orchestrationModelReservations.id, source.reservationId),
@@ -421,9 +449,21 @@ export async function assertNativePayloadSourceSetCurrent(db: Db | Transaction, 
     const preceding = prefix.inputs.filter(value => !(value.kind === "worker_model_dispatch" && isDeepStrictEqual(value, source)));
     return isDeepStrictEqual(preceding, inputs.data) ? [{ prefix, dispatch: source }] : [];
   }));
+  // NativeSession's acknowledged runner turn is a source prefix of its own,
+  // before a managed provider request has produced a worker_model_dispatch.
+  // Accept only the exact immutable receipt entry (same cumulative policy and
+  // ordered inputs); this does not qualify any provider output by itself.
+  const matchingMarkerlessDispatches = receipt.data.dispatches.filter(prefix =>
+    isDeepStrictEqual(prefix.policy, policy.data) &&
+    !prefix.inputs.some(source => source.kind === "worker_model_dispatch") &&
+    isDeepStrictEqual(prefix.inputs, inputs.data));
   const bootstrapMatches = isDeepStrictEqual(receipt.data.bootstrap.policy, policy.data) &&
     isDeepStrictEqual(receipt.data.bootstrap.inputs, inputs.data);
-  if (!matchingDispatches.length && !bootstrapMatches) throw forbidden("The Native source prefix is not in its original receipt");
+  const matchingAdditionalInputs = receipt.data.additionalInputs.filter(entry =>
+    entry.responsibleUserId === run.responsibleUserId &&
+    isDeepStrictEqual(entry.policy, policy.data) && isDeepStrictEqual(entry.inputs, inputs.data));
+  if (!matchingDispatches.length && !matchingMarkerlessDispatches.length && !bootstrapMatches && matchingAdditionalInputs.length !== 1)
+    throw forbidden("The Native source prefix is not in its original receipt");
 
   const captures = Array.isArray(profile?.nativeToolResultSourceCaptures)
     ? profile.nativeToolResultSourceCaptures.filter(value => value && typeof value === "object" && !Array.isArray(value)) as Record<string, unknown>[] : [];
@@ -506,6 +546,7 @@ export async function assertNativePayloadSourceSetCurrent(db: Db | Transaction, 
   }
   const contexts = inputs.data.filter((source): source is Extract<NativePayloadSourceInput, { kind: "context" }> => source.kind === "context");
   await assertNativeTemporalContextInputsCurrent(db as Db, input.companyId, contexts);
+  await assertNativeContextInputOwnersCurrent(db as Db, input.companyId, input.actor, contexts, scope);
   for (const source of inputs.data) {
     nativeSourceReadWork(scope);
     if (source.kind === "task" || source.kind === "project" || source.kind === "context") continue;
@@ -525,8 +566,232 @@ export async function assertNativePayloadSourceSetCurrent(db: Db | Transaction, 
       if (!await canActorReadMemorySources(db, input.companyId, input.actor, source.memoryId)) throw forbidden("A Native source Memory is unavailable");
       continue;
     }
+    if (source.kind === "workspace_metadata") {
+      const [workspaceRun] = source.runId === input.runId ? [run] : [];
+      const profile = workspaceRun?.runnerProfileJson && typeof workspaceRun.runnerProfileJson === "object" && !Array.isArray(workspaceRun.runnerProfileJson)
+        ? workspaceRun.runnerProfileJson as Record<string, unknown> : null;
+      const execution = profile?.nativeExecutionInput && typeof profile.nativeExecutionInput === "object" && !Array.isArray(profile.nativeExecutionInput)
+        ? profile.nativeExecutionInput as Record<string, unknown> : null;
+      const binding = execution?.binding as Record<string, unknown> | undefined;
+      const workspace = execution?.workspace as Record<string, unknown> | undefined;
+      const tuple = workspace && { cwd: workspace.cwd, repoUrl: workspace.repoUrl, repoRef: workspace.repoRef, branchName: workspace.branchName };
+      if (!tuple || binding?.executionWorkspaceId !== source.executionWorkspaceId ||
+        createHash("sha256").update(JSON.stringify(tuple), "utf8").digest("hex") !== source.contentHash)
+        throw forbidden("A Native source workspace tuple changed");
+      if (source.origin === "agent_home") {
+        const [competing] = await db.select({ id: executionWorkspaces.id }).from(executionWorkspaces).where(and(
+          eq(executionWorkspaces.companyId, input.companyId), eq(executionWorkspaces.id, source.executionWorkspaceId)));
+        if (competing || source.executionWorkspaceId !== input.runId || source.sourceVersion !== `agent-home:${run.agentId}:v1` ||
+          !isDeepStrictEqual(tuple, { cwd: resolveDefaultAgentWorkspaceDir(run.agentId), repoUrl: null, repoRef: null, branchName: null }))
+          throw forbidden("A Native source agent workspace changed");
+      } else if (source.origin === "task_session") {
+        if (source.executionWorkspaceId !== input.runId || source.sourceVersion !== `task-session:${input.runId}`)
+          throw forbidden("A Native source task-session workspace changed");
+      } else if (source.origin === "execution_workspace") {
+        const [current] = await db.select({ cwd: executionWorkspaces.cwd, repoUrl: executionWorkspaces.repoUrl,
+          repoRef: executionWorkspaces.baseRef, branchName: executionWorkspaces.branchName, updatedAt: executionWorkspaces.updatedAt })
+          .from(executionWorkspaces).where(and(eq(executionWorkspaces.companyId, input.companyId),
+            eq(executionWorkspaces.id, source.executionWorkspaceId)));
+        if (!current || current.updatedAt.toISOString() !== source.sourceVersion ||
+          !isDeepStrictEqual({ cwd: current.cwd, repoUrl: current.repoUrl, repoRef: current.repoRef, branchName: current.branchName }, tuple))
+          throw forbidden("A Native source execution workspace changed");
+      } else throw forbidden("A Native source workspace origin is unsupported");
+      continue;
+    }
+    if (source.kind === "runtime_instructions" || source.kind === "runtime_skill") {
+      const execution = profileRunExecution(run);
+      if (!execution) throw forbidden("A Native runtime source is unavailable");
+      const runtime = execution.runtimeContext && typeof execution.runtimeContext === "object" && !Array.isArray(execution.runtimeContext)
+        ? execution.runtimeContext as Record<string, unknown> : null;
+      const bundle = source.kind === "runtime_instructions"
+        ? (runtime?.instructions as Record<string, unknown> | undefined)?.bundle as Parameters<typeof readNativeRuntimeAssetText>[0] | undefined
+        : (Array.isArray(runtime?.skills) ? runtime!.skills as Record<string, unknown>[] : []).find(value =>
+            value.key === source.key && value.versionId === source.versionId)?.bundle as Parameters<typeof readNativeRuntimeAssetText>[0] | undefined;
+      if (!bundle || bundle.digest !== (source.kind === "runtime_instructions" ? source.bundleDigest : source.bundleDigest) ||
+        bundle.manifestDigest !== source.manifestDigest)
+        throw forbidden("A Native runtime asset source changed");
+      await readNativeRuntimeAssetText(bundle, 256000, { companyId: input.companyId, runId: input.runId }).catch(() => {
+        throw forbidden("A Native runtime asset source was erased");
+      });
+      continue;
+    }
+    if (source.kind === "foundation_revision") {
+      const [foundation] = await db.select({ document: foundationDocuments, revision: documentRevisions })
+        .from(foundationDocuments).innerJoin(documentRevisions, and(eq(documentRevisions.companyId, foundationDocuments.companyId),
+          eq(documentRevisions.documentId, foundationDocuments.documentId), eq(documentRevisions.id, foundationDocuments.approvedRevisionId)))
+        .where(and(eq(foundationDocuments.companyId, input.companyId), eq(foundationDocuments.id, source.foundationDocumentId),
+          eq(foundationDocuments.documentId, source.documentId), eq(foundationDocuments.approvedRevisionId, source.revisionId),
+          eq(foundationDocuments.status, "approved")));
+      if (!foundation || createHash("sha256").update(foundation.revision.body, "utf8").digest("hex") !== source.contentHash)
+        throw forbidden("A Native source Foundation revision changed");
+      await assertLearnedAssetAnalyticalSources(db, input.companyId, "document_revision", source.revisionId, input.actor);
+      continue;
+    }
+    if (source.kind === "native_task_wake") {
+      const task = inputs.data.find((value): value is Extract<NativePayloadSourceInput, { kind: "task" }> =>
+        value.kind === "task" && value.issueId === source.issueId);
+      if (source.runId !== input.runId || source.issueId !== input.issueId || !task ||
+        task.sourceVersion !== source.sourceVersion || !isDeepStrictEqual(receipt.data.bootstrap.inputs.find(value =>
+          value.kind === "native_task_wake" && value.runId === source.runId), source))
+        throw forbidden("A Native task wake source changed");
+      continue;
+    }
+    if (source.kind === "worker_model_dispatch") {
+      const dispatches = receipt.data.dispatches.flatMap(prefix => prefix.inputs.filter(value =>
+        value.kind === "worker_model_dispatch" && isDeepStrictEqual(value, source)));
+      const intents = Array.isArray(profile?.nativeAwModelWireIntents)
+        ? profile.nativeAwModelWireIntents.filter(value => value && typeof value === "object" && !Array.isArray(value) &&
+            (value as Record<string, unknown>).reservationId === source.reservationId) as Record<string, unknown>[] : [];
+      const [reservation] = await db.select().from(orchestrationModelReservations).where(and(
+        eq(orchestrationModelReservations.companyId, input.companyId), eq(orchestrationModelReservations.id, source.reservationId),
+        eq(orchestrationModelReservations.purpose, "worker_model"), eq(orchestrationModelReservations.status, "completed")));
+      if (source.runId !== input.runId || dispatches.length !== 1 || intents.length !== 1 || !reservation ||
+        reservation.inputHash !== source.requestHash || reservation.providerResponseHash !== source.responseHash ||
+        intents[0]!.requestHash !== source.requestHash || intents[0]!.wireBodyHash !== source.wireBodyHash ||
+        intents[0]!.responseContentHash === undefined || intents[0]!.endpoint !== "https://api.anthropic.com/v1/messages" ||
+        intents[0]!.method !== "POST") throw forbidden("A Native historical model dispatch changed");
+      continue;
+    }
+    if (source.kind === "tool_result") {
+      const captures = Array.isArray(profile?.nativeToolResultSourceCaptures)
+        ? profile.nativeToolResultSourceCaptures.filter(value => value && typeof value === "object" && !Array.isArray(value) &&
+            (value as Record<string, unknown>).callId === source.callId &&
+            (value as Record<string, unknown>).tool === source.toolName &&
+            (value as Record<string, unknown>).resultDigest === source.contentHash &&
+            isDeepStrictEqual((value as Record<string, unknown>).source, source)) as Record<string, unknown>[] : [];
+      const [invocation] = source.invocationId ? await db.select().from(toolInvocations).where(and(
+        eq(toolInvocations.companyId, input.companyId), eq(toolInvocations.id, source.invocationId),
+        eq(toolInvocations.runId, input.runId), eq(toolInvocations.status, "succeeded"),
+        eq(toolInvocations.resultHash, source.contentHash))) : [];
+      const matchingReceiptInputs = receipt.data.additionalInputs.flatMap(entry => entry.inputs.filter(value =>
+        value.kind === "tool_result" && isDeepStrictEqual(value, source)));
+      if (source.runId !== input.runId || matchingReceiptInputs.length !== 1 || captures.length !== 1 || !invocation ||
+        invocation.issueId !== input.issueId || invocation.toolName !== source.toolName)
+        throw forbidden("A Native historical tool result changed");
+      const associations = Array.isArray(profile?.nativeToolCallDispatchAssociations)
+        ? profile.nativeToolCallDispatchAssociations.filter(value => value && typeof value === "object" && !Array.isArray(value) &&
+            (value as Record<string, unknown>).callId === source.callId && (value as Record<string, unknown>).tool === source.toolName)
+        : [];
+      const providerUses = Array.isArray(profile?.nativeAwModelWireIntents) ? profile.nativeAwModelWireIntents.flatMap(value => {
+        if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+        const uses = Array.isArray((value as Record<string, unknown>).responseToolUses)
+          ? (value as Record<string, unknown>).responseToolUses as unknown[] : [];
+        return uses.filter(use => use && typeof use === "object" && !Array.isArray(use) &&
+          (use as Record<string, unknown>).id === source.callId && typeof (use as Record<string, unknown>).name === "string" &&
+          ((use as Record<string, unknown>).name as string).replace(/^(?:paperclip__|paperclip_|paperclip\.)/, "") === source.toolName);
+      }) : [];
+      if (associations.length !== 1 || providerUses.length !== 1 ||
+        !associations.some(value => (value as Record<string, unknown>).argumentsHash === (providerUses[0] as Record<string, unknown>).argumentsHash))
+        throw forbidden("A Native historical tool result dispatch changed");
+      const capture = captures[0]!;
+      const documentRevision = capture.documentRevision && typeof capture.documentRevision === "object" && !Array.isArray(capture.documentRevision)
+        ? capture.documentRevision as Record<string, unknown> : null;
+      if (documentRevision) {
+        if (typeof documentRevision.issueId !== "string" || typeof documentRevision.revisionId !== "string")
+          throw forbidden("A Native historical document tool result changed");
+        await assertNativeDocumentRevisionCurrentSourceAccess(db as Db, { companyId: input.companyId,
+          issueId: documentRevision.issueId, revisionId: documentRevision.revisionId, actor: input.actor, requireLatest: false });
+      }
+      continue;
+    }
+    if (source.kind === "authored_definition") {
+      const [owner] = await db.select().from(agents).where(and(eq(agents.companyId, input.companyId), eq(agents.id, source.agentId)));
+      if (!owner || source.agentId !== run.agentId) throw forbidden("A Native authored Agent source is unavailable");
+      await assertAuthoredAgentSnapshotCurrent(db as Db, owner).catch(() => {
+        throw forbidden("A Native authored Agent source changed");
+      });
+      const config = owner.runtimeConfig && typeof owner.runtimeConfig === "object" && !Array.isArray(owner.runtimeConfig)
+        ? owner.runtimeConfig as Record<string, unknown> : {};
+      const authored = config[AUTHORED_AGENT_DEFINITION_KEY] && typeof config[AUTHORED_AGENT_DEFINITION_KEY] === "object"
+        ? config[AUTHORED_AGENT_DEFINITION_KEY] as Record<string, unknown> : null;
+      if (!authored || authored.revisionId !== source.revisionId || authored.definitionHash !== source.definitionHash ||
+        (authored.procedureSnapshotHash ?? null) !== source.procedureSnapshotHash)
+        throw forbidden("A Native authored Agent source changed");
+      continue;
+    }
+    if (source.kind === "skill_version") {
+      const selected = await skillResolverService(db as Db).authorizedVersion(input.actor, input.companyId, source.skillId, source.versionId)
+        .catch(() => { throw forbidden("A Native Skill source is unavailable"); });
+      const body = selected.version.fileInventory.find(file => file.path === "SKILL.md")?.content;
+      if (selected.skill.key !== source.skillKey || !body || nativeSha256(body) !== source.contentHash)
+        throw forbidden("A Native Skill source changed");
+      await assertLearnedAssetAnalyticalSources(db, input.companyId, "skill_version", source.versionId, input.actor);
+      continue;
+    }
+    if (source.kind === "playbook_revision") {
+      const [owner] = await db.select({ body: documentRevisions.body }).from(playbookDocuments)
+        .innerJoin(documentRevisions, and(eq(documentRevisions.companyId, playbookDocuments.companyId),
+          eq(documentRevisions.documentId, playbookDocuments.documentId), eq(documentRevisions.id, playbookDocuments.approvedRevisionId)))
+        .where(and(eq(playbookDocuments.companyId, input.companyId), eq(playbookDocuments.id, source.playbookId),
+          eq(playbookDocuments.approvedRevisionId, source.revisionId), eq(playbookDocuments.status, "approved")));
+      if (!owner || createHash("sha256").update(owner.body, "utf8").digest("hex") !== source.contentHash)
+        throw forbidden("A Native Playbook source changed");
+      await assertLearnedAssetAnalyticalSources(db, input.companyId, "document_revision", source.revisionId, input.actor);
+      continue;
+    }
+    if (source.kind === "role_pack_version") {
+      const { rolePackService } = await import("./role-packs.js");
+      let current: Extract<NativePayloadSourceInput, { kind: "role_pack_version" }>[] = [];
+      await rolePackService(db as Db).resolve(input.actor, input.companyId, run.agentId, undefined, undefined,
+        values => { current = values; });
+      if (current.filter(value => isDeepStrictEqual(value, source)).length !== 1)
+        throw forbidden("A Native Role Pack source changed");
+      await assertLearnedAssetAnalyticalSources(db, input.companyId, "role_pack_version", source.versionId, input.actor);
+      continue;
+    }
+    if (source.kind === "comment") {
+      const [comment] = await db.select({ sourceVersion: sql<string>`extract(epoch from ${issueComments.updatedAt})::text` })
+        .from(issueComments).where(and(eq(issueComments.companyId, input.companyId), eq(issueComments.issueId, source.issueId),
+          eq(issueComments.id, source.commentId), isNull(issueComments.deletedAt)));
+      const { issueService } = await import("./issues.js");
+      const view = comment ? await issueService(db as Db).getComment(source.commentId) : null;
+      const projection = view && typeof view === "object" ? view as Record<string, unknown> : null;
+      if (!comment || comment.sourceVersion !== source.sourceVersion || !projection ||
+        nativeSha256({ body: projection.body, presentation: projection.presentation, metadata: projection.metadata }) !== source.contentHash ||
+        !await canActorReadIssuePrivacy(db, input.actor, { id: source.issueId, companyId: input.companyId }))
+        throw forbidden("A Native source Comment changed or was erased");
+      continue;
+    }
+    if (source.kind === "interaction") {
+      const { materializeNativeInteractionResponses } = await import("./native-runtime/native-interaction-bridge.js");
+      const current: Extract<NativePayloadSourceInput, { kind: "interaction" }>[] = [];
+      await materializeNativeInteractionResponses({ db: db as Db, companyId: input.companyId, issueId: source.issueId,
+        runId: input.runId, agentId: run.agentId, interactionIds: [source.interactionId], onSourceCapture: value => { current.push(value); } });
+      if (current.length !== 1 || !isDeepStrictEqual(current[0], source))
+        throw forbidden("A Native source Interaction changed or was erased");
+      continue;
+    }
+    if (source.kind === "attachment") {
+      const [attachment] = await db.select({ attachment: issueAttachments, asset: assets }).from(issueAttachments)
+        .innerJoin(assets, and(eq(assets.companyId, issueAttachments.companyId), eq(assets.id, issueAttachments.assetId)))
+        .where(and(eq(issueAttachments.companyId, input.companyId), eq(issueAttachments.issueId, source.issueId),
+          eq(issueAttachments.id, source.attachmentId)));
+      if (!attachment || attachment.attachment.payloadSourceSnapshotInvalidated || source.assetId !== attachment.asset.id ||
+        source.sha256 !== attachment.asset.sha256 || source.byteSize !== attachment.asset.byteSize ||
+        source.commentId !== attachment.attachment.issueCommentId ||
+        !await canActorReadIssuePrivacy(db, input.actor, { id: source.issueId, companyId: input.companyId }))
+        throw forbidden("A Native source Attachment changed or was erased");
+      if (source.commentId) {
+        const { issueService } = await import("./issues.js");
+        if (!await issueService(db as Db).getComment(source.commentId)) throw forbidden("A Native source Attachment comment was erased");
+      }
+      continue;
+    }
+    if (source.kind === "document_revision") {
+      if (!source.issueId) throw forbidden("A Native document source is unavailable");
+      await assertNativeDocumentRevisionCurrentSourceAccess(db as Db, { companyId: input.companyId, issueId: source.issueId,
+        revisionId: source.revisionId, actor: input.actor, requireLatest: false });
+      continue;
+    }
     throw forbidden("A Native source family needs a completed original result receipt");
   }
+}
+
+function profileRunExecution(run: typeof heartbeatRuns.$inferSelect): Record<string, unknown> | null {
+  const profile = run.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson)
+    ? run.runnerProfileJson as Record<string, unknown> : null;
+  return profile?.nativeExecutionInput && typeof profile.nativeExecutionInput === "object" && !Array.isArray(profile.nativeExecutionInput)
+    ? profile.nativeExecutionInput as Record<string, unknown> : null;
 }
 
 /** There is not yet a provider-owned witness for the complete input delivered to
@@ -566,6 +831,73 @@ function temporalContextContentHash(manifest: typeof contextManifests.$inferSele
       version: item.sourceVersion, contentHash: item.contentHash, snapshot: item.payloadSourceSnapshot })),
     roots: roots.map(root => ({ id: root.memoryRecordId, version: root.sourceVersion, snapshot: root.payloadSourceSnapshot })),
   }), "utf8").digest("hex");
+}
+
+async function assertNativeContextInputOwnersCurrent(db: Db, companyId: string, actor: AuthorizationActor,
+  inputs: Extract<NativePayloadSourceInput, { kind: "context" }>[], scope: NativeSourceReadScope) {
+  if (!inputs.length) return;
+  const ids = [...new Set(inputs.map(source => source.manifestId))];
+  if (ids.length !== inputs.length) throw forbidden("A Native Context manifest source is ambiguous");
+  const manifests = await db.select().from(contextManifests).where(and(eq(contextManifests.companyId, companyId), inArray(contextManifests.id, ids)));
+  const items = await db.select().from(contextManifestItems).where(and(eq(contextManifestItems.companyId, companyId), inArray(contextManifestItems.manifestId, ids)));
+  const roots = await db.select().from(contextManifestMemoryRoots).where(and(eq(contextManifestMemoryRoots.companyId, companyId), inArray(contextManifestMemoryRoots.manifestId, ids)));
+  if (manifests.length !== ids.length || items.length > 256 || roots.length > 256)
+    throw forbidden("A Native Context manifest source is unavailable");
+  for (const manifest of manifests) {
+    for (const item of items.filter(value => value.manifestId === manifest.id)) {
+      nativeSourceReadWork(scope);
+      if (item.sourceProvider === "august_works_tasks") {
+        const match = /^issue:\/\/([0-9a-f-]{36})$/i.exec(item.sourceRef);
+        const [owner] = match ? await db.select({ id: issues.id, updatedAt: issues.updatedAt,
+          payloadSourceSnapshot: issues.payloadSourceSnapshot, payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated })
+          .from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, match[1]!))) : [];
+        const [ownerHash] = match ? await db.execute<{ hash: string }>(sql`select public.aw_native_payload_body_hash('issue',to_jsonb(i)) as hash
+          from issues i where i.company_id=${companyId}::uuid and i.id=${match[1]!}::uuid`) : [];
+        const snapshot = nativePayloadSourceSnapshotSchema.safeParse(owner?.payloadSourceSnapshot);
+        if (!match || !owner || !ownerHash || owner.payloadSourceSnapshotInvalidated || !snapshot.success ||
+          snapshot.data.owner.kind !== "issue" || snapshot.data.owner.contentHash !== ownerHash.hash ||
+          item.sourceVersion !== owner.updatedAt.toISOString() || !item.payloadSourceSnapshot ||
+          !isDeepStrictEqual(item.payloadSourceSnapshot, owner.payloadSourceSnapshot))
+          throw forbidden("A Native Context Task source changed or was erased");
+        await canActorReadIssuePrivacy(db, actor, { id: match[1]!, companyId }).then(allowed => {
+          if (!allowed) throw forbidden("A Native Context Task source is unavailable");
+        });
+        await assertAnalyticalContextPayloadAccess(db, companyId, actor, { issueId: match[1]! });
+      } else if (item.sourceProvider === "august_works_memory" || item.sourceProvider === "august_works_derived_memory") {
+        const match = /^memory:\/\/(?:record|derived)\/([0-9a-f-]{36})$/i.exec(item.sourceRef);
+        if (!match || !await canActorReadMemorySources(db, companyId, actor, match[1]!))
+          throw forbidden("A Native Context Memory source is unavailable");
+        const [memory] = await db.select({ updatedAt: memoryRecords.updatedAt, content: memoryRecords.content,
+          payloadSourceSnapshot: memoryRecords.payloadSourceSnapshot, payloadSourceSnapshotInvalidated: memoryRecords.payloadSourceSnapshotInvalidated,
+          deletedAt: memoryRecords.deletedAt, revokedAt: memoryRecords.revokedAt, supersededByRecordId: memoryRecords.supersededByRecordId })
+          .from(memoryRecords).where(and(eq(memoryRecords.companyId, companyId), eq(memoryRecords.id, match[1]!), memoryPayloadVisible(), isNull(memoryRecords.deletedAt)));
+        const [memoryHash] = await db.execute<{ hash: string }>(sql`select public.aw_native_payload_body_hash('memory_record',to_jsonb(m)) as hash
+          from memory_records m where m.company_id=${companyId}::uuid and m.id=${match[1]!}::uuid and m.deleted_at is null`);
+        const memorySnapshot = nativePayloadSourceSnapshotSchema.safeParse(memory?.payloadSourceSnapshot);
+        if (!memory || memory.deletedAt || memory.revokedAt || memory.supersededByRecordId || memory.payloadSourceSnapshotInvalidated ||
+          !memoryHash || !memorySnapshot.success || memorySnapshot.data.owner.kind !== "memory_record" ||
+          memorySnapshot.data.owner.contentHash !== memoryHash.hash || item.sourceVersion !== memory.updatedAt.toISOString() ||
+          !item.payloadSourceSnapshot || !isDeepStrictEqual(item.payloadSourceSnapshot, memory.payloadSourceSnapshot))
+          throw forbidden("A Native Context Memory source changed or was erased");
+      } else if (item.sourceProvider === "august_works_foundation") {
+        const match = /^foundation:\/\/[0-9a-f-]{36}\/([0-9a-f-]{36})\/(?:whole|\d+)$/i.exec(item.sourceRef);
+        if (!match || item.sourceVersion !== match[1]) throw forbidden("A Native Context Foundation source is unavailable");
+        await assertLearnedAssetAnalyticalSources(db, companyId, "document_revision", match[1]!, actor);
+      } else throw forbidden("A Native Context source family is unsupported");
+    }
+    for (const root of roots.filter(value => value.manifestId === manifest.id)) {
+      nativeSourceReadWork(scope);
+      const [memory] = await db.select({ payloadSourceSnapshot: memoryRecords.payloadSourceSnapshot,
+        payloadSourceSnapshotInvalidated: memoryRecords.payloadSourceSnapshotInvalidated, revokedAt: memoryRecords.revokedAt,
+        supersededByRecordId: memoryRecords.supersededByRecordId, deletedAt: memoryRecords.deletedAt }).from(memoryRecords)
+        .where(and(eq(memoryRecords.companyId, companyId), eq(memoryRecords.id, root.memoryRecordId), memoryPayloadVisible(), isNull(memoryRecords.deletedAt)));
+      if (!memory || memory.deletedAt || memory.revokedAt || memory.supersededByRecordId || memory.payloadSourceSnapshotInvalidated ||
+        !nativePayloadSourceSnapshotSchema.safeParse(memory.payloadSourceSnapshot).success ||
+        !isDeepStrictEqual(memory.payloadSourceSnapshot, root.payloadSourceSnapshot) ||
+        !await canActorReadMemorySources(db, companyId, actor, root.memoryRecordId))
+        throw forbidden("A Native Context Memory root is unavailable");
+    }
+  }
 }
 
 export async function assertNativeTemporalContextInputsCurrent(db: Db, companyId: string,
@@ -1090,6 +1422,11 @@ async function assertNativeDocumentRevisionCurrentSourceAccessInScope(db: Db, in
         if (!current || current.updatedAt.toISOString() !== source.sourceVersion ||
           !isDeepStrictEqual({ cwd: current.cwd, repoUrl: current.repoUrl, repoRef: current.repoRef, branchName: current.branchName }, tuple))
           throw forbidden("The Native document workspace owner changed");
+      } else if (source.origin === "task_session") {
+        // This source is a server-owned per-run workspace tuple, not an
+        // independently persisted execution_workspaces row.
+        if (source.executionWorkspaceId !== source.runId || source.sourceVersion !== `task-session:${source.runId}`)
+          throw forbidden("The Native document task-session workspace source changed");
       } else throw forbidden("The Native document workspace source family is unsupported");
       continue;
     }

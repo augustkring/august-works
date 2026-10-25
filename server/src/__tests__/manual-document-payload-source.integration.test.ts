@@ -48,6 +48,22 @@ describe("fresh direct Human document revision sources", () => {
       from document_revisions r where r.id=${id}::uuid`);
     return { row: row!, proof: proof! };
   }
+  it("captures a new manual Task before rechecking its ordinary current write authority", async () => {
+    const f = await seed();
+    const created = await issueService(db).create(f.companyId, {
+      title: "Current Human Task", description: "Exact text supplied by the authenticated Human.",
+      createdByUserId: f.userId, responsibleUserId: f.userId,
+    }, db, undefined, { manualInputActor: f.actor });
+    const [row] = await db.select().from(issues).where(eq(issues.id, created.id));
+    const [proof] = await db.execute<{ hash: string; valid: boolean }>(sql`select
+      public.aw_native_payload_body_hash('issue',to_jsonb(i)) as hash,
+      (i.payload_source_snapshot->>'digest')=encode(sha256(convert_to((i.payload_source_snapshot-'digest')::text,'UTF8')),'hex') as valid
+      from issues i where i.id=${created.id}::uuid`);
+    expect(row).toMatchObject({ payloadSourceProtocolVersion: 1, payloadSourceSnapshotInvalidated: false,
+      payloadSourceSnapshot: { version: 1, owner: { kind: "issue", companyId: f.companyId, id: created.id } } });
+    expect(row!.payloadSourceSnapshot.owner.contentHash).toBe(proof!.hash);
+    expect(proof!.valid).toBe(true);
+  });
   it("captures only the first stored native revision and exposes no proof through document DTOs", async () => {
     const f = await seed(), http = request(appFor(f.actor));
     const created = await http.put(`/api/issues/${f.issue.id}/documents/notes`).send(body).expect(201);

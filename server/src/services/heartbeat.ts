@@ -211,7 +211,7 @@ import { documentService, type DocumentRevisionSourceCapture } from "./documents
 import { getTaskPlanContext } from "./task-plan-context.js";
 import { selectNativeHeartbeatBackend } from "./orchestration/native-draft-runtime.js";
 import { buildNativeBootstrapSourceSet, captureNativeTaskWakeSource, type NativeBootstrapSourceClosure,
-  type NativePreparedSourceCandidate } from "./native-runtime/native-execution-input.js";
+  prepareNativeTurnWithContext, type NativePreparedSourceCandidate } from "./native-runtime/native-execution-input.js";
 import { managedAgentProfileService } from "./managed-agent-profiles.js";
 import { remoteAgentProfileService } from "./remote-agent-profiles.js";
 import {
@@ -24360,6 +24360,41 @@ export function heartbeatService(
                     db,
                     execution: nativeExecution,
                     bootstrapSourceClosure: nativeBootstrapSourceClosure,
+                    ...(nativeExecution.provider.kind === "opencode" ? {
+                      prepareTurnSourceClosure: async turnInput => {
+                        const issue = issueRef;
+                        if (!issue || !experimentalInstanceSettings.enableContextEngineV1) {
+                          return { turnInput, sourceClosure: nativeBootstrapSourceClosure ?? undefined };
+                        }
+                        const refreshed = await assembleFreshNativeGovernedContext(db, {
+                          enabled: true,
+                          foundationEnabled: experimentalInstanceSettings.enableFoundationV1 === true,
+                          ...(authoredDefinition ? { sourceScope: "task_only" as const } : {}),
+                          companyId: agent.companyId,
+                          agentId: agent.id,
+                          responsibleUserId: run.responsibleUserId ?? responsibleUserId,
+                          runId: run.id,
+                          issueId: issue.id,
+                          projectId: issue.projectId,
+                          issueTitle: issue.title,
+                          issueDescription: issue.description,
+                          immediateRequest: safeWakeCommentContext?.body ?? null,
+                        });
+                        if (!refreshed?.sourceWitness || !refreshed.manifest || !nativeBootstrapSourceClosure) {
+                          // No fresh Context body was added to this turn. Keep
+                          // the already bound immutable bootstrap input; never
+                          // infer a new source set from missing witness data.
+                          return { turnInput, sourceClosure: nativeBootstrapSourceClosure ?? undefined };
+                        }
+                        const prepared = prepareNativeTurnWithContext({ turnInput,
+                          baseClosure: nativeBootstrapSourceClosure, companyId: agent.companyId,
+                          runId: run.id, agentId: agent.id, issueId: issue.id, contextMarkdown: refreshed.markdown,
+                          contextWitness: refreshed.sourceWitness,
+                          manifestIds: [{ companyId: agent.companyId, contextManifestId: refreshed.manifest.id }] });
+                        if (!prepared) throw new Error("native_per_turn_context_source_unavailable");
+                        return prepared;
+                      },
+                    } : {}),
                     conversationMode: isConversation(issueContext),
                     turnTimeoutMs: Math.max(0, asNumber(runtimeConfig.timeoutSec, 0)) * 1_000,
                     runnerInstanceId: nativeRunnerInstanceId,

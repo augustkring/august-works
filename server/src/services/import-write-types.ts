@@ -27,7 +27,7 @@ export interface ImportIssueRow {
   visibility: "open" | "private";
   privacyRootIssueId: string | null;
   privacyParentIssueId: string | null;
-  privacySources: Array<{ sourceKind: "issue" | "project" | "run" | "workflow_run" | "routine_run"; sourceId: string }>;
+  privacySources: Array<{ sourceKind: "issue" | "project" | "run" | "run_copy" | "workflow_run" | "routine_run"; sourceId: string }>;
   responsibleUserId: string | null;
   createdByUserId: string | null;
   title: string;

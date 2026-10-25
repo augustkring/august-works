@@ -54,6 +54,8 @@ export type NativePayloadSourceSet = {
 export type NativeBootstrapSourceClosure = {
   sourceSet: NativePayloadSourceSet;
   taskEnvelopeDigest: string;
+  /** Digest and Context root attached to a later server-prepared turn. */
+  turnContext?: { markdownDigest: string; manifestIds: string[] };
 };
 
 /** Server-only Native output capture. The model-call identity and hashes are
@@ -267,6 +269,53 @@ export function buildNativeBootstrapSourceSet(input: {
   const references = inputs.length + Object.values(policy).reduce((sum, values) => sum + values.length, 0);
   if (references > 256) return null;
   return { policy, inputs };
+}
+
+/** Attach one real, freshly assembled Context render to the exact next Native
+ * user frame and carry its witness-derived owners into that dispatch closure.
+ * This is a server-only preparation helper; caller prose cannot mint the
+ * witness or source references. */
+export function prepareNativeTurnWithContext<T extends { message: { role: string; text: string } }>(input: {
+  turnInput: T;
+  baseClosure: NativeBootstrapSourceClosure;
+  companyId: string;
+  runId: string;
+  agentId: string;
+  issueId: string;
+  contextMarkdown: string;
+  contextWitness: NativeBootstrapContextWitness | null;
+  manifestIds: readonly { companyId: string; contextManifestId: string }[];
+}): { turnInput: T; sourceClosure: NativeBootstrapSourceClosure } | null {
+  if (input.turnInput.message.role !== "user" || input.turnInput.message.text.length > 2_000_000) return null;
+  const context = input.contextWitness && readNativeBootstrapContextWitness(input.contextWitness, {
+    companyId: input.companyId, runId: input.runId, agentId: input.agentId, issueId: input.issueId,
+    renderedMarkdown: input.contextMarkdown, manifestIds: input.manifestIds,
+  });
+  if (!context || input.manifestIds.length !== 1) return null;
+  let frame: Record<string, unknown>;
+  try {
+    const parsed: unknown = JSON.parse(input.turnInput.message.text);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    frame = parsed as Record<string, unknown>;
+  } catch { return null; }
+  if (frame.schema !== "paperclip.native-model-envelope.v2" || Object.hasOwn(frame, "turnContext")) return null;
+  const markdownDigest = createHash("sha256").update(input.contextMarkdown, "utf8").digest("hex");
+  const manifestIds = [...new Set([context.contextInput.manifestId])].sort();
+  frame.turnContext = { schema: "paperclip.native-turn-context.v1", markdown: input.contextMarkdown,
+    digest: markdownDigest, manifestIds };
+  const policy: NativePayloadSourcePolicy = { ...input.baseClosure.sourceSet.policy };
+  for (const key of Object.keys(policy) as Array<keyof NativePayloadSourcePolicy>)
+    policy[key] = [...new Set([...policy[key], ...context.policy[key]])].sort();
+  const inputs = [...input.baseClosure.sourceSet.inputs];
+  for (const source of [context.contextInput, ...context.inputs]) {
+    const encoded = JSON.stringify(source);
+    if (!inputs.some(existing => JSON.stringify(existing) === encoded)) inputs.push(source);
+  }
+  if (inputs.length + Object.values(policy).reduce((sum, values) => sum + values.length, 0) > 256) return null;
+  return { turnInput: { ...input.turnInput,
+    message: { ...input.turnInput.message, text: JSON.stringify(frame) } },
+    sourceClosure: { sourceSet: { policy, inputs }, taskEnvelopeDigest: input.baseClosure.taskEnvelopeDigest,
+      turnContext: { markdownDigest, manifestIds } } };
 }
 
 /** Closed constructor: callers cannot spread legacy context or environment data. */

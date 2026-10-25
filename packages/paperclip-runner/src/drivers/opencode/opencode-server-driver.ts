@@ -2034,6 +2034,12 @@ async function startRuntime(input: {
       XDG_DATA_HOME: dataHome,
       XDG_CACHE_HOME: cacheHome,
       OPENCODE_DISABLE_PROJECT_CONFIG: "true",
+      // These two pinned 1.18.32 controls keep a cold isolated runtime from
+      // reaching the public plugin registry or model catalog. They are
+      // hard-coded for the managed child and are included in the diagnostic
+      // environment allowlist below; callers cannot use them to re-enable IO.
+      OPENCODE_DISABLE_DEFAULT_PLUGINS: "true",
+      OPENCODE_DISABLE_MODELS_FETCH: "true",
       OPENCODE_SERVER_USERNAME: username,
       OPENCODE_SERVER_PASSWORD: password,
     },
@@ -2579,6 +2585,8 @@ function sanitizedEnvironment(
     "SSL_CERT_FILE",
     "SSL_CERT_DIR",
     "OPENROUTER_API_KEY",
+    "OPENCODE_DISABLE_DEFAULT_PLUGINS",
+    "OPENCODE_DISABLE_MODELS_FETCH",
   ];
   const result: NodeJS.ProcessEnv = {};
   for (const key of allowed)
@@ -2600,6 +2608,8 @@ function sanitizedEnvironmentKeys(): string[] {
     "SSL_CERT_FILE",
     "SSL_CERT_DIR",
     "OPENROUTER_API_KEY",
+    "OPENCODE_DISABLE_DEFAULT_PLUGINS",
+    "OPENCODE_DISABLE_MODELS_FETCH",
   ];
 }
 

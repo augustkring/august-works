@@ -115,12 +115,17 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
   const receipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
   const schemas = authority.toolSchemas;
   const prompts = authority.authorizedPromptHashes;
+  const promptSourceBindings = authority.promptSourceBindings;
   const system = request.system;
   const systemText = typeof system === "string" ? system : Array.isArray(system) && system.every((part) =>
     managedRecord(part).type === "text" && typeof managedRecord(part).text === "string")
     ? (system as Array<{ text: string }>).map((part) => part.text).join("") : null;
   if (!run || authority.version !== 1 || !receipt.success || !Array.isArray(schemas) || !Array.isArray(prompts) ||
     prompts.length === 0 || prompts.length > 64 || prompts.some((value) => typeof value !== "string" || !/^[0-9a-f]{64}$/.test(value)) ||
+    !Array.isArray(promptSourceBindings) || promptSourceBindings.length !== prompts.length ||
+    promptSourceBindings.some((value) => typeof managedRecord(value).promptHash !== "string" ||
+      !/^[0-9a-f]{64}$/.test(managedRecord(value).promptHash as string) || typeof managedRecord(value).sourceSetHash !== "string" ||
+      !/^[0-9a-f]{64}$/.test(managedRecord(value).sourceSetHash as string)) ||
     authority.executionInputHash !== nativeSha256(profile.nativeExecutionInput) ||
     !Array.isArray(authority.toolSchemas) || authority.toolSchemasHash !== nativeSha256(schemas) ||
     typeof authority.systemInstructionsHash !== "string" || systemText === null ||
@@ -138,8 +143,13 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
   const sourcePrefixes = [{ policy: receipt.data.bootstrap.policy, inputs: receipt.data.bootstrap.inputs },
     ...receipt.data.dispatches.map((dispatch) => {
       const currentDispatch = [...dispatch.inputs].reverse().find((source) => source.kind === "worker_model_dispatch");
-      if (!currentDispatch) throw forbidden("Managed OpenCode source prefix has no current dispatch");
-      return { policy: dispatch.policy, inputs: dispatch.inputs.filter((source) => !isDeepStrictEqual(source, currentDispatch)) };
+      // NativeSessionExecutor records the exact server-built task prompt before
+      // the managed Anthropic route emits its first worker_model_dispatch.
+      // That original source set is still checked as-is; later managed
+      // provider dispatches remove only their own final marker.
+      return currentDispatch
+        ? { policy: dispatch.policy, inputs: dispatch.inputs.filter((source) => !isDeepStrictEqual(source, currentDispatch)) }
+        : { policy: dispatch.policy, inputs: dispatch.inputs };
     })];
   for (const sourceSet of sourcePrefixes)
     await assertNativePayloadSourceSetCurrent(db, {
@@ -201,8 +211,29 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
     } else if (message.role === "user") {
       for (const block of blocks) {
         if (block.type === "text") {
-          if (typeof block.text !== "string" || !prompts.includes(nativeSha256(block.text)))
+          const promptHash = typeof block.text === "string" ? nativeSha256(block.text) : "";
+          const promptBindings = promptSourceBindings.map(managedRecord).filter((binding) => binding.promptHash === promptHash);
+          if (typeof block.text !== "string" || !prompts.includes(promptHash) || promptBindings.length !== 1)
             throw forbidden("Managed OpenCode user history is outside the current server-owned prompt receipts");
+          const bindingHash = promptBindings[0]!.sourceSetHash;
+          const bootstrapSourceSet = { policy: receipt.data.bootstrap.policy, inputs: receipt.data.bootstrap.inputs };
+          if (bindingHash === nativeSha256(bootstrapSourceSet)) {
+            await assertNativePayloadSourceSetCurrent(db, { companyId: claims.company_id,
+              issueId: run.nativeIssueId!, runId: claims.run_id,
+              actor: { type: "agent", source: "agent_jwt", companyId: claims.company_id, agentId: claims.sub,
+                runId: claims.run_id, onBehalfOfUserId: claims.responsible_user_id },
+              policy: bootstrapSourceSet.policy, inputs: bootstrapSourceSet.inputs });
+          } else {
+            const sourceSets = receipt.data.additionalInputs.filter((entry) =>
+              nativeSha256({ policy: entry.policy, inputs: entry.inputs }) === bindingHash);
+            if (sourceSets.length === 0) throw forbidden("Managed OpenCode prompt source set is not in its original receipt");
+            for (const sourceSet of sourceSets)
+              await assertNativePayloadSourceSetCurrent(db, { companyId: claims.company_id,
+                issueId: run.nativeIssueId!, runId: claims.run_id,
+                actor: { type: "agent", source: "agent_jwt", companyId: claims.company_id, agentId: claims.sub,
+                  runId: claims.run_id, onBehalfOfUserId: claims.responsible_user_id },
+                policy: sourceSet.policy, inputs: sourceSet.inputs });
+          }
           sawAuthorizedUserPrompt = true;
           continue;
         }

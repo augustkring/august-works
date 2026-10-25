@@ -26,6 +26,7 @@ import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embed
 import { initializeRunIdentity, reserveSteeredIdentity, reconcileSteeredIdentity } from "../run-identity.js";
 import { documentService } from "../documents.js";
 import type { DocumentRevisionSourceCapture } from "../documents.js";
+import { assertNativeDocumentRevisionCurrentSourceAccess } from "../native-direct-input.js";
 import { issueService } from "../issues.js";
 import { issueThreadInteractionService } from "../issue-thread-interactions.js";
 import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
@@ -293,6 +294,16 @@ describe("PaperclipRunnerToolAuthority", () => {
       onDocumentRead: async capture => { captures.push(capture); },
     });
     expect(captures).toHaveLength(1);
+  });
+
+  it("does not let a legacy document revision bypass its parent Task privacy check", async () => {
+    const fixture = await seedDocumentReader();
+    const created = await documentService(db).upsertIssueDocument({ issueId: fixture.issueId,
+      key: `legacy-private-${randomUUID()}`, title: "Legacy private parent", format: "markdown", body: "Private body" });
+    await expect(assertNativeDocumentRevisionCurrentSourceAccess(db, {
+      companyId: fixture.companyId, issueId: fixture.issueId, revisionId: created.document.latestRevisionId,
+      actor: { type: "none", source: "none" },
+    })).rejects.toThrow();
   });
 
   it("binds a returned document to its authenticated dispatch and never to model arguments", async () => {

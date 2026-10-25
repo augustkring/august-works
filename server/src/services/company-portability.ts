@@ -3641,7 +3641,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       }
     }
     type TaskProof = { source: typeof issueRows.$inferSelect | null; visibility: "open" | "private";
-      sources: Array<{ sourceKind: "issue" | "project" | "run" | "workflow_run" | "routine_run"; sourceId: string }> };
+      sources: Array<{ sourceKind: "issue" | "project" | "run" | "run_copy" | "workflow_run" | "routine_run"; sourceId: string }> };
     type ProjectProof = { source: typeof projectRows.$inferSelect | null; visibility: "open" | "private";
       sourceIssueIds: string[]; sourceProjectIds: string[]; sourceProvenanceQualified: boolean };
     if (!tasks.length && !projects.length) return { tasks: new Map<string, TaskProof>(), projects: new Map<string, ProjectProof>() };
@@ -3720,7 +3720,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       const currentSources = await sourceDb.select({ sourceKind: issuePrivacySources.sourceKind, sourceId: issuePrivacySources.sourceId })
         .from(issuePrivacySources).where(and(eq(issuePrivacySources.companyId, companyId), eq(issuePrivacySources.issueId, source.id)));
       const sources = [...task.privacySources, ...currentSources.map(entry => {
-        if (entry.sourceKind !== "issue" && entry.sourceKind !== "project" && entry.sourceKind !== "run" && entry.sourceKind !== "workflow_run" && entry.sourceKind !== "routine_run") {
+        if (entry.sourceKind !== "issue" && entry.sourceKind !== "project" && entry.sourceKind !== "run" && entry.sourceKind !== "run_copy" && entry.sourceKind !== "workflow_run" && entry.sourceKind !== "routine_run") {
           throw unprocessable("Task source provenance is invalid");
         }
         return { sourceKind: entry.sourceKind, sourceId: entry.sourceId };

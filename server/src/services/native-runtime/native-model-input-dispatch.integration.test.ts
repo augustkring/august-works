@@ -26,7 +26,7 @@ import { documentService, type DocumentRevisionSourceCapture } from "../document
 import { nativeSha256 } from "./canonical.js";
 import { currentNativeControllerIdentity } from "./native-restart-recovery.js";
 import { buildNativeModelEnvelope } from "@paperclipai/paperclip-runner";
-import { buildNativeExecutionInput, buildNativeBootstrapSourceSet } from "./native-execution-input.js";
+import { buildNativeExecutionInput, buildNativeBootstrapSourceSet, prepareNativeTurnWithContext } from "./native-execution-input.js";
 import { nativeRuntimeContextFixture } from "./runtime-context.test-fixture.js";
 import { issueService } from "../issues.js";
 import type { NativeTaskSourceCapture } from "../issues.js";
@@ -489,6 +489,20 @@ describe("native model input dispatch intent", () => {
     const closure = { sourceSet: sourceSet!, taskEnvelopeDigest: createHash("sha256").update(JSON.stringify(execution.task), "utf8").digest("hex") };
     const dispatchId = await recordNativeModelInputDispatchIntent({ ...dispatchArgs(seeded, turnInput), bootstrapSourceClosure: closure });
     await recordNativeModelInputDispatchAcknowledgement({ ...acknowledgementArgs(seeded, dispatchId, turnInput), sourceClosure: closure });
+    const refreshedContext = await contextEngineService(db).assembleNativeBootstrap({ companyId, agentId,
+      authorizationActor: { type: "agent", source: "none", companyId, agentId, runId: seeded.runId, onBehalfOfUserId: userId },
+      responsibleUserId: userId, runId: seeded.runId, issueId: createdIssue.id, projectId: null,
+      query: "Fresh canonical Context for a later Native turn", intent: "native_task_execution", includeFoundation: false,
+      sensitivityCeiling: "internal" });
+    const refreshedTurn = prepareNativeTurnWithContext({ turnInput, baseClosure: closure, companyId,
+      runId: seeded.runId, agentId, issueId: createdIssue.id, contextMarkdown: refreshedContext.markdown,
+      contextWitness: refreshedContext.nativeBootstrapWitness ?? null,
+      manifestIds: [{ companyId, contextManifestId: refreshedContext.packet.manifest!.id }] });
+    expect(refreshedTurn).not.toBeNull();
+    const refreshedDispatchId = await recordNativeModelInputDispatchIntent({
+      ...dispatchArgs(seeded, refreshedTurn!.turnInput), bootstrapSourceClosure: refreshedTurn!.sourceClosure });
+    await recordNativeModelInputDispatchAcknowledgement({ ...acknowledgementArgs(seeded, refreshedDispatchId, refreshedTurn!.turnInput),
+      sourceClosure: refreshedTurn!.sourceClosure });
     const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
     expect(run!.nativeInputSourceProtocolVersion).toBe(1);
     expect(run!.sourceContextProvenanceQualified).toBe(false);
@@ -496,7 +510,11 @@ describe("native model input dispatch intent", () => {
       bootstrap: { inputs: expect.arrayContaining([expect.objectContaining({ kind: "task", issueId: createdIssue.id }),
         expect.objectContaining({ kind: "document_revision", revisionId: revisionCapture!.input.revisionId }),
         expect.objectContaining({ kind: "context", manifestId: governedContext.packet.manifest!.id })]) },
-      dispatches: [expect.objectContaining({ responsibleUserId: userId })],
+      dispatches: [expect.objectContaining({ responsibleUserId: userId }), expect.objectContaining({
+        responsibleUserId: userId, inputs: expect.arrayContaining([
+          expect.objectContaining({ kind: "context", manifestId: refreshedContext.packet.manifest!.id }),
+        ]),
+      })],
     } });
 
     const alteredSeed = await seed({ existingIssueId: createdIssue.id, responsibleUserId: userId });

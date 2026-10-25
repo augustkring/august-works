@@ -135,6 +135,7 @@ import { appendHeartbeatRunEvent } from "../heartbeat-run-events.js";
 import { nativeSha256 } from "./canonical.js";
 import { resolveDefaultAgentWorkspaceDir } from "../../home-paths.js";
 import { assertAnalyticalContextPayloadAccess } from "../analytical-context-authority.js";
+import { assertNativePayloadSourceSetCurrent } from "../native-direct-input.js";
 import { canActorReadIssuePrivacy, type AuthorizationActor } from "../authorization.js";
 import { PaperclipRunnerToolAuthority, resolveNativeInputDispatchReceiptIdentity, type NativeDocumentToolResultSource,
   type NativeProjectToolResultSource } from "./paperclip-runner-tool-authority.js";
@@ -7113,7 +7114,23 @@ async function nativeTurnFrameMatchesSourceClosure(tx: Parameters<Parameters<Db[
     return no("frame_parse");
   }
   const task = record(frame.task);
-  if (!isDeepStrictEqual(frame, expected)) return no("envelope_shape");
+  const frameWithoutTurnContext = { ...frame };
+  delete frameWithoutTurnContext.turnContext;
+  if (!isDeepStrictEqual(frameWithoutTurnContext, expected)) return no("envelope_shape");
+  if (closure.turnContext) {
+    const turnContext = record(frame.turnContext);
+    const manifestIds = closure.turnContext.manifestIds;
+    const contextSourceIds = closure.sourceSet.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "context" }> =>
+      source.kind === "context").map(source => source.manifestId);
+    if (typeof turnContext.markdown !== "string" || typeof turnContext.digest !== "string" ||
+      createHash("sha256").update(typeof turnContext.markdown === "string" ? turnContext.markdown : "", "utf8").digest("hex") !== turnContext.digest ||
+      turnContext.digest !== closure.turnContext.markdownDigest ||
+      !Array.isArray(turnContext.manifestIds) || !isDeepStrictEqual(turnContext.manifestIds, manifestIds) ||
+      !Array.isArray(manifestIds) || new Set(manifestIds).size !== manifestIds.length ||
+      new Set(contextSourceIds).size !== contextSourceIds.length || manifestIds.some(id => !contextSourceIds.includes(id)) ||
+      turnContext.markdown.length > 256000)
+      return no("turn_context_binding");
+  } else if (Object.hasOwn(frame, "turnContext")) return no("turn_context_unqualified");
   if (frame.schema !== "paperclip.native-model-envelope.v2") return no("envelope_schema");
   if (createHash("sha256").update(JSON.stringify(task), "utf8").digest("hex") !== closure.taskEnvelopeDigest) return no("envelope_task_digest");
   const workspaceSource = closure.sourceSet.inputs.find((input): input is Extract<NativePayloadSourceInput, { kind: "workspace_metadata" }> =>
@@ -7145,12 +7162,18 @@ async function nativeTurnFrameMatchesSourceClosure(tx: Parameters<Parameters<Db[
         repoRef: currentWorkspace.repoRef, branchName: currentWorkspace.branchName, updatedAt: currentWorkspace.updatedAt },
       { id: workspaceSource.executionWorkspaceId, ...workspaceTuple, updatedAt: currentWorkspace.updatedAt })) return no("workspace_current_binding");
     workspaceProjectId = currentWorkspace.projectId;
+  } else if (workspaceSource.origin === "task_session") {
+    // Ephemeral task-session directories have no execution_workspaces row;
+    // the source is the exact immutable workspace tuple persisted in this run's
+    // server-built NativeExecutionInput, bound to the assigned issue below.
+    if (workspaceSource.runId !== run.id || workspaceSource.executionWorkspaceId !== parsedExecution.binding.executionWorkspaceId ||
+      workspaceSource.sourceVersion !== `task-session:${run.id}`) return no("workspace_task_session_binding");
   } else return no("workspace_origin_unavailable");
   const [currentTask] = await tx.select({ id: issues.id, companyId: issues.companyId, projectId: issues.projectId,
     executionWorkspaceId: issues.executionWorkspaceId, assigneeAgentId: issues.assigneeAgentId,
     executionRunId: issues.executionRunId }).from(issues).where(and(eq(issues.companyId, run.companyId),
       eq(issues.id, run.nativeIssueId!), eq(issues.assigneeAgentId, run.agentId), eq(issues.executionRunId, run.id))).for("share");
-  const sourceActor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: run.companyId,
+  const sourceActor: AuthorizationActor = { type: "agent", source: "none", companyId: run.companyId,
     agentId: run.agentId, runId: run.id, onBehalfOfUserId: run.responsibleUserId };
   if (!currentTask || workspaceSource.origin === "execution_workspace" &&
     (currentTask.executionWorkspaceId !== workspaceSource.executionWorkspaceId || currentTask.projectId !== workspaceProjectId))
@@ -7252,13 +7275,17 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
       (!Array.isArray(profile.nativeToolCallDispatchAssociations) || profile.nativeToolCallDispatchAssociations.length === 0) &&
       (!Array.isArray(profile.nativeToolResultSourceCaptures) || profile.nativeToolResultSourceCaptures.length === 0) &&
       (!Array.isArray(profile.nativeAttachmentStageSources) || profile.nativeAttachmentStageSources.length === 0);
-    if (input.bootstrapSourceClosure && await nativeTurnFrameMatchesSourceClosure(tx, run, input.turnInput,
-      input.bootstrapSourceClosure, profile.nativeExecutionInput) &&
-      run.nativeInputSourceProtocolVersion === 0 && typeof run.responsibleUserId === "string" && run.responsibleUserId.length > 0 &&
+    const sourceClosure = input.bootstrapSourceClosure;
+    const sourceClosureMatches = sourceClosure && await nativeTurnFrameMatchesSourceClosure(tx, run, input.turnInput,
+      sourceClosure, profile.nativeExecutionInput);
+    const existingReceipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+    if (profile.nativeOpenCodeSourceAuthority && !sourceClosureMatches)
+      throw new Error("managed_opencode_source_prompt_closure_unavailable");
+    if (sourceClosureMatches && run.nativeInputSourceProtocolVersion === 0 && typeof run.responsibleUserId === "string" && run.responsibleUserId.length > 0 &&
       profile.nativeExecutionInput !== undefined && profile.nativeInputSourceReceipt === undefined && noPriorNativeEffects) {
       const bootstrap = {
         executionInputDigest: await postgresJsonbSha256(tx, profile.nativeExecutionInput),
-        ...input.bootstrapSourceClosure.sourceSet,
+        ...sourceClosure.sourceSet,
       };
       const unsigned: Omit<NativeRunInputSourceReceipt, "digest"> = {
         version: 1,
@@ -7271,14 +7298,42 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
       const candidate = { ...unsigned, digest: await postgresJsonbSha256(tx, unsigned) };
       const parsed = nativeRunInputSourceReceiptSchema.safeParse(candidate);
       if (parsed.success) receipt = parsed.data;
+    } else if (sourceClosureMatches && existingReceipt.success && typeof run.responsibleUserId === "string" &&
+      existingReceipt.data.binding.responsibleUserId === run.responsibleUserId) {
+      const bootstrapSetHash = nativeSha256({ policy: existingReceipt.data.bootstrap.policy, inputs: existingReceipt.data.bootstrap.inputs });
+      const preparedSetHash = nativeSha256(sourceClosure.sourceSet);
+      if (preparedSetHash !== bootstrapSetHash && !existingReceipt.data.additionalInputs.some(entry =>
+        entry.responsibleUserId === run.responsibleUserId && nativeSha256({ policy: entry.policy, inputs: entry.inputs }) === preparedSetHash)) {
+        const { digest: _priorDigest, ...receiptBody } = existingReceipt.data;
+        const nextBody = { ...receiptBody, additionalInputs: [...receiptBody.additionalInputs, {
+          responsibleUserId: run.responsibleUserId, ...sourceClosure.sourceSet,
+        }] };
+        const candidate = { ...nextBody, digest: await postgresJsonbSha256(tx, nextBody) };
+        const parsed = nativeRunInputSourceReceiptSchema.safeParse(candidate);
+        if (!parsed.success) throw new Error("native_model_input_turn_source_receipt_invalid");
+        receipt = parsed.data;
+      } else receipt = existingReceipt.data;
     }
     let nativeOpenCodeSourceAuthority = profile.nativeOpenCodeSourceAuthority;
     if (nativeOpenCodeSourceAuthority && typeof nativeOpenCodeSourceAuthority === "object" && !Array.isArray(nativeOpenCodeSourceAuthority)) {
       const sourceAuthority = record(nativeOpenCodeSourceAuthority);
       const priorPrompts = sourceAuthority.authorizedPromptHashes;
-      if (!Array.isArray(priorPrompts) || priorPrompts.length >= 64 || priorPrompts.some((hash) => typeof hash !== "string" || !/^[0-9a-f]{64}$/.test(hash)))
+      const promptHash = nativeSha256(input.turnInput.message.text);
+      const priorBindings = sourceAuthority.promptSourceBindings;
+      if (!sourceClosureMatches || !receipt || !Array.isArray(priorPrompts) || priorPrompts.length >= 64 ||
+        priorPrompts.some(hash => typeof hash !== "string" || !/^[0-9a-f]{64}$/.test(hash)) ||
+        !Array.isArray(priorBindings) || priorBindings.length >= 64 ||
+        priorBindings.some(value => !value || typeof value !== "object" || typeof record(value).promptHash !== "string" ||
+          !/^[0-9a-f]{64}$/.test(record(value).promptHash as string) || typeof record(value).sourceSetHash !== "string" ||
+          !/^[0-9a-f]{64}$/.test(record(value).sourceSetHash as string)))
         throw new Error("managed_opencode_source_prompt_budget_exceeded");
-      nativeOpenCodeSourceAuthority = { ...sourceAuthority, authorizedPromptHashes: [...priorPrompts, nativeSha256(input.turnInput.message.text)] };
+      const sourceSetHash = nativeSha256(sourceClosure.sourceSet);
+      const existingPromptBinding = priorBindings.map(record).filter(value => value.promptHash === promptHash);
+      if (existingPromptBinding.length > 1 || existingPromptBinding.length === 1 && existingPromptBinding[0]!.sourceSetHash !== sourceSetHash)
+        throw new Error("managed_opencode_source_prompt_binding_ambiguous");
+      const authorizedPromptHashes = priorPrompts.includes(promptHash) ? priorPrompts : [...priorPrompts, promptHash];
+      const promptSourceBindings = existingPromptBinding.length ? priorBindings : [...priorBindings, { promptHash, sourceSetHash }];
+      nativeOpenCodeSourceAuthority = { ...sourceAuthority, authorizedPromptHashes, promptSourceBindings };
     }
     const nextProfile = { ...profile, nativeModelInputDispatchIntents: intents,
       ...(nativeOpenCodeSourceAuthority ? { nativeOpenCodeSourceAuthority } : {}),
@@ -7291,6 +7346,13 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
     const storedIntents = record(stored?.profile).nativeModelInputDispatchIntents;
     if (!Array.isArray(storedIntents) || nativeSha256(storedIntents) !== nativeSha256(intents))
       throw new Error("native_model_input_dispatch_persistence_failed");
+    if (nativeOpenCodeSourceAuthority && sourceClosure && receipt)
+      await assertNativePayloadSourceSetCurrent(tx as unknown as Db, {
+        companyId: run.companyId, issueId: run.nativeIssueId!, runId: run.id,
+        actor: { type: "agent", source: "none", companyId: run.companyId, agentId: run.agentId,
+          runId: run.id, onBehalfOfUserId: run.responsibleUserId ?? undefined },
+        policy: sourceClosure.sourceSet.policy, inputs: sourceClosure.sourceSet.inputs,
+      });
     await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
   }).catch((error: unknown) => {
     // A driver's query/params can include the existing private run profile.
@@ -7872,6 +7934,12 @@ export async function executePaperclipNativeSession(input: {
   execution: NativeExecutionInput;
   /** Compiler-owned closed bootstrap source set; NULL means unknown. */
   bootstrapSourceClosure?: NativeBootstrapSourceClosure | null;
+  /** Trusted Heartbeat-owned per-turn source refresh. The returned turnInput
+   * is the exact value passed to startTurn and its closure is bound at dispatch. */
+  prepareTurnSourceClosure?: (turnInput: Parameters<NativeSession["startTurn"]>[0]) => Promise<{
+    turnInput: Parameters<NativeSession["startTurn"]>[0];
+    sourceClosure?: NativeBootstrapSourceClosure;
+  }>;
   runnerInstanceId: string;
   /** Trusted task identity from the heartbeat orchestration. */
   conversationMode?: boolean;
@@ -9084,14 +9152,19 @@ async function executePaperclipNativeSessionWithinScope(
                 await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
               }
             },
-            onTurnInput: async turnInput => {
+            prepareTurn: async turnInput => input.prepareTurnSourceClosure
+              ? input.prepareTurnSourceClosure(turnInput)
+              : { turnInput, sourceClosure: input.bootstrapSourceClosure ?? undefined },
+            onTurnInput: async (turnInput, sourceClosure) => {
               if (launchEventSeq === null) throw new Error("native_model_input_launch_binding_invalid");
               await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
+              const preparedClosure = sourceClosure && typeof sourceClosure === "object" && !Array.isArray(sourceClosure)
+                ? sourceClosure as NativeBootstrapSourceClosure : null;
               const dispatchId = await recordNativeModelInputDispatchIntent({
                 db: input.db, runId, companyId: input.execution.binding.companyId,
                 issueId: input.execution.binding.issueId, agentId: input.execution.binding.agentId,
                 leaseOwner, attempt, controller, eventSeq: launchEventSeq, turnInput,
-                bootstrapSourceClosure: input.bootstrapSourceClosure,
+                bootstrapSourceClosure: preparedClosure,
               });
               await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
               await renewNativeSessionExecutionLease({
@@ -9100,13 +9173,15 @@ async function executePaperclipNativeSessionWithinScope(
               });
               return dispatchId;
             },
-            onTurnStarted: async (turnInput, turnId, dispatchId) => {
+            onTurnStarted: async (turnInput, turnId, dispatchId, sourceClosure) => {
               if (launchEventSeq === null || !dispatchId) throw new Error("native_model_input_ack_binding_invalid");
+              const preparedClosure = sourceClosure && typeof sourceClosure === "object" && !Array.isArray(sourceClosure)
+                ? sourceClosure as NativeBootstrapSourceClosure : null;
               await recordNativeModelInputDispatchAcknowledgement({
                 db: input.db, runId, companyId: input.execution.binding.companyId,
                 issueId: input.execution.binding.issueId, agentId: input.execution.binding.agentId,
                 leaseOwner, attempt, controller, eventSeq: launchEventSeq, dispatchId, turnInput, turnId,
-                sourceClosure: input.bootstrapSourceClosure,
+                sourceClosure: preparedClosure,
               });
             },
             input: runnerExecution,
@@ -11301,6 +11376,7 @@ export function remoteCheckpointIncompleteFailure(
 export async function createRunnerdBackend(input: {
   db: Db;
   execution: NativeExecutionInput;
+  bootstrapSourceClosure?: NativeBootstrapSourceClosure | null;
   runnerInstanceId: string;
   chatAttachmentReadScope?: NativeChatAttachmentReadScope;
   restartRecovery?: NativeRestartRecoveryClaim;
@@ -11535,6 +11611,10 @@ async function createRunnerdBackendWithinSessionClaim(
       toolSchemasHash: nativeSha256(schemas),
       toolSchemas: schemas,
       authorizedPromptHashes: [nativeSha256(initialUserMessage)],
+      promptSourceBindings: input.bootstrapSourceClosure ? [{
+        promptHash: nativeSha256(initialUserMessage),
+        sourceSetHash: nativeSha256(input.bootstrapSourceClosure.sourceSet),
+      }] : [],
     };
     await input.db.transaction(async (tx) => {
       const [run] = await tx.select().from(heartbeatRuns).where(and(

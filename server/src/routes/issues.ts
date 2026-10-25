@@ -9255,7 +9255,8 @@ export function issueRoutes(
       const sources = await tx.select().from(issuePrivacySources).where(and(eq(issuePrivacySources.companyId, issue.companyId), eq(issuePrivacySources.issueId, issue.id)));
       for (const source of sources) {
         const target = subjectType === "user" ? { type: "board" as const, userId: subjectId, source: "session" as const } : { type: "none" as const };
-        const canRead = source.sourceKind === "run" ? await canActorReadHeartbeatRunPrivacy(tx, target, { id: source.sourceId, companyId: issue.companyId })
+        const canRead = source.sourceKind === "run_copy" ? true
+          : source.sourceKind === "run" ? await canActorReadHeartbeatRunPrivacy(tx, target, { id: source.sourceId, companyId: issue.companyId })
           : source.sourceKind === "issue" ? await canActorReadIssuePrivacy(tx, target, { id: source.sourceId, companyId: issue.companyId })
           : await canActorReadProjectPrivacy(tx, target, { id: source.sourceId, companyId: issue.companyId });
         if (!canRead) throw unprocessable("Sharing inherited source content requires an authorized publication operation");

@@ -639,6 +639,26 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         .from(issues)
         .where(eq(issues.id, task.id));
       expect(currentTask!.status).not.toBe("done");
+
+      // The dispatch run is provenance for the copied model output, not a
+      // grant over the canonical Human Task that existed before the run.
+      const independentActor = await seedCurrentHumanSourceActor(db, [f.home], f.userId);
+      const { document: independentDocument } = await documentService(db).upsertIssueDocument({
+        issueId: task.id, key: "human-note", title: "Independent Human note", format: "markdown",
+        body: "KEEP_INDEPENDENT_DOCUMENT", createdByUserId: f.userId, manualInputActor: independentActor,
+      });
+      await db.transaction(async rawTx => {
+        const tx = rawTx as unknown as typeof db;
+        await lockMemoryPrivacy(tx, f.home);
+        await tx.insert(memoryDeletionMarkers).values({ companyId: f.home, kind: "source", key: `memory-run-source-erasure:v1:${actualRun!.id}` });
+        await purgeDerivedWorkflowMemory(tx, f.home, [], new Date(), { workflowRevisionIds: [], artifactVersionIds: [], runIds: [actualRun!.id] });
+      });
+      const [retainedTask] = await db.select().from(issues).where(eq(issues.id, task.id));
+      expect(retainedTask).toMatchObject({ title: "Produce the scheduler's single internal draft", description: "Retain one internal draft for human review." });
+      const [erasedRevision] = await db.select().from(documentRevisions).where(eq(documentRevisions.id, revision!.revision.id));
+      expect(erasedRevision).toMatchObject({ body: "", title: null, payloadSourceSnapshot: null });
+      const [retainedDocument] = await db.select().from(documents).where(eq(documents.id, independentDocument.id));
+      expect(retainedDocument).toMatchObject({ title: "Independent Human note", latestBody: "KEEP_INDEPENDENT_DOCUMENT" });
     }, 60000);
 
     it("rejects actual Native admission after a private grant is revoked, before a worker attempt or model dispatch", async () => {
@@ -693,8 +713,9 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         await documentService(db).getIssueDocumentByKey(task.id, "result"),
       ).toBeNull();
       expect((await ledger())[0]).toMatchObject({
-        status: "unknown",
+        status: "completed",
         maximumMinor: 3,
+        usage: { inputTokens, outputTokens: 20 },
       });
       const [current] = await db
         .select()
@@ -1218,8 +1239,9 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         await documentService(db).getIssueDocumentByKey(task.id, "result"),
       ).toBeNull();
       expect((await ledger())[0]).toMatchObject({
-        status: "unknown",
+        status: "completed",
         maximumMinor: 3,
+        usage: { inputTokens, outputTokens: 20 },
       });
       expect(calls).toBe(1);
       await session.close({ reason: "revoked" });
@@ -1927,8 +1949,9 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         status: 409,
       });
       expect((await ledger())[0]).toMatchObject({
-        status: "unknown",
+        status: "completed",
         maximumMinor: 3,
+        usage: { inputTokens, outputTokens: 20 },
       });
       expect(
         (

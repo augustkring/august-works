@@ -72,6 +72,7 @@ import {
   issueApprovals,
   issueAccessGrants,
   issuePrivacySources,
+  memoryDeletionMarkers,
   issueAttachments,
   issueCreateIdempotencyKeys,
   issueInboxArchives,
@@ -2038,8 +2039,8 @@ export async function ensureAssignmentIssueAccessGrant(
 }
 
 async function retainIssuePrivacySources(tx: DbTransaction, issue: typeof issues.$inferSelect,
-  sources: Array<{ sourceKind: "issue" | "project" | "run" | "workflow_run" | "routine_run"; sourceId: string | null | undefined; contextManifestId?: string | null }>) {
-  const rows = sources.filter((source): source is { sourceKind: "issue" | "project" | "run" | "workflow_run" | "routine_run"; sourceId: string; contextManifestId?: string | null } => Boolean(source.sourceId))
+  sources: Array<{ sourceKind: "issue" | "project" | "run" | "run_copy" | "workflow_run" | "routine_run"; sourceId: string | null | undefined; contextManifestId?: string | null }>) {
+  const rows = sources.filter((source): source is { sourceKind: "issue" | "project" | "run" | "run_copy" | "workflow_run" | "routine_run"; sourceId: string; contextManifestId?: string | null } => Boolean(source.sourceId))
     .filter(source => source.sourceKind !== "issue" || source.sourceId !== issue.id)
     .map(source => ({ companyId: issue.companyId, issueId: issue.id, ...source }));
   if (rows.some(source => !isUuidLike(source.sourceId))) throw unprocessable("Task privacy source identity is invalid");
@@ -2054,8 +2055,9 @@ async function resolveIssuePrivacy(
   actorRunId?: string | null,
   additionalIssueSources: string[] = [],
   freezeCurrentRunContext = false,
+  nativeOutputRunId?: string | null,
 ) {
-  const sources: Array<{ sourceKind: "issue" | "project" | "run" | "workflow_run" | "routine_run"; sourceId: string; contextManifestId?: string | null }> = [];
+  const sources: Array<{ sourceKind: "issue" | "project" | "run" | "run_copy" | "workflow_run" | "routine_run"; sourceId: string; contextManifestId?: string | null }> = [];
   const parents = new Set([...additionalIssueSources, previous?.privacyParentIssueId, previous?.parentId, next.privacyParentIssueId,
     next.privacyRootIssueId !== next.id ? next.privacyRootIssueId : null, next.parentId].filter((id): id is string => Boolean(id)));
   const independentParents = new Set(parents);
@@ -2115,6 +2117,12 @@ async function resolveIssuePrivacy(
     const sourceId = candidates[0];
     if (run.scopeKind === "issue" && !sourceId) throw notFound("Task privacy source is unavailable");
     if (sourceId === next.id) continue;
+    if (runId === nativeOutputRunId) {
+      // The model-dispatch Run is an output provenance/retention edge. Its
+      // later private Context must not retroactively become this Task's input.
+      sources.push({ sourceKind: "run_copy", sourceId: runId });
+      continue;
+    }
     sources.push({ sourceKind: "run", sourceId: runId });
     if (!(await canActorReadHeartbeatRunPrivacy(tx, { type: "none" }, run))) visibility = "private";
     if (sourceId) { parents.add(sourceId); privacyParentIssueId ??= sourceId; }
@@ -2153,9 +2161,11 @@ async function resolveIssuePrivacy(
 }
 
 async function assertIssuePrivacySourcesReadable(tx: DbTransaction, actor: AuthorizationActor,
-  companyId: string, sources: Array<{ sourceKind: "issue" | "project" | "run" | "workflow_run" | "routine_run"; sourceId: string }>) {
+  companyId: string, sources: Array<{ sourceKind: "issue" | "project" | "run" | "run_copy" | "workflow_run" | "routine_run"; sourceId: string }>) {
   for (const source of sources) {
-    const readable = source.sourceKind === "run"
+    const readable = source.sourceKind === "run_copy"
+      ? await isNativeOutputRunCopyCurrent(tx, companyId, source.sourceId)
+      : source.sourceKind === "run"
       ? await canActorReadHeartbeatRunPrivacy(tx, actor, { id: source.sourceId, companyId })
       : source.sourceKind === "workflow_run" || source.sourceKind === "routine_run"
       ? await canActorReadTypedTaskSourcePrivacy(tx, actor, { sourceKind: source.sourceKind, id: source.sourceId, companyId })
@@ -2164,6 +2174,16 @@ async function assertIssuePrivacySourcesReadable(tx: DbTransaction, actor: Autho
       : await canActorReadProjectPrivacy(tx, actor, { id: source.sourceId, companyId });
     if (!readable) throw notFound("Task privacy source is unavailable");
   }
+}
+
+async function isNativeOutputRunCopyCurrent(tx: DbTransaction, companyId: string, runId: string) {
+  const [run] = await tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, runId)));
+  if (!run) return false;
+  const [marker] = await tx.select({ key: memoryDeletionMarkers.key }).from(memoryDeletionMarkers).where(and(
+    eq(memoryDeletionMarkers.companyId, companyId), eq(memoryDeletionMarkers.kind, "source"),
+    eq(memoryDeletionMarkers.key, `memory-run-source-erasure:v1:${runId}`)));
+  return !marker;
 }
 
 export async function pinIssueMutationHuman(tx: DbTransaction, actor: AuthorizationActor, companyId: string, noWait = false) {
@@ -2253,16 +2273,20 @@ function isManualRootPayloadInput(data: IssueCreateInput) {
 
 async function bindManualTaskPayload(tx: DbTransaction, issue: typeof issues.$inferSelect,
   actor: AuthorizationActor, publications: ActivityPublication[]) {
-  const decision = await authorizationService(tx).decide({ actor, action: "issue:mutate",
-    resource: { type: "issue", companyId: issue.companyId, issueId: issue.id,
-      status: issue.status, assigneeAgentId: issue.assigneeAgentId, assigneeUserId: issue.assigneeUserId },
-    enforceResponsibleUserIntersection: true });
-  if (!decision.allowed) throw forbidden("Current task write authority is required");
+  // A protocol-1 new row has no source snapshot until its authenticated
+  // manual input is captured. Bind that exact inserted body first inside the
+  // same transaction, then make the ordinary current issue:mutate decision on
+  // the now-valid row. Any denial rolls the provisional snapshot back.
   const [captured] = await tx.update(issues).set({ payloadSourceSnapshot: directHumanPayloadSnapshotSql("issue") })
     .where(and(eq(issues.id, issue.id), eq(issues.companyId, issue.companyId),
     eq(issues.createdByUserId, actor.userId!), eq(issues.payloadSourceProtocolVersion, 1),
     isNull(issues.payloadSourceSnapshot), eq(issues.payloadSourceSnapshotInvalidated, false))).returning();
   if (!captured?.payloadSourceSnapshot) throw conflict("Manual input source capture was not stored");
+  const decision = await authorizationService(tx).decide({ actor, action: "issue:mutate",
+    resource: { type: "issue", companyId: captured.companyId, issueId: captured.id,
+      status: captured.status, assigneeAgentId: captured.assigneeAgentId, assigneeUserId: captured.assigneeUserId },
+    enforceResponsibleUserIntersection: true });
+  if (!decision.allowed) throw forbidden("Current task write authority is required");
   const snapshot = nativePayloadSourceSnapshotSchema.parse(captured.payloadSourceSnapshot);
   const activity = await persistActivity(tx as unknown as Db, {
     companyId: issue.companyId, actorType: "user", actorId: actor.userId!,
@@ -10630,7 +10654,8 @@ export function issueService(db: Db) {
 
         issueData.id ??= randomUUID();
         const privacy = await resolveIssuePrivacy(tx, companyId, { ...issueData, id: issueData.id }, null, actorRunId,
-          workspaceInheritanceIssueId ? [workspaceInheritanceIssueId] : [], !!suppliedPrivacyActor && suppliedPrivacyActor.type === "agent" && !nativeEffectClaim);
+          workspaceInheritanceIssueId ? [workspaceInheritanceIssueId] : [], !!suppliedPrivacyActor && suppliedPrivacyActor.type === "agent" && !nativeEffectClaim,
+          nativeEffectPrefix?.runId);
         if (nativeEffectPrefix) {
           const addCapturedSources = async (kind: "issue" | "project" | "run", ids: readonly string[]) => {
             for (const sourceId of ids) {
@@ -10669,13 +10694,10 @@ export function issueService(db: Db) {
           runIds: [...new Set(privacy.sources.filter(source => source.sourceKind === "run").map(source => source.sourceId))].sort(),
           memoryIds: [], foundationRevisionIds: [],
         };
-        const nativeEffectPolicy: NativePayloadSourcePolicy | null = nativeEffectPrefix ? {
-          issueIds: [...new Set([...temporalContextPolicy.issueIds, ...nativeEffectPrefix.policy.issueIds])].sort(),
-          projectIds: [...new Set([...temporalContextPolicy.projectIds, ...nativeEffectPrefix.policy.projectIds])].sort(),
-          runIds: [...new Set([...temporalContextPolicy.runIds, ...nativeEffectPrefix.policy.runIds])].sort(),
-          memoryIds: [...new Set(nativeEffectPrefix.policy.memoryIds)].sort(),
-          foundationRevisionIds: [...new Set(nativeEffectPrefix.policy.foundationRevisionIds)].sort(),
-        } : null;
+        // The provider-bound prefix is the Task's exact read set. The
+        // producer Run is represented separately as run_copy and must not
+        // import Context that was added after this dispatch.
+        const nativeEffectPolicy: NativePayloadSourcePolicy | null = nativeEffectPrefix?.policy ?? null;
         const freezeTemporalContext = !nativeEffectPrefix && privacy.temporalContextInputs !== null &&
           privacy.temporalContextInputs.length + temporalContextPolicy.issueIds.length + temporalContextPolicy.projectIds.length +
             temporalContextPolicy.runIds.length <= 256;
@@ -11110,7 +11132,7 @@ export function issueService(db: Db) {
           { sourceKind: "issue" as const, sourceId: row.privacyRootIssueId },
           { sourceKind: "issue" as const, sourceId: row.parentId },
           { sourceKind: "project" as const, sourceId: row.projectId },
-        ].filter((source): source is { sourceKind: "issue" | "project" | "run" | "workflow_run" | "routine_run"; sourceId: string } =>
+        ].filter((source): source is { sourceKind: "issue" | "project" | "run" | "run_copy" | "workflow_run" | "routine_run"; sourceId: string } =>
           Boolean(source.sourceId) && !(source.sourceKind === "issue" && source.sourceId === row.id))
           .map(source => ({ companyId, issueId: row.id, ...source })));
         for (let offset = 0; offset < retainedRows.length; offset += DEFAULT_INSERT_CHUNK_ROWS) {
@@ -11123,7 +11145,7 @@ export function issueService(db: Db) {
             inArray(issues.id, rows.slice(offset, offset + DEFAULT_INSERT_CHUNK_ROWS).map(row => row.id))));
           for (const issue of stored) {
             const original = originals.get(issue.id)!;
-            const sources: Array<{ sourceKind: "issue" | "project" | "run" | "workflow_run" | "routine_run"; sourceId: string | null | undefined }> = [...original.privacySources,
+            const sources: Array<{ sourceKind: "issue" | "project" | "run" | "run_copy" | "workflow_run" | "routine_run"; sourceId: string | null | undefined }> = [...original.privacySources,
               { sourceKind: "issue", sourceId: original.privacyParentIssueId },
               { sourceKind: "issue", sourceId: original.privacyRootIssueId },
               { sourceKind: "issue", sourceId: original.parentId },
@@ -11139,7 +11161,7 @@ export function issueService(db: Db) {
               if (current && current.companyId !== companyId) throw unprocessable("Imported task privacy source belongs to another organization");
               checkedSources.add(key);
             }
-            const readableSources = sources.filter((source): source is { sourceKind: "issue" | "project" | "run" | "workflow_run" | "routine_run"; sourceId: string } => Boolean(source.sourceId));
+            const readableSources = sources.filter((source): source is { sourceKind: "issue" | "project" | "run" | "run_copy" | "workflow_run" | "routine_run"; sourceId: string } => Boolean(source.sourceId));
             if (options.actor) await assertIssuePrivacySourcesReadable(tx, options.actor, companyId, readableSources);
             if (issue.visibility === "open" && !(await canActorReadIssuePrivacy(tx, { type: "none" }, issue))) {
               throw unprocessable("Imported task source content is private or unavailable");

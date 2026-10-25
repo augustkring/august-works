@@ -427,7 +427,7 @@ describe("executeNativeSession recovery", () => {
     };
     const appended: PrpEvent[] = [];
     const observedTurnInputs: Parameters<NativeSession["startTurn"]>[0][] = [];
-    const observedTurnStarts: Array<{ input: Parameters<NativeSession["startTurn"]>[0]; turnId: string; dispatchId?: string }> = [];
+    const observedTurnStarts: Array<{ input: Parameters<NativeSession["startTurn"]>[0]; turnId: string; dispatchId?: string; sourceClosure?: unknown }> = [];
     const digest = "0".repeat(64);
     const context = {
       prompt: { revision: PAPERCLIP_EXECUTION_PROMPT_REVISION, text: PAPERCLIP_EXECUTION_PROMPT, digest: nativeRuntimePromptDigest() },
@@ -463,6 +463,11 @@ describe("executeNativeSession recovery", () => {
       runnerInstanceId: "runner-recovery",
       controlPlaneInstanceId: "control-recovery",
       timeoutMs: 1000,
+      prepareTurn: async prepared => ({
+        turnInput: { ...prepared, message: { ...prepared.message,
+          text: JSON.stringify({ ...JSON.parse(prepared.message.text), turnContext: { markdown: "CURRENT_CONTEXT" } }) } },
+        sourceClosure: { sourceSet: "server-owned" },
+      }),
       onTurnInput: async observed => {
         observedTurnInputs.push(structuredClone(observed));
         // A callback receives a detached observation and cannot rewrite the
@@ -470,15 +475,16 @@ describe("executeNativeSession recovery", () => {
         observed.message.text = "callback mutation must not reach provider";
         return snapshotBeforeUpdate ? "dispatch-continuation" : "dispatch-fresh";
       },
-      onTurnStarted: async (observed, turnId, dispatchId) => {
-        observedTurnStarts.push({ input: structuredClone(observed), turnId, dispatchId });
+      onTurnStarted: async (observed, turnId, dispatchId, sourceClosure) => {
+        observedTurnStarts.push({ input: structuredClone(observed), turnId, dispatchId, sourceClosure });
       },
     });
     expect(startTurn).toHaveBeenCalledOnce();
     const submitted = providerSubmittedInputs[0]!;
     expect(observedTurnInputs).toEqual([submitted]);
     expect(observedTurnStarts).toEqual([{ input: submitted, turnId: "turn-recovery",
-      dispatchId: snapshotBeforeUpdate ? "dispatch-continuation" : "dispatch-fresh" }]);
+      dispatchId: snapshotBeforeUpdate ? "dispatch-continuation" : "dispatch-fresh", sourceClosure: { sourceSet: "server-owned" } }]);
+    expect(JSON.parse(submitted.message.text).turnContext).toEqual({ markdown: "CURRENT_CONTEXT" });
     if (snapshotBeforeUpdate) {
       expect(submitted.continuation).toBe(true);
       expect(JSON.parse(submitted.message.text)).toMatchObject({ schema: "paperclip.native-continuation.v1", events: "Say bye" });

@@ -863,7 +863,49 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
             and captured_task.payload_source_snapshot->'owner'->>'contentHash'=public.aw_native_payload_body_hash('issue',to_jsonb(captured_task))
             and captured_task.payload_source_snapshot->>'digest'=encode(sha256(convert_to((captured_task.payload_source_snapshot-'digest')::text,'UTF8')),'hex'))))
     and not exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_input
-      where captured_input->>'kind' not in ('context','task'))
+      where captured_input->>'kind' not in ('context','task','project','memory','foundation_revision','comment','interaction',
+        'document_revision','attachment','skill_version','runtime_skill','playbook_revision','role_pack_version',
+        'authored_definition','runtime_instructions','retained_run','retained_workspace','tool_result',
+        'completion_contract','native_task_wake','workspace_metadata','worker_model_dispatch'))
+    and not exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_dispatch
+      where captured_dispatch->>'kind'='worker_model_dispatch' and (
+        captured_dispatch->>'runId' is distinct from temporal_owner.origin_run_id::text
+        or not exists(select 1 from heartbeat_runs producer
+          cross join lateral jsonb_array_elements(coalesce(producer.runner_profile_json->'nativeInputSourceReceipt'->'dispatches','[]'::jsonb)) prefix(value)
+          where producer.company_id=temporal_owner.company_id and producer.id::text=captured_dispatch->>'runId'
+            and producer.native_input_source_protocol_version=1
+            and prefix.value->'policy'=temporal_owner.payload_source_snapshot->'policy'
+            and prefix.value->'inputs'=(select coalesce(jsonb_agg(captured_input order by captured_input.ordinality),'[]'::jsonb)
+              from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') with ordinality captured_input(value,ordinality)
+              where captured_input.value is distinct from captured_dispatch)
+          union all
+          select 1 from heartbeat_runs producer
+          where producer.company_id=temporal_owner.company_id and producer.id::text=captured_dispatch->>'runId'
+            and producer.native_input_source_protocol_version=1
+            and producer.runner_profile_json->'nativeInputSourceReceipt'->'bootstrap'->'policy'=temporal_owner.payload_source_snapshot->'policy'
+            and producer.runner_profile_json->'nativeInputSourceReceipt'->'bootstrap'->'inputs'=(
+              select coalesce(jsonb_agg(captured_input order by captured_input.ordinality),'[]'::jsonb)
+              from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') with ordinality captured_input(value,ordinality)
+              where captured_input.value is distinct from captured_dispatch)
+        )
+        or not exists(select 1 from orchestration_model_reservations reservation
+          where reservation.company_id=temporal_owner.company_id and reservation.id::text=captured_dispatch->>'reservationId'
+            and reservation.purpose='worker_model' and reservation.status='completed'
+            and reservation.input_hash=captured_dispatch->>'requestHash'
+            and reservation.provider_response_hash=captured_dispatch->>'responseHash')
+        or not exists(select 1 from heartbeat_runs producer cross join lateral
+            jsonb_array_elements(coalesce(producer.runner_profile_json->'nativeAwModelWireIntents','[]'::jsonb)) wire(value)
+          where producer.company_id=temporal_owner.company_id and producer.id::text=captured_dispatch->>'runId'
+            and wire.value->>'reservationId'=captured_dispatch->>'reservationId'
+            and wire.value->>'callId'=captured_dispatch->>'callId'
+            and wire.value->>'requestHash'=captured_dispatch->>'requestHash'
+            and wire.value->>'wireBodyHash'=captured_dispatch->>'wireBodyHash'
+            and wire.value->>'endpoint'='https://api.anthropic.com/v1/messages' and wire.value->>'method'='POST')
+      ))
+    and (not exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_input
+      where captured_input->>'kind' not in ('context','task')) or exists(
+        select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_dispatch
+        where captured_dispatch->>'kind'='worker_model_dispatch'))
     and not exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_input
       where captured_input->>'kind'='context' and (
         not exists(select 1 from context_manifests captured_context
@@ -871,7 +913,12 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
             and captured_context.id=(captured_input->>'manifestId')::uuid
             and captured_context.query_hash=captured_input->>'queryHash'
             and captured_context.policy_snapshot_hash=captured_input->>'policySnapshotHash'
-            and captured_context.run_id=any(array(select value::uuid from jsonb_array_elements_text(temporal_owner.payload_source_snapshot->'policy'->'runIds') refs(value))))
+            and (captured_context.run_id=any(array(select value::uuid from jsonb_array_elements_text(temporal_owner.payload_source_snapshot->'policy'->'runIds') refs(value)))
+              or captured_context.run_id=any(array(select case when dispatch.value->>'runId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+                  then (dispatch.value->>'runId')::uuid end
+                from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') dispatch(value)
+                where dispatch.value->>'kind'='worker_model_dispatch'
+                  and dispatch.value->>'runId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'))))
         or exists(select 1 from context_manifest_items captured_item where captured_item.company_id=temporal_owner.company_id
           and captured_item.manifest_id=(captured_input->>'manifestId')::uuid and captured_item.source_provider='august_works_tasks'
           and not exists(select 1 from issue_privacy_sources captured_edge where captured_edge.company_id=temporal_owner.company_id
@@ -889,10 +936,11 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
     : null;
   const issueSnapshotCorrupt = kind === "issue" ? sql`exists(select 1 from issues temporal_owner where temporal_owner.id=${id}
     and temporal_owner.company_id=${company} and temporal_owner.payload_source_protocol_version=1
-    and temporal_owner.payload_source_snapshot is not null and temporal_owner.payload_source_snapshot_invalidated=false
-    and temporal_owner.payload_source_snapshot->'owner'->>'kind'='issue'
+    and temporal_owner.payload_source_snapshot_invalidated=false
+    and (temporal_owner.payload_source_snapshot is null or (
+    temporal_owner.payload_source_snapshot->'owner'->>'kind'='issue'
     and temporal_owner.payload_source_snapshot->'owner'->>'id'=temporal_owner.id::text
-    and not ${issueSnapshotValid})` : sql`false`;
+    and not ${issueSnapshotValid})))` : sql`false`;
   const currentContextAllowed = (manifestId: SQL) => kind === "issue" && capturedContextManifestIds === undefined
     ? sql`(not ${issueSnapshotValid} or ${manifestId}=any(${capturedContextIds!}))`
     : capturedContextManifestIds === undefined ? sql`true` : sql`${manifestId}=any(${capturedContextIds!})`;
@@ -1000,7 +1048,7 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
       select 1 from reachable where kind=source_kind and id=source_id
       union all
       select 1 from bounded n where
-        n.kind not in ('issue','project','run','workflow_run','routine_run')
+        n.kind not in ('issue','project','run','run_copy','workflow_run','routine_run')
         or (n.kind='issue' and not exists(
           -- Resolve the exact company/id row first. Folding these privacy
           -- predicates into the base lookup makes PostgreSQL choose the
@@ -1019,6 +1067,13 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
           and p.source_provenance_qualified and (p.visibility='open' or ${projectPrincipalAccess(actor, sql`p.id`, sql`${company}`)})))
           or (n.kind='run' and not exists(select 1 from ${heartbeatRuns} r where r.id=n.id and r.company_id=${company}
           and ${heartbeatRunTaskBindingCondition(sql`r`)}))
+        -- A Native model-output owner retains its producing Run only so the
+        -- output can be suppressed on Run erasure. That provenance edge does
+        -- not authorize reading the Run or inherit later Run Context roots.
+        or (n.kind='run_copy' and (not exists(select 1 from ${heartbeatRuns} copy_run
+              where copy_run.id=n.id and copy_run.company_id=${company})
+          or exists(select 1 from ${memoryDeletionMarkers} marker where marker.company_id=${company}
+            and marker.kind='source' and marker.key='memory-run-source-erasure:v1:'||n.id::text)))
         -- Selected private Memory can narrow a derivative's audience, even when
         -- the producer's original Task is public. This is a necessary denial,
         -- not a complete Memory provenance receipt or a positive access grant.

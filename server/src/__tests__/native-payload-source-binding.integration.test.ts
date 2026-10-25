@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { agents, assets, companies, createDb, documentRevisions, documents, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, heartbeatRuns, issueDocuments, memoryDeletionMarkers,
-  issueAttachments, issueComments, issues, learningCycles, learningHypotheses, learningEvaluations, learningDomainCandidates, learningRetainedAssets, memoryBindings, memoryEvidence, memoryRecords, pluginManagedResources, plugins, projects } from "@paperclipai/db";
+  issueAttachments, issueComments, issuePrivacySources, issues, learningCycles, learningHypotheses, learningEvaluations, learningDomainCandidates, learningRetainedAssets, memoryBindings, memoryEvidence, memoryRecords, pluginManagedResources, plugins, projects } from "@paperclipai/db";
 import { roadmapPolicySchema, type NativePayloadSourceSnapshot } from "@paperclipai/shared";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { lockAnalyticalCompany } from "../services/analytical-privacy.js";
@@ -78,6 +78,27 @@ describe("Native payload source snapshot binds its original payload owner", () =
     const valid = await snapshot(row);
     await expect(db.update(issues).set({ payloadSourceSnapshot: { ...valid, digest: "b".repeat(64) } }).where(eq(issues.id, row.id)))
       .rejects.toMatchObject({ cause: { code: "23514" } });
+  });
+  it("keeps two-phase V1 task provenance conservative until its exact output prefix is bound", async () => {
+    const parent = await insert(0);
+    const [agent] = await db.insert(agents).values({ companyId, name: "Two-phase Native fixture", role: "engineer", adapterType: "process" }).returning();
+    const [run] = await db.insert(heartbeatRuns).values({ companyId, agentId: agent!.id, runtimeMode: "native", nativeIssueId: parent.id }).returning();
+    const [task] = await db.insert(issues).values({ companyId, title: "Captured task result", description: "Captured model body",
+      createdByAgentId: agent!.id, originKind: "manual", originRunId: run!.id,
+      originId: `paperclip-runner:create-task:${parent.id}:two-phase-fixture`, payloadSourceProtocolVersion: 1 }).returning();
+    const beforeBind = await db.select({ sourceKind: issuePrivacySources.sourceKind, sourceId: issuePrivacySources.sourceId }).from(issuePrivacySources)
+      .where(eq(issuePrivacySources.issueId, task!.id));
+    expect(beforeBind).toContainEqual({ sourceKind: "run", sourceId: run!.id });
+    expect(beforeBind).not.toContainEqual({ sourceKind: "run_copy", sourceId: run!.id });
+    expect(beforeBind).not.toContainEqual({ sourceKind: "issue", sourceId: parent.id });
+    const dispatch: NativePayloadSourceSnapshot["inputs"][number] = { kind: "worker_model_dispatch", runId: run!.id,
+      reservationId: randomUUID(), callId: "two-phase", requestHash: "a".repeat(64), wireBodyHash: "b".repeat(64), responseHash: "c".repeat(64) };
+    await db.update(issues).set({ payloadSourceSnapshot: await snapshot(task!, {}, { inputs: [dispatch] }) }).where(eq(issues.id, task!.id));
+    const edges = await db.select({ sourceKind: issuePrivacySources.sourceKind, sourceId: issuePrivacySources.sourceId }).from(issuePrivacySources)
+      .where(eq(issuePrivacySources.issueId, task!.id));
+    expect(edges).toContainEqual({ sourceKind: "run_copy", sourceId: run!.id });
+    expect(edges).not.toContainEqual({ sourceKind: "run", sourceId: run!.id });
+    expect(edges).not.toContainEqual({ sourceKind: "issue", sourceId: parent.id });
   });
   it("retains a bound snapshot across operational updates but rejects silently replacing its body", async () => {
     const row = await insert();
@@ -279,6 +300,53 @@ describe("Native payload source snapshot binds its original payload owner", () =
     expect(erased!.captured).toBeNull(); expect(erased!.invalidated).toBe(true);
     expect((await db.select().from(issues).where(eq(issues.id, unrelated.id)))[0]!.payloadSourceSnapshot).toEqual(unrelatedSnapshot);
     await expect(bindOwner(table, kind, id)).rejects.toMatchObject({ cause: { code: "23514" } });
+  });
+
+  it("physically erases only document revisions copied from the erased dispatch Run", async () => {
+    const parent = await insert(0);
+    const [agent] = await db.insert(agents).values({ companyId, name: "Dispatch erasure fixture", role: "engineer", adapterType: "process" }).returning();
+    const [sourceRun] = await db.insert(heartbeatRuns).values({ companyId, agentId: agent!.id, runtimeMode: "native", nativeIssueId: parent.id }).returning();
+    const [otherRun] = await db.insert(heartbeatRuns).values({ companyId, agentId: agent!.id, runtimeMode: "native", nativeIssueId: parent.id }).returning();
+    async function copiedDocument(title: string, body: string, runId: string) {
+      const [document] = await db.insert(documents).values({ companyId, title, latestBody: body }).returning();
+      const [revision] = await db.insert(documentRevisions).values({ companyId, documentId: document!.id, revisionNumber: 1,
+        title, body, payloadSourceProtocolVersion: 1 }).returning();
+      await db.update(documents).set({ latestRevisionId: revision!.id }).where(eq(documents.id, document!.id));
+      const [captured] = await db.execute<{ snapshot: NativePayloadSourceSnapshot }>(sql`select
+        content || jsonb_build_object('digest',encode(sha256(convert_to(content::text,'UTF8')),'hex')) as snapshot from (
+          select jsonb_build_object('version',1,'owner',jsonb_build_object('kind','document_revision','companyId',target.company_id::text,
+            'id',target.id::text,'contentHash',public.aw_native_payload_body_hash('document_revision',to_jsonb(target))),
+            'policy',jsonb_build_object('issueIds','[]'::jsonb,'projectIds','[]'::jsonb,'runIds','[]'::jsonb,
+              'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),
+            'inputs',jsonb_build_array(jsonb_build_object('kind','worker_model_dispatch','runId',${runId}::text,
+              'reservationId',${randomUUID()}::text,'callId','erasure-fixture','requestHash',repeat('a',64),
+              'wireBodyHash',repeat('b',64),'responseHash',repeat('c',64)))) as content
+          from document_revisions target where target.company_id=${companyId}::uuid and target.id=${revision!.id}::uuid
+        ) captured`);
+      await db.update(documentRevisions).set({ payloadSourceSnapshot: captured!.snapshot }).where(eq(documentRevisions.id, revision!.id));
+      const [storedRevision] = await db.select().from(documentRevisions).where(eq(documentRevisions.id, revision!.id));
+      return { document: document!, revision: storedRevision! };
+    }
+    const copied = await copiedDocument("PRIVATE copied output", "PRIVATE copied output body", sourceRun!.id);
+    const other = await copiedDocument("KEEP other Run output", "KEEP other Run output body", otherRun!.id);
+    expect(copied.revision.payloadSourceSnapshot?.inputs[0]).toMatchObject({ kind: "worker_model_dispatch", runId: sourceRun!.id });
+    expect(other.revision.payloadSourceSnapshot?.inputs[0]).toMatchObject({ kind: "worker_model_dispatch", runId: otherRun!.id });
+    await db.transaction(async rawTx => {
+      const tx = rawTx as unknown as typeof db;
+      await lockMemoryPrivacy(tx, companyId);
+      await tx.insert(memoryDeletionMarkers).values({ companyId, kind: "source", key: `memory-run-source-erasure:v1:${sourceRun!.id}` });
+      await purgeDerivedWorkflowMemory(tx, companyId, [], new Date(), { workflowRevisionIds: [], artifactVersionIds: [], runIds: [sourceRun!.id] });
+    });
+    const [erasedRevision] = await db.select().from(documentRevisions).where(eq(documentRevisions.id, copied.revision.id));
+    expect(erasedRevision).toMatchObject({ title: null, body: "", payloadSourceSnapshot: null });
+    const [erasedDocument] = await db.select().from(documents).where(eq(documents.id, copied.document.id));
+    expect(erasedDocument).toMatchObject({ title: "Source-erased native document", latestBody: "" });
+    const [retainedRevision] = await db.select().from(documentRevisions).where(eq(documentRevisions.id, other.revision.id));
+    expect(retainedRevision).toMatchObject({ title: "KEEP other Run output", body: "KEEP other Run output body" });
+    const [retainedDocument] = await db.select().from(documents).where(eq(documents.id, other.document.id));
+    expect(retainedDocument).toMatchObject({ title: "KEEP other Run output", latestBody: "KEEP other Run output body" });
+    const [retainedParent] = await db.select().from(issues).where(eq(issues.id, parent.id));
+    expect(retainedParent).toMatchObject({ title: "Original captured body", description: "Actual content" });
   });
 
 
