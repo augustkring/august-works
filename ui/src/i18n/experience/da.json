@@ -8,6 +8,12 @@
       "recordedWeekSpend": "Denne uge: {{amount}}",
       "budgetComparisonUnavailable": "Budget sammenlignes ikke, når nogle priser er ukendte."
   },
+  "slackConnection": {
+    "requestedUserScopes": "Slack anmoder om disse brugertilladelser. Slack-botappen til chat er separat:",
+    "managedUnavailable": "Blenteras administrerede Slack-app er ikke konfigureret på denne instans. Bed en forbindelsesadministrator om at aktivere standardopsætningen, eller brug din organisations egen OAuth-app nedenfor.",
+    "useManaged": "Brug Blenteras Slack-app",
+    "useOwnAdvanced": "Brug din egen Slack OAuth-app (avanceret)"
+  },
   "cliAuth": {
     "sessionFailed": "Dit login kunne ikke bekræftes",
     "sessionRetryHelp": "Kontrollér dit login igen, før du gennemgår anmodningen. Kontrol af login sender ikke en godkendelse.",

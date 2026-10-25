@@ -41,6 +41,14 @@ type Binding = {
   runId: string;
 };
 type Call = { tool: string; callId: string; arguments: unknown };
+
+function nativeToolWireResult(value: unknown): unknown {
+  // Native tool results cross a JSON protocol boundary. Hash and return the
+  // exact JSON value the runner can observe (not pre-serialization Date or
+  // class instances whose canonical hashes differ from their wire form).
+  const serialized = JSON.stringify(value);
+  return serialized === undefined ? null : JSON.parse(serialized);
+}
 const reads = new Set([
   "get_task_context",
   "get_task_history",
@@ -521,7 +529,7 @@ export async function withOrchestrationNativeTool<T>(
     throw forbidden("The cumulative native tool budget is exhausted");
   }
   try {
-    const result = await effect();
+    const result = nativeToolWireResult(await effect());
     await db.transaction(async (tx) => {
       const t = tx as unknown as Db;
       await lockMemoryPrivacy(t, b.companyId);

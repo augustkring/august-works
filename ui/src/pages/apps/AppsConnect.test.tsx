@@ -1497,6 +1497,28 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
       }));
   });
 
+  it("keeps the managed Slack route and own-app fallback visible with honest requested scopes", async () => {
+    const slack = CONNECTABLE_APP_DEFINITIONS.find((app) => app.slug === "slack")!;
+    mockSearch.value = "source=slack";
+    listGalleryMock.mockResolvedValue({ apps: [{
+      ...slack,
+      ownershipAvailability: { ...slack.ownershipAvailability, platform_shared: true },
+    }] });
+
+    await render();
+    await passAccessStep();
+
+    expect(container.textContent).toContain("Slack will request these user permissions");
+    expect(container.textContent).toContain("search:read.public");
+    expect(container.textContent).toContain("Use your own Slack OAuth app (advanced)");
+    const ownApp = buttonByText("Use your own Slack OAuth app (advanced)");
+    expect(ownApp?.getAttribute("aria-expanded")).toBe("false");
+    await act(async () => ownApp?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    await flushReact();
+    expect(container.textContent).toContain("Your OAuth app");
+    expect(buttonByText("Use Blentera's Slack app")?.getAttribute("aria-expanded")).toBe("true");
+  });
+
   it("never renders self-host enrollment when the connector identity is already active", async () => {
     mockSearch.value = "source=gmail&stage=setup";
     listGalleryMock.mockResolvedValueOnce({

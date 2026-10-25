@@ -8,6 +8,12 @@
       "recordedWeekSpend": "This week: {{amount}}",
       "budgetComparisonUnavailable": "Budget comparison is unavailable while some prices are unknown."
   },
+  "slackConnection": {
+    "requestedUserScopes": "Slack will request these user permissions. The Slack bot app for chat is separate:",
+    "managedUnavailable": "The Blentera-managed Slack app is not configured on this instance. Ask a connection manager to enable the standard setup, or use your organization's own OAuth app below.",
+    "useManaged": "Use Blentera's Slack app",
+    "useOwnAdvanced": "Use your own Slack OAuth app (advanced)"
+  },
   "cliAuth": {
     "sessionFailed": "Your sign-in could not be checked",
     "sessionRetryHelp": "Check your sign-in again before reviewing this request. Checking sign-in will not submit approval.",

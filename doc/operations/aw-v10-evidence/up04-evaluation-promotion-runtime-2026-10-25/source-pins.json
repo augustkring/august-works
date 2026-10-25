@@ -1,0 +1,17 @@
+{
+  "capturedAt": "2026-10-25T19:23:13.452509+00:00",
+  "files": {
+    "server/src/__tests__/skill-evaluation-promotion-runtime.integration.test.ts": "3e39774d6c84c7d9f7c726ec54dbcba324b011314b2c9ffed1b381435ee6d895",
+    "server/src/services/skill-lifecycle.ts": "c2181707ddc4e3da6027dafd01cfe348e5f2621ea4fa6c9dc617bdfb08c8965d",
+    "server/src/services/skill-evaluations.ts": "ee48603945f3007853a04fc69062eda0b5aad2c4425b1199c962daaf829f9f61",
+    "server/src/services/company-skills.ts": "dd87270a325a8c4dbf1c439b9472c79bc54c2e607db894932cdabc670ff926f2",
+    "server/src/services/skill-resolver.ts": "25e5e76db93f57038e26dfe6ce7a515a425964e6eec2caef065cb29380902248",
+    "server/src/services/agent-runtime-fabric.ts": "32c7480f77e8cb7cd40d9c3bcaaa2ef1c23dd3d6015b162dab7d1ff8677f5607",
+    "server/src/services/plugin-agent-runtime-state.ts": "1b5680accce920050b027d5b814f4e9a989057938366c08a369004c7bd33b01e",
+    "server/src/services/agent-runtime-owner-assignments.ts": "e045e3d8b82bac60d7f779b400972fb4c044a101fd167585fdb8d202035e8f95",
+    "server/src/services/agent-provider-bindings.ts": "c34460f72744c70ed7068f7284895085d61b6bc4146d8c0e646f6ac0178267ad",
+    "server/src/services/agents.ts": "4eecbb0ebeef8011cef204c4a6406f760fe917c2672971bf3354134b8c87cb00",
+    "server/src/services/costs.ts": "50f64f3dae0ff44c31b6cbe30c719091bbbd6adc296acfe10045421fe522d49a",
+    "server/src/services/issues.ts": "fdc430ee5bdf838046f8ad8b0cc29408be77732516770efeb81a79ee6d7ea1b4"
+  }
+}

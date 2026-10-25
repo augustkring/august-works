@@ -1,6 +1,7 @@
 import { onboardingConnectionTools, type DeferredOnboardingConnection } from "./onboarding-connection-transport";
 import { RemoteMcpProductionSetup } from "./remote-mcp/RemoteMcpProductionSetup";
 import { useMemoryConnectorsEnabled } from "@/hooks/useMemoryConnectorsEnabled";
+import { useTranslation } from "@/i18n";
 import { AiConnectionCredentialStep } from "@/components/ai-connections/AiConnectionCredentialStep";
 import { ConnectionChoiceList } from "./ConnectionChoiceList";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
@@ -3389,6 +3390,7 @@ function KeyStep({
   onBack: () => void;
   onConnect: () => void;
 }) {
+  const { t } = useTranslation("experience");
   const methods = useMemo(
     () => connectionMethodsForCredentialSource(entry, credentialSource),
     [credentialSource, entry],
@@ -3533,7 +3535,7 @@ function KeyStep({
       disabled={submitting}
       onClick={() => onMethodChange(usingCustomSlackOAuth ? managedSlackMethod : customerSlackMethod)}
     >
-      {usingCustomSlackOAuth ? "Use Blentera's Slack app" : "Use your own Slack OAuth app (advanced)"}
+      {usingCustomSlackOAuth ? t("slackConnection.useManaged") : t("slackConnection.useOwnAdvanced")}
     </Button>
   ) : managedGoogleMethod && customerGoogleMethod && capabilityMethods.length === 2 ? (
     <Button
@@ -3648,6 +3650,16 @@ function KeyStep({
       <div className="space-y-6">
         {capabilitySelection}
         {authenticationSelection}
+        {entry.slug === "slack" && entry.ownershipAvailability?.platform_shared === false ? (
+          <p className="text-xs text-muted-foreground">
+            {t("slackConnection.managedUnavailable")}
+          </p>
+        ) : null}
+        {entry.slug === "slack" && method?.defaults?.scopesHint?.length ? (
+          <p className="text-xs text-muted-foreground">
+            {t("slackConnection.requestedUserScopes")} {method.defaults.scopesHint.join(", ")}
+          </p>
+        ) : null}
 
         {usingVercel && vercelReview && vercelConnectAvailability ? (
           <div className="space-y-4 rounded-lg border border-border p-4">

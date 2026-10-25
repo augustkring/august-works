@@ -12,7 +12,7 @@ locale: en
 last_verified_at: 2026-10-25
 review_trigger: App connection, provider authorization, credential renewal, or access review changes
 security_or_privacy_sensitive: true
-linked_source_files: [ui/src/pages/apps/Connections.tsx, ui/src/pages/apps/AppNotConnected.tsx, ui/src/pages/apps/AppDetail.tsx, ui/src/pages/apps/app-detail/PermissionsPanel.tsx, ui/src/components/JevSkillSuggestionSettings.tsx, server/src/routes/jev-decisions.ts, server/src/services/jev-skill-suggestions.ts]
+linked_source_files: [ui/src/pages/apps/Connections.tsx, ui/src/pages/apps/AppNotConnected.tsx, ui/src/pages/apps/AppDetail.tsx, ui/src/pages/apps/app-detail/PermissionsPanel.tsx, ui/src/features/connections/ConnectionSetupFlow.tsx, packages/shared/src/app-definitions/slack.json, server/src/services/tool-access.ts, server/src/services/paperclip-cloud-connector.ts, ui/src/components/JevSkillSuggestionSettings.tsx, server/src/routes/jev-decisions.ts, server/src/services/jev-skill-suggestions.ts]
 ---
 
 Open **Apps** or **Company settings → Apps and data** to view connections available to your company. The apps, sign-in methods, and controls shown depend on the current deployment.
@@ -22,6 +22,8 @@ Open **Apps** or **Company settings → Apps and data** to view connections avai
 Choose the app and follow its connection flow. Before continuing, review the account or workspace being connected, who can use the connection, and the permissions or actions shown on screen. Finish any sign-in or provider consent in the provider’s own page, then return to Blentera and check the connection status.
 
 A connection is permission to use the selected account and scope. It does not mean every possible action is enabled. Review the app’s permissions and action settings before asking a Co-worker to use it.
+
+For Slack agent tools, the standard option uses the Blentera-managed Slack app when the instance has it configured. Review the user permissions on the setup screen and on Slack’s consent page. If the managed option is unavailable, a connection manager can use the advanced option for the organization’s own Slack OAuth app. These options connect a person’s Slack account for agent tools; the separate Slack bot app is used when people start work from Slack.
 
 ## Reconnect when access is unavailable
 

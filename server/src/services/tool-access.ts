@@ -3714,7 +3714,7 @@ export function toolAccessService(
     }
     if (typeof value === "string")
       return value
-        .split(/\s+/)
+        .split(/[\s,]+/)
         .map((item) => item.trim())
         .filter(Boolean);
     return [];
@@ -8751,7 +8751,7 @@ export function toolAccessService(
       );
     if (typeof value === "string")
       return value
-        .split(/\s+/)
+        .split(/[\s,]+/)
         .map((item) => item.trim())
         .filter(Boolean);
     return [];
@@ -12626,7 +12626,13 @@ export function toolAccessService(
         : requestedGrantKind === "agent"
           ? "per_agent"
           : "shared";
-    const connectionOwnership = method?.ownershipModes.includes("platform_shared")
+    const connectionOwnership = isPaperclipCloudConnectorStrategy(
+      method?.oauthStrategy,
+    ) || (
+      galleryEntry?.slug === "slack" &&
+      method?.key === MANAGED_SLACK_OAUTH_METHOD_KEY &&
+      method.ownershipModes.includes("platform_shared")
+    )
       ? "platform_shared"
       : "customer";
     let applicationRow: typeof toolApplications.$inferSelect | null = null;
@@ -14665,7 +14671,13 @@ export function toolAccessService(
       ? (requestedScopes ?? [])
       : (input.scopes ?? endpoints.scopes);
     if (authorizationScopes.length > 0)
-      authorizationUrl.searchParams.set("scope", authorizationScopes.join(" "));
+      authorizationUrl.searchParams.set(
+        "scope",
+        galleryEntry?.slug === "slack" &&
+          (galleryMethod?.key === MANAGED_SLACK_OAUTH_METHOD_KEY || galleryMethod?.key === "mcp-oauth")
+          ? authorizationScopes.join(",")
+          : authorizationScopes.join(" "),
+      );
     const reviewedAuthorizationParams =
       galleryMethod?.defaults?.oauthAuthorizationParams;
     if (reviewedAuthorizationParams?.access_type)
@@ -15866,6 +15878,9 @@ export function toolAccessService(
     const galleryEntry = sourceTemplateKey
       ? getConnectableAppDefinition(sourceTemplateKey)
       : null;
+    const galleryMethod = galleryEntry
+      ? connectionMethodForConnection(galleryEntry, connection)
+      : null;
     assertOAuthRedirectConstraints(galleryEntry, input.redirectUri);
     const endpoints = await oauthEndpointsForConnection(
       connection,
@@ -15896,6 +15911,16 @@ export function toolAccessService(
       code: input.code,
       resource: endpoints.resource,
     });
+    if (
+      galleryEntry?.slug === "slack" &&
+      (galleryMethod?.key === MANAGED_SLACK_OAUTH_METHOD_KEY || galleryMethod?.key === "mcp-oauth") &&
+      token.scope
+    ) {
+      const requested = new Set(normalizeOauthScopes(stateRow.requestedScopes));
+      const unexpected = normalizeOauthScopes(token.scope).filter((scope) => !requested.has(scope));
+      if (unexpected.length > 0)
+        throw forbidden("Slack returned permissions outside the consent request");
+    }
     const connectedAt = now();
     const expiresAt = token.expiresIn
       ? new Date(connectedAt.getTime() + token.expiresIn * 1000).toISOString()

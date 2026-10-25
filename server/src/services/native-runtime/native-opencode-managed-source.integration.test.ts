@@ -87,7 +87,7 @@ function canonicalHash(value: unknown): string {
 function staticManagedErrorCodes(value: unknown, depth = 0): string[] {
   if (depth > 6) return [];
   if (typeof value === "string") {
-    if (/^managed_opencode_[a-z0-9_]{1,100}$/.test(value)) return [value];
+    if (/^[a-z][a-z0-9_]{2,80}$/.test(value)) return [value];
     if (value.length > 16_384) return [];
     try { return staticManagedErrorCodes(JSON.parse(value), depth + 1); }
     catch { return []; }
@@ -260,7 +260,7 @@ describe("managed OpenCode source-closure binary integration", () => {
       responsibleUserId: f.userId, issueId: task.id, query: task.title });
     const plan = await orchestrationService(db).create(human, companyId, {
       issueId: task.id, expectedIssueUpdatedAt: task.updatedAt.toISOString(), workload: "semantic", actionClass: "internal_draft", riskClass: "C0",
-      completionContract: { objective: "Save the internal note", requiredOutputs: [{ key: "note" }],
+      completionContract: { objective: "Save the internal note", requiredOutputs: [{ key: "managed-source-e2e" }],
         businessInvariants: ["Use only this task's private workspace"] },
       budgets: { maxModelCostMinor: 10, maxToolActions: 2 }, workers: [{ key: "writer", issueId: task.id }],
     });
@@ -791,11 +791,14 @@ describe("managed OpenCode source-closure binary integration", () => {
           ? failedProfile.nativeToolResultSourceCaptures as Array<Record<string, unknown>> : [];
         const invocations = await db.select({ toolName: toolInvocations.toolName, status: toolInvocations.status })
           .from(toolInvocations).where(and(eq(toolInvocations.companyId, companyId), eq(toolInvocations.runId, run!.id)));
+        const writeInvocationStatusCounts = Object.fromEntries(["executing", "succeeded", "failed", "cancelled"].map(status =>
+          [status, invocations.filter(value => value.toolName === "write_document" && value.status === status).length]));
         diagnostics.push(`managed write capture facts: ${JSON.stringify({ providerWriteUseCount: writeUses.length,
           matchingAssociationCount: associations.filter(value => value.callId === "managed-e2e-write-1" &&
             toolName(value.tool) === "write_document").length,
           matchingCaptureCount: captures.filter(value => value.callId === "managed-e2e-write-1" &&
             value.managedOpenCode === true && toolName(value.tool) === "write_document").length,
+          writeInvocationStatusCounts,
           succeededCanonicalInvocationCount: invocations.filter(value => value.toolName === "write_document" &&
             value.status === "succeeded").length,
           managedToolResultErrorCodes: diagnostics.flatMap(line => [...line.matchAll(/managed_opencode_tool_result_[a-z_]+/g)]

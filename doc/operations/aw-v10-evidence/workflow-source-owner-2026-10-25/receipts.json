@@ -3156,6 +3156,86 @@
         "Duration  55.65s (transform 2.16s, setup 0ms, import 3.77s, tests 51.75s, environment 0ms)"
       ],
       "sourceCommit": "ec9e2bd4ca50558597f0848e7fe6ffc22286315b"
+    },
+    {
+      "name": "costs-service-unpriced-final2-20261025",
+      "exitCode": 0,
+      "exitSidecar": "costs-service-unpriced-final2-20261025.log.exit",
+      "rawSha256": "2927b017dfcf2f2f419959119f7a6bab963733be3f5f3fc179d8f1031669fdff",
+      "sanitizedSha256": "2927b017dfcf2f2f419959119f7a6bab963733be3f5f3fc179d8f1031669fdff",
+      "archiveSha256": "b14f91dfad1990a0821bf379ec42c7ca16294e4124c0231b0c14dc32f53ab68c",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  17 passed (17)",
+        "Duration  10.31s (transform 3.17s, setup 72ms, import 4.91s, tests 5.20s, environment 0ms)"
+      ],
+      "sourceCommit": "1b5a19d567f025cbe4377766f0098e20ad2c3539"
+    },
+    {
+      "name": "up05-paused-accepted-resume-final2-20261025",
+      "exitCode": 0,
+      "exitSidecar": "up05-paused-accepted-resume-final2-20261025.exit",
+      "rawSha256": "626d35a7f53e58131ea495ad0c0f40b21db2d9ae1c350938bb918c910c7f0a4a",
+      "sanitizedSha256": "7b4725d471ab1a8d4655f767dc4b0908ce8e86345d74f7a9726e3e201ef908f0",
+      "archiveSha256": "c9704f50b8519090fc3dbd089e73a5c74643c43527a77bbb61ce591cf8719b81",
+      "redactions": {
+        "ansi": 6,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 307 skipped (308)",
+        "Duration  23.58s (transform 12.22s, setup 74ms, import 16.49s, tests 6.88s, environment 0ms)"
+      ],
+      "sourceCommit": "1b5a19d567f025cbe4377766f0098e20ad2c3539"
+    },
+    {
+      "name": "managed-opencode-mcp-bridge-test-20261025-rerun",
+      "exitCode": 0,
+      "exitSidecar": "managed-opencode-mcp-bridge-test-20261025-rerun.exit",
+      "rawSha256": "42b0c17a1142d22666a567e87dc04d84eabe44ad354923862063b410066fae1e",
+      "sanitizedSha256": "42b0c17a1142d22666a567e87dc04d84eabe44ad354923862063b410066fae1e",
+      "archiveSha256": "4d971f073cab69e679bf168f26106b7c890b1f2664c3f267226ce79c40c46b18",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  10 passed (10)",
+        "Duration  791ms (transform 71ms, setup 0ms, import 137ms, tests 536ms, environment 0ms)"
+      ],
+      "sourceCommit": "1b5a19d567f025cbe4377766f0098e20ad2c3539"
+    },
+    {
+      "name": "v10-token-gates-pricing-slack",
+      "exitCode": 0,
+      "exitSidecar": "v10-token-gates-pricing-slack.exit",
+      "rawSha256": "6afc6ad896a24825708eb6e5f73f4787bcb6da8c5ed681b9916431439e0bc780",
+      "sanitizedSha256": "6afc6ad896a24825708eb6e5f73f4787bcb6da8c5ed681b9916431439e0bc780",
+      "archiveSha256": "54cb5fcb68faef60e731259e2486419a024cbc683cd5dd47dca7b8ba0d18a3a9",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "1b5a19d567f025cbe4377766f0098e20ad2c3539"
     }
   ],
   "updates": [
@@ -3656,6 +3736,16 @@
       "meaning": "Original CLI positive import/export after conditional publication target binding; actual host scoped exit0, isolated broad rerun remains separate.",
       "logs": [
         "company-import-export-e2e-host-20261025"
+      ]
+    },
+    {
+      "sourceCommit": "1b5a19d567f025cbe4377766f0098e20ad2c3539",
+      "meaning": "Current focused costs PostgreSQL pricing coverage17/17, paused accepted-interaction effect1/307skipped, MCP bridge identity10/10 and token gates0; final whole workspace remains pending.",
+      "logs": [
+        "costs-service-unpriced-final2-20261025",
+        "up05-paused-accepted-resume-final2-20261025",
+        "managed-opencode-mcp-bridge-test-20261025-rerun",
+        "v10-token-gates-pricing-slack"
       ]
     }
   ],

@@ -292,9 +292,14 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
         const contentHash = nativeSha256(result);
         const returnedResultDigest = createHash("sha256").update(JSON.stringify(result), "utf8").digest("hex");
         const invocationId = source.invocationId;
-        if (contentHash !== capture.resultDigest || source.kind !== "tool_result" || source.contentHash !== contentHash ||
-          source.callId !== block.tool_use_id || source.toolName !== toolName || typeof invocationId !== "string")
-          throw forbidden("Managed OpenCode tool result does not match its persisted source capture");
+        if (contentHash !== capture.resultDigest)
+          throw forbidden("managed_opencode_tool_result_capture_digest_mismatch");
+        if (source.kind !== "tool_result" || source.contentHash !== contentHash)
+          throw forbidden("managed_opencode_tool_result_source_digest_mismatch");
+        if (source.callId !== block.tool_use_id || source.toolName !== toolName)
+          throw forbidden("managed_opencode_tool_result_identity_mismatch");
+        if (typeof invocationId !== "string")
+          throw forbidden("managed_opencode_tool_result_invocation_missing");
         const [invocation] = await db.select().from(toolInvocations).where(and(
           eq(toolInvocations.companyId, claims.company_id), eq(toolInvocations.id, invocationId),
           eq(toolInvocations.runId, claims.run_id), eq(toolInvocations.agentId, claims.sub),

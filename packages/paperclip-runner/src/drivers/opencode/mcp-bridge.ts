@@ -65,14 +65,15 @@ export async function startOpenCodeMcpBridge(
   const calls = new Map<string, { fingerprint: string; promise: Promise<unknown> }>();
   const controllers = new Map<string, AbortController>();
   const usedNativeToolCallIds = new Set<string>();
-  let pendingNativeToolCall: { callId: string; tool: string; argsHash: string; observedAt: number } | null = null;
+  const pendingNativeToolCalls = new Map<string, { callId: string; tool: string; argsHash: string; observedAt: number }>();
+  const activeNativeToolCalls = new Map<string, { callId: string; tool: string; argsHash: string; activeAt: number }>();
   const server = createServer((request, response) => {
     void handleRequest(request, response, {
       secret,
       requireNativeToolCallObservation: options.requireNativeToolCallObservation === true,
       usedNativeToolCallIds,
-      get pendingNativeToolCall() { return pendingNativeToolCall; },
-      set pendingNativeToolCall(value) { pendingNativeToolCall = value; },
+      pendingNativeToolCalls,
+      activeNativeToolCalls,
       tools,
       admittedTools,
       validators,
@@ -145,7 +146,8 @@ async function handleRequest(
     secret: string;
     requireNativeToolCallObservation: boolean;
     usedNativeToolCallIds: Set<string>;
-    pendingNativeToolCall: { callId: string; tool: string; argsHash: string; observedAt: number } | null;
+    pendingNativeToolCalls: Map<string, { callId: string; tool: string; argsHash: string; observedAt: number }>;
+    activeNativeToolCalls: Map<string, { callId: string; tool: string; argsHash: string; activeAt: number }>;
     tools: OpenCodeMcpToolDefinition[];
     admittedTools: OpenCodeMcpToolDefinition[];
     validators: Map<string, ValidateFunction>;
@@ -175,6 +177,38 @@ async function handleRequest(
     response.end();
     return;
   }
+  if (request.method === "POST" && request.url === "/paperclip-native-tool-call-complete") {
+    if (!context.requireNativeToolCallObservation) {
+      response.statusCode = 404;
+      response.end();
+      return;
+    }
+    let completion: Record<string, unknown>;
+    try {
+      const value: unknown = JSON.parse(await readBody(request, 16 * 1024));
+      completion = isRecord(value) ? value : {};
+    } catch {
+      response.statusCode = 400;
+      response.end();
+      return;
+    }
+    const callId = typeof completion.callId === "string" ? completion.callId : "";
+    if (Object.keys(completion).join(",") !== "callId" || !/^[\x21-\x7e]{1,240}$/.test(callId)) {
+      response.statusCode = 400;
+      response.end();
+      return;
+    }
+    const hadPending = context.pendingNativeToolCalls.delete(callId);
+    const hadActive = context.activeNativeToolCalls.delete(callId);
+    if (!hadPending && !hadActive) {
+      response.statusCode = 409;
+      response.end();
+      return;
+    }
+    response.statusCode = 202;
+    response.end();
+    return;
+  }
   if (request.method === "POST" && request.url === "/paperclip-native-tool-call") {
     if (!context.requireNativeToolCallObservation) {
       response.statusCode = 404;
@@ -193,15 +227,25 @@ async function handleRequest(
     const callId = typeof observation.callId === "string" ? observation.callId : "";
     const tool = typeof observation.tool === "string" ? canonicalOpenCodeMcpToolName(observation.tool) : "";
     const argsHash = typeof observation.argsHash === "string" ? observation.argsHash : "";
-    const prior = context.pendingNativeToolCall;
-    if (!/^[\x21-\x7e]{1,240}$/.test(callId) || !/^[a-zA-Z0-9_.:-]{1,200}$/.test(tool) ||
+    for (const [key, value] of context.pendingNativeToolCalls) {
+      if (value.observedAt + 5_000 <= Date.now()) context.pendingNativeToolCalls.delete(key);
+    }
+    for (const [key, value] of context.activeNativeToolCalls) {
+      if (value.activeAt + 30_000 <= Date.now()) context.activeNativeToolCalls.delete(key);
+    }
+    const ambiguousTuple = [...context.pendingNativeToolCalls.values(), ...context.activeNativeToolCalls.values()]
+      .some(value => value.tool === tool && value.argsHash === argsHash);
+    if (Object.keys(observation).sort().join(",") !== "argsHash,callId,tool" ||
+      !/^[\x21-\x7e]{1,240}$/.test(callId) || !/^[a-zA-Z0-9_.:-]{1,200}$/.test(tool) ||
       !/^[0-9a-f]{64}$/.test(argsHash) || !context.admittedTools.some(candidate => candidate.name === tool) ||
-      context.usedNativeToolCallIds.has(callId) || (prior !== null && prior.observedAt + 5_000 > Date.now())) {
+      context.pendingNativeToolCalls.size >= 128 || context.activeNativeToolCalls.size >= 128 ||
+      context.usedNativeToolCallIds.size >= 256 || context.usedNativeToolCallIds.has(callId) ||
+      context.pendingNativeToolCalls.has(callId) || context.activeNativeToolCalls.has(callId) || ambiguousTuple) {
       response.statusCode = 409;
       response.end();
       return;
     }
-    context.pendingNativeToolCall = { callId, tool, argsHash, observedAt: Date.now() };
+    context.pendingNativeToolCalls.set(callId, { callId, tool, argsHash, observedAt: Date.now() });
     response.statusCode = 202;
     response.end();
     return;
@@ -267,16 +311,20 @@ async function handleRequest(
   let callId = requestId;
   const args = params.arguments ?? {};
   if (context.requireNativeToolCallObservation) {
-    const observation = context.pendingNativeToolCall;
     const argsHash = createHash("sha256").update(canonicalJson(args), "utf8").digest("hex");
-    if (!observation || observation.observedAt + 5_000 <= Date.now() || observation.tool !== tool ||
-      observation.argsHash !== argsHash || context.usedNativeToolCallIds.has(observation.callId)) {
-      context.pendingNativeToolCall = null;
+    const matching = [...context.pendingNativeToolCalls.values()].filter(observation =>
+      observation.observedAt + 5_000 > Date.now() && observation.tool === tool && observation.argsHash === argsHash);
+    if (matching.length !== 1 || context.usedNativeToolCallIds.has(matching[0]?.callId ?? "")) {
+      if (matching.length > 1) for (const observation of matching) context.pendingNativeToolCalls.delete(observation.callId);
+      else if (matching.length === 0 && context.pendingNativeToolCalls.size === 1)
+        context.pendingNativeToolCalls.clear();
       writeRpc(response, id, { isError: true, content: [{ type: "text", text: "Managed tool call has no exact hook observation." }] });
       return;
     }
+    const observation = matching[0]!;
     callId = observation.callId;
-    context.pendingNativeToolCall = null;
+    context.pendingNativeToolCalls.delete(observation.callId);
+    context.activeNativeToolCalls.set(observation.callId, { ...observation, activeAt: Date.now() });
     context.usedNativeToolCallIds.add(callId);
   }
   const validator = context.validators.get(tool);

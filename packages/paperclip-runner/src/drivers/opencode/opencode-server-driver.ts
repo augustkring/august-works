@@ -160,10 +160,13 @@ const CAPABILITIES: NativeSessionCapabilities = {
 // Hook names and mutable output shapes are qualified against OpenCode 1.18.32.
 // The gateway treats these as observations and independently validates the
 // final Messages body against current server-owned sources and tool results.
-function managedSourceWitnessPlugin(systemInstructions: string): string {
+function managedSourceWitnessPlugin(systemInstructions: string, bridgeUrl: string, bridgeSecret: string): string {
 return `
 import { createHash } from "node:crypto";
 const PAPERCLIP_SYSTEM_PROMPT = ${JSON.stringify(systemInstructions)};
+const PAPERCLIP_TOOL_OBSERVATION_URL = ${JSON.stringify(`${bridgeUrl.replace(/\/mcp$/, "")}/paperclip-native-tool-call`)};
+const PAPERCLIP_TOOL_OBSERVATION_COMPLETE_URL = ${JSON.stringify(`${bridgeUrl.replace(/\/mcp$/, "")}/paperclip-native-tool-call-complete`)};
+const PAPERCLIP_TOOL_OBSERVATION_SECRET = ${JSON.stringify(bridgeSecret)};
 const stable = (value) => {
   if (Array.isArray(value)) return value.map(stable);
   if (value && typeof value === "object") return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stable(value[key])]));
@@ -179,6 +182,7 @@ export const PaperclipSourceWitness = async () => {
   let messages = null;
   const tools = new Map();
   const pending = new Map();
+  const activeToolCalls = new Map();
   const calls = [];
   let invalid = false;
   let ordinal = 0;
@@ -186,10 +190,40 @@ export const PaperclipSourceWitness = async () => {
     "experimental.chat.messages.transform": async (_input, output) => { try { messages = output.messages; hash(messages); } catch { invalid = true; } },
     "experimental.chat.system.transform": async (_input, output) => { try { output.system.splice(0, output.system.length, PAPERCLIP_SYSTEM_PROMPT); system = [...output.system]; hash(system); } catch { invalid = true; } },
     "tool.definition": async (input, output) => { try { tools.set(input.toolID, hash({ description: output.description, parameters: output.parameters })); } catch { invalid = true; } },
-    "tool.execute.before": async (input, output) => { try { pending.set(input.callID, { tool: input.tool, argsHash: hash(output.args) }); } catch { invalid = true; } },
+    "tool.execute.before": async (input, output) => {
+      if (typeof input.callID !== "string" || !/^[\\x21-\\x7e]{1,240}$/.test(input.callID) ||
+        typeof input.tool !== "string" || activeToolCalls.has(input.callID)) { invalid = true; throw new Error("managed OpenCode tool call is ambiguous"); }
+      try {
+        const argsHash = hash(output.args);
+        if ([...activeToolCalls.values()].some(active => active.tool === input.tool && active.argsHash === argsHash)) {
+          invalid = true;
+          throw new Error("managed OpenCode identical parallel tool calls are ambiguous");
+        }
+        activeToolCalls.set(input.callID, { tool: input.tool, argsHash });
+        const response = await fetch(PAPERCLIP_TOOL_OBSERVATION_URL, { method: "POST",
+          headers: { authorization: "Bearer " + PAPERCLIP_TOOL_OBSERVATION_SECRET, "content-type": "application/json" },
+          body: JSON.stringify({ callId: input.callID, tool: input.tool, argsHash }), signal: AbortSignal.timeout(5000) });
+        if (!response.ok) throw new Error("managed OpenCode tool observation was rejected");
+        pending.set(input.callID, { tool: input.tool, argsHash });
+      } catch {
+        invalid = true;
+        activeToolCalls.delete(input.callID);
+        throw new Error("managed OpenCode tool observation failed");
+      }
+    },
     "tool.execute.after": async (input, output) => {
       const before = pending.get(input.callID);
       pending.delete(input.callID);
+      const active = activeToolCalls.get(input.callID);
+      if (active) {
+        try {
+          const response = await fetch(PAPERCLIP_TOOL_OBSERVATION_COMPLETE_URL, { method: "POST",
+            headers: { authorization: "Bearer " + PAPERCLIP_TOOL_OBSERVATION_SECRET, "content-type": "application/json" },
+            body: JSON.stringify({ callId: input.callID }), signal: AbortSignal.timeout(5000) });
+          if (!response.ok) invalid = true;
+        } catch { invalid = true; }
+      }
+      activeToolCalls.delete(input.callID);
       if (!before || calls.length >= 128) { invalid = true; return; }
       try { calls.push({ callID: input.callID, tool: input.tool, argsHash: before.argsHash, resultHash: hash(output) }); }
       catch { invalid = true; }
@@ -1954,8 +1988,10 @@ async function startRuntime(input: {
     );
     throw error;
   }
+  const managedModel = Boolean((input.options.environment ?? process.env).PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN?.trim());
   const bridge = await startOpenCodeMcpBridge({
     tools: input.options.dynamicTools,
+    requireNativeToolCallObservation: managedModel,
     handler: input.dispatch,
   }).catch(async (error) => {
     await rm(isolatedHome, { recursive: true, force: true }).catch(
@@ -1979,10 +2015,10 @@ async function startRuntime(input: {
     input.options.model,
     input.options.environment ?? process.env,
   );
-  const managedModel = Boolean((input.options.environment ?? process.env).PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN?.trim());
   if (managedModel) {
     await makePrivateFileWritable(sourcePluginPath);
-    await writeFile(sourcePluginPath, managedSourceWitnessPlugin(input.options.systemInstructions ?? CODEX_SKILLLESS_BASE_INSTRUCTIONS), { mode: 0o400 });
+    await writeFile(sourcePluginPath, managedSourceWitnessPlugin(input.options.systemInstructions ?? CODEX_SKILLLESS_BASE_INSTRUCTIONS,
+      bridge.url, bridge.secret), { mode: 0o400 });
     await chmod(sourcePluginPath, 0o400);
   }
   const config = {

@@ -12,7 +12,7 @@ locale: da
 last_verified_at: 2026-10-25
 review_trigger: Ændringer i appforbindelser, udbydergodkendelse, fornyelse af adgang eller adgangskontrol
 security_or_privacy_sensitive: true
-linked_source_files: [ui/src/pages/apps/Connections.tsx, ui/src/pages/apps/AppNotConnected.tsx, ui/src/pages/apps/AppDetail.tsx, ui/src/pages/apps/app-detail/PermissionsPanel.tsx, ui/src/components/JevSkillSuggestionSettings.tsx, server/src/routes/jev-decisions.ts, server/src/services/jev-skill-suggestions.ts]
+linked_source_files: [ui/src/pages/apps/Connections.tsx, ui/src/pages/apps/AppNotConnected.tsx, ui/src/pages/apps/AppDetail.tsx, ui/src/pages/apps/app-detail/PermissionsPanel.tsx, ui/src/features/connections/ConnectionSetupFlow.tsx, packages/shared/src/app-definitions/slack.json, server/src/services/tool-access.ts, server/src/services/paperclip-cloud-connector.ts, ui/src/components/JevSkillSuggestionSettings.tsx, server/src/routes/jev-decisions.ts, server/src/services/jev-skill-suggestions.ts]
 ---
 
 Åbn **Apps** eller **Company settings → Apps and data** for at se de forbindelser, virksomheden kan bruge. Apps, loginmetoder og kontroller afhænger af den aktuelle installation.
@@ -22,6 +22,8 @@ linked_source_files: [ui/src/pages/apps/Connections.tsx, ui/src/pages/apps/AppNo
 Vælg appen, og følg forbindelsesforløbet. Før du fortsætter, skal du kontrollere den konto eller arbejdsplads, der tilsluttes, hvem der kan bruge forbindelsen, og hvilke tilladelser eller handlinger der vises. Gennemfør login eller samtykke på udbyderens egen side. Vend derefter tilbage til Blentera og kontrollér forbindelsens status.
 
 En forbindelse giver adgang til den valgte konto og det viste omfang. Det betyder ikke, at alle handlinger er slået til. Gennemgå appens tilladelser og handlingsindstillinger, før du beder en Co-worker om at bruge den.
+
+Til Slack-agentværktøjer bruger standardvalget Blenteras administrerede Slack-app, når den er konfigureret på installationen. Gennemgå brugertilladelserne på opsætningsskærmen og på Slacks samtykkeside. Hvis den administrerede mulighed ikke er tilgængelig, kan en forbindelsesadministrator bruge den avancerede mulighed til organisationens egen Slack OAuth-app. Disse muligheder forbinder en persons Slack-konto til agentværktøjer; den separate Slack-botapp bruges, når personer starter arbejde fra Slack.
 
 ## Genopret en forbindelse, når adgangen mangler
 

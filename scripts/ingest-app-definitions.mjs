@@ -108,6 +108,12 @@ const vercelConnect = (
     },
   },
 });
+const SLACK_MCP_USER_SCOPES = [
+  "channels:history", "channels:read", "chat:write",
+  "groups:history", "groups:read", "im:history", "im:read",
+  "mpim:history", "mpim:read", "search:read.im",
+  "search:read.mpim", "search:read.private", "search:read.public",
+];
 const posthogConfigFields = () => [
   {
     key: "projectId",
@@ -346,14 +352,14 @@ const apps = [
         "oauth",
         {
           serverUrl: "https://mcp.slack.com/mcp",
-          authorizationEndpoint: "https://slack.com/oauth/v2/authorize",
-          tokenEndpoint: "https://slack.com/api/oauth.v2.access",
-          scopesHint: ["channels:read", "chat:write", "search:read"],
+          authorizationEndpoint: "https://slack.com/oauth/v2_user/authorize",
+          tokenEndpoint: "https://slack.com/api/oauth.v2.user.access",
+          scopesHint: SLACK_MCP_USER_SCOPES,
         },
         "S3",
         "Review the Slack workspace and requested permissions, then authorize Blentera. A connection manager can use the advanced option to connect a separately managed Slack OAuth app.",
         {
-          label: "Use Blentera's Slack app",
+          label: "Use this connection as an agent tool",
           whenToUse: "Use Blentera's configured Slack OAuth app for the standard setup.",
           purpose: "tool",
           ownershipModes: ["platform_shared"],
@@ -371,9 +377,9 @@ const apps = [
         "oauth",
         {
           serverUrl: "https://mcp.slack.com/mcp",
-          authorizationEndpoint: "https://slack.com/oauth/v2/authorize",
-          tokenEndpoint: "https://slack.com/api/oauth.v2.access",
-          scopesHint: ["channels:read", "chat:write", "search:read"],
+          authorizationEndpoint: "https://slack.com/oauth/v2_user/authorize",
+          tokenEndpoint: "https://slack.com/api/oauth.v2.user.access",
+          scopesHint: SLACK_MCP_USER_SCOPES,
         },
         "S3",
         "Connect a Slack workspace and limit access to the channels agents need.",
@@ -408,6 +414,7 @@ const apps = [
         },
       ),
     ],
+    { docsUrl: "https://docs.slack.dev/ai/slack-mcp-server/" },
   ],
   [
     "microsoft-teams",

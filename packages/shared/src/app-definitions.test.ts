@@ -250,10 +250,22 @@ describe("AppDefinition catalog", () => {
     const ownApp = slack.methods.find((method) => method.key === "mcp-oauth")!;
     expect(managed.ownershipModes).toEqual(["platform_shared"]);
     expect(managed.defaults?.scopesHint).toEqual([
+      "channels:history",
       "channels:read",
       "chat:write",
-      "search:read",
+      "groups:history",
+      "groups:read",
+      "im:history",
+      "im:read",
+      "mpim:history",
+      "mpim:read",
+      "search:read.im",
+      "search:read.mpim",
+      "search:read.private",
+      "search:read.public",
     ]);
+    expect(managed.defaults?.authorizationEndpoint).toBe("https://slack.com/oauth/v2_user/authorize");
+    expect(managed.defaults?.tokenEndpoint).toBe("https://slack.com/api/oauth.v2.user.access");
     expect(connectionMethodSupportsAutomaticOAuth(managed)).toBe(true);
     expect(connectionMethodAcceptsCustomerOAuthClient(managed)).toBe(false);
     expect(connectionMethodAcceptsCustomerOAuthClient(ownApp)).toBe(true);
