@@ -15,7 +15,7 @@ import {
   type SandboxHostRequest,
 } from "@paperclipai/shared";
 import type { AuthorizationActor } from "../authorization.js";
-import { assertConfiguredOperatorAuthentication } from "../../auth/authenticator-assurance.js";
+import { assertConfiguredOperatorAuthentication, assertHumanAuthentication } from "../../auth/authenticator-assurance.js";
 import {
   assertV7Authorization,
   assertV7Enabled,
@@ -48,10 +48,24 @@ export function nativeSandboxHostTransport(
     ["prepare", "apply", "start", "probe", "revoke_providers", "stop", "destroy"].includes(
       action,
     );
-  const assertOperator = (actor: AuthorizationActor, action: SandboxHostRequest["action"], tx?: Db) =>
-    assertConfiguredOperatorAuthentication(tx ?? db, actor, operatorUserIds, {
+  const assertOperator = async (actor: AuthorizationActor, action: SandboxHostRequest["action"], tx?: Db, companyId?: string, bindingId?: string) => {
+    if (action === "stop" || action === "revoke_providers") {
+      const reader = tx ?? db;
+      await assertHumanAuthentication(reader, actor, { requireRecent: true, phishingResistant: false });
+      if (companyId) await assertV7Authorization(reader, actor, companyId, "runtime:manage");
+      return;
+    }
+    if ((action === "inspect" || action === "capabilities") && companyId && bindingId) {
+      const [binding] = await (tx ?? db).select({ status: runtimeSandboxBindings.status }).from(runtimeSandboxBindings).where(and(
+        eq(runtimeSandboxBindings.companyId, companyId), eq(runtimeSandboxBindings.id, bindingId),
+      )).limit(1);
+      if (["stopping", "quarantined"].includes(binding?.status ?? ""))
+        return assertV7Authorization(tx ?? db, actor, companyId, "runtime:manage");
+    }
+    return assertConfiguredOperatorAuthentication(tx ?? db, actor, operatorUserIds, {
       requireRecent: requireRecent(action),
     });
+  };
   async function current(
     tx: Db,
     request: SandboxHostRequest,
@@ -113,7 +127,8 @@ export function nativeSandboxHostTransport(
       throw conflict("Native sandbox host scope changed", {
         code: "sandbox_scope_changed",
       });
-    if (!safety(request.action)) {
+    const safetyObservation = ["inspect", "capabilities"].includes(request.action) && ["stopping", "quarantined"].includes(binding.status);
+    if (!safety(request.action) && !safetyObservation) {
       await assertV7Enabled(tx, "sandbox_abstraction_v7");
       await assertV7Enabled(tx, "openshell_v7");
       const actor: AuthorizationActor = {
@@ -127,6 +142,13 @@ export function nativeSandboxHostTransport(
         request.scope.companyId,
         "runtime:manage",
       );
+    } else if (request.action === "stop" || request.action === "inspect" || request.action === "capabilities" || request.action === "revoke_providers") {
+      const actor: AuthorizationActor = {
+        type: "board",
+        source: "session",
+        userId: request.requesterUserId,
+      };
+      await assertV7Authorization(tx, actor, request.scope.companyId, "runtime:manage");
     }
     return { cell, binding, host };
   }
@@ -150,7 +172,7 @@ export function nativeSandboxHostTransport(
       now = new Date();
     // Fail closed before revealing host/capability state to an unconfigured
     // or weakly authenticated operator.
-    await assertOperator(actor, action);
+    await assertOperator(actor, action, undefined, scope.companyId, scope.bindingId);
     const originalExpiry =
       action === "apply" ? admission?.expiresAt : action === "start" ? start?.expiresAt : undefined;
     if (
@@ -167,7 +189,7 @@ export function nativeSandboxHostTransport(
     const queued = await withV7ActivityTransaction(
       db,
       async (tx, publications) => {
-        await assertOperator(actor, action, tx);
+        await assertOperator(actor, action, tx, scope.companyId, scope.bindingId);
         await assertV7Authorization(
           tx,
           actor,
@@ -214,7 +236,7 @@ export function nativeSandboxHostTransport(
             throw conflict(
               "Sandbox operation key belongs to different immutable inputs",
             );
-          await assertOperator(actor, action, tx);
+          await assertOperator(actor, action, tx, scope.companyId, scope.bindingId);
           return existing;
         }
         const active = await tx
@@ -266,7 +288,7 @@ export function nativeSandboxHostTransport(
           },
           publications,
         );
-        await assertOperator(actor, action, tx);
+        await assertOperator(actor, action, tx, scope.companyId, scope.bindingId);
         return command;
       },
     );
@@ -278,7 +300,7 @@ export function nativeSandboxHostTransport(
       if (!record) throw conflict("Native sandbox receipt unavailable");
       if (record.status === "SUCCEEDED") {
         return db.transaction(async (tx) => {
-          await assertOperator(actor, action, tx as unknown as Db);
+          await assertOperator(actor, action, tx as unknown as Db, scope.companyId, scope.bindingId);
           await current(
             tx as unknown as Db,
             sandboxHostRequestSchema.parse(record.payload),
@@ -288,7 +310,7 @@ export function nativeSandboxHostTransport(
           const reply = sandboxHostReplySchema.parse(record.safeResult);
           if (reply.action !== action)
             throw conflict("Native sandbox reply action changed");
-          await assertOperator(actor, action, tx as unknown as Db);
+          await assertOperator(actor, action, tx as unknown as Db, scope.companyId, scope.bindingId);
           return { commandId: record.id, reply };
         });
       }

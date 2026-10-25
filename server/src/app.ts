@@ -771,6 +771,12 @@ export async function createApp(
       boundary: binding.boundaryPolicy, bridge: opts.saasPlatform!.sandboxHosts.bridge(actor), evidenceKind: "protected_host_report", prover: opts.saasPlatform!.config.runtime.openshellProver!,
     }) : undefined : undefined,
     nativeOperation: opts.saasPlatform ? (companyId, cellId, userId, action, idempotencyKey) => opts.saasPlatform!.runtime.request(companyId, cellId, userId, { action, idempotencyKey }) : undefined,
+    assertRuntimeStartAdmission: opts.saasPlatform?.runtime.assertSandboxStartAdmission
+      ? (tx, input) => opts.saasPlatform!.runtime.assertSandboxStartAdmission(tx, input)
+      : undefined,
+    recordRuntimeWorkloadState: opts.saasPlatform?.runtime.recordSandboxWorkloadState
+      ? (tx, input) => opts.saasPlatform!.runtime.recordSandboxWorkloadState(tx, input)
+      : undefined,
   }));
   api.use(cognitiveMemoryRoutes(db));
   api.use(memoryRoutes(db));

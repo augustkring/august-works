@@ -11,6 +11,8 @@ export function executionSandboxRoutes(db: Db, options: {
   operatorUserIds?: string[];
   backendFor?: NonNullable<Parameters<typeof executionSandboxService>[1]>["backendFor"];
   nativeOperation?: NonNullable<Parameters<typeof executionSandboxService>[1]>["nativeOperation"];
+  assertRuntimeStartAdmission?: NonNullable<Parameters<typeof executionSandboxService>[1]>["assertRuntimeStartAdmission"];
+  recordRuntimeWorkloadState?: NonNullable<Parameters<typeof executionSandboxService>[1]>["recordRuntimeWorkloadState"];
 } = {}) {
   const router = Router(), service = executionSandboxService(db, options);
   router.get("/companies/:companyId/runtime-cells/:id/execution-posture", async (req, res) => {

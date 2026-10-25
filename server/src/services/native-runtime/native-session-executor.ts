@@ -22,6 +22,7 @@ import {
   EXECUTION_CONTROL_DEADLINE_MS,
 } from "../execution-control-deadline.js";
 import { createHash, randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { execFileSync } from "node:child_process";
 import {
   chmodSync,
@@ -75,6 +76,7 @@ import {
   createRunnerdCodexTransport,
   executeNativeSession,
   applyNativeSessionGoalControl,
+  buildNativeModelEnvelope,
   inspectWarmRunTransition,
   parseNativeExecutionInput,
   parsePaperclipQuestionSet,
@@ -114,6 +116,7 @@ import {
   environmentLeases,
   heartbeatRunEvents,
   heartbeatRuns,
+  completionContracts,
   issueDocuments,
   issueThreadInteractions,
   issues,
@@ -7069,19 +7072,47 @@ export async function renewNativeSessionExecutionLease(input: {
   if (!updated) throw new Error("native_session_lease_lost");
 }
 
-function nativeTurnFrameMatchesSourceClosure(turnInput: Parameters<NativeSession["startTurn"]>[0], closure: NativeBootstrapSourceClosure | null | undefined) {
-  if (!closure || turnInput.continuation === true || turnInput.message.role !== "user") return false;
-  let frame: Record<string, unknown>;
+async function nativeTurnFrameMatchesSourceClosure(tx: Parameters<Parameters<Db["transaction"]>[0]>[0],
+  run: typeof heartbeatRuns.$inferSelect, turnInput: Parameters<NativeSession["startTurn"]>[0],
+  closure: NativeBootstrapSourceClosure | null | undefined, rawNativeExecutionInput: unknown) {
+  const no = () => false;
+  if (!closure || turnInput.continuation === true || turnInput.message.role !== "user") return no();
+  let frame: Record<string, unknown>, parsedExecution: ReturnType<typeof parseNativeExecutionInput>, expected: unknown;
   try {
     frame = record(JSON.parse(turnInput.message.text));
+    parsedExecution = parseNativeExecutionInput(rawNativeExecutionInput);
+    expected = buildNativeModelEnvelope(parsedExecution);
   } catch {
-    return false;
+    return no();
   }
   const task = record(frame.task);
-  return frame.schema === "paperclip.native-model-envelope.v2" &&
-    createHash("sha256").update(JSON.stringify(task), "utf8").digest("hex") === closure.taskEnvelopeDigest &&
-    frame.workspace === null && frame.planningContext === null &&
-    Array.isArray(frame.interactionResponses) && frame.interactionResponses.length === 0;
+  if (!isDeepStrictEqual(frame, expected) || frame.schema !== "paperclip.native-model-envelope.v2" ||
+    createHash("sha256").update(JSON.stringify(task), "utf8").digest("hex") !== closure.taskEnvelopeDigest ||
+    frame.workspace !== null || frame.planningContext !== null || !Array.isArray(frame.interactionResponses) ||
+    frame.interactionResponses.length !== 0 || parsedExecution.binding.companyId !== run.companyId ||
+    parsedExecution.binding.runId !== run.id || parsedExecution.binding.agentId !== run.agentId ||
+    parsedExecution.binding.issueId !== run.nativeIssueId || !run.nativeIssueId) return no();
+
+  const taskInput = closure.sourceSet.inputs.find((input): input is Extract<NativePayloadSourceInput, { kind: "task" }> =>
+    input.kind === "task" && input.issueId === parsedExecution.binding.issueId);
+  if (!taskInput || createHash("sha256").update(JSON.stringify({ id: taskInput.issueId,
+    identifier: parsedExecution.task.identifier, title: parsedExecution.task.title,
+    description: parsedExecution.task.description, workMode: parsedExecution.task.workMode }), "utf8").digest("hex") !== taskInput.contentHash)
+    return no();
+
+  if (!run.completionContractId || !run.completionContractSha256 ||
+    parsedExecution.completionContract.id !== run.completionContractId ||
+    parsedExecution.completionContract.sha256 !== run.completionContractSha256) return no();
+  const [contract] = await tx.select({ id: completionContracts.id, revision: completionContracts.revision,
+    canonicalSha256: completionContracts.canonicalSha256, contractJson: completionContracts.contractJson })
+    .from(completionContracts).where(and(eq(completionContracts.companyId, run.companyId),
+      eq(completionContracts.issueId, run.nativeIssueId), eq(completionContracts.id, run.completionContractId))).for("share");
+  if (!contract || contract.canonicalSha256 !== parsedExecution.completionContract.sha256) return no();
+  const canonicalTaskContract = { revision: String(contract.revision), objective: parsedExecution.task.title,
+    criteria: [{ id: "objective", requirement: parsedExecution.task.description?.trim() || `Complete: ${parsedExecution.task.title}` }] };
+  const matches = isDeepStrictEqual(contract.contractJson, canonicalTaskContract) &&
+    isDeepStrictEqual(parsedExecution.completionContract.contract, canonicalTaskContract);
+  return matches;
 }
 
 async function postgresJsonbSha256(tx: Parameters<Parameters<Db["transaction"]>[0]>[0], value: unknown): Promise<string> {
@@ -7135,7 +7166,8 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
       (!Array.isArray(profile.nativeToolCallDispatchAssociations) || profile.nativeToolCallDispatchAssociations.length === 0) &&
       (!Array.isArray(profile.nativeToolResultSourceCaptures) || profile.nativeToolResultSourceCaptures.length === 0) &&
       (!Array.isArray(profile.nativeAttachmentStageSources) || profile.nativeAttachmentStageSources.length === 0);
-    if (input.bootstrapSourceClosure && nativeTurnFrameMatchesSourceClosure(input.turnInput, input.bootstrapSourceClosure) &&
+    if (input.bootstrapSourceClosure && await nativeTurnFrameMatchesSourceClosure(tx, run, input.turnInput,
+      input.bootstrapSourceClosure, profile.nativeExecutionInput) &&
       run.nativeInputSourceProtocolVersion === 0 && typeof run.responsibleUserId === "string" && run.responsibleUserId.length > 0 &&
       profile.nativeExecutionInput !== undefined && profile.nativeInputSourceReceipt === undefined && noPriorNativeEffects) {
       const bootstrap = {
@@ -7214,7 +7246,7 @@ export async function recordNativeModelInputDispatchAcknowledgement(input: Param
     if (parsedReceipt.success && run.nativeInputSourceProtocolVersion === 1 &&
       typeof run.responsibleUserId === "string" && run.responsibleUserId.length > 0 &&
       matching[0]!.raw.responsibleUserId === run.responsibleUserId &&
-      nativeTurnFrameMatchesSourceClosure(input.turnInput, input.sourceClosure)) {
+      await nativeTurnFrameMatchesSourceClosure(tx, run, input.turnInput, input.sourceClosure, profile.nativeExecutionInput)) {
       const { digest: _priorDigest, ...receiptBody } = parsedReceipt.data;
       const unsigned: Omit<NativeRunInputSourceReceipt, "digest"> = {
         ...receiptBody,

@@ -33,7 +33,7 @@ import { approvedFoundationView, foundationService } from "../foundation/foundat
 import {authorizationService,canActorReadHeartbeatRunPrivacy,canActorReadIssuePrivacy,canActorReadProjectPrivacy,type AuthorizationActor,type NativeContextInspectionOwner} from "../authorization.js";
 import { crossCompanyEvidencePolicy } from "../cross-company-context-policy.js";
 import { assertAnalyticalContextPayloadAccess } from "../analytical-context-authority.js";
-import { captureNativeBootstrapContextWitness, type NativeBootstrapContextWitness } from "./native-bootstrap-context-witness.js";
+import { captureNativeBootstrapContextWitness, readNativeBootstrapContextWitness, type NativeBootstrapContextWitness } from "./native-bootstrap-context-witness.js";
 
 export interface DelegatedContextExecutionBindingInput {
   homeCompanyId: string;
@@ -116,14 +116,24 @@ export function hashEvidenceContent(evidence: EvidenceItem): string {
  * must pass the guest actor returned by the canonical cross-company resolver
  * and its existing native transaction. */
 export async function revalidateStoredContextManifestSources(db: Db, input: {
-  companyId: string; manifestId: string; agentId: string; actor: AuthorizationActor;
+  companyId: string; manifestId: string; agentId: string; runId?: string | null; actor: AuthorizationActor;
 }) {
   if (!is(db, PgTransaction)) throw forbidden("Delegated Context source review requires its active native transaction.");
   const [manifest] = await db.select({ id: contextManifests.id, agentId: contextManifests.agentId,
-    runId: contextManifests.runId }).from(contextManifests).where(and(
+    runId: contextManifests.runId, issueId: contextManifests.issueId }).from(contextManifests).where(and(
     eq(contextManifests.companyId, input.companyId), eq(contextManifests.id, input.manifestId))).limit(1);
-  if (!manifest || manifest.agentId !== input.agentId || manifest.runId !== null)
+  if (!manifest || manifest.agentId !== input.agentId || manifest.runId !== (input.runId ?? null))
     throw forbidden("Delegated Context manifest is unavailable");
+  if (input.runId) {
+    const [run] = await db.select({ id: heartbeatRuns.id, agentId: heartbeatRuns.agentId,
+      responsibleUserId: heartbeatRuns.responsibleUserId, issueId: heartbeatRuns.issueId, nativeIssueId: heartbeatRuns.nativeIssueId,
+      status: heartbeatRuns.status }).from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId),
+      eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.agentId, input.agentId))).for("share");
+    if (!run || run.status !== "running" || run.responsibleUserId !== input.actor.onBehalfOfUserId ||
+      input.actor.type !== "agent" || input.actor.source !== "agent_jwt" || input.actor.runId !== run.id ||
+      manifest.issueId !== (run.nativeIssueId ?? run.issueId))
+      throw forbidden("Native bootstrap Context accountability changed");
+  }
   await lockIssuePrivacyTree(db, input.companyId);
   await lockMemoryPrivacy(db, input.companyId);
   const items = await db.select().from(contextManifestItems).where(and(
@@ -201,6 +211,36 @@ export async function revalidateStoredContextManifestSources(db: Db, input: {
   }
   for (const [id, version] of expectedRoots) if (!roots.some(root => root.memoryRecordId === id && root.sourceVersion === version))
     throw forbidden("Delegated Context selected Memory root closure is incomplete");
+}
+
+/** Recheck a fresh native bootstrap's original Context rows through their
+ * canonical owners immediately before native input dispatch. The opaque token
+ * carries the original server-created Agent/run principal and exact manifest;
+ * it does not grant permission on its own. */
+export async function revalidateNativeBootstrapContextWitness(db: Db, input: {
+  witness: NativeBootstrapContextWitness; companyId: string; runId: string; agentId: string; issueId: string;
+  renderedMarkdown: string; manifestIds: readonly { companyId: string; contextManifestId: string }[];
+}) {
+  const captured = readNativeBootstrapContextWitness(input.witness, input);
+  if (!captured) throw forbidden("Native bootstrap Context source witness is unavailable");
+  await db.transaction(async rawTx => {
+    const tx = rawTx as unknown as Db;
+    const actor = captured.actor;
+    const [run] = await tx.select({ id: heartbeatRuns.id, status: heartbeatRuns.status,
+      agentId: heartbeatRuns.agentId, responsibleUserId: heartbeatRuns.responsibleUserId,
+      issueId: heartbeatRuns.issueId, nativeIssueId: heartbeatRuns.nativeIssueId }).from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.agentId, input.agentId),
+    )).for("share");
+    if (!run || run.status !== "running" || run.responsibleUserId !== actor.onBehalfOfUserId ||
+      run.nativeIssueId !== input.issueId && run.issueId !== input.issueId || actor.type !== "agent" || actor.source !== "agent_jwt" ||
+      actor.companyId !== input.companyId || actor.agentId !== input.agentId || actor.runId !== input.runId)
+      throw forbidden("Native bootstrap Context accountability changed before dispatch");
+    const companyAccess = await authorizationService(tx).decide({ actor, action: "company_scope:read",
+      resource: { type: "company", companyId: input.companyId }, enforceResponsibleUserIntersection: true });
+    if (!companyAccess.allowed) throw forbidden("Native bootstrap Context authority changed before dispatch");
+    await revalidateStoredContextManifestSources(tx, { companyId: input.companyId,
+      manifestId: captured.contextInput.manifestId, agentId: input.agentId, runId: input.runId, actor });
+  });
 }
 
 export interface ContextManifestSelectedEvidence {
@@ -728,7 +768,7 @@ export function contextManifestService(db: Db) {
           if (delegated || !input.runId || !issueId || input.issueId !== issueId)
             throw forbidden("Native bootstrap Context requires its exact same-company accountable Task run");
           nativeBootstrapWitness = captureNativeBootstrapContextWitness({ companyId: input.companyId, runId: input.runId,
-            agentId: input.agentId, issueId, renderedMarkdown: nativeBootstrap.renderedMarkdown,
+            agentId: input.agentId, issueId, actor: sourceActor, renderedMarkdown: nativeBootstrap.renderedMarkdown,
             manifest: manifest!, items, roots: retainedMemoryRoots });
         }
         return { manifest: manifest!, items, roots: retainedMemoryRoots, ...(nativeBootstrapWitness ? { nativeBootstrapWitness } : {}) };

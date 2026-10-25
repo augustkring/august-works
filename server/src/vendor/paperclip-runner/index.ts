@@ -100,6 +100,7 @@ export const defaultCapabilityRunnerdBinary =
 export const executeNativeSession = runner.executeNativeSession;
 export const applyNativeSessionGoalControl =
   runner.applyNativeSessionGoalControl;
+export const buildNativeModelEnvelope = runner.buildNativeModelEnvelope;
 export const completeRetainedNativeSessionCleanup = runner.completeRetainedNativeSessionCleanup;
 export const settleRetainedRunnerdSession = runner.settleRetainedRunnerdSession;
 export const retainedRunnerdMaintenanceIsIdle =

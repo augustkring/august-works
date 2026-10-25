@@ -3,7 +3,7 @@ import { enqueueSkillVersionFileErasure } from "../learning/skill-file-erasure.j
 import { and, eq, inArray, is, sql, type SQL } from "drizzle-orm";
 import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
 import * as schema from "@paperclipai/db";
-import { customerFeedback, supportCases, projectRoadmapProposals, causalClaims, businessScenarios, forecastSpecs, businessMetrics, businessMetricTargets, strategyExecutionLinks, processAnalysisDefinitions, decisionContexts, companies, companyDeletionOperations, orchestrationCompanyPurposeBudgets, orchestrationCompanyPurposeReservations, issues, memoryRecords, type Db } from "@paperclipai/db";
+import { customerFeedback, supportCases, projectRoadmapProposals, causalClaims, businessScenarios, forecastSpecs, businessMetrics, businessMetricTargets, strategyExecutionLinks, processAnalysisDefinitions, decisionContexts, automationArtifacts, automationArtifactVersions, companies, companyDeletionOperations, orchestrationCompanyPurposeBudgets, orchestrationCompanyPurposeReservations, issues, memoryRecords, type Db } from "@paperclipai/db";
 import { conflict } from "../../errors.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
@@ -268,10 +268,28 @@ export async function purgeCompanyContent(
             (child) => child !== table && edges.get(child)?.has(table),
           ),
       );
-      if (!leaves.length)
+      if (!leaves.length) {
+        // An Artifact root and its immutable versions intentionally reference
+        // each other: the root pins its latest version, while each version is
+        // owned by the root. Let the native root cascade own this exact pair
+        // after every other in-scope child has been removed. Version DELETE
+        // guards and workspace cleanup triggers still run.
+        const exactArtifactCycle = pending.size === 2 &&
+          pending.has(automationArtifacts) && pending.has(automationArtifactVersions);
+        if (exactArtifactCycle) {
+          const scope = scopes.get(automationArtifacts)!;
+          const roots = await tx.execute<{ id: string }>(sql`delete from ${automationArtifacts} where ${scope} returning id`);
+          if (roots.length) {
+            deleted.push(getTableConfig(automationArtifacts).name, getTableConfig(automationArtifactVersions).name);
+          }
+          pending.delete(automationArtifacts);
+          pending.delete(automationArtifactVersions);
+          continue;
+        }
         throw conflict(
           "Company content has a non-null reference cycle; scoped migration required",
         );
+      }
       for (const table of leaves) {
         await tx.execute(sql`delete from ${table} where ${scopes.get(table)!}`);
         pending.delete(table);

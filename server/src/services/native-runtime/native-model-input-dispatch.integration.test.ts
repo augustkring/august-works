@@ -39,6 +39,8 @@ import { createLocalAgentJwt } from "../../agent-auth-jwt.js";
 import { actorMiddleware } from "../../middleware/auth.js";
 import { errorHandler } from "../../middleware/error-handler.js";
 import { issueRoutes } from "../../routes/issues.js";
+import { ensureNativeCompletionContract } from "./completion-contracts.js";
+import { contextEngineService } from "../context/context-engine.js";
 
 describe("native model input dispatch intent", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
@@ -272,6 +274,11 @@ describe("native model input dispatch intent", () => {
       unsupportedInputPresent: false });
     expect(sourceSet?.inputs).toEqual([expect.objectContaining({ kind: "task", issueId: sourceTask.id })]);
 
+    const completion = await ensureNativeCompletionContract({ db, companyId,
+      issue: { id: sourceTask.id, title: selectedTask!.title, description: selectedTask!.description }, actorId: agentId });
+    await db.update(heartbeatRuns).set({ completionContractId: completion.row.id,
+      completionContractSha256: completion.row.canonicalSha256 }).where(eq(heartbeatRuns.id, seeded.runId));
+
     await initializeRunIdentity(db, { companyId, runId: seeded.runId, issueId: sourceTask.id, responsibleUserId, cause: "dispatch" });
     const execution = buildNativeExecutionInput({ companyId, runId: seeded.runId, agentId,
       issue: { id: sourceTask.id, identifier: selectedTask!.identifier, title: selectedTask!.title,
@@ -280,8 +287,8 @@ describe("native model input dispatch intent", () => {
       executionMode: "default", provider: "claude_managed", model: "claude-sonnet-5",
       managedProfile: { profileId: "profile", anthropicAgentId: "agent_01", agentVersion: "1", environmentId: "environment",
         betaVersion: "managed-agents-2026-04-01" }, maxSessionListCostUsd: 1,
-      completionContract: { id: randomUUID(), sha256: `sha256:${"a".repeat(64)}`, schemaVersion: "paperclip.run-result.v1",
-        contract: { revision: "1", objective: "Create one requested task", criteria: [{ id: "task", requirement: "Create the task" }] } },
+      completionContract: { id: completion.row.id, sha256: completion.row.canonicalSha256,
+        schemaVersion: completion.row.schemaVersion, contract: completion.contract },
       runtimeContext: nativeRuntimeContextFixture() });
     await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeExecutionInput: execution } }).where(eq(heartbeatRuns.id, seeded.runId));
     const envelope = buildNativeModelEnvelope(execution);
@@ -497,6 +504,11 @@ describe("native model input dispatch intent", () => {
     expect(selectedRevision).not.toBeNull();
     expect(revisionCapture).not.toBeNull();
     if (!selectedRevision || typeof selectedRevision.body !== "string") throw new Error("The selected document body is unavailable");
+    const governedContext = await contextEngineService(db).assembleNativeBootstrap({ companyId, agentId,
+      responsibleUserId: userId, runId: seeded.runId, issueId: createdIssue.id, projectId: null,
+      query: "Rendered native task", intent: "native_task_execution", includeFoundation: false,
+      sensitivityCeiling: "internal" });
+    expect(governedContext.nativeBootstrapWitness).toBeDefined();
     const renderedReferences: Array<{ kind: "task" | "comment" | "document_revision" | "attachment" | "unknown"; id: string }> = [];
     const renderedMarkdown = buildPaperclipTaskMarkdown({
       issue: { id: createdIssue.id, identifier: selectedTask!.identifier, title: selectedTask!.title, description: selectedTask!.description, workMode: "standard" },
@@ -515,15 +527,22 @@ describe("native model input dispatch intent", () => {
       candidates: [
         { kind: "task", id: createdIssue.id, input: taskCapture!.input, payloadSourceSnapshot: taskCapture!.payloadSourceSnapshot },
         { kind: "document_revision", id: revisionCapture!.input.revisionId, input: revisionCapture!.input, payloadSourceSnapshot: revisionCapture!.payloadSourceSnapshot },
-      ], runtimeInputs: [], contextManifestIds: [], rolePackInputs: [], unsupportedInputPresent: false });
-    expect(sourceSet?.inputs.map(value => value.kind)).toEqual(["task", "document_revision"]);
+      ], runtimeInputs: [], contextManifestIds: [{ companyId, contextManifestId: governedContext.packet.manifest!.id }],
+      governedContextMarkdown: governedContext.markdown, contextWitness: governedContext.nativeBootstrapWitness,
+      rolePackInputs: [], unsupportedInputPresent: false });
+    expect(sourceSet?.inputs.map(value => value.kind)).toEqual(["task", "document_revision", "context"]);
+    const completion = await ensureNativeCompletionContract({ db, companyId,
+      issue: { id: createdIssue.id, title: selectedTask!.title, description: selectedTask!.description }, actorId: agentId });
+    await db.update(heartbeatRuns).set({ completionContractId: completion.row.id,
+      completionContractSha256: completion.row.canonicalSha256 }).where(eq(heartbeatRuns.id, seeded.runId));
     const execution = buildNativeExecutionInput({ companyId, runId: seeded.runId, agentId,
       issue: { id: createdIssue.id, identifier: selectedTask!.identifier, title: selectedTask!.title, description: selectedTask!.description, workMode: "standard" },
-      taskPrompt: renderedMarkdown!, workspace: { id: seeded.runId, cwd: "/native", repoUrl: null, repoRef: null, branchName: null },
+      taskPrompt: renderedMarkdown!, governedContextMarkdown: governedContext.markdown,
+      workspace: { id: seeded.runId, cwd: "/native", repoUrl: null, repoRef: null, branchName: null },
       normalizedSessionId: null, provider: "claude_managed", model: "claude-sonnet-5",
       managedProfile: { profileId: "profile", anthropicAgentId: "agent_01", agentVersion: "1", environmentId: "environment", betaVersion: "managed-agents-2026-04-01" },
-      maxSessionListCostUsd: 1, completionContract: { id: randomUUID(), sha256: `sha256:${"a".repeat(64)}`, schemaVersion: "paperclip.run-result.v1",
-        contract: { revision: "1", objective: "Complete the task", criteria: [{ id: "output", requirement: "Return the result" }] } },
+      maxSessionListCostUsd: 1, completionContract: { id: completion.row.id, sha256: completion.row.canonicalSha256,
+        schemaVersion: completion.row.schemaVersion, contract: completion.contract },
       runtimeContext: nativeRuntimeContextFixture() });
     await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeExecutionInput: execution } }).where(eq(heartbeatRuns.id, seeded.runId));
     const envelope = buildNativeModelEnvelope(execution);
@@ -536,12 +555,14 @@ describe("native model input dispatch intent", () => {
     expect(run!.sourceContextProvenanceQualified).toBe(false);
     expect(run!.runnerProfileJson).toMatchObject({ nativeInputSourceReceipt: {
       bootstrap: { inputs: expect.arrayContaining([expect.objectContaining({ kind: "task", issueId: createdIssue.id }),
-        expect.objectContaining({ kind: "document_revision", revisionId: revisionCapture!.input.revisionId })]) },
+        expect.objectContaining({ kind: "document_revision", revisionId: revisionCapture!.input.revisionId }),
+        expect.objectContaining({ kind: "context", manifestId: governedContext.packet.manifest!.id })]) },
       dispatches: [expect.objectContaining({ responsibleUserId: userId })],
     } });
 
     const alteredSeed = await seed({ existingIssueId: createdIssue.id, responsibleUserId: userId });
-    await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeExecutionInput: execution } }).where(eq(heartbeatRuns.id, alteredSeed.runId));
+    await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeExecutionInput: execution },
+      completionContractId: completion.row.id, completionContractSha256: completion.row.canonicalSha256 }).where(eq(heartbeatRuns.id, alteredSeed.runId));
     const alteredEnvelope = structuredClone(envelope);
     alteredEnvelope.task.title = `${alteredEnvelope.task.title} substituted`;
     const alteredTurn = { message: { role: "user" as const, text: JSON.stringify(alteredEnvelope) }, requestedCollaborationMode: "default" as const };
@@ -550,6 +571,27 @@ describe("native model input dispatch intent", () => {
     expect(alteredRun!.nativeInputSourceProtocolVersion).toBe(0);
     expect(alteredRun!.runnerProfileJson).not.toHaveProperty("nativeInputSourceReceipt");
 
+    const alteredContractSeed = await seed({ existingIssueId: createdIssue.id, responsibleUserId: userId });
+    await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeExecutionInput: execution },
+      completionContractId: completion.row.id, completionContractSha256: completion.row.canonicalSha256 }).where(eq(heartbeatRuns.id, alteredContractSeed.runId));
+    const alteredContractEnvelope = structuredClone(envelope);
+    alteredContractEnvelope.completionContract.criteria[0]!.requirement += " Added after source collection.";
+    const alteredContractTurn = { message: { role: "user" as const, text: JSON.stringify(alteredContractEnvelope) }, requestedCollaborationMode: "default" as const };
+    await recordNativeModelInputDispatchIntent({ ...dispatchArgs(alteredContractSeed, alteredContractTurn), bootstrapSourceClosure: closure });
+    const [alteredContractRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, alteredContractSeed.runId));
+    expect(alteredContractRun!.nativeInputSourceProtocolVersion).toBe(0);
+    expect(alteredContractRun!.runnerProfileJson).not.toHaveProperty("nativeInputSourceReceipt");
+
+    const extraKeySeed = await seed({ existingIssueId: createdIssue.id, responsibleUserId: userId });
+    await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeExecutionInput: execution },
+      completionContractId: completion.row.id, completionContractSha256: completion.row.canonicalSha256 }).where(eq(heartbeatRuns.id, extraKeySeed.runId));
+    const extraKeyEnvelope = { ...structuredClone(envelope), untrackedSource: "unclassified prompt input" };
+    const extraKeyTurn = { message: { role: "user" as const, text: JSON.stringify(extraKeyEnvelope) }, requestedCollaborationMode: "default" as const };
+    await recordNativeModelInputDispatchIntent({ ...dispatchArgs(extraKeySeed, extraKeyTurn), bootstrapSourceClosure: closure });
+    const [extraKeyRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, extraKeySeed.runId));
+    expect(extraKeyRun!.nativeInputSourceProtocolVersion).toBe(0);
+    expect(extraKeyRun!.runnerProfileJson).not.toHaveProperty("nativeInputSourceReceipt");
+
     const unknownSeed = await seed({ existingIssueId: createdIssue.id, responsibleUserId: userId });
     const workspaceExecution = buildNativeExecutionInput({ companyId, runId: unknownSeed.runId, agentId,
       issue: { id: createdIssue.id, identifier: selectedTask!.identifier, title: selectedTask!.title, description: selectedTask!.description, workMode: "standard" },
@@ -557,7 +599,8 @@ describe("native model input dispatch intent", () => {
       normalizedSessionId: null, completionContract: { id: randomUUID(), sha256: `sha256:${"a".repeat(64)}`, schemaVersion: "paperclip.run-result.v1",
         contract: { revision: "1", objective: "Complete the task", criteria: [{ id: "output", requirement: "Return the result" }] } },
       runtimeContext: nativeRuntimeContextFixture() });
-    await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeExecutionInput: workspaceExecution } }).where(eq(heartbeatRuns.id, unknownSeed.runId));
+    await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeExecutionInput: workspaceExecution },
+      completionContractId: completion.row.id, completionContractSha256: completion.row.canonicalSha256 }).where(eq(heartbeatRuns.id, unknownSeed.runId));
     const workspaceEnvelope = buildNativeModelEnvelope(workspaceExecution);
     const workspaceTurn = { message: { role: "user" as const, text: JSON.stringify(workspaceEnvelope) }, requestedCollaborationMode: "default" as const };
     const workspaceClosure = { sourceSet: sourceSet!, taskEnvelopeDigest: createHash("sha256").update(JSON.stringify(workspaceExecution.task), "utf8").digest("hex") };

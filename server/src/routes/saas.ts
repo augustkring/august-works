@@ -7,7 +7,7 @@ import { activationConnectionConsentService } from "../services/saas/activation-
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { z } from "zod";
 import { Router, type Request, type Response } from "express";
-import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import {
   authSecurityEvents,
   authSessions,
@@ -17,6 +17,7 @@ import {
   runtimeHosts,
   runtimeCapacityProfiles,
   runtimeVersionCatalog,
+  runtimeSandboxBindings,
   supportSessions,
   deploymentRecords,
   platformSchedulerLeases,
@@ -45,6 +46,8 @@ import { assertCompanyAccess } from "./authz.js";
 import { publicJson } from "../services/saas/crypto.js";
 import { assertConfiguredOperatorAuthentication } from "../auth/authenticator-assurance.js";
 import { supportCaseOperatorBodySchema, supportCaseOperatorReceiptSchema, supportCaseOperatorService } from "../services/saas/support-case-operator.js";
+import { executionSandboxService } from "../services/execution-sandbox/sandbox-service.js";
+import { openShellBackend } from "../services/execution-sandbox/openshell-backend.js";
 
 export function saasRoutes(db: Db, platform: SaasPlatform) {
   const router = Router();
@@ -1053,6 +1056,32 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
         !["stop", "delete", "backup", "rotate_gateway"].includes(input.action)
       )
         await gate("hosted_openclaw_v6");
+      if (input.action === "stop") {
+        const [activeSandbox] = await db.select().from(runtimeSandboxBindings).where(and(
+          eq(runtimeSandboxBindings.companyId, companyId),
+          eq(runtimeSandboxBindings.runtimeCellId, String(req.params.cellId)),
+          inArray(runtimeSandboxBindings.status, ["admitting", "running", "stopping", "quarantined"]),
+        )).orderBy(desc(runtimeSandboxBindings.createdAt)).limit(1);
+        if (activeSandbox) {
+          const service = executionSandboxService(db, {
+            operatorUserIds: platform.config.operatorUserIds,
+            backendFor: (binding, actor) => {
+              const prover = platform.config.runtime.openshellProver;
+              if (binding.backend !== "openshell" || !prover) return undefined;
+              return openShellBackend({
+                identity: { companyId: binding.companyId, bindingId: binding.id, cellId: binding.runtimeCellId, cellGeneration: binding.cellGeneration, sandboxRef: binding.sandboxRef ?? `aw-v7-${binding.id}` },
+                boundary: binding.boundaryPolicy,
+                bridge: platform.sandboxHosts.bridge(actor),
+                evidenceKind: "protected_host_report",
+                prover,
+              });
+            },
+            assertRuntimeStartAdmission: (tx, input) => platform.runtime.assertSandboxStartAdmission(tx, input),
+            recordRuntimeWorkloadState: (tx, input) => platform.runtime.recordSandboxWorkloadState(tx, input),
+          });
+          await service.stop(req.actor, companyId, activeSandbox.id, input.idempotencyKey);
+        }
+      }
       res
         .status(202)
         .json(

@@ -1,22 +1,28 @@
 import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
-import { constants, generateKeyPairSync, privateDecrypt } from "node:crypto";
+import { constants, generateKeyPairSync, privateDecrypt, randomUUID } from "node:crypto";
+import express from "express";
+import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import {
   activityLog,
+  agents,
   authSessions,
   billingAccounts,
   billingAccountCompanies,
   companyMemberships,
   createDb,
   runtimeCells,
+  runtimeOperations,
+  heartbeatRuns,
+  issues,
   runtimeCapacityProfiles,
   runtimeHostCommands,
   runtimeHosts,
   runtimeSandboxBindings,
   runtimeVersionCatalog,
 } from "@paperclipai/db";
-import { SANDBOX_HOST_COMMAND } from "@paperclipai/shared";
+import { PROVIDER_CAPABILITY_FEATURES, SANDBOX_CONTROLS, SANDBOX_HOST_COMMAND } from "@paperclipai/shared";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -25,13 +31,20 @@ import { seedV5Companies } from "./helpers/v5-fixtures.js";
 import { policyFixture } from "./helpers/sandbox-fixture.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { executionSandboxService } from "../services/execution-sandbox/sandbox-service.js";
+import { executionSandboxRoutes } from "../routes/execution-sandbox.js";
 import { nativeSandboxHostTransport } from "../services/execution-sandbox/native-host-bridge.js";
-import { runtimeControlService } from "../services/runtime/control.js";
 import { open as unseal } from "../services/saas/crypto.js";
 import type { SaasPlatformConfig } from "../saas-platform-config.js";
 import type { SandboxIdentity } from "../services/execution-sandbox/backend.js";
 import { openShellBackend } from "../services/execution-sandbox/openshell-backend.js";
 import { projectOpenShellPolicy } from "../services/execution-sandbox/openshell-policy.js";
+import { agentIdentityService } from "../services/agent-identities.js";
+import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
+import { agentRuntimeFabricService } from "../services/agent-runtime-fabric.js";
+import { discoverNativeCapabilities } from "../services/native-provider-conformance.js";
+import { runtimeControlService } from "../services/runtime/control.js";
+import { errorHandler } from "../middleware/index.js";
+import { nativeSha256 } from "../services/native-runtime/canonical.js";
 
 const support = await getEmbeddedPostgresTestSupport();
 const image = "fixture.invalid/openshell@sha256:" + "a".repeat(64);
@@ -118,6 +131,9 @@ const image = "fixture.invalid/openshell@sha256:" + "a".repeat(64);
           runtimeHostId: host.id,
         })
         .returning()) as [typeof cell];
+      transportForTest = nativeSandboxHostTransport(db, { operatorUserIds: [f.userId] });
+      testWorkloadStates.clear();
+      testWorkloadPolicies.clear();
       const binding = await executionSandboxService(db, { operatorUserIds: [f.userId] }).create(
         f.actor,
         f.home,
@@ -161,6 +177,76 @@ const image = "fixture.invalid/openshell@sha256:" + "a".repeat(64);
           .where(eq(runtimeHostCommands.runtimeCellId, cell.id))
       )[0]!;
     }
+    function supportedPolicy() {
+      const policy = policyFixture();
+      policy.filesystem.deniedPaths = [];
+      policy.process.allowedBinaries = [];
+      policy.process.allowedSyscalls = [];
+      policy.network.destinations = [];
+      policy.requiredControls = [...SANDBOX_CONTROLS];
+      return policy;
+    }
+    function simulatedBackend(identity: SandboxIdentity, bridge: ReturnType<ReturnType<typeof nativeSandboxHostTransport>["bridge"]>) {
+      let state: "stopped" | "ready" | "running" = "stopped";
+      let policyHash: string | null = null;
+      return {
+        backend: "openshell" as const,
+        evidenceKind: "protected_host_report" as const,
+        capabilities: () => bridge.capabilities(identity),
+        prepareSandbox: () => bridge.prepare(identity),
+        inspectWorkload: async () => ({ ...await bridge.inspect(identity), state, policyHash, controlsHealthy: true }),
+        applyPolicy: async input => {
+          const hash = nativeSha256(input.policy);
+          const result = await bridge.apply({ ...identity, document: projectOpenShellPolicy(input.policy.compiledPolicy).document, policyHash: hash, expiresAt: input.expiresAt, idempotencyKey: `v7-sandbox-policy:${identity.bindingId}:${identity.cellGeneration}:${hash}` });
+          if (result.applied) { state = "ready"; policyHash = hash; }
+          return { applied: result.applied, requiresRecreate: result.requiresRecreate, observedPolicyHash: result.policyHash, unsupportedFeatures: [] };
+        },
+        startWorkload: input => bridge.start({ ...identity, expiresAt: input.expiresAt, policyHash: nativeSha256(input.policy), idempotencyKey: input.idempotencyKey }).then(result => { state = "running"; return result; }),
+        stopWorkload: async input => { await bridge.revokeProviders(identity); const result = await bridge.stop({ ...identity, idempotencyKey: input.idempotencyKey }); state = "stopped"; return result; },
+        destroySandbox: input => bridge.destroy({ ...identity, idempotencyKey: input.idempotencyKey }),
+        probeBoundary: input => bridge.probe({ ...identity, test: input.test }),
+      };
+    }
+    async function driveHost<T>(work: Promise<T>, targetCellId: string): Promise<T> {
+      let settled = false;
+      const result = work.then(value => ({ value }), error => ({ error })).then(value => { settled = true; return value; });
+      const deadline = Date.now() + 45000;
+      while (!settled && Date.now() < deadline) {
+        const claim = await transportForTest.claim(host.id);
+        if (!claim) { await new Promise(resolve => setTimeout(resolve, 2)); continue; }
+        const secret = privateDecrypt({ key: keys.privateKey, padding: constants.RSA_PKCS1_OAEP_PADDING, oaepHash: "sha256", oaepLabel: Buffer.from("aw-runtime-command-v6") }, Buffer.from(claim.envelope.encryptedKey, "base64url"));
+        const command = unseal<Record<string, any>>(claim.envelope.ciphertext, secret.toString("hex"), `command:${claim.id}:${host.id}:1`);
+        const action = command.action as string;
+        const common = { generation: command.scope.cellGeneration, imageDigest: command.imageDigest };
+        const reply = action === "capabilities" ? { action, capabilities: testCapabilities(command.imageDigest) }
+          : action === "prepare" ? { action, backendVersion: "0.1.2", imageDigest: command.imageDigest }
+          : action === "probe" ? { action, verdict: "pass", observationHash: "d".repeat(64) }
+          : action === "inspect" ? { action, ...common, state: testWorkloadStates.get(command.scope.cellId) ?? "stopped", policyHash: testWorkloadPolicies.get(command.scope.cellId) ?? null, controlsHealthy: true }
+          : action === "apply" ? (testWorkloadStates.set(command.scope.cellId, "ready"), testWorkloadPolicies.set(command.scope.cellId, command.admission.policyHash), { action, applied: true, requiresRecreate: false, policyHash: command.admission.policyHash, effectivePolicyHash: command.admission.policyHash })
+          : action === "start" ? (testWorkloadStates.set(command.scope.cellId, "running"), testWorkloadPolicies.set(command.scope.cellId, command.start.policyHash), { action, started: true, operationId: claim.id, sandboxId: command.scope.bindingId, containerId: "b".repeat(64), imageDigest: command.imageDigest, policyHash: command.start.policyHash, effectivePolicyHash: command.start.policyHash })
+          : action === "stop" ? (testWorkloadStates.set(command.scope.cellId, "stopped"), { action, stopped: true })
+          : action === "revoke_providers" ? { action, revoked: true }
+          : action === "destroy" ? { action, destroyed: true }
+          : { action, document: projectOpenShellPolicy(supportedPolicy()).document };
+        await transportForTest.complete(host.id, claim.id, { claimToken: command.claimToken, generation: command.scope.cellGeneration, success: true, reply, errorCode: null });
+      }
+      if (!settled) throw new Error(`test host did not drain commands for cell ${targetCellId}`);
+      const output = await result;
+      if ("error" in output) throw output.error;
+      return output.value;
+    }
+    const testWorkloadStates = new Map<string, "stopped" | "ready" | "running">();
+    const testWorkloadPolicies = new Map<string, string>();
+    const testCapabilitySnapshots = new Map<string, Record<string, unknown>>();
+    const testCapabilities = (digest: string) => {
+      let snapshot = testCapabilitySnapshots.get(digest);
+      if (!snapshot) {
+        snapshot = { ...Object.fromEntries(SANDBOX_CONTROLS.map(control => [control, true])), backend: "openshell", backendVersion: "0.1.2", hostKernelVersion: "fixture-kernel", sandboxImageDigest: digest, filesystemEnforcementMode: "hard_requirement", staticPolicyRequiresRecreate: true, dynamicNetworkPolicy: true, policyProverBoundaryCheck: true, policyProverCoverage: [...SANDBOX_CONTROLS], credentialBindingDimensions: ["company", "presence", "host", "port", "method", "path", "binary", "expiry", "revocation"], testedAt: new Date(Date.now() - 1000).toISOString(), expiresAt: new Date(Date.now() + 86400000).toISOString(), qualificationHash: "a".repeat(64), evidenceKind: "protected_host_report" };
+        testCapabilitySnapshots.set(digest, snapshot);
+      }
+      return snapshot;
+    };
+    let transportForTest: ReturnType<typeof nativeSandboxHostTransport>;
     function decrypt(
       claim: NonNullable<
         Awaited<
@@ -452,6 +538,70 @@ const image = "fixture.invalid/openshell@sha256:" + "a".repeat(64);
       });
       expect(retained.qualifications[0]?.results).toHaveLength(18);
     }, 20000);
+    it("admits a qualified native Task through the HTTP route and meters only the signed host start/stop receipts (CI transport simulation)", async () => {
+      await instanceSettingsService(db).updateExperimental({
+        agent_identities_v5: true,
+        agent_provider_bindings_v5: true,
+        agent_runtime_fabric_v5: true,
+        enableContextEngineV1: true,
+      });
+      const created = await agentIdentityService(db).create(f.actor, { name: "Sandbox admission Task fixture", homeCompanyId: f.home });
+      const presence = created.presence;
+      const providerService = agentProviderBindingService(db);
+      const provider = await providerService.create(f.actor, f.home, presence.id, { providerType: "paperclip_native", providerAgentRef: presence.id, providerEndpointRef: null, isolationMode: "isolated_per_presence" });
+      const newCellId = randomUUID();
+      const [admissionCell] = await db.insert(runtimeCells).values({
+        id: newCellId, companyId: f.home, billingAccountId: cell.billingAccountId,
+        runtimeHostId: host.id, providerBindingId: provider.id,
+        capacityProfile: "sandbox-host-fixture", desiredImageDigest: image,
+        status: "STOPPED", isolationMode: "company_cell",
+      }).returning();
+      await providerService.attach(f.actor, f.home, presence.id, { providerBindingId: provider.id, providerProfileRef: `aw:cell:${admissionCell!.id}:generation:${admissionCell!.generation}` });
+      const features = Object.fromEntries(PROVIDER_CAPABILITY_FEATURES.map(key => [key, false])) as Record<(typeof PROVIDER_CAPABILITY_FEATURES)[number], boolean>;
+      await providerService.recordDiscovery(f.home, presence.id, { provider: "paperclip_native", version: "ci-software-fixture", features, skills: [], tools: [], discoveredAt: new Date().toISOString() }, { connect: true, identity: true, start: true, stream: true, wait: true, cancel: true, memoryScoping: true });
+      const [task] = await db.insert(issues).values({ companyId: f.home, title: "Run through the qualified sandbox", status: "in_progress", assigneeAgentId: presence.id, responsibleUserId: f.userId }).returning();
+      const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: presence.id, status: "running", runtimeMode: "native", runtimeModeResolvedAt: new Date(), nativeIssueId: task!.id, responsibleUserId: f.userId, contextSnapshot: { issueId: task!.id } }).returning();
+      await db.update(issues).set({ executionRunId: run!.id }).where(eq(issues.id, task!.id));
+      const manifest = await agentRuntimeFabricService(db).prepare({ companyId: f.home, agentId: presence.id, runId: run!.id, responsibleUserId: f.userId, issueId: task!.id, query: task!.title });
+      expect(manifest).toBeTruthy();
+      const boundary = supportedPolicy();
+      const sandboxBinding = await executionSandboxService(db, { operatorUserIds: [f.userId] }).create(f.actor, f.home, { runtimeCellId: admissionCell!.id, expectedCellGeneration: admissionCell!.generation.toString(), backend: "openshell", profile: "development", boundaryPolicy: boundary });
+      const sandboxIdentity: SandboxIdentity = { companyId: f.home, bindingId: sandboxBinding.id, cellId: admissionCell!.id, cellGeneration: admissionCell!.generation.toString(), sandboxRef: `aw-v7-${sandboxBinding.id}` };
+      const serviceOptions = {
+        operatorUserIds: [f.userId],
+        backendFor: (binding: any, actor: any) => simulatedBackend(sandboxIdentity, transportForTest.bridge(actor)),
+      };
+      const qualification = await driveHost(executionSandboxService(db, serviceOptions).qualify(f.actor, f.home, sandboxBinding.id, 1), admissionCell!.id);
+      expect(qualification).toMatchObject({ status: "ready", version: 2 });
+      const compiled = await executionSandboxService(db, serviceOptions).compile(f.actor, f.home, sandboxBinding.id, { expectedVersion: 2, executionManifestId: manifest!.record.id, candidatePolicy: boundary });
+      expect(compiled.status).toBe("qualified");
+      const runtime = runtimeControlService(db, { runtime: { suspectSeconds: 90, unreachableSeconds: 600, relayPort: 3102 } } as SaasPlatformConfig);
+      const app = express();
+      app.use(express.json());
+      app.use((req, _res, next) => { (req as any).actor = f.actor; next(); });
+      app.use("/api", executionSandboxRoutes(db, {
+        ...serviceOptions,
+        assertRuntimeStartAdmission: (tx, input) => runtime.assertSandboxStartAdmission(tx, input),
+        recordRuntimeWorkloadState: (tx, input) => runtime.recordSandboxWorkloadState(tx, input),
+      }));
+      app.use(errorHandler);
+      const admissionPromise = request(app).post(`/api/companies/${f.home}/runtime-sandboxes/${sandboxBinding.id}/admit`).send({ expectedVersion: 2, policySnapshotId: compiled.id });
+      const admitted = await driveHost(admissionPromise.then(response => { expect(response.status).toBe(200); return response.body; }), admissionCell!.id);
+      expect(admitted.binding).toMatchObject({ status: "running", version: 4 });
+      expect((await db.select().from(runtimeCells).where(eq(runtimeCells.id, admissionCell!.id)))[0]).toMatchObject({ status: "HEALTHY" });
+      expect((await db.select().from(runtimeOperations).where(eq(runtimeOperations.runtimeCellId, admissionCell!.id))).map(row => [row.operationType, row.status])).toEqual([["start", "SUCCEEDED"]]);
+      await new Promise(resolve => setTimeout(resolve, 5));
+      const service = executionSandboxService(db, {
+        ...serviceOptions,
+        recordRuntimeWorkloadState: (tx, input) => runtime.recordSandboxWorkloadState(tx, input),
+      });
+      const stopped = await driveHost(service.stop(f.actor, f.home, sandboxBinding.id, "fixture-user-stop"), admissionCell!.id);
+      expect(stopped.binding.status).toBe("stopped");
+      expect((await db.select().from(runtimeCells).where(eq(runtimeCells.id, admissionCell!.id)))[0]).toMatchObject({ status: "STOPPED", activeSince: null });
+      expect((await db.select().from(runtimeOperations).where(eq(runtimeOperations.runtimeCellId, admissionCell!.id))).map(row => [row.operationType, row.status])).toEqual([["start", "SUCCEEDED"], ["stop", "SUCCEEDED"]]);
+      expect((await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.home), eq(activityLog.entityId, admissionCell!.id)))).some(event => event.action === "runtime.sandbox_workload_started")).toBe(true);
+      await runtime.relay.stop();
+    }, 60000);
     it("rejects a late completion after host fencing and expires bounded pending work", async () => {
       const transport = nativeSandboxHostTransport(db, { operatorUserIds: [f.userId] }),
         result = transport

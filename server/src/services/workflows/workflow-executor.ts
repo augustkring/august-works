@@ -123,6 +123,22 @@ export interface WorkflowRunActor {
   runId?: string | null;
   responsibleUserId?: string | null;
   memoryRecordIds?: string[];
+  /** Original verified request carrier; in-memory only, never persisted or DTO-controlled. */
+  authorizationActor?: AuthorizationActor;
+}
+
+function workflowSourceActor(companyId: string, actor: WorkflowRunActor): AuthorizationActor | undefined {
+  const original = actor.authorizationActor;
+  if (!original) return learningActorFromPrincipal(companyId, actor.principal, actor.runId);
+  const sameRun = (original.runId ?? null) === (actor.runId ?? null);
+  const matches = actor.principal.type === "user"
+    ? original.type === "board" && original.source !== "local_implicit" && original.userId === actor.principal.userId && sameRun
+    : actor.principal.type === "agent"
+      ? original.type === "agent" && original.companyId === companyId && original.agentId === actor.principal.agentId &&
+        (original.onBehalfOfUserId ?? null) === (actor.principal.responsibleUserId ?? null) && sameRun
+      : actor.principal.service === "local-board" && original.type === "board" && original.source === "local_implicit" && sameRun;
+  if (!matches) throw forbidden("Original Workflow reader identity does not match its execution principal.", { code: "workflow_execution_actor_mismatch" });
+  return original;
 }
 
 type WorkflowHeartbeatRuntime = IssueAssignmentWakeupDeps & {
@@ -395,7 +411,7 @@ export async function enqueueWorkflowRunInTransaction(
       ["workflows:read", "workflows:edit", "workflows:run"]);
     await assertCustomerWorkflowTestAuthority(executor, input.companyId, input.actor.principal);
   }
-  await assertLearnedAssetAnalyticalSources(executor,input.companyId,"workflow_revision",input.revisionId,learningActorFromPrincipal(input.companyId,input.actor.principal,input.actor.runId));
+  await assertLearnedAssetAnalyticalSources(executor,input.companyId,"workflow_revision",input.revisionId,workflowSourceActor(input.companyId,input.actor));
   if (input.idempotencyKey) {
     const existing = await getIdempotentRun(
       executor,
@@ -787,7 +803,7 @@ async function completeRunningStep(
   actor: WorkflowRunActor,
   artifactBinding?: { artifactId: string; versionId: string },
 ) {
-  await assertLearnedAssetAnalyticalSources(db,run.companyId,"workflow_revision",run.workflowRevisionId,learningActorFromPrincipal(run.companyId,actor.principal,actor.runId));
+  await assertLearnedAssetAnalyticalSources(db,run.companyId,"workflow_revision",run.workflowRevisionId,workflowSourceActor(run.companyId,actor));
   const finishedAt = new Date();
   const durationMs = Math.max(
     0,
@@ -802,7 +818,7 @@ async function completeRunningStep(
       eq(workflowStepRuns.companyId, run.companyId), eq(workflowStepRuns.workflowRunId, run.id),
       eq(workflowStepRuns.id, runningStep.id), eq(workflowStepRuns.status, "running")));
     if (!retainedStep) throw conflict("Workflow step changed before checkpoint", { code: "workflow_step_completion_conflict" });
-    await assertLearnedWorkflowPayloadAccess(scopedDb, run.companyId, learningActorFromPrincipal(run.companyId, actor.principal, actor.runId),
+    await assertLearnedWorkflowPayloadAccess(scopedDb, run.companyId, workflowSourceActor(run.companyId, actor),
       { workflowRunId: run.id }, "task");
     if (artifactBinding) {
       if (retainedStep.automationArtifactVersionId !== artifactBinding.versionId) {
@@ -1462,7 +1478,7 @@ async function prepareRunnableStep(
   inputJson: unknown,
   actor: WorkflowRunActor,
 ): Promise<{ checkpoint: WorkflowStepRow | null; running: WorkflowStepRow | null }> {
-  await assertLearnedAssetAnalyticalSources(db,run.companyId,"workflow_revision",run.workflowRevisionId,learningActorFromPrincipal(run.companyId,actor.principal,actor.runId));
+  await assertLearnedAssetAnalyticalSources(db,run.companyId,"workflow_revision",run.workflowRevisionId,workflowSourceActor(run.companyId,actor));
   const attempts = await nodeAttempts(db, run, nodeId);
   const succeeded = attempts.find((step) => step.status === "succeeded") ?? null;
   if (succeeded) return { checkpoint: succeeded, running: null };
@@ -2437,7 +2453,7 @@ async function createWorkflowTask(
         : null);
   let deduplicated = false;
   const publications: ActivityPublication[] = [];
-  const privacyActor = learningActorFromPrincipal(run.companyId, actor.principal, actor.runId);
+  const privacyActor = workflowSourceActor(run.companyId, actor);
 
   const issue = await db.transaction(async (tx) => {
     const create = () => issueService(db).create(
@@ -2954,7 +2970,7 @@ async function createWorkflowAgentTaskIssueInTransaction(
         ? actor.principal.userId
         : null);
   let deduplicated = false;
-  const privacyActor = learningActorFromPrincipal(run.companyId, actor.principal, actor.runId);
+  const privacyActor = workflowSourceActor(run.companyId, actor);
   const create = () => issueService(db).create(
     run.companyId,
     {
@@ -4501,7 +4517,7 @@ async function scheduleTaskCompletionWait(
         ? actor.principal.userId
         : null);
   const publications: ActivityPublication[] = [];
-  const privacyActor = learningActorFromPrincipal(run.companyId, actor.principal, actor.runId);
+  const privacyActor = workflowSourceActor(run.companyId, actor);
 
   await db.transaction(async (tx) => {
     let deduplicated = false;
@@ -6084,7 +6100,7 @@ async function resolveSubworkflowWait(db: Db, run: typeof workflowRuns.$inferSel
   let errorCode = !child ? "workflow_subworkflow_missing" : expired ? "workflow_subworkflow_timeout" : "workflow_subworkflow_failed";
   let succeeded = child?.status === "succeeded" && (!wait.timeoutAt || Boolean(child.finishedAt && child.finishedAt <= wait.timeoutAt));
   const detail = succeeded ? await getRunDetail(db, run.companyId, child!.id,
-    learningActorFromPrincipal(run.companyId, actor.principal, actor.runId), "task") : null;
+    workflowSourceActor(run.companyId, actor), "task") : null;
   const childRevision = succeeded ? await revisionForRun(db, child!) : null;
   const terminalNodes = new Set(childRevision?.graph.nodes.filter((item) => !childRevision.graph.edges.some((edge) => edge.source === item.id)).map((item) => item.id) ?? []);
   const resultSteps = detail?.steps.filter((item) => item.status === "succeeded" && terminalNodes.has(item.nodeId)) ?? [];
@@ -6422,7 +6438,7 @@ async function executeWorkflowGraph(
               await lockMemoryPrivacy(scopedDb, ownedRun.companyId);
               // A current read admits staging; only the persisted exact step
               // binding below admits execution. Both stay under privacy locks.
-              const reader = learningActorFromPrincipal(ownedRun.companyId, actor.principal, actor.runId);
+              const reader = workflowSourceActor(ownedRun.companyId, actor);
               const inspect = () => automationArtifactService(scopedDb).getDetail(ownedRun.companyId, artifactId, actor);
               if (reader?.type === "agent") await withNativeAnalyticalReader(scopedDb, ownedRun.companyId, reader, inspect, "task");
               else await inspect();
@@ -6862,7 +6878,7 @@ async function executeClaimedRun(
       return;
     }
   }
-  try{await assertLearnedAssetAnalyticalSources(db,run.companyId,"workflow_revision",run.workflowRevisionId,learningActorFromPrincipal(run.companyId,actor.principal,actor.runId));}
+  try{await assertLearnedAssetAnalyticalSources(db,run.companyId,"workflow_revision",run.workflowRevisionId,workflowSourceActor(run.companyId,actor));}
   catch{await failRun(db,run,actor,"analytical_source_access_lost","The original Learning analytical source is unavailable");return;}
   const revision = await revisionForRun(db, run);
   if (!revision) {
@@ -8344,7 +8360,7 @@ export function workflowExecutorService(
         );
       }
 
-      const detail = await getRunDetail(db, companyId, runId,learningActorFromPrincipal(companyId,actor.principal,actor.runId),"task");
+      const detail = await getRunDetail(db, companyId, runId,workflowSourceActor(companyId,actor),"task");
       if (!detail) throw new Error("Workflow run disappeared during cancellation");
       return detail;
     },
@@ -8482,7 +8498,7 @@ export function workflowExecutorService(
         await executeClaimedRun(db, claimed, actor, runtimeDeps);
       }
 
-      const detail = await getRunDetail(db, companyId, queued.run.id,learningActorFromPrincipal(companyId,actor.principal,actor.runId),"task");
+      const detail = await getRunDetail(db, companyId, queued.run.id,workflowSourceActor(companyId,actor),"task");
       if (!detail) throw new Error("Workflow retry disappeared after execution");
       return detail;
     },
@@ -8564,7 +8580,7 @@ export function workflowExecutorService(
         }
       }
 
-      const detail = await getRunDetail(db, companyId, runId,learningActorFromPrincipal(companyId,actor.principal,actor.runId),"task");
+      const detail = await getRunDetail(db, companyId, runId,workflowSourceActor(companyId,actor),"task");
       if (!detail) throw new Error("Workflow run disappeared after execution");
       return detail;
     },
@@ -8620,7 +8636,7 @@ export function workflowExecutorService(
         await executeClaimedRun(db, claimed, actor, runtimeDeps);
       }
 
-      const detail = await getRunDetail(db, companyId, queued.run.id,learningActorFromPrincipal(companyId,actor.principal,actor.runId),"task");
+      const detail = await getRunDetail(db, companyId, queued.run.id,workflowSourceActor(companyId,actor),"task");
       if (!detail) throw new Error("Workflow run disappeared after execution");
       return detail;
     },
@@ -8725,7 +8741,7 @@ export function workflowExecutorService(
         await executeClaimedRun(db, claimed, actor, runtimeDeps);
       }
 
-      const detail = await getRunDetail(db, companyId, queued.run.id,learningActorFromPrincipal(companyId,actor.principal,actor.runId),"task");
+      const detail = await getRunDetail(db, companyId, queued.run.id,workflowSourceActor(companyId,actor),"task");
       if (!detail) throw new Error("Workflow run disappeared after task invocation");
       return detail;
     },

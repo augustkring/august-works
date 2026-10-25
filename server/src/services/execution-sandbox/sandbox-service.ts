@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { activityLog, agentExecutionManifests, agents, agentPresenceRuntimeBindings, agentProviderBindings, companyMemberships, principalPermissionGrants, heartbeatRuns, issues, runtimeCapacityProfiles, orchestrationPlans, orchestrationWorkerAttempts, runtimeCells, runtimeHosts, runtimeSandboxBindings, runtimePolicySnapshots, sandboxQualificationRuns, type Db } from "@paperclipai/db";
+import { activityLog, agentExecutionManifests, agents, agentPresenceRuntimeBindings, agentProviderBindings, billingAccounts, companyMemberships, principalPermissionGrants, heartbeatRuns, issues, runtimeCapacityProfiles, orchestrationPlans, orchestrationWorkerAttempts, runtimeCells, runtimeHosts, runtimeSandboxBindings, runtimePolicySnapshots, sandboxQualificationRuns, type Db } from "@paperclipai/db";
 import { SANDBOX_CONTROLS, sandboxBindingCreateSchema, sandboxCapabilitySnapshotSchema, sandboxCompileSchema, type SandboxAdmissionInput, type SandboxBindingCreateInput, type SandboxCompileInput, type SandboxPosture } from "@paperclipai/shared";
 import { conflict, forbidden, notFound } from "../../errors.js";
 import { assertConfiguredOperatorAuthentication } from "../../auth/authenticator-assurance.js";
@@ -21,6 +21,8 @@ export function executionSandboxService(db: Db, options: {
   operatorUserIds?: readonly string[];
   backendFor?: (binding: Binding, actor: AuthorizationActor) => ExecutionSandboxBackend | undefined;
   nativeOperation?: (companyId: string, cellId: string, userId: string, action: "stop" | "delete", idempotencyKey: string) => Promise<{ id: string }>;
+  assertRuntimeStartAdmission?: (tx: Db, input: { actor: AuthorizationActor; companyId: string; cellId: string; userId: string }) => Promise<unknown>;
+  recordRuntimeWorkloadState?: (tx: Db, input: { action: "start" | "stop"; companyId: string; cellId: string; bindingId: string; generation: string; hostCommandId: string; claimKey: string; policySnapshotId: string; executionManifestId: string; executionManifestHash: string; policyHash: string; userId: string; idempotencyKey?: string }) => Promise<unknown>;
 } = {}) {
   async function access(tx: Db, actor: AuthorizationActor, companyId: string, mutate = false) {
     if (mutate) await assertConfiguredOperatorAuthentication(tx, actor, options.operatorUserIds ?? []);
@@ -364,6 +366,102 @@ export function executionSandboxService(db: Db, options: {
         await logActivity(tx, { companyId, actorType: "user", actorId: v7HumanActorId(actor), action: "sandbox.policy_compiled", entityType: "runtime_sandbox", entityId: id, details: { policySnapshotId: snapshot!.id, proverResult: compilation.proverResult, policyHash: snapshot!.policyHash } }, publications); return snapshot!;
       });
     },
+    stop: async (actor: AuthorizationActor, companyId: string, id: string, idempotencyKey: string) => {
+      const initial = await withV7ActivityTransaction(db, async (tx, publications) => {
+        await assertV7Authorization(tx, actor, companyId, "runtime:manage");
+        const unlocked = await binding(tx, actor, companyId, id);
+        const unlockedCell = await cell(tx, companyId, unlocked.runtimeCellId);
+        await tx.select({ id: billingAccounts.id }).from(billingAccounts).where(eq(billingAccounts.id, unlockedCell.billingAccountId)).for("update");
+        await tx.select({ id: runtimeCells.id }).from(runtimeCells).where(and(eq(runtimeCells.companyId, companyId), eq(runtimeCells.id, unlocked.runtimeCellId))).for("update");
+        const row = await binding(tx, actor, companyId, id, true);
+        const currentCell = await cell(tx, companyId, row.runtimeCellId);
+        if (currentCell.generation.toString() !== row.cellGeneration)
+          throw conflict("Sandbox generation changed before Stop");
+        if (!["admitting", "running", "stopping", "quarantined"].includes(row.status))
+          throw conflict("Sandbox has no active workload to stop");
+        const [claim] = await tx.select().from(activityLog).where(and(
+          eq(activityLog.companyId, companyId), eq(activityLog.entityType, "runtime_sandbox"),
+          eq(activityLog.entityId, id), eq(activityLog.action, "sandbox.admission_claimed"),
+        )).orderBy(desc(activityLog.createdAt), desc(activityLog.id)).limit(1);
+        const details = claim?.details as Record<string, unknown> | undefined;
+        if (typeof details?.claimKey !== "string" || typeof details.policySnapshotId !== "string")
+          throw conflict("Sandbox has no exact admission claim to stop");
+        const [stopping] = await tx.update(runtimeSandboxBindings).set({ status: "stopping", version: row.version + 1, updatedAt: new Date() }).where(and(
+          eq(runtimeSandboxBindings.id, id), eq(runtimeSandboxBindings.version, row.version),
+        )).returning();
+        if (!stopping) throw conflict("Sandbox changed before its Stop claim was recorded");
+        await logActivity(tx, {
+          companyId, actorType: "user", actorId: v7HumanActorId(actor),
+          action: "sandbox.workload_stop_claimed", entityType: "runtime_sandbox", entityId: id,
+          details: { generation: row.cellGeneration, policySnapshotId: details.policySnapshotId, claimKey: details.claimKey, idempotencyKey },
+        }, publications);
+        return {
+          row: stopping,
+          claimKey: details.claimKey,
+          policySnapshotId: details.policySnapshotId,
+          executionManifestId: details.executionManifestId,
+          executionManifestHash: details.executionManifestHash,
+          policyHash: details.policyHash,
+        };
+      });
+      const selected = backend(initial.row, actor);
+      const scope = identity(initial.row), key = `v7-sandbox-user-stop:${id}:${initial.row.cellGeneration}:${idempotencyKey}`;
+      let stopConfirmed = false, operationId: string | null = null;
+      try {
+        if (!selected || selected.backend !== "openshell")
+          throw conflict("The bound OpenShell safety owner is unavailable");
+        const stopped = await selected.stopWorkload({ ...scope, idempotencyKey: key });
+        operationId = stopped.operationId;
+        const observation = await selected.inspectWorkload(scope);
+        stopConfirmed = observation.state === "stopped" && observation.generation === scope.cellGeneration && observation.imageDigest === initial.row.capabilitySnapshot?.sandboxImageDigest;
+        if (!stopConfirmed) throw conflict("Sandbox Stop did not independently confirm the exact workload stopped");
+        const stoppedBinding = await withV7ActivityTransaction(db, async (tx, publications) => {
+          await tx.select({ id: runtimeCells.id }).from(runtimeCells).where(and(eq(runtimeCells.companyId, companyId), eq(runtimeCells.id, scope.cellId))).for("update");
+          const [current] = await tx.select().from(runtimeSandboxBindings).where(and(
+            eq(runtimeSandboxBindings.companyId, companyId), eq(runtimeSandboxBindings.id, id),
+            eq(runtimeSandboxBindings.cellGeneration, scope.cellGeneration),
+            inArray(runtimeSandboxBindings.status, ["admitting", "running", "stopping", "quarantined"]),
+          )).for("update");
+          if (!current) throw conflict("Sandbox changed while Stop was completing");
+          await assertV7Authorization(tx, actor, companyId, "runtime:manage");
+          if (!options.recordRuntimeWorkloadState || typeof initial.executionManifestId !== "string" || typeof initial.executionManifestHash !== "string" || typeof initial.policyHash !== "string")
+            throw conflict("Original runtime state owner or exact admission claim is unavailable");
+          await options.recordRuntimeWorkloadState(tx, {
+            action: "stop", companyId, cellId: scope.cellId, bindingId: id,
+            generation: scope.cellGeneration, hostCommandId: operationId!,
+            claimKey: initial.claimKey, policySnapshotId: initial.policySnapshotId,
+            executionManifestId: initial.executionManifestId,
+            executionManifestHash: initial.executionManifestHash,
+            policyHash: initial.policyHash, userId: v7HumanActorId(actor),
+            idempotencyKey,
+          });
+          const [updated] = await tx.update(runtimeSandboxBindings).set({ status: "stopped", version: current.version + 1, updatedAt: new Date() }).where(and(
+            eq(runtimeSandboxBindings.id, id), eq(runtimeSandboxBindings.version, current.version),
+          )).returning();
+          if (!updated) throw conflict("Sandbox changed while recording Stop");
+          await tx.update(runtimePolicySnapshots).set({ status: "revoked" }).where(and(
+            eq(runtimePolicySnapshots.companyId, companyId), eq(runtimePolicySnapshots.bindingId, id),
+            inArray(runtimePolicySnapshots.status, ["draft", "qualified"]),
+          ));
+          await logActivity(tx, {
+            companyId, actorType: "user", actorId: v7HumanActorId(actor),
+            action: "sandbox.workload_stopped", entityType: "runtime_sandbox", entityId: id,
+            details: { cellId: scope.cellId, generation: scope.cellGeneration, policySnapshotId: initial.policySnapshotId, claimKey: initial.claimKey, idempotencyKey, operationId, stopConfirmed: true },
+          }, publications);
+          return updated!;
+        });
+        return { binding: stoppedBinding, operationId, stopConfirmed: true as const };
+      } catch (error) {
+        const fenced = await fenceSandboxAdmissionOutcome(db, {
+          companyId, bindingId: id, cellId: scope.cellId, generation: scope.cellGeneration,
+          policySnapshotId: initial.policySnapshotId, claimKey: initial.claimKey,
+          operationKeys: [key], stopConfirmed,
+        });
+        if (!fenced) throw conflict("Sandbox Stop outcome could not be persisted; keep the workload fenced", { code: "sandbox_quarantine_persistence_failed" });
+        if (!stopConfirmed) throw conflict("Sandbox Stop outcome is unknown; keep the workload quarantined until confirmed", { code: "sandbox_stop_unconfirmed" });
+        throw error;
+      }
+    },
     admit: async (
       actor: AuthorizationActor,
       companyId: string,
@@ -372,6 +470,18 @@ export function executionSandboxService(db: Db, options: {
     ) => {
       const claimKey = `v7-sandbox-admission:${id}:${(await binding(db, actor, companyId, id)).cellGeneration}:${input.policySnapshotId}`;
       const initial = await withV7ActivityTransaction(db, async (tx, publications) => {
+        const [candidate] = await tx.select({ runtimeCellId: runtimeSandboxBindings.runtimeCellId }).from(runtimeSandboxBindings).where(and(
+          eq(runtimeSandboxBindings.companyId, companyId), eq(runtimeSandboxBindings.id, id),
+        ));
+        if (!candidate) throw notFound("Sandbox binding not found");
+        const [unlockedCell] = await tx.select({ billingAccountId: runtimeCells.billingAccountId }).from(runtimeCells).where(and(
+          eq(runtimeCells.companyId, companyId), eq(runtimeCells.id, candidate.runtimeCellId),
+        ));
+        if (!unlockedCell) throw notFound("Runtime cell not found");
+        await tx.select({ id: billingAccounts.id }).from(billingAccounts).where(eq(billingAccounts.id, unlockedCell.billingAccountId)).for("update");
+        await tx.select({ id: runtimeCells.id }).from(runtimeCells).where(and(
+          eq(runtimeCells.companyId, companyId), eq(runtimeCells.id, candidate.runtimeCellId),
+        )).for("update");
         const [current] = await tx
           .select()
           .from(runtimeSandboxBindings)
@@ -393,6 +503,8 @@ export function executionSandboxService(db: Db, options: {
             input.expectedVersion,
             claimKey,
           );
+          if (!options.assertRuntimeStartAdmission) throw conflict("Original runtime start admission owner is unavailable");
+          await options.assertRuntimeStartAdmission(tx, { actor, companyId, cellId: resumed.row.runtimeCellId, userId: v7HumanActorId(actor) });
           return {
             ...resumed,
             claimKey,
@@ -463,6 +575,8 @@ export function executionSandboxService(db: Db, options: {
           input.policySnapshotId,
           input.expectedVersion,
         );
+        if (!options.assertRuntimeStartAdmission) throw conflict("Original runtime start admission owner is unavailable");
+        await options.assertRuntimeStartAdmission(tx, { actor, companyId, cellId: ready.row.runtimeCellId, userId: v7HumanActorId(actor) });
         const [claimed] = await tx
           .update(runtimeSandboxBindings)
           .set({ status: "admitting", version: ready.row.version + 1, updatedAt: new Date() })
@@ -644,6 +758,16 @@ export function executionSandboxService(db: Db, options: {
         )
           throw conflict("Running workload state is not independently observed");
         const completion = await withV7ActivityTransaction(db, async (tx, publications) => {
+          // Keep the original runtime owner's billing-account → cell →
+          // binding lock order while committing the verified host receipt.
+          const [cellOwner] = await tx.select({ billingAccountId: runtimeCells.billingAccountId }).from(runtimeCells).where(and(
+            eq(runtimeCells.companyId, companyId), eq(runtimeCells.id, scope.cellId),
+          ));
+          if (!cellOwner) throw conflict("Runtime cell disappeared before sandbox start was recorded");
+          await tx.select({ id: billingAccounts.id }).from(billingAccounts).where(eq(billingAccounts.id, cellOwner.billingAccountId)).for("update");
+          await tx.select({ id: runtimeCells.id }).from(runtimeCells).where(and(
+            eq(runtimeCells.companyId, companyId), eq(runtimeCells.id, scope.cellId),
+          )).for("update");
           const current = await admissionContext(
             tx,
             actor,
@@ -656,6 +780,16 @@ export function executionSandboxService(db: Db, options: {
           if (current.row.version < initial.claimVersion)
             throw conflict("Sandbox admission version moved backwards");
           if (current.row.version === initial.claimVersion && current.row.status === "admitting") {
+            if (!options.recordRuntimeWorkloadState)
+              throw conflict("Original runtime state owner is unavailable");
+            await options.recordRuntimeWorkloadState(tx, {
+              action: "start", companyId, cellId: scope.cellId, bindingId: id,
+              generation: scope.cellGeneration, hostCommandId: started.operationId,
+              claimKey, policySnapshotId: initial.snapshot.id,
+              executionManifestId: current.source.record.id,
+              executionManifestHash: current.source.record.hash,
+              policyHash, userId: v7HumanActorId(actor),
+            });
             const [updated] = await tx
               .update(runtimeSandboxBindings)
               .set({ status: "running", version: current.row.version + 1, updatedAt: new Date() })

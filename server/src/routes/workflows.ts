@@ -235,6 +235,7 @@ export function workflowRoutes(db: Db) {
         },
         runId: req.actor.runId ?? null,
         responsibleUserId: req.actor.onBehalfOfUserId ?? null,
+        authorizationActor: { ...req.actor },
       };
     }
     if (req.actor.type === "board" && req.actor.source === "local_implicit") {
@@ -242,6 +243,7 @@ export function workflowRoutes(db: Db) {
         principal: { type: "system" as const, service: "local-board" },
         runId: req.actor.runId ?? null,
         responsibleUserId: req.actor.userId ?? null,
+        authorizationActor: { ...req.actor },
       };
     }
     const info = getActorInfo(req);
@@ -249,6 +251,7 @@ export function workflowRoutes(db: Db) {
       principal: { type: "user" as const, userId: info.actorId },
       runId: info.runId,
       responsibleUserId: info.actorId,
+      authorizationActor: { ...req.actor },
     };
   }
 

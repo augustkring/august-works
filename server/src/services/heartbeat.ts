@@ -486,6 +486,7 @@ import {
 } from "./instance-settings.js";
 import { readAuthoredAgentDefinition } from "./agents/authored-definition.js";
 import { assembleFreshNativeGovernedContext } from "./context/context-runtime.js";
+import { revalidateNativeBootstrapContextWitness } from "./context/context-manifest.js";
 import {
   evaluateExecutionAllowlist,
   isExecutionForcedToKubernetes,
@@ -24299,13 +24300,18 @@ export function heartbeatService(
             // Draft projection is asynchronous and has no provider effects.
             // Ordinary provider factories must stay inside the atomic dispatch
             // gate, after cancellation and chat admission have been rechecked.
-            const nativeDraftBackend = nativeExecution.provider.kind === "aw_text_only"
-              ? await selectNativeHeartbeatBackend(db, nativeExecution)
-              : undefined;
             const guardedDispatch =
               await dispatchResolvedInteractionContinuationWithAtomicGate(
-                (markDispatchStarted) =>
-                  executePaperclipNativeSession({
+                async (_markDispatchStarted) => {
+                  if (freshGovernedContext?.sourceWitness && governedContextMarkdown?.trim() && nativeBootstrapContextManifests) {
+                    await revalidateNativeBootstrapContextWitness(db, { witness: freshGovernedContext.sourceWitness,
+                      companyId: agent.companyId, runId: run.id, agentId: agent.id, issueId: issueRef.id,
+                      renderedMarkdown: governedContextMarkdown, manifestIds: nativeBootstrapContextManifests });
+                  }
+                  const nativeDraftBackend = nativeExecution.provider.kind === "aw_text_only"
+                    ? await selectNativeHeartbeatBackend(db, nativeExecution)
+                    : undefined;
+                  return executePaperclipNativeSession({
                     db,
                     execution: nativeExecution,
                     bootstrapSourceClosure: nativeBootstrapSourceClosure,
@@ -24422,7 +24428,8 @@ export function heartbeatService(
                       markDispatchStarted();
                       await persistRunProcessMetadata(run.id, meta);
                     },
-                  }),
+                  });
+                },
               );
             if (!guardedDispatch.dispatched) return;
             nativeDispatchStarted = true;

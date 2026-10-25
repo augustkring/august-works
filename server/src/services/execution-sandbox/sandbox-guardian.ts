@@ -253,7 +253,7 @@ export async function reconcileSandboxSafety(
     await db.execute(sql`select b.id,b.company_id,b.runtime_cell_id
     from runtime_sandbox_bindings b join runtime_cells c on c.company_id=b.company_id and c.id=b.runtime_cell_id
     where b.status not in ('deleted','stopped') and c.deleted_at is null
-      and (b.status in ('ready','running') or (b.status='admitting' and b.updated_at <= ${new Date(now.getTime() - 60000).toISOString()}::timestamptz) or c.status in ('HEALTHY','DEGRADED','FAILED'))
+      and (b.status in ('ready','running') or (b.status in ('admitting','stopping') and b.updated_at <= ${new Date(now.getTime() - 60000).toISOString()}::timestamptz) or c.status in ('HEALTHY','DEGRADED','FAILED'))
     order by b.updated_at,b.id limit ${Math.max(1, Math.min(100, Math.trunc(limit) || 20))}`);
   let quarantined = 0,
     stopRequested = 0,
@@ -298,10 +298,10 @@ export async function reconcileSandboxSafety(
               .where(eq(runtimeHosts.id, cell.runtimeHostId))
           : [];
         const reasons: string[] = [];
-        const staleAdmission = binding.status === "admitting" && binding.updatedAt.getTime() <= now.getTime() - 60000;
+        const staleAdmission = ["admitting", "stopping"].includes(binding.status) && binding.updatedAt.getTime() <= now.getTime() - 60000;
         let staleClaimKey: string | null = null;
         if (staleAdmission) {
-          reasons.push("admission_claim_stale");
+          reasons.push(binding.status === "stopping" ? "stop_outcome_unknown" : "admission_claim_stale");
           const [claim] = await tx.select({ details: activityLog.details }).from(activityLog).where(and(
             eq(activityLog.companyId, cell.companyId),
             eq(activityLog.entityType, "runtime_sandbox"),

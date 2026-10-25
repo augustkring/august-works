@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { nativePayloadSourceSnapshotSchema, type NativePayloadSourceInput, type NativePayloadSourcePolicy } from "@paperclipai/shared";
+import type { AuthorizationActor } from "../authorization.js";
 
 type Manifest = { id: string; companyId: string; runId: string | null; agentId: string; issueId: string | null;
   projectId: string | null; queryHash: string; policySnapshotHash: string; createdAt: Date };
@@ -10,7 +11,7 @@ type Root = { companyId: string; manifestId: string; memoryRecordId: string; sou
 export type NativeBootstrapContextWitness = object;
 type WitnessData = { companyId: string; runId: string; agentId: string; issueId: string; renderedMarkdownDigest: string;
   manifestId: string; queryHash: string; policySnapshotHash: string; contentHash: string;
-  policy: NativePayloadSourcePolicy; inputs: NativePayloadSourceInput[] };
+  actor: AuthorizationActor; policy: NativePayloadSourcePolicy; inputs: NativePayloadSourceInput[] };
 const witnesses = new WeakMap<object, WitnessData>();
 const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 const emptyPolicy = (): NativePayloadSourcePolicy => ({ issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] });
@@ -18,12 +19,14 @@ const sha256 = (value: string) => createHash("sha256").update(value, "utf8").dig
 
 /** Called only by the Context manifest owner while its source-verification transaction is active. */
 export function captureNativeBootstrapContextWitness(input: { companyId: string; runId: string; agentId: string; issueId: string;
-  renderedMarkdown: string; manifest: Manifest; items: Item[]; roots: Root[] }): NativeBootstrapContextWitness | null {
+  actor: AuthorizationActor; renderedMarkdown: string; manifest: Manifest; items: Item[]; roots: Root[] }): NativeBootstrapContextWitness | null {
   try {
   const { manifest } = input;
   if (!uuid.test(input.companyId) || !uuid.test(input.runId) || !uuid.test(input.agentId) || !uuid.test(input.issueId) ||
     manifest.companyId !== input.companyId || manifest.runId !== input.runId || manifest.agentId !== input.agentId ||
-    manifest.issueId !== input.issueId || input.items.length === 0 || input.items.length > 256 || input.roots.length > 256 ||
+    manifest.issueId !== input.issueId || input.actor.type !== "agent" || input.actor.source !== "agent_jwt" ||
+    input.actor.companyId !== input.companyId || input.actor.agentId !== input.agentId || input.actor.runId !== input.runId ||
+    !input.actor.onBehalfOfUserId || input.items.length === 0 || input.items.length > 256 || input.roots.length > 256 ||
     input.items.some(item => item.companyId !== input.companyId || item.manifestId !== manifest.id) ||
     input.roots.some(root => root.companyId !== input.companyId || root.manifestId !== manifest.id))
     return null;
@@ -85,7 +88,7 @@ export function captureNativeBootstrapContextWitness(input: { companyId: string;
   const witness = Object.freeze({});
   witnesses.set(witness, { companyId: input.companyId, runId: input.runId, agentId: input.agentId, issueId: input.issueId,
     renderedMarkdownDigest, manifestId: manifest.id, queryHash: manifest.queryHash,
-    policySnapshotHash: manifest.policySnapshotHash, contentHash, policy, inputs });
+    policySnapshotHash: manifest.policySnapshotHash, contentHash, actor: structuredClone(input.actor), policy, inputs });
   return witness;
   } catch {
     return null;
@@ -95,7 +98,7 @@ export function captureNativeBootstrapContextWitness(input: { companyId: string;
 export function readNativeBootstrapContextWitness(value: unknown, expected: {
   companyId: string; runId: string; agentId: string; issueId: string; renderedMarkdown: string;
   manifestIds: readonly { companyId: string; contextManifestId: string }[];
-}): { contextInput: Extract<NativePayloadSourceInput, { kind: "context" }>; policy: NativePayloadSourcePolicy;
+}): { actor: AuthorizationActor; contextInput: Extract<NativePayloadSourceInput, { kind: "context" }>; policy: NativePayloadSourcePolicy;
   inputs: NativePayloadSourceInput[] } | null {
   if (!value || typeof value !== "object") return null;
   const data = witnesses.get(value as object);
@@ -103,6 +106,6 @@ export function readNativeBootstrapContextWitness(value: unknown, expected: {
     data.issueId !== expected.issueId || sha256(expected.renderedMarkdown) !== data.renderedMarkdownDigest ||
     expected.manifestIds.length !== 1 || expected.manifestIds[0]?.companyId !== data.companyId ||
     expected.manifestIds[0]?.contextManifestId !== data.manifestId) return null;
-  return { contextInput: { kind: "context", manifestId: data.manifestId, queryHash: data.queryHash,
+  return { actor: structuredClone(data.actor), contextInput: { kind: "context", manifestId: data.manifestId, queryHash: data.queryHash,
     policySnapshotHash: data.policySnapshotHash, contentHash: data.contentHash }, policy: structuredClone(data.policy), inputs: structuredClone(data.inputs) };
 }

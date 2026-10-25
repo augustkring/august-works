@@ -32,6 +32,7 @@ import {
   type Db,
 } from "@paperclipai/db";
 import {
+  SANDBOX_HOST_COMMAND,
   runtimeModelProviderSchema,
   runtimeCellCreateSchema,
   runtimeCommandResultSchema,
@@ -213,6 +214,100 @@ export function runtimeControlService(
       .limit(1);
     if (!cell) throw notFound("Runtime cell not found");
     return cell;
+  }
+  async function assertStartAdmission(tx: Tx, cell: typeof runtimeCells.$inferSelect, now: Date) {
+    await entitlementService(tx as unknown as Db).require(cell.companyId, "hosted_runtime.provision");
+    const reason = await runtimeCommercialReason(tx, cell, now);
+    if (reason)
+      throw forbidden("Runtime commercial capacity is unavailable", { code: "RUNTIME_PLAN_LIMIT" });
+    if (cell.status !== "STOPPED" || cell.deletedAt)
+      throw conflict("Runtime state does not allow this operation");
+  }
+  async function assertSandboxStartAdmission(tx: Db, input: { actor: AuthorizationActor; companyId: string; cellId: string; userId: string; now?: Date }) {
+    const now = input.now ?? new Date();
+    await assertV5Authorization(tx, input.actor, input.companyId, "runtime:manage");
+    const [initial] = await tx.select().from(runtimeCells).where(and(
+      eq(runtimeCells.companyId, input.companyId), eq(runtimeCells.id, input.cellId), isNull(runtimeCells.deletedAt),
+    )).limit(1);
+    if (!initial) throw notFound("Runtime cell not found");
+    await tx.select({ id: billingAccounts.id }).from(billingAccounts).where(eq(billingAccounts.id, initial.billingAccountId)).for("update");
+    const [cell] = await tx.select().from(runtimeCells).where(and(
+      eq(runtimeCells.companyId, input.companyId), eq(runtimeCells.id, input.cellId),
+    )).for("update");
+    if (!cell) throw notFound("Runtime cell not found");
+    const [busy] = await tx.select({ id: runtimeOperations.id }).from(runtimeOperations).where(and(
+      eq(runtimeOperations.runtimeCellId, input.cellId), inArray(runtimeOperations.status, ACTIVE_OPERATIONS),
+    )).limit(1);
+    if (busy) throw conflict("Runtime operation already active");
+    await assertStartAdmission(tx as unknown as Tx, cell, now);
+    if (cell.runtimeHostId) {
+      const [host] = await tx.select().from(runtimeHosts).where(eq(runtimeHosts.id, cell.runtimeHostId)).limit(1);
+      if (!host || host.fencedAt || host.credentialRevokedAt || host.retiredAt || !["READY", "DRAINING"].includes(host.status) || !host.lastHeartbeatAt || host.lastHeartbeatAt.getTime() <= now.getTime() - config.runtime.suspectSeconds * 1000)
+        throw conflict("Runtime host is unavailable for sandbox admission");
+    }
+    return cell;
+  }
+  async function recordSandboxWorkloadState(tx: Db, input: {
+    action: "start" | "stop"; companyId: string; cellId: string; bindingId: string; generation: string;
+    hostCommandId: string; claimKey: string; policySnapshotId: string; executionManifestId: string;
+    executionManifestHash: string; policyHash: string; userId: string; idempotencyKey?: string; now?: Date;
+  }) {
+    const now = input.now ?? new Date();
+    const [cell] = await tx.select().from(runtimeCells).where(and(
+      eq(runtimeCells.companyId, input.companyId), eq(runtimeCells.id, input.cellId),
+      eq(runtimeCells.generation, BigInt(input.generation)), isNull(runtimeCells.deletedAt),
+    )).for("update");
+    const [binding] = await tx.execute(sql`select id,status,cell_generation from runtime_sandbox_bindings where company_id=${input.companyId}::uuid and id=${input.bindingId}::uuid and runtime_cell_id=${input.cellId}::uuid for update`);
+    const [command] = await tx.select().from(runtimeHostCommands).where(and(
+      eq(runtimeHostCommands.id, input.hostCommandId), eq(runtimeHostCommands.companyId, input.companyId),
+      eq(runtimeHostCommands.runtimeCellId, input.cellId), eq(runtimeHostCommands.cellGeneration, BigInt(input.generation)),
+      eq(runtimeHostCommands.commandType, SANDBOX_HOST_COMMAND), eq(runtimeHostCommands.status, "SUCCEEDED"),
+    )).limit(1).for("share");
+    if (!cell || !binding || String(binding.status) !== (input.action === "start" ? "admitting" : "stopping") || String(binding.cell_generation) !== input.generation || !command)
+      throw conflict("Signed sandbox workload receipt is no longer current");
+    const payload = command.payload as Record<string, any>;
+    const reply = command.safeResult as Record<string, any> | null;
+    if (payload.action !== input.action || payload.scope?.bindingId !== input.bindingId || payload.scope?.companyId !== input.companyId || payload.scope?.cellId !== input.cellId || payload.scope?.cellGeneration !== input.generation || reply?.action !== input.action || (input.action === "start" ? reply.started !== true || reply.policyHash !== input.policyHash : reply.stopped !== true))
+      throw conflict("Signed sandbox workload receipt does not match the requested state transition");
+    if (input.action === "start" && (cell.status !== "STOPPED" || payload.start?.policyHash !== input.policyHash || payload.start?.idempotencyKey !== `v7-sandbox-start:${input.bindingId}:${input.generation}:${input.policySnapshotId}`))
+      throw conflict("Sandbox Start receipt is not bound to the current stopped-cell admission");
+    const [claim] = await tx.select({ id: activityLog.id }).from(activityLog).where(and(
+      eq(activityLog.companyId, input.companyId), eq(activityLog.entityType, "runtime_sandbox"),
+      eq(activityLog.entityId, input.bindingId), eq(activityLog.action, "sandbox.admission_claimed"),
+      sql`${activityLog.details}->>'claimKey' = ${input.claimKey}`,
+      sql`${activityLog.details}->>'policySnapshotId' = ${input.policySnapshotId}`,
+      sql`${activityLog.details}->>'generation' = ${input.generation}`,
+      sql`${activityLog.details}->>'executionManifestId' = ${input.executionManifestId}`,
+      sql`${activityLog.details}->>'executionManifestHash' = ${input.executionManifestHash}`,
+      sql`${activityLog.details}->>'policyHash' = ${input.policyHash}`,
+    )).limit(1);
+    if (!claim) throw conflict("Sandbox workload receipt has no exact native admission claim");
+    const operationId = randomUUID();
+    const requestHash = input.action === "stop" && input.idempotencyKey
+      ? sha256(JSON.stringify({ cellId: input.cellId, action: "stop", idempotencyKey: input.idempotencyKey }))
+      : sha256(JSON.stringify({ sandboxBindingId: input.bindingId, generation: input.generation, hostCommandId: input.hostCommandId, claimKey: input.claimKey, policySnapshotId: input.policySnapshotId, action: input.action }));
+    const [operation] = await tx.insert(runtimeOperations).values({
+      id: operationId, companyId: input.companyId, runtimeCellId: input.cellId,
+      operationType: input.action, status: "SUCCEEDED", requestedByType: "user", requestedById: input.userId,
+      idempotencyKey: input.idempotencyKey ?? `sandbox-${input.action}:${input.bindingId}:${input.generation}:${input.hostCommandId}`,
+      requestHash,
+      desiredState: { sandboxAdmission: true, sandboxBindingId: input.bindingId, generation: input.generation, sandboxHostCommandId: input.hostCommandId, claimKey: input.claimKey, policySnapshotId: input.policySnapshotId, executionManifestId: input.executionManifestId, executionManifestHash: input.executionManifestHash, policyHash: input.policyHash },
+      deadlineAt: now, completedAt: now,
+    }).returning();
+    if (!operation) throw conflict("Runtime workload operation receipt could not be recorded");
+    if (input.action === "start") {
+      await tx.update(runtimeCells).set({ status: "HEALTHY", activeSince: now, meteredThrough: now, suspendedReason: null, lastErrorCode: null, updatedAt: now }).where(eq(runtimeCells.id, input.cellId));
+    } else if (cell.status === "HEALTHY") {
+      await meter(tx as unknown as Tx, cell, now);
+      await tx.update(runtimeCells).set({ status: "STOPPED", activeSince: null, meteredThrough: now, lastErrorCode: null, updatedAt: now }).where(eq(runtimeCells.id, input.cellId));
+    }
+    await tx.insert(activityLog).values({
+      companyId: input.companyId, actorType: "user", actorId: input.userId,
+      action: input.action === "start" ? "runtime.sandbox_workload_started" : "runtime.sandbox_workload_stopped",
+      entityType: "runtime_cell", entityId: input.cellId,
+      details: { operationId: operation.id, sandboxBindingId: input.bindingId, sandboxHostCommandId: input.hostCommandId, generation: input.generation },
+    });
+    return operation!;
   }
   async function create(
     companyId: string,
@@ -435,7 +530,7 @@ export function runtimeControlService(
     expectedGeneration?: string,
   ) {
     if (systemActor === "sandbox-guardian" && (input.action !== "stop" || !expectedGeneration || !/^[1-9][0-9]{0,18}$/.test(expectedGeneration))) throw forbidden("Sandbox safety recovery only requests generation-bound native Stop");
-    if (["start", "upgrade", "migrate", "restore"].includes(input.action))
+    if (["upgrade", "migrate", "restore"].includes(input.action))
       await entitlementService(db).require(
         companyId,
         "hosted_runtime.provision",
@@ -488,17 +583,41 @@ export function runtimeControlService(
         )
         .limit(1);
       if (busy) throw conflict("Runtime operation already active");
-      if (["start", "upgrade", "restore", "migrate"].includes(input.action)) {
+      if (input.action === "stop" && cell.status === "STOPPED") {
+        const [receipt] = await tx.select().from(activityLog).where(and(
+          eq(activityLog.companyId, companyId),
+          eq(activityLog.entityType, "runtime_sandbox"),
+          eq(activityLog.action, "sandbox.workload_stopped"),
+          sql`${activityLog.details}->>'cellId' = ${cellId}`,
+          sql`${activityLog.details}->>'idempotencyKey' = ${input.idempotencyKey}`,
+          sql`${activityLog.details}->>'stopConfirmed' = 'true'`,
+        )).orderBy(sql`${activityLog.createdAt} desc, ${activityLog.id} desc`).limit(1);
+        if (receipt) {
+          const details = receipt.details as Record<string, unknown>;
+          const [completed] = await tx.insert(runtimeOperations).values({
+            companyId, runtimeCellId: cellId, operationType: "stop", status: "SUCCEEDED",
+            requestedByType: systemActor ? "system" : "user", requestedById: systemActor ?? userId,
+            idempotencyKey: input.idempotencyKey, requestHash,
+            desiredState: { sandboxBindingId: receipt.entityId, sandboxHostOperationId: details.operationId, workloadStopped: true },
+            deadlineAt: now, completedAt: now,
+          }).returning();
+          await tx.insert(activityLog).values({
+            companyId, actorType: systemActor ? "system" : "user", actorId: systemActor ?? userId,
+            action: "runtime.sandbox_stop_completed", entityType: "runtime_cell", entityId: cellId,
+            details: { operationId: completed!.id, sandboxBindingId: receipt.entityId, sandboxHostOperationId: details.operationId },
+          });
+          return completed!;
+        }
+      }
+      if (input.action === "start") {
+        await assertStartAdmission(tx as unknown as Tx, cell, now);
+        await tx.update(runtimeCells).set({ suspendedReason: null, updatedAt: now }).where(eq(runtimeCells.id, cell.id));
+      } else if (["upgrade", "restore", "migrate"].includes(input.action)) {
         const reason = await runtimeCommercialReason(tx, cell, now);
         if (reason)
           throw forbidden("Runtime commercial capacity is unavailable", {
             code: "RUNTIME_PLAN_LIMIT",
           });
-        if (input.action === "start")
-          await tx
-            .update(runtimeCells)
-            .set({ suspendedReason: null, updatedAt: now })
-            .where(eq(runtimeCells.id, cell.id));
       }
       if (
         (input.action === "start" && cell.status !== "STOPPED") ||
@@ -2107,6 +2226,8 @@ export function runtimeControlService(
     getCell,
     create,
     request,
+    assertSandboxStartAdmission,
+    recordSandboxWorkloadState,
     dispatchOne,
     claim,
     renew,

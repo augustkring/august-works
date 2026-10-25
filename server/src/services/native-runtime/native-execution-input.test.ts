@@ -36,7 +36,8 @@ describe("native bootstrap rendered-source closure", () => {
     const foundationDocumentId = randomUUID(), foundationRevisionId = randomUUID();
     const contextMarkdown = "## August Works governed context\n### Approved Foundation\nStable guidance.";
     const taskInput = { kind: "task" as const, issueId, sourceVersion: "1", contentHash: hash };
-    const witness = captureNativeBootstrapContextWitness({ companyId, runId, agentId, issueId, renderedMarkdown: contextMarkdown,
+    const sourceActor = { type: "agent" as const, source: "agent_jwt" as const, companyId, agentId, runId, onBehalfOfUserId: "user-1" };
+    const witness = captureNativeBootstrapContextWitness({ companyId, runId, agentId, issueId, actor: sourceActor, renderedMarkdown: contextMarkdown,
       manifest: { id: randomUUID(), companyId, runId, agentId, issueId, projectId: null, queryHash: hash,
         policySnapshotHash: "b".repeat(64), createdAt: new Date() },
       items: [
@@ -51,7 +52,7 @@ describe("native bootstrap rendered-source closure", () => {
     const manifestId = randomUUID();
     const manifest = { id: manifestId, companyId, runId, agentId, issueId, projectId: null, queryHash: hash,
       policySnapshotHash: "b".repeat(64), createdAt: new Date() };
-    const exactWitness = captureNativeBootstrapContextWitness({ companyId, runId, agentId, issueId, renderedMarkdown: contextMarkdown,
+    const exactWitness = captureNativeBootstrapContextWitness({ companyId, runId, agentId, issueId, actor: sourceActor, renderedMarkdown: contextMarkdown,
       manifest, items: [
         { id: randomUUID(), manifestId, companyId, rank: 0, sourceProvider: "august_works_tasks", sourceRef: `issue://${issueId}`,
           sourceVersion: new Date().toISOString(), contentHash: hash, payloadSourceSnapshot: snapshot() },
