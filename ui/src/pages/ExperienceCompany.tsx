@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { useLocation } from "react-router-dom";
 import { companyExperienceSchema } from "@paperclipai/shared";
 import { useAccountIdentity } from "../api/companies-query";
 import { api } from "../api/client";
@@ -64,6 +65,7 @@ export function CompanyControls({
   principal: string;
 }) {
   const { t } = useTranslation("experience");
+  const location = useLocation();
   const client = useQueryClient();
   const heading = useRef<HTMLHeadingElement>(null);
   const [search, setSearch] = useState("");
@@ -111,6 +113,15 @@ export function CompanyControls({
   useEffect(() => {
     heading.current?.focus();
   }, [query.data?.companyId, query.isFetching]);
+  useEffect(() => {
+    if (!query.data || !location.hash) return;
+    const category = location.hash.slice(1);
+    const target = document.getElementById(category);
+    if (!target?.matches("[data-company-settings-section]")) return;
+    if (typeof target.scrollIntoView === "function")
+      target.scrollIntoView({ block: "start" });
+    target.querySelector<HTMLElement>("h2")?.focus({ preventScroll: true });
+  }, [query.data?.companyId, query.data?.observedAt, location.hash]);
   if (query.isError)
     return <CompanyReadError retry={() => void query.refetch()} />;
   if (query.isPending || query.isFetching)
@@ -155,6 +166,9 @@ export function CompanyControls({
         {sections.map((section) => (
           <section
             key={section.id}
+            id={`company-section-${section.id}`}
+            data-company-settings-section
+            tabIndex={-1}
             aria-labelledby={`company-${section.id}`}
             className="space-y-3 rounded-lg border border-border p-4"
           >

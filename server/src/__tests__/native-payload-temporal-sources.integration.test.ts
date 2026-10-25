@@ -99,7 +99,7 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
       ] });
     const firstContextCapture = first.contextReadCaptures.find(value => value.callId === ids.contextR)?.contextRead as {
       manifestIds?: Array<{ contextManifestId: string }>;
-      sourceSet?: { policy?: { memoryIds?: string[] }; inputs?: Array<{ kind?: string; memoryId?: string }> };
+      sourceSet?: { policy?: { memoryIds?: string[]; issueIds?: string[] }; inputs?: Array<{ kind?: string; memoryId?: string }> };
     } | undefined;
     const firstManifestId = firstContextCapture?.manifestIds?.[0]?.contextManifestId;
     if (!firstContextCapture || !firstManifestId) throw new Error("The first managed run has no actual private Context manifest");
@@ -108,6 +108,9 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
     expect(firstSelectedItems.some(item => item.sourceProvider === "august_works_memory" &&
       item.sourceRef === `memory://record/${privateRootId}`)).toBe(true);
     expect(firstContextCapture.sourceSet?.policy?.memoryIds).toContain(privateRootId);
+    expect(firstContextCapture.sourceSet?.policy?.issueIds).toContain(first.privateRoot?.issueId);
+    expect((await memories.get(first.companyId, privateRootId!, first.aliceMemoryActor))?.record.id).toBe(privateRootId);
+    expect(await memories.get(first.companyId, privateRootId!, first.bobMemoryActor)).toBeNull();
 
     const contextCapture = second.contextReadCaptures[0]?.contextRead as {
       manifestIds?: Array<{ contextManifestId: string }>;
@@ -190,9 +193,8 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
     expect((await readFile(providerDb)).byteLength).toBeGreaterThan(0);
     expect((await readFile(laterProviderDb)).byteLength).toBeGreaterThan(0);
     const memories = memoryService(db);
-    const privateRoot = first.privateRoot;
-    if (!privateRoot || privateRoot.memoryId !== privateRootId) throw new Error("The actual private Memory root is unavailable");
-    const erased = await memories.forget(first.companyId, privateRootId, privateRoot.memoryActor);
+    if (!first.privateRoot || first.privateRoot.memoryId !== privateRootId) throw new Error("The actual private Memory root is unavailable");
+    const erased = await memories.forget(first.companyId, privateRootId, first.aliceMemoryActor);
     expect(erased.deletedRecordCount).toBeGreaterThan(1);
     expect((await memories.get(first.companyId, memoryAId, first.aliceMemoryActor))?.record.id).toBe(memoryAId);
     expect((await memories.get(first.companyId, memoryAId, first.bobMemoryActor))?.record.id).toBe(memoryAId);

@@ -19,6 +19,7 @@ import {
   heartbeatRuns,
   completionContracts,
   companyMemberships,
+  principalPermissionGrants,
   companies,
   documentRevisions,
   agentExecutionManifests,
@@ -53,7 +54,6 @@ import { instanceSettingsService } from "../../services/instance-settings.js";
 import { orchestrationService } from "../../services/orchestration/orchestration-service.js";
 import { workerModelGateway } from "../../services/orchestration/worker-model-gateway.js";
 import { createToolGatewayService } from "../../services/tool-gateway.js";
-import { createNativePrivateMemoryThroughHeartbeat } from "./native-private-memory-producer.js";
 import { recordNativeLocalProcessStopAfterExit } from "../../services/native-local-process-stop.js";
 import { getAssignedMcpGateway, registerAssignedMcpGateway } from "../../services/native-runtime/assigned-mcp-tools.js";
 import { hashContextPolicySnapshot } from "../../services/context/context-manifest.js";
@@ -240,11 +240,9 @@ export type ManagedNativeOpenCodeHumanAction = {
 };
 
 type ManagedNativePrivateRoot = {
-  producerRunId: string;
   issueId: string;
   memoryId: string;
   content: string;
-  producerActor: AuthorizationActor;
   memoryActor: MemoryMutationActor;
 };
 
@@ -394,27 +392,57 @@ export async function runManagedNativeOpenCodeFixture(input: {
     humanApp.use("/api", issueRoutes(db, {} as never)); humanApp.use(errorHandler);
     let privateRoot: ManagedNativePrivateRoot | null = null;
     if (input.privateContextContent) {
-      const privateTaskResponse = await request(humanApp).post(`/api/companies/${companyId}/issues`)
-        .send({ title: `Private Context source ${randomUUID()}`, description: input.privateContextContent,
-          visibility: "private", assigneeAgentId: agentId, responsibleUserId: aliceUserId });
-      expect(privateTaskResponse.status, JSON.stringify(privateTaskResponse.body)).toBe(201);
-      const privateTask = privateTaskResponse.body as { id: string };
+      // The ordinary HTTP admission path deliberately rejects private work.
+      // For this source-closure fixture, create the private root through the
+      // existing issue owner with the current verified Human actor.
+      const privateTask = await issueService(db).create(companyId, {
+        title: `Context producer Task ${randomUUID()}`,
+        description: input.privateContextContent,
+        visibility: "private", assigneeAgentId: agentId, responsibleUserId: aliceUserId,
+        createdByUserId: aliceUserId,
+      }, db, undefined, { manualInputActor: human, privacyActor: human, sourceAccessActor: human });
       const [persistedPrivateTask] = await db.select({ visibility: issues.visibility, assigneeAgentId: issues.assigneeAgentId,
         responsibleUserId: issues.responsibleUserId }).from(issues)
         .where(and(eq(issues.companyId, companyId), eq(issues.id, privateTask.id)));
       if (!persistedPrivateTask || persistedPrivateTask.visibility !== "private" ||
         persistedPrivateTask.assigneeAgentId !== agentId || persistedPrivateTask.responsibleUserId !== aliceUserId)
         throw new Error("managed_fixture_private_context_task_binding_invalid");
-      const produced = await createNativePrivateMemoryThroughHeartbeat({ db, companyId, agentId,
-        userId: aliceUserId, issueId: privateTask.id, content: input.privateContextContent,
-        bindingKey: `managed-opencode-private-context-${randomUUID()}` });
-      const memoryActor: MemoryMutationActor = {
-        principal: { type: "agent", agentId, responsibleUserId: aliceUserId },
-        runId: produced.runId, authorizationActor: produced.actor,
+      const sourceActor: MemoryMutationActor = {
+        principal: { type: "user", userId: aliceUserId }, authorizationActor: human,
       };
-      privateRoot = { producerRunId: produced.runId, issueId: privateTask.id,
-        memoryId: produced.record.id, content: input.privateContextContent,
-        producerActor: produced.actor, memoryActor };
+      await db.insert(principalPermissionGrants).values([
+        { companyId, principalType: "user", principalId: aliceUserId, permissionKey: "company_scope:read" },
+        { companyId, principalType: "agent", principalId: agentId, permissionKey: "company_scope:read" },
+      ]).onConflictDoNothing();
+      const privateMemoryService = memoryService(db);
+      const binding = await privateMemoryService.createCompanyBinding(companyId, {
+        key: `managed-opencode-private-context-${randomUUID()}`, name: "Managed OpenCode private-root Memory",
+        providerKey: "local",
+      }, sourceActor);
+      await privateMemoryService.addBindingTarget(companyId, binding.id,
+        { targetType: "agent", targetId: agentId }, sourceActor);
+      const observedAt = new Date();
+      const taskExcerpt = [`Status: ${privateTask.status}`, `Priority: ${privateTask.priority}`,
+        `Description: ${privateTask.description!.trim()}`].join("\n").slice(0, 60_000);
+      const privateTaskMemory = await privateMemoryService.createCandidate(companyId, {
+        memoryType: "lesson", scope: { type: "company", id: null }, subject: { type: "company", id: companyId }, ownerAgentId: null,
+        title: "Human-provided private-context root", content: input.privateContextContent, summary: null,
+        sensitivity: "internal", importance: 50, confidenceScore: 0.8, validFrom: null, validUntil: null,
+        observedAt: observedAt.toISOString(), retentionPolicy: "standard", expiresAt: null,
+        createdByOperationId: null, metadata: {}, bindingId: binding.id,
+        evidence: [{ sourceClass: "task", sourceProvider: "august_works_tasks", sourceType: "issue",
+          sourceRef: `issue://${privateTask.id}`, sourceVersion: privateTask.updatedAt.toISOString(),
+          sourceUpdatedAt: privateTask.updatedAt.toISOString(), observedAt: observedAt.toISOString(),
+          excerptHash: createHash("sha256").update(taskExcerpt).digest("hex"),
+          citation: { label: `${privateTask.identifier}: ${privateTask.title}` }, trustLevel: "low", relation: "supports" }],
+      }, sourceActor);
+      const acceptedPrivateTaskMemory = await privateMemoryService.reviewCandidate(companyId,
+        privateTaskMemory.record.id, { decision: "accept" }, sourceActor);
+      if (!(await privateMemoryService.get(companyId, acceptedPrivateTaskMemory.record.id, sourceActor)) ||
+        await privateMemoryService.get(companyId, acceptedPrivateTaskMemory.record.id, bobMemoryActor))
+        throw new Error("managed_fixture_private_context_memory_acl_invalid");
+      privateRoot = { issueId: privateTask.id, memoryId: acceptedPrivateTaskMemory.record.id,
+        content: input.privateContextContent, memoryActor: sourceActor };
     }
     const createTaskResponse = await request(humanApp).post(`/api/companies/${companyId}/issues`)
       .send({ title: "Save a private source-bound note", description: "Create a short internal note and finish the task.",

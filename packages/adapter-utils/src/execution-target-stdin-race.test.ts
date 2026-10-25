@@ -1,5 +1,5 @@
 import { execFile as execFileCallback, spawn } from "node:child_process";
-import { symlinkSync } from "node:fs";
+import { existsSync, symlinkSync } from "node:fs";
 import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, readlink, rename, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
@@ -666,6 +666,30 @@ describe("deterministic remote process-session wrapper shutdown (PAP-5316)", () 
   // path) is still running. Production host code never does this — it never
   // matches or signals a process by name or command line.
   async function findLivePidsByArgvSubstring(substring: string): Promise<number[]> {
+    // The isolated test worker intentionally omits procps, so `ps` is not a
+    // reliable harness dependency there. Linux /proc provides the same
+    // read-only identity check without requiring a package in the worker.
+    if (process.platform === "linux" && existsSync("/proc")) {
+      const pids: number[] = [];
+      for (const entry of await readdir("/proc").catch(() => [])) {
+        if (!/^\d+$/.test(entry)) continue;
+        try {
+          const [stat, commandLine] = await Promise.all([
+            readFile(`/proc/${entry}/stat`, "utf8"),
+            readFile(`/proc/${entry}/cmdline`),
+          ]);
+          const closingParen = stat.lastIndexOf(")");
+          if (closingParen < 0) continue;
+          const state = stat.slice(closingParen + 2).trim().split(/\s+/, 1)[0];
+          if (state === "Z" || state === "X") continue;
+          if (commandLine.toString("utf8").includes(substring)) pids.push(Number(entry));
+        } catch {
+          // The process may exit between enumeration and its /proc reads.
+        }
+      }
+      return pids;
+    }
+
     try {
       const { stdout } = await execFile("ps", ["-eo", "pid=,args="]);
       const pids: number[] = [];

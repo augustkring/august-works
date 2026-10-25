@@ -1,0 +1,143 @@
+{
+  "screenId": "SETTINGS-AGENTS-AI",
+  "journeyId": "settings",
+  "routeOrSurface": "/:companyPrefix/company/settings#company-section-agents_ai",
+  "targetExperienceProfiles": [
+    "admin",
+    "security_admin"
+  ],
+  "customerOutcome": "Find existing Agent ownership and company AI defaults/policy owners. Runtime identity controls appear only when their Native capability is enabled.",
+  "entryConditions": [
+    "Current authenticated principal and selected company; current Native company administration eligibility is rechecked.",
+    "Effective rollout and each destination’s Original resource authority remain necessary; directory visibility is not a grant."
+  ],
+  "exitConditions": [
+    "Open an authorized destination and complete material work in that Original owner.",
+    "Missing category jobs remain implementation gaps; navigation, an empty state or a contract does not claim configuration or evidence."
+  ],
+  "content": {
+    "h1": "Agents & AI",
+    "supportingCopy": "Find existing Agent ownership and company AI defaults/policy owners. Runtime identity controls appear only when their Native capability is enabled.",
+    "customerTerms": [
+      "Agents and owners",
+      "AI defaults and policies",
+      "Agent runtime identity"
+    ],
+    "displayedState": [
+      "Agent list and ownership/current work",
+      "Company new-agent approval and interaction defaults",
+      "Governed AI use cases",
+      "Agent runtime identities only when enabled",
+      "Only authorized entries are shown; an empty category does not imply support for missing jobs."
+    ]
+  },
+  "inputs": [
+    {
+      "id": "search",
+      "label": "Search company settings",
+      "dataType": "Text",
+      "required": false,
+      "default": "Empty",
+      "help": "Names, purposes and old aliases are searchable.",
+      "validation": "Local matching over authorized entries only, at most 180 characters; no API query text",
+      "autofillOrPrefill": "No automatic content collection"
+    }
+  ],
+  "actions": {
+    "primary": {
+      "label": "Open an authorized settings owner",
+      "operation": "Navigate to the exact current Original domain owner; no mutation occurs on this category surface."
+    },
+    "secondary": [
+      "Search currently authorized entries locally.",
+      "Return to Company without retaining private results across account or company changes.",
+      "Retry the same bounded read after refreshing authority."
+    ],
+    "destructiveOrIrreversible": []
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Current Company navigation authority and feature admission",
+      "Original Agent, Company defaults, AI Governance and runtime identity owners"
+    ],
+    "canonicalWriteOperation": "Agent/configuration/policy writes only through existing Original owners",
+    "authorityEffect": "The category directory grants no permission, approval, provider access or configuration. Each destination repeats its Original authority and source checks.",
+    "asyncWork": "The bounded Company navigation read filters entries by current company administration, per-action authorization and feature availability, then rechecks eligibility before responding.",
+    "receipt": "Current company identity and observed time only; no destination operation receipt is manufactured."
+  },
+  "states": {
+    "loading": "Announce loading only while the current identity/company request is pending.",
+    "empty": "Explain an actual empty authorized result. Missing dependencies or qualified capabilities are separate unavailable states.",
+    "partial": "Retain trustworthy available results and name unavailable dependencies or sources.",
+    "stale": "Hide retained controls during background checks and live authority/source-loss invalidations; query epochs reject late prior responses.",
+    "validation_error": "Preserve other entered values, identify the field problem and associate it programmatically with the control.",
+    "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
+    "permission_denied": "Suppress retained private data and unavailable controls; do not infer additional grants from profile or navigation.",
+    "recovering": "Re-resolve canonical state/version and the original request identity before permitting another effect.",
+    "success": "Announce only the server-confirmed canonical result. First value additionally requires independently verified native artifact/run binding."
+  },
+  "navigation": {
+    "back": "Return to Company or the invoking control through the current company route.",
+    "cancelOrSaveExit": "There is no mutation on this screen; local search is discarded when account/company changes.",
+    "deepLink": "/:companyPrefix/company/settings#company-section-agents_ai",
+    "resume": "Reload current authorized entries, then reopen the Original object/request; never replay a prior mutation."
+  },
+  "accessibility": {
+    "initialFocus": "Main heading or the dialog category control; keyboard focus is visible and unobscured.",
+    "focusAfterError": "Error summary or first invalid control, with a programmatically associated explanation.",
+    "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
+    "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
+    "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
+    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
+    "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
+    "reducedMotion": "No essential animated transition or moving progress indicator.",
+    "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
+  },
+  "responsive": {
+    "wide": "Readable constrained content width with natural wrapping.",
+    "narrow": "Reflow cards and form actions without concealing utilities or consequences.",
+    "mobile": "Touch targets remain reachable; dialogs scroll within the viewport and do not obscure focus."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Current authorized category labels, purposes, paths and restricted-access context.",
+      "Only minimal status for enabled and authorized destination owners."
+    ],
+    "dataCollected": [
+      "No server-side search text or configuration values on this category screen."
+    ],
+    "sensitiveFields": [
+      "Membership, role, configuration, provider, security metadata and source references remain in their Original owner."
+    ],
+    "loggingConstraints": "Do not log search text, account query values, private domain payloads, credentials, destination responses or raw errors."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "Search text",
+      "Company configuration",
+      "Membership or role data",
+      "Provider and security details",
+      "Credentials",
+      "Raw URLs/query strings",
+      "DOM, screenshots and destination payloads"
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "On the exact artifact, verify the Agents & AI category keeps its stable label and exposes only entries returned by the Original Company navigation owner.",
+      "Verify each mapped destination resolves to the named existing owner, denial is enforced there, and missing jobs are not presented as configured or complete.",
+      "Verify account/company switching and permission withdrawal remove prior private entries before a late response can restore them."
+    ],
+    "accessibility": [
+      "Verify keyboard navigation, focus order, screen-reader names/status and 200/400% zoom manually on the exact artifact; this contract is not conformance evidence."
+    ],
+    "securityPrivacy": [
+      "Verify current company administration, per-entry action/feature gates, cross-tenant refusal, authority withdrawal and no private search/destination data persistence or logging.",
+      "Verify configuration effects remain in each named Original owner; category/link visibility grants no authority."
+    ],
+    "usability": [
+      "Run representative exploratory and pre-registered confirmatory setting journeys for the exact artifact, including empty, restricted and unavailable states; source checks alone do not qualify usability."
+    ]
+  }
+}

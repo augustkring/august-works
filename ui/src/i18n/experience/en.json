@@ -623,6 +623,11 @@
         "purpose": "Company name and general defaults.",
         "aliases": "general settings organization"
       },
+      "company_defaults": {
+        "label": "Company defaults",
+        "purpose": "Review current organization identity, interaction defaults and new-hire approval settings.",
+        "aliases": "defaults approval general new-agent interactions"
+      },
       "members": {
         "label": "Members and invitations",
         "purpose": "Invite teammates and review membership.",
@@ -643,6 +648,16 @@
         "purpose": "Review agents, responsible owners and current work.",
         "aliases": "AI agent configuration"
       },
+      "agent_defaults": {
+        "label": "New-agent defaults",
+        "purpose": "Review company defaults for new-agent approval and interactions.",
+        "aliases": "AI policy approval interactions defaults"
+      },
+      "agent_runtime_identity": {
+        "label": "Agent runtime identities",
+        "purpose": "Review authorized Agent runtime identity controls.",
+        "aliases": "service identity credentials runtime"
+      },
       "connections": {
         "label": "Connected apps",
         "purpose": "Review connections and granted data access.",
@@ -662,6 +677,11 @@
         "label": "Workflow publication",
         "purpose": "Review reusable work and publication authority.",
         "aliases": "automation orchestration"
+      },
+      "readiness": {
+        "label": "Readiness checks",
+        "purpose": "Review current governed readiness requirements and findings.",
+        "aliases": "compliance assessment controls"
       },
       "account_security": {
         "label": "Account security",
@@ -698,6 +718,11 @@
         "purpose": "Review and export security event evidence.",
         "aliases": "audit security SIEM"
       },
+      "readiness_evidence": {
+        "label": "Readiness evidence",
+        "purpose": "Review current readiness findings in the original evidence owner.",
+        "aliases": "assessment controls audit"
+      },
       "billing": {
         "label": "Billing and usage",
         "purpose": "Review commercial access, usage and payment settings.",
@@ -712,6 +737,16 @@
         "label": "Advanced controls",
         "purpose": "Open authorized technical controls.",
         "aliases": "developer providers gateway API"
+      },
+      "runtime": {
+        "label": "Managed runtime",
+        "purpose": "Review managed runtime capacity through its original owner.",
+        "aliases": "provider compute capacity"
+      },
+      "tool_gateway": {
+        "label": "Tool gateways",
+        "purpose": "Review authorized tool gateway configuration.",
+        "aliases": "API integrations protocol"
       }
     },
     "restricted": "Restricted access. Permissions are checked when opened.",

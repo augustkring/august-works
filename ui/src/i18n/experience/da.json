@@ -623,6 +623,11 @@
         "purpose": "Virksomhedsnavn og generelle standarder.",
         "aliases": "generelt indstillinger organisation"
       },
+      "company_defaults": {
+        "label": "Virksomhedsstandarder",
+        "purpose": "Gennemgå organisationens identitet, interaktionsstandarder og godkendelse af nye ansættelser.",
+        "aliases": "standarder godkendelse generelt nye agenter interaktioner"
+      },
       "members": {
         "label": "Medlemmer og invitationer",
         "purpose": "Invitér kolleger og gennemgå medlemskab.",
@@ -643,6 +648,16 @@
         "purpose": "Gennemgå agenter, ansvarlige ejere og aktuelt arbejde.",
         "aliases": "AI agent opsætning"
       },
+      "agent_defaults": {
+        "label": "Standarder for nye agenter",
+        "purpose": "Gennemgå virksomhedsstandarder for godkendelse og interaktioner for nye agenter.",
+        "aliases": "AI politik godkendelse interaktioner standarder"
+      },
+      "agent_runtime_identity": {
+        "label": "Agenters runtime-identiteter",
+        "purpose": "Gennemgå autoriserede identitetskontroller for agent-runtime.",
+        "aliases": "serviceidentitet legitimationsoplysninger runtime"
+      },
       "connections": {
         "label": "Tilsluttede apps",
         "purpose": "Gennemgå forbindelser og tildelt dataadgang.",
@@ -662,6 +677,11 @@
         "label": "Publicering af workflows",
         "purpose": "Gennemgå genbrugeligt arbejde og tilladelse til publicering.",
         "aliases": "automatisering orkestrering"
+      },
+      "readiness": {
+        "label": "Beredskabskontroller",
+        "purpose": "Gennemgå aktuelle krav og fund for styret beredskab.",
+        "aliases": "efterlevelse vurdering kontroller"
       },
       "account_security": {
         "label": "Kontosikkerhed",
@@ -698,6 +718,11 @@
         "purpose": "Gennemgå og eksportér dokumentation for sikkerhedshændelser.",
         "aliases": "audit sikkerhed SIEM"
       },
+      "readiness_evidence": {
+        "label": "Beredskabsdokumentation",
+        "purpose": "Gennemgå aktuelle beredskabsfund hos den oprindelige dokumentationsejer.",
+        "aliases": "vurdering kontroller audit"
+      },
       "billing": {
         "label": "Betaling og forbrug",
         "purpose": "Gennemgå kommerciel adgang, forbrug og betalingsindstillinger.",
@@ -712,6 +737,16 @@
         "label": "Avancerede kontroller",
         "purpose": "Åbn tekniske kontroller, du har adgang til.",
         "aliases": "udvikler udbydere gateway API"
+      },
+      "runtime": {
+        "label": "Administreret runtime",
+        "purpose": "Gennemgå kapaciteten for administreret runtime hos den oprindelige ejer.",
+        "aliases": "udbyder beregning kapacitet"
+      },
+      "tool_gateway": {
+        "label": "Værktøjsgateways",
+        "purpose": "Gennemgå autoriseret konfiguration af værktøjsgateways.",
+        "aliases": "API integrationer protokol"
       }
     },
     "restricted": "Begrænset adgang. Rettigheder kontrolleres ved åbning.",

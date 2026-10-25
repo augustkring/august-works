@@ -1067,9 +1067,12 @@
       "implementationStatus": "in_progress",
       "componentPaths": [
         "ui/src/pages/ExperienceCompany.tsx",
-        "server/src/services/experience/company-navigation.ts"
+        "server/src/services/experience/company-navigation.ts",
+        "ui/src/pages/CompanySettings.tsx",
+        "server/src/routes/companies.ts"
       ],
-      "evidenceRefs": []
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/settings-general.json"
     },
     {
       "screenId": "SETTINGS-PEOPLE-ACCESS",
@@ -1085,9 +1088,14 @@
       "implementationStatus": "in_progress",
       "componentPaths": [
         "ui/src/pages/ExperienceCompany.tsx",
-        "server/src/services/experience/company-navigation.ts"
+        "server/src/services/experience/company-navigation.ts",
+        "ui/src/pages/CompanyAccess.tsx",
+        "ui/src/pages/Enterprise.tsx",
+        "server/src/routes/access.ts",
+        "server/src/services/enterprise/identity-policy.ts"
       ],
-      "evidenceRefs": []
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/settings-people-access.json"
     },
     {
       "screenId": "SETTINGS-AGENTS-AI",
@@ -1103,9 +1111,15 @@
       "implementationStatus": "in_progress",
       "componentPaths": [
         "ui/src/pages/ExperienceCompany.tsx",
-        "server/src/services/experience/company-navigation.ts"
+        "server/src/services/experience/company-navigation.ts",
+        "ui/src/pages/Agents.tsx",
+        "ui/src/pages/CompanySettings.tsx",
+        "ui/src/pages/AIGovernance.tsx",
+        "ui/src/pages/AgentRuntimeFabric.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
       ],
-      "evidenceRefs": []
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/settings-agents-ai.json"
     },
     {
       "screenId": "SETTINGS-APPS-DATA",
@@ -1121,9 +1135,15 @@
       "implementationStatus": "in_progress",
       "componentPaths": [
         "ui/src/pages/ExperienceCompany.tsx",
-        "server/src/services/experience/company-navigation.ts"
+        "server/src/services/experience/company-navigation.ts",
+        "ui/src/pages/apps/Browse.tsx",
+        "ui/src/pages/apps/AppDetail.tsx",
+        "ui/src/pages/Foundation.tsx",
+        "server/src/services/connection-intents.ts",
+        "server/src/services/foundation/foundation-service.ts"
       ],
-      "evidenceRefs": []
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/settings-apps-data.json"
     },
     {
       "screenId": "SETTINGS-GOVERNANCE-COMPLIANCE",
@@ -1139,9 +1159,15 @@
       "implementationStatus": "in_progress",
       "componentPaths": [
         "ui/src/pages/ExperienceCompany.tsx",
-        "server/src/services/experience/company-navigation.ts"
+        "server/src/services/experience/company-navigation.ts",
+        "ui/src/pages/AIGovernance.tsx",
+        "ui/src/pages/WorkflowIndex.tsx",
+        "ui/src/pages/Readiness.tsx",
+        "server/src/services/ai-governance/governance-service.ts",
+        "server/src/services/readiness/readiness-service.ts"
       ],
-      "evidenceRefs": []
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/settings-governance-compliance.json"
     },
     {
       "screenId": "SETTINGS-SECURITY",
@@ -1157,9 +1183,15 @@
       "implementationStatus": "in_progress",
       "componentPaths": [
         "ui/src/pages/ExperienceCompany.tsx",
-        "server/src/services/experience/company-navigation.ts"
+        "server/src/services/experience/company-navigation.ts",
+        "ui/src/pages/SaasAccount.tsx",
+        "ui/src/pages/CustomerSupport.tsx",
+        "ui/src/pages/Secrets.tsx",
+        "ui/src/pages/SecurityEvents.tsx",
+        "ui/src/pages/AgentRuntimeFabric.tsx"
       ],
-      "evidenceRefs": []
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/settings-security.json"
     },
     {
       "screenId": "SETTINGS-DATA-PRIVACY",
@@ -1175,9 +1207,13 @@
       "implementationStatus": "in_progress",
       "componentPaths": [
         "ui/src/pages/ExperienceCompany.tsx",
-        "server/src/services/experience/company-navigation.ts"
+        "server/src/services/experience/company-navigation.ts",
+        "ui/src/pages/CompanyExport.tsx",
+        "ui/src/pages/SaasDeletion.tsx",
+        "server/src/services/saas/account-deletion.ts"
       ],
-      "evidenceRefs": []
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/settings-data-privacy.json"
     },
     {
       "screenId": "SETTINGS-AUDIT-EVIDENCE",
@@ -1193,9 +1229,15 @@
       "implementationStatus": "in_progress",
       "componentPaths": [
         "ui/src/pages/ExperienceCompany.tsx",
-        "server/src/services/experience/company-navigation.ts"
+        "server/src/services/experience/company-navigation.ts",
+        "ui/src/pages/audit/CompanyActivity.tsx",
+        "ui/src/pages/SecurityEvents.tsx",
+        "ui/src/pages/AIGovernance.tsx",
+        "ui/src/pages/Readiness.tsx",
+        "server/src/services/ai-governance/evidence-pack.ts"
       ],
-      "evidenceRefs": []
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/settings-audit-evidence.json"
     },
     {
       "screenId": "SETTINGS-BILLING-CAPACITY",
@@ -1211,9 +1253,14 @@
       "implementationStatus": "in_progress",
       "componentPaths": [
         "ui/src/pages/ExperienceCompany.tsx",
-        "server/src/services/experience/company-navigation.ts"
+        "server/src/services/experience/company-navigation.ts",
+        "ui/src/pages/SaasBilling.tsx",
+        "ui/src/pages/SaasRuntimes.tsx",
+        "server/src/services/billing/billing.ts",
+        "server/src/services/billing/capacity-admission.ts"
       ],
-      "evidenceRefs": []
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/settings-billing-capacity.json"
     },
     {
       "screenId": "SETTINGS-ADVANCED-DEVELOPER",
@@ -1229,9 +1276,15 @@
       "implementationStatus": "in_progress",
       "componentPaths": [
         "ui/src/pages/ExperienceCompany.tsx",
-        "server/src/services/experience/company-navigation.ts"
+        "server/src/services/experience/company-navigation.ts",
+        "ui/src/pages/ExperienceAdvanced.tsx",
+        "ui/src/pages/AgentRuntimeFabric.tsx",
+        "ui/src/pages/tools/AdvancedToolsRoute.tsx",
+        "ui/src/pages/CompanyEnvironments.tsx",
+        "server/src/services/experience/service.ts"
       ],
-      "evidenceRefs": []
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/settings-advanced-developer.json"
     },
     {
       "screenId": "WORKFLOW-DESCRIBE",

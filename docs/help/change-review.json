@@ -2021,10 +2021,10 @@
     {
       "source": "server/src/services/native-local-process-stop.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "8bed7d23336e7eada16542a0586f520f148ad4d9f856a4e772663c8e9adca92e",
-      "articleSha256": "e634875e2e77456e6cd6051158a9e450eae9f2f3dbb4f18a5be52365bcc41980",
+      "sourceSha256": "980d8bc976885c20e8c1236f46bd726b7dbd7281a83d5099c0b7373755060f2e",
+      "articleSha256": "c57b16d980152c5a04c123634599ba10e1989b4a501bd754b371064ac6e44ec4",
       "decision": "updated",
-      "rationale": "Reviewed the local Stop receipt owner: only confirmed absence of the current local process identity produces the receipt needed by runtime erasure; the article states that cleanup waits for Native stop confirmation."
+      "rationale": "Normal Heartbeat cleanup now records the same server-authored Stop receipt as stale-process recovery, but only after a terminal local process identity is confirmed absent; the article scopes its claim to managed runtime files and deferred cleanup."
     },
     {
       "source": "server/src/services/memory/memory-jobs.ts",
@@ -2045,10 +2045,26 @@
     {
       "source": "server/src/services/native-local-process-stop.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "8bed7d23336e7eada16542a0586f520f148ad4d9f856a4e772663c8e9adca92e",
-      "articleSha256": "9149798be001b73c3a05daef24cf9f0e361e88eff9014055ff881a7ac368f5b3",
+      "sourceSha256": "980d8bc976885c20e8c1236f46bd726b7dbd7281a83d5099c0b7373755060f2e",
+      "articleSha256": "8e0134f5d6252ebe1d322edf7114b58b737e4be412d77ff3655c37a0d82d2d46",
       "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: reviewed the local Stop receipt owner: only confirmed absence of the current local process identity produces the receipt needed by runtime erasure; the article states that cleanup waits for Native stop confirmation."
+      "rationale": "Danish version checked against the same current source behavior: Normal Heartbeat cleanup now records the same server-authored Stop receipt as stale-process recovery, but only after a terminal local process identity is confirmed absent; the article scopes its claim to managed runtime files and deferred cleanup."
+    },
+    {
+      "source": "server/src/services/heartbeat.ts",
+      "articleId": "export-and-delete",
+      "sourceSha256": "0bd9846265754cefcc8a525039f4a81a8ebb8727316765cacdb4f0e564dbbd14",
+      "articleSha256": "c57b16d980152c5a04c123634599ba10e1989b4a501bd754b371064ac6e44ec4",
+      "decision": "updated",
+      "rationale": "Reviewed the actual normal Heartbeat terminal-cleanup callsite: after Native dispatch and before local lease release, it asks the exact local PID/process-group owner to compare-clear only after OS absence is confirmed; remote, warm, resumed, and restart-suspended runs do not receive that receipt here."
+    },
+    {
+      "source": "server/src/services/heartbeat.ts",
+      "articleId": "export-and-delete-da",
+      "sourceSha256": "0bd9846265754cefcc8a525039f4a81a8ebb8727316765cacdb4f0e564dbbd14",
+      "articleSha256": "8e0134f5d6252ebe1d322edf7114b58b737e4be412d77ff3655c37a0d82d2d46",
+      "decision": "updated",
+      "rationale": "Danish version checked against the same current source behavior: reviewed the actual normal Heartbeat terminal-cleanup callsite: after Native dispatch and before local lease release, it asks the exact local PID/process-group owner to compare-clear only after OS absence is confirmed; remote, warm, resumed, and restart-suspended runs do not receive that receipt here."
     }
   ]
 }

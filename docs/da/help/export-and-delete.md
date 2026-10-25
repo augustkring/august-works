@@ -12,7 +12,7 @@ locale: da
 last_verified_at: 2026-10-25
 review_trigger: Ændringer i eksport, sletning, opbevaring, privat Memory-deling eller kildeadgang
 security_or_privacy_sensitive: true
-linked_source_files: [ui/src/pages/CompanyExport.tsx, ui/src/pages/SaasDeletion.tsx, ui/src/pages/SaasAccount.tsx, server/src/services/saas/account-deletion.ts, server/src/services/saas/offboarding.ts, server/src/services/saas/company-purge.ts, ui/src/pages/Memory.tsx, server/src/routes/memory.ts, server/src/services/memory/memory-service.ts, server/src/services/memory/memory-privacy.ts, server/src/services/memory/memory-jobs.ts, server/src/services/native-runtime/runtime-asset-retention.ts, server/src/services/native-local-process-stop.ts]
+linked_source_files: [ui/src/pages/CompanyExport.tsx, ui/src/pages/SaasDeletion.tsx, ui/src/pages/SaasAccount.tsx, server/src/services/saas/account-deletion.ts, server/src/services/saas/offboarding.ts, server/src/services/saas/company-purge.ts, ui/src/pages/Memory.tsx, server/src/routes/memory.ts, server/src/services/memory/memory-service.ts, server/src/services/memory/memory-privacy.ts, server/src/services/memory/memory-jobs.ts, server/src/services/native-runtime/runtime-asset-retention.ts, server/src/services/native-local-process-stop.ts, server/src/services/heartbeat.ts]
 ---
 
 Blentera har særskilte handlinger til at eksportere en virksomhed, slette en organisation og slette din personlige konto. Kontrollér, hvilke data og hvilken identitet du mener, før du fortsætter.

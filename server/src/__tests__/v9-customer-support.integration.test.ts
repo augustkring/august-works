@@ -80,6 +80,15 @@ const support = await getEmbeddedPostgresTestSupport();
         progressive_shell_v9: true,
         saas_deployment_profile_v6: true,
         admin_support_v6: true,
+        runtime_host_agent_v6: true,
+        billing_v6: true,
+        billing_entitlements_v6: true,
+        billing_usage_v6: true,
+        hosted_openclaw_v6: true,
+        agent_identities_v5: true,
+        enableFoundationV1: true,
+        enableContextEngineV1: true,
+        readiness_engine_v7: true,
       });
       service = saasSupportService(db, {
         environment: "staging",
@@ -1180,6 +1189,66 @@ const support = await getEmbeddedPostgresTestSupport();
               eq(companyMemberships.principalId, "owner"),
             ),
           );
+      }
+    });
+    it("projects existing settings jobs into their stable categories through the Original navigation owner", async () => {
+      const view = await companyExperience(db, actor, companyId);
+      const entries = new Map(
+        view.sections.flatMap((section) =>
+          section.entries.map((entry) => [entry.id, { section: section.id, href: entry.href }] as const),
+        ),
+      );
+      expect(entries.get("company_defaults")).toEqual({
+        section: "general",
+        href: "/company/settings/general",
+      });
+      expect(entries.get("agent_defaults")).toEqual({
+        section: "agents_ai",
+        href: "/company/settings/general",
+      });
+      expect(entries.get("agent_runtime_identity")).toEqual({
+        section: "agents_ai",
+        href: "/runtime",
+      });
+      expect(entries.get("readiness")).toEqual({
+        section: "governance_compliance",
+        href: "/readiness",
+      });
+      expect(entries.get("readiness_evidence")).toEqual({
+        section: "audit_evidence",
+        href: "/readiness",
+      });
+      expect(entries.get("runtime")).toEqual({
+        section: "advanced_developer",
+        href: "/company/settings/runtime",
+      });
+      expect(entries.get("tool_gateway")).toEqual({
+        section: "advanced_developer",
+        href: "/apps/gateways",
+      });
+      expect(view.sections.map((section) => section.id)).toHaveLength(10);
+      await instanceSettingsService(db).updateExperimental({
+        readiness_engine_v7: false,
+        agent_identities_v5: false,
+        hosted_openclaw_v6: false,
+      });
+      try {
+        const unavailable = await companyExperience(db, actor, companyId);
+        const unavailableIds = new Set(
+          unavailable.sections.flatMap((section) =>
+            section.entries.map((entry) => entry.id),
+          ),
+        );
+        expect(unavailableIds.has("readiness")).toBe(false);
+        expect(unavailableIds.has("readiness_evidence")).toBe(false);
+        expect(unavailableIds.has("agent_runtime_identity")).toBe(false);
+        expect(unavailableIds.has("runtime")).toBe(false);
+      } finally {
+        await instanceSettingsService(db).updateExperimental({
+          readiness_engine_v7: true,
+          agent_identities_v5: true,
+          hosted_openclaw_v6: true,
+        });
       }
     });
     it("mounts account-bound private no-store HTTP and refuses changed accounts, unknown query, agents and rollback", async () => {

@@ -10,7 +10,7 @@ import {
 } from "@paperclipai/shared";
 import { api } from "../api/client";
 import { ExperienceCompany } from "./ExperienceCompany";
-import "../i18n";
+import { i18n } from "../i18n";
 const id = (n: number) =>
   `10000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 let company = id(1),
@@ -58,19 +58,19 @@ function data(companyId = company): CompanyExperience {
   };
 }
 let root: Root, container: HTMLDivElement, client: QueryClient;
-const view = () => (
+const view = (initialEntry = "/") => (
   <QueryClientProvider client={client}>
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <ExperienceCompany />
     </MemoryRouter>
   </QueryClientProvider>
 );
-async function mount() {
+async function mount(initialEntry?: string) {
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
-  await act(async () => root.render(view()));
+  await act(async () => root.render(view(initialEntry)));
 }
 async function search(value: string) {
   await act(async () => {
@@ -112,6 +112,49 @@ it("searches authorized customer labels, purposes and old aliases with category 
   expect(container.textContent).toContain("0 settings match");
   expect(get).toHaveBeenCalledTimes(1);
   expect(get.mock.calls[0][1]).toMatchObject({ cache: "no-store" });
+});
+it("renders the added Company owner entries in Danish as well as English", async () => {
+  const response = data();
+  response.sections.find((section) => section.id === "general")!.entries = [
+    { id: "company_defaults", href: "/company/settings/general" },
+  ];
+  response.sections.find((section) => section.id === "governance_compliance")!.entries = [
+    { id: "readiness", href: "/readiness" },
+  ];
+  response.sections.find((section) => section.id === "advanced_developer")!.entries = [
+    { id: "tool_gateway", href: "/apps/gateways" },
+  ];
+  vi.spyOn(api, "get").mockResolvedValue(response);
+  const previous = i18n.language;
+  try {
+    await act(async () => {
+      await i18n.changeLanguage("en");
+    });
+    await mount();
+    await vi.waitFor(() => expect(container.textContent).toContain("Company defaults"));
+    expect(container.textContent).toContain("Readiness checks");
+    expect(container.textContent).toContain("Tool gateways");
+    await act(async () => {
+      await i18n.changeLanguage("da");
+    });
+    expect(container.textContent).toContain("Virksomhedsstandarder");
+    expect(container.textContent).toContain("Beredskabskontroller");
+    expect(container.textContent).toContain("Værktøjsgateways");
+  } finally {
+    await act(async () => {
+      await i18n.changeLanguage(previous);
+    });
+  }
+});
+it("opens and focuses a requested stable settings category deep link", async () => {
+  vi.spyOn(api, "get").mockResolvedValue(data());
+  await mount("/company/settings#company-section-general");
+  await vi.waitFor(() =>
+    expect(document.activeElement).toBe(
+      container.querySelector("#company-section-general h2"),
+    ),
+  );
+  expect(container.querySelectorAll("[data-company-settings-section]")).toHaveLength(10);
 });
 it.each(["company", "account"])(
   "clears search and changes the private request namespace when %s changes",

@@ -12,7 +12,7 @@ locale: en
 last_verified_at: 2026-10-25
 review_trigger: Export scope, deletion, retention, or private Memory sharing and source access changes
 security_or_privacy_sensitive: true
-linked_source_files: [ui/src/pages/CompanyExport.tsx, ui/src/pages/SaasDeletion.tsx, ui/src/pages/SaasAccount.tsx, server/src/services/saas/account-deletion.ts, server/src/services/saas/offboarding.ts, server/src/services/saas/company-purge.ts, ui/src/pages/Memory.tsx, server/src/routes/memory.ts, server/src/services/memory/memory-service.ts, server/src/services/memory/memory-privacy.ts, server/src/services/memory/memory-jobs.ts, server/src/services/native-runtime/runtime-asset-retention.ts, server/src/services/native-local-process-stop.ts]
+linked_source_files: [ui/src/pages/CompanyExport.tsx, ui/src/pages/SaasDeletion.tsx, ui/src/pages/SaasAccount.tsx, server/src/services/saas/account-deletion.ts, server/src/services/saas/offboarding.ts, server/src/services/saas/company-purge.ts, ui/src/pages/Memory.tsx, server/src/routes/memory.ts, server/src/services/memory/memory-service.ts, server/src/services/memory/memory-privacy.ts, server/src/services/memory/memory-jobs.ts, server/src/services/native-runtime/runtime-asset-retention.ts, server/src/services/native-local-process-stop.ts, server/src/services/heartbeat.ts]
 ---
 
 Blentera has separate actions for exporting a company, deleting an organization, and deleting your personal account. Check which data and identity you mean before continuing.
