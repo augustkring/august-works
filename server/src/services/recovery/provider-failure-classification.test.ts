@@ -7,6 +7,20 @@ import {
 import { legacyExecutionNeedsReconciliation } from "../legacy-execution-recovery.js";
 
 describe("classifyAdapterFailureForRecovery", () => {
+  it("does not automatically replay an ACP tool whose outcome became unknown", () => {
+    const failure = { errorCode: "acpx_tool_stalled", error: "Tool stopped reporting updates", resultJson: { acpStalledToolKind: "execute" } };
+    expect(classifyAdapterFailureForRecovery(failure)).toBeNull();
+    expect(classifyContinuationFailure({ errorCode: "acpx_tool_stalled" } as never))
+      .toMatchObject({ kind: "non_retryable", maxAttempts: 0, errorCode: "acpx_tool_stalled" });
+    expect(legacyExecutionNeedsReconciliation({
+      runtimeMode: "legacy", status: "failed", errorCode: "acpx_tool_stalled",
+      resultJson: {
+        acpStalledToolKind: "execute",
+        conversationContinuation: "continue_conversation_v1",
+      },
+    })).toBe(true);
+  });
+
   it("uses a typed ACP quota reset without needing the provider's original message", () => {
     const now = new Date("2026-07-15T20:00:00.000Z");
     expect(classifyAdapterFailureForRecovery({

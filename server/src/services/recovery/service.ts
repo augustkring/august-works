@@ -488,6 +488,10 @@ const TRANSIENT_INFRA_CONTINUATION_ERROR_CODES = new Set<string>([
 ]);
 
 const NON_RETRYABLE_CONTINUATION_ERROR_CODES = new Set<string>([
+  // The ACP host ended a tool call after it stopped reporting updates. The
+  // provider may already have applied an unknown side effect, so generic
+  // continuation must not replay the task automatically.
+  "acpx_tool_stalled",
   "adapter_engine_unavailable",
   "agent_not_invokable",
   "agent_not_found",
