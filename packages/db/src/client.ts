@@ -5,6 +5,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import postgres from "postgres";
 import * as schema from "./schema/index.js";
+import { installDatabaseWorkSignals } from "./work-signals.js";
 
 const MIGRATIONS_FOLDER = fileURLToPath(new URL("./migrations", import.meta.url));
 const DRIZZLE_MIGRATIONS_TABLE = "__drizzle_migrations";
@@ -261,7 +262,7 @@ export function createDb(url: string, options?: DatabaseClientOptions) {
   if (key) registerClient(key, sql);
   // A disconnect can hide a committed write. Let the driver reconnect, but
   // leave retries and uncertain-outcome reconciliation to the domain owner.
-  return drizzlePg(sql, { schema });
+  return installDatabaseWorkSignals(drizzlePg(sql, { schema }));
 }
 
 export async function getPostgresDataDirectory(url: string): Promise<string | null> {

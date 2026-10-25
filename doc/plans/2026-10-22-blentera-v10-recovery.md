@@ -1525,3 +1525,10 @@ Native document result capture now transports the actual backend turn/call ident
 ### 2026-10-25 — Selected runtime instruction/Skill inputs
 
 The original retained runtime preparation capture now includes exact selected authored Skill and approved Memory versions, plus the actual materialized instruction and selected runtime Skill bundle/manifest identities. No unselected Skills, raw instruction body or private filesystem path is added to those references. Both complete original runtime/procedure files pass26tests. Evidence: `native-prepared-asset-inputs-2026-10-25/receipts.json`. This closes missing prepared-asset facts only; dispatch/file-read/consumption, Role Pack and other input families, immutable output closure and current cross-slice compilation/final workspace gates remain open.
+
+
+### 2026-10-25 — UP13 native transaction notification dependency
+
+Adapted pinned upstream `packages/db/src/work-signals.ts` through the original createDb owner, independently of the existing business work-signal domain. Opt-in registration happens before writes; nested savepoints settle only with the outer transaction. Failed outcomes retain native XIDs for fresh-pool status reconciliation; the lifecycle never replays SQL. Added active callback fencing to prevent escaped outer/savepoint registrations from leaving permanent pending hints, and finite listener warnings keep error content private.
+
+Final native14PASS includes actual PostgreSQL commit followed by a deliberately lost client response, late commit/abort, real backend disconnect, rollback/savepoint visibility, linked versus isolated pools, listener failure and unchanged no-signal query behavior. Final DBbuild0 passes; the whole DB suite is ongoing. Evidence: `database-work-signals-2026-10-25/receipts.json`. UP13 deadline workers/producers, restore/admission/idle/Stop/shutdown and its full occurrence/effect matrix remain mandatory; process-local hints are not a cross-process event log.

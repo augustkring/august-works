@@ -206,6 +206,27 @@ When authoring migrations or one-time backfills:
 - The repo keeps only the newest 5 snapshots. `generate` runs `prune:snapshots` afterwards to delete older ones. Drizzle only reads the newest snapshot, and each snapshot is a full copy of the schema (over 1 MB each). Older snapshots are still in git history.
 - `packages/db/src/migration-snapshot-drift.test.ts` is the enforcement backstop. It repeats the diff that `generate` performs and fails when the newest snapshot no longer matches `packages/db/src/schema/`.
 
+## Process-local durable-work notifications
+
+`createDb` installs the transaction lifecycle used by `signalDatabaseWork`.
+An opted-in producer awaits registration before writing its existing durable
+queue. Nested savepoints share the outer transaction's hints; consumers receive
+settlement only after that outer operation finishes. An escaped transaction
+callback cannot register new work. Transactions without opted-in work issue no
+additional notification SQL.
+
+Failed outcomes retain their PostgreSQL transaction ID for a fresh-pool
+`pg_xact_status` check before the next queue scan. An unresolved transaction
+stays pending; committed, aborted and aged-out outcomes release the hint so the
+owner can inspect durable state. This never retries a mutating statement.
+Listener failures cannot alter transaction success or expose listener error
+content through warnings.
+
+These notifications are process-local hints, not a cross-process event log.
+Periodic durable scans remain necessary for restart, other processes, direct
+database writes and lost hints. Installing the lifecycle does not itself
+enable deadline workers or qualify idle/runtime shutdown behavior.
+
 ## Workflow step durations
 
 Migration `0531_regular_bug.sql` widens `workflow_step_runs.duration_ms` from
