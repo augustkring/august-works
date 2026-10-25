@@ -28,6 +28,7 @@ import {
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
+import { assertFirstPartySupportRelease, assertFirstPartySupportReservation } from "../agent-packages/execution-gate.js";
 import { logActivity, withV7ActivityTransaction } from "../v7-mutations.js";
 import { conflict, forbidden, notFound } from "../../errors.js";
 
@@ -172,6 +173,9 @@ export function modelReservationService(
       input: { companyId: string; purpose: "first_party_support" },
       now: Date,
     ): CompanyPurposeFunding | null;
+    /** Exact deployment-owned first-party package release. No request field
+     * or customer preference can select a different version. */
+    firstPartySupportVersionId?: string;
     /** Original support caller resolves current readable source authority under
      * this transaction. This server-held callback is required for taskless use. */
     currentCompanyPurposeAuthority?(
@@ -423,12 +427,22 @@ export function modelReservationService(
         await lockMemoryPrivacy(tx, input.companyId);
         const userId = await assertCompanyPurposeAuthority(tx, actor, input);
         const { funding, quote } = freshCompanyPurposeFunding(input, now);
+        if (!options.firstPartySupportVersionId) {
+          throw forbidden("The first-party support package release is not configured");
+        }
+        const supportPackage = await assertFirstPartySupportRelease(
+          tx,
+          options.firstPartySupportVersionId,
+          funding.tariff.sourceSha,
+          now,
+        );
         const budget = await ensureCompanyPurposeBudget(tx, funding);
         const requestHash = nativeSha256({
           purpose: "first_party_support",
           input,
           principalUserId: userId,
           funding: funding.profileHash,
+          packageVersionId: supportPackage.packageVersionId,
           quote,
         });
         const [existing] = await tx.select().from(orchestrationCompanyPurposeReservations).where(and(
@@ -454,6 +468,7 @@ export function modelReservationService(
         const [reservation] = await tx.insert(orchestrationCompanyPurposeReservations).values({
           companyId: input.companyId,
           budgetId: budget.id,
+          packageVersionId: supportPackage.packageVersionId,
           principalUserId: userId,
           idempotencyKey: input.idempotencyKey,
           requestHash,
@@ -509,6 +524,17 @@ export function modelReservationService(
         const userId = await assertCompanyPurposeAuthority(tx, actor, input);
         if (initial.principalUserId !== userId) throw forbidden("Original support principal required");
         const { funding, quote } = freshCompanyPurposeFunding(input, now);
+        if (!options.firstPartySupportVersionId) {
+          throw forbidden("The first-party support package release is not configured");
+        }
+        await assertFirstPartySupportReservation(
+          tx,
+          companyId,
+          initial.id,
+          options.firstPartySupportVersionId,
+          funding.tariff.sourceSha,
+          now,
+        );
         const budget = await ensureCompanyPurposeBudget(tx, funding);
         if (budget.id !== initial.budgetId) throw conflict("The support funding profile changed before dispatch");
         const [record] = await tx.select().from(orchestrationCompanyPurposeReservations).where(eq(
@@ -535,6 +561,14 @@ export function modelReservationService(
           details: { reservationId: id, purpose: "first_party_support", maximumMinor: record.maximumMinor },
         }, publications);
         await assertCompanyPurposeAuthority(tx, actor, input);
+        await assertFirstPartySupportReservation(
+          tx,
+          companyId,
+          id,
+          options.firstPartySupportVersionId,
+          funding.tariff.sourceSha,
+          now,
+        );
         return {
           reservation: dispatched!,
           funding: {
@@ -695,6 +729,17 @@ export function modelReservationService(
         const userId = await assertCompanyPurposeAuthority(tx, actor, input);
         if (initial.principalUserId !== userId) throw forbidden("Original support principal required");
         const { funding, quote } = freshCompanyPurposeFunding(input, now);
+        if (!options.firstPartySupportVersionId) {
+          throw forbidden("The first-party support package release is not configured");
+        }
+        await assertFirstPartySupportReservation(
+          tx,
+          companyId,
+          initial.id,
+          options.firstPartySupportVersionId,
+          funding.tariff.sourceSha,
+          now,
+        );
         const budget = await ensureCompanyPurposeBudget(tx, funding);
         if (budget.id !== initial.budgetId) throw conflict("The support funding profile changed before content return");
         const [record] = await tx.select().from(orchestrationCompanyPurposeReservations).where(eq(
@@ -705,6 +750,14 @@ export function modelReservationService(
           throw conflict("Current completed support funding is required before content return");
         }
         await assertCompanyPurposeAuthority(tx, actor, input);
+        await assertFirstPartySupportReservation(
+          tx,
+          companyId,
+          id,
+          options.firstPartySupportVersionId,
+          funding.tariff.sourceSha,
+          now,
+        );
       });
     },
     async reserve(actor: AuthorizationActor, raw: Request, now = new Date()) {

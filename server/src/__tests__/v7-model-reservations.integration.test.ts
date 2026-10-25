@@ -1,5 +1,5 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { randomUUID } from "node:crypto";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { createHash, randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import {
   companyMemberships,
@@ -28,8 +28,49 @@ import {
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import { purgeCompanyContent } from "../services/saas/company-purge.js";
 import { saasOffboardingService } from "../services/saas/offboarding.js";
+import { agentPackageService } from "../services/agent-packages/package-service.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
+import { COMPANY_SEARCH_HELP_ARTICLES } from "../services/company-search-help.generated.js";
+import { supportGuideKnowledgePin } from "../services/experience/support-assistant-grounding.js";
+import { firstPartySupportModelGateway, supportAssistantPolicyRevision } from "../services/orchestration/first-party-support-model-gateway.js";
+import { searchAuthorizedSupportHelp } from "../services/experience/support-assistant-help.js";
+import type { FirstPartySupportModelProfile } from "../services/orchestration/first-party-support-model-profiles.js";
 const sourceSha = "a".repeat(40),
   authorityHash = "b".repeat(64);
+const supportApiKey = "software-fixture-support-key-never-live";
+const supportModelProfile = (companyId: string, packageVersionId: string): FirstPartySupportModelProfile => ({
+  companyId,
+  packageVersionId,
+  purpose: "first_party_support",
+  funder: "blentera_platform",
+  profileId: "software-support-profile",
+  providerAccountId: "software-platform-account-fixture",
+  credentialBindingHash: createHash("sha256").update(supportApiKey).digest("hex"),
+  privacyNoticeUrl: "https://support.example.test/privacy/ai-processing",
+  periodKey: "software-fixture-period",
+  periodStartsAt: new Date(Date.now() - 10 * 60_000).toISOString(),
+  periodEndsAt: new Date(Date.now() + 60 * 60_000).toISOString(),
+  maxCostMinor: 500,
+  maxCalls: 10,
+  contract: "anthropic-text-messages-2023-06-01",
+  tariff: {
+    provider: "anthropic",
+    model: "software-fixture-model-20261025",
+    currency: "USD",
+    inputMinorPerMillion: 100,
+    outputMinorPerMillion: 100,
+    fixedMinor: 0,
+    qualificationHash: "c".repeat(64),
+    sourceSha,
+    testedAt: new Date(Date.now() - 20 * 60_000).toISOString(),
+    expiresAt: new Date(Date.now() + 2 * 60 * 60_000).toISOString(),
+  },
+  maximumEnvelopeBytes: 262144,
+  inputTokensUpperBound: 300000,
+  maxOutputTokens: 512,
+  qualificationEvidenceRef: "https://qualification.test.invalid/qualification/software-support-fixture.json",
+  qualificationArtifactSha256: "d".repeat(64),
+});
 const tariff = (): ModelTariffCeiling => ({
   provider: "openai",
   model: "fixture-only-model",
@@ -116,6 +157,7 @@ const support = await getEmbeddedPostgresTestSupport();
       supportFunding: CompanyPurposeFunding | null,
       supportAuthorityHash: string,
       supportAuthorityResponses: string[] | null,
+      supportPackageVersionId: string,
       lateProofEnabled: boolean,
       lateProofAccountMismatch: boolean;
     beforeAll(async () => {
@@ -127,13 +169,71 @@ const support = await getEmbeddedPostgresTestSupport();
     afterAll(async () => {
       await database?.cleanup();
     }, 30000);
+    let supportPackageSequence = 0;
     beforeEach(async () => {
       await instanceSettingsService(db).updateExperimental({
+        saas_deployment_profile_v6: true,
+        billing_v6: true,
         enableWorkflowsV1: true,
         readiness_engine_v7: true,
         orchestration_v7: true,
+        agent_packages_v7: true,
       });
       f = await seedV5Presences(db);
+      f.actor.sessionId = await seedNativePasskeySession(db, f.userId);
+      const qualification = { uri: "https://qualification.test.invalid/qualification/support-fixture", sha256: "d".repeat(64) };
+      const packagePublisher = agentPackageService(db, {
+        operatorUserIds: [f.userId],
+        protectedEvidenceOrigin: "https://qualification.test.invalid",
+        sourceSha,
+      });
+      // The fixture exercises the original operator publication path. Its
+      // synthetic evidence is software-test data, not release qualification.
+      const publishedSupport = await packagePublisher.publish(f.actor, {
+        packageKey: "paperclip-support",
+        name: "Blentera Support (test fixture)",
+        description: "Software-only fixture for taskless ledger tests",
+        category: "support",
+        version: `1.0.${++supportPackageSequence}`,
+        releaseNotes: "Software-only integration fixture",
+        manifest: {
+          purpose: "Answer bounded customer questions from currently authorized sources",
+          prohibitedUses: ["External communications", "Customer data mutation"],
+          role: "Read-only support assistant",
+          audience: "first_party_support",
+          maximumRisk: "C1",
+          actionClasses: ["internal_draft"],
+          requiredKnowledge: [supportGuideKnowledgePin(COMPANY_SEARCH_HELP_ARTICLES[0]!)],
+          requiredConnections: [],
+          optionalConnections: [],
+          memoryPolicy: "no_persistent_memory",
+          humanApproval: "before_material_action",
+          supervision: "bounded_native",
+          verification: "independent_native",
+          sandboxAssurance: "read_only_no_code_execution",
+          runtimeProviders: ["paperclip_native"],
+          onboardingQuestions: [],
+          knownLimitations: ["Synthetic publication fixture; no production qualification claim"],
+          sourceRevision: sourceSha,
+          license: "MIT",
+          commercialProductKey: null,
+        },
+        components: [{ key: "support-role", type: "role_pack", sourceVersion: "1", contentHash: "e".repeat(64), source: qualification, required: true }],
+        releaseEvidence: {
+          sbom: qualification,
+          provenance: qualification,
+          signature: qualification,
+          scan: qualification,
+          evaluations: qualification,
+          protectedHoldout: qualification,
+          sandboxQualification: null,
+          releaseAuthorization: qualification,
+          unresolvedCritical: [],
+          evaluatedAt: new Date(Date.now() - 1000).toISOString(),
+          expiresAt: new Date(Date.now() + 3600000).toISOString(),
+        },
+      });
+      supportPackageVersionId = publishedSupport.id;
       price = tariff();
       currentHash = authorityHash;
       supportAuthorityHash = authorityHash;
@@ -170,6 +270,7 @@ const support = await getEmbeddedPostgresTestSupport();
         qualifiedTariff: async () => price,
         currentAuthority: async () => currentHash,
         qualifiedCompanyPurposeFunding: () => supportFunding,
+        firstPartySupportVersionId: supportPackageVersionId,
         currentCompanyPurposeAuthority: async () =>
           supportAuthorityResponses?.shift() ?? supportAuthorityHash,
         reconcileCompanyPurposeOutcome: async (_tx, { reservation, funding }) => lateProofEnabled ? ({
@@ -186,6 +287,35 @@ const support = await getEmbeddedPostgresTestSupport();
           usage: { inputTokens: 1, outputTokens: 1 },
         }) : null,
       });
+    const supportGateway = (
+      profiles: FirstPartySupportModelProfile[],
+      fetch: typeof import("../services/remote-http-fetch.js").guardedRemoteHttpFetch,
+    ) => firstPartySupportModelGateway(db, {
+      profiles,
+      sourceSha,
+      protectedEvidenceOrigin: "https://qualification.test.invalid",
+      helpSearch: (tx, actor, input) => searchAuthorizedSupportHelp(tx, actor, input),
+      credential: () => supportApiKey,
+      fetch,
+    });
+    const supportTransportResponse = (init: RequestInit) => {
+      const requestBody = JSON.parse(String(init.body)) as {
+        model: string;
+        messages: Array<{ content: Array<{ text: string }> }>;
+      };
+      const envelope = JSON.parse(requestBody.messages[0]!.content[0]!.text) as {
+        approvedHelpEvidence: Array<{ id: string }>;
+      };
+      return new Response(JSON.stringify({
+        type: "message",
+        role: "assistant",
+        model: requestBody.model,
+        stop_reason: "end_turn",
+        content: [{ type: "text", text: JSON.stringify({ evidenceIds: [envelope.approvedHelpEvidence[0]!.id] }) }],
+        usage: { input_tokens: 100, output_tokens: 8 },
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    };
+    const mockSupportTransport = () => vi.fn(async (_url: string | URL, init: RequestInit) => supportTransportResponse(init));
     const makeSupportFunding = (companyId: string, overrides: Partial<CompanyPurposeFunding> = {}): CompanyPurposeFunding => {
       const base = {
         companyId,
@@ -478,6 +608,7 @@ const support = await getEmbeddedPostgresTestSupport();
       const [reservation] = await db.select().from(orchestrationCompanyPurposeReservations).where(eq(orchestrationCompanyPurposeReservations.companyId, f.home));
       const [budget] = await db.select().from(orchestrationCompanyPurposeBudgets).where(eq(orchestrationCompanyPurposeBudgets.companyId, f.home));
       expect(reservation).toMatchObject({ companyId: f.home, budgetId: budget!.id, principalUserId: f.userId, maximumMinor: 30, status: "reserved" });
+      expect(reservation?.packageVersionId).toBe(supportPackageVersionId);
       expect(budget).toMatchObject({ companyId: f.home, purpose: "first_party_support", funder: "blentera_platform", provider: "openai", reservedMinor: 30, reservedCalls: 1, maxCostMinor: 50, maxCalls: 10 });
       expect(await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.companyId, f.home))).toHaveLength(0);
       supportFunding = makeSupportFunding(f.home, { profileId: "rotated-support-profile" });
@@ -519,6 +650,199 @@ const support = await getEmbeddedPostgresTestSupport();
       const [stored] = await db.select().from(orchestrationCompanyPurposeReservations).where(eq(orchestrationCompanyPurposeReservations.id, reservation.id));
       expect(stored?.status).toBe("cancelled");
       expect((await db.select().from(orchestrationCompanyPurposeBudgets).where(eq(orchestrationCompanyPurposeBudgets.companyId, f.home)))[0]?.reservedMinor).toBe(30);
+    });
+    it("keeps the exact package version pinned and refuses dispatch after that release is revoked", async () => {
+      const broker = service();
+      const reservation = await broker.reserveCompanyPurpose(f.actor, supportRequest("support-package-pin"));
+      expect(reservation.packageVersionId).toBe(supportPackageVersionId);
+      await expect(db.update(orchestrationCompanyPurposeReservations)
+        .set({ packageVersionId: null })
+        .where(eq(orchestrationCompanyPurposeReservations.id, reservation.id))).rejects.toThrow();
+      await agentPackageService(db, {
+        operatorUserIds: [f.userId],
+        protectedEvidenceOrigin: "https://qualification.test.invalid",
+        sourceSha,
+      }).revoke(f.actor, supportPackageVersionId);
+      await expect(broker.claimCompanyPurposeForDispatch(f.actor, f.home, reservation.id)).rejects.toMatchObject({ status: 403 });
+      const [stored] = await db.select().from(orchestrationCompanyPurposeReservations).where(eq(orchestrationCompanyPurposeReservations.id, reservation.id));
+      expect(stored).toMatchObject({ status: "reserved", packageVersionId: supportPackageVersionId });
+    });
+    it("keeps the taskless support release out of customer catalog and Agent installation", async () => {
+      const publisher = agentPackageService(db, {
+        operatorUserIds: [f.userId],
+        protectedEvidenceOrigin: "https://qualification.test.invalid",
+        sourceSha,
+      });
+      expect(await publisher.catalog(f.actor)).not.toContainEqual(expect.objectContaining({ versionId: supportPackageVersionId }));
+      await expect(publisher.preview(f.actor, f.home, {
+        versionId: supportPackageVersionId,
+        agentId: f.presence.id,
+        components: [],
+      })).rejects.toMatchObject({ status: 409 });
+    });
+    it("runs one software-only first-party Help answer through the original reservation and grounding owners", async () => {
+      // This uses the real PostgreSQL publisher, reservation ledger, Human
+      // session and authorized Find/Help owner. The profile and provider
+      // response are explicit software fixtures; no real model is contacted.
+      const profiles = [supportModelProfile(f.home, supportPackageVersionId)];
+      const fetch = mockSupportTransport();
+      const gateway = supportGateway(profiles, fetch as unknown as typeof import("../services/remote-http-fetch.js").guardedRemoteHttpFetch);
+      const consentPolicyRevision = supportAssistantPolicyRevision(profiles[0]!, sourceSha,
+        [supportGuideKnowledgePin(COMPANY_SEARCH_HELP_ARTICLES[0]!)], "en");
+      const request = {
+        requestId: randomUUID(),
+        expectedUserId: f.userId,
+        question: "Start a company and reach your first result",
+        locale: "en" as const,
+        consent: true as const,
+        consentPolicyRevision,
+      };
+      const response = await gateway.answer(f.actor, f.home, request);
+      expect(response).toMatchObject({ requestId: request.requestId, kind: "guidance" });
+      expect(response.citations).toHaveLength(1);
+      expect(response.citations[0]).toMatchObject({
+        articleId: COMPANY_SEARCH_HELP_ARTICLES[0]!.articleId,
+        sourceHash: nativeSha256(COMPANY_SEARCH_HELP_ARTICLES[0]),
+        locale: "en",
+      });
+      expect(response.citations[0]!.text).toBeTruthy();
+      expect(fetch).toHaveBeenCalledTimes(1);
+      const [reservation] = await db.select().from(orchestrationCompanyPurposeReservations)
+        .where(eq(orchestrationCompanyPurposeReservations.companyId, f.home));
+      expect(reservation).toMatchObject({
+        status: "completed",
+        principalUserId: f.userId,
+        packageVersionId: supportPackageVersionId,
+        providerResponseHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+        usage: { inputTokens: 100, outputTokens: 8 },
+      });
+      const replay = await gateway.answer(f.actor, f.home, request);
+      expect(replay).toEqual({ requestId: request.requestId, kind: "already_processed", citations: [] });
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
+    it("keeps unknown transport outcomes held and does not retry, and spends nothing when Help evidence is outside the package pins", async () => {
+      const profiles = [supportModelProfile(f.home, supportPackageVersionId)];
+      const fetch = vi.fn(async () => { throw new Error("software transport failure"); });
+      const gateway = supportGateway(profiles, fetch as unknown as typeof import("../services/remote-http-fetch.js").guardedRemoteHttpFetch);
+      const consentPolicyRevision = supportAssistantPolicyRevision(profiles[0]!, sourceSha,
+        [supportGuideKnowledgePin(COMPANY_SEARCH_HELP_ARTICLES[0]!)], "en");
+      const request = {
+        requestId: randomUUID(), expectedUserId: f.userId,
+        question: "Developer and advanced documentation", locale: "en" as const, consent: true as const, consentPolicyRevision,
+      };
+      const staleConsent = { ...request, requestId: randomUUID(), question: "Start a company and reach your first result",
+        consentPolicyRevision: "f".repeat(64) };
+      expect(await gateway.answer(f.actor, f.home, staleConsent)).toEqual({
+        requestId: staleConsent.requestId, kind: "unavailable", citations: [],
+      });
+      await expect(gateway.answer(f.actor, f.home, { ...staleConsent, requestId: randomUUID(), expectedUserId: "different-human" }))
+        .rejects.toMatchObject({ status: 403 });
+      expect(await gateway.answer(f.actor, f.guest, { ...staleConsent, requestId: randomUUID(), expectedUserId: f.userId }))
+        .toMatchObject({ kind: "unavailable" });
+      expect(fetch).not.toHaveBeenCalled();
+      const response = await gateway.answer(f.actor, f.home, request);
+      expect(response).toEqual({ requestId: request.requestId, kind: "cannot_verify", citations: [] });
+      expect(fetch).not.toHaveBeenCalled();
+      expect(await db.select().from(orchestrationCompanyPurposeReservations)
+        .where(eq(orchestrationCompanyPurposeReservations.companyId, f.home))).toHaveLength(0);
+
+      const approved = { ...request, requestId: randomUUID(), question: "Start a company and reach your first result" };
+      expect(await gateway.answer(f.actor, f.home, approved)).toMatchObject({ kind: "unknown" });
+      expect(fetch).toHaveBeenCalledTimes(1);
+      const [unknown] = await db.select().from(orchestrationCompanyPurposeReservations)
+        .where(eq(orchestrationCompanyPurposeReservations.companyId, f.home));
+      expect(unknown).toMatchObject({ status: "unknown", packageVersionId: supportPackageVersionId });
+      expect(await gateway.answer(f.actor, f.home, approved)).toEqual({ requestId: approved.requestId, kind: "unknown", citations: [] });
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
+    it("settles provider usage after Human membership is revoked during dispatch but withholds the Help quote", async () => {
+      const profiles = [supportModelProfile(f.home, supportPackageVersionId)];
+      let signalStarted!: () => void;
+      const started = new Promise<void>(resolve => { signalStarted = resolve; });
+      let releaseResponse!: () => void;
+      const released = new Promise<void>(resolve => { releaseResponse = resolve; });
+      const fetch = vi.fn(async (_url: string | URL, init: RequestInit) => {
+        const response = supportTransportResponse(init);
+        signalStarted();
+        await released;
+        return response;
+      });
+      const gateway = supportGateway(profiles, fetch as unknown as typeof import("../services/remote-http-fetch.js").guardedRemoteHttpFetch);
+      const consentPolicyRevision = supportAssistantPolicyRevision(profiles[0]!, sourceSha,
+        [supportGuideKnowledgePin(COMPANY_SEARCH_HELP_ARTICLES[0]!)], "en");
+      const request = {
+        requestId: randomUUID(), expectedUserId: f.userId,
+        question: "Start a company and reach your first result", locale: "en" as const, consent: true as const, consentPolicyRevision,
+      };
+      const pending = gateway.answer(f.actor, f.home, request);
+      await started;
+      await db.delete(companyMemberships).where(eq(companyMemberships.companyId, f.home));
+      releaseResponse();
+      expect(await pending).toEqual({ requestId: request.requestId, kind: "cannot_verify", citations: [] });
+      expect(fetch).toHaveBeenCalledTimes(1);
+      const [stored] = await db.select().from(orchestrationCompanyPurposeReservations)
+        .where(eq(orchestrationCompanyPurposeReservations.companyId, f.home));
+      expect(stored).toMatchObject({ status: "completed", usage: { inputTokens: 100, outputTokens: 8 } });
+    });
+    it("withholds citations but settles actual usage when the pinned package is revoked in flight", async () => {
+      const profiles = [supportModelProfile(f.home, supportPackageVersionId)];
+      let signalStarted!: () => void;
+      const started = new Promise<void>(resolve => { signalStarted = resolve; });
+      let releaseResponse!: () => void;
+      const released = new Promise<void>(resolve => { releaseResponse = resolve; });
+      const fetch = vi.fn(async (_url: string | URL, init: RequestInit) => {
+        const response = supportTransportResponse(init);
+        signalStarted();
+        await released;
+        return response;
+      });
+      const gateway = supportGateway(profiles, fetch as unknown as typeof import("../services/remote-http-fetch.js").guardedRemoteHttpFetch);
+      const request = {
+        requestId: randomUUID(), expectedUserId: f.userId,
+        question: "Start a company and reach your first result", locale: "en" as const, consent: true as const,
+        consentPolicyRevision: supportAssistantPolicyRevision(profiles[0]!, sourceSha,
+          [supportGuideKnowledgePin(COMPANY_SEARCH_HELP_ARTICLES[0]!)], "en"),
+      };
+      const pending = gateway.answer(f.actor, f.home, request);
+      await started;
+      await agentPackageService(db, {
+        operatorUserIds: [f.userId],
+        protectedEvidenceOrigin: "https://qualification.test.invalid",
+        sourceSha,
+      }).revoke(f.actor, supportPackageVersionId);
+      releaseResponse();
+      expect(await pending).toEqual({ requestId: request.requestId, kind: "cannot_verify", citations: [] });
+      const [stored] = await db.select().from(orchestrationCompanyPurposeReservations)
+        .where(eq(orchestrationCompanyPurposeReservations.companyId, f.home));
+      expect(stored).toMatchObject({ status: "completed", usage: { inputTokens: 100, outputTokens: 8 }, packageVersionId: supportPackageVersionId });
+    });
+    it("withholds citations but settles actual usage when the deployment funding profile disappears in flight", async () => {
+      const profiles = [supportModelProfile(f.home, supportPackageVersionId)];
+      let signalStarted!: () => void;
+      const started = new Promise<void>(resolve => { signalStarted = resolve; });
+      let releaseResponse!: () => void;
+      const released = new Promise<void>(resolve => { releaseResponse = resolve; });
+      const fetch = vi.fn(async (_url: string | URL, init: RequestInit) => {
+        const response = supportTransportResponse(init);
+        signalStarted();
+        await released;
+        return response;
+      });
+      const gateway = supportGateway(profiles, fetch as unknown as typeof import("../services/remote-http-fetch.js").guardedRemoteHttpFetch);
+      const request = {
+        requestId: randomUUID(), expectedUserId: f.userId,
+        question: "Start a company and reach your first result", locale: "en" as const, consent: true as const,
+        consentPolicyRevision: supportAssistantPolicyRevision(profiles[0]!, sourceSha,
+          [supportGuideKnowledgePin(COMPANY_SEARCH_HELP_ARTICLES[0]!)], "en"),
+      };
+      const pending = gateway.answer(f.actor, f.home, request);
+      await started;
+      profiles.splice(0, 1);
+      releaseResponse();
+      expect(await pending).toEqual({ requestId: request.requestId, kind: "cannot_verify", citations: [] });
+      const [stored] = await db.select().from(orchestrationCompanyPurposeReservations)
+        .where(eq(orchestrationCompanyPurposeReservations.companyId, f.home));
+      expect(stored).toMatchObject({ status: "completed", usage: { inputTokens: 100, outputTokens: 8 } });
     });
     it("bounds taskless invocations even when a qualified fixture tariff computes zero minor units", async () => {
       supportFunding = makeSupportFunding(f.home, {

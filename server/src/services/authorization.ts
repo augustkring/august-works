@@ -45,7 +45,7 @@ import {
   resolveCoreTrustPreset,
   type TrustPresetResolution,
 } from "./trust-preset-resolver.js";
-import { conflict, forbidden, HttpError } from "../errors.js";
+import { conflict, forbidden, HttpError, unprocessable } from "../errors.js";
 import { logger } from "../middleware/logger.js";
 import { normalizeAgentPermissions } from "./agent-permissions.js";
 import { grantsForHumanRole, normalizeHumanRole } from "./company-member-roles.js";
@@ -1130,7 +1130,7 @@ type ReadSourceDecisionInput = {
 };
 export type NativeContextInspectionOwner = { decide(input: ReadSourceDecisionInput): Promise<AuthorizationDecision> };
 type ReadSourceOwner = NativeContextInspectionOwner & {
-  assertTaskPrivacyBatch(actor: AuthorizationActor, issueIds: string[], projectIds: string[]): Promise<void>;
+  assertTaskPrivacyBatch(actor: AuthorizationActor, issueIds: string[], projectIds: string[], deadline?:number): Promise<void>;
   readRoutineSources?(runIds: string[], actor: AuthorizationActor): Promise<string[]>;
   readWorkflowSources?(runIds: string[], actor: AuthorizationActor, mode?: "strict" | "task_candidates"): Promise<string[]>;
 };
@@ -1575,7 +1575,9 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
   async function withReadSources<T>(companyId: string, issueIds: string[], projectIds: string[], read: (owner: ReadSourceOwner) => Promise<T>) {
     return withReadScope(companyId, issueIds, projectIds, "task_sources", read);
   }
-  async function assertTaskPrivacyBatch(actor: AuthorizationActor, issueIds: string[], projectIds: string[]) {
+  async function assertTaskPrivacyBatch(actor: AuthorizationActor, issueIds: string[], projectIds: string[], deadline?:number) {
+    const checkDeadline=()=>{if(deadline!==undefined&&performance.now()>deadline)throw unprocessable("Forecast exceeds the native source time budget");};
+    checkDeadline();
     if (!readSources || !is(db, PgTransaction) || !readSources.active || readSources.purpose !== "task_sources")
       throw forbidden("Batched Task privacy checks require their active native source scope.");
     const companyId = readSources.companyId;
@@ -1587,8 +1589,10 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       throw forbidden("Batched Task privacy input is not the complete captured native population.");
 
     const valuesFor = (ids: string[]) => sql.join(ids.map(id => sql`(${id}::uuid)`), sql`, `);
+    checkDeadline();
     const issueCondition = await issueReadSqlCondition(db, actor);
     const projectCondition = await projectReadSqlCondition(db, actor);
+    checkDeadline();
     const evaluate = async () => {
       const issuesById = new Map<string, boolean>();
       const projectsById = new Map<string, boolean>();
@@ -1596,6 +1600,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       // bound. Batching only removes client/server round trips; it never
       // aggregates a filtered subset or omits a root from the decision.
       for (let offset = 0; offset < issueIds.length; offset += 512) {
+        checkDeadline();
         const ids = issueIds.slice(offset, offset + 512);
         const roots = valuesFor(ids);
         const rows = await db.execute<{ id: string; allowed: boolean }>(sql`
@@ -1612,8 +1617,10 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
           const issue = readSources.issues.get(id);
           if (issue && await canActorReadIssuePrivacy(db, actor, { id, companyId })) issuesById.set(id, true);
         }
+        checkDeadline();
       }
       for (let offset = 0; offset < exactProjectIds.length; offset += 512) {
+        checkDeadline();
         const ids = exactProjectIds.slice(offset, offset + 512);
         const roots = valuesFor(ids);
         const rows = await db.execute<{ id: string; allowed: boolean }>(sql`
@@ -1622,6 +1629,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
           join projects on projects.id=selected.id and projects.company_id=${companyId}
         `);
         for (const row of rows) if (ids.includes(row.id)) projectsById.set(row.id, row.allowed === true);
+        checkDeadline();
       }
       return { issues: issuesById, projects: projectsById };
     };
@@ -1641,32 +1649,54 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     };
     nativeTaskPrivacyBatches.set(db as object, batch);
     try {
-      const checks = [
-        ...issueIds.map(id => async () => {
-          const issue = readSources.issues.get(id)!;
-          if (issue.hiddenAt) throw forbidden("A hidden Task cannot contribute to a metric.");
-          const decision = await decide({ actor, action: "issue:read", enforceResponsibleUserIntersection: true, resource: {
-            type: "issue", companyId, issueId: id, projectId: issue.projectId, parentIssueId: issue.parentId,
-            assigneeAgentId: issue.assigneeAgentId, assigneeUserId: issue.assigneeUserId, status: issue.status,
-            originKind: issue.originKind, originId: issue.originId,
-          } });
-          if (!decision.allowed) throw forbidden("A Task source is outside the current authorization boundary.");
-        }),
-        ...exactProjectIds.map(id => async () => {
-          const decision = await decide({ actor, action: "project:read", enforceResponsibleUserIntersection: true,
-            resource: { type: "project", companyId, projectId: id } });
-          if (!decision.allowed) throw forbidden("A Project source is outside the current authorization boundary.");
-        }),
-      ];
-      for (let offset = 0; offset < checks.length; offset += 32) {
-        const decisions = await Promise.allSettled(checks.slice(offset, offset + 32).map(check => check()));
-        for (const decision of decisions) if (decision.status === "rejected") throw decision.reason;
+      const companyWideBoardReader=actor.type==="board"&&!actor.keyId&&!actor.authenticatedKeyHash&&(actor.source==="session"||actor.source==="cloud_tenant");
+      if(companyWideBoardReader) {
+        // Board action authority is company-membership based; Task and Project
+        // visibility is still evaluated separately for every exact root by the
+        // canonical SQL predicates below. Avoid re-reading the same Human
+        // membership/session for thousands of sources in this closed scope.
+        for(const id of issueIds) if(readSources.issues.get(id)!.hiddenAt) throw forbidden("A hidden Task cannot contribute to a metric.");
+        const firstIssue=issueIds[0]&&readSources.issues.get(issueIds[0]);
+        if(firstIssue) {
+          const decision=await decide({actor,action:"issue:read",enforceResponsibleUserIntersection:true,resource:{type:"issue",companyId,issueId:firstIssue.id,projectId:firstIssue.projectId,parentIssueId:firstIssue.parentId,assigneeAgentId:firstIssue.assigneeAgentId,assigneeUserId:firstIssue.assigneeUserId,status:firstIssue.status,originKind:firstIssue.originKind,originId:firstIssue.originId}});
+          if(!decision.allowed) throw forbidden("A Task source is outside the current authorization boundary.");
+        }
+        const firstProject=exactProjectIds[0];
+        if(firstProject) {
+          const decision=await decide({actor,action:"project:read",enforceResponsibleUserIntersection:true,resource:{type:"project",companyId,projectId:firstProject}});
+          if(!decision.allowed) throw forbidden("A Project source is outside the current authorization boundary.");
+        }
+        checkDeadline();
+      } else {
+        const checks = [
+          ...issueIds.map(id => async () => {
+            const issue = readSources.issues.get(id)!;
+            if (issue.hiddenAt) throw forbidden("A hidden Task cannot contribute to a metric.");
+            const decision = await decide({ actor, action: "issue:read", enforceResponsibleUserIntersection: true, resource: {
+              type: "issue", companyId, issueId: id, projectId: issue.projectId, parentIssueId: issue.parentId,
+              assigneeAgentId: issue.assigneeAgentId, assigneeUserId: issue.assigneeUserId, status: issue.status,
+              originKind: issue.originKind, originId: issue.originId,
+            } });
+            if (!decision.allowed) throw forbidden("A Task source is outside the current authorization boundary.");
+          }),
+          ...exactProjectIds.map(id => async () => {
+            const decision = await decide({ actor, action: "project:read", enforceResponsibleUserIntersection: true,
+              resource: { type: "project", companyId, projectId: id } });
+            if (!decision.allowed) throw forbidden("A Project source is outside the current authorization boundary.");
+          }),
+        ];
+        for (let offset = 0; offset < checks.length; offset += 32) {
+          const decisions = await Promise.allSettled(checks.slice(offset, offset + 32).map(check => check()));
+          for (const decision of decisions) if (decision.status === "rejected") throw decision.reason;
+          checkDeadline();
+        }
       }
     } finally {
       batch.active = false;
       nativeTaskPrivacyBatches.delete(db as object);
     }
     const final = await evaluate();
+    checkDeadline();
     if (issueIds.some(id => final.issues.get(id) !== true) || exactProjectIds.some(id => final.projects.get(id) !== true))
       throw forbidden("Task source privacy changed during the complete read.");
   }

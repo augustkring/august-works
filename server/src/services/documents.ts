@@ -22,6 +22,9 @@ import { logger } from "../middleware/logger.js";
 export interface DocumentRevisionSourceCapture {
   readonly input: Extract<NativePayloadSourceInput, { kind: "document_revision" }>;
   readonly payloadSourceSnapshot: NativePayloadSourceSnapshot | null;
+  /** Hash of the exact public read_document result built from this selected row.
+   * This binds source evidence to returned bytes; it is not a permission grant. */
+  readonly returnedResultDigest?: string;
 }
 
 function normalizeDocumentKey(key: string) {
@@ -191,13 +194,15 @@ export function documentService(db: Db) {
         .where(and(eq(issueDocuments.issueId, issueId), eq(issueDocuments.key, key)))
         .then((rows) => rows[0] ?? null);
       const revision = row?.sourceRevision;
-      options.onSourceCapture?.(row && revision && revision.body === row.latestBody && revision.title === row.title &&
+      const result = row ? mapIssueDocumentRow(row, true) : null;
+      options.onSourceCapture?.(row && revision && result && revision.body === row.latestBody && revision.title === row.title &&
         revision.format === row.format && revision.revisionNumber === row.latestRevisionNumber
         ? { input: { kind: "document_revision", documentId: row.id, revisionId: revision.id, issueId: row.issueId,
             contentHash: createHash("sha256").update(row.latestBody, "utf8").digest("hex") },
-            payloadSourceSnapshot: revision.payloadSourceSnapshot }
+            payloadSourceSnapshot: revision.payloadSourceSnapshot,
+            returnedResultDigest: createHash("sha256").update(JSON.stringify({ document: result }), "utf8").digest("hex") }
         : null);
-      return row ? mapIssueDocumentRow(row, true) : null;
+      return result;
     },
 
     listIssueDocumentRevisions: async (issueId: string, rawKey: string) => {

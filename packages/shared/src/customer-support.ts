@@ -247,3 +247,45 @@ export const supportCaseIntakePolicySchema = z.discriminatedUnion("available", [
     retentionTrigger: supportCaseDataPolicySchema.shape.retentionTrigger,
   }),
 ]);
+
+/** The assistant is optional and platform-funded. These DTOs carry neither
+ * provider credentials nor an authority to operate on a customer's account. */
+export const supportAssistantRequestSchema = z.strictObject({
+  requestId: z.uuid().toLowerCase(),
+  expectedUserId: z.string().min(1).max(300),
+  question: z.string().trim().min(1).max(4000),
+  locale: z.enum(["en", "da"]),
+  consent: z.literal(true),
+  consentPolicyRevision: z.string().regex(/^[a-f0-9]{64}$/),
+});
+export const supportAssistantAvailabilityQuerySchema = z.strictObject({
+  expectedUserId: z.string().min(1).max(300),
+  locale: z.enum(["en", "da"]),
+});
+export const supportAssistantAvailabilitySchema = z.discriminatedUnion("available", [
+  z.strictObject({ available: z.literal(false) }),
+  z.strictObject({ available: z.literal(true), included: z.literal(true),
+    policyRevision: z.string().regex(/^[a-f0-9]{64}$/),
+    providerName: z.string().min(1).max(100),
+    processingNotice: z.string().min(20).max(2000),
+    privacyNoticeUrl: z.url().refine(value => {
+      const url = new URL(value);
+      return url.protocol === "https:" && !url.username && !url.password;
+    }),
+  }),
+]);
+export const supportAssistantCitationSchema = z.strictObject({
+  id: z.string().min(1).max(150), articleId: z.string().min(1).max(120),
+  title: z.string().min(1).max(300), href: z.url(), locale: z.enum(["en", "da"]),
+  sourceHash: z.string().regex(/^[a-f0-9]{64}$/), text: z.string().min(1).max(900),
+  maturity: z.enum(["preview", "ga"]), lastVerifiedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+export const supportAssistantResponseSchema = z.discriminatedUnion("kind", [
+  z.strictObject({ requestId: z.uuid(), kind: z.literal("guidance"),
+    citations: z.array(supportAssistantCitationSchema).min(1).max(3) }),
+  z.strictObject({ requestId: z.uuid(), kind: z.enum(["cannot_verify", "unknown", "unavailable", "already_processed"]),
+    citations: z.tuple([]) }),
+]);
+export type SupportAssistantRequest = z.infer<typeof supportAssistantRequestSchema>;
+export type SupportAssistantAvailability = z.infer<typeof supportAssistantAvailabilitySchema>;
+export type SupportAssistantResponse = z.infer<typeof supportAssistantResponseSchema>;

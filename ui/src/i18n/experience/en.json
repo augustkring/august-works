@@ -3309,5 +3309,22 @@
     "failed": "Could not approve Memory",
     "unconfirmed": "The result could not be confirmed.",
     "accessChanged": "Account or company access changed. Refresh before reviewing this Memory."
+  },
+  "helpAssistant": {
+    "title": "Support Assistant",
+    "scope": "Get guidance from approved Blentera Help articles. The assistant cannot check your account, task or service status.",
+    "checking": "Checking availability…",
+    "unavailable": "AI assistance is unavailable. You can still search Help or contact a person.",
+    "included": "This assistance is included, with no additional AI charge.",
+    "question": "What would you like help with?",
+    "noSecrets": "Do not include passwords, recovery codes, API keys or other secrets.",
+    "privacy": "Read the processing notice",
+    "consent": "I agree to send this question and the selected Help text to {{provider}}.",
+    "ask": "Ask the assistant",
+    "asking": "Finding supported guidance…",
+    "cannotVerify": "I can’t verify an answer from the information available. Contact support for help. A request with an unclear result is not sent again automatically.",
+    "guidanceOnly": "These excerpts come from the linked Help guides. They do not confirm the current state of your account, task or service.",
+    "source": "{{maturity}} guide · verified {{date}}",
+    "preview": "Preview"
   }
 }

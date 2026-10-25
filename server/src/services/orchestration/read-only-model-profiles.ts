@@ -10,11 +10,8 @@ import {
  * The token ceiling must qualify the entire text-only wire envelope for this
  * exact model and byte limit. The report also needs independent judge
  * calibration; a vendor's advertised context window is insufficient. */
-export const modelQualificationProfileSchema = z
+export const modelQualificationMetadataSchema = z
   .object({
-    id: z.string().uuid(),
-    companyId: z.string().uuid(),
-    binding: aiConnectionBindingSchema,
     contract: z.literal("anthropic-text-messages-2023-06-01"),
     tariff: modelTariffCeilingSchema,
     maximumEnvelopeBytes: z.number().int().min(1024).max(262144),
@@ -22,6 +19,15 @@ export const modelQualificationProfileSchema = z
     maxOutputTokens: z.number().int().min(256).max(8192),
     qualificationEvidenceRef: z.string().url(),
     qualificationArtifactSha256: z.string().regex(/^[a-f0-9]{64}$/),
+  })
+  .strict();
+export type ModelQualificationMetadata = z.infer<typeof modelQualificationMetadataSchema>;
+
+export const modelQualificationProfileSchema = modelQualificationMetadataSchema
+  .extend({
+    id: z.string().uuid(),
+    companyId: z.string().uuid(),
+    binding: aiConnectionBindingSchema,
   })
   .strict();
 
@@ -71,7 +77,7 @@ export function assertReadOnlyModelProfileCurrent(
 }
 
 export function assertModelQualificationMetadata(
-  p: z.infer<typeof modelQualificationProfileSchema>,
+  p: ModelQualificationMetadata,
   sourceSha: string,
   protectedOrigin: string,
   now = new Date(),

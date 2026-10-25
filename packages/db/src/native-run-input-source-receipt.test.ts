@@ -58,6 +58,42 @@ describe("Original run input receipt database binding", () => {
       values(${id},${companyId},${agentId},${alice},1,'native',${db.json({nativeExecutionInput:execution,nativeInputSourceReceipt:insertedReceipt})})`;
   });
 
+  it("installs a first receipt only beside a pre-turn input intent and appends a source set only after its exact acknowledgement",async()=>{
+    // This DB-contract fixture exercises integrity and ordering only; it does
+    // not claim that its structural source is a real provider input.
+    const runId=randomUUID(), issueId=randomUUID(), dispatchId=randomUUID(), eventSeq=17, attempt=2;
+    await db`insert into issues(id,company_id,title) values(${issueId},${companyId},'Intent owner')`;
+    const [row]=await db`insert into heartbeat_runs(id,company_id,agent_id,responsible_user_id,native_input_source_protocol_version,runtime_mode,status,issue_id,runner_profile_json)
+      values(${runId},${companyId},${agentId},${alice},0,'native','running',${issueId},${db.json({nativeExecutionInput:execution})}) returning *`;
+    const turnInputDigest=await digest({message:{role:"user",text:"exact rendered frame"}});
+    const intent={dispatchId,eventSeq,attempt,responsibleUserId:alice,turnInputDigest,byteSize:40,continuation:false};
+    const receipt=await receiptFor(row!,{binding:{companyId,runId,agentId,responsibleUserId:alice,issueId},
+      bootstrap:{executionInputDigest:await digest(execution),policy:policy(),inputs:[{kind:"task",issueId,sourceVersion:"1",contentHash:"a".repeat(64)}]},
+      dispatches:[],additionalInputs:[]});
+    const profile={nativeExecutionInput:execution,nativeInputSourceReceipt:receipt,nativeModelInputDispatchIntents:[intent]};
+    await db`update heartbeat_runs set runner_profile_json=${db.json(profile)},native_input_source_protocol_version=1 where id=${runId}`;
+    const sourceDispatch={executionInputDigest:turnInputDigest,responsibleUserId:alice,policy:policy(),
+      inputs:[{kind:"task",issueId,sourceVersion:"1",contentHash:"a".repeat(64)}]};
+    const acknowledgedProfile={...profile,nativeModelInputDispatchIntents:[{...intent,turnId:"actual-turn-17"}],
+      nativeInputSourceReceipt:await sign({...receipt,dispatches:[sourceDispatch]})};
+    await db`update heartbeat_runs set runner_profile_json=${db.json(acknowledgedProfile)} where id=${runId}`;
+    const [saved]=await db`select runner_profile_json,native_input_source_protocol_version from heartbeat_runs where id=${runId}`;
+    expect(saved!.native_input_source_protocol_version).toBe(1);
+    expect(saved!.runner_profile_json.nativeInputSourceReceipt.dispatches).toEqual([sourceDispatch]);
+
+    const badRunId=randomUUID();
+    const [badRow]=await db`insert into heartbeat_runs(id,company_id,agent_id,responsible_user_id,native_input_source_protocol_version,runtime_mode,status,issue_id,runner_profile_json)
+      values(${badRunId},${companyId},${agentId},${alice},0,'native','running',${issueId},${db.json({nativeExecutionInput:execution})}) returning *`;
+    const badReceipt=await receiptFor(badRow!,{binding:{companyId,runId:badRunId,agentId,responsibleUserId:alice,issueId},
+      bootstrap:{executionInputDigest:await digest(execution),policy:policy(),inputs:[]}});
+    await expect(db`update heartbeat_runs set runner_profile_json=${db.json({nativeExecutionInput:execution,nativeInputSourceReceipt:badReceipt})},
+      native_input_source_protocol_version=1 where id=${badRunId}`).rejects.toMatchObject(denied);
+    const badIntentProfile={nativeExecutionInput:execution,nativeInputSourceReceipt:badReceipt,
+      nativeModelInputDispatchIntents:[{...intent,dispatchId:randomUUID(),turnId:"actual-turn"}]};
+    await expect(db`update heartbeat_runs set runner_profile_json=${db.json(badIntentProfile)},native_input_source_protocol_version=1 where id=${badRunId}`)
+      .rejects.toMatchObject(denied);
+  });
+
   it("rejects mismatched owner, Human, input digest and receipt digest",async()=>{
     const row=await insert(), original=await receiptFor(row);
     for(const binding of [{companyId:foreignCompanyId},{runId:randomUUID()},{agentId:randomUUID()},{issueId:randomUUID()},{responsibleUserId:bob}]){
@@ -85,12 +121,21 @@ describe("Original run input receipt database binding", () => {
 
   it("retains historical Human captures through steering and validates every appended entry",async()=>{
     const {row,receipt}=await captured();
-    const first=await sign({...receipt,dispatches:[{executionInputDigest:await digest(execution),responsibleUserId:alice,policy:policy(),inputs:[]}]});
-    await write(row,first);
+    const firstFrame={message:{role:"user",text:"Alice exact dispatched frame"}};
+    const firstDispatchId=randomUUID();
+    const firstFrameDigest=await digest(firstFrame);
+    const first=await sign({...receipt,dispatches:[{executionInputDigest:firstFrameDigest,responsibleUserId:alice,policy:policy(),inputs:[]}]});
+    const firstIntent={dispatchId:firstDispatchId,eventSeq:17,attempt:1,responsibleUserId:alice,turnInputDigest:firstFrameDigest,
+      byteSize:Buffer.byteLength(JSON.stringify(firstFrame)),continuation:false,turnId:"ack-alice"};
+    await write(row,first,{nativeModelInputDispatchIntents:[firstIntent]});
     await db`update heartbeat_runs set responsible_user_id=${bob} where id=${row.id}`;
-    const next=await sign({...first,dispatches:[...first.dispatches,{executionInputDigest:await digest({fixture:"Bob dispatch"}),responsibleUserId:bob,policy:policy(),inputs:[]}],
+    const secondFrame={message:{role:"user",text:"Bob exact dispatched frame"}};
+    const secondFrameDigest=await digest(secondFrame);
+    const secondIntent={dispatchId:randomUUID(),eventSeq:17,attempt:2,responsibleUserId:bob,turnInputDigest:secondFrameDigest,
+      byteSize:Buffer.byteLength(JSON.stringify(secondFrame)),continuation:false,turnId:"ack-bob"};
+    const next=await sign({...first,dispatches:[...first.dispatches,{executionInputDigest:secondFrameDigest,responsibleUserId:bob,policy:policy(),inputs:[]}],
       additionalInputs:[{responsibleUserId:bob,policy:policy(),inputs:[]}]});
-    await write(row,next);
+    await write(row,next,{nativeModelInputDispatchIntents:[firstIntent,secondIntent]});
     for(const replacement of [
       {...next,binding:{...next.binding,responsibleUserId:bob}},
       {...next,dispatches:next.dispatches.slice(1)},

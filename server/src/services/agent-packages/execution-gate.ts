@@ -5,6 +5,14 @@ import type { PackageRelease, ToolRiskLevel } from "@paperclipai/shared";
 import { packageReleaseBlockers } from "./package-policy.js";
 import { forbidden } from "../../errors.js";
 import { agentProviderBindingService } from "../agent-provider-bindings.js";
+import {
+  agentPackages,
+  agentPackageVersions,
+  orchestrationCompanyPurposeBudgets,
+  orchestrationCompanyPurposeReservations,
+} from "@paperclipai/db";
+import { and, eq } from "drizzle-orm";
+import { FIRST_PARTY_SUPPORT_PACKAGE_KEY } from "@paperclipai/shared";
 export async function assertPackageExecution(
   db: Db,
   companyId: string,
@@ -58,6 +66,65 @@ export async function assertPackageExecution(
       );
   }
   return release.manifest;
+}
+
+/** Resolve only the exact deployment-pinned first-party support release.
+ * This has no Agent installation or HeartbeatRun requirement because the
+ * subject is the native company-purpose reservation itself. */
+export async function assertFirstPartySupportRelease(
+  db: Db,
+  versionId: string,
+  sourceSha: string,
+  now = new Date(),
+) {
+  const [row] = await db.select({ version: agentPackageVersions, package: agentPackages })
+    .from(agentPackageVersions)
+    .innerJoin(agentPackages, eq(agentPackages.id, agentPackageVersions.packageId))
+    .where(eq(agentPackageVersions.id, versionId))
+    .for("share");
+  const release = row?.version.release as PackageRelease | undefined;
+  const [nativeQualification] = row
+    ? await db.execute(sql`select aw_v7_package_release_current(v) as current from agent_package_versions v where v.id=${versionId}::uuid`)
+    : [];
+  if (
+    !row || row.package.key !== FIRST_PARTY_SUPPORT_PACKAGE_KEY ||
+    row.package.status !== "active" || row.version.state !== "published" ||
+    !release || release.manifest.audience !== "first_party_support" ||
+    release.manifest.sourceRevision !== sourceSha ||
+    nativeQualification?.current !== true ||
+    packageReleaseBlockers(release, now).length
+  )
+    throw forbidden("The pinned first-party support package release is not current");
+  return { packageVersionId: row.version.id, packageKey: row.package.key, release };
+}
+
+/** Bind a real reservation to its immutable exact package version. The same
+ * check is called before provider dispatch and before returning model content. */
+export async function assertFirstPartySupportReservation(
+  db: Db,
+  companyId: string,
+  reservationId: string,
+  expectedVersionId: string,
+  sourceSha: string,
+  now = new Date(),
+) {
+  const [row] = await db.select({ reservation: orchestrationCompanyPurposeReservations, budget: orchestrationCompanyPurposeBudgets })
+    .from(orchestrationCompanyPurposeReservations)
+    .innerJoin(orchestrationCompanyPurposeBudgets, and(
+      eq(orchestrationCompanyPurposeBudgets.companyId, orchestrationCompanyPurposeReservations.companyId),
+      eq(orchestrationCompanyPurposeBudgets.id, orchestrationCompanyPurposeReservations.budgetId),
+    ))
+    .where(and(
+      eq(orchestrationCompanyPurposeReservations.companyId, companyId),
+      eq(orchestrationCompanyPurposeReservations.id, reservationId),
+    ));
+  if (
+    !row || row.reservation.packageVersionId !== expectedVersionId ||
+    row.budget.purpose !== "first_party_support" || row.budget.sourceSha !== sourceSha ||
+    !["reserved", "dispatched", "completed"].includes(row.reservation.status)
+  )
+    throw forbidden("The support reservation is not bound to the current pinned package release");
+  return assertFirstPartySupportRelease(db, expectedVersionId, sourceSha, now);
 }
 export async function packageToolRestriction(
   db: Db,

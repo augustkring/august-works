@@ -12,7 +12,7 @@ import {heartbeatMemoryPayloadRetained} from "../services/memory/memory-privacy.
 import {randomUUID} from "node:crypto";
 import {afterAll,beforeAll,beforeEach,describe,expect,it} from "vitest";
 import {and,eq,sql} from "drizzle-orm";
-import {companies,projects,issues,agents,authUsers,heartbeatRuns,decisions,decisionContexts,decisionContextVersions,decisionContextBindings,decisionCalculationPins,managementReviewSnapshots,decisionEvidenceLinks,decisionAssumptions,decisionCriteria,decisionExpectedOutcomes,businessScenarioRuns,businessMetrics,businessMetricVersions,businessMetricPublications,businessMetricObservations,analyticalLineageManifests,analyticalLineageEdges,forecastSpecs,forecastSpecVersions,forecastBacktests,forecastRuns,forecastPublications,createDb} from "@paperclipai/db";
+import {companies,projects,projectAccessMembers,issues,agents,authUsers,boardApiKeys,heartbeatRuns,decisions,decisionContexts,decisionContextVersions,decisionContextBindings,decisionCalculationPins,managementReviewSnapshots,decisionEvidenceLinks,decisionAssumptions,decisionCriteria,decisionExpectedOutcomes,businessScenarioRuns,businessMetrics,businessMetricVersions,businessMetricPublications,businessMetricObservations,analyticalLineageManifests,analyticalLineageEdges,forecastSpecs,forecastSpecVersions,forecastBacktests,forecastRuns,forecastPublications,createDb} from "@paperclipai/db";
 import {businessForecastDefinitionSchema,businessMetricDefinitionSchema,decisionContextDefinitionSchema,type DecisionEvidenceReference,type BusinessMetricResult} from "@paperclipai/shared";
 import {businessForecastService} from "../services/business-forecasting/service.js";
 import { currentInsightToolCard } from "../services/experience/insight-tool-card.js";
@@ -73,7 +73,7 @@ suite("Governed native business forecasts on migrated PostgreSQL",()=>{
  }
  /** Synthetic chronologically coherent fixtures exercise owner/SQL boundaries.
   * They do not establish an actually collected production history or release qualification. */
- async function history(values=Array(10).fill(1) as number[]) {
+ async function history(values=Array(10).fill(1) as number[],shareFirstSourceAcrossFirstTwo=false,incorrectFirstSourceCount=false,sourceProjectOverrides:ReadonlyMap<number,string>=new Map()) {
   const cutoff=new Date(Math.floor(Date.now()/DAY)*DAY),start=new Date(cutoff.getTime()-values.length*DAY),metricId=randomUUID(),versionId=randomUUID();
   const definition=businessMetricDefinitionSchema.parse({...metricDefinition(policyId),ownerUserId:nativeOwnerUserId??"local-board",valueType:"count",unit:"objects",reviewFrequencyDays:60,freshnessSeconds:20*DAY/1000,calculation:{kind:"native_count",population:{entity:"issue",statuses:["done"],projectId}}});
   const definitionHash=nativeSha256(definition),createdAt=new Date(start.getTime()-DAY);
@@ -84,9 +84,12 @@ suite("Governed native business forecasts on migrated PostgreSQL",()=>{
   const observations:BusinessMetricResult[]=[],sourceIds:string[]=[];
   for(let index=0;index<values.length;index++) {
    const from=new Date(start.getTime()+index*DAY),until=new Date(from.getTime()+DAY),observedAt=until,expiresAt=new Date(Date.now()+20*DAY),id=randomUUID(),manifestId=randomUUID(),inputHash=nativeSha256({index,value:values[index]});
-   const ownIds=Array.from({length:values[index]},()=>randomUUID());sourceIds.push(...ownIds);
-   if(ownIds.length) await db.insert(issues).values(ownIds.map(id=>({id,companyId,projectId,title:"Fixture source prose must not be copied",status:"done",responsibleUserId:actor.userId,createdAt:new Date(from.getTime()+12*60*60*1000),updatedAt:new Date(from.getTime()+12*60*60*1000)})));
-   await db.insert(analyticalLineageManifests).values({id:manifestId,companyId,analysisType:"business_metric",analysisRef:id,engineVersion:"aw-native-metric-v1",inputHash,definitionHash,requestedBy:"local-board",sourceWatermark:observedAt.toISOString(),sourceCount:ownIds.length,parameters:{syntheticFixture:true},createdAt:observedAt,expiresAt});
+   const ownIds=Array.from({length:values[index]},(_,sourceIndex)=>index===1&&sourceIndex===0&&shareFirstSourceAcrossFirstTwo?sourceIds[0]!:randomUUID());sourceIds.push(...ownIds);
+   if(ownIds.length) {
+    const issueRows=ownIds.map(id=>({id,companyId,projectId:sourceProjectOverrides.get(index)??projectId,title:"Fixture source prose must not be copied",status:"done",responsibleUserId:sourceProjectOverrides.has(index)?"unrelated-private-owner":actor.userId,createdAt:new Date(from.getTime()+12*60*60*1000),updatedAt:new Date(from.getTime()+12*60*60*1000)}));
+    if(shareFirstSourceAcrossFirstTwo) await db.insert(issues).values(issueRows).onConflictDoNothing();else await db.insert(issues).values(issueRows);
+   }
+   await db.insert(analyticalLineageManifests).values({id:manifestId,companyId,analysisType:"business_metric",analysisRef:id,engineVersion:"aw-native-metric-v1",inputHash,definitionHash,requestedBy:"local-board",sourceWatermark:observedAt.toISOString(),sourceCount:ownIds.length+(index===0&&incorrectFirstSourceCount?1:0),parameters:{syntheticFixture:true},createdAt:observedAt,expiresAt});
    await db.insert(analyticalLineageEdges).values([{companyId,manifestId,inputType:"metric_version",inputRef:versionId,inputHash:definitionHash,relationship:"definition"},
     {companyId,manifestId,inputType:"project",inputRef:projectId,inputHash:nativeSha256({id:projectId}),relationship:"source"},
     {companyId,manifestId,inputType:"governance_obligation",inputRef:policyId,inputHash:(await db.execute<{h:string}>(sql`select obligation_hash as h from governance_obligations where id=${policyId}::uuid`))[0].h,relationship:"policy"},
@@ -218,6 +221,45 @@ suite("Governed native business forecasts on migrated PostgreSQL",()=>{
   expect(await db.select().from(forecastSpecs).where(eq(forecastSpecs.id,d.spec.id))).toHaveLength(0);
   expect(await db.select({id:issues.id}).from(issues).where(eq(issues.companyId,companyId))).toHaveLength(4000);
  },120000);
+ it("merges shared Task lineage once while validating every observation manifest",async()=>{
+  const h=await history(undefined,true),first=h.observations[0]!,second=h.observations[1]!;
+  const d=await draft(h),result=await backtest(d),[artifact]=await db.select().from(forecastBacktests).where(eq(forecastBacktests.id,result.id)),[manifest]=await db.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,artifact!.lineageManifestId));
+  const sourceEdges=await db.select().from(analyticalLineageEdges).where(eq(analyticalLineageEdges.manifestId,manifest!.id));
+  expect(first.id).not.toBe(second.id);expect(result.result.status).toBe("qualified");expect(sourceEdges.filter(edge=>edge.inputType==="issue")).toHaveLength(9);
+ });
+ it("rejects a tampered source count before writing a forecast artifact",async()=>{
+  const h=await history(undefined,false,true),d=await draft(h);
+  await expect(backtest(d)).rejects.toMatchObject({status:409});
+  expect(await db.select().from(forecastBacktests).where(eq(forecastBacktests.specId,d.spec.id))).toHaveLength(0);
+ });
+ it("denies a currently hidden Task in a batched forecast source population",async()=>{
+  const h=await history(),d=await draft(h);
+  await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,h.sourceIds[0]!));
+  await expect(backtest(d)).rejects.toMatchObject({status:403});
+  expect(await db.select().from(forecastBacktests).where(eq(forecastBacktests.specId,d.spec.id))).toHaveLength(0);
+ });
+ it("checks both allowed and denied same-company private ancestry for a Human session",async()=>{
+  const [allowed,denied]=await db.insert(projects).values([{companyId,name:"Private source allowed to the Human",visibility:"private"},{companyId,name:"Private source withheld from the Human",visibility:"private"}]).returning();
+  await db.insert(projectAccessMembers).values({companyId,projectId:allowed!.id,subjectType:"user",subjectId:actor.userId!});
+  const h=await history(undefined,false,false,new Map([[0,allowed!.id],[1,denied!.id]])),d=await draft(h);
+  await expect(backtest(d)).rejects.toMatchObject({status:403});
+  expect(await db.select().from(forecastBacktests).where(eq(forecastBacktests.specId,d.spec.id))).toHaveLength(0);
+ });
+ it("keeps current board-key credentials subject to each private source ACL",async()=>{
+  const keyId=randomUUID(),keyHash="current-scoped-board-key-fixture",expiresAt=new Date(Date.now()+60_000);
+  await db.insert(boardApiKeys).values({id:keyId,userId:actor.userId!,name:"Current forecasting fixture key",keyHash,expiresAt,createdAt:new Date()});
+  actor={...actor,source:"board_key",keyId,authenticatedKeyHash:keyHash,authenticatedCredentialExpiresAt:expiresAt.getTime(),sessionId:null};
+  const [allowed,denied]=await db.insert(projects).values([{companyId,name:"Private source allowed to this key owner",visibility:"private"},{companyId,name:"Private source denied to this key owner",visibility:"private"}]).returning();
+  await db.insert(projectAccessMembers).values({companyId,projectId:allowed!.id,subjectType:"user",subjectId:actor.userId!});
+  const h=await history(undefined,false,false,new Map([[0,allowed!.id],[1,denied!.id]])),d=await draft(h);
+  await expect(backtest(d)).rejects.toMatchObject({status:403});
+  expect(await db.select().from(forecastBacktests).where(eq(forecastBacktests.specId,d.spec.id))).toHaveLength(0);
+ });
+ it("rejects an expired Human credential before admitting retained forecast sources",async()=>{
+  const h=await history(),d=await draft(h);actor={...actor,authenticatedCredentialExpiresAt:Date.now()-1};
+  await expect(backtest(d)).rejects.toMatchObject({status:403});
+  expect(await db.select().from(forecastBacktests).where(eq(forecastBacktests.specId,d.spec.id))).toHaveLength(0);
+ });
  it("persists separate definitions, native rolling-origin qualification and human publication before a run",async()=>{
   const d=await draft(),test=await backtest(d);expect(test).toMatchObject({kind:"backtest",currentQualification:"qualified",result:{status:"qualified",uncertainty:{method:"unavailable"}}});
   await expect(service().run(companyId,actor,d.spec.id,{expectedRevision:1,versionId:d.version.id,observationIds:d.h.observations.map(item=>item.id),cutoff:d.h.cutoff.toISOString()})).rejects.toMatchObject({status:409});

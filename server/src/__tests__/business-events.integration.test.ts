@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
-import { activityLog, analyticalLineageEdges, analyticalLineageManifests, businessEvents, businessEventObjects, businessEventSuppressions, businessEventBackfillRuns, companies, governanceObligations, createDb, applyPendingMigrations, runDatabaseBackup, runDatabaseRestore, issues, projects } from "@paperclipai/db";
+import { activityLog, analyticalLineageEdges, analyticalLineageManifests, businessEvents, businessEventObjects, businessEventSuppressions, businessEventBackfillRuns, companies, governanceObligations, principalPermissionGrants, createDb, applyPendingMigrations, runDatabaseBackup, runDatabaseRestore, issues, projects } from "@paperclipai/db";
 import { businessEventBackfillSchema } from "@paperclipai/shared";
 import { businessEventService } from "../services/business-events.js";
 import { businessEventExportService } from "../services/business-event-export.js";
@@ -51,6 +51,7 @@ suite("Native V8 business event projection on migrated PostgreSQL", () => {
       { id: otherCompanyId, name: "Other event test", issuePrefix: randomUUID() },
     ]);
     actor = await seedCurrentHumanSourceActor(db, [companyId, otherCompanyId]);
+    await db.insert(principalPermissionGrants).values({ companyId, principalType: "user", principalId: actor.userId!, permissionKey: "audit:view_agent_actions", scope: null, grantedByUserId: actor.userId });
     const project = await createCanonicalHumanProject(db, companyId, actor, "Project"); projectId = project.id;
     const issue = await issueService(db).create(companyId, { projectId, title: "Issue", createdByUserId: actor.userId, responsibleUserId: actor.userId }, db, undefined, { manualInputActor: actor, privacyActor: actor, sourceAccessActor: actor });
     issueId = issue.id;

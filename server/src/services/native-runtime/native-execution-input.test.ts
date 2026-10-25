@@ -1,11 +1,36 @@
+import { createHash, randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import type { ExecutionContinuationEnvelope, AskUserQuestionsInteraction } from "@paperclipai/shared";
 
 import { formatDurableQuestionResponseSummary } from "../question-response-delivery.js";
 import { buildNativeCompletionContract } from "./completion-contracts.js";
 import { renderPaperclipWakePrompt } from "@paperclipai/adapter-utils/server-utils";
-import { buildNativeExecutionInput } from "./native-execution-input.js";
+import { buildNativeBootstrapSourceSet, buildNativeExecutionInput } from "./native-execution-input.js";
 import { nativeRuntimeContextFixture } from "./runtime-context.test-fixture.js";
+
+describe("native bootstrap rendered-source closure", () => {
+  const companyId = randomUUID(), issueId = randomUUID(), renderedMarkdown = "Task body rendered by the native task renderer.";
+  const hash = "a".repeat(64);
+  const policy = { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] };
+  const snapshot = (ownerCompanyId = companyId, ownerIssueId = issueId) => ({ version: 1 as const,
+    owner: { kind: "issue" as const, companyId: ownerCompanyId, id: ownerIssueId, contentHash: hash }, policy, inputs: [], digest: hash });
+  const input = (overrides: Partial<Parameters<typeof buildNativeBootstrapSourceSet>[0]> = {}) => {
+    const taskInput = { kind: "task" as const, issueId, sourceVersion: "1", contentHash: hash };
+    const references = [{ kind: "task" as const, id: issueId }];
+    return buildNativeBootstrapSourceSet({ companyId, renderedMarkdown,
+      renderedMarkdownDigest: createHash("sha256").update(renderedMarkdown, "utf8").digest("hex"), references,
+      candidates: [{ kind: "task", id: issueId, input: taskInput, payloadSourceSnapshot: snapshot() }],
+      runtimeInputs: [], contextManifestIds: [], rolePackInputs: [], unsupportedInputPresent: false, ...overrides });
+  };
+
+  it("requires a nonempty Task root and exact company, renderer identity and candidate input binding", () => {
+    expect(input()?.inputs).toEqual([{ kind: "task", issueId, sourceVersion: "1", contentHash: hash }]);
+    expect(input({ references: [] })).toBeNull();
+    expect(input({ candidates: [{ kind: "task", id: issueId, input: { kind: "task", issueId, sourceVersion: "1", contentHash: hash }, payloadSourceSnapshot: snapshot(randomUUID()) }] })).toBeNull();
+    expect(input({ candidates: [{ kind: "task", id: issueId, input: { kind: "project", projectId: issueId, sourceVersion: "1", contentHash: hash }, payloadSourceSnapshot: snapshot() }] })).toBeNull();
+    expect(input({ candidates: [{ kind: "task", id: issueId, input: { kind: "task", issueId: randomUUID(), sourceVersion: "1", contentHash: hash }, payloadSourceSnapshot: snapshot() }] })).toBeNull();
+  });
+});
 
 describe("LCA-05 explicit native work mode", () => {
   it.each(["standard", "planning", "ask"])("title and description cannot override %s mode", (workMode) => {

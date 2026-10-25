@@ -3424,6 +3424,9 @@ export function sanitizeInheritedPaperclipEnv(
 ): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...baseEnv };
   delete env.PAPERCLIPAI_CMD;
+  // Platform-funded Support inference is hosted-only. Its credential must
+  // never cross the original server-to-runtime child process boundary.
+  delete env.AW_FIRST_PARTY_SUPPORT_ANTHROPIC_API_KEY;
   for (const key of Object.keys(env)) {
     if (!key.startsWith("PAPERCLIP_")) continue;
     if (key === "PAPERCLIP_RUNTIME_API_URL") continue;

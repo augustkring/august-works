@@ -3309,5 +3309,22 @@
     "failed": "Memory kunne ikke godkendes",
     "unconfirmed": "Resultatet kunne ikke bekræftes.",
     "accessChanged": "Adgangen til kontoen eller virksomheden er ændret. Opdater siden, før du gennemgår denne Memory."
+  },
+  "helpAssistant": {
+    "title": "Supportassistent",
+    "scope": "Få vejledning fra godkendte Hjælp-artikler om Blentera. Assistenten kan ikke kontrollere din konto, opgave eller tjenestens aktuelle status.",
+    "checking": "Kontrollerer tilgængelighed…",
+    "unavailable": "AI-hjælp er ikke tilgængelig. Du kan stadig søge i Hjælp eller kontakte et menneske.",
+    "included": "Denne hjælp er inkluderet uden ekstra AI-betaling.",
+    "question": "Hvad vil du gerne have hjælp til?",
+    "noSecrets": "Medtag ikke adgangskoder, gendannelseskoder, API-nøgler eller andre hemmeligheder.",
+    "privacy": "Læs behandlingsmeddelelsen",
+    "consent": "Jeg accepterer, at spørgsmålet og den valgte Hjælp-tekst sendes til {{provider}}.",
+    "ask": "Spørg assistenten",
+    "asking": "Finder dokumenteret vejledning…",
+    "cannotVerify": "Jeg kan ikke bekræfte et svar ud fra de tilgængelige oplysninger. Kontakt support for hjælp. En forespørgsel med et uklart resultat sendes ikke automatisk igen.",
+    "guidanceOnly": "Uddragene kommer fra de Hjælp-artikler, der er linket til. De bekræfter ikke din kontos, opgaves eller tjenestens aktuelle status.",
+    "source": "{{maturity}}-vejledning · verificeret {{date}}",
+    "preview": "Forhåndsvisning"
   }
 }

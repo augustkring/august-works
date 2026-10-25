@@ -15,6 +15,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   activityLog,
   authUsers,
+  authSessions,
   agents,
   agentTaskSessions,
   agentWakeupRequests,
@@ -179,7 +180,7 @@ const support = await getEmbeddedPostgresTestSupport();
         issueService(db).update(results[0].id, { assigneeAgentId: null }),
       ).rejects.toThrow(/conversation/i);
     });
-    it("resolves through authenticated company routes, keeps opens read-only, and derives ownership", async () => {
+    it("resolves through authenticated company routes, keeps opens read-only, and limits conversation payloads to their Human owner", async () => {
       const appFor = (userId?: string, allowed = true) => {
         const app = express();
         app.use(express.json());
@@ -236,30 +237,33 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(resolved.every((response) => response.status === 200)).toBe(true);
       expect(resolved[0].body.id).toBe(resolved[1].body.id);
       expect(resolved[0].body.conversationUserId).toBe(owner);
-      expect(
-        (
-          await request(appFor(colleague)).get(
-            `/api/issues/${resolved[0].body.id}`,
-          )
-        ).status,
-      ).toBe(200);
+      const ownerRead = await request(appFor(owner)).get(`/api/issues/${resolved[0].body.id}`);
+      expect(ownerRead.status).toBe(200);
+      expect(ownerRead.body).toMatchObject({ id: resolved[0].body.id, conversationUserId: owner });
+      const colleagueRead = await request(appFor(colleague)).get(`/api/issues/${resolved[0].body.id}`);
+      expect(colleagueRead.status).toBe(404);
+      expect(JSON.stringify(colleagueRead.body)).not.toContain("Conversation");
       expect(
         (await request(appFor(randomUUID(), false)).get(path)).status,
       ).toBe(403);
-      expect(
-        (
-          await request(app)
-            .post(`/api/issues/${resolved[0].body.id}/comments`)
-            .send({ body: "Hello" })
-        ).status,
-      ).toBe(422);
+      const privateWorkTask = await issueService(db).create(companyId, {
+        title: "Private work must remain unavailable",
+        visibility: "private",
+        responsibleUserId: owner,
+        createdByUserId: owner,
+      });
+      const genericPrivateTaskWrite = await request(app)
+        .post(`/api/issues/${privateWorkTask.id}/comments`)
+        .send({ body: "Hello", clientRequestId: randomUUID() });
+      expect(genericPrivateTaskWrite.status).toBe(422);
+      expect(genericPrivateTaskWrite.body.error).toBe("Private tasks are not available");
       const chatId = resolved[0].body.id;
       const queuedInterrupt = { queueId: randomUUID(), revision: "queue-revision", targetRunId: randomUUID() };
       expect((await request(appFor(colleague)).post(`/api/issues/${chatId}/queued-comments/interrupt`)
-        .send(queuedInterrupt)).status).toBe(403);
+        .send(queuedInterrupt)).status).toBe(404);
       for (const body of ["Hello", "/new"]) {
         expect((await request(appFor(colleague)).post(`/api/issues/${chatId}/comments`)
-          .send({ body, clientRequestId: randomUUID() })).status).toBe(403);
+          .send({ body, clientRequestId: randomUUID() })).status).toBe(404);
       }
       expect((await request(appFor(colleague))
         .post(`/api/companies/${companyId}/issues/${chatId}/attachments`)
@@ -270,29 +274,38 @@ const support = await getEmbeddedPostgresTestSupport();
         continuationPolicy: "wake_assignee_on_accept", payload: { version: 1, prompt: "Hand off this plan?" },
       }).returning();
       expect((await request(appFor(colleague))
-        .post(`/api/issues/${chatId}/interactions/${planReview.id}/accept`).send({})).status).toBe(403);
+        .post(`/api/issues/${chatId}/interactions/${planReview.id}/accept`).send({})).status).toBe(404);
       expect((await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.id, planReview.id)))[0].status).toBe("pending");
       const [pause] = await db.insert(issueTreeHolds).values({
         companyId, rootIssueId: chatId, mode: "pause", status: "active",
         createdByActorType: "user", createdByUserId: owner,
         releasePolicy: { strategy: "manual", note: "leaf_pause" },
       }).returning();
-      const blockedSend = await request(app).post(`/api/issues/${chatId}/comments`)
+      const blockedSend = await request(appFor(owner)).post(`/api/issues/${chatId}/comments`)
         .send({ body: "Continue working", clientRequestId: randomUUID() });
-      expect(blockedSend.status).toBe(409);
+      expect(blockedSend.status, JSON.stringify(blockedSend.body)).toBe(409);
       expect(await db.select().from(issueComments).where(eq(issueComments.issueId, chatId))).toHaveLength(0);
       const resetRequest = { body: "/new", clientRequestId: randomUUID() };
-      const reset = await request(app).post(`/api/issues/${chatId}/comments`).send(resetRequest);
+      const reset = await request(appFor(owner)).post(`/api/issues/${chatId}/comments`).send(resetRequest);
       expect(reset.status).toBe(201);
       const retriedResets = await Promise.all(Array.from({ length: 3 }, () =>
-        request(app).post(`/api/issues/${chatId}/comments`).send(resetRequest)));
+        request(appFor(owner)).post(`/api/issues/${chatId}/comments`).send(resetRequest)));
       expect(retriedResets.every((response) => response.status === 201 && response.body.id === reset.body.id)).toBe(true);
       const addedEvents = await db.select().from(activityLog).where(and(
         eq(activityLog.entityId, chatId), eq(activityLog.action, "issue.comment_added"),
       ));
       expect(addedEvents).toHaveLength(1);
+      const ownerMessage = await request(appFor(owner)).post(`/api/issues/${chatId}/comments`)
+        .send({ body: "Owner follow-up", clientRequestId: randomUUID() });
+      expect(ownerMessage.status, JSON.stringify(ownerMessage.body)).toBe(201);
 
       expect((await db.select().from(issueTreeHolds).where(eq(issueTreeHolds.id, pause.id)))[0].status).toBe("released");
+      await db.delete(authSessions).where(eq(authSessions.id, sessionIds.get(owner)!));
+      const revokedOwnerMessage = await request(appFor(owner)).post(`/api/issues/${chatId}/comments`)
+        .send({ body: "Stale session", clientRequestId: randomUUID() });
+      expect(revokedOwnerMessage.status).toBe(404);
+      const messagesAfterRevokedAttempt = await db.select().from(issueComments).where(eq(issueComments.issueId, chatId));
+      expect(messagesAfterRevokedAttempt.some(comment => comment.body === "Stale session")).toBe(false);
       const local = await request(appFor()).post(path);
       expect(local.body.conversationUserId).toBe("local-board");
       await instanceSettingsService(db).updateExperimental({
@@ -303,7 +316,7 @@ const support = await getEmbeddedPostgresTestSupport();
         .send(queuedInterrupt)).status).toBe(404);
       expect(
         (await request(app).get(`/api/issues/${resolved[0].body.id}`)).status,
-      ).toBe(200);
+      ).toBe(404);
       await instanceSettingsService(db).updateExperimental({
         enableAgentChat: true,
       });

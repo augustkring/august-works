@@ -288,7 +288,8 @@ import {
   lockIssuePrivacyTree,
   type IssuePostCommitAction,
 } from "../services/issues.js";
-import { authorizationDeniedDetails, authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, issueReadSqlCondition, projectReadSqlCondition } from "../services/authorization.js";
+import { authorizationDeniedDetails, authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, issueReadSqlCondition, projectReadSqlCondition, pinCurrentBoardActor } from "../services/authorization.js";
+import { assertDirectInputSessionCurrent } from "../services/native-direct-input.js";
 import { withCurrentTaskSourceRead } from "../services/task-source-read-scope.js";
 import { persistActivity } from "../services/activity-log.js";
 import { stalledReviewDecisionService } from "../services/stalled-review-decisions.js";
@@ -3553,7 +3554,24 @@ export function issueRoutes(
     }
     for (const id of sources) {
       if (!(await canActorReadIssuePrivacy(db, req.actor, { id, companyId }))) throw notFound("Issue not found");
-      if (!(await canActorReadIssuePrivacy(db, { type: "none" }, { id, companyId }))) throw unprocessable("Private tasks are not available");
+      let ownedNativeConversation = false;
+      const isNativeConversationCommentWrite = req.method === "POST" &&
+        req.originalUrl.split("?")[0]!.endsWith(`/issues/${id}/comments`);
+      if (isNativeConversationCommentWrite && req.actor.type === "board" && req.actor.source === "session" && req.actor.sessionId && req.actor.userId) {
+        ownedNativeConversation = await db.transaction(async tx => {
+          const [conversation] = await tx.select({ conversationAgentId: issueRows.conversationAgentId,
+            conversationUserId: issueRows.conversationUserId }).from(issueRows)
+            .where(and(eq(issueRows.id, id), eq(issueRows.companyId, companyId)));
+          if (!conversation?.conversationAgentId || conversation.conversationUserId !== req.actor.userId) return false;
+          const pinned = await pinCurrentBoardActor(tx, req.actor);
+          if (!pinned || pinned.credentialExpiresAt === null) throw notFound("Issue not found");
+          await assertDirectInputSessionCurrent(tx, pinned.actor, pinned.credentialExpiresAt);
+          if (!await canActorReadIssuePrivacy(tx, pinned.actor, { id, companyId })) throw notFound("Issue not found");
+          return true;
+        });
+      }
+      if (!ownedNativeConversation && !(await canActorReadIssuePrivacy(db, { type: "none" }, { id, companyId })))
+        throw unprocessable("Private tasks are not available");
     }
     const projectId = req.body?.projectId;
     if (typeof projectId === "string" && isUuidLike(projectId)) {
@@ -17750,9 +17768,23 @@ export function issueRoutes(
         const userId = req.actor.userId;
         const publications: ActivityPublication[] = [];
         const comment = await db.transaction(async (tx) => {
-          await tx.select({ id: issueRows.id }).from(issueRows).where(and(
+          const [lockedIssue] = await tx.select().from(issueRows).where(and(
             eq(issueRows.id, issue.id), eq(issueRows.companyId, issue.companyId),
           )).for("update");
+          if (!lockedIssue || lockedIssue.conversationAgentId == null || lockedIssue.conversationUserId !== userId)
+            throw notFound("Conversation not found");
+          const pinned = await pinCurrentBoardActor(tx, req.actor);
+          if (!pinned || pinned.credentialExpiresAt === null)
+            throw forbidden("The current conversation owner session is unavailable");
+          await assertDirectInputSessionCurrent(tx, pinned.actor, pinned.credentialExpiresAt,
+            "The current conversation owner session is unavailable");
+          const issueCommentDecision = await authorizationService(tx).decide({ actor: pinned.actor, action: "issue:comment",
+            resource: { type: "issue", companyId: lockedIssue.companyId, issueId: lockedIssue.id,
+              projectId: lockedIssue.projectId, parentIssueId: lockedIssue.parentId,
+              assigneeAgentId: lockedIssue.assigneeAgentId, assigneeUserId: lockedIssue.assigneeUserId,
+              status: lockedIssue.status }, enforceResponsibleUserIntersection: true });
+          if (!issueCommentDecision.allowed || !await canActorReadIssuePrivacy(tx, pinned.actor, lockedIssue))
+            throw notFound("Conversation not found");
           const [existing] = await tx.select({ id: issueComments.id }).from(issueComments).where(and(
             eq(issueComments.issueId, issue.id), eq(issueComments.authorUserId, userId),
             eq(issueComments.clientRequestId, req.body.clientRequestId),
@@ -17760,6 +17792,8 @@ export function issueRoutes(
           const saved = await svc.addComment(issue.id, req.body.body, { userId }, {
             clientRequestId: req.body.clientRequestId, authorType: "user", attachmentIds: req.body.attachmentIds,
           }, tx);
+          await assertDirectInputSessionCurrent(tx, pinned.actor, pinned.credentialExpiresAt,
+            "The current conversation owner session is unavailable");
           if (!existing) await logActivity(tx as unknown as Db, {
             companyId: issue.companyId, actorType: actor.actorType, actorId: actor.actorId,
             action: "issue.comment_added", entityType: "issue", entityId: issue.id,

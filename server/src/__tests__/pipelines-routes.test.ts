@@ -41,6 +41,7 @@ import {
 } from "./helpers/embedded-postgres.js";
 import { errorHandler } from "../middleware/error-handler.js";
 import { issueRoutes } from "../routes/issues.js";
+import { projectRoutes } from "../routes/projects.js";
 import { pipelineRoutes } from "../routes/pipelines.js";
 import {
   PIPELINE_AUTOMATION_DEFAULT_TITLE_TEMPLATE,
@@ -116,6 +117,7 @@ describeEmbeddedPostgres("pipeline routes", () => {
     });
     instance.use("/api", pipelineRoutes(db, { heartbeat: noopHeartbeat }));
     instance.use("/api", issueRoutes(db, {} as any));
+    instance.use("/api", projectRoutes(db));
     instance.use(errorHandler);
     return instance;
   }
@@ -141,6 +143,8 @@ describeEmbeddedPostgres("pipeline routes", () => {
     await db.insert(principalPermissionGrants).values(grantsForHumanRole("owner").map(grant => ({
       companyId, principalType: "user" as const, principalId: userId, ...grant,
     })));
+    await db.insert(principalPermissionGrants).values({ companyId, principalType: "user", principalId: userId,
+      permissionKey: "pipelines:write", scope: null });
     const actor: Express.Request["actor"] = { type: "board", source: "session", userId, sessionId,
       companyIds: [companyId], memberships: [{ companyId, membershipRole: "owner", status: "active" }] };
     return { userId, sessionId, actor };
@@ -204,17 +208,13 @@ describeEmbeddedPostgres("pipeline routes", () => {
     return agent!;
   }
 
-  async function seedProjectWorkspaceFixture(companyId: string, name = "Automation") {
-    const projectId = randomUUID();
+  async function seedProjectWorkspaceFixture(companyId: string, actor: Express.Request["actor"], name = "Automation") {
+    const created = await request(app(actor)).post(`/api/companies/${companyId}/projects`)
+      .send({ name: `${name} project`, status: "in_progress" }).expect(201);
+    const projectId = created.body.id as string;
     const projectWorkspaceId = randomUUID();
     const executionWorkspaceId = randomUUID();
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
-      name: `${name} project`,
-      status: "in_progress",
-    });
     await db.insert(projectWorkspaces).values({
       id: projectWorkspaceId,
       companyId,
@@ -566,6 +566,9 @@ describeEmbeddedPostgres("pipeline routes", () => {
       scope: null,
     });
     const runId = randomUUID();
+    const runOwner = await seedHumanMember(company.id, "Pipeline run owner");
+    await db.insert(heartbeatRuns).values({ id: runId, companyId: company.id, agentId: agent!.id,
+      responsibleUserId: runOwner.userId, scopeKind: "company", status: "succeeded", contextSnapshot: {} });
     const agentActor: Express.Request["actor"] = {
       type: "agent",
       agentId: agent!.id,
@@ -701,10 +704,12 @@ describeEmbeddedPostgres("pipeline routes", () => {
 
   it("carries route-saved stage automation workspace context into detail responses and execution issues", async () => {
     const company = await seedCompany();
-    const http = request(app(boardActor));
+    const responsible = await seedHumanMember(company.id, "Automation owner");
+    await db.update(companies).set({ defaultResponsibleUserId: responsible.userId }).where(eq(companies.id, company.id));
+    const http = request(app(responsible.actor));
     const agent = await seedAutomationAgent(company.id);
     const { projectId, projectWorkspaceId, executionWorkspaceId } =
-      await seedProjectWorkspaceFixture(company.id, "Route automation");
+      await seedProjectWorkspaceFixture(company.id, responsible.actor, "Route automation");
     await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: true });
 
     const pipeline = await http
@@ -778,10 +783,12 @@ describeEmbeddedPostgres("pipeline routes", () => {
 
   it("fails automation execution when the selected project workspace belongs to a different project", async () => {
     const company = await seedCompany();
-    const http = request(app(boardActor));
+    const responsible = await seedHumanMember(company.id, "Automation owner");
+    await db.update(companies).set({ defaultResponsibleUserId: responsible.userId }).where(eq(companies.id, company.id));
+    const http = request(app(responsible.actor));
     const agent = await seedAutomationAgent(company.id);
-    const source = await seedProjectWorkspaceFixture(company.id, "Source project");
-    const mismatched = await seedProjectWorkspaceFixture(company.id, "Mismatched project");
+    const source = await seedProjectWorkspaceFixture(company.id, responsible.actor, "Source project");
+    const mismatched = await seedProjectWorkspaceFixture(company.id, responsible.actor, "Mismatched project");
     await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: true });
 
     const pipeline = await http
@@ -828,7 +835,9 @@ describeEmbeddedPostgres("pipeline routes", () => {
 
   it("keeps legacy stage automation with only assignee and instructions compatible", async () => {
     const company = await seedCompany();
-    const http = request(app(boardActor));
+    const responsible = await seedHumanMember(company.id, "Automation owner");
+    await db.update(companies).set({ defaultResponsibleUserId: responsible.userId }).where(eq(companies.id, company.id));
+    const http = request(app(responsible.actor));
     const agent = await seedAutomationAgent(company.id);
 
     const pipeline = await http

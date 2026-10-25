@@ -10,6 +10,7 @@ import { useCompany } from "../context/CompanyContext";
 import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
 import { useV9PrivateReadAuthority } from "../hooks/useV9PrivateReadAuthority";
 import { queryKeys } from "../lib/queryKeys";
+import { CustomerSupportAssistant } from "../components/CustomerSupportAssistant";
 
 const HELP_SEARCH_LIMIT = 8;
 
@@ -138,6 +139,8 @@ export function CustomerHelpCenter({ navigationState }: { navigationState?: unkn
           <a className={linkClass} href={FEEDBACK_CONTACTS.privacy}>{t("helpCenter.privacy")}</a>
         </div>
       </section>
+      <CustomerSupportAssistant key={`${scope}:${locale}`} companyId={selectedCompanyId} principal={principal}
+        locale={locale} ready={ready} authority={authority} />
     </section>
   );
 }

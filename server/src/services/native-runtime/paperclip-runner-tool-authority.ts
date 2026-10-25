@@ -204,6 +204,10 @@ export function captureNativeProjectToolResult(input: {
     tool: "call_api",
     operationId: "GET /api/projects/{id}",
     projectId: requestedId,
+    // #executeAdmitted strips the internal discriminator and returns the
+    // normalized API response with this public operation identity. Bind to
+    // those exact model-visible bytes; the capture's operationId is separate
+    // for validation but is also part of the returned object digest.
     resultDigest: createHash("sha256").update(JSON.stringify({ ...toolResponse, apiOperationId: "GET /api/projects/{id}" })).digest("hex"),
     source: source?.kind === "project" ? source : null,
   };
@@ -371,13 +375,18 @@ export class PaperclipRunnerToolAuthority {
       : null;
     return nativeBackendToolCallIdentity.run(boundNativeCall, async () => {
       this.binding.authoritySignal?.throwIfAborted();
-      let documentSource: DocumentRevisionSourceCapture | null = null;
+      const documentSource: { value: DocumentRevisionSourceCapture | null } = { value: null };
       const result = await withOrchestrationNativeTool(this.db, this.binding, call,
-        () => this.#executeAdmitted(call, source => { documentSource = source; }, options.onProjectToolResult),
+        () => this.#executeAdmitted(call, source => { documentSource.value = source; }, options.onProjectToolResult),
         call.tool !== "paperclip_search_assigned_tools" && (this.binding.assignedMcpTools?.has(call.tool) ?? false));
       if (call.tool === "read_document" && options.onDocumentRead) {
+        const resultDigest = createHash("sha256").update(JSON.stringify(result)).digest("hex");
         await options.onDocumentRead({ turnId: boundNativeCall?.turnId ?? null, callId: call.callId, tool: "read_document",
-          resultDigest: createHash("sha256").update(JSON.stringify(result)).digest("hex"), source: documentSource });
+          resultDigest,
+          // The document owner computes this from the same selected revision
+          // and normalized DTO before returning. A mismatch means provenance
+          // is unknown; never repair it with a later re-read.
+          source: documentSource.value?.returnedResultDigest === resultDigest ? documentSource.value : null });
       }
       return result;
     });

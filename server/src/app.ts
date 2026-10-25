@@ -1,6 +1,8 @@
 import { companyImportJobService } from "./services/company-import-jobs.js";
 import { purgeExpiredNotificationChannelCommands } from "./services/notifications/channel-retention.js";
 import { customerSupportRoutes } from "./routes/customer-support.js";
+import { firstPartySupportModelGateway } from "./services/orchestration/first-party-support-model-gateway.js";
+import { searchAuthorizedSupportHelp } from "./services/experience/support-assistant-help.js";
 import { maintenanceHistoryRoutes } from "./routes/maintenance-history.js";
 import { experienceObservationRoutes } from "./routes/experience-observations.js";
 import { experienceMeasuresRoutes } from "./routes/experience-measures.js";
@@ -924,7 +926,12 @@ export async function createApp(
   api.use(maintenanceHistoryRoutes(db));
   api.use(experienceMeasuresRoutes(db));
   api.use(experienceObservationRoutes(db));
-  api.use(customerSupportRoutes(db));
+  api.use(customerSupportRoutes(db, { assistant: opts.saasPlatform ? firstPartySupportModelGateway(db, {
+    profiles: opts.saasPlatform.config.firstPartySupportModelProfiles ?? [],
+    sourceSha: opts.saasPlatform.config.deployment.sourceSha,
+    protectedEvidenceOrigin: opts.saasPlatform.config.objects.endpoint,
+    helpSearch: searchAuthorizedSupportHelp,
+  }) : undefined }));
   api.use(customerFeedbackRoutes(db,{operatorUserIds:opts.saasPlatform?.config.operatorUserIds, storage: scopedStorage}));
   api.use(attentionRoutes(db));
   api.use(decisionTrainingRoutes(db));

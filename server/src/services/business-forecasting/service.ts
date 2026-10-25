@@ -109,19 +109,20 @@ async function appendVersion(tx:Db,row:Root,actor:AuthorizationActor,definition:
 async function capture(tx:Db,row:Root,actor:AuthorizationActor,pin:Awaited<ReturnType<typeof version>>,observationIds:string[],cutoff:Date) {
  if(cutoff>new Date()) throw conflict("Forecast cutoff cannot be in the future");
  const series:BusinessForecastSeriesPoint[]=[],deadline=performance.now()+30_000;
- let expiresAt=pin.value.expiresAt,edges=pin.source.edges;
+ let expiresAt=pin.value.expiresAt;
+ const metricPin=pin.value.definition.metricId,metricVersion=pin.value.definition.metricVersionId;
+ const current=await businessMetricService(tx).inspectCurrentObservationsWithLineage(row.companyId,actor,metricPin,metricVersion,observationIds,deadline);
+ const observationById=new Map(current.observations.map(item=>[item.observation.id,item]));
  for(const id of observationIds) {
-  timeBudget(deadline);const value=await businessMetricService(tx).inspectCurrentObservation(row.companyId,actor,id);timeBudget(deadline);
+  timeBudget(deadline);const admitted=observationById.get(id);if(!admitted)throw notFound("Forecast measurement was erased");const value=admitted.result;timeBudget(deadline);
   if(value.metricId!==pin.value.definition.metricId || value.versionId!==pin.value.definition.metricVersionId || Date.parse(value.asOf)>cutoff.getTime() || Date.parse(value.asOf)<Math.max(pin.authority.metric.version.createdAt.getTime(),pin.authority.publication.publishedAt.getTime())) throw conflict("Forecast observations require exact known-at-cutoff native definition pins");
   const domain=pin.authority.metric.version.definition.valueType;
   if(value.value!==null && (!Number.isFinite(value.value) || value.value<0 || domain==="ratio"&&value.value>1 || domain==="count"&&!Number.isInteger(value.value))) throw conflict("The native observation is outside its exact metric value domain");
-  const [observation]=await tx.select().from(businessMetricObservations).where(and(eq(businessMetricObservations.companyId,row.companyId),eq(businessMetricObservations.id,id))).for("share");
-  if(!observation) throw notFound("Forecast measurement was erased");
-  const source=await lineage(tx,row.companyId,observation.lineageManifestId);timeBudget(deadline);edges=mergeEdges([edges,source.edges]);
-  expiresAt=new Date(Math.min(expiresAt.getTime(),observation.expiresAt.getTime(),source.manifest.expiresAt.getTime()));
+  const {observation,manifest}=admitted;
+  expiresAt=new Date(Math.min(expiresAt.getTime(),observation.expiresAt.getTime(),manifest.expiresAt.getTime()));
   series.push({observationId:id,metricId:value.metricId,metricVersionId:value.versionId,sourceHash:nativeSha256(value),from:value.from,until:value.until,asOf:value.asOf,value:value.value,status:value.status,unit:pin.authority.metric.version.definition.unit});
  }
- timeBudget(deadline);await inspectDecisionSourceAuthority(tx,row.companyId,actor,edges,deadline);
+ const edges=mergeEdges([pin.source.edges,current.edges]);timeBudget(deadline);
  if(expiresAt<=new Date()) throw conflict("Forecast evidence expired before capture completed");
  return {series,edges,expiresAt};
 }
@@ -139,12 +140,9 @@ async function inspectArtifact(tx:Db,row:Root,actor:AuthorizationActor,pin:Await
  const source=await lineage(tx,row.companyId,value.lineageManifestId);
  if(source.manifest.engineVersion!=="aw-native-business-forecast-owner-v1" || source.manifest.sourceCount!==source.edges.length || source.manifest.createdAt.getTime()!==value.createdAt.getTime() || source.manifest.expiresAt.getTime()!==value.expiresAt.getTime() || value.definitionHash!==pin.value.contentHash || value.contentHash!==artifactHash(value) || value.inputHash!==nativeSha256(value.series) || source.manifest.analysisType!==`forecast_${kind}` || source.manifest.analysisRef!==value.id
   || source.manifest.definitionHash!==value.definitionHash || source.manifest.inputHash!==value.inputHash || source.manifest.parameters.artifactHash!==value.contentHash || source.manifest.parameters.lineageHash!==nativeSha256(source.edges)) throw conflict("Forecast artifact lineage integrity is unavailable");
- const deadline=performance.now()+30_000;
- for(const point of value.series) {
-  timeBudget(deadline);const current=await businessMetricService(tx).inspectCurrentObservation(row.companyId,actor,point.observationId);
-  if(nativeSha256(current)!==point.sourceHash) throw conflict("Forecast measurement receipt integrity is unavailable");
- }
- await inspectDecisionSourceAuthority(tx,row.companyId,actor,source.edges,deadline);
+ const deadline=performance.now()+30_000,observations=await businessMetricService(tx).inspectCurrentObservationsWithLineage(row.companyId,actor,pin.value.definition.metricId,pin.value.definition.metricVersionId,value.series.map(point=>point.observationId),deadline);
+ const currentById=new Map(observations.observations.map(item=>[item.observation.id,item.result]));
+ for(const point of value.series) {timeBudget(deadline);const current=currentById.get(point.observationId);if(!current||nativeSha256(current)!==point.sourceHash) throw conflict("Forecast measurement receipt integrity is unavailable");}
  const stale=!pin.authority.statisticalProfileCurrent || row.status==="retired" || kind==="run"&&row.publishedVersionId!==value.versionId || pin.authority.metric.metric.publishedVersionId!==pin.value.definition.metricVersionId || await historyChanged(tx,row,pin.value,value.series,value.cutoff);
  return {id:value.id,companyId:value.companyId,specId:value.specId,versionId:value.versionId,kind,result:value.result,series:value.series,contentHash:value.contentHash,cutoff:value.cutoff.toISOString(),createdAt:value.createdAt.toISOString(),expiresAt:value.expiresAt.toISOString(),currentQualification:stale?"needs_revalidation":value.result.status==="qualified"?"qualified":"inconclusive",reviewReason:stale?"The published metric definition or available measurement history changed; a new backtest and human publication are required.":null};
 }
@@ -157,7 +155,8 @@ async function appendArtifact(tx:Db,row:Root,actor:AuthorizationActor,pin:Awaite
  }
  if(options.signal?.aborted) throw conflict("Statistical forecast was cancelled before persistence");
  await statisticalAuthority(tx,pin.value.definition,true);
- await inspectDecisionSourceAuthority(tx,row.companyId,actor,captured.edges,performance.now()+30000);
+ // Metric observation lineage and every exact native Task/Project root were
+ // just reauthorized by the metric owner inside this transaction.
  if(captured.expiresAt<=new Date()) throw conflict("Forecast Sources expired before persistence");
  if(options.signal?.aborted) throw conflict("Statistical forecast was cancelled before persistence");
  const material={series:captured.series,result,cutoff,definitionHash:pin.value.contentHash},contentHash=artifactHash(material);

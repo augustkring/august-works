@@ -3718,6 +3718,20 @@
       "when": 1792915207915,
       "tag": "0532_company_purpose_model_budgets",
       "breakpoints": true
+    },
+    {
+      "idx": 533,
+      "version": "7",
+      "when": 1792917760741,
+      "tag": "0533_native_run_input_source_dispatch_receipts",
+      "breakpoints": true
+    },
+    {
+      "idx": 534,
+      "version": "7",
+      "when": 1792919213623,
+      "tag": "0534_first_party_support_package_pin",
+      "breakpoints": true
     }
   ]
 }

@@ -10,6 +10,7 @@ import { agents } from "./agents.js";
 import { completionContracts } from "./completion_contracts.js";
 import { agentExecutionManifests } from "./execution_manifests.js";
 import { heartbeatRuns } from "./heartbeat_runs.js";
+import { agentPackageVersions } from "./agent_packages.js";
 import { workflowRuns, workflows } from "./workflows.js";
 const times = () => ({ createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(), updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow() });
 export const orchestrationPlans = pgTable("orchestration_plans", {
@@ -86,6 +87,9 @@ export const orchestrationCompanyPurposeBudgets = pgTable("orchestration_company
 }));
 export const orchestrationCompanyPurposeReservations = pgTable("orchestration_company_purpose_reservations", {
   id: uuid("id").primaryKey().defaultRandom(), companyId: uuid("company_id").notNull(), budgetId: uuid("budget_id").notNull(), principalUserId: text("principal_user_id").notNull(),
+  /** Exact globally published first-party support package release pinned by
+   * the trusted server. Null is retained only for pre-feature legacy rows. */
+  packageVersionId: uuid("package_version_id"),
   idempotencyKey: text("idempotency_key").notNull(), requestHash: text("request_hash").notNull(), inputHash: text("input_hash").notNull(), authorityHash: text("authority_hash").notNull(),
   quote: jsonb("quote").$type<ModelReservationQuote>().notNull(), maximumMinor: integer("maximum_minor").notNull(),
   status: text("status").$type<"reserved" | "dispatched" | "completed" | "failed" | "unknown" | "cancelled">().notNull().default("reserved"),
@@ -95,6 +99,7 @@ export const orchestrationCompanyPurposeReservations = pgTable("orchestration_co
   tenantUq: unique("orchestration_company_purpose_reservation_tenant_uq").on(t.companyId, t.id),
   keyUq: unique("orchestration_company_purpose_reservation_key_uq").on(t.companyId, t.idempotencyKey),
   budgetFk: foreignKey({ columns: [t.companyId, t.budgetId], foreignColumns: [orchestrationCompanyPurposeBudgets.companyId, orchestrationCompanyPurposeBudgets.id] }).onDelete("restrict"),
+  packageVersionFk: foreignKey({ columns: [t.packageVersionId], foreignColumns: [agentPackageVersions.id] }).onDelete("restrict"),
   statusCheck: check("orchestration_company_purpose_reservation_status_ck", sql`${t.status} in ('reserved','dispatched','completed','failed','unknown','cancelled')`),
   costCheck: check("orchestration_company_purpose_reservation_cost_ck", sql`${t.maximumMinor} between 0 and 1000000 and (${t.quote}->>'maximumMinor')::int=${t.maximumMinor} and ${t.expiresAt}>${t.createdAt}`),
   hashCheck: check("orchestration_company_purpose_reservation_hash_ck", sql`${t.requestHash} ~ '^[a-f0-9]{64}$' and ${t.inputHash} ~ '^[a-f0-9]{64}$' and ${t.authorityHash} ~ '^[a-f0-9]{64}$' and (${t.providerResponseHash} is null or ${t.providerResponseHash} ~ '^[a-f0-9]{64}$')`),

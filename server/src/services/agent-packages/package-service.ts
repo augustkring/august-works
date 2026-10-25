@@ -48,6 +48,7 @@ import {
   type PackageInstallationView,
   type PackageRelease,
   type PackageInstallOptions,
+  FIRST_PARTY_SUPPORT_PACKAGE_KEY,
 } from "@paperclipai/shared";
 import type { z } from "zod";
 import type { AuthorizationActor } from "../authorization.js";
@@ -120,6 +121,7 @@ export function agentPackageService(
     if (
       row.package.status !== "active" ||
       row.version.state !== "published" ||
+      row.version.release.manifest.audience === "first_party_support" ||
       packageReleaseBlockers(row.version.release).length
     )
       throw conflict(
@@ -1245,7 +1247,9 @@ export function agentPackageService(
           and(
             eq(agentPackages.status, "active"),
             eq(agentPackageVersions.state, "published"),
-            audience ? sql`${agentPackageVersions.release}->'manifest'->>'audience'=${audience}` : undefined,
+            audience
+              ? sql`${agentPackageVersions.release}->'manifest'->>'audience'=${audience}`
+              : sql`${agentPackageVersions.release}->'manifest'->>'audience' in ('internal_test','customer')`,
           ),
         )
         .orderBy(agentPackages.key, desc(agentPackageVersions.createdAt))
@@ -1277,6 +1281,12 @@ export function agentPackageService(
       await assertV7Enabled(db, "agent_packages_v7");
       const input = packageReleaseSchema.parse(raw),
         blockers = packageReleaseBlockers(input);
+      if (
+        input.manifest.audience === "first_party_support" &&
+        (input.packageKey !== FIRST_PARTY_SUPPORT_PACKAGE_KEY ||
+          !options.sourceSha || input.manifest.sourceRevision !== options.sourceSha)
+      )
+        throw forbidden("First-party support release must use its fixed key and current server source pin");
       if (blockers.length) throw conflict(blockers.join("; "));
       for (const ref of Object.values(input.releaseEvidence).filter(
         (v) => v && typeof v === "object" && "uri" in v,

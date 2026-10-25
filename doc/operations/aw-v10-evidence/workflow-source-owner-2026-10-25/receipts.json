@@ -1015,6 +1015,174 @@
         "Duration  71.73s (transform 11.04s, setup 199ms, import 24.07s, tests 47.03s, environment 0ms)"
       ],
       "sourceCommit": "9d5b9c8899382bc0db28d680219e01c8c36c3972"
+    },
+    {
+      "name": "agent-conversations-owner-gate-full4",
+      "exitCode": 0,
+      "exitSidecar": "agent-conversations-owner-gate-full4.exit",
+      "rawSha256": "b41cf492d1cd1ae80654380562d4de16ad6ca77df28227cc23c8f5c1e033b31e",
+      "sanitizedSha256": "01e1ba6f09946d78918b68ed6da63097baa93fd34c2ea2e7d7276162278831c3",
+      "archiveSha256": "8403809a548c6503453c0076f769db3a51ff365788deb70ea084d78c1e4d5eee",
+      "redactions": {
+        "ansi": 66,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  37 passed (37)",
+        "Duration  29.52s (transform 10.99s, setup 88ms, import 15.70s, tests 13.61s, environment 0ms)"
+      ],
+      "sourceCommit": "e6a72705c4b726266c08cac29d9d59f451f2c533"
+    },
+    {
+      "name": "forecast-full-final",
+      "exitCode": 0,
+      "exitSidecar": "forecast-full-final.exit",
+      "rawSha256": "edbc42b6e8ca419fe066052d5805545f71e8e4ee90902cbaab864f40d13858a0",
+      "sanitizedSha256": "edbc42b6e8ca419fe066052d5805545f71e8e4ee90902cbaab864f40d13858a0",
+      "archiveSha256": "3f031815657147cbc39dde2f31e6c0b5c421347ca56271ef3002e3c386abad98",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  25 passed | 7 skipped (32)",
+        "Duration 116.70s"
+      ],
+      "sourceCommit": "e6a72705c4b726266c08cac29d9d59f451f2c533"
+    },
+    {
+      "name": "analytical-context-forecast-combined-final",
+      "exitCode": 0,
+      "exitSidecar": "analytical-context-forecast-combined-final.exit",
+      "rawSha256": "a78493bf53d76196f90c227c152b38df3291995f2366df6a1ae1ab6ee6daeab3",
+      "sanitizedSha256": "a78493bf53d76196f90c227c152b38df3291995f2366df6a1ae1ab6ee6daeab3",
+      "archiveSha256": "6a2ead1dd7fe7a85b385f5a9970acba996fb23f92d04111c52aff8c02303bc25",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  81 passed | 7 skipped (88)",
+        "Duration 373.54s (transform 10.56s, setup 127ms, import 18.63s, tests 354.55s, environment 0ms)"
+      ],
+      "sourceCommit": "e6a72705c4b726266c08cac29d9d59f451f2c533"
+    },
+    {
+      "name": "native-input-dispatch-final2",
+      "exitCode": 0,
+      "exitSidecar": "native-input-dispatch-final2.exit",
+      "rawSha256": "d6d067c275a6a378d2fc32f33e3656dec81c15e64643cc08e1eef8fc41f633b8",
+      "sanitizedSha256": "d6d067c275a6a378d2fc32f33e3656dec81c15e64643cc08e1eef8fc41f633b8",
+      "archiveSha256": "159957fad8465bfa9f5c0579d4448e661264181a3bdb6560271ca10f8e057b16",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  38 passed (38)",
+        "Duration  22.21s (transform 10.10s, setup 81ms, import 13.73s, tests 8.27s, environment 0ms)"
+      ],
+      "sourceCommit": "e6a72705c4b726266c08cac29d9d59f451f2c533"
+    },
+    {
+      "name": "native-input-receipt-db-final",
+      "exitCode": 0,
+      "exitSidecar": "native-input-receipt-db-final.exit",
+      "rawSha256": "982c452ba3f8c2bbd9c9629dbb1fdb2165b69d89c1ced8852d34c2a1243ae49a",
+      "sanitizedSha256": "982c452ba3f8c2bbd9c9629dbb1fdb2165b69d89c1ced8852d34c2a1243ae49a",
+      "archiveSha256": "18a17d9f7aa5c75df8ad86984cd3492263748a65ac1c516d8a109b65e60726d7",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  9 passed (9)",
+        "Duration  7.65s (transform 2.11s, setup 0ms, import 3.39s, tests 4.15s, environment 0ms)"
+      ],
+      "sourceCommit": "e6a72705c4b726266c08cac29d9d59f451f2c533"
+    },
+    {
+      "name": "native-input-renderer-final",
+      "exitCode": 0,
+      "exitSidecar": "native-input-renderer-final.exit",
+      "rawSha256": "9cea2b13ea58b2c5d61d6a6bef1d113133a2727b52bc83bb72f31b3c20d4e76d",
+      "sanitizedSha256": "9cea2b13ea58b2c5d61d6a6bef1d113133a2727b52bc83bb72f31b3c20d4e76d",
+      "archiveSha256": "121b9a03054e9b067900d56732c9501e2aad47ede465e438b4eb2d29a1ebdffc",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  39 passed (39)",
+        "Duration  12.47s (transform 8.94s, setup 71ms, import 12.27s, tests 14ms, environment 0ms)"
+      ],
+      "sourceCommit": "e6a72705c4b726266c08cac29d9d59f451f2c533"
+    },
+    {
+      "name": "native-input-exact-closure-final2",
+      "exitCode": 0,
+      "exitSidecar": "native-input-exact-closure-final2.exit",
+      "rawSha256": "d330a0b19c3ca8b05e188d7b64c6805053c3f3788f36138cf3a448b2ff3f3cd9",
+      "sanitizedSha256": "d330a0b19c3ca8b05e188d7b64c6805053c3f3788f36138cf3a448b2ff3f3cd9",
+      "archiveSha256": "6e97a1468d0cbaa61c60837c7ec64c584f3a91844bc439ec4a97e4a669a39686",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  56 passed (56)",
+        "Duration  22.76s (transform 9.45s, setup 128ms, import 14.48s, tests 7.91s, environment 0ms)"
+      ],
+      "sourceCommit": "e6a72705c4b726266c08cac29d9d59f451f2c533"
+    },
+    {
+      "name": "native-input-actual-document-fields-final",
+      "exitCode": 0,
+      "exitSidecar": "native-input-actual-document-fields-final.exit",
+      "rawSha256": "720c01d451437844696bd784ec2bceeb732db83509c059e0ca45ee45a1d31026",
+      "sanitizedSha256": "720c01d451437844696bd784ec2bceeb732db83509c059e0ca45ee45a1d31026",
+      "archiveSha256": "194d8188b32243260e67059adf8f98e6953e98501b9993119b2250427b7e26a9",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  38 passed (38)",
+        "Duration  22.55s (transform 10.10s, setup 73ms, import 13.55s, tests 8.79s, environment 0ms)"
+      ],
+      "sourceCommit": "e6a72705c4b726266c08cac29d9d59f451f2c533"
     }
   ],
   "updates": [
@@ -1133,6 +1301,20 @@
         "pipeline-final-tsc",
         "native-source-project-fixtures-attempt1",
         "native-source-project-fixtures-attempt2"
+      ]
+    },
+    {
+      "sourceCommit": "e6a72705c4b726266c08cac29d9d59f451f2c533",
+      "meaning": "Current canonical owner fixes and controlled software input receipts; structural receipt never qualifies provider consumption, opaque history or physical profiles.",
+      "logs": [
+        "agent-conversations-owner-gate-full4",
+        "forecast-full-final",
+        "analytical-context-forecast-combined-final",
+        "native-input-dispatch-final2",
+        "native-input-receipt-db-final",
+        "native-input-renderer-final",
+        "native-input-exact-closure-final2",
+        "native-input-actual-document-fields-final"
       ]
     }
   ],

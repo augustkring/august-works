@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { loadReadOnlyModelProfiles, type ReadOnlyModelProfile } from "./services/orchestration/read-only-model-profiles.js";
 import { loadWorkerModelProfiles, type WorkerModelProfile } from "./services/orchestration/worker-model-profiles.js";
+import { loadFirstPartySupportModelProfiles, type FirstPartySupportModelProfile } from "./services/orchestration/first-party-support-model-profiles.js";
 
 const required = z.string().trim().min(1);
 const secret = z.string().min(32);
@@ -109,11 +110,15 @@ const schema = z.object({
   AW_READ_ONLY_MODEL_PROFILES_SHA256: key.optional(),
   AW_WORKER_MODEL_PROFILES_PATH: required.refine(v => v.startsWith("/")).optional(),
   AW_WORKER_MODEL_PROFILES_SHA256: key.optional(),
+  AW_FIRST_PARTY_SUPPORT_MODEL_PROFILES_PATH: required.refine(v => v.startsWith("/")).optional(),
+  AW_FIRST_PARTY_SUPPORT_MODEL_PROFILES_SHA256: key.optional(),
+  AW_FIRST_PARTY_SUPPORT_ANTHROPIC_API_KEY: secret.optional(),
 });
 
 export type SaasPlatformConfig = {
   readOnlyModelProfiles?: ReadOnlyModelProfile[];
   workerModelProfiles?: WorkerModelProfile[];
+  firstPartySupportModelProfiles?: FirstPartySupportModelProfile[];
   environment: "staging" | "production";
   databaseUrl: string;
   runLogs?: {
@@ -335,6 +340,9 @@ export function loadSaasPlatformConfig(
     operatorUserIds: operators,
     ...(v.AW_WORKER_MODEL_PROFILES_PATH || v.AW_WORKER_MODEL_PROFILES_SHA256 ? {
       workerModelProfiles: loadWorkerModelProfiles(v.AW_WORKER_MODEL_PROFILES_PATH, v.AW_WORKER_MODEL_PROFILES_SHA256?.toLowerCase()),
+    } : {}),
+    ...(v.AW_FIRST_PARTY_SUPPORT_MODEL_PROFILES_PATH || v.AW_FIRST_PARTY_SUPPORT_MODEL_PROFILES_SHA256 ? {
+      firstPartySupportModelProfiles: loadFirstPartySupportModelProfiles(v.AW_FIRST_PARTY_SUPPORT_MODEL_PROFILES_PATH, v.AW_FIRST_PARTY_SUPPORT_MODEL_PROFILES_SHA256?.toLowerCase()),
     } : {}),
     ...(v.AW_READ_ONLY_MODEL_PROFILES_PATH || v.AW_READ_ONLY_MODEL_PROFILES_SHA256 ? {
       readOnlyModelProfiles: loadReadOnlyModelProfiles(v.AW_READ_ONLY_MODEL_PROFILES_PATH, v.AW_READ_ONLY_MODEL_PROFILES_SHA256?.toLowerCase()),

@@ -210,6 +210,7 @@ import {
 import { documentService, type DocumentRevisionSourceCapture } from "./documents.js";
 import { getTaskPlanContext } from "./task-plan-context.js";
 import { selectNativeHeartbeatBackend } from "./orchestration/native-draft-runtime.js";
+import { buildNativeBootstrapSourceSet, type NativeBootstrapSourceClosure, type NativePreparedSourceCandidate } from "./native-runtime/native-execution-input.js";
 import { managedAgentProfileService } from "./managed-agent-profiles.js";
 import { remoteAgentProfileService } from "./remote-agent-profiles.js";
 import {
@@ -8526,7 +8527,7 @@ export function buildPaperclipTaskMarkdown(input: {
   // false builds the compact variant used for resume deltas, where the session
   // already received the description with the assignment.
   includeDescription?: boolean;
-}) {
+}, options: { onRenderedSource?: (source: { kind: "task" | "comment" | "document_revision" | "attachment" | "unknown"; id: string }) => void } = {}) {
   const quoteTaskScalar = (value: string) => JSON.stringify(value);
   const fenceTaskText = (value: string) => {
     const longestBacktickRun = Math.max(
@@ -8567,6 +8568,11 @@ export function buildPaperclipTaskMarkdown(input: {
     (input.acceptedPlan?.revisionId || input.acceptedPlanContinuation),
   );
   if (!issue && effectiveWakeComments.length === 0) return null;
+  if (input.interaction?.kind || input.interaction?.status || input.planReview?.status || input.externalChatProvider ||
+    input.acceptedPlanContinuation || input.acceptedPlan?.revisionId) {
+    options.onRenderedSource?.({ kind: input.acceptedPlan?.revisionId ? "document_revision" : "unknown",
+      id: input.acceptedPlan?.revisionId ?? issue?.id ?? "unbound-task-markdown-source" });
+  }
 
   const lines = [
     "Paperclip task context:",
@@ -8623,6 +8629,7 @@ export function buildPaperclipTaskMarkdown(input: {
     comment: (typeof effectiveWakeComments)[number],
   ) => {
     if (!comment.attachments?.length) return;
+    for (const attachment of comment.attachments) options.onRenderedSource?.({ kind: "attachment", id: attachment.id });
     lines.push(
       "",
       `Attachments on wake comment ${quoteTaskScalar(comment.id)}:`,
@@ -8640,6 +8647,7 @@ export function buildPaperclipTaskMarkdown(input: {
     }
   };
   if (issue) {
+    options.onRenderedSource?.({ kind: "task", id: issue.id });
     lines.push(
       `- Issue: ${quoteTaskScalar(issue.identifier || issue.id)}`,
       `- Title: ${quoteTaskScalar(issue.title)}`,
@@ -8692,6 +8700,7 @@ export function buildPaperclipTaskMarkdown(input: {
       );
     }
     if (rejectedPlan) {
+      options.onRenderedSource?.({ kind: "unknown", id: issue.id });
       lines.push(
         "",
         "Rejected plan review directive:",
@@ -8719,6 +8728,7 @@ export function buildPaperclipTaskMarkdown(input: {
       lines.push("", "Issue description:", fenceTaskText(description));
     }
     if (!issue.conversationAgentId && input.taskPlan?.body.trim()) {
+      options.onRenderedSource?.({ kind: "document_revision", id: input.taskPlan.revisionId });
       lines.push(
         "",
         `Task plan document ${input.taskPlan.documentId}, revision ${input.taskPlan.revisionNumber} (${input.taskPlan.revisionId}):`,
@@ -8730,6 +8740,7 @@ export function buildPaperclipTaskMarkdown(input: {
   if (ancestors.length > 0) {
     lines.push("", "Authoritative parent / ancestor context:");
     for (const [index, ancestor] of ancestors.entries()) {
+      options.onRenderedSource?.({ kind: "task", id: ancestor.id });
       const label = ancestor.identifier || ancestor.id;
       const status = ancestor.status ? ` (${ancestor.status})` : "";
       const priority = ancestor.priority ? ` [${ancestor.priority}]` : "";
@@ -8745,6 +8756,7 @@ export function buildPaperclipTaskMarkdown(input: {
     }
   }
   if (effectiveWakeComments.length === 1) {
+    options.onRenderedSource?.({ kind: "comment", id: effectiveWakeComments[0]!.id });
     lines.push(
       "",
       "Follow-up directive:",
@@ -8763,6 +8775,7 @@ export function buildPaperclipTaskMarkdown(input: {
       "Pending wake comments (oldest to newest):",
     );
     for (const [index, comment] of effectiveWakeComments.entries()) {
+      options.onRenderedSource?.({ kind: "comment", id: comment.id });
       lines.push(
         "",
         `Wake comment ${index + 1} (${quoteTaskScalar(comment.id)}):`,
@@ -8772,6 +8785,7 @@ export function buildPaperclipTaskMarkdown(input: {
     }
   }
   if (attachmentOmissions.length > 0) {
+    for (const omission of attachmentOmissions) options.onRenderedSource?.({ kind: "unknown", id: omission.commentId });
     lines.push(
       "",
       "Attachment import notices (server-generated):",
@@ -20215,8 +20229,8 @@ export function heartbeatService(
       const taskKey = deriveTaskKeyWithHeartbeatFallback(context, null);
       const sessionCodec = getAdapterSessionCodec(agent.adapterType);
       const issueId = readNonEmptyString(context.issueId);
-      let taskSourceCapture: NativeTaskSourceCapture | null = null;
-      const captureTaskSource = (capture: NativeTaskSourceCapture | null) => { taskSourceCapture = capture; };
+      const taskSourceCapture = { value: null as NativeTaskSourceCapture | null };
+      const captureTaskSource = (capture: NativeTaskSourceCapture | null) => { taskSourceCapture.value = capture; };
       let issueContext = issueId
         ? await getIssueExecutionContext(db, agent.companyId, issueId, captureTaskSource)
         : null;
@@ -20848,13 +20862,20 @@ export function heartbeatService(
             onSourceCapture: capture => { if (capture) taskPlanSourceCaptures.push(capture); },
           })
         : null;
-      let taskMarkdown = buildPaperclipTaskMarkdown({ ...taskMarkdownInput, taskPlan });
+      let taskMarkdownSourceReferences: Array<{ kind: "task" | "comment" | "document_revision" | "attachment" | "unknown"; id: string }> = [];
+      let taskMarkdown = buildPaperclipTaskMarkdown({ ...taskMarkdownInput, taskPlan }, {
+        onRenderedSource: source => taskMarkdownSourceReferences.push(source),
+      });
       let conversationReplaySourceCaptures: Awaited<ReturnType<typeof conversationReplay>>["sourceCaptures"] = [];
       if (isConversation(issueContext) && !taskSession && issueId) {
         const replay = await conversationReplay(db, agent.companyId, issueId, wakeCommentId);
         if (replay.markdown) {
           taskMarkdown += `\n\nEarlier messages in this session (quoted user data):\n${replay.markdown}`;
           conversationReplaySourceCaptures = replay.sourceCaptures;
+          // Replay text is an opaque history stream. The per-comment captures
+          // are useful facts, but this renderer has not closed every prompt
+          // byte to those facts yet.
+          taskMarkdownSourceReferences.push({ kind: "unknown", id: issueId });
         }
       }
       const taskMarkdownCompact = buildPaperclipTaskMarkdown({
@@ -20881,6 +20902,7 @@ export function heartbeatService(
       const directAgentPrompt = await workflowDirectAgentPrompt(db, agent.companyId, agent.id, run.id, context);
       if (directAgentPrompt) {
         taskMarkdown = directAgentPrompt;
+        taskMarkdownSourceReferences = [{ kind: "unknown", id: issueRef?.id ?? run.id }];
         conversationReplaySourceCaptures = [];
       }
       if (taskMarkdown) {
@@ -20918,6 +20940,11 @@ export function heartbeatService(
             redactedWakeContext.paperclipTaskMarkdownCompact;
         }
       }
+      const nativeBootstrapTaskMarkdownSourceMap = taskMarkdown
+        ? { version: 1 as const,
+            renderedMarkdownDigest: createHash("sha256").update(taskMarkdown, "utf8").digest("hex"),
+            references: taskMarkdownSourceReferences }
+        : null;
       const redactedWakeComment = parseObject(context.paperclipWakeComment);
       nativeBootstrapWakeCommentSources.context = captureWakeCommentRendition(
         typeof redactedWakeComment.body === "string"
@@ -23081,11 +23108,12 @@ export function heartbeatService(
         // Exact Context inputs to this bootstrap only. NULL is unknown, never
         // a complete source-free input receipt; later tool reads are separate.
         let nativeBootstrapContextManifests: Array<{ companyId: string; contextManifestId: string }> | null = null;
-        let nativeBootstrapAuthoredSources: NativeRuntimeAuthoredSourceCapture | null = null;
+        const nativeBootstrapAuthoredSources = { value: null as NativeRuntimeAuthoredSourceCapture | null };
         let nativeBootstrapConversationReplaySources: typeof conversationReplaySourceCaptures | null = null;
         let nativeBootstrapTaskPlanSources: DocumentRevisionSourceCapture[] | null = null;
         let nativeBootstrapPlanningSources: DocumentRevisionSourceCapture[] | null = null;
         let nativeBootstrapAncestorSources: NativeTaskSourceCapture[] | null = null;
+        let nativeBootstrapSourceClosure: NativeBootstrapSourceClosure | null = null;
         const nativeBootstrapInteractionSources: Array<Extract<NativePayloadSourceInput, { kind: "interaction" }>> = [];
         let nativeRunnerInstanceId: string | null = null;
         if (nativeRuntimeResolution.kind === "native") {
@@ -23545,8 +23573,19 @@ export function heartbeatService(
               runId: run.id,
               runtimeConfig,
               runtimeSkillEntries,
-              onAuthoredSourceCapture: (capture) => { nativeBootstrapAuthoredSources = capture; },
+              onAuthoredSourceCapture: (capture) => { nativeBootstrapAuthoredSources.value = capture; },
             });
+            const selectedNativeTaskPrompt = [
+              nativeReviewRequest ?? readNonEmptyString(
+                selectPaperclipTaskMarkdown(context, {
+                  resumedSession: false,
+                  includeCommunicationGuidance: false,
+                }),
+              ) ?? `# ${issueRef.identifier ?? issueRef.id}: ${issueRef.title}`,
+              projectRepositoryPaths.length > 0
+                ? `## Project repositories\nThe task workspace also contains these editable Git repositories:\n${projectRepositoryPaths.map((repo) => `- ${repo}`).join("\n")}`
+                : null,
+            ].filter(Boolean).join("\n\n");
             const nativeExecutionWithCheckpoint =
               buildNativeExecutionWithCheckpoint({
                 previousRun: previousNativeRun,
@@ -23557,18 +23596,7 @@ export function heartbeatService(
                     companyId: agent.companyId,
                     runId: run.id,
                     issue: nativeReviewRequest ? { ...issueRef, title: `Review: ${issueRef.title}`, description: nativeReviewRequest } : issueRef,
-                    taskPrompt: [
-                      nativeReviewRequest ?? readNonEmptyString(
-                        selectPaperclipTaskMarkdown(context, {
-                          resumedSession: false,
-                          includeCommunicationGuidance: false,
-                        }),
-                      ) ??
-                      `# ${issueRef.identifier ?? issueRef.id}: ${issueRef.title}`,
-                      projectRepositoryPaths.length > 0
-                        ? `## Project repositories\nThe task workspace also contains these editable Git repositories:\n${projectRepositoryPaths.map((repo) => `- ${repo}`).join("\n")}`
-                        : null,
-                    ].filter(Boolean).join("\n\n"),
+                    taskPrompt: selectedNativeTaskPrompt,
                     governedContextMarkdown,
                     initialCommunicationGuidance: nativeReviewRequest ? null : readNonEmptyString(context.paperclipTaskCommunicationGuidance),
                     wakePayload: context.paperclipWake,
@@ -23644,6 +23672,48 @@ export function heartbeatService(
               });
             nativeExecution = nativeExecutionWithCheckpoint.execution;
             nativeResumeCheckpoint = nativeExecutionWithCheckpoint.checkpoint;
+            const nativeSourceCandidates: NativePreparedSourceCandidate[] = [];
+            const capturedTaskSource = taskSourceCapture.value;
+            const capturedAuthoredSources = nativeBootstrapAuthoredSources.value;
+            if (capturedTaskSource?.input.kind === "task") nativeSourceCandidates.push({ kind: "task", id: capturedTaskSource.input.issueId,
+              input: capturedTaskSource.input, payloadSourceSnapshot: capturedTaskSource.payloadSourceSnapshot });
+            for (const capture of ancestorSourceCaptures) nativeSourceCandidates.push({ kind: "task", id: capture.input.issueId,
+              input: capture.input, payloadSourceSnapshot: capture.payloadSourceSnapshot });
+            const commentCaptures = [nativeBootstrapWakeCommentSources.request, nativeBootstrapWakeCommentSources.context,
+              ...inlineWakeCommentSourceCaptures, ...(nativeBootstrapConversationReplaySources ?? [])];
+            for (const capture of commentCaptures) if (capture?.input.kind === "comment") nativeSourceCandidates.push({ kind: "comment",
+              id: capture.input.commentId, input: capture.input, payloadSourceSnapshot: capture.payloadSourceSnapshot });
+            for (const capture of [...(nativeBootstrapTaskPlanSources ?? []), ...(nativeBootstrapPlanningSources ?? [])]) {
+              if (capture.input.kind === "document_revision") nativeSourceCandidates.push({ kind: "document_revision",
+                id: capture.input.revisionId, input: capture.input, payloadSourceSnapshot: capture.payloadSourceSnapshot });
+            }
+            // The renderer map is usable only if it is for the exact selection
+            // sent to buildNativeExecutionInput (full vs compact can differ).
+            // A mismatch stays unknown rather than carrying full-render sources
+            // onto a compact or otherwise substituted prompt.
+            const selectedMarkdown = nativeBootstrapTaskMarkdownSourceMap
+              ? selectedNativeTaskPrompt : "";
+            const nativeBootstrapSourceSet = buildNativeBootstrapSourceSet({
+              companyId: agent.companyId,
+              renderedMarkdown: selectedMarkdown,
+              renderedMarkdownDigest: nativeBootstrapTaskMarkdownSourceMap?.renderedMarkdownDigest ?? null,
+              references: nativeBootstrapTaskMarkdownSourceMap?.references ?? null,
+              candidates: nativeSourceCandidates,
+              runtimeInputs: capturedAuthoredSources?.inputs ?? null,
+              contextManifestIds: nativeBootstrapContextManifests,
+              rolePackInputs: v5Fabric ? v5Fabric.inputRolePackSources : [],
+              unsupportedInputPresent: Boolean(nativeReviewRequest || directAgentPrompt || previousNativeRun ||
+                persistedNativeExecutionInput || nativeResumeCheckpoint || governedContextMarkdown?.trim() ||
+                ("initialCommunicationGuidance" in nativeExecution && nativeExecution.initialCommunicationGuidance) ||
+                ("continuationPrompt" in nativeExecution && nativeExecution.continuationPrompt) ||
+                nativeExecution.interactionResponses.length || ("planningContext" in nativeExecution && nativeExecution.planningContext) ||
+                isConversation(issueContext) || context.paperclipWake || projectRepositoryPaths.length > 0 ||
+                capturedAuthoredSources?.contextManifests.length || !capturedTaskSource),
+            });
+            nativeBootstrapSourceClosure = nativeBootstrapSourceSet
+              ? { sourceSet: nativeBootstrapSourceSet,
+                  taskEnvelopeDigest: createHash("sha256").update(JSON.stringify(nativeExecution.task), "utf8").digest("hex") }
+              : null;
             if (
               nativeSessionId !==
               nativeExecutionWithCheckpoint.normalizedSessionId
@@ -23751,13 +23821,14 @@ export function heartbeatService(
                   // Recovery preserves the original capture, including unknown
                   // historical sources. Never substitute a later live Context.
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapContextManifests }),
-                  ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapAuthoredSources }),
+                  ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapAuthoredSources: nativeBootstrapAuthoredSources.value }),
                   // A reused inventory has unknown original Role Pack captures;
                   // current selections cannot replace its historical sources.
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapRolePackSources: v5Fabric ? v5Fabric.inputRolePackSources ?? null : [] }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapConversationReplaySources }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapTaskPlanSources, nativeBootstrapPlanningSources }),
-                  ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapTaskSource: taskSourceCapture, nativeBootstrapAncestorSources }),
+                  ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapTaskSource: taskSourceCapture.value, nativeBootstrapAncestorSources }),
+                  ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapTaskMarkdownSourceMap }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapInlineWakeCommentSources: inlineWakeCommentSourceCaptures }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapWakeCommentSources }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapContinuationCommentSources: continuationCommentSources }),
@@ -24231,6 +24302,7 @@ export function heartbeatService(
                   executePaperclipNativeSession({
                     db,
                     execution: nativeExecution,
+                    bootstrapSourceClosure: nativeBootstrapSourceClosure,
                     conversationMode: isConversation(issueContext),
                     turnTimeoutMs: Math.max(0, asNumber(runtimeConfig.timeoutSec, 0)) * 1_000,
                     runnerInstanceId: nativeRunnerInstanceId,

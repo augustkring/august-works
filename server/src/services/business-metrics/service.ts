@@ -25,6 +25,10 @@ type CurrentMetricObservationLineage = {
   edges: Array<typeof analyticalLineageEdges.$inferSelect>;
   revision: typeof businessMetricVersions.$inferSelect;
 };
+type CurrentMetricObservationLineageBatch = {
+  observations: Array<Pick<CurrentMetricObservationLineage, "result" | "observation" | "manifest" | "revision">>;
+  edges: Array<Pick<typeof analyticalLineageEdges.$inferSelect,"inputType"|"inputRef"|"inputHash"|"relationship">>;
+};
 
 export function businessMetricService(db: Db) {
   function queryTimeBudget(deadline: number) {
@@ -98,6 +102,44 @@ export function businessMetricService(db: Db) {
       });
       await assertAnalyticalSourcesNotErased(db, companyId, edges.filter(e => e.inputType === "issue").map(e => e.inputRef), edges.filter(e => e.inputType === "project").map(e => e.inputRef));
       return { result: observation.result, observation, manifest, edges, revision };
+  }
+  async function inspectCurrentObservationsWithLineage(companyId:string,actor:AuthorizationActor,metricId:string,versionId:string,observationIds:string[],deadline:number):Promise<CurrentMetricObservationLineageBatch> {
+    if (!is(db, PgTransaction)) return db.transaction(async tx => businessMetricService(tx as unknown as Db).inspectCurrentObservationsWithLineage(companyId,actor,metricId,versionId,observationIds,deadline));
+    if (!observationIds.length || observationIds.length>1000 || new Set(observationIds).size!==observationIds.length) throw unprocessable("Forecast observation batch exceeds its exact bound");
+    queryTimeBudget(deadline);
+    await admit(db,companyId,actor);
+    const observations=await db.select().from(businessMetricObservations).where(and(eq(businessMetricObservations.companyId,companyId),eq(businessMetricObservations.metricId,metricId),eq(businessMetricObservations.versionId,versionId),inArray(businessMetricObservations.id,observationIds))).for("share");
+    queryTimeBudget(deadline);
+    if(observations.length!==observationIds.length || observations.some(row=>row.expiresAt.getTime()<=Date.now())) throw conflict("Metric observation is no longer current");
+    const manifestIds=[...new Set(observations.map(row=>row.lineageManifestId))];
+    await assertMemorySourcesRetained(db,companyId,manifestIds.map(id=>({sourceProvider:"august_works_analytical",sourceRef:`manifest://${id}`})));
+    queryTimeBudget(deadline);
+    const row=await metric(db,companyId,metricId);
+    if(row.status!=="published") throw conflict("Metric is not currently published");
+    const revision=await version(db,companyId,metricId,versionId);
+    await definitionAdmission(db,companyId,actor,revision.definition);
+    const calculation=revision.definition.calculation,population=calculation.kind==="native_count"?calculation.population:calculation.kind==="native_ratio"?calculation.denominator:null;
+    if(!population) throw conflict("Metric observation lineage is unavailable");
+    const manifests=await db.select().from(analyticalLineageManifests).where(and(eq(analyticalLineageManifests.companyId,companyId),inArray(analyticalLineageManifests.id,manifestIds))).for("share");
+    queryTimeBudget(deadline);
+    const manifestById=new Map(manifests.map(manifest=>[manifest.id,manifest]));
+    const stats=await db.select({manifestId:analyticalLineageEdges.manifestId,total:sql<string>`count(*)::text`,populationCount:sql<string>`count(*) filter (where ${analyticalLineageEdges.inputType}=${population.entity})::text`,hasDefinition:sql<boolean>`bool_or(${analyticalLineageEdges.inputType}='metric_version' and ${analyticalLineageEdges.inputRef}=${revision.id} and ${analyticalLineageEdges.inputHash}=${revision.contentHash})`,hasProject:population.entity==="issue"&&population.projectId?sql<boolean>`bool_or(${analyticalLineageEdges.inputType}='project' and ${analyticalLineageEdges.inputRef}=${population.projectId})`:sql<boolean>`true`}).from(analyticalLineageEdges).where(and(eq(analyticalLineageEdges.companyId,companyId),inArray(analyticalLineageEdges.manifestId,manifestIds))).groupBy(analyticalLineageEdges.manifestId);
+    queryTimeBudget(deadline);
+    const statsById=new Map(stats.map(item=>[item.manifestId,item]));
+    for(const observation of observations) {
+      const manifest=manifestById.get(observation.lineageManifestId),counts=statsById.get(observation.lineageManifestId);
+      if(!manifest||!counts||manifest.expiresAt.getTime()<=Date.now()||manifest.inputHash!==observation.inputHash||manifest.definitionHash!==revision.contentHash||Number(counts.total)>20065||Number(counts.populationCount)!==manifest.sourceCount||!counts.hasDefinition||!counts.hasProject) throw conflict("Metric observation lineage is unavailable");
+    }
+    if(population.entity==="issue"&&population.projectId&&!await permitted(db,companyId,actor,"project",population.projectId)) throw forbidden("Metric population scope is outside the current authorization boundary");
+    const edges=await db.selectDistinct({inputType:analyticalLineageEdges.inputType,inputRef:analyticalLineageEdges.inputRef,inputHash:sql<string>`case when ${analyticalLineageEdges.inputType} in ('issue','project') then '' else ${analyticalLineageEdges.inputHash} end`,relationship:analyticalLineageEdges.relationship}).from(analyticalLineageEdges).where(and(eq(analyticalLineageEdges.companyId,companyId),inArray(analyticalLineageEdges.manifestId,manifestIds))).limit(20066);
+    queryTimeBudget(deadline);
+    if(edges.length>20065) throw conflict("Metric observation lineage exceeds its exact retained source bound");
+    const issueIds=[...new Set(edges.filter(edge=>edge.inputType==="issue").map(edge=>edge.inputRef))],projectIds=[...new Set([...edges.filter(edge=>edge.inputType==="project").map(edge=>edge.inputRef),...(population.entity==="issue"&&population.projectId?[population.projectId]:[])])];
+    await accessService(db).withReadSources(companyId,issueIds,projectIds,async sourceAccess=>sourceAccess.assertTaskPrivacyBatch(actor,issueIds,projectIds,deadline));
+    queryTimeBudget(deadline);
+    await assertAnalyticalSourcesNotErased(db,companyId,issueIds,projectIds);
+    queryTimeBudget(deadline);
+    return {observations:observations.map(observation=>({result:observation.result,observation,manifest:manifestById.get(observation.lineageManifestId)!,revision})),edges};
   }
   async function version(tx: Db, companyId: string, metricId: string, id: string) {
     const [row] = await tx.select().from(businessMetricVersions).where(and(eq(businessMetricVersions.companyId, companyId), eq(businessMetricVersions.metricId, metricId), eq(businessMetricVersions.id, id))).for("share");
@@ -193,6 +235,11 @@ export function businessMetricService(db: Db) {
      * and reauthorized by the original metric owner in this transaction. */
     async inspectCurrentObservationWithLineage(companyId: string, actor: AuthorizationActor, observationId: string): Promise<CurrentMetricObservationLineage> {
       return inspectCurrentObservationWithLineage(companyId, actor, observationId);
+    },
+    /** Bounded forecast capture reauthorizes exact current observations and
+     * returns their complete admitted lineage union under this transaction. */
+    async inspectCurrentObservationsWithLineage(companyId:string,actor:AuthorizationActor,metricId:string,versionId:string,observationIds:string[],deadline:number):Promise<CurrentMetricObservationLineageBatch> {
+      return inspectCurrentObservationsWithLineage(companyId,actor,metricId,versionId,observationIds,deadline);
     },
     /** Reusable admission for pinned consumers. Call inside their native
      * company-serialized transaction; this does not observe or change a metric. */

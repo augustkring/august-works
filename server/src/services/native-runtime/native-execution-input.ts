@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { buildNativeContinuationPrompt } from "./native-continuation.js";
 import type {
   NativeAcpxAgent,
@@ -10,6 +11,12 @@ import type {
   NativeRuntimeContextSnapshot,
   StrictCompletionContractInput,
 } from "../../vendor/paperclip-runner/index.js";
+import {
+  nativePayloadSourceInputSchema,
+  nativePayloadSourceSnapshotSchema,
+  type NativePayloadSourceInput,
+  type NativePayloadSourcePolicy,
+} from "@paperclipai/shared";
 import {
   parseNativeExecutionInput,
   resolveQualifiedAcpxProfile,
@@ -25,6 +32,91 @@ const NATIVE_GITHUB_ATTACHMENT_RECOVERY_GUIDANCE = [
   "Paperclip owns recovery navigation for unavailable GitHub attachments. It may append an authenticated task link after an accepted response, only when the current source remains authorized and a safe configured Board URL is available. The model does not select or authorize that link.",
   "A task URL missing from your prompt or tool results is not evidence that no task link can be provided; do not claim that a link is unavailable merely because you cannot see its URL. Do not invent a URL or promise that a link will appear. Briefly explain the unavailable input and ask the user to attach it directly to this Paperclip task or paste the needed text. Never infer the file's contents or substitute an older file.",
 ].join("\n");
+
+export type NativeRenderedSourceReference = {
+  kind: "task" | "comment" | "document_revision" | "attachment" | "unknown";
+  id: string;
+};
+
+export type NativePreparedSourceCandidate = {
+  kind: "task" | "comment" | "document_revision" | "attachment";
+  id: string;
+  input: NativePayloadSourceInput;
+  payloadSourceSnapshot: unknown;
+};
+
+export type NativePayloadSourceSet = {
+  policy: NativePayloadSourcePolicy;
+  inputs: NativePayloadSourceInput[];
+};
+
+export type NativeBootstrapSourceClosure = {
+  sourceSet: NativePayloadSourceSet;
+  taskEnvelopeDigest: string;
+};
+
+/** Resolve only references emitted by the real Markdown renderer. Missing,
+ * ambiguous, unsupported, or source-history-unknown references stay unknown. */
+export function buildNativeBootstrapSourceSet(input: {
+  companyId: string;
+  renderedMarkdown: string;
+  renderedMarkdownDigest: string | null;
+  references: readonly NativeRenderedSourceReference[] | null;
+  candidates: readonly NativePreparedSourceCandidate[];
+  runtimeInputs: readonly NativePayloadSourceInput[] | null;
+  contextManifestIds: readonly { companyId: string; contextManifestId: string }[] | null;
+  rolePackInputs: readonly NativePayloadSourceInput[] | null;
+  unsupportedInputPresent: boolean;
+}): NativePayloadSourceSet | null {
+  if (input.unsupportedInputPresent || !input.references || input.references.length === 0 ||
+    !input.references.some(reference => reference.kind === "task") || !input.renderedMarkdownDigest ||
+    createHash("sha256").update(input.renderedMarkdown, "utf8").digest("hex") !== input.renderedMarkdownDigest ||
+    !input.runtimeInputs || !input.contextManifestIds || input.contextManifestIds.length !== 0 ||
+    !input.rolePackInputs || input.rolePackInputs.length !== 0 ||
+    input.references.some(reference => reference.kind === "unknown")) return null;
+  const policy: NativePayloadSourcePolicy = { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] };
+  const inputs: NativePayloadSourceInput[] = [];
+  const append = (source: NativePayloadSourceInput) => {
+    const parsed = nativePayloadSourceInputSchema.parse(source);
+    if (!inputs.some(existing => JSON.stringify(existing) === JSON.stringify(parsed))) inputs.push(parsed);
+  };
+  const addSnapshotPolicy = (raw: unknown, expected: { kind: string; id: string }) => {
+    if (raw === null || raw === undefined) return false;
+    const parsed = nativePayloadSourceSnapshotSchema.safeParse(raw);
+    if (!parsed.success || parsed.data.owner.kind !== expected.kind || parsed.data.owner.id !== expected.id ||
+      parsed.data.owner.companyId !== input.companyId) return false;
+    for (const key of Object.keys(policy) as Array<keyof NativePayloadSourcePolicy>) {
+      policy[key].push(...parsed.data.policy[key]);
+      policy[key] = [...new Set(policy[key])].sort();
+    }
+    for (const source of parsed.data.inputs) append(source);
+    return true;
+  };
+  for (const reference of input.references) {
+    const matches = input.candidates.filter(candidate => candidate.kind === reference.kind && candidate.id === reference.id);
+    const uniqueMatches = [...new Map(matches.map(candidate => [JSON.stringify(candidate), candidate])).values()];
+    if (uniqueMatches.length !== 1) return null;
+    const candidate = uniqueMatches[0]!;
+    const expectedOwner = reference.kind === "task" ? "issue" : reference.kind;
+    const sourceMatchesReference = reference.kind === "task"
+      ? candidate.input.kind === "task" && candidate.input.issueId === reference.id
+      : reference.kind === "document_revision"
+        ? candidate.input.kind === "document_revision" && candidate.input.revisionId === reference.id
+        : reference.kind === "comment"
+          ? candidate.input.kind === "comment" && candidate.input.commentId === reference.id
+          : reference.kind === "attachment"
+            ? candidate.input.kind === "attachment" && candidate.input.attachmentId === reference.id
+            : false;
+    if (!sourceMatchesReference) return null;
+    if (!addSnapshotPolicy(candidate.payloadSourceSnapshot, { kind: expectedOwner, id: reference.id })) return null;
+    append(candidate.input);
+  }
+  for (const source of input.runtimeInputs) append(source);
+  for (const source of input.rolePackInputs) append(source);
+  const references = inputs.length + Object.values(policy).reduce((sum, values) => sum + values.length, 0);
+  if (references > 256) return null;
+  return { policy, inputs };
+}
 
 /** Closed constructor: callers cannot spread legacy context or environment data. */
 export function buildNativeExecutionInput(input: {

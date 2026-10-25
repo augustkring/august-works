@@ -1,9 +1,9 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import express from "express";
 import request from "supertest";
 import { and, eq, sql } from "drizzle-orm";
-import { analyticalLineageManifests, businessMetricObservations, companies, goals, governanceObligations, issues, projects, projectMilestones, managementReviewSnapshots, managementReviewEvents, managementReviewSourceLinks, managementReviewGovernanceDependencies, memoryBindings, memoryRecords, memoryEvidence, type Db, createDb } from "@paperclipai/db";
+import { analyticalLineageManifests, businessMetricObservations, companies, goals, governanceObligations, issues, projects, projectMilestones, managementReviewSnapshots, managementReviewEvents, managementReviewSourceLinks, managementReviewGovernanceDependencies, memoryBindings, memoryBindingTargets, memoryRecords, type Db, createDb } from "@paperclipai/db";
 import { managementReviewDefinitionSchema, type ManagementReviewDefinition } from "@paperclipai/shared";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { managementReviewService } from "../services/management-reviews/service.js";
@@ -43,6 +43,21 @@ describe.skipIf(!support.supported)("Native historical management review owner o
     policyId = (await aiGovernanceService(db).obligation(actor, companyId, policy)).id;
   });
   async function fixture() { const [goal] = await db.insert(goals).values({ companyId, title: "Native source goal", status: "planned" }).returning(); const now = new Date(), from = new Date(now.getTime() - 86400000).toISOString(), until = now.toISOString(); const definition = managementReviewDefinitionSchema.parse({ name: "Human cited leadership review", reviewType: "weekly_leadership", period: { from, until }, purpose: "management_intelligence", sensitivity: "internal", retentionDays: 1, governanceObligationRefs: [policyId], sources: [{ key: "goal", source: { kind: "canonical", reference: { type: "goal", id: goal!.id } } }], agenda: [{ key: "inspect", category: "INVESTIGATE", ownerUserId: "local-board", dueAt: new Date(now.getTime() + 86400000).toISOString(), sourceKeys: ["goal"], nextAction: rationale, hypothesis: "Human suspects a constraint; this remains an unverified hypothesis" }] }); return { goal: goal!, definition }; }
+  async function verifiedMemory(bindingKey: string, bindingName: string, taskId: string, contentOverride?: string) {
+    const [binding] = await db.insert(memoryBindings).values({ companyId, key: bindingKey, name: bindingName, providerKey: "local" }).returning();
+    await db.insert(memoryBindingTargets).values({ companyId, bindingId: binding!.id, targetType: "company", targetId: companyId });
+    const [task] = await db.select({ updatedAt: issues.updatedAt }).from(issues).where(eq(issues.id, taskId));
+    const observedAt = new Date(), sourceVersion = task!.updatedAt.toISOString(), content = contentOverride ?? `${bindingName}: independently reviewed software fixture`;
+    const memoryActor = { principal: { type: "user" as const, userId: actor.userId! }, authorizationActor: actor };
+    const created = await memoryService(db).createCandidate(companyId, { bindingId: binding!.id, memoryType: "outcome", scope: { type: "company", id: null }, subject: null, ownerAgentId: null,
+      title: bindingName, content, summary: "Explicitly reviewed synthetic outcome source", sensitivity: "internal", importance: 50, confidenceScore: 0.8,
+      validFrom: null, validUntil: null, observedAt: observedAt.toISOString(), retentionPolicy: "standard", expiresAt: null, createdByOperationId: null, metadata: {}, evidence: [{
+        sourceClass: "task", sourceProvider: "august_works_tasks", sourceType: "issue", sourceRef: `issue://${taskId}`, sourceVersion, sourceUpdatedAt: sourceVersion,
+        observedAt: observedAt.toISOString(), excerptHash: createHash("sha256").update(content).digest("hex"), citation: { label: "Reviewed native Task" }, trustLevel: "high", relation: "supports",
+      }] }, memoryActor);
+    await memoryService(db).reviewCandidate(companyId, created.record.id, { decision: "accept", reason: "Software fixture explicitly verifies this source" }, memoryActor);
+    return created.record;
+  }
   it("projects a signed review without raw source snapshots, actor fields or events and rechecks its current sources", async () => {
     const f = await fixture(), owner = managementReviewService(db), created = await owner.create(companyId, actor, f.definition);
     await publish(created.id, created.contentHash);
@@ -124,18 +139,16 @@ describe.skipIf(!support.supported)("Native historical management review owner o
   it("rejects agent authors and cross-company source pins without inserting review prose", async () => { const f = await fixture(), [foreign] = await db.insert(goals).values({ companyId: otherId, title: "Foreign hidden source" }).returning(); await expect(managementReviewService(db).create(companyId, { type: "agent", agentId: randomUUID(), source: "agent_jwt" }, f.definition)).rejects.toMatchObject({ status: 403 }); f.definition.sources[0]!.source = { kind: "canonical", reference: { type: "goal", id: foreign!.id } }; await expect(managementReviewService(db).create(companyId, actor, f.definition)).rejects.toMatchObject({ status: 404 }); expect(await db.select().from(managementReviewSnapshots).where(eq(managementReviewSnapshots.companyId, companyId))).toHaveLength(0); });
   it("inherits surviving verified native Learning roots and erases the entire copied review when a Memory root is purged", async () => {
     const f = await fixture(); await instanceSettingsService(db).updateExperimental({ enableContextEngineV1: true, skill_lifecycle_v5: true, playbooks_v5: true, enableCollectiveMemoryV1: true, cognitive_memory_v7: true, memory_observations_v7: true, learning_engine_v7: true });
-    const [task] = await db.insert(issues).values({ companyId, title: "Synthetic verified Task software fixture", status: "done", completedAt: new Date(), responsibleUserId: "local-board" }).returning();
-    const [binding] = await db.insert(memoryBindings).values({ companyId, key: "management_source", name: "Native verified source fixture", providerKey: "local" }).returning();
-    const [memory] = await db.insert(memoryRecords).values({ companyId, bindingId: binding!.id, providerKey: "local", memoryType: "outcome", scopeType: "company", content: "Synthetic verified native Task root for software qualification only", reviewState: "accepted", verificationState: "human_verified", observedAt: new Date(), createdByActorType: "system", createdByActorId: "fixture" }).returning();
-    await db.insert(memoryEvidence).values({ companyId, memoryRecordId: memory!.id, sourceClass: "task", sourceProvider: "august_works_tasks", sourceType: "issue", sourceRef: `issue://${task!.id}`, sourceVersion: "1", observedAt: new Date(), excerptHash: "a".repeat(64), citationJson: { label: "Synthetic native fixture" }, trustLevel: "high", supportsOrContradicts: "supports" });
-    const cycle = await learningService(db).create(actor, companyId, { scope: { type: "company", id: null }, purpose: "native_task_execution", trigger: rationale, memoryRecordIds: [memory!.id] });
+    const [task] = await db.insert(issues).values({ companyId, title: "Synthetic verified Task software fixture", status: "done", completedAt: new Date(), responsibleUserId: actor.userId }).returning();
+    const memory = await verifiedMemory("management_source", "Native verified source fixture", task!.id);
+    const cycle = await learningService(db).create(actor, companyId, { scope: { type: "company", id: null }, purpose: "native_task_execution", trigger: rationale, memoryRecordIds: [memory.id] });
     f.definition.sources.push({ key: "learning", source: { kind: "learning_cycle", id: cycle.id, expectedVersion: cycle.version } });
     const created = await managementReviewService(db).create(companyId, actor, f.definition), detail = await managementReviewService(db).detail(companyId, actor, created.id);
     expect(detail.sources.find(source => source.key === "learning")!.grade).toBe("native_learning_cycle");
     await learningService(db).finish(actor, companyId, cycle.id, { expectedVersion: cycle.version, decision: "cancel", rationale });
     const changed = await managementReviewService(db).detail(companyId, actor, created.id); expect(changed.currentQualification).toBe("needs_revalidation"); expect(changed.sources).toEqual(detail.sources); expect(changed.packet).toEqual(detail.packet); await expect(publish(created.id, created.contentHash)).rejects.toMatchObject({ status: 409 }); await expect(managementReviewService(db).create(companyId, actor, f.definition)).rejects.toMatchObject({ status: 409 });
     await disableV8Rollout(db); await db.update(companies).set({ status: "paused" }).where(eq(companies.id, companyId));
-    await db.transaction(async raw => { const tx = raw as unknown as Db; await lockMemoryPrivacy(tx, companyId); await purgeMemoryRecords(tx, companyId, [memory!.id]); });
+    await db.transaction(async raw => { const tx = raw as unknown as Db; await lockMemoryPrivacy(tx, companyId); await purgeMemoryRecords(tx, companyId, [memory.id]); });
     expect(await db.select().from(managementReviewSnapshots).where(eq(managementReviewSnapshots.id, created.id))).toHaveLength(0);
     expect((await db.select().from(issues).where(eq(issues.id, task!.id)))[0]!.status).toBe("done");
   });
@@ -143,14 +156,12 @@ describe.skipIf(!support.supported)("Native historical management review owner o
     const f=await fixture();await instanceSettingsService(db).updateExperimental({enableContextEngineV1:true,skill_lifecycle_v5:true,playbooks_v5:true,enableCollectiveMemoryV1:true,cognitive_memory_v7:true,memory_observations_v7:true,learning_engine_v7:true});
     const purpose=analyticalPurpose();purpose.analyticalPurpose!.capabilities=["metrics","reviews"];purpose.analyticalPurpose!.permittedSensitivity=["internal","confidential"];
     const policy=await aiGovernanceService(db).obligation(actor,companyId,purpose);f.definition.governanceObligationRefs=[policy.id];
-    const [task]=await db.insert(issues).values({companyId,title:"Synthetic verified native work outcome",status:"done",completedAt:new Date(),responsibleUserId:"local-board"}).returning();
-    const [binding]=await db.insert(memoryBindings).values({companyId,key:"analytical_learning",name:"Original verified outcome",providerKey:"local"}).returning();
-    const [memory]=await db.insert(memoryRecords).values({companyId,bindingId:binding!.id,providerKey:"local",memoryType:"outcome",scopeType:"company",content:"Independent verified native Task outcome",reviewState:"accepted",verificationState:"human_verified",observedAt:new Date(),createdByActorType:"system",createdByActorId:"fixture"}).returning();
-    await db.insert(memoryEvidence).values({companyId,memoryRecordId:memory!.id,sourceClass:"task",sourceProvider:"august_works_tasks",sourceType:"issue",sourceRef:`issue://${task!.id}`,sourceVersion:"1",observedAt:new Date(),excerptHash:"a".repeat(64),citationJson:{label:"Synthetic native qualification"},trustLevel:"high",supportsOrContradicts:"supports"});
+    const [task]=await db.insert(issues).values({companyId,title:"Synthetic verified native work outcome",status:"done",completedAt:new Date(),responsibleUserId:actor.userId}).returning();
+    const memory=await verifiedMemory("analytical_learning","Original verified outcome",task!.id,"Independent verified native Task outcome");
     const metrics=businessMetricService(db),metric=await metrics.create(companyId,actor,{key:"learning_review_signal",definition:{...metricDefinition(policy.id),sensitivity}});
     await metrics.publish(companyId,actor,metric.metric.id,{expectedRevision:1,versionId:metric.version.id});
     const observation=await metrics.query(companyId,actor,{metricId:metric.metric.id,versionId:metric.version.id,from:f.definition.period.from,until:new Date().toISOString(),dimensions:[],maxRows:100});
-    const cycle=await learningService(db).create(actor,companyId,{scope:{type:"company",id:null},purpose:"native_task_execution",trigger:rationale,memoryRecordIds:[memory!.id],analyticalSources:[{kind:"analytical_evidence",source:{type:"metric_observation",id:observation.id,metricId:observation.metricId,metricVersionId:observation.versionId}}]});
+    const cycle=await learningService(db).create(actor,companyId,{scope:{type:"company",id:null},purpose:"native_task_execution",trigger:rationale,memoryRecordIds:[memory.id],analyticalSources:[{kind:"analytical_evidence",source:{type:"metric_observation",id:observation.id,metricId:observation.metricId,metricVersionId:observation.versionId}}]});
     f.definition.sources.push({key:"learning",source:{kind:"learning_cycle",id:cycle.id,expectedVersion:cycle.version}});
     const owner=managementReviewService(db);
     if(sensitivity==="confidential")await expect(owner.create(companyId,actor,f.definition)).rejects.toMatchObject({status:403});
@@ -165,7 +176,7 @@ describe.skipIf(!support.supported)("Native historical management review owner o
     await disableV8Rollout(db);await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));
     await db.delete(businessMetricObservations).where(eq(businessMetricObservations.id,observation.id));await memoryJobService(db).tick({limit:10});
     expect(await db.select().from(managementReviewSnapshots).where(eq(managementReviewSnapshots.id,created.id))).toHaveLength(0);
-    expect((await db.select().from(memoryRecords).where(eq(memoryRecords.id,memory!.id)))[0]!.content).toBe("Independent verified native Task outcome");
+    expect((await db.select().from(memoryRecords).where(eq(memoryRecords.id,memory.id)))[0]!.content).toBe("Independent verified native Task outcome");
   });
   it("purges published review/event content with disabled rollout and a paused company while preserving a foreign Goal", async () => {
     const f = await fixture(), created = await managementReviewService(db).create(companyId, actor, f.definition); await publish(created.id, created.contentHash);

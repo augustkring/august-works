@@ -50,8 +50,9 @@ import type {
   AdapterExecutionResult,
   AdapterRuntimeEvent,
 } from "../../adapters/index.js";
-import { nativePayloadSourceInputSchema, nativePayloadSourceSnapshotSchema, type NativeFinalizationResult,
-  type NativePayloadSourceInput } from "@paperclipai/shared";
+import { nativePayloadSourceInputSchema, nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema,
+  type NativeFinalizationResult, type NativePayloadSourceInput, type NativeRunInputSourceReceipt } from "@paperclipai/shared";
+import type { NativeBootstrapSourceClosure } from "./native-execution-input.js";
 import type {
   HarnessRuntimeRequestResolution,
   NativeExecutionInput,
@@ -7068,12 +7069,34 @@ export async function renewNativeSessionExecutionLease(input: {
   if (!updated) throw new Error("native_session_lease_lost");
 }
 
+function nativeTurnFrameMatchesSourceClosure(turnInput: Parameters<NativeSession["startTurn"]>[0], closure: NativeBootstrapSourceClosure | null | undefined) {
+  if (!closure || turnInput.continuation === true || turnInput.message.role !== "user") return false;
+  let frame: Record<string, unknown>;
+  try {
+    frame = record(JSON.parse(turnInput.message.text));
+  } catch {
+    return false;
+  }
+  const task = record(frame.task);
+  return frame.schema === "paperclip.native-model-envelope.v2" &&
+    createHash("sha256").update(JSON.stringify(task), "utf8").digest("hex") === closure.taskEnvelopeDigest &&
+    frame.workspace === null && frame.planningContext === null &&
+    Array.isArray(frame.interactionResponses) && frame.interactionResponses.length === 0;
+}
+
+async function postgresJsonbSha256(tx: Parameters<Parameters<Db["transaction"]>[0]>[0], value: unknown): Promise<string> {
+  const [row] = await tx.execute<{ digest: string }>(sql`select encode(sha256(convert_to((${JSON.stringify(value)}::jsonb)::text,'UTF8')),'hex') as digest`);
+  if (!row || !/^[0-9a-f]{64}$/.test(row.digest)) throw new Error("native_input_source_receipt_persistence_failed");
+  return row.digest;
+}
+
 /** Chosen backend-call bytes before I/O, not proof of delivery or complete
  * source provenance. Keep unknown sends and prior attempts as separate facts. */
 export async function recordNativeModelInputDispatchIntent(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
   agentId: string;
   eventSeq: number;
   turnInput: Parameters<NativeSession["startTurn"]>[0];
+  bootstrapSourceClosure?: NativeBootstrapSourceClosure | null;
 }): Promise<string> {
   if (!Number.isSafeInteger(input.eventSeq) || input.eventSeq < 0)
     throw new Error("native_model_input_launch_binding_invalid");
@@ -7107,8 +7130,36 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
     }];
     if (Buffer.byteLength(JSON.stringify(intents)) > 2 * 1024 * 1024)
       throw new Error("native_model_input_dispatch_budget_exceeded");
+    let receipt: NativeRunInputSourceReceipt | null = null;
+    const noPriorNativeEffects = previous.length === 0 &&
+      (!Array.isArray(profile.nativeToolCallDispatchAssociations) || profile.nativeToolCallDispatchAssociations.length === 0) &&
+      (!Array.isArray(profile.nativeToolResultSourceCaptures) || profile.nativeToolResultSourceCaptures.length === 0) &&
+      (!Array.isArray(profile.nativeAttachmentStageSources) || profile.nativeAttachmentStageSources.length === 0);
+    if (input.bootstrapSourceClosure && nativeTurnFrameMatchesSourceClosure(input.turnInput, input.bootstrapSourceClosure) &&
+      run.nativeInputSourceProtocolVersion === 0 && typeof run.responsibleUserId === "string" && run.responsibleUserId.length > 0 &&
+      profile.nativeExecutionInput !== undefined && profile.nativeInputSourceReceipt === undefined && noPriorNativeEffects) {
+      const bootstrap = {
+        executionInputDigest: await postgresJsonbSha256(tx, profile.nativeExecutionInput),
+        ...input.bootstrapSourceClosure.sourceSet,
+      };
+      const unsigned: Omit<NativeRunInputSourceReceipt, "digest"> = {
+        version: 1,
+        binding: { companyId: run.companyId, runId: run.id, agentId: run.agentId,
+          responsibleUserId: run.responsibleUserId, issueId: run.nativeIssueId ?? null },
+        bootstrap,
+        dispatches: [],
+        additionalInputs: [],
+      };
+      const candidate = { ...unsigned, digest: await postgresJsonbSha256(tx, unsigned) };
+      const parsed = nativeRunInputSourceReceiptSchema.safeParse(candidate);
+      if (parsed.success) receipt = parsed.data;
+    }
+    const nextProfile = { ...profile, nativeModelInputDispatchIntents: intents,
+      ...(receipt ? { nativeInputSourceReceipt: receipt } : {}) };
     const [stored] = await tx.update(heartbeatRuns).set({
-      runnerProfileJson: { ...profile, nativeModelInputDispatchIntents: intents }, updatedAt: new Date(),
+      runnerProfileJson: nextProfile,
+      ...(receipt ? { nativeInputSourceProtocolVersion: 1 } : {}),
+      updatedAt: new Date(),
     }).where(eq(heartbeatRuns.id, run.id)).returning({ profile: heartbeatRuns.runnerProfileJson });
     const storedIntents = record(stored?.profile).nativeModelInputDispatchIntents;
     if (!Array.isArray(storedIntents) || nativeSha256(storedIntents) !== nativeSha256(intents))
@@ -7121,7 +7172,7 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
     throw new Error([
       "native_session_lease_lost", "native_session_lease_ttl_invalid",
       "native_model_input_run_binding_changed", "native_model_input_launch_binding_changed",
-      "native_model_input_dispatch_budget_exceeded",
+      "native_model_input_dispatch_budget_exceeded", "native_input_source_receipt_persistence_failed",
     ].includes(message) ? message : "native_model_input_dispatch_persistence_failed");
   });
   return dispatchId;
@@ -7131,6 +7182,7 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
  * an acknowledgement fact only; it does not establish delivery or provenance. */
 export async function recordNativeModelInputDispatchAcknowledgement(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
   agentId: string; eventSeq: number; dispatchId: string; turnInput: Parameters<NativeSession["startTurn"]>[0]; turnId: string;
+  sourceClosure?: NativeBootstrapSourceClosure | null;
 }): Promise<void> {
   if (!Number.isSafeInteger(input.eventSeq) || input.eventSeq < 0 ||
     !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(input.dispatchId) ||
@@ -7157,8 +7209,29 @@ export async function recordNativeModelInputDispatchAcknowledgement(input: Param
       ? { ...record(raw), turnId: input.turnId } : raw);
     if (Buffer.byteLength(JSON.stringify(acknowledged)) > 2 * 1024 * 1024)
       throw new Error("native_model_input_ack_budget_exceeded");
+    const parsedReceipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+    let nextReceipt: NativeRunInputSourceReceipt | null = null;
+    if (parsedReceipt.success && run.nativeInputSourceProtocolVersion === 1 &&
+      typeof run.responsibleUserId === "string" && run.responsibleUserId.length > 0 &&
+      matching[0]!.raw.responsibleUserId === run.responsibleUserId &&
+      nativeTurnFrameMatchesSourceClosure(input.turnInput, input.sourceClosure)) {
+      const { digest: _priorDigest, ...receiptBody } = parsedReceipt.data;
+      const unsigned: Omit<NativeRunInputSourceReceipt, "digest"> = {
+        ...receiptBody,
+        dispatches: [...parsedReceipt.data.dispatches, {
+          executionInputDigest: digest,
+          responsibleUserId: run.responsibleUserId,
+          ...input.sourceClosure!.sourceSet,
+        }],
+      };
+      const candidate = { ...unsigned, digest: await postgresJsonbSha256(tx, unsigned) };
+      const validated = nativeRunInputSourceReceiptSchema.safeParse(candidate);
+      if (validated.success) nextReceipt = validated.data;
+    }
+    const nextProfile = { ...profile, nativeModelInputDispatchIntents: acknowledged,
+      ...(nextReceipt ? { nativeInputSourceReceipt: nextReceipt } : {}) };
     const [stored] = await tx.update(heartbeatRuns).set({
-      runnerProfileJson: { ...profile, nativeModelInputDispatchIntents: acknowledged }, updatedAt: new Date(),
+      runnerProfileJson: nextProfile, updatedAt: new Date(),
     }).where(eq(heartbeatRuns.id, run.id)).returning({ profile: heartbeatRuns.runnerProfileJson });
     const retained = record(stored?.profile).nativeModelInputDispatchIntents;
     if (!Array.isArray(retained) || nativeSha256(retained) !== nativeSha256(acknowledged))
@@ -7168,7 +7241,7 @@ export async function recordNativeModelInputDispatchAcknowledgement(input: Param
     const message = error instanceof Error ? error.message : "";
     throw new Error(["native_session_lease_lost", "native_session_lease_ttl_invalid",
       "native_model_input_ack_binding_invalid", "native_model_input_ack_budget_exceeded",
-      "native_model_input_ack_persistence_failed"].includes(message)
+      "native_model_input_ack_persistence_failed", "native_input_source_receipt_persistence_failed"].includes(message)
       ? message : "native_model_input_ack_persistence_failed");
   });
 }
@@ -7327,10 +7400,11 @@ export async function recordNativeDocumentToolResultIntent(input: Parameters<typ
       const snapshot = capture.source.payloadSourceSnapshot === null ? null
         : nativePayloadSourceSnapshotSchema.parse(capture.source.payloadSourceSnapshot);
       if (inputSource.kind !== "document_revision" || inputSource.issueId !== input.issueId ||
+      capture.source.returnedResultDigest !== capture.resultDigest ||
         snapshot && (snapshot.owner.kind !== "document_revision" || snapshot.owner.companyId !== input.companyId ||
           snapshot.owner.id !== inputSource.revisionId))
         throw new Error("native_document_tool_capture_binding_invalid");
-      source = { input: inputSource, payloadSourceSnapshot: snapshot };
+    source = { input: inputSource, payloadSourceSnapshot: snapshot, returnedResultDigest: capture.source.returnedResultDigest };
     }
     await persistNativeToolResultSourceCapture(input, { ...capture, source }, "document");
   } catch (error: unknown) {
@@ -7419,6 +7493,8 @@ function startNativeSessionExecutionLeaseRenewal(input: {
 export async function executePaperclipNativeSession(input: {
   db: Db;
   execution: NativeExecutionInput;
+  /** Compiler-owned closed bootstrap source set; NULL means unknown. */
+  bootstrapSourceClosure?: NativeBootstrapSourceClosure | null;
   runnerInstanceId: string;
   /** Trusted task identity from the heartbeat orchestration. */
   conversationMode?: boolean;
@@ -8586,6 +8662,7 @@ async function executePaperclipNativeSessionWithinScope(
                 db: input.db, runId, companyId: input.execution.binding.companyId,
                 issueId: input.execution.binding.issueId, agentId: input.execution.binding.agentId,
                 leaseOwner, attempt, controller, eventSeq: launchEventSeq, turnInput,
+                bootstrapSourceClosure: input.bootstrapSourceClosure,
               });
               await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
               await renewNativeSessionExecutionLease({
@@ -8600,6 +8677,7 @@ async function executePaperclipNativeSessionWithinScope(
                 db: input.db, runId, companyId: input.execution.binding.companyId,
                 issueId: input.execution.binding.issueId, agentId: input.execution.binding.agentId,
                 leaseOwner, attempt, controller, eventSeq: launchEventSeq, dispatchId, turnInput, turnId,
+                sourceClosure: input.bootstrapSourceClosure,
               });
             },
             input: runnerExecution,

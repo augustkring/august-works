@@ -778,24 +778,6 @@ async function requirePipelineCaseBodySources(db: Db, req: Request, companyId: s
   if (!await canReadPipelineCaseBodySources(db, req, companyId, caseId)) throw notFound("Pipeline case not found");
 }
 
-async function requirePipelineCaseEventSources(db: Db, req: Request, companyId: string, caseId: string) {
-  const events = await db.select({ actorType: pipelineCaseEvents.actorType, runId: pipelineCaseEvents.runId,
-    payload: pipelineCaseEvents.payload }).from(pipelineCaseEvents).where(and(
-      eq(pipelineCaseEvents.companyId, companyId), eq(pipelineCaseEvents.caseId, caseId))).limit(257);
-  if (events.length > 256) throw notFound("Pipeline case events not found");
-  for (const event of events) {
-    if (event.actorType === "agent" && (!event.runId ||
-      !await canReadPipelineCaseProducerRun(db, req, companyId, event.runId)))
-      throw notFound("Pipeline case events not found");
-    const payloadIssueId = event.payload && typeof event.payload === "object" && !Array.isArray(event.payload)
-      ? (event.payload as Record<string, unknown>).issueId : null;
-    if (typeof payloadIssueId === "string" &&
-      (!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(payloadIssueId) ||
-        !await canReadPipelineCaseTaskSource(db, req, companyId, payloadIssueId)))
-      throw notFound("Pipeline case events not found");
-  }
-}
-
 async function canReadPipelineCaseEventSources(db: Db, req: Request, companyId: string, caseId: string) {
   const events = await db.select({ actorType: pipelineCaseEvents.actorType, runId: pipelineCaseEvents.runId,
     payload: pipelineCaseEvents.payload }).from(pipelineCaseEvents).where(and(
