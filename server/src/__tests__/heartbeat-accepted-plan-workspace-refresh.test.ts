@@ -9,11 +9,13 @@ import { eq, ne } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   activityLog,
+  authUsers,
   agentRuntimeState,
   agentTaskSessions,
   agentWakeupRequests,
   agents,
   companies,
+  companyMemberships,
   companySkills,
   createDb,
   documentRevisions,
@@ -153,7 +155,9 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
     await db.delete(agents);
     await db.delete(workspaceOperations);
     await db.delete(companySkills);
+    await db.delete(companyMemberships);
     await db.delete(companies);
+    await db.delete(authUsers);
   });
 
   afterAll(async () => {
@@ -210,6 +214,24 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
       updatedAt: new Date(),
       ...(args.status === "completed" ? { completedAt: new Date() } : {}),
     });
+  }
+
+  async function seedNativeHuman(companyId: string, userId: string) {
+    await db.insert(authUsers).values({
+      id: userId,
+      name: "Workspace refresh human",
+      email: `${userId}@example.test`,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await db.insert(companyMemberships).values({
+      companyId,
+      principalType: "user",
+      principalId: userId,
+      membershipRole: "owner",
+      status: "active",
+    });
+    return userId;
   }
 
   async function seedAcceptedPlanAcceptance(args: {
@@ -286,6 +308,7 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
     const sharedExecutionWorkspaceId = randomUUID();
     const issueId = randomUUID();
     const agentId = randomUUID();
+    const responsibleUserId = randomUUID();
     const repoRoot = await createGitRepo();
     tempRoots.push(repoRoot);
 
@@ -297,14 +320,16 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
       name: "Acme",
       issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
       status: "active",
-      defaultResponsibleUserId: "responsible-user",
+      defaultResponsibleUserId: responsibleUserId,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+    await seedNativeHuman(companyId, responsibleUserId);
     await db.insert(projects).values({
       id: projectId,
       companyId,
       name: "Accepted Plan Workspace Refresh",
+      sourceProvenanceQualified: true,
       status: "active",
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -356,7 +381,7 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
       status: "in_progress",
       workMode: "planning",
       priority: "medium",
-      responsibleUserId: "responsible-user",
+      responsibleUserId,
       assigneeAgentId: agentId,
       identifier: "PAP-9122",
       executionWorkspaceId: sharedExecutionWorkspaceId,
@@ -460,6 +485,7 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
     const projectWorkspaceId = randomUUID();
     const sourceIssueId = randomUUID();
     const agentId = randomUUID();
+    const responsibleUserId = randomUUID();
     const { repoRoot, originRoot } = await createGitRepoWithOrigin();
     tempRoots.push(repoRoot, originRoot);
 
@@ -471,14 +497,16 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
       name: "Acme",
       issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
       status: "active",
-      defaultResponsibleUserId: "responsible-user",
+      defaultResponsibleUserId: responsibleUserId,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+    await seedNativeHuman(companyId, responsibleUserId);
     await db.insert(projects).values({
       id: projectId,
       companyId,
       name: "Accepted Plan Branch Freshness",
+      sourceProvenanceQualified: true,
       status: "active",
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -520,7 +548,7 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
       status: "in_progress",
       workMode: "planning",
       priority: "medium",
-      responsibleUserId: "responsible-user",
+      responsibleUserId,
       assigneeAgentId: agentId,
       identifier: "PAP-1584",
       executionWorkspaceSettings: {
@@ -696,6 +724,7 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
     const issueId = randomUUID();
     const otherPlanningIssueId = randomUUID();
     const agentId = randomUUID();
+    const responsibleUserId = randomUUID();
     const repoRoot = await createGitRepo();
     tempRoots.push(repoRoot);
 
@@ -707,14 +736,16 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
       name: "Acme",
       issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
       status: "active",
-      defaultResponsibleUserId: "responsible-user",
+      defaultResponsibleUserId: responsibleUserId,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+    await seedNativeHuman(companyId, responsibleUserId);
     await db.insert(projects).values({
       id: projectId,
       companyId,
       name: "Accepted Plan Routing",
+      sourceProvenanceQualified: true,
       status: "active",
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -752,7 +783,7 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
         status: "in_progress",
         workMode: "planning",
         priority: "medium",
-        responsibleUserId: "responsible-user",
+        responsibleUserId,
         assigneeAgentId: agentId,
         identifier: "PAP-9301",
         createdAt: new Date(),
@@ -767,7 +798,7 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
         status: "in_progress",
         workMode: "planning",
         priority: "medium",
-        responsibleUserId: "responsible-user",
+        responsibleUserId,
         assigneeAgentId: agentId,
         identifier: "PAP-9302",
         createdAt: new Date(),
@@ -855,6 +886,7 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
     const issueId = randomUUID();
     const otherPlanningIssueId = randomUUID();
     const agentId = randomUUID();
+    const responsibleUserId = randomUUID();
     const repoRoot = await createGitRepo();
     tempRoots.push(repoRoot);
 
@@ -866,14 +898,16 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
       name: "Acme",
       issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
       status: "active",
-      defaultResponsibleUserId: "responsible-user",
+      defaultResponsibleUserId: responsibleUserId,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+    await seedNativeHuman(companyId, responsibleUserId);
     await db.insert(projects).values({
       id: projectId,
       companyId,
       name: "Accepted Plan Routing",
+      sourceProvenanceQualified: true,
       status: "active",
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -911,7 +945,7 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
         status: "in_progress",
         workMode: "standard",
         priority: "medium",
-        responsibleUserId: "responsible-user",
+        responsibleUserId,
         assigneeAgentId: agentId,
         identifier: "PAP-9401",
         createdAt: new Date(),
@@ -926,7 +960,7 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
         status: "in_progress",
         workMode: "planning",
         priority: "medium",
-        responsibleUserId: "responsible-user",
+        responsibleUserId,
         assigneeAgentId: agentId,
         identifier: "PAP-9402",
         createdAt: new Date(),
@@ -1015,6 +1049,7 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
     const projectWorkspaceId = randomUUID();
     const issueId = randomUUID();
     const agentId = randomUUID();
+    const responsibleUserId = randomUUID();
     const repoRoot = await createGitRepo();
     tempRoots.push(repoRoot);
 
@@ -1026,14 +1061,16 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
       name: "Acme",
       issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
       status: "active",
-      defaultResponsibleUserId: "responsible-user",
+      defaultResponsibleUserId: responsibleUserId,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+    await seedNativeHuman(companyId, responsibleUserId);
     await db.insert(projects).values({
       id: projectId,
       companyId,
       name: "Accepted Plan Retry",
+      sourceProvenanceQualified: true,
       status: "active",
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -1070,7 +1107,7 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
       status: "in_progress",
       workMode: "planning",
       priority: "medium",
-      responsibleUserId: "responsible-user",
+      responsibleUserId,
       assigneeAgentId: agentId,
       identifier: "PAP-9303",
       createdAt: new Date(),

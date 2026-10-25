@@ -11,13 +11,16 @@ import { localRepositoryPath } from "./local-repository-path.js";
 import { managedProjectCheckoutName } from "./managed-project-checkout-name.js";
 import { materializeManagedProjectWorkspace } from "./managed-repository-checkout.js";
 import { assertReproducibleGitFiles, ensureSavedGitCommit, gitCacheCommand, GitCacheRestorationFailure, verifyRemoteGitCommit } from "./git-workspace-restoration.js";
+import { isSupportedRestorationGitSource } from "./git-workspace-auth-env.js";
 
 export const CLAUDE_SETTINGS_PATH = ".claude/settings.local.json";
 const SETTINGS_LIMIT = 64 * 1024;
 const CHECKOUT_LIMIT = 50;
 type Identity = { companyId: string; workspaceId: string };
 type Settings = { material: StoredSecretVersionMaterial } | null;
-export type ManagedCheckoutSource = { id: string; repoUrl: string; repoRef: string | null; cwd: string | null };
+export type ManagedCheckoutSource = {
+  id: string; repoUrl: string; repoRef: string | null; cwd: string | null; sourceType: string; visibility: string;
+};
 export type ManagedCheckoutContents = {
   name: string; source: ManagedCheckoutSource; commit: string; branchName: string | null;
 };
@@ -99,6 +102,7 @@ export function validateGitWorkspaceContents(contents: GitWorkspaceContents | un
     if (!checkout || !checkout.source || typeof checkout.source.id !== "string" || typeof checkout.source.repoUrl !== "string"
       || !(checkout.source.repoRef === null || typeof checkout.source.repoRef === "string")
       || !(checkout.source.cwd === null || typeof checkout.source.cwd === "string")
+      || typeof checkout.source.sourceType !== "string" || typeof checkout.source.visibility !== "string"
       || typeof checkout.name !== "string" || !/^[A-Za-z0-9_-]+-[a-f0-9]{12}$/.test(checkout.name)
       || checkout.name !== managedProjectCheckoutName(checkout.source) || names.has(checkout.name)
       || !/^[a-f0-9]{40}$/.test(checkout.commit)
@@ -107,17 +111,6 @@ export function validateGitWorkspaceContents(contents: GitWorkspaceContents | un
       || !settingsValid(checkout.settings)) throw new GitCacheRestorationFailure();
     names.add(checkout.name);
   }
-}
-
-export function selectRestoredProjectRepositories<T extends { id: string; repoUrl: string | null; repoRef: string | null; cwd?: string | null }>(sources: T[], contents?: GitWorkspaceContents): T[] {
-  validateGitWorkspaceContents(contents);
-  for (const checkout of contents?.checkouts ?? []) {
-    if (!sources.some(source => source.id === checkout.source.id && source.repoUrl === checkout.source.repoUrl)) throw new GitCacheRestorationFailure();
-  }
-  return sources.map(source => {
-    const saved = contents?.checkouts.find(checkout => checkout.source.id === source.id)?.source;
-    return saved ? { ...source, repoRef: saved.repoRef, cwd: saved.cwd } : source;
-  });
 }
 
 export async function readManagedCheckoutContents(checkout: string, name: string, source: ManagedCheckoutSource, signal?: AbortSignal): Promise<ManagedCheckoutContents> {
@@ -193,6 +186,7 @@ export async function restoreGitWorkspaceContents(input: Identity & { cwd: strin
   validateGitWorkspaceContents(input.contents);
   try {
     for (const checkout of input.contents.checkouts) {
+      if (!isSupportedRestorationGitSource(checkout.source.repoUrl)) throw new GitCacheRestorationFailure();
       await input.authorizeSource(checkout.source);
       const localSource = localRepositoryPath(checkout.source.repoUrl);
       if (localSource && !input.prepareLocalSource) throw new GitCacheRestorationFailure();
@@ -213,8 +207,7 @@ export async function restoreGitWorkspaceContents(input: Identity & { cwd: strin
         await restoreSettings(destination, checkout.settings, input, relative);
         continue;
       }
-      const result = await materializeManagedProjectWorkspace(destination, { repoUrl: checkout.source.repoUrl,
-        ...(localSource ? { localSource } : {}),
+      const result = await materializeManagedProjectWorkspace(destination, { repoUrl: checkout.source.repoUrl, strictSourceAuth: true,
         resolveGitAuth: input.resolveGitAuth, beforePublish: async temporary => {
           await ensureSavedGitCommit(temporary, checkout.source.repoUrl, checkout.commit, input.resolveGitAuth);
           if (checkout.branchName) await gitCacheCommand(temporary, ["check-ref-format", "--branch", checkout.branchName]);

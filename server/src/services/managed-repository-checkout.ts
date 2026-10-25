@@ -7,6 +7,7 @@ import { captureDirectorySnapshot, mergeDirectoryWithBaseline } from "@paperclip
 import { sanitizeRuntimeServiceBaseEnv } from "./runtime-service-env.js";
 import { describeGitAuthFailure, scrubGitCredentialText, type GitRemoteAuthProvider } from "./git-credentials.js";
 import { isWorkspaceGitScanError, WorkspaceGitScanError } from "./workspace-git-operation-scheduler.js";
+import { gitWorkspaceRestoreCredentialArgs, gitWorkspaceRestoreEnv, isSupportedRestorationGitSource } from "./git-workspace-auth-env.js";
 
 const execFile = promisify(execFileCallback);
 const MANAGED_WORKSPACE_GIT_CLONE_TIMEOUT_MS = 10 * 60 * 1000;
@@ -19,8 +20,14 @@ export async function materializeManagedProjectWorkspace(
     localSource?: string | null;
     resolveGitAuth?: GitRemoteAuthProvider | null;
     beforePublish?: (cloneCwd: string) => Promise<void>;
+    /** Exact restore only: remove all ambient Git identities/config and use
+     * only the canonical credential provider result for a remote source. */
+    strictSourceAuth?: boolean;
   },
 ): Promise<{ cwd: string; warning: string | null }> {
+  if (input.strictSourceAuth && (!input.repoUrl || !isSupportedRestorationGitSource(input.repoUrl))) {
+    throw new Error("Unsupported source for exact workspace restoration");
+  }
   if (input.beforePublish && !input.repoUrl) {
     throw new Error("Exact saved-source inspection requires a repository URL");
   }
@@ -75,16 +82,21 @@ export async function materializeManagedProjectWorkspace(
   try {
     await execFile(
       "git",
-      [...(auth?.configArgs ?? []), "clone", "--no-hardlinks", "--", input.localSource ?? input.repoUrl, cloneTmpDir],
+      [...(input.strictSourceAuth ? gitWorkspaceRestoreCredentialArgs(auth) : auth?.configArgs ?? []),
+        "clone", "--no-hardlinks", "--", input.localSource ?? input.repoUrl, cloneTmpDir],
       {
         env: {
           // Spread order matters: the sanitizer strips PAPERCLIP_*, which would remove the
           // credential-helper token env if it came first. GIT_TERMINAL_PROMPT=0 fails a
           // credential-less private clone immediately instead of hanging on a prompt until
           // the clone timeout.
-          ...sanitizeRuntimeServiceBaseEnv(process.env),
-          GIT_TERMINAL_PROMPT: "0",
-          ...(auth?.env ?? {}),
+          ...(input.strictSourceAuth
+            ? gitWorkspaceRestoreEnv(auth)
+            : {
+              ...sanitizeRuntimeServiceBaseEnv(process.env),
+              GIT_TERMINAL_PROMPT: "0",
+              ...(auth?.env ?? {}),
+            }),
         },
         timeout: MANAGED_WORKSPACE_GIT_CLONE_TIMEOUT_MS,
       },

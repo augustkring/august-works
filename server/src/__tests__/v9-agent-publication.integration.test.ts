@@ -16,7 +16,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { agentPresenceRuntimeBindings, agentConfigRevisions, agentExecutionManifests, memoryJobs, activityLog, agentConfigurationDrafts, agentConfigurationTests, agents, authUsers, billingAccounts, billingAccountCompanies, companyMemberships, companySkills, companySkillVersions, principalPermissionGrants, createDb, documents, heartbeatRuns, orchestrationPlans, orchestrationModelReservations, orchestrationWorkers, toolInvocations, verificationRuns } from "@paperclipai/db";
+import { agentPresenceRuntimeBindings, agentConfigRevisions, agentExecutionManifests, memoryJobs, activityLog, agentConfigurationDrafts, agentConfigurationTests, agents, authSessions, authUsers, billingAccounts, billingAccountCompanies, companyMemberships, companySkills, companySkillVersions, principalPermissionGrants, createDb, documents, heartbeatRuns, orchestrationPlans, orchestrationModelReservations, orchestrationWorkers, toolInvocations, verificationRuns } from "@paperclipai/db";
 import { CUSTOM_AGENT_STEPS, agentAuthoringContentSchema, type AgentAuthoringDraftView, type AgentDraftTestCommand, AUTHORED_AGENT_DEFINITION_KEY, agentDraftPublicationCommandSchema, type AgentDraftPublicationCommand, type VerificationReviewInput } from "@paperclipai/shared";
 import { agentAuthoringService } from "../services/agents/authoring-drafts.js";
 import { agentAuthoringTestService } from "../services/agents/authoring-tests.js";
@@ -41,6 +41,7 @@ import { reconcileAgentDraftTest } from "../services/agents/authoring-test-recov
 import { heartbeatMemoryPayloadRetained, reapplyMemoryDeletionMarkers } from "../services/memory/memory-privacy.js";
 import { memoryJobService } from "../services/memory/memory-jobs.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 import { grantAuthoringKnowledgeReadFixture, seedRequiredAuthoringProcedures, seedApprovedAuthoringPlaybook, bindAuthoringPlaybook, grantAuthoringPlaybookReadFixture } from "./helpers/authoring-procedures.js";
 import { prepareHirePublicationFixture } from "./helpers/hire-publication.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
@@ -310,6 +311,9 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     expect(calls).toBe(1);
   });
   it("publishes the exact approved preference without new grants and closes its erased-source runtime", async () => {
+    const sessionId = await seedNativePasskeySession(db, f.userId);
+    const [session] = await db.select({ expiresAt: authSessions.expiresAt }).from(authSessions).where(eq(authSessions.id, sessionId));
+    f.actor = { ...f.actor, sessionId, authenticatedCredentialExpiresAt: session!.expiresAt.getTime() };
     const preference = await seedApprovedAuthoringPreference(db,f.home,f.presence.id,f.userId);
     draft = await drafts().save(f.actor,f.home,draft.id,{ requestId: randomUUID(),expectedVersion:draft.version,step:"test",
       content:{ ...draft.content!,memory:"approved_work_preferences",memoryRecordIds:[preference.id] } });

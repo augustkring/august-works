@@ -12,7 +12,7 @@ locale: en
 last_verified_at: 2026-10-25
 review_trigger: Task run status, scheduled retry, stop, continuation, or recovery actions change
 security_or_privacy_sensitive: true
-linked_source_files: [ui/src/pages/IssueDetail.tsx, ui/src/components/IssueBlockedNotice.tsx, ui/src/lib/wait-for-stopped-runs.ts, server/src/services/issue-recovery-actions.ts, server/src/services/issues.ts, server/src/services/routines.ts, server/src/services/scheduled-work.ts]
+linked_source_files: [ui/src/pages/IssueDetail.tsx, ui/src/components/IssueBlockedNotice.tsx, ui/src/lib/wait-for-stopped-runs.ts, server/src/services/issue-recovery-actions.ts, server/src/services/issues.ts, server/src/services/routines.ts, server/src/services/scheduled-work.ts, server/src/routes/issues.ts, server/src/services/execution-workspaces.ts, server/src/services/heartbeat.ts, server/src/services/workspace-runtime.ts, server/src/services/managed-repository-checkout.ts, server/src/services/git-credentials.ts]
 ---
 
 When a task stops making progress, open the original task and check its current status, activity, run history, and next-step notice. A failed response from your browser does not always mean the task failed; the server may have accepted the original action.
@@ -26,6 +26,12 @@ If a scheduled retry is shown, use the task’s **Retry now** action only if you
 If a Co-worker’s update is refused because access to its restricted sources cannot be preserved, the task’s existing content stays in place. Keep the original task and ask its owner or [human support](/help/index) to review the refusal before repeating the update.
 
 A skipped scheduled run can mean its saved sources are no longer available to the responsible person. Ask the source owner to review access before changing or retrying the schedule.
+
+## Check saved workspace access
+
+If a task cannot reopen its saved workspace, ask a project owner to check your current access, the saved repository source, and its connection. The task can remain closed while these requirements are unresolved. Return to the original task after access is restored, and check its latest run before retrying.
+
+If the saved source or history cannot be recovered, contact [human support](/help/index) with the task identifier and the message shown on screen.
 
 ## When a stop is pending
 

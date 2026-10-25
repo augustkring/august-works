@@ -2528,7 +2528,8 @@ export function routineService(
             executionWorkspaceId: input.executionWorkspaceId ?? null,
             executionWorkspacePreference: input.executionWorkspacePreference ?? null,
             executionWorkspaceSettings: input.executionWorkspaceSettings ?? null,
-          }, taskTx, workflowPublications));
+          }, taskTx, workflowPublications, deps.sourceActor?.type === "board" &&
+            deps.sourceActor.userId === manualRunnerUserId ? { privacyActor: deps.sourceActor } : {}));
         } catch (error) {
           workflowPublications.length = issuePublicationStart;
           const isOpenExecutionConflict =

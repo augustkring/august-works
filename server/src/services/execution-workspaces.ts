@@ -66,6 +66,7 @@ import {
 } from "./git-workspace-restoration.js";
 import { readManagedCheckoutContents, type ManagedCheckoutContents } from "./git-workspace-contents.js";
 import { managedProjectCheckoutName } from "./managed-project-checkout-name.js";
+import { localRepositoryPath } from "./local-repository-path.js";
 import { readProjectWorkspaceRuntimeConfig } from "./project-workspace-runtime-config.js";
 import { workspaceGitOperationScheduler } from "./workspace-git-operation-scheduler.js";
 import {
@@ -3168,7 +3169,8 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
             ? tx
                 .select({ id: projectWorkspaces.id, companyId: projectWorkspaces.companyId,
                   projectId: projectWorkspaces.projectId, sourceType: projectWorkspaces.sourceType,
-                  cwd: projectWorkspaces.cwd, repoUrl: projectWorkspaces.repoUrl, repoRef: projectWorkspaces.repoRef })
+                  cwd: projectWorkspaces.cwd, repoUrl: projectWorkspaces.repoUrl, repoRef: projectWorkspaces.repoRef,
+                  visibility: projectWorkspaces.visibility })
                 .from(projectWorkspaces)
                 .where(and(
                   eq(projectWorkspaces.companyId, row.companyId),
@@ -3184,6 +3186,12 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
             .for("share")
             .then((rows) => parseProjectExecutionWorkspacePolicy(rows[0]?.executionWorkspacePolicy)),
         ]);
+        const gitAuth = createGitRemoteAuthProvider(db, row.companyId, {
+          issueId: row.sourceIssueId ?? issue.id,
+          heartbeatRunId: actor.type === "agent" ? actor.runId : null,
+          responsibleUserId: actor.type === "board" ? actor.userId ?? null : actor.onBehalfOfUserId ?? null,
+          agentId: actor.type === "agent" ? actor.agentId : null,
+        });
         // Resolve the base checkout that the rebuild spawns git in. A
         // local-folder project stores its base path in projectWorkspaces.cwd.
         // A managed_checkout project stores null there, so resolve its live
@@ -3199,26 +3207,17 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
             repoUrl: row.repoUrl,
             beforeUse: requireCurrentSource,
             beforePublish: requireCurrentSource,
-            resolveGitAuth: createGitRemoteAuthProvider(db, row.companyId, {
-              issueId: row.sourceIssueId ?? issue.id,
-              heartbeatRunId: actor.type === "agent" ? actor.runId : null,
-              responsibleUserId: actor.type === "board" ? actor.userId ?? null : actor.onBehalfOfUserId ?? null,
-              agentId: actor.type === "agent" ? actor.agentId : null,
-            }),
+            strictSourceAuth: true,
+            resolveGitAuth: gitAuth,
           });
           resolvedBaseCwd = managedWorkspace.cwd;
         }
-        const gitAuth = createGitRemoteAuthProvider(db, row.companyId, {
-          issueId: row.sourceIssueId ?? issue.id,
-          heartbeatRunId: actor.type === "agent" ? actor.runId : null,
-          responsibleUserId: actor.type === "board" ? actor.userId ?? null : actor.onBehalfOfUserId ?? null,
-          agentId: actor.type === "agent" ? actor.agentId : null,
-        });
         const restorationWorkspace = {
           id: row.id, companyId: row.companyId, projectId: row.projectId,
           projectWorkspaceId: row.projectWorkspaceId ?? null, sourceIssueId: row.sourceIssueId,
           repoUrl: row.repoUrl, baseRef: row.baseRef, sourceCwd: projectWorkspace?.cwd ?? null,
           sourceRepoRef: projectWorkspace?.repoRef ?? null, sourceType: projectWorkspace?.sourceType ?? null,
+          sourceVisibility: projectWorkspace?.visibility ?? null,
           mode: row.mode, strategyType: row.strategyType,
           branchName: row.branchName, cwd: row.cwd, providerRef: row.providerRef,
           metadata: row.metadata as Record<string, unknown> | null,
@@ -3226,44 +3225,6 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
         const sourceRows = row.projectId ? await tx.select().from(projectWorkspaces).where(and(
           eq(projectWorkspaces.companyId, row.companyId), eq(projectWorkspaces.projectId, row.projectId),
         )).for("share") : [];
-        let restoredFromRecipe = false;
-        if (row.strategyType === "git_worktree" && row.cwd
-          && !(await fs.stat(row.cwd).then(() => true, () => false))) {
-          const recipe = readGitCacheRestoration(restorationWorkspace);
-          if (!recipe || !resolvedBaseCwd || !projectWorkspace || projectWorkspace.cwd !== null
-            || projectWorkspace.projectId !== row.projectId || projectWorkspace.repoUrl !== row.repoUrl
-            || (projectWorkspace.repoRef !== null && projectWorkspace.repoRef !== row.baseRef)) {
-            throw new Error("Saved managed-project workspace state is unavailable");
-          }
-          await restoreManagedGitCacheWorktree({
-            workspace: restorationWorkspace,
-            baseCwd: resolvedBaseCwd,
-            resolveGitAuth: gitAuth,
-            beforeMutation: requireCurrentSource,
-            authorizeSource: async source => {
-              if (!(await currentSourceAllowed())) throw new Error("Current source access is unavailable");
-              const current = sourceRows.find(candidate => candidate.id === source.id);
-              if (!current || current.projectId !== row.projectId || current.companyId !== row.companyId
-                || current.repoUrl !== source.repoUrl || current.repoRef !== source.repoRef || current.cwd !== source.cwd) {
-                throw new Error("Managed project source changed");
-              }
-            },
-            prepareLocalSource: async sourceCwd => {
-              await requireCurrentSource();
-              if (!sourceRows.some(source => source.cwd === sourceCwd && source.projectId === row.projectId)) {
-                throw new Error("Local project source changed");
-              }
-              return requireCurrentSource;
-            },
-          });
-          restoredFromRecipe = true;
-        }
-        // Reject malformed internal state rather than replacing it with a new
-        // package. A missing package is acceptable while the live worktree still
-        // exists; it is never a license to rebuild from the moving current ref.
-        if (restorationWorkspace.metadata?.[GIT_CACHE_RESTORATION_KEY] !== undefined) {
-          readGitCacheRestoration(restorationWorkspace);
-        }
         const config = readExecutionWorkspaceConfig(row.metadata as Record<string, unknown> | null);
         const nextGeneration = readExecutionWorkspaceLifecycleGeneration(
           row.metadata as Record<string, unknown> | null,
@@ -3275,10 +3236,64 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
           companyId: row.companyId,
           executionWorkspaceId: row.id,
         });
-
         let rebuildError: string | null = null;
         let cacheRecipe: GitCacheRestoration | null = null;
+        let restoredFromRecipe = false;
+        let existingRecipe: GitCacheRestoration | null = null;
+        if (restorationWorkspace.metadata?.[GIT_CACHE_RESTORATION_KEY] !== undefined) {
+          try { existingRecipe = readGitCacheRestoration(restorationWorkspace); }
+          catch { rebuildError = "Saved managed-project workspace state is unavailable"; }
+        }
+        const workspacePathExists = row.cwd ? await fs.lstat(row.cwd).then(() => true, (error: NodeJS.ErrnoException) => {
+          if (error.code === "ENOENT") return false;
+          throw error;
+        }) : false;
+        if (row.strategyType === "git_worktree" && row.cwd
+          && (!workspacePathExists || existingRecipe?.restorePending === true)) {
+          const recipe = existingRecipe;
+          if (!rebuildError && (!recipe || !resolvedBaseCwd || !projectWorkspace || projectWorkspace.cwd !== null
+            || projectWorkspace.projectId !== row.projectId || projectWorkspace.repoUrl !== row.repoUrl
+            || (projectWorkspace.repoRef !== null && projectWorkspace.repoRef !== row.baseRef))) {
+            rebuildError = "Saved managed-project workspace state is unavailable";
+          }
+          if (recipe && !rebuildError && resolvedBaseCwd) {
+            nextMetadata = { ...nextMetadata, [GIT_CACHE_RESTORATION_KEY]: { ...recipe, restorePending: true } };
+            try {
+              await restoreManagedGitCacheWorktree({
+                workspace: restorationWorkspace,
+                baseCwd: resolvedBaseCwd,
+                resolveGitAuth: gitAuth,
+                beforeMutation: requireCurrentSource,
+                authorizeSource: async source => {
+                  if (!(await currentSourceAllowed())) throw new Error("Current source access is unavailable");
+                  const current = sourceRows.find(candidate => candidate.id === source.id);
+                  if (!current || current.projectId !== row.projectId || current.companyId !== row.companyId
+                    || current.repoUrl !== source.repoUrl || current.repoRef !== source.repoRef || current.cwd !== source.cwd) {
+                    throw new Error("Managed project source changed");
+                  }
+                },
+                prepareLocalSource: async sourceCwd => {
+                  await requireCurrentSource();
+                  const hasCurrentSource = sourceRows.some(source => {
+                    if (source.projectId !== row.projectId) return false;
+                    if (source.cwd === sourceCwd) return true;
+                    try { return !!source.repoUrl && localRepositoryPath(source.repoUrl) === sourceCwd; }
+                    catch { return false; }
+                  });
+                  if (!hasCurrentSource) {
+                    throw new Error("Local project source changed");
+                  }
+                  return requireCurrentSource;
+                },
+              });
+              restoredFromRecipe = true;
+            } catch (error) {
+              rebuildError = error instanceof Error ? error.message : String(error);
+            }
+          }
+        }
         try {
+          if (rebuildError) throw new Error(rebuildError);
           const runtimeMetadata = row.metadata as Record<string, unknown> | null;
           const metadataForRuntime = restoredFromRecipe && runtimeMetadata
             ? { ...runtimeMetadata, gitBranchOwnershipVersion: undefined }
@@ -3333,11 +3348,12 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
               managedProjectCheckoutName({ id: source.id, repoUrl: source.repoUrl!, repoRef: source.repoRef, cwd: source.cwd }), source,
             ]));
             const capturedCheckouts: ManagedCheckoutContents[] = [];
-            const authorizeCheckoutSource = async (source: { id: string; repoUrl: string; repoRef: string | null; cwd: string | null }) => {
+            const authorizeCheckoutSource = async (source: { id: string; repoUrl: string; repoRef: string | null; cwd: string | null; sourceType: string; visibility: string }) => {
               await requireCurrentSource();
               const current = sourceRows.find(candidate => candidate.id === source.id);
               if (!current || current.projectId !== row.projectId || current.companyId !== row.companyId
-                || current.repoUrl !== source.repoUrl || current.repoRef !== source.repoRef || current.cwd !== source.cwd) {
+                || current.repoUrl !== source.repoUrl || current.repoRef !== source.repoRef || current.cwd !== source.cwd
+                || current.sourceType !== source.sourceType || current.visibility !== source.visibility) {
                 throw new Error("Managed project source changed");
               }
             };
@@ -3348,13 +3364,18 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
               proveManagedCheckout: async (checkoutPath, name, signal) => {
                 const source = sourceByCheckoutName.get(name);
                 if (!source?.repoUrl) throw new Error("Managed checkout source is unavailable");
-                const sourceIdentity = { id: source.id, repoUrl: source.repoUrl, repoRef: source.repoRef, cwd: source.cwd };
+                const sourceIdentity = { id: source.id, repoUrl: source.repoUrl, repoRef: source.repoRef, cwd: source.cwd,
+                  sourceType: source.sourceType, visibility: source.visibility };
                 await authorizeCheckoutSource(sourceIdentity);
                 await assertReproducibleManagedCheckout(checkoutPath, { repoUrl: source.repoUrl, resolveGitAuth: gitAuth, signal });
                 capturedCheckouts.push(await readManagedCheckoutContents(checkoutPath, name, sourceIdentity, signal));
                 await authorizeCheckoutSource(sourceIdentity);
               },
             });
+            if (restoredFromRecipe) {
+              const restoredAt = new Date().toISOString();
+              cacheRecipe = { ...cacheRecipe, restoredAt, contentsRestoredAt: restoredAt };
+            }
           }
         } catch (error) {
           rebuildError = error instanceof Error ? error.message : String(error);

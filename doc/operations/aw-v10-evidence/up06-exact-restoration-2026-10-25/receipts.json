@@ -193,6 +193,69 @@
         "Duration  16.22s (transform 11.63s, setup 93ms, import 15.86s, tests 98ms, environment 0ms)"
       ],
       "sourceCommit": "3481ef277701ef3a0d12cde2aeb09081f7e275c4"
+    },
+    {
+      "name": "up06-reopen-canonical-fixture-final",
+      "exitCode": 0,
+      "exitSidecar": "up06-reopen-canonical-fixture-final.exit",
+      "rawSha256": "b67de1fac79d896f05130d0f99e91324a9c3a46c0775646dc730b0ee0decdfcc",
+      "sanitizedSha256": "83f1e377175456783abfc73e839d2b8db9f16a5ea4b0c7ff141ab6e9ca923861",
+      "archiveSha256": "931f5102952842939d84cdbd2ae9dbd53ece1ceca285de2fe90bc458ef79b2a0",
+      "redactions": {
+        "ansi": 54,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  10 passed (10)",
+        "Duration  24.97s (transform 12.93s, setup 69ms, import 17.69s, tests 7.10s, environment 0ms)"
+      ],
+      "sourceCommit": "beb0a78f663e2b5bcff4b50758e6101fa7d6c505"
+    },
+    {
+      "name": "up06-closed-route-actor-final6",
+      "exitCode": 0,
+      "exitSidecar": "up06-closed-route-actor-final6.exit",
+      "rawSha256": "7f21bd299bb8a5497ec33874b831c7693e0efee6c397f524bb265671fa0b3423",
+      "sanitizedSha256": "298ac5660ad5ccb20c25defd900b2b618a2ad84bddff455ea269e9d59eb9ae14",
+      "archiveSha256": "87a1a5148f8ffcfbaa8fb6c2a920a1bc320ec02893457d4d922adade889c6f81",
+      "redactions": {
+        "ansi": 26,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  12 passed (12)",
+        "Duration  13.70s (transform 11.48s, setup 84ms, import 13.11s, tests 393ms, environment 0ms)"
+      ],
+      "sourceCommit": "beb0a78f663e2b5bcff4b50758e6101fa7d6c505"
+    },
+    {
+      "name": "up06-reopen-service-final2",
+      "exitCode": 0,
+      "exitSidecar": "up06-reopen-service-final2.exit",
+      "rawSha256": "d0fa7d13679b3f63f61d82e0b9f0051c0195bc121719b58dde7935467a446764",
+      "sanitizedSha256": "2feda2fb5d0cb52370cb748c40cd5a4cd4d7031cdf73812a22ac4003768f6867",
+      "archiveSha256": "d4c29dcec4b23e849e399864ccb27c01dc0676cc5f79ed254253e7d92e64e171",
+      "redactions": {
+        "ansi": 516,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  71 passed (71)",
+        "Duration  36.19s (transform 11.55s, setup 91ms, import 16.12s, tests 19.77s, environment 0ms)"
+      ],
+      "sourceCommit": "beb0a78f663e2b5bcff4b50758e6101fa7d6c505"
     }
   ],
   "updates": [
@@ -212,6 +275,15 @@
       "logs": [
         "up06-git-credentials-final",
         "up06-git-credentials-final2"
+      ]
+    },
+    {
+      "sourceCommit": "beb0a78f663e2b5bcff4b50758e6101fa7d6c505",
+      "meaning": "Current actual actor/source authority on reopen, before credential/filesystem work, clone publication, worktree/provision and active publication. Complete native reopen10, route12 and preservation/workspace71 pass. Exact history/settings restoration and automatic expiration qualification remain open.",
+      "logs": [
+        "up06-reopen-canonical-fixture-final",
+        "up06-closed-route-actor-final6",
+        "up06-reopen-service-final2"
       ]
     }
   ]

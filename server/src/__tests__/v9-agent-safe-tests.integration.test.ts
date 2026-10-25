@@ -81,9 +81,6 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     await instanceSettingsService(db).updateExperimental({ saas_deployment_profile_v6: true, billing_v6: true, agent_packages_v7: true,
       hire_agent_v9: true, enableWorkflowsV1: true, orchestration_v7: true, supervision_v7: true, readiness_engine_v7: true, verifier_v7: true });
     f = await seedV5Presences(db);
-    const sessionId = await seedNativePasskeySession(db, f.userId);
-    const [session] = await db.select({ expiresAt: authSessions.expiresAt }).from(authSessions).where(eq(authSessions.id, sessionId));
-    f.actor = { ...f.actor, sessionId, authenticatedCredentialExpiresAt: session!.expiresAt.getTime() };
     selectedPreferenceBody = null;
     requiredProcedures = await seedRequiredAuthoringProcedures(db, f.actor, f.home, f.presence.id);
     calls = 0; duringCall = undefined; lostResponse = false; excessUsage = false;
@@ -124,6 +121,11 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     expect(JSON.stringify(reviewed)).not.toContain("private-safe-test-key");
     return { requestId: randomUUID(), expectedVersion: draft.version, scenarioIndex: 0, expectedReviewHash: reviewed.reviewHash,
       confirmRepresentativeTest: true, confirmCompanyVisibleResult: true };
+  }
+  async function attachCurrentNativeSession() {
+    const sessionId = await seedNativePasskeySession(db, f.userId);
+    const [session] = await db.select({ expiresAt: authSessions.expiresAt }).from(authSessions).where(eq(authSessions.id, sessionId));
+    f.actor = { ...f.actor, sessionId, authenticatedCredentialExpiresAt: session!.expiresAt.getTime() };
   }
   async function execute() { const input = await command(); return { input, result: await service().start(f.actor, f.home, draft.id, input) }; }
   async function selectReviewedTaskProposal() {
@@ -354,6 +356,7 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     expect(calls).toBe(1);
   });
   it("uses only the selected approved preference through the actual bounded test controller", async () => {
+    await attachCurrentNativeSession();
     const selected = await selectPreference();
     unselectedPreferenceBody = (await seedApprovedAuthoringPreference(db, f.home, f.presence.id, f.userId)).body;
     expect(unselectedPreferenceBody).not.toBe(selected.body);
@@ -390,6 +393,7 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
         eq(companyMemberships.principalId, f.userId), eq(companyMemberships.status, "active")))).toHaveLength(1);
     });
   it("withholds a late result after preference withdrawal while retaining the completed debit", async () => {
+    await attachCurrentNativeSession();
     const preference = await selectPreference();
     duringCall = async () => { await memoryService(db).revoke(f.home, preference.id, { reason: "Human withdrew the preference" },
       { principal: { type: "user", userId: f.userId } }); };

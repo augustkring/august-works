@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { gitWorkspaceRestoreEnv } from "./git-workspace-auth-env.js";
 
 // Directory names that hold regenerable output: installed dependencies, build
 // output, and tool caches. Compaction removes a directory only when its name is
@@ -50,7 +51,8 @@ async function runGitRead(
     const child = execFile(
       "git",
       ["-C", worktreePath, ...args],
-      { cwd: worktreePath, timeout: GIT_READ_TIMEOUT_MS, signal: options.signal, maxBuffer: 16 * 1024 * 1024 },
+      { cwd: worktreePath, timeout: GIT_READ_TIMEOUT_MS, signal: options.signal, maxBuffer: 16 * 1024 * 1024,
+        env: gitWorkspaceRestoreEnv() },
       (error, stdout) => {
         const exitCode = (error as { code?: unknown } | null)?.code;
         if (!error || (typeof exitCode === "number" && options.okExitCodes?.includes(exitCode))) {

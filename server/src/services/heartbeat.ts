@@ -2374,6 +2374,8 @@ export async function ensureManagedProjectWorkspace(input: {
   beforeUse?: (() => Promise<void>) | null;
   /** Recheck immediately before a newly materialized checkout is published. */
   beforePublish?: (() => Promise<void>) | null;
+  /** Exact saved-workspace restoration must not inherit ambient Git credentials/config. */
+  strictSourceAuth?: boolean;
 }): Promise<{ cwd: string; warning: string | null }> {
   const defaultCwd = resolveManagedProjectWorkspaceDir({
     companyId: input.companyId,
@@ -2401,6 +2403,9 @@ export async function ensureManagedProjectWorkspace(input: {
     // The winner may have cloned a different repository with the same basename.
     return ensureManagedProjectWorkspace(input);
   }
+  // For source-sensitive callers, authorize the actual clone before the
+  // credential provider resolves or any Git network operation begins.
+  await input.beforeUse?.();
   const attempt = materializeManagedProjectWorkspace(cwd, {
     ...input,
     beforePublish: input.beforePublish ?? undefined,

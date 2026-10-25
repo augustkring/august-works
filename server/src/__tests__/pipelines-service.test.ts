@@ -1691,7 +1691,7 @@ describeEmbeddedPostgres("pipelineService", () => {
       actor: userActor,
     });
 
-    expect(moved.automationExecution.status).toBe("succeeded");
+    expect(moved.automationExecution.status, moved.automationExecution.status === "failed" ? moved.automationExecution.execution.error ?? undefined : undefined).toBe("succeeded");
     const executionIssueId = moved.automationExecution.status === "succeeded"
       ? moved.automationExecution.execution.executionIssueId
       : null;
@@ -1803,7 +1803,7 @@ describeEmbeddedPostgres("pipelineService", () => {
       expectedVersion: 1,
       actor: userActor,
     });
-    expect(moved.automationExecution.status).toBe("succeeded");
+    expect(moved.automationExecution.status, moved.automationExecution.status === "failed" ? moved.automationExecution.execution.error ?? undefined : undefined).toBe("succeeded");
     const executionIssueId = moved.automationExecution.status === "succeeded"
       ? moved.automationExecution.execution.executionIssueId
       : null;

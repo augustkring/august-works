@@ -358,6 +358,70 @@
         "Duration  35.71s (transform 8.81s, setup 75ms, import 12.51s, tests 23.02s, environment 0ms)"
       ],
       "sourceCommit": "7b6a662f30661ecda31f8cee4c5bf2e407c0035c"
+    },
+    {
+      "name": "tool-gateway-workflow-source-diagnostic",
+      "exitCode": 1,
+      "exitSidecar": "tool-gateway-workflow-source-diagnostic.exit",
+      "rawSha256": "ef42a3ddd7d6c4fdc9ec73fff9822486442cfdbc261a0160e530da31ad84d57d",
+      "sanitizedSha256": "ef42a3ddd7d6c4fdc9ec73fff9822486442cfdbc261a0160e530da31ad84d57d",
+      "archiveSha256": "d63cd2b7593d1ddf6372afad2ddfaecef187b3a235e21d34dc4af75b89832822",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 2 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  2 failed | 50 skipped (52)",
+        "Duration  22.38s (transform 12.54s, setup 78ms, import 17.37s, tests 4.79s, environment 0ms)"
+      ],
+      "sourceCommit": "8f8733afeeef37b52d5a5854e106e94baa685173"
+    },
+    {
+      "name": "tool-gateway-workflow-source-current-principals",
+      "exitCode": 0,
+      "exitSidecar": "tool-gateway-workflow-source-current-principals.exit",
+      "rawSha256": "e64f706d4f3a8bb597fd50883ff00522927ee5f252b8365ef54b359c79253465",
+      "sanitizedSha256": "e64f706d4f3a8bb597fd50883ff00522927ee5f252b8365ef54b359c79253465",
+      "archiveSha256": "e4487a58d9b8b13205c9fff1127d4a8616ef6f6da2c9fa7cd16e5b38166fc5f8",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  2 passed | 50 skipped (52)",
+        "Duration  28.44s (transform 14.90s, setup 81ms, import 20.13s, tests 8.08s, environment 0ms)"
+      ],
+      "sourceCommit": "8f8733afeeef37b52d5a5854e106e94baa685173"
+    },
+    {
+      "name": "tool-gateway-workflow-principals-full",
+      "exitCode": 0,
+      "exitSidecar": "tool-gateway-workflow-principals-full.exit",
+      "rawSha256": "751f600044f4109c9fd2aa7201897b22eccc5f148a8d4a233e03169a70e4bef6",
+      "sanitizedSha256": "4c09db22c270ad2f869b07839659352d0208fef376b2441221ab4e1b0797d65f",
+      "archiveSha256": "888116a5088c3a3e19e288c1f07c3633392190ddc4538d91803e3a36fe5e94a0",
+      "redactions": {
+        "ansi": 600,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  52 passed (52)",
+        "Duration  37.37s (transform 12.98s, setup 88ms, import 17.81s, tests 19.34s, environment 0ms)"
+      ],
+      "sourceCommit": "8f8733afeeef37b52d5a5854e106e94baa685173"
     }
   ],
   "updates": [
@@ -396,6 +460,15 @@
       "logs": [
         "workflow-source-owner-final-optimized",
         "workflow-source-executor-final-optimized"
+      ]
+    },
+    {
+      "sourceCommit": "8f8733afeeef37b52d5a5854e106e94baa685173",
+      "meaning": "Full workspace exposed two old Workflow connector fixture failures. Native current Human/Agent membership and original run identity repair both, retaining review/cancel/revocation/provider-call assertions. Complete gateway52 nowpasses; no production admission was weakened.",
+      "logs": [
+        "tool-gateway-workflow-source-diagnostic",
+        "tool-gateway-workflow-source-current-principals",
+        "tool-gateway-workflow-principals-full"
       ]
     }
   ],
