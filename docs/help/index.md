@@ -1,7 +1,7 @@
 ---
 help_article_id: help-and-human-support
 title: Help and human support
-summary: Find guidance, view your cases, or contact a person directly
+summary: Search guidance, optionally ask the Support Assistant, view cases, or contact a person
 audience: company-members
 product_capability_refs: [HELP-01, HELP-02, V10-038]
 screen_contract_refs: [HELP-01, HELP-02]
@@ -12,7 +12,7 @@ locale: en
 last_verified_at: 2026-10-25
 review_trigger: Help navigation, support intake, contacts, or recovery behavior changes
 security_or_privacy_sensitive: true
-linked_source_files: [ui/src/App.tsx, ui/src/components/ExperienceUtilities.tsx, ui/src/pages/CustomerHelpCenter.tsx, ui/src/pages/CustomerSupportCases.tsx, ui/src/lib/help-navigation.ts, server/src/routes/customer-support.ts, server/src/services/experience/customer-support.ts, server/src/services/experience/support-cases.ts, packages/shared/src/customer-support.ts, packages/shared/src/customer-feedback.ts, packages/shared/src/product-identity.ts, packages/shared/src/support-diagnostics.ts, ui/src/api/search.ts, server/src/services/company-search.ts, server/src/routes/issues.ts, packages/shared/src/types/search.ts, ui/src/components/ExperienceCommandPalette.tsx, ui/src/pages/Search.tsx, packages/shared/src/validators/search.ts, server/src/services/experience/support-case-configuration.ts, server/src/services/experience/support-case-delivery.ts, server/src/services/experience/support-case-http-gateway.ts, server/src/routes/saas.ts, server/src/services/saas/support-case-operator.ts]
+linked_source_files: [ui/src/App.tsx, ui/src/components/ExperienceUtilities.tsx, ui/src/pages/CustomerHelpCenter.tsx, ui/src/pages/CustomerSupportCases.tsx, ui/src/lib/help-navigation.ts, server/src/routes/customer-support.ts, server/src/services/experience/customer-support.ts, server/src/services/experience/support-cases.ts, packages/shared/src/customer-support.ts, packages/shared/src/customer-feedback.ts, packages/shared/src/product-identity.ts, packages/shared/src/support-diagnostics.ts, ui/src/api/search.ts, server/src/services/company-search.ts, server/src/routes/issues.ts, packages/shared/src/types/search.ts, ui/src/components/ExperienceCommandPalette.tsx, ui/src/pages/Search.tsx, packages/shared/src/validators/search.ts, server/src/services/experience/support-case-configuration.ts, server/src/services/experience/support-case-delivery.ts, server/src/services/experience/support-case-http-gateway.ts, server/src/routes/saas.ts, server/src/services/saas/support-case-operator.ts, ui/src/components/CustomerSupportAssistant.tsx, ui/src/components/CustomerSupportAssistant.test.tsx, server/src/services/orchestration/first-party-support-model-gateway.ts, server/src/services/orchestration/first-party-support-model-profiles.ts, server/src/services/experience/support-assistant-grounding.ts, server/src/services/orchestration/model-reservations.ts, server/src/services/agent-packages/execution-gate.ts, server/src/services/agent-packages/package-policy.ts, server/src/services/agent-packages/package-service.ts, server/src/saas-platform-config.ts, server/src/app.ts, server/src/services/company-search-help.generated.ts, packages/shared/src/agent-packages.ts, packages/shared/src/model-broker.ts, server/src/services/orchestration/read-only-model-transport.ts]
 ---
 
 Open **Help** in the app to browse guidance, open support cases, or check the configured service status page. You can contact human support directly at [support@blentera.com](mailto:support@blentera.com). You do not need to converse with an assistant first.
@@ -32,6 +32,16 @@ If a submission's result is unknown, keep the page's original request and use it
 If a saved case shows unknown delivery, keep its reference and contact support directly. An interrupted delivery attempt is not automatically sent again, because the provider may already have received it.
 
 Open a case to read replies from support. **Waiting for you** shows what support needs from you. Replying to a resolved case reopens the same case. Replying to a closed case creates a linked follow-up and keeps the original history.
+
+## Optional Support Assistant
+
+Help may also show a **Support Assistant**. It is optional and may be unavailable when this deployment has no current operator-approved Help package, provider profile, or funding. Help search, support cases, and direct human contact remain available independently.
+
+When the assistant is available, read its processing notice and privacy link before sending. If you agree, check the consent box and choose **Ask the assistant**. Your question and selected Help article excerpts are sent to Anthropic for a read-only response. Blentera funds this included feature; it does not use your AI connections. Do not include passwords, recovery codes, API keys, or other secrets.
+
+The assistant can return only exact excerpts from approved, linked Help articles. It cannot write a new remedy, look up your account, task, case, or service status, or take an action. If the articles do not support an answer, it says it cannot verify one. For an account-specific question or a current incident, contact human support directly.
+
+If a request has an unclear result, it is not automatically sent again. Keep the notice on screen and do not repeatedly submit the same question; use Help search or contact a person instead. The assistant is not a required step in support or recovery.
 
 ## Report a security or privacy concern
 

@@ -29,6 +29,18 @@ All environment variables that Paperclip uses for server configuration.
 | `PAPERCLIP_HIDDEN_SETTINGS` | (unset) | Comma-separated settings surfaces to hide from the UI and floor at the API, for operators hosting Paperclip for others (managed cloud, internal shared server). See [Hiding settings surfaces](#hiding-settings-surfaces). |
 | `PAPERCLIP_SETTING_DEFAULTS` | (unset) | JSON object replacing the schema default of selected instance settings, for hosting operators. See [Operator setting defaults](#operator-setting-defaults). |
 
+### Optional SaaS Support Assistant
+
+The grounded Support Assistant is unavailable unless the SaaS operator supplies all current profile, package, provider credential, funding, and Help-release requirements. It is optional and does not use customer AI connections. Configure it only with independently reviewed real provider and deployment evidence; see the [V6 support operations runbook](../../doc/operations/aw-v6-runtime.md#optional-grounded-support-assistant-default-unavailable). No default profile or production provider qualification is included.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AW_FIRST_PARTY_SUPPORT_MODEL_PROFILES_PATH` | (unset) | Absolute path to the private per-company first-party Support model profile JSON. The file must be owned by the server OS user, have no group/other permissions, and be at most 1 MiB. Configure together with the exact SHA-256 variable. |
+| `AW_FIRST_PARTY_SUPPORT_MODEL_PROFILES_SHA256` | (unset) | Lowercase SHA-256 of the exact profile file bytes. Must be configured together with the profile path. |
+| `AW_FIRST_PARTY_SUPPORT_ANTHROPIC_API_KEY` | (unset) | Platform-owned Anthropic API key. Store only in the deployment secret manager; the private profile stores its SHA-256 binding, never the key. |
+
+An absent, mismatched, stale, or unqualified profile keeps the feature unavailable. See the runbook for package publication, evidence, and profile setup.
+
 Daytona connectivity for `paperclip_runner` uses authenticated provider
 WebSocket ingress and follows the instance experimental setting
 `enableNativeRunner` (default `false`). There is no separate ingress opt-in.

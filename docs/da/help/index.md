@@ -1,7 +1,7 @@
 ---
 help_article_id: help-and-human-support-da
 title: Hjælp og menneskelig support
-summary: Find vejledning, se dine sager, eller kontakt en person direkte
+summary: Søg vejledning, spørg valgfrit Supportassistenten, se sager, eller kontakt en person
 audience: company-members
 product_capability_refs: [HELP-01, HELP-02, V10-038]
 screen_contract_refs: [HELP-01, HELP-02]
@@ -12,7 +12,7 @@ locale: da
 last_verified_at: 2026-10-25
 review_trigger: Ændringer i Hjælp-navigation, supportindtag, kontaktoplysninger eller genopretning
 security_or_privacy_sensitive: true
-linked_source_files: [ui/src/App.tsx, ui/src/components/ExperienceUtilities.tsx, ui/src/pages/CustomerHelpCenter.tsx, ui/src/pages/CustomerSupportCases.tsx, ui/src/lib/help-navigation.ts, server/src/routes/customer-support.ts, server/src/services/experience/customer-support.ts, server/src/services/experience/support-cases.ts, packages/shared/src/customer-support.ts, packages/shared/src/customer-feedback.ts, packages/shared/src/product-identity.ts, packages/shared/src/support-diagnostics.ts, ui/src/api/search.ts, server/src/services/company-search.ts, server/src/routes/issues.ts, packages/shared/src/types/search.ts, ui/src/components/ExperienceCommandPalette.tsx, ui/src/pages/Search.tsx, packages/shared/src/validators/search.ts, server/src/services/experience/support-case-configuration.ts, server/src/services/experience/support-case-delivery.ts, server/src/services/experience/support-case-http-gateway.ts, server/src/routes/saas.ts, server/src/services/saas/support-case-operator.ts]
+linked_source_files: [ui/src/App.tsx, ui/src/components/ExperienceUtilities.tsx, ui/src/pages/CustomerHelpCenter.tsx, ui/src/pages/CustomerSupportCases.tsx, ui/src/lib/help-navigation.ts, server/src/routes/customer-support.ts, server/src/services/experience/customer-support.ts, server/src/services/experience/support-cases.ts, packages/shared/src/customer-support.ts, packages/shared/src/customer-feedback.ts, packages/shared/src/product-identity.ts, packages/shared/src/support-diagnostics.ts, ui/src/api/search.ts, server/src/services/company-search.ts, server/src/routes/issues.ts, packages/shared/src/types/search.ts, ui/src/components/ExperienceCommandPalette.tsx, ui/src/pages/Search.tsx, packages/shared/src/validators/search.ts, server/src/services/experience/support-case-configuration.ts, server/src/services/experience/support-case-delivery.ts, server/src/services/experience/support-case-http-gateway.ts, server/src/routes/saas.ts, server/src/services/saas/support-case-operator.ts, ui/src/components/CustomerSupportAssistant.tsx, ui/src/components/CustomerSupportAssistant.test.tsx, server/src/services/orchestration/first-party-support-model-gateway.ts, server/src/services/orchestration/first-party-support-model-profiles.ts, server/src/services/experience/support-assistant-grounding.ts, server/src/services/orchestration/model-reservations.ts, server/src/services/agent-packages/execution-gate.ts, server/src/services/agent-packages/package-policy.ts, server/src/services/agent-packages/package-service.ts, server/src/saas-platform-config.ts, server/src/app.ts, server/src/services/company-search-help.generated.ts, packages/shared/src/agent-packages.ts, packages/shared/src/model-broker.ts, server/src/services/orchestration/read-only-model-transport.ts]
 ---
 
 Åbn **Hjælp / Support** i appen for at gennemse vejledning, åbne supportsager eller kontrollere den konfigurerede statusside. Du kan kontakte menneskelig support direkte på [support@blentera.com](mailto:support@blentera.com). Du behøver ikke først tale med en assistent.
@@ -32,6 +32,16 @@ Hvis resultatet af en indsendelse er ukendt, skal du beholde den oprindelige anm
 Hvis en gemt sag viser ukendt levering, skal du beholde sagsreferencen og kontakte support direkte. Et afbrudt leveringsforsøg sendes ikke automatisk igen, fordi udbyderen allerede kan have modtaget det.
 
 Åbn en sag for at læse svar fra support. **Afventer dit svar** viser, hvad support har brug for fra dig. Et svar på en løst sag genåbner den samme sag. Et svar på en afsluttet sag opretter en tilknyttet opfølgning og bevarer den oprindelige historik.
+
+## Valgfri Supportassistent
+
+Hjælp kan også vise en **Supportassistent**. Den er valgfri og kan være utilgængelig, hvis denne installation ikke har en aktuel operatørgodkendt Hjælp-pakke, udbyderprofil eller finansiering. Hjælpesøgning, supportsager og direkte menneskelig kontakt fungerer uafhængigt.
+
+Når assistenten er tilgængelig, skal du læse behandlingsmeddelelsen og privatlivslinket, før du sender noget. Hvis du accepterer, skal du markere samtykkefeltet og vælge **Spørg assistenten**. Dit spørgsmål og udvalgte uddrag fra Hjælp-artikler sendes til Anthropic for et læsebaseret svar. Blentera betaler for denne inkluderede funktion; den bruger ikke dine AI-forbindelser. Medtag ikke adgangskoder, gendannelseskoder, API-nøgler eller andre hemmeligheder.
+
+Assistenten kan kun returnere præcise uddrag fra godkendte, tilknyttede Hjælp-artikler. Den kan ikke skrive nye løsninger, slå din konto, opgave, sag eller tjenestestatus op eller udføre handlinger. Hvis artiklerne ikke underbygger et svar, oplyser den, at svaret ikke kan bekræftes. Kontakt menneskelig support direkte ved spørgsmål om din konto eller en aktuel hændelse.
+
+Hvis resultatet af en anmodning er uklart, sendes den ikke automatisk igen. Behold meddelelsen på skærmen, og indsend ikke det samme spørgsmål gentagne gange; brug i stedet Hjælpesøgning eller kontakt en person. Assistenten er ikke et påkrævet trin for support eller genopretning.
 
 ## Indberet et sikkerheds- eller privatlivsproblem
 

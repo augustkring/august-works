@@ -373,7 +373,7 @@
     {
       "source": "server/src/services/saas/offboarding.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "a59b45f938293783a1e5318ac8b409e866d921dca36d936fa803bfe986526fe9",
+      "sourceSha256": "20f02e6c5f24b62d7db8102350d1e92272149036258db62ec5bcb70511f23a6a",
       "articleSha256": "f4a921bd0683d97d5d7c4cb8ef15a1af9494d6df8ec6bf4cf366ede6da2771cb",
       "decision": "no_change",
       "rationale": "Reviewed unchanged company export, organization/account deletion and retention behavior against this article. The added paired private Memory section is supported by its separately reviewed original Memory owners; existing export/deletion guidance remains accurate."
@@ -381,7 +381,7 @@
     {
       "source": "server/src/services/saas/company-purge.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "b7b59f6b8369a2f7ff62df2f026ba7ee5f813e386bb7142f2f83f17bd75899e0",
+      "sourceSha256": "e2f19874904c75dd706ac32efc9352ee2723e74d5388b2a568d313a8d0812070",
       "articleSha256": "f4a921bd0683d97d5d7c4cb8ef15a1af9494d6df8ec6bf4cf366ede6da2771cb",
       "decision": "no_change",
       "rationale": "Reviewed unchanged company export, organization/account deletion and retention behavior against this article. The added paired private Memory section is supported by its separately reviewed original Memory owners; existing export/deletion guidance remains accurate."
@@ -493,7 +493,7 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "b14bc5bc085eb82323d65a027da55712ea9dc2083f22248d5af98cfcaa599ccc",
+      "sourceSha256": "f5a2e440b137092d00ccadde9bd89b8e6058ad225e36d76678d096d2dfad7d68",
       "articleSha256": "54ba747c42686a3646ab5853d49c33a79c4d869ddbb39e3cc76a412be19c17a5",
       "decision": "updated",
       "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
@@ -502,7 +502,7 @@
       "source": "ui/src/App.tsx",
       "articleId": "help-and-human-support",
       "sourceSha256": "a18f03eba75b3cd5837cc27e83577a941324f1a2aadd7cb8452a0bb54db0deb8",
-      "articleSha256": "7db4ab48ab595554d9c6d838f803d0bf70b4e931bf6e428f526e048031f64fe1",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "no_change",
       "rationale": "Reviewed App.tsx: current Help navigation, support intake, human contact, and request recovery behavior matches the article; no wording change is needed."
     },
@@ -510,15 +510,15 @@
       "source": "ui/src/components/ExperienceUtilities.tsx",
       "articleId": "help-and-human-support",
       "sourceSha256": "d44832d4849da6c1eb50a91b97f08d43b8d14ed55fe3fe56a6c565dc0e5ae781",
-      "articleSha256": "7db4ab48ab595554d9c6d838f803d0bf70b4e931bf6e428f526e048031f64fe1",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "no_change",
       "rationale": "Reviewed ExperienceUtilities.tsx: current Help navigation, support intake, human contact, and request recovery behavior matches the article; no wording change is needed."
     },
     {
       "source": "ui/src/pages/CustomerHelpCenter.tsx",
       "articleId": "help-and-human-support",
-      "sourceSha256": "9a24ebff42d88a12cdd08d1dbf5feded516baac63cafed991f156c615c85cb3b",
-      "articleSha256": "7db4ab48ab595554d9c6d838f803d0bf70b4e931bf6e428f526e048031f64fe1",
+      "sourceSha256": "ed4043ca9bef4a7e74bfa6dc5a23a1877291b8329d37410fe6af65822677dd5d",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "updated",
       "rationale": "Reviewed the original Help query owner and English/Danish presentation changes: selected locale filters before counts and paging; UI locale keys/tokens withhold old-language results and use the matching approved documentation paths. Paired guides now explain display-language search; no resource authority or provider qualification is added."
     },
@@ -526,7 +526,7 @@
       "source": "ui/src/pages/CustomerSupportCases.tsx",
       "articleId": "help-and-human-support",
       "sourceSha256": "be3af7f1dc8f2f07b507bac12bc28bcd41661923d8bc89a4824ad90e5db81b86",
-      "articleSha256": "7db4ab48ab595554d9c6d838f803d0bf70b4e931bf6e428f526e048031f64fe1",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "no_change",
       "rationale": "Reviewed CustomerSupportCases.tsx: current Help navigation, support intake, human contact, and request recovery behavior matches the article; no wording change is needed."
     },
@@ -534,15 +534,15 @@
       "source": "ui/src/lib/help-navigation.ts",
       "articleId": "help-and-human-support",
       "sourceSha256": "132369ced166ef7e7b15204f09b42fe1cb7551d67d1436006b35448108155a2b",
-      "articleSha256": "7db4ab48ab595554d9c6d838f803d0bf70b4e931bf6e428f526e048031f64fe1",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "no_change",
       "rationale": "Reviewed help-navigation.ts: current Help navigation, support intake, human contact, and request recovery behavior matches the article; no wording change is needed."
     },
     {
       "source": "server/src/routes/customer-support.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "fcd4bffddaaedcb64205d3daddf419c3e6f027685eb63045c509569c01dfe67d",
-      "articleSha256": "7db4ab48ab595554d9c6d838f803d0bf70b4e931bf6e428f526e048031f64fe1",
+      "sourceSha256": "b2d8fba4c1e66503ba272e0ac907c29527b63cc286d6ce2dbe8b94215df73596",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "no_change",
       "rationale": "Reviewed extraction of the original startup processing-policy parser for reuse by intake and configured outbound delivery. Customer request schemas, disclosure checks, visibility and recovery remain the same; the guide already distinguishes local receipts from actual provider delivery."
     },
@@ -550,7 +550,7 @@
       "source": "server/src/services/experience/customer-support.ts",
       "articleId": "help-and-human-support",
       "sourceSha256": "a66506818899ee0940bb54f71d8f2941fd66ead42f3bea7d884e726f0313f49e",
-      "articleSha256": "7db4ab48ab595554d9c6d838f803d0bf70b4e931bf6e428f526e048031f64fe1",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "no_change",
       "rationale": "Reviewed customer-support.ts: current Help navigation, support intake, human contact, and request recovery behavior matches the article; no wording change is needed."
     },
@@ -558,15 +558,15 @@
       "source": "server/src/services/experience/support-cases.ts",
       "articleId": "help-and-human-support",
       "sourceSha256": "5af6b2a0a163da02a8d2a90f97d563862e2b33e407b245d1a0915390a7cf1ffd",
-      "articleSha256": "7db4ab48ab595554d9c6d838f803d0bf70b4e931bf6e428f526e048031f64fe1",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "updated",
       "rationale": "Reviewed native expired delivery maintenance, preserved attempt identity, company/case/event lock order and bounded skipping of busy roots. The paired guide explains unknown delivery and direct contact without automatic duplicate dispatch or a false provider receipt."
     },
     {
       "source": "packages/shared/src/customer-support.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "3cac98df03888f2b9414fdb77a80e55992986dfeb404f75373ac1d5a9cbd4883",
-      "articleSha256": "7db4ab48ab595554d9c6d838f803d0bf70b4e931bf6e428f526e048031f64fe1",
+      "sourceSha256": "b00e932955ef9d60fdf5dddbea56025cb4024ffedc222874b65f319799307cac",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "no_change",
       "rationale": "Reviewed customer-support.ts: current Help navigation, support intake, human contact, and request recovery behavior matches the article; no wording change is needed."
     },
@@ -574,7 +574,7 @@
       "source": "packages/shared/src/customer-feedback.ts",
       "articleId": "help-and-human-support",
       "sourceSha256": "0f49bdcaf851b08f3dab373ba79b49d0809072d47fa5d88f7aeae1f2315804c7",
-      "articleSha256": "7db4ab48ab595554d9c6d838f803d0bf70b4e931bf6e428f526e048031f64fe1",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "no_change",
       "rationale": "Reviewed customer-feedback.ts: current Help navigation, support intake, human contact, and request recovery behavior matches the article; no wording change is needed."
     },
@@ -582,7 +582,7 @@
       "source": "packages/shared/src/product-identity.ts",
       "articleId": "help-and-human-support",
       "sourceSha256": "085231253fdee6684f2d088a4b9bf183da1c3f5ecc6a27a423e3716570ee350f",
-      "articleSha256": "7db4ab48ab595554d9c6d838f803d0bf70b4e931bf6e428f526e048031f64fe1",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "no_change",
       "rationale": "Reviewed product-identity.ts: current Help navigation, support intake, human contact, and request recovery behavior matches the article; no wording change is needed."
     },
@@ -590,7 +590,7 @@
       "source": "packages/shared/src/support-diagnostics.ts",
       "articleId": "help-and-human-support",
       "sourceSha256": "862d5d636ddf9ebf55e7d6e6f809fa34aba9f8cfd274f1777af9eb3ccc755075",
-      "articleSha256": "7db4ab48ab595554d9c6d838f803d0bf70b4e931bf6e428f526e048031f64fe1",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "no_change",
       "rationale": "Reviewed support-diagnostics.ts: current Help navigation, support intake, human contact, and request recovery behavior matches the article; no wording change is needed."
     },
@@ -598,7 +598,7 @@
       "source": "ui/src/api/search.ts",
       "articleId": "help-and-human-support",
       "sourceSha256": "e8b757cf2b15085045352319082476a9369f746cc855f3c566b5ea38b1cc6382",
-      "articleSha256": "7db4ab48ab595554d9c6d838f803d0bf70b4e931bf6e428f526e048031f64fe1",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "updated",
       "rationale": "Reviewed the original Help query owner and English/Danish presentation changes: selected locale filters before counts and paging; UI locale keys/tokens withhold old-language results and use the matching approved documentation paths. Paired guides now explain display-language search; no resource authority or provider qualification is added."
     },
@@ -606,23 +606,23 @@
       "source": "server/src/services/company-search.ts",
       "articleId": "help-and-human-support",
       "sourceSha256": "b9b0bc634ac7ee4aeddd167820951431b7272184ec76f4a3d1e816f3c49ae608",
-      "articleSha256": "7db4ab48ab595554d9c6d838f803d0bf70b4e931bf6e428f526e048031f64fe1",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "updated",
       "rationale": "Reviewed the original Help query owner and English/Danish presentation changes: selected locale filters before counts and paging; UI locale keys/tokens withhold old-language results and use the matching approved documentation paths. Paired guides now explain display-language search; no resource authority or provider qualification is added."
     },
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "b7d8a379ee0d7b5cd620eb21108ebb9f2e34b90fcad7127e753f124482f5c6fe",
-      "articleSha256": "7db4ab48ab595554d9c6d838f803d0bf70b4e931bf6e428f526e048031f64fe1",
+      "sourceSha256": "64b853ae2a79db176cf638e43bcf76176edd86bc13acfd7f99a9ee5bf0e32ed1",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "no_change",
-      "rationale": "Reviewed workspace reopen forwarding of the actual authenticated actor and current source checks. Support intake, recovery receipts, direct Human contact and diagnostic sharing described here are unchanged; workspace-specific guidance is in Recover interrupted work."
+      "rationale": "Reviewed authenticated conversation-comment session pinning and current owner checks alongside Help support routes. This change adds no support-case access or assistant authority; the paired article preserves direct human contact and the optional assistant boundary."
     },
     {
       "source": "packages/shared/src/types/search.ts",
       "articleId": "help-and-human-support",
       "sourceSha256": "25805fa121307b96c5b7441425325799ac5a2c1daa1131b6c9ae861de35a6084",
-      "articleSha256": "7db4ab48ab595554d9c6d838f803d0bf70b4e931bf6e428f526e048031f64fe1",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "no_change",
       "rationale": "Reviewed the shared Help result contract: article identity, preview maturity, version, locale and verification date match the guidance."
     },
@@ -630,7 +630,7 @@
       "source": "ui/src/components/ExperienceCommandPalette.tsx",
       "articleId": "help-and-human-support",
       "sourceSha256": "9e7e3c752e70a3acdd79bb54c9dbfa8efcc56b9dc65645689ff287c3b2578ef1",
-      "articleSha256": "7db4ab48ab595554d9c6d838f803d0bf70b4e931bf6e428f526e048031f64fe1",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "updated",
       "rationale": "Reviewed the original Help query owner and English/Danish presentation changes: selected locale filters before counts and paging; UI locale keys/tokens withhold old-language results and use the matching approved documentation paths. Paired guides now explain display-language search; no resource authority or provider qualification is added."
     },
@@ -638,7 +638,7 @@
       "source": "ui/src/pages/Search.tsx",
       "articleId": "help-and-human-support",
       "sourceSha256": "11dd968606267120a5d88c5eea124f496f615a4f77160caa1e586783e1d8e994",
-      "articleSha256": "7db4ab48ab595554d9c6d838f803d0bf70b4e931bf6e428f526e048031f64fe1",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "updated",
       "rationale": "Reviewed the optional English/Danish Help presentation filter and locale-specific query/cache keys; the paired Help guide explains display-language selection without changing any resource permission."
     },
@@ -646,7 +646,7 @@
       "source": "packages/shared/src/validators/search.ts",
       "articleId": "help-and-human-support",
       "sourceSha256": "a8aadc55d9ec277dc3a8a1b87d5d2f9085b3bb7993413aa71184da21c116b6ea",
-      "articleSha256": "7db4ab48ab595554d9c6d838f803d0bf70b4e931bf6e428f526e048031f64fe1",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "updated",
       "rationale": "Reviewed the optional English/Danish Help presentation filter and locale-specific query/cache keys; the paired Help guide explains display-language selection without changing any resource permission."
     },
@@ -654,7 +654,7 @@
       "source": "server/src/services/experience/support-case-configuration.ts",
       "articleId": "help-and-human-support",
       "sourceSha256": "f69d0e55c3958d5a82a076ce20391b2e3d53b6623ce3bb91acf36199de27f523",
-      "articleSha256": "7db4ab48ab595554d9c6d838f803d0bf70b4e931bf6e428f526e048031f64fe1",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "updated",
       "rationale": "Reviewed explicitly configured native outbound delivery: immutable customer event, committed attempt before I/O, current access under native locks, exact bounded acknowledgement, unknown without automatic retry, and no privileged support grant. The guide explains local receipts, uncertain delivery and direct human contact; no provider/host qualification is claimed."
     },
@@ -662,7 +662,7 @@
       "source": "server/src/services/experience/support-case-delivery.ts",
       "articleId": "help-and-human-support",
       "sourceSha256": "56b422fc04257950bd7217feb902388aa10b7879d1a286e039d3bca0587cf97e",
-      "articleSha256": "7db4ab48ab595554d9c6d838f803d0bf70b4e931bf6e428f526e048031f64fe1",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "updated",
       "rationale": "Reviewed explicitly configured native outbound delivery: immutable customer event, committed attempt before I/O, current access under native locks, exact bounded acknowledgement, unknown without automatic retry, and no privileged support grant. The guide explains local receipts, uncertain delivery and direct human contact; no provider/host qualification is claimed."
     },
@@ -670,7 +670,7 @@
       "source": "server/src/services/experience/support-case-http-gateway.ts",
       "articleId": "help-and-human-support",
       "sourceSha256": "804d1bc6376d2f4267b55eb4a2397e03845d8a70bfc879da44136bf3ffb9b547",
-      "articleSha256": "7db4ab48ab595554d9c6d838f803d0bf70b4e931bf6e428f526e048031f64fe1",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "updated",
       "rationale": "Reviewed explicitly configured native outbound delivery: immutable customer event, committed attempt before I/O, current access under native locks, exact bounded acknowledgement, unknown without automatic retry, and no privileged support grant. The guide explains local receipts, uncertain delivery and direct human contact; no provider/host qualification is claimed."
     },
@@ -678,7 +678,7 @@
       "source": "server/src/routes/saas.ts",
       "articleId": "help-and-human-support",
       "sourceSha256": "cd81fb96f8761d955ee6d09751ba5043ba83a9b23a03abf9a74d0f44758feaf8",
-      "articleSha256": "7db4ab48ab595554d9c6d838f803d0bf70b4e931bf6e428f526e048031f64fe1",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "updated",
       "rationale": "Reviewed the native configured Human operator response: current recent passkey session, original deadline, strict case/version/command identity, erased-command fence, resolution/closure and safe customer messages. The guide now explains reading replies and resolved/closed follow-up behavior; no tenant support access or provider qualification is implied."
     },
@@ -686,7 +686,7 @@
       "source": "server/src/services/saas/support-case-operator.ts",
       "articleId": "help-and-human-support",
       "sourceSha256": "7dc8e6d5c1f8258eec865025c98e27b8cccb7e09b4bc1c07d6366507ac289b95",
-      "articleSha256": "7db4ab48ab595554d9c6d838f803d0bf70b4e931bf6e428f526e048031f64fe1",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "updated",
       "rationale": "Reviewed the native configured Human operator response: current recent passkey session, original deadline, strict case/version/command identity, erased-command fence, resolution/closure and safe customer messages. The guide now explains reading replies and resolved/closed follow-up behavior; no tenant support access or provider qualification is implied."
     },
@@ -1109,7 +1109,7 @@
     {
       "source": "server/src/services/saas/offboarding.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "a59b45f938293783a1e5318ac8b409e866d921dca36d936fa803bfe986526fe9",
+      "sourceSha256": "20f02e6c5f24b62d7db8102350d1e92272149036258db62ec5bcb70511f23a6a",
       "articleSha256": "0deb4c9a8300bff2bfc69e3bd20d6e0478909ec6ceece03fe50cf2bef856ee01",
       "decision": "no_change",
       "rationale": "Reviewed unchanged company export, organization/account deletion and retention behavior against this article. The added paired private Memory section is supported by its separately reviewed original Memory owners; existing export/deletion guidance remains accurate."
@@ -1117,7 +1117,7 @@
     {
       "source": "server/src/services/saas/company-purge.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "b7b59f6b8369a2f7ff62df2f026ba7ee5f813e386bb7142f2f83f17bd75899e0",
+      "sourceSha256": "e2f19874904c75dd706ac32efc9352ee2723e74d5388b2a568d313a8d0812070",
       "articleSha256": "0deb4c9a8300bff2bfc69e3bd20d6e0478909ec6ceece03fe50cf2bef856ee01",
       "decision": "no_change",
       "rationale": "Reviewed unchanged company export, organization/account deletion and retention behavior against this article. The added paired private Memory section is supported by its separately reviewed original Memory owners; existing export/deletion guidance remains accurate."
@@ -1229,7 +1229,7 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "b14bc5bc085eb82323d65a027da55712ea9dc2083f22248d5af98cfcaa599ccc",
+      "sourceSha256": "f5a2e440b137092d00ccadde9bd89b8e6058ad225e36d76678d096d2dfad7d68",
       "articleSha256": "653be69f33553a2937d71f8f8cec015e288235f7e470f817ad19b2c6bcef8ff6",
       "decision": "updated",
       "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
@@ -1238,7 +1238,7 @@
       "source": "ui/src/App.tsx",
       "articleId": "help-and-human-support-da",
       "sourceSha256": "a18f03eba75b3cd5837cc27e83577a941324f1a2aadd7cb8452a0bb54db0deb8",
-      "articleSha256": "e9ef1d13e8079524d3e58d816ed9f43d0221a3edf777605aa0e19a93a60c76fd",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
       "rationale": "Danish translation of help-and-human-support: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
@@ -1246,15 +1246,15 @@
       "source": "ui/src/components/ExperienceUtilities.tsx",
       "articleId": "help-and-human-support-da",
       "sourceSha256": "d44832d4849da6c1eb50a91b97f08d43b8d14ed55fe3fe56a6c565dc0e5ae781",
-      "articleSha256": "e9ef1d13e8079524d3e58d816ed9f43d0221a3edf777605aa0e19a93a60c76fd",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
       "rationale": "Danish translation of help-and-human-support: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
     {
       "source": "ui/src/pages/CustomerHelpCenter.tsx",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "9a24ebff42d88a12cdd08d1dbf5feded516baac63cafed991f156c615c85cb3b",
-      "articleSha256": "e9ef1d13e8079524d3e58d816ed9f43d0221a3edf777605aa0e19a93a60c76fd",
+      "sourceSha256": "ed4043ca9bef4a7e74bfa6dc5a23a1877291b8329d37410fe6af65822677dd5d",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
       "rationale": "Reviewed the original Help query owner and English/Danish presentation changes: selected locale filters before counts and paging; UI locale keys/tokens withhold old-language results and use the matching approved documentation paths. Paired guides now explain display-language search; no resource authority or provider qualification is added."
     },
@@ -1262,7 +1262,7 @@
       "source": "ui/src/pages/CustomerSupportCases.tsx",
       "articleId": "help-and-human-support-da",
       "sourceSha256": "be3af7f1dc8f2f07b507bac12bc28bcd41661923d8bc89a4824ad90e5db81b86",
-      "articleSha256": "e9ef1d13e8079524d3e58d816ed9f43d0221a3edf777605aa0e19a93a60c76fd",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
       "rationale": "Danish translation of help-and-human-support: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
@@ -1270,15 +1270,15 @@
       "source": "ui/src/lib/help-navigation.ts",
       "articleId": "help-and-human-support-da",
       "sourceSha256": "132369ced166ef7e7b15204f09b42fe1cb7551d67d1436006b35448108155a2b",
-      "articleSha256": "e9ef1d13e8079524d3e58d816ed9f43d0221a3edf777605aa0e19a93a60c76fd",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
       "rationale": "Danish translation of help-and-human-support: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
     {
       "source": "server/src/routes/customer-support.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "fcd4bffddaaedcb64205d3daddf419c3e6f027685eb63045c509569c01dfe67d",
-      "articleSha256": "e9ef1d13e8079524d3e58d816ed9f43d0221a3edf777605aa0e19a93a60c76fd",
+      "sourceSha256": "b2d8fba4c1e66503ba272e0ac907c29527b63cc286d6ce2dbe8b94215df73596",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "no_change",
       "rationale": "Reviewed extraction of the original startup processing-policy parser for reuse by intake and configured outbound delivery. Customer request schemas, disclosure checks, visibility and recovery remain the same; the guide already distinguishes local receipts from actual provider delivery."
     },
@@ -1286,7 +1286,7 @@
       "source": "server/src/services/experience/customer-support.ts",
       "articleId": "help-and-human-support-da",
       "sourceSha256": "a66506818899ee0940bb54f71d8f2941fd66ead42f3bea7d884e726f0313f49e",
-      "articleSha256": "e9ef1d13e8079524d3e58d816ed9f43d0221a3edf777605aa0e19a93a60c76fd",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
       "rationale": "Danish translation of help-and-human-support: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
@@ -1294,15 +1294,15 @@
       "source": "server/src/services/experience/support-cases.ts",
       "articleId": "help-and-human-support-da",
       "sourceSha256": "5af6b2a0a163da02a8d2a90f97d563862e2b33e407b245d1a0915390a7cf1ffd",
-      "articleSha256": "e9ef1d13e8079524d3e58d816ed9f43d0221a3edf777605aa0e19a93a60c76fd",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
       "rationale": "Reviewed native expired delivery maintenance, preserved attempt identity, company/case/event lock order and bounded skipping of busy roots. The paired guide explains unknown delivery and direct contact without automatic duplicate dispatch or a false provider receipt."
     },
     {
       "source": "packages/shared/src/customer-support.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "3cac98df03888f2b9414fdb77a80e55992986dfeb404f75373ac1d5a9cbd4883",
-      "articleSha256": "e9ef1d13e8079524d3e58d816ed9f43d0221a3edf777605aa0e19a93a60c76fd",
+      "sourceSha256": "b00e932955ef9d60fdf5dddbea56025cb4024ffedc222874b65f319799307cac",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
       "rationale": "Danish translation of help-and-human-support: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
@@ -1310,7 +1310,7 @@
       "source": "packages/shared/src/customer-feedback.ts",
       "articleId": "help-and-human-support-da",
       "sourceSha256": "0f49bdcaf851b08f3dab373ba79b49d0809072d47fa5d88f7aeae1f2315804c7",
-      "articleSha256": "e9ef1d13e8079524d3e58d816ed9f43d0221a3edf777605aa0e19a93a60c76fd",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
       "rationale": "Danish translation of help-and-human-support: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
@@ -1318,7 +1318,7 @@
       "source": "packages/shared/src/product-identity.ts",
       "articleId": "help-and-human-support-da",
       "sourceSha256": "085231253fdee6684f2d088a4b9bf183da1c3f5ecc6a27a423e3716570ee350f",
-      "articleSha256": "e9ef1d13e8079524d3e58d816ed9f43d0221a3edf777605aa0e19a93a60c76fd",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
       "rationale": "Danish translation of help-and-human-support: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
@@ -1326,7 +1326,7 @@
       "source": "packages/shared/src/support-diagnostics.ts",
       "articleId": "help-and-human-support-da",
       "sourceSha256": "862d5d636ddf9ebf55e7d6e6f809fa34aba9f8cfd274f1777af9eb3ccc755075",
-      "articleSha256": "e9ef1d13e8079524d3e58d816ed9f43d0221a3edf777605aa0e19a93a60c76fd",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
       "rationale": "Danish translation of help-and-human-support: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
@@ -1334,7 +1334,7 @@
       "source": "ui/src/api/search.ts",
       "articleId": "help-and-human-support-da",
       "sourceSha256": "e8b757cf2b15085045352319082476a9369f746cc855f3c566b5ea38b1cc6382",
-      "articleSha256": "e9ef1d13e8079524d3e58d816ed9f43d0221a3edf777605aa0e19a93a60c76fd",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
       "rationale": "Reviewed the original Help query owner and English/Danish presentation changes: selected locale filters before counts and paging; UI locale keys/tokens withhold old-language results and use the matching approved documentation paths. Paired guides now explain display-language search; no resource authority or provider qualification is added."
     },
@@ -1342,23 +1342,23 @@
       "source": "server/src/services/company-search.ts",
       "articleId": "help-and-human-support-da",
       "sourceSha256": "b9b0bc634ac7ee4aeddd167820951431b7272184ec76f4a3d1e816f3c49ae608",
-      "articleSha256": "e9ef1d13e8079524d3e58d816ed9f43d0221a3edf777605aa0e19a93a60c76fd",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
       "rationale": "Danish translation of help-and-human-support: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "b7d8a379ee0d7b5cd620eb21108ebb9f2e34b90fcad7127e753f124482f5c6fe",
-      "articleSha256": "e9ef1d13e8079524d3e58d816ed9f43d0221a3edf777605aa0e19a93a60c76fd",
+      "sourceSha256": "64b853ae2a79db176cf638e43bcf76176edd86bc13acfd7f99a9ee5bf0e32ed1",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "no_change",
-      "rationale": "Reviewed workspace reopen forwarding of the actual authenticated actor and current source checks. Support intake, recovery receipts, direct Human contact and diagnostic sharing described here are unchanged; workspace-specific guidance is in Recover interrupted work."
+      "rationale": "Reviewed authenticated conversation-comment session pinning and current owner checks alongside Help support routes. This change adds no support-case access or assistant authority; the paired article preserves direct human contact and the optional assistant boundary."
     },
     {
       "source": "packages/shared/src/types/search.ts",
       "articleId": "help-and-human-support-da",
       "sourceSha256": "25805fa121307b96c5b7441425325799ac5a2c1daa1131b6c9ae861de35a6084",
-      "articleSha256": "e9ef1d13e8079524d3e58d816ed9f43d0221a3edf777605aa0e19a93a60c76fd",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
       "rationale": "Danish translation of help-and-human-support: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
@@ -1366,7 +1366,7 @@
       "source": "ui/src/components/ExperienceCommandPalette.tsx",
       "articleId": "help-and-human-support-da",
       "sourceSha256": "9e7e3c752e70a3acdd79bb54c9dbfa8efcc56b9dc65645689ff287c3b2578ef1",
-      "articleSha256": "e9ef1d13e8079524d3e58d816ed9f43d0221a3edf777605aa0e19a93a60c76fd",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
       "rationale": "Reviewed the original Help query owner and English/Danish presentation changes: selected locale filters before counts and paging; UI locale keys/tokens withhold old-language results and use the matching approved documentation paths. Paired guides now explain display-language search; no resource authority or provider qualification is added."
     },
@@ -1374,7 +1374,7 @@
       "source": "ui/src/pages/Search.tsx",
       "articleId": "help-and-human-support-da",
       "sourceSha256": "11dd968606267120a5d88c5eea124f496f615a4f77160caa1e586783e1d8e994",
-      "articleSha256": "e9ef1d13e8079524d3e58d816ed9f43d0221a3edf777605aa0e19a93a60c76fd",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
       "rationale": "Reviewed the optional English/Danish Help presentation filter and locale-specific query/cache keys; the paired Help guide explains display-language selection without changing any resource permission."
     },
@@ -1382,7 +1382,7 @@
       "source": "packages/shared/src/validators/search.ts",
       "articleId": "help-and-human-support-da",
       "sourceSha256": "a8aadc55d9ec277dc3a8a1b87d5d2f9085b3bb7993413aa71184da21c116b6ea",
-      "articleSha256": "e9ef1d13e8079524d3e58d816ed9f43d0221a3edf777605aa0e19a93a60c76fd",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
       "rationale": "Reviewed the optional English/Danish Help presentation filter and locale-specific query/cache keys; the paired Help guide explains display-language selection without changing any resource permission."
     },
@@ -1390,7 +1390,7 @@
       "source": "server/src/services/experience/support-case-configuration.ts",
       "articleId": "help-and-human-support-da",
       "sourceSha256": "f69d0e55c3958d5a82a076ce20391b2e3d53b6623ce3bb91acf36199de27f523",
-      "articleSha256": "e9ef1d13e8079524d3e58d816ed9f43d0221a3edf777605aa0e19a93a60c76fd",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
       "rationale": "Reviewed explicitly configured native outbound delivery: immutable customer event, committed attempt before I/O, current access under native locks, exact bounded acknowledgement, unknown without automatic retry, and no privileged support grant. The guide explains local receipts, uncertain delivery and direct human contact; no provider/host qualification is claimed."
     },
@@ -1398,7 +1398,7 @@
       "source": "server/src/services/experience/support-case-delivery.ts",
       "articleId": "help-and-human-support-da",
       "sourceSha256": "56b422fc04257950bd7217feb902388aa10b7879d1a286e039d3bca0587cf97e",
-      "articleSha256": "e9ef1d13e8079524d3e58d816ed9f43d0221a3edf777605aa0e19a93a60c76fd",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
       "rationale": "Reviewed explicitly configured native outbound delivery: immutable customer event, committed attempt before I/O, current access under native locks, exact bounded acknowledgement, unknown without automatic retry, and no privileged support grant. The guide explains local receipts, uncertain delivery and direct human contact; no provider/host qualification is claimed."
     },
@@ -1406,7 +1406,7 @@
       "source": "server/src/services/experience/support-case-http-gateway.ts",
       "articleId": "help-and-human-support-da",
       "sourceSha256": "804d1bc6376d2f4267b55eb4a2397e03845d8a70bfc879da44136bf3ffb9b547",
-      "articleSha256": "e9ef1d13e8079524d3e58d816ed9f43d0221a3edf777605aa0e19a93a60c76fd",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
       "rationale": "Reviewed explicitly configured native outbound delivery: immutable customer event, committed attempt before I/O, current access under native locks, exact bounded acknowledgement, unknown without automatic retry, and no privileged support grant. The guide explains local receipts, uncertain delivery and direct human contact; no provider/host qualification is claimed."
     },
@@ -1414,7 +1414,7 @@
       "source": "server/src/routes/saas.ts",
       "articleId": "help-and-human-support-da",
       "sourceSha256": "cd81fb96f8761d955ee6d09751ba5043ba83a9b23a03abf9a74d0f44758feaf8",
-      "articleSha256": "e9ef1d13e8079524d3e58d816ed9f43d0221a3edf777605aa0e19a93a60c76fd",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
       "rationale": "Reviewed the native configured Human operator response: current recent passkey session, original deadline, strict case/version/command identity, erased-command fence, resolution/closure and safe customer messages. The guide now explains reading replies and resolved/closed follow-up behavior; no tenant support access or provider qualification is implied."
     },
@@ -1422,7 +1422,7 @@
       "source": "server/src/services/saas/support-case-operator.ts",
       "articleId": "help-and-human-support-da",
       "sourceSha256": "7dc8e6d5c1f8258eec865025c98e27b8cccb7e09b4bc1c07d6366507ac289b95",
-      "articleSha256": "e9ef1d13e8079524d3e58d816ed9f43d0221a3edf777605aa0e19a93a60c76fd",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
       "rationale": "Reviewed the native configured Human operator response: current recent passkey session, original deadline, strict case/version/command identity, erased-command fence, resolution/closure and safe customer messages. The guide now explains reading replies and resolved/closed follow-up behavior; no tenant support access or provider qualification is implied."
     },
@@ -1477,7 +1477,7 @@
     {
       "source": "server/src/services/routines.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "91da0f195f11263c7613f455d0c43bcdd4de3c4c06590e704baf779682bd73ff",
+      "sourceSha256": "a93f1b08a0f9a22f5db5a3df224487b32d8a8c3b2ac9e896ee1096af8c10adc1",
       "articleSha256": "54ba747c42686a3646ab5853d49c33a79c4d869ddbb39e3cc76a412be19c17a5",
       "decision": "updated",
       "rationale": "Reviewed exact manual-run Human credential forwarding: existing advice to restore current source access before retrying remains valid. Added saved-workspace recovery guidance in this article."
@@ -1493,7 +1493,7 @@
     {
       "source": "server/src/services/routines.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "91da0f195f11263c7613f455d0c43bcdd4de3c4c06590e704baf779682bd73ff",
+      "sourceSha256": "a93f1b08a0f9a22f5db5a3df224487b32d8a8c3b2ac9e896ee1096af8c10adc1",
       "articleSha256": "653be69f33553a2937d71f8f8cec015e288235f7e470f817ad19b2c6bcef8ff6",
       "decision": "updated",
       "rationale": "Reviewed exact manual-run Human credential forwarding: existing advice to restore current source access before retrying remains valid. Added saved-workspace recovery guidance in this article."
@@ -1509,18 +1509,18 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "b7d8a379ee0d7b5cd620eb21108ebb9f2e34b90fcad7127e753f124482f5c6fe",
+      "sourceSha256": "64b853ae2a79db176cf638e43bcf76176edd86bc13acfd7f99a9ee5bf0e32ed1",
       "articleSha256": "54ba747c42686a3646ab5853d49c33a79c4d869ddbb39e3cc76a412be19c17a5",
-      "decision": "updated",
-      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+      "decision": "no_change",
+      "rationale": "Reviewed the current authenticated conversation-comment session pin and current owner authorization. This change does not alter the saved-workspace recovery steps described here; current task and workspace checks still apply."
     },
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "b7d8a379ee0d7b5cd620eb21108ebb9f2e34b90fcad7127e753f124482f5c6fe",
+      "sourceSha256": "64b853ae2a79db176cf638e43bcf76176edd86bc13acfd7f99a9ee5bf0e32ed1",
       "articleSha256": "653be69f33553a2937d71f8f8cec015e288235f7e470f817ad19b2c6bcef8ff6",
-      "decision": "updated",
-      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+      "decision": "no_change",
+      "rationale": "Reviewed the current authenticated conversation-comment session pin and current owner authorization. This change does not alter the saved-workspace recovery steps described here; current task and workspace checks still apply."
     },
     {
       "source": "server/src/services/execution-workspaces.ts",
@@ -1541,7 +1541,7 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "9f0720082f26824fc55033eedf3317f7a54d09a6f00def9e8ba93b5623e5fd2d",
+      "sourceSha256": "b86965d9e3b4a7612e39f4f0c7fcf8da459c224deb36de18d2b5a469293f1e70",
       "articleSha256": "54ba747c42686a3646ab5853d49c33a79c4d869ddbb39e3cc76a412be19c17a5",
       "decision": "updated",
       "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
@@ -1549,7 +1549,7 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "9f0720082f26824fc55033eedf3317f7a54d09a6f00def9e8ba93b5623e5fd2d",
+      "sourceSha256": "b86965d9e3b4a7612e39f4f0c7fcf8da459c224deb36de18d2b5a469293f1e70",
       "articleSha256": "653be69f33553a2937d71f8f8cec015e288235f7e470f817ad19b2c6bcef8ff6",
       "decision": "updated",
       "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
@@ -1601,6 +1601,246 @@
       "articleSha256": "653be69f33553a2937d71f8f8cec015e288235f7e470f817ad19b2c6bcef8ff6",
       "decision": "updated",
       "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+    },
+    {
+      "source": "ui/src/components/CustomerSupportAssistant.tsx",
+      "articleId": "help-and-human-support",
+      "sourceSha256": "04e9d79c1d80d837ed5229483bc83a6c61d3fd726e90207304300dea7ccd0029",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
+      "decision": "updated",
+      "rationale": "Reviewed English Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+    },
+    {
+      "source": "ui/src/components/CustomerSupportAssistant.test.tsx",
+      "articleId": "help-and-human-support",
+      "sourceSha256": "d520cb78941f6a86507318978286d049516cc78c5b662e69dc20fb711b35337c",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
+      "decision": "updated",
+      "rationale": "Reviewed English Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+    },
+    {
+      "source": "server/src/services/orchestration/first-party-support-model-gateway.ts",
+      "articleId": "help-and-human-support",
+      "sourceSha256": "11108ac40c7f93162bbd07ea377bd3b202b3b8544fbcaedfd1676b2515225c36",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
+      "decision": "updated",
+      "rationale": "Reviewed English Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+    },
+    {
+      "source": "server/src/services/orchestration/first-party-support-model-profiles.ts",
+      "articleId": "help-and-human-support",
+      "sourceSha256": "95bb50d0ec74bdabe7bb97e8f83021be2ee87e3b29cfd2e33be3bd30b4b7bb9a",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
+      "decision": "updated",
+      "rationale": "Reviewed English Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+    },
+    {
+      "source": "server/src/services/experience/support-assistant-grounding.ts",
+      "articleId": "help-and-human-support",
+      "sourceSha256": "e7e4ed4fdd8aece0215d3ab1c849de790b48f09817e4c88edfe5edeca543806f",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
+      "decision": "updated",
+      "rationale": "Reviewed English Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+    },
+    {
+      "source": "server/src/services/orchestration/model-reservations.ts",
+      "articleId": "help-and-human-support",
+      "sourceSha256": "b8b29068c83ad641ef5ef6c735cc9511c3a6084f9db4b98f95c68d7bdcc7a4c6",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
+      "decision": "updated",
+      "rationale": "Reviewed English Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+    },
+    {
+      "source": "server/src/services/agent-packages/execution-gate.ts",
+      "articleId": "help-and-human-support",
+      "sourceSha256": "f2d28fdb1d562eb5612624da73a5ba734b00bf79724022bbfecc194951e858a9",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
+      "decision": "updated",
+      "rationale": "Reviewed English Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+    },
+    {
+      "source": "server/src/services/agent-packages/package-policy.ts",
+      "articleId": "help-and-human-support",
+      "sourceSha256": "bf540133a118d28a8c51ea24bdc0ac6241a27f5272d3dc002747277725dca16f",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
+      "decision": "updated",
+      "rationale": "Reviewed English Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+    },
+    {
+      "source": "server/src/services/agent-packages/package-service.ts",
+      "articleId": "help-and-human-support",
+      "sourceSha256": "d1b6c5e8787fb1ddc3d9ffd42b2073158baaac14557e7978566a43759d5cdaf1",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
+      "decision": "updated",
+      "rationale": "Reviewed English Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+    },
+    {
+      "source": "server/src/saas-platform-config.ts",
+      "articleId": "help-and-human-support",
+      "sourceSha256": "a952ed1fb5a8bd29c6a9c6934ccba09b2d6dcf7db9cfc2f8b9d07bfa58328f6b",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
+      "decision": "updated",
+      "rationale": "Reviewed English Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+    },
+    {
+      "source": "server/src/app.ts",
+      "articleId": "help-and-human-support",
+      "sourceSha256": "d1c2804a37e2573124cc9442febef463b85ce919af46f6964c121137a87af9ca",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
+      "decision": "updated",
+      "rationale": "Reviewed English Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+    },
+    {
+      "source": "server/src/services/company-search-help.generated.ts",
+      "articleId": "help-and-human-support",
+      "sourceSha256": "dd34919dd2b68f6fd4bf0eedbcca49e4ae47b6f82bb785a0693766cdde97701a",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
+      "decision": "updated",
+      "rationale": "Reviewed English Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+    },
+    {
+      "source": "packages/shared/src/agent-packages.ts",
+      "articleId": "help-and-human-support",
+      "sourceSha256": "c324ead925446b3bd4876b1d74cb48c9e084e6c83fa1ef41ebbcb6428b0072f2",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
+      "decision": "updated",
+      "rationale": "Reviewed English Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+    },
+    {
+      "source": "packages/shared/src/model-broker.ts",
+      "articleId": "help-and-human-support",
+      "sourceSha256": "0a878ca1d6d937ad9a002a7223abc04654ca588e2fd2b471b23948eacc7e1c51",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
+      "decision": "updated",
+      "rationale": "Reviewed English Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+    },
+    {
+      "source": "server/src/services/orchestration/read-only-model-transport.ts",
+      "articleId": "help-and-human-support",
+      "sourceSha256": "f40a68d7be1b1c2f36de15e1d2276f4d917c3659d0babef6588caa490cc6a51e",
+      "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
+      "decision": "updated",
+      "rationale": "Reviewed English Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+    },
+    {
+      "source": "ui/src/components/CustomerSupportAssistant.tsx",
+      "articleId": "help-and-human-support-da",
+      "sourceSha256": "04e9d79c1d80d837ed5229483bc83a6c61d3fd726e90207304300dea7ccd0029",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
+      "decision": "updated",
+      "rationale": "Reviewed Danish Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+    },
+    {
+      "source": "ui/src/components/CustomerSupportAssistant.test.tsx",
+      "articleId": "help-and-human-support-da",
+      "sourceSha256": "d520cb78941f6a86507318978286d049516cc78c5b662e69dc20fb711b35337c",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
+      "decision": "updated",
+      "rationale": "Reviewed Danish Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+    },
+    {
+      "source": "server/src/services/orchestration/first-party-support-model-gateway.ts",
+      "articleId": "help-and-human-support-da",
+      "sourceSha256": "11108ac40c7f93162bbd07ea377bd3b202b3b8544fbcaedfd1676b2515225c36",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
+      "decision": "updated",
+      "rationale": "Reviewed Danish Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+    },
+    {
+      "source": "server/src/services/orchestration/first-party-support-model-profiles.ts",
+      "articleId": "help-and-human-support-da",
+      "sourceSha256": "95bb50d0ec74bdabe7bb97e8f83021be2ee87e3b29cfd2e33be3bd30b4b7bb9a",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
+      "decision": "updated",
+      "rationale": "Reviewed Danish Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+    },
+    {
+      "source": "server/src/services/experience/support-assistant-grounding.ts",
+      "articleId": "help-and-human-support-da",
+      "sourceSha256": "e7e4ed4fdd8aece0215d3ab1c849de790b48f09817e4c88edfe5edeca543806f",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
+      "decision": "updated",
+      "rationale": "Reviewed Danish Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+    },
+    {
+      "source": "server/src/services/orchestration/model-reservations.ts",
+      "articleId": "help-and-human-support-da",
+      "sourceSha256": "b8b29068c83ad641ef5ef6c735cc9511c3a6084f9db4b98f95c68d7bdcc7a4c6",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
+      "decision": "updated",
+      "rationale": "Reviewed Danish Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+    },
+    {
+      "source": "server/src/services/agent-packages/execution-gate.ts",
+      "articleId": "help-and-human-support-da",
+      "sourceSha256": "f2d28fdb1d562eb5612624da73a5ba734b00bf79724022bbfecc194951e858a9",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
+      "decision": "updated",
+      "rationale": "Reviewed Danish Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+    },
+    {
+      "source": "server/src/services/agent-packages/package-policy.ts",
+      "articleId": "help-and-human-support-da",
+      "sourceSha256": "bf540133a118d28a8c51ea24bdc0ac6241a27f5272d3dc002747277725dca16f",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
+      "decision": "updated",
+      "rationale": "Reviewed Danish Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+    },
+    {
+      "source": "server/src/services/agent-packages/package-service.ts",
+      "articleId": "help-and-human-support-da",
+      "sourceSha256": "d1b6c5e8787fb1ddc3d9ffd42b2073158baaac14557e7978566a43759d5cdaf1",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
+      "decision": "updated",
+      "rationale": "Reviewed Danish Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+    },
+    {
+      "source": "server/src/saas-platform-config.ts",
+      "articleId": "help-and-human-support-da",
+      "sourceSha256": "a952ed1fb5a8bd29c6a9c6934ccba09b2d6dcf7db9cfc2f8b9d07bfa58328f6b",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
+      "decision": "updated",
+      "rationale": "Reviewed Danish Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+    },
+    {
+      "source": "server/src/app.ts",
+      "articleId": "help-and-human-support-da",
+      "sourceSha256": "d1c2804a37e2573124cc9442febef463b85ce919af46f6964c121137a87af9ca",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
+      "decision": "updated",
+      "rationale": "Reviewed Danish Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+    },
+    {
+      "source": "server/src/services/company-search-help.generated.ts",
+      "articleId": "help-and-human-support-da",
+      "sourceSha256": "dd34919dd2b68f6fd4bf0eedbcca49e4ae47b6f82bb785a0693766cdde97701a",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
+      "decision": "updated",
+      "rationale": "Reviewed Danish Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+    },
+    {
+      "source": "packages/shared/src/agent-packages.ts",
+      "articleId": "help-and-human-support-da",
+      "sourceSha256": "c324ead925446b3bd4876b1d74cb48c9e084e6c83fa1ef41ebbcb6428b0072f2",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
+      "decision": "updated",
+      "rationale": "Reviewed Danish Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+    },
+    {
+      "source": "packages/shared/src/model-broker.ts",
+      "articleId": "help-and-human-support-da",
+      "sourceSha256": "0a878ca1d6d937ad9a002a7223abc04654ca588e2fd2b471b23948eacc7e1c51",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
+      "decision": "updated",
+      "rationale": "Reviewed Danish Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+    },
+    {
+      "source": "server/src/services/orchestration/read-only-model-transport.ts",
+      "articleId": "help-and-human-support-da",
+      "sourceSha256": "f40a68d7be1b1c2f36de15e1d2276f4d917c3659d0babef6588caa490cc6a51e",
+      "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
+      "decision": "updated",
+      "rationale": "Reviewed Danish Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
     }
   ]
 }
