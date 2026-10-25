@@ -988,6 +988,16 @@ function workflowActorKey(actor: AuthorizationActor) {
   return JSON.stringify(identity);
 }
 function workflowActorHash(actor: AuthorizationActor) { return createHash("sha256").update(workflowActorKey(actor)).digest("hex"); }
+function isWithholdableWorkflowTaskCandidate(error: unknown) {
+  if (!(error instanceof HttpError) || ![403, 404, 409, 422].includes(error.status)) return false;
+  const details = error.details;
+  if (details && typeof details === "object" && "code" in details &&
+    (details.code === "workflow_source_review_cyclic" || details.code === "workflow_source_review_budget_exceeded")) return false;
+  // These are scope-wide failures, never evidence that this one candidate is
+  // unreadable. In particular, do not convert an incomplete batch review into
+  // a successful partial list/count.
+  return !/(budget|cyclic|review.*exceed|exceed.*review)/i.test(error.message);
+}
 const issueReadColumns = {
   id: issues.id, companyId: issues.companyId, projectId: issues.projectId, parentId: issues.parentId,
   assigneeAgentId: issues.assigneeAgentId, assigneeUserId: issues.assigneeUserId, checkoutRunId: issues.checkoutRunId,
@@ -1169,6 +1179,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       if (!company?.allowed) {
         await requireActiveWorkflowBaselineMembership(db, companyId, sourceActor);
         const readable = new Set<string>();
+        const reviewStartedAt = performance.now();
         await withWorkflowAuthoringSourceReview(async () => {
           for (const runId of runIds) {
             const publicBaseline = await canActorReadTypedTaskSourcePrivacy(db as unknown as Db, { type: "none" },
@@ -1181,11 +1192,13 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
               await assertWorkflowRunPayloadSourceAccess(db as unknown as Db, companyId, runId, sourceActor);
               readable.add(runId);
             } catch (error) {
-              if (taskCandidates && error instanceof HttpError && [403, 404, 409, 422].includes(error.status)) continue;
+              if (taskCandidates && isWithholdableWorkflowTaskCandidate(error)) continue;
               throw error;
             }
           }
         });
+        if (taskCandidates && performance.now() - reviewStartedAt > 8_000)
+          throw forbidden("Complete Workflow candidate source review exceeded its budget.", { code: "workflow_source_review_budget_exceeded" });
         context.workflowRunIds = new Set();
         context.workflowSourceCheckRunIds = new Set(runIds);
         context.workflowReadableRunIds = taskCandidates ? readable : new Set(runIds);
@@ -1193,17 +1206,20 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
         return [...(context.workflowReadableRunIds ?? [])].sort();
       }
       const authorized = new Set<string>();
+      const reviewStartedAt = performance.now();
       await withWorkflowAuthoringSourceReview(async () => {
         for (const runId of runIds) {
           try {
             await assertWorkflowRunPayloadSourceAccess(db as unknown as Db, companyId, runId, sourceActor, "task");
             authorized.add(runId);
           } catch (error) {
-            if (taskCandidates && error instanceof HttpError && [403, 404, 409, 422].includes(error.status)) continue;
+            if (taskCandidates && isWithholdableWorkflowTaskCandidate(error)) continue;
             throw error;
           }
         }
       });
+      if (taskCandidates && performance.now() - reviewStartedAt > 8_000)
+        throw forbidden("Complete Workflow candidate source review exceeded its budget.", { code: "workflow_source_review_budget_exceeded" });
       context.workflowRunIds = authorized;
       context.workflowSourceCheckRunIds = new Set(runIds);
       context.workflowReadableRunIds = new Set(authorized);

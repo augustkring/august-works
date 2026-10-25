@@ -32,6 +32,7 @@ import { routineService } from "../services/routines.js";
 import { workflowAuthoringToolsService } from "../services/workflows/workflow-authoring-tools.js";
 import { workflowService } from "../services/workflows/workflow-service.js";
 import { workflowExecutorService } from "../services/workflows/workflow-executor.js";
+import { withWorkflowAuthoringSourceReview } from "../services/workflows/workflow-authoring-sources.js";
 import { grantsForHumanRole } from "../services/company-member-roles.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
@@ -330,6 +331,19 @@ describe("typed routine Task private source graph", () => {
       .find((row: { id: string }) => row.id === projectId);
     expect(ownerProject?.taskCount).toBe(2);
     expect(bobProject?.taskCount).toBe(1);
+
+    let taskQueryEntered = false;
+    await expect(db.transaction(async rawTx => {
+      const tx = rawTx as unknown as typeof db;
+      return withWorkflowAuthoringSourceReview(async () => {
+        await new Promise(resolve => setTimeout(resolve, 8_100));
+        return authorizationService(tx).withReadWorkflowTaskCandidates(f.home, ownerActor(), [ownerTask.runId], async () => {
+          taskQueryEntered = true;
+          return true;
+        });
+      });
+    })).rejects.toMatchObject({ status: 403, details: { code: "workflow_source_review_budget_exceeded" } });
+    expect(taskQueryEntered).toBe(false);
   }, 180_000);
 
   it("keeps assigned narrow Agent Task reads available while withholding private Routine-backed rows", async () => {

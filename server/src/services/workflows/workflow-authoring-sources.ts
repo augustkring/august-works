@@ -55,13 +55,15 @@ export async function assertWorkflowAuthoringSources(db: Db, companyId: string, 
   await assertV5Authorization(db, { ...actor, isInstanceAdmin: false, ignoreInstanceAdmin: true }, companyId, "workflows:read");
   const state = review.getStore() ?? { active: new Set<string>(), deadline: performance.now() + 8000 };
   const key = `${companyId}:${workflowId}`;
-  if (state.active.has(key) || performance.now() > state.deadline)
-    throw forbidden("Complete workflow source review is cyclic or excessive");
+  if (state.active.has(key)) throw forbidden("Complete workflow source review is cyclic", { code: "workflow_source_review_cyclic" });
+  if (performance.now() > state.deadline)
+    throw forbidden("Complete workflow source review exceeded its budget", { code: "workflow_source_review_budget_exceeded" });
   const inspect = async () => {
     state.active.add(key);
     try {
       for (const id of ids.data) {
-        if (performance.now() > state.deadline) throw forbidden("Complete workflow source review exceeded its budget");
+        if (performance.now() > state.deadline)
+          throw forbidden("Complete workflow source review exceeded its budget", { code: "workflow_source_review_budget_exceeded" });
         const [origin] = await db.select({ runId: heartbeatRuns.id, agentId: heartbeatRuns.agentId,
           userId: heartbeatRuns.responsibleUserId, issue: issues }).from(heartbeatRuns)
           .innerJoin(issues, and(eq(issues.companyId, heartbeatRuns.companyId), sql`${issues.id}=coalesce(${heartbeatRuns.nativeIssueId},case
@@ -114,7 +116,8 @@ export async function assertWorkflowRunAuthoringSources(db: Db, companyId: strin
   const state = review.getStore() ?? { active: new Set<string>(), deadline: performance.now() + 8000 };
   const inspect = async () => {
     for (const id of parsed.data) {
-      if (performance.now() > state.deadline) throw forbidden("Complete workflow run source review exceeded its budget");
+      if (performance.now() > state.deadline)
+        throw forbidden("Complete workflow run source review exceeded its budget", { code: "workflow_source_review_budget_exceeded" });
       await assertWorkflowAuthoringSources(db, companyId, id, actor, readScope);
     }
   };
@@ -131,8 +134,9 @@ export async function assertWorkflowRunPayloadSourceAccess(db: Db, companyId: st
   actor: AuthorizationActor, readScope?: NativeReadScope) {
   const state = review.getStore() ?? { active: new Set<string>(), deadline: performance.now() + 8000 };
   const key = `run:${companyId}:${runId}`;
-  if (state.active.has(key) || performance.now() > state.deadline)
-    throw forbidden("Workflow source review is cyclic or exceeds its budget");
+  if (state.active.has(key)) throw forbidden("Workflow source review is cyclic", { code: "workflow_source_review_cyclic" });
+  if (performance.now() > state.deadline)
+    throw forbidden("Workflow source review exceeded its budget", { code: "workflow_source_review_budget_exceeded" });
   return review.run(state, async () => {
     state.active.add(key);
     try { await inspectWorkflowRunPayloadSourceAccess(db, companyId, runId, actor, readScope); }
@@ -201,12 +205,18 @@ async function inspectWorkflowRunPayloadSourceAccess(db: Db, companyId: string, 
     const roots = new Map<string, string>();
     const { assertLearnedAssetAnalyticalSources } = await import("../learning/learning-analytical-sources.js");
     for (const asset of learnedAssetRefs) {
-      if (performance.now() > sourceReviewDeadline) throw forbidden("Complete workflow Learning source review exceeded its budget");
-      await assertLearnedAssetAnalyticalSources(db, companyId, asset.type, asset.id, actor, readScope);
-      if (!retainedAssetKeySet.has(`${asset.type}:${asset.id}`)) continue;
+      if (performance.now() > sourceReviewDeadline)
+        throw forbidden("Complete workflow Learning source review exceeded its budget", { code: "workflow_source_review_budget_exceeded" });
+      const hasRetainedAssetRoots = retainedAssetKeySet.has(`${asset.type}:${asset.id}`);
+      if (!hasRetainedAssetRoots) {
+        await assertLearnedAssetAnalyticalSources(db, companyId, asset.type, asset.id, actor, readScope);
+        continue;
+      }
       let rows;
       try { rows = await learningAssetRoots(db, companyId, asset.type, asset.id, "task", actor, readScope); }
       catch (error) {
+        if (error instanceof HttpError && ["workflow_source_review_cyclic", "workflow_source_review_budget_exceeded"]
+          .includes((error.details as { code?: string } | undefined)?.code ?? "")) throw error;
         if (error instanceof HttpError && [403, 404, 409, 422].includes(error.status))
           throw forbidden("Current Workflow Learning Memory source is unavailable", { code: "analytical_source_access_lost" });
         throw error;
