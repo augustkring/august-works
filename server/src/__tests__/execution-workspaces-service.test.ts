@@ -568,6 +568,213 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
     expect(workspace).toMatchObject({ status: "archived", cleanupReason: "issue_terminal" });
   }, 20_000);
 
+  it("preserves server-owned metadata across a public replacement or clear", async () => {
+    const seeded = await seedTerminalWorkspace();
+    const pendingSince = "2026-10-01T12:00:00.000Z";
+    const serverMetadata = {
+      lifecycleGeneration: 4,
+      createdByRuntime: false,
+      gitBranchOwnershipVersion: 1,
+      reopenPendingConsumption: true,
+      reopenPendingConsumptionSince: pendingSince,
+      worktreeInstanceRoot: "/trusted/worktree-instance",
+      baseRefSnapshot: { baseRef: "main", resolvedSha: "a".repeat(40) },
+      configFingerprint: { version: 1, workspaceHash: "trusted-config-hash" },
+      workspaceRealizationRequest: { version: 1, authoritativeRoot: "/trusted/target" },
+      workspaceRealization: { version: 1, authoritativeRoot: "/trusted/realized" },
+      operatorNote: "previous value",
+    };
+    await db.update(executionWorkspaces).set({ metadata: serverMetadata })
+      .where(eq(executionWorkspaces.id, seeded.executionWorkspaceId));
+
+    const replaced = await svc.updateFromApi(seeded.executionWorkspaceId, seeded.companyId, {
+      metadata: {
+        lifecycleGeneration: 900,
+        createdByRuntime: true,
+        gitBranchOwnershipVersion: 99,
+        reopenPendingConsumption: false,
+        reopenPendingConsumptionSince: null,
+        worktreeInstanceRoot: "/attacker/path",
+        baseRefSnapshot: { baseRef: "attacker", resolvedSha: "f".repeat(40) },
+        configFingerprint: { version: 1, workspaceHash: "attacker-config-hash" },
+        workspaceRealizationRequest: { version: 1, authoritativeRoot: "/attacker/request" },
+        workspaceRealization: { version: 1, authoritativeRoot: "/attacker/realized" },
+        operatorNote: "replacement is allowed",
+      },
+    });
+    expect(replaced?.metadata).toMatchObject({
+      lifecycleGeneration: 4,
+      createdByRuntime: false,
+      gitBranchOwnershipVersion: 1,
+      reopenPendingConsumption: true,
+      reopenPendingConsumptionSince: pendingSince,
+      worktreeInstanceRoot: "/trusted/worktree-instance",
+      baseRefSnapshot: { baseRef: "main", resolvedSha: "a".repeat(40) },
+      configFingerprint: { version: 1, workspaceHash: "trusted-config-hash" },
+      workspaceRealizationRequest: { version: 1, authoritativeRoot: "/trusted/target" },
+      workspaceRealization: { version: 1, authoritativeRoot: "/trusted/realized" },
+      operatorNote: "replacement is allowed",
+    });
+
+    const cleared = await svc.updateFromApi(seeded.executionWorkspaceId, seeded.companyId, { metadata: null });
+    expect(cleared?.metadata).toEqual({
+      lifecycleGeneration: 4,
+      createdByRuntime: false,
+      gitBranchOwnershipVersion: 1,
+      reopenPendingConsumption: true,
+      reopenPendingConsumptionSince: pendingSince,
+      worktreeInstanceRoot: "/trusted/worktree-instance",
+      baseRefSnapshot: { baseRef: "main", resolvedSha: "a".repeat(40) },
+      configFingerprint: { version: 1, workspaceHash: "trusted-config-hash" },
+      workspaceRealizationRequest: { version: 1, authoritativeRoot: "/trusted/target" },
+      workspaceRealization: { version: 1, authoritativeRoot: "/trusted/realized" },
+    });
+    await expect(svc.updateFromApi(seeded.executionWorkspaceId, randomUUID(), {
+      metadata: { operatorNote: "wrong company" },
+    })).resolves.toBeNull();
+    await expect(svc.updateFromApi(seeded.executionWorkspaceId, seeded.companyId, {
+      providerRef: "/tmp/attacker-worktree",
+    })).rejects.toMatchObject({ status: 409, details: { code: "execution_workspace_identity_immutable" } });
+    const [afterIdentityAttempt] = await db.select({ providerRef: executionWorkspaces.providerRef })
+      .from(executionWorkspaces).where(eq(executionWorkspaces.id, seeded.executionWorkspaceId));
+    expect(afterIdentityAttempt?.providerRef).toBe(seeded.worktreePath);
+  });
+
+  it("re-reads protected metadata after a concurrent lifecycle-lock holder commits", async () => {
+    const seeded = await seedTerminalWorkspace();
+    const initial = {
+      lifecycleGeneration: 7,
+      createdByRuntime: false,
+      gitBranchOwnershipVersion: 1,
+      worktreeInstanceRoot: "/trusted/worktree-instance",
+      baseRefSnapshot: { baseRef: "main", resolvedSha: "a".repeat(40) },
+      configFingerprint: { version: 1, workspaceHash: "trusted-config-hash" },
+      workspaceRealizationRequest: { version: 1, authoritativeRoot: "/trusted/target" },
+      workspaceRealization: { version: 1, authoritativeRoot: "/trusted/realized" },
+    };
+    const fresh = {
+      lifecycleGeneration: 8,
+      createdByRuntime: true,
+      gitBranchOwnershipVersion: 1,
+      reopenPendingConsumption: true,
+      reopenPendingConsumptionSince: "2026-10-25T12:00:00.000Z",
+      worktreeInstanceRoot: "/trusted/worktree-instance",
+      baseRefSnapshot: { baseRef: "main", resolvedSha: "a".repeat(40) },
+      configFingerprint: { version: 1, workspaceHash: "trusted-config-hash" },
+      workspaceRealizationRequest: { version: 1, authoritativeRoot: "/trusted/target" },
+      workspaceRealization: { version: 1, authoritativeRoot: "/trusted/realized" },
+      serverNote: "new lifecycle",
+    };
+    await db.update(executionWorkspaces).set({ metadata: initial })
+      .where(eq(executionWorkspaces.id, seeded.executionWorkspaceId));
+
+    let signalLockHeld!: () => void;
+    const lockHeld = new Promise<void>((resolve) => { signalLockHeld = resolve; });
+    const lifecycleWriter = db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`execution_workspace_lifecycle:${seeded.executionWorkspaceId}`}, 0))`);
+      signalLockHeld();
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      await tx.update(executionWorkspaces).set({ metadata: fresh })
+        .where(eq(executionWorkspaces.id, seeded.executionWorkspaceId));
+    });
+
+    await lockHeld;
+    const stalePublicPatch = svc.updateFromApi(seeded.executionWorkspaceId, seeded.companyId, {
+      metadata: {
+        lifecycleGeneration: 1,
+        createdByRuntime: false,
+        gitBranchOwnershipVersion: 99,
+        reopenPendingConsumption: false,
+        reopenPendingConsumptionSince: null,
+        worktreeInstanceRoot: "/attacker/path",
+        baseRefSnapshot: { baseRef: "attacker", resolvedSha: "f".repeat(40) },
+        configFingerprint: { version: 1, workspaceHash: "attacker-config-hash" },
+        workspaceRealizationRequest: { version: 1, authoritativeRoot: "/attacker/request" },
+        workspaceRealization: { version: 1, authoritativeRoot: "/attacker/realized" },
+        publicNote: "stale replacement data",
+      },
+    });
+    await lifecycleWriter;
+    const updated = await stalePublicPatch;
+
+    expect(updated?.metadata).toMatchObject({
+      lifecycleGeneration: 8,
+      createdByRuntime: true,
+      gitBranchOwnershipVersion: 1,
+      reopenPendingConsumption: true,
+      reopenPendingConsumptionSince: fresh.reopenPendingConsumptionSince,
+      worktreeInstanceRoot: "/trusted/worktree-instance",
+      baseRefSnapshot: { baseRef: "main", resolvedSha: "a".repeat(40) },
+      configFingerprint: { version: 1, workspaceHash: "trusted-config-hash" },
+      workspaceRealizationRequest: { version: 1, authoritativeRoot: "/trusted/target" },
+      workspaceRealization: { version: 1, authoritativeRoot: "/trusted/realized" },
+      publicNote: "stale replacement data",
+    });
+    expect(updated?.metadata).not.toHaveProperty("serverNote");
+  });
+
+  it("keeps server-owned metadata when a public archive replacement is applied", async () => {
+    const seeded = await seedTerminalWorkspace();
+    await db.update(executionWorkspaces).set({
+      metadata: {
+        lifecycleGeneration: 4,
+        createdByRuntime: false,
+        gitBranchOwnershipVersion: 1,
+        worktreeInstanceRoot: "/trusted/worktree-instance",
+        baseRefSnapshot: { baseRef: "main", resolvedSha: "a".repeat(40) },
+        configFingerprint: { version: 1, workspaceHash: "trusted-config-hash" },
+        workspaceRealizationRequest: { version: 1, authoritativeRoot: "/trusted/target" },
+        workspaceRealization: { version: 1, authoritativeRoot: "/trusted/realized" },
+      },
+    }).where(eq(executionWorkspaces.id, seeded.executionWorkspaceId));
+
+    await expect(svc.archiveWorkspaceUnderLifecycleLock({
+      id: seeded.executionWorkspaceId,
+      expectedCompanyId: seeded.companyId,
+      closedAt: new Date(),
+      patch: { providerRef: "/tmp/attacker-worktree" },
+    })).rejects.toMatchObject({ status: 409, details: { code: "execution_workspace_identity_immutable" } });
+
+    const archived = await svc.archiveWorkspaceUnderLifecycleLock({
+      id: seeded.executionWorkspaceId,
+      expectedCompanyId: seeded.companyId,
+      closedAt: new Date(),
+      patch: {
+        metadata: {
+          lifecycleGeneration: 900,
+          createdByRuntime: true,
+          gitBranchOwnershipVersion: 99,
+          worktreeInstanceRoot: "/attacker/path",
+          baseRefSnapshot: { baseRef: "attacker", resolvedSha: "f".repeat(40) },
+          configFingerprint: { version: 1, workspaceHash: "attacker-config-hash" },
+          workspaceRealizationRequest: { version: 1, authoritativeRoot: "/attacker/request" },
+          workspaceRealization: { version: 1, authoritativeRoot: "/attacker/realized" },
+          reopenPendingConsumption: true,
+          reopenPendingConsumptionSince: "2026-10-25T12:00:00.000Z",
+          operatorNote: "archive request note",
+        },
+      },
+    });
+
+    expect(archived?.outcome).toBe("archived");
+    if (archived?.outcome !== "archived") return;
+    expect(archived.workspace.metadata).toMatchObject({
+      lifecycleGeneration: 5,
+      createdByRuntime: false,
+      gitBranchOwnershipVersion: 1,
+      worktreeInstanceRoot: "/trusted/worktree-instance",
+      baseRefSnapshot: { baseRef: "main", resolvedSha: "a".repeat(40) },
+      configFingerprint: { version: 1, workspaceHash: "trusted-config-hash" },
+      workspaceRealizationRequest: { version: 1, authoritativeRoot: "/trusted/target" },
+      workspaceRealization: { version: 1, authoritativeRoot: "/trusted/realized" },
+      operatorNote: "archive request note",
+    });
+    expect(archived.workspace.metadata).not.toHaveProperty("reopenPendingConsumption");
+    expect(archived.workspace.metadata).not.toHaveProperty("reopenPendingConsumptionSince");
+    await expect(svc.updateFromApi(seeded.executionWorkspaceId, seeded.companyId, { status: "active" }))
+      .rejects.toMatchObject({ status: 409, details: { code: "execution_workspace_reopen_required" } });
+  });
+
   it("archives but retains Git worktrees and ignored customer data until exact restoration is qualified", async () => {
     const seeded = await seedAncestryTerminalWorkspace();
     const projectWorkspaceId = randomUUID();
@@ -1576,6 +1783,7 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
 
     const result = await svc.archiveWorkspaceUnderLifecycleLock({
       id: seeded.executionWorkspaceId,
+      expectedCompanyId: seeded.companyId,
       patch: {},
       closedAt: new Date(),
     });

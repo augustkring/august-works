@@ -3,6 +3,7 @@ import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { errorHandler } from "../middleware/index.js";
 import { executionWorkspaceRoutes } from "../routes/execution-workspaces.js";
+import { conflict } from "../errors.js";
 
 const mockExecutionWorkspaceService = vi.hoisted(() => ({
   list: vi.fn(),
@@ -14,6 +15,7 @@ const mockExecutionWorkspaceService = vi.hoisted(() => ({
   fenceClosedWorkspaceDestruction: vi.fn(),
   reconcileExecutionWorkspaceBranch: vi.fn(),
   update: vi.fn(),
+  updateFromApi: vi.fn(),
 }));
 
 const mockWorkspaceOperationService = vi.hoisted(() => ({
@@ -115,6 +117,7 @@ describe.sequential("execution workspace routes", () => {
       },
     ]);
     mockExecutionWorkspaceService.getById.mockResolvedValue(null);
+    mockExecutionWorkspaceService.updateFromApi.mockResolvedValue(null);
     mockExecutionWorkspaceService.reconcileExecutionWorkspaceBranch.mockResolvedValue(null);
     mockHeartbeatService.wakeup.mockResolvedValue(null);
   });
@@ -140,6 +143,96 @@ describe.sequential("execution workspace routes", () => {
       reuseEligible: true,
     });
     expect(mockExecutionWorkspaceService.list).not.toHaveBeenCalled();
+  });
+
+  it("routes public metadata replacement through the lifecycle-locked update owner", async () => {
+    mockExecutionWorkspaceService.getById.mockResolvedValue({
+      id: "workspace-1",
+      companyId: "company-1",
+      status: "active",
+      metadata: {
+        lifecycleGeneration: 3,
+        createdByRuntime: false,
+        gitBranchOwnershipVersion: 1,
+      },
+    });
+    mockExecutionWorkspaceService.updateFromApi.mockResolvedValue({
+      id: "workspace-1",
+      companyId: "company-1",
+      status: "active",
+      metadata: { lifecycleGeneration: 3, createdByRuntime: false, gitBranchOwnershipVersion: 1 },
+    });
+
+    const res = await request(createApp())
+      .patch("/api/execution-workspaces/workspace-1")
+      .send({
+        metadata: {
+          lifecycleGeneration: 900,
+          createdByRuntime: true,
+          gitBranchOwnershipVersion: 99,
+          reopenPendingConsumption: true,
+          operatorNote: "allowed replacement content",
+        },
+      });
+
+    expect(res.status).toBe(200);
+    expect(mockExecutionWorkspaceService.updateFromApi).toHaveBeenCalledWith("workspace-1", "company-1", {
+      metadata: {
+        lifecycleGeneration: 900,
+        createdByRuntime: true,
+        gitBranchOwnershipVersion: 99,
+        reopenPendingConsumption: true,
+        operatorNote: "allowed replacement content",
+      },
+    });
+    expect(mockExecutionWorkspaceService.update).not.toHaveBeenCalled();
+  });
+
+  it("requires the original issue reopen owner for raw activation of an archived workspace", async () => {
+    mockExecutionWorkspaceService.getById.mockResolvedValue({
+      id: "workspace-1",
+      companyId: "company-1",
+      status: "archived",
+      metadata: { lifecycleGeneration: 4 },
+    });
+    mockExecutionWorkspaceService.updateFromApi.mockRejectedValue(conflict(
+      "Archived execution workspaces must be reopened through their issue.",
+      { code: "execution_workspace_reopen_required" },
+    ));
+
+    const res = await request(createApp())
+      .patch("/api/execution-workspaces/workspace-1")
+      .send({ status: "active" });
+
+    expect(res.status).toBe(409);
+    expect(res.body.details).toMatchObject({ code: "execution_workspace_reopen_required" });
+    expect(mockExecutionWorkspaceService.updateFromApi).toHaveBeenCalledWith("workspace-1", "company-1", { status: "active" });
+  });
+
+  it("returns 409 when PATCH tries to retarget a Git workspace cleanup identity", async () => {
+    mockExecutionWorkspaceService.getById.mockResolvedValue({
+      id: "workspace-1",
+      companyId: "company-1",
+      status: "active",
+      providerType: "git_worktree",
+      providerRef: "/tmp/original-worktree",
+    });
+    mockExecutionWorkspaceService.updateFromApi.mockRejectedValue(conflict(
+      "Execution workspace source and path identity cannot be changed through PATCH.",
+      { code: "execution_workspace_identity_immutable" },
+    ));
+
+    const res = await request(createApp())
+      .patch("/api/execution-workspaces/workspace-1")
+      .send({ providerRef: "/tmp/other-customer-worktree" });
+
+    expect(res.status).toBe(409);
+    expect(res.body.details).toMatchObject({ code: "execution_workspace_identity_immutable" });
+    expect(mockExecutionWorkspaceService.updateFromApi).toHaveBeenCalledWith(
+      "workspace-1",
+      "company-1",
+      { providerRef: "/tmp/other-customer-worktree" },
+    );
   });
 
   it("delegates bounded workspace overview queries", async () => {

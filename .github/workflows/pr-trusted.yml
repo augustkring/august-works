@@ -947,6 +947,7 @@ jobs:
 
       - name: Boot the production runtime bundle
         run: |
+          pnpm exec vitest run server/scripts/bundle-runtime.test.mjs
           pnpm --filter @paperclipai/server build:runtime
           bash scripts/server-boot-smoke.sh node server/dist-runtime/index.mjs
 

@@ -1198,6 +1198,7 @@ export function executionWorkspaceRoutes(db: Db, opts: { pluginWorkerManager?: P
       // destruction fence below never deletes a worktree that a reopen rebuilt.
       const archiveResult = await svc.archiveWorkspaceUnderLifecycleLock({
         id,
+        expectedCompanyId: existing.companyId,
         patch,
         closedAt,
       });
@@ -1346,7 +1347,7 @@ export function executionWorkspaceRoutes(db: Db, opts: { pluginWorkerManager?: P
         return;
       }
     } else {
-      const updatedWorkspace = await svc.update(id, patch);
+      const updatedWorkspace = await svc.updateFromApi(id, existing.companyId, patch);
       if (!updatedWorkspace) {
         res.status(404).json({ error: "Execution workspace not found" });
         return;

@@ -57,7 +57,11 @@ import { visibleIssueCondition } from "./issue-visibility.js";
 import { createGitRemoteAuthProvider } from "./git-credentials.js";
 import { readProjectWorkspaceRuntimeConfig } from "./project-workspace-runtime-config.js";
 import { workspaceGitOperationScheduler } from "./workspace-git-operation-scheduler.js";
-import { isRuntimeOwnedGitBranch } from "./execution-workspace-branch-ownership.js";
+import {
+  GIT_BRANCH_OWNERSHIP_METADATA_KEY,
+  isRuntimeOwnedGitBranch,
+} from "./execution-workspace-branch-ownership.js";
+import { WORKTREE_INSTANCE_ROOT_METADATA_KEY } from "./workspace-instance-cleanup.js";
 import {
   listCurrentRuntimeServicesForExecutionWorkspaces,
   listCurrentRuntimeServicesForProjectWorkspaces,
@@ -158,6 +162,19 @@ export const EXECUTION_WORKSPACE_REOPEN_PENDING_METADATA_KEY = "reopenPendingCon
 // stranded flag whose consumer never cleared it. A reopen writes this key in the
 // same write that sets the flag, and every clear removes both keys together.
 export const EXECUTION_WORKSPACE_REOPEN_PENDING_SINCE_METADATA_KEY = "reopenPendingConsumptionSince";
+
+const EXECUTION_WORKSPACE_SERVER_OWNED_METADATA_KEYS = [
+  EXECUTION_WORKSPACE_LIFECYCLE_GENERATION_METADATA_KEY,
+  EXECUTION_WORKSPACE_REOPEN_PENDING_METADATA_KEY,
+  EXECUTION_WORKSPACE_REOPEN_PENDING_SINCE_METADATA_KEY,
+  "createdByRuntime",
+  GIT_BRANCH_OWNERSHIP_METADATA_KEY,
+  WORKTREE_INSTANCE_ROOT_METADATA_KEY,
+  "baseRefSnapshot",
+  "configFingerprint",
+  "workspaceRealizationRequest",
+  "workspaceRealization",
+] as const;
 
 export function metadataHasReopenPendingConsumption(
   metadata: Record<string, unknown> | null | undefined,
@@ -332,6 +349,37 @@ export type ExecutionWorkspaceGitWorktreeContention = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function preserveServerOwnedExecutionWorkspaceMetadata(
+  requestedMetadata: unknown,
+  currentMetadata: unknown,
+): Record<string, unknown> | null {
+  const next = isRecord(requestedMetadata) ? { ...requestedMetadata } : {};
+  const current = isRecord(currentMetadata) ? currentMetadata : {};
+  for (const key of EXECUTION_WORKSPACE_SERVER_OWNED_METADATA_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(current, key)) next[key] = current[key];
+    else delete next[key];
+  }
+  return requestedMetadata === null && Object.keys(next).length === 0 ? null : next;
+}
+
+function assertPublicExecutionWorkspaceIdentityUnchanged(
+  current: Pick<ExecutionWorkspaceRow, "providerType" | "metadata" | "cwd" | "providerRef" | "branchName" | "repoUrl" | "baseRef">,
+  patch: Partial<typeof executionWorkspaces.$inferInsert>,
+): void {
+  const runtimeOwnedLocalPath =
+    (current.metadata as Record<string, unknown> | null)?.createdByRuntime === true;
+  if (current.providerType !== "git_worktree" && !runtimeOwnedLocalPath) return;
+  const identityFields = ["cwd", "providerRef", "branchName", "repoUrl", "baseRef"] as const;
+  const changed = identityFields.some((field) =>
+    patch[field] !== undefined && patch[field] !== current[field]
+  );
+  if (!changed) return;
+  throw conflict(
+    "Execution workspace source and path identity cannot be changed through PATCH.",
+    { code: "execution_workspace_identity_immutable" },
+  );
 }
 
 function readNullableString(value: unknown): string | null {
@@ -2920,6 +2968,50 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
       return row ? toExecutionWorkspace(row) : null;
     },
 
+    // Public PATCH metadata is replacement-shaped, but server-owned lifecycle
+    // and branch-ownership fields are never public input. Merge those fields
+    // from the row re-read under the same lock used by archive and reopen, so a
+    // stale client snapshot cannot erase a newer generation or re-open fence.
+    updateFromApi: async (id: string, expectedCompanyId: string, patch: Partial<typeof executionWorkspaces.$inferInsert>) => {
+      const row = await db.transaction(async (tx) => {
+        await acquireExecutionWorkspaceLifecycleLock(tx, id);
+        const fresh = await tx
+          .select()
+          .from(executionWorkspaces)
+          .where(eq(executionWorkspaces.id, id))
+          .for("update")
+          .then((rows) => rows[0] ?? null);
+        if (!fresh || fresh.companyId !== expectedCompanyId) return null;
+        if (
+          isClosedExecutionWorkspaceStatus(fresh.status)
+          && patch.status !== undefined
+          && !isClosedExecutionWorkspaceStatus(patch.status)
+        ) {
+          // Reopening an archived workspace must rebuild and publish through
+          // reopenClosedIsolatedExecutionWorkspaceForIssue.
+          throw conflict(
+            "Archived execution workspaces must be reopened through their issue.",
+            { code: "execution_workspace_reopen_required" },
+          );
+        }
+        assertPublicExecutionWorkspaceIdentityUnchanged(fresh, patch);
+        const safePatch = { ...patch };
+        if (patch.metadata !== undefined) {
+          safePatch.metadata = preserveServerOwnedExecutionWorkspaceMetadata(
+            patch.metadata,
+            fresh.metadata,
+          );
+        }
+        return tx
+          .update(executionWorkspaces)
+          .set({ ...safePatch, updatedAt: new Date() })
+          .where(eq(executionWorkspaces.id, id))
+          .returning()
+          .then((rows) => rows[0] ?? null);
+      });
+      return row ? toExecutionWorkspace(row) : null;
+    },
+
     // Reopen one closed isolated execution workspace so an authorized issue can
     // use it again. The caller must first authorize the request on the issue.
     // The whole operation runs under the per-workspace lifecycle lock: it reads
@@ -3267,6 +3359,7 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
     // worktree during the reopen consumption window.
     archiveWorkspaceUnderLifecycleLock: async (input: {
       id: string;
+      expectedCompanyId: string;
       patch: Partial<typeof executionWorkspaces.$inferInsert>;
       closedAt: Date;
     }): Promise<
@@ -3281,7 +3374,7 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
           .from(executionWorkspaces)
           .where(eq(executionWorkspaces.id, input.id))
           .then((rows) => rows[0] ?? null);
-        if (!fresh || isClosedExecutionWorkspaceStatus(fresh.status)) {
+        if (!fresh || fresh.companyId !== input.expectedCompanyId || isClosedExecutionWorkspaceStatus(fresh.status)) {
           // The row is missing or already closed by a concurrent path. Do not
           // archive again.
           return null;
@@ -3293,9 +3386,14 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
           // rebuilt worktree. The route maps this to HTTP 409.
           return { outcome: "reopen_pending" };
         }
-        const baseMetadata =
+        assertPublicExecutionWorkspaceIdentityUnchanged(fresh, input.patch);
+        const requestedBaseMetadata =
           (input.patch.metadata as Record<string, unknown> | null | undefined)
           ?? (fresh.metadata as Record<string, unknown> | null);
+        const baseMetadata = preserveServerOwnedExecutionWorkspaceMetadata(
+          requestedBaseMetadata,
+          fresh.metadata,
+        );
         const archiveMetadata = clearMetadataReopenPendingConsumption(
           bumpExecutionWorkspaceLifecycleGeneration(baseMetadata),
         );
