@@ -64,6 +64,39 @@ describe("initializeMcpHttpSession", () => {
       "MCP-Protocol-Version": MCP_PROTOCOL_VERSION,
     });
   });
+
+  it.each(["2025-03-26", "2025-06-18", "2025-11-25"])(
+    "keeps supported legacy protocol %s during negotiation",
+    async (protocolVersion) => {
+      const sessionHeaders = await initializeMcpHttpSession({
+        requestId: "legacy-request",
+        send: async (init) => {
+          const payload = JSON.parse(String(init.body)) as Record<string, unknown>;
+          if (payload.method === "initialize") return Response.json({
+            jsonrpc: "2.0", id: payload.id,
+            result: { protocolVersion, capabilities: {}, serverInfo: { name: "legacy", version: "1" } },
+          });
+          return new Response(null, { status: 202 });
+        },
+      });
+      expect(sessionHeaders["MCP-Protocol-Version"]).toBe(protocolVersion);
+    },
+  );
+
+  it("fails closed when an MCP server selects an unrecognized revision", async () => {
+    await expect(initializeMcpHttpSession({
+      requestId: "future-request",
+      send: async (init) => {
+        const payload = JSON.parse(String(init.body)) as Record<string, unknown>;
+        return Response.json({ jsonrpc: "2.0", id: payload.id,
+          result: { protocolVersion: "2099-01-01", capabilities: {} } });
+      },
+    })).rejects.toMatchObject({
+      name: "McpHttpInitializationError",
+      stage: "initialize",
+      message: "Remote MCP server selected an unsupported protocol version",
+    });
+  });
 });
 
 describe("parseMcpHttpResponseBody", () => {

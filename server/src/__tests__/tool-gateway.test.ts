@@ -1690,6 +1690,18 @@ describeEmbeddedPostgres("tool gateway acceptance", () => {
       commandTemplateKey: localTool.templateKey,
       healthStatus: "ok",
     });
+
+    const secondSession = await gateway.createSession({ companyId: company.id, agentId: agent.id, runId: run.id });
+    await gateway.executeTool({
+      sessionToken: secondSession.token,
+      tool: expectedName,
+      parameters: { message: "second session" },
+    });
+    const sessionSlots = await db.select().from(toolRuntimeSlots)
+      .where(eq(toolRuntimeSlots.connectionId, localTool.connection.id));
+    expect(sessionSlots).toHaveLength(2);
+    expect(new Set(sessionSlots.map((row) => row.slotKey)).size).toBe(2);
+    expect(sessionSlots.every((row) => row.slotKey.includes(localTool.connection.id))).toBe(true);
   });
 
   it("passes only approved env values to local stdio MCP processes", async () => {

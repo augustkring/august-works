@@ -555,7 +555,10 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
     );
 
     it("forces the real heartbeat through native admission and the budget gateway, saves one draft and retains human review", async () => {
-      const started = await freshNativePlan();
+      const started = await freshNativePlan({ maxModelCostMinor: 6, maxToolActions: 3 });
+      // This authored Agent requires Human review for proposed Tasks, so the
+      // actual Messages response must use its reviewed output contract.
+      modelOutput = JSON.stringify({ draft: "Retained bounded draft", proposedTask: null });
       const substitution = vi.fn(() => {
         throw new Error(
           "An internal draft must not use the injected provider seam",
@@ -621,7 +624,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         .from(orchestrationPlans)
         .where(eq(orchestrationPlans.id, started.id));
       expect(current).toMatchObject({
-        toolActionsUsed: 2,
+        toolActionsUsed: 3,
         modelCostReserved: 3,
       });
       const [currentTask] = await db

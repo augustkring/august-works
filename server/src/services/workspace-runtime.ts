@@ -69,6 +69,7 @@ import { isRuntimeOwnedGitBranch } from "./execution-workspace-branch-ownership.
 import { logActivity } from "./activity-log.js";
 import { readProjectWorkspaceRuntimeConfig } from "./project-workspace-runtime-config.js";
 import { workspaceGitOperationScheduler } from "./workspace-git-operation-scheduler.js";
+import { assertGitWorkspaceCleanupProof, type GitWorkspaceCleanupProof } from "./git-workspace-restoration.js";
 import {
   cleanupWorktreeInstanceArtifacts,
   deriveWorktreeInstanceId,
@@ -4037,6 +4038,7 @@ export async function cleanupExecutionWorkspaceArtifacts(input: {
   assertSafeToCleanup?: (() => Promise<void>) | null;
   beforeBranchDelete?: (() => Promise<void>) | null;
   expectedBranchHeadSha?: string | null;
+  gitRestorationProof?: GitWorkspaceCleanupProof;
   runCleanupCommands?: boolean;
   forceWorktreeRemoval?: boolean;
 }) {
@@ -4060,6 +4062,14 @@ export async function cleanupExecutionWorkspaceArtifacts(input: {
     if (status) throw new Error("Workspace files require preservation before cleanup.");
   };
   await input.assertSafeToCleanup?.();
+  if (input.workspace.providerType === "git_worktree") {
+    try {
+      await assertGitWorkspaceCleanupProof(input.gitRestorationProof, input.workspace.id);
+    } catch {
+    return { cleanedPath: workspacePath, cleaned: false,
+      warnings: ["Exact workspace restoration was not verified; the Git workspace was kept."] };
+    }
+  }
   try {
     await assertGitContentsSafe();
   } catch {
@@ -4217,23 +4227,38 @@ export async function cleanupExecutionWorkspaceArtifacts(input: {
     if (containsProjectWorkspace) {
       warnings.push(`Refusing to remove path "${workspacePath}" because it contains the project workspace.`);
     } else {
-      await input.assertSafeToCleanup?.();
-      await fs.rm(resolvedWorkspacePath, { recursive: true, force: true });
-      if (input.recorder) {
-        await input.recorder.recordOperation({
-          phase: "workspace_teardown",
-          cwd: projectWorkspaceCwd ?? process.cwd(),
-          metadata: {
-            workspaceId: input.workspace.id,
-            workspacePath: resolvedWorkspacePath,
-            cleanupAction: "remove_local_fs",
-          },
-          run: async () => ({
-            status: "succeeded",
-            exitCode: 0,
-            system: `Removed local workspace directory ${resolvedWorkspacePath}\n`,
-          }),
-        });
+      const stat = await fs.lstat(resolvedWorkspacePath).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") return null;
+        throw error;
+      });
+      if (stat && (!stat.isDirectory() || stat.isSymbolicLink())) {
+        warnings.push("Workspace path could not be verified for cleanup; the workspace was kept.");
+      } else if (stat && (await fs.readdir(resolvedWorkspacePath)).length > 0) {
+        // A runtime-created directory can acquire customer files after setup.
+        // Without an export recipe, any entry is unique work and must survive
+        // archive or failed-setup cleanup for owner review.
+        warnings.push("Workspace files require preservation before cleanup; the workspace was kept.");
+      } else if (stat) {
+        // rmdir is atomic with respect to an entry appearing after readdir: it
+        // fails if a writer added customer data, unlike recursive rm.
+        await input.assertSafeToCleanup?.();
+        await fs.rmdir(resolvedWorkspacePath);
+        if (input.recorder) {
+          await input.recorder.recordOperation({
+            phase: "workspace_teardown",
+            cwd: projectWorkspaceCwd ?? process.cwd(),
+            metadata: {
+              workspaceId: input.workspace.id,
+              workspacePath: resolvedWorkspacePath,
+              cleanupAction: "remove_local_fs",
+            },
+            run: async () => ({
+              status: "succeeded",
+              exitCode: 0,
+              system: `Removed empty local workspace directory ${resolvedWorkspacePath}\n`,
+            }),
+          });
+        }
       }
     }
   }

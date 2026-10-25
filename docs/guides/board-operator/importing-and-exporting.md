@@ -67,12 +67,14 @@ An accepted import has a saved operation ID. Reloading the page checks that oper
 
 If a new-company import is still running or its result is unknown before a target company is confirmed, its original requester can find the operation in the Import history for a company they can currently access. The entry says **New company, result not yet confirmed**. It does not identify or prove that a company was created. Once the target is confirmed, the operation appears in that company's history when you have current access.
 
-- **Running:** wait for the saved operation. Do not create a second import.
+- **Running:** wait for the saved operation. Use **Cancel import** to request a safe stop; leaving the page does not cancel it.
+- **Cancellation requested:** the import stops at a native checkpoint. Changes already completed are not rolled back. If the owner cannot prove a complete cancellation receipt, the operation remains unknown and must be reconciled.
+- **Cancelled:** cancellation was confirmed before any import changes began. No import effects were made.
 - **Complete:** open the imported company. Detailed names may no longer be available, while the saved summary still identifies the completed operation where you retain access.
 - **Rejected before import:** follow the reason shown. For a changed package, preview the current files before confirming again.
 - **Outcome unknown:** some changes may already have been saved. Keep the operation ID and contact your administrator or [support](/help/index). Do not upload the package again to find out whether the first import worked.
 
-A server restart preserves the accepted operation. Automatic replay, cancellation of an import already applying changes, and self-service reconciliation of an unknown result are not available in this preview. The full-detail cache is temporary; its loss does not authorize another import.
+A server restart preserves the accepted operation. Automatic replay and self-service reconciliation of an unknown result are not available in this preview. The full-detail cache is temporary; its loss does not authorize another import.
 
 ## Exporting a Company
 

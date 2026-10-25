@@ -781,6 +781,7 @@ type CompanyImportWatchOutcome =
   | { status: "completed-expired"; companyId: string | null };
 
 class ImportOutcomeUnknownError extends Error {}
+class ImportCancelledError extends Error {}
 
 function importOutcomeIsUnknown(error: unknown): boolean {
   return error instanceof ImportOutcomeUnknownError || (error instanceof ApiError && error.status === 409
@@ -791,11 +792,14 @@ function importOutcomeIsUnknown(error: unknown): boolean {
 async function watchImportJob(
   jobId: string,
   storageKey: string,
+  onCancellationRequested?: () => void,
 ): Promise<CompanyImportWatchOutcome> {
   for (;;) {
     let job: Awaited<ReturnType<typeof companiesApi.getImportJob>>["job"] | null = null;
     try {
-      job = (await companiesApi.getImportJob(jobId)).job;
+      const status = await companiesApi.getImportJob(jobId);
+      job = status.job;
+      if (status.operation?.status === "cancel_requested") onCancellationRequested?.();
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
         // Missing or withdrawn status is no proof of non-application. Retain
@@ -839,6 +843,10 @@ async function watchImportJob(
       // Keep the original job identity for a later read. Uncertainty is never
       // a reason to resubmit a non-idempotent import or activate its contents.
       throw new ImportOutcomeUnknownError(job.error?.message ?? "The import outcome is unknown. Reconcile the existing import before trying again.");
+    }
+    if (job?.status === "cancelled") {
+      clearStoredImportJob(storageKey);
+      throw new ImportCancelledError();
     }
     if (job?.status === "failed") {
       clearStoredImportJob(storageKey);
@@ -925,6 +933,8 @@ export function CompanyImport() {
   // A still-running job from a previous page load being re-attached to. While
   // set, the page shows a "resume watching" panel instead of the stale form.
   const [resumedWatchJobId, setResumedWatchJobId] = useState<string | null>(null);
+  const [activeImportJobId, setActiveImportJobId] = useState<string | null>(null);
+  const [cancellationRequested, setCancellationRequested] = useState(false);
   const resumeAttemptedRef = useRef(false);
 
   // Chunked transfer state. The manifest cache is keyed by File identity so
@@ -1221,7 +1231,7 @@ export function CompanyImport() {
       resume?: { jobId: string; storageKey: string };
     }) => {
       if (variables.resume) {
-        return watchImportJob(variables.resume.jobId, variables.resume.storageKey);
+        return watchImportJob(variables.resume.jobId, variables.resume.storageKey, () => setCancellationRequested(true));
       }
       const meta = {
         ...buildImportMetaCommon(),
@@ -1260,10 +1270,13 @@ export function CompanyImport() {
         jobId: accepted.job.id,
         pauseAutomations: variables.pauseAutomations,
       });
-      return watchImportJob(accepted.job.id, storageKey);
+      setActiveImportJobId(accepted.job.id);
+      return watchImportJob(accepted.job.id, storageKey, () => setCancellationRequested(true));
     },
     onSuccess: async (outcome, { previewForImport, pauseAutomations: submittedPauseAutomations }) => {
       setResumedWatchJobId(null);
+      setActiveImportJobId(null);
+      setCancellationRequested(false);
       // The company list powers the switcher; refresh it on every success path
       // so the imported company appears immediately without a manual reload.
       await queryClient.invalidateQueries({ queryKey: queryKeys.companies.all });
@@ -1328,12 +1341,32 @@ export function CompanyImport() {
     },
     onError: (err) => {
       setResumedWatchJobId(null);
+      setActiveImportJobId(null);
+      setCancellationRequested(false);
       pushToast({
         tone: "error",
-        title: importOutcomeIsUnknown(err) ? "Import outcome unknown" : "Import failed",
-        body: err instanceof Error ? err.message : "Failed to apply import.",
+        title: err instanceof ImportCancelledError ? t("companyImport.cancelled")
+          : importOutcomeIsUnknown(err) ? "Import outcome unknown" : "Import failed",
+        body: err instanceof ImportCancelledError ? t("companyImport.cancelledBeforeEffects")
+          : err instanceof Error ? err.message : "Failed to apply import.",
       });
     },
+  });
+
+  const cancelImportMutation = useMutation({
+    mutationFn: (jobId: string) => companiesApi.cancelImportJob(jobId),
+    onSuccess: (response) => {
+      if (response.operation?.status === "cancelled") {
+        setCancellationRequested(true);
+        pushToast({ tone: "success", title: t("companyImport.cancelled"), body: t("companyImport.cancelledBeforeEffects") });
+      } else if (response.operation?.status === "cancel_requested") {
+        setCancellationRequested(true);
+        pushToast({ tone: "info", title: t("companyImport.cancelPendingTitle"), body: t("companyImport.cancelPendingBody") });
+      } else {
+        pushToast({ tone: "info", title: t("companyImport.cancelFinishedTitle"), body: t("companyImport.cancelFinishedBody") });
+      }
+    },
+    onError: (error) => pushToast({ tone: "error", title: t("companyImport.cancelFailed"), body: error instanceof Error ? error.message : t("companyImport.cancelErrorStatus") }),
   });
 
   // On mount, re-attach to a job stored by a previous page load. This is what
@@ -1346,6 +1379,7 @@ export function CompanyImport() {
     const stored = readStoredImportJob(selectedCompanyId);
     if (!stored) return;
     setResumedWatchJobId(stored.jobId);
+    setActiveImportJobId(stored.jobId);
     resumeImportWatch({
       previewForImport: null,
       pauseAutomations: stored.pauseAutomations,
@@ -1829,17 +1863,25 @@ export function CompanyImport() {
     return (
       <div className="max-w-6xl space-y-4 px-5 py-5">
         <div>
-          <h2 className="text-base font-semibold">Resume watching import</h2>
+          <h2 className="text-base font-semibold">{t("companyImport.resumeHeading")}</h2>
           <p className="text-xs text-muted-foreground mt-1">
-            An import you started earlier is still running on the server.
+            {t("companyImport.resumeBody")}
           </p>
         </div>
         <div className="flex items-start gap-2 rounded-md border border-border bg-muted/30 px-3 py-2.5">
           <Loader2 className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
           <p className="text-xs text-muted-foreground">
-            Import running on the server — safe to keep waiting; reconnecting won&apos;t lose it.
+            {cancellationRequested
+              ? t("companyImport.cancelRequested")
+              : "Import running on the server — safe to keep waiting; reconnecting won&apos;t lose it."}
           </p>
         </div>
+        {activeImportJobId && !cancellationRequested && (
+          <Button size="sm" variant="outline" disabled={cancelImportMutation.isPending}
+            onClick={() => cancelImportMutation.mutate(activeImportJobId)}>
+            {cancelImportMutation.isPending ? t("companyImport.requestingCancel") : t("companyImport.cancelImport")}
+          </Button>
+        )}
       </div>
     );
   }
@@ -2107,22 +2149,32 @@ export function CompanyImport() {
               />
               Start imported agents and routines paused
             </label>
-            <Button
-              size="sm"
-              onClick={() => importMutation.mutate({ previewForImport: importPreview, pauseAutomations })}
-              disabled={importMutation.isPending || importOutcomeIsUnknown(importMutation.error) || hasErrors || selectedCount === 0}
-            >
-              <Download className="mr-1.5 h-3.5 w-3.5" />
-              {importMutation.isPending
-                ? "Importing..."
-                : `Import ${selectedCount} file${selectedCount === 1 ? "" : "s"}`}
-            </Button>
+            <div className="flex items-center gap-2">
+              {importMutation.isPending && activeImportJobId && !cancellationRequested && (
+                <Button size="sm" variant="outline" disabled={cancelImportMutation.isPending}
+                  onClick={() => cancelImportMutation.mutate(activeImportJobId)}>
+                  {cancelImportMutation.isPending ? t("companyImport.requestingCancel") : t("companyImport.cancelImport")}
+                </Button>
+              )}
+              <Button
+                size="sm"
+                onClick={() => { setCancellationRequested(false); importMutation.mutate({ previewForImport: importPreview, pauseAutomations }); }}
+                disabled={importMutation.isPending || importOutcomeIsUnknown(importMutation.error) || hasErrors || selectedCount === 0}
+              >
+                <Download className="mr-1.5 h-3.5 w-3.5" />
+                {importMutation.isPending
+                  ? "Importing..."
+                  : `Import ${selectedCount} file${selectedCount === 1 ? "" : "s"}`}
+              </Button>
+            </div>
           </div>
           {importMutation.isPending && (
             <div className="mx-5 mt-3 flex items-start gap-2 rounded-md border border-border bg-muted/30 px-3 py-2.5">
               <Loader2 className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
               <p className="text-xs text-muted-foreground">
-                {transferProgress
+                {cancellationRequested
+                  ? t("companyImport.cancelRequestedProgress")
+                  : transferProgress
                   ? `${formatTransferProgress(transferProgress)} An interrupted upload resumes from the finished parts.`
                   : "Import running on the server — safe to keep waiting; reconnecting won't lose it. Large packages can take several minutes."}
               </p>

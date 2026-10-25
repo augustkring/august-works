@@ -108,20 +108,20 @@ export function saasPlatform(
   );
   const catalog = runtimeCatalogService(db, config);
   const costs = saasCostService(db, config);
+  const workerModels = config.workerModelProfiles?.length ? workerModelGateway(db, {
+    profiles: config.workerModelProfiles, sourceSha: config.deployment.sourceSha,
+    protectedEvidenceOrigin: origins.primaryAppOrigin,
+  }) : undefined;
   const runtime = runtimeControlService(
     db,
     config,
     notifications.notifyCompany,
-    { credentialBrokerOrigin: origins.primaryAppOrigin },
+    { credentialBrokerOrigin: origins.primaryAppOrigin, workerModels },
   );
   const sandboxHosts = nativeSandboxHostTransport(db, {
     suspectSeconds: config.runtime.suspectSeconds,
     operatorUserIds: config.operatorUserIds,
   });
-  const workerModels = config.workerModelProfiles?.length ? workerModelGateway(db, {
-    profiles: config.workerModelProfiles, sourceSha: config.deployment.sourceSha,
-    protectedEvidenceOrigin: origins.primaryAppOrigin,
-  }) : undefined;
   registerNativeDraftGateway(db, workerModels);
   registerNativeDraftConformance(db, config.workerModelProfiles?.length ? nativeDraftConformanceService(db, {
     profiles: config.workerModelProfiles, sourceSha: config.deployment.sourceSha,

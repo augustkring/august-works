@@ -56,6 +56,7 @@ import {
 import { companyTransferRunService } from "../services/company-transfer-runs.js";
 import { agentInstructionsBundleMode } from "../services/agent-instructions.js";
 import { resolvePortableExportAgentSelection } from "../services/company-portability-agent-selection.js";
+import { ImportCancellationError } from "../services/company-portability.js";
 import {
   accessService,
   agentService,
@@ -299,11 +300,13 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     return importResultCache.get(id)?.result;
   }
 
-  async function runImportJob(job: CompanyImportJob, operation: () => Promise<CompanyPortabilityImportResult>,
+  async function runImportJob(job: CompanyImportJob, operation: (checkCancellation: () => Promise<void>) => Promise<CompanyPortabilityImportResult>,
     domainInvoked: () => boolean, sourceActor: Request["actor"]) {
     try {
       if (!(await importJobs.start(job, sourceActor))) return;
-      const result = await operation();
+      const result = await operation(async () => {
+        if (await importJobs.cancellationRequested(job)) throw new Error("import_cancel_requested");
+      });
       const settled = await importJobs.succeed(job, result);
       if (!settled) throw conflict("The original import operation is unavailable", { code: "import_outcome_unknown" });
       importResultCache.set(job.id, { result, expiresAt: Date.now() + 60 * 60_000 });
@@ -311,9 +314,13 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     } catch (error) {
       // This native callback knows whether it invoked portability. An error
       // after that boundary cannot establish that no domain write committed.
-      try { await importJobs.fail(job, domainInvoked(), error instanceof ImportSourceChangedError ? "import_preview_source_changed" : "import_rejected"); }
+      const unknownOutcome = error instanceof ImportCancellationError
+        ? error.effectsStarted
+        : domainInvoked() && !(error instanceof ImportPreflightError) && !(error instanceof ImportSourceChangedError);
+      try { await importJobs.fail(job, unknownOutcome, error instanceof ImportCancellationError && !error.effectsStarted
+        ? "import_cancelled" : error instanceof ImportSourceChangedError ? "import_preview_source_changed" : "import_rejected"); }
       catch { logger.warn({ operationId: job.id }, "import outcome could not be saved; durable active operation is retained"); }
-      if (domainInvoked()) throw conflict("The import outcome is unknown. Reconcile the existing import before trying again.",
+      if (unknownOutcome) throw conflict("The import outcome is unknown. Reconcile the existing import before trying again.",
         { code: "import_outcome_unknown", operationId: job.id });
       throw error;
     }
@@ -706,6 +713,14 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     res.json({ ...importJobResponse(record), operation: companyImportOperationReceipt(job) });
   });
 
+  router.post("/import/jobs/:jobId/cancel", async (req, res) => {
+    assertBoard(req);
+    const job = await importJobs.requestCancellation(req.params.jobId as string, importJobActorKey(req), req.actor);
+    if (!job) { res.status(404).json({ error: "Import job not found" }); return; }
+    const record = importJobRecord(job);
+    res.json({ ...importJobResponse(record), operation: companyImportOperationReceipt(job) });
+  });
+
   /**
    * Post-resolution import execution, shared by the single-shot upload route
    * and the chunked transfer apply route: validate the resolved body, run the
@@ -729,7 +744,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     const actor = getActorInfo(req);
     const boardUserId = req.actor.type === "board" ? req.actor.userId : null;
     let domainInvoked = false;
-    const operation = async () => {
+    const operation = async (checkCancellation: () => Promise<void>) => {
       try {
         const importBody = companyPortabilityImportSchema.parse(rawImportBody);
         assertImportTargetAccess(req, importBody.target);
@@ -739,6 +754,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
           actor: req.actor,
           privateWorkAdmission: "closed",
           pauseAutomations: importBody.pauseAutomations === true,
+          checkCancellation,
         });
         // The import is committed. Settlement (hooks) runs before the
         // best-effort audit entry so a logging failure cannot make a
@@ -1503,7 +1519,7 @@ type ImportJobActorKind = "cloud_tenant" | "board";
 interface ImportJobRecord {
   id: string;
   actorKind: ImportJobActorKind;
-  status: "running" | "succeeded" | "failed" | "needs_reconciliation";
+  status: "running" | "cancelled" | "succeeded" | "failed" | "needs_reconciliation";
   createdAt: string;
   updatedAt: string;
   completedAt?: string;

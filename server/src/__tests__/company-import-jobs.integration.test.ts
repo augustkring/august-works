@@ -211,4 +211,30 @@ describeEmbeddedPostgres("native company import job ledger", () => {
     expect((await service.get(second.job.id, authority.actorKey))!.status).toBe("running");
   });
 
+  it("confirms cancellation before dispatch and fences a later start", async () => {
+    const authority = await seedAuthority(true);
+    const actor = authority.actor!;
+    const service = companyImportJobService(db);
+    const admitted = await service.admit(admission(authority), actor);
+
+    const cancelled = await service.requestCancellation(admitted.job.id, authority.actorKey, actor);
+    expect(cancelled).toMatchObject({ status: "cancelled", progressStage: "cancelled", cancelRequestedAt: expect.any(Date) });
+    expect(await service.start(admitted.job, actor)).toBe(false);
+    expect((await service.requestCancellation(admitted.job.id, authority.actorKey, actor))?.status).toBe("cancelled");
+  }, 90_000);
+
+  it("keeps cancellation requested during effects and makes restart inconclusive", async () => {
+    const authority = await seedAuthority(true);
+    const actor = authority.actor!;
+    const service = companyImportJobService(db);
+    const admitted = await service.admit(admission(authority), actor);
+    expect(await service.start(admitted.job, actor)).toBe(true);
+
+    const requested = await service.requestCancellation(admitted.job.id, authority.actorKey, actor);
+    expect(requested).toMatchObject({ status: "running", progressStage: "importing", cancelRequestedAt: expect.any(Date) });
+    expect(await service.cancellationRequested(admitted.job)).toBe(true);
+    await service.recoverInterrupted();
+    expect((await service.get(admitted.job.id, authority.actorKey))?.status).toBe("needs_reconciliation");
+  }, 90_000);
+
 });

@@ -1298,6 +1298,7 @@ function registerCurrentRoute(input: {
   path: string;
   tags: string[];
   summary: string;
+  description?: string;
   query?: z.ZodTypeAny;
   body?: z.ZodTypeAny;
   headers?: z.ZodTypeAny;
@@ -1319,6 +1320,7 @@ function registerCurrentRoute(input: {
     path: input.path,
     tags: input.tags,
     summary: input.summary,
+    ...(input.description ? { description: input.description } : {}),
     ...(request ? { request } : {}),
     responses: input.responses ?? {
       200: r.ok(),
@@ -1438,6 +1440,7 @@ const BOARD_ONLY_OPERATIONS = new Set([
   "GET /api/companies/stats",
   "GET /api/companies/issues",
   "GET /api/companies/import/jobs/{jobId}",
+  "POST /api/companies/import/jobs/{jobId}/cancel",
   "POST /api/board-claim/{token}/claim",
   "GET /api/cli-auth/me",
   "POST /api/companies/{companyId}/invites",
@@ -9890,8 +9893,8 @@ registry.registerPath({
   description:
     "A job is readable only by the actor that created it — the board user or the trusted Cloud " +
     "tenant identity from the async import submission. Any other caller gets the same 404 as an " +
-    "unknown id. Jobs are held in memory: they are dropped a few minutes after finishing and do " +
-    "not survive a server restart.",
+    "unknown id. Job identity and status are durable. Full result detail is process-local and may " +
+    "expire; an interrupted job requires reconciliation rather than automatic replay.",
   request: { params: z.object({ jobId: z.string() }) },
   responses: {
     200: r.ok(),
@@ -9899,6 +9902,16 @@ registry.registerPath({
     401: r.unauthorized,
     404: r.notFound,
   },
+});
+
+registerCurrentRoute({
+  method: "post",
+  path: "/api/companies/import/jobs/{jobId}/cancel",
+  tags: ["companies"],
+  summary: "Request cancellation of a company import",
+  description: "Cancellation before import effects start is confirmed immediately. Once effects begin, the native portability owner checks safe checkpoints; completed effects are not rolled back, and an interrupted partial result remains inconclusive until reconciled.",
+  request: { params: z.object({ jobId: z.string() }) },
+  responses: { 200: r.ok(), 401: r.unauthorized, 404: r.notFound },
 });
 
 for (const route of [

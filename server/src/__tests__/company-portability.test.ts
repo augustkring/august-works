@@ -189,7 +189,7 @@ vi.mock("../routes/org-chart-svg.js", () => ({
   renderOrgChartPng: vi.fn(async () => Buffer.from("png")),
 }));
 
-const { companyPortabilityService, dedupeImportedCompanyName, parseGitHubSourceUrl, renderYamlBlock, renderFrontmatter } = await import("../services/company-portability.js");
+const { companyPortabilityService, ImportCancellationError, dedupeImportedCompanyName, parseGitHubSourceUrl, renderYamlBlock, renderFrontmatter } = await import("../services/company-portability.js");
 
 const nativePostgresSupport = await getEmbeddedPostgresTestSupport();
 const itNative = nativePostgresSupport.supported ? it : it.skip;
@@ -1971,6 +1971,33 @@ describe("company portability", () => {
       selectedFiles: ["COMPANY.md"],
     }, "user-1");
     expect(imported.company.action).toBe("created");
+    expect(companySvc.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("confirms cancellation before the first write and fences at later import checkpoints", async () => {
+    const portability = companyPortabilityService({} as any);
+    const request = {
+      source: { type: "inline" as const, files: { "COMPANY.md": "---\nname: Import checkpoint\n---\n" } },
+      include: { company: true, agents: false, projects: false, issues: false },
+      target: { mode: "new_company" as const, newCompanyName: "Import checkpoint" },
+      collisionStrategy: "rename" as const,
+      selectedFiles: ["COMPANY.md"],
+    };
+
+    const beforeEffect = portability.importBundle(request, "user-1", {
+      checkCancellation: async () => { throw new Error("cancel requested"); },
+    });
+    await expect(beforeEffect).rejects.toBeInstanceOf(ImportCancellationError);
+    await expect(beforeEffect).rejects.toMatchObject({ effectsStarted: false });
+    expect(companySvc.create).not.toHaveBeenCalled();
+
+    companySvc.create.mockResolvedValue({ id: "company-import-checkpoint", name: "Import checkpoint" });
+    let checks = 0;
+    const afterEffect = portability.importBundle(request, "user-1", {
+      checkCancellation: async () => { if (++checks === 2) throw new Error("cancel requested"); },
+    });
+    await expect(afterEffect).rejects.toBeInstanceOf(ImportCancellationError);
+    await expect(afterEffect).rejects.toMatchObject({ effectsStarted: true });
     expect(companySvc.create).toHaveBeenCalledTimes(1);
   });
 

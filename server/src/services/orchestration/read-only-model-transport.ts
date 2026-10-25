@@ -36,59 +36,80 @@ function boundedRecord(max: number) {
   });
 }
 
+const managedTextBlockSchema = z.object({ type: z.literal("text"), text: z.string().max(262144) }).strict();
+const managedContentBlockSchema = z.discriminatedUnion("type", [
+  managedTextBlockSchema,
+  z.object({ type: z.literal("tool_use"), id: z.string().min(1).max(200), name: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/), input: boundedRecord(128) }).strict(),
+  z.object({
+    type: z.literal("tool_result"), tool_use_id: z.string().min(1).max(200),
+    content: z.union([z.string().max(262144), z.array(managedTextBlockSchema).max(128)]).optional(),
+    is_error: z.boolean().optional(),
+  }).strict(),
+]);
+
 const managedMessagesSchema = z.object({
   model: z.string().max(200).optional(),
   max_tokens: z.number().int().positive().max(8192),
   stream: z.boolean().optional(),
-  system: z.union([z.string().max(65536), z.array(boundedRecord(32)).max(128)]).optional(),
+  system: z.union([z.string().max(65536), z.array(managedTextBlockSchema).max(128)]).optional(),
   messages: z.array(z.object({
     role: z.enum(["user", "assistant"]),
-    content: z.union([z.string().max(262144), z.array(boundedRecord(32)).max(512)]),
+    content: z.union([z.string().max(262144), z.array(managedContentBlockSchema).max(512)]),
   }).strict()).min(1).max(256),
   tools: z.array(z.object({
     name: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/),
     description: z.string().max(8192).optional(),
     input_schema: boundedRecord(128),
   }).strict()).max(128).optional(),
-  tool_choice: boundedRecord(16).optional(),
+  tool_choice: z.discriminatedUnion("type", [
+    z.object({ type: z.enum(["auto", "any", "none"]) }).strict(),
+    z.object({ type: z.literal("tool"), name: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/) }).strict(),
+  ]).optional(),
   temperature: z.number().min(0).max(1).optional(),
   top_p: z.number().min(0).max(1).optional(),
   top_k: z.number().int().positive().max(1000).optional(),
   stop_sequences: z.array(z.string().max(1024)).max(16).optional(),
-  metadata: boundedRecord(16).optional(),
+  metadata: z.object({ user_id: z.string().max(128).optional() }).strict().optional(),
 }).strict();
+
+function assertBoundedJson(value: unknown) {
+  let nodes = 0;
+  const visit = (current: unknown, depth: number): boolean => {
+    if (++nodes > 20000 || depth > 32) return false;
+    if (Array.isArray(current)) return current.every((item) => visit(item, depth + 1));
+    if (!current || typeof current !== "object") return true;
+    return Object.entries(current as Record<string, unknown>).every(([key, child]) =>
+      key !== "__proto__" && visit(child, depth + 1));
+  };
+  if (!visit(value, 0)) throw new ReadOnlyModelTransportError("response_limit");
+}
 
 export function validateAnthropicManagedMessagesRequest(
   raw: unknown,
   input: { model: string; maxOutputTokens: number; maximumEnvelopeBytes: number },
 ) {
   const request = managedMessagesSchema.parse(raw);
+  assertBoundedJson(request);
   if (
     !/^[a-zA-Z0-9_.:-]{1,200}$/.test(input.model) ||
     !Number.isSafeInteger(input.maxOutputTokens) || input.maxOutputTokens < 1 ||
     !Number.isSafeInteger(input.maximumEnvelopeBytes) || input.maximumEnvelopeBytes < 1024 ||
     request.max_tokens > input.maxOutputTokens ||
+    request.stream !== true ||
     (request.model !== undefined && request.model !== input.model)
   ) throw new ReadOnlyModelTransportError("invalid_response");
   const providerRequest = { ...request, model: input.model, stream: false, service_tier: "standard_only" };
   const body = JSON.stringify(providerRequest);
   if (Buffer.byteLength(body, "utf8") > input.maximumEnvelopeBytes)
     throw new ReadOnlyModelTransportError("response_limit");
-  const containsUnqualifiedCostControl = (value: unknown): boolean => {
-    if (Array.isArray(value)) return value.some(containsUnqualifiedCostControl);
-    if (!value || typeof value !== "object") return false;
-    return Object.entries(value as Record<string, unknown>).some(([key, nested]) =>
-      ["cache_control", "thinking", "service_tier"].includes(key) || containsUnqualifiedCostControl(nested));
-  };
-  const containsImage = (value: unknown): boolean => {
-    if (Array.isArray(value)) return value.some(containsImage);
-    if (!value || typeof value !== "object") return false;
-    const record = value as Record<string, unknown>;
-    return record.type === "image" || Object.values(record).some(containsImage);
-  };
-  if (containsUnqualifiedCostControl(request) || containsImage(request))
+  for (const message of request.messages) if (Array.isArray(message.content))
+    for (const block of message.content)
+      if ((block.type === "tool_use" && message.role !== "assistant") || (block.type === "tool_result" && message.role !== "user"))
+        throw new ReadOnlyModelTransportError("invalid_response");
+  const toolNames = request.tools?.map((tool) => tool.name) ?? [];
+  if (new Set(toolNames).size !== toolNames.length)
     throw new ReadOnlyModelTransportError("invalid_response");
-  return { request, providerRequest, body };
+  return { request, providerRequest, body, toolNames };
 }
 
 /** Exactly one non-streaming text-only Messages call. No user endpoint,
@@ -296,7 +317,7 @@ export async function anthropicManagedMessagesCall(
     !Number.isSafeInteger(input.maximumEnvelopeBytes) || input.maximumEnvelopeBytes < 1024 ||
     !Number.isSafeInteger(input.maximumInputTokens) || input.maximumInputTokens < 1
   ) throw new ReadOnlyModelTransportError("invalid_response");
-  const { request, body } = validateAnthropicManagedMessagesRequest(raw, input);
+  const { request, body, toolNames } = validateAnthropicManagedMessagesRequest(raw, input);
   if (body.includes(credential))
     throw new ReadOnlyModelTransportError(body.includes(credential) ? "credential_boundary" : "response_limit");
   signal.throwIfAborted();
@@ -350,10 +371,22 @@ export async function anthropicManagedMessagesCall(
       ])).min(1).max(128),
       stop_reason: z.enum(["end_turn", "max_tokens", "stop_sequence", "tool_use"]),
       stop_sequence: z.string().max(1024).nullable().optional(),
-      usage: z.object({ input_tokens: z.number().int().nonnegative(), output_tokens: z.number().int().nonnegative() }).passthrough(),
+      usage: z.object({
+        input_tokens: z.number().int().safe().nonnegative(),
+        output_tokens: z.number().int().safe().nonnegative(),
+        cache_creation_input_tokens: z.number().int().safe().nonnegative().optional(),
+        cache_read_input_tokens: z.number().int().safe().nonnegative().optional(),
+      }).strict(),
     }).passthrough().parse(JSON.parse(text));
-    if (parsed.usage.output_tokens > request.max_tokens || parsed.usage.input_tokens > input.maximumInputTokens)
+    if (parsed.usage.output_tokens > request.max_tokens || parsed.usage.input_tokens > input.maximumInputTokens ||
+      (parsed.usage.cache_creation_input_tokens ?? 0) !== 0 || (parsed.usage.cache_read_input_tokens ?? 0) !== 0)
       throw new ReadOnlyModelTransportError("invalid_response");
+    const toolIds = new Set<string>();
+    for (const block of parsed.content) if (block.type === "tool_use") {
+      if (!toolNames.includes(block.name) || toolIds.has(block.id))
+        throw new ReadOnlyModelTransportError("invalid_response");
+      toolIds.add(block.id);
+    }
     const events: Array<[string, unknown]> = [["message_start", { type: "message_start", message: {
       id: parsed.id, type: "message", role: "assistant", model: parsed.model, content: [],
       stop_reason: null, stop_sequence: null, usage: { input_tokens: parsed.usage.input_tokens, output_tokens: 0 },

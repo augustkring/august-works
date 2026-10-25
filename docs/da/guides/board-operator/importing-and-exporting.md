@@ -67,12 +67,14 @@ En accepteret import har et gemt operations-id. Når siden genindlæses, kontrol
 
 Hvis en import til en ny virksomhed stadig kører, eller resultatet er ukendt, før målvirksomheden er bekræftet, kan den oprindelige anmoder finde operationen i Import history for en virksomhed, vedkommende aktuelt har adgang til. Indgangen viser **New company, result not yet confirmed**. Den identificerer eller beviser ikke, at en virksomhed er oprettet. Når målet er bekræftet, vises operationen i den pågældende virksomheds historik, hvis du har aktuel adgang.
 
-- **Running:** Vent på den gemte operation. Opret ikke en ny import.
+- **Running:** Vent på den gemte operation. Brug **Annuller import** for at anmode om et sikkert stop. Hvis du forlader siden, fortsætter importen.
+- **Cancellation requested:** Importen stopper ved et kontrolpunkt i den oprindelige importproces. Allerede gennemførte ændringer rulles ikke tilbage. Hvis processen ikke kan bekræfte en fuldstændig annulleringskvittering, forbliver resultatet ukendt og skal afklares.
+- **Cancelled:** Annulleringen blev bekræftet, før importændringerne begyndte. Ingen importeffekter blev udført.
 - **Complete:** Åbn den importerede virksomhed. Detaljerede navne vises måske ikke længere, men den gemte oversigt identificerer stadig den gennemførte operation, hvis du fortsat har adgang.
 - **Rejected before import:** Følg den viste årsag. Hvis pakken er ændret, skal du forhåndsvise de aktuelle filer, før du bekræfter igen.
 - **Outcome unknown:** Nogle ændringer kan allerede være gemt. Behold operations-id'et, og kontakt administratoren eller [support](/da/help/index). Upload ikke pakken igen for at undersøge, om den første import lykkedes.
 
-En genstart af serveren bevarer den accepterede operation. Automatisk genafspilning, annullering af en import, der allerede anvender ændringer, og selvbetjent afklaring af et ukendt resultat er ikke tilgængelige i denne forhåndsvisning. Cachen med fulde detaljer er midlertidig. At den forsvinder, giver ikke tilladelse til at starte importen igen.
+En genstart af serveren bevarer den accepterede operation. Automatisk genafspilning og selvbetjent afklaring af et ukendt resultat er ikke tilgængelige i denne forhåndsvisning. Cachen med fulde detaljer er midlertidig. At den forsvinder, giver ikke tilladelse til at starte importen igen.
 
 ## Eksportér en virksomhed med CLI
 

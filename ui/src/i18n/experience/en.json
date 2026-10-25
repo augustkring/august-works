@@ -3207,7 +3207,21 @@
     "firstAgentDefault": "Chief of staff"
   },
   "companyImport": {
-    "sourceCommit": "GitHub source commit: {{sha}}"
+    "sourceCommit": "GitHub source commit: {{sha}}",
+    "resumeHeading": "Resume watching import",
+    "resumeBody": "An import you started earlier is still running on the server. You can leave this page safely.",
+    "cancelImport": "Cancel import",
+    "requestingCancel": "Requesting cancellation…",
+    "cancelRequested": "Cancellation requested. The import will stop at a safe checkpoint; completed changes are not rolled back.",
+    "cancelRequestedProgress": "Cancellation requested. The import is checking for a safe stop point; completed changes will not be rolled back.",
+    "cancelled": "Import cancelled",
+    "cancelledBeforeEffects": "Import cancelled before any import changes were made.",
+    "cancelFailed": "Could not cancel import",
+    "cancelPendingTitle": "Cancellation requested",
+    "cancelPendingBody": "Checking the import owner for a safe stop point. Completed changes will not be rolled back.",
+    "cancelFinishedTitle": "Import already finished",
+    "cancelFinishedBody": "The current import result is shown when status refreshes.",
+    "cancelErrorStatus": "The import is checking for a safe stop point; completed changes will not be rolled back."
   },
   "supportCases": {
     "exportInclude": "Include support cases you can currently view, with their full customer-visible history. Internal notes, credentials and support-access grants are excluded. This archive cannot restore live cases.",

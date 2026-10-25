@@ -3745,7 +3745,23 @@ describe("realizeExecutionWorkspace", () => {
     }
   });
 
-  it("removes a created git worktree and branch during cleanup", async () => {
+  it("keeps non-empty local_fs workspaces during archive cleanup", async () => {
+    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-local-workspace-preserve-"));
+    const file = path.join(cwd, "owner-notes.txt");
+    await fs.writeFile(file, "unsaved owner work\n");
+    const result = await cleanupExecutionWorkspaceArtifacts({
+      workspace: { id: "local-fs-preserve", cwd, providerType: "local_fs", providerRef: cwd,
+        branchName: null, repoUrl: null, baseRef: null, projectId: "project-1", projectWorkspaceId: "source-1",
+        sourceIssueId: "issue-1", metadata: { createdByRuntime: true } },
+      projectWorkspace: { cwd: null, cleanupCommand: null },
+    });
+    expect(result.cleaned).toBe(false);
+    expect(result.warnings[0]).toContain("Workspace files require preservation");
+    expect(await fs.readFile(file, "utf8")).toBe("unsaved owner work\n");
+    await fs.rm(cwd, { recursive: true, force: true });
+  });
+
+  it("keeps a clean git worktree until exact restoration is verified", async () => {
     const repoRoot = await createTempRepo();
 
     const workspace = await realizeExecutionWorkspace({
@@ -3800,14 +3816,13 @@ describe("realizeExecutionWorkspace", () => {
       },
     });
 
-    expect(cleanup.cleaned).toBe(true);
-    expect(cleanup.warnings).toEqual([]);
-    await expect(fs.stat(workspace.cwd)).rejects.toThrow();
-    await expect(
-      execFileAsync("git", ["branch", "--list", workspace.branchName!], { cwd: repoRoot }),
-    ).resolves.toMatchObject({
-      stdout: "",
-    });
+    expect(cleanup.cleaned).toBe(false);
+    expect(cleanup.warnings[0]).toContain("Exact workspace restoration was not verified");
+    expect(await fs.stat(workspace.cwd)).toBeTruthy();
+    await expect(execFileAsync("git", ["branch", "--list", workspace.branchName!], { cwd: repoRoot }))
+      .resolves.toMatchObject({ stdout: expect.stringContaining(workspace.branchName!) });
+    await runGit(repoRoot, ["worktree", "remove", "--force", workspace.cwd!]);
+    await fs.rm(repoRoot, { recursive: true, force: true });
   });
 
   it("deletes a runtime-created branch at its verified tip after a reuse realization", async () => {
@@ -3877,14 +3892,10 @@ describe("realizeExecutionWorkspace", () => {
       expectedBranchHeadSha: verifiedBranchTip,
     });
 
-    expect(cleanup.cleaned).toBe(true);
-    expect(cleanup.warnings).toEqual([]);
-    await expect(fs.stat(reused.cwd)).rejects.toThrow();
-    await expect(
-      execFileAsync("git", ["rev-parse", "--verify", `refs/heads/${reused.branchName}`], {
-        cwd: repoRoot,
-      }),
-    ).rejects.toThrow();
+    expect(cleanup.cleaned).toBe(false);
+    expect(cleanup.warnings[0]).toContain("Exact workspace restoration was not verified");
+    await expect(fs.stat(reused.cwd)).resolves.toBeTruthy();
+    expect(await readGit(repoRoot, ["rev-parse", `refs/heads/${reused.branchName}`])).toBe(verifiedBranchTip);
   });
 
   it("keeps a runtime-created branch when its tip changes after guarded worktree removal", async () => {
@@ -3945,9 +3956,8 @@ describe("realizeExecutionWorkspace", () => {
       },
     });
 
-    expect(cleanup.cleaned).toBe(true);
-    expect(cleanup.warnings).toHaveLength(1);
-    expect(cleanup.warnings[0]).toContain(`Skipped deleting branch "${workspace.branchName}"`);
+    expect(cleanup.cleaned).toBe(false);
+    expect(cleanup.warnings[0]).toContain("Exact workspace restoration was not verified");
     expect(await readGit(repoRoot, ["rev-parse", `refs/heads/${workspace.branchName}`])).toBe(racedHeadSha);
   });
 
@@ -4007,9 +4017,8 @@ describe("realizeExecutionWorkspace", () => {
       },
     });
 
-    expect(cleanup.cleaned).toBe(true);
-    expect(cleanup.warnings).toHaveLength(1);
-    expect(cleanup.warnings[0]).toContain(`Skipped deleting branch "${workspace.branchName}"`);
+    expect(cleanup.cleaned).toBe(false);
+    expect(cleanup.warnings[0]).toContain("Exact workspace restoration was not verified");
     await expect(
       execFileAsync("git", ["branch", "--list", workspace.branchName!], { cwd: repoRoot }),
     ).resolves.toMatchObject({
@@ -9856,9 +9865,9 @@ describe("realizeExecutionWorkspace with an exact existing branch", () => {
       cleanupWorkspaceInput(workspace, repoRoot, branchTip),
     );
 
-    expect(cleanup.cleaned).toBe(true);
-    expect(cleanup.warnings).toEqual([]);
-    await expect(fs.stat(workspace.cwd)).rejects.toThrow();
+    expect(cleanup.cleaned).toBe(false);
+    expect(cleanup.warnings[0]).toContain("Exact workspace restoration was not verified");
+    await expect(fs.stat(workspace.cwd)).resolves.toBeTruthy();
     expect(await readGit(repoRoot, ["rev-parse", "refs/heads/feature/operator-owned"])).toBe(branchTip);
   });
 
@@ -9876,9 +9885,9 @@ describe("realizeExecutionWorkspace with an exact existing branch", () => {
       },
     });
 
-    expect(cleanup.cleaned).toBe(true);
-    expect(cleanup.warnings).toEqual([]);
-    await expect(fs.stat(workspace.cwd)).rejects.toThrow();
+    expect(cleanup.cleaned).toBe(false);
+    expect(cleanup.warnings[0]).toContain("Exact workspace restoration was not verified");
+    await expect(fs.stat(workspace.cwd)).resolves.toBeTruthy();
     expect(await readGit(repoRoot, ["rev-parse", "refs/heads/feature/legacy-owned"])).toBe(branchTip);
   });
 
@@ -9922,9 +9931,9 @@ describe("realizeExecutionWorkspace with an exact existing branch", () => {
       cleanupWorkspaceInput(workspace, repoRoot, branchTip),
     );
 
-    expect(cleanup.cleaned).toBe(true);
-    expect(cleanup.warnings).toEqual([]);
-    await expect(fs.stat(workspace.cwd)).rejects.toThrow();
+    expect(cleanup.cleaned).toBe(false);
+    expect(cleanup.warnings[0]).toContain("Exact workspace restoration was not verified");
+    await expect(fs.stat(workspace.cwd)).resolves.toBeTruthy();
     expect(await readGit(repoRoot, ["rev-parse", "refs/heads/feature/literal-pin"])).toBe(branchTip);
   });
 

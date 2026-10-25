@@ -9,8 +9,8 @@ import {
 } from "./read-only-model-profiles.js";
 
 /** Price/token qualification is separate from independent judge calibration.
- * This profile authorizes only the fixed server text transport. It does not
- * qualify an autonomous CLI, managed session or physical sandbox. */
+ * Both server text and fixed-origin managed Messages transports are admitted;
+ * no arbitrary CLI provider or direct provider egress is qualified. */
 export const workerModelProfileSchema = modelQualificationProfileSchema
   .extend({
     workerAgentId: z.string().uuid(),

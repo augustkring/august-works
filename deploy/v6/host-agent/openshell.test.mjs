@@ -104,7 +104,7 @@ async function fixture(work, hooks = {}) {
       assert.equal(options.env.PATH, "/usr/bin:/bin");
       const command = args.slice(4);
       if (command[0] === "profile" && command[1] === "describe")
-        return { stdout: JSON.stringify(hooks.brokerProfile ?? {}) };
+        return { stdout: JSON.stringify(hooks.modelBrokerProfile ?? hooks.brokerProfile ?? {}) };
       if (command[0] === "provider" && command[1] === "create") {
         assert.ok(!args.some(value => String(value).includes(hooks.brokerToken ?? "__never__")));
         assert.equal(options.env.PAPERCLIP_SANDBOX_BROKER_TOKEN, hooks.brokerToken);
@@ -211,6 +211,8 @@ function execRequest(deadlineAt = deadline(), stdinBase64 = "") {
     timeoutDeadline: deadlineAt,
     brokerCapabilityHash: null,
     brokerProviderProfile: null,
+    modelBrokerCapabilityHash: null,
+    modelBrokerProviderProfile: null,
   }))).digest("hex");
   return {
     requestId: randomUUID(), bindingId: scope.bindingId, hostEpoch: 1,
@@ -225,6 +227,12 @@ const brokerProfile = {
   id: "paperclip-broker",
   credentials: [{ name: "broker_token", env_vars: ["PAPERCLIP_SANDBOX_BROKER_TOKEN"], required: true, auth_style: "bearer", header_name: "Authorization" }],
   endpoints: [{ host: "paperclip.example.test", port: 443, protocol: "rest", enforcement: "enforce", path: "", rules: [{ allow: { method: "POST", path: "/mcp/gateways/*" } }] }],
+  binaries: [{ path: "/usr/bin/node" }],
+};
+const modelBrokerProfile = {
+  id: "paperclip-model-broker",
+  credentials: [{ name: "model_token", env_vars: ["PAPERCLIP_SANDBOX_MODEL_TOKEN"], required: true, auth_style: "bearer", header_name: "Authorization" }],
+  endpoints: [{ host: "paperclip.example.test", port: 443, protocol: "rest", enforcement: "enforce", path: "", rules: [{ allow: { method: "POST", path: "/runtime-tools/model/v1/messages" } }] }],
   binaries: [{ path: "/usr/bin/node" }],
 };
 function brokerExecRequest() {
@@ -269,6 +277,25 @@ function brokerExecRequest() {
     timeoutDeadline: request.deadlineAt,
     brokerCapabilityHash: createHash("sha256").update(token).digest("hex"),
     brokerProviderProfile: { id: request.brokerCredential.profileId, hash: request.brokerCredential.profileHash },
+    modelBrokerCapabilityHash: null,
+    modelBrokerProviderProfile: null,
+  }))).digest("hex");
+  return { request, token };
+}
+function modelBrokerExecRequest() {
+  const request = execRequest();
+  const expiresAt = new Date(Math.min(Date.parse(request.deadlineAt), Date.now() + 30000)).toISOString();
+  const claims = { scope: "worker_model", company_id: scope.companyId, run_id: request.runId, sub: randomUUID(),
+    exp: Math.floor(Date.parse(expiresAt) / 1000) + 1, worker_model: { workerAttemptId: randomUUID(), executionManifestId: request.manifestId } };
+  const token = `fixture.${Buffer.from(JSON.stringify(claims)).toString("base64url")}.signature`;
+  request.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN = "https://paperclip.example.test/";
+  request.modelBrokerCredential = { capabilityToken: token, profileId: modelBrokerProfile.id,
+    profileHash: createHash("sha256").update(JSON.stringify(canonical(modelBrokerProfile))).digest("hex"), expiresAt };
+  request.commandDigest = createHash("sha256").update(JSON.stringify(canonical({ argv: request.argv, cwd: request.cwd, env: request.env,
+    stdinHash: createHash("sha256").update(Buffer.from(request.stdinBase64, "base64")).digest("hex"), timeoutDeadline: request.deadlineAt,
+    brokerCapabilityHash: null, brokerProviderProfile: null,
+    modelBrokerCapabilityHash: createHash("sha256").update(token).digest("hex"),
+    modelBrokerProviderProfile: { id: request.modelBrokerCredential.profileId, hash: request.modelBrokerCredential.profileHash },
   }))).digest("hex");
   return { request, token };
 }
@@ -705,6 +732,33 @@ test("sandbox broker capability enters through an expiring native provider, neve
     assert.equal(calls.some(call => call.args.some(value => String(value).includes(token))), false);
     assert.equal(spawnedArgs.some(value => String(value).includes(token)), false);
     assert.equal(spawnedArgs.some(value => String(value).startsWith("PAPERCLIP_SANDBOX_BROKER_TOKEN=")), false);
+  }, hooks);
+});
+
+test("managed model capability uses its exact Messages route profile and stays out of workload env and argv", async () => {
+  let spawnedArgs = null;
+  const hooks = {
+    modelBrokerProfile,
+    spawnProcess(_file, args, options) {
+      spawnedArgs = args;
+      assert.equal(options.env.PAPERCLIP_SANDBOX_MODEL_TOKEN, undefined);
+      const child = new EventEmitter(); child.stdin = new PassThrough(); child.stdout = Readable.from([]); child.stderr = Readable.from([]);
+      child.kill = () => true; setImmediate(() => child.emit("close", 0, null)); return child;
+    },
+  };
+  await fixture(async ({ engine, enablePhysical, setPhase, calls }) => {
+    enablePhysical(); setPhase("Stopped");
+    await engine.execute(randomUUID(), { ...input("apply"), admission: { policyHash, expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: "model-policy", document: policyDocument } }, deadline());
+    await engine.execute(randomUUID(), { ...input("start"), start: { policyHash, expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: "model-start" } }, deadline());
+    const { request, token } = modelBrokerExecRequest(); hooks.brokerToken = token;
+    const scopeInput = { companyId: scope.companyId, bindingId: scope.bindingId, cellId: scope.cellId, cellGeneration: "1", sandboxRef: scope.sandboxRef };
+    assert.deepEqual(await engine.executeStream({ scope: scopeInput, request, capabilityToken: "fixture-token" }, () => {}), { exitCode: 0, timedOut: false });
+    assert.ok(calls.some(call => call.args.slice(4).join(" ").includes("provider create")));
+    assert.ok(calls.some(call => call.args.slice(4).join(" ").includes("paperclip-model-broker")));
+    assert.equal(calls.some(call => call.args.some(value => String(value).includes(token))), false);
+    assert.equal(spawnedArgs.some(value => String(value).includes(token)), false);
+    assert.equal(spawnedArgs.some(value => String(value).startsWith("PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN=")), true);
+    assert.equal(spawnedArgs.some(value => String(value).startsWith("PAPERCLIP_SANDBOX_MODEL_TOKEN=")), false);
   }, hooks);
 });
 

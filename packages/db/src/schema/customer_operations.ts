@@ -34,7 +34,7 @@ export const customerOperations = pgTable("customer_operations", {
   index("customer_operations_requester_status_idx").on(t.requesterKeyHash, t.status),
   index("customer_operations_user_idx").on(t.requestedByUserId),
   check("customer_operations_domain_check", sql`${t.operationType}='company_import' AND ${t.domain}='company_portability'`),
-  check("customer_operations_state_check", sql`${t.status} in ('running','succeeded','failed','needs_reconciliation')`),
+  check("customer_operations_state_check", sql`${t.status} in ('running','cancelled','succeeded','failed','needs_reconciliation')`),
   check("customer_operations_hash_check", sql`${t.requesterKeyHash} ~ '^[a-f0-9]{64}$' AND ${t.inputHash} ~ '^[a-f0-9]{64}$'`),
   check("customer_operations_attempt_check", sql`${t.attempt}>=1`),
 ]);

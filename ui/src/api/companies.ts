@@ -80,6 +80,7 @@ export interface CompanyImportJobStatus {
     /** Board-created jobs carry the full result for parity with the sync response. */
     importResult?: CompanyPortabilityImportResult;
   };
+  operation?: CustomerOperationReceipt;
   retryAfterMs?: number;
 }
 
@@ -163,6 +164,8 @@ export const companiesApi = {
     api.postForm<CompanyImportJobAccepted>("/companies/import?async=1", importPackageForm(file, meta)),
   getImportJob: (jobId: string) =>
     api.get<CompanyImportJobStatus>(`/companies/import/jobs/${encodeURIComponent(jobId)}`),
+  cancelImportJob: (jobId: string) =>
+    api.post<CompanyImportJobStatus>(`/companies/import/jobs/${encodeURIComponent(jobId)}/cancel`, {}),
   // Chunked resumable transfer for large local .zip packages: declare the
   // sliced zip (content-addressed, so re-declaring the same file resumes the
   // prior transfer with its uploaded parts intact), upload the missing parts,

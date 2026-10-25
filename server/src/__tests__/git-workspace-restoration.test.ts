@@ -90,6 +90,7 @@ async function fixture() {
   const nestedSettings = Buffer.from('{"permissions":{"deny":["Write"]}}\n');
   await fs.mkdir(path.join(nestedPath, ".claude"), { recursive: true });
   await fs.writeFile(path.join(nestedPath, ".claude/settings.local.json"), nestedSettings, { mode: 0o600 });
+  await fs.chmod(path.join(nestedPath, ".claude/settings.local.json"), 0o640);
   const workspace = {
     id: workspaceId, companyId, projectId, projectWorkspaceId, sourceIssueId, repoUrl, baseRef: "main",
     sourceRepoRef: "main", sourceCwd: null, sourceType: "remote_managed", sourceVisibility: "default",
@@ -198,6 +199,8 @@ describe("managed project worktree restoration recipe", () => {
       .toEqual(nestedSettings);
     const stat = await fs.stat(path.join(workspace.cwd!, ".claude/settings.local.json"));
     expect(stat.mode & 0o777).toBe(0o600);
+    const nestedStat = await fs.stat(path.join(workspace.cwd!, PROJECT_REPOSITORIES_DIR, nestedName, ".claude/settings.local.json"));
+    expect(nestedStat.mode & 0o777).toBe(0o640);
     const encrypted = await localEncryptedProvider.resolveVersion({ material: recipe.contents!.settings!.material, externalRef: null });
     expect(encrypted).not.toContain(settings.toString());
     await restoreManagedGitCacheWorktree({ workspace: persisted, baseCwd: recipe.sourcePath,
@@ -240,5 +243,34 @@ describe("managed project worktree restoration recipe", () => {
       cwd: workspace.cwd!, contents: recipe.contents, resolveGitAuth: async () => null,
       authorizeSource: async () => {} })).rejects.toThrow("saved workspace commit could not be restored");
     expect(await fs.readFile(path.join(workspace.cwd!, "README.md"), "utf8")).toBe("saved tree\n");
+  });
+
+  it("rechecks source authority after preparation and before publishing a restored checkout", async () => {
+    const { workspace, nestedName, nestedSource } = await fixture();
+    const resolveGitAuth = async () => null;
+    const managedCheckouts: ManagedCheckoutContents[] = [];
+    const recipe = await inspectGitCacheRecipe(workspace, resolveGitAuth, undefined, {
+      managedCheckouts,
+      proveManagedCheckout: async (checkoutPath, name, signal) => {
+        await assertReproducibleManagedCheckout(checkoutPath, { repoUrl: nestedSource.repoUrl, resolveGitAuth, signal });
+        managedCheckouts.push(await readManagedCheckoutContents(checkoutPath, name, nestedSource, signal));
+      },
+    });
+    await execFile("git", ["-C", recipe.sourcePath, "worktree", "remove", "--force", workspace.cwd!]);
+    const persisted = { ...workspace, metadata: { ...workspace.metadata, [GIT_CACHE_RESTORATION_KEY]: recipe } };
+    let authorizationChecks = 0;
+    await expect(restoreManagedGitCacheWorktree({
+      workspace: persisted,
+      baseCwd: recipe.sourcePath,
+      resolveGitAuth,
+      beforeMutation: async () => {},
+      authorizeSource: async source => {
+        if (source.id === workspace.projectWorkspaceId && ++authorizationChecks > 1) throw new Error("source withdrawn");
+      },
+      prepareLocalSource: async () => async () => {},
+    })).rejects.toThrow("source withdrawn");
+    await expect(fs.access(workspace.cwd!)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(fs.access(path.join(path.dirname(workspace.cwd!), `.${path.basename(workspace.cwd!)}.tmp`)))
+      .rejects.toMatchObject({ code: "ENOENT" });
   });
 });

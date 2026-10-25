@@ -1798,3 +1798,10 @@ All current source is saved on disk and checkpointed for recovery; this is unfin
 The original JavaScript logical backup owner now preserves PostgreSQL identity sequence ownership, generation mode, options and exact values. Full backup tests8/8 pass, including actual compressed backup/restore with ALWAYS and BY DEFAULT identities and sequence values above JavaScript safe integers. The full analytical restore suite is being rerun against this fix.
 
 Scoped UP04 lifecycle16/16, runtime-state7/7, SDK39/39, SDK build and redaction controls pass. Context8/8 and its cold sensitivity-filter regression pass at their recorded source checkpoints. Original native source closure, general managed model transport and optional Jev consumer integration remain under implementation; no fabricated provenance or operator qualifications are accepted. Whole-workspace final compiler/tests/build and PR are still outstanding.
+
+
+### 2026-10-25 — Post-restore analysis and continuing integration
+
+The complete business experiment analysis rerun passes20/20 after the original backup identity fix (223.80s). Its successful completed tool-output summary is retained separately as `business-experiment-analysis-20-backup-lib8-rerun`; the earlier raw19/20 failure is preserved. This summary is not a complete raw stdout archive. General workspace typecheck and build are being run serially to detect current integration issues while the remaining source owners are active, so these runs are diagnostic rather than unchanged-source final acceptance.
+
+Remaining concrete implementation includes durable import cancellation and its native effect checkpoints, preferred per-user/company Co-worker routing, managed model provider injection with complete request validation, and exact workspace/source restoration continuation. Native output provenance retains its current denial for unqualified inputs; no structural dispatch hash is promoted into proof of full model consumption.

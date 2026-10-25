@@ -18,6 +18,8 @@ const execFile = promisify(execFileCallback);
 const shaPattern = /^[a-f0-9]{40}$/;
 
 export const GIT_CACHE_RESTORATION_KEY = "gitCacheRestoration";
+const inspectedRecipeBrand = Symbol("inspected Git workspace recipe");
+const cleanupProofBrand = Symbol("verified Git workspace cleanup");
 export type GitCacheRestoration = {
   schema: "paperclip.git-cache-restoration.v1";
   companyId: string;
@@ -42,6 +44,12 @@ export type GitCacheRestoration = {
   contentsRestoredAt?: string | null;
   restorePending?: boolean;
   contents?: GitWorkspaceContents;
+};
+type InspectedGitCacheRestoration = GitCacheRestoration & { [inspectedRecipeBrand]: true };
+export type GitWorkspaceCleanupProof = {
+  readonly workspaceId: string;
+  readonly [cleanupProofBrand]: true;
+  readonly recheck: () => Promise<void>;
 };
 type Workspace = {
   id: string; companyId: string; projectId: string | null; projectWorkspaceId: string | null;
@@ -392,7 +400,20 @@ export async function inspectGitCacheRecipe(workspace: Workspace, resolveGitAuth
     sourceKind: "managed_project", projectId: workspace.projectId, projectWorkspaceId: workspace.projectWorkspaceId!,
     baseRef: workspace.baseRef, repoRef: workspace.sourceRepoRef ?? null,
     sourceCwd: workspace.sourceCwd ?? null, sourceType: workspace.sourceType!, sourceVisibility: workspace.sourceVisibility!,
-    sourcePath: source, worktreePath: workspace.cwd, gitBranchOwnershipVersion: 1, verifiedAt: new Date().toISOString(), contents };
+    sourcePath: source, worktreePath: workspace.cwd, gitBranchOwnershipVersion: 1, verifiedAt: new Date().toISOString(), contents,
+    [inspectedRecipeBrand]: true } as InspectedGitCacheRestoration;
+}
+
+/** Mint only from a live inspection, never from JSON metadata. The recheck runs
+ * at the destructive boundary while the caller holds the lifecycle lock. */
+export function createGitWorkspaceCleanupProof(recipe: GitCacheRestoration, recheck: () => Promise<void>): GitWorkspaceCleanupProof {
+  if (!(inspectedRecipeBrand in recipe)) throw new GitCacheRestorationFailure();
+  return Object.freeze({ workspaceId: recipe.workspaceId, recheck, [cleanupProofBrand]: true as const });
+}
+
+export async function assertGitWorkspaceCleanupProof(proof: GitWorkspaceCleanupProof | undefined, workspaceId: string) {
+  if (!proof || !(cleanupProofBrand in proof) || proof.workspaceId !== workspaceId) throw new GitCacheRestorationFailure();
+  await proof.recheck();
 }
 
 export async function ensureSavedGitCommit(cwd: string, repoUrl: string, commit: string, resolveGitAuth: GitRemoteAuthProvider) {
@@ -454,6 +475,12 @@ export async function restoreManagedGitCacheWorktree(input: {
   } else {
     if (branchOwner) throw new GitCacheRestorationFailure();
     await input.beforeMutation();
+    // The initial source check happens before Git performs network proofs and
+    // preparation. Recheck immediately before publishing the linked worktree so
+    // a revoked source cannot become a usable restored checkout in that gap.
+    await input.authorizeSource({ id: recipe.projectWorkspaceId, repoUrl: recipe.repoUrl, repoRef: recipe.repoRef,
+      cwd: recipe.sourceCwd, sourceType: recipe.sourceType, visibility: recipe.sourceVisibility });
+    await verifiedGitCacheSource(input.workspace, recipe.sourcePath);
     await execFile("git", ["-c", "core.fsmonitor=false", "-C", input.baseCwd, "worktree", "add",
       ...(currentBranchTip ? [] : ["-b", recipe.branchName]), "--", input.workspace.cwd,
       ...(currentBranchTip ? [recipe.branchName] : [recipe.commit])], {

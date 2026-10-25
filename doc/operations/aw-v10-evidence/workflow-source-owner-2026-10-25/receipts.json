@@ -2316,6 +2316,44 @@
         "Duration  35.24s (transform 9.64s, setup 70ms, import 13.74s, tests 21.32s, environment 0ms)"
       ],
       "sourceCommit": "bf361bbe1c9bdb25927b21e46dcbe30f66a3cdad"
+    },
+    {
+      "name": "business-experiment-analysis-20-backup-lib8-rerun",
+      "exitCode": 0,
+      "exitSidecar": "business-experiment-analysis-20-backup-lib8-rerun.exit",
+      "rawSha256": "9c04e8392be3f556b6768ce9b54c7651506c9db991f583c33f575ecfde06cff7",
+      "sanitizedSha256": "9c04e8392be3f556b6768ce9b54c7651506c9db991f583c33f575ecfde06cff7",
+      "archiveSha256": "138fe43631ac99238fe90f0aa5ae013f1fa467bd7848c23d536b83750016f034",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files 1 passed (1)",
+        "Tests 20 passed (20)",
+        "Duration 223.80s (transform 10.27s, setup 75ms, import 14.47s, tests 209.12s, environment 0ms)"
+      ],
+      "sourceCommit": "f6ab0bdd93a5aadfd29664ed8123cb6dd11f3b49"
+    },
+    {
+      "name": "v10-recovery-workspace-typecheck",
+      "exitCode": 1,
+      "exitSidecar": "v10-recovery-workspace-typecheck.exit",
+      "rawSha256": "92ac8a1ba1b74e7a4c99ee1570a515a805f8f72a616a6ea6a8bc66058c1e1deb",
+      "sanitizedSha256": "92ac8a1ba1b74e7a4c99ee1570a515a805f8f72a616a6ea6a8bc66058c1e1deb",
+      "archiveSha256": "0996650e8f948b551d0a94fb2210fddb054009a9c5c3b32084054b589baa81a2",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "f6ab0bdd93a5aadfd29664ed8123cb6dd11f3b49"
     }
   ],
   "updates": [
@@ -2648,6 +2686,20 @@
       "meaning": "Actual sandbox broker HTTP software integration only; not physical host/provider qualification",
       "logs": [
         "sandbox-broker-native-http-full"
+      ]
+    },
+    {
+      "sourceCommit": "f6ab0bdd93a5aadfd29664ed8123cb6dd11f3b49",
+      "meaning": "Full experiment analysis rerun after original backup identity fix; saved completed tool-output summary rather than complete raw stdout; scoped software only",
+      "logs": [
+        "business-experiment-analysis-20-backup-lib8-rerun"
+      ]
+    },
+    {
+      "sourceCommit": "f6ab0bdd93a5aadfd29664ed8123cb6dd11f3b49",
+      "meaning": "Serial whole-workspace diagnostic during active integration; failed server has transport variable and import DTO/OpenAPI errors, not final acceptance",
+      "logs": [
+        "v10-recovery-workspace-typecheck"
       ]
     }
   ],

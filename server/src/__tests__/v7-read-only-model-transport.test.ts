@@ -252,6 +252,9 @@ describe("managed Anthropic Messages broker transport", () => {
     await expect(anthropicManagedMessagesCall({ ...managedRequest, model: "other" }, {
       model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000,
     }, key, new AbortController().signal, { fetch })).rejects.toThrow();
+    await expect(anthropicManagedMessagesCall({ ...managedRequest, stream: false }, {
+      model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000,
+    }, key, new AbortController().signal, { fetch })).rejects.toThrow("invalid_response");
     expect(fetch).not.toHaveBeenCalled();
     await expect(anthropicManagedMessagesCall({ ...managedRequest, messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/png", data: "AA==" } }] }] }, {
       model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000,
@@ -269,5 +272,8 @@ describe("managed Anthropic Messages broker transport", () => {
     await expect(anthropicManagedMessagesCall(managedRequest, {
       model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000,
     }, key, new AbortController().signal, { fetch: async () => json({ ...toolResponse, usage: { input_tokens: 1001, output_tokens: 10 } }) })).rejects.toThrow("invalid_response");
+    await expect(anthropicManagedMessagesCall(managedRequest, {
+      model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000,
+    }, key, new AbortController().signal, { fetch: async () => json({ ...toolResponse, content: [{ ...toolResponse.content[0], name: "undeclared_tool" }] }) })).rejects.toThrow("invalid_response");
   });
 });

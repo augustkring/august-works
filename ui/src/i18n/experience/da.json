@@ -3207,7 +3207,21 @@
     "firstAgentDefault": "Stabschef"
   },
   "companyImport": {
-    "sourceCommit": "GitHub-kildecommit: {{sha}}"
+    "sourceCommit": "GitHub-kildecommit: {{sha}}",
+    "resumeHeading": "Fortsæt overvågning af import",
+    "resumeBody": "En import, du startede tidligere, kører stadig på serveren. Du kan trygt forlade denne side.",
+    "cancelImport": "Annuller import",
+    "requestingCancel": "Anmoder om annullering…",
+    "cancelRequested": "Annullering er anmodet. Importen stopper ved et sikkert kontrolpunkt; gennemførte ændringer rulles ikke tilbage.",
+    "cancelRequestedProgress": "Annullering er anmodet. Importen kontrollerer, om den kan stoppe sikkert; gennemførte ændringer rulles ikke tilbage.",
+    "cancelled": "Import annulleret",
+    "cancelledBeforeEffects": "Importen blev annulleret, før der blev foretaget ændringer.",
+    "cancelFailed": "Importen kunne ikke annulleres",
+    "cancelPendingTitle": "Annullering er anmodet",
+    "cancelPendingBody": "Kontrollerer, om importen kan stoppe sikkert. Gennemførte ændringer rulles ikke tilbage.",
+    "cancelFinishedTitle": "Importen er allerede afsluttet",
+    "cancelFinishedBody": "Det aktuelle importresultat vises, når status er opdateret.",
+    "cancelErrorStatus": "Importen kontrollerer, om den kan stoppe sikkert; gennemførte ændringer rulles ikke tilbage."
   },
   "supportCases": {
     "exportInclude": "Medtag supportsager, du har adgang til nu, med hele den kundevendte historik. Interne noter, legitimationsoplysninger og supportadgang er udeladt. Arkivet kan ikke genskabe aktive sager.",

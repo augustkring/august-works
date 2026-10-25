@@ -70,6 +70,9 @@ import { executionSandboxService } from "../execution-sandbox/sandbox-service.js
 import { getAssignedMcpGateway } from "../native-runtime/assigned-mcp-tools.js";
 import { createRunSecretRedactionRegistry } from "../run-secret-redaction.js";
 import { REDACTED_EVENT_VALUE } from "../../redaction.js";
+import { resolvePaperclipRunnerProviderProfile } from "../native-runtime/provider-profile.js";
+import type { workerModelGateway } from "../orchestration/worker-model-gateway.js";
+import { verifyRuntimeToolsToken } from "../../runtime-tools-token.js";
 
 const ACTIVE_OPERATIONS = [
   "REQUESTED",
@@ -103,7 +106,7 @@ export function runtimeControlService(
   db: Db,
   config: SaasPlatformConfig,
   notify?: NotifyCompany,
-  options: { credentialBrokerOrigin?: string } = {},
+  options: { credentialBrokerOrigin?: string; workerModels?: ReturnType<typeof workerModelGateway> } = {},
 ) {
   const credentialBrokerOrigin = configuredPaperclipEndpointOrigin(options.credentialBrokerOrigin);
   const auth = runtimeHostAuth(db);
@@ -2337,6 +2340,42 @@ export function runtimeControlService(
         brokerCredential !== undefined) {
         throw forbidden("Sandbox execution contains an unauthorized broker capability");
       }
+      const modelCredential = request.modelBrokerCredential;
+      const modelClaims = modelCredential ? verifyRuntimeToolsToken(modelCredential.capabilityToken, "worker_model") : null;
+      const modelBinding = modelClaims?.worker_model;
+      const [modelAttempt] = modelBinding ? await tx.select().from(orchestrationWorkerAttempts).where(and(
+        eq(orchestrationWorkerAttempts.companyId, claims.company_id),
+        eq(orchestrationWorkerAttempts.id, modelBinding.workerAttemptId),
+        eq(orchestrationWorkerAttempts.planId, modelBinding.planId),
+        eq(orchestrationWorkerAttempts.workerId, modelBinding.workerId),
+        eq(orchestrationWorkerAttempts.agentId, source.run.agentId!),
+        eq(orchestrationWorkerAttempts.runId, source.run.id),
+        eq(orchestrationWorkerAttempts.executionManifestId, source.manifest.id),
+        eq(orchestrationWorkerAttempts.status, "running"),
+      )).limit(1) : [];
+      const [modelPlan] = modelBinding ? await tx.select().from(orchestrationPlans).where(and(
+        eq(orchestrationPlans.companyId, claims.company_id),
+        eq(orchestrationPlans.id, modelBinding.planId),
+        eq(orchestrationPlans.version, modelBinding.expectedPlanVersion),
+        eq(orchestrationPlans.status, "running"),
+      )).limit(1) : [];
+      const nativeProvider = source.source.agent.adapterType === "paperclip_runner"
+        ? resolvePaperclipRunnerProviderProfile(source.source.agent.adapterConfig)
+        : null;
+      if (nativeProvider?.provider === "opencode") {
+        if (!modelCredential || !modelClaims?.worker_model || !source.capability.modelBrokerProviderProfile ||
+          modelCredential.profileId !== source.capability.modelBrokerProviderProfile.id ||
+          modelCredential.profileHash !== source.capability.modelBrokerProviderProfile.hash ||
+          request.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN !== credentialBrokerOrigin ||
+          modelClaims.company_id !== claims.company_id || modelClaims.sub !== source.run.agentId ||
+          modelClaims.run_id !== source.run.id || modelClaims.responsible_user_id !== source.run.responsibleUserId ||
+          modelClaims.exp * 1000 < Date.now() || Date.parse(modelCredential.expiresAt) > Date.parse(request.deadlineAt) ||
+          !modelAttempt || !modelPlan || modelPlan.issueId !== source.run.nativeIssueId ||
+          Date.parse(modelCredential.expiresAt) > modelClaims.exp * 1000)
+          throw forbidden("Managed OpenCode model broker capability is missing or outside its exact run scope");
+      } else if (modelCredential !== undefined) {
+        throw forbidden("Sandbox execution contains an unauthorized managed model capability");
+      }
       const [consumed] = await tx.update(runtimeHostCommands).set({ status: "CLAIMED", attempt: 1 }).where(and(
         eq(runtimeHostCommands.id, operation.id), eq(runtimeHostCommands.status, "PENDING"), eq(runtimeHostCommands.attempt, 0),
       )).returning({ id: runtimeHostCommands.id });
@@ -2417,7 +2456,7 @@ export function runtimeControlService(
     const cwd = input.cwd;
     if (!cwd || !cwd.startsWith("/")) throw conflict("Sandbox execution requires an absolute workspace path");
     const env = { ...(input.env ?? {}) };
-    for (const reserved of ["PAPERCLIP_SANDBOX_BROKER_TOKEN", "PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN", "PAPERCLIP_SANDBOX_BROKER_SESSION_ID"])
+    for (const reserved of ["PAPERCLIP_SANDBOX_BROKER_TOKEN", "PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN", "PAPERCLIP_SANDBOX_BROKER_SESSION_ID", "PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN"])
       if (Object.hasOwn(env, reserved)) throw conflict("Sandbox broker variables are server-owned");
     const stdinBytes = Buffer.from(input.stdin ?? "", "utf8");
     const requestId = randomUUID();
@@ -2438,6 +2477,26 @@ export function runtimeControlService(
     let brokerCapability: SandboxBrokerCapabilityClaim | null = null;
     let brokerCapabilityToken: string | null = null;
     let brokerProviderProfile: { id: string; hash: string } | null = null;
+    let modelBrokerCredential: { capabilityToken: string; profileId: string; profileHash: string; expiresAt: string } | null = null;
+    const runnerProfile = initialSource.source.agent.adapterType === "paperclip_runner"
+      ? resolvePaperclipRunnerProviderProfile(initialSource.source.agent.adapterConfig)
+      : null;
+    if (runnerProfile?.provider === "opencode") {
+      const profile = initialSource.capability.modelBrokerProviderProfile;
+      if (!options.workerModels || !profile || !credentialBrokerOrigin)
+        throw conflict("Qualified managed model broker is unavailable");
+      const minted = await options.workerModels.issueForRun({
+        companyId: input.companyId,
+        agentId: initialSource.run.agentId!,
+        runId: initialSource.run.id,
+        responsibleUserId: initialSource.run.responsibleUserId!,
+      });
+      const expiresAt = new Date(Math.min(Date.parse(minted.expiresAt), deadlineAt.getTime(), initialSource.lease.expiresAt!.getTime()));
+      if (expiresAt <= now) throw conflict("Managed model broker capability expired before sandbox dispatch");
+      modelBrokerCredential = { capabilityToken: minted.token, profileId: profile.id, profileHash: profile.hash, expiresAt: expiresAt.toISOString() };
+      await createRunSecretRedactionRegistry(db).register(input.companyId, initialSource.run.id, minted.token);
+      env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN = credentialBrokerOrigin;
+    }
     if (credentials.mode === "brokered") {
       if (credentials.bindings.length === 0) throw conflict("Brokered sandbox policy has no current credential bindings");
       brokerProviderProfile = initialSource.capability.credentialBrokerProviderProfile ?? null;
@@ -2502,7 +2561,9 @@ export function runtimeControlService(
     }
     const commandDigest = nativeSha256({ argv, cwd, env, stdinHash: sha256(stdinBytes), timeoutDeadline: deadlineAt.toISOString(),
       brokerCapabilityHash: brokerCapabilityToken ? sha256(brokerCapabilityToken) : null,
-      brokerProviderProfile: brokerProviderProfile ? { id: brokerProviderProfile.id, hash: brokerProviderProfile.hash } : null });
+      brokerProviderProfile: brokerProviderProfile ? { id: brokerProviderProfile.id, hash: brokerProviderProfile.hash } : null,
+      modelBrokerCapabilityHash: modelBrokerCredential ? sha256(modelBrokerCredential.capabilityToken) : null,
+      modelBrokerProviderProfile: modelBrokerCredential ? { id: modelBrokerCredential.profileId, hash: modelBrokerCredential.profileHash } : null });
     const attempt = initialSource.attempt?.attempt ?? Math.max(1, initialSource.run.continuationAttempt + 1);
     const prepared = await db.transaction(async transaction => {
       const tx = transaction as unknown as Db;
@@ -2543,6 +2604,7 @@ export function runtimeControlService(
           capabilityToken: brokerCapabilityToken, profileId: brokerProviderProfile.id,
           profileHash: brokerProviderProfile.hash, expiresAt: brokerCapability.expiresAt,
         } } : {}),
+        ...(modelBrokerCredential ? { modelBrokerCredential } : {}),
       };
     });
     if (!prepared) return null;
@@ -2570,6 +2632,7 @@ export function runtimeControlService(
         capabilityToken: brokerCapabilityToken, profileId: brokerProviderProfile.id,
         profileHash: brokerProviderProfile.hash, expiresAt: brokerCapability.expiresAt,
       } } : {}),
+      ...(modelBrokerCredential ? { modelBrokerCredential } : {}),
       stdinBase64: prepared.stdinBytes.toString("base64"),
     };
     const capabilityToken = createSandboxExecJwt({
@@ -2593,6 +2656,7 @@ export function runtimeControlService(
     const stdout: Buffer[] = [], stderr: Buffer[] = [];
     let outputBytes = 0;
     const brokerTokenForRedaction = prepared.brokerCredential?.capabilityToken ?? null;
+    const modelBrokerTokenForRedaction = prepared.modelBrokerCredential?.capabilityToken ?? null;
     const outputTail: Record<"stdout" | "stderr", string> = { stdout: "", stderr: "" };
     const assertCurrentOutputAuthority = async () => db.transaction(async transaction => {
       const tx = transaction as unknown as Db;
@@ -2625,20 +2689,21 @@ export function runtimeControlService(
     });
     const deliverOutput = async (stream: "stdout" | "stderr", chunk: string, final = false) => {
       if (!input.onOutput) return;
-      if (!brokerTokenForRedaction) {
+      const redactionTokens = [brokerTokenForRedaction, modelBrokerTokenForRedaction].filter((value): value is string => Boolean(value));
+      if (!redactionTokens.length) {
         if (chunk) await input.onOutput(stream, chunk);
         return;
       }
       const combined = outputTail[stream] + chunk;
-      let safeEnd = final ? combined.length : Math.max(0, combined.length - brokerTokenForRedaction.length + 1);
-      if (!final) {
-        let found = combined.indexOf(brokerTokenForRedaction);
+      let safeEnd = final ? combined.length : Math.max(0, combined.length - Math.max(...redactionTokens.map(token => token.length)) + 1);
+      if (!final) for (const token of redactionTokens) {
+        let found = combined.indexOf(token);
         while (found >= 0 && found < safeEnd) {
-          if (found + brokerTokenForRedaction.length > safeEnd) safeEnd = found;
-          found = combined.indexOf(brokerTokenForRedaction, found + brokerTokenForRedaction.length);
+          if (found + token.length > safeEnd) safeEnd = found;
+          found = combined.indexOf(token, found + token.length);
         }
       }
-      const safe = combined.slice(0, safeEnd).split(brokerTokenForRedaction).join(REDACTED_EVENT_VALUE);
+      const safe = redactionTokens.reduce((text, token) => text.split(token).join(REDACTED_EVENT_VALUE), combined.slice(0, safeEnd));
       outputTail[stream] = combined.slice(safeEnd);
       if (safe) await input.onOutput(stream, safe);
     };

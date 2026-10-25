@@ -74,19 +74,19 @@ export const orchestrationModelReservations = pgTable("orchestration_model_reser
  * support calls. It does not weaken or share the plan-backed reservation FK. */
 export const orchestrationCompanyPurposeBudgets = pgTable("orchestration_company_purpose_budgets", {
   id: uuid("id").primaryKey().defaultRandom(), companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "restrict" }),
-  purpose: text("purpose").$type<"first_party_support">().notNull(), funder: text("funder").notNull(), profileId: text("profile_id").notNull(), profileHash: text("profile_hash").notNull(), providerAccountId: text("provider_account_id").notNull(), credentialBindingHash: text("credential_binding_hash").notNull(), periodKey: text("period_key").notNull(),
+  purpose: text("purpose").$type<"first_party_support" | "decision_skill_suggestion">().notNull(), funder: text("funder").notNull(), profileId: text("profile_id").notNull(), profileHash: text("profile_hash").notNull(), providerAccountId: text("provider_account_id").notNull(), credentialBindingHash: text("credential_binding_hash").notNull(), periodKey: text("period_key").notNull(),
   periodStartsAt: timestamp("period_starts_at", { withTimezone: true }).notNull(), periodEndsAt: timestamp("period_ends_at", { withTimezone: true }).notNull(),
   provider: text("provider").notNull(), model: text("model").notNull(), sourceSha: text("source_sha").notNull(), qualificationHash: text("qualification_hash").notNull(), tariffHash: text("tariff_hash").notNull(),
   maxCostMinor: integer("max_cost_minor").notNull(), reservedMinor: integer("reserved_minor").notNull().default(0), maxCalls: integer("max_calls").notNull(), reservedCalls: integer("reserved_calls").notNull().default(0), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, t => ({
   tenantUq: unique("orchestration_company_purpose_budget_tenant_uq").on(t.companyId, t.id),
   periodUq: unique("orchestration_company_purpose_budget_period_uq").on(t.companyId, t.purpose, t.profileId, t.periodKey),
-  contractCheck: check("orchestration_company_purpose_budget_contract_ck", sql`${t.purpose}='first_party_support' and ${t.funder}='blentera_platform' and ${t.profileId} ~ '^[a-zA-Z0-9._:-]{1,120}$' and ${t.profileHash} ~ '^[a-f0-9]{64}$' and ${t.providerAccountId} ~ '^[a-zA-Z0-9._:-]{1,160}$' and ${t.credentialBindingHash} ~ '^[a-f0-9]{64}$' and ${t.periodKey} ~ '^[a-zA-Z0-9._:-]{1,120}$' and ${t.periodStartsAt}<${t.periodEndsAt} and ${t.periodEndsAt}<=${t.periodStartsAt}+interval '366 days' and ${t.provider} in ('openai','anthropic','openrouter') and length(${t.model}) between 1 and 200 and ${t.sourceSha} ~ '^[a-f0-9]{40}$' and ${t.qualificationHash} ~ '^[a-f0-9]{64}$' and ${t.tariffHash} ~ '^[a-f0-9]{64}$'`),
+  contractCheck: check("orchestration_company_purpose_budget_contract_ck", sql`${t.purpose} in ('first_party_support','decision_skill_suggestion') and ((${t.purpose}='first_party_support' and ${t.funder}='blentera_platform') or (${t.purpose}='decision_skill_suggestion' and ${t.funder}='company_connection')) and ${t.profileId} ~ '^[a-zA-Z0-9._:-]{1,120}$' and ${t.profileHash} ~ '^[a-f0-9]{64}$' and ${t.providerAccountId} ~ '^[a-zA-Z0-9._:-]{1,160}$' and ${t.credentialBindingHash} ~ '^[a-f0-9]{64}$' and ${t.periodKey} ~ '^[a-zA-Z0-9._:-]{1,120}$' and ${t.periodStartsAt}<${t.periodEndsAt} and ${t.periodEndsAt}<=${t.periodStartsAt}+interval '366 days' and ${t.provider} in ('openai','anthropic','openrouter') and length(${t.model}) between 1 and 200 and ${t.sourceSha} ~ '^[a-f0-9]{40}$' and ${t.qualificationHash} ~ '^[a-f0-9]{64}$' and ${t.tariffHash} ~ '^[a-f0-9]{64}$'`),
   amountCheck: check("orchestration_company_purpose_budget_amount_ck", sql`${t.maxCostMinor} between 1 and 1000000 and ${t.reservedMinor} between 0 and ${t.maxCostMinor} and ${t.maxCalls} between 1 and 10000 and ${t.reservedCalls} between 0 and ${t.maxCalls}`),
   periodIdx: index("orchestration_company_purpose_budget_period_idx").on(t.periodEndsAt),
 }));
 export const orchestrationCompanyPurposeReservations = pgTable("orchestration_company_purpose_reservations", {
-  id: uuid("id").primaryKey().defaultRandom(), companyId: uuid("company_id").notNull(), budgetId: uuid("budget_id").notNull(), principalUserId: text("principal_user_id").notNull(),
+  id: uuid("id").primaryKey().defaultRandom(), companyId: uuid("company_id").notNull(), budgetId: uuid("budget_id").notNull(), purpose: text("purpose").$type<"first_party_support" | "decision_skill_suggestion">().notNull().default("first_party_support"), principalUserId: text("principal_user_id").notNull(),
   /** Exact globally published first-party support package release pinned by
    * the trusted server. Null is retained only for pre-feature legacy rows. */
   packageVersionId: uuid("package_version_id"),
@@ -97,6 +97,7 @@ export const orchestrationCompanyPurposeReservations = pgTable("orchestration_co
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(), dispatchedAt: timestamp("dispatched_at", { withTimezone: true }), completedAt: timestamp("completed_at", { withTimezone: true }), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, t => ({
   tenantUq: unique("orchestration_company_purpose_reservation_tenant_uq").on(t.companyId, t.id),
+  purposeCheck: check("orchestration_company_purpose_reservation_purpose_ck", sql`${t.purpose} in ('first_party_support','decision_skill_suggestion')`),
   keyUq: unique("orchestration_company_purpose_reservation_key_uq").on(t.companyId, t.idempotencyKey),
   budgetFk: foreignKey({ columns: [t.companyId, t.budgetId], foreignColumns: [orchestrationCompanyPurposeBudgets.companyId, orchestrationCompanyPurposeBudgets.id] }).onDelete("restrict"),
   packageVersionFk: foreignKey({ columns: [t.packageVersionId], foreignColumns: [agentPackageVersions.id] }).onDelete("restrict"),

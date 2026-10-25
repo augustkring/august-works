@@ -338,9 +338,9 @@ export function workerModelGateway(db: Db, options: Options) {
       );
     // No existing managed cell is converted to a text-only qualification.
     // Its model boundary must be integrated with physical workload admission.
-    if (provider.runtime.providerProfileRef.startsWith("aw:cell:"))
+    if (provider.runtime.providerProfileRef.startsWith("aw:cell:") && p.transport !== "server-anthropic-messages-v1")
       throw forbidden(
-        "Managed sandbox model calls require the physical workload broker",
+        "Managed sandbox text-only calls are not qualified for a physical workload",
       );
     const selection = await aiConnectionService(tx).select({
       companyId: claims.company_id,
@@ -980,7 +980,6 @@ export function workerModelGateway(db: Db, options: Options) {
         }, credential, controller.signal, {
           fetch: options.fetch,
           onWireDispatch: async (wire) => {
-            if (!internal?.onWireDispatch) return;
             const receipt: WorkerModelDispatchWireReceipt = {
               ...wire, reservationId: reservation.id, callId, requestHash: inputHash,
             };
@@ -1007,7 +1006,7 @@ export function workerModelGateway(db: Db, options: Options) {
               await tx.update(heartbeatRuns).set({ runnerProfileJson: { ...profile, nativeAwModelWireIntents: intents }, updatedAt: new Date() })
                 .where(and(eq(heartbeatRuns.companyId, run.companyId), eq(heartbeatRuns.id, run.id), eq(heartbeatRuns.status, "running")));
             });
-            internal.onWireDispatch?.(receipt);
+            internal?.onWireDispatch?.(receipt);
           },
         });
         const outcome = await reservations.recordOutcome(claims.company_id, reservation.id, {

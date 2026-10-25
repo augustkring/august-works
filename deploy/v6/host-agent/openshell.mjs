@@ -113,8 +113,8 @@ export function openShellHostEngine({
     );
     return json ? JSON.parse(stdout) : stdout;
   }
-  async function inspectBrokerProviderProfile(request, deadlineAt) {
-    const broker = request.brokerCredential;
+  async function inspectBrokerProviderProfile(request, deadlineAt, model = false) {
+    const broker = model ? request.modelBrokerCredential : request.brokerCredential;
     if (!broker) return null;
     const profile = await cli(["profile", "describe", broker.profileId, "--output", "json"], deadlineAt);
     if (!profile || profile.id !== broker.profileId || hash(JSON.stringify(canonical(profile))) !== broker.profileHash ||
@@ -123,16 +123,16 @@ export function openShellHostEngine({
       !Array.isArray(profile.binaries)) throw new Error("sandbox_operation_unsupported");
     const credential = profile.credentials[0];
     if (credential?.auth_style !== "bearer" || credential.header_name?.toLowerCase() !== "authorization" ||
-      credential.env_vars?.length !== 1 || credential.env_vars[0] !== "PAPERCLIP_SANDBOX_BROKER_TOKEN" ||
+      credential.env_vars?.length !== 1 || credential.env_vars[0] !== (model ? "PAPERCLIP_SANDBOX_MODEL_TOKEN" : "PAPERCLIP_SANDBOX_BROKER_TOKEN") ||
       credential.token_grant || credential.refresh) throw new Error("sandbox_operation_unsupported");
     const endpoint = profile.endpoints[0];
-    const origin = new URL(request.env.PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN ?? "");
+    const origin = new URL(request.env[model ? "PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN" : "PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN"] ?? "");
     const port = origin.port ? Number(origin.port) : origin.protocol === "https:" ? 443 : 80;
     const rules = endpoint?.rules;
     if (origin.protocol !== "https:" || endpoint?.host !== origin.hostname || endpoint?.port !== port ||
       endpoint.protocol !== "rest" || endpoint.enforcement !== "enforce" || endpoint.allow_uninspected_credentials === true ||
       endpoint.path || !Array.isArray(rules) || rules.length !== 1 ||
-      rules[0]?.allow?.method !== "POST" || rules[0]?.allow?.path !== "/mcp/gateways/*")
+      rules[0]?.allow?.method !== "POST" || rules[0]?.allow?.path !== (model ? "/runtime-tools/model/v1/messages" : "/mcp/gateways/*"))
       throw new Error("sandbox_operation_unsupported");
     return { profile, origin };
   }
@@ -171,6 +171,25 @@ export function openShellHostEngine({
     if (!Array.isArray(attached.providers) || !attached.providers.some(value => value?.name === providerName) || attached.next_page_token !== "")
       throw new Error("sandbox_observation_unavailable");
   }
+  async function attachModelBrokerProvider(request, scope, deadlineAt, providerName) {
+    const broker = request.modelBrokerCredential;
+    if (!broker) return;
+    if (Date.parse(broker.expiresAt) <= Date.now() || Date.parse(broker.expiresAt) > Date.parse(deadlineAt)) throw new Error("exec_timeout");
+    const decoded = (() => { try { return JSON.parse(Buffer.from(broker.capabilityToken.split(".")[1], "base64url").toString("utf8")); } catch { return null; } })();
+    if (!decoded || decoded.scope !== "worker_model" || decoded.company_id !== scope.companyId || decoded.run_id !== request.runId ||
+      decoded.exp * 1000 <= Date.now() || decoded.exp * 1000 < Date.parse(broker.expiresAt) ||
+      decoded.worker_model?.executionManifestId !== request.manifestId || !decoded.worker_model?.workerAttemptId)
+      throw new Error("sandbox_scope_changed");
+    const { origin } = await inspectBrokerProviderProfile(request, deadlineAt, true);
+    if (origin.username || origin.password || origin.pathname !== "/" || origin.search || origin.hash) throw new Error("sandbox_operation_unsupported");
+    const credentialEnv = "PAPERCLIP_SANDBOX_MODEL_TOKEN";
+    await cli(["provider", "create", "--name", providerName, "--type", broker.profileId, "--credential", credentialEnv], deadlineAt, false, { [credentialEnv]: broker.capabilityToken });
+    await cli(["provider", "update", providerName, "--credential-expires-at", `${credentialEnv}=${broker.expiresAt}`], deadlineAt, false);
+    const waitSeconds = Math.max(1, Math.min(15, Math.floor((Date.parse(deadlineAt) - Date.now()) / 1000)));
+    await cli(["sandbox", "provider", "attach", scope.sandboxRef, providerName, "--wait", "--timeout", String(waitSeconds), "--output", "json"], deadlineAt, true, {}, 18_000);
+    const attached = await cli(["sandbox", "provider", "list", scope.sandboxRef, "--page-size", "16", "--output", "json"], deadlineAt);
+    if (!Array.isArray(attached.providers) || !attached.providers.some(value => value?.name === providerName) || attached.next_page_token !== "") throw new Error("sandbox_observation_unavailable");
+  }
   async function detachAndDeleteBrokerProvider(scope, deadlineAt, providerName) {
     await cli(["sandbox", "provider", "detach", scope.sandboxRef, providerName, "--wait", "--timeout", "15", "--output", "json"], deadlineAt, true, {}, 18_000);
     const attached = await cli(["sandbox", "provider", "list", scope.sandboxRef, "--page-size", "16", "--output", "json"], deadlineAt);
@@ -180,10 +199,8 @@ export function openShellHostEngine({
   }
   async function deleteQuiescedBrokerProviders(scope, deadlineAt) {
     const pending = Object.values(journal.commands).flatMap(command => {
-      const provider = command?.brokerProvider;
-      return provider && validScope(provider.scope) && sameDocument(provider.scope, scope) &&
-        /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,100}$/.test(provider.name ?? "")
-        ? [provider.name] : [];
+      return [command?.brokerProvider, command?.modelBrokerProvider].filter(provider => provider && validScope(provider.scope) && sameDocument(provider.scope, scope) &&
+        /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,100}$/.test(provider.name ?? "")).map(provider => provider.name);
     });
     const names = [...new Set(pending)].slice(0, 32);
     for (const name of names) await cli(["provider", "delete", name], deadlineAt, false);
@@ -191,6 +208,8 @@ export function openShellHostEngine({
       for (const command of Object.values(journal.commands)) {
         if (command?.brokerProvider && names.includes(command.brokerProvider.name) && validScope(command.brokerProvider.scope) && sameDocument(command.brokerProvider.scope, scope))
           delete command.brokerProvider;
+        if (command?.modelBrokerProvider && names.includes(command.modelBrokerProvider.name) && validScope(command.modelBrokerProvider.scope) && sameDocument(command.modelBrokerProvider.scope, scope))
+          delete command.modelBrokerProvider;
       }
       await atomicJson(journalFile, journal);
     });
@@ -733,9 +752,9 @@ export function openShellHostEngine({
   async function executeStream(input, onOutput, signal) {
     const request = input?.request;
     const requestKeys = ["requestId", "bindingId", "hostEpoch", "runId", "attemptId", "attempt", "manifestId", "manifestHash", "policySnapshotId", "policyHash", "commandDigest", "deadlineAt", "sandboxRef", "imageDigest", "argv", "cwd", "env", "stdinBase64"];
-    const requestKeysWithBroker = [...requestKeys, "brokerCredential"];
+    const requestVariants = [requestKeys, [...requestKeys, "brokerCredential"], [...requestKeys, "modelBrokerCredential"], [...requestKeys, "brokerCredential", "modelBrokerCredential"]];
     if (!input || !validScope(input.scope) || !request ||
-      ![requestKeys, requestKeysWithBroker].some(keys => Object.keys(request).sort().join(",") === keys.slice().sort().join(",")) ||
+      !requestVariants.some(keys => Object.keys(request).sort().join(",") === keys.slice().sort().join(",")) ||
       !uuid.test(request.requestId) || request.bindingId !== input.scope.bindingId ||
       request.hostEpoch !== epoch || !uuid.test(request.runId) ||
       (request.attemptId !== null && !uuid.test(request.attemptId)) ||
@@ -755,6 +774,11 @@ export function openShellHostEngine({
         typeof request.brokerCredential.profileHash !== "string" || !/^[a-f0-9]{64}$/.test(request.brokerCredential.profileHash) ||
         typeof request.brokerCredential.expiresAt !== "string" || !Number.isFinite(Date.parse(request.brokerCredential.expiresAt)))) ||
       (!!request.brokerCredential !== (typeof request.env.PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN === "string" && typeof request.env.PAPERCLIP_SANDBOX_BROKER_SESSION_ID === "string")) ||
+      (request.modelBrokerCredential !== undefined && (!request.modelBrokerCredential || typeof request.modelBrokerCredential.capabilityToken !== "string" || request.modelBrokerCredential.capabilityToken.length > 16_384 ||
+        typeof request.modelBrokerCredential.profileId !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,99}$/.test(request.modelBrokerCredential.profileId) ||
+        typeof request.modelBrokerCredential.profileHash !== "string" || !/^[a-f0-9]{64}$/.test(request.modelBrokerCredential.profileHash) ||
+        typeof request.modelBrokerCredential.expiresAt !== "string" || !Number.isFinite(Date.parse(request.modelBrokerCredential.expiresAt)))) ||
+      (!!request.modelBrokerCredential !== (typeof request.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === "string")) ||
       typeof request.stdinBase64 !== "string" || request.stdinBase64.length > 512 * 1024 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(request.stdinBase64) ||
       typeof input.capabilityToken !== "string" || input.capabilityToken.length > 16384 ||
       typeof onOutput !== "function") throw new Error("sandbox_scope_changed");
@@ -764,6 +788,8 @@ export function openShellHostEngine({
       stdinHash: hash(Buffer.from(request.stdinBase64, "base64")), timeoutDeadline: deadlineAt,
       brokerCapabilityHash: request.brokerCredential ? hash(request.brokerCredential.capabilityToken) : null,
       brokerProviderProfile: request.brokerCredential ? { id: request.brokerCredential.profileId, hash: request.brokerCredential.profileHash } : null,
+      modelBrokerCapabilityHash: request.modelBrokerCredential ? hash(request.modelBrokerCredential.capabilityToken) : null,
+      modelBrokerProviderProfile: request.modelBrokerCredential ? { id: request.modelBrokerCredential.profileId, hash: request.modelBrokerCredential.profileHash } : null,
     })));
     if (commandDigest !== request.commandDigest) throw new Error("sandbox_scope_changed");
     const detail = await observed(input.scope, deadlineAt);
@@ -792,13 +818,20 @@ export function openShellHostEngine({
           expiresAt: request.brokerCredential.expiresAt,
           scope: input.scope,
         } } : {}),
+        ...(request.modelBrokerCredential ? { modelBrokerProvider: {
+          name: `awmb-${request.requestId.replaceAll("-", "")}`,
+          expiresAt: request.modelBrokerCredential.expiresAt,
+          scope: input.scope,
+        } } : {}),
       };
       await atomicJson(journalFile, journal);
     });
     if (signal?.aborted) throw new Error("exec_unknown");
     if (Date.parse(deadlineAt) <= Date.now()) throw new Error("exec_timeout");
     const brokerProviderName = request.brokerCredential ? `awbr-${request.requestId.replaceAll("-", "")}` : null;
+    const modelBrokerProviderName = request.modelBrokerCredential ? `awmb-${request.requestId.replaceAll("-", "")}` : null;
     if (brokerProviderName) await attachBrokerProvider(request, input.scope, deadlineAt, brokerProviderName);
+    if (modelBrokerProviderName) await attachModelBrokerProvider(request, input.scope, deadlineAt, modelBrokerProviderName);
     const cliArgs = ["--gateway", config.gateway, "--workspace", config.workspace, "sandbox", "exec", "--name", input.scope.sandboxRef, "--workdir", request.cwd];
     for (const key of Object.keys(request.env).sort()) cliArgs.push("--env", `${key}=${request.env[key]}`);
     cliArgs.push("--", ...request.argv);
@@ -848,6 +881,7 @@ export function openShellHostEngine({
     }
     if (timedOut) throw new Error("exec_unknown");
     if (brokerProviderName) await detachAndDeleteBrokerProvider(input.scope, deadlineAt, brokerProviderName);
+    if (modelBrokerProviderName) await detachAndDeleteBrokerProvider(input.scope, deadlineAt, modelBrokerProviderName);
     await serial(async () => {
       journal.commands[request.requestId] = { requestHash, result: { exitCode, timedOut }, kind: "exec", state: "completed" };
       await atomicJson(journalFile, journal);

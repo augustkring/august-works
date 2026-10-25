@@ -14,7 +14,22 @@ import { createHash } from "node:crypto";
 
 /** The Accept header value required by the MCP Streamable HTTP transport. */
 export const MCP_HTTP_ACCEPT = "application/json, text/event-stream";
-export const MCP_PROTOCOL_VERSION = "2025-06-18";
+export const MCP_PROTOCOL_VERSION = "2026-07-28";
+// Keep the versions exercised by current supported remote MCP clients during
+// the compatibility window. Transport negotiation never changes tool policy.
+export const SUPPORTED_MCP_PROTOCOL_VERSIONS = new Set([
+  MCP_PROTOCOL_VERSION,
+  "2025-11-25",
+  "2025-06-18",
+  "2025-03-26",
+]);
+
+/** Select a mutually supported revision for a server-side initialize response. */
+export function selectMcpProtocolVersion(requested: unknown): string {
+  return typeof requested === "string" && SUPPORTED_MCP_PROTOCOL_VERSIONS.has(requested)
+    ? requested
+    : MCP_PROTOCOL_VERSION;
+}
 
 export class McpHttpResponseError extends Error {
   constructor(readonly reason: "invalid_json" | "malformed_response" | "too_large", message: string) {
@@ -90,9 +105,14 @@ export async function initializeMcpHttpSession(input: {
     : null;
   const resultRecord = result && typeof result === "object" ? result as Record<string, unknown> : null;
   if (!resultRecord) throw new McpHttpInitializationError("Remote MCP initialization failed", "initialize", null);
-  const protocolVersion = typeof resultRecord?.protocolVersion === "string" && resultRecord.protocolVersion
-    ? resultRecord.protocolVersion
-    : MCP_PROTOCOL_VERSION;
+  const protocolVersion = resultRecord.protocolVersion;
+  if (typeof protocolVersion !== "string" || !SUPPORTED_MCP_PROTOCOL_VERSIONS.has(protocolVersion)) {
+    throw new McpHttpInitializationError(
+      "Remote MCP server selected an unsupported protocol version",
+      "initialize",
+      null,
+    );
+  }
   const sessionId = initializeResponse.headers.get("mcp-session-id");
   const sessionHeaders: Record<string, string> = {
     ...(input.headers ?? {}),

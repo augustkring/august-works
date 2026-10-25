@@ -174,11 +174,10 @@ export function modelReservationService(
      * funding contract; a missing profile means taskless support inference is
      * unavailable. */
     qualifiedCompanyPurposeFunding?(
-      input: { companyId: string; purpose: "first_party_support" },
+      input: { companyId: string; purpose: CompanyPurposeRequest["purpose"] },
       now: Date,
     ): CompanyPurposeFunding | null;
-    /** Exact deployment-owned first-party package release. No request field
-     * or customer preference can select a different version. */
+    /** Exact deployment-owned first-party package release. Required only for Support. */
     firstPartySupportVersionId?: string;
     /** Original support caller resolves current readable source authority under
      * this transaction. This server-held callback is required for taskless use. */
@@ -326,18 +325,18 @@ export function modelReservationService(
     now: Date,
   ) {
     if (!options.qualifiedCompanyPurposeFunding) {
-      throw forbidden("Platform-funded support inference is not configured");
+      throw forbidden("Company-purpose model funding is not configured");
     }
     const raw = options.qualifiedCompanyPurposeFunding(
-      { companyId: input.companyId, purpose: "first_party_support" },
+      { companyId: input.companyId, purpose: input.purpose },
       now,
     );
-    if (!raw) throw forbidden("No current platform support funding profile is qualified");
+    if (!raw) throw forbidden("No current company-purpose funding profile is qualified");
     const funding = companyPurposeFundingSchema.parse(raw);
     if (
       funding.companyId !== input.companyId ||
-      funding.purpose !== "first_party_support" ||
-      funding.funder !== "blentera_platform" ||
+      funding.purpose !== input.purpose ||
+      ((input.purpose === "first_party_support") !== (funding.funder === "blentera_platform")) ||
       funding.profileHash !== companyPurposeProfileHash(funding) ||
       funding.tariff.sourceSha !== options.sourceSha ||
       Date.parse(funding.periodStartsAt) > now.getTime() ||
@@ -345,7 +344,7 @@ export function modelReservationService(
       Date.parse(funding.periodEndsAt) - Date.parse(funding.periodStartsAt) >
         366 * 24 * 60 * 60 * 1000
     ) {
-      throw forbidden("The current platform support funding contract is invalid or expired");
+      throw forbidden("The current company-purpose funding contract is invalid or expired");
     }
     const quote = quoteModelReservation(
       {
@@ -357,7 +356,7 @@ export function modelReservationService(
       now,
     );
     if (quote.maximumMinor > funding.maxCostMinor) {
-      throw forbidden("The support call exceeds its platform-funded budget period");
+      throw forbidden("The call exceeds its company-purpose budget period");
     }
     return { funding, quote };
   }
@@ -420,7 +419,7 @@ export function modelReservationService(
       eq(orchestrationCompanyPurposeBudgets.periodKey, funding.periodKey),
     )).for("update");
     if (!budget ||
-      budget.funder !== funding.funder || budget.profileHash !== funding.profileHash ||
+      budget.purpose !== funding.purpose || budget.funder !== funding.funder || budget.profileHash !== funding.profileHash ||
       budget.providerAccountId !== funding.providerAccountId ||
       budget.credentialBindingHash !== funding.credentialBindingHash ||
       budget.periodStartsAt.getTime() !== Date.parse(funding.periodStartsAt) ||
@@ -446,22 +445,16 @@ export function modelReservationService(
         await lockMemoryPrivacy(tx, input.companyId);
         const userId = await assertCompanyPurposeAuthority(tx, actor, input);
         const { funding, quote } = freshCompanyPurposeFunding(input, now);
-        if (!options.firstPartySupportVersionId) {
-          throw forbidden("The first-party support package release is not configured");
-        }
-        const supportPackage = await assertFirstPartySupportRelease(
-          tx,
-          options.firstPartySupportVersionId,
-          funding.tariff.sourceSha,
-          now,
-        );
+        const supportPackage = input.purpose === "first_party_support"
+          ? await assertFirstPartySupportRelease(tx, options.firstPartySupportVersionId ?? "", funding.tariff.sourceSha, now)
+          : null;
         const budget = await ensureCompanyPurposeBudget(tx, funding);
         const requestHash = nativeSha256({
-          purpose: "first_party_support",
+          purpose: input.purpose,
           input,
           principalUserId: userId,
           funding: funding.profileHash,
-          packageVersionId: supportPackage.packageVersionId,
+          packageVersionId: supportPackage?.packageVersionId ?? null,
           quote,
         });
         const [existing] = await tx.select().from(orchestrationCompanyPurposeReservations).where(and(
@@ -470,7 +463,7 @@ export function modelReservationService(
         ));
         if (existing) {
           if (existing.requestHash !== requestHash) {
-            throw conflict("Support reservation key belongs to different immutable inputs");
+            throw conflict("Company-purpose reservation key belongs to different immutable inputs");
           }
           return existing;
         }
@@ -487,7 +480,8 @@ export function modelReservationService(
         const [reservation] = await tx.insert(orchestrationCompanyPurposeReservations).values({
           companyId: input.companyId,
           budgetId: budget.id,
-          packageVersionId: supportPackage.packageVersionId,
+          purpose: input.purpose,
+          packageVersionId: supportPackage?.packageVersionId ?? null,
           principalUserId: userId,
           idempotencyKey: input.idempotencyKey,
           requestHash,
@@ -507,8 +501,8 @@ export function modelReservationService(
           entityId: input.companyId,
           details: {
             reservationId: reservation!.id,
-            purpose: "first_party_support",
-            funder: "blentera_platform",
+            purpose: input.purpose,
+            funder: funding.funder,
             maximumMinor: quote.maximumMinor,
             currency: quote.currency,
             tariffHash: quote.tariffHash,
@@ -534,6 +528,7 @@ export function modelReservationService(
         if (!initial) throw notFound("Company-purpose model reservation not found");
         const input: CompanyPurposeRequest = {
           companyId,
+          purpose: initial.purpose,
           idempotencyKey: initial.idempotencyKey,
           inputHash: initial.inputHash,
           authorityHash: initial.authorityHash,
@@ -541,21 +536,13 @@ export function modelReservationService(
           maxOutputTokens: initial.quote.maxOutputTokens,
         };
         const userId = await assertCompanyPurposeAuthority(tx, actor, input);
-        if (initial.principalUserId !== userId) throw forbidden("Original support principal required");
+        if (initial.principalUserId !== userId) throw forbidden("Original company-purpose principal required");
         const { funding, quote } = freshCompanyPurposeFunding(input, now);
-        if (!options.firstPartySupportVersionId) {
-          throw forbidden("The first-party support package release is not configured");
-        }
-        await assertFirstPartySupportReservation(
-          tx,
-          companyId,
-          initial.id,
-          options.firstPartySupportVersionId,
-          funding.tariff.sourceSha,
-          now,
+        if (input.purpose === "first_party_support") await assertFirstPartySupportReservation(
+          tx, companyId, initial.id, options.firstPartySupportVersionId ?? "", funding.tariff.sourceSha, now,
         );
         const budget = await ensureCompanyPurposeBudget(tx, funding);
-        if (budget.id !== initial.budgetId) throw conflict("The support funding profile changed before dispatch");
+        if (budget.id !== initial.budgetId) throw conflict("The company-purpose funding profile changed before dispatch");
         const [record] = await tx.select().from(orchestrationCompanyPurposeReservations).where(eq(
           orchestrationCompanyPurposeReservations.id,
           initial.id,
@@ -577,16 +564,11 @@ export function modelReservationService(
           action: "orchestration.company_purpose_model_dispatch_claimed",
           entityType: "company",
           entityId: companyId,
-          details: { reservationId: id, purpose: "first_party_support", maximumMinor: record.maximumMinor },
+          details: { reservationId: id, purpose: input.purpose, maximumMinor: record.maximumMinor },
         }, publications);
         await assertCompanyPurposeAuthority(tx, actor, input);
-        await assertFirstPartySupportReservation(
-          tx,
-          companyId,
-          id,
-          options.firstPartySupportVersionId,
-          funding.tariff.sourceSha,
-          now,
+        if (input.purpose === "first_party_support") await assertFirstPartySupportReservation(
+          tx, companyId, id, options.firstPartySupportVersionId ?? "", funding.tariff.sourceSha, now,
         );
         return {
           reservation: dispatched!,
@@ -739,6 +721,7 @@ export function modelReservationService(
         if (!initial) throw notFound("Company-purpose model reservation not found");
         const input: CompanyPurposeRequest = {
           companyId,
+          purpose: initial.purpose,
           idempotencyKey: initial.idempotencyKey,
           inputHash: initial.inputHash,
           authorityHash: initial.authorityHash,
@@ -748,19 +731,11 @@ export function modelReservationService(
         const userId = await assertCompanyPurposeAuthority(tx, actor, input);
         if (initial.principalUserId !== userId) throw forbidden("Original support principal required");
         const { funding, quote } = freshCompanyPurposeFunding(input, now);
-        if (!options.firstPartySupportVersionId) {
-          throw forbidden("The first-party support package release is not configured");
-        }
-        await assertFirstPartySupportReservation(
-          tx,
-          companyId,
-          initial.id,
-          options.firstPartySupportVersionId,
-          funding.tariff.sourceSha,
-          now,
+        if (input.purpose === "first_party_support") await assertFirstPartySupportReservation(
+          tx, companyId, initial.id, options.firstPartySupportVersionId ?? "", funding.tariff.sourceSha, now,
         );
         const budget = await ensureCompanyPurposeBudget(tx, funding);
-        if (budget.id !== initial.budgetId) throw conflict("The support funding profile changed before content return");
+        if (budget.id !== initial.budgetId) throw conflict("The company-purpose funding profile changed before content return");
         const [record] = await tx.select().from(orchestrationCompanyPurposeReservations).where(eq(
           orchestrationCompanyPurposeReservations.id,
           initial.id,
@@ -769,13 +744,8 @@ export function modelReservationService(
           throw conflict("Current completed support funding is required before content return");
         }
         await assertCompanyPurposeAuthority(tx, actor, input);
-        await assertFirstPartySupportReservation(
-          tx,
-          companyId,
-          id,
-          options.firstPartySupportVersionId,
-          funding.tariff.sourceSha,
-          now,
+        if (input.purpose === "first_party_support") await assertFirstPartySupportReservation(
+          tx, companyId, id, options.firstPartySupportVersionId ?? "", funding.tariff.sourceSha, now,
         );
       });
     },

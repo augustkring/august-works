@@ -3,7 +3,7 @@ export type CustomerOperationStatus =
   | "requested" | "admitted" | "running" | "verifying" | "paused"
   | "cancel_requested" | "cancelled" | "succeeded" | "failed" | "inconclusive";
 
-export type CompanyImportJobState = "running" | "succeeded" | "failed" | "needs_reconciliation";
+export type CompanyImportJobState = "running" | "cancelled" | "succeeded" | "failed" | "needs_reconciliation";
 
 export interface CustomerOperationReceipt {
   id: string;

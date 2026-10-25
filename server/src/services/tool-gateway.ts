@@ -5910,7 +5910,9 @@ export function createToolGatewayService(
         companyId: input.session.companyId,
         applicationId: input.connection.applicationId,
         connectionId: input.connection.id,
-        connectionKey: `mcp:${input.session.companyId}:${input.connection.id}`,
+        // Each gateway session is run-bound. Keep local stdio slot state
+        // isolated by that session instead of reusing a company connection slot.
+        connectionKey: `mcp:${input.session.companyId}:${input.connection.id}:${input.session.id}`,
         runId: input.session.runId,
         issueId: input.session.issueId,
         agentId: input.session.agentId,
@@ -6965,7 +6967,7 @@ export function createToolGatewayService(
         companyId: session.companyId,
         applicationId: tool.applicationId ?? null,
         connectionId: connection.id,
-        connectionKey: `mcp:${session.companyId}:${connection.id}`,
+          connectionKey: `mcp:${session.companyId}:${connection.id}:${session.id}`,
         runId: session.runId,
         issueId: session.issueId,
         agentId: session.agentId,

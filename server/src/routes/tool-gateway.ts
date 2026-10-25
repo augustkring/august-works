@@ -17,6 +17,7 @@ import { ToolGatewayHttpError, type ToolGatewayService } from "../services/tool-
 import { forbidden, HttpError } from "../errors.js";
 import { accessService } from "../services/index.js";
 import { listConnectionLifecycleEvents } from "../services/tool-connection-activity.js";
+import { selectMcpProtocolVersion } from "../services/mcp-http.js";
 
 const TOOL_ACTIVITY_EVENT_TYPES = [
   "call_completed",
@@ -80,9 +81,9 @@ async function handleMcpGatewayProtocol(
         jsonrpc: "2.0",
         id,
         result: {
-          protocolVersion: "2025-03-26",
+            protocolVersion: selectMcpProtocolVersion(body.params?.protocolVersion),
           capabilities: { tools: {}, resources: {}, prompts: {} },
-          serverInfo: { name: "Paperclip MCP Gateway", version: "1.0.0" },
+          serverInfo: { name: "blentera-mcp-gateway", version: "1.0.0" },
           _meta: {
             "paperclip/mcp-app-ui": "unsupported",
             "paperclip/mcp-app-ui-detail": "Interactive ui:// iframe hosting is not available in Paperclip Runner.",

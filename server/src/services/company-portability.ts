@@ -780,7 +780,12 @@ type ImportBehaviorOptions = {
   mode?: ImportMode;
   sourceCompanyId?: string | null;
   pauseAutomations?: boolean;
+  checkCancellation?: () => Promise<void>;
 };
+
+export class ImportCancellationError extends Error {
+  constructor(readonly effectsStarted: boolean) { super("Import cancellation requested"); }
+}
 
 type AgentLike = {
   id: string;
@@ -5470,6 +5475,13 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     // deliberately small bundle. Reject the fragment rather than importing it.
     assertInlineSourceComplete(input.source);
     const mode = resolveImportMode(options);
+    let effectsStarted = false;
+    const cancellationCheckpoint = async () => {
+      if (options?.checkCancellation) {
+        try { await options.checkCancellation(); }
+        catch { throw new ImportCancellationError(effectsStarted); }
+      }
+    };
     const plan = await buildPreview(input, options);
     if (input.expectedSourceFingerprint && input.expectedSourceFingerprint !== plan.preview.sourceFingerprint)
       throw new ImportSourceChangedError();
@@ -5545,6 +5557,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     } | null = null;
     let companyAction: "created" | "updated" | "unchanged" = "unchanged";
 
+    await cancellationCheckpoint();
     if (input.target.mode === "new_company") {
       if (mode === "agent_safe" && !options?.sourceCompanyId) {
         throw unprocessable("Safe new-company imports require a source company context.");
@@ -5570,6 +5583,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
               manifestCompanyName,
               (await companies.list()).map((company) => company.name),
             ));
+      effectsStarted = true;
       const created = await companies.create({
         name: companyName,
         description: include.company ? (sourceManifest.company?.description ?? null) : null,
@@ -5607,6 +5621,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       targetCompany = await companies.getById(input.target.companyId);
       if (!targetCompany) throw notFound("Target company not found");
       if (include.company && sourceManifest.company && mode === "board_full") {
+        effectsStarted = true;
         const updated = await companies.update(targetCompany.id, {
           name: sourceManifest.company.name,
           description: sourceManifest.company.description,
@@ -5647,6 +5662,8 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     });
     const createdImportSecretIds: string[] = [];
     try {
+      await cancellationCheckpoint();
+      effectsStarted = true;
       await materializeImportEnvInputValues(
         targetCompany.id,
         sourceManifest,
@@ -5657,6 +5674,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       );
 
       if (include.company) {
+        await cancellationCheckpoint();
         const logoPath = sourceManifest.company?.logoPath ?? null;
         if (!logoPath) {
           const cleared = await companies.update(targetCompany.id, { logoAssetId: null });
@@ -5794,7 +5812,9 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       }
 
       if (include.agents) {
+        await cancellationCheckpoint();
         for (const planAgent of plan.preview.plan.agentPlans) {
+          await cancellationCheckpoint();
           const manifestAgent = plan.selectedAgents.find((agent) => agent.slug === planAgent.slug);
           if (!manifestAgent) continue;
           if (planAgent.action === "skip") {
@@ -6011,7 +6031,9 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       }
 
       if (include.projects) {
+        await cancellationCheckpoint();
         for (const planProject of plan.preview.plan.projectPlans) {
+          await cancellationCheckpoint();
           const manifestProject = sourceManifest.projects.find((project) => project.slug === planProject.slug);
           if (!manifestProject) continue;
           if (planProject.action === "skip") {
@@ -6152,6 +6174,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       }
 
       if (include.issues) {
+        await cancellationCheckpoint();
         const routines = routineService(db);
 
         // Resolve label names against the target company before creating
@@ -6166,6 +6189,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         const referencedLabelNames = new Set<string>();
         let hasLegacyLabelIds = false;
         for (const manifestIssue of sourceManifest.issues) {
+          await cancellationCheckpoint();
           if (manifestIssue.recurring) continue;
           for (const name of manifestIssue.labelNames ?? []) referencedLabelNames.add(name);
           if ((manifestIssue.labelIds ?? []).length > 0) hasLegacyLabelIds = true;

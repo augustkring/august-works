@@ -113,6 +113,54 @@ export function companyImportJobService(db: Db) {
         .limit(1).then(rows => rows[0] ?? null);
     },
 
+    async requestCancellation(id: string, actorKey: string, actor: AuthorizationActor) {
+      return db.transaction(async tx => {
+        const pinned = await pinImportCredential(tx, actor);
+        const currentActor = pinned?.actor ?? actor;
+        const [job] = await tx.select().from(customerOperations).where(and(
+          eq(customerOperations.id, id), eq(customerOperations.requesterKeyHash, hash(actorKey)),
+          eq(customerOperations.operationType, "company_import"),
+        )).for("update");
+        if (!job) return null;
+        if (actor.type !== "board" || (actor.userId ?? null) !== job.requestedByUserId)
+          throw forbidden("The original import requester is required");
+        if (job.companyId) {
+          const decision = await authorizationService(tx).decide({ actor: currentActor, action: "company_scope:read",
+            resource: { type: "company", companyId: job.companyId }, enforceResponsibleUserIntersection: true });
+          if (!decision.allowed) throw forbidden("Current company access is required");
+        } else if (job.scopeKey === "new_company" && currentActor.source !== "local_implicit"
+          && currentActor.source !== "cloud_tenant" && !(await hasCurrentInstanceAdminRole(tx, currentActor.userId))) {
+          throw forbidden("Instance admin is required to cancel a new-company import");
+        }
+        if (job.status !== "running") return job;
+        if (job.progressStage === "admitted") {
+          const [cancelled] = await tx.update(customerOperations).set({ status: "cancelled", progressStage: "cancelled",
+            cancelRequestedAt: sql`coalesce(${customerOperations.cancelRequestedAt}, clock_timestamp())`,
+            completedAt: sql`clock_timestamp()`, updatedAt: sql`clock_timestamp()`, progressAt: sql`clock_timestamp()` })
+            .where(and(eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),
+              eq(customerOperations.status, "running"), eq(customerOperations.progressStage, "admitted")))
+            .returning();
+          await finishImportCredential(tx, pinned);
+          return cancelled ?? job;
+        }
+        const [requested] = await tx.update(customerOperations).set({
+          cancelRequestedAt: sql`coalesce(${customerOperations.cancelRequestedAt}, clock_timestamp())`,
+          updatedAt: sql`clock_timestamp()`, progressAt: sql`clock_timestamp()`,
+        }).where(and(eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),
+          eq(customerOperations.status, "running"))).returning();
+        await finishImportCredential(tx, pinned);
+        return requested ?? job;
+      });
+    },
+
+    async cancellationRequested(job: CompanyImportJob) {
+      const [current] = await db.select({ status: customerOperations.status,
+        cancelRequestedAt: customerOperations.cancelRequestedAt }).from(customerOperations).where(and(
+        eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),
+      )).limit(1);
+      return !current || current.status !== "running" || current.cancelRequestedAt !== null;
+    },
+
     /** Bounded discoverability for the original requester; never returns the
      * raw operation row outside this native owner. */
     async listForRequesterCompany(input: { actorKey: string; companyId: string; requestedByUserId: string | null;
@@ -175,6 +223,7 @@ export function companyImportJobService(db: Db) {
           progressAt: sql`clock_timestamp()`, updatedAt: sql`clock_timestamp()` }).where(and(
           eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),
           eq(customerOperations.status, "running"), eq(customerOperations.progressStage, "admitted"),
+          isNull(customerOperations.cancelRequestedAt),
         )).returning({ id: customerOperations.id });
         await finishImportCredential(tx, pinned);
         return rows.length === 1;
@@ -194,10 +243,11 @@ export function companyImportJobService(db: Db) {
       return settled ?? null;
     },
 
-    async fail(job: CompanyImportJob, unknownOutcome: boolean, knownError: "import_rejected" | "import_preview_source_changed" = "import_rejected") {
-      const [settled] = await db.update(customerOperations).set({ status: unknownOutcome ? "needs_reconciliation" : "failed",
-        progressStage: unknownOutcome ? "needs_reconciliation" : "rejected_before_import",
-        errorCode: unknownOutcome ? "import_outcome_unknown" : knownError,
+    async fail(job: CompanyImportJob, unknownOutcome: boolean, knownError: "import_rejected" | "import_preview_source_changed" | "import_cancelled" = "import_rejected") {
+      const cancelled = !unknownOutcome && knownError === "import_cancelled";
+      const [settled] = await db.update(customerOperations).set({ status: unknownOutcome ? "needs_reconciliation" : cancelled ? "cancelled" : "failed",
+        progressStage: unknownOutcome ? "needs_reconciliation" : cancelled ? "cancelled" : "rejected_before_import",
+        errorCode: unknownOutcome ? "import_outcome_unknown" : cancelled ? null : knownError,
         completedAt: unknownOutcome ? null : sql`clock_timestamp()`, updatedAt: sql`clock_timestamp()`, progressAt: sql`clock_timestamp()`,
       }).where(and(eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),
         eq(customerOperations.status, "running"))).returning();
@@ -219,6 +269,8 @@ export function companyImportJobService(db: Db) {
 export function companyImportOperationReceipt(job: CompanyImportJob): CustomerOperationReceipt {
   return { id: job.id, operationType: "company_import", domain: "company_portability", domainOperationRef: job.domainOperationRef,
     status: job.status === "needs_reconciliation" ? "inconclusive"
+      : job.status === "cancelled" ? "cancelled"
+        : job.cancelRequestedAt && job.status === "running" ? "cancel_requested"
       : job.status === "running" && job.progressStage === "admitted" ? "admitted" : job.status,
     progressStage: job.progressStage, attempt: job.attempt, unknownOutcome: job.status === "needs_reconciliation",
     createdAt: job.createdAt.toISOString(), updatedAt: job.updatedAt.toISOString(), completedAt: job.completedAt?.toISOString() ?? null };

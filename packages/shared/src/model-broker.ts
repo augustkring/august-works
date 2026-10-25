@@ -35,8 +35,8 @@ export const modelReservationQuoteSchema = z
  * assistance. This is never accepted from a customer request. */
 export const companyPurposeFundingSchema = z.object({
   companyId: z.string().uuid(),
-  purpose: z.literal("first_party_support"),
-  funder: z.literal("blentera_platform"),
+  purpose: z.enum(["first_party_support", "decision_skill_suggestion"]),
+  funder: z.enum(["blentera_platform", "company_connection"]),
   profileId: z.string().regex(/^[a-zA-Z0-9._:-]{1,120}$/),
   profileHash: hash,
   providerAccountId: z.string().regex(/^[a-zA-Z0-9._:-]{1,160}$/),
@@ -53,11 +53,14 @@ export const companyPurposeFundingSchema = z.object({
     ctx.addIssue({ code: "custom", message: "Invalid platform funding period" });
   }
   if (value.tariff.currency !== "USD") {
-    ctx.addIssue({ code: "custom", message: "Platform support funding requires USD tariff" });
+    ctx.addIssue({ code: "custom", message: "Company-purpose funding requires USD tariff" });
   }
+  if ((value.purpose === "first_party_support") !== (value.funder === "blentera_platform"))
+    ctx.addIssue({ code: "custom", message: "Company-purpose funding source does not match purpose" });
 });
 export const companyPurposeReservationInputSchema = z.object({
   companyId: z.string().uuid(),
+  purpose: z.enum(["first_party_support", "decision_skill_suggestion"]).default("first_party_support"),
   idempotencyKey: z.string().min(1).max(200),
   inputHash: hash,
   authorityHash: hash,
