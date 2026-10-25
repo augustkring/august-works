@@ -114,6 +114,7 @@ function buildTransaction(tx: Db, companyId: string, deps: QueuedCommentQueuePos
 
     async buildQueueSnapshot({ issue, actor, wake, state, queueRun, activeRun }): Promise<IssueQueuedCommentQueue> {
       const commentIds = queuedCommentIdsFromWakePayload(wake?.payload ?? null);
+      const wait = state === "deferred" ? parseObject(parseObject(wake?.payload).executionWait) : {};
       const rows =
         commentIds.length > 0
           ? await tx
@@ -159,6 +160,9 @@ function buildTransaction(tx: Db, companyId: string, deps: QueuedCommentQueuePos
       return buildQueuedCommentQueueSnapshot({
         issueId: issue.id,
         queueId: wake?.id ?? null,
+        executionWait: typeof wait.reason === "string" && typeof wait.message === "string"
+          ? { reason: wait.reason, message: wait.message }
+          : null,
         state,
         activeRunId: activeRun?.id ?? null,
         protocol: steering.protocol,

@@ -325,6 +325,9 @@ describeEmbeddedPostgres("heartbeat stale queued-run invalidation", () => {
     await heartbeat.resumeQueuedRuns();
     const [delivered] = await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, wake.id));
     expect(delivered.runId).toBeTruthy();
+    // Promotion commits before its asynchronous dispatch registers live work.
+    // Wait for the actual adapter call before draining that execution.
+    await waitForCondition(async () => countExecuteCallsForRun(delivered.runId!) > 0);
     await heartbeat.waitForRunExecutionDrain(delivered.runId!);
     const recovered = await heartbeat.getRun(delivered.runId!);
     expect(countExecuteCallsForRun(delivered.runId!), JSON.stringify({ status: recovered?.status,

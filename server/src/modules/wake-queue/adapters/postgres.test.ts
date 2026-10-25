@@ -8,9 +8,11 @@ import {
   agentWakeupRequests,
   agents,
   companies,
+  completionContracts,
   createDb,
   environmentLeases,
   nativeRunFinalizations,
+  nativeRunResults,
   heartbeatRuns,
   issueComments,
   issueRecoveryActions,
@@ -65,9 +67,11 @@ describeEmbeddedPostgres("wake-queue postgres adapter", () => {
     // so the run row must go first.
     await db.delete(environmentLeases);
     await db.delete(nativeRunFinalizations);
+    await db.delete(nativeRunResults);
     await db.delete(heartbeatRuns);
     await db.delete(agentWakeupRequests);
     await db.delete(issueRecoveryActions);
+    await db.delete(completionContracts);
     await db.delete(issues);
     await db.delete(agents);
     await db.delete(companies);
@@ -556,6 +560,100 @@ describeEmbeddedPostgres("wake-queue postgres adapter", () => {
     });
     expect((await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, wakeId)))[0].status).toBe("deferred_issue_execution");
     expect(await db.select().from(issueRecoveryActions).where(eq(issueRecoveryActions.sourceIssueId, issueId))).toHaveLength(0);
+  });
+
+  it("does not drain a deferred message after an acknowledged native task Stop", async () => {
+    const companyId = await seedCompany();
+    const agentId = await seedAgent({ companyId });
+    const issueId = await seedIssue({ companyId, assigneeAgentId: agentId, status: "in_progress" });
+    const runId = await seedRun({ companyId, agentId, status: "cancelled", contextSnapshot: { issueId } });
+    const now = new Date();
+    await db.update(heartbeatRuns).set({ runtimeMode: "native", nativeIssueId: issueId, finishedAt: now, resultJson: {
+      cancelledByActorType: "user", cancelledByUserId: "responsible-user",
+      nativeCancellation: { schema: "paperclip.native-cancellation.v1", runId, companyId, issueId,
+        scope: "run", reasonCode: "cancellation_run_only", dispatchState: "acknowledged", dispatched: true,
+        intentAuditId: randomUUID(), acknowledgementAuditId: randomUUID() },
+    } }).where(eq(heartbeatRuns.id, runId));
+    await db.insert(nativeRunFinalizations).values({ companyId, issueId, runId, phase: "committed" });
+    await db.update(issues).set({ executionRunId: runId, checkoutRunId: runId }).where(eq(issues.id, issueId));
+    const [comment] = await db.insert(issueComments).values({ companyId, issueId, authorType: "user",
+      authorUserId: "responsible-user", body: "Accepted input before task Stop" }).returning();
+    const wakeId = await seedDeferredWake({ companyId, agentId, issueId, requestedByActorId: "responsible-user",
+      payload: { commentId: comment.id, _paperclipWakeContext: {
+        issueId, wakeReason: "issue_commented", wakeCommentIds: [comment.id],
+      } },
+    });
+    const release = createReleaseIssueExecution({ issueLock: createPostgresWakeQueueAdapter(db, stubDeps),
+      recovery: { escalateStrandedAssignedIssue: async () => undefined, escalateStrandedRecoveryIssueInPlace: async () => undefined },
+    });
+
+    const result = await release({ companyId, runId, now, resumeStrandedQueue: true });
+
+    expect(result).toMatchObject({ outcome: { kind: "released" }, postCommitEffects: [] });
+    expect((await db.select().from(issues).where(eq(issues.id, issueId)))[0])
+      .toMatchObject({ status: "in_progress", executionRunId: null, checkoutRunId: null });
+    expect((await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, wakeId)))[0])
+      .toMatchObject({ status: "deferred_issue_execution", runId: null });
+    expect((await db.select().from(issueComments).where(eq(issueComments.id, comment.id)))[0]?.body)
+      .toBe("Accepted input before task Stop");
+    expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, companyId))).toHaveLength(1);
+    expect(await db.select().from(issueRecoveryActions).where(eq(issueRecoveryActions.sourceIssueId, issueId))).toHaveLength(0);
+  });
+
+  it("keeps an accepted message behind a persisted unknown native outcome despite committed result retention", async () => {
+    const companyId = await seedCompany();
+    const agentId = await seedAgent({ companyId });
+    const issueId = await seedIssue({ companyId, assigneeAgentId: agentId, status: "in_progress" });
+    const runId = await seedRun({ companyId, agentId, status: "failed", contextSnapshot: { issueId } });
+    const contractId = randomUUID();
+    const resultId = randomUUID();
+    const contractSha256 = `contract-${contractId}`;
+    await db.insert(completionContracts).values({
+      id: contractId, companyId, issueId, revision: 1, schemaVersion: "paperclip.completion-contract.v1",
+      policyVersion: "wake-queue-test-v1", risk: "standard", completionAuthority: "server_arbiter",
+      incompleteCriteriaPolicy: "preserve_non_terminal", contractJson: { revision: "wake-queue-test-v1",
+        objective: "Retain an uncertain native result", criteria: [{ id: "objective", requirement: "Complete the task" }] },
+      canonicalSha256: contractSha256, createdByActorType: "system", createdByActorId: "test",
+    });
+    await db.update(heartbeatRuns).set({ runtimeMode: "native", nativeIssueId: issueId, finishedAt: new Date(),
+      completionContractId: contractId, completionContractSha256: contractSha256, errorCode: "thread_binding_mismatch",
+    }).where(eq(heartbeatRuns.id, runId));
+    await db.insert(nativeRunResults).values({ id: resultId, companyId, issueId, runId, completionContractId: contractId,
+      serverFingerprint: `fingerprint-${resultId}`, schemaStatus: "accepted", resultJson: { summary: "Recorded result" },
+      canonicalSha256: `result-${resultId}` });
+    await db.insert(nativeRunFinalizations).values({ companyId, issueId, runId, resultId, phase: "committed" });
+    await db.update(issues).set({ executionRunId: runId, checkoutRunId: runId }).where(eq(issues.id, issueId));
+    const [comment] = await db.insert(issueComments).values({ companyId, issueId, authorType: "user",
+      authorUserId: "responsible-user", body: "Accepted input after uncertain native outcome" }).returning();
+    const wakeId = await seedDeferredWake({ companyId, agentId, issueId, requestedByActorId: "responsible-user",
+      payload: { commentId: comment.id, _paperclipWakeContext: {
+        issueId, wakeReason: "issue_commented", wakeCommentIds: [comment.id],
+      } },
+    });
+    const release = createReleaseIssueExecution({ issueLock: createPostgresWakeQueueAdapter(db, stubDeps),
+      recovery: { escalateStrandedAssignedIssue: async () => undefined, escalateStrandedRecoveryIssueInPlace: async () => undefined },
+    });
+
+    // The original terminal-failure owner records the durable unknown-outcome
+    // blocker. A committed result/finalization record must not erase it.
+    await release({ companyId, runId, now: new Date() });
+    const [unknownOutcome] = await db.select().from(issueRecoveryActions).where(eq(issueRecoveryActions.sourceIssueId, issueId));
+    expect(unknownOutcome).toMatchObject({ cause: "native_continuation_requires_reconciliation", status: "active",
+      evidence: { runId, originalFailureCode: "thread_binding_mismatch" } });
+    expect((await db.select().from(nativeRunFinalizations).where(eq(nativeRunFinalizations.runId, runId)))[0])
+      .toMatchObject({ phase: "committed", resultId });
+
+    const recovered = await release({ companyId, runId, now: new Date(), resumeStrandedQueue: true });
+
+    expect(recovered).toMatchObject({ outcome: { kind: "released" }, postCommitEffects: [] });
+    expect((await db.select().from(issues).where(eq(issues.id, issueId)))[0])
+      .toMatchObject({ status: "blocked", executionRunId: null, checkoutRunId: null });
+    expect((await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, wakeId)))[0])
+      .toMatchObject({ status: "deferred_issue_execution", runId: null });
+    expect((await db.select().from(issueComments).where(eq(issueComments.id, comment.id)))[0]?.body)
+      .toBe("Accepted input after uncertain native outcome");
+    expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, companyId))).toHaveLength(1);
+    expect(await db.select().from(issueRecoveryActions).where(eq(issueRecoveryActions.sourceIssueId, issueId))).toHaveLength(1);
   });
 
   it.each(["in_progress", "blocked"])("preserves recovery ownership and queued messages when a native task fails from %s", async (status) => {
