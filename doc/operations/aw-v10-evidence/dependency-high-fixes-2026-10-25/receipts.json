@@ -1,0 +1,112 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+  "sourceCommitMeaning": "Archive checkout identity; scoped runs may predate it. Only separately recorded unchanged-source gates establish final tested source identity.",
+  "meaning": "Pinned pnpm production audit and installed dependency compatibility qualification",
+  "logs": [
+    {
+      "name": "dependency-install",
+      "exitCode": 0,
+      "exitSidecar": "dependency-install.exit",
+      "rawSha256": "3f0f16e24ded34877c2d4303ccecc9b5a1d598485d36cc4cc3fca1e8593acc70",
+      "sanitizedSha256": "3f0f16e24ded34877c2d4303ccecc9b5a1d598485d36cc4cc3fca1e8593acc70",
+      "archiveSha256": "98cde20603f6b20c462fb547cb54a99593f7edf57b73c584b6019498152d0121",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "dependency-cursor-import",
+      "exitCode": 0,
+      "exitSidecar": "dependency-cursor-import.exit",
+      "rawSha256": "31c93faa7014fff9e546bd1fa6b8e1ccd23565246355750b0dd247c898e0b9c4",
+      "sanitizedSha256": "31c93faa7014fff9e546bd1fa6b8e1ccd23565246355750b0dd247c898e0b9c4",
+      "archiveSha256": "9e232c1aadb561a3d6fc604eebadd8375102fa3c079900a622127e53ef9bed4c",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "dependency-cursor-typecheck",
+      "exitCode": 0,
+      "exitSidecar": "dependency-cursor-typecheck.exit",
+      "rawSha256": "e55375223418fbc14c45460593808e845deb315d839859c309aa2986c82221d0",
+      "sanitizedSha256": "e55375223418fbc14c45460593808e845deb315d839859c309aa2986c82221d0",
+      "archiveSha256": "212ea9a8fdc3a19432ba6c13299b399b9d14134ff7033c7af5563bdfa0d92b1c",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "dependency-cursor-tests",
+      "exitCode": 0,
+      "exitSidecar": "dependency-cursor-tests.exit",
+      "rawSha256": "56b8a5226af402fd1b13c6a31d7a29c0f734d52baabcb6dd0f73f9e31efdf83a",
+      "sanitizedSha256": "56b8a5226af402fd1b13c6a31d7a29c0f734d52baabcb6dd0f73f9e31efdf83a",
+      "archiveSha256": "c16deac794587b336b891398943fdfc5beb4983793a635dd5586f3404b18536d",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files 4 passed (4)",
+        "Tests 20 passed (20)",
+        "Duration 2.79s"
+      ]
+    },
+    {
+      "name": "dependency-teams-tests",
+      "exitCode": 0,
+      "exitSidecar": "dependency-teams-tests.exit",
+      "rawSha256": "37c0ecdbfba440d19d855b3256cb3457fa5c8b5d9b1c13ea60d8efe970e87a7e",
+      "sanitizedSha256": "37c0ecdbfba440d19d855b3256cb3457fa5c8b5d9b1c13ea60d8efe970e87a7e",
+      "archiveSha256": "9798215c279ebb3c9254e338ffd19019d11e658cffde78854c6f819f77003fca",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files 1 passed (1)",
+        "Tests 6 passed (6)",
+        "Duration 2.38s"
+      ]
+    },
+    {
+      "name": "dependency-installed-audit",
+      "exitCode": null,
+      "exitSidecar": "dependency-installed-audit.exit",
+      "rawSha256": "8d599e3e5fb2b16d26236fd8b3b2ca76931df9b816c9fe224732890262a985e6",
+      "sanitizedSha256": "8d599e3e5fb2b16d26236fd8b3b2ca76931df9b816c9fe224732890262a985e6",
+      "archiveSha256": "2342e08c7414762a3bbfdff6e582a074a9609e881da20bf5b32e754fd960db6e",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    }
+  ]
+}

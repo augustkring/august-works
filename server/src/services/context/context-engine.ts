@@ -822,8 +822,9 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
       }) : null;
       const bootstrapMarkdown = bootstrapPacket ? serializeContextPacket(bootstrapPacket) : null;
       const manifestResult = inspectionActor ? null : await withContextStageDeadline(
-        "context_manifest", () => manifests.create(contextSourceInput,
-          nativeBootstrap && bootstrapMarkdown !== null ? { renderedMarkdown: bootstrapMarkdown } : undefined), deadlineAt);
+        "context_manifest", signal => manifests.create(contextSourceInput,
+          nativeBootstrap && bootstrapMarkdown !== null ? { renderedMarkdown: bootstrapMarkdown } : undefined,
+          { signal, deadlineAt }), deadlineAt);
       const inspectionResult = inspectionActor ? await withContextStageDeadline(
         "context_inspection", () => manifests.inspectReadOnly(contextSourceInput, inspectionActor, inspectionAuthority!), deadlineAt) : null;
 

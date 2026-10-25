@@ -11,6 +11,7 @@ import { instanceSettingsService } from "../instance-settings.js";
 import { makeFixtureTreeWritable, runManagedNativeOpenCodeFixture } from "../../__tests__/helpers/managed-native-opencode-e2e-fixture.js";
 import { memoryService } from "../memory/memory-service.js";
 import * as nativeDirectInput from "../native-direct-input.js";
+import { nativePayloadSourceSnapshotSchema } from "@paperclipai/shared";
 
 const managedContextReadFailures: Array<{ name: string; code: string | null; causeCode: string | null; frames: string[] }> = [];
 
@@ -65,6 +66,7 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
 
   afterAll(async () => {
     await database?.cleanup();
+    vi.restoreAllMocks();
     vi.unstubAllEnvs();
     if (root && !preserveDebugArtifacts) {
       await makeFixtureTreeWritable(root);
@@ -141,9 +143,23 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
     expect(await memories.get(result.companyId, memoryB!.memoryId!, result.bobMemoryActor)).toBeNull();
     expect(await memories.get(result.companyId, privateRoot!.memoryId!, result.bobMemoryActor)).toBeNull();
     const contextCapture = result.contextReadCaptures[0]?.contextRead as {
-      sourceSet?: { policy?: { memoryIds?: string[] }; inputs?: Array<{ kind?: string }> };
+      manifestIds?: Array<{ contextManifestId?: string }>;
+      sourceSet?: { policy?: { memoryIds?: string[] }; inputs?: Array<{ kind?: string; manifestId?: string }> };
     } | undefined;
     expect(contextCapture?.sourceSet?.policy?.memoryIds).toContain(privateRoot!.memoryId);
     expect(contextCapture?.sourceSet?.inputs?.some(source => source.kind === "context")).toBe(true);
+    const outputSnapshot = (callId: string) => nativePayloadSourceSnapshotSchema.parse(
+      result.memoryOutputs.find(output => output.callId === callId)?.currentForAlice?.record.payloadSourceSnapshot);
+    const snapshotA = outputSnapshot(memoryAId);
+    const snapshotB = outputSnapshot(memoryBId);
+    const contextManifestId = contextCapture?.manifestIds?.[0]?.contextManifestId;
+    expect(contextManifestId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(result.contextManifestSelectionFacts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ contextManifestId, selectedPrivateRootItem: true, retainedPrivateRoot: true }),
+    ]));
+    expect(snapshotA.inputs.some(source => source.kind === "context")).toBe(false);
+    expect(snapshotA.policy.memoryIds).not.toContain(privateRoot!.memoryId);
+    expect(snapshotB.policy.memoryIds).toContain(privateRoot!.memoryId);
+    expect(snapshotB.inputs).toContainEqual(expect.objectContaining({ kind: "context", manifestId: contextManifestId }));
   }, 180_000);
 });

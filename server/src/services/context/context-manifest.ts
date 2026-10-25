@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, eq, inArray, is } from "drizzle-orm";
+import { and, eq, inArray, is, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { PgTransaction } from "drizzle-orm/pg-core";
 import {
@@ -265,6 +265,11 @@ export interface CreateContextManifestInput {
   selected: ContextManifestSelectedEvidence[];
 }
 
+export interface CreateContextManifestOptions {
+  signal?: AbortSignal;
+  deadlineAt?: number;
+}
+
 async function assertManifestReferences(db: Db, input: CreateContextManifestInput) {
   const [agent, run, issue, project] = await Promise.all([
     db
@@ -505,11 +510,30 @@ export function contextManifestService(db: Db) {
         return { policySnapshotHash: hashContextPolicySnapshot(input.policySnapshot), sourceSnapshotHash };
       });
     },
-    create: async (input: CreateContextManifestInput, nativeBootstrap?: { renderedMarkdown: string }) => {
+    create: async (input: CreateContextManifestInput, nativeBootstrap?: { renderedMarkdown: string }, options: CreateContextManifestOptions = {}) => {
       const queryHash = hashContextQuery(input.query);
       const policySnapshotHash = hashContextPolicySnapshot(input.policySnapshot);
 
-      return db.transaction(async (tx) => {
+      const assertActive = () => {
+        if (options.signal?.aborted) throw options.signal.reason ?? new Error("Context manifest assembly aborted");
+        if (options.deadlineAt !== undefined && options.deadlineAt <= Date.now())
+          throw options.signal?.reason ?? new Error("Context manifest assembly deadline exceeded");
+      };
+      assertActive();
+      try {
+      return await db.transaction(async (tx) => {
+        const refreshStatementTimeout = async () => {
+          assertActive();
+          if (options.deadlineAt === undefined) return;
+          // The outer Context stage races this same absolute deadline. Expire
+          // PostgreSQL statements slightly before that timer so an in-flight
+          // statement cannot keep the transaction's privacy locks after the
+          // caller has moved on to native-tool fencing.
+          const statementTimeoutMs = Math.max(1, Math.floor(options.deadlineAt - Date.now() - 25));
+          await tx.execute(sql`select set_config('statement_timeout', ${String(statementTimeoutMs)}, true)`);
+          assertActive();
+        };
+        await refreshStatementTimeout();
         const sourceDb = tx as unknown as Db;
         const delegated = input.delegatedExecution;
         if (delegated && (input.runId || input.companyId !== delegated.guestCompanyId || input.agentId !== delegated.guestAgentId ||
@@ -567,6 +591,7 @@ export function contextManifestService(db: Db) {
         // Retrieval may have waited while membership or sharing changed. The
         // original privacy transaction owns admission of the retained copy.
         const assertScopePrivacy = async () => {
+          await refreshStatementTimeout();
           if (delegated) {
             const [currentRun] = await sourceDb.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
               eq(heartbeatRuns.companyId, delegated.homeCompanyId), eq(heartbeatRuns.id, delegated.homeRunId),
@@ -602,16 +627,20 @@ export function contextManifestService(db: Db) {
             || (input.runId && !await canActorReadHeartbeatRunPrivacy(sourceDb,sourceActor,{companyId:input.companyId,id:input.runId}))
             || (input.projectId && !await canActorReadProjectPrivacy(sourceDb,sourceActor,{companyId:input.companyId,id:input.projectId})))
             throw forbidden("Context source access is unavailable");
+          assertActive();
         };
         // Pin current primary/guest authority before touching Task privacy
         // roots, then recheck in the same physical source transaction after
         // the privacy tree is locked.
         if (delegated) await assertScopePrivacy();
+        await refreshStatementTimeout();
         await lockIssuePrivacyTree(tx,input.companyId);
+        await refreshStatementTimeout();
         await assertScopePrivacy();
         const selectedTaskIds: string[] = [];
         const selectedPayloadSnapshots = new Map<string, typeof issues.$inferSelect["payloadSourceSnapshot"]>();
         const sourceKey = (provider: string, ref: string) => `${provider}:${ref.toLowerCase()}`;
+        await refreshStatementTimeout();
         for (const {decision} of input.selected) {
           const evidence = decision.evidence;
           if (evidence.sourceProvider !== "august_works_tasks") continue;
@@ -628,9 +657,11 @@ export function contextManifestService(db: Db) {
         }
         // A later selected row may have waited after an earlier source passed.
         await assertScopePrivacy();
+        assertActive();
         for (const id of selectedTaskIds)
           if (!await canActorReadIssuePrivacy(sourceDb,sourceActor,{companyId:input.companyId,id}))
             throw forbidden("Context source access is unavailable");
+        await refreshStatementTimeout();
         const [manifest] = await tx
           .insert(contextManifests)
           .values({
@@ -723,6 +754,7 @@ export function contextManifestService(db: Db) {
         const rootIds=[...expectedRoots.keys()];
         if(rootIds.length>256)throw forbidden("Complete Context Memory roots exceed their source budget");
         if (rootIds.length) {
+          await refreshStatementTimeout();
           const roots = await tx.select({ id: memoryRecords.id, updatedAt: memoryRecords.updatedAt,scopeType:memoryRecords.scopeType,ownerAgentId:memoryRecords.ownerAgentId,payloadSourceSnapshot:memoryRecords.payloadSourceSnapshot }).from(memoryRecords).where(and(eq(memoryRecords.companyId, input.companyId), inArray(memoryRecords.id, rootIds), memoryPayloadVisible())).for("share");
           if (roots.length !== rootIds.length) throw forbidden("Context Memory roots cross a company boundary");
           for(const root of roots){
@@ -737,6 +769,7 @@ export function contextManifestService(db: Db) {
           for (const root of roots) selectedPayloadSnapshots.set(sourceKey("august_works_memory",`memory://record/${root.id}`),root.payloadSourceSnapshot);
           delegatedRootSnapshot.push(...roots.map(root => ({ memoryRecordId: root.id, sourceVersion: root.updatedAt.toISOString(),
             payloadHash: hashContextPolicySnapshot(root.payloadSourceSnapshot) })));
+          await refreshStatementTimeout();
           retainedMemoryRoots = await tx.insert(contextManifestMemoryRoots).values(roots.map((root) => ({ companyId: input.companyId, manifestId: manifest!.id,
             memoryRecordId: root.id, sourceVersion: root.updatedAt.toISOString(), payloadSourceSnapshot: root.payloadSourceSnapshot }))).returning();
         }
@@ -747,6 +780,7 @@ export function contextManifestService(db: Db) {
         // have been pinned. Caller evidence metadata never supplies snapshots.
         let items: typeof contextManifestItems.$inferSelect[] = [];
         if (values.length > 0) {
+          await refreshStatementTimeout();
           items = await tx.insert(contextManifestItems).values(values.map(value => ({ ...value,
             payloadSourceSnapshot: selectedPayloadSnapshots.get(sourceKey(value.sourceProvider,value.sourceRef)) ?? null,
           }))).returning();
@@ -775,6 +809,7 @@ export function contextManifestService(db: Db) {
         for(const id of rootIds)
           if(!await canActorReadMemorySources(sourceDb,input.companyId,sourceActor,id))
             throw forbidden("Context Memory source access changed during assembly");
+        assertActive();
 
         let nativeBootstrapWitness: NativeBootstrapContextWitness | undefined;
         if (nativeBootstrap) {
@@ -787,6 +822,23 @@ export function contextManifestService(db: Db) {
         }
         return { manifest: manifest!, items, roots: retainedMemoryRoots, ...(nativeBootstrapWitness ? { nativeBootstrapWitness } : {}) };
       });
+      } catch (error) {
+        const cause = error && typeof error === "object" && "cause" in error ? error.cause : null;
+        const code = error && typeof error === "object" && "code" in error && typeof error.code === "string"
+          ? error.code
+          : cause && typeof cause === "object" && "code" in cause && typeof cause.code === "string"
+            ? cause.code : null;
+        if (code === "57014" && options.signal && options.deadlineAt !== undefined && !options.signal.aborted) {
+          await new Promise<void>(resolve => {
+            if (options.signal!.aborted) return resolve();
+            options.signal!.addEventListener("abort", () => resolve(), { once: true });
+          });
+        }
+        if (options.signal?.aborted) throw options.signal.reason ?? error;
+        if (options.deadlineAt !== undefined && options.deadlineAt <= Date.now())
+          throw options.signal?.reason ?? error;
+        throw error;
+      }
     },
   };
 }

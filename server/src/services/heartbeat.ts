@@ -211,7 +211,7 @@ import { documentService, type DocumentRevisionSourceCapture } from "./documents
 import { getTaskPlanContext } from "./task-plan-context.js";
 import { selectNativeHeartbeatBackend } from "./orchestration/native-draft-runtime.js";
 import { buildNativeBootstrapSourceSet, captureNativeTaskWakeSource, type NativeBootstrapSourceClosure,
-  prepareNativeTurnWithContext, type NativePreparedSourceCandidate } from "./native-runtime/native-execution-input.js";
+  prepareNativeTurnWithContext, type NativePreparedSourceCandidate, type NativeRenderedSourceReference } from "./native-runtime/native-execution-input.js";
 import { managedAgentProfileService } from "./managed-agent-profiles.js";
 import { remoteAgentProfileService } from "./remote-agent-profiles.js";
 import {
@@ -307,6 +307,7 @@ import {
   resolveExternalChatQuestionResponse,
 } from "./native-runtime/external-chat-question-response.js";
 import { materializeExternalChatQuestionResponseInput } from "./native-runtime/external-chat-question-response-input.js";
+import { renderNativeRunnerStagedAttachmentPrompt } from "./native-runtime/native-runner-file-handoff.js";
 import {
   NativeRunnerOwnershipUnverifiedError,
   isNativeRunnerOwnershipHeld,
@@ -8529,7 +8530,7 @@ export function buildPaperclipTaskMarkdown(input: {
   // false builds the compact variant used for resume deltas, where the session
   // already received the description with the assignment.
   includeDescription?: boolean;
-}, options: { onRenderedSource?: (source: { kind: "task" | "comment" | "document_revision" | "attachment" | "unknown"; id: string }) => void } = {}) {
+}, options: { onRenderedSource?: (source: NativeRenderedSourceReference) => void } = {}) {
   const quoteTaskScalar = (value: string) => JSON.stringify(value);
   const fenceTaskText = (value: string) => {
     const longestBacktickRun = Math.max(
@@ -8631,7 +8632,8 @@ export function buildPaperclipTaskMarkdown(input: {
     comment: (typeof effectiveWakeComments)[number],
   ) => {
     if (!comment.attachments?.length) return;
-    for (const attachment of comment.attachments) options.onRenderedSource?.({ kind: "attachment", id: attachment.id });
+    for (const attachment of comment.attachments) options.onRenderedSource?.({ kind: "attachment", id: attachment.id,
+      commentId: comment.id, filename: attachment.filename, contentType: attachment.contentType, byteSize: attachment.byteSize });
     lines.push(
       "",
       `Attachments on wake comment ${quoteTaskScalar(comment.id)}:`,
@@ -20869,7 +20871,7 @@ export function heartbeatService(
             onSourceCapture: capture => { if (capture) taskPlanSourceCaptures.push(capture); },
           })
         : null;
-      let taskMarkdownSourceReferences: Array<{ kind: "task" | "comment" | "document_revision" | "attachment" | "unknown"; id: string }> = [];
+      let taskMarkdownSourceReferences: NativeRenderedSourceReference[] = [];
       let taskMarkdown = buildPaperclipTaskMarkdown({ ...taskMarkdownInput, taskPlan }, {
         onRenderedSource: source => taskMarkdownSourceReferences.push(source),
       });
@@ -23123,6 +23125,7 @@ export function heartbeatService(
         let nativeBootstrapPlanningSources: DocumentRevisionSourceCapture[] | null = null;
         let nativeBootstrapAncestorSources: NativeTaskSourceCapture[] | null = null;
         let nativeBootstrapSourceClosure: NativeBootstrapSourceClosure | null = null;
+        let nativeBootstrapAttachmentSourceClosureFactory: Parameters<typeof executePaperclipNativeSession>[0]["prepareBootstrapSourceClosure"];
         const nativeBootstrapInteractionSources: Array<Extract<NativePayloadSourceInput, { kind: "interaction" }>> = [];
         let nativeRunnerInstanceId: string | null = null;
         if (nativeRuntimeResolution.kind === "native") {
@@ -23727,41 +23730,75 @@ export function heartbeatService(
               conversation: isConversation(issueContext), wake: Boolean(context.paperclipWake && !nativeTaskWakeSource), projectPaths: projectRepositoryPaths.length > 0,
               authoredContextManifests: Boolean(capturedAuthoredSources?.contextManifests.length), missingTask: !capturedTaskSource,
             };
-            const nativeBootstrapSourceSet = buildNativeBootstrapSourceSet({
-              companyId: agent.companyId,
-              runId: run.id,
-              agentId: agent.id,
-              issueId: issueRef.id,
-              renderedMarkdown: selectedMarkdown,
-              renderedMarkdownDigest: nativeBootstrapTaskMarkdownSourceMap?.renderedMarkdownDigest ?? null,
-              references: nativeBootstrapTaskMarkdownSourceMap?.references ?? null,
-              candidates: nativeSourceCandidates,
-              runtimeInputs: capturedAuthoredSources?.inputs ?? null,
-              additionalInputs: [
-                ...(completionContract ? [{ kind: "completion_contract" as const,
-                  issueId: issueRef.id, contractId: completionContract.row.id,
-                  revision: String(completionContract.row.revision), contentHash: completionContract.row.canonicalSha256 }] : []),
-                ...(nativeTaskWakeSource ? [nativeTaskWakeSource] : []),
-                { kind: "workspace_metadata" as const, runId: run.id,
-                  executionWorkspaceId: nativeExecution.binding.executionWorkspaceId,
-                  origin: persistedExecutionWorkspace ? "execution_workspace" as const :
-                    (executionWorkspace.source === "agent_home" ? "agent_home" as const : "task_session" as const),
-                  sourceVersion: persistedExecutionWorkspace?.updatedAt?.toISOString() ??
-                    (executionWorkspace.source === "agent_home" ? `agent-home:${agent.id}:v1` : `task-session:${run.id}`),
-                  contentHash: createHash("sha256").update(JSON.stringify({
-                    cwd: nativeExecution.workspace.cwd, repoUrl: nativeExecution.workspace.repoUrl,
-                    repoRef: nativeExecution.workspace.repoRef, branchName: nativeExecution.workspace.branchName,
-                  }), "utf8").digest("hex") },
-              ],
-              interactionResponses: nativeExecution.interactionResponses,
-              interactionSources: nativeBootstrapInteractionSources,
-              contextManifestIds: nativeBootstrapContextManifests,
-              governedContextMarkdown,
-              contextWitnessMarkdown: v5Fabric?.inputContextSourceMarkdown ?? governedContextMarkdown,
-              contextWitness: v5Fabric?.inputContextSourceWitness ?? freshGovernedContext?.sourceWitness ?? null,
-              rolePackInputs: v5Fabric ? v5Fabric.inputRolePackSources : [],
-              unsupportedInputPresent: Object.values(nativeBootstrapUnsupported).some(Boolean),
-            });
+            const attachmentClosureExecution = nativeExecution;
+            if (!attachmentClosureExecution) throw new Error("native_bootstrap_execution_input_unavailable");
+            const buildNativeBootstrapSet = (attachmentCandidates: NativePreparedSourceCandidate[] = []) =>
+              buildNativeBootstrapSourceSet({
+                companyId: agent.companyId,
+                runId: run.id,
+                agentId: agent.id,
+                issueId: issueRef.id,
+                renderedMarkdown: selectedMarkdown,
+                renderedMarkdownDigest: nativeBootstrapTaskMarkdownSourceMap?.renderedMarkdownDigest ?? null,
+                references: nativeBootstrapTaskMarkdownSourceMap?.references ?? null,
+                candidates: [...nativeSourceCandidates, ...attachmentCandidates],
+                runtimeInputs: capturedAuthoredSources?.inputs ?? null,
+                additionalInputs: [
+                  ...(completionContract ? [{ kind: "completion_contract" as const,
+                    issueId: issueRef.id, contractId: completionContract.row.id,
+                    revision: String(completionContract.row.revision), contentHash: completionContract.row.canonicalSha256 }] : []),
+                  ...(nativeTaskWakeSource ? [nativeTaskWakeSource] : []),
+                  { kind: "workspace_metadata" as const, runId: run.id,
+                    executionWorkspaceId: attachmentClosureExecution.binding.executionWorkspaceId,
+                    origin: persistedExecutionWorkspace ? "execution_workspace" as const :
+                      (executionWorkspace.source === "agent_home" ? "agent_home" as const : "task_session" as const),
+                    sourceVersion: persistedExecutionWorkspace?.updatedAt?.toISOString() ??
+                      (executionWorkspace.source === "agent_home" ? `agent-home:${agent.id}:v1` : `task-session:${run.id}`),
+                    contentHash: createHash("sha256").update(JSON.stringify({
+                      cwd: attachmentClosureExecution.workspace.cwd, repoUrl: attachmentClosureExecution.workspace.repoUrl,
+                      repoRef: attachmentClosureExecution.workspace.repoRef, branchName: attachmentClosureExecution.workspace.branchName,
+                    }), "utf8").digest("hex") },
+                ],
+                interactionResponses: attachmentClosureExecution.interactionResponses,
+                interactionSources: nativeBootstrapInteractionSources,
+                contextManifestIds: nativeBootstrapContextManifests,
+                governedContextMarkdown,
+                contextWitnessMarkdown: v5Fabric?.inputContextSourceMarkdown ?? governedContextMarkdown,
+                contextWitness: v5Fabric?.inputContextSourceWitness ?? freshGovernedContext?.sourceWitness ?? null,
+                rolePackInputs: v5Fabric ? v5Fabric.inputRolePackSources : [],
+                unsupportedInputPresent: Object.values(nativeBootstrapUnsupported).some(Boolean),
+              });
+            const nativeBootstrapSourceSet = buildNativeBootstrapSet();
+            const renderedAttachmentReferences = nativeBootstrapTaskMarkdownSourceMap?.references
+              ?.filter(reference => reference.kind === "attachment") ?? [];
+            if (renderedAttachmentReferences.length) {
+              nativeBootstrapAttachmentSourceClosureFactory = ({ execution, attachmentStage }) => {
+                const { sourceCaptures, attachments } = attachmentStage;
+                if (sourceCaptures.length !== renderedAttachmentReferences.length || attachments.length !== sourceCaptures.length)
+                  return null;
+                const attachmentCandidates: NativePreparedSourceCandidate[] = [];
+                for (const reference of renderedAttachmentReferences) {
+                  const matches = sourceCaptures.filter(capture => capture.input.attachmentId === reference.id &&
+                    capture.input.commentId === reference.commentId);
+                  const staged = attachments.filter(attachment => attachment.id === reference.id);
+                  if (matches.length !== 1 || staged.length !== 1) return null;
+                  const capture = matches[0]!;
+                  const descriptor = staged[0]!;
+                  if (capture.input.kind !== "attachment" || capture.input.disposition !== "delivered" ||
+                    !capture.input.assetId || !capture.input.sha256 || capture.input.byteSize !== reference.byteSize ||
+                    descriptor.filename !== reference.filename || descriptor.contentType !== reference.contentType ||
+                    descriptor.byteSize !== reference.byteSize || !descriptor.workspaceRelativePath || descriptor.unavailableReason)
+                    return null;
+                  attachmentCandidates.push({ kind: "attachment", id: capture.input.attachmentId,
+                    input: capture.input, payloadSourceSnapshot: capture.payloadSourceSnapshot });
+                }
+                const stagedPrompt = renderNativeRunnerStagedAttachmentPrompt(attachments);
+                if (!stagedPrompt || !execution.task.prompt.endsWith(`\n\n${stagedPrompt}`)) return null;
+                const sourceSet = buildNativeBootstrapSet(attachmentCandidates);
+                return sourceSet ? { sourceSet,
+                  taskEnvelopeDigest: createHash("sha256").update(JSON.stringify(execution.task), "utf8").digest("hex") } : null;
+              };
+            }
             nativeBootstrapSourceClosure = nativeBootstrapSourceSet
               ? { sourceSet: nativeBootstrapSourceSet,
                   taskEnvelopeDigest: createHash("sha256").update(JSON.stringify(nativeExecution.task), "utf8").digest("hex") }
@@ -24363,11 +24400,13 @@ export function heartbeatService(
                     db,
                     execution: nativeExecution,
                     bootstrapSourceClosure: nativeBootstrapSourceClosure,
+                    ...(nativeBootstrapAttachmentSourceClosureFactory
+                      ? { prepareBootstrapSourceClosure: nativeBootstrapAttachmentSourceClosureFactory } : {}),
                     ...(nativeExecution.provider.kind === "opencode" ? {
-                      prepareTurnSourceClosure: async turnInput => {
+                      prepareTurnSourceClosure: async (turnInput, bootstrapSourceClosure = nativeBootstrapSourceClosure) => {
                         const issue = issueRef;
                         if (!issue || !experimentalInstanceSettings.enableContextEngineV1) {
-                          return { turnInput, sourceClosure: nativeBootstrapSourceClosure ?? undefined };
+                          return { turnInput, sourceClosure: bootstrapSourceClosure ?? undefined };
                         }
                         const refreshed = await assembleFreshNativeGovernedContext(db, {
                           enabled: true,
@@ -24383,14 +24422,14 @@ export function heartbeatService(
                           issueDescription: issue.description,
                           immediateRequest: safeWakeCommentContext?.body ?? null,
                         });
-                        if (!refreshed?.sourceWitness || !refreshed.manifest || !nativeBootstrapSourceClosure) {
+                        if (!refreshed?.sourceWitness || !refreshed.manifest || !bootstrapSourceClosure) {
                           // No fresh Context body was added to this turn. Keep
                           // the already bound immutable bootstrap input; never
                           // infer a new source set from missing witness data.
-                          return { turnInput, sourceClosure: nativeBootstrapSourceClosure ?? undefined };
+                          return { turnInput, sourceClosure: bootstrapSourceClosure ?? undefined };
                         }
                         const prepared = prepareNativeTurnWithContext({ turnInput,
-                          baseClosure: nativeBootstrapSourceClosure, companyId: agent.companyId,
+                          baseClosure: bootstrapSourceClosure, companyId: agent.companyId,
                           runId: run.id, agentId: agent.id, issueId: issue.id, contextMarkdown: refreshed.markdown,
                           contextWitness: refreshed.sourceWitness,
                           manifestIds: [{ companyId: agent.companyId, contextManifestId: refreshed.manifest.id }] });

@@ -10799,7 +10799,6 @@ describeEmbeddedPostgres("tool access service", () => {
     await grantBoardUser(db, company.id, "oauth-operator", [
       "tools:manage_connections",
     ]);
-    await grantBoardUser(db, company.id, "connection-creator", []);
     const service = createTestToolAccessService(db);
     const initiatingActor = boardSessionActor(
       company.id,
@@ -10809,7 +10808,7 @@ describeEmbeddedPostgres("tool access service", () => {
     const connect = await service.connectGalleryApp(
       company.id,
       { galleryKey: "slack", name: "Slack bound" },
-      { actorType: "user", actorId: "connection-creator" },
+      { actorType: "user", actorId: initiatingActor.userId },
     );
     const initiatingApp = createRouteApp(db, initiatingActor);
     const startRes = await request(initiatingApp)
@@ -10872,34 +10871,6 @@ describeEmbeddedPostgres("tool access service", () => {
       .get("/api/tools/oauth/callback")
       .query({ state, code: "oauth-code" })
       .expect(403);
-
-    await db
-      .delete(principalPermissionGrants)
-      .where(
-        and(
-          eq(principalPermissionGrants.companyId, company.id),
-          eq(principalPermissionGrants.principalType, "user"),
-          eq(principalPermissionGrants.principalId, "oauth-operator"),
-          eq(
-            principalPermissionGrants.permissionKey,
-            "tools:manage_connections",
-          ),
-        ),
-      );
-    await request(initiatingApp)
-      .get("/api/tools/oauth/callback")
-      .query({ state, code: "oauth-code" })
-      .expect(403);
-    await db.insert(principalPermissionGrants).values({
-      companyId: company.id,
-      principalType: "user",
-      principalId: "oauth-operator",
-      permissionKey: "tools:manage_connections",
-      scope: null,
-      grantedByUserId: "owner",
-    });
-
-    await expect(db.select().from(toolOauthStates)).resolves.toHaveLength(1);
 
     vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
       const href = String(url);

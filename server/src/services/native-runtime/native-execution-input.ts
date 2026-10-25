@@ -37,6 +37,10 @@ const NATIVE_GITHUB_ATTACHMENT_RECOVERY_GUIDANCE = [
 export type NativeRenderedSourceReference = {
   kind: "task" | "comment" | "document_revision" | "attachment" | "unknown";
   id: string;
+  commentId?: string;
+  filename?: string;
+  contentType?: string;
+  byteSize?: number;
 };
 
 export type NativePreparedSourceCandidate = {
@@ -292,7 +296,11 @@ export function buildNativeBootstrapSourceSet(input: {
         : reference.kind === "comment"
           ? candidate.input.kind === "comment" && candidate.input.commentId === reference.id
           : reference.kind === "attachment"
-            ? candidate.input.kind === "attachment" && candidate.input.attachmentId === reference.id
+            ? candidate.input.kind === "attachment" && candidate.input.attachmentId === reference.id &&
+              typeof reference.commentId === "string" && typeof reference.filename === "string" &&
+              typeof reference.contentType === "string" && Number.isSafeInteger(reference.byteSize) &&
+              candidate.input.commentId === reference.commentId && candidate.input.byteSize === reference.byteSize &&
+              candidate.input.disposition === "delivered" && candidate.input.assetId !== null && candidate.input.sha256 !== null
             : false;
     if (!sourceMatchesReference) return null;
     if (!addSnapshotPolicy(candidate.payloadSourceSnapshot, { kind: expectedOwner, id: reference.id })) return null;

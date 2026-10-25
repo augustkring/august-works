@@ -6,6 +6,7 @@ import { formatDurableQuestionResponseSummary } from "../question-response-deliv
 import { buildNativeCompletionContract } from "./completion-contracts.js";
 import { renderPaperclipWakePrompt } from "@paperclipai/adapter-utils/server-utils";
 import { buildNativeBootstrapSourceSet, buildNativeExecutionInput, captureNativeTaskWakeSource } from "./native-execution-input.js";
+import type { NativeInteractionResponseEnvelope } from "../../vendor/paperclip-runner/index.js";
 import { nativeRuntimeContextFixture } from "./runtime-context.test-fixture.js";
 import { captureNativeBootstrapContextWitness } from "../context/native-bootstrap-context-witness.js";
 
@@ -30,6 +31,43 @@ describe("native bootstrap rendered-source closure", () => {
     expect(input({ candidates: [{ kind: "task", id: issueId, input: { kind: "task", issueId, sourceVersion: "1", contentHash: hash }, payloadSourceSnapshot: snapshot(randomUUID()) }] })).toBeNull();
     expect(input({ candidates: [{ kind: "task", id: issueId, input: { kind: "project", projectId: issueId, sourceVersion: "1", contentHash: hash }, payloadSourceSnapshot: snapshot() }] })).toBeNull();
     expect(input({ candidates: [{ kind: "task", id: issueId, input: { kind: "task", issueId: randomUUID(), sourceVersion: "1", contentHash: hash }, payloadSourceSnapshot: snapshot() }] })).toBeNull();
+  });
+
+  it("admits only the exact rendered attachment owner after byte verification", () => {
+    const attachmentId = randomUUID(), commentId = randomUUID(), assetId = randomUUID();
+    const taskInput = { kind: "task" as const, issueId, sourceVersion: "1", contentHash: hash };
+    const attachmentInput = { kind: "attachment" as const, issueId, attachmentId, commentId, assetId,
+      sha256: hash, byteSize: 42, disposition: "delivered" as const };
+    const attachmentSnapshot = { version: 1 as const,
+      owner: { kind: "attachment" as const, companyId, id: attachmentId, contentHash: hash },
+      policy, inputs: [], digest: hash };
+    const base = { companyId, runId, agentId, issueId, renderedMarkdown,
+      renderedMarkdownDigest: createHash("sha256").update(renderedMarkdown, "utf8").digest("hex"),
+      references: [{ kind: "task" as const, id: issueId }, { kind: "attachment" as const, id: attachmentId,
+        commentId, filename: "brief.pdf", contentType: "application/pdf", byteSize: 42 }],
+      candidates: [{ kind: "task" as const, id: issueId, input: taskInput, payloadSourceSnapshot: snapshot() },
+        { kind: "attachment" as const, id: attachmentId, input: attachmentInput, payloadSourceSnapshot: attachmentSnapshot }],
+      runtimeInputs: [], contextManifestIds: [], rolePackInputs: [], unsupportedInputPresent: false };
+    expect(buildNativeBootstrapSourceSet(base)?.inputs).toContainEqual(attachmentInput);
+    expect(buildNativeBootstrapSourceSet({ ...base, candidates: [...base.candidates.slice(0, 1), {
+      kind: "attachment" as const, id: attachmentId,
+      input: { ...attachmentInput, disposition: "attachment_staging_failed" as const }, payloadSourceSnapshot: attachmentSnapshot,
+    }] })).toBeNull();
+    expect(buildNativeBootstrapSourceSet({ ...base, references: [...base.references.slice(0, 1), {
+      ...base.references[1]!, commentId: randomUUID(),
+    }] })).toBeNull();
+  });
+
+  it("includes only interaction envelopes matched to unique exact current captures", () => {
+    const interactionId = randomUUID();
+    const response = { interactionId, kind: "ask_user_questions", response: { status: "pending", result: null } } satisfies NativeInteractionResponseEnvelope;
+    const source = { kind: "interaction" as const, issueId, interactionId, sourceVersion: "1",
+      contentHash: createHash("sha256").update(JSON.stringify(response), "utf8").digest("hex") };
+    expect(input({ interactionResponses: [response], interactionSources: [source] })?.inputs).toContainEqual(source);
+    expect(input({ interactionResponses: [response], interactionSources: [] })).toBeNull();
+    expect(input({ interactionResponses: [], interactionSources: [source] })).toBeNull();
+    expect(input({ interactionResponses: [response], interactionSources: [{ ...source, contentHash: hash }] })).toBeNull();
+    expect(input({ interactionResponses: [response, response], interactionSources: [source] })).toBeNull();
   });
 
   it("closes only the exact Task-only wake payload and rejects comment or interaction additions", () => {

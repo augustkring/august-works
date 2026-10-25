@@ -22,6 +22,8 @@ import {
   principalPermissionGrants,
   companies,
   documentRevisions,
+  contextManifestItems,
+  contextManifestMemoryRoots,
   agentExecutionManifests,
   issueDocuments,
   issues,
@@ -1827,6 +1829,35 @@ export async function runManagedNativeOpenCodeFixture(input: {
     const childTasks = childTaskIds.length ? await db.select().from(issues)
       .where(and(eq(issues.companyId, companyId), inArray(issues.id, childTaskIds))) : [];
     const contextReadCaptures = capturedResults.filter(value => value.contextRead !== undefined);
+    const privateRootMemoryId = privateRootRef.current?.memoryId ?? null;
+    const contextManifestSelectionFacts = await Promise.all(contextReadCaptures.flatMap(value => {
+      const contextRead = value.contextRead && typeof value.contextRead === "object" && !Array.isArray(value.contextRead)
+        ? value.contextRead as Record<string, unknown> : {};
+      const manifestIds = Array.isArray(contextRead.manifestIds) ? contextRead.manifestIds : [];
+      return manifestIds.flatMap(manifestValue => {
+        const manifest = manifestValue && typeof manifestValue === "object" && !Array.isArray(manifestValue)
+          ? manifestValue as Record<string, unknown> : {};
+        const contextManifestId = typeof manifest.contextManifestId === "string" &&
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(manifest.contextManifestId)
+          ? manifest.contextManifestId : null;
+        if (!contextManifestId) return [];
+        return [async () => {
+          const [items, roots] = await Promise.all([
+            db.select({ sourceProvider: contextManifestItems.sourceProvider, sourceRef: contextManifestItems.sourceRef })
+              .from(contextManifestItems).where(eq(contextManifestItems.manifestId, contextManifestId)),
+            privateRootMemoryId
+              ? db.select({ memoryRecordId: contextManifestMemoryRoots.memoryRecordId }).from(contextManifestMemoryRoots)
+                .where(and(eq(contextManifestMemoryRoots.manifestId, contextManifestId),
+                  eq(contextManifestMemoryRoots.memoryRecordId, privateRootMemoryId)))
+              : Promise.resolve([]),
+          ]);
+          return { contextManifestId,
+            selectedPrivateRootItem: privateRootMemoryId !== null && items.some(item =>
+              item.sourceProvider === "august_works_memory" && item.sourceRef === `memory://record/${privateRootMemoryId}`),
+            retainedPrivateRoot: roots.length === 1 };
+        }];
+      });
+    }).map(read => read()));
     return {
       companyId,
       agentId,
@@ -1847,6 +1878,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
       memoryOutputs,
       acceptedMemoryIds,
       contextReadCaptures,
+      contextManifestSelectionFacts,
       contextResultConsumers,
       childTasks,
       modelCalls: modelCalls.length,

@@ -1,0 +1,81 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+  "sourceCommitMeaning": "Archive checkout identity; scoped runs may predate it. Only separately recorded unchanged-source gates establish final tested source identity.",
+  "meaning": "First serial whole-workspace typecheck stopped at server errors; scoped server retry passed on a synchronized source snapshot and freshly installed locked dependencies. These are not a final whole-workspace pass; UI and later edits still require checks. Exact source pins accompany logs.",
+  "logs": [
+    {
+      "name": "v10-current-new-deps-typecheck",
+      "exitCode": 1,
+      "exitSidecar": "v10-current-new-deps-typecheck.exit",
+      "rawSha256": "487a4dbc5252cfb5b277052245639d42d6742164c6af66e43c899dabb2e62f0b",
+      "sanitizedSha256": "487a4dbc5252cfb5b277052245639d42d6742164c6af66e43c899dabb2e62f0b",
+      "archiveSha256": "1c21949aab0503231b6d82d1b014c9af8dbd73fb4fb49aa1254a1f19c6d0e1aa",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "v10-new-deps-server-typecheck-retry",
+      "exitCode": 0,
+      "exitSidecar": "v10-new-deps-server-typecheck-retry.exit",
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "context-manifest-deadline-cancel-focused-20261025",
+      "exitCode": 1,
+      "exitSidecar": "context-manifest-deadline-cancel-focused-20261025.exit",
+      "rawSha256": "a7d19c988197d1f97d05db146a78b24d14de8612cfe98f6cfdd17706d7dc2c1a",
+      "sanitizedSha256": "a7d19c988197d1f97d05db146a78b24d14de8612cfe98f6cfdd17706d7dc2c1a",
+      "archiveSha256": "e1951e527ff0043810b6946f7c50206b8f92b20519d3f1e4cfd42934d0520737",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 6 skipped (7)",
+        "Duration  19.22s (transform 9.50s, setup 76ms, import 13.39s, tests 5.63s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "context-manifest-deadline-cancel-focused-rerun-20261025",
+      "exitCode": 0,
+      "exitSidecar": "context-manifest-deadline-cancel-focused-rerun-20261025.exit",
+      "rawSha256": "24fd6783476ce7856ebe094e234a267e5f1583c0af9ed8fcdd2881a58dc550ef",
+      "sanitizedSha256": "24fd6783476ce7856ebe094e234a267e5f1583c0af9ed8fcdd2881a58dc550ef",
+      "archiveSha256": "94859317ece66e687ce3ec89b154bdbf740c763cb9911a325a2b7e14dff8772d",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 6 skipped (7)",
+        "Duration  18.37s (transform 9.31s, setup 97ms, import 12.97s, tests 5.16s, environment 0ms)"
+      ]
+    }
+  ]
+}

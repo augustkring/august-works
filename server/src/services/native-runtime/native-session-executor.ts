@@ -7133,9 +7133,85 @@ export async function renewNativeSessionExecutionLease(input: {
   if (!updated) throw new Error("native_session_lease_lost");
 }
 
+type NativeAttachmentStageReceipt = {
+  eventSeq: number;
+  attempt: number;
+  responsibleUserId: string | null;
+  baseTaskDigest: string;
+  finalTaskDigest: string;
+  sourceCaptureHash: string;
+  descriptorHash: string;
+  stageHash: string;
+  sourceCaptures: readonly NativeRunnerAttachmentSourceCapture[];
+};
+
+function nativeTaskDigest(task: unknown): string {
+  return createHash("sha256").update(JSON.stringify(task), "utf8").digest("hex");
+}
+
+function nativeAttachmentStageRecord(profile: Record<string, unknown>, run: typeof heartbeatRuns.$inferSelect,
+  attachmentInputs: readonly Extract<NativePayloadSourceInput, { kind: "attachment" }>[],
+  identity?: { eventSeq: number; attempt: number }): NativeAttachmentStageReceipt | null | undefined {
+  const captures = Array.isArray(profile.nativeAttachmentStageSources) ? profile.nativeAttachmentStageSources : [];
+  if (!attachmentInputs.length) return captures.length === 0 ? undefined : null;
+  if (captures.length !== 1) return null;
+  const raw = record(captures[0]);
+  if (identity && (raw.eventSeq !== identity.eventSeq || raw.attempt !== identity.attempt) ||
+    (raw.responsibleUserId ?? null) !== (run.responsibleUserId ?? null) || !Array.isArray(raw.sourceCaptures)) return null;
+  const sourceCaptures = raw.sourceCaptures as unknown[];
+  if (sourceCaptures.some(capture => !capture || typeof capture !== "object" || Array.isArray(capture) ||
+    !record(capture).input || typeof record(capture).input !== "object" || Array.isArray(record(capture).input))) return null;
+  const typedSourceCaptures = sourceCaptures as NativeRunnerAttachmentSourceCapture[];
+  const sourceInputs = typedSourceCaptures.map(capture => capture.input);
+  if (!isDeepStrictEqual(sourceInputs, attachmentInputs) || typedSourceCaptures.some(capture =>
+    capture.input.kind !== "attachment" || capture.input.disposition !== "delivered" ||
+    !capture.input.assetId || !capture.input.sha256 || capture.input.byteSize === null)) return null;
+  let execution: NativeExecutionInput;
+  try { execution = parseNativeExecutionInput(profile.nativeExecutionInput); } catch { return null; }
+  const baseTaskDigest = nativeTaskDigest(execution.task);
+  const finalTaskDigest = typeof raw.finalTaskDigest === "string" ? raw.finalTaskDigest : "";
+  const sourceCaptureHash = typeof raw.sourceCaptureHash === "string" ? raw.sourceCaptureHash : "";
+  const descriptorHash = typeof raw.descriptorHash === "string" ? raw.descriptorHash : "";
+  const stageHash = typeof raw.stageHash === "string" ? raw.stageHash : "";
+  if (!Number.isSafeInteger(raw.eventSeq) || !Number.isSafeInteger(raw.attempt) ||
+    !/^[0-9a-f]{64}$/.test(finalTaskDigest) ||
+    raw.baseTaskDigest !== baseTaskDigest || sourceCaptureHash !== nativeSha256(sourceCaptures) ||
+    !/^[0-9a-f]{64}$/.test(descriptorHash) ||
+    stageHash !== nativeSha256({ eventSeq: raw.eventSeq, attempt: raw.attempt,
+      responsibleUserId: raw.responsibleUserId ?? null, baseTaskDigest, finalTaskDigest, sourceCaptureHash, descriptorHash })) return null;
+  return { eventSeq: raw.eventSeq as number, attempt: raw.attempt as number,
+    responsibleUserId: (raw.responsibleUserId ?? null) as string | null, baseTaskDigest, finalTaskDigest,
+    sourceCaptureHash, descriptorHash, stageHash, sourceCaptures: typedSourceCaptures };
+}
+
+function nativeAttachmentStageReceipt(profile: Record<string, unknown>, run: typeof heartbeatRuns.$inferSelect,
+  closure: NativeBootstrapSourceClosure | null | undefined,
+  identity: { eventSeq: number; attempt: number }): NativeAttachmentStageReceipt | null | undefined {
+  const attachmentInputs = closure?.sourceSet.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "attachment" }> =>
+    source.kind === "attachment") ?? [];
+  const stage = nativeAttachmentStageRecord(profile, run, attachmentInputs, identity);
+  if (!stage || !attachmentInputs.length) return stage;
+  return closure?.taskEnvelopeDigest === stage.finalTaskDigest ? stage : null;
+}
+
+function nativeAttachmentStageAuthorityBinding(profile: Record<string, unknown>, run: typeof heartbeatRuns.$inferSelect,
+  bootstrap: { inputs: NativePayloadSourceInput[] }, identity: { eventSeq: number; attempt: number }): { valid: boolean; stageHash: string | null } {
+  const attachmentInputs = bootstrap.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "attachment" }> =>
+    source.kind === "attachment");
+  const stage = nativeAttachmentStageRecord(profile, run, attachmentInputs, identity);
+  if (!attachmentInputs.length) return { valid: stage === undefined, stageHash: null };
+  if (!stage) return { valid: false, stageHash: null };
+  const dispatches = Array.isArray(profile.nativeModelInputDispatchIntents)
+    ? profile.nativeModelInputDispatchIntents.map(record) : [];
+  const matchingDispatches = dispatches.filter(dispatch => dispatch.eventSeq === identity.eventSeq && dispatch.attempt === identity.attempt &&
+    (dispatch.responsibleUserId ?? null) === stage.responsibleUserId);
+  return { valid: matchingDispatches.length > 0, stageHash: matchingDispatches.length > 0 ? stage.stageHash : null };
+}
+
 async function nativeTurnFrameMatchesSourceClosure(tx: Parameters<Parameters<Db["transaction"]>[0]>[0],
   run: typeof heartbeatRuns.$inferSelect, turnInput: Parameters<NativeSession["startTurn"]>[0],
-  closure: NativeBootstrapSourceClosure | null | undefined, rawNativeExecutionInput: unknown) {
+  closure: NativeBootstrapSourceClosure | null | undefined, rawNativeExecutionInput: unknown,
+  identity: { eventSeq: number; attempt: number }) {
   const no = (_reason: string) => false;
   if (!closure || turnInput.continuation === true || turnInput.message.role !== "user") return no("frame_kind");
   let frame: Record<string, unknown>, parsedExecution: ReturnType<typeof parseNativeExecutionInput>, expected: unknown;
@@ -7149,7 +7225,17 @@ async function nativeTurnFrameMatchesSourceClosure(tx: Parameters<Parameters<Db[
   const task = record(frame.task);
   const frameWithoutTurnContext = { ...frame };
   delete frameWithoutTurnContext.turnContext;
-  if (!isDeepStrictEqual(frameWithoutTurnContext, expected)) return no("envelope_shape");
+  const attachmentStage = nativeAttachmentStageReceipt(record(run.runnerProfileJson), run, closure, identity);
+  if (attachmentStage === null) return no("attachment_stage_binding");
+  if (attachmentStage) {
+    const expectedFrame = record(expected);
+    const expectedTask = { ...record(expectedFrame.task) };
+    const actualTask = { ...task };
+    delete expectedTask.prompt;
+    delete actualTask.prompt;
+    if (!isDeepStrictEqual({ ...frameWithoutTurnContext, task: actualTask }, { ...expectedFrame, task: expectedTask }) ||
+      nativeTaskDigest(frame.task) !== attachmentStage.finalTaskDigest) return no("staged_task_binding");
+  } else if (!isDeepStrictEqual(frameWithoutTurnContext, expected)) return no("envelope_shape");
   if (closure.turnContext) {
     const turnContext = record(frame.turnContext);
     const manifestIds = closure.turnContext.manifestIds;
@@ -7165,7 +7251,7 @@ async function nativeTurnFrameMatchesSourceClosure(tx: Parameters<Parameters<Db[
       return no("turn_context_binding");
   } else if (Object.hasOwn(frame, "turnContext")) return no("turn_context_unqualified");
   if (frame.schema !== "paperclip.native-model-envelope.v2") return no("envelope_schema");
-  if (createHash("sha256").update(JSON.stringify(task), "utf8").digest("hex") !== closure.taskEnvelopeDigest) return no("envelope_task_digest");
+  if (nativeTaskDigest(frame.task) !== closure.taskEnvelopeDigest) return no("envelope_task_digest");
   const workspaceSource = closure.sourceSet.inputs.find((input): input is Extract<NativePayloadSourceInput, { kind: "workspace_metadata" }> =>
     input.kind === "workspace_metadata" && input.runId === run.id);
   if (!workspaceSource) return no("workspace_source_missing");
@@ -7333,13 +7419,15 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
     if (Buffer.byteLength(JSON.stringify(intents)) > 2 * 1024 * 1024)
       throw new Error("native_model_input_dispatch_budget_exceeded");
     let receipt: NativeRunInputSourceReceipt | null = null;
+    const sourceClosure = input.bootstrapSourceClosure;
+    const attachmentStage = nativeAttachmentStageReceipt(profile, run, sourceClosure,
+      { eventSeq: input.eventSeq, attempt: input.attempt });
     const noPriorNativeEffects = previous.length === 0 &&
       (!Array.isArray(profile.nativeToolCallDispatchAssociations) || profile.nativeToolCallDispatchAssociations.length === 0) &&
       (!Array.isArray(profile.nativeToolResultSourceCaptures) || profile.nativeToolResultSourceCaptures.length === 0) &&
-      (!Array.isArray(profile.nativeAttachmentStageSources) || profile.nativeAttachmentStageSources.length === 0);
-    const sourceClosure = input.bootstrapSourceClosure;
+      (attachmentStage === undefined || attachmentStage !== null);
     const sourceClosureMatches = sourceClosure && await nativeTurnFrameMatchesSourceClosure(tx, run, input.turnInput,
-      sourceClosure, profile.nativeExecutionInput);
+      sourceClosure, profile.nativeExecutionInput, { eventSeq: input.eventSeq, attempt: input.attempt });
     const existingReceipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
     if (profile.nativeOpenCodeSourceAuthority && !sourceClosureMatches)
       throw new Error("managed_opencode_source_prompt_closure_unavailable");
@@ -7481,7 +7569,8 @@ export async function recordNativeModelInputDispatchAcknowledgement(input: Param
     if (parsedReceipt.success && run.nativeInputSourceProtocolVersion === 1 &&
       typeof run.responsibleUserId === "string" && run.responsibleUserId.length > 0 &&
       matching[0]!.raw.responsibleUserId === run.responsibleUserId &&
-      await nativeTurnFrameMatchesSourceClosure(tx, run, input.turnInput, input.sourceClosure, profile.nativeExecutionInput)) {
+      await nativeTurnFrameMatchesSourceClosure(tx, run, input.turnInput, input.sourceClosure, profile.nativeExecutionInput,
+        { eventSeq: input.eventSeq, attempt: input.attempt })) {
       const { digest: _priorDigest, ...receiptBody } = parsedReceipt.data;
       const unsigned: Omit<NativeRunInputSourceReceipt, "digest"> = {
         ...receiptBody,
@@ -7782,7 +7871,7 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
 }
 
 async function assertManagedOpenCodeToolCallCurrent(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
-  agentId: string; turnId: string; callId: string; tool: string; argumentsHash: string;
+  agentId: string; eventSeq: number; turnId: string; callId: string; tool: string; argumentsHash: string;
 }): Promise<void> {
   await assertNativeAnalyticalRunPayloadAccess(input.db, input.companyId, input.runId);
   const [run] = await input.db.select().from(heartbeatRuns).where(and(
@@ -7793,8 +7882,12 @@ async function assertManagedOpenCodeToolCallCurrent(input: Parameters<typeof ren
   const profile = record(run?.runnerProfileJson);
   const authority = record(profile.nativeOpenCodeSourceAuthority);
   const receipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+  const attachmentStage = run && receipt.success
+    ? nativeAttachmentStageAuthorityBinding(profile, run, receipt.data.bootstrap,
+      { eventSeq: input.eventSeq, attempt: input.attempt }) : { valid: false, stageHash: null };
   if (!run || !receipt.success || authority.version !== 1 ||
-    authority.executionInputHash !== nativeSha256(profile.nativeExecutionInput))
+    authority.executionInputHash !== nativeSha256(profile.nativeExecutionInput) || !attachmentStage.valid ||
+    (authority.attachmentStageHash ?? null) !== attachmentStage.stageHash)
     throw new Error("managed_opencode_tool_call_source_binding_invalid");
   const bootstrapHash = nativeSha256(receipt.data.bootstrap);
   const sourceIntents = Array.isArray(profile.nativeAwModelWireIntents)
@@ -7827,7 +7920,7 @@ async function assertManagedOpenCodeToolCallCurrent(input: Parameters<typeof ren
 }
 
 async function prepareManagedOpenCodeOutputCapture(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
-  agentId: string; turnId: string; callId: string; tool: string; argumentsHash: string;
+  agentId: string; eventSeq: number; turnId: string; callId: string; tool: string; argumentsHash: string;
 }): Promise<NativeModelOutputCapture> {
   await assertManagedOpenCodeToolCallCurrent(input);
   const [run] = await input.db.select().from(heartbeatRuns).where(and(
@@ -8075,11 +8168,19 @@ function startNativeSessionExecutionLeaseRenewal(input: {
 export async function executePaperclipNativeSession(input: {
   db: Db;
   execution: NativeExecutionInput;
+  /** Canonical immutable Heartbeat input hash, before per-run staged descriptors are appended. */
+  nativeBootstrapExecutionInputHash?: string;
   /** Compiler-owned closed bootstrap source set; NULL means unknown. */
   bootstrapSourceClosure?: NativeBootstrapSourceClosure | null;
+  /** Rebuild the exact bootstrap closure after inbound files are verified and staged. */
+  prepareBootstrapSourceClosure?: (input: {
+    execution: NativeExecutionInput;
+    attachmentStage: Awaited<ReturnType<typeof stageNativeRunnerWakeAttachments>>;
+  }) => NativeBootstrapSourceClosure | null;
   /** Trusted Heartbeat-owned per-turn source refresh. The returned turnInput
    * is the exact value passed to startTurn and its closure is bound at dispatch. */
-  prepareTurnSourceClosure?: (turnInput: Parameters<NativeSession["startTurn"]>[0]) => Promise<{
+  prepareTurnSourceClosure?: (turnInput: Parameters<NativeSession["startTurn"]>[0],
+    bootstrapSourceClosure?: NativeBootstrapSourceClosure | null) => Promise<{
     turnInput: Parameters<NativeSession["startTurn"]>[0];
     sourceClosure?: NativeBootstrapSourceClosure;
   }>;
@@ -8193,7 +8294,7 @@ export async function executePaperclipNativeSession(input: {
       workspaceRoot: input.execution.workspace.cwd,
       executionTargetKind: targetKind,
     });
-    preparedInput = { ...input, chatAttachmentReadScope };
+    preparedInput = { ...input, nativeBootstrapExecutionInputHash: nativeSha256(input.execution), chatAttachmentReadScope };
     cleanupStagedAttachments = () => chatAttachmentReadScope.close();
     const attachmentStage = await stageNativeRunnerWakeAttachments({
       db: input.db,
@@ -8242,7 +8343,15 @@ export async function executePaperclipNativeSession(input: {
         }),
       };
     }
-    return await executePaperclipNativeSessionWithinScope(preparedInput, attachmentStage.sourceCaptures);
+    if (input.prepareBootstrapSourceClosure) {
+      preparedInput = { ...preparedInput,
+        bootstrapSourceClosure: input.prepareBootstrapSourceClosure({
+          execution: preparedInput.execution,
+          attachmentStage,
+        }) };
+    }
+    return await executePaperclipNativeSessionWithinScope(preparedInput, attachmentStage.sourceCaptures,
+      attachmentStage.attachments, input.execution);
   } catch (error) {
     executionFailure = error;
     throw error;
@@ -8285,6 +8394,8 @@ export async function executePaperclipNativeSession(input: {
 async function executePaperclipNativeSessionWithinScope(
   input: Parameters<typeof executePaperclipNativeSession>[0],
   stagedAttachmentSources?: readonly NativeRunnerAttachmentSourceCapture[],
+  stagedAttachments?: Awaited<ReturnType<typeof stageNativeRunnerWakeAttachments>>["attachments"],
+  baseExecution?: NativeExecutionInput,
 ): Promise<AdapterExecutionResult> {
   const runId = input.execution.binding.runId;
   if (
@@ -9210,9 +9321,10 @@ async function executePaperclipNativeSessionWithinScope(
               if (managedOpenCodeOutputCaptureRef) {
                 managedOpenCodeOutputCaptureRef.value = null;
                 if (managedContextReadCaptureRef) managedContextReadCaptureRef.value = null;
+                if (launchEventSeq === null) throw new Error("managed_opencode_tool_call_source_binding_invalid");
                 await assertManagedOpenCodeToolCallCurrent({ db: input.db, runId, companyId: input.execution.binding.companyId,
                   issueId: input.execution.binding.issueId, agentId: input.execution.binding.agentId,
-                  leaseOwner, attempt, controller, ...call });
+                  leaseOwner, attempt, controller, eventSeq: launchEventSeq, ...call });
               }
               await recordNativeToolCallDispatchAssociation({
                 db: input.db, runId, companyId: input.execution.binding.companyId,
@@ -9220,10 +9332,11 @@ async function executePaperclipNativeSessionWithinScope(
                 leaseOwner, attempt, controller, ...call,
               });
               if (managedOpenCodeOutputCaptureRef && ["write_document", "create_task", "self_remember"].includes(call.tool)) {
+                if (launchEventSeq === null) throw new Error("managed_opencode_tool_call_source_binding_invalid");
                 managedOpenCodeOutputCaptureRef.value = await prepareManagedOpenCodeOutputCapture({
                   db: input.db, runId, companyId: input.execution.binding.companyId,
                   issueId: input.execution.binding.issueId, agentId: input.execution.binding.agentId,
-                  leaseOwner, attempt, controller, ...call,
+                  leaseOwner, attempt, controller, eventSeq: launchEventSeq, ...call,
                 });
               }
             },
@@ -9300,12 +9413,40 @@ async function executePaperclipNativeSessionWithinScope(
                   const previous = profile.nativeAttachmentStageSources ?? [];
                   if (!Array.isArray(previous) || previous.length >= 64)
                     throw new Error("native_attachment_stage_capture_budget_exceeded");
-                  const captures = [...previous, { eventSeq: launchIntent.row.seq, attempt,
-                    responsibleUserId: run.responsibleUserId ?? null, sourceCaptures: stagedAttachmentSources }];
+                  if (launchEventSeq === null || !stagedAttachments)
+                    throw new Error("native_attachment_stage_capture_binding_changed");
+                  const persistedExecution = parseNativeExecutionInput(profile.nativeExecutionInput);
+                  const immutableExecution = baseExecution ?? persistedExecution;
+                  if (nativeSha256(immutableExecution) !== nativeSha256(persistedExecution))
+                    throw new Error("native_attachment_stage_capture_binding_changed");
+                  const baseTaskDigest = nativeTaskDigest(immutableExecution.task);
+                  const finalTaskDigest = nativeTaskDigest(input.execution.task);
+                  const closureAttachmentInputs = input.bootstrapSourceClosure?.sourceSet.inputs.filter(
+                    (source): source is Extract<NativePayloadSourceInput, { kind: "attachment" }> => source.kind === "attachment") ?? [];
+                  const sourceInputs = stagedAttachmentSources.map(capture => capture.input);
+                  if (closureAttachmentInputs.length && (!isDeepStrictEqual(closureAttachmentInputs, sourceInputs) ||
+                    input.bootstrapSourceClosure?.taskEnvelopeDigest !== finalTaskDigest))
+                    throw new Error("native_attachment_stage_capture_binding_changed");
+                  const sourceCaptureHash = nativeSha256(stagedAttachmentSources);
+                  // The descriptor hash excludes workspace paths. The final task digest binds those exact paths
+                  // without retaining temporary filesystem paths in the run profile.
+                  const descriptorHash = nativeSha256(stagedAttachments.map(({ id, filename, contentType, byteSize, unavailableReason }) =>
+                    ({ id, filename, contentType, byteSize, unavailableReason })));
+                  const stageHash = nativeSha256({ eventSeq: launchIntent.row.seq, attempt,
+                    responsibleUserId: run.responsibleUserId ?? null, baseTaskDigest, finalTaskDigest,
+                    sourceCaptureHash, descriptorHash });
+                  const currentCapture = { eventSeq: launchIntent.row.seq, attempt,
+                    responsibleUserId: run.responsibleUserId ?? null, baseTaskDigest, finalTaskDigest,
+                    sourceCaptureHash, descriptorHash, stageHash, sourceCaptures: stagedAttachmentSources };
+                  const captures = [...previous, currentCapture];
                   if (Buffer.byteLength(JSON.stringify(captures)) > 2 * 1024 * 1024)
                     throw new Error("native_attachment_stage_capture_budget_exceeded");
+                  const authority = record(profile.nativeOpenCodeSourceAuthority);
+                  const nextAuthority = authority.version === 1 && previous.length === 0 && closureAttachmentInputs.length
+                    ? { ...authority, attachmentStageHash: stageHash } : profile.nativeOpenCodeSourceAuthority;
                   await tx.update(heartbeatRuns).set({
-                    runnerProfileJson: { ...profile, nativeAttachmentStageSources: captures }, updatedAt: new Date(),
+                    runnerProfileJson: { ...profile, nativeAttachmentStageSources: captures,
+                      ...(nextAuthority ? { nativeOpenCodeSourceAuthority: nextAuthority } : {}) }, updatedAt: new Date(),
                   }).where(eq(heartbeatRuns.id, runId));
                 });
                 // Capture persistence may itself wait; it is never a grant.
@@ -9313,7 +9454,7 @@ async function executePaperclipNativeSessionWithinScope(
               }
             },
             prepareTurn: async turnInput => input.prepareTurnSourceClosure
-              ? input.prepareTurnSourceClosure(turnInput)
+              ? input.prepareTurnSourceClosure(turnInput, input.bootstrapSourceClosure)
               : { turnInput, sourceClosure: input.bootstrapSourceClosure ?? undefined },
             onTurnInput: async (turnInput, sourceClosure) => {
               if (launchEventSeq === null) throw new Error("native_model_input_launch_binding_invalid");
@@ -11542,6 +11683,7 @@ export function remoteCheckpointIncompleteFailure(
 export async function createRunnerdBackend(input: {
   db: Db;
   execution: NativeExecutionInput;
+  nativeBootstrapExecutionInputHash?: string;
   bootstrapSourceClosure?: NativeBootstrapSourceClosure | null;
   runnerInstanceId: string;
   chatAttachmentReadScope?: NativeChatAttachmentReadScope;
@@ -11828,7 +11970,8 @@ async function createRunnerdBackendWithinSessionClaim(
     });
     const sourceAuthority = {
       version: 1,
-      executionInputHash: nativeSha256(input.execution),
+      executionInputHash: input.nativeBootstrapExecutionInputHash ?? nativeSha256(input.execution),
+      attachmentStageHash: null as string | null,
       systemInstructionsHash: nativeSha256(nativeSystemInstructions(input.execution)),
       toolSchemasHash: nativeSha256(schemas),
       toolSchemas: schemas,
@@ -11848,6 +11991,8 @@ async function createRunnerdBackendWithinSessionClaim(
       )).for("update");
       const profile = run?.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson)
         ? run.runnerProfileJson as Record<string, unknown> : null;
+      if (!run || !profile || nativeSha256(profile.nativeExecutionInput) !== sourceAuthority.executionInputHash)
+        throw new Error("managed_opencode_source_authority_input_changed");
       const previous = profile?.nativeOpenCodeSourceAuthority;
       const previousAuthority = previous && typeof previous === "object" && !Array.isArray(previous)
         ? previous as Record<string, unknown> : null;

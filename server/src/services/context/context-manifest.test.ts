@@ -202,6 +202,63 @@ describeEmbeddedPostgres("Context Manifest service", () => {
     expect(items.map(item => item.contentHash)).toEqual([hashEvidenceContent(selectedTask), hashEvidenceContent(selectedMemory)]);
   });
 
+  it("cancels a deadline-bound manifest transaction and releases acquired privacy locks", async () => {
+    const seeded = await seedCompanyAndAgent("Bounded manifest transaction");
+    const [run] = await db.insert(heartbeatRuns).values({ companyId: seeded.companyId, agentId: seeded.agent.id,
+      responsibleUserId: seeded.userId, status: "running" }).returning();
+    let markTreeLockHeld!: () => void;
+    const treeLockHeld = new Promise<void>(resolve => { markTreeLockHeld = resolve; });
+    let releaseTreeLock!: () => void;
+    const treeLockRelease = new Promise<void>(resolve => { releaseTreeLock = resolve; });
+    const blocker = db.transaction(async tx => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`issue-privacy-tree:${seeded.companyId}`}, 0))`);
+      markTreeLockHeld();
+      await treeLockRelease;
+    });
+    await treeLockHeld;
+
+    const deadlineAt = Date.now() + 1_500;
+    const controller = new AbortController();
+    const deadlineError = new Error("Context manifest deadline reached");
+    const timer = setTimeout(() => controller.abort(deadlineError), deadlineAt - Date.now());
+    try {
+      const creation = contextManifestService(db).create({
+        companyId: seeded.companyId,
+        runId: run!.id,
+        agentId: seeded.agent.id,
+        query: "Bounded manifest transaction",
+        policySnapshot: {},
+        selected: [],
+      }, undefined, { signal: controller.signal, deadlineAt });
+      const outcome = creation.then(
+        () => ({ succeeded: true as const }),
+        error => ({ succeeded: false as const, error }),
+      );
+      let acquiredPrivacyLocks = false;
+      while (Date.now() < deadlineAt - 40 && !acquiredPrivacyLocks) {
+        const [locks] = await db.execute<{ businessEvents: boolean; memoryPrivacy: boolean }>(sql`
+          select pg_try_advisory_xact_lock(hashtextextended(${`business-events:${seeded.companyId}`}, 0)) as "businessEvents",
+            pg_try_advisory_xact_lock(hashtextextended(${`memory:privacy:${seeded.companyId}`}, 0)) as "memoryPrivacy"
+        `);
+        acquiredPrivacyLocks = locks?.businessEvents === false && locks.memoryPrivacy === false;
+        if (!acquiredPrivacyLocks) await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(acquiredPrivacyLocks).toBe(true);
+      expect(await outcome).toEqual({ succeeded: false, error: deadlineError });
+    } finally {
+      clearTimeout(timer);
+      releaseTreeLock();
+      await blocker;
+    }
+
+    const [locks] = await db.execute<{ businessEvents: boolean; memoryPrivacy: boolean }>(sql`
+      select pg_try_advisory_xact_lock(hashtextextended(${`business-events:${seeded.companyId}`}, 0)) as "businessEvents",
+        pg_try_advisory_xact_lock(hashtextextended(${`memory:privacy:${seeded.companyId}`}, 0)) as "memoryPrivacy"
+    `);
+    expect(locks).toEqual({ businessEvents: true, memoryPrivacy: true });
+    expect(await db.select().from(contextManifests)).toHaveLength(0);
+  });
+
   it("hashes policy snapshots deterministically across object-key order", () => {
     expect(
       hashContextPolicySnapshot({ b: 2, a: { y: true, x: "one" } }),
