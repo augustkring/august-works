@@ -8,6 +8,8 @@ import { validateWorkflowOutput, WorkflowOutputSchemaError } from "./workflows/w
 import { COGNEE_STDIO_TEMPLATE, cogneeCloudUrl, callCogneeCloud } from "./cognee-connection.js";
 import { HttpError } from "../errors.js";
 import type { AuthorizationActor } from "./authorization.js";
+import type { NativeModelOutputCapture } from "./native-runtime/native-execution-input.js";
+import { nativeSha256 } from "./native-runtime/canonical.js";
 import { claimSlackRateLimitRetry } from "./connectors/slack-retry.js";
 import { resolveSlackTaskAuthority } from "./connectors/slack-authority.js";
 import { SLACK_TOOLS } from "@paperclipai/shared";
@@ -191,6 +193,7 @@ import {
 import { extendApprovedExecutionWaitDeadline } from "./approved-execution-wait.js";
 import { instanceSettingsService } from "./instance-settings.js";
 import { memoryAgentToolsService } from "./memory/memory-agent-tools.js";
+import { sealNativeMemoryToolResultSnapshot, type MemoryMutationActor } from "./memory/memory-service.js";
 import { workflowAuthoringToolsService } from "./workflows/workflow-authoring-tools.js";
 import { foundationAuthoringToolsService } from "./foundation-authoring-tools.js";
 import { foundationAuthoringProposeInputJsonSchema } from "@paperclipai/shared";
@@ -380,6 +383,17 @@ export type ToolGatewayRuntimeSlot = ToolRuntimeSlotView;
 export interface ScopedToolGatewayContext {
   session: ToolGatewaySession;
   assertCurrent: (tool?: ToolGatewayDescriptor) => Promise<void>;
+}
+
+// The output witness is process-local capability state, never a field on an
+// HTTP request or serializable scoped context.
+const nativeMemoryOutputCaptures = new WeakMap<ScopedToolGatewayContext, NativeModelOutputCapture>();
+export function bindManagedNativeMemoryOutputCapture(context: ScopedToolGatewayContext, capture: NativeModelOutputCapture) {
+  nativeMemoryOutputCaptures.set(context, capture);
+  return context;
+}
+function nativeMemoryOutputCapture(context: ScopedToolGatewayContext | undefined) {
+  return context ? nativeMemoryOutputCaptures.get(context) : undefined;
 }
 
 export class ToolGatewayHttpError extends Error {
@@ -1203,6 +1217,13 @@ const BUILTIN_TOOLS: ToolGatewayDescriptor[] = [
     risk: "read",
   },
 ];
+
+/** Canonical first-party Memory tool descriptor for managed Native catalogs. */
+export function managedNativeRememberToolDescriptor(): ToolGatewayDescriptor {
+  const tool = BUILTIN_TOOLS.find(candidate => candidate.name === "paperclip-self:remember");
+  if (!tool) throw new Error("managed_native_memory_tool_unavailable");
+  return { ...tool, parametersSchema: structuredClone(tool.parametersSchema) };
+}
 
 const VIRTUAL_SEARCH_TOOLS: ToolGatewayDescriptor = {
   name: "search_tools",
@@ -3633,6 +3654,10 @@ export function createToolGatewayService(
         projectId: session.projectId,
         responsibleUserId: session.responsibleUserId ?? null,
         authorizationActor,
+        ...(nativeMemoryOutputCapture(scopedContext) ? {
+          nativeModelOutputCapture: nativeMemoryOutputCapture(scopedContext)!,
+          nativeToolInvocationId: invocationId,
+        } : {}),
         allowShared: flags.sharedMemory,
         allowPrivate: flags.privateMemory,
       };
@@ -10909,6 +10934,22 @@ export function createToolGatewayService(
         input = { ...input, tool: bound.name };
       }
       let tool = await findToolForSession(session, input.tool);
+      const scopedMemoryCapture = nativeMemoryOutputCapture(scopedContext);
+      if (scopedMemoryCapture) {
+        const capture = scopedMemoryCapture;
+        const use = capture.managedOpenCodeToolUse;
+        if (tool.name !== "paperclip-self:remember" || !use || use.toolName !== tool.name ||
+          capture.runId !== session.runId || capture.dispatch.runId !== session.runId ||
+          !session.agentId || !session.issueId ||
+          !capture.sourceSet.inputs.some(source => source.kind === "task" && source.issueId === session.issueId) ||
+          use.argumentsHash !== nativeSha256(input.parameters ?? {})) {
+          throw new ToolGatewayHttpError(403, "Native Memory output capture does not match this scoped call", "native_memory_capture_invalid");
+        }
+        input = { ...input, idempotencyKey: `aw-native-tool:${capture.runId}:${use.callId}` };
+      }
+      if (scopedContext && tool.name === "paperclip-self:remember" && !scopedMemoryCapture) {
+        throw new ToolGatewayHttpError(403, "Managed Native Memory writes require a current provider tool-use capture", "native_memory_capture_required");
+      }
       if (scopedContext && tool.providerType === "paperclip_virtual" && tool.name !== "run_tool") {
         throw new ToolGatewayHttpError(403, "Scoped runs discover connected tools through tool.list", "scoped_tool_not_connected");
       }
@@ -11679,6 +11720,22 @@ export function createToolGatewayService(
             updatedAt: completedAt,
           })
           .where(eq(toolInvocations.id, invocationId));
+        const nativeMemoryCapture = nativeMemoryOutputCapture(scopedContext);
+        if (tool.name === "paperclip-self:remember" && nativeMemoryCapture) {
+          const resultRecord = asRecord(resultValidation.value);
+          const data = asRecord(resultRecord?.data);
+          const memory = asRecord(data?.record);
+          if ((data?.status === "accepted" || data?.status === "pending") && typeof memory?.id === "string" &&
+            resultValidation.summary.sha256) {
+            const actor: MemoryMutationActor = {
+              principal: { type: "agent", agentId: session.agentId!, responsibleUserId: session.responsibleUserId ?? null },
+              runId: session.runId, authorizationActor,
+              nativeModelOutputCapture: nativeMemoryCapture, nativeToolInvocationId: invocationId,
+            };
+            await sealNativeMemoryToolResultSnapshot(db, { companyId: session.companyId,
+              recordId: memory.id, actor, resultHash: resultValidation.summary.sha256 });
+          }
+        }
         if (input.approvedActionRequestId) {
           const [executedRequest] = await db
             .update(toolActionRequests)

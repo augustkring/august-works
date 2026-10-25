@@ -11,6 +11,8 @@ import { createLocalNativeQuestionBridge } from "./local-native-question-bridge.
 import { readVerifiedRemoteWorkspaceFile } from "./remote-deliverable-file.js";
 import { copyBackCodexAuth } from "@paperclipai/adapter-codex-local/server";
 import { nativeCompletionFeedback } from "./native-completion-feedback.js";
+import { V7_COMPLETION_SCHEMA } from "../orchestration/orchestration-contracts.js";
+import { NATIVE_COMPLETION_CONTRACT_SCHEMA } from "./completion-contracts.js";
 import { hasAcknowledgedNativeReassignmentStopIntent, hasAcknowledgedNativeStopIntent } from "../acknowledged-native-stop.js";
 import { stoppedCodexTurnIsTextOnly } from "./stopped-codex-turn.js";
 import { prepareVerifiedRemoteProviderPack } from "./remote-provider-pack.js";
@@ -7229,8 +7231,17 @@ async function nativeTurnFrameMatchesSourceClosure(tx: Parameters<Parameters<Db[
   const contractJson = record(contract.contractJson);
   const projectedContract = { revision: String(contractJson.revision), objective: String(contractJson.objective),
     criteria: Array.isArray(contractJson.criteria) ? contractJson.criteria : null };
-  if (nativeSha256({ schemaVersion: contract.schemaVersion, policyVersion: contract.policyVersion,
-    risk: contract.risk, completionAuthority: contract.completionAuthority, contract: contract.contractJson }) !== contract.canonicalSha256)
+  // V7 orchestration contracts predate the native contract policy columns and
+  // are canonically hashed as {schemaVersion, contract}. Native v1 contracts
+  // include the complete policy tuple. Keep the two retained wire formats
+  // explicit; do not accept a caller-selected hash shape.
+  const canonicalContractHash = contract.schemaVersion === V7_COMPLETION_SCHEMA
+    ? nativeSha256({ schemaVersion: contract.schemaVersion, contract: contract.contractJson })
+    : contract.schemaVersion === NATIVE_COMPLETION_CONTRACT_SCHEMA
+      ? nativeSha256({ schemaVersion: contract.schemaVersion, policyVersion: contract.policyVersion,
+        risk: contract.risk, completionAuthority: contract.completionAuthority, contract: contract.contractJson })
+      : null;
+  if (!canonicalContractHash || canonicalContractHash !== contract.canonicalSha256)
     return no("contract_digest");
   return isDeepStrictEqual(parsedExecution.completionContract.contract, projectedContract) || no("contract_projection");
 }
@@ -11585,9 +11596,10 @@ async function createRunnerdBackendWithinSessionClaim(
   const managedOpenCode = input.execution.provider.kind === "opencode" &&
     Boolean((input.runnerEnvironment ?? process.env).PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN?.trim());
   let managedOpenCodeTools: Readonly<Record<string, unknown>>[] | null = null;
+  let managedOpenCodeDynamicTools: Readonly<Record<string, unknown>>[] | null = null;
   if (managedOpenCode) {
     const allowedNames = new Set(["read_document", "write_document", "create_task", "paperclip_finish", "paperclip_block"]);
-    const schemas = dynamicTools.flatMap((raw) => {
+    const schemas: Array<Record<string, unknown>> = dynamicTools.flatMap((raw): Array<Record<string, unknown>> => {
       if (typeof raw.name !== "string") return [];
       let name = raw.name;
       for (const prefix of ["paperclip__", "paperclip_", "paperclip."]) {
@@ -11610,6 +11622,11 @@ async function createRunnerdBackendWithinSessionClaim(
       !names.includes("paperclip_finish") || !names.includes("paperclip_block") || new Set(names).size !== names.length)
       throw new Error("managed_opencode_source_profile_tools_incomplete");
     managedOpenCodeTools = schemas;
+    // Runnerd's original MCP bridge owns and appends the two canonical
+    // terminal controls. Keep them in the broker's exact catalog proof, but
+    // pass only Paperclip CRUD tools to the bridge to avoid duplicate names.
+    managedOpenCodeDynamicTools = schemas.filter((tool) =>
+      ["read_document", "write_document", "create_task"].includes(String(tool.name)));
     const taskEnvelope = createCodexTaskEnvelope({
       objective: input.execution.completionContract.contract.objective,
       contractRevision: input.execution.completionContract.contract.revision,
@@ -13279,11 +13296,12 @@ async function createRunnerdBackendWithinSessionClaim(
     runnerInstanceId:
       retainedTransition?.runnerInstanceId ?? input.runnerInstanceId,
     environment: effectiveRunnerEnvironment,
+    opencodeEnvironment: effectiveRunnerEnvironment,
     workingDirectoryAuthority: remoteTarget
       ? "remote_runner"
       : "local_filesystem",
     onSpawn: input.onSpawn,
-    dynamicTools: managedOpenCodeTools ?? dynamicTools,
+    dynamicTools: managedOpenCodeDynamicTools ?? dynamicTools,
     completionFeedback: async (result) => {
       const current = sessionToolAuthorityEpochs.get(sessionScopeId);
       if (!current) throw new Error("native_session_tool_authority_unavailable");

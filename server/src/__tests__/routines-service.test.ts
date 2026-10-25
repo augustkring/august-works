@@ -1,6 +1,10 @@
 import { createHmac, randomUUID } from "node:crypto";
+import { fork, type ChildProcess } from "node:child_process";
+import { once } from "node:events";
 import express, { type RequestHandler } from "express";
+import path from "node:path";
 import request from "supertest";
+import { fileURLToPath } from "node:url";
 import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createDeliveryWorkCoordinator } from "../services/delivery-work-coordinator.js";
@@ -9,7 +13,9 @@ import { registerScheduledWork } from "../services/scheduled-work.js";
 import { readTaskDrain, startTaskDrain, stopTaskDrain } from "../services/task-admission.js";
 import {
   activityLog,
+  agentWakeupRequests,
   agents,
+  agentRuntimeState,
   authSessions,
   authUsers,
   companies,
@@ -58,6 +64,8 @@ import { workflowService } from "../services/workflows/workflow-service.ts";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
+const scheduledWorkerPath = fileURLToPath(new URL("./fixtures/scheduled-work-recovery-worker.ts", import.meta.url));
+const tsxLoaderPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../cli/node_modules/tsx/dist/loader.mjs");
 const originalSecretsProviderEnv = process.env.PAPERCLIP_SECRETS_PROVIDER;
 const originalPaperclipApiUrlEnv = process.env.PAPERCLIP_API_URL;
 
@@ -102,7 +110,9 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
     await db.delete(documentRevisions);
     await db.delete(companySecretVersions);
     await db.delete(companySecrets);
+    await db.delete(agentRuntimeState);
     await db.delete(heartbeatRuns);
+    await db.delete(agentWakeupRequests);
     await db.delete(issues);
     await db.delete(executionWorkspaces);
     await db.delete(projectWorkspaces);
@@ -315,6 +325,46 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
       completedAt: input.completedAt ?? null, triggerPayload: input.triggerPayload })
       .where(eq(routineRuns.id, run!.id));
     return { runId: run!.id, issue };
+  }
+
+  async function waitForScheduledWorkerMessage(child: ChildProcess, type: string, timeoutMs = 15_000) {
+    return new Promise<Record<string, unknown>>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`Timed out waiting for scheduled worker ${type}`)), timeoutMs);
+      const onMessage = (message: unknown) => {
+        if (!message || typeof message !== "object") return;
+        const value = message as Record<string, unknown>;
+        if (value.type === "worker_error") {
+          clearTimeout(timer);
+          reject(new Error(`Scheduled worker error: ${String(value.message)}`));
+        } else if (value.type === type) {
+          clearTimeout(timer);
+          resolve(value);
+        }
+      };
+      const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
+        clearTimeout(timer);
+        reject(new Error(`Scheduled worker exited before ${type} (${code ?? signal})`));
+      };
+      child.on("message", onMessage);
+      child.once("exit", onExit);
+      child.once("error", error => { clearTimeout(timer); reject(error); });
+    });
+  }
+
+  function startScheduledWorker(input: { companyId: string; routineId: string; actor: AuthorizationActor }) {
+    return fork(scheduledWorkerPath, [], {
+      cwd: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.."),
+      execArgv: ["--import", tsxLoaderPath],
+      env: {
+        PATH: process.env.PATH ?? "",
+        NODE_ENV: process.env.NODE_ENV ?? "test",
+        PAPERCLIP_TEST_DATABASE_URL: tempDb!.connectionString,
+        PAPERCLIP_TEST_COMPANY_ID: input.companyId,
+        PAPERCLIP_TEST_ROUTINE_ID: input.routineId,
+        PAPERCLIP_TEST_ROUTINE_ACTOR: JSON.stringify(input.actor),
+      },
+      stdio: ["ignore", "ignore", "ignore", "ipc"],
+    });
   }
 
   it("clears transient routine run failures when execution issues resume", async () => {
@@ -963,6 +1013,66 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
       expect(wakeups).toHaveLength(1);
     } finally {
       await Promise.all([first.coordinator.stop(), second.coordinator.stop()]);
+    }
+  }, 90_000);
+
+  it("restores and claims one saved Routine occurrence after an OS process restart", async () => {
+    const { actor, agentId, companyId, routine } = await seedFixture();
+    const routineOwner = routineService(db, { sourceActor: actor });
+    const { trigger } = await routineOwner.createTrigger(routine.id, {
+      kind: "schedule", cronExpression: "* * * * *", timezone: "UTC",
+    }, {});
+    const savedDeadline = new Date(Date.now() + 30_000);
+    await db.update(routineTriggers).set({ nextRunAt: savedDeadline }).where(eq(routineTriggers.id, trigger.id));
+
+    const first = startScheduledWorker({ companyId, routineId: routine.id, actor });
+    const childProcesses = [first];
+    try {
+      const firstReady = await waitForScheduledWorkerMessage(first, "ready");
+      expect(firstReady.nextWakeAt).toBe(savedDeadline.getTime());
+
+      // A direct SQL writer in the parent process has no child-process signal.
+      // The original heartbeat recovery wake makes the child read the current
+      // durable deadline instead of retaining its old timer.
+      const recoveredDeadline = new Date(Date.now() + 3_000);
+      await db.update(routineTriggers).set({ nextRunAt: recoveredDeadline }).where(eq(routineTriggers.id, trigger.id));
+      const reconciled = waitForScheduledWorkerMessage(first, "reconciled");
+      first.send({ type: "wake" });
+      expect((await reconciled).nextRunAt).toBe(recoveredDeadline.toISOString());
+
+      const firstExit = once(first, "exit");
+      first.kill("SIGKILL");
+      await firstExit;
+      await new Promise(resolve => setTimeout(resolve, Math.max(0, recoveredDeadline.getTime() - Date.now()) + 100));
+
+      // Two fresh Node processes start after the durable deadline. Their
+      // original scheduler and Routine owner race the existing database claim.
+      const second = startScheduledWorker({ companyId, routineId: routine.id, actor });
+      const third = startScheduledWorker({ companyId, routineId: routine.id, actor });
+      childProcesses.push(second, third);
+      await Promise.all([waitForScheduledWorkerMessage(second, "ready"), waitForScheduledWorkerMessage(third, "ready")]);
+      await vi.waitFor(async () => {
+        const runs = await db.select().from(routineRuns).where(eq(routineRuns.routineId, routine.id));
+        expect(runs).toHaveLength(1);
+        expect(runs[0]?.status).toBe("issue_created");
+      }, { timeout: 10_000 });
+
+      const runs = await db.select().from(routineRuns).where(eq(routineRuns.routineId, routine.id));
+      const tasks = await db.select().from(issues).where(eq(issues.originRunId, runs[0]!.id));
+      expect(runs[0]).toMatchObject({ source: "schedule", status: "issue_created", linkedIssueId: expect.any(String) });
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0]).toMatchObject({ companyId, assigneeAgentId: agentId, originKind: "routine_execution", originId: routine.id });
+      expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, agentId))).toHaveLength(1);
+      expect(await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.agentId, agentId))).toHaveLength(1);
+    } finally {
+      await Promise.all(childProcesses.slice(1).map(async child => {
+        if (child.exitCode !== null || child.signalCode !== null) return;
+        const exit = once(child, "exit");
+        child.send({ type: "stop" });
+        await Promise.race([exit, new Promise(resolve => setTimeout(resolve, 3_000))]);
+        if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+      }));
+      if (first.exitCode === null && first.signalCode === null) first.kill("SIGKILL");
     }
   }, 90_000);
 

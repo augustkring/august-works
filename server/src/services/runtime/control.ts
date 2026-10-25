@@ -74,6 +74,10 @@ import { resolvePaperclipRunnerProviderProfile } from "../native-runtime/provide
 import type { workerModelGateway } from "../orchestration/worker-model-gateway.js";
 import { verifyRuntimeToolsToken } from "../../runtime-tools-token.js";
 
+type IssuedWorkerModelCredential = Awaited<
+  ReturnType<ReturnType<typeof workerModelGateway>["issueForRun"]>
+>;
+
 const ACTIVE_OPERATIONS = [
   "REQUESTED",
   "RUNNING",
@@ -2483,8 +2487,10 @@ export function runtimeControlService(
     let brokerCapability: SandboxBrokerCapabilityClaim | null = null;
     let brokerCapabilityToken: string | null = null;
     let brokerProviderProfile: { id: string; hash: string } | null = null;
-    let modelBrokerCredential: { capabilityToken: string; profileId: string; profileHash: string; expiresAt: string;
-      inputTokensUpperBound: number; maxOutputTokens: number } | null = null;
+    let modelBrokerCredential: Pick<IssuedWorkerModelCredential,
+      "expiresAt" | "inputTokensUpperBound" | "maxOutputTokens"> & {
+        capabilityToken: string; profileId: string; profileHash: string;
+      } | null = null;
     const runnerProfile = initialSource.source.agent.adapterType === "paperclip_runner"
       ? resolvePaperclipRunnerProviderProfile(initialSource.source.agent.adapterConfig)
       : null;

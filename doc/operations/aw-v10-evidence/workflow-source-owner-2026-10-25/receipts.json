@@ -2965,6 +2965,112 @@
         "Duration  22.33s (transform 10.60s, setup 76ms, import 14.43s, tests 7.71s, environment 0ms)"
       ],
       "sourceCommit": "205c09d937dca26969f493f66da3c83c8c9d2357"
+    },
+    {
+      "name": "managed-source-closure-gateway-transport",
+      "exitCode": 1,
+      "exitSidecar": "managed-source-closure-gateway-transport.exit",
+      "rawSha256": "a899b20db723ac17bb2a9decc6df882335e85283deb83835d292095d414c8b8d",
+      "sanitizedSha256": "5a4928e4816d52f8f9adfc235f9b52561a3ae3e538f707b2c5a88e32f521196b",
+      "archiveSha256": "c8cd9b1411ac3900a557602eace56cda5fef048f11d930749b6dfa104e89af77",
+      "redactions": {
+        "ansi": 30,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 2 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed | 1 passed (2)",
+        "Tests  2 failed | 81 passed (83)",
+        "Duration  220.03s (transform 9.81s, setup 138ms, import 13.68s, tests 205.98s, environment 0ms)"
+      ],
+      "sourceCommit": "a969b7c6c5663de66d14d33aa3a34197214b90b2"
+    },
+    {
+      "name": "managed-source-closure-gateway-transport-after-fix",
+      "exitCode": 0,
+      "exitSidecar": "managed-source-closure-gateway-transport-after-fix.exit",
+      "rawSha256": "cb54efbbbd2d691e7e5378bcf6c2a7abc40d2511202f1c50df5d2d64d63749e1",
+      "sanitizedSha256": "216622b6efa106098d89c2f8873e4600cc2fa6998a16a42507da0b337f9f8faf",
+      "archiveSha256": "6fba97ec0d1760a2b9494c0cc76df6273919ca924fd5fee5b15370be9f1cd5d6",
+      "redactions": {
+        "ansi": 18,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  83 passed (83)",
+        "Duration  233.49s (transform 10.10s, setup 124ms, import 13.98s, tests 219.14s, environment 0ms)"
+      ],
+      "sourceCommit": "a969b7c6c5663de66d14d33aa3a34197214b90b2"
+    },
+    {
+      "name": "managed-source-closure-aw-positive-after-contract-fix",
+      "exitCode": 0,
+      "exitSidecar": "managed-source-closure-aw-positive-after-contract-fix.exit",
+      "rawSha256": "3bae083102d3e1f7374e44597a320451f84959bd6f45b6120a29c27e8b2b4fa0",
+      "sanitizedSha256": "3bae083102d3e1f7374e44597a320451f84959bd6f45b6120a29c27e8b2b4fa0",
+      "archiveSha256": "3da0819ca21308200527cbba5aca5d5629d6d1a93069907557c611b1579047b6",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 64 skipped (65)",
+        "Duration  31.65s (transform 10.04s, setup 75ms, import 13.73s, tests 17.73s, environment 0ms)"
+      ],
+      "sourceCommit": "a969b7c6c5663de66d14d33aa3a34197214b90b2"
+    },
+    {
+      "name": "managed-source-closure-aw-pause-after-contract-fix",
+      "exitCode": 0,
+      "exitSidecar": "managed-source-closure-aw-pause-after-contract-fix.exit",
+      "rawSha256": "8a6fcd76ac3e926835b76657120cdc4c22df5194b6019605a67fc37c5bf3707d",
+      "sanitizedSha256": "d51e6857931bbf1b5b84aeafef8be435d4f21a69baa3e71e1fdcaa03612e6b99",
+      "archiveSha256": "308a12142a827335222d14ebc535f8fa9bd1fd00564e145d086182564714ab50",
+      "redactions": {
+        "ansi": 12,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 64 skipped (65)",
+        "Duration  29.27s (transform 10.50s, setup 73ms, import 14.38s, tests 14.69s, environment 0ms)"
+      ],
+      "sourceCommit": "a969b7c6c5663de66d14d33aa3a34197214b90b2"
+    },
+    {
+      "name": "up13-os-process-restart-routine-20261025",
+      "exitCode": 0,
+      "exitSidecar": "up13-os-process-restart-routine-20261025.log.exit",
+      "rawSha256": "a2acc18d96a7a064c30018ff3f53990d6e2ddc5a419f4cf41101b12cc64684c2",
+      "sanitizedSha256": "a2acc18d96a7a064c30018ff3f53990d6e2ddc5a419f4cf41101b12cc64684c2",
+      "archiveSha256": "f6dcc74cbbe0239cdb6d59735486234a2994daf6adb756b4280fd511b10476e3",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 81 skipped (82)",
+        "Duration  34.00s (transform 11.05s, setup 74ms, import 15.03s, tests 18.78s, environment 0ms)"
+      ],
+      "sourceCommit": "a969b7c6c5663de66d14d33aa3a34197214b90b2"
     }
   ],
   "updates": [
@@ -3432,6 +3538,23 @@
         "up13-restart-dual-server-routine-20261025",
         "up13-dual-server-monitor-20261025",
         "up03-typed-routine-project-export-v2"
+      ]
+    },
+    {
+      "sourceCommit": "a969b7c6c5663de66d14d33aa3a34197214b90b2",
+      "meaning": "Full gateway/transport83 passed after exact V7 completion-contract hash compatibility; earlier81/83 failure retained separately. Actual AW positive and known-charge Pause controls remain strict.",
+      "logs": [
+        "managed-source-closure-gateway-transport",
+        "managed-source-closure-gateway-transport-after-fix",
+        "managed-source-closure-aw-positive-after-contract-fix",
+        "managed-source-closure-aw-pause-after-contract-fix"
+      ]
+    },
+    {
+      "sourceCommit": "a969b7c6c5663de66d14d33aa3a34197214b90b2",
+      "meaning": "Real PostgreSQL Routine scheduling recovery across SIGKILL and two fresh Node processes, parent SQL deadline change and explicit heartbeat wake; one canonical terminal occurrence/effect.",
+      "logs": [
+        "up13-os-process-restart-routine-20261025"
       ]
     }
   ],

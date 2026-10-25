@@ -178,6 +178,7 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
     state.work++;
     const [row] = await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId,companyId),eq(memoryRecords.id,id),memoryPayloadVisible()));
     if (!row?.sourceProvenanceQualified || (row.expiresAt && row.expiresAt.getTime()<=Date.now())) return false;
+    if (row.payloadSourceProtocolVersion === 1 && row.payloadSourceSnapshot === null) return false;
     const publicationSource=authorizedPrivateOwnerEdge;
     const readerUserId=actor.type==="board"?actor.userId:actor.onBehalfOfUserId;
     // A run may legitimately change Human after acknowledged steering. Its
@@ -214,13 +215,35 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
     }
     visited.add(visitKey);active.add(id);
     const capturedSnapshot=nativePayloadSourceSnapshotSchema.safeParse(row.payloadSourceSnapshot);
-    const capturedContextIds=capturedSnapshot.success&&row.payloadSourceProtocolVersion===1&&!row.payloadSourceSnapshotInvalidated
-      &&capturedSnapshot.data.owner.kind==="memory_record"&&capturedSnapshot.data.owner.companyId===companyId
-      &&capturedSnapshot.data.owner.id===row.id&&capturedSnapshot.data.policy.runIds.length===row.sourceRunIds.length
-      &&row.sourceRunIds.every(runId=>capturedSnapshot.data.policy.runIds.includes(runId))
-      &&capturedSnapshot.data.inputs.every(input=>input.kind==="context")
-      ? capturedSnapshot.data.inputs.map(input=>input.kind==="context"?input.manifestId:"").sort() : null;
-    row.sourceRunIds.forEach(value=>addScoped(runChecks,value,row.id,capturedContextIds));
+    let capturedContextIds: string[] | null = null;
+    let capturedReadRunIds = row.sourceRunIds;
+    if (capturedSnapshot.success && row.payloadSourceProtocolVersion===1 && !row.payloadSourceSnapshotInvalidated &&
+      capturedSnapshot.data.owner.kind==="memory_record" && capturedSnapshot.data.owner.companyId===companyId &&
+      capturedSnapshot.data.owner.id===row.id) {
+      const dispatch = capturedSnapshot.data.inputs.find((value): value is Extract<typeof value, { kind: "worker_model_dispatch" }> =>
+        value.kind === "worker_model_dispatch");
+      const expectedRunIds = dispatch
+        ? [...new Set([...capturedSnapshot.data.policy.runIds, dispatch.runId])].sort()
+        : row.sourceRunIds;
+      const exactPolicy = isDeepStrictEqual(capturedSnapshot.data.policy.issueIds,[...row.sourceIssueIds].sort()) &&
+        isDeepStrictEqual(capturedSnapshot.data.policy.projectIds,[...row.sourceProjectIds].sort()) &&
+        isDeepStrictEqual([...row.sourceRunIds].sort(),expectedRunIds) &&
+        isDeepStrictEqual(capturedSnapshot.data.policy.memoryIds,[...row.sourceMemoryIds].sort()) &&
+        isDeepStrictEqual(capturedSnapshot.data.policy.foundationRevisionIds,[...row.sourceFoundationRevisionIds].sort());
+      if (exactPolicy && dispatch && actor) {
+        try {
+          const { assertNativeMemoryOutputSnapshotCurrent } = await import("../native-direct-input.js");
+          await assertNativeMemoryOutputSnapshotCurrent(db, { companyId, recordId: row.id, snapshot: capturedSnapshot.data });
+          capturedContextIds = capturedSnapshot.data.inputs.filter((value): value is Extract<typeof value, { kind: "context" }> =>
+            value.kind === "context").map(value => value.manifestId).sort();
+          capturedReadRunIds = capturedSnapshot.data.policy.runIds;
+        } catch { /* Unknown or stale output binding keeps the legacy conservative read path. */ }
+      } else if (exactPolicy && !dispatch && capturedSnapshot.data.policy.runIds.length > 0 &&
+        capturedSnapshot.data.inputs.every(value => value.kind === "context")) {
+        capturedContextIds = capturedSnapshot.data.inputs.map(value => value.kind === "context" ? value.manifestId : "").sort();
+      }
+    }
+    capturedReadRunIds.forEach(value=>addScoped(runChecks,value,row.id,capturedContextIds));
     row.sourceIssueIds.forEach(value=>addScoped(taskChecks,value,row.id,capturedContextIds));
     row.sourceProjectIds.forEach(value=>projectIds.add(value));row.sourceFoundationRevisionIds.forEach(value=>revisions.add(value));
     if (row.scopeType==="project") {
@@ -505,6 +528,40 @@ export async function purgeMemoryRecords(db: Db, companyId: string, rootIds: str
 export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, recordIds: string[], now = new Date(),
   sourceAssets?:{workflowRevisionIds:string[];artifactVersionIds:string[];runIds?:string[];skillVersionIds?:string[]}) {
   if (!recordIds.length&&!sourceAssets?.workflowRevisionIds.length&&!sourceAssets?.artifactVersionIds.length&&!sourceAssets?.runIds?.length&&!sourceAssets?.skillVersionIds?.length) return;
+  if (sourceAssets?.runIds?.length) {
+    // A Run-level source erasure scrubs its actual Memory copies. Do not use
+    // this retention edge for Context/Memory-root erasure; those follow the
+    // exact qualified snapshot/sourceMemoryIds graph instead.
+    const runCopies = await db.select({ id: memoryRecords.id }).from(memoryRecords).where(and(
+      eq(memoryRecords.companyId, companyId), isNull(memoryRecords.deletedAt),
+      sql`${memoryRecords.sourceRunIds} && ARRAY[${sql.join(sourceAssets.runIds.map(id => sql`${id}::uuid`), sql`, `)}]::uuid[]`,
+    ));
+    if (runCopies.length) await purgeMemoryRecords(db, companyId, runCopies.map(row => row.id), now);
+    const memoryCalls = await db.select({ id: toolInvocations.id }).from(toolInvocations).where(and(
+      eq(toolInvocations.companyId, companyId), inArray(toolInvocations.runId, sourceAssets.runIds),
+      eq(toolInvocations.toolName, "paperclip-self:remember"),
+    ));
+    if (memoryCalls.length) {
+      const ids = memoryCalls.map(row => row.id);
+      await db.update(toolInvocations).set({ argumentsHash: null, argumentsSummary: null, idempotencyRequestHash: null,
+        resultHash: null, resultSummary: null, resultSizeBytes: null, workflowResultJson: null, errorMessage: null, updatedAt: now })
+        .where(and(eq(toolInvocations.companyId, companyId), inArray(toolInvocations.id, ids)));
+      await db.update(toolCallEvents).set({ argumentsSummary: null, requestSummary: null, resultSummary: null,
+        metadata: { payloadDeleted: true }, errorMessage: null }).where(and(eq(toolCallEvents.companyId, companyId),
+          inArray(toolCallEvents.invocationId, ids)));
+      await db.update(toolActionRequests).set({ signedArguments: null,
+        canonicalArgumentsSummary: { summary: "Erased source payload", sizeBytes: 0 }, previewMarkdown: null, updatedAt: now })
+        .where(and(eq(toolActionRequests.companyId, companyId), inArray(toolActionRequests.invocationId, ids)));
+      await db.update(toolActionRequests).set({ status: "cancelled", resolvedAt: now, updatedAt: now }).where(and(
+        eq(toolActionRequests.companyId, companyId), inArray(toolActionRequests.invocationId, ids),
+        inArray(toolActionRequests.status, ["pending", "approved"])));
+      await db.update(toolAccessAuditEvents).set({ details: { payloadDeleted: true } }).where(and(
+        eq(toolAccessAuditEvents.companyId, companyId),
+        sql`${toolAccessAuditEvents.details} ->> 'invocationId' in (${sql.join(ids.map(id => sql`${id}`), sql`, `)})`));
+      await db.update(activityLog).set({ details: { payloadDeleted: true } }).where(and(eq(activityLog.companyId, companyId),
+        inArray(activityLog.runId, sourceAssets.runIds), eq(activityLog.action, "memory.private_created")));
+    }
+  }
   const evaluations = await db.select({ id: workflowOptimizerEvaluations.id, artifactId: workflowOptimizerEvaluations.artifactId }).from(workflowOptimizerEvaluations).where(and(eq(workflowOptimizerEvaluations.companyId, companyId),
     or(recordIds.length?sql`${workflowOptimizerEvaluations.memoryRecordIds} ?| ARRAY[${sql.join(recordIds.map((id) => sql`${id}`), sql`, `)}]::text[]`:undefined,sourceAssets?.artifactVersionIds.length?inArray(workflowOptimizerEvaluations.artifactVersionId,sourceAssets.artifactVersionIds):undefined)??sql`false`));
   if (evaluations.length) {

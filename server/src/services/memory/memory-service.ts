@@ -42,6 +42,9 @@ import {
   type MemoryRecordDetail,
   type MemoryCandidateInputParsed,
   type MemoryResolutionMetadata,
+  nativePayloadSourceInputSchema,
+  nativePayloadSourceSnapshotSchema,
+  type NativePayloadSourceInput,
 } from "@paperclipai/shared";
 import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
 import { isUniqueViolation } from "../../db-errors.js";
@@ -50,7 +53,8 @@ import { lockMemoryPrivacy, assertMemoryOperationRetained, assertMemorySourcesRe
 import { learningActorFromPrincipal } from "../learning/learning-analytical-sources.js";
 import { persistActivity, publishActivity, type ActivityPublication } from "../activity-log.js";
 import { pinCurrentBoardActor, type AuthorizationActor } from "../authorization.js";
-import { captureNativeTemporalContext, nativePayloadSnapshotSql } from "../native-direct-input.js";
+import { assertNativeMemoryToolInvocationCurrent, captureNativeTemporalContext, nativePayloadSnapshotSql } from "../native-direct-input.js";
+import type { NativeModelOutputCapture } from "../native-runtime/native-execution-input.js";
 import {
   lockMemoryResolution,
   resolveMemoryCandidate,
@@ -61,6 +65,9 @@ export interface MemoryMutationActor {
   runId?: string | null;
   /** Original server-verified carrier; never request-controlled JSON. */
   authorizationActor?: AuthorizationActor;
+  /** Native managed tool capture and invocation ID are server-held only. */
+  nativeModelOutputCapture?: NativeModelOutputCapture;
+  nativeToolInvocationId?: string;
 }
 
 function memorySourceActor(companyId:string,actor:MemoryMutationActor):AuthorizationActor|undefined {
@@ -631,8 +638,29 @@ async function insertCandidate(
   }
   const identity = actorIdentity(actor);
   const now = new Date();
-  const sourceProvenance=state.sourceProvenance??await captureMemorySources(tx,companyId,memorySourceActor(companyId,actor),input.scope,
+  let sourceProvenance=state.sourceProvenance??await captureMemorySources(tx,companyId,memorySourceActor(companyId,actor),input.scope,
     [...(supersedesRecordId?[supersedesRecordId]:[]),...(state.sourceMemoryIds??[])], input.evidence);
+  const outputCapture = actor.nativeModelOutputCapture;
+  let outputIssueId: string | null = null;
+  if (outputCapture) {
+    const outputActor = memorySourceActor(companyId, actor);
+    outputIssueId = outputActor?.type === "agent" ? outputActor.companyId === companyId
+      ? (await tx.select({ issueId: heartbeatRuns.nativeIssueId }).from(heartbeatRuns).where(and(
+          eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, outputCapture.runId),
+        )))[0]?.issueId : null : null;
+    if (!outputActor || !outputIssueId || !actor.nativeToolInvocationId || actor.runId !== outputCapture.runId)
+      throw forbidden("Native Memory output binding is unavailable");
+    await assertNativeMemoryToolInvocationCurrent(tx, { companyId, issueId: outputIssueId, actor: outputActor,
+      capture: outputCapture, invocationId: actor.nativeToolInvocationId, status: "executing" });
+    // The producer Run is retained so deleting it scrubs the copy. It is not
+    // a whole-Run read dependency unless the exact captured policy says so.
+    sourceProvenance = { ...sourceProvenance, sourceProvenanceQualified: true,
+      sourceRunIds: [...new Set([...outputCapture.sourceSet.policy.runIds, outputCapture.runId])].sort(),
+      sourceIssueIds: [...outputCapture.sourceSet.policy.issueIds],
+      sourceProjectIds: [...outputCapture.sourceSet.policy.projectIds],
+      sourceMemoryIds: [...outputCapture.sourceSet.policy.memoryIds],
+      sourceFoundationRevisionIds: [...outputCapture.sourceSet.policy.foundationRevisionIds] };
+  }
   const temporalContext = actor.principal.type === "agent" && actor.runId && sourceProvenance.sourceProvenanceQualified
     ? await captureNativeTemporalContext(tx, companyId, actor.runId, "memory_record") : null;
   const temporalContextPolicy = {
@@ -640,7 +668,9 @@ async function insertCandidate(
     runIds: sourceProvenance.sourceRunIds, memoryIds: sourceProvenance.sourceMemoryIds,
     foundationRevisionIds: sourceProvenance.sourceFoundationRevisionIds,
   };
-  const freezeTemporalContext = !!temporalContext?.complete && temporalContext.inputs.length + temporalContextPolicy.issueIds.length +
+  const snapshotPolicy = outputCapture?.sourceSet.policy ?? temporalContextPolicy;
+  const snapshotInputs = outputCapture ? [...outputCapture.sourceSet.inputs, outputCapture.dispatch] : temporalContext?.inputs ?? [];
+  const freezeTemporalContext = !!outputCapture || !!temporalContext?.complete && temporalContext.inputs.length + temporalContextPolicy.issueIds.length +
     temporalContextPolicy.projectIds.length + temporalContextPolicy.runIds.length + temporalContextPolicy.memoryIds.length +
     temporalContextPolicy.foundationRevisionIds.length <= 256;
 
@@ -686,9 +716,9 @@ async function insertCandidate(
 
   let persistedRecord=record;
   await insertEvidenceRows(tx, companyId, record.id, input.evidence);
-  if (freezeTemporalContext) {
+  if (freezeTemporalContext && !outputCapture) {
     const [captured] = await tx.update(memoryRecords).set({ payloadSourceSnapshot: nativePayloadSnapshotSql(
-      "memory_record", temporalContextPolicy, temporalContext!.inputs,
+      "memory_record", snapshotPolicy, snapshotInputs,
     ) }).where(and(eq(memoryRecords.companyId, companyId), eq(memoryRecords.id, record.id),
       eq(memoryRecords.payloadSourceProtocolVersion, 1), isNull(memoryRecords.payloadSourceSnapshot),
       eq(memoryRecords.payloadSourceSnapshotInvalidated, false))).returning();
@@ -698,10 +728,55 @@ async function insertCandidate(
 
   // Every new-row producer shares this final effect admission. An INSERT can
   // wait on a foreign key after capture, while its Agent/Human loses authority.
-  if(!await canActorReadMemorySources(tx,companyId,memorySourceActor(companyId,actor),record.id))
+  if (outputCapture) {
+    const outputActor = memorySourceActor(companyId, actor);
+    if (!outputActor || !outputIssueId || !actor.nativeToolInvocationId) throw forbidden("Native Memory output binding is unavailable");
+    await assertNativeMemoryToolInvocationCurrent(tx, { companyId, issueId: outputIssueId, actor: outputActor,
+      capture: outputCapture, invocationId: actor.nativeToolInvocationId, status: "executing" });
+  } else if(!await canActorReadMemorySources(tx,companyId,memorySourceActor(companyId,actor),record.id))
     throw forbidden("Memory candidate source access is unavailable");
 
   return persistedRecord;
+}
+
+/** Attach the completed canonical Gateway result to a Memory output after its
+ * server-owned invocation row reaches succeeded. Failed/unsettled calls keep
+ * their earlier prefix fail-closed and cannot gain a completed result edge. */
+export async function sealNativeMemoryToolResultSnapshot(db: Db, input: {
+  companyId: string; recordId: string; actor: MemoryMutationActor; resultHash: string;
+}) {
+  const capture = input.actor.nativeModelOutputCapture;
+  const invocationId = input.actor.nativeToolInvocationId;
+  const actor = memorySourceActor(input.companyId, input.actor);
+  if (!capture || !invocationId || actor?.type !== "agent" || !input.actor.runId)
+    throw forbidden("Native Memory output binding is unavailable");
+  return db.transaction(async tx => {
+    const [run] = await tx.select({ issueId: heartbeatRuns.nativeIssueId }).from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, capture.runId),
+    ));
+    if (!run?.issueId) throw forbidden("Native Memory output owner is unavailable");
+    await assertNativeMemoryToolInvocationCurrent(tx, { companyId: input.companyId, issueId: run.issueId,
+      actor, capture, invocationId, status: "succeeded", resultHash: input.resultHash });
+    const [record] = await tx.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, input.companyId),
+      eq(memoryRecords.id, input.recordId), eq(memoryRecords.createdByActorType, "agent"),
+      eq(memoryRecords.createdByActorId, actor.agentId!), eq(memoryRecords.sourceProvenanceQualified, true),
+      eq(memoryRecords.payloadSourceProtocolVersion, 1), isNull(memoryRecords.payloadSourceSnapshot),
+      eq(memoryRecords.payloadSourceSnapshotInvalidated, false)));
+    if (!record) throw forbidden("Native Memory output is no longer eligible for source binding");
+    const toolResult = nativePayloadSourceInputSchema.parse({ kind: "tool_result", runId: capture.runId,
+      callId: capture.managedOpenCodeToolUse!.callId, toolName: "paperclip-self:remember", invocationId,
+      contentHash: input.resultHash });
+    if (toolResult.kind !== "tool_result") throw forbidden("Native Memory result source is unavailable");
+    const inputs: NativePayloadSourceInput[] = [...capture.sourceSet.inputs, capture.dispatch, toolResult];
+    const [sealed] = await tx.update(memoryRecords).set({ payloadSourceSnapshot: nativePayloadSnapshotSql(
+      "memory_record", capture.sourceSet.policy, inputs,
+    ) }).where(and(eq(memoryRecords.companyId, input.companyId), eq(memoryRecords.id, record.id),
+      eq(memoryRecords.payloadSourceProtocolVersion, 1), isNull(memoryRecords.payloadSourceSnapshot),
+      eq(memoryRecords.payloadSourceSnapshotInvalidated, false))).returning({ snapshot: memoryRecords.payloadSourceSnapshot });
+    if (!nativePayloadSourceSnapshotSchema.safeParse(sealed?.snapshot).success)
+      throw forbidden("Native Memory output source binding could not be sealed");
+    return sealed.snapshot;
+  });
 }
 
 export interface MemoryServiceOptions {

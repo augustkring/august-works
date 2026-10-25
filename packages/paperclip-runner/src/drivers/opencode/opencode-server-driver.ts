@@ -2056,6 +2056,7 @@ async function startRuntime(input: {
       OPENCODE_DISABLE_AUTOUPDATE: "true",
       OPENCODE_DISABLE_DEFAULT_PLUGINS: "true",
       OPENCODE_DISABLE_MODELS_FETCH: "true",
+      ...(managedModel ? { ANTHROPIC_API_KEY: "paperclip-managed-model-broker" } : {}),
       OPENCODE_SERVER_USERNAME: username,
       OPENCODE_SERVER_PASSWORD: password,
     },
@@ -2654,6 +2655,7 @@ function sanitizedEnvironmentKeys(): string[] {
     "OPENCODE_DISABLE_AUTOUPDATE",
     "OPENCODE_DISABLE_DEFAULT_PLUGINS",
     "OPENCODE_DISABLE_MODELS_FETCH",
+    "ANTHROPIC_API_KEY",
   ];
 }
 

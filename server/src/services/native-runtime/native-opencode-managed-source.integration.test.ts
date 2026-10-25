@@ -121,14 +121,22 @@ describe("managed OpenCode source-closure binary integration", () => {
     const runRoot = await mkdtemp(join(root, "run-"));
     const keyPath = join(runRoot, "broker-key.pem");
     const certPath = join(runRoot, "broker-cert.pem");
-    execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", keyPath,
-      "-out", certPath, "-days", "1", "-subj", "/CN=127.0.0.1", "-addext",
-      "subjectAltName=IP:127.0.0.1,DNS:localhost", "-addext", "basicConstraints=critical,CA:TRUE",
-      "-addext", "keyUsage=critical,digitalSignature,keyCertSign,keyEncipherment"], { stdio: "ignore" });
+    const caKeyPath = join(runRoot, "broker-ca-key.pem");
+    const caCertPath = join(runRoot, "broker-ca-cert.pem");
+    const csrPath = join(runRoot, "broker.csr");
+    const extensionsPath = join(runRoot, "broker-extensions.cnf");
+    execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", caKeyPath,
+      "-out", caCertPath, "-days", "1", "-subj", "/CN=Managed OpenCode E2E Test CA", "-addext",
+      "basicConstraints=critical,CA:TRUE", "-addext", "keyUsage=critical,keyCertSign,cRLSign"], { stdio: "ignore" });
+    execFileSync("openssl", ["req", "-new", "-newkey", "rsa:2048", "-nodes", "-keyout", keyPath,
+      "-out", csrPath, "-subj", "/CN=127.0.0.1"], { stdio: "ignore" });
+    await writeFile(extensionsPath, "basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectAltName=IP:127.0.0.1,DNS:localhost\n");
+    execFileSync("openssl", ["x509", "-req", "-in", csrPath, "-CA", caCertPath, "-CAkey", caKeyPath,
+      "-CAcreateserial", "-out", certPath, "-days", "1", "-sha256", "-extfile", extensionsPath], { stdio: "ignore" });
     await chmod(keyPath, 0o600);
     const certBundlePath = join(runRoot, "broker-trust-bundle.pem");
     await writeFile(certBundlePath, Buffer.concat([await readFile("/etc/ssl/certs/ca-certificates.crt"),
-      Buffer.from("\n"), await readFile(certPath)]), { mode: 0o600 });
+      Buffer.from("\n"), await readFile(caCertPath)]), { mode: 0o600 });
     const f = await seedV5Presences(db);
     const sessionId = await seedNativePasskeySession(db, f.userId);
     const [membership] = await db.select({ companyId: companyMemberships.companyId,
@@ -263,6 +271,7 @@ describe("managed OpenCode source-closure binary integration", () => {
     let responseCount = 0;
     const modelCalls: Array<Record<string, unknown>> = [];
     const brokerRequests: string[] = [];
+    let managedConfigReadOnlyVerified = false;
     const gateway = workerModelGateway(db, {
       profiles: [profile], sourceSha, protectedEvidenceOrigin: "https://protected.test.invalid",
       fetch: async (url, init) => {
@@ -334,8 +343,15 @@ describe("managed OpenCode source-closure binary integration", () => {
       // Test TLS mediation stands in for OpenShell host injection. Only the
       // exact Messages endpoint receives a capability minted by issueForRun;
       // the OpenCode child receives no bearer token in its environment.
-      req.headers.authorization = `Bearer ${minted.token}`;
-      next();
+      const continueRequest = () => {
+        req.headers.authorization = `Bearer ${minted.token}`;
+        next();
+      };
+      if (managedConfigReadOnlyVerified) continueRequest();
+      else void assertManagedConfigIsReadOnlyBeforeSpawn().then(() => {
+        managedConfigReadOnlyVerified = true;
+        continueRequest();
+      }).catch(next);
     });
     app.use(runtimeConnectionIntentRoutes(db, gateway));
     app.use((error: unknown, req: express.Request, _res: express.Response, next: express.NextFunction) => {
@@ -360,9 +376,29 @@ describe("managed OpenCode source-closure binary integration", () => {
       PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: String(profile.maxOutputTokens),
       PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: `https://127.0.0.1:${address.port}` };
     const diagnostics: string[] = [];
-    const runtimeDirectory = join(root, "instances", instanceId, "runtime", "paperclip-runner", "opencode");
-    const configDirectory = join(runtimeDirectory, prepared.normalizedSessionId, "config", "opencode");
+    let runtimeDirectory = "";
+    let configDirectory = "";
+    const findManagedOpenCodeConfig = async (directory: string, depth = 0): Promise<string | null> => {
+      if (depth > 16) return null;
+      const entries = await readdir(directory, { withFileTypes: true }).catch(() => []);
+      for (const entry of entries) {
+        if (entry.isSymbolicLink()) continue;
+        const path = join(directory, entry.name);
+        if (entry.isDirectory()) {
+          const found = await findManagedOpenCodeConfig(path, depth + 1);
+          if (found) return found;
+        } else if (entry.isFile() && entry.name === "opencode.json" &&
+          directory.endsWith(`${join("config", "opencode")}`)) return directory;
+      }
+      return null;
+    };
     const assertManagedConfigIsReadOnlyBeforeSpawn = async () => {
+      if (!configDirectory) {
+        const found = await findManagedOpenCodeConfig(join(root, "instances", instanceId));
+        if (!found) throw new Error("managed_opencode_config_not_found");
+        configDirectory = found;
+        runtimeDirectory = dirname(dirname(dirname(configDirectory)));
+      }
       const [directory, ignore, config, plugin] = await Promise.all([
         stat(configDirectory), stat(join(configDirectory, ".gitignore")),
         stat(join(configDirectory, "opencode.json")), stat(join(configDirectory, "plugins", "paperclip-source-witness.js")),
@@ -373,22 +409,55 @@ describe("managed OpenCode source-closure binary integration", () => {
       diagnostics.push(`managed config modes before spawn: ${modes.map(mode => mode.toString(8)).join(",")}`);
     };
     const onSpawn = async ({ pid }: { pid: number }) => {
-      await assertManagedConfigIsReadOnlyBeforeSpawn();
       diagnostics.push(`OpenCode pid ${pid}`);
       const environment = (await readFile(`/proc/${pid}/environ`, "utf8").catch(() => "")).split("\0");
-      diagnostics.push(environment.filter(value => value.startsWith("OPENCODE_DISABLE_") ||
-        value.startsWith("XDG_CONFIG_HOME=") || value.startsWith("XDG_DATA_HOME=")).join("; "));
-      const processState = await readFile(`/proc/${pid}/wchan`, "utf8").catch(() => "unknown");
-      diagnostics.push(`OpenCode wait channel ${processState.trim()}`);
+      diagnostics.push(`managed OpenCode spawn env: brokerOrigin=${environment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN=")) ? "present" : "missing"}, inputCap=${environment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND=")) ? "present" : "missing"}, outputCap=${environment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS=")) ? "present" : "missing"}, placeholderKey=${environment.includes("ANTHROPIC_API_KEY=paperclip-managed-model-broker") ? "present" : "missing"}, xdgConfig=${environment.find(value => value.startsWith("XDG_CONFIG_HOME="))?.slice("XDG_CONFIG_HOME=".length) ?? "missing"}`);
     };
     try {
       const result = await executePaperclipNativeSession({ db, execution, bootstrapSourceClosure, useRunnerd: true, onSpawn,
         runnerInstanceId: prepared.runnerInstanceId, leaseOwner, turnTimeoutMs: 90_000, adapterType: "paperclip_runner",
-        runnerEnvironment }).catch(error => {
+        runnerEnvironment, onLog: async (stream, chunk) => {
+          for (const line of chunk.split(/\r?\n/)) {
+            if (!line.trim()) continue;
+            try {
+              const envelope = JSON.parse(line) as Record<string, unknown>;
+              const event = envelope.event && typeof envelope.event === "object" ? envelope.event as Record<string, unknown> : null;
+              if (event) {
+                const payload = event.payload && typeof event.payload === "object" ? event.payload as Record<string, unknown> : {};
+                const safe = { eventType: event.eventType, payloadType: payload.type, status: payload.status,
+                  code: payload.code, reasonCode: payload.reasonCode,
+                  tool: typeof payload.name === "string" ? payload.name : undefined,
+                  payloadKeys: Object.keys(payload).sort() };
+                diagnostics.push(`runner ${stream} event: ${JSON.stringify(safe)}`);
+                if (event.eventType === "turn.failed") {
+                  const failure = payload.error;
+                  if (typeof failure === "string")
+                    diagnostics.push(`runner turn failure: ${failure.replaceAll(credential, "<redacted>").slice(0, 240)}`);
+                  else if (failure && typeof failure === "object" && !Array.isArray(failure)) {
+                    const details = failure as Record<string, unknown>;
+                    const data = details.data && typeof details.data === "object" && !Array.isArray(details.data)
+                      ? details.data as Record<string, unknown> : {};
+                    diagnostics.push(`runner turn failure: ${JSON.stringify({ name: details.name, code: details.code,
+                      message: typeof details.message === "string" ? details.message.replaceAll(credential, "<redacted>").slice(0, 240) : undefined,
+                      keys: Object.keys(details).sort(), dataKeys: Object.keys(data).sort(), dataCode: data.code,
+                      dataStatus: data.statusCode ?? data.status,
+                      dataMessage: typeof data.message === "string" ? data.message.replaceAll(credential, "<redacted>").slice(0, 240) : undefined })}`);
+                  }
+                }
+              }
+            } catch {
+              if (stream === "stderr" && /(?:error|failed|failure|denied|unavailable|timeout|timed out|disconnect|exit code|command_execution_failed)/i.test(line))
+                diagnostics.push(`runner stderr: ${line.replace(/\s+/g, " ").slice(0, 240)}`);
+            }
+          }
+        } }).catch(error => {
           preserveDebugArtifacts = true;
           throw new Error(`${error instanceof Error ? error.message : String(error)}\n${diagnostics.join("\n")}\nBroker: ${brokerRequests.join(", ")}\nArtifacts: ${runRoot}`);
         });
-      expect(result.exitCode).toBe(0);
+      if (result.exitCode !== 0) {
+        preserveDebugArtifacts = true;
+        throw new Error(`managed_opencode_runner_exit_${result.exitCode}; providerResponses=${responseCount}\n${diagnostics.join("\n")}\nBroker: ${brokerRequests.join(", ")}\nArtifacts: ${runRoot}`);
+      }
       expect(responseCount).toBeGreaterThanOrEqual(2);
       const assertManagedConfigCleanup = async () => {
         expect((await stat(configDirectory)).mode & 0o777).toBe(0o700);
@@ -408,7 +477,7 @@ describe("managed OpenCode source-closure binary integration", () => {
         onDiagnostic: message => diagnostics.push(message) });
       const warmSession = await warmDriver.openSession({ runId: run!.id,
         normalizedSessionId: prepared.normalizedSessionId, workingDirectory: execution.workspace.cwd });
-      await warmSession.close();
+      await warmSession.close({ reason: "managed E2E warm-start probe complete" });
       await assertManagedConfigCleanup();
     } finally {
       broker.closeAllConnections();

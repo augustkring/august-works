@@ -74,6 +74,7 @@ import {
   rehydrateRunnerdUsageNotification,
   rehydrateRunnerdWorkspaceChangeNotification,
   runnerdCanonicalNotificationMethod,
+  runnerdEnvironmentInternals,
   runnerdLaunchProfileInternals,
   runnerdRecoveryInternals,
   resolveRunnerdAcpxPermissionMode,
@@ -381,6 +382,41 @@ it("publishes spawned runner ownership before waiting for provider startup", asy
 it("launches runnerd with its production durable outbox limits", () => {
   expect(runnerdLaunchProfileInternals.maxOutboxBytes).toBe(16 * 1024 * 1024);
   expect(runnerdLaunchProfileInternals.p0ReserveBytes).toBe(1024 * 1024);
+});
+
+it("forwards only a complete bounded managed-model tuple through the OpenCode runner environment", () => {
+  const safe = runnerdEnvironmentInternals.createSanitizedOpenCodeRunnerEnvironment({
+    PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://broker.example.test",
+    PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "12000",
+    PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "1024",
+    ANTHROPIC_API_KEY: "caller-secret-must-not-pass",
+    OPENAI_API_KEY: "caller-secret-must-not-pass",
+    UNRELATED_PRIVATE_VALUE: "must-not-pass",
+  });
+  expect(safe.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN).toBe("https://broker.example.test");
+  expect(safe.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND).toBe("12000");
+  expect(safe.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS).toBe("1024");
+  expect(safe.ANTHROPIC_API_KEY).toBeUndefined();
+  expect(safe.OPENAI_API_KEY).toBeUndefined();
+  expect(safe.UNRELATED_PRIVATE_VALUE).toBeUndefined();
+
+  for (const invalid of [
+    { PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "http://broker.example.test" },
+    { PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://user:pass@broker.example.test" },
+    { PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "2000001" },
+    { PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "32000" },
+    { PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "01024" },
+  ]) {
+    const stripped = runnerdEnvironmentInternals.createSanitizedOpenCodeRunnerEnvironment({
+      PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://broker.example.test",
+      PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "12000",
+      PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "1024",
+      ...invalid,
+    });
+    expect(stripped.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN).toBeUndefined();
+    expect(stripped.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND).toBeUndefined();
+    expect(stripped.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS).toBeUndefined();
+  }
 });
 
 it("requires an explicit retained state directory before adopting a runner", () => {

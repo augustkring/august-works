@@ -1693,10 +1693,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "0f98f591a5ee2e27619df5c9a36397e8de72870a842af1e43b29b8208eb55ff5",
+      "sourceSha256": "496aa399917d65817410248e0819ea601cffeb913eed076b9b98502349116b23",
       "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
-      "decision": "updated",
-      "rationale": "Assistant evidence comes from approved linked Help articles; the article says answers cite only those excerpts and cannot add unsupported remedies."
+      "decision": "no_change",
+      "rationale": "Rechecked the generated Help article excerpts against the current bilingual articles. The Assistant still selects only approved linked article excerpts; no wording change is needed."
     },
     {
       "source": "packages/shared/src/agent-packages.ts",
@@ -1717,10 +1717,10 @@
     {
       "source": "server/src/services/orchestration/read-only-model-transport.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "51752a64a9553944832c3f2b89e221f4c52adb3156e4013855ec4c4c1e6e152b",
+      "sourceSha256": "54241a2202635c33a9d0db2dc00efa82c024d783be0286e842c3172a52b649d0",
       "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
-      "decision": "updated",
-      "rationale": "The assistant transport is read-only, bounded and cannot execute tools; the article states those limits and directs account-specific questions to a person."
+      "decision": "no_change",
+      "rationale": "Rechecked the current Support Assistant caller and transport. The support path uses the bounded text-only read-only call, while displayed guidance remains selected from approved article excerpts; no wording change is needed."
     },
     {
       "source": "ui/src/components/CustomerSupportAssistant.tsx",
@@ -1813,10 +1813,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "0f98f591a5ee2e27619df5c9a36397e8de72870a842af1e43b29b8208eb55ff5",
+      "sourceSha256": "496aa399917d65817410248e0819ea601cffeb913eed076b9b98502349116b23",
       "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
-      "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: Assistant evidence comes from approved linked Help articles; the article says answers cite only those excerpts and cannot add unsupported remedies."
+      "decision": "no_change",
+      "rationale": "Danish review: rechecked the generated Help article excerpts against the current bilingual articles. The Assistant still selects only approved linked article excerpts; no wording change is needed."
     },
     {
       "source": "packages/shared/src/agent-packages.ts",
@@ -1837,10 +1837,10 @@
     {
       "source": "server/src/services/orchestration/read-only-model-transport.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "51752a64a9553944832c3f2b89e221f4c52adb3156e4013855ec4c4c1e6e152b",
+      "sourceSha256": "54241a2202635c33a9d0db2dc00efa82c024d783be0286e842c3172a52b649d0",
       "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
-      "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: The assistant transport is read-only, bounded and cannot execute tools; the article states those limits and directs account-specific questions to a person."
+      "decision": "no_change",
+      "rationale": "Danish review: rechecked the current Support Assistant caller and transport. The support path uses the bounded text-only read-only call, while displayed guidance remains selected from approved article excerpts; no wording change is needed."
     },
     {
       "source": "packages/shared/src/validators/company-portability.ts",

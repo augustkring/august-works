@@ -1315,12 +1315,17 @@ export async function withReadMemoryTemporalSources<T>(db: Db | DbTransaction, a
     isNull(memoryRecords.deletedAt), sql`not exists(select 1 from ${memoryDeletionMarkers} d
       where d.company_id=${companyId} and d.record_id=${recordId})`));
   const snapshot = row && nativePayloadSourceSnapshotSchema.safeParse(row.payloadSourceSnapshot);
+  const dispatch = snapshot?.success ? snapshot.data.inputs.find((input): input is Extract<typeof input, { kind: "worker_model_dispatch" }> =>
+    input.kind === "worker_model_dispatch") : undefined;
+  const capturedRunIds = dispatch
+    ? [...new Set([...snapshot!.data.policy.runIds, dispatch.runId])].sort()
+    : row?.sourceRunIds ?? [];
   if (!row || !snapshot?.success || !row.sourceProvenanceQualified || row.payloadSourceProtocolVersion !== 1 || row.payloadSourceSnapshotInvalidated
     || snapshot.data.owner.kind !== "memory_record" || snapshot.data.owner.companyId !== companyId || snapshot.data.owner.id !== recordId
-    || !snapshot.data.policy.runIds.length || snapshot.data.inputs.some(input => input.kind !== "context")
+    || !dispatch && (!snapshot.data.policy.runIds.length || snapshot.data.inputs.some(input => input.kind !== "context"))
     || !isDeepStrictEqual(snapshot.data.policy.issueIds, [...row.sourceIssueIds].sort())
     || !isDeepStrictEqual(snapshot.data.policy.projectIds, [...row.sourceProjectIds].sort())
-    || !isDeepStrictEqual(snapshot.data.policy.runIds, [...row.sourceRunIds].sort())
+    || !isDeepStrictEqual([...row.sourceRunIds].sort(), capturedRunIds)
     || !isDeepStrictEqual(snapshot.data.policy.memoryIds, [...row.sourceMemoryIds].sort())
     || !isDeepStrictEqual(snapshot.data.policy.foundationRevisionIds, [...row.sourceFoundationRevisionIds].sort()))
     throw forbidden("Captured Memory Context source is unavailable");
@@ -1331,10 +1336,11 @@ export async function withReadMemoryTemporalSources<T>(db: Db | DbTransaction, a
       and m.payload_source_snapshot is not null and m.payload_source_snapshot_invalidated=false`);
   if (!binding?.valid) throw forbidden("Captured Memory Context source binding is unavailable");
   const contextInputs = snapshot.data.inputs.filter((input): input is Extract<typeof input, { kind: "context" }> => input.kind === "context");
-  const { assertNativeTemporalContextInputsCurrent } = await import("./native-direct-input.js");
+  const { assertNativeMemoryOutputSnapshotCurrent, assertNativeTemporalContextInputsCurrent } = await import("./native-direct-input.js");
+  if (dispatch) await assertNativeMemoryOutputSnapshotCurrent(db as Db, { companyId, recordId, snapshot: snapshot.data });
   await assertNativeTemporalContextInputsCurrent(db as Db, companyId, contextInputs);
   const scope: MemoryTemporalReadScope = { db: db as object, companyId, recordId, actorKey: routineActorKey(actor),
-    issueIds: new Set(row.sourceIssueIds), runIds: new Set(row.sourceRunIds),
+    issueIds: new Set(row.sourceIssueIds), runIds: new Set(snapshot.data.policy.runIds),
     contextIds: contextInputs.map(input => input.manifestId).sort(), active: true };
   try { return await memoryTemporalReadScopes.run(scope, read); }
   finally { scope.active = false; }

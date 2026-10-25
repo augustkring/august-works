@@ -27,6 +27,7 @@ import {
 import { logActivity } from "../activity-log.js";
 import { memoryService, type MemoryMutationActor } from "./memory-service.js";
 import type { AuthorizationActor } from "../authorization.js";
+import type { NativeModelOutputCapture } from "../native-runtime/native-execution-input.js";
 import {
   memorySubjectScopeId,
   resolveMemoryRetrievalScopes,
@@ -44,6 +45,9 @@ export interface MemoryAgentToolContext {
   responsibleUserId?: string | null;
   /** Server-held verified actor captured when this Tool Gateway session was minted. */
   authorizationActor?: AuthorizationActor;
+  /** Server-only Native output binding supplied by the scoped Gateway call. */
+  nativeModelOutputCapture?: NativeModelOutputCapture;
+  nativeToolInvocationId?: string;
   allowShared: boolean;
   allowPrivate: boolean;
 }
@@ -71,6 +75,8 @@ function actorFor(context: MemoryAgentToolContext): MemoryMutationActor {
     },
     runId: context.runId,
     ...(authorizationActor ? { authorizationActor } : {}),
+    ...(context.nativeModelOutputCapture ? { nativeModelOutputCapture: context.nativeModelOutputCapture } : {}),
+    ...(context.nativeToolInvocationId ? { nativeToolInvocationId: context.nativeToolInvocationId } : {}),
   };
 }
 

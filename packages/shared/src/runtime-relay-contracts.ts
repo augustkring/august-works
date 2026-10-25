@@ -34,6 +34,8 @@ const sandboxExecRequest = z.object({
     profileId: z.string().min(1).max(100).regex(/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/),
     profileHash: digest,
     expiresAt: z.iso.datetime(),
+    inputTokensUpperBound: z.number().int().min(1).max(2_000_000),
+    maxOutputTokens: z.number().int().min(256).max(8192),
   }).strict().optional(),
   stdinBase64: z.string().max(512 * 1024).regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/),
 }).strict().superRefine((value, ctx) => {

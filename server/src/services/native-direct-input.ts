@@ -3,6 +3,7 @@ import { isDeepStrictEqual } from "node:util";
 import { and, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { agents, issues, projects, issueComments, documentRevisions, issueDocuments, issueAttachments, assets,
   contextManifests, contextManifestItems, contextManifestMemoryRoots, accountDeletionOperations, memoryRecords,
+  memoryDeletionMarkers,
   completionContracts, heartbeatRuns, orchestrationModelReservations, executionWorkspaces, foundationDocuments,
   documents, companySkills, companySkillVersions, playbookDocuments, rolePacks, rolePackVersions, rolePackItems,
   agentRolePackAssignments, issueThreadInteractions, type Db } from "@paperclipai/db";
@@ -666,7 +667,8 @@ export async function assertNativePayloadSourceSetCurrent(db: Db | Transaction, 
       const matchingReceiptInputs = receipt.data.additionalInputs.flatMap(entry => entry.inputs.filter(value =>
         value.kind === "tool_result" && isDeepStrictEqual(value, source)));
       if (source.runId !== input.runId || matchingReceiptInputs.length !== 1 || captures.length !== 1 || !invocation ||
-        invocation.issueId !== input.issueId || invocation.toolName !== source.toolName)
+        invocation.issueId !== input.issueId || invocation.toolName !== source.toolName ||
+        invocation.idempotencyKey !== `aw-native-tool:${input.runId}:${source.callId}`)
         throw forbidden("A Native historical tool result changed");
       const associations = Array.isArray(profile?.nativeToolCallDispatchAssociations)
         ? profile.nativeToolCallDispatchAssociations.filter(value => value && typeof value === "object" && !Array.isArray(value) &&
@@ -809,6 +811,81 @@ export async function readNativeIssueEffectPrefix(tx: Transaction, actor: Author
   if (!run?.nativeIssueId || !expectedToolName) throw forbidden("Native provider input boundary is unavailable");
   await assertNativeModelOutputCaptureCurrent(tx, actor.companyId!, run.nativeIssueId, capture, expectedToolName);
   return { policy: capture.sourceSet.policy, inputs: [...capture.sourceSet.inputs, capture.dispatch], runId: capture.runId };
+}
+
+/** Admit a Memory write only when its canonical Tool Gateway invocation is the
+ * exact server-owned row for the settled Native provider tool-use. */
+export async function assertNativeMemoryToolInvocationCurrent(db: Db | Transaction, input: {
+  companyId: string; issueId: string; actor: AuthorizationActor; capture: NativeModelOutputCapture;
+  invocationId: string; status: "executing" | "succeeded"; resultHash?: string | null;
+}): Promise<void> {
+  const use = input.capture.managedOpenCodeToolUse;
+  if (input.actor.type !== "agent" || input.actor.companyId !== input.companyId ||
+    input.actor.agentId == null || input.actor.runId !== input.capture.runId ||
+    use?.toolName !== "paperclip-self:remember") throw forbidden("Native Memory output binding is unavailable");
+  await assertNativeModelOutputCaptureCurrent(db, input.companyId, input.issueId, input.capture, "paperclip-self:remember");
+  const [erased] = await db.select({ key: memoryDeletionMarkers.key }).from(memoryDeletionMarkers).where(and(
+    eq(memoryDeletionMarkers.companyId, input.companyId), eq(memoryDeletionMarkers.kind, "source"),
+    eq(memoryDeletionMarkers.key, `memory-run-source-erasure:v1:${input.capture.runId}`),
+  ));
+  if (erased) throw forbidden("Native Memory producer Run was erased");
+  const [invocation] = await db.select({ id: toolInvocations.id, companyId: toolInvocations.companyId,
+    idempotencyKey: toolInvocations.idempotencyKey,
+    agentId: toolInvocations.agentId, runId: toolInvocations.runId, issueId: toolInvocations.issueId,
+    toolName: toolInvocations.toolName, argumentsHash: toolInvocations.argumentsHash,
+    status: toolInvocations.status, resultHash: toolInvocations.resultHash }).from(toolInvocations)
+    .where(and(eq(toolInvocations.companyId, input.companyId), eq(toolInvocations.id, input.invocationId)));
+  if (!invocation || invocation.agentId !== input.actor.agentId || invocation.runId !== input.capture.runId ||
+    invocation.issueId !== input.issueId || invocation.toolName !== "paperclip-self:remember" ||
+    invocation.idempotencyKey !== `aw-native-tool:${input.capture.runId}:${use.callId}` ||
+    invocation.argumentsHash !== use.argumentsHash || invocation.status !== input.status ||
+    input.status === "succeeded" && invocation.resultHash !== input.resultHash)
+    throw forbidden("Native Memory invocation no longer matches its provider tool-use");
+}
+
+/** Validate both the consumed model prefix and the completed Gateway result
+ * carried by a Native Memory V1 snapshot. The producer dispatch is provenance,
+ * while only the snapshot policy's retained_run entries grant whole-Run reads. */
+export async function assertNativeMemoryOutputSnapshotCurrent(db: Db | Transaction, input: {
+  companyId: string; recordId: string; snapshot: NativePayloadSourceSnapshot;
+}): Promise<void> {
+  const dispatches = input.snapshot.inputs.flatMap((source, index) => source.kind === "worker_model_dispatch" ? [{ source, index }] : []);
+  if (!dispatches.length) throw forbidden("Native Memory output prefix is unavailable");
+  // The writer appends this effect's dispatch after its exact prior prefix.
+  const { source: dispatch, index: dispatchIndex } = dispatches[dispatches.length - 1]!;
+  if (dispatch.kind !== "worker_model_dispatch") throw forbidden("Native Memory output prefix is unavailable");
+  const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId),
+    eq(heartbeatRuns.id, dispatch.runId), eq(heartbeatRuns.runtimeMode, "native")));
+  if (!run?.nativeIssueId) throw forbidden("Native Memory output owner is unavailable");
+  const profile = run.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson)
+    ? run.runnerProfileJson as Record<string, unknown> : null;
+  const intentMatches = Array.isArray(profile?.nativeAwModelWireIntents)
+    ? profile.nativeAwModelWireIntents.filter(value => value && typeof value === "object" && !Array.isArray(value) &&
+      (value as Record<string, unknown>).reservationId === dispatch.reservationId) as Record<string, unknown>[] : [];
+  const uses = intentMatches.flatMap(intent => Array.isArray(intent.responseToolUses)
+    ? (intent.responseToolUses as unknown[]).filter(value => value && typeof value === "object" && !Array.isArray(value) &&
+      typeof (value as Record<string, unknown>).id === "string" && typeof (value as Record<string, unknown>).name === "string" &&
+      ((value as Record<string, unknown>).name as string).replace(/^(?:paperclip__|paperclip_|paperclip\.)/, "") === "paperclip-self:remember" &&
+      typeof (value as Record<string, unknown>).argumentsHash === "string") as Record<string, unknown>[] : []);
+  const resultCandidates = input.snapshot.inputs.flatMap((source, index) => source.kind === "tool_result" &&
+    source.toolName === "paperclip-self:remember" && index > dispatchIndex ? [{ source, index }] : []);
+  const resultPair = resultCandidates.length === 1 ? resultCandidates[0] : undefined;
+  const result = resultPair?.source;
+  const matchingUses = uses.filter(value => value.id === result?.callId);
+  const use = matchingUses[0];
+  if (!result || result.kind !== "tool_result" || result.runId !== dispatch.runId || !result.invocationId ||
+    resultPair!.index <= dispatchIndex || intentMatches.length !== 1 || matchingUses.length !== 1 || !use ||
+    typeof intentMatches[0]!.responseContentHash !== "string")
+    throw forbidden("Native Memory output tool-use is unavailable");
+  const inputActor: AuthorizationActor = { type: "agent", source: "none", companyId: input.companyId,
+    agentId: run.agentId, runId: run.id, onBehalfOfUserId: run.responsibleUserId };
+  const sourceInputs = input.snapshot.inputs.filter((_, index) => index !== resultPair!.index && index !== dispatchIndex);
+  const capture: NativeModelOutputCapture = { runId: run.id, sourceSet: { policy: input.snapshot.policy, inputs: sourceInputs },
+    dispatch, managedOpenCodeToolUse: { callId: result.callId, toolName: result.toolName,
+      argumentsHash: use!.argumentsHash as string, responseContentHash: intentMatches[0]!.responseContentHash as string } };
+  await assertNativeModelOutputCaptureCurrent(db, input.companyId, run.nativeIssueId, capture, "paperclip-self:remember");
+  await assertNativePayloadSourceSetCurrent(db, { companyId: input.companyId, issueId: run.nativeIssueId,
+    runId: run.id, actor: inputActor, policy: input.snapshot.policy, inputs: [result] });
 }
 
 export interface NativeTemporalContextCapture {

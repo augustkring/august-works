@@ -944,8 +944,9 @@ export function workerModelGateway(db: Db, options: Options) {
       const minted = createRuntimeToolsToken({ ...input, workerModelBinding: binding, scope: "worker_model" });
       const claims = minted && verifyRuntimeToolsToken(minted.token, "worker_model");
       if (!claims?.worker_model) throw forbidden("Worker capability signing is unavailable");
-      await current(db, claims as BoundClaims);
-      return minted!;
+      const state = await current(db, claims as BoundClaims);
+      return { ...minted!, inputTokensUpperBound: state.profile.inputTokensUpperBound,
+        maxOutputTokens: state.profile.maxOutputTokens };
     },
     async call(
       claims: RuntimeToolsTokenClaims,
