@@ -6,6 +6,7 @@ import { and, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   activityLog,
+  authUsers,
   agentWakeupRequests,
   toolActionDeliveries,
   agents,
@@ -223,7 +224,17 @@ describeEmbeddedPostgres("tool gateway service", () => {
   });
 
   it("executes a pinned connector through a workflow and denies catalogue drift before another provider call", async () => {
-    const { company, agent, run } = await createRunFixture(db);
+    const { company, agent, run, issue } = await createRunFixture(db);
+    const userId = randomUUID();
+    await db.insert(authUsers).values({ id: userId, name: "Workflow connector owner", email: `${userId}@example.test`,
+      emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
+    await db.insert(companyMemberships).values([
+      { companyId: company.id, principalType: "user", principalId: userId, membershipRole: "member", status: "active" },
+      { companyId: company.id, principalType: "agent", principalId: agent.id, membershipRole: "member", status: "active" },
+    ]);
+    await db.update(heartbeatRuns).set({ responsibleUserId: userId }).where(eq(heartbeatRuns.id, run.id));
+    await initializeRunIdentity(db, { companyId: company.id, runId: run.id, issueId: issue.id,
+      responsibleUserId: userId, cause: "instruction" });
     const { connection, catalogEntry } = await createRemoteMcpToolFixture(db, company.id);
     await db.insert(toolPolicies).values({ companyId: company.id, name: "Allow workflow connector",
       policyType: "allow", selectors: { connectionId: connection.id } });
@@ -236,7 +247,8 @@ describeEmbeddedPostgres("tool gateway service", () => {
         { headers: { "content-type": "application/json" } });
     };
     const gateway = createTestToolGatewayService(db, { remoteHttpRequest: provider });
-    const actor = { principal: { type: "agent" as const, agentId: agent.id }, runId: run.id };
+    const actor = { principal: { type: "agent" as const, agentId: agent.id, responsibleUserId: userId },
+      runId: run.id, responsibleUserId: userId };
     const svc = workflowService(db);
     const workflow = await svc.create(company.id, { name: "Pinned connector" }, actor);
     const draft = await svc.updateDraft(company.id, workflow.id, {
@@ -273,8 +285,12 @@ describeEmbeddedPostgres("tool gateway service", () => {
   it("parks a user workflow for signed tool review, recovers its receipt, and blocks late approval after cancellation", async () => {
     const { company } = await createRunFixture(db);
     const { connection, catalogEntry } = await createRemoteMcpToolFixture(db, company.id);
-    await db.insert(companyMemberships).values({ companyId: company.id, principalType: "user",
-      principalId: "workflow-owner", membershipRole: "owner", status: "active" });
+    await db.insert(authUsers).values(["workflow-owner", "reviewer"].map(id => ({ id, name: id,
+      email: `${id}@example.test`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() }))).onConflictDoNothing();
+    await db.insert(companyMemberships).values([
+      { companyId: company.id, principalType: "user", principalId: "workflow-owner", membershipRole: "owner", status: "active" },
+      { companyId: company.id, principalType: "user", principalId: "reviewer", membershipRole: "admin", status: "active" },
+    ]);
     await db.insert(toolPolicies).values({ companyId: company.id, name: "Review workflow connector",
       policyType: "require_approval", selectors: { connectionId: connection.id } });
     let calls = 0;
