@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import {
   activityLog,
   agents,
+  authUsers,
   companies,
   companyMemberships,
   createDb,
@@ -57,6 +58,7 @@ describePg("Memory Core service", () => {
     await db.delete(memoryBindings);
     await db.delete(projects);
     await db.delete(companyMemberships);
+    await db.delete(authUsers);
     await db.delete(agents);
     await db.delete(companies);
   });
@@ -67,13 +69,21 @@ describePg("Memory Core service", () => {
 
   async function seed(name = "Memory Co") {
     const companyId = randomUUID();
-    const userId = `user-${companyId}`;
+    const userId = randomUUID();
     await db.insert(companies).values({
       id: companyId,
       name,
       issuePrefix: `M${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
       requireBoardApprovalForNewAgents: false,
       defaultResponsibleUserId: userId,
+    });
+    await db.insert(authUsers).values({
+      id: userId,
+      name: "Memory Core Human",
+      email: `${userId}@example.test`,
+      emailVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     });
     await db.insert(companyMemberships).values({
       companyId,
