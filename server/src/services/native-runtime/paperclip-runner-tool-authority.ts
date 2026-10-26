@@ -198,6 +198,9 @@ export type NativeProjectToolResultSource = {
   tool: "call_api";
   operationId: "GET /api/projects/{id}";
   projectId: string | null;
+  /** Hash of the validated runner-api request. The request body is never retained. */
+  requestHash: string;
+  pathAndQuery: string;
   resultDigest: string;
   source: Extract<NativePayloadSourceInput, { kind: "project" }> | null;
 };
@@ -207,6 +210,8 @@ export function captureNativeProjectToolResult(input: {
   requestedProjectId: string | null | undefined;
   turnId: string | null;
   callId: string;
+  requestHash: string;
+  pathAndQuery: string;
   result: unknown;
 }): NativeProjectToolResultSource {
   const rawRequestedId = input.requestedProjectId?.toLowerCase();
@@ -215,7 +220,8 @@ export function captureNativeProjectToolResult(input: {
   const response = record(input.result), project = record(response.data);
   const projectId = typeof project.id === "string" ? project.id.toLowerCase() : "";
   const sourceCandidate = response.ok === true && response.status === 200 && requestedId !== null &&
-    projectId === requestedId && project.companyId === input.companyId && typeof project.updatedAt === "string"
+    projectId === requestedId && project.companyId === input.companyId && typeof project.updatedAt === "string" &&
+    /^[0-9a-f]{64}$/.test(input.requestHash) && input.pathAndQuery === `/api/projects/${requestedId}`
     ? nativePayloadSourceInputSchema.safeParse({ kind: "project", projectId, sourceVersion: project.updatedAt,
         contentHash: createHash("sha256").update(JSON.stringify(project)).digest("hex") })
     : null;
@@ -227,6 +233,8 @@ export function captureNativeProjectToolResult(input: {
     tool: "call_api",
     operationId: "GET /api/projects/{id}",
     projectId: requestedId,
+    requestHash: input.requestHash,
+    pathAndQuery: input.pathAndQuery,
     // #executeAdmitted strips the internal discriminator and returns the
     // normalized API response with this public operation identity. Bind to
     // those exact model-visible bytes; the capture's operationId is separate
@@ -887,9 +895,46 @@ export class PaperclipRunnerToolAuthority {
     if (["GET", "HEAD", "OPTIONS"].includes(operation.method)) {
       const result = await execute();
       if (operation.operationId === "GET /api/projects/{id}" && onProjectToolResult) {
-        await onProjectToolResult(captureNativeProjectToolResult({ companyId: this.binding.companyId,
+        const capture = captureNativeProjectToolResult({ companyId: this.binding.companyId,
           requestedProjectId: input.pathParams?.id, turnId: nativeBackendToolCallIdentity.getStore()?.turnId ?? null,
-          callId, result }));
+          callId, requestHash: createHash("sha256").update(canonicalJson(input)).digest("hex"),
+          pathAndQuery: (() => { const url = runnerApiUrl(operation, input, context, apiUrl); return `${url.pathname}${url.search}`; })(),
+          result });
+        await onProjectToolResult(capture);
+        // Native Project reads use the existing run-owned API receipt map. The
+        // exact response body stays in the provider result path; only its
+        // digest and bounded request/dispatch identity are retained here.
+        const identity = nativeBackendToolCallIdentity.getStore();
+        if (capture.source && identity?.tool === "call_api" && identity.callId === callId &&
+          identity.turnId === capture.turnId && nativeInputDispatch) {
+          const receiptKey = createHash("sha256").update(callId).digest("hex");
+          await this.db.transaction(async tx => {
+            const [run] = await tx.select().from(heartbeatRuns).where(and(
+              eq(heartbeatRuns.companyId, this.binding.companyId), eq(heartbeatRuns.id, this.binding.runId),
+              eq(heartbeatRuns.agentId, this.binding.agentId), eq(heartbeatRuns.nativeIssueId, this.binding.issueId),
+              eq(heartbeatRuns.status, "running"),
+            )).for("update");
+            const profile = record(run?.runnerProfileJson);
+            const associations = Array.isArray(profile.nativeToolCallDispatchAssociations)
+              ? profile.nativeToolCallDispatchAssociations.map(record).filter(value => value.callId === callId &&
+                value.turnId === capture.turnId && value.tool === "call_api") : [];
+            if (!run || associations.length !== 1 || associations[0]!.dispatchId !== nativeInputDispatch.dispatchId ||
+              associations[0]!.eventSeq !== nativeInputDispatch.eventSeq || associations[0]!.attempt !== nativeInputDispatch.attempt ||
+              typeof associations[0]!.argumentsHash !== "string" || !/^[0-9a-f]{64}$/.test(associations[0]!.argumentsHash))
+              throw new Error("native_project_api_receipt_binding_invalid");
+            const resultJson = record(run.resultJson), receipts = record(resultJson.apiToolReceipts);
+            const receipt = { callId, turnId: capture.turnId, eventSeq: nativeInputDispatch.eventSeq,
+              attempt: nativeInputDispatch.attempt, operationId: capture.operationId, method: "GET",
+              pathAndQuery: capture.pathAndQuery, requestHash: capture.requestHash,
+              argumentsHash: associations[0]!.argumentsHash as string, state: "completed", status: 200,
+              resultDigest: capture.resultDigest };
+            if (receipts[receiptKey] && JSON.stringify(receipts[receiptKey]) !== JSON.stringify(receipt))
+              throw new Error("native_project_api_receipt_conflict");
+            receipts[receiptKey] = receipt;
+            await tx.update(heartbeatRuns).set({ resultJson: { ...resultJson, apiToolReceipts: receipts } })
+              .where(eq(heartbeatRuns.id, run.id));
+          });
+        }
       }
       return result;
     }

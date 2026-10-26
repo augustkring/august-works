@@ -141,8 +141,10 @@ import { appendHeartbeatRunEvent } from "../heartbeat-run-events.js";
 import { nativeSha256 } from "./canonical.js";
 import { resolveDefaultAgentWorkspaceDir } from "../../home-paths.js";
 import { assertAnalyticalContextPayloadAccess } from "../analytical-context-authority.js";
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
+import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { assembleNativeContextRead, assertNativeContextReadSourceSetCurrent, assertNativeManagedConsumedSourceSetCurrent, assertNativeMemorySourceInputCurrent,
-  nativeMemoryReviewTransitionStateHash,
+  nativeMemoryReviewTransitionStateHash, assertNativeProjectSourceCurrent,
   assertNativePayloadSourceSetCurrent, type NativeContextReadBinding } from "../native-direct-input.js";
 import { canActorReadIssuePrivacy, type AuthorizationActor } from "../authorization.js";
 import { PaperclipRunnerToolAuthority, resolveNativeInputDispatchReceiptIdentity, type NativeDocumentToolResultSource,
@@ -1464,8 +1466,8 @@ class SessionToolAuthorityEpoch {
   constructor(runId: string, authority: PaperclipRunnerToolAuthority, private readonly toolTrace?: NativeToolTrace,
     private readonly onDocumentRead?: (source: NativeDocumentToolResultSource) => Promise<void>,
     private readonly onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>,
-    private readonly onNativeToolCall?: (call: { tool: string; callId: string; turnId: string; argumentsHash: string }) => Promise<void>,
-    private readonly onManagedOpenCodeToolResult?: (call: { tool: "read_document" | "write_document" | "create_task" | "self_remember" | "read_context"; callId: string; turnId: string; argumentsHash: string; result: unknown; contextRead?: NativeContextReadBinding }) => Promise<void>,
+    private readonly onNativeToolCall?: (call: { tool: string; callId: string; turnId: string; argumentsHash: string; arguments: unknown }) => Promise<void>,
+    private readonly onManagedOpenCodeToolResult?: (call: { tool: "read_document" | "write_document" | "create_task" | "self_remember" | "read_context" | "call_api"; callId: string; turnId: string; argumentsHash: string; result: unknown; contextRead?: NativeContextReadBinding; projectRead?: NativeProjectToolResultSource }) => Promise<void>,
     private readonly managedContextReadCapture?: { value: NativeContextReadBinding | null }) {
     this.runId = runId;
     this.#authority = authority;
@@ -1491,16 +1493,26 @@ class SessionToolAuthorityEpoch {
     const execute = async () => {
       this.#assertCurrent();
       const argumentsHash = nativeSha256(call.arguments);
-      if (call.turnId) await this.onNativeToolCall?.({ tool: call.tool, callId: call.callId, turnId: call.turnId, argumentsHash });
+      if (this.onManagedOpenCodeToolResult && call.tool === "call_api" && !call.turnId)
+        throw new Error("managed_opencode_tool_call_source_binding_invalid");
+      if (call.turnId) await this.onNativeToolCall?.({ tool: call.tool, callId: call.callId,
+        turnId: call.turnId, argumentsHash, arguments: call.arguments });
+      const projectReadCapture: { value: NativeProjectToolResultSource | null } = { value: null };
       const result = await this.#authority.execute(call, {
         onDocumentRead: this.onDocumentRead,
-        onProjectToolResult: this.onProjectToolResult,
+        onProjectToolResult: async source => {
+          projectReadCapture.value = source;
+          await this.onProjectToolResult?.(source);
+        },
         ...(call.turnId ? { nativeToolCallIdentity: { tool: call.tool, callId: call.callId, turnId: call.turnId } } : {}),
       });
       if (call.turnId && (call.tool === "read_document" || call.tool === "write_document" ||
         call.tool === "create_task" || call.tool === "self_remember" || call.tool === "read_context"))
         await this.onManagedOpenCodeToolResult?.({ tool: call.tool, callId: call.callId, turnId: call.turnId, argumentsHash, result,
           ...(call.tool === "read_context" && this.managedContextReadCapture?.value ? { contextRead: this.managedContextReadCapture.value } : {}) });
+      if (call.turnId && call.tool === "call_api" && projectReadCapture.value?.source)
+        await this.onManagedOpenCodeToolResult?.({ tool: "call_api", callId: call.callId, turnId: call.turnId,
+          argumentsHash, result, projectRead: projectReadCapture.value });
       return result;
     };
     const run = async () => this.toolTrace ? this.toolTrace.execute(call, execute) : execute();
@@ -7147,7 +7159,10 @@ type NativeAttachmentStageReceipt = {
 };
 
 function nativeTaskDigest(task: unknown): string {
-  return createHash("sha256").update(JSON.stringify(task), "utf8").digest("hex");
+  // The persisted profile is JSONB, which does not preserve JavaScript key
+  // insertion order. Use the same canonical encoding in the stage stamp and
+  // its PostgreSQL verifier.
+  return nativeSha256(task);
 }
 
 function nativeAttachmentStageRecord(profile: Record<string, unknown>, run: typeof heartbeatRuns.$inferSelect,
@@ -7430,7 +7445,8 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
       (!Array.isArray(profile.nativeToolCallDispatchAssociations) || profile.nativeToolCallDispatchAssociations.length === 0) &&
       (!Array.isArray(profile.nativeToolResultSourceCaptures) || profile.nativeToolResultSourceCaptures.length === 0) &&
       (attachmentStage === undefined || attachmentStage !== null);
-    const sourceClosureMatches = sourceClosure && await nativeTurnFrameMatchesSourceClosure(tx, run, input.turnInput,
+    let sourceClosureMatches: boolean | null | undefined;
+    sourceClosureMatches = sourceClosure && await nativeTurnFrameMatchesSourceClosure(tx, run, input.turnInput,
       sourceClosure, profile.nativeExecutionInput, { eventSeq: input.eventSeq, attempt: input.attempt });
     const existingReceipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
     if (profile.nativeOpenCodeSourceAuthority && !sourceClosureMatches)
@@ -7494,15 +7510,57 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
     const nextProfile = { ...profile, nativeModelInputDispatchIntents: intents,
       ...(nativeOpenCodeSourceAuthority ? { nativeOpenCodeSourceAuthority } : {}),
       ...(receipt ? { nativeInputSourceReceipt: receipt } : {}) };
+    if (input.bootstrapSourceClosure?.sourceSet.inputs.some(source => source.kind === "attachment")) {
+      const authorityDiagnostic = record(nextProfile.nativeOpenCodeSourceAuthority);
+      await tx.execute(sql`savepoint native_protocol_gate_diagnostic`);
+      let storedBootstrapPredicate: boolean | null = null;
+      try {
+        const [row] = await tx.execute<{ matches: boolean }>(sql`
+          select public.aw_native_current_attachment_stage_matches(${JSON.stringify(nextProfile)}::jsonb,
+            ${run.companyId}::uuid,${run.id}::uuid,${run.agentId}::uuid,${run.nativeIssueId}::uuid,
+            ${run.responsibleUserId},${JSON.stringify(receipt?.bootstrap.inputs ?? [])}::jsonb,
+            ${JSON.stringify(intents[0])}::jsonb) as matches`);
+        storedBootstrapPredicate = row?.matches === true;
+        await tx.execute(sql`release savepoint native_protocol_gate_diagnostic`);
+      } catch {
+        await tx.execute(sql`rollback to savepoint native_protocol_gate_diagnostic`);
+      }
+      console.error("native input protocol gate diagnostics", {
+        oldProtocolZero: run.nativeInputSourceProtocolVersion === 0,
+        newProtocolOne: run.nativeInputSourceProtocolVersion === 0,
+        nativeRuntime: run.runtimeMode === "native", running: run.status === "running",
+        oldExecutionInput: Object.hasOwn(profile, "nativeExecutionInput"),
+        executionInputEqual: isDeepStrictEqual(profile.nativeExecutionInput, nextProfile.nativeExecutionInput),
+        oldDispatchIntentsAbsent: !Object.hasOwn(profile, "nativeModelInputDispatchIntents"),
+        oldToolAssociationsAbsent: !Object.hasOwn(profile, "nativeToolCallDispatchAssociations"),
+        oldToolResultsAbsent: !Object.hasOwn(profile, "nativeToolResultSourceCaptures"),
+        stagePresent: Object.hasOwn(profile, "nativeAttachmentStageSources"), receiptPresent: Object.hasOwn(nextProfile, "nativeInputSourceReceipt"),
+        intentsArray: Array.isArray(nextProfile.nativeModelInputDispatchIntents),
+        oneIntent: Array.isArray(nextProfile.nativeModelInputDispatchIntents) && nextProfile.nativeModelInputDispatchIntents.length === 1,
+        triggerNotSynthetic: run.triggerDetail !== "provider_conformance" && run.triggerDetail !== "agent_safe_test",
+        storedBootstrapPredicate,
+        receiptInputMatchesClosure: isDeepStrictEqual(receipt?.bootstrap.inputs, input.bootstrapSourceClosure.sourceSet.inputs),
+        stageEventSeq: attachmentStage?.eventSeq ?? null, dispatchEventSeq: input.eventSeq,
+        stageAttempt: attachmentStage?.attempt ?? null, dispatchAttempt: input.attempt,
+        stageCurrentIdentity: attachmentStage?.eventSeq === input.eventSeq && attachmentStage?.attempt === input.attempt,
+        authorityActive: authorityDiagnostic.version === 1,
+        authorityInputHashMatches: authorityDiagnostic.executionInputHash === nativeSha256(profile.nativeExecutionInput),
+        authorityStageHashMatches: authorityDiagnostic.attachmentStageHash === attachmentStage?.stageHash,
+      });
+    }
     stage = "intent_persist";
     const [stored] = await tx.update(heartbeatRuns).set({
       runnerProfileJson: nextProfile,
       ...(receipt ? { nativeInputSourceProtocolVersion: 1 } : {}),
       updatedAt: new Date(),
     }).where(eq(heartbeatRuns.id, run.id)).returning({ profile: heartbeatRuns.runnerProfileJson });
-    const storedIntents = record(stored?.profile).nativeModelInputDispatchIntents;
-    if (!Array.isArray(storedIntents) || nativeSha256(storedIntents) !== nativeSha256(intents))
-      throw new Error("native_model_input_dispatch_persistence_failed");
+    if (!stored) throw new Error("native_model_input_dispatch_row_not_returned");
+    if (!stored.profile || typeof stored.profile !== "object" || Array.isArray(stored.profile))
+      throw new Error("native_model_input_dispatch_profile_not_returned");
+    const storedIntents = record(stored.profile).nativeModelInputDispatchIntents;
+    if (!Array.isArray(storedIntents)) throw new Error("native_model_input_dispatch_intents_not_returned");
+    if (nativeSha256(storedIntents) !== nativeSha256(intents))
+      throw new Error("native_model_input_dispatch_profile_digest_mismatch");
     if (nativeOpenCodeSourceAuthority && sourceClosure && receipt) {
       stage = "source_owner_recheck";
       await assertNativePayloadSourceSetCurrent(tx as unknown as Db, {
@@ -7517,11 +7575,42 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
   }).catch((error: unknown) => {
     // A driver's query/params can include the existing private run profile.
     // Keep only our finite control errors; never propagate raw DB diagnostics.
+    const safeCause = record(record(error).cause);
+    const safeConstraint = safeCause.constraint;
+    const safeMessages = ["Erased native run inputs cannot be restored", "Native run erasure marker conflict",
+      "Native run input receipt cannot be removed", "Native run input receipt requires a native protocol writer and input",
+      "Malformed native run input receipt", "Native run input receipt bounds or digest mismatch",
+      "Native run input receipt owner mismatch", "Native run bootstrap input digest mismatch",
+      "Native run receipt must accompany its first input capture",
+      "Native first receipt requires one unacknowledged actual input intent",
+      "Native run bootstrap capture is immutable", "Native run input captures are append-only",
+      "Malformed native run input capture", "Native run input captures are append-only",
+      "Native run input capture Human mismatch", "Malformed native input digest",
+      "Native dispatch source capture requires one exact acknowledged input", "Malformed native input policy vectors",
+      "Malformed native input policy vector", "Duplicate native input policy identity", "Malformed native input policy identity",
+      "Native input capture exceeds source bounds", "Duplicate native captured input", "Malformed native captured input",
+      "Native run receipt exceeds distinct source bounds", "Native input source protocol requires the first actual native frame receipt",
+      "Native input source protocol requires an unacknowledged current Human intent",
+      "Synthetic probes cannot claim native input source protocol"];
+    const safeMessageIndices: number[] = [];
+    let causeCursor: unknown = error;
+    for (let depth = 0; depth < 6 && causeCursor; depth++) {
+      const messageIndex = safeMessages.indexOf(String(record(causeCursor).message));
+      if (messageIndex >= 0) safeMessageIndices.push(messageIndex);
+      causeCursor = record(causeCursor).cause;
+    }
+    console.error("native dispatch persistence diagnostic", { stage,
+      pgCode: typeof safeCause.code === "string" && /^[0-9A-Z]{5}$/.test(safeCause.code) ? safeCause.code : null,
+      constraint: typeof safeConstraint === "string" && /^[a-z0-9_]{1,120}$/.test(safeConstraint) ? safeConstraint : null,
+      safeMessageIndices });
     const message = error instanceof Error ? error.message : "";
     throw new Error([
       "native_session_lease_lost", "native_session_lease_ttl_invalid",
       "native_model_input_run_binding_changed", "native_model_input_launch_binding_changed",
       "native_model_input_dispatch_budget_exceeded", "native_model_input_dispatch_persistence_failed",
+      "native_model_input_dispatch_row_not_returned", "native_model_input_dispatch_profile_not_returned",
+      "native_model_input_dispatch_intents_not_returned",
+      "native_model_input_dispatch_profile_digest_mismatch",
       "native_input_source_receipt_persistence_failed",
       // These are closed internal state codes with no prompt/provider payload.
       // Preserve them for the actual managed provider path so the source seam
@@ -7530,7 +7619,10 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
       "native_model_input_turn_source_receipt_invalid",
       "managed_opencode_source_prompt_budget_exceeded",
       "managed_opencode_source_prompt_binding_ambiguous",
-    ].includes(message) ? message : stage === "intent_persist"
+    ].includes(message) ? message : stage === "intent_persist" &&
+      input.bootstrapSourceClosure?.sourceSet.inputs.some(source => source.kind === "attachment")
+      ? "native_model_input_attachment_stage_rejected"
+      : stage === "intent_persist"
       ? "native_model_input_dispatch_persistence_failed"
       : `native_model_input_dispatch_${stage}_failed`);
   });
@@ -7682,12 +7774,20 @@ export async function recordNativeToolCallDispatchAssociation(input: Parameters<
 
 async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
   agentId: string; turnId: string; callId: string; argumentsHash: string;
-  tool: "read_document" | "write_document" | "create_task" | "self_remember" | "read_context"; result: unknown;
+  tool: "read_document" | "write_document" | "create_task" | "self_remember" | "read_context" | "call_api"; result: unknown;
   contextRead?: NativeContextReadBinding;
+  projectRead?: NativeProjectToolResultSource;
 }): Promise<void> {
-  const digest = nativeSha256(input.result);
+  const projectRead = input.tool === "call_api" ? input.projectRead : undefined;
+  if (input.tool === "call_api" && (!projectRead?.source || projectRead.tool !== "call_api" ||
+    projectRead.operationId !== "GET /api/projects/{id}" || projectRead.callId !== input.callId ||
+    projectRead.turnId !== input.turnId || !/^[0-9a-f]{64}$/.test(projectRead.requestHash) ||
+    !/^[0-9a-f]{64}$/.test(projectRead.resultDigest))) throw new Error("managed_opencode_tool_result_binding_invalid");
+  const digest = projectRead?.resultDigest ?? nativeSha256(input.result);
   try {
     await input.db.transaction(async tx => {
+      await lockAnalyticalCompany(tx as unknown as Db, input.companyId);
+      await lockMemoryPrivacy(tx as unknown as Db, input.companyId);
       await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
       const [run] = await tx.select().from(heartbeatRuns).where(and(
         eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId),
@@ -7702,7 +7802,7 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         value.callId === input.callId && value.turnId === input.turnId && value.tool === input.tool &&
         value.argumentsHash === input.argumentsHash) : [];
       const invocationToolName = input.tool === "self_remember" ? "paperclip-self:remember" : input.tool;
-      const [invocation] = await tx.select().from(toolInvocations).where(and(
+      const [invocation] = input.tool === "call_api" ? [] : await tx.select().from(toolInvocations).where(and(
         eq(toolInvocations.companyId, input.companyId), eq(toolInvocations.runId, input.runId),
         eq(toolInvocations.agentId, input.agentId),
         eq(toolInvocations.idempotencyKey, `aw-native-tool:${input.runId}:${input.callId}`),
@@ -7710,10 +7810,11 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         eq(toolInvocations.argumentsHash, input.argumentsHash),
       )).for("share");
       const contentHash = digest;
-      if (!run || sourceAuthority.version !== 1 || !parsed.success || call.length !== 1 || !invocation ||
-        !contentHash || invocation.resultHash !== contentHash ||
-        (input.tool === "self_remember" && nativeSha256(invocation.workflowResultJson) !== contentHash) ||
-        invocation.issueId !== input.issueId || parsed.data.binding.companyId !== input.companyId ||
+      if (!run || sourceAuthority.version !== 1 || !parsed.success || call.length !== 1 ||
+        !contentHash || (input.tool !== "call_api" && (!invocation || invocation.resultHash !== contentHash ||
+          invocation.issueId !== input.issueId)) ||
+        (input.tool === "self_remember" && nativeSha256(invocation?.workflowResultJson) !== contentHash) ||
+        parsed.data.binding.companyId !== input.companyId ||
         parsed.data.binding.runId !== input.runId || parsed.data.binding.agentId !== input.agentId ||
         parsed.data.binding.responsibleUserId !== run.responsibleUserId)
         throw new Error("managed_opencode_tool_result_binding_invalid");
@@ -7732,8 +7833,50 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
           }) : [];
       if (matchingModelCalls.length !== 1 || typeof matchingModelCalls[0]!.reservationId !== "string")
         throw new Error("managed_opencode_tool_result_binding_invalid");
+      let returnedProjectSource: Extract<NativePayloadSourceInput, { kind: "project" }> | null = null;
+      if (input.tool === "call_api") {
+        const source = projectRead?.source;
+        const response = record(input.result);
+        const { apiOperationId: _apiOperationId, ...responseBody } = response;
+        const responseDigest = createHash("sha256").update(JSON.stringify({ ...responseBody,
+          apiOperationId: "GET /api/projects/{id}" }), "utf8").digest("hex");
+        const projectDto = record(response.data);
+        const projectSource = source ? nativePayloadSourceInputSchema.safeParse(source) : null;
+        const apiReceipts = record(record(run.resultJson).apiToolReceipts);
+        const receiptKey = createHash("sha256").update(input.callId).digest("hex");
+        const apiReceipt = record(apiReceipts[receiptKey]);
+        const associations = profile.nativeToolCallDispatchAssociations;
+        const matchingCaptures = Array.isArray(profile.nativeToolResultSourceCaptures)
+          ? profile.nativeToolResultSourceCaptures.map(record).filter(capture => capture.callId === input.callId &&
+            capture.turnId === input.turnId && capture.tool === "call_api" && capture.operationId === "GET /api/projects/{id}" &&
+            capture.resultDigest === digest && capture.requestHash === projectRead!.requestHash &&
+            capture.pathAndQuery === projectRead!.pathAndQuery && isDeepStrictEqual(capture.source, source)) : [];
+        const matchingAssociation = Array.isArray(associations) ? associations.map(record).filter(value =>
+          value.callId === input.callId && value.turnId === input.turnId && value.tool === "call_api" &&
+          value.argumentsHash === input.argumentsHash && value.dispatchId === call[0]!.dispatchId &&
+          value.eventSeq === call[0]!.eventSeq && value.attempt === call[0]!.attempt) : [];
+        if (!source || !projectSource?.success || projectSource.data.kind !== "project" ||
+          projectSource.data.projectId !== projectRead!.projectId || projectRead!.resultDigest !== digest ||
+          matchingCaptures.length !== 1 || matchingAssociation.length !== 1 ||
+          responseDigest !== digest || response.apiOperationId !== "GET /api/projects/{id}" || response.ok !== true ||
+          response.status !== 200 || projectDto.id !== projectSource.data.projectId ||
+          createHash("sha256").update(JSON.stringify(projectDto), "utf8").digest("hex") !== projectSource.data.contentHash ||
+          apiReceipt.callId !== input.callId || apiReceipt.turnId !== input.turnId ||
+          apiReceipt.eventSeq !== call[0]!.eventSeq || apiReceipt.attempt !== call[0]!.attempt ||
+          apiReceipt.operationId !== "GET /api/projects/{id}" || apiReceipt.method !== "GET" ||
+          apiReceipt.pathAndQuery !== `/api/projects/${projectSource.data.projectId}` ||
+          apiReceipt.pathAndQuery !== projectRead!.pathAndQuery ||
+          apiReceipt.requestHash !== projectRead!.requestHash || apiReceipt.argumentsHash !== input.argumentsHash ||
+          apiReceipt.state !== "completed" || apiReceipt.status !== 200 || apiReceipt.resultDigest !== digest)
+          throw new Error("managed_opencode_tool_result_binding_invalid");
+        const projectActor: AuthorizationActor = { type: "agent", source: "none", companyId: input.companyId,
+          agentId: input.agentId, runId: input.runId, onBehalfOfUserId: run.responsibleUserId ?? undefined };
+        await assertNativeProjectSourceCurrent(tx as unknown as Db, { companyId: input.companyId,
+          actor: projectActor, source: projectSource.data });
+        returnedProjectSource = projectSource.data;
+      }
       const inputSource = nativePayloadSourceInputSchema.parse({ kind: "tool_result", runId: input.runId,
-        callId: input.callId, toolName: invocationToolName, invocationId: invocation.id, contentHash });
+        callId: input.callId, toolName: invocationToolName, invocationId: invocation?.id ?? null, contentHash });
       const resultDocument = record(record(input.result).document);
       const documentRevision = input.tool === "write_document" && typeof resultDocument.id === "string" &&
         typeof resultDocument.latestRevisionId === "string"
@@ -7841,7 +7984,8 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
       const nextCaptures = [...captures, { eventSeq: call[0]!.eventSeq, attempt: call[0]!.attempt,
         turnId: input.turnId, callId: input.callId, tool: input.tool, resultDigest: contentHash,
         source: { kind: "tool_result", runId: input.runId, callId: input.callId, toolName: invocationToolName,
-          invocationId: invocation.id, contentHash }, documentRevision,
+          invocationId: invocation?.id ?? null, contentHash }, documentRevision,
+        ...(returnedProjectSource ? { projectSource: returnedProjectSource } : {}),
         taskRef: createdTask ? { issueId: createdTask.id } : null,
         ...(contextReadCapture ? { contextRead: contextReadCapture } : {}), managedOpenCode: true }];
       const { digest: _receiptDigest, ...body } = parsed.data;
@@ -7855,9 +7999,11 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
           // retained_run source. Only returned Task/document owners add source policy.
           policy: { issueIds: [...new Set([...(createdTask ? [createdTask.id] : []),
             ...(returnedDocumentSource?.issueId ? [returnedDocumentSource.issueId] : [])])],
-            projectIds: [], runIds: [], memoryIds: returnedMemorySource ? [returnedMemorySource.memoryId] : [], foundationRevisionIds: [] },
+            projectIds: returnedProjectSource ? [returnedProjectSource.projectId] : [],
+            runIds: [], memoryIds: returnedMemorySource ? [returnedMemorySource.memoryId] : [], foundationRevisionIds: [] },
           inputs: [inputSource, ...(returnedDocumentSource ? [returnedDocumentSource] : []),
-            ...(createdTask ? [createdTask.source] : []), ...(returnedMemorySource ? [returnedMemorySource] : [])],
+            ...(createdTask ? [createdTask.source] : []), ...(returnedMemorySource ? [returnedMemorySource] : []),
+            ...(returnedProjectSource ? [returnedProjectSource] : [])],
         }),
       }] };
       const receipt = { ...updatedReceiptBody, digest: await postgresJsonbSha256(tx, updatedReceiptBody) };
@@ -7883,7 +8029,7 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
 }
 
 async function assertManagedOpenCodeToolCallCurrent(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
-  agentId: string; eventSeq: number; turnId: string; callId: string; tool: string; argumentsHash: string;
+  agentId: string; eventSeq: number; turnId: string; callId: string; tool: string; argumentsHash: string; arguments: unknown;
 }): Promise<void> {
   await assertNativeAnalyticalRunPayloadAccess(input.db, input.companyId, input.runId);
   const [run] = await input.db.select().from(heartbeatRuns).where(and(
@@ -7917,6 +8063,15 @@ async function assertManagedOpenCodeToolCallCurrent(input: Parameters<typeof ren
   if (normalizedName !== input.tool) throw new Error("managed_opencode_tool_call_response_tool_mismatch");
   if (matchingCallId[0]!.use.argumentsHash !== input.argumentsHash)
     throw new Error("managed_opencode_tool_call_response_arguments_mismatch");
+  if (input.tool === "call_api") {
+    const args = record(input.arguments), pathParams = record(args.pathParams);
+    const uuid = typeof pathParams.id === "string" &&
+      /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(pathParams.id) && pathParams.id === pathParams.id.toLowerCase();
+    if (!isDeepStrictEqual(Object.keys(args).sort(), ["operationId", "pathParams"]) ||
+      args.operationId !== "GET /api/projects/{id}" ||
+      !isDeepStrictEqual(Object.keys(pathParams), ["id"]) || !uuid)
+      throw new Error("managed_opencode_project_api_operation_not_supported");
+  }
   const matchedIntent = matchingCallId[0]!.intent;
   if (typeof matchedIntent.responseContentHash !== "string" || typeof matchedIntent.reservationId !== "string")
     throw new Error("managed_opencode_tool_call_response_receipt_missing");
@@ -7932,7 +8087,7 @@ async function assertManagedOpenCodeToolCallCurrent(input: Parameters<typeof ren
 }
 
 async function prepareManagedOpenCodeOutputCapture(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
-  agentId: string; eventSeq: number; turnId: string; callId: string; tool: string; argumentsHash: string;
+  agentId: string; eventSeq: number; turnId: string; callId: string; tool: string; argumentsHash: string; arguments: unknown;
 }): Promise<NativeModelOutputCapture> {
   await assertManagedOpenCodeToolCallCurrent(input);
   const [run] = await input.db.select().from(heartbeatRuns).where(and(
@@ -7989,7 +8144,8 @@ async function prepareManagedOpenCodeOutputCapture(input: Parameters<typeof rene
   const typedComponents = sourceComponents as NativeConsumedSourceComponent[];
   await assertNativeManagedConsumedSourceSetCurrent(input.db, { companyId: input.companyId, issueId: input.issueId,
     runId: input.runId, actor: { type: "agent", source: "none", companyId: input.companyId,
-      agentId: input.agentId, runId: input.runId }, components: typedComponents, sourceSet });
+      agentId: input.agentId, runId: input.runId, onBehalfOfUserId: run.responsibleUserId ?? undefined },
+    components: typedComponents, sourceSet });
   return {
     runId: input.runId,
     sourceSet,
@@ -8014,6 +8170,10 @@ async function persistNativeToolResultSourceCapture(input: Parameters<typeof ren
   const persistenceError = `native_${family}_tool_capture_persistence_failed`;
   try {
     await input.db.transaction(async tx => {
+      if (family === "project") {
+        await lockAnalyticalCompany(tx as unknown as Db, input.companyId);
+        await lockMemoryPrivacy(tx as unknown as Db, input.companyId);
+      }
       // Same owned coordinator -> run -> launch order as selected turn inputs.
       await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
       const [run] = await tx.select().from(heartbeatRuns).where(and(
@@ -8029,6 +8189,21 @@ async function persistNativeToolResultSourceCapture(input: Parameters<typeof ren
       )).for("share");
       if (!launch) throw new Error(bindingError);
       const profile = record(run.runnerProfileJson);
+      if (family === "project") {
+        const projectCapture = capture as NativeProjectToolResultSource;
+        if (projectCapture.source) {
+          const source = nativePayloadSourceInputSchema.parse(projectCapture.source);
+          if (source.kind !== "project" || source.projectId !== projectCapture.projectId ||
+            !/^[0-9a-f]{64}$/.test(projectCapture.requestHash)) throw new Error(bindingError);
+          const projectActor: AuthorizationActor = {
+            type: "agent", source: "none", companyId: input.companyId, agentId: input.agentId,
+            runId: input.runId, onBehalfOfUserId: run.responsibleUserId ?? undefined,
+          };
+          if (projectCapture.projectId !== source.projectId) throw new Error(bindingError);
+          await assertNativeProjectSourceCurrent(tx as unknown as Db, { companyId: input.companyId,
+            actor: projectActor, source });
+        }
+      }
       const legacy = profile.nativeDocumentToolResultSources;
       const current = profile.nativeToolResultSourceCaptures;
       if ((legacy !== undefined && !Array.isArray(legacy)) || (current !== undefined && !Array.isArray(current)))
@@ -8051,7 +8226,8 @@ async function persistNativeToolResultSourceCapture(input: Parameters<typeof ren
       const nativeInputDispatch = selectedDispatch?.eventSeq === launch.seq && selectedDispatch.attempt === input.attempt
         ? selectedDispatch : null;
       const projectBinding = capture.tool === "call_api"
-        ? { operationId: capture.operationId, projectId: capture.projectId } : {};
+        ? { operationId: capture.operationId, projectId: capture.projectId, requestHash: capture.requestHash,
+          pathAndQuery: capture.pathAndQuery } : {};
       const captures = [...previous, { eventSeq: launch.seq, attempt: input.attempt, turnId: capture.turnId,
         nativeInputDispatch, responsibleUserId: run.responsibleUserId ?? null, callId: capture.callId,
         tool: capture.tool, ...projectBinding, resultDigest: capture.resultDigest, source: capture.source }];
@@ -8113,6 +8289,9 @@ export async function recordNativeProjectToolResultIntent(input: Parameters<type
     if (!Number.isSafeInteger(input.eventSeq) || input.eventSeq < 0 || capture.tool !== "call_api" ||
       capture.operationId !== "GET /api/projects/{id}" || !/^[\x21-\x7e]{1,240}$/.test(capture.callId) ||
       !/^[0-9a-f]{64}$/.test(capture.resultDigest) ||
+      !/^[0-9a-f]{64}$/.test(capture.requestHash) ||
+      !/^\/api\/projects\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(capture.pathAndQuery) ||
+      capture.pathAndQuery !== `/api/projects/${capture.projectId}` ||
       capture.turnId !== null && !/^[\x21-\x7e]{1,240}$/.test(capture.turnId) ||
       capture.projectId !== null && !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(capture.projectId))
       throw new Error("native_project_tool_capture_binding_invalid");
@@ -11726,8 +11905,8 @@ export async function createRunnerdBackend(input: {
   toolTrace?: NativeToolTrace;
   onDocumentRead?: (source: NativeDocumentToolResultSource) => Promise<void>;
   onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>;
-  onNativeToolCall?: (call: { tool: string; callId: string; turnId: string; argumentsHash: string }) => Promise<void>;
-  onManagedOpenCodeToolResult?: (call: { tool: "read_document" | "write_document" | "create_task" | "self_remember" | "read_context"; callId: string; turnId: string; argumentsHash: string; result: unknown; contextRead?: NativeContextReadBinding }) => Promise<void>;
+  onNativeToolCall?: (call: { tool: string; callId: string; turnId: string; argumentsHash: string; arguments: unknown }) => Promise<void>;
+  onManagedOpenCodeToolResult?: (call: { tool: "read_document" | "write_document" | "create_task" | "self_remember" | "read_context" | "call_api"; callId: string; turnId: string; argumentsHash: string; result: unknown; contextRead?: NativeContextReadBinding; projectRead?: NativeProjectToolResultSource }) => Promise<void>;
   onLog?: (stream: "stdout" | "stderr", chunk: string) => Promise<void>;
   stopTaskForReassignment?: (target: { companyId: string; issueId: string; agentId: string; runId: string | null }) => Promise<void>;
   enqueueWakeup?: (
@@ -11925,7 +12104,8 @@ async function createRunnerdBackendWithinSessionClaim(
   let managedOpenCodeTools: Readonly<Record<string, unknown>>[] | null = null;
   let managedOpenCodeDynamicTools: Readonly<Record<string, unknown>>[] | null = null;
   if (managedOpenCode) {
-    const allowedNames = new Set(["read_document", "write_document", "create_task", "self_remember", "read_context", "paperclip_finish", "paperclip_block"]);
+    const allowedNames = new Set(["read_document", "write_document", "create_task", "self_remember", "read_context",
+      "call_api", "paperclip_finish", "paperclip_block"]);
     const schemas: Array<Record<string, unknown>> = dynamicTools.flatMap((raw): Array<Record<string, unknown>> => {
       if (typeof raw.name !== "string") return [];
       let name = raw.name;
@@ -11933,7 +12113,24 @@ async function createRunnerdBackendWithinSessionClaim(
         if (name.startsWith(prefix)) { name = name.slice(prefix.length); break; }
       }
       if (!allowedNames.has(name)) return [];
-      return [{ ...structuredClone(raw), name }];
+      const schema = structuredClone(raw);
+      if (name === "call_api") {
+        // The managed source contract currently qualifies only the existing
+        // authenticated Project GET. Pin this exact operation into the
+        // provider-visible schema; the ordinary Native API authority remains
+        // responsible for every call and does not gain an alternate route.
+        schema.description = "Read one current Project through the existing authenticated API route. This managed provider profile supports only GET /api/projects/{id}.";
+        schema.inputSchema = {
+          type: "object", additionalProperties: false,
+          properties: {
+            operationId: { type: "string", enum: ["GET /api/projects/{id}"] },
+            pathParams: { type: "object", additionalProperties: false,
+              properties: { id: { type: "string", format: "uuid" } }, required: ["id"] },
+          },
+          required: ["operationId", "pathParams"],
+        };
+      }
+      return [{ ...schema, name }];
     });
     // The pinned OpenCode MCP bridge appends these canonical terminal tools at
     // discovery time. Include the same server-owned definitions in the
@@ -11964,13 +12161,13 @@ async function createRunnerdBackendWithinSessionClaim(
     // terminal controls. Keep them in the broker's exact catalog proof, but
     // pass only Paperclip CRUD tools to the bridge to avoid duplicate names.
     managedOpenCodeDynamicTools = schemas.filter((tool) =>
-      ["read_document", "write_document", "create_task", "self_remember", "read_context"].includes(String(tool.name)));
+      ["read_document", "write_document", "create_task", "self_remember", "read_context", "call_api"].includes(String(tool.name)));
     const resumeToolNames = managedOpenCodeDynamicTools.map((tool) => String(tool.name));
     if (new Set(resumeToolNames).size !== resumeToolNames.length ||
       !["read_document", "write_document", "create_task"].every(name => resumeToolNames.includes(name)) ||
       (input.nativeModelOutputCapture && !resumeToolNames.includes("self_remember")) ||
       (input.nativeModelOutputCapture && !resumeToolNames.includes("read_context")) ||
-      resumeToolNames.some(name => !["read_document", "write_document", "create_task", "self_remember", "read_context"].includes(name)))
+      resumeToolNames.some(name => !["read_document", "write_document", "create_task", "self_remember", "read_context", "call_api"].includes(name)))
       throw new Error("managed_opencode_resume_tool_catalog_invalid");
     const taskEnvelope = createCodexTaskEnvelope({
       objective: input.execution.completionContract.contract.objective,

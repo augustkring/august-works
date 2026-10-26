@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, readlink, rm, stat, writeFile } from "node:fs/promises";
 import { createServer as createHttpsServer } from "node:https";
+import { createServer as createHttpServer } from "node:http";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 
@@ -10,11 +11,13 @@ import request from "supertest";
 import postgres from "postgres";
 import { and, eq, gte, inArray, sql } from "drizzle-orm";
 import { expect } from "vitest";
+import { nativeSha256 } from "../../services/native-runtime/canonical.js";
 
 import {
   agents,
   agentIdentities,
   authUsers,
+  authSessions,
   createDb,
   heartbeatRuns,
   completionContracts,
@@ -64,6 +67,9 @@ import { hashContextPolicySnapshot } from "../../services/context/context-manife
 import { discoverNativeCapabilities } from "../../services/native-provider-conformance.js";
 import { makeProviderCapabilitySnapshot, providerConformanceRequirements } from "../../services/provider-capabilities.js";
 import { runtimeConnectionIntentRoutes } from "../../routes/connection-intents.js";
+import { projectRoutes } from "../../routes/projects.js";
+import { actorMiddleware } from "../../middleware/auth.js";
+import type { BetterAuthSessionResult } from "../../auth/better-auth.js";
 import { errorHandler } from "../../middleware/error-handler.js";
 import { issueRoutes } from "../../routes/issues.js";
 import { setupRunnerPrpWebSocketServer } from "../../realtime/runner-prp-ws.js";
@@ -233,14 +239,14 @@ export async function makeFixtureTreeWritable(target: string): Promise<void> {
 }
 
 export type ManagedNativeOpenCodeModelStep = {
-  tool: "write_document" | "create_task" | "self_remember" | "read_context" | "paperclip_finish";
+  tool: "write_document" | "create_task" | "self_remember" | "read_context" | "call_api" | "paperclip_finish";
   id?: string;
   input?: Record<string, unknown>;
 };
 
 export type ManagedNativeOpenCodeHumanAction = {
   afterModelToolCallId: string;
-  action: "accept_memory_candidate" | "create_private_context_root";
+  action: "accept_memory_candidate" | "create_private_context_root" | "edit_project_workspace";
 };
 
 type ManagedNativePrivateRoot = {
@@ -259,6 +265,8 @@ export async function runManagedNativeOpenCodeFixture(input: {
   humanActions?: ManagedNativeOpenCodeHumanAction[];
   /** Prepare a private Task source; create its Human-reviewed Memory root after the configured model step. */
   privateContextContent?: string;
+  /** Return early after a Human workspace change is rejected as a stale Project source. */
+  expectProjectWorkspaceSourceDenial?: boolean;
   reuseIdentity?: { companyId: string; agentId: string; aliceUserId: string; bobUserId: string };
   onPreserveDebugArtifacts?: () => void;
 }) {
@@ -309,11 +317,14 @@ export async function runManagedNativeOpenCodeFixture(input: {
     modelSteps.slice(0, -1).some(step => step.tool === "paperclip_finish") ||
     new Set(modelSteps.map((step, index) => step.id ?? `managed-e2e-${step.tool}-${index}`)).size !== modelSteps.length)
     throw new Error("managed_fixture_model_steps_invalid");
+  const includesProjectApiRead = modelSteps.some(step => step.tool === "call_api");
   for (const action of input.humanActions ?? []) {
     const target = modelSteps.find((step, index) =>
       (step.id ?? `managed-e2e-${step.tool}-${index}`) === action.afterModelToolCallId);
-    if ((action.action !== "accept_memory_candidate" && action.action !== "create_private_context_root") ||
-      target?.tool !== "self_remember")
+    const memoryAction = action.action === "accept_memory_candidate" || action.action === "create_private_context_root";
+    if ((memoryAction && target?.tool !== "self_remember") ||
+      (action.action === "edit_project_workspace" && target?.tool !== "call_api") ||
+      !["accept_memory_candidate", "create_private_context_root", "edit_project_workspace"].includes(action.action))
       throw new Error("managed_fixture_human_action_invalid");
   }
   const acceptedMemoryIds: string[] = [];
@@ -430,7 +441,54 @@ export async function runManagedNativeOpenCodeFixture(input: {
     const humanApp = express();
     humanApp.use(express.json());
     humanApp.use((req, _res, next) => { req.actor = human as typeof req.actor; next(); });
-    humanApp.use("/api", issueRoutes(db, {} as never)); humanApp.use(errorHandler);
+    humanApp.use("/api", issueRoutes(db, {} as never));
+    humanApp.use(errorHandler);
+    const projectApiApp = express();
+    projectApiApp.use(express.json());
+    let fixtureProjectHumanCookie: string | null = null;
+    if (includesProjectApiRead) {
+      const [projectSession] = await db.select({ id: authSessions.id, userId: authSessions.userId,
+        token: authSessions.token, expiresAt: authSessions.expiresAt })
+        .from(authSessions).where(and(eq(authSessions.id, sessionId), eq(authSessions.userId, aliceUserId)));
+      if (!projectSession || projectSession.expiresAt.getTime() <= Date.now())
+        throw new Error("managed_fixture_project_human_session_unavailable");
+      fixtureProjectHumanCookie = `session_token=${encodeURIComponent(projectSession.token)}`;
+      projectApiApp.use(actorMiddleware(db, { deploymentMode: "authenticated", resolveSession: async req => {
+        const cookieToken = (req.header("cookie") ?? "").split(";").map(value => value.trim())
+          .map(value => value.slice(value.indexOf("=") + 1)).map(value => decodeURIComponent(value))
+          .find(value => value === projectSession.token);
+        if (!cookieToken || projectSession.expiresAt.getTime() <= Date.now()) return null;
+        const [user] = await db.select({ id: authUsers.id, name: authUsers.name, email: authUsers.email })
+          .from(authUsers).where(eq(authUsers.id, projectSession.userId));
+        if (!user) return null;
+        const session: BetterAuthSessionResult = {
+          session: { id: projectSession.id, userId: projectSession.userId, expiresAt: projectSession.expiresAt },
+          user,
+        };
+        return session;
+      } }));
+      projectApiApp.use("/api", projectRoutes(db));
+      projectApiApp.use(errorHandler);
+    }
+    let fixtureProjectId: string | null = null;
+    let fixtureProjectWorkspaceId: string | null = null;
+    if (includesProjectApiRead) {
+      if (!fixtureProjectHumanCookie) throw new Error("managed_fixture_project_human_session_missing");
+      const createdProject = await request(projectApiApp).post(`/api/companies/${companyId}/projects`)
+        .set("cookie", fixtureProjectHumanCookie)
+        .send({ name: `Managed OpenCode Project ${randomUUID()}`,
+          description: "Human-created Project returned by the authenticated call_api route.",
+          workspace: { name: "Public Project workspace", cwd: root, isPrimary: true } });
+      if (createdProject.status !== 201 || typeof createdProject.body.id !== "string")
+        throw new Error(`managed_fixture_project_create_failed_${createdProject.status}`);
+      fixtureProjectId = createdProject.body.id;
+      const createdWorkspace = Array.isArray(createdProject.body.workspaces)
+        ? createdProject.body.workspaces.find((value: unknown) => value && typeof value === "object" &&
+            (value as Record<string, unknown>).isPrimary === true) : null;
+      if (!createdWorkspace || typeof (createdWorkspace as Record<string, unknown>).id !== "string")
+        throw new Error("managed_fixture_project_workspace_id_missing");
+      fixtureProjectWorkspaceId = (createdWorkspace as Record<string, unknown>).id as string;
+    }
     if (input.privateContextContent) {
       // The ordinary HTTP admission path deliberately rejects private work.
       // For this source-closure fixture, create the private root through the
@@ -462,7 +520,8 @@ export async function runManagedNativeOpenCodeFixture(input: {
         responsibleUserId: aliceUserId });
     expect(createTaskResponse.status, JSON.stringify(createTaskResponse.body)).toBe(201);
     const createdTask = createTaskResponse.body as { id: string };
-    await db.update(issues).set({ status: "todo", assigneeAgentId: agentId })
+    await db.update(issues).set({ status: "todo", assigneeAgentId: agentId,
+      ...(fixtureProjectId ? { projectId: fixtureProjectId } : {}) })
       .where(and(eq(issues.companyId, companyId), eq(issues.id, createdTask.id)));
     const task = (await db.select().from(issues).where(eq(issues.id, createdTask.id)))[0]!;
     const [run] = await db.insert(heartbeatRuns).values({ companyId, agentId, responsibleUserId: aliceUserId,
@@ -590,7 +649,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
       ], contextManifestIds: [], rolePackInputs: [], unsupportedInputPresent: false });
     if (!sourceSet) throw new Error("Canonical source collector did not close the task input.");
     const bootstrapSourceClosure = { sourceSet,
-      taskEnvelopeDigest: createHash("sha256").update(JSON.stringify(execution.task), "utf8").digest("hex") };
+      taskEnvelopeDigest: nativeSha256(execution.task) };
     const profileBlob = { ...(run!.runnerProfileJson as Record<string, unknown>), nativeExecutionInput: execution };
     await db.update(heartbeatRuns).set({ runnerProfileJson: profileBlob }).where(eq(heartbeatRuns.id, run!.id));
     const leaseOwner = `managed-opencode-e2e:${randomUUID()}`;
@@ -605,6 +664,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
     let qualifiedManagedProcessAtFirstProviderRequest = false;
     const modelCalls: Array<Record<string, unknown>> = [];
     const contextResultConsumers: Array<{ callId: string; consumed: boolean }> = [];
+    const projectApiResultConsumers: Array<{ callId: string; consumed: boolean; contentDigest: string | null }> = [];
     const brokerRequests: string[] = [];
     const brokerFailureFacts = () => brokerRequests
       .filter(value => !value.startsWith("managed-tool-schema-comparison ")).slice(-40);
@@ -645,6 +705,28 @@ export async function runManagedNativeOpenCodeFixture(input: {
             block.type === "tool_result" && block.tool_use_id === callId && block.is_error !== true &&
             (typeof block.content === "string" || Array.isArray(block.content))) });
         }
+        if (responseCount > 1 && modelSteps[responseCount - 2]?.tool === "call_api") {
+          const previousStep = modelSteps[responseCount - 2]!;
+          const callId = previousStep.id ?? `managed-e2e-${previousStep.tool}-${responseCount - 2}`;
+          const messages = Array.isArray(body.messages) ? body.messages : [];
+          const toolResults = messages.flatMap(message => {
+            if (!message || typeof message !== "object") return [];
+            const content = (message as Record<string, unknown>).content;
+            return Array.isArray(content) ? content : [];
+          }).filter(block => block && typeof block === "object") as Array<Record<string, unknown>>;
+          const matching = toolResults.filter(block => block.type === "tool_result" && block.tool_use_id === callId);
+          let contentDigest: string | null = null;
+          const content = matching.length === 1 ? matching[0]!.content : null;
+          if (typeof content === "string") {
+            try {
+              const parsed = JSON.parse(content) as unknown;
+              if (parsed && typeof parsed === "object" && !Array.isArray(parsed))
+                contentDigest = createHash("sha256").update(JSON.stringify(parsed), "utf8").digest("hex");
+            } catch { /* Keep only bounded digest evidence, never provider content. */ }
+          }
+          projectApiResultConsumers.push({ callId, consumed: matching.length === 1 && matching[0]!.is_error !== true &&
+            typeof content === "string", contentDigest });
+        }
         const tools = (body.tools as Array<Record<string, unknown>>) ?? [];
         const step = modelSteps[responseCount - 1];
         if (!step) throw new Error("Managed fixture provider exhausted its configured model steps.");
@@ -664,6 +746,15 @@ export async function runManagedNativeOpenCodeFixture(input: {
           if (name === "paperclip_finish") return tool.name === "paperclip_finish" || toolName(tool.name) === "finish";
           return toolName(tool.name) === name;
         });
+        if (step.tool === "call_api") {
+          if (!fixtureProjectId) throw new Error("managed_fixture_project_read_not_prepared");
+          const apiTool = findTool("call_api");
+          expect(apiTool?.input_schema).toEqual({ type: "object", additionalProperties: false,
+            properties: { operationId: { type: "string", enum: ["GET /api/projects/{id}"] },
+              pathParams: { type: "object", additionalProperties: false,
+                properties: { id: { type: "string", format: "uuid" } }, required: ["id"] } },
+            required: ["operationId", "pathParams"] });
+        }
         if (step.tool === "paperclip_finish") {
           const finish = findTool(step.tool);
           if (!finish) throw new Error("OpenCode wire omitted paperclip_finish.");
@@ -685,6 +776,14 @@ export async function runManagedNativeOpenCodeFixture(input: {
           if (modelToolInput.bindingKey !== undefined && modelToolInput.bindingKey !== managedMemoryBindingKey)
             throw new Error("managed_fixture_memory_binding_key_mismatch");
           modelToolInput.bindingKey = managedMemoryBindingKey;
+        }
+        if (step.tool === "call_api") {
+          const pathParams = modelToolInput.pathParams && typeof modelToolInput.pathParams === "object" &&
+            !Array.isArray(modelToolInput.pathParams) ? modelToolInput.pathParams as Record<string, unknown> : {};
+          if (modelToolInput.operationId !== "GET /api/projects/{id}" ||
+            (pathParams.id !== "fixture-project" && pathParams.id !== fixtureProjectId))
+            throw new Error("managed_fixture_project_read_step_invalid");
+          modelToolInput.pathParams = { id: fixtureProjectId };
         }
         return new Response(JSON.stringify({ id: "msg_managed_e2e_finish", type: "message", role: "assistant", model, stop_reason: "tool_use",
           content: [{ type: "tool_use", id: step.id ?? `managed-e2e-${step.tool}-${responseCount}`, name: selected.name, input: modelToolInput }],
@@ -728,10 +827,20 @@ export async function runManagedNativeOpenCodeFixture(input: {
         const step = modelSteps.find((value, index) =>
           (value.id ?? `managed-e2e-${value.tool}-${index}`) === callId);
         if (!incomingToolResults.includes(callId) || completedHumanActions.has(actionKey)) continue;
-        if (step?.tool !== "self_remember")
+        if (step?.tool !== "self_remember" && !(step?.tool === "call_api" && action.action === "edit_project_workspace"))
           throw new Error("managed_fixture_human_action_unqualified");
         brokerRequests.push(`human-action started ${action.action}`);
-        if (action.action === "accept_memory_candidate") {
+        if (action.action === "edit_project_workspace") {
+          if (!fixtureProjectId || !fixtureProjectWorkspaceId)
+            throw new Error("managed_fixture_project_workspace_unavailable");
+          const editedPath = join(root, "project-workspace-edited");
+          await mkdir(editedPath, { recursive: true, mode: 0o700 });
+          if (!fixtureProjectHumanCookie) throw new Error("managed_fixture_project_human_session_missing");
+          const edited = await request(projectApiApp).patch(
+            `/api/projects/${fixtureProjectId}/workspaces/${fixtureProjectWorkspaceId}`,
+          ).set("cookie", fixtureProjectHumanCookie).send({ cwd: editedPath });
+          if (edited.status !== 200) throw new Error(`managed_fixture_project_workspace_edit_failed_${edited.status}`);
+        } else if (action.action === "accept_memory_candidate") {
           const [invocation] = await db.select({ workflowResultJson: toolInvocations.workflowResultJson,
             status: toolInvocations.status, toolName: toolInvocations.toolName })
             .from(toolInvocations).where(and(eq(toolInvocations.companyId, companyId),
@@ -1036,6 +1145,18 @@ export async function runManagedNativeOpenCodeFixture(input: {
     const address = broker.address();
     if (!address || typeof address === "string") throw new Error("Expected local HTTPS listener.");
     setupRunnerPrpWebSocketServer(broker, { apiUrl: `https://127.0.0.1:${address.port}` });
+    let apiServer: ReturnType<typeof createHttpServer> | null = null;
+    const originalPaperclipApiUrl = process.env.PAPERCLIP_API_URL;
+    if (includesProjectApiRead) {
+      apiServer = createHttpServer(projectApiApp);
+      await new Promise<void>((resolveListen, reject) => {
+        apiServer!.once("error", reject);
+        apiServer!.listen(0, "127.0.0.1", () => { apiServer!.off("error", reject); resolveListen(); });
+      });
+      const apiAddress = apiServer.address();
+      if (!apiAddress || typeof apiAddress === "string") throw new Error("Expected local Project API listener.");
+      process.env.PAPERCLIP_API_URL = `http://127.0.0.1:${apiAddress.port}`;
+    }
     const runnerEnvironment = { PATH: `${dirname(opencodeBinary)}:${process.env.PATH ?? ""}`, SSL_CERT_FILE: certBundlePath,
       OPENCODE_DISABLE_DEFAULT_PLUGINS: "true", OPENCODE_DISABLE_MODELS_FETCH: "true",
       PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: String(profile.inputTokensUpperBound),
@@ -1183,7 +1304,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
           const invocationFinished = contextInvocation?.status && contextInvocation.status !== "executing";
           const completedCaptureStillPending = contextInvocation?.status === "succeeded" && !contextResultCapturePresent &&
             contextProbeCompletedAt !== null && Date.now() - contextProbeCompletedAt < 5_000;
-          const fourthModelFetchStarted = contextPostCaptureProbeStartedAt !== null && responseCount >= 4;
+          const fifthModelFetchStarted = contextPostCaptureProbeStartedAt !== null && responseCount >= 5;
           const postCaptureProbeExpired = contextPostCaptureProbeStartedAt !== null &&
             (Date.now() - contextPostCaptureProbeStartedAt >= 15_000 || contextPostCaptureProbeSamples >= 60);
           const contextInvocationFailed = invocationFinished && contextInvocation?.status !== "succeeded";
@@ -1191,11 +1312,11 @@ export async function runManagedNativeOpenCodeFixture(input: {
             Date.now() - contextProbeCompletedAt >= 5_000;
           const preCaptureProbeExpired = contextPostCaptureProbeStartedAt === null && contextProbeStartedAt !== null &&
             Date.now() - contextProbeStartedAt >= 10_000;
-          if (contextProbeCallId && (fourthModelFetchStarted || postCaptureProbeExpired || contextInvocationFailed ||
+          if (contextProbeCallId && (fifthModelFetchStarted || postCaptureProbeExpired || contextInvocationFailed ||
             captureWaitExpired || preCaptureProbeExpired)) {
             if (contextPostCaptureProbeStartedAt !== null)
               diagnostics.push(`managed Context post-capture probe stopped: ${JSON.stringify({
-                reason: fourthModelFetchStarted ? "fourth_model_fetch" : postCaptureProbeExpired ? "bounded_window" : "invocation_finished",
+                reason: fifthModelFetchStarted ? "fifth_model_fetch" : postCaptureProbeExpired ? "bounded_window" : "invocation_finished",
                 elapsedMs: Date.now() - contextPostCaptureProbeStartedAt,
                 samples: contextPostCaptureProbeSamples, providerFetchCount: responseCount,
               })}`);
@@ -1734,6 +1855,22 @@ export async function runManagedNativeOpenCodeFixture(input: {
         diagnostics.push(`managed context invocation facts: ${JSON.stringify(contextInvocationFacts)}`);
         diagnostics.push(`managed Context source facts: ${JSON.stringify(contextReadSourceFacts)}`);
         diagnostics.push(`managed context transaction owners: ${JSON.stringify([...contextTransactionOwners].slice(0, 40))}`);
+        if (input.expectProjectWorkspaceSourceDenial) {
+          const denied = brokerRequests.some(value => value.includes("response POST /runtime-tools/model/v1/messages 403"));
+          expect(denied, "a workspace edit must make the prior Project source stale before the next provider dispatch").toBe(true);
+          expect(responseCount).toBe(1);
+          const [deniedRun] = await db.select({ runnerProfileJson: heartbeatRuns.runnerProfileJson })
+            .from(heartbeatRuns).where(eq(heartbeatRuns.id, run!.id));
+          const deniedProfile = deniedRun?.runnerProfileJson && typeof deniedRun.runnerProfileJson === "object"
+            ? deniedRun.runnerProfileJson as Record<string, unknown> : {};
+          const denialCaptures = Array.isArray(deniedProfile.nativeToolResultSourceCaptures)
+            ? deniedProfile.nativeToolResultSourceCaptures.filter(value => value && typeof value === "object" &&
+                (value as Record<string, unknown>).tool === "call_api") as Array<Record<string, unknown>> : [];
+          expect(denialCaptures).toHaveLength(2);
+          return { projectWorkspaceSourceDenial: { status: 403, providerResponsesBeforeDenial: responseCount,
+            originalCaptureRetained: denialCaptures.some(value => value.managedOpenCode !== true),
+            managedToolResultRetained: denialCaptures.some(value => value.managedOpenCode === true) } };
+        }
         throw new Error(`managed_opencode_runner_exit_${result.exitCode}; providerResponses=${responseCount}; fakeFetchEntrances=${JSON.stringify(fakeFetchEntrances)}\n${diagnostics.join("\n")}\nBroker: ${JSON.stringify(brokerFailureFacts())}\nArtifacts: ${runRoot}`);
       }
       completedNativeFinalization = (result as unknown as Record<string, unknown>).nativeFinalization as NonNullable<typeof completedNativeFinalization>;
@@ -1769,6 +1906,12 @@ export async function runManagedNativeOpenCodeFixture(input: {
       await pgMonitor.end({ timeout: 1 });
       broker.closeAllConnections();
       await new Promise<void>(resolveClose => broker.close(() => resolveClose()));
+      if (apiServer) {
+        apiServer.closeAllConnections();
+        await new Promise<void>(resolveClose => apiServer!.close(() => resolveClose()));
+      }
+      if (originalPaperclipApiUrl === undefined) delete process.env.PAPERCLIP_API_URL;
+      else process.env.PAPERCLIP_API_URL = originalPaperclipApiUrl;
     }
     const [persistedRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, run!.id));
     const sourceReceipt = persistedRun!.runnerProfileJson as Record<string, unknown>;
@@ -1894,6 +2037,93 @@ export async function runManagedNativeOpenCodeFixture(input: {
         }];
       });
     }).map(read => read()));
+    let projectApiReadEvidence: Record<string, unknown> | null = null;
+    const projectApiStepIndex = modelSteps.findIndex(step => step.tool === "call_api");
+    if (projectApiStepIndex >= 0) {
+      if (!fixtureProjectId || !fixtureProjectWorkspaceId) throw new Error("managed_fixture_project_read_not_prepared");
+      const projectApiStep = modelSteps[projectApiStepIndex]!;
+      const callId = projectApiStep.id ?? `managed-e2e-call_api-${projectApiStepIndex}`;
+      const matchingCaptures = capturedResults.filter(value => value.callId === callId && value.tool === "call_api");
+      const originalCapture = matchingCaptures.find(value => value.managedOpenCode !== true);
+      const managedCapture = matchingCaptures.find(value => value.managedOpenCode === true);
+      if (!originalCapture || !managedCapture) throw new Error("managed_fixture_project_read_capture_missing");
+      const originalSource = originalCapture.source && typeof originalCapture.source === "object"
+        ? originalCapture.source as Record<string, unknown> : {};
+      const managedProjectSource = managedCapture.projectSource && typeof managedCapture.projectSource === "object"
+        ? managedCapture.projectSource as Record<string, unknown> : {};
+      const managedResultSource = managedCapture.source && typeof managedCapture.source === "object"
+        ? managedCapture.source as Record<string, unknown> : {};
+      const [currentProjectResponse, projectRun] = await Promise.all([
+        request(projectApiApp).get(`/api/projects/${fixtureProjectId}`).set("cookie", fixtureProjectHumanCookie!),
+        db.select({ resultJson: heartbeatRuns.resultJson }).from(heartbeatRuns).where(eq(heartbeatRuns.id, run!.id)).then(rows => rows[0]),
+      ]);
+      if (currentProjectResponse.status !== 200) throw new Error(`managed_fixture_project_read_current_projection_failed_${currentProjectResponse.status}`);
+      const projectDto = currentProjectResponse.body as Record<string, unknown>;
+      const workspaces = Array.isArray(projectDto.workspaces) ? projectDto.workspaces : [];
+      const primaryWorkspace = projectDto.primaryWorkspace && typeof projectDto.primaryWorkspace === "object"
+        ? projectDto.primaryWorkspace as Record<string, unknown> : null;
+      const projectionHash = createHash("sha256").update(JSON.stringify(projectDto), "utf8").digest("hex");
+      const apiResult = projectRun?.resultJson && typeof projectRun.resultJson === "object"
+        ? projectRun.resultJson as Record<string, unknown> : {};
+      const apiReceipts = apiResult.apiToolReceipts && typeof apiResult.apiToolReceipts === "object"
+        ? apiResult.apiToolReceipts as Record<string, unknown> : {};
+      const apiReceiptHash = createHash("sha256").update(callId).digest("hex");
+      const apiReceipt = apiReceipts[apiReceiptHash] && typeof apiReceipts[apiReceiptHash] === "object"
+        ? apiReceipts[apiReceiptHash] as Record<string, unknown> : {};
+      const captureRequestHash = typeof originalCapture.requestHash === "string" ? originalCapture.requestHash : null;
+      const dispatchAssociations = Array.isArray(sourceReceipt.nativeToolCallDispatchAssociations)
+        ? sourceReceipt.nativeToolCallDispatchAssociations as Array<Record<string, unknown>> : [];
+      const matchingAssociations = dispatchAssociations.filter(value => value.callId === callId &&
+        value.turnId === originalCapture.turnId && value.eventSeq === originalCapture.eventSeq &&
+        value.attempt === originalCapture.attempt && value.tool === "call_api" &&
+        value.argumentsHash === managedCapture.argumentsHash);
+      const inputReceipt = sourceReceipt.nativeInputSourceReceipt && typeof sourceReceipt.nativeInputSourceReceipt === "object"
+        ? sourceReceipt.nativeInputSourceReceipt as Record<string, unknown> : {};
+      const additionalInputs = Array.isArray(inputReceipt.additionalInputs)
+        ? inputReceipt.additionalInputs as Array<Record<string, unknown>> : [];
+      const matchingSourceSets = additionalInputs.filter(value => {
+        const inputs = Array.isArray(value.inputs) ? value.inputs as Array<Record<string, unknown>> : [];
+        return inputs.some(source => source.kind === "tool_result" && source.callId === callId);
+      });
+      const consumedInputs = matchingSourceSets.length === 1 && Array.isArray(matchingSourceSets[0]!.inputs)
+        ? matchingSourceSets[0]!.inputs as Array<Record<string, unknown>> : [];
+      const policy = matchingSourceSets.length === 1 && matchingSourceSets[0]!.policy &&
+        typeof matchingSourceSets[0]!.policy === "object"
+        ? matchingSourceSets[0]!.policy as Record<string, unknown> : {};
+      const toolResultInput = consumedInputs.find(value => value.kind === "tool_result");
+      const projectInput = consumedInputs.find(value => value.kind === "project");
+      expect(workspaces).toEqual(expect.arrayContaining([expect.objectContaining({ id: fixtureProjectWorkspaceId, isPrimary: true })]));
+      expect(primaryWorkspace).toMatchObject({ id: fixtureProjectWorkspaceId, isPrimary: true });
+      expect(originalSource).toMatchObject({ kind: "project", projectId: fixtureProjectId,
+        contentHash: projectionHash });
+      expect(managedProjectSource).toEqual(originalSource);
+      expect(managedCapture).toMatchObject({ callId, tool: "call_api", resultDigest: originalCapture.resultDigest,
+        turnId: originalCapture.turnId, eventSeq: originalCapture.eventSeq, attempt: originalCapture.attempt });
+      expect(managedResultSource).toEqual({ kind: "tool_result", runId: run!.id, callId,
+        toolName: "call_api", invocationId: null, contentHash: originalCapture.resultDigest });
+      expect(apiReceipt).toMatchObject({ callId, turnId: originalCapture.turnId, eventSeq: originalCapture.eventSeq,
+        attempt: originalCapture.attempt, operationId: "GET /api/projects/{id}", method: "GET",
+        pathAndQuery: `/api/projects/${fixtureProjectId}`, requestHash: captureRequestHash,
+        argumentsHash: managedCapture.argumentsHash, state: "completed", status: 200,
+        resultDigest: originalCapture.resultDigest });
+      expect(matchingAssociations).toHaveLength(1);
+      expect(matchingSourceSets).toHaveLength(1);
+      expect(policy).toEqual({ issueIds: [], projectIds: [fixtureProjectId], runIds: [], memoryIds: [],
+        foundationRevisionIds: [] });
+      expect(consumedInputs).toHaveLength(2);
+      expect(toolResultInput).toEqual({ kind: "tool_result", runId: run!.id, callId,
+        toolName: "call_api", invocationId: null, contentHash: originalCapture.resultDigest });
+      expect(projectInput).toEqual(originalSource);
+      const consumedProjectResult = projectApiResultConsumers.filter(value => value.callId === callId);
+      expect(consumedProjectResult).toEqual([{ callId, consumed: true, contentDigest: originalCapture.resultDigest }]);
+      projectApiReadEvidence = { providerContinued: responseCount >= 2, toolSchemaPinned: true,
+        providerConsumedExactNonErrorToolResult: consumedProjectResult.length === 1 && consumedProjectResult[0]!.consumed,
+        projectSourceMatchedCurrentExpandedProjection: originalSource.contentHash === projectionHash,
+        hasPrimaryWorkspaceInProjection: Boolean(primaryWorkspace?.id === fixtureProjectWorkspaceId),
+        matchingOriginalAndManagedCaptures: matchingCaptures.length === 2,
+        matchingAssociation: matchingAssociations.length === 1,
+        exactAdditionalInputClosure: matchingSourceSets.length === 1 && consumedInputs.length === 2 };
+    }
     return {
       companyId,
       agentId,
@@ -1916,6 +2146,8 @@ export async function runManagedNativeOpenCodeFixture(input: {
       contextReadCaptures,
       contextManifestSelectionFacts,
       contextResultConsumers,
+      projectApiResultConsumers,
+      projectApiReadEvidence,
       childTasks,
       modelCalls: modelCalls.length,
       completedRun: terminalRun,

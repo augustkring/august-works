@@ -47,6 +47,15 @@ import { resolveManagedProjectWorkspaceDir } from "../home-paths.js";
 type ProjectRow = typeof projects.$inferSelect;
 type DbTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
+/** Serialize Project workspace-set changes with readers that pin the parent
+ * Project before reading its joined workspace projection. */
+async function lockProjectWorkspaceOwner(tx: DbTransaction, companyId: string, projectId: string) {
+  const [owner] = await tx.select({ id: projects.id }).from(projects).where(and(
+    eq(projects.companyId, companyId), eq(projects.id, projectId),
+  )).for("update");
+  return owner ?? null;
+}
+
 export async function pinProjectMutationHuman(tx: DbTransaction, actor: AuthorizationActor, companyId: string, noWait = false) {
   if (actor.source === "local_implicit") return;
   const userId = actor.type === "agent" ? actor.onBehalfOfUserId : actor.userId;
@@ -1101,15 +1110,11 @@ export function projectService(db: Db) {
         repoUrl,
       });
 
-      const existing = await db
-        .select()
-        .from(projectWorkspaces)
-        .where(eq(projectWorkspaces.projectId, projectId))
-        .orderBy(asc(projectWorkspaces.createdAt))
-        .then((rows) => rows);
-
-      const shouldBePrimary = data.isPrimary === true || existing.length === 0;
       const created = await db.transaction(async (tx) => {
+        if (!await lockProjectWorkspaceOwner(tx, project.companyId, projectId)) return null;
+        const existing = await tx.select({ id: projectWorkspaces.id }).from(projectWorkspaces)
+          .where(and(eq(projectWorkspaces.companyId, project.companyId), eq(projectWorkspaces.projectId, projectId)));
+        const shouldBePrimary = data.isPrimary === true || existing.length === 0;
         if (shouldBePrimary) {
           await tx
             .update(projectWorkspaces)
@@ -1228,6 +1233,12 @@ export function projectService(db: Db) {
       }
 
       const updated = await db.transaction(async (tx) => {
+        if (!await lockProjectWorkspaceOwner(tx, existing.companyId, projectId)) return null;
+        const [current] = await tx.select({ updatedAt: projectWorkspaces.updatedAt }).from(projectWorkspaces)
+          .where(and(eq(projectWorkspaces.id, workspaceId), eq(projectWorkspaces.projectId, projectId)));
+        // Do not apply a patch derived from a workspace row that changed while
+        // this transaction waited for the Project serialization lock.
+        if (!current || current.updatedAt.getTime() !== existing.updatedAt.getTime()) return null;
         if (data.isPrimary === true) {
           await tx
             .update(projectWorkspaces)
@@ -1322,6 +1333,10 @@ export function projectService(db: Db) {
       if (!existing) return null;
 
       const removed = await db.transaction(async (tx) => {
+        if (!await lockProjectWorkspaceOwner(tx, existing.companyId, projectId)) return null;
+        const [current] = await tx.select({ updatedAt: projectWorkspaces.updatedAt }).from(projectWorkspaces)
+          .where(and(eq(projectWorkspaces.id, workspaceId), eq(projectWorkspaces.projectId, projectId)));
+        if (!current || current.updatedAt.getTime() !== existing.updatedAt.getTime()) return null;
         const row = await tx
           .delete(projectWorkspaces)
           .where(eq(projectWorkspaces.id, workspaceId))

@@ -5,7 +5,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   activityLog, authSessions, authUsers, companies, companyMemberships, createDb,
-  EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, projects,
+  EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, projects, projectWorkspaces,
 } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { errorHandler } from "../middleware/error-handler.js";
@@ -105,6 +105,27 @@ describe("manual Human Project payload source capture", () => {
     expect(JSON.stringify(audit[0]!.details)).not.toContain("Direct Human project description");
   });
 
+  it("captures the original Human-owned workspace rows before exposing them in the Project DTO", async () => {
+    const f = await seed("admin");
+    const response = await request(appFor(f.actor)).post(`/api/companies/${f.companyId}/projects`)
+      .send({ ...simpleBody("Human project with workspace"),
+        workspace: { name: "Qualified repository", repoUrl: "https://github.com/example/qualified-repository" } }).expect(201);
+    const [row] = await db.select().from(projects).where(eq(projects.id, response.body.id));
+    const [workspace] = await db.select().from(projectWorkspaces).where(eq(projectWorkspaces.projectId, response.body.id));
+    const [pin] = row!.payloadSourceSnapshot!.inputs.filter((input: { kind: string }) => input.kind === "project_workspace");
+    const [expected] = await db.execute<{ sourceVersion: string; contentHash: string }>(sql`
+      select w.updated_at::text as "sourceVersion",
+        encode(sha256(convert_to(to_jsonb(w)::text,'UTF8')),'hex') as "contentHash"
+      from project_workspaces w where w.id=${workspace!.id}::uuid
+    `);
+    expect(row!.payloadSourceSnapshot!.inputs).toEqual([{
+      kind: "project_workspace", projectId: row!.id, workspaceId: workspace!.id,
+      sourceVersion: expected!.sourceVersion, contentHash: expected!.contentHash,
+    }]);
+    expect(pin).toEqual(row!.payloadSourceSnapshot!.inputs[0]);
+    expect(response.body.workspaces.map((value: { id: string }) => value.id)).toContain(workspace!.id);
+  });
+
   it("captures the exact public Project rendition returned through its authenticated read route", async () => {
     const f = await seed("admin"), http = request(appFor(f.actor));
     const created = await http.post(`/api/companies/${f.companyId}/projects`)
@@ -113,7 +134,8 @@ describe("manual Human Project payload source capture", () => {
     const result = { ok: true, status: 200, operationId: "GET /api/projects/{id}", contentType: "application/json",
       retryAfter: null, data: selected.body };
     const capture = captureNativeProjectToolResult({ companyId: f.companyId, requestedProjectId: created.body.id,
-      turnId: null, callId: "actual-project-read-result", result });
+      turnId: null, callId: "actual-project-read-result", requestHash: "b".repeat(64),
+      pathAndQuery: `/api/projects/${created.body.id}`, result });
     expect(capture).toMatchObject({ projectId: created.body.id, source: {
       kind: "project", projectId: created.body.id, sourceVersion: selected.body.updatedAt,
       contentHash: createHash("sha256").update(JSON.stringify(selected.body)).digest("hex"),

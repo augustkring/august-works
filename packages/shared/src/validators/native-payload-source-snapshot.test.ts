@@ -17,6 +17,8 @@ describe("Native payload source snapshot structural boundary", () => {
       { kind: "project", projectId: randomUUID(), sourceVersion: "2026-10-23T00:00:00.000Z", contentHash: hash },
       { kind: "task", issueId, sourceVersion: "2026-10-23T00:00:01.000Z", contentHash: "b".repeat(64) },
       { kind: "task", issueId, sourceVersion: "2026-10-23T00:00:00.000Z", contentHash: "c".repeat(64) },
+      { kind: "project_workspace", projectId: randomUUID(), workspaceId: randomUUID(),
+        sourceVersion: "2026-10-23 00:00:00.123456+00", contentHash: hash },
       { kind: "skill_version", skillId: randomUUID(), versionId: randomUUID(), skillKey: "native/review", contentHash: hash },
       { kind: "runtime_skill", key: "paperclip", versionId: "catalog-release-2026.10", bundleDigest: hash, manifestDigest: hash },
       { kind: "runtime_skill", key: "builtin", versionId: null, bundleDigest: hash, manifestDigest: hash },

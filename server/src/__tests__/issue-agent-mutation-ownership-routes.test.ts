@@ -355,6 +355,7 @@ function createRunContextDb(
   runAgentOrRows: string | Record<string, unknown>[] = ownerAgentId,
   runId: string = ownerRunId,
   chatBindings: Array<{ id: string; companyId: string; issueId: string; state: string }> = [],
+  currentIssueRows: Record<string, unknown>[] = [],
 ) {
   const chatBindingQueries: ReturnType<PgDialect["sqlToQuery"]>[] = [];
   const runRows = Array.isArray(runAgentOrRows)
@@ -369,13 +370,16 @@ function createRunContextDb(
   const firstRun = runRows[0] ?? {};
   const runAgentId = typeof firstRun.agentId === "string" ? firstRun.agentId : ownerAgentId;
   const runAgentCompanyId = typeof firstRun.agentCompanyId === "string" ? firstRun.agentCompanyId : companyId;
-  const rowsForSelection = async (selection: Record<string, unknown>, chatBindingQuery = false, settledRecoveryQuery = false) => {
+  const rowsForSelection = async (selection: Record<string, unknown>, chatBindingQuery = false, settledRecoveryQuery = false, currentIssueRows: Record<string, unknown>[] = []) => {
     if (chatBindingQuery) return chatBindings;
     // An unknown selector has no settled recovery receipt. Returning the
     // generic issue fixture here would invent an unrelated replay row.
     if (settledRecoveryQuery) return [];
     const keys = Object.keys(selection);
     if (keys.includes("entityId")) return [];
+    // The issue-list route re-reads the exact issue rows after its cached
+    // projection. Model only that explicit SQL boundary in this route test.
+    if (keys.includes("companyId") && keys.includes("projectId") && keys.includes("assigneeAgentId")) return currentIssueRows;
     if (keys.includes("contextSnapshot")) return runRows;
     if (keys.includes("agentCompanyId")) return runRows;
     if (keys.length === 0) {
@@ -384,16 +388,16 @@ function createRunContextDb(
     }
     return [{ id: runAgentId, companyId: runAgentCompanyId, permissions: {}, role: "engineer", reportsTo: null }];
   };
-  const buildQuery = (selection: Record<string, unknown>, chatBindingQuery = false, settledRecoveryQuery = false) => {
+  const buildQuery = (selection: Record<string, unknown>, chatBindingQuery = false, settledRecoveryQuery = false, currentIssueRows: Record<string, unknown>[] = []) => {
     const whereResult = {
       orderBy: vi.fn(async () => []),
       limit: vi.fn(() => ({
-        then: async (resolve: (limitedRows: unknown[]) => unknown) => resolve(await rowsForSelection(selection, chatBindingQuery, settledRecoveryQuery)),
+        then: async (resolve: (limitedRows: unknown[]) => unknown) => resolve(await rowsForSelection(selection, chatBindingQuery, settledRecoveryQuery, currentIssueRows)),
       })),
       for: vi.fn(() => ({
-        then: async (resolve: (selectedRows: unknown[]) => unknown) => resolve(await rowsForSelection(selection, chatBindingQuery, settledRecoveryQuery)),
+        then: async (resolve: (selectedRows: unknown[]) => unknown) => resolve(await rowsForSelection(selection, chatBindingQuery, settledRecoveryQuery, currentIssueRows)),
       })),
-      then: async (resolve: (selectedRows: unknown[]) => unknown) => resolve(await rowsForSelection(selection, chatBindingQuery, settledRecoveryQuery)),
+      then: async (resolve: (selectedRows: unknown[]) => unknown) => resolve(await rowsForSelection(selection, chatBindingQuery, settledRecoveryQuery, currentIssueRows)),
     };
     const query = {
       innerJoin: vi.fn(() => query),
@@ -412,7 +416,8 @@ function createRunContextDb(
         if (getTableName(table) === "issue_thread_interactions") {
           return { where: vi.fn(() => ({ limit: vi.fn(async () => []) })) };
         }
-        return buildQuery(selection, getTableName(table) === "chat_conversations", getTableName(table) === "issue_recovery_actions");
+        return buildQuery(selection, getTableName(table) === "chat_conversations", getTableName(table) === "issue_recovery_actions",
+          getTableName(table) === "issues" ? currentIssueRows : []);
       }),
     })),
     insert: vi.fn(() => ({ values: vi.fn(async () => undefined) })),
@@ -852,11 +857,18 @@ describe("agent issue mutation checkout ownership", () => {
       };
     });
 
-    const app = await createApp(boardActor());
+    const app = await createApp(boardActor(), createRunContextDb({}, ownerAgentId, ownerRunId, [], [makeIssue()]));
     const res = await request(app).get(`/api/companies/${companyId}/issues`);
 
     expect(res.status, JSON.stringify({ body: res.body, errorContext: lastErrorContext })).toBe(200);
-    expect(res.body).toEqual([expect.objectContaining({ id: issueId })]);
+    const listedRows = await mockIssueService.list.mock.results[0]?.value;
+    const accessResults = await Promise.all(mockAccessService.decide.mock.results.map(async (result) =>
+      result.type === "return" ? await result.value : String(result.value)));
+    expect(res.body, JSON.stringify({ listCalls: mockIssueService.list.mock.calls.length,
+      listedRows,
+      decisionCalls: mockAccessService.decide.mock.calls.map(([input]) => input),
+      accessResults }))
+      .toEqual([expect.objectContaining({ id: issueId })]);
     expect(mockAccessService.decide).toHaveBeenCalledWith(expect.objectContaining({
       action: "company_scope:read",
       resource: { type: "company", companyId },
@@ -878,7 +890,8 @@ describe("agent issue mutation checkout ownership", () => {
         : "Issue read remains separately denied.",
     }));
 
-    const res = await request(await createApp(boardActor())).get(`/api/companies/${companyId}/issues`);
+    const db = createRunContextDb({}, ownerAgentId, ownerRunId, [], [makeIssue()]);
+    const res = await request(await createApp(boardActor(), db)).get(`/api/companies/${companyId}/issues`);
 
     expect(res.status, JSON.stringify({ body: res.body, errorContext: lastErrorContext })).toBe(200);
     expect(res.body).toEqual([]);

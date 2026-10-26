@@ -100,6 +100,11 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
     const assertContextSourceSetCurrent = nativeDirectInput.assertNativeContextReadSourceSetCurrent;
     vi.spyOn(nativeDirectInput, "assertNativeContextReadSourceSetCurrent").mockImplementation(async (...args) =>
       timeManagedContextSourceCheck("assertNativeContextReadSourceSetCurrent", () => assertContextSourceSetCurrent(...args)));
+    const assertManagedConsumedSourceSetCurrent = nativeDirectInput.assertNativeManagedConsumedSourceSetCurrent;
+    vi.spyOn(nativeDirectInput, "assertNativeManagedConsumedSourceSetCurrent").mockImplementation(async function (
+      this: unknown, ...args) {
+      return timeManagedContextSourceCheck("assertNativeManagedConsumedSourceSetCurrent", () => assertManagedConsumedSourceSetCurrent(...args));
+    });
     const assertAnalyticalContextPayloadAccess = analyticalContextAuthority.assertAnalyticalContextPayloadAccess;
     vi.spyOn(analyticalContextAuthority, "assertAnalyticalContextPayloadAccess").mockImplementation(async (...args) =>
       timeManagedContextSourceCheck("assertAnalyticalContextPayloadAccess", () => assertAnalyticalContextPayloadAccess(...args)));
@@ -182,32 +187,42 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
       expect.objectContaining({ key: "managed-source-b", aliceHttpStatus: 200, bobHttpStatus: 403,
         snapshot: expect.objectContaining({ schema: "paperclip.native_payload_source_snapshot.v1" }) }),
     ]));
-    const toolResult = (callId: string) => result.toolResults.find(value => value.callId === callId);
+    if (!("runId" in result) || !("toolResults" in result) || !Array.isArray(result.toolResults) ||
+      !("contextReadCaptures" in result) || !Array.isArray(result.contextReadCaptures) ||
+      !("memoryOutputs" in result) || !Array.isArray(result.memoryOutputs) || !result.privateRoot)
+      throw new Error("managed_opencode_success_result_shape_invalid");
+    const toolResults = result.toolResults;
+    const contextReadCaptures = result.contextReadCaptures;
+    const memoryOutputs = result.memoryOutputs;
+    const privateRootOutput = result.privateRoot;
+    const toolResult = (callId: string) => toolResults.find(value => value.callId === callId);
     const memoryA = toolResult(memoryAId);
-    const privateRoot = result.privateRoot;
+    const privateRoot = privateRootOutput;
     const memoryB = toolResult(memoryBId);
-    expect(memoryA?.memoryId).toMatch(/^[0-9a-f-]{36}$/);
-    expect(privateRoot?.memoryId).toMatch(/^[0-9a-f-]{36}$/);
-    expect(privateRoot?.issueId).toMatch(/^[0-9a-f-]{36}$/);
-    expect(memoryB?.memoryId).toMatch(/^[0-9a-f-]{36}$/);
+    if (!memoryA?.memoryId || !privateRoot.memoryId || !privateRoot.issueId || !memoryB?.memoryId)
+      throw new Error("managed_opencode_required_memory_outputs_missing");
+    expect(memoryA.memoryId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(privateRoot.memoryId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(privateRoot.issueId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(memoryB.memoryId).toMatch(/^[0-9a-f-]{36}$/);
     const memories = memoryService(db);
-    await memories.reviewCandidate(result.companyId, memoryB!.memoryId!, { decision: "accept" }, result.aliceMemoryActor);
-    expect((await memories.get(result.companyId, memoryA!.memoryId!, result.aliceMemoryActor))?.record.id)
-      .toBe(memoryA!.memoryId);
-    expect((await memories.get(result.companyId, memoryA!.memoryId!, result.bobMemoryActor))?.record.id)
-      .toBe(memoryA!.memoryId);
-    expect((await memories.get(result.companyId, memoryB!.memoryId!, result.aliceMemoryActor))?.record.id)
-      .toBe(memoryB!.memoryId);
-    expect(await memories.get(result.companyId, memoryB!.memoryId!, result.bobMemoryActor)).toBeNull();
-    expect(await memories.get(result.companyId, privateRoot!.memoryId!, result.bobMemoryActor)).toBeNull();
-    const contextCapture = result.contextReadCaptures[0]?.contextRead as {
+    await memories.reviewCandidate(result.companyId, memoryB.memoryId, { decision: "accept" }, result.aliceMemoryActor);
+    expect((await memories.get(result.companyId, memoryA.memoryId, result.aliceMemoryActor))?.record.id)
+      .toBe(memoryA.memoryId);
+    expect((await memories.get(result.companyId, memoryA.memoryId, result.bobMemoryActor))?.record.id)
+      .toBe(memoryA.memoryId);
+    expect((await memories.get(result.companyId, memoryB.memoryId, result.aliceMemoryActor))?.record.id)
+      .toBe(memoryB.memoryId);
+    expect(await memories.get(result.companyId, memoryB.memoryId, result.bobMemoryActor)).toBeNull();
+    expect(await memories.get(result.companyId, privateRoot.memoryId, result.bobMemoryActor)).toBeNull();
+    const contextCapture = contextReadCaptures[0]?.contextRead as {
       manifestIds?: Array<{ contextManifestId?: string }>;
       sourceSet?: { policy?: { memoryIds?: string[] }; inputs?: Array<{ kind?: string; manifestId?: string }> };
     } | undefined;
-    expect(contextCapture?.sourceSet?.policy?.memoryIds).toContain(privateRoot!.memoryId);
+    expect(contextCapture?.sourceSet?.policy?.memoryIds).toContain(privateRoot.memoryId);
     expect(contextCapture?.sourceSet?.inputs?.some(source => source.kind === "context")).toBe(true);
     const outputSnapshot = (callId: string) => nativePayloadSourceSnapshotSchema.parse(
-      result.memoryOutputs.find(output => output.callId === callId)?.currentForAlice?.record.payloadSourceSnapshot);
+      memoryOutputs.find(output => output.callId === callId)?.currentForAlice?.record.payloadSourceSnapshot);
     const snapshotA = outputSnapshot(memoryAId);
     const snapshotB = outputSnapshot(memoryBId);
     const contextManifestId = contextCapture?.manifestIds?.[0]?.contextManifestId;
@@ -216,8 +231,41 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
       expect.objectContaining({ contextManifestId, selectedPrivateRootItem: true, retainedPrivateRoot: true }),
     ]));
     expect(snapshotA.inputs.some(source => source.kind === "context")).toBe(false);
-    expect(snapshotA.policy.memoryIds).not.toContain(privateRoot!.memoryId);
-    expect(snapshotB.policy.memoryIds).toContain(privateRoot!.memoryId);
+    expect(snapshotA.policy.memoryIds).not.toContain(privateRoot.memoryId);
+    expect(snapshotB.policy.memoryIds).toContain(privateRoot.memoryId);
     expect(snapshotB.inputs).toContainEqual(expect.objectContaining({ kind: "context", manifestId: contextManifestId }));
+  }, 180_000);
+
+  it("binds a managed Project GET result to the exact current public Project projection", async () => {
+    const callId = "managed-e2e-project-read";
+    const result = await runManagedNativeOpenCodeFixture({ db, connectionString: database.connectionString,
+      root, instanceId, steps: [
+        { tool: "call_api", id: callId, input: { operationId: "GET /api/projects/{id}", pathParams: { id: "fixture-project" } } },
+        { tool: "paperclip_finish", id: "managed-e2e-project-finish" },
+      ] });
+    if (!("runId" in result) || !result.projectApiReadEvidence)
+      throw new Error("managed_opencode_project_read_success_evidence_missing");
+    expect(result.completedRun?.status).toBe("succeeded");
+    expect(result.projectApiReadEvidence).toMatchObject({ providerContinued: true, toolSchemaPinned: true,
+      providerConsumedExactNonErrorToolResult: true, projectSourceMatchedCurrentExpandedProjection: true,
+      hasPrimaryWorkspaceInProjection: true, matchingOriginalAndManagedCaptures: true,
+      matchingAssociation: true, exactAdditionalInputClosure: true });
+    expect(result.projectApiResultConsumers).toHaveLength(1);
+    expect(result.projectApiResultConsumers[0]).toMatchObject({ callId, consumed: true });
+    expect(result.projectApiResultConsumers[0]?.contentDigest).toMatch(/^[0-9a-f]{64}$/);
+  }, 180_000);
+
+  it("refuses the next managed request after the captured Project workspace changes", async () => {
+    const callId = "managed-e2e-project-stale-read";
+    const result = await runManagedNativeOpenCodeFixture({ db, connectionString: database.connectionString,
+      root, instanceId, steps: [
+        { tool: "call_api", id: callId, input: { operationId: "GET /api/projects/{id}", pathParams: { id: "fixture-project" } } },
+        { tool: "paperclip_finish", id: "managed-e2e-project-stale-finish" },
+      ], humanActions: [{ afterModelToolCallId: callId, action: "edit_project_workspace" }],
+      expectProjectWorkspaceSourceDenial: true });
+    if (!("projectWorkspaceSourceDenial" in result))
+      throw new Error("managed_opencode_project_workspace_denial_evidence_missing");
+    expect(result.projectWorkspaceSourceDenial).toMatchObject({ status: 403, providerResponsesBeforeDenial: 1,
+      originalCaptureRetained: true, managedToolResultRetained: true });
   }, 180_000);
 });

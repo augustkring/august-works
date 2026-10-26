@@ -31,6 +31,10 @@ export const nativePayloadSourcePolicySchema = z.object({
 export const nativePayloadSourceInputSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("task"), issueId: id, sourceVersion: text, contentHash: sha256 }).strict(),
   z.object({ kind: z.literal("project"), projectId: id, sourceVersion: text, contentHash: sha256 }).strict(),
+  // A Project's public DTO joins workspace rows. This input binds each joined
+  // row to the original Human-owned Project capture; the Project body hash
+  // alone covers only the projects table row.
+  z.object({ kind: z.literal("project_workspace"), projectId: id, workspaceId: id, sourceVersion: text, contentHash: sha256 }).strict(),
   z.object({ kind: z.literal("memory"), memoryId: id, sourceVersion: text, contentHash: sha256,
     reviewStateAtCapture: z.enum(["pending", "accepted", "rejected"]).optional(),
     verificationStateAtCapture: z.enum(["unverified", "corroborated", "human_verified", "system_verified"]).optional(),

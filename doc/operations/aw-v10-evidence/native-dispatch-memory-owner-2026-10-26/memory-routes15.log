@@ -1,0 +1,96 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+-stderr | src/__tests__/memory-routes.test.ts > Memory routes > supports shared binding, candidate review, detail and revocation
+memory route test diagnostic DrizzleQueryError: Failed query: update "memory_records" set "payload_source_snapshot" = (
+    with payload as (select jsonb_build_object('version',1,'owner',jsonb_build_object(
+      'kind',$1::text,'companyId',memory_records.company_id::text,'id',memory_records.id::text,
+      'contentHash',public.aw_native_payload_body_hash($2::text,to_jsonb(memory_records))),
+      'policy',$3::jsonb,'inputs',$4::jsonb) as value)
+    select value || jsonb_build_object('digest',encode(sha256(convert_to(value::text,'UTF8')),'hex')) from payload
+  ), "payload_source_snapshot_invalidated" = $5, "source_provenance_qualified" = $6, "source_run_ids" = $7, "source_issue_ids" = $8, "source_project_ids" = $9, "source_memory_ids" = $10, "source_foundation_revision_ids" = $11, "updated_at" = $12 where ("memory_records"."company_id" = $13 and "memory_records"."id" = $14 and "memory_records"."payload_source_protocol_version" = $15 and "memory_records"."payload_source_snapshot_invalidated" = $16 and "memory_records"."created_by_actor_type" = $17) returning "payload_source_snapshot"
+params: memory_record,memory_record,{"issueIds":["2c9ff818-7bbd-4203-8c93-5a2f286d5736","90506772-5ae8-477f-89a0-0810ef83d65b"],"projectIds":[],"runIds":[],"memoryIds":[],"foundationRevisionIds":[]},[{"kind":"task","issueId":"2c9ff818-7bbd-4203-8c93-5a2f286d5736","sourceVersion":"2026-10-26T02:15:07.982Z","contentHash":"c09e9315158fb791b51515837afb640d48637ab1a0aa2bbed72f7b09b20af4aa"},{"kind":"task","issueId":"90506772-5ae8-477f-89a0-0810ef83d65b","sourceVersion":"2026-10-26T02:15:08.021Z","contentHash":"8979b54bf5757c51fed6fc0259b775543926600760a1aca23233364fb362496e"}],false,true,{},{"2c9ff818-7bbd-4203-8c93-5a2f286d5736","90506772-5ae8-477f-89a0-0810ef83d65b"},{},{},{},2026-10-26T02:15:10.049Z,e7a3484c-ce42-47ba-91ff-e13db38ba7e4,80d5ca8e-1c7d-443e-8045-e5f692fa898a,1,true,user
+    at PostgresJsPreparedQuery.queryWithCache (file:///workspace/v10-dep-qualification/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/drizzle-orm/pg-core/session.js:41:15)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/drizzle-orm/postgres-js/session.js:37:20
+    at inspect (/workspace/v10-dep-qualification/server/src/services/memory/memory-service.ts:1122:30)
+    at /workspace/v10-dep-qualification/packages/db/src/work-signals.ts:38:22
+    at async scope (file:///workspace/v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+    at async sql.begin (file:///workspace/v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+    at PostgresJsDatabase.connection.transaction (/workspace/v10-dep-qualification/packages/db/src/work-signals.ts:35:22)
+    at runCandidate (/workspace/v10-dep-qualification/server/src/services/memory/memory-service.ts:935:23)
+    at Object.createCandidate (/workspace/v10-dep-qualification/server/src/services/memory/memory-service.ts:2021:21) {
+  query: 'update "memory_records" set "payload_source_snapshot" = (\n' +
+    "    with payload as (select jsonb_build_object('version',1,'owner',jsonb_build_object(\n" +
+    "      'kind',$1::text,'companyId',memory_records.company_id::text,'id',memory_records.id::text,\n" +
+    "      'contentHash',public.aw_native_payload_body_hash($2::text,to_jsonb(memory_records))),\n" +
+    "      'policy',$3::jsonb,'inputs',$4::jsonb) as value)\n" +
+    "    select value || jsonb_build_object('digest',encode(sha256(convert_to(value::text,'UTF8')),'hex')) from payload\n" +
+    '  ), "payload_source_snapshot_invalidated" = $5, "source_provenance_qualified" = $6, "source_run_ids" = $7, "source_issue_ids" = $8, "source_project_ids" = $9, "source_memory_ids" = $10, "source_foundation_revision_ids" = $11, "updated_at" = $12 where ("memory_records"."company_id" = $13 and "memory_records"."id" = $14 and "memory_records"."payload_source_protocol_version" = $15 and "memory_records"."payload_source_snapshot_invalidated" = $16 and "memory_records"."created_by_actor_type" = $17) returning "payload_source_snapshot"',
+  params: [
+    'memory_record',
+    'memory_record',
+    '{"issueIds":["2c9ff818-7bbd-4203-8c93-5a2f286d5736","90506772-5ae8-477f-89a0-0810ef83d65b"],"projectIds":[],"runIds":[],"memoryIds":[],"foundationRevisionIds":[]}',
+    '[{"kind":"task","issueId":"2c9ff818-7bbd-4203-8c93-5a2f286d5736","sourceVersion":"2026-10-26T02:15:07.982Z","contentHash":"c09e9315158fb791b51515837afb640d48637ab1a0aa2bbed72f7b09b20af4aa"},{"kind":"task","issueId":"90506772-5ae8-477f-89a0-0810ef83d65b","sourceVersion":"2026-10-26T02:15:08.021Z","contentHash":"8979b54bf5757c51fed6fc0259b775543926600760a1aca23233364fb362496e"}]',
+    false,
+    true,
+    '{}',
+    '{"2c9ff818-7bbd-4203-8c93-5a2f286d5736","90506772-5ae8-477f-89a0-0810ef83d65b"}',
+    '{}',
+    '{}',
+    '{}',
+    '2026-10-26T02:15:10.049Z',
+    'e7a3484c-ce42-47ba-91ff-e13db38ba7e4',
+    '80d5ca8e-1c7d-443e-8045-e5f692fa898a',
+    1,
+    true,
+    'user'
+  ],
+  cause: PostgresError: Human Memory evidence seal does not retain its source history
+      at ErrorResponse (file:///workspace/v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30)
+      at handle (file:///workspace/v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6)
+      at Socket.data (file:///workspace/v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9)
+      at Socket.emit (node:events:509:28)
+      at addChunk (node:internal/streams/readable:563:12)
+      at readableAddChunkPushByteMode (node:internal/streams/readable:514:3)
+      at Readable.push (node:internal/streams/readable:394:5)
+      at TCP.onStreamRead (node:internal/stream_base_commons:189:23) {
+    severity_local: 'ERROR',
+    severity: 'ERROR',
+    code: '23514',
+    where: 'PL/pgSQL function aw_native_payload_source_binding() line 42 at RAISE',
+    file: 'pl_exec.c',
+    line: '3937',
+    routine: 'exec_stmt_raise'
+  }
+}
+
+x-
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/memory-routes.test.ts > Memory routes > supports shared binding, candidate review, detail and revocation
+AssertionError: {"error":"Internal server error"}: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/memory-routes.test.ts:286:70
+    284|         ],
+    285|       });
+    286|     expect(contradiction.status, JSON.stringify(contradiction.body)).t…
+       |                                                                      ^
+    287|     expect(contradiction.body).toMatchObject({
+    288|       resolution: {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 skipped (3)
+   Start at  02:14:50
+   Duration  19.83s (transform 9.75s, setup 92ms, import 13.57s, tests 6.05s, environment 0ms)
+

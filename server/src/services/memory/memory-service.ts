@@ -103,7 +103,7 @@ async function assertCurrentMemoryHumanCredential(db:Db,actor:AuthorizationActor
 
 async function captureHumanManualTaskMemorySources(db:Db,companyId:string,principal:ExecutionPrincipal,
   actor:AuthorizationActor|undefined,provenance:Awaited<ReturnType<typeof captureMemorySources>>,
-  evidence:MemoryCandidateInputParsed["evidence"]):Promise<{policy:NativePayloadSourcePolicy;inputs:NativePayloadSourceInput[];
+  evidence:Pick<MemoryCandidateInputParsed["evidence"][number],"sourceClass"|"sourceProvider"|"sourceType"|"sourceRef"|"sourceVersion"|"sourceUpdatedAt">[]):Promise<{policy:NativePayloadSourcePolicy;inputs:NativePayloadSourceInput[];
     credentialExpiresAt:number|null}|null> {
   if(principal.type!=="user"||actor?.type!=="board"||actor.userId!==principal.userId||
     (actor.source!=="session"&&actor.source!=="board_key")||!provenance.sourceProvenanceQualified||
@@ -1019,7 +1019,28 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
           const [privateShareCopy]=await txDb.select({id:memoryPrivateSharePublications.sharedRecordId}).from(memoryPrivateSharePublications).where(and(
             eq(memoryPrivateSharePublications.companyId,companyId),eq(memoryPrivateSharePublications.sharedRecordId,target.id)));
 
-          const provenance=await captureMemorySources(txDb,companyId,memorySourceActor(companyId,actor),parsed.data.scope,sourceMemoryIds);
+          const oldSnapshot=nativePayloadSourceSnapshotSchema.safeParse(target.payloadSourceSnapshot);
+          const manualSnapshot=oldSnapshot.success?oldSnapshot.data:null;
+          const targetMetadata=target.metadata&&typeof target.metadata==="object"&&!Array.isArray(target.metadata)
+            ?target.metadata as Record<string,unknown>:{};
+          const humanManualTaskTarget=actor.principal.type==="user"&&actor.authorizationActor?.type==="board"
+            &&actor.authorizationActor.userId===actor.principal.userId&&target.createdByActorType==="user"
+            &&target.sourceProvenanceQualified&&target.payloadSourceProtocolVersion===1&&!target.payloadSourceSnapshotInvalidated&&manualSnapshot!==null
+            &&manualSnapshot.owner.kind==="memory_record"&&manualSnapshot.owner.companyId===companyId
+            &&manualSnapshot.owner.id===target.id&&manualSnapshot.inputs.length>0
+            &&manualSnapshot.inputs.every(item=>item.kind==="task")
+            &&Object.entries(manualSnapshot.policy).every(([key,ids])=>key==="issueIds"||ids.length===0)
+            &&targetMetadata.nativeManagedMemoryInvocationId===undefined
+            &&targetMetadata.nativeManagedMemoryCallId===undefined
+            &&targetMetadata.nativeManagedMemoryArgumentsHash===undefined;
+          const priorTaskEvidence=humanManualTaskTarget?await txDb.select({sourceClass:memoryEvidence.sourceClass,
+            sourceProvider:memoryEvidence.sourceProvider,sourceType:memoryEvidence.sourceType,sourceRef:memoryEvidence.sourceRef,
+            sourceVersion:memoryEvidence.sourceVersion,sourceUpdatedAt:memoryEvidence.sourceUpdatedAt})
+            .from(memoryEvidence).where(and(eq(memoryEvidence.companyId,companyId),eq(memoryEvidence.memoryRecordId,target.id))):[];
+          const allTaskEvidence=[...priorTaskEvidence.map(item=>({...item,sourceUpdatedAt:item.sourceUpdatedAt?.toISOString()??null})),
+            ...resolution.novelEvidence];
+          const provenance=await captureMemorySources(txDb,companyId,memorySourceActor(companyId,actor),parsed.data.scope,
+            [...sourceMemoryIds,...(humanManualTaskTarget?target.sourceMemoryIds:[])],humanManualTaskTarget?allTaskEvidence:[]);
           if(provenance.sourceMemoryIds.includes(target.id)){
             // Only the exact current native selection can be a no-op input to
             // its own unchanged claim. Caller IDs and old receipts cannot erase
@@ -1049,7 +1070,9 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
           const sourceChanges=!shareCopyHasOnlyIncidentalRunRoots
             && (target.sourceProvenanceQualified!==(target.sourceProvenanceQualified && provenance.sourceProvenanceQualified)
               || sourceKeys.some(key=>provenance[key].some(id=>!target[key].includes(id))));
-          if(resolution.metadata.kind!=="duplicate" || sourceChanges)await txDb.update(memoryRecords).set({
+          let humanEvidenceSealAudit:{previousSnapshotDigest:string;currentSnapshotDigest:string}|null=null;
+          let humanEvidenceSealCredential:{actor:AuthorizationActor;credentialExpiresAt:number|null}|null=null;
+          if((resolution.metadata.kind!=="duplicate" || sourceChanges)&&!humanManualTaskTarget)await txDb.update(memoryRecords).set({
             ...(sourceChanges ? { payloadSourceSnapshot: null } : {}),
             sourceProvenanceQualified:target.sourceProvenanceQualified && provenance.sourceProvenanceQualified,
             sourceRunIds:[...new Set([...target.sourceRunIds,...provenance.sourceRunIds])],
@@ -1071,6 +1094,50 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
               resolution.novelEvidence,
             );
 
+            if(humanManualTaskTarget&&manualSnapshot){
+              const currentTaskSources=await captureHumanManualTaskMemorySources(txDb,companyId,actor.principal,
+                memorySourceActor(companyId,actor),provenance,allTaskEvidence);
+              if(!currentTaskSources||allTaskEvidence.length===0||allTaskEvidence.some(item=>item.sourceClass!=="task"||
+                item.sourceProvider!=="august_works_tasks"||item.sourceType!=="issue")||
+                currentTaskSources.inputs.some(input=>input.kind!=="task")||
+                manualSnapshot.inputs.some(old=>!currentTaskSources.inputs.some(current=>JSON.stringify(old)===JSON.stringify(current))))
+                throw conflict("Human Memory evidence cannot be sealed from current Task sources",{code:"memory_resolution_source_conflict"});
+              const nextSnapshotInputs=[...manualSnapshot.inputs];
+              for(const input of currentTaskSources.inputs){
+                if(!nextSnapshotInputs.some(existing=>JSON.stringify(existing)===JSON.stringify(input)))nextSnapshotInputs.push(input);
+              }
+              const nextPolicy={issueIds:[...new Set([...manualSnapshot.policy.issueIds,...currentTaskSources.policy.issueIds])].sort(),
+                projectIds:[...new Set([...manualSnapshot.policy.projectIds,...currentTaskSources.policy.projectIds])].sort(),
+                runIds:[...new Set([...manualSnapshot.policy.runIds,...currentTaskSources.policy.runIds])].sort(),
+                memoryIds:[...new Set([...manualSnapshot.policy.memoryIds,...currentTaskSources.policy.memoryIds])].sort(),
+                foundationRevisionIds:[...new Set([...manualSnapshot.policy.foundationRevisionIds,...currentTaskSources.policy.foundationRevisionIds])].sort()};
+              const mergedSourceFields={
+                sourceProvenanceQualified:target.sourceProvenanceQualified&&provenance.sourceProvenanceQualified,
+                sourceRunIds:[...new Set([...target.sourceRunIds,...provenance.sourceRunIds])],
+                sourceIssueIds:[...new Set([...target.sourceIssueIds,...provenance.sourceIssueIds])],
+                sourceProjectIds:[...new Set([...target.sourceProjectIds,...provenance.sourceProjectIds])],
+                sourceMemoryIds:[...new Set([...target.sourceMemoryIds,...provenance.sourceMemoryIds])],
+                sourceFoundationRevisionIds:[...new Set([...target.sourceFoundationRevisionIds,...provenance.sourceFoundationRevisionIds])],
+              };
+              const [retained]=await txDb.update(memoryRecords).set({...mergedSourceFields,updatedAt:new Date()})
+                .where(and(eq(memoryRecords.companyId,companyId),eq(memoryRecords.id,target.id),
+                  eq(memoryRecords.payloadSourceProtocolVersion,1),eq(memoryRecords.payloadSourceSnapshotInvalidated,true),
+                  eq(memoryRecords.createdByActorType,"user"))).returning({id:memoryRecords.id});
+              if(!retained)throw conflict("Human Memory source history changed before sealing",{code:"memory_resolution_source_conflict"});
+              const [sealed]=await txDb.update(memoryRecords).set({
+                payloadSourceSnapshot:nativePayloadSnapshotSql("memory_record",nextPolicy,nextSnapshotInputs),
+                payloadSourceSnapshotInvalidated:false,updatedAt:new Date(),
+              }).where(and(eq(memoryRecords.companyId,companyId),eq(memoryRecords.id,target.id),
+                eq(memoryRecords.payloadSourceProtocolVersion,1),eq(memoryRecords.payloadSourceSnapshotInvalidated,true),
+                eq(memoryRecords.createdByActorType,"user"))).returning({snapshot:memoryRecords.payloadSourceSnapshot});
+              const sealedSnapshot=nativePayloadSourceSnapshotSchema.safeParse(sealed?.snapshot);
+              if(!sealedSnapshot.success)throw conflict("Human Memory evidence seal was not stored",{code:"memory_resolution_source_conflict"});
+              if(!actor.authorizationActor||actor.authorizationActor.type!=="board")
+                throw forbidden("Current Human Memory authority changed");
+              humanEvidenceSealCredential={actor:actor.authorizationActor,credentialExpiresAt:currentTaskSources.credentialExpiresAt};
+              humanEvidenceSealAudit={previousSnapshotDigest:manualSnapshot.digest,currentSnapshotDigest:sealedSnapshot.data.digest};
+            }
+
             publications.push(
               await persistMemoryActivity(txDb, actor, {
                 companyId,
@@ -1079,9 +1146,15 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
                     ? "memory.corroborated"
                     : "memory.contradiction_attached",
                 recordId: target.id,
-                details: { resolution: resolution.metadata },
+                details: { resolution: resolution.metadata,
+                  ...(humanEvidenceSealAudit?{evidenceSnapshotSeal:humanEvidenceSealAudit}:{}) },
               }),
             );
+          }
+
+          if((resolution.metadata.kind!=="duplicate"||sourceChanges)&&humanManualTaskTarget&&
+            resolution.novelEvidence.length===0){
+            throw conflict("Human Memory source expansion requires new current Task evidence",{code:"memory_resolution_source_conflict"});
           }
 
           // A distinct descendant or another retained source may lead back to
@@ -1089,6 +1162,8 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
           // so failed attachment rolls back lineage, evidence and audit alike.
           if(!await canActorReadMemorySources(txDb,companyId,memorySourceActor(companyId,actor),target.id))
             throw conflict("Memory attachment sources are unavailable or cyclic",{code:"memory_resolution_source_conflict"});
+          if(humanEvidenceSealCredential)await assertCurrentMemoryHumanCredential(txDb,humanEvidenceSealCredential.actor,
+            humanEvidenceSealCredential);
           return { recordId: target.id, resolution: resolution.metadata, replayed:false as const };
         }
 

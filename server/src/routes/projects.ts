@@ -387,7 +387,7 @@ export function projectRoutes(db: Db) {
     const directActor = req.actor.type === "board" && req.actor.source === "session" &&
       req.actor.userId && req.actor.sessionId && !req.actor.runId ? { ...req.actor } : null;
     const captureDirectInput = !!directActor && (!projectData.visibility || projectData.visibility === "open") &&
-      !workspace && !repositoryIds?.length && !repositoryUrls?.length && !projectData.goalIds?.length &&
+      !repositoryIds?.length && !repositoryUrls?.length && !projectData.goalIds?.length &&
       !projectData.sourceIssueIds?.length && !projectData.sourceProjectIds?.length &&
       [projectData.goalId, projectData.personalOwnerUserId, projectData.env, projectData.roadmapPolicy,
         projectData.executionWorkspacePolicy, projectData.pauseReason].every(value => value == null);

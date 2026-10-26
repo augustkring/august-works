@@ -18,7 +18,8 @@ export async function seedCurrentHumanSourceActor(db: Db, companyIds: string[], 
   return { type: "board", source: "session", userId, sessionId: await seedNativePasskeySession(db, userId), companyIds };
 }
 
-export async function createCanonicalHumanProject(db: Db, companyId: string, actor: AuthorizationActor, name: string) {
+export async function createCanonicalHumanProject(db: Db, companyId: string, actor: AuthorizationActor, name: string,
+  options: { description?: string; status?: string } = {}) {
   const app = express();
   app.use(express.json());
   app.use(((req, _res, next) => {
@@ -32,7 +33,7 @@ export async function createCanonicalHumanProject(db: Db, companyId: string, act
   }) as RequestHandler);
   app.use("/api", projectRoutes(db));
   app.use(errorHandler);
-  const created = await request(app).post(`/api/companies/${companyId}/projects`).send({ name });
+  const created = await request(app).post(`/api/companies/${companyId}/projects`).send({ name, ...options });
   if (created.status !== 201 || typeof created.body.id !== "string") throw new Error(`Canonical Human Project fixture creation failed: ${created.status}`);
   return (await db.select().from(projects).where(eq(projects.id, created.body.id)))[0]!;
 }

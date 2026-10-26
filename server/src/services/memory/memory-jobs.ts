@@ -191,10 +191,18 @@ async function readMemoryJobBeforeDeadline(db: Db, companyId: string, actor: Aut
   }
 }
 
-async function ownIndexTombstoneReadable(db: Db, actor: AuthorizationActor | undefined, job: MemoryJob) {
+async function ownIndexHistoryReceiptReadable(db: Db, actor: AuthorizationActor | undefined, job: MemoryJob) {
   if (actor?.type !== "board" || actor.source !== "session" || !actor.userId || job.operationType !== "index_refresh"
-    || !job.jobKey.startsWith("maintenance:v1:") || Object.keys(job.sourceRefJson).length || job.resultJson !== null
+    || !job.jobKey.startsWith("maintenance:v1:")
     || job.status !== "succeeded" || !job.startedAt || !job.finishedAt || job.leaseExpiresAt) return false;
+  const source = maintenanceReadSource.safeParse(job.sourceRefJson);
+  if (!source.success || source.data.requester.type !== "user" || source.data.requester.userId !== actor.userId ||
+    Object.keys(source.data.recordVersions).length !== source.data.recordIds.length) return false;
+  for (const id of source.data.recordIds) {
+    const [row] = await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, job.companyId), eq(memoryRecords.id, id)));
+    if (!row || source.data.recordVersions[id] !== row.updatedAt.toISOString() ||
+      !await canActorReadMemorySources(db, job.companyId, actor, id)) return false;
+  }
   const receipts = await db.select().from(activityLog).where(and(eq(activityLog.companyId, job.companyId), eq(activityLog.entityType, "memory_job"),
     eq(activityLog.entityId, job.id), eq(activityLog.action, "memory.index_refresh_completed"))).limit(2).for("share");
   const receipt = receipts[0];
@@ -232,7 +240,7 @@ export async function listReadableMemoryJobs(db: Db, companyId: string, actor: A
         scanned++; cursor = job;
         let readable = await readMemoryJobBeforeDeadline(tx, companyId, actor, job.id, deadline);
         assertMemoryJobReadBudget(deadline);
-        if (!readable && options.indexHistory) readable = await ownIndexTombstoneReadable(tx, actor, job);
+        if (!readable && options.indexHistory) readable = await ownIndexHistoryReceiptReadable(tx, actor, job);
         assertMemoryJobReadBudget(deadline);
         if (readable) rows.push(job);
         if (rows.length >= limit) break;
@@ -242,7 +250,7 @@ export async function listReadableMemoryJobs(db: Db, companyId: string, actor: A
       assertMemoryJobReadBudget(deadline);
       let readable = await readMemoryJobBeforeDeadline(tx, companyId, actor, job.id, deadline);
       assertMemoryJobReadBudget(deadline);
-      if (!readable && options.indexHistory) readable = await ownIndexTombstoneReadable(tx, actor, job);
+      if (!readable && options.indexHistory) readable = await ownIndexHistoryReceiptReadable(tx, actor, job);
       assertMemoryJobReadBudget(deadline);
       if (!readable) throw conflict("Memory job sources changed");
     }

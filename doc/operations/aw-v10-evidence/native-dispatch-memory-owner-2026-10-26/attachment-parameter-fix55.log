@@ -1,0 +1,28 @@
+Copied and verified source files 120
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts (42 tests | 1 failed | 41 skipped) 5655ms
+     × qualifies only the current PG attachment bytes staged by executor admission 1721ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > qualifies only the current PG attachment bytes staged by executor admission
+Error: native_event_schema_invalid:must have required property 'sourceInstanceId'
+ ❯ PaperclipControlPlanePort.appendEvent src/services/native-runtime/paperclip-control-plane-port.ts:188:30
+    186|     if (!isPrpEvent(value)) throw new Error("native_legacy_event_not_s…
+    187|     const validated = validatePrpEvent(value);
+    188|     if (!validated.ok) throw new Error(`native_event_schema_invalid:${…
+       |                              ^
+    189|     const event = validated.event;
+    190|     if (event.runId !== this.#binding.runId || (this.#sessionId && eve…
+ ❯ ../packages/paperclip-runner/src/native-session-runtime.ts:976:42
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 41 skipped (42)
+   Start at  02:51:33
+   Duration  18.58s (transform 9.28s, setup 67ms, import 12.74s, tests 5.65s, environment 0ms)
+

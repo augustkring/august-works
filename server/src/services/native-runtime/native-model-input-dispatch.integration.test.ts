@@ -271,7 +271,9 @@ describe("native model input dispatch intent", () => {
       task: builtExecution.task,
       workspace: builtExecution.workspace,
       session: builtExecution.session,
-      provider: builtExecution.provider,
+      provider: builtExecution.provider.kind === "codex"
+        ? { kind: "codex", model: builtExecution.provider.model }
+        : builtExecution.provider,
       completionContract: builtExecution.completionContract,
       interactionResponses: builtExecution.interactionResponses,
       credentialBindings: builtExecution.credentialBindings,
@@ -329,8 +331,9 @@ describe("native model input dispatch intent", () => {
       async openSession(openInput) {
         return { identity: () => openInput.identity,
           async capabilities() { return { resume: false, typedEvents: true, steering: false, interruption: true, structuredResult: true }; },
-          async *events() { await started; await terminal; yield { schema: "paperclip.prp.event.v1" as const,
-            sourceEventId: `${turnId}:terminal`, sourceSeq: 1, sourceInstanceId: turnId, sourceKind: "runner" as const,
+          async *events() { await started; yield { schema: "paperclip.prp.event.v1" as const,
+            sourceEventId: `${runnerInstanceId}:${seeded.runId}:1`, sourceSeq: 1,
+            sourceInstanceId: runnerInstanceId, sourceKind: "runner" as const,
             runId: seeded.runId, normalizedSessionId: openInput.identity.sessionId, turnId, eventType: "turn.completed" as const,
             schemaVersion: 1 as const, priority: 0 as const, emittedAt: new Date().toISOString(), payload: {} }; },
           async startTurn(input) { providerFrame = input.message.text; signalStart(); return { turnId }; },
@@ -361,7 +364,7 @@ describe("native model input dispatch intent", () => {
           const prompt = renderNativeRunnerStagedAttachmentPrompt(attachmentStage.attachments);
           if (!prompt || !stagedExecution.task.prompt.endsWith(`\n\n${prompt}`)) return null;
           const sourceSet = buildSet(candidates);
-          return sourceSet ? { sourceSet, taskEnvelopeDigest: createHash("sha256").update(JSON.stringify(stagedExecution.task), "utf8").digest("hex") } : null;
+          return sourceSet ? { sourceSet, taskEnvelopeDigest: nativeSha256(stagedExecution.task) } : null;
         }, backend, runnerInstanceId, useRunnerd: true,
         leaseOwner: seeded.leaseOwner });
     } finally {
@@ -501,7 +504,7 @@ describe("native model input dispatch intent", () => {
     await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeExecutionInput: execution } }).where(eq(heartbeatRuns.id, seeded.runId));
     const envelope = buildNativeModelEnvelope(execution);
     const turnInput = { message: { role: "user" as const, text: JSON.stringify(envelope) }, requestedCollaborationMode: "default" as const };
-    const closure = { sourceSet: sourceSet!, taskEnvelopeDigest: createHash("sha256").update(JSON.stringify(execution.task), "utf8").digest("hex") };
+    const closure = { sourceSet: sourceSet!, taskEnvelopeDigest: nativeSha256(execution.task) };
     const args = dispatchArgs(seeded, turnInput);
     const dispatchId = await recordNativeModelInputDispatchIntent({ ...args, bootstrapSourceClosure: closure });
     const turnId = "native-task-effect-turn", callId = "native-task-effect-call";
@@ -547,7 +550,9 @@ describe("native model input dispatch intent", () => {
     await recordNativeToolCallDispatchAssociation({ ...args, turnId, callId, tool: "call_api" });
     const projectId = randomUUID();
     const capture: NativeProjectToolResultSource = { turnId, callId, tool: "call_api",
-      operationId: "GET /api/projects/{id}", projectId, resultDigest: nativeSha256({ status: 200, unknown: true }), source: null };
+      operationId: "GET /api/projects/{id}", projectId, requestHash: "a".repeat(64),
+      pathAndQuery: `/api/projects/${projectId}`,
+      resultDigest: nativeSha256({ status: 200, unknown: true }), source: null };
     const { turnInput: _turnInput, ...binding } = args;
     await recordNativeProjectToolResultIntent({ ...binding, capture });
     const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
@@ -712,7 +717,7 @@ describe("native model input dispatch intent", () => {
     await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeExecutionInput: execution } }).where(eq(heartbeatRuns.id, seeded.runId));
     const envelope = buildNativeModelEnvelope(execution);
     const turnInput = { message: { role: "user" as const, text: JSON.stringify(envelope) }, requestedCollaborationMode: "default" as const };
-    const closure = { sourceSet: sourceSet!, taskEnvelopeDigest: createHash("sha256").update(JSON.stringify(execution.task), "utf8").digest("hex") };
+    const closure = { sourceSet: sourceSet!, taskEnvelopeDigest: nativeSha256(execution.task) };
     const dispatchId = await recordNativeModelInputDispatchIntent({ ...dispatchArgs(seeded, turnInput), bootstrapSourceClosure: closure });
     await recordNativeModelInputDispatchAcknowledgement({ ...acknowledgementArgs(seeded, dispatchId, turnInput), sourceClosure: closure });
     const [runAfterBootstrap] = await db.select({ nativeInputSourceProtocolVersion: heartbeatRuns.nativeInputSourceProtocolVersion })
@@ -789,7 +794,7 @@ describe("native model input dispatch intent", () => {
       completionContractId: completion.row.id, completionContractSha256: completion.row.canonicalSha256 }).where(eq(heartbeatRuns.id, unknownSeed.runId));
     const workspaceEnvelope = buildNativeModelEnvelope(workspaceExecution);
     const workspaceTurn = { message: { role: "user" as const, text: JSON.stringify(workspaceEnvelope) }, requestedCollaborationMode: "default" as const };
-    const workspaceClosure = { sourceSet: sourceSet!, taskEnvelopeDigest: createHash("sha256").update(JSON.stringify(workspaceExecution.task), "utf8").digest("hex") };
+    const workspaceClosure = { sourceSet: sourceSet!, taskEnvelopeDigest: nativeSha256(workspaceExecution.task) };
     await recordNativeModelInputDispatchIntent({ ...dispatchArgs(unknownSeed, workspaceTurn), bootstrapSourceClosure: workspaceClosure });
     const [unknownRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, unknownSeed.runId));
     expect(unknownRun!.nativeInputSourceProtocolVersion).toBe(0);
@@ -854,7 +859,7 @@ describe("native model input dispatch intent", () => {
         schemaVersion: completion.row.schemaVersion, contract: completion.contract }, runtimeContext: nativeRuntimeContextFixture() });
     await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeExecutionInput: execution } }).where(eq(heartbeatRuns.id, seeded.runId));
     const turnInput = { message: { role: "user" as const, text: JSON.stringify(buildNativeModelEnvelope(execution)) }, requestedCollaborationMode: "default" as const };
-    const closure = { sourceSet: sourceSet!, taskEnvelopeDigest: createHash("sha256").update(JSON.stringify(execution.task), "utf8").digest("hex") };
+    const closure = { sourceSet: sourceSet!, taskEnvelopeDigest: nativeSha256(execution.task) };
     const dispatchId = await recordNativeModelInputDispatchIntent({ ...dispatchArgs(seeded, turnInput), bootstrapSourceClosure: closure });
     const [runAfterIntent] = await db.select({ nativeInputSourceProtocolVersion: heartbeatRuns.nativeInputSourceProtocolVersion,
       runnerProfileJson: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
@@ -1280,7 +1285,7 @@ describe("native model input dispatch intent", () => {
       for each row execute function public.${sql.identifier(functionName)}()`);
     try {
       await expect(recordNativeModelInputDispatchIntent(dispatchArgs(seeded, turnInput)))
-        .rejects.toThrow("native_model_input_dispatch_persistence_failed");
+        .rejects.toThrow("native_model_input_dispatch_intents_not_returned");
       const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
       expect(run!.runnerProfileJson).toEqual({ retainedProfileField: canary });
       expect(run!.runnerProfileJson).not.toHaveProperty("nativeModelInputDispatchIntents");

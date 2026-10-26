@@ -77,6 +77,7 @@ import path from "node:path";
 import { execFile as execFileCallback } from "node:child_process";
 import { promisify } from "node:util";
 import { createHash, randomUUID } from "node:crypto";
+import { nativeSha256 } from "./native-runtime/canonical.js";
 import {
   and,
   asc,
@@ -23796,12 +23797,12 @@ export function heartbeatService(
                 if (!stagedPrompt || !execution.task.prompt.endsWith(`\n\n${stagedPrompt}`)) return null;
                 const sourceSet = buildNativeBootstrapSet(attachmentCandidates);
                 return sourceSet ? { sourceSet,
-                  taskEnvelopeDigest: createHash("sha256").update(JSON.stringify(execution.task), "utf8").digest("hex") } : null;
+                  taskEnvelopeDigest: nativeSha256(execution.task) } : null;
               };
             }
             nativeBootstrapSourceClosure = nativeBootstrapSourceSet
               ? { sourceSet: nativeBootstrapSourceSet,
-                  taskEnvelopeDigest: createHash("sha256").update(JSON.stringify(nativeExecution.task), "utf8").digest("hex") }
+                  taskEnvelopeDigest: nativeSha256(nativeExecution.task) }
               : null;
             if (
               nativeSessionId !==

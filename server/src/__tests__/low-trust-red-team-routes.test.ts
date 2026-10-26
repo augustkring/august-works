@@ -12,6 +12,7 @@ import {
   agents,
   approvals,
   assets,
+  authSessions,
   authUsers,
   companies,
   companyMemberships,
@@ -32,6 +33,7 @@ import {
   issueInboxArchives,
   issueRelations,
   issues,
+  instanceUserRoles,
   issueThreadInteractions,
   issueWorkProducts,
   principalPermissionGrants,
@@ -50,6 +52,7 @@ import { drainHeartbeatRunsToQuiescence } from "./helpers/drain-heartbeat-runs.j
 import { errorHandler } from "../middleware/index.js";
 import { agentRoutes } from "../routes/agents.js";
 import { issueRoutes } from "../routes/issues.js";
+import { createCanonicalHumanProject, seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 import { heartbeatService } from "../services/heartbeat.js";
 import { LOW_TRUST_QUARANTINED_BODY } from "../services/source-trust.js";
 
@@ -118,6 +121,7 @@ async function deleteCompanySkillsAfterLateHeartbeatWritesDrain(db: Db) {
   let lastError: unknown = null;
   for (let attempt = 0; attempt < 10; attempt += 1) {
     await db.delete(companySkills);
+    await db.delete(principalPermissionGrants);
     try {
       await db.delete(companies);
       return;
@@ -142,6 +146,7 @@ function agentActor(
     type: "agent",
     agentId,
     onBehalfOfUserId: "board-user",
+    onBehalfOfMemberships: [{ companyId: fixture.company.id, membershipRole: "owner", status: "active" }],
     companyId: fixture.company.id,
     runId:
       agentId === fixture.agents.lowTrust.id
@@ -156,6 +161,7 @@ function standardReportActor(fixture: Fixture): Express.Request["actor"] {
     type: "agent",
     agentId: fixture.agents.standard.id,
     onBehalfOfUserId: "board-user",
+    onBehalfOfMemberships: [{ companyId: fixture.company.id, membershipRole: "owner", status: "active" }],
     companyId: fixture.company.id,
     runId: fixture.runs.standardReport.id,
     source: "agent_jwt",
@@ -170,6 +176,7 @@ function skillTestActor(
     type: "agent",
     agentId: fixture.agents.standard.id,
     onBehalfOfUserId: "board-user",
+    onBehalfOfMemberships: [{ companyId: fixture.company.id, membershipRole: "owner", status: "active" }],
     companyId: fixture.company.id,
     runId: fixture.runs.standard.id,
     source: "agent_jwt",
@@ -181,16 +188,17 @@ function boardActor(fixture: Fixture): Express.Request["actor"] {
   return {
     type: "board",
     userId: "board-user",
+    sessionId: fixture.sessionId,
+    source: "session",
     companyIds: [fixture.company.id],
     memberships: [
       {
         companyId: fixture.company.id,
-        membershipRole: "operator",
+        membershipRole: "owner",
         status: "active",
       },
     ],
     isInstanceAdmin: true,
-    source: "local_implicit",
   };
 }
 
@@ -432,6 +440,7 @@ async function seedLowTrustFixture(db: Db) {
     id: "board-user",
     name: "Low-trust route owner",
     email: "low-trust-route-owner@example.test",
+    emailVerified: true,
     createdAt: new Date(),
     updatedAt: new Date(),
   });
@@ -443,30 +452,15 @@ async function seedLowTrustFixture(db: Db) {
       defaultResponsibleUserId: "board-user",
     })
     .returning();
-  await db.insert(companyMemberships).values({
-    companyId: company!.id,
-    principalType: "user",
-    principalId: "board-user",
-    status: "active",
-    membershipRole: "owner",
+  const currentHuman = await seedCurrentHumanSourceActor(db, [company!.id], "board-user");
+  const sessionId = currentHuman.sessionId!;
+  await db.insert(instanceUserRoles).values({ userId: "board-user", role: "instance_admin" });
+  // The route requires source-qualified Projects. Create them through the
+  // authenticated Human owner path; direct inserts would be unreadable Tasks.
+  const allowedProject = await createCanonicalHumanProject(db, company!.id, currentHuman, `Allowed ${nonce}`, { status: "in_progress" });
+  const outOfScopeProject = await createCanonicalHumanProject(db, company!.id, currentHuman, `Out ${nonce}`, {
+    description: canary("FLAG-PROJECT-7R4G"), status: "in_progress",
   });
-  const [allowedProject] = await db
-    .insert(projects)
-    .values({
-      companyId: company!.id,
-      name: `Allowed ${nonce}`,
-      status: "in_progress",
-    })
-    .returning();
-  const [outOfScopeProject] = await db
-    .insert(projects)
-    .values({
-      companyId: company!.id,
-      name: `Out ${nonce}`,
-      description: canary("FLAG-PROJECT-7R4G"),
-      status: "in_progress",
-    })
-    .returning();
 
   const [collaborator] = await db
     .insert(agents)
@@ -853,6 +847,7 @@ async function seedLowTrustFixture(db: Db) {
       cto: cto!,
     },
     projects: { allowed: allowedProject!, outOfScope: outOfScopeProject! },
+    sessionId,
     issues: {
       reviewGrandparent: reviewGrandparent!,
       reviewRoot: reviewRoot!,
@@ -922,6 +917,8 @@ describeEmbeddedPostgres(
       await db.delete(agents);
       await db.delete(projects);
       await deleteCompanySkillsAfterLateHeartbeatWritesDrain(db);
+      await db.delete(instanceUserRoles);
+      await db.delete(authSessions);
       await db.delete(authUsers);
     });
 
@@ -1254,6 +1251,10 @@ describeEmbeddedPostgres(
         authorAgentId: fixture.agents.lowTrust.id,
       });
 
+      const commentsBeforeUnmentionedAttempt = await db
+        .select({ id: issueComments.id })
+        .from(issueComments)
+        .where(eq(issueComments.issueId, targetIssue!.id));
       const unmentionedComment = await request(
         createApp(db, agentActor(fixture, unmentioned.id)),
       )
@@ -1262,9 +1263,13 @@ describeEmbeddedPostgres(
       expect(
         unmentionedComment.status,
         JSON.stringify(unmentionedComment.body),
-      ).toBe(403);
-      expect(unmentionedComment.body.details.code).toBe(
-        "issue_write_actor_class_excluded",
+      ).toBe(404);
+      const commentsAfterUnmentionedAttempt = await db
+        .select({ id: issueComments.id })
+        .from(issueComments)
+        .where(eq(issueComments.issueId, targetIssue!.id));
+      expect(commentsAfterUnmentionedAttempt).toHaveLength(
+        commentsBeforeUnmentionedAttempt.length,
       );
     });
 
@@ -1624,8 +1629,20 @@ describeEmbeddedPostgres(
       for (const attempt of attempts) {
         const before = await snapshot(db);
         const res = await attempt.req();
+        const expectedStatus = [
+          "LT-02",
+          "LT-08",
+          "LT-08 revisions",
+          "LT-08 annotations",
+          "LT-08 annotation thread",
+          "LT recovery actions",
+          "LT external objects",
+          "LT external object summary",
+          "LT attachments",
+          "LT attachment content",
+        ].includes(attempt.id) ? 404 : 403;
         expect(res.status, `${attempt.id}: ${JSON.stringify(res.body)}`).toBe(
-          403,
+          expectedStatus,
         );
         expectNoCanary(res.body, ...forbiddenMarkers);
         const after = await snapshot(db);
@@ -1768,7 +1785,7 @@ describeEmbeddedPostgres(
       for (const attempt of attempts) {
         const res = await attempt.req();
         expect(res.status, `${attempt.id}: ${JSON.stringify(res.body)}`).toBe(
-          403,
+          404,
         );
         expectNoCanary(res.body, ...forbiddenMarkers);
       }

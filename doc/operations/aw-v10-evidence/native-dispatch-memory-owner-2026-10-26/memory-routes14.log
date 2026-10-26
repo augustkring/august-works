@@ -1,0 +1,32 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+-x-
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/memory-routes.test.ts > Memory routes > supports shared binding, candidate review, detail and revocation
+AssertionError: {"error":"Internal server error"}: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/memory-routes.test.ts:282:70
+    280|         ],
+    281|       });
+    282|     expect(contradiction.status, JSON.stringify(contradiction.body)).t…
+       |                                                                      ^
+    283|     expect(contradiction.body).toMatchObject({
+    284|       resolution: {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 skipped (3)
+   Start at  02:14:24
+   Duration  19.90s (transform 9.69s, setup 66ms, import 13.72s, tests 6.00s, environment 0ms)
+

@@ -1,0 +1,45 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+-stderr | src/__tests__/memory-routes.test.ts > Memory routes > supports shared binding, candidate review, detail and revocation
+memory route test diagnostic ReferenceError: nativeSha256 is not defined
+    at /workspace/v10-dep-qualification/server/src/services/memory/memory-service.ts:1103:106
+    at Array.some (<anonymous>)
+    at /workspace/v10-dep-qualification/server/src/services/memory/memory-service.ts:1103:76
+    at Array.some (<anonymous>)
+    at inspect (/workspace/v10-dep-qualification/server/src/services/memory/memory-service.ts:1103:39)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at /workspace/v10-dep-qualification/packages/db/src/work-signals.ts:38:22
+    at async scope (file:///workspace/v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+    at async sql.begin (file:///workspace/v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+    at PostgresJsDatabase.connection.transaction (/workspace/v10-dep-qualification/packages/db/src/work-signals.ts:35:22)
+
+x-
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/memory-routes.test.ts > Memory routes > supports shared binding, candidate review, detail and revocation
+AssertionError: {"error":"Internal server error"}: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/memory-routes.test.ts:286:70
+    284|         ],
+    285|       });
+    286|     expect(contradiction.status, JSON.stringify(contradiction.body)).t…
+       |                                                                      ^
+    287|     expect(contradiction.body).toMatchObject({
+    288|       resolution: {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 skipped (3)
+   Start at  02:13:51
+   Duration  19.27s (transform 9.29s, setup 74ms, import 13.18s, tests 5.89s, environment 0ms)
+

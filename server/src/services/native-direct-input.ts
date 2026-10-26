@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { and, eq, gte, inArray, is, isNull, sql } from "drizzle-orm";
 import { PgTransaction } from "drizzle-orm/pg-core";
-import { agents, issues, projects, issueComments, documentRevisions, issueDocuments, issueAttachments, assets,
+import { agents, issues, projects, projectWorkspaces, issueComments, documentRevisions, issueDocuments, issueAttachments, assets,
   contextManifests, contextManifestItems, contextManifestMemoryRoots, accountDeletionOperations, memoryRecords,
   memoryDeletionMarkers,
   completionContracts, heartbeatRuns, orchestrationModelReservations, executionWorkspaces, foundationDocuments,
@@ -23,6 +23,8 @@ import { assertAuthoredAgentSnapshotCurrent } from "./agents/authored-definition
 import { readNativeBootstrapContextWitness } from "./context/native-bootstrap-context-witness.js";
 import { assertLearnedAssetAnalyticalSources } from "./learning/learning-analytical-sources.js";
 import { assertRuntimeSkillSourceRetained } from "./learning/learning-assets.js";
+import { publicNativePayloadRow } from "./native-payload-public.js";
+import { projectService } from "./projects.js";
 import { skillResolverService } from "./skill-resolver.js";
 import { nativeSha256 } from "./native-runtime/canonical.js";
 import { captureNativeTaskWakeSource, type NativeConsumedSourceComponent, type NativeModelOutputCapture,
@@ -68,6 +70,167 @@ function nativeToolResultReceiptCopies(receipt: NativeRunInputSourceReceipt, sou
   const conflicting = receipt.additionalInputs.some(entry => entry.inputs.some(value =>
     value.kind === "tool_result" && value.callId === source.callId && !isDeepStrictEqual(value, source)));
   return { exact, conflicting, duplicateWithinEntry: perEntry.some(value => value > 1) };
+}
+
+function nativeSourceRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+async function assertNativeProjectSourceCurrentInScope(db: Db | Transaction, input: {
+  companyId: string; actor: AuthorizationActor; projectId: string;
+  sources?: Extract<NativePayloadSourceInput, { kind: "project" }>[];
+  workspaceSources?: Extract<NativePayloadSourceInput, { kind: "project_workspace" }>[];
+}, scope: NativeSourceReadScope): Promise<void> {
+  const projectId = input.projectId;
+  nativeSourceReadWork(scope);
+  const [project] = await db.select({ id: projects.id, companyId: projects.companyId, updatedAt: projects.updatedAt,
+    payloadSourceProtocolVersion: projects.payloadSourceProtocolVersion,
+    payloadSourceSnapshot: projects.payloadSourceSnapshot, payloadSourceSnapshotInvalidated: projects.payloadSourceSnapshotInvalidated })
+    .from(projects).where(and(eq(projects.companyId, input.companyId), eq(projects.id, projectId))).for("share");
+  const currentWorkspaceSources = await db.select({ workspaceId: projectWorkspaces.id,
+    sourceVersion: sql<string>`${projectWorkspaces.updatedAt}::text`,
+    contentHash: sql<string>`encode(sha256(convert_to(to_jsonb(${projectWorkspaces})::text,'UTF8')),'hex')` })
+    .from(projectWorkspaces).where(and(eq(projectWorkspaces.companyId, input.companyId),
+      eq(projectWorkspaces.projectId, projectId))).for("share");
+  if (!project || !await canActorReadProjectPrivacy(db, input.actor, project))
+    throw forbidden("A Native source Project is unavailable");
+  const owner = nativePayloadSourceSnapshotSchema.safeParse(project.payloadSourceSnapshot);
+  const [hash] = await db.execute<{ hash: string }>(sql`select public.aw_native_payload_body_hash('project',to_jsonb(p)) as hash
+    from projects p where p.company_id=${input.companyId}::uuid and p.id=${projectId}::uuid`);
+  const currentProjection = await projectService(db as Db).getById(projectId);
+  const currentPublicProjection = currentProjection ? publicNativePayloadRow(currentProjection) : null;
+  const currentPublicHash = currentPublicProjection
+    ? createHash("sha256").update(JSON.stringify(currentPublicProjection), "utf8").digest("hex") : null;
+  const projectionRecord = currentProjection as unknown as Record<string, unknown> | null;
+  const projectedWorkspaces = Array.isArray(projectionRecord?.workspaces)
+    ? projectionRecord!.workspaces.filter((value): value is Record<string, unknown> =>
+        value !== null && typeof value === "object" && !Array.isArray(value)) : [];
+  const currentWorkspacePins = owner.success ? owner.data.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "project_workspace" }> =>
+    source.kind === "project_workspace" && source.projectId === projectId) : [];
+  const allWorkspacePins = owner.success ? owner.data.inputs.filter(source => source.kind === "project_workspace") : [];
+  const sortedWorkspacePins = [...currentWorkspacePins].sort((left, right) => left.workspaceId.localeCompare(right.workspaceId));
+  const sortedCurrentWorkspaceSources = [...currentWorkspaceSources].sort((left, right) => left.workspaceId.localeCompare(right.workspaceId));
+  const requestedWorkspaceSources = input.workspaceSources ?? [];
+  const invalidWorkspaceSources = new Set(requestedWorkspaceSources.map(source => source.workspaceId)).size !== requestedWorkspaceSources.length ||
+    requestedWorkspaceSources.some(source => !currentWorkspacePins.some(pin => isDeepStrictEqual(pin, source)));
+  const projectionGoals = Array.isArray(projectionRecord?.goals) ? projectionRecord!.goals : null;
+  const projectionHasManagedByPlugin = projectionRecord?.managedByPlugin !== null && projectionRecord?.managedByPlugin !== undefined;
+  const projectionHasWorkspaceRuntimeServices = projectedWorkspaces.some(workspace =>
+    !Array.isArray(workspace.runtimeServices) || workspace.runtimeServices.length > 0);
+  const invalidSources = (input.sources ?? []).some(source => source.sourceVersion !== project.updatedAt.toISOString() ||
+    source.contentHash !== currentPublicHash);
+  if (project.payloadSourceProtocolVersion !== 1 || project.payloadSourceSnapshotInvalidated || !owner.success ||
+    owner.data.owner.kind !== "project" || owner.data.owner.companyId !== input.companyId || owner.data.owner.id !== projectId || !hash ||
+    owner.data.owner.contentHash !== hash.hash || invalidSources || invalidWorkspaceSources || !currentProjection ||
+    !isDeepStrictEqual(sortedWorkspacePins, sortedCurrentWorkspaceSources.map(workspace => ({ kind: "project_workspace",
+      projectId, workspaceId: workspace.workspaceId, sourceVersion: workspace.sourceVersion, contentHash: workspace.contentHash }))) ||
+    allWorkspacePins.length !== currentWorkspacePins.length ||
+    !isDeepStrictEqual(projectedWorkspaces.map(workspace => workspace.id).sort(), currentWorkspaceSources.map(workspace => workspace.workspaceId).sort()) ||
+    projectionGoals === null || projectionGoals.length > 0 || projectionHasManagedByPlugin || projectionHasWorkspaceRuntimeServices)
+    throw forbidden("A Native source Project changed");
+}
+
+async function assertNativeProjectApiToolResultCurrentInScope(db: Db | Transaction, input: {
+  companyId: string; run: typeof heartbeatRuns.$inferSelect;
+  profile: Record<string, unknown>; receipt: NativeRunInputSourceReceipt; actor: AuthorizationActor; scope: NativeSourceReadScope;
+  source: Extract<NativePayloadSourceInput, { kind: "tool_result" }>;
+}): Promise<void> {
+  const source = input.source;
+  const captures = Array.isArray(input.profile.nativeToolResultSourceCaptures)
+    ? input.profile.nativeToolResultSourceCaptures.map(nativeSourceRecord) : [];
+  const originalCaptures = captures.filter(capture => capture.managedOpenCode !== true &&
+    capture.callId === source.callId && capture.tool === "call_api" &&
+    capture.operationId === "GET /api/projects/{id}" && capture.resultDigest === source.contentHash);
+  const managedCaptures = captures.filter(capture => capture.managedOpenCode === true &&
+    capture.callId === source.callId && capture.tool === "call_api" && capture.resultDigest === source.contentHash &&
+    isDeepStrictEqual(capture.source, source));
+  if (originalCaptures.length !== 1 || managedCaptures.length !== 1 || source.invocationId !== null)
+    throw forbidden("A Native Project API result receipt is unavailable");
+  const original = originalCaptures[0]!;
+  const managed = managedCaptures[0]!;
+  const projectSourceResult = nativePayloadSourceInputSchema.safeParse(original.source);
+  const managedProjectSourceResult = nativePayloadSourceInputSchema.safeParse(managed.projectSource);
+  if (!projectSourceResult.success || projectSourceResult.data.kind !== "project" ||
+    !managedProjectSourceResult.success || managedProjectSourceResult.data.kind !== "project" ||
+    !isDeepStrictEqual(managedProjectSourceResult.data, projectSourceResult.data) ||
+    !/^[0-9a-f]{64}$/.test(String(original.requestHash ?? "")) ||
+    original.projectId !== projectSourceResult.data.projectId ||
+    original.pathAndQuery !== `/api/projects/${projectSourceResult.data.projectId}` ||
+    original.turnId !== managed.turnId || original.eventSeq !== managed.eventSeq || original.attempt !== managed.attempt ||
+    typeof original.turnId !== "string" || typeof managed.turnId !== "string" ||
+    typeof original.eventSeq !== "number" || typeof original.attempt !== "number")
+    throw forbidden("A Native Project API result capture is ambiguous");
+
+  const receiptKey = createHash("sha256").update(source.callId, "utf8").digest("hex");
+  const apiReceipts = nativeSourceRecord(nativeSourceRecord(input.run.resultJson).apiToolReceipts);
+  const apiReceipt = nativeSourceRecord(apiReceipts[receiptKey]);
+  const expectedReceiptKeys = ["callId", "turnId", "eventSeq", "attempt", "operationId", "method", "pathAndQuery",
+    "requestHash", "argumentsHash", "state", "status", "resultDigest"].sort();
+  if (!isDeepStrictEqual(Object.keys(apiReceipt).sort(), expectedReceiptKeys) ||
+    apiReceipt.callId !== source.callId || apiReceipt.turnId !== original.turnId ||
+    apiReceipt.eventSeq !== original.eventSeq || apiReceipt.attempt !== original.attempt ||
+    apiReceipt.operationId !== "GET /api/projects/{id}" || apiReceipt.method !== "GET" ||
+    apiReceipt.pathAndQuery !== original.pathAndQuery || apiReceipt.requestHash !== original.requestHash ||
+    apiReceipt.state !== "completed" || apiReceipt.status !== 200 || apiReceipt.resultDigest !== source.contentHash)
+    throw forbidden("A Native Project API receipt no longer matches its exact result capture");
+
+  const associations = Array.isArray(input.profile.nativeToolCallDispatchAssociations)
+    ? input.profile.nativeToolCallDispatchAssociations.map(nativeSourceRecord).filter(association =>
+        association.callId === source.callId && association.turnId === original.turnId && association.tool === "call_api" &&
+        association.eventSeq === original.eventSeq && association.attempt === original.attempt &&
+        typeof association.argumentsHash === "string" && /^[0-9a-f]{64}$/.test(association.argumentsHash)) : [];
+  const uses = Array.isArray(input.profile.nativeAwModelWireIntents)
+    ? input.profile.nativeAwModelWireIntents.flatMap(value => {
+        const intent = nativeSourceRecord(value);
+        const responseUses = Array.isArray(intent.responseToolUses) ? intent.responseToolUses.map(nativeSourceRecord) : [];
+        return responseUses.filter(use => use.id === source.callId && typeof use.name === "string" &&
+          nativeProviderToolName(use.name) === "call_api").map(use => ({ intent, use }));
+      }) : [];
+  const dispatches = Array.isArray(input.profile.nativeModelInputDispatchIntents)
+    ? input.profile.nativeModelInputDispatchIntents.map(nativeSourceRecord).filter(dispatch =>
+        dispatch.turnId === original.turnId && dispatch.eventSeq === original.eventSeq &&
+        dispatch.attempt === original.attempt && dispatch.responsibleUserId === input.run.responsibleUserId &&
+        dispatch.continuation === false) : [];
+  if (associations.length !== 1 || uses.length !== 1 || dispatches.length !== 1 ||
+    associations[0]!.dispatchId !== dispatches[0]!.dispatchId ||
+    !/^[0-9a-f]{64}$/.test(String(uses[0]!.use.argumentsHash ?? "")) ||
+    uses[0]!.use.argumentsHash !== associations[0]!.argumentsHash ||
+    apiReceipt.argumentsHash !== associations[0]!.argumentsHash ||
+    typeof uses[0]!.intent.reservationId !== "string")
+    throw forbidden("A Native Project API result is not bound to one acknowledged provider call");
+  const [reservation] = await db.select({ status: orchestrationModelReservations.status,
+    providerResponseHash: orchestrationModelReservations.providerResponseHash }).from(orchestrationModelReservations).where(and(
+    eq(orchestrationModelReservations.companyId, input.companyId),
+    eq(orchestrationModelReservations.id, uses[0]!.intent.reservationId as string),
+    eq(orchestrationModelReservations.purpose, "worker_model"), eq(orchestrationModelReservations.status, "completed")));
+  if (reservation?.status !== "completed" || typeof reservation.providerResponseHash !== "string")
+    throw forbidden("A Native Project API provider result is unsettled");
+
+  const projectSource = projectSourceResult.data;
+  const additionalEntries = input.receipt.additionalInputs.filter(entry => entry.responsibleUserId === input.run.responsibleUserId &&
+    isDeepStrictEqual(entry.inputs, [source, projectSource]) &&
+    isDeepStrictEqual(entry.policy, { issueIds: [], projectIds: [projectSource.projectId], runIds: [], memoryIds: [],
+      foundationRevisionIds: [] }));
+  const toolResultCopies = input.receipt.additionalInputs.reduce((count, entry) => count + entry.inputs.filter(value =>
+    value.kind === "tool_result" && value.callId === source.callId).length, 0);
+  if (additionalEntries.length !== 1 || toolResultCopies !== 1 ||
+    nativeToolResultReceiptCopies(input.receipt, source).conflicting)
+    throw forbidden("A Native Project API result source entry is ambiguous");
+  await assertNativeProjectSourceCurrentInScope(db, { companyId: input.companyId, actor: input.actor,
+    projectId: projectSourceResult.data.projectId, sources: [projectSourceResult.data] }, input.scope);
+}
+
+/** Revalidate a captured Project DTO and its separately mutable workspace rows
+ * at a tool-result publication boundary. The caller holds its privacy locks. */
+export async function assertNativeProjectSourceCurrent(db: Db | Transaction, input: {
+  companyId: string; actor: AuthorizationActor; source: Extract<NativePayloadSourceInput, { kind: "project" }>;
+}): Promise<void> {
+  return inNativeSourceReadTransaction(db, async tx => {
+    const scope = nativeSourceReadScope();
+    await lockNativeSourceReadPrivacy(tx, input.companyId, scope);
+    await assertNativeProjectSourceCurrentInScope(tx, { companyId: input.companyId, actor: input.actor,
+      projectId: input.source.projectId, sources: [input.source] }, scope);
+  });
 }
 
 function nativeMemoryReviewEvidence(receipt: NativeRunInputSourceReceipt,
@@ -268,19 +431,6 @@ async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction
         !ownerHash || owner.data.owner.contentHash !== ownerHash.hash || !hashes.includes(source.contentHash))
         throw forbidden("A Native output Task source changed or was erased");
     }
-  }
-  for (const projectId of capture.sourceSet.policy.projectIds) {
-    nativeSourceReadWork(scope);
-    const [project] = await db.select({ id: projects.id, companyId: projects.companyId, updatedAt: projects.updatedAt,
-      payloadSourceSnapshot: projects.payloadSourceSnapshot, payloadSourceSnapshotInvalidated: projects.payloadSourceSnapshotInvalidated })
-      .from(projects).where(and(eq(projects.companyId, companyId), eq(projects.id, projectId)));
-    const owner = nativePayloadSourceSnapshotSchema.safeParse(project?.payloadSourceSnapshot);
-    const [ownerHash] = await db.execute<{ hash: string }>(sql`select public.aw_native_payload_body_hash('project',to_jsonb(p)) as hash
-      from projects p where p.company_id=${companyId}::uuid and p.id=${projectId}::uuid`);
-    if (!project || project.payloadSourceSnapshotInvalidated || !owner.success || owner.data.owner.kind !== "project" ||
-      !ownerHash || owner.data.owner.contentHash !== ownerHash.hash || !await canActorReadProjectPrivacy(db, actor, project) ||
-      capture.sourceSet.inputs.some(source => source.kind === "project" && source.projectId === projectId &&
-        source.sourceVersion !== project.updatedAt.toISOString())) throw forbidden("A Native output Project source is unavailable");
   }
   for (const runId of capture.sourceSet.policy.runIds) {
     nativeSourceReadWork(scope);
@@ -618,7 +768,7 @@ export async function assertNativePayloadSourceSetCurrent(db: Db | Transaction, 
 async function assertNativePayloadSourceSetCurrentInScope(db: Db | Transaction, input: {
   companyId: string; issueId: string; runId: string; actor: AuthorizationActor;
   policy: NativePayloadSourcePolicy; inputs: NativePayloadSourceInput[];
-}, scope: NativeSourceReadScope): Promise<void> {
+}, scope: NativeSourceReadScope, receiptComponentsAlreadyBound = false): Promise<void> {
   const policy = nativePayloadSourcePolicySchema.safeParse(input.policy);
   const inputs = nativePayloadSourceInputSchema.array().safeParse(input.inputs);
   if (!policy.success || !inputs.success || !await nativeSourceReaderHasCompanyAccess(db, input.companyId, input.actor))
@@ -632,7 +782,7 @@ async function assertNativePayloadSourceSetCurrentInScope(db: Db | Transaction, 
     receipt.data.binding.agentId !== run.agentId || receipt.data.binding.issueId !== input.issueId)
     throw forbidden("The Native source prefix owner is unavailable");
 
-  const matchingDispatches = receipt.data.dispatches.flatMap(prefix => prefix.inputs.flatMap(source => {
+  const matchingDispatches = receiptComponentsAlreadyBound ? [] : receipt.data.dispatches.flatMap(prefix => prefix.inputs.flatMap(source => {
     if (source.kind !== "worker_model_dispatch" || !isDeepStrictEqual(prefix.policy, policy.data)) return [];
     const preceding = prefix.inputs.filter(value => !(value.kind === "worker_model_dispatch" && isDeepStrictEqual(value, source)));
     return isDeepStrictEqual(preceding, inputs.data) ? [{ prefix, dispatch: source }] : [];
@@ -641,16 +791,17 @@ async function assertNativePayloadSourceSetCurrentInScope(db: Db | Transaction, 
   // before a managed provider request has produced a worker_model_dispatch.
   // Accept only the exact immutable receipt entry (same cumulative policy and
   // ordered inputs); this does not qualify any provider output by itself.
-  const matchingMarkerlessDispatches = receipt.data.dispatches.filter(prefix =>
+  const matchingMarkerlessDispatches = receiptComponentsAlreadyBound ? [] : receipt.data.dispatches.filter(prefix =>
     isDeepStrictEqual(prefix.policy, policy.data) &&
     !prefix.inputs.some(source => source.kind === "worker_model_dispatch") &&
     isDeepStrictEqual(prefix.inputs, inputs.data));
   const bootstrapMatches = isDeepStrictEqual(receipt.data.bootstrap.policy, policy.data) &&
     isDeepStrictEqual(receipt.data.bootstrap.inputs, inputs.data);
-  const matchingAdditionalInputs = receipt.data.additionalInputs.filter(entry =>
+  const matchingAdditionalInputs = receiptComponentsAlreadyBound ? [] : receipt.data.additionalInputs.filter(entry =>
     entry.responsibleUserId === run.responsibleUserId &&
     isDeepStrictEqual(entry.policy, policy.data) && isDeepStrictEqual(entry.inputs, inputs.data));
-  if (!matchingDispatches.length && !matchingMarkerlessDispatches.length && !bootstrapMatches && matchingAdditionalInputs.length !== 1)
+  if (!receiptComponentsAlreadyBound && !matchingDispatches.length && !matchingMarkerlessDispatches.length &&
+    !bootstrapMatches && matchingAdditionalInputs.length !== 1)
     throw forbidden("The Native source prefix is not in its original receipt");
 
   const captures = Array.isArray(profile?.nativeToolResultSourceCaptures)
@@ -719,19 +870,16 @@ async function assertNativePayloadSourceSetCurrentInScope(db: Db | Transaction, 
         throw forbidden("A Native source Task changed");
     }
   }
-  for (const projectId of policy.data.projectIds) {
-    nativeSourceReadWork(scope);
-    const [project] = await db.select({ id: projects.id, companyId: projects.companyId, updatedAt: projects.updatedAt,
-      payloadSourceSnapshot: projects.payloadSourceSnapshot, payloadSourceSnapshotInvalidated: projects.payloadSourceSnapshotInvalidated })
-      .from(projects).where(and(eq(projects.companyId, input.companyId), eq(projects.id, projectId)));
-    if (!project || !await canActorReadProjectPrivacy(db, input.actor, project)) throw forbidden("A Native source Project is unavailable");
-    const owner = nativePayloadSourceSnapshotSchema.safeParse(project.payloadSourceSnapshot);
-    const [hash] = await db.execute<{ hash: string }>(sql`select public.aw_native_payload_body_hash('project',to_jsonb(p)) as hash
-      from projects p where p.company_id=${input.companyId}::uuid and p.id=${projectId}::uuid`);
-    if (project.payloadSourceSnapshotInvalidated || !owner.success || owner.data.owner.kind !== "project" || !hash ||
-      owner.data.owner.contentHash !== hash.hash || inputs.data.some(source => source.kind === "project" &&
-        source.projectId === projectId && source.sourceVersion !== project.updatedAt.toISOString()))
-      throw forbidden("A Native source Project changed");
+  const projectSourceIds = [...new Set([...policy.data.projectIds, ...inputs.data.flatMap(source =>
+    source.kind === "project" || source.kind === "project_workspace" ? [source.projectId] : [])])];
+  for (const projectId of projectSourceIds) {
+    const projectInputs = inputs.data.filter((source): source is Extract<NativePayloadSourceInput, { kind: "project" }> =>
+      source.kind === "project" && source.projectId === projectId);
+    const workspaceInputs = inputs.data.filter((source): source is Extract<NativePayloadSourceInput, { kind: "project_workspace" }> =>
+      source.kind === "project_workspace" && source.projectId === projectId);
+    await assertNativeProjectSourceCurrentInScope(db, { companyId: input.companyId,
+      actor: input.actor, projectId, ...(projectInputs.length ? { sources: projectInputs } : {}),
+      ...(workspaceInputs.length ? { workspaceSources: workspaceInputs } : {}) }, scope);
   }
   for (const runId of policy.data.runIds) {
     nativeSourceReadWork(scope);
@@ -747,7 +895,7 @@ async function assertNativePayloadSourceSetCurrentInScope(db: Db | Transaction, 
   await assertNativeContextInputOwnersCurrent(db as Db, input.companyId, input.actor, contexts, scope);
   for (const source of inputs.data) {
     nativeSourceReadWork(scope);
-    if (source.kind === "task" || source.kind === "project" || source.kind === "context") continue;
+    if (source.kind === "task" || source.kind === "project" || source.kind === "project_workspace" || source.kind === "context") continue;
     if (source.kind === "completion_contract") {
       const [contract] = await db.select().from(completionContracts).where(and(eq(completionContracts.companyId, input.companyId),
         eq(completionContracts.id, source.contractId), eq(completionContracts.issueId, source.issueId)));
@@ -861,6 +1009,10 @@ async function assertNativePayloadSourceSetCurrentInScope(db: Db | Transaction, 
       continue;
     }
     if (source.kind === "tool_result") {
+      const projectApiResult = source.toolName === "call_api" && source.invocationId === null;
+      if ((source.invocationId === null && !projectApiResult) ||
+        (source.toolName === "call_api" && source.invocationId !== null))
+        throw forbidden("A Native tool result requires its original succeeded invocation");
       const captures = Array.isArray(profile?.nativeToolResultSourceCaptures)
         ? profile.nativeToolResultSourceCaptures.filter(value => value && typeof value === "object" && !Array.isArray(value) &&
             (value as Record<string, unknown>).callId === source.callId &&
@@ -874,9 +1026,9 @@ async function assertNativePayloadSourceSetCurrentInScope(db: Db | Transaction, 
         eq(toolInvocations.resultHash, source.contentHash))) : [];
       const matchingReceiptInputs = nativeToolResultReceiptCopies(receipt.data, source);
       if (source.runId !== input.runId || matchingReceiptInputs.exact < 1 || matchingReceiptInputs.conflicting ||
-        matchingReceiptInputs.duplicateWithinEntry || captures.length !== 1 || !invocation ||
-        invocation.issueId !== input.issueId || invocation.toolName !== source.toolName ||
-        invocation.idempotencyKey !== `aw-native-tool:${input.runId}:${source.callId}`)
+        matchingReceiptInputs.duplicateWithinEntry || captures.length !== 1 ||
+        (projectApiResult ? invocation !== undefined : !invocation || invocation.issueId !== input.issueId ||
+          invocation.toolName !== source.toolName || invocation.idempotencyKey !== `aw-native-tool:${input.runId}:${source.callId}`))
         throw forbidden("A Native historical tool result changed");
       const associations = Array.isArray(profile?.nativeToolCallDispatchAssociations)
         ? profile.nativeToolCallDispatchAssociations.filter(value => value && typeof value === "object" && !Array.isArray(value) &&
@@ -894,6 +1046,9 @@ async function assertNativePayloadSourceSetCurrentInScope(db: Db | Transaction, 
       if (associations.length !== 1 || providerUses.length !== 1 ||
         !associations.some(value => (value as Record<string, unknown>).argumentsHash === (providerUses[0] as Record<string, unknown>).argumentsHash))
         throw forbidden("A Native historical tool result dispatch changed");
+      if (projectApiResult) await assertNativeProjectApiToolResultCurrentInScope(db, {
+        companyId: input.companyId, run, profile, receipt: receipt.data, source, actor: input.actor, scope,
+      });
       const capture = captures[0]!;
       const captureToolName = typeof capture.tool === "string" ? capture.tool : "";
       const contextRead = capture.contextRead && typeof capture.contextRead === "object" && !Array.isArray(capture.contextRead)
@@ -1148,7 +1303,6 @@ export async function assertNativeMemoryOutputSnapshotCurrent(db: Db | Transacti
     consumedSourceComponents: consumed.components,
     dispatch, managedOpenCodeToolUse: { callId, toolName: "paperclip-self:remember",
       argumentsHash: use!.argumentsHash as string, responseContentHash: intentMatches[0]!.responseContentHash as string } };
-  await assertNativeModelOutputCaptureCurrent(db, input.companyId, run.nativeIssueId, capture, "paperclip-self:remember", input.actor);
   await assertNativeMemoryToolInvocationCurrent(db, { companyId: input.companyId, issueId: run.nativeIssueId,
     actor: inputActor, capture, invocationId, status: "succeeded", resultHash: invocation.resultHash, currentReader: input.actor });
 }
@@ -1200,7 +1354,6 @@ async function assertNativeManagedConsumedSourceSetCurrentUncached(db: Db | Tran
 
   const wireIntents = Array.isArray(profile?.nativeAwModelWireIntents)
     ? profile.nativeAwModelWireIntents.filter(value => value && typeof value === "object" && !Array.isArray(value)) as Record<string, unknown>[] : [];
-  const dispatchMarkers = new Map<NativeConsumedSourceComponent, NativePayloadSourceInput>();
   const componentSets: NativePayloadSourceSet[] = [];
   let inputCount = 0;
   for (const [componentIndex, component] of input.components.entries()) {
@@ -1248,7 +1401,6 @@ async function assertNativeManagedConsumedSourceSetCurrentUncached(db: Db | Tran
         reservation.providerResponseHash !== marker.responseHash ||
         markerIntents[0]!.endpoint !== "https://api.anthropic.com/v1/messages" || markerIntents[0]!.method !== "POST")
         throw forbidden("A Native dispatch component is not in its original receipt");
-      dispatchMarkers.set(component, marker);
     } else if (component.kind === "additional_input") {
       if (typeof component.responsibleUserId !== "string") throw forbidden("A Native additional input is malformed");
       const matches = receipt.data.additionalInputs.filter(value => value.responsibleUserId === component.responsibleUserId &&
@@ -1267,13 +1419,12 @@ async function assertNativeManagedConsumedSourceSetCurrentUncached(db: Db | Tran
     [...new Set(componentSets.flatMap(set => set.policy[key]))].sort()])) as NativePayloadSourcePolicy;
   if (!isDeepStrictEqual(combinedInputs, inputs.data) || !isDeepStrictEqual(combinedPolicy, policy.data))
     throw forbidden("The Native consumed source components do not match their source set");
-  for (const [index, component] of input.components.entries()) {
-    const set = componentSets[index]!;
-    const checkedInputs = component.kind === "dispatch"
-      ? set.inputs.filter(value => !isDeepStrictEqual(value, dispatchMarkers.get(component))) : set.inputs;
-    await assertNativePayloadSourceSetCurrentInScope(db, { companyId: input.companyId, issueId: input.issueId,
-      runId: input.runId, actor: input.actor, policy: set.policy, inputs: checkedInputs }, scope);
-  }
+  // Receipt components and every dispatch marker above are now structurally
+  // bound. Recheck current authorization and owners once for the exact selected
+  // union; prior journal prefixes are provenance, not separate consumption.
+  const selectedOwnerInputs = combinedInputs.filter(source => source.kind !== "worker_model_dispatch");
+  await assertNativePayloadSourceSetCurrentInScope(db, { companyId: input.companyId, issueId: input.issueId,
+    runId: input.runId, actor: input.actor, policy: combinedPolicy, inputs: selectedOwnerInputs }, scope, true);
 }
 
 /** Revalidate a managed model request's ordered, server-captured union of
@@ -1624,8 +1775,14 @@ async function assertNativeDocumentRevisionCurrentSourceAccessInScope(db: Db, in
     eq(issues.companyId, input.companyId), eq(issues.id, selected.issueId))).for("share");
   if (!parentTask || !await canActorReadIssuePrivacy(db, input.actor, parentTask))
     throw forbidden("The selected Native document Task is unavailable");
-  await assertAnalyticalContextPayloadAccess(db, input.companyId, input.actor, { issueId: selected.issueId });
   const revision = selected.revision;
+  // Protocol-v1 outputs carry their exact historical source prefix. Rechecking
+  // the parent Task against every later Context manifest would retroactively
+  // attach private sources created after this output (for example, A before R).
+  // The complete v1 snapshot below revalidates its exact owners and current
+  // readers; legacy revisions retain the broader fail-closed Task check.
+  if (revision.payloadSourceProtocolVersion !== 1)
+    await assertAnalyticalContextPayloadAccess(db, input.companyId, input.actor, { issueId: selected.issueId });
   if (revision.payloadSourceProtocolVersion === 0 || revision.payloadSourceProtocolVersion === null) {
     scope.active.delete(activeKey); scope.complete.add(completeKey); return;
   }
@@ -1676,21 +1833,14 @@ async function assertNativeDocumentRevisionCurrentSourceAccessInScope(db: Db, in
     }
   }
   const projectSourceIds = [...new Set([...policy.projectIds, ...snapshot.inputs.flatMap(source =>
-    source.kind === "project" ? [source.projectId] : [])])];
+    source.kind === "project" || source.kind === "project_workspace" ? [source.projectId] : [])])];
   for (const projectId of projectSourceIds) {
-    nativeSourceReadWork(scope);
-    const [project] = await db.select({ id: projects.id, companyId: projects.companyId,
-      updatedAt: projects.updatedAt, payloadSourceSnapshot: projects.payloadSourceSnapshot,
-      payloadSourceSnapshotInvalidated: projects.payloadSourceSnapshotInvalidated })
-      .from(projects).where(and(eq(projects.companyId, input.companyId), eq(projects.id, projectId)));
-    const [projectHash] = await db.execute<{ hash: string }>(sql`select public.aw_native_payload_body_hash('project',to_jsonb(p)) as hash
-      from projects p where p.company_id=${input.companyId}::uuid and p.id=${projectId}::uuid`);
-    const projectSnapshot = nativePayloadSourceSnapshotSchema.safeParse(project?.payloadSourceSnapshot);
-    if (!project || project.payloadSourceSnapshotInvalidated || !projectSnapshot.success || !projectHash ||
-      projectSnapshot.data.owner.kind !== "project" || projectSnapshot.data.owner.contentHash !== projectHash.hash ||
-      !await canActorReadProjectPrivacy(db, input.actor, project) ||
-      snapshot.inputs.some(source => source.kind === "project" && source.projectId === projectId && source.sourceVersion !== project.updatedAt.toISOString()))
-      throw forbidden("A Native document Project source is unavailable");
+    const projectInputs = snapshot.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "project" }> =>
+      source.kind === "project" && source.projectId === projectId);
+    const workspaceInputs = snapshot.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "project_workspace" }> =>
+      source.kind === "project_workspace" && source.projectId === projectId);
+    await assertNativeProjectSourceCurrentInScope(db, { companyId: input.companyId, actor: input.actor, projectId,
+      ...(projectInputs.length ? { sources: projectInputs } : {}), ...(workspaceInputs.length ? { workspaceSources: workspaceInputs } : {}) }, scope);
   }
   const memorySourceIds = [...new Set([...policy.memoryIds, ...snapshot.inputs.flatMap(source =>
     source.kind === "memory" ? [source.memoryId] : [])])];
@@ -2194,12 +2344,25 @@ export function directHumanPayloadSnapshotSql(kind: "issue" | "project" | "comme
     : kind === "document_revision" ? sql`jsonb_build_array((select d.issue_id::text from ${issueDocuments} d
         where d.company_id=${documentRevisions.companyId} and d.document_id=${documentRevisions.documentId}))`
     : sql`'[]'::jsonb`;
+  // Project API DTOs expose joined workspace rows as well as the projects row.
+  // Bind the source rows at the original Human Project capture, rather than
+  // treating the Project body's hash as provenance for those independent rows.
+  const projectWorkspaceInputs = kind === "project" ? sql`coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'kind','project_workspace','projectId',w.project_id::text,'workspaceId',w.id::text,
+      'sourceVersion',w.updated_at::text,
+      'contentHash',encode(sha256(convert_to(to_jsonb(w)::text,'UTF8')),'hex'))
+      order by w.id)
+    from project_workspaces w
+    where w.company_id=${projects.companyId} and w.project_id=${projects.id}
+  ),'[]'::jsonb)` : sql`'[]'::jsonb`;
   return sql<NativePayloadSourceSnapshot>`(
     with payload as (select jsonb_build_object('version',1,'owner',jsonb_build_object(
       'kind',${kind}::text,'companyId',${table.companyId}::text,'id',${table.id}::text,
       'contentHash',public.aw_native_payload_body_hash(${kind}::text,to_jsonb(${table}))),
       'policy',jsonb_build_object('issueIds',${issuePolicy},'projectIds','[]'::jsonb,'runIds','[]'::jsonb,
-        'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb) as value)
+        'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),
+      'inputs',${projectWorkspaceInputs}) as value)
     select value || jsonb_build_object('digest',encode(sha256(convert_to(value::text,'UTF8')),'hex')) from payload
   )`;
 }

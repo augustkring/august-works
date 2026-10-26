@@ -1,0 +1,7 @@
+# Human manual Memory evidence seal
+
+The forward migration `0546_human_memory_evidence_snapshot_seal.sql` keeps a prior Human-manual Memory snapshot only as an invalidated, inaccessible history witness while `memory_evidence` changes. The service reseals only user-created protocol-1 rows whose old inputs are exclusively canonical Task tuples, whose prior evidence and novel evidence remain current and readable to the current Human, and whose new snapshot preserves all old inputs and policy IDs. The same transaction updates only source vectors and the snapshot; the existing contradiction/corroboration activity stores the old and new snapshot digests. Native/Agent targets and unsupported evidence retain irreversible invalidation.
+
+The latest qualified PostgreSQL owner run used [source-pins26.json](source-pins26.json). [memory-routes26.log](memory-routes26.log) exited 0 with **6/6** tests passing. Coverage includes the positive Human contradiction seal with both exact Task tuples and policy IDs, the existing lifecycle/revoke flow, denial after source Task withdrawal, denial after deleting the actual `authSessions` row while the cached actor remains unchanged, foreign-company Task denial, and database-level rejection of dropped prior Task tuples or changed-body snapshot reuse.
+
+The route fixture also confirms the existing Human activity entry contains only old/new snapshot digests for the seal and retains the actual Human actor identity. A qualified compiler and generated migration metadata check remain in the root queue.

@@ -1,0 +1,38 @@
+Copied and verified source files 120
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+stderr | src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > qualifies only the current PG attachment bytes staged by executor admission
+attachment stage predicate diagnostic { pgCode: '42703' }
+
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts (42 tests | 1 failed | 41 skipped) 5041ms
+     × qualifies only the current PG attachment bytes staged by executor admission 1418ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > qualifies only the current PG attachment bytes staged by executor admission
+Error: native_model_input_attachment_stage_rejected
+ ❯ src/services/native-runtime/native-session-executor.ts:7559:11
+    7557|     // Keep only our finite control errors; never propagate raw DB dia…
+    7558|     const message = error instanceof Error ? error.message : "";
+    7559|     throw new Error([
+       |           ^
+    7560|       "native_session_lease_lost", "native_session_lease_ttl_invalid",
+    7561|       "native_model_input_run_binding_changed", "native_model_input_la…
+ ❯ recordNativeModelInputDispatchIntent src/services/native-runtime/native-session-executor.ts:7409:3
+ ❯ Object.onTurnInput src/services/native-runtime/native-session-executor.ts:9609:34
+ ❯ executeNativeSession ../packages/paperclip-runner/src/native-session-runtime.ts:2382:30
+ ❯ trace.measure.parentName src/services/native-runtime/native-session-executor.ts:9524:24
+ ❯ Object.measure src/services/native-runtime/native-run-trace.ts:481:14
+ ❯ executePaperclipNativeSessionWithinScope src/services/native-runtime/native-session-executor.ts:9516:14
+ ❯ executePaperclipNativeSession src/services/native-runtime/native-session-executor.ts:8496:12
+ ❯ executeVerifiedAttachmentCase src/services/native-runtime/native-model-input-dispatch.integration.test.ts:348:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 41 skipped (42)
+   Start at  02:49:20
+   Duration  17.84s (transform 9.22s, setup 117ms, import 12.55s, tests 5.04s, environment 0ms)
+

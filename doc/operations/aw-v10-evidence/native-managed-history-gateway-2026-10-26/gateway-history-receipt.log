@@ -1,0 +1,12 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/services/orchestration/worker-model-gateway.receipt.test.ts > managed OpenCode assistant history receipt binding > resolves the exact acknowledged source prefix and its provider response marker 7ms
+ ✓ src/services/orchestration/worker-model-gateway.receipt.test.ts > managed OpenCode assistant history receipt binding > leaves changed response receipts unknown 1ms
+ ✓ src/services/orchestration/worker-model-gateway.receipt.test.ts > managed OpenCode assistant history receipt binding > rejects an otherwise valid dispatch prefix containing an extra unbound source 1ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  01:48:08
+   Duration  12.57s (transform 9.00s, setup 72ms, import 12.36s, tests 10ms, environment 0ms)
+

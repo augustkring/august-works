@@ -1,0 +1,34 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+----------------·-----x-
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/memory/memory-service.test.ts > Memory Core service > allows company deletion to cascade through bindings, records, and evidence
+Error: Failed query: delete from "companies" where "companies"."id" = $1
+params: 5c4528ae-ed3d-403c-8766-9ee89c834935
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ src/services/memory/memory-service.test.ts:1457:5
+    1455|     await db.delete(companyMemberships).where(eq(companyMemberships.co…
+    1456|     await db.delete(agents).where(eq(agents.companyId, seeded.companyI…
+    1457|     await db.delete(companies).where(eq(companies.id, seeded.companyId…
+       |     ^
+    1458|
+    1459|     expect(
+
+Caused by: PostgresError: update or delete on table "companies" violates foreign key constraint "issues_company_id_companies_id_fk" on table "issues"
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23503', detail: 'Key (id)=(5c4528ae-ed3d-403c-8766-9ee89c834935) is still referenced from table "issues".', schema_name: 'public', table_name: 'issues', constraint_name: 'issues_company_id_companies_id_fk', file: 'ri_triggers.c', routine: 'ri_ReportViolation', query: 'delete from "companies" where "companies"."id" = $1', parameters: [ '5c4528ae-ed3d-403c-8766-9ee89c834935' ], args: [ '5c4528ae-ed3d-403c-8766-9ee89c834935' ], types: [ 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed | 22 skipped (24)
+   Start at  01:40:14
+   Duration  18.51s (transform 8.80s, setup 70ms, import 12.67s, tests 5.66s, environment 0ms)
+

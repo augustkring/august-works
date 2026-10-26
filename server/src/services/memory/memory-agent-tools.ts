@@ -818,6 +818,11 @@ export function memoryAgentToolsService(db: Db) {
       if (!parsed.success) {
         throw unprocessable("Invalid Memory share input", parsed.error.issues);
       }
+      if (!context.runId || !context.issueId) {
+        throw forbidden("Remembering or correcting memory requires a task-bound agent run", {
+          code: "memory_task_context_required",
+        });
+      }
       if (!context.allowShared || !context.allowPrivate) {
         throw forbidden("Sharing Memory requires private and shared Memory to be enabled", {
           code: "memory_share_disabled",

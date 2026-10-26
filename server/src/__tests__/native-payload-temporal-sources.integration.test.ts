@@ -38,8 +38,10 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
     const taskATitle = `Independent task A ${randomUUID()}`;
     const taskBTitle = `Task B copied after Context ${randomUUID()}`;
     const documentKey = `temporal-a-${randomUUID()}`;
+    const documentKeyB = `temporal-b-${randomUUID()}`;
     const ids = {
       documentA: `temporal-document-a-${randomUUID()}`,
+      documentB: `temporal-document-b-${randomUUID()}`,
       taskA: `temporal-task-a-${randomUUID()}`,
       memoryA: `temporal-memory-a-${randomUUID()}`,
       contextR: `temporal-context-r-${randomUUID()}`,
@@ -56,6 +58,8 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
         { tool: "self_remember", id: ids.memoryA, input: { scope: "company", memoryType: "outcome",
           title: "Earlier shared Memory A", content: "Memory A predates the private Context read.", idempotencyKey: randomUUID() } },
         { tool: "read_context", id: ids.contextR, input: { query: privateRootContent } },
+        { tool: "write_document", id: ids.documentB, input: { idempotencyKey: randomUUID(), key: documentKeyB,
+          title: "Private-context document B", body: "B follows the private Context read.", baseRevisionId: null } },
         { tool: "create_task", id: ids.taskB, input: { idempotencyKey: randomUUID(), title: taskBTitle,
           description: `Copied body after governed Context read: ${randomUUID()}.` } },
         { tool: "self_remember", id: ids.memoryB, input: { scope: "company", memoryType: "outcome",
@@ -127,7 +131,7 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
     const memoryCId = second.toolResults.find(value => value.toolName === "paperclip-self:remember")?.memoryId;
     if (!memoryCId) throw new Error("The second managed run omitted Memory C");
     await memories.reviewCandidate(first.companyId, memoryCId, { decision: "accept" }, first.aliceMemoryActor);
-    return { first, second, documentKey, taskATitle, taskBTitle, taskAId, taskBId, memoryAId, memoryBId,
+    return { first, second, documentKey, documentKeyB, taskATitle, taskBTitle, taskAId, taskBId, memoryAId, memoryBId,
       privateRootId, memoryCId, contextCapture, selectedItems, manifestId, assignedTaskB };
   }
 
@@ -191,6 +195,30 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
     expect(await canActorReadIssuePrivacy(db, first.bobActor, assignedTaskB)).toBe(false);
   });
 
+  it("keeps document A independent while document B carries the later private Context source", async () => {
+    const { first, documentKey, documentKeyB, privateRootId } = temporal;
+    expect(first.documents).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: documentKey, aliceHttpStatus: 200, bobHttpStatus: 200 }),
+      expect.objectContaining({ key: documentKeyB, aliceHttpStatus: 200, bobHttpStatus: 403 }),
+    ]));
+    const [documentA] = await db.select().from(issueDocuments).where(and(
+      eq(issueDocuments.companyId, first.companyId), eq(issueDocuments.issueId, first.issueId), eq(issueDocuments.key, documentKey)));
+    const [documentB] = await db.select().from(issueDocuments).where(and(
+      eq(issueDocuments.companyId, first.companyId), eq(issueDocuments.issueId, first.issueId), eq(issueDocuments.key, documentKeyB)));
+    if (!documentA || !documentB) throw new Error("The managed Native document outputs disappeared");
+    const [revisionA] = await db.select().from(documentRevisions).where(and(
+      eq(documentRevisions.companyId, first.companyId), eq(documentRevisions.documentId, documentA.documentId)));
+    const [revisionB] = await db.select().from(documentRevisions).where(and(
+      eq(documentRevisions.companyId, first.companyId), eq(documentRevisions.documentId, documentB.documentId)));
+    if (!revisionA || !revisionB) throw new Error("The managed Native document revisions disappeared");
+    expect(nativePayloadSourceSnapshotSchema.parse(revisionA.payloadSourceSnapshot).policy.memoryIds).not.toContain(privateRootId);
+    expect(nativePayloadSourceSnapshotSchema.parse(revisionB.payloadSourceSnapshot).policy.memoryIds).toContain(privateRootId);
+    await expect(assertNativeDocumentRevisionCurrentSourceAccess(db, { companyId: first.companyId,
+      issueId: first.issueId, revisionId: revisionA.id, actor: first.bobActor, requireLatest: true })).resolves.toBeUndefined();
+    await expect(assertNativeDocumentRevisionCurrentSourceAccess(db, { companyId: first.companyId,
+      issueId: first.issueId, revisionId: revisionB.id, actor: first.bobActor, requireLatest: true })).rejects.toMatchObject({ status: 403 });
+  });
+
   it("carries inherited Task B privacy into fresh Context and Memory C without a direct root Memory item", async () => {
     const { first, privateRootId, taskBId, memoryCId, contextCapture, selectedItems } = temporal;
     expect(selectedItems).toEqual(expect.arrayContaining([expect.objectContaining({
@@ -207,7 +235,7 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
   });
 
   it("erases exact Task and Memory copies while preserving independent earlier Task, Memory, and document", async () => {
-    const { first, second, documentKey, taskAId, taskBId, memoryAId, memoryBId, privateRootId, memoryCId } = temporal;
+    const { first, second, documentKey, documentKeyB, taskAId, taskBId, memoryAId, memoryBId, privateRootId, memoryCId } = temporal;
     const providerDb = join(managedOpenCodeRuntimeDirectory({ companyId: first.companyId, runId: first.runId }),
       first.nativeFinalization.normalizedSessionId, "data", "opencode", "opencode.db");
     const laterProviderDb = join(managedOpenCodeRuntimeDirectory({ companyId: second.companyId, runId: second.runId }),
@@ -242,6 +270,17 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
     expect(documentRevision?.payloadSourceSnapshotInvalidated).toBe(false);
     await expect(assertNativeDocumentRevisionCurrentSourceAccess(db, { companyId: first.companyId,
       issueId: first.issueId, revisionId: documentRevision!.id, actor: first.bobActor, requireLatest: true })).resolves.toBeUndefined();
+    const [documentLinkB] = await db.select().from(issueDocuments).where(and(
+      eq(issueDocuments.companyId, first.companyId), eq(issueDocuments.issueId, first.issueId), eq(issueDocuments.key, documentKeyB)));
+    expect(documentLinkB).toBeDefined();
+    const [documentB] = await db.select({ latestRevisionId: documents.latestRevisionId }).from(documents).where(and(
+      eq(documents.companyId, first.companyId), eq(documents.id, documentLinkB!.documentId)));
+    const [documentRevisionB] = await db.select().from(documentRevisions).where(and(
+      eq(documentRevisions.companyId, first.companyId), eq(documentRevisions.documentId, documentLinkB!.documentId),
+      eq(documentRevisions.id, documentB!.latestRevisionId!)));
+    expect(documentRevisionB?.payloadSourceSnapshotInvalidated).toBe(true);
+    await expect(assertNativeDocumentRevisionCurrentSourceAccess(db, { companyId: first.companyId,
+      issueId: first.issueId, revisionId: documentRevisionB!.id, actor: first.aliceActor, requireLatest: true })).rejects.toMatchObject({ status: 403 });
     const [retainedMemoryA] = await db.select({ deletedAt: memoryRecords.deletedAt,
       payloadSourceSnapshotInvalidated: memoryRecords.payloadSourceSnapshotInvalidated }).from(memoryRecords)
       .where(and(eq(memoryRecords.companyId, first.companyId), eq(memoryRecords.id, memoryAId)));

@@ -1,0 +1,34 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts (42 tests | 1 failed) 13767ms
+     × qualifies only the current PG attachment bytes staged by executor admission 1352ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > qualifies only the current PG attachment bytes staged by executor admission
+Error: native_model_input_dispatch_persistence_failed
+ ❯ src/services/native-runtime/native-session-executor.ts:7538:11
+    7536|     // Keep only our finite control errors; never propagate raw DB dia…
+    7537|     const message = error instanceof Error ? error.message : "";
+    7538|     throw new Error([
+       |           ^
+    7539|       "native_session_lease_lost", "native_session_lease_ttl_invalid",
+    7540|       "native_model_input_run_binding_changed", "native_model_input_la…
+ ❯ recordNativeModelInputDispatchIntent src/services/native-runtime/native-session-executor.ts:7407:3
+ ❯ Object.onTurnInput src/services/native-runtime/native-session-executor.ts:9609:34
+ ❯ executeNativeSession ../packages/paperclip-runner/src/native-session-runtime.ts:2382:30
+ ❯ trace.measure.parentName src/services/native-runtime/native-session-executor.ts:9524:24
+ ❯ Object.measure src/services/native-runtime/native-run-trace.ts:481:14
+ ❯ executePaperclipNativeSessionWithinScope src/services/native-runtime/native-session-executor.ts:9516:14
+ ❯ executePaperclipNativeSession src/services/native-runtime/native-session-executor.ts:8496:12
+ ❯ executeVerifiedAttachmentCase src/services/native-runtime/native-model-input-dispatch.integration.test.ts:348:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 41 passed (42)
+   Start at  01:55:17
+   Duration  27.63s (transform 10.23s, setup 90ms, import 13.66s, tests 13.77s, environment 0ms)
+

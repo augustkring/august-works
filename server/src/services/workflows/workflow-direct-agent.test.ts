@@ -210,10 +210,26 @@ suite("Bounded Direct Agent Call", () => {
     expect((await db.select().from(issues).where(eq(issues.id, task!.id)))[0]?.description).toBeNull();
     expect((await db.select().from(documents).where(eq(documents.id, document!.id)))[0]?.latestBody).toBe("");
     const jobs = memoryJobService(db, { runLogStore: logStore });
-    const claimed = await jobs.claimNext(new Date());
-    expect(claimed?.sourceRefJson.kind).toBe("run_log_erasure");
-    await jobs.executeClaimed(claimed!);
-    expect((await db.select().from(memoryJobs).where(eq(memoryJobs.id, claimed!.id)))[0]?.status).toBe("succeeded");
+    // Forgetting the current Task source also queues its runtime-asset cleanup.
+    // Drain that earlier outbox item before asserting the independently queued log erasure.
+    const claimedKinds: string[] = [];
+    let logErasure = null as Awaited<ReturnType<typeof jobs.claimNext>>;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const claimed = await jobs.claimNext(new Date(), seeded.companyId);
+      expect(claimed).toBeTruthy();
+      claimedKinds.push(String(claimed!.sourceRefJson.kind));
+      if (claimed!.sourceRefJson.kind === "run_log_erasure") {
+        logErasure = claimed;
+        break;
+      }
+      expect(claimed!.sourceRefJson.kind).toBe("runtime_asset_erasure");
+      await jobs.executeClaimed(claimed!);
+      expect((await db.select().from(memoryJobs).where(eq(memoryJobs.id, claimed!.id)))[0]?.status).toBe("succeeded");
+    }
+    expect(claimedKinds).toEqual(["runtime_asset_erasure", "run_log_erasure"]);
+    expect(logErasure).toBeTruthy();
+    await jobs.executeClaimed(logErasure!);
+    expect((await db.select().from(memoryJobs).where(eq(memoryJobs.id, logErasure!.id)))[0]?.status).toBe("succeeded");
     await expect(logStore.read(handle)).rejects.toMatchObject({ status: 404 });
     await expect(fs.readFile(path.join(logDir, handle.logRef))).rejects.toMatchObject({ code: "ENOENT" });
     await fs.rm(logDir, { recursive: true, force: true });

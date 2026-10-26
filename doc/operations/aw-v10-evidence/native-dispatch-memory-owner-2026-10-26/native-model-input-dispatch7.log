@@ -1,0 +1,51 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts (42 tests | 2 failed) 13699ms
+     × qualifies only the current PG attachment bytes staged by executor admission 1221ms
+     × rejects a database update that silently suppresses the dispatch intent 56ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > qualifies only the current PG attachment bytes staged by executor admission
+Error: native_model_input_dispatch_persistence_failed
+ ❯ src/services/native-runtime/native-session-executor.ts:7538:11
+    7536|     // Keep only our finite control errors; never propagate raw DB dia…
+    7537|     const message = error instanceof Error ? error.message : "";
+    7538|     throw new Error([
+       |           ^
+    7539|       "native_session_lease_lost", "native_session_lease_ttl_invalid",
+    7540|       "native_model_input_run_binding_changed", "native_model_input_la…
+ ❯ recordNativeModelInputDispatchIntent src/services/native-runtime/native-session-executor.ts:7407:3
+ ❯ Object.onTurnInput src/services/native-runtime/native-session-executor.ts:9609:34
+ ❯ executeNativeSession ../packages/paperclip-runner/src/native-session-runtime.ts:2382:30
+ ❯ trace.measure.parentName src/services/native-runtime/native-session-executor.ts:9524:24
+ ❯ Object.measure src/services/native-runtime/native-run-trace.ts:481:14
+ ❯ executePaperclipNativeSessionWithinScope src/services/native-runtime/native-session-executor.ts:9516:14
+ ❯ executePaperclipNativeSession src/services/native-runtime/native-session-executor.ts:8496:12
+ ❯ executeVerifiedAttachmentCase src/services/native-runtime/native-model-input-dispatch.integration.test.ts:348:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > rejects a database update that silently suppresses the dispatch intent
+AssertionError: expected [Function] to throw error including 'native_model_input_dispatch_persisten…' but got 'native_model_input_dispatch_intents_n…'
+
+Expected: "native_model_input_dispatch_persistence_failed"
+Received: "native_model_input_dispatch_intents_not_returned"
+
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts:1286:90
+    1284|       for each row execute function public.${sql.identifier(functionNa…
+    1285|     try {
+    1286|       await expect(recordNativeModelInputDispatchIntent(dispatchArgs(s…
+       |                                                                                          ^
+    1287|         .rejects.toThrow("native_model_input_dispatch_persistence_fail…
+    1288|       const [run] = await db.select().from(heartbeatRuns).where(eq(hea…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 40 passed (42)
+   Start at  01:48:21
+   Duration  27.87s (transform 10.32s, setup 70ms, import 13.97s, tests 13.70s, environment 0ms)
+

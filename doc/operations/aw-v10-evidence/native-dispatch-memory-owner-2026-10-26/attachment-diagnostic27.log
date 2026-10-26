@@ -1,0 +1,42 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+-------------stderr | src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > qualifies only the current PG attachment bytes staged by executor admission
+attachment stage predicate diagnostic {
+  matched: false,
+  capture_hash: true,
+  base_task: false,
+  launch: true,
+  attempt_live: false
+}
+
+x----------------------------
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > qualifies only the current PG attachment bytes staged by executor admission
+Error: native_model_input_attachment_stage_rejected
+ ❯ src/services/native-runtime/native-session-executor.ts:7537:11
+    7535|     // Keep only our finite control errors; never propagate raw DB dia…
+    7536|     const message = error instanceof Error ? error.message : "";
+    7537|     throw new Error([
+       |           ^
+    7538|       "native_session_lease_lost", "native_session_lease_ttl_invalid",
+    7539|       "native_model_input_run_binding_changed", "native_model_input_la…
+ ❯ recordNativeModelInputDispatchIntent src/services/native-runtime/native-session-executor.ts:7406:3
+ ❯ Object.onTurnInput src/services/native-runtime/native-session-executor.ts:9587:34
+ ❯ executeNativeSession ../packages/paperclip-runner/src/native-session-runtime.ts:2382:30
+ ❯ trace.measure.parentName src/services/native-runtime/native-session-executor.ts:9502:24
+ ❯ Object.measure src/services/native-runtime/native-run-trace.ts:481:14
+ ❯ executePaperclipNativeSessionWithinScope src/services/native-runtime/native-session-executor.ts:9494:14
+ ❯ executePaperclipNativeSession src/services/native-runtime/native-session-executor.ts:8474:12
+ ❯ executeVerifiedAttachmentCase src/services/native-runtime/native-model-input-dispatch.integration.test.ts:349:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 41 skipped (42)
+   Start at  02:27:52
+   Duration  18.79s (transform 9.35s, setup 76ms, import 12.71s, tests 5.85s, environment 0ms)
+

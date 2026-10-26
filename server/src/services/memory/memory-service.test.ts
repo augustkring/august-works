@@ -1454,6 +1454,9 @@ describePg("Memory Core service", () => {
     await db.delete(projects).where(eq(projects.companyId, seeded.companyId));
     await db.delete(companyMemberships).where(eq(companyMemberships.companyId, seeded.companyId));
     await db.delete(agents).where(eq(agents.companyId, seeded.companyId));
+    // Canonical source Tasks are owned by the issue service, not by Memory.
+    // Remove them through their owner before testing the Memory cascade.
+    await db.delete(issues).where(eq(issues.companyId, seeded.companyId));
     await db.delete(companies).where(eq(companies.id, seeded.companyId));
 
     expect(
