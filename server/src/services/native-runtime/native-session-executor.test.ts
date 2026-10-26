@@ -6278,6 +6278,45 @@ describe("native warm session supervision", () => {
     );
   });
 
+  it("withholds a fresh-envelope closure when a prior warm-session transcript is retained", async () => {
+    const sharedSession = { close: vi.fn(async () => undefined) };
+    const base = {
+      ...execution,
+      binding: { ...execution.binding, executionWorkspaceId: "workspace" },
+      workspace: { cwd: "/tmp/warm-native-source", repoUrl: null, repoRef: null, branchName: null },
+      session: { normalizedSessionId: "session-warm-native-source", driverKind: "codex_app_server" as const,
+        protocolVersion: 1 as const, lifecyclePolicy: { mode: "warm" as const, idleTimeoutMs: 60_000 } },
+    } as NativeExecutionInputV1;
+    const second = { ...base, binding: { ...base.binding, runId: "run-native-warm-source-second" } };
+    const result = {
+      result: { summary: "completed" }, terminal: { runTerminalState: "succeeded" }, turnId: "turn-warm-source",
+      normalizedSessionId: "session-warm-native-source", providerSessionId: "provider-warm-native-source",
+      driverKind: "test", driverVersion: "1", nativeEventCount: 1, highestContiguousSourceSeq: 1, usage: null,
+    };
+    const preparedSourceClosure = { sentinel: "current-envelope-only" } as unknown as NonNullable<
+      Parameters<typeof executePaperclipNativeSession>[0]["bootstrapSourceClosure"]>;
+    let observedSourceClosure: unknown = preparedSourceClosure;
+    state.execute.mockReset()
+      .mockImplementationOnce(async options => {
+        options.onSession?.(sharedSession);
+        return result;
+      })
+      .mockImplementationOnce(async options => {
+        expect(options.existingSession).toBe(sharedSession);
+        const prepared = await options.prepareTurn({ message: { role: "user", text: "fresh second-run envelope" } });
+        observedSourceClosure = prepared?.sourceClosure;
+        return result;
+      });
+
+    await executePaperclipNativeSession({ db: leaseDb(base), execution: base,
+      runnerInstanceId: "runner", bootstrapSourceClosure: preparedSourceClosure });
+    await executePaperclipNativeSession({ db: leaseDb(second), execution: second,
+      runnerInstanceId: "runner", bootstrapSourceClosure: preparedSourceClosure,
+      prepareTurnSourceClosure: async turnInput => ({ turnInput, sourceClosure: preparedSourceClosure }) });
+    expect(observedSourceClosure).toBeUndefined();
+    await closeIdleWarmNativeSessionsForRestart();
+  });
+
   it("does not offer a quarantined warm session to the next run", async () => {
     const close = vi.fn(async () => undefined);
     const quarantinedSession = { close };

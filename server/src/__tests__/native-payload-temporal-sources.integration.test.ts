@@ -5,14 +5,17 @@ import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { companyMemberships, contextManifestItems, createDb, documents, documentRevisions, issueDocuments, issues, memoryJobs, memoryRecords } from "@paperclipai/db";
+import { companyMemberships, contextManifestItems, createDb, documents, documentRevisions, issueDocuments, issues, memoryJobs, memoryRecords, toolInvocations } from "@paperclipai/db";
 import { nativePayloadSourceSnapshotSchema } from "@paperclipai/shared";
 import { canActorReadIssuePrivacy } from "../services/authorization.js";
 import { issueService } from "../services/issues.js";
 import { memoryService } from "../services/memory/memory-service.js";
 import { memoryJobService } from "../services/memory/memory-jobs.js";
 import { assertNativeDocumentRevisionCurrentSourceAccess, assertNativeMemoryOutputSnapshotCurrent } from "../services/native-direct-input.js";
+import { lockAnalyticalCompany } from "../services/analytical-privacy.js";
+import { lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
 import { managedOpenCodeRuntimeDirectory } from "../services/native-runtime/runtime-asset-retention.js";
+import { assertScopedNativeMemoryReplayReceiptCurrent } from "../services/tool-gateway.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { makeFixtureTreeWritable, runManagedNativeOpenCodeFixture } from "./helpers/managed-native-opencode-e2e-fixture.js";
 
@@ -232,6 +235,53 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
     const memories = memoryService(db);
     expect((await memories.get(first.companyId, memoryCId, first.aliceMemoryActor))?.record.id).toBe(memoryCId);
     expect(await memories.get(first.companyId, memoryCId, first.bobMemoryActor)).toBeNull();
+  });
+
+  it("replays only a current Native Memory output when its input roots remain readable", async () => {
+    const { first, second, memoryBId, memoryCId, privateRootId, taskBId } = temporal;
+    const memories = memoryService(db);
+    const verifyReceipt = async (producer: typeof first, callId: string, recordId: string, expectStoredResult = true) => {
+      const [invocation] = await db.select().from(toolInvocations).where(and(
+        eq(toolInvocations.companyId, producer.companyId), eq(toolInvocations.runId, producer.runId),
+        eq(toolInvocations.idempotencyKey, `aw-native-tool:${producer.runId}:${callId}`),
+        eq(toolInvocations.toolName, "paperclip-self:remember")));
+      expect(invocation).toBeDefined();
+      const result = invocation?.workflowResultJson;
+      if (expectStoredResult) {
+        expect(result).toMatchObject({ data: { record: { id: recordId } } });
+        const [output] = await db.select({ payloadSourceSnapshot: memoryRecords.payloadSourceSnapshot }).from(memoryRecords)
+          .where(and(eq(memoryRecords.companyId, producer.companyId), eq(memoryRecords.id, recordId)));
+        const snapshot = nativePayloadSourceSnapshotSchema.parse(output?.payloadSourceSnapshot);
+        await expect(assertNativeMemoryOutputSnapshotCurrent(db, { companyId: producer.companyId, recordId,
+          snapshot, actor: producer.aliceMemoryActor.authorizationActor })).resolves.toBeUndefined();
+      }
+      await db.transaction(async rawTx => {
+        const tx = rawTx as unknown as typeof db;
+        await lockAnalyticalCompany(tx, producer.companyId);
+        await lockMemoryPrivacy(tx, producer.companyId);
+        await assertScopedNativeMemoryReplayReceiptCurrent(tx, { companyId: producer.companyId,
+          runId: producer.runId, agentId: producer.agentId, issueId: producer.issueId, callId,
+          invocationId: invocation!.id, argumentsHash: invocation!.argumentsHash!, result });
+      });
+      return invocation!;
+    };
+
+    const memoryBCallId = first.toolResults.find(value => value.memoryId === memoryBId)?.callId;
+    if (!memoryBCallId) throw new Error("The Native Memory B call receipt is unavailable");
+    await verifyReceipt(first, memoryBCallId, memoryBId);
+    expect((await memories.get(first.companyId, privateRootId, first.aliceMemoryActor))?.record.id).toBe(privateRootId);
+    await memories.revoke(first.companyId, memoryBId, { reason: "The Human revoked this output." }, first.aliceMemoryActor);
+    expect((await memories.get(first.companyId, privateRootId, first.aliceMemoryActor))?.record.id).toBe(privateRootId);
+    await expect(verifyReceipt(first, memoryBCallId, memoryBId)).rejects.toMatchObject({
+      reasonCode: "native_memory_capture_invalid",
+    });
+
+    await verifyReceipt(second, second.toolResults.find(value => value.memoryId === memoryCId)!.callId, memoryCId);
+    expect(await memories.get(first.companyId, taskBId, first.aliceMemoryActor)).not.toBeNull();
+    await memories.forget(first.companyId, memoryCId, second.aliceMemoryActor);
+    expect(await memories.get(first.companyId, taskBId, first.aliceMemoryActor)).not.toBeNull();
+    await expect(verifyReceipt(second, second.toolResults.find(value => value.memoryId === memoryCId)!.callId, memoryCId, false))
+      .rejects.toMatchObject({ reasonCode: "native_memory_capture_invalid" });
   });
 
   it("erases exact Task and Memory copies while preserving independent earlier Task, Memory, and document", async () => {

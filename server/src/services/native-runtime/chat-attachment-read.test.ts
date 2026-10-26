@@ -345,11 +345,20 @@ describe("native same-conversation historical attachment reading", () => {
     });
     expect(result).not.toHaveProperty("objectKey");
     expect(result.workspaceRelativePath).toMatch(/^\.paperclip-inbound\//);
+    const [owner] = await db.select().from(issueAttachments).where(eq(issueAttachments.id, sourceAttachmentId));
+    expect(reader.nativeReadResultCapture(result)).toMatchObject({
+      sourceSet: null,
+      observedSourceInputs: [{ kind: "attachment", issueId, attachmentId: sourceAttachmentId, commentId: sourceCommentId,
+        assetId: owner!.assetId, sha256: createHash("sha256").update(sourceBody).digest("hex"),
+        byteSize: sourceBody.length, disposition: "delivered" }],
+    });
+    expect(reader.nativeReadResultCapture({ ...result })).toBeNull();
     const stagedPath = path.join(workspaceRoot, result.workspaceRelativePath);
     expect(await readFile(stagedPath)).toEqual(sourceBody);
     expect(await db.select().from(issueAttachments)).toEqual(before);
     expect(await db.select().from(chatPublications)).toEqual([]);
     await reader.close();
+    expect(reader.nativeReadResultCapture(result)).toBeNull();
     expect((await stat(stagedPath)).size).toBe(0);
     expect(() => reader.read(selection())).toThrow("scope_closed");
   });

@@ -24,6 +24,7 @@ import type {
 } from "@paperclipai/shared";
 import { agentExecutionScopeSchema, crossCompanyPolicySchema, type AgentExecutionScope } from "@paperclipai/shared";
 import { conflict, forbidden, HttpError, unprocessable } from "../../errors.js";
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { learningAssetRoots,retainLearnedAssetsInContext } from "../learning/learning-assets.js";
 import { memoryPayloadVisible, canActorReadMemorySources, lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { modelLineage, observationLineage } from "../memory/derived-memory.js";
@@ -119,6 +120,10 @@ export async function revalidateStoredContextManifestSources(db: Db, input: {
   companyId: string; manifestId: string; agentId: string; runId?: string | null; actor: AuthorizationActor;
 }) {
   if (!is(db, PgTransaction)) throw forbidden("Delegated Context source review requires its active native transaction.");
+  // Acquire shared source locks before pinning the run or any owner rows. Event
+  // publication uses analytical -> Memory -> run, so source review must match.
+  await lockAnalyticalCompany(db, input.companyId);
+  await lockMemoryPrivacy(db, input.companyId);
   const [manifest] = await db.select({ id: contextManifests.id, agentId: contextManifests.agentId,
     runId: contextManifests.runId, issueId: contextManifests.issueId }).from(contextManifests).where(and(
     eq(contextManifests.companyId, input.companyId), eq(contextManifests.id, input.manifestId))).limit(1);

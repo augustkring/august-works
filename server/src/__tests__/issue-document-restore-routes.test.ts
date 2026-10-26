@@ -27,6 +27,7 @@ const mockAgentService = vi.hoisted(() => ({
 
 const mockLogActivity = vi.hoisted(() => vi.fn(async () => undefined));
 const mockAnalyticalPayloadAccess = vi.hoisted(() => vi.fn());
+const mockNativeDocumentSourceAccess = vi.hoisted(() => vi.fn(async () => undefined));
 const mockHeartbeatService = vi.hoisted(() => ({
   wakeup: vi.fn(async () => undefined),
   reportRunActivity: vi.fn(async () => undefined),
@@ -78,6 +79,10 @@ const systemDocument = {
 };
 
 function registerModuleMocks() {
+  vi.doMock("../services/native-direct-input.js", async () => ({
+    ...(await vi.importActual<typeof import("../services/native-direct-input.js")>("../services/native-direct-input.js")),
+    assertNativeDocumentRevisionCurrentSourceAccess: mockNativeDocumentSourceAccess,
+  }));
   vi.doMock("../services/analytical-context-authority.js", () => ({
     assertAnalyticalContextPayloadAccess: mockAnalyticalPayloadAccess,
   }));
@@ -159,9 +164,14 @@ function registerModuleMocks() {
 
 function createRunContextDb(contextSnapshot: Record<string, unknown>) {
   return {
+    execute: vi.fn(async () => [{ ids: [], overflow: false }]),
     select: vi.fn(() => ({
       from: vi.fn(() => ({
         where: vi.fn(() => ({
+          orderBy: vi.fn(() => ({
+            then: async (resolve: (rows: unknown[]) => unknown) => resolve([]),
+          })),
+          limit: vi.fn(async () => [{ id: issueId, companyId, projectId: null, parentId: null, assigneeAgentId: null, assigneeUserId: null, status: "todo" }]),
           then: async (resolve: (rows: unknown[]) => unknown) =>
             resolve([{
               id: "run-1",
@@ -169,6 +179,20 @@ function createRunContextDb(contextSnapshot: Record<string, unknown>) {
               agentId: "agent-1",
               contextSnapshot,
             }]),
+        })),
+      })),
+    })),
+  };
+}
+
+function createEmptyIssueRouteDb() {
+  return {
+    execute: vi.fn(async () => [{ ids: [], overflow: false }]),
+    select: vi.fn(() => ({
+      from: vi.fn(() => ({
+        where: vi.fn(() => ({
+          orderBy: vi.fn(async () => []),
+          limit: vi.fn(async () => [{ id: issueId, companyId, projectId: null, parentId: null, assigneeAgentId: null, assigneeUserId: null, status: "todo" }]),
         })),
       })),
     })),
@@ -183,7 +207,7 @@ async function createApp(
     source: "local_implicit",
     isInstanceAdmin: false,
   },
-  db: unknown = {},
+  db: unknown = createEmptyIssueRouteDb(),
 ) {
   const [{ issueRoutes }, { errorHandler }] = await Promise.all([
     vi.importActual<typeof import("../routes/issues.js")>("../routes/issues.js"),
@@ -218,6 +242,7 @@ describe("issue document revision routes", () => {
     registerModuleMocks();
     vi.clearAllMocks();
     mockAnalyticalPayloadAccess.mockReset().mockResolvedValue(undefined);
+    mockNativeDocumentSourceAccess.mockReset().mockResolvedValue(undefined);
     mockAccessService.decide.mockResolvedValue({
       allowed: true,
       action: "issue:read",

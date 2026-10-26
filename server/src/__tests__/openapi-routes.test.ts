@@ -53,6 +53,7 @@ const apiPrefixes: Record<string, string> = {
   "agent-runtime-fabric.ts": "/api",
   "cross-company-context.ts": "/api",
   "organization.ts": "/api",
+  "jev-decisions.ts": "/api",
   "playbooks.ts": "/api",
   "portfolio.ts": "/api",
   "project-control.ts": "/api",

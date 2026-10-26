@@ -86,6 +86,9 @@ importers:
       agentmail:
         specifier: ^0.5.14
         version: 0.5.20
+      axe-core:
+        specifier: 4.13.0
+        version: 4.13.0
       cross-env:
         specifier: ^10.1.0
         version: 10.1.0

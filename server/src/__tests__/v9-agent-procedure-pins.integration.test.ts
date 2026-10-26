@@ -181,6 +181,10 @@ const support = await getEmbeddedPostgresTestSupport();
     const loaded = await agentRuntimeFabricService(db).loadPlaybook({ type: "agent", source: "agent_jwt", companyId: f.f.home,
       agentId: f.agent.id, runId: f.run.id, onBehalfOfUserId: f.f.userId, ignoreInstanceAdmin: true }, f.f.home, f.run.id, f.playbook!.playbookId);
     expect(loaded.markdown).toBe(f.playbook!.body);
+    const [runAfterRead] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, f.run.id));
+    expect(runAfterRead!.runnerProfileJson).toMatchObject({ nativeRuntimeProcedureReadObservations: [
+      { kind: "playbook_revision", resultDigest: expect.stringMatching(/^[a-f0-9]{64}$/), sourceQualified: false, source: null },
+    ] });
   });
   it("captures exact authored sources and retained Memory roots for the combined runtime input", async () => {
     const f = await installed(true, true, true);

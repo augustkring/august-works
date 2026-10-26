@@ -30,9 +30,12 @@ import { assertNativeDocumentRevisionCurrentSourceAccess } from "../native-direc
 import { issueService } from "../issues.js";
 import { issueThreadInteractionService } from "../issue-thread-interactions.js";
 import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
-import { recordNativeModelInputDispatchIntent, recordNativeModelInputDispatchAcknowledgement, recordNativeToolCallDispatchAssociation, recordNativeDocumentToolResultIntent } from "./native-session-executor.js";
+import { nativeSha256 } from "./canonical.js";
+import { recordNativeModelInputDispatchIntent, recordNativeModelInputDispatchAcknowledgement, recordNativeToolCallDispatchAssociation,
+  recordNativeDocumentToolResultIntent, recordNativeInputToolResultIntent } from "./native-session-executor.js";
 import { PROCESS_START_REQUESTED } from "../native-local-process-stop.js";
 import { currentNativeControllerIdentity } from "./native-restart-recovery.js";
+import { nativeRunInputSourceReceiptSchema } from "@paperclipai/shared";
 import { createAssignedMcpTools } from "./assigned-mcp-tools.js";
 import type { ToolGatewayService } from "../tool-gateway.js";
 import { READ_CURRENT_WAKE_COMMENTS_TOOL_NAME } from "./current-wake-comments.js";
@@ -82,13 +85,14 @@ describe("PaperclipRunnerToolAuthority", () => {
     await db.insert(heartbeatRunEvents).values({ companyId: fixture.companyId, runId: fixture.runId,
       agentId: fixture.agentId, seq: eventSeq, eventType: PROCESS_START_REQUESTED,
       payload: { fixture: "actual native launch event" } });
-    const bindCall = async (tool: string, callId: string, turnId: string, expectAssociation = true) => {
+    const bindCall = async (tool: string, callId: string, turnId: string, expectAssociation = true,
+      argumentsHash?: string) => {
       const turnInput = { message: { role: "user" as const, text: `actual native input ${turnId}` } };
       const binding = { db, runId: fixture.runId, companyId: fixture.companyId, issueId: fixture.issueId,
         agentId: fixture.agentId, leaseOwner, attempt, controller, eventSeq };
       const dispatchId = await recordNativeModelInputDispatchIntent({ ...binding, turnInput });
       await recordNativeModelInputDispatchAcknowledgement({ ...binding, dispatchId, turnInput, turnId });
-      const associationRecorded = await recordNativeToolCallDispatchAssociation({ ...binding, turnId, callId, tool });
+      const associationRecorded = await recordNativeToolCallDispatchAssociation({ ...binding, turnId, callId, tool, argumentsHash });
       if (expectAssociation) expect(associationRecorded).toBe(true);
       return { tool, callId, turnId, dispatchId, eventSeq, attempt };
     };
@@ -294,6 +298,88 @@ describe("PaperclipRunnerToolAuthority", () => {
       onDocumentRead: async capture => { captures.push(capture); },
     });
     expect(captures).toHaveLength(1);
+  });
+
+  it("captures actual get_task_history comments but leaves missing retained roots unknown", async () => {
+    const fixture = await seedDocumentReader();
+    const [comment] = await db.insert(issueComments).values({ companyId: fixture.companyId,
+      issueId: fixture.issueId, body: "A real retained history body", authorUserId: userId }).returning();
+    const captures: Array<{
+      turnId: string | null; callId: string; tool: string; resultDigest: string;
+      sourceSet: { policy: unknown; inputs: unknown[] } | null; observedSourceInputs: unknown[];
+    }> = [];
+    const result = await fixture.authority.execute({ tool: "get_task_history", callId: "history-read-real",
+      arguments: {} }, { nativeToolCallIdentity: { tool: "get_task_history", callId: "history-read-real", turnId: "history-turn" },
+      onNativeInputToolResult: async capture => { captures.push(capture); } }) as { comments: Array<{ id: string; body: string }> };
+    expect(result.comments).toEqual([expect.objectContaining({ id: comment!.id, body: "A real retained history body" })]);
+    expect(captures).toHaveLength(1);
+    expect(captures[0]).toMatchObject({ turnId: "history-turn", callId: "history-read-real", tool: "get_task_history",
+      resultDigest: nativeSha256(result), sourceSet: null,
+      observedSourceInputs: [expect.objectContaining({ kind: "comment", issueId: fixture.issueId,
+        commentId: comment!.id, contentHash: nativeSha256({ body: "A real retained history body", presentation: null, metadata: null }) })] });
+    await db.update(issueComments).set({ body: "Changed after capture", updatedAt: new Date(Date.now() + 1_000) })
+      .where(eq(issueComments.id, comment!.id));
+    const [changed] = await db.select({ sourceVersion: sql<string>`extract(epoch from ${issueComments.updatedAt})::text` })
+      .from(issueComments).where(eq(issueComments.id, comment!.id));
+    expect(changed!.sourceVersion).not.toBe(captures[0]!.observedSourceInputs[0] &&
+      (captures[0]!.observedSourceInputs[0] as { sourceVersion?: string }).sourceVersion);
+  });
+
+  it("marks only an actually empty bounded task-history read as a complete source-free result", async () => {
+    const fixture = await seedDocumentReader();
+    const captures: Array<{ sourceSet: { policy: { issueIds: string[] }; inputs: unknown[] } | null;
+      resultDigest: string }> = [];
+    const result = await fixture.authority.execute({ tool: "get_task_history", callId: "empty-history-read", arguments: {} }, {
+      nativeToolCallIdentity: { tool: "get_task_history", callId: "empty-history-read", turnId: "empty-history-turn" },
+      onNativeInputToolResult: async capture => { captures.push(capture); },
+    });
+    expect(result).toEqual({ comments: [] });
+    expect(captures).toEqual([{ sourceSet: { policy: { issueIds: [fixture.issueId], projectIds: [], runIds: [],
+      memoryIds: [], foundationRevisionIds: [] }, inputs: [] }, resultDigest: nativeSha256(result) }]);
+  });
+
+  it("persists a complete Native history read only against its acknowledged dispatch and exact result bytes", async () => {
+    const fixture = await seedDispatchBoundAuthority();
+    const args = {}, argumentsHash = nativeSha256(args);
+    const call = await fixture.bindCall("get_task_history", "native-empty-history", "native-empty-history-turn", true, argumentsHash);
+    const [runBefore] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
+    const policy = { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] };
+    const initialBody = { version: 1 as const,
+      binding: { companyId: fixture.companyId, runId: fixture.runId, agentId: fixture.agentId,
+        responsibleUserId: runBefore!.responsibleUserId!, issueId: fixture.issueId },
+      bootstrap: { executionInputDigest: "a".repeat(64), policy, inputs: [] },
+      dispatches: [], additionalInputs: [] };
+    const receipt = nativeRunInputSourceReceiptSchema.parse({ ...initialBody, digest: "b".repeat(64) });
+    await db.update(heartbeatRuns).set({ runnerProfileJson: { ...runBefore!.runnerProfileJson, nativeInputSourceReceipt: receipt } })
+      .where(eq(heartbeatRuns.id, fixture.runId));
+    let captured: Parameters<typeof recordNativeInputToolResultIntent>[0]["capture"] | null = null;
+    const result = await fixture.authority.execute({ tool: call.tool, callId: call.callId, arguments: args }, {
+      nativeToolCallIdentity: call,
+      onNativeInputToolResult: async capture => {
+        captured = capture;
+        await recordNativeInputToolResultIntent({ ...fixture.documentCaptureBinding, capture });
+      },
+    });
+    expect(result).toEqual({ comments: [] });
+    expect(captured).toMatchObject({ turnId: call.turnId, callId: call.callId, tool: call.tool,
+      argumentsHash, resultDigest: nativeSha256(result), sourceSet: { policy: {
+        issueIds: [fixture.issueId], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [],
+      }, inputs: [] } });
+    const [stored] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
+    const profile = stored!.runnerProfileJson!;
+    expect(profile.nativeToolResultSourceCaptures).toEqual([expect.objectContaining({
+      callId: call.callId, turnId: call.turnId, tool: call.tool, argumentsHash,
+      resultDigest: nativeSha256(result), nativeReadResult: true,
+      source: { kind: "tool_result", runId: fixture.runId, callId: call.callId,
+        toolName: call.tool, invocationId: null, contentHash: nativeSha256(result) },
+    })]);
+    const updatedReceipt = nativeRunInputSourceReceiptSchema.parse(profile.nativeInputSourceReceipt);
+    expect(updatedReceipt.additionalInputs).toContainEqual({ responsibleUserId: runBefore!.responsibleUserId,
+      policy: captured!.sourceSet!.policy, inputs: [expect.objectContaining({ kind: "tool_result", callId: call.callId,
+        invocationId: null }),] });
+    const forged = { ...captured!, result: { comments: [{ id: "forged", body: "not returned" }] } };
+    await expect(recordNativeInputToolResultIntent({ ...fixture.documentCaptureBinding, capture: forged }))
+      .rejects.toThrow("native_tool_result_capture_persistence_failed");
   });
 
   it("does not let a legacy document revision bypass its parent Task privacy check", async () => {

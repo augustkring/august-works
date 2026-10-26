@@ -56,6 +56,7 @@ import {
   issueDocuments,
   issueThreadInteractions,
   issues,
+  memoryRecords,
   projects,
   toolActionRequests,
   toolActionDeliveries,
@@ -395,6 +396,76 @@ export function bindManagedNativeMemoryOutputCapture(context: ScopedToolGatewayC
 }
 function nativeMemoryOutputCapture(context: ScopedToolGatewayContext | undefined) {
   return context ? nativeMemoryOutputCaptures.get(context) : undefined;
+}
+
+/** Revalidate the canonical result and its Native Memory owner before a scoped idempotent replay. */
+export async function assertScopedNativeMemoryReplayReceiptCurrent(db: Db, input: {
+  companyId: string; runId: string; agentId: string; issueId: string; callId: string;
+  invocationId: string; argumentsHash: string; result: unknown;
+}): Promise<{ recordId: string; snapshotDigest: string }> {
+  const resultRecord = asRecord(input.result);
+  const resultData = asRecord(resultRecord?.data);
+  const resultMemory = asRecord(resultData?.record);
+  const recordId = typeof resultMemory?.id === "string" ? resultMemory.id : null;
+  const resultSummary = validateToolContent({ value: input.result, direction: "result",
+    sensitiveMode: "redact", promptInjectionMode: "block" }).summary;
+  if (!recordId || !resultSummary.sha256) throw new ToolGatewayHttpError(403,
+    "Managed Memory replay receipt is unavailable", "native_memory_capture_invalid");
+  const [transactionStart] = await db.execute<{ transactionId: string }>(sql`select txid_current()::text as "transactionId"`);
+  if (!transactionStart?.transactionId) throw new ToolGatewayHttpError(403,
+    "Managed Memory replay transaction is unavailable", "native_memory_capture_invalid");
+  const [invocation] = await db.select({ status: toolInvocations.status, argumentsHash: toolInvocations.argumentsHash,
+    resultHash: toolInvocations.resultHash, workflowResultJson: toolInvocations.workflowResultJson })
+    .from(toolInvocations).where(and(eq(toolInvocations.id, input.invocationId),
+      eq(toolInvocations.companyId, input.companyId), eq(toolInvocations.runId, input.runId),
+      eq(toolInvocations.agentId, input.agentId), eq(toolInvocations.issueId, input.issueId),
+      eq(toolInvocations.idempotencyKey, `aw-native-tool:${input.runId}:${input.callId}`),
+      eq(toolInvocations.toolName, "paperclip-self:remember"))).for("share");
+  if (!invocation || invocation.status !== "succeeded" || invocation.argumentsHash !== input.argumentsHash ||
+    invocation.resultHash !== resultSummary.sha256 || invocation.workflowResultJson === null ||
+    nativeSha256(invocation.workflowResultJson) !== nativeSha256(input.result))
+    throw new ToolGatewayHttpError(403, "Managed Memory replay receipt is no longer current",
+      "native_memory_capture_invalid");
+  const { memoryPayloadVisible } = await import("./memory/memory-privacy.js");
+  const [output] = await db.select({ deletedAt: memoryRecords.deletedAt, revokedAt: memoryRecords.revokedAt,
+    expiresAt: memoryRecords.expiresAt,
+    retentionState: memoryRecords.retentionState, reviewState: memoryRecords.reviewState,
+    createdByActorType: memoryRecords.createdByActorType, createdByActorId: memoryRecords.createdByActorId,
+    sourceRunIds: memoryRecords.sourceRunIds, sourceIssueIds: memoryRecords.sourceIssueIds,
+    sourceProvenanceQualified: memoryRecords.sourceProvenanceQualified,
+    payloadSourceProtocolVersion: memoryRecords.payloadSourceProtocolVersion,
+    payloadSourceSnapshot: memoryRecords.payloadSourceSnapshot,
+    payloadSourceSnapshotInvalidated: memoryRecords.payloadSourceSnapshotInvalidated,
+    metadata: memoryRecords.metadata }).from(memoryRecords).where(and(
+      eq(memoryRecords.companyId, input.companyId), eq(memoryRecords.id, recordId), memoryPayloadVisible(),
+      isNull(memoryRecords.revokedAt), or(isNull(memoryRecords.expiresAt), gt(memoryRecords.expiresAt, sql`clock_timestamp()`)),
+      eq(memoryRecords.retentionState, "active"), inArray(memoryRecords.reviewState, ["pending", "accepted"]),
+      eq(memoryRecords.payloadSourceSnapshotInvalidated, false), eq(memoryRecords.payloadSourceProtocolVersion, 1))).for("share");
+  const metadata = output?.metadata && typeof output.metadata === "object" && !Array.isArray(output.metadata)
+    ? output.metadata as Record<string, unknown> : null;
+  const { nativePayloadSourceSnapshotSchema } = await import("@paperclipai/shared");
+  const snapshot = nativePayloadSourceSnapshotSchema.safeParse(output?.payloadSourceSnapshot);
+  if (!output || output.deletedAt || output.revokedAt || output.expiresAt && output.expiresAt.getTime() <= Date.now() ||
+    output.retentionState !== "active" ||
+    !["pending", "accepted"].includes(output.reviewState) || output.createdByActorType !== "agent" ||
+    output.createdByActorId !== input.agentId || !output.sourceProvenanceQualified ||
+    output.payloadSourceProtocolVersion !== 1 || output.payloadSourceSnapshotInvalidated ||
+    metadata?.nativeManagedMemoryInvocationId !== input.invocationId ||
+    metadata.nativeManagedMemoryCallId !== input.callId || metadata.nativeManagedMemoryArgumentsHash !== input.argumentsHash ||
+    !output.sourceRunIds.includes(input.runId) || !output.sourceIssueIds.includes(input.issueId) ||
+    !snapshot.success || snapshot.data.owner.kind !== "memory_record" ||
+    snapshot.data.owner.companyId !== input.companyId || snapshot.data.owner.id !== recordId)
+    throw new ToolGatewayHttpError(403, "Managed Memory output is no longer current",
+      "native_memory_capture_invalid");
+  const [owner] = await db.execute<{ valid: boolean }>(sql`select
+    public.aw_native_payload_body_hash('memory_record',to_jsonb(m))=${snapshot.data.owner.contentHash}
+      and encode(sha256(convert_to((m.payload_source_snapshot-'digest')::text,'UTF8')),'hex')=${snapshot.data.digest} as valid
+    from ${memoryRecords} m where m.company_id=${input.companyId}::uuid and m.id=${recordId}::uuid`);
+  const [transactionEnd] = await db.execute<{ transactionId: string }>(sql`select txid_current()::text as "transactionId"`);
+  if (!owner?.valid || transactionEnd?.transactionId !== transactionStart.transactionId)
+    throw new ToolGatewayHttpError(403, "Managed Memory output changed during replay validation",
+      "native_memory_capture_invalid");
+  return { recordId, snapshotDigest: snapshot.data.digest };
 }
 
 export class ToolGatewayHttpError extends Error {
@@ -10962,11 +11033,12 @@ export function createToolGatewayService(
       }
       const revalidateScopedMemoryReplay = async (replay: { invocationId: string; argumentsHash: string; result: unknown }) => {
         if (!scopedMemoryCapture) return;
-        if (!session.issueId) throw new ToolGatewayHttpError(403,
+        const replayIssueId = session.issueId;
+        const replayAgentId = session.agentId;
+        const replayRunId = session.runId;
+        if (!replayIssueId) throw new ToolGatewayHttpError(403,
           "Managed Memory replay has no current Task binding", "native_memory_capture_invalid");
-        const resultSummary = validateToolContent({ value: replay.result, direction: "result",
-          sensitiveMode: "redact", promptInjectionMode: "block" }).summary;
-        if (!replay.argumentsHash || !resultSummary.sha256) throw new ToolGatewayHttpError(403,
+        if (!replay.argumentsHash || !replayAgentId || !replayRunId) throw new ToolGatewayHttpError(403,
           "Managed Memory replay receipt is unavailable", "native_memory_capture_invalid");
         const { assertNativeModelOutputCaptureCurrent } = await import("./native-direct-input.js");
         const { lockAnalyticalCompany } = await import("./analytical-privacy.js");
@@ -10975,20 +11047,31 @@ export function createToolGatewayService(
           const tx = rawTx as unknown as Db;
           await lockAnalyticalCompany(tx, session.companyId);
           await lockMemoryPrivacy(tx, session.companyId);
-          const [current] = await tx.select({ status: toolInvocations.status, argumentsHash: toolInvocations.argumentsHash,
-            resultHash: toolInvocations.resultHash, workflowResultJson: toolInvocations.workflowResultJson })
-            .from(toolInvocations).where(and(eq(toolInvocations.id, replay.invocationId),
-              eq(toolInvocations.companyId, session.companyId), eq(toolInvocations.runId, session.runId!),
-              eq(toolInvocations.agentId, session.agentId!), eq(toolInvocations.issueId, session.issueId!),
-              eq(toolInvocations.idempotencyKey, `aw-native-tool:${scopedMemoryCapture.runId}:${scopedMemoryCapture.managedOpenCodeToolUse!.callId}`),
-              eq(toolInvocations.toolName, "paperclip-self:remember"))).for("share");
-          if (!current || current.status !== "succeeded" || current.argumentsHash !== replay.argumentsHash ||
-            current.resultHash !== resultSummary.sha256 || current.workflowResultJson === null ||
-            nativeSha256(current.workflowResultJson) !== nativeSha256(replay.result))
-            throw new ToolGatewayHttpError(403, "Managed Memory replay receipt is no longer current",
-              "native_memory_capture_invalid");
-          await assertNativeModelOutputCaptureCurrent(tx, session.companyId, session.issueId!, scopedMemoryCapture,
+          const outputReceipt = await assertScopedNativeMemoryReplayReceiptCurrent(tx, { companyId: session.companyId,
+            runId: replayRunId, agentId: replayAgentId, issueId: replayIssueId,
+            callId: scopedMemoryCapture.managedOpenCodeToolUse!.callId,
+            invocationId: replay.invocationId, argumentsHash: replay.argumentsHash,
+            result: replay.result });
+          // Recheck consumed inputs after output receipt reads, then apply the output's current reader policy.
+          await assertNativeModelOutputCaptureCurrent(tx, session.companyId, replayIssueId, scopedMemoryCapture,
             "paperclip-self:remember");
+          const { canActorReadMemorySources, memoryPayloadVisible } = await import("./memory/memory-privacy.js");
+          const currentReader = currentSessionMemoryActor(session);
+          if (!currentReader || !await canActorReadMemorySources(tx, session.companyId, currentReader, outputReceipt.recordId))
+            throw new ToolGatewayHttpError(403, "Managed Memory output destination is no longer readable",
+              "native_memory_capture_invalid");
+          const [stillCurrent] = await tx.select({ payloadSourceSnapshot: memoryRecords.payloadSourceSnapshot })
+            .from(memoryRecords).where(and(eq(memoryRecords.companyId, session.companyId),
+              eq(memoryRecords.id, outputReceipt.recordId), memoryPayloadVisible(), isNull(memoryRecords.revokedAt),
+              or(isNull(memoryRecords.expiresAt), gt(memoryRecords.expiresAt, sql`clock_timestamp()`)),
+              eq(memoryRecords.retentionState, "active"), inArray(memoryRecords.reviewState, ["pending", "accepted"]),
+              eq(memoryRecords.payloadSourceSnapshotInvalidated, false), eq(memoryRecords.payloadSourceProtocolVersion, 1)))
+            .for("share");
+          const { nativePayloadSourceSnapshotSchema } = await import("@paperclipai/shared");
+          const finalSnapshot = nativePayloadSourceSnapshotSchema.safeParse(stillCurrent?.payloadSourceSnapshot);
+          if (!finalSnapshot.success || finalSnapshot.data.digest !== outputReceipt.snapshotDigest)
+            throw new ToolGatewayHttpError(403, "Managed Memory output changed during replay validation",
+              "native_memory_capture_invalid");
         });
       };
       if (scopedContext && tool.name === "paperclip-self:remember" && !scopedMemoryCapture) {

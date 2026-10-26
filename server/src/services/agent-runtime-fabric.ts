@@ -1,12 +1,14 @@
 import { admitOrchestrationHeartbeat, hasOrchestrationPlan } from "./orchestration/orchestration-admission.js";
 import { assertV7Enabled } from "./v7-authorization.js";
 import { learningAssetRoots,retainLearnedAssetsInContext,assertRuntimeSkillSourceRetained } from "./learning/learning-assets.js";
+import { assertLearnedAssetAnalyticalSources } from "./learning/learning-analytical-sources.js";
 import { lockMemoryPrivacy,heartbeatMemoryPayloadRetained } from "./memory/memory-privacy.js";
 import {assertAnalyticalContextPayloadAccess} from "./analytical-context-authority.js";
 import {lockAnalyticalCompany} from "./analytical-privacy.js";
+import { createHash, randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
-import { agentIdentities, agents, companies, heartbeatRuns, issues, contextManifestItems, contextManifestMemoryRoots, companySkillTestRuns, companySkillEvalRuns, agentExecutionManifests, agentExecutionManifestItems, agentExecutionAuthorizations, agentExecutionScopeRequests, companySkillUsageEvents, type Db } from "@paperclipai/db";
-import { agentExecutionManifestSchema, agentExecutionScopeSchema, createExecutionScopeRequestSchema, v5FeatureEnabled, type AgentExecutionScope, type NativePayloadSourceInput } from "@paperclipai/shared";
+import { agentIdentities, agents, companies, heartbeatRuns, issues, contextManifestItems, contextManifestMemoryRoots, companySkills, companySkillVersions, playbookDocuments, documentRevisions, companySkillTestRuns, companySkillEvalRuns, agentExecutionManifests, agentExecutionManifestItems, agentExecutionAuthorizations, agentExecutionScopeRequests, companySkillUsageEvents, type Db } from "@paperclipai/db";
+import { agentExecutionManifestSchema, agentExecutionScopeSchema, createExecutionScopeRequestSchema, nativePayloadSourceInputSchema, nativeRunInputSourceReceiptSchema, v5FeatureEnabled, type AgentExecutionScope, type NativePayloadSourceInput, type NativePayloadSourcePolicy } from "@paperclipai/shared";
 import type { z } from "zod";
 import { readAuthoredAgentDefinition } from "./agents/authored-definition.js";
 import { resolveAuthoringProcedures } from "./agents/authoring-procedures.js";
@@ -26,6 +28,136 @@ import { playbookResolverService } from "./playbook-resolver.js";
 import {playbookService} from "./playbooks.js";
 import { logActivity } from "./activity-log.js";
 import { jevSkillSuggestionService, type JevSkillSuggestionProfile } from "./jev-skill-suggestions.js";
+import { nativeSha256 } from "./native-runtime/canonical.js";
+
+function sourceRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+const EMPTY_RUNTIME_SOURCE_POLICY: NativePayloadSourcePolicy = {
+  issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [],
+};
+
+/** Record an on-demand procedure body at its original authenticated read owner.
+ * The observation is committed before the HTTP response, so a lost response
+ * conservatively retains the source. It never claims provider transport or
+ * exact token consumption. */
+async function recordRuntimeProcedureDelivery(tx: Db, input: {
+  actor: AuthorizationActor; companyId: string; runId: string; agentId: string;
+  source: Extract<NativePayloadSourceInput, { kind: "skill_version" | "playbook_revision" }>;
+  resultDigest: string;
+}): Promise<void> {
+  const actor = input.actor;
+  if (actor.type !== "agent" || actor.companyId !== input.companyId || actor.agentId !== input.agentId ||
+    actor.runId !== input.runId || !actor.onBehalfOfUserId || !/^[0-9a-f]{64}$/.test(input.resultDigest))
+    throw forbidden("Runtime procedure delivery requires the current authenticated run principal");
+
+  // Company privacy locks precede original source and Run row locks.
+  await lockAnalyticalCompany(tx, input.companyId);
+  await lockMemoryPrivacy(tx, input.companyId);
+  if (input.source.kind === "skill_version") {
+    const [owner] = await tx.select({ id: companySkills.id }).from(companySkills)
+      .where(and(eq(companySkills.companyId, input.companyId), eq(companySkills.id, input.source.skillId))).for("share");
+    const [version] = await tx.select({ id: companySkillVersions.id }).from(companySkillVersions)
+      .where(and(eq(companySkillVersions.companyId, input.companyId), eq(companySkillVersions.id, input.source.versionId),
+        eq(companySkillVersions.companySkillId, input.source.skillId))).for("share");
+    if (!owner || !version) throw forbidden("The pinned Skill source is unavailable");
+  } else {
+    const [owner] = await tx.select({ id: playbookDocuments.id }).from(playbookDocuments)
+      .where(and(eq(playbookDocuments.companyId, input.companyId), eq(playbookDocuments.id, input.source.playbookId),
+        eq(playbookDocuments.approvedRevisionId, input.source.revisionId), eq(playbookDocuments.status, "approved"))).for("share");
+    const [revision] = await tx.select({ id: documentRevisions.id }).from(documentRevisions)
+      .where(and(eq(documentRevisions.companyId, input.companyId), eq(documentRevisions.id, input.source.revisionId))).for("share");
+    if (!owner || !revision) throw forbidden("The pinned Playbook source is unavailable");
+  }
+  const [run] = await tx.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId),
+    eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.status, "running"))).for("update");
+  if (!run || run.responsibleUserId !== actor.onBehalfOfUserId)
+    throw forbidden("The pinned procedure read outlived its authenticated Run");
+  // Legacy Fabric Runs retain ordinary read behavior. They have no Native
+  // source receipt to extend and therefore remain outside source-qualified
+  // derivative capture.
+  if (run.runtimeMode !== "native") return;
+
+  let verifiedBody: string | null = null;
+  let completeSelfContainedClosure = false;
+  if (input.source.kind === "skill_version") {
+    const retained = await assertRuntimeSkillSourceRetained(tx, input.companyId, actor, input.source.skillId, input.source.versionId);
+    verifiedBody = retained.version.fileInventory.find(file => file.path === "SKILL.md")?.content ?? null;
+    const learned = await assertLearnedAssetAnalyticalSources(tx, input.companyId, "skill_version", input.source.versionId, actor, "task");
+    const roots = await learningAssetRoots(tx, input.companyId, "skill_version", input.source.versionId, "v5_runtime_execution", actor, "task");
+    completeSelfContainedClosure = learned.cycles.length === 0 && roots.length === 0;
+  } else {
+    const current = await playbookService(tx).runtimeRevision(actor, input.companyId, input.source.playbookId,
+      input.source.revisionId, "task");
+    verifiedBody = current.revision.body;
+    const learned = await assertLearnedAssetAnalyticalSources(tx, input.companyId, "document_revision", input.source.revisionId, actor, "task");
+    const roots = await learningAssetRoots(tx, input.companyId, "document_revision", input.source.revisionId, "v5_runtime_execution", actor, "task");
+    completeSelfContainedClosure = learned.cycles.length === 0 && roots.length === 0;
+  }
+  const verifiedContentHash = verifiedBody === null ? null : input.source.kind === "skill_version"
+    ? nativeSha256(verifiedBody) : createHash("sha256").update(verifiedBody, "utf8").digest("hex");
+  if (verifiedBody === null || verifiedContentHash !== input.source.contentHash)
+    throw forbidden("The pinned procedure changed before its body was returned");
+
+  const profile = sourceRecord(run.runnerProfileJson);
+  const rawObservations = profile.nativeRuntimeProcedureReadObservations;
+  if (rawObservations !== undefined && !Array.isArray(rawObservations))
+    throw conflict("Runtime procedure read evidence is malformed");
+  const observations = Array.isArray(rawObservations) ? rawObservations : [];
+  if (observations.some(value => {
+    const prior = sourceRecord(value);
+    const keys = Object.keys(prior).sort();
+    const source = nativePayloadSourceInputSchema.safeParse(prior.source);
+    return keys.some(key => !["observationId", "kind", "resultDigest", "sourceQualified", "source"].includes(key)) ||
+      typeof prior.observationId !== "string" || !/^[0-9a-f-]{36}$/i.test(prior.observationId) ||
+      prior.kind !== "skill_version" && prior.kind !== "playbook_revision" ||
+      typeof prior.resultDigest !== "string" || !/^[0-9a-f]{64}$/.test(prior.resultDigest) ||
+      typeof prior.sourceQualified !== "boolean" ||
+      (prior.sourceQualified ? !source.success || source.data.kind !== prior.kind : prior.source !== null);
+  }) || new Set(observations.map(value => sourceRecord(value).observationId)).size !== observations.length)
+    throw conflict("Runtime procedure read evidence is malformed");
+  if (observations.length >= 256) throw conflict("Runtime procedure read evidence exceeds its bound");
+  const receipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+  let nextReceipt = receipt.success ? receipt.data : null;
+  let sourceQualified = false;
+  if (completeSelfContainedClosure && run.nativeInputSourceProtocolVersion === 1 && receipt.success &&
+    receipt.data.binding.companyId === input.companyId && receipt.data.binding.runId === input.runId &&
+    receipt.data.binding.agentId === input.agentId && receipt.data.binding.issueId === run.nativeIssueId &&
+    run.nativeIssueId !== null && receipt.data.binding.responsibleUserId === run.responsibleUserId) {
+    const exactInputs: NativePayloadSourceInput[] = [input.source];
+    const alreadyRecorded = receipt.data.additionalInputs.filter(entry => entry.responsibleUserId === run.responsibleUserId &&
+      nativeSha256({ policy: entry.policy, inputs: entry.inputs }) === nativeSha256({ policy: EMPTY_RUNTIME_SOURCE_POLICY, inputs: exactInputs }));
+    if (alreadyRecorded.length === 0) {
+      const { digest: _digest, ...body } = receipt.data;
+      const unsigned = { ...body, additionalInputs: [...body.additionalInputs, {
+        responsibleUserId: run.responsibleUserId!, policy: EMPTY_RUNTIME_SOURCE_POLICY, inputs: exactInputs,
+      }] };
+      const [hash] = await tx.execute<{ digest: string }>(sql`select encode(sha256(convert_to((${JSON.stringify(unsigned)}::jsonb)::text,'UTF8')),'hex') as digest`);
+      const candidate = { ...unsigned, digest: hash?.digest };
+      const parsed = nativeRunInputSourceReceiptSchema.safeParse(candidate);
+      if (!parsed.success) throw conflict("Runtime procedure source receipt exceeds its bound");
+      nextReceipt = parsed.data;
+    }
+    sourceQualified = true;
+  }
+  const nextObservations = [...observations, { observationId: randomUUID(), kind: input.source.kind,
+    resultDigest: input.resultDigest, sourceQualified,
+    ...(sourceQualified ? { source: input.source } : { source: null }) }];
+  if (Buffer.byteLength(JSON.stringify(nextObservations), "utf8") > 512 * 1024)
+    throw conflict("Runtime procedure read evidence exceeds its bound");
+  const [stored] = await tx.update(heartbeatRuns).set({ runnerProfileJson: {
+    ...profile, nativeRuntimeProcedureReadObservations: nextObservations,
+    ...(nextReceipt && sourceQualified ? { nativeInputSourceReceipt: nextReceipt } : {}),
+  }, ...(nextReceipt && sourceQualified ? { nativeInputSourceProtocolVersion: 1 } : {}), updatedAt: new Date() })
+    .where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.status, "running")))
+    .returning({ profile: heartbeatRuns.runnerProfileJson });
+  const retained = sourceRecord(stored?.profile);
+  if (!Array.isArray(retained.nativeRuntimeProcedureReadObservations) ||
+    nativeSha256(retained.nativeRuntimeProcedureReadObservations) !== nativeSha256(nextObservations) ||
+    sourceQualified && !nativeRunInputSourceReceiptSchema.safeParse(retained.nativeInputSourceReceipt).success)
+    throw conflict("Runtime procedure read evidence could not be retained");
+}
 
 export function agentRuntimeFabricService(db: Db, decisionShadow?: { sourceSha: string; profiles?: readonly JevSkillSuggestionProfile[] }) {
   async function currentPayload(actor:AuthorizationActor,companyId:string,runId:string,erased=false,reader:Db=db){
@@ -73,6 +205,10 @@ export function agentRuntimeFabricService(db: Db, decisionShadow?: { sourceSha: 
         if(!body)throw notFound("Pinned Skill body not found");
         if(Buffer.byteLength(body,"utf8")>32000)throw unprocessable("This Skill exceeds the on-demand body budget; split it into bounded procedures");
         await tx.insert(companySkillUsageEvents).values({companyId,runId,agentId:run.agentId,skillId:pin.skillId,skillVersionId:pin.versionId,stage:"loaded",selectionReason:pin.selection}).onConflictDoNothing();
+        const source=nativePayloadSourceInputSchema.parse({kind:"skill_version",skillId:pin.skillId,versionId:pin.versionId,skillKey:pin.key,contentHash:nativeSha256(body)});
+        if(source.kind!=="skill_version")throw forbidden("Pinned Skill source capture is unavailable");
+        await recordRuntimeProcedureDelivery(tx,{actor,companyId,runId,agentId:run.agentId,source,
+          resultDigest:nativeSha256({skillId:pin.skillId,versionId:pin.versionId,markdown:body})});
         return {skillId:pin.skillId,versionId:pin.versionId,markdown:body};
       });
     },
@@ -95,6 +231,11 @@ export function agentRuntimeFabricService(db: Db, decisionShadow?: { sourceSha: 
           if(coverage[0]?.covered!==cycle.analyticalSourceCount)throw forbidden("The complete pinned Playbook Source was not retained",{code:"analytical_source_access_lost"});
         }
         if(Buffer.byteLength(row.revision.body,"utf8")>32000)throw unprocessable("This Playbook exceeds the on-demand body budget; split it into bounded procedures");
+        const playbookSource=nativePayloadSourceInputSchema.parse({kind:"playbook_revision",playbookId:pin.playbookId,revisionId:pin.revisionId,
+          contentHash:createHash("sha256").update(row.revision.body,"utf8").digest("hex")});
+        if(playbookSource.kind!=="playbook_revision")throw forbidden("Pinned Playbook source capture is unavailable");
+        await recordRuntimeProcedureDelivery(tx,{actor,companyId,runId,agentId:run.agentId,source:playbookSource,
+          resultDigest:nativeSha256({playbookId:pin.playbookId,revisionId:pin.revisionId,markdown:row.revision.body})});
         return {playbookId:pin.playbookId,revisionId:pin.revisionId,markdown:row.revision.body};
       });
     },

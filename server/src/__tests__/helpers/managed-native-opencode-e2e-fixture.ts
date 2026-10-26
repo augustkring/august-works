@@ -281,6 +281,9 @@ export async function runManagedNativeOpenCodeFixture(input: {
   let contextProbeSamples = 0;
   let contextPostCaptureProbeStartedAt: number | null = null;
   let contextPostCaptureProbeSamples = 0;
+  let finalExchangeProbeTimer: ReturnType<typeof setInterval> | undefined;
+  let finalExchangeProbeStartedAt: number | null = null;
+  let finalExchangeProbeSamples = 0;
   const contextTransactionOwners = new Set<string>();
   const contextTransactionOwnerFrames = new Map<string, string[]>();
   const ownerDb = db as typeof db & { transaction: typeof db.transaction };
@@ -288,7 +291,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
   const instrumentedRootTransaction = (async (...args: Parameters<typeof db.transaction>) => {
     const [callback, config] = args;
     return originalRootTransaction(async tx => {
-      if (contextProbeCallId || ownerFrameDiagnosticsEnabled) {
+      if (contextProbeCallId || finalExchangeProbeStartedAt !== null || ownerFrameDiagnosticsEnabled) {
         const stack = new Error().stack ?? "";
         const serviceFrames = stack.split("\n").map(line => line.trim())
           .map(line => /server\/src\/services\/([A-Za-z0-9_./-]+\.ts):(\d+):\d+/.exec(line))
@@ -301,7 +304,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
         contextTransactionOwners.add(ownerLabel);
         if (!contextTransactionOwnerFrames.has(ownerLabel) && contextTransactionOwnerFrames.size < 160)
           contextTransactionOwnerFrames.set(ownerLabel, serviceFrames);
-        if (contextProbeCallId)
+        if (contextProbeCallId || finalExchangeProbeStartedAt !== null)
           await tx.execute(sql`select set_config('application_name', ${ownerLabel}, true)`);
       }
       return callback(tx);
@@ -807,6 +810,20 @@ export async function runManagedNativeOpenCodeFixture(input: {
     app.use(express.json({ limit: "2mb" }));
     app.use(async (req, res, next) => {
       brokerRequests.push(`${req.method} ${req.path}`);
+      if (diagnosticsEnabled && req.method === "POST" && req.path === "/runtime-tools/model/v1/messages" &&
+        responseCount >= 5 && finalExchangeProbeTimer === undefined) {
+        if (contextProbeTimer) clearInterval(contextProbeTimer);
+        contextProbeTimer = undefined;
+        contextProbeCallId = null;
+        finalExchangeProbeStartedAt = Date.now();
+        finalExchangeProbeSamples = 0;
+        diagnostics.push(`managed final exchange probe started: ${JSON.stringify({ providerFetchCount: responseCount })}`);
+        finalExchangeProbeTimer = setInterval(() => {
+          finalExchangeProbeSamples += 1;
+          void inspectPostgresWaits();
+        }, 250);
+        void inspectPostgresWaits();
+      }
       res.on("finish", () => brokerRequests.push(`response ${req.method} ${req.path} ${res.statusCode}`));
       const originalJson = res.json.bind(res);
       res.json = ((body: unknown) => {
@@ -1301,6 +1318,9 @@ export async function runManagedNativeOpenCodeFixture(input: {
             contextPostCaptureElapsedMs: contextPostCaptureProbeStartedAt === null ? null :
               Math.max(0, Date.now() - contextPostCaptureProbeStartedAt),
             contextPostCaptureSample: contextPostCaptureProbeStartedAt === null ? null : contextPostCaptureProbeSamples,
+            finalExchangeProbeElapsedMs: finalExchangeProbeStartedAt === null ? null :
+              Math.max(0, Date.now() - finalExchangeProbeStartedAt),
+            finalExchangeProbeSample: finalExchangeProbeStartedAt === null ? null : finalExchangeProbeSamples,
             providerFetchCount: responseCount,
             contextInvocationStatus: contextInvocation?.status ?? (contextProbeCallId ? "not_started" : null),
             contextResultCapturePresent,
@@ -1335,6 +1355,15 @@ export async function runManagedNativeOpenCodeFixture(input: {
             if (contextProbeTimer) clearInterval(contextProbeTimer);
             contextProbeTimer = undefined;
             contextProbeCallId = null;
+          }
+          if (finalExchangeProbeStartedAt !== null && finalExchangeProbeTimer &&
+            (Date.now() - finalExchangeProbeStartedAt >= 15_000 || finalExchangeProbeSamples >= 60)) {
+            diagnostics.push(`managed final exchange probe stopped: ${JSON.stringify({
+              reason: "bounded_window", elapsedMs: Date.now() - finalExchangeProbeStartedAt,
+              samples: finalExchangeProbeSamples, providerFetchCount: responseCount,
+            })}`);
+            clearInterval(finalExchangeProbeTimer);
+            finalExchangeProbeTimer = undefined;
           }
         }
       } catch (error) {
@@ -1921,6 +1950,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
       for (const timer of processTreeTimers) clearInterval(timer);
       if (pgMonitorTimer) clearInterval(pgMonitorTimer);
       if (contextProbeTimer) clearInterval(contextProbeTimer);
+      if (finalExchangeProbeTimer) clearInterval(finalExchangeProbeTimer);
       if (contextInvocationWatchTimer) clearInterval(contextInvocationWatchTimer);
       await pgMonitor.end({ timeout: 1 });
       broker.closeAllConnections();

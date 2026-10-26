@@ -949,6 +949,7 @@ export function workerModelGateway(db: Db, options: Options) {
     reasonCode = "worker_model_unsettled",
   ) {
     await withV7ActivityTransaction(db, async (tx, publications) => {
+      await lockAnalyticalCompany(tx as unknown as Db, companyId);
       await lockMemoryPrivacy(tx, companyId);
       const [plan] = await tx
         .select()

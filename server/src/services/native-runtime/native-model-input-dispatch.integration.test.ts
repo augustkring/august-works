@@ -871,6 +871,10 @@ describe("native model input dispatch intent", () => {
     const checkCurrent = () => assertNativePayloadSourceSetCurrent(db, { companyId, issueId: createdIssue.id, runId: seeded.runId,
       actor: nativeActor, policy: sourceSet!.policy, inputs: sourceSet!.inputs });
     await expect(checkCurrent()).resolves.toBeUndefined();
+    await expect(assertNativePayloadSourceSetCurrent(db, { companyId, issueId: createdIssue.id, runId: seeded.runId,
+      actor: nativeActor, policy: sourceSet!.policy,
+      inputs: sourceSet!.inputs.filter(source => source.kind !== "interaction") }))
+      .rejects.toThrow("The Native source prefix is not in its original receipt");
     await interactionService.submitItemVerdicts({ id: createdIssue.id, companyId, status: "in_progress" }, interactionId,
       { verdicts: [{ id: "two", verdict: "reject", reason: "Needs revision" }] }, { userId });
     await expect(checkCurrent()).rejects.toThrow("A Native source Interaction changed or was erased");

@@ -239,7 +239,7 @@ jobs:
             spec: tests/e2e/aw-v10-support.spec.ts
           - journey: V10 authenticated agent chat
             config: tests/e2e/aw-v10-agent-chat.config.ts
-            spec: tests/e2e/agent-chat-*.spec.ts
+            spec: 'tests/e2e/agent-chat-(sessions|projects)\.spec\.ts'
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

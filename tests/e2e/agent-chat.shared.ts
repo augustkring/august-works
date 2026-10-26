@@ -25,28 +25,35 @@ export async function setup(request: APIRequestContext, page?: Page) {
   const pageContext = page?.context();
   const config = page ? process.env.PAPERCLIP_E2E_SERVER_CONFIG : undefined;
   const authenticated = !!page && process.env.PAPERCLIP_E2E_AUTH_MODE === "authenticated";
+  const nativeChat = !!page && process.env.PAPERCLIP_E2E_NATIVE_CHAT === "true";
   const baseURL = process.env.PAPERCLIP_API_URL
     ?? `http://127.0.0.1:${process.env.PAPERCLIP_E2E_PORT ?? "3199"}`;
   if (authenticated) {
     if (!config || !baseURL) throw new Error("An isolated authenticated E2E server is required for agent chat");
     request = page!.request;
     instanceControlRequest = request;
-    const stamp = Date.now();
-    const email = `agent-chat-${stamp}@test.invalid`;
-    await json(await request.post("/api/auth/sign-up/email", { data: {
-      name: "Authenticated agent-chat reviewer",
-      email,
-      password: "Agent-chat browser test passphrase 2026!",
-    } }));
-    const invitation = execFileSync("pnpm", [
-      "--filter", "@paperclipai/db", "exec", "tsx",
-      path.resolve("packages/db/scripts/create-auth-bootstrap-invite.ts"),
-      "--config", config,
-      "--base-url", baseURL,
-    ], { encoding: "utf8", env: process.env, stdio: ["ignore", "pipe", "pipe"] }).trim();
-    const invitationToken = new URL(invitation).pathname.split("/").at(-1);
-    if (!invitationToken) throw new Error("Authenticated agent-chat bootstrap invitation was malformed");
-    await json(await request.post(`/api/invites/${invitationToken}/accept`, { data: { requestType: "human" } }));
+    // The isolated instance has one bootstrap Human claim. Reuse that account
+    // across this serial browser lane instead of attempting a second claim in
+    // every test; each test still creates an independent company and agents.
+    const email = `agent-chat-owner-${process.env.PAPERCLIP_E2E_PORT ?? "3199"}@test.invalid`;
+    const password = "Agent-chat browser test passphrase 2026!";
+    const login = await request.post("/api/auth/sign-in/email", { data: { email, password } });
+    if (login.status() === 401 || login.status() === 404) {
+      await json(await request.post("/api/auth/sign-up/email", { data: {
+        name: "Authenticated agent-chat reviewer", email, password,
+      } }));
+      const invitation = execFileSync("pnpm", [
+        "--filter", "@paperclipai/db", "exec", "tsx",
+        path.resolve("packages/db/scripts/create-auth-bootstrap-invite.ts"),
+        "--config", config,
+        "--base-url", baseURL,
+      ], { encoding: "utf8", env: process.env, stdio: ["ignore", "pipe", "pipe"] }).trim();
+      const invitationToken = new URL(invitation).pathname.split("/").at(-1);
+      if (!invitationToken) throw new Error("Authenticated agent-chat bootstrap invitation was malformed");
+      await json(await request.post(`/api/invites/${invitationToken}/accept`, { data: { requestType: "human" } }));
+    } else if (!login.ok()) {
+      throw new Error(`Authenticated agent-chat login failed: ${login.status()} ${await login.text()}`);
+    }
   }
   const company = await json(
     await request.post("/api/companies", {
@@ -78,7 +85,8 @@ export async function setup(request: APIRequestContext, page?: Page) {
   );
   await json(
     await instanceControlRequest.patch("/api/instance/settings/experimental", {
-      data: { enableAgentChat: true, enableClassicTaskInterface: false },
+      data: { enableAgentChat: true, enableClassicTaskInterface: false,
+        ...(nativeChat ? { enableNativeRunner: true } : {}) },
     }),
   );
   const agents = [];
@@ -88,8 +96,8 @@ export async function setup(request: APIRequestContext, page?: Page) {
         await request.post(`/api/companies/${company.id}/agents`, {
           data: {
             name,
-            adapterType: "process",
-            adapterConfig: {
+            adapterType: nativeChat ? "paperclip_runner" : "process",
+            adapterConfig: nativeChat ? { provider: "codex", model: "gpt-5.1-codex-mini" } : {
               command: process.execPath,
               args: [path.resolve("tests/e2e/fixtures/agent-chat.mjs")],
               graceSec: 1,
@@ -177,6 +185,7 @@ export async function setup(request: APIRequestContext, page?: Page) {
             data: {
               enableAgentChat: original.enableAgentChat,
               enableClassicTaskInterface: original.enableClassicTaskInterface,
+              ...(nativeChat ? { enableNativeRunner: original.enableNativeRunner } : {}),
             },
           }),
         );

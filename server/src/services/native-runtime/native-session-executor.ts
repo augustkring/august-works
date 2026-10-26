@@ -148,10 +148,10 @@ import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { assembleNativeContextRead, assertNativeContextReadSourceSetCurrent, assertNativeManagedConsumedSourceSetCurrent, assertNativeMemorySourceInputCurrent,
   nativeMemoryReviewTransitionStateHash, assertNativeProjectSourceCurrent,
-  assertNativePayloadSourceSetCurrent, type NativeContextReadBinding } from "../native-direct-input.js";
+  assertNativePayloadSourceSetCurrent, assertNativeReadResultSourceSetOwnersCurrent, type NativeContextReadBinding } from "../native-direct-input.js";
 import { canActorReadIssuePrivacy, type AuthorizationActor } from "../authorization.js";
 import { PaperclipRunnerToolAuthority, resolveNativeInputDispatchReceiptIdentity, type NativeDocumentToolResultSource,
-  type NativeProjectToolResultSource } from "./paperclip-runner-tool-authority.js";
+  type NativeInputToolResultSource, type NativeProjectToolResultSource } from "./paperclip-runner-tool-authority.js";
 import {nativeManagementToolsAvailable} from "./management-analytical-tools.js";
 import { createAssignedMcpTools, getAssignedMcpGateway } from "./assigned-mcp-tools.js";
 import { getNativeReviewAssignment, readNativeReviewAssignmentContext } from "./native-review-participant.js";
@@ -1469,6 +1469,7 @@ class SessionToolAuthorityEpoch {
   constructor(runId: string, authority: PaperclipRunnerToolAuthority, private readonly toolTrace?: NativeToolTrace,
     private readonly onDocumentRead?: (source: NativeDocumentToolResultSource) => Promise<void>,
     private readonly onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>,
+    private readonly onNativeInputToolResult?: (source: NativeInputToolResultSource) => Promise<void>,
     private readonly onNativeToolCall?: (call: { tool: string; callId: string; turnId: string; argumentsHash: string; arguments: unknown }) => Promise<void>,
     private readonly onManagedOpenCodeToolResult?: (call: { tool: "read_document" | "write_document" | "create_task" | "self_remember" | "read_context" | "call_api"; callId: string; turnId: string; argumentsHash: string; result: unknown; contextRead?: NativeContextReadBinding; projectRead?: NativeProjectToolResultSource }) => Promise<void>,
     private readonly managedContextReadCapture?: { value: NativeContextReadBinding | null }) {
@@ -1507,6 +1508,7 @@ class SessionToolAuthorityEpoch {
           projectReadCapture.value = source;
           await this.onProjectToolResult?.(source);
         },
+        onNativeInputToolResult: this.onNativeInputToolResult,
         ...(call.turnId ? { nativeToolCallIdentity: { tool: call.tool, callId: call.callId, turnId: call.turnId } } : {}),
       });
       if (call.turnId && (call.tool === "read_document" || call.tool === "write_document" ||
@@ -6243,6 +6245,57 @@ function record(value: unknown): Record<string, unknown> {
     : {};
 }
 
+/** Unknown same-run Native reads are monotonic: a later qualified read cannot
+ * repair an earlier result whose owner roots were unavailable. Check these
+ * persisted observations at every managed output-capture boundary. */
+function assertNativeRunReadSourceHistoryQualified(profile: Record<string, unknown>, input: {
+  runId: string; responsibleUserId: string | null;
+}): void {
+  const deny = () => { throw new Error("native_read_result_source_history_unavailable"); };
+  const receipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+  const rawCaptures = profile.nativeToolResultSourceCaptures;
+  if (rawCaptures !== undefined && !Array.isArray(rawCaptures)) deny();
+  for (const raw of (rawCaptures as unknown[] | undefined) ?? []) {
+    const capture = record(raw);
+    const isReadTool = ["get_task_context", "get_task_history", "read_chat_attachment"].includes(String(capture.tool));
+    if (isReadTool && capture.nativeReadResult !== true) deny();
+    if (capture.nativeReadResult !== true) continue;
+    const sourceResult = nativePayloadSourceInputSchema.safeParse(capture.source);
+    const sourceSetValue = record(capture.sourceSet);
+    const sourcePolicy = nativePayloadSourcePolicySchema.safeParse(sourceSetValue.policy);
+    const sourceInputs = nativePayloadSourceInputSchema.array().safeParse(sourceSetValue.inputs);
+    const capturedInputs = nativePayloadSourceInputSchema.array().safeParse(capture.sourceInputs);
+    if (!raw || typeof raw !== "object" || Array.isArray(raw) || !receipt.success || !sourceResult.success ||
+      sourceResult.data.kind !== "tool_result" || sourceResult.data.runId !== input.runId || sourceResult.data.invocationId !== null ||
+      sourceResult.data.callId !== capture.callId || sourceResult.data.toolName !== capture.tool ||
+      sourceResult.data.contentHash !== capture.resultDigest || !sourcePolicy.success || !sourceInputs.success ||
+      !capturedInputs.success || !isDeepStrictEqual(capturedInputs.data, sourceInputs.data) ||
+      !["get_task_context", "get_task_history", "read_chat_attachment"].includes(String(capture.tool)) ||
+      typeof capture.turnId !== "string" || !/^[0-9a-f]{64}$/.test(String(capture.argumentsHash)) ||
+      !receipt.data.additionalInputs.some(entry => entry.responsibleUserId === input.responsibleUserId &&
+        isDeepStrictEqual(entry.policy, sourcePolicy.data) &&
+        isDeepStrictEqual(entry.inputs, [sourceResult.data, ...sourceInputs.data]))) deny();
+  }
+  const rawProcedureReads = profile.nativeRuntimeProcedureReadObservations;
+  if (rawProcedureReads !== undefined && !Array.isArray(rawProcedureReads)) deny();
+  const procedureObservationIds = new Set<string>();
+  for (const raw of (rawProcedureReads as unknown[] | undefined) ?? []) {
+    const observation = record(raw);
+    const source = nativePayloadSourceInputSchema.safeParse(observation.source);
+    const exactReceiptCopy = receipt.success && source.success && receipt.data.additionalInputs.some(entry =>
+      entry.responsibleUserId === input.responsibleUserId && entry.inputs.some(value => isDeepStrictEqual(value, source.data)));
+    if (!raw || typeof raw !== "object" || Array.isArray(raw) ||
+      Object.keys(observation).some(key => !["observationId", "kind", "resultDigest", "sourceQualified", "source"].includes(key)) ||
+      observation.sourceQualified !== true ||
+      typeof observation.observationId !== "string" || !/^[0-9a-f-]{36}$/i.test(observation.observationId) ||
+      procedureObservationIds.has(observation.observationId) ||
+      typeof observation.resultDigest !== "string" || !/^[0-9a-f]{64}$/.test(observation.resultDigest) ||
+      (observation.kind !== "skill_version" && observation.kind !== "playbook_revision") ||
+      !source.success || source.data.kind !== observation.kind || !exactReceiptCopy) deny();
+    procedureObservationIds.add(observation.observationId as string);
+  }
+}
+
 type FirstAgentEventKind =
   | "reasoning"
   | "agentMessage"
@@ -7768,6 +7821,8 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.status, "running"),
       )).for("update");
       const profile = record(run?.runnerProfileJson);
+      if (run) assertNativeRunReadSourceHistoryQualified(profile, { runId: input.runId,
+        responsibleUserId: run.responsibleUserId });
       const sourceAuthority = record(profile.nativeOpenCodeSourceAuthority);
       const parsed = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
       const associations = profile.nativeToolCallDispatchAssociations;
@@ -8095,6 +8150,8 @@ async function prepareManagedOpenCodeOutputCapture(input: Parameters<typeof rene
     eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.status, "running"),
   ));
   const profile = record(run?.runnerProfileJson);
+  if (run) assertNativeRunReadSourceHistoryQualified(profile, { runId: input.runId,
+    responsibleUserId: run.responsibleUserId });
   const receipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
   if (!run || !receipt.success) throw new Error("managed_opencode_output_capture_source_unavailable");
   const bootstrapHash = nativeSha256(receipt.data.bootstrap);
@@ -8279,6 +8336,140 @@ export async function recordNativeDocumentToolResultIntent(input: Parameters<typ
     throw new Error(["native_session_lease_lost", "native_session_lease_ttl_invalid",
       "native_document_tool_capture_binding_invalid", "native_document_tool_capture_budget_exceeded"].includes(message)
       ? message : "native_document_tool_capture_persistence_failed");
+  }
+}
+
+/** Retains a Native tool result and, only when its original owner supplied a
+ * complete source set and the acknowledged provider dispatch association is
+ * exact, appends that result plus its source inputs to the run receipt. */
+export async function recordNativeInputToolResultIntent(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
+  agentId: string; eventSeq: number; capture: NativeInputToolResultSource;
+}): Promise<void> {
+  const bindingError = "native_tool_result_capture_binding_invalid";
+  const budgetError = "native_tool_result_capture_budget_exceeded";
+  try {
+    const capture = input.capture;
+    const readTool = capture.tool === "get_task_context" || capture.tool === "get_task_history" ||
+      capture.tool === "read_chat_attachment" ? capture.tool : null;
+    const supportedNativeRead = readTool !== null;
+    if (!Number.isSafeInteger(input.eventSeq) || input.eventSeq < 0 || !supportedNativeRead ||
+      !/^[\x21-\x7e]{1,240}$/.test(capture.callId) || !/^[\x21-\x7e]{1,240}$/.test(capture.tool) ||
+      !/^[0-9a-f]{64}$/.test(capture.argumentsHash) ||
+      !/^[0-9a-f]{64}$/.test(capture.resultDigest) || nativeSha256(capture.result) !== capture.resultDigest ||
+      capture.turnId !== null && !/^[\x21-\x7e]{1,240}$/.test(capture.turnId)) throw new Error(bindingError);
+    const observedInputs = nativePayloadSourceInputSchema.array().safeParse(capture.observedSourceInputs);
+    const capturedSourceSet = capture.sourceSet;
+    const sourcePolicy = capturedSourceSet ? nativePayloadSourcePolicySchema.safeParse(capturedSourceSet.policy) : null;
+    const sourceInputs = capturedSourceSet ? nativePayloadSourceInputSchema.array().safeParse(capturedSourceSet.inputs) : null;
+    const sourceSetContainsObservedInputs = observedInputs.success && sourceInputs?.success &&
+      new Set(sourceInputs.data.map(value => JSON.stringify(value))).size === sourceInputs.data.length &&
+      new Set(observedInputs.data.map(value => JSON.stringify(value))).size === observedInputs.data.length &&
+      observedInputs.data.every(observed => sourceInputs.data.filter(value => isDeepStrictEqual(value, observed)).length === 1);
+    if (!observedInputs.success || capturedSourceSet && (!sourcePolicy?.success || !sourceInputs?.success ||
+      !sourceSetContainsObservedInputs)) throw new Error(bindingError);
+    const qualifiedSourceSet = capturedSourceSet && sourcePolicy?.success && sourceInputs?.success
+      ? { policy: sourcePolicy.data, inputs: sourceInputs.data }
+      : null;
+
+    await input.db.transaction(async tx => {
+      await lockAnalyticalCompany(tx as unknown as Db, input.companyId);
+      await lockMemoryPrivacy(tx as unknown as Db, input.companyId);
+      await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
+      const [run] = await tx.select().from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.companyId, input.companyId),
+        eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId),
+        eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.status, "running"),
+      )).for("update");
+      const [launch] = await tx.select({ seq: heartbeatRunEvents.seq }).from(heartbeatRunEvents).where(and(
+        eq(heartbeatRunEvents.companyId, input.companyId), eq(heartbeatRunEvents.runId, input.runId),
+        eq(heartbeatRunEvents.agentId, input.agentId), eq(heartbeatRunEvents.seq, input.eventSeq),
+        eq(heartbeatRunEvents.eventType, PROCESS_START_REQUESTED),
+      )).for("share");
+      if (!run || !launch || launch.seq !== input.eventSeq) throw new Error(bindingError);
+      const profile = record(run.runnerProfileJson);
+      const capturesRaw = profile.nativeToolResultSourceCaptures;
+      if (capturesRaw !== undefined && !Array.isArray(capturesRaw)) throw new Error(bindingError);
+      const captures = (capturesRaw as unknown[] | undefined) ?? [];
+      if (captures.some(value => {
+        const row = record(value);
+        return !value || typeof value !== "object" || Array.isArray(value) ||
+          typeof row.callId !== "string" || typeof row.tool !== "string" ||
+          typeof row.resultDigest !== "string" || !/^[0-9a-f]{64}$/.test(row.resultDigest);
+      })) throw new Error(bindingError);
+      if (captures.length >= 256 || Buffer.byteLength(JSON.stringify(captures)) > 2 * 1024 * 1024)
+        throw new Error(budgetError);
+      const dispatch = capture.turnId ? resolveNativeInputDispatchReceiptIdentity(profile,
+        { tool: capture.tool, callId: capture.callId, turnId: capture.turnId }, capture.tool) : null;
+      const nativeInputDispatch = dispatch?.eventSeq === input.eventSeq && dispatch.attempt === input.attempt
+        ? dispatch : null;
+      const associations = Array.isArray(profile.nativeToolCallDispatchAssociations)
+        ? profile.nativeToolCallDispatchAssociations.map(record).filter(value => value.callId === capture.callId &&
+          value.turnId === capture.turnId && value.tool === capture.tool && value.argumentsHash === capture.argumentsHash &&
+          value.dispatchId === nativeInputDispatch?.dispatchId && value.eventSeq === input.eventSeq && value.attempt === input.attempt)
+        : [];
+      let source: Extract<NativePayloadSourceInput, { kind: "tool_result" }> | null = null;
+      let nextReceipt: NativeRunInputSourceReceipt | null = null;
+      const parsedReceipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+      if (qualifiedSourceSet && nativeInputDispatch && associations.length === 1 && parsedReceipt.success &&
+        typeof run.responsibleUserId === "string" && parsedReceipt.data.binding.companyId === input.companyId &&
+        parsedReceipt.data.binding.runId === input.runId && parsedReceipt.data.binding.agentId === input.agentId &&
+        parsedReceipt.data.binding.issueId === input.issueId &&
+        parsedReceipt.data.binding.responsibleUserId === run.responsibleUserId) {
+        const parsedSource = nativePayloadSourceInputSchema.safeParse({ kind: "tool_result", runId: input.runId,
+          callId: capture.callId, toolName: capture.tool, invocationId: null, contentHash: capture.resultDigest });
+        if (parsedSource.success && parsedSource.data.kind === "tool_result") {
+            // Validate exact source rows while holding the same privacy and run
+            // transaction locks used to append the additional-input receipt.
+            await assertNativeReadResultSourceSetOwnersCurrent(tx as unknown as Db, { companyId: input.companyId,
+              issueId: input.issueId, runId: input.runId,
+              tool: readTool!,
+              actor: { type: "agent", source: "none", companyId: input.companyId, agentId: input.agentId,
+                runId: input.runId, onBehalfOfUserId: run.responsibleUserId },
+              sourceSet: qualifiedSourceSet });
+            source = parsedSource.data;
+            const existing = parsedReceipt.data.additionalInputs.filter(entry => entry.responsibleUserId === run.responsibleUserId &&
+              isDeepStrictEqual(entry.policy, qualifiedSourceSet.policy) &&
+              isDeepStrictEqual(entry.inputs, [source, ...qualifiedSourceSet.inputs]));
+            if (existing.length > 1) throw new Error(bindingError);
+            if (existing.length === 0) {
+              const { digest: _previousDigest, ...body } = parsedReceipt.data;
+              const nextBody = { ...body, additionalInputs: [...body.additionalInputs, {
+                responsibleUserId: run.responsibleUserId, policy: qualifiedSourceSet.policy,
+                inputs: [source, ...qualifiedSourceSet.inputs],
+              }] };
+              const candidate = { ...nextBody, digest: await postgresJsonbSha256(tx, nextBody) };
+              const parsed = nativeRunInputSourceReceiptSchema.safeParse(candidate);
+              if (!parsed.success) throw new Error(bindingError);
+              nextReceipt = parsed.data;
+            } else nextReceipt = parsedReceipt.data;
+        }
+      }
+      if (captures.some(value => {
+        const row = record(value);
+        return row.callId === capture.callId && row.tool === capture.tool && row.resultDigest === capture.resultDigest;
+      })) throw new Error(bindingError);
+      const nextCaptures = [...captures, { eventSeq: launch.seq, attempt: input.attempt,
+        turnId: capture.turnId, nativeInputDispatch, callId: capture.callId, tool: capture.tool,
+        argumentsHash: capture.argumentsHash, resultDigest: capture.resultDigest, source,
+        sourceInputs: qualifiedSourceSet?.inputs ?? observedInputs.data,
+        ...(qualifiedSourceSet ? { sourceSet: qualifiedSourceSet } : {}), nativeReadResult: true }];
+      if (Buffer.byteLength(JSON.stringify(nextCaptures)) > 2 * 1024 * 1024) throw new Error(budgetError);
+      const nextProfile = { ...profile, nativeToolResultSourceCaptures: nextCaptures,
+        ...(nextReceipt ? { nativeInputSourceReceipt: nextReceipt } : {}) };
+      const [stored] = await tx.update(heartbeatRuns).set({ runnerProfileJson: nextProfile, updatedAt: new Date() })
+        .where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.status, "running")))
+        .returning({ profile: heartbeatRuns.runnerProfileJson });
+      const retained = record(stored?.profile);
+      if (!Array.isArray(retained.nativeToolResultSourceCaptures) ||
+        nativeSha256(retained.nativeToolResultSourceCaptures) !== nativeSha256(nextCaptures) ||
+        nextReceipt && !nativeRunInputSourceReceiptSchema.safeParse(retained.nativeInputSourceReceipt).success)
+        throw new Error("native_tool_result_capture_persistence_failed");
+      await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "";
+    throw new Error(["native_session_lease_lost", "native_session_lease_ttl_invalid", bindingError, budgetError].includes(message)
+      ? message : "native_tool_result_capture_persistence_failed");
   }
 }
 
@@ -9342,6 +9533,11 @@ async function executePaperclipNativeSessionWithinScope(
       );
     }
   }
+  // Provider history survives across warm-session runs, but no exact prior-run
+  // history receipt is available at this owner. Keep ordinary warm execution
+  // intact while withholding any closure that would claim the fresh envelope
+  // is the complete provider input.
+  const retainedSessionHistoryUnknown = existingWarmSession !== undefined || persistedWarmSession != null;
   async function resolvePendingGovernedWait() {
     const continuingInteractionIds = continuingPendingInteractionIds(
       input.execution,
@@ -9501,6 +9697,18 @@ async function executePaperclipNativeSessionWithinScope(
                 companyId: input.execution.binding.companyId, issueId: input.execution.binding.issueId,
                 leaseOwner, attempt, controller });
             },
+            onNativeInputToolResult: async capture => {
+              if (launchEventSeq === null) throw new Error("native_tool_result_capture_binding_invalid");
+              await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
+              await recordNativeInputToolResultIntent({ db: input.db, runId,
+                companyId: input.execution.binding.companyId, issueId: input.execution.binding.issueId,
+                agentId: input.execution.binding.agentId, leaseOwner, attempt, controller,
+                eventSeq: launchEventSeq, capture });
+              await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
+              await renewNativeSessionExecutionLease({ db: input.db, runId,
+                companyId: input.execution.binding.companyId, issueId: input.execution.binding.issueId,
+                leaseOwner, attempt, controller });
+            },
             onProjectToolResult: async capture => {
               if (launchEventSeq === null) throw new Error("native_project_tool_capture_binding_invalid");
               await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
@@ -9650,9 +9858,14 @@ async function executePaperclipNativeSessionWithinScope(
                 await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
               }
             },
-            prepareTurn: async turnInput => input.prepareTurnSourceClosure
-              ? input.prepareTurnSourceClosure(turnInput, input.bootstrapSourceClosure)
-              : { turnInput, sourceClosure: input.bootstrapSourceClosure ?? undefined },
+            prepareTurn: async turnInput => {
+              const prepared = input.prepareTurnSourceClosure
+                ? await input.prepareTurnSourceClosure(turnInput, input.bootstrapSourceClosure)
+                : { turnInput, sourceClosure: input.bootstrapSourceClosure ?? undefined };
+              return retainedSessionHistoryUnknown
+                ? { turnInput: prepared.turnInput, sourceClosure: undefined }
+                : prepared;
+            },
             onTurnInput: async (turnInput, sourceClosure) => {
               if (launchEventSeq === null) throw new Error("native_model_input_launch_binding_invalid");
               await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
@@ -10126,6 +10339,19 @@ async function executePaperclipNativeSessionWithinScope(
           `[paperclip-runner] native session execution failed: ${executionFailureMessage}\n`,
         ),
       );
+      if (process.env.PAPERCLIP_MANAGED_OPENCODE_E2E_DIAGNOSTICS === "1") {
+        const originalError = error instanceof Error ? error as Error & { code?: unknown; cause?: { code?: unknown } } : null;
+        const safeCode = (value: unknown) => typeof value === "string" && /^[A-Z0-9_]{1,32}$/.test(value)
+          ? value : undefined;
+        const frames = originalError?.stack?.split("\n").slice(1).flatMap(line => {
+          const match = /\/server\/src\/services\/([^():]+\.ts):(\d+):\d+/.exec(line);
+          return match ? [`${match[1]}:${match[2]}`] : [];
+        }).slice(0, 4) ?? [];
+        const failureFacts = { name: originalError?.name ?? "UnknownError",
+          code: safeCode(originalError?.code), causeCode: safeCode(originalError?.cause?.code), frames };
+        await attemptFailureStep(() => input.onLog?.("stderr",
+          `[paperclip-runner] native session original failure facts: ${JSON.stringify(failureFacts)}\n`));
+      }
       await input.db.transaction(async (tx) => {
         await tx.execute(
           sql`select set_config('statement_timeout', '15000', true), set_config('lock_timeout', '1000', true)`,
@@ -11909,6 +12135,7 @@ export async function createRunnerdBackend(input: {
   toolTrace?: NativeToolTrace;
   onDocumentRead?: (source: NativeDocumentToolResultSource) => Promise<void>;
   onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>;
+  onNativeInputToolResult?: (source: NativeInputToolResultSource) => Promise<void>;
   onNativeToolCall?: (call: { tool: string; callId: string; turnId: string; argumentsHash: string; arguments: unknown }) => Promise<void>;
   onManagedOpenCodeToolResult?: (call: { tool: "read_document" | "write_document" | "create_task" | "self_remember" | "read_context" | "call_api"; callId: string; turnId: string; argumentsHash: string; result: unknown; contextRead?: NativeContextReadBinding; projectRead?: NativeProjectToolResultSource }) => Promise<void>;
   onLog?: (stream: "stdout" | "stderr", chunk: string) => Promise<void>;
@@ -12090,6 +12317,7 @@ async function createRunnerdBackendWithinSessionClaim(
     input.toolTrace,
     input.onDocumentRead,
     input.onProjectToolResult,
+    input.onNativeInputToolResult,
     input.onNativeToolCall,
     input.onManagedOpenCodeToolResult,
     input.managedNativeContextReadCapture,
