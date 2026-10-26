@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { agents, authUsers, companies, companyMemberships, createDb, heartbeatRuns, memoryBindingTargets, memoryBindings,
+import { activityLog, agents, authUsers, companies, companyMemberships, createDb, heartbeatRuns, memoryBindingTargets, memoryBindings,
   memoryEvidence, memoryRecords, principalPermissionGrants } from "@paperclipai/db";
 import { EMBEDDED_POSTGRES_TEST_TIMEOUT_MS } from "@paperclipai/db";
 import type { ContextAuthorityDecision, MemoryCandidateInputParsed } from "@paperclipai/shared";
@@ -93,7 +93,7 @@ describe("Memory revocation preserves only a still-valid body snapshot", () => {
       payloadSourceSnapshotInvalidated: true });
   });
 
-  it("invalidates a duplicate claim when a different native Context Memory root is attached", async () => {
+  it("rolls back an ordinary duplicate when a new native Context root would invalidate its claim snapshot", async () => {
     const { companyId, userId, agentId, runId, bindingId } = await seed();
     const observedAt = new Date();
     const [target] = await db.insert(memoryRecords).values({ companyId, bindingId, providerKey: "local", memoryType: "lesson",
@@ -128,12 +128,21 @@ describe("Memory revocation preserves only a still-valid body snapshot", () => {
         observedAt: evidence.observedAt.toISOString(), excerptHash: evidence.excerptHash, citation: evidence.citationJson,
         trustLevel: evidence.trustLevel, relation: "supports",
       }] };
-    const result = await memoryService(db).createCandidate(companyId, candidate, actor);
-    expect(result.resolution.kind).toBe("duplicate");
+    const [before] = await db.select().from(memoryRecords).where(eq(memoryRecords.id, target!.id));
+    const evidenceBefore = await db.select().from(memoryEvidence).where(eq(memoryEvidence.memoryRecordId, target!.id));
+    const activityBefore = await db.select({ id: activityLog.id }).from(activityLog).where(eq(activityLog.companyId, companyId));
+    await expect(memoryService(db).createCandidate(companyId, candidate, actor)).rejects.toMatchObject({
+      status: 409, details: { code: "memory_resolution_source_conflict" },
+    });
     const [updated] = await db.select().from(memoryRecords).where(eq(memoryRecords.id, target!.id));
-    expect(updated!.sourceMemoryIds).toContain(extra!.id);
-    expect(updated!.payloadSourceSnapshot).toBeNull();
-    expect(updated!.payloadSourceSnapshotInvalidated).toBe(true);
+    const evidenceAfter = await db.select().from(memoryEvidence).where(eq(memoryEvidence.memoryRecordId, target!.id));
+    const activityAfter = await db.select({ id: activityLog.id }).from(activityLog).where(eq(activityLog.companyId, companyId));
+    expect(updated).toEqual(before);
+    expect(updated!.sourceMemoryIds).not.toContain(extra!.id);
+    expect(updated!.payloadSourceSnapshot).toEqual(before!.payloadSourceSnapshot);
+    expect(updated!.payloadSourceSnapshotInvalidated).toBe(false);
+    expect(evidenceAfter).toEqual(evidenceBefore);
+    expect(activityAfter).toEqual(activityBefore);
   });
 
   it("preserves the exact snapshot when a duplicate does not change retained roots", async () => {

@@ -895,11 +895,11 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
             and captured_input->>'contentHash' ~ '^[0-9a-f]{64}$'
             and (captured_input->>'contentHash'=public.aw_native_payload_body_hash('issue',to_jsonb(captured_task))
               or captured_input->>'contentHash'=encode(sha256(convert_to(
-                '{"id":'||to_json(captured_task.id::text)::text||',"identifier":'||to_json(captured_task.identifier)::text||
-                ',"title":'||to_json(captured_task.title)::text||',"description":'||to_json(captured_task.description)::text||
+                '{"id":'||to_json(captured_task.id::text)::text||',"identifier":'||coalesce(to_json(captured_task.identifier)::text,'null')||
+                ',"title":'||to_json(captured_task.title)::text||',"description":'||coalesce(to_json(captured_task.description)::text,'null')||
                 ',"workMode":'||to_json(captured_task.work_mode)::text||'}','UTF8')),'hex')
               or captured_input->>'contentHash'=encode(sha256(convert_to(
-                '{"id":'||to_json(captured_task.id::text)::text||',"identifier":'||to_json(captured_task.identifier)::text||
+                '{"id":'||to_json(captured_task.id::text)::text||',"identifier":'||coalesce(to_json(captured_task.identifier)::text,'null')||
                 ',"title":'||to_json(captured_task.title)::text||',"status":'||to_json(captured_task.status)::text||
                 ',"priority":'||to_json(captured_task.priority)::text||'}','UTF8')),'hex'))
             and captured_task.payload_source_protocol_version=1 and captured_task.payload_source_snapshot is not null

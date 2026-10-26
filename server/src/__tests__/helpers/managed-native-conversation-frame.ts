@@ -121,9 +121,9 @@ export async function runManagedNativeConversationFrame(input: {
     "-out", caCertPath, "-days", "1", "-subj", "/CN=Managed conversation fixture CA", "-addext",
     "basicConstraints=critical,CA:TRUE", "-addext", "keyUsage=critical,keyCertSign,cRLSign"], { stdio: "ignore" });
   execFileSync("openssl", ["req", "-new", "-newkey", "rsa:2048", "-nodes", "-keyout", keyPath,
-    "-out", csrPath, "-subj", "/CN=127.0.0.1"], { stdio: "ignore" });
+    "-out", csrPath, "-subj", "/CN=broker.localhost"], { stdio: "ignore" });
   const { writeFile, readFile } = await import("node:fs/promises");
-  await writeFile(extensionsPath, "basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectAltName=IP:127.0.0.1,DNS:localhost\n");
+  await writeFile(extensionsPath, "basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectAltName=DNS:broker.localhost\n");
   execFileSync("openssl", ["x509", "-req", "-in", csrPath, "-CA", caCertPath, "-CAkey", caKeyPath,
     "-CAcreateserial", "-out", certPath, "-days", "1", "-sha256", "-extfile", extensionsPath], { stdio: "ignore" });
   await chmod(keyPath, 0o600);
@@ -290,14 +290,16 @@ export async function runManagedNativeConversationFrame(input: {
   });
   brokerApp.use(errorHandler);
   const broker = createHttpsServer({ key: await readFile(keyPath), cert: await readFile(certPath) }, brokerApp);
-  broker.listen(0, "127.0.0.1");
+  broker.listen(0, "::1");
   await new Promise<void>(resolve => broker.once("listening", resolve));
   const address = broker.address();
   if (!address || typeof address === "string") throw new Error("conversation_fixture_broker_listen_failed");
+  // The sandbox policy schema admits domain names, not IP literals. The
+  // special-use .localhost name resolves to loopback and keeps this fixture
+  // endpoint local while allowing the real managed policy to pin it exactly.
   // Durable PRP and the runner accept only an origin, with no trailing path
-  // separator. A slash here makes the managed environment tuple invalid and
-  // causes the runner to drop it before OpenCode starts.
-  const origin = new URL(`https://127.0.0.1:${address.port}`).origin;
+  // separator; a slash would make the managed environment tuple invalid.
+  const origin = new URL(`https://broker.localhost:${address.port}`).origin;
   setupRunnerPrpWebSocketServer(broker, { apiUrl: origin });
   const prevBroker = process.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN;
   const prevJwt = process.env.PAPERCLIP_AGENT_JWT_SECRET;

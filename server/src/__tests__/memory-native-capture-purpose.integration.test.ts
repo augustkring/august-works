@@ -60,6 +60,11 @@ describe("Native capture source purpose stays inside its actual PostgreSQL trans
   });
   function evidence(label:string){return {sourceClass:"task" as const,sourceProvider:"native_capture_fixture",sourceType:"outcome",sourceRef:`outcome://${label}`,sourceVersion:"1",sourceUpdatedAt:null,
     observedAt:new Date().toISOString(),excerptHash:createHash("sha256").update(label).digest("hex"),citation:{label},trustLevel:"low" as const,relation:"supports" as const};}
+  function selectedMemoryDecision(record:typeof source.record):ContextAuthorityDecision{return {authorityRank:0,primaryForDomain:true,reason:"preferred_authority",evidence:{
+    id:`memory:${record.id}`,companyId,sourceClass:"private_memory",sourceProvider:"august_works_memory",sourceType:"memory_record",
+    sourceRef:`memory://record/${record.id}`,sourceVersion:record.updatedAt.toISOString(),sourceUpdatedAt:record.updatedAt.toISOString(),
+    title:record.title!,excerpt:record.content,observedAt:record.observedAt.toISOString(),validFrom:null,validUntil:null,authorityDomain:null,
+    trustLevel:"low",sensitivity:"internal",citation:{label:"Native Memory source"},metadata:{}}};}
   async function pinned<T>(inspect:(tx:Db,receipt:NativeMemoryCaptureReceipt)=>Promise<T>){
     return db.transaction(async raw=>{
       const tx=raw as unknown as Db;await lockAnalyticalCompany(tx,companyId);await lockMemoryPrivacy(tx,companyId);
@@ -154,6 +159,63 @@ describe("Native capture source purpose stays inside its actual PostgreSQL trans
     const rows=await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId,companyId),eq(memoryRecords.createdByOperationId,operationId)));
     expect(rows).toHaveLength(1);
     expect(await memoryService(db).get(companyId,rows[0]!.id,mutation())).toBeNull();
+  });
+  it("invalidates a duplicate target through receipt-backed capture without returning its body",async()=>{
+    const operationId=randomUUID(),fingerprint="c".repeat(64);
+    const input={bindingId:source.record.bindingId,memoryType:"lesson",scope:{type:"company",id:null},title:"Captured expansion claim",
+      content:"The same reviewed capture after selecting another Memory root",summary:null,sensitivity:"internal",observedAt:new Date().toISOString(),
+      validFrom:null,validUntil:null,expiresAt:null,createdByOperationId:operationId,metadata:{postRunExtractionFingerprint:fingerprint},evidence:[evidence("expansion")]};
+    await pinned(async(tx,receipt)=>{
+      const publications:ActivityPublication[]=[],service=memoryService(tx,{nativeCaptureReceipt:receipt,postCommitPublications:publications});
+      expect(await service.captureCandidate(companyId,input,mutation())).toEqual({resolutionKind:"new",replayed:false});
+      const [target]=await tx.select().from(memoryRecords).where(eq(memoryRecords.createdByOperationId,operationId));
+      expect(target?.payloadSourceSnapshot).not.toBeNull();
+      let extra!:Awaited<ReturnType<ReturnType<typeof memoryService>["createPrivateMemory"]>>;
+      await withNativeMemoryCaptureSources(tx,companyId,actor(),receipt,async()=>{
+        extra=await memoryService(tx).createPrivateMemory(companyId,agentId,{bindingId:source.record.bindingId,memoryType:"lesson",
+          title:"Newly selected native source",content:"A separate current Memory source",summary:null,sensitivity:"internal",
+          observedAt:new Date().toISOString(),validFrom:null,validUntil:null,expiresAt:null,createdByOperationId:randomUUID(),evidence:[evidence("extra-root")]},mutation());
+        await contextManifestService(tx).create({companyId,agentId,runId,issueId,responsibleUserId:userId,authorizationActor:actor(),
+          query:"Select an additional current Memory root",policySnapshot:{},selected:[{decision:selectedMemoryDecision(extra.record)}]});
+      });
+      const expanded=await service.captureCandidate(companyId,{...input,createdByOperationId:randomUUID()},mutation());
+      expect(expanded).toEqual({resolutionKind:"duplicate",replayed:false});
+      const [after]=await tx.select().from(memoryRecords).where(eq(memoryRecords.id,target!.id));
+      expect(after!.sourceMemoryIds).toContain(extra.record.id);
+      expect(after!.payloadSourceSnapshot).toBeNull();
+      expect(after!.payloadSourceSnapshotInvalidated).toBe(true);
+      expect(await memoryService(tx).get(companyId,target!.id,mutation())).toBeNull();
+    });
+  });
+  it("rejects receipt-backed duplicate capture when the staged Context root would create a source cycle",async()=>{
+    const operationId=randomUUID(),fingerprint="d".repeat(64);
+    const input={bindingId:source.record.bindingId,memoryType:"lesson",scope:{type:"company",id:null},title:"Cycle-controlled capture",
+      content:"A current source graph must remain acyclic",summary:null,sensitivity:"internal",observedAt:new Date().toISOString(),
+      validFrom:null,validUntil:null,expiresAt:null,createdByOperationId:operationId,metadata:{postRunExtractionFingerprint:fingerprint},evidence:[evidence("cycle")]};
+    await pinned(async(tx,receipt)=>{
+      const service=memoryService(tx,{nativeCaptureReceipt:receipt,postCommitPublications:[]});
+      expect(await service.captureCandidate(companyId,input,mutation())).toEqual({resolutionKind:"new",replayed:false});
+      const [target]=await tx.select().from(memoryRecords).where(eq(memoryRecords.createdByOperationId,operationId));
+      const before=target!;
+      let cyclicRoot!:Awaited<ReturnType<ReturnType<typeof memoryService>["createPrivateMemory"]>>;
+      await withNativeMemoryCaptureSources(tx,companyId,actor(),receipt,async()=>{
+        await contextManifestService(tx).create({companyId,agentId,runId,issueId,responsibleUserId:userId,authorizationActor:actor(),
+          query:"Create a retained Memory dependency on the target",policySnapshot:{},selected:[{decision:selectedMemoryDecision(before)}]});
+        cyclicRoot=await memoryService(tx).createPrivateMemory(companyId,agentId,{bindingId:source.record.bindingId,memoryType:"lesson",
+          title:"Source that depends on the target",content:"This root already depends on the target",summary:null,sensitivity:"internal",
+          observedAt:new Date().toISOString(),validFrom:null,validUntil:null,expiresAt:null,createdByOperationId:randomUUID(),evidence:[evidence("cycle-root")]},mutation());
+        await contextManifestService(tx).create({companyId,agentId,runId,issueId,responsibleUserId:userId,authorizationActor:actor(),
+          query:"Select the dependent source",policySnapshot:{},selected:[{decision:selectedMemoryDecision(cyclicRoot.record)}]});
+      });
+      await expect(service.captureCandidate(companyId,{...input,createdByOperationId:randomUUID()},mutation())).rejects.toMatchObject({
+        status:409,details:{code:"memory_resolution_source_conflict"},
+      });
+      const [after]=await tx.select().from(memoryRecords).where(eq(memoryRecords.id,before.id));
+      expect(after).toEqual(before);
+      expect(after!.sourceMemoryIds).not.toContain(cyclicRoot.record.id);
+      expect(after!.payloadSourceSnapshot).not.toBeNull();
+      expect(after!.payloadSourceSnapshotInvalidated).toBe(false);
+    });
   });
   async function learnedRevision(rootId:string){
     const [document]=await db.insert(documents).values({companyId,latestBody:"Learned Foundation"}).returning();

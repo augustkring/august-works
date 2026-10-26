@@ -1,0 +1,30 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts (31 tests | 1 failed | 30 skipped) 24004ms
+     × settles the actual qualified conversation usage once and preserves the exact debit in canonical purge 19581ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > settles the actual qualified conversation usage once and preserves the exact debit in canonical purge
+Error: conversation_offboarding_purge_incomplete:{"stage":"purge","status":"processing","runtime":{"operation":{"stage":"purge","status":"processing","errorCode":"offboarding_reconciliation_pending"},"jobs":[{"jobKey":"runtime-asset-erasure:v1:42660cea-4cf5-4ee4-bff5-4965cd86ed95","status":"succeeded","errorCode":null,"attemptNumber":1}]},"purgeProbe":{"outcome":"allowed_in_probe","purgePredicate":[{"operation":"DELETE","triggerDepth":2,"companyMarkerMatches":true,"contextRunMatches":true,"contextTaskPresent":true,"contextTaskRetired":false,"contextTaskMatchesNativeRun":false,"sourceErased":false}]},"nativeStop":{"runPresent":true,"runStatus":"succeeded","runtimeMode":"native","processPidPresent":false,"processGroupPresent":false,"controllerLeasePresent":false,"controllerBootIdPresent":false,"finalizationPhase":"committed","finalizationLeaseHeld":false,"nativeLocalStopReceipt":true,"leases":[{"provider":"local","status":"released","cleanupStatus":null,"released":true,"remoteTerminationReceipt":false}]}}
+ ❯ purgeConversationCompany src/__tests__/v7-model-reservations.integration.test.ts:581:15
+    579|       const completed = await offboarding.get(facts.companyId);
+    580|       if (!completed || completed.id !== operation.id || completed.sta…
+    581|         throw new Error(`conversation_offboarding_purge_incomplete:${J…
+       |               ^
+    582|           status: completed?.status ?? null, runtime: await offboardin…
+    583|           purgeProbe: await probePurgeFailure(facts.companyId, operati…
+ ❯ Object.afterRunSettledBeforeTeardown src/__tests__/v7-model-reservations.integration.test.ts:698:31
+ ❯ runManagedNativeConversationFrame src/__tests__/helpers/managed-native-conversation-frame.ts:438:7
+ ❯ conversationReservationFixture src/__tests__/v7-model-reservations.integration.test.ts:346:22
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:694:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 30 skipped (31)
+   Start at  16:45:01
+   Duration  41.67s (transform 12.44s, setup 100ms, import 17.40s, tests 24.00s, environment 0ms)
+

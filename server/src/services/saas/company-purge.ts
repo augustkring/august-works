@@ -190,15 +190,14 @@ export async function purgeCompanyContent(
     // relying on that Context FK after deleting the issue loses the source
     // proof. The existing erasure owner performs the full descendant scrub
     // and writes only its content-free run marker in this transaction.
-    const retiredConversationRuns = await tx.execute<{ id: string }>(sql`
-      select h.id::text as id from heartbeat_runs h
-      join issues i on i.company_id=h.company_id and i.id=h.native_issue_id
-      where h.company_id=${companyId}::uuid and h.runtime_mode='native'
-        and i.conversation_retired_at=${conversationRetiredAt}
-    `);
+    const retiredConversationRuns = await tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns).innerJoin(issues,
+      and(eq(issues.companyId, heartbeatRuns.companyId), eq(issues.id, heartbeatRuns.nativeIssueId))).where(and(
+      eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.runtimeMode, "native"),
+      eq(issues.conversationRetiredAt, conversationRetiredAt)));
     if (retiredConversationRuns.length) {
       await purgeDerivedWorkflowMemory(tx as unknown as Db, companyId, [], conversationRetiredAt, {
         workflowRevisionIds: [], artifactVersionIds: [], runIds: retiredConversationRuns.map(row => row.id),
+        companyPurgeOperationId: options.operationId,
       });
     }
     // These purpose-ledger rows have a native DELETE guard and a retained

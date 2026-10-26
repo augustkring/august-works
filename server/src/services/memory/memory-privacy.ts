@@ -7,7 +7,7 @@ import { agentExecutionManifests, providerTraceRecords,
   contextManifests, contextManifestItems, contextManifestMemoryRoots, saasRunLogs, saasRunLogChunks, activityLog, issueThreadInteractions, toolAccessAuditEvents, toolActionRequests, toolCallEvents, toolInvocations,
   heartbeatRuns, heartbeatRunEvents, agentWakeupRequests, agents, authUsers, issues, issueComments, issueDocuments, documents, documentRevisions,
   nativeRunResults, workAssessments, statusDecisions, nativeRunFinalizations, completionContracts, issueWorkProducts, agentTaskSessions, agentRuntimeState,
-  workflowRuns, workflowStepRuns, workflowWaits, workflowRunReviews, workflowOptimizerEvaluations, workflowOptimizerObservations, automationArtifacts, automationArtifactVersions, issuePrivacySources, type Db } from "@paperclipai/db";
+  workflowRuns, workflowStepRuns, workflowWaits, workflowRunReviews, workflowOptimizerEvaluations, workflowOptimizerObservations, automationArtifacts, automationArtifactVersions, issuePrivacySources, companyDeletionOperations, type Db } from "@paperclipai/db";
 import { notificationPreferenceProposals, foundationChangeProposals, foundationSections, routines, routineRevisions, routineTriggers, routineDocuments, routineRuns, companySecretBindings, memoryBindings, memoryBindingTargets } from "@paperclipai/db";
 import { eraseAnalyticalSourcesUnderMemory } from "../analytical-source-erasure.js";
 import { eraseBusinessEventObjectUnderMemory } from "../business-event-payload-erasure.js";
@@ -113,7 +113,7 @@ export async function withNativeMemoryCaptureSources<T>(db: Db, companyId: strin
 
 /** Current source authority, independent of a Memory record's display scope.
  * A shared/corrected copy keeps every original root. Unknown history is withheld. */
-type MemorySourceReadBudget = { signal?: AbortSignal; deadlineAt?: number };
+type MemorySourceReadBudget = { signal?: AbortSignal; deadlineAt?: number; forbiddenRecordId?: string };
 type MemorySourceReadScope = { active:Set<string>;deadline:number;work:number;signal?:AbortSignal };
 function assertMemorySourceReadActive(state: MemorySourceReadScope) {
   if (state.signal?.aborted) throw state.signal.reason ?? new Error("Memory source read was cancelled");
@@ -148,10 +148,28 @@ export async function canActorReadMemorySources(db: Db, companyId: string, actor
   if(state.work>=256) { diagnosticDenied("work_budget"); return false; }
   const read=async()=>{
     state.active.add(key);
-    try{return await inspectMemorySourceAccess(db,companyId,actor,recordId,state,diagnosticDenied);}
+    try{return await inspectMemorySourceAccess(db,companyId,actor,recordId,state,diagnosticDenied,budget.forbiddenRecordId);}
     finally{state.active.delete(key);}
   };
   return inherited?read():memorySourceReads.run(state,read);
+}
+/** Revalidates a bounded union through the original recursive source reader.
+ * A forbidden target is used only for a staged write that may add these roots
+ * beneath that target; reaching it would create a cycle after commit. */
+export async function canActorReadMemorySourceSet(db: Db, companyId: string, actor: AuthorizationActor | undefined,
+  recordIds: readonly string[], forbiddenRecordId?: string): Promise<boolean> {
+  const inherited=memorySourceReads.getStore(),state=inherited??{active:new Set<string>(),deadline:performance.now()+8000,work:0};
+  const inspect=async()=>{
+    const ids=[...new Set(recordIds)].sort();
+    if(ids.length>256 || (forbiddenRecordId && ids.includes(forbiddenRecordId)))return false;
+    for(const id of ids){
+      try{assertMemorySourceReadActive(state);}catch{return false;}
+      if(!await canActorReadMemorySources(db,companyId,actor,id,
+        forbiddenRecordId?{forbiddenRecordId}:{}))return false;
+    }
+    return true;
+  };
+  return inherited?inspect():memorySourceReads.run(state,inspect);
 }
 async function memorySourceActorCurrent(db:Db,companyId:string,actor:AuthorizationActor|undefined,sourceRootId?:string):Promise<boolean> {
   if(!actor)return false;
@@ -176,7 +194,8 @@ async function memorySourceActorCurrent(db:Db,companyId:string,actor:Authorizati
   return (await authorizationService(db).decide({actor,action:"company_scope:read",resource:{type:"company",companyId},enforceResponsibleUserIntersection:true})).allowed;
 }
 async function inspectMemorySourceAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,recordId:string,
-  state:MemorySourceReadScope,diagnosticDenied:(reason:"scope_guard"|"cycle"|"deadline"|"work_budget")=>void):Promise<boolean> {
+  state:MemorySourceReadScope,diagnosticDenied:(reason:"scope_guard"|"cycle"|"deadline"|"work_budget")=>void,
+  forbiddenRecordId?:string):Promise<boolean> {
   if (!actor) return false;
   const { authorizationService, canActorReadIssuePrivacy, canActorReadProjectPrivacy, canActorReadHeartbeatRunPrivacy } = await import("../authorization.js");
   const admitted = () => memorySourceActorCurrent(db,companyId,actor,recordId);
@@ -193,6 +212,7 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
   const deadline = state.deadline;
   const visit = async (id:string,ancestor=false,authorizedPrivateOwnerEdge=false):Promise<boolean> => {
     try { assertMemorySourceReadActive(state); } catch { diagnosticDenied("scope_guard"); return false; }
+    if (id===forbiddenRecordId) { diagnosticDenied("cycle"); return false; }
     if (active.has(id)) { diagnosticDenied("cycle"); return false; }
     if (performance.now()>deadline) { diagnosticDenied("deadline"); return false; }
     if (visited.size>=256 || state.work>=256) { diagnosticDenied("work_budget"); return false; }
@@ -780,8 +800,18 @@ export async function purgeMemoryRecords(db: Db, companyId: string, rootIds: str
 }
 
 export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, recordIds: string[], now = new Date(),
-  sourceAssets?:{workflowRevisionIds:string[];artifactVersionIds:string[];runIds?:string[];skillVersionIds?:string[]}) {
+  sourceAssets?:{workflowRevisionIds:string[];artifactVersionIds:string[];runIds?:string[];skillVersionIds?:string[];companyPurgeOperationId?:string}) {
   if (!recordIds.length&&!sourceAssets?.workflowRevisionIds.length&&!sourceAssets?.artifactVersionIds.length&&!sourceAssets?.runIds?.length&&!sourceAssets?.skillVersionIds?.length) return;
+  if (sourceAssets?.companyPurgeOperationId) {
+    if (!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(sourceAssets.companyPurgeOperationId))
+      throw conflict("Company-purge Memory erasure receipt is invalid");
+    const [operation] = await db.select({ id: companyDeletionOperations.id }).from(companyDeletionOperations).where(and(
+      eq(companyDeletionOperations.id, sourceAssets.companyPurgeOperationId), eq(companyDeletionOperations.companyId, companyId),
+      eq(companyDeletionOperations.stage, "purge"), eq(companyDeletionOperations.status, "processing"),
+      sql`${companyDeletionOperations.evidence}->>'runtimesErasedAt' is not null`,
+    ));
+    if (!operation) throw conflict("Company-purge Memory erasure receipt is not current");
+  }
   if (sourceAssets?.runIds?.length) {
     // A Run-level source erasure scrubs its actual Memory copies. Do not use
     // this retention edge for Context/Memory-root erasure; those follow the
@@ -917,10 +947,15 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
       const runtimeAssetJobKey = `runtime-asset-erasure:v1:${child.id}`;
       await db.insert(memoryJobs).values({ companyId, operationType: "retention", jobKey: runtimeAssetJobKey,
         sourceRefJson: { kind: "runtime_asset_erasure", runId: child.id, legacyDigests: [] } }).onConflictDoNothing();
+      const companyPurgeReceiptCondition = sourceAssets?.companyPurgeOperationId
+        ? sql`(${memoryJobs.status}='succeeded'
+          and ${memoryJobs.sourceRefJson}->>'runId'=${child.id}
+          and ${memoryJobs.sourceRefJson}->>'companyPurgeOperationId'=${sourceAssets.companyPurgeOperationId}) is not true`
+        : sql`true`;
       await db.update(memoryJobs).set({ status: "queued", finishedAt: null, resultJson: null, resultSummary: null,
         error: null, errorCode: null, sourceRefJson: { kind: "runtime_asset_erasure", runId: child.id, legacyDigests: [] }, updatedAt: now })
         .where(and(eq(memoryJobs.companyId, companyId), eq(memoryJobs.jobKey, runtimeAssetJobKey), eq(memoryJobs.attemptNumber, 1),
-          inArray(memoryJobs.status, ["succeeded", "failed", "cancelled"])));
+          inArray(memoryJobs.status, ["succeeded", "failed", "cancelled"]), companyPurgeReceiptCondition));
       if (child.logRef && child.logStore === "local_file") {
         // Transactional outbox: content-free identities only, independent of
         // feature flags and retained after source-job payloads are erased.

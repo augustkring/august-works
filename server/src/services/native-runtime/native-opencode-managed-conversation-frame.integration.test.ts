@@ -1,5 +1,6 @@
-import {and,eq} from "drizzle-orm";
-import {heartbeatRunEvents,nativeRunFinalizations,nativeRunResults} from "@paperclipai/db";
+import {and,eq,sql} from "drizzle-orm";
+import {randomUUID} from "node:crypto";
+import {authSessions,authUsers,companyMemberships,heartbeatRunEvents,issues,nativeRunFinalizations,nativeRunResults,projectWorkspaces,projects} from "@paperclipai/db";
 import type {BusinessMetricQuery} from "@paperclipai/shared";
 import {instanceSettingsService} from "../instance-settings.js";
 import {businessMetricService} from "../business-metrics/service.js";
@@ -15,6 +16,13 @@ import { createDb } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { makeConversationFixtureTreeWritable, runManagedNativeConversationFrame } from "../../__tests__/helpers/managed-native-conversation-frame.js";
 import { configureManagedConversationSandboxHost } from "../../__tests__/helpers/managed-native-conversation-sandbox-host.js";
+import express from "express";
+import request from "supertest";
+import { actorMiddleware } from "../../middleware/auth.js";
+import { errorHandler } from "../../middleware/error-handler.js";
+import type { BetterAuthSessionResult } from "../../auth/better-auth.js";
+import { projectRoutes } from "../../routes/projects.js";
+import { seedNativePasskeySession } from "../../__tests__/helpers/native-authentication-fixtures.js";
 
 function qualifiedOpenCodeBinary(): string | null {
   if (process.platform !== "linux") return null;
@@ -234,6 +242,174 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
       expect.objectContaining({inputs:expect.arrayContaining([
         expect.objectContaining({kind:"tool_result",toolName:"query_business_metric",invocationId:null}),
         expect.objectContaining({kind:"context"})])})])});
+  },240_000);
+
+  it("creates one private Project from a current conversation dispatch and carries its exact result into the next request",async()=>{
+    const binary=qualifiedOpenCodeBinary();
+    if(!binary)throw new Error("qualified_opencode_binary_unavailable");
+    const callId="conversation-project-create-c0";
+    const projectName="Conversation-created private Project";
+    const workspaceName="Conversation local workspace";
+    let providerConsumedResult=false;
+    let projectRead:{projectId:string;ownerStatus:number;foreignStatus:number}|null=null;
+    const result=await runManagedNativeConversationFrame({db,root,opencodeBinary:binary,
+      providerReply:({body,callIndex})=>{
+        if(callIndex===1){
+          const tools=Array.isArray(body.tools)?body.tools as Array<Record<string,unknown>>:[];
+          const tool=tools.find(value=>typeof value.name==="string"&&value.name.endsWith("create_project"));
+          if(!tool)throw new Error("conversation_project_create_tool_not_advertised");
+          return {stop_reason:"tool_use",content:[{type:"tool_use",id:callId,name:tool.name,input:{
+            name:projectName,description:"Created from this authenticated conversation turn.",
+            workspace:{name:workspaceName},idempotencyKey:"conversation-project-create-c0" }}]};
+        }
+        if(callIndex!==2)throw new Error("conversation_project_create_unexpected_provider_retry");
+        const messages=Array.isArray(body.messages)?body.messages as Array<Record<string,unknown>>:[];
+        const blocks=messages.flatMap(message=>Array.isArray(message.content)?message.content as Array<Record<string,unknown>>:[]);
+        const output=blocks.find(block=>block.type==="tool_result"&&block.tool_use_id===callId);
+        if(!output||output.is_error===true)throw new Error("conversation_project_create_result_not_delivered");
+        const content=typeof output.content==="string"?output.content:Array.isArray(output.content)
+          ?(output.content as Array<Record<string,unknown>>).map(part=>typeof part.text==="string"?part.text:"").join(""):"";
+        const dto=JSON.parse(content) as Record<string,unknown>;
+        expect(dto).toMatchObject({name:projectName,visibility:"private"});
+        expect(dto.id).toEqual(expect.any(String));
+        providerConsumedResult=true;
+        return undefined;
+      },
+      afterRunSettledBeforeTeardown:async facts=>{
+        if(!facts.run||facts.run.status!=="succeeded")return;
+        const receipt=facts.nativeInputSourceReceipt as {additionalInputs?:Array<{inputs?:unknown[]}>}|null;
+        const rows=Array.isArray(receipt?.additionalInputs)?receipt!.additionalInputs:[];
+        const createdEntries=rows.filter(entry=>Array.isArray(entry.inputs)&&entry.inputs.some(value=>{
+          const item=value&&typeof value==="object"&&!Array.isArray(value)?value as Record<string,unknown>:{};
+          return item.kind==="tool_result"&&item.toolName==="create_project"&&item.callId===callId&&item.invocationId===null;
+        }));
+        expect(createdEntries).toHaveLength(1);
+        const createdInputs=createdEntries[0]!.inputs!.map(value=>value&&typeof value==="object"&&!Array.isArray(value)
+          ?value as Record<string,unknown>:{});
+        const projectSources=createdInputs.filter(value=>value.kind==="project");
+        const workspaceSources=createdInputs.filter(value=>value.kind==="project_workspace");
+        expect(projectSources).toHaveLength(1);
+        expect(workspaceSources).toHaveLength(1);
+        const projectId=String(projectSources[0]!.projectId);
+        const [project]=await db.select().from(projects).where(and(eq(projects.companyId,facts.companyId),eq(projects.id,projectId)));
+        const workspaces=await db.select().from(projectWorkspaces).where(and(eq(projectWorkspaces.companyId,facts.companyId),eq(projectWorkspaces.projectId,projectId)));
+        expect(project).toMatchObject({name:projectName,visibility:"private",privacyOwnerUserId:facts.actor.userId});
+        expect(workspaces).toHaveLength(1);
+        expect(workspaces[0]).toMatchObject({name:workspaceName,isPrimary:true});
+
+        const [ownerSession]=await db.select({id:authSessions.id,userId:authSessions.userId,token:authSessions.token,
+          expiresAt:authSessions.expiresAt}).from(authSessions).where(and(eq(authSessions.id,facts.actor.sessionId!),
+          eq(authSessions.userId,facts.actor.userId!)));
+        const foreignUserId=`conversation-project-foreign-${randomUUID()}`;
+        const now=new Date();
+        await db.insert(authUsers).values({id:foreignUserId,name:"Foreign Project reader",email:`${foreignUserId}@test.invalid`,
+          emailVerified:true,createdAt:now,updatedAt:now});
+        await db.insert(companyMemberships).values({companyId:facts.companyId,principalType:"user",principalId:foreignUserId,
+          membershipRole:"member",status:"active"});
+        const foreignSessionId=await seedNativePasskeySession(db,foreignUserId);
+        const [foreignSession]=await db.select({id:authSessions.id,userId:authSessions.userId,token:authSessions.token,
+          expiresAt:authSessions.expiresAt}).from(authSessions).where(and(eq(authSessions.id,foreignSessionId),
+          sql`${authSessions.expiresAt}>now()`)).limit(1);
+        if(!ownerSession||!foreignSession)throw new Error("conversation_project_human_sessions_missing");
+        const app=express();app.use(express.json());
+        app.use(actorMiddleware(db,{deploymentMode:"authenticated",resolveSession:async req=>{
+          const token=(req.header("cookie")??"").split(";").map(value=>value.trim())
+            .map(value=>value.slice(value.indexOf("=")+1)).map(decodeURIComponent).find(Boolean);
+          if(!token)return null;
+          const [session]=await db.select({id:authSessions.id,userId:authSessions.userId,expiresAt:authSessions.expiresAt})
+            .from(authSessions).where(and(eq(authSessions.token,token),sql`${authSessions.expiresAt}>now()`)).limit(1);
+          if(!session)return null;
+          const [user]=await db.select({id:authUsers.id,name:authUsers.name,email:authUsers.email})
+            .from(authUsers).where(eq(authUsers.id,session.userId)).limit(1);
+          if(!user)return null;
+          const value:BetterAuthSessionResult={session:{id:session.id,userId:session.userId,expiresAt:session.expiresAt},user};
+          return value;
+        }}));
+        app.use("/api",projectRoutes(db));app.use(errorHandler);
+        const ownerResponse=await request(app).get(`/api/projects/${projectId}`)
+          .set("cookie",`session_token=${encodeURIComponent(ownerSession.token)}`);
+        const foreignResponse=await request(app).get(`/api/projects/${projectId}`)
+          .set("cookie",`session_token=${encodeURIComponent(foreignSession.token)}`);
+        projectRead={projectId,ownerStatus:ownerResponse.status,foreignStatus:foreignResponse.status};
+      }});
+    expect(result.success,JSON.stringify({status:result.runStatus,errorCode:result.run?.errorCode,
+      calls:result.providerCallCount,providerStubFailure:result.providerStubFailure,broker:result.brokerRequestFacts,
+      sourceProtocol:result.run?.nativeInputSourceProtocolVersion,stdout:result.run?.stdoutExcerpt?.slice(0,800),
+      stderr:result.run?.stderrExcerpt?.slice(0,1000)})).toBe(true);
+    expect(result.providerCallCount).toBe(2);
+    expect(result.workerPlan).toBeNull();
+    expect(result.workerAttempts).toHaveLength(0);
+    expect(result.foreignWriteDidNotMutate).toBe(true);
+    expect(providerConsumedResult).toBe(true);
+    expect(projectRead).toMatchObject({ownerStatus:200});
+    expect(projectRead?.foreignStatus).toBeGreaterThanOrEqual(400);
+    expect(result.nativeInputSourceReceipt).toMatchObject({additionalInputs:expect.arrayContaining([
+      expect.objectContaining({inputs:expect.arrayContaining([
+        expect.objectContaining({kind:"tool_result",toolName:"create_project",invocationId:null,callId}),
+        expect.objectContaining({kind:"project"}),expect.objectContaining({kind:"project_workspace"})])})])});
+  },240_000);
+
+  it("creates a source-bound Task from an ordinary conversation model turn and carries the exact result into the next request",async()=>{
+    const binary=qualifiedOpenCodeBinary();
+    if(!binary)throw new Error("qualified_opencode_binary_unavailable");
+    const callId="conversation-task-create-c0";
+    const taskTitle="Conversation-created private Task";
+    let providerConsumedResult=false;
+    const result=await runManagedNativeConversationFrame({db,root,opencodeBinary:binary,
+      providerReply:({body,callIndex})=>{
+        if(callIndex===1){
+          const tools=Array.isArray(body.tools)?body.tools as Array<Record<string,unknown>>:[];
+          const tool=tools.find(value=>typeof value.name==="string"&&value.name.endsWith("create_task"));
+          if(!tool)throw new Error("conversation_task_create_tool_not_advertised");
+          return {stop_reason:"tool_use",content:[{type:"tool_use",id:callId,name:tool.name,input:{
+            title:taskTitle,description:"Created from this authenticated conversation turn.",
+            idempotencyKey:"conversation-task-create-c0"}}]};
+        }
+        if(callIndex!==2)throw new Error("conversation_task_create_unexpected_provider_retry");
+        const messages=Array.isArray(body.messages)?body.messages as Array<Record<string,unknown>>:[];
+        const blocks=messages.flatMap(message=>Array.isArray(message.content)?message.content as Array<Record<string,unknown>>:[]);
+        const output=blocks.find(block=>block.type==="tool_result"&&block.tool_use_id===callId);
+        if(!output||output.is_error===true)throw new Error("conversation_task_create_result_not_delivered");
+        const content=typeof output.content==="string"?output.content:Array.isArray(output.content)
+          ?(output.content as Array<Record<string,unknown>>).map(part=>typeof part.text==="string"?part.text:"").join(""):"";
+        const dto=JSON.parse(content) as Record<string,unknown>;
+        const task=dto.task&&typeof dto.task==="object"&&!Array.isArray(dto.task)?dto.task as Record<string,unknown>:null;
+        expect(dto.disposition).toBe("applied");
+        expect(task).toMatchObject({title:taskTitle,parentId:null,status:"todo"});
+        expect(task?.id).toEqual(expect.any(String));
+        providerConsumedResult=true;
+        return undefined;
+      },
+      afterRunSettledBeforeTeardown:async facts=>{
+        if(!facts.run||facts.run.status!=="succeeded")return;
+        const receipt=facts.nativeInputSourceReceipt as {additionalInputs?:Array<{policy?:unknown;inputs?:unknown[]}>}|null;
+        const rows=Array.isArray(receipt?.additionalInputs)?receipt!.additionalInputs:[];
+        const entries=rows.filter(entry=>Array.isArray(entry.inputs)&&entry.inputs.some(value=>{
+          const item=value&&typeof value==="object"&&!Array.isArray(value)?value as Record<string,unknown>:{};
+          return item.kind==="tool_result"&&item.toolName==="create_task"&&item.callId===callId&&item.invocationId!==null;
+        }));
+        expect(entries).toHaveLength(1);
+        const inputs=entries[0]!.inputs!.map(value=>value&&typeof value==="object"&&!Array.isArray(value)
+          ?value as Record<string,unknown>:{});
+        const taskSources=inputs.filter(value=>value.kind==="task");
+        expect(taskSources).toHaveLength(1);
+        const taskId=String(taskSources[0]!.issueId);
+        expect(entries[0]!.policy).toMatchObject({issueIds:[taskId]});
+        expect(inputs).toEqual(expect.arrayContaining([expect.objectContaining({kind:"tool_result",callId,toolName:"create_task"})]));
+        const [created]=await db.select().from(issues).where(and(eq(issues.companyId,facts.companyId),eq(issues.id,taskId)));
+        expect(created).toMatchObject({title:taskTitle,parentId:null,status:"todo",responsibleUserId:facts.actor.userId,
+          createdByAgentId:facts.actor.agentId,payloadSourceProtocolVersion:1,payloadSourceSnapshotInvalidated:false});
+        expect(created?.payloadSourceSnapshot).toMatchObject({owner:{kind:"issue",companyId:facts.companyId,id:taskId}});
+      }});
+    expect(result.success,JSON.stringify({status:result.runStatus,errorCode:result.run?.errorCode,
+      calls:result.providerCallCount,providerStubFailure:result.providerStubFailure,broker:result.brokerRequestFacts,
+      sourceProtocol:result.run?.nativeInputSourceProtocolVersion,stdout:result.run?.stdoutExcerpt?.slice(0,800),
+      stderr:result.run?.stderrExcerpt?.slice(0,1000)})).toBe(true);
+    expect(result.providerCallCount).toBe(2);
+    expect(result.workerPlan).toBeNull();
+    expect(result.workerAttempts).toHaveLength(0);
+    expect(result.foreignWriteDidNotMutate).toBe(true);
+    expect(providerConsumedResult).toBe(true);
   },240_000);
 
 });

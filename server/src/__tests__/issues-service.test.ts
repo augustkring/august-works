@@ -1,5 +1,5 @@
 import { projectService } from "../services/projects.js";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { and, asc, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
@@ -145,7 +145,7 @@ describeEmbeddedPostgres("issueService native ancestor source capture",()=>{
       expect(row).not.toHaveProperty("sourceCapture");
     }
   });
-  it("retains the original captured row across operational status changes",async()=>{
+  it("retains the captured row across status changes and rejects a body edit under its sealed source",async()=>{
     const seeded=await chain(),svc=issueService(db),captured:NativeTaskSourceCapture[]=[];
     await svc.getAncestors(seeded.target.id,{onSourceCapture:capture=>captured.push(capture)});
     expect(captured[0]?.payloadSourceSnapshot).toEqual(seeded.snapshot);
@@ -160,6 +160,14 @@ describeEmbeddedPostgres("issueService native ancestor source capture",()=>{
     const [currentHash]=await db.execute<{hash:string}>(sql`select public.aw_native_payload_body_hash('issue',to_jsonb(i)) as hash
       from issues i where i.id=${seeded.selected.id}::uuid`);
     expect(captured[0]!.input.contentHash).toBe(currentHash!.hash);
+    await expect(db.update(issues).set({title:"Changed Task payload"}).where(eq(issues.id,seeded.selected.id)))
+      .rejects.toThrow("Native payload source snapshot does not bind its owner and body");
+    const [unchanged]=await db.select({title:issues.title,payloadSourceSnapshot:issues.payloadSourceSnapshot,
+      payloadSourceSnapshotInvalidated:issues.payloadSourceSnapshotInvalidated}).from(issues)
+      .where(eq(issues.id,seeded.selected.id));
+    expect(unchanged!.title).toBe(seeded.selected.title);
+    expect(unchanged!.payloadSourceSnapshot).toEqual(seeded.snapshot);
+    expect(unchanged!.payloadSourceSnapshotInvalidated).toBe(false);
     const empty:NativeTaskSourceCapture[]=[];
     expect(await svc.getAncestors(seeded.rows[0]!.id,{onSourceCapture:capture=>empty.push(capture)})).toEqual([]);
     expect(empty).toEqual([]);

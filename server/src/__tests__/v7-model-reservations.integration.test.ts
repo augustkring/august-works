@@ -693,13 +693,50 @@ const support = await getEmbeddedPostgresTestSupport();
         qualificationHash: "b".repeat(64), expiresAt: new Date(Date.now() + 60 * 60_000).toISOString() };
       const result = await conversationReservationFixture(async facts => { factsHolder.value = facts; }, 2000, usagePricedTariff,
         async facts => {
-          if (!facts.run || !facts.reservation) throw new Error("conversation_settled_frame_missing_for_purge");
-          await assertConversationNativeStopBeforeErasure(facts);
-          purgeHolder.value = await purgeConversationCompany(facts, "conversation-known-cost-purge");
+          const providerFrame = factsHolder.value;
+          if (!providerFrame) throw new Error("conversation_provider_frame_missing_for_purge");
+          const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, providerFrame.companyId),
+            eq(heartbeatRuns.id, providerFrame.run.id))).limit(1);
+          const [reservation] = await db.select().from(orchestrationModelReservations).where(and(
+            eq(orchestrationModelReservations.companyId, providerFrame.companyId),
+            eq(orchestrationModelReservations.id, providerFrame.reservation.id))).limit(1);
+          const [conversation] = await db.select({ conversationAgentId: issues.conversationAgentId,
+            conversationUserId: issues.conversationUserId, conversationSessionGeneration: issues.conversationSessionGeneration,
+            conversationState: issues.conversationState, status: issues.status }).from(issues)
+            .where(and(eq(issues.companyId, providerFrame.companyId), eq(issues.id, providerFrame.issueId))).limit(1);
+          if (!run || !reservation || !conversation || run.companyId !== providerFrame.companyId || run.agentId !== providerFrame.agentId ||
+            run.runtimeMode !== "native" || run.nativeIssueId !== providerFrame.issueId || run.responsibleUserId !== providerFrame.actor.userId ||
+            run.status !== "succeeded" || reservation.status !== "completed" || reservation.purpose !== "conversation_model" ||
+            reservation.conversationRunId !== run.id || reservation.conversationIssueId !== providerFrame.issueId ||
+            reservation.conversationSessionGeneration !== providerFrame.reservation.conversationSessionGeneration ||
+            conversation.conversationAgentId !== providerFrame.agentId || conversation.conversationUserId !== providerFrame.actor.userId ||
+            conversation.conversationSessionGeneration !== providerFrame.reservation.conversationSessionGeneration ||
+            !["waiting", "in_review"].includes(conversation.status) ||
+            (facts.run && facts.run.id !== run.id) || (facts.reservation && facts.reservation.id !== reservation.id)) {
+            throw new Error(`conversation_settled_provider_frame_mismatch:${JSON.stringify({
+              runPresent: !!run, runStatus: run?.status ?? null, runNative: run?.runtimeMode === "native",
+              runIssueMatches: run?.nativeIssueId === providerFrame.issueId,
+              runHumanMatches: run?.responsibleUserId === providerFrame.actor.userId,
+              reservationPresent: !!reservation, reservationStatus: reservation?.status ?? null,
+              reservationRunMatches: reservation?.conversationRunId === run?.id,
+              reservationIssueMatches: reservation?.conversationIssueId === providerFrame.issueId,
+              generationMatches: reservation?.conversationSessionGeneration === providerFrame.reservation.conversationSessionGeneration &&
+                conversation?.conversationSessionGeneration === providerFrame.reservation.conversationSessionGeneration,
+              taskOwnerMatches: conversation?.conversationAgentId === providerFrame.agentId &&
+                conversation?.conversationUserId === providerFrame.actor.userId,
+              taskSettled: !!conversation && ["waiting", "in_review"].includes(conversation.status),
+              selectedRunMatches: facts.run?.id === run?.id,
+              selectedReservationMatches: facts.reservation?.id === reservation?.id,
+            })}`);
+          }
+          const exactFrame = { ...facts, run, reservation };
+          await assertConversationNativeStopBeforeErasure(exactFrame);
+          purgeHolder.value = await purgeConversationCompany(exactFrame, "conversation-known-cost-purge");
         });
       const facts = factsHolder.value;
       if (!facts) throw new Error("conversation_frame_facts_missing");
       expect(result.success).toBe(true);
+      expect(result.run?.id).toBe(factsHolder.value?.run.id);
       expect(result.workerPlan).toBeNull();
       expect(result.workerAttempts).toHaveLength(0);
       const reservation = result.reservation!;

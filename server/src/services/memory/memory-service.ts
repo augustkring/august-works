@@ -51,7 +51,9 @@ import {
 import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
 import { isUniqueViolation } from "../../db-errors.js";
 import { lockMemoryPrivacy, assertMemoryOperationRetained, assertMemorySourcesRetained,
-  purgeMemoryRecords, memoryDeletionKey, memoryPayloadVisible, reapplyMemoryDeletionMarkers, canActorReadMemorySources, captureMemorySources, capturePrivateShareSource, memoryShareContentFingerprint, withNativeMemoryCaptureSources, type NativeMemoryCaptureReceipt } from "./memory-privacy.js";
+  purgeMemoryRecords, memoryDeletionKey, memoryPayloadVisible, reapplyMemoryDeletionMarkers, canActorReadMemorySources,
+  canActorReadMemorySourceSet, captureMemorySources, capturePrivateShareSource, memoryShareContentFingerprint,
+  withNativeMemoryCaptureSources, type NativeMemoryCaptureReceipt } from "./memory-privacy.js";
 import { learningActorFromPrincipal } from "../learning/learning-analytical-sources.js";
 import { persistActivity, publishActivity, type ActivityPublication } from "../activity-log.js";
 import { canActorReadIssuePrivacy, pinCurrentBoardActor, type AuthorizationActor } from "../authorization.js";
@@ -1073,6 +1075,21 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
           const sourceChanges=!shareCopyHasOnlyIncidentalRunRoots
             && (target.sourceProvenanceQualified!==(target.sourceProvenanceQualified && provenance.sourceProvenanceQualified)
               || sourceKeys.some(key=>provenance[key].some(id=>!target[key].includes(id))));
+          const invalidatesCurrentSnapshot=sourceChanges && target.payloadSourceProtocolVersion===1 && !humanManualTaskTarget;
+          if(invalidatesCurrentSnapshot && !nativeCapture)
+            throw conflict("Memory source expansion would invalidate the current claim snapshot",{code:"memory_resolution_source_conflict"});
+          if(invalidatesCurrentSnapshot && nativeCapture){
+            const sourceActor=memorySourceActor(companyId,actor);
+            const sourceMemoryUnion=[...new Set([...target.sourceMemoryIds,...provenance.sourceMemoryIds])].sort();
+            if(!await canActorReadMemorySourceSet(txDb,companyId,sourceActor,sourceMemoryUnion,target.id))
+              throw conflict("Memory attachment sources are unavailable or cyclic",{code:"memory_resolution_source_conflict"});
+            // Revalidate current Context/Task/Project/Foundation authority after
+            // every staged Memory root has completed its recursive source walk.
+            const finalProvenance=await captureMemorySources(txDb,companyId,sourceActor,parsed.data.scope,sourceMemoryUnion,parsed.data.evidence);
+            if(!finalProvenance.sourceProvenanceQualified ||
+              !await canActorReadMemorySources(txDb,companyId,sourceActor,target.id))
+              throw conflict("Memory attachment sources are unavailable or cyclic",{code:"memory_resolution_source_conflict"});
+          }
           let humanEvidenceSealAudit:{previousSnapshotDigest:string;currentSnapshotDigest:string}|null=null;
           let humanEvidenceSealCredential:{actor:AuthorizationActor;credentialExpiresAt:number|null}|null=null;
           if((resolution.metadata.kind!=="duplicate" || sourceChanges)&&!humanManualTaskTarget)await txDb.update(memoryRecords).set({
@@ -1163,7 +1180,10 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
           // A distinct descendant or another retained source may lead back to
           // this target. Use the original current source owner before commit,
           // so failed attachment rolls back lineage, evidence and audit alike.
-          if(!await canActorReadMemorySources(txDb,companyId,memorySourceActor(companyId,actor),target.id))
+          // Receipt-backed capture returns only the resolution, never a Memory
+          // body. Its staged union and old target were fully revalidated above;
+          // this exact write deliberately invalidated the old body snapshot.
+          if(!invalidatesCurrentSnapshot && !await canActorReadMemorySources(txDb,companyId,memorySourceActor(companyId,actor),target.id))
             throw conflict("Memory attachment sources are unavailable or cyclic",{code:"memory_resolution_source_conflict"});
           if(humanEvidenceSealCredential)await assertCurrentMemoryHumanCredential(txDb,humanEvidenceSealCredential.actor,
             humanEvidenceSealCredential);

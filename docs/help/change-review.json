@@ -104,7 +104,7 @@
       "sourceSha256": "1a2b3d7becdbb50b9ff8c12dfc4cd7071795fa3474fd7cc22c879093cdb3e5aa",
       "articleSha256": "ce2b7703039362ccc1a7747cfb7b11bb189be5d72007cd6297e5ac49d200fe82",
       "decision": "updated",
-      "rationale": "The Access step discloses that Slack consent authorizes the signed-in person and that organization sharing shares that person\u2019s connection; setup retains managed and advanced own-app choices."
+      "rationale": "The Access step discloses that Slack consent authorizes the signed-in person and that organization sharing shares that person’s connection; setup retains managed and advanced own-app choices."
     },
     {
       "source": "ui/src/pages/apps/app-detail/PermissionsPanel.tsx",
@@ -120,7 +120,7 @@
       "sourceSha256": "2c5de01bbf0adc3eb74f4d8678055cf8b15a5fe69946453ffcb4bdc2f4746608",
       "articleSha256": "ce2b7703039362ccc1a7747cfb7b11bb189be5d72007cd6297e5ac49d200fe82",
       "decision": "updated",
-      "rationale": "The paired article directs administrators to inspect an app\u2019s active connection and permissions before asking a Co-worker to use it."
+      "rationale": "The paired article directs administrators to inspect an app’s active connection and permissions before asking a Co-worker to use it."
     },
     {
       "source": "ui/src/pages/apps/AppNotConnected.tsx",
@@ -128,7 +128,7 @@
       "sourceSha256": "218b58f14a1feb713347afaf7760ac3549ccf20bb0be5259073015376c0ecd3b",
       "articleSha256": "ce2b7703039362ccc1a7747cfb7b11bb189be5d72007cd6297e5ac49d200fe82",
       "decision": "updated",
-      "rationale": "The paired article covers this screen\u2019s unavailable-connection recovery through the same provider sign-in and permission review, without promising reconnection is always available."
+      "rationale": "The paired article covers this screen’s unavailable-connection recovery through the same provider sign-in and permission review, without promising reconnection is always available."
     },
     {
       "source": "ui/src/pages/apps/Connections.tsx",
@@ -192,7 +192,7 @@
       "sourceSha256": "1a2b3d7becdbb50b9ff8c12dfc4cd7071795fa3474fd7cc22c879093cdb3e5aa",
       "articleSha256": "0c498d8afe04b324bf1ef354b4a717e8952f6e8907d11ba37a9206a2ffe3c7f9",
       "decision": "updated",
-      "rationale": "Danish version checked against the current UI: The Access step discloses that Slack consent authorizes the signed-in person and that organization sharing shares that person\u2019s connection; setup retains managed and advanced own-app choices."
+      "rationale": "Danish version checked against the current UI: The Access step discloses that Slack consent authorizes the signed-in person and that organization sharing shares that person’s connection; setup retains managed and advanced own-app choices."
     },
     {
       "source": "ui/src/pages/apps/app-detail/PermissionsPanel.tsx",
@@ -208,7 +208,7 @@
       "sourceSha256": "2c5de01bbf0adc3eb74f4d8678055cf8b15a5fe69946453ffcb4bdc2f4746608",
       "articleSha256": "0c498d8afe04b324bf1ef354b4a717e8952f6e8907d11ba37a9206a2ffe3c7f9",
       "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: The paired article directs administrators to inspect an app\u2019s active connection and permissions before asking a Co-worker to use it."
+      "rationale": "Danish version checked against the same current source behavior: The paired article directs administrators to inspect an app’s active connection and permissions before asking a Co-worker to use it."
     },
     {
       "source": "ui/src/pages/apps/AppNotConnected.tsx",
@@ -216,7 +216,7 @@
       "sourceSha256": "218b58f14a1feb713347afaf7760ac3549ccf20bb0be5259073015376c0ecd3b",
       "articleSha256": "0c498d8afe04b324bf1ef354b4a717e8952f6e8907d11ba37a9206a2ffe3c7f9",
       "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: The paired article covers this screen\u2019s unavailable-connection recovery through the same provider sign-in and permission review, without promising reconnection is always available."
+      "rationale": "Danish version checked against the same current source behavior: The paired article covers this screen’s unavailable-connection recovery through the same provider sign-in and permission review, without promising reconnection is always available."
     },
     {
       "source": "ui/src/pages/apps/Connections.tsx",
@@ -669,18 +669,18 @@
     {
       "source": "server/src/services/memory/memory-privacy.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "bf5e5cb4b23e3746fc5dafc352c0f0c95d531ebd726f5df51c1a68e896aa1e8f",
+      "sourceSha256": "0ab50a23b98d22e51ec70b78101e8133b61a97099e6113ab3b8f410381a1e820",
       "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "no_change",
-      "rationale": "Reviewed both export/deletion articles against the additional conversation dispatch source family and original source-erasure visitors. The existing current-source restrictions, derived-copy erasure and managed-runtime cleanup caveats remain accurate."
+      "rationale": "Reviewed both EN/DA deletion articles after exact current company-operation binding and null-safe retention of succeeded runtime erasure receipts. The original graph walker also rejects a proposed Memory cycle. Customer actions and the documented Stop/retention/minimal-receipt limits remain unchanged."
     },
     {
       "source": "server/src/services/memory/memory-service.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "f85d0533f77080eafc22af4729c5b9259469768dc7da9e524fd590475b48226b",
+      "sourceSha256": "8af5d4e6e66504b816f0b4c515c6198b9b97b77b8924e139062638a9eaf6cf5b",
       "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
-      "decision": "updated",
-      "rationale": "Reviewed canonical Native Memory detail projection and final source validation in one publishing transaction, including retained Human evidence rules. The customer actions and original-source restrictions in both EN/DA articles remain unchanged."
+      "decision": "no_change",
+      "rationale": "Reviewed both EN/DA deletion articles: ordinary source expansion refuses and rolls back when it would invalidate an existing readable snapshot; the receipt-backed Native path returns only its existing resolution result after rechecking the complete staged source union. No stale body is returned. The documented blocked-update and retained source restrictions remain accurate."
     },
     {
       "source": "server/src/services/saas/account-deletion.ts",
@@ -693,10 +693,10 @@
     {
       "source": "server/src/services/saas/company-purge.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "b9b44b0a7bb996eef8f85584953dfbc768aec34a862142b22d062d59bd59f8ad",
+      "sourceSha256": "8d0aa274a25ca46a49eef4be8671ed588d82b2e7fe32fbb0d1fde49fd762f8ce",
       "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "no_change",
-      "rationale": "Reviewed both export/deletion articles against conversation reservation offboarding: unresolved outcomes block purge and a content-free aggregate retains actual settled cost and token totals. Existing financial/minimal-receipt retention and pending-erasure wording remains accurate."
+      "rationale": "Reviewed both EN/DA deletion articles: exact typed timestamp selection identifies retired conversation Runs, then the original erasure owner retains its current operation receipt through Run cascade. Customer deletion actions, stages, Stop and retention guidance are unchanged; integrated purge qualification is still pending."
     },
     {
       "source": "server/src/services/saas/offboarding.ts",
@@ -749,18 +749,18 @@
     {
       "source": "server/src/services/memory/memory-privacy.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "bf5e5cb4b23e3746fc5dafc352c0f0c95d531ebd726f5df51c1a68e896aa1e8f",
+      "sourceSha256": "0ab50a23b98d22e51ec70b78101e8133b61a97099e6113ab3b8f410381a1e820",
       "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "no_change",
-      "rationale": "Reviewed both export/deletion articles against the additional conversation dispatch source family and original source-erasure visitors. The existing current-source restrictions, derived-copy erasure and managed-runtime cleanup caveats remain accurate."
+      "rationale": "Reviewed both EN/DA deletion articles after exact current company-operation binding and null-safe retention of succeeded runtime erasure receipts. The original graph walker also rejects a proposed Memory cycle. Customer actions and the documented Stop/retention/minimal-receipt limits remain unchanged."
     },
     {
       "source": "server/src/services/memory/memory-service.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "f85d0533f77080eafc22af4729c5b9259469768dc7da9e524fd590475b48226b",
+      "sourceSha256": "8af5d4e6e66504b816f0b4c515c6198b9b97b77b8924e139062638a9eaf6cf5b",
       "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
-      "decision": "updated",
-      "rationale": "Reviewed canonical Native Memory detail projection and final source validation in one publishing transaction, including retained Human evidence rules. The customer actions and original-source restrictions in both EN/DA articles remain unchanged. This Danish article preserves the same customer scope as its English pair."
+      "decision": "no_change",
+      "rationale": "Reviewed both EN/DA deletion articles: ordinary source expansion refuses and rolls back when it would invalidate an existing readable snapshot; the receipt-backed Native path returns only its existing resolution result after rechecking the complete staged source union. No stale body is returned. The documented blocked-update and retained source restrictions remain accurate."
     },
     {
       "source": "server/src/services/saas/account-deletion.ts",
@@ -773,10 +773,10 @@
     {
       "source": "server/src/services/saas/company-purge.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "b9b44b0a7bb996eef8f85584953dfbc768aec34a862142b22d062d59bd59f8ad",
+      "sourceSha256": "8d0aa274a25ca46a49eef4be8671ed588d82b2e7fe32fbb0d1fde49fd762f8ce",
       "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "no_change",
-      "rationale": "Reviewed both export/deletion articles against conversation reservation offboarding: unresolved outcomes block purge and a content-free aggregate retains actual settled cost and token totals. Existing financial/minimal-receipt retention and pending-erasure wording remains accurate."
+      "rationale": "Reviewed both EN/DA deletion articles: exact typed timestamp selection identifies retired conversation Runs, then the original erasure owner retains its current operation receipt through Run cascade. Customer deletion actions, stages, Stop and retention guidance are unchanged; integrated purge qualification is still pending."
     },
     {
       "source": "server/src/services/saas/offboarding.ts",
@@ -1096,7 +1096,7 @@
       "sourceSha256": "3f407de9eae33be8153e390c27b71ce81388ab807becfc8ecc2ce502cb747127",
       "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "updated",
-      "rationale": "Help utilities retain direct human support and the optional assistant route; the article keeps those paths independent and describes the assistant\u2019s consent and read-only limits."
+      "rationale": "Help utilities retain direct human support and the optional assistant route; the article keeps those paths independent and describes the assistant’s consent and read-only limits."
     },
     {
       "source": "ui/src/lib/help-navigation.ts",
@@ -1408,7 +1408,7 @@
       "sourceSha256": "3f407de9eae33be8153e390c27b71ce81388ab807becfc8ecc2ce502cb747127",
       "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: Help utilities retain direct human support and the optional assistant route; the article keeps those paths independent and describes the assistant\u2019s consent and read-only limits."
+      "rationale": "Danish version checked against the same current source behavior: Help utilities retain direct human support and the optional assistant route; the article keeps those paths independent and describes the assistant’s consent and read-only limits."
     },
     {
       "source": "ui/src/lib/help-navigation.ts",
@@ -1565,10 +1565,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "bb55357bce20f82fc717e034a333e0fff5b5ba90810ed51a96c0b085cd60367a",
+      "sourceSha256": "8f25ef264a68f3ad87a766a5de24ee04d86787b40370ed628e15b74cecb6bdb1",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Reviewed paired recovery/export articles against issue-before-Run selection locking, current source/wake capture and bounded failure logging. Stop still waits for original run settlement; source access and erasure remain mandatory. No customer procedure or retention promise changes."
+      "rationale": "Reviewed against both EN/DA linked articles: Native selection clears only its verified old controller lease, and the exact projectless conversation workspace uses its original private root. Stop confirmation, staged runtime erasure and checking the original Run before recovery remain the documented customer actions."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1581,10 +1581,10 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "5e76563dd529d59ad8d274ac42a8c35728241c8d09dc068006c4e4b2ed73cf48",
+      "sourceSha256": "d7129d5b1e9edc0ca5f9d2cf0dfb59b4c499e84d5232a3caf9cdd06c46fec6f0",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Reviewed paired recovery articles against removal of temporary profiling and equivalent final private-reader validation. The original Task and its current source restrictions remain preserved on refusal; customer recovery instructions remain accurate."
+      "rationale": "Reviewed against both EN/DA recovering-work articles: manual comment source capture now shares the original transaction-aware current Human/ACL/seal path; canonical Task hashes distinguish payload edits from operational transitions. The article already tells readers to preserve the original Task and review refused source-dependent updates before retrying."
     },
     {
       "source": "server/src/services/managed-repository-checkout.ts",
@@ -1624,7 +1624,7 @@
       "sourceSha256": "90983e55a2fa9ea9a8abe2b33a5aab817e05a463a65bf5d5795335149d769fd2",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "updated",
-      "rationale": "The blocked-task notice is covered by the article\u2019s instruction to read the displayed blocker and use only the next action shown for the original task."
+      "rationale": "The blocked-task notice is covered by the article’s instruction to read the displayed blocker and use only the next action shown for the original task."
     },
     {
       "source": "ui/src/lib/wait-for-stopped-runs.ts",
@@ -1632,7 +1632,7 @@
       "sourceSha256": "ce5726db6b535d3dd592bfde111b94de36291c1fe7dd5a85198dd22799bbe8c2",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "updated",
-      "rationale": "The stop-waiting UI is covered by the article\u2019s instruction to keep the task open, wait for status, and inspect the original run when an outcome is unknown."
+      "rationale": "The stop-waiting UI is covered by the article’s instruction to keep the task open, wait for status, and inspect the original run when an outcome is unknown."
     },
     {
       "source": "ui/src/pages/IssueDetail.tsx",
@@ -1669,10 +1669,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "bb55357bce20f82fc717e034a333e0fff5b5ba90810ed51a96c0b085cd60367a",
+      "sourceSha256": "8f25ef264a68f3ad87a766a5de24ee04d86787b40370ed628e15b74cecb6bdb1",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Reviewed paired recovery/export articles against issue-before-Run selection locking, current source/wake capture and bounded failure logging. Stop still waits for original run settlement; source access and erasure remain mandatory. No customer procedure or retention promise changes."
+      "rationale": "Reviewed against both EN/DA linked articles: Native selection clears only its verified old controller lease, and the exact projectless conversation workspace uses its original private root. Stop confirmation, staged runtime erasure and checking the original Run before recovery remain the documented customer actions."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1685,10 +1685,10 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "5e76563dd529d59ad8d274ac42a8c35728241c8d09dc068006c4e4b2ed73cf48",
+      "sourceSha256": "d7129d5b1e9edc0ca5f9d2cf0dfb59b4c499e84d5232a3caf9cdd06c46fec6f0",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Reviewed paired recovery articles against removal of temporary profiling and equivalent final private-reader validation. The original Task and its current source restrictions remain preserved on refusal; customer recovery instructions remain accurate."
+      "rationale": "Reviewed against both EN/DA recovering-work articles: manual comment source capture now shares the original transaction-aware current Human/ACL/seal path; canonical Task hashes distinguish payload edits from operational transitions. The article already tells readers to preserve the original Task and review refused source-dependent updates before retrying."
     },
     {
       "source": "server/src/services/managed-repository-checkout.ts",
@@ -1728,7 +1728,7 @@
       "sourceSha256": "90983e55a2fa9ea9a8abe2b33a5aab817e05a463a65bf5d5795335149d769fd2",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: The blocked-task notice is covered by the article\u2019s instruction to read the displayed blocker and use only the next action shown for the original task."
+      "rationale": "Danish version checked against the same current source behavior: The blocked-task notice is covered by the article’s instruction to read the displayed blocker and use only the next action shown for the original task."
     },
     {
       "source": "ui/src/lib/wait-for-stopped-runs.ts",
@@ -1736,7 +1736,7 @@
       "sourceSha256": "ce5726db6b535d3dd592bfde111b94de36291c1fe7dd5a85198dd22799bbe8c2",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: The stop-waiting UI is covered by the article\u2019s instruction to keep the task open, wait for status, and inspect the original run when an outcome is unknown."
+      "rationale": "Danish version checked against the same current source behavior: The stop-waiting UI is covered by the article’s instruction to keep the task open, wait for status, and inspect the original run when an outcome is unknown."
     },
     {
       "source": "ui/src/pages/IssueDetail.tsx",
@@ -2053,18 +2053,18 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "bb55357bce20f82fc717e034a333e0fff5b5ba90810ed51a96c0b085cd60367a",
+      "sourceSha256": "8f25ef264a68f3ad87a766a5de24ee04d86787b40370ed628e15b74cecb6bdb1",
       "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "no_change",
-      "rationale": "Reviewed paired recovery/export articles against issue-before-Run selection locking, current source/wake capture and bounded failure logging. Stop still waits for original run settlement; source access and erasure remain mandatory. No customer procedure or retention promise changes."
+      "rationale": "Reviewed against both EN/DA linked articles: Native selection clears only its verified old controller lease, and the exact projectless conversation workspace uses its original private root. Stop confirmation, staged runtime erasure and checking the original Run before recovery remain the documented customer actions."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "bb55357bce20f82fc717e034a333e0fff5b5ba90810ed51a96c0b085cd60367a",
+      "sourceSha256": "8f25ef264a68f3ad87a766a5de24ee04d86787b40370ed628e15b74cecb6bdb1",
       "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "no_change",
-      "rationale": "Reviewed paired recovery/export articles against issue-before-Run selection locking, current source/wake capture and bounded failure logging. Stop still waits for original run settlement; source access and erasure remain mandatory. No customer procedure or retention promise changes."
+      "rationale": "Reviewed against both EN/DA linked articles: Native selection clears only its verified old controller lease, and the exact projectless conversation workspace uses its original private root. Stop confirmation, staged runtime erasure and checking the original Run before recovery remain the documented customer actions."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",

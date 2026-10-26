@@ -50,7 +50,7 @@ import { agentProviderBindingService } from "../agent-provider-bindings.js";
 import { assertV7Authorization, assertV7Enabled } from "../v7-authorization.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
-import { isCurrentWorkerConversationRoot } from "../native-runtime/worker-conversation-root.js";
+import { isCurrentConversationModelRoot, isCurrentWorkerConversationRoot } from "../native-runtime/worker-conversation-root.js";
 import type { NativeConsumedSourceComponent, NativeModelOutputCapture } from "../native-runtime/native-execution-input.js";
 import {
   lockMemoryPrivacy,
@@ -685,12 +685,10 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
           const [task] = typeof taskId === "string" ? await db.select({ id: issues.id, companyId: issues.companyId,
             identifier: issues.identifier, title: issues.title, status: issues.status, priority: issues.priority,
             projectId: issues.projectId, parentId: issues.parentId, assigneeAgentId: issues.assigneeAgentId,
-            sourceVersion: sql<string>`extract(epoch from ${issues.updatedAt})::text`, hiddenAt: issues.hiddenAt,
+            contentHash: sql<string>`public.aw_native_payload_body_hash('issue',to_jsonb(${issues}))`, hiddenAt: issues.hiddenAt,
             payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated,
           }).from(issues).where(and(eq(issues.companyId, claims.company_id), eq(issues.id, taskId))) : [];
-          const currentTaskSourceHash = task && createHash("sha256").update(JSON.stringify({ id: task.id,
-            identifier: task.identifier ?? null, title: task.title, status: task.status, priority: task.priority }), "utf8").digest("hex");
-          const [workerConversationRoot] = task?.parentId === null && claims.scope === "worker_model" && run.nativeIssueId
+          const [conversationRoot] = task?.parentId === null && run.nativeIssueId
             ? await db.select({ conversationAgentId: issues.conversationAgentId,
               conversationUserId: issues.conversationUserId, conversationState: issues.conversationState,
               conversationSessionGeneration: issues.conversationSessionGeneration,
@@ -700,14 +698,21 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
               payloadSourceSnapshot: issues.payloadSourceSnapshot,
               payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated,
             }).from(issues).where(and(eq(issues.companyId, claims.company_id), eq(issues.id, run.nativeIssueId))) : [];
-          const workerConversationRootCurrent = !!run.nativeIssueId && isCurrentWorkerConversationRoot({
-            scope: claims.scope, root: workerConversationRoot, contextSnapshot: run.contextSnapshot,
+          const workerConversationRootCurrent = !!run.nativeIssueId && claims.scope === "worker_model" && isCurrentWorkerConversationRoot({
+            scope: claims.scope, root: conversationRoot, contextSnapshot: run.contextSnapshot,
             companyId: claims.company_id, issueId: run.nativeIssueId, agentId: claims.sub,
             responsibleUserId: run.responsibleUserId, runId: claims.run_id,
           });
-          const taskParentCurrent = task?.parentId === run.nativeIssueId || task?.parentId === null && workerConversationRootCurrent;
-          if (!task || !taskSource || taskSource.sourceVersion !== task.sourceVersion ||
-            taskSource.contentHash !== currentTaskSourceHash || task.payloadSourceSnapshotInvalidated || !taskParentCurrent)
+          const conversationModelRootCurrent = !!run.nativeIssueId && claims.scope === "conversation_model" &&
+            claims.conversation_model.issueId === run.nativeIssueId && isCurrentConversationModelRoot({
+              root: conversationRoot, contextSnapshot: run.contextSnapshot, companyId: claims.company_id,
+              agentId: claims.sub, responsibleUserId: run.responsibleUserId, runId: claims.run_id,
+              binding: claims.conversation_model,
+            });
+          const taskParentCurrent = task?.parentId === run.nativeIssueId || task?.parentId === null &&
+            (workerConversationRootCurrent || conversationModelRootCurrent);
+          if (!task || !taskSource || taskSource.contentHash !== task.contentHash ||
+            task.payloadSourceSnapshotInvalidated || !taskParentCurrent)
             throw forbidden("Managed OpenCode created Task source is no longer current");
           await assertV7Authorization(db, {
             type: "agent", source: "agent_jwt", companyId: claims.company_id, agentId: claims.sub,

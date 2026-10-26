@@ -65,7 +65,10 @@ suite("Native experiment final capture and human interpretation on migrated Post
     // Actual PostgreSQL time is used throughout. Synthetic fixture sources are
     // enrolled after the real preregistered start; no mocked database clock.
     definition.sampleOrDurationPlan.from = new Date(Date.now() + 1500).toISOString();
-    definition.sampleOrDurationPlan.until = new Date(Date.parse(definition.sampleOrDurationPlan.from) + (confirmatory ? 30000 : short ? 1800 : 60000)).toISOString();
+    // Keep the confirmatory test's fixed horizon real, but bounded enough that
+    // its 16 canonical assignments, actual post-horizon capture and analysis
+    // fit inside Vitest's unchanged 60s case deadline on loaded CI runners.
+    definition.sampleOrDurationPlan.until = new Date(Date.parse(definition.sampleOrDurationPlan.from) + (confirmatory ? 22000 : short ? 1800 : 60000)).toISOString();
     definition.sampleOrDurationPlan.minimumAssignedUnits = 4;
     definition.analysisPlan.finalCaptureMaxDelaySeconds = delay;
     if(confirmatory){ definition.analysisPlan.familywiseAlpha=0.2; definition.guardrailMetrics[0].maximumAcceptableHarm=1; }

@@ -706,11 +706,15 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       content:"Enterprise strategy context memory from a directly captured Human Task.",privateSourceTask:true});
     const memoryTaskId=contextMemory.sourceIssueIds[0];
     if(!memoryTaskId)throw new Error("Human Memory source Task was not retained");
-    await instanceSettingsService(db).updateExperimental({ enableContextEngineV1: true });
+    await instanceSettingsService(db).updateExperimental({
+      enableContextEngineV1: true, enableCollectiveMemoryV1: true,
+    });
     const contextRead=await assembleNativeContextRead(db,{companyId:seeded.companyId,agentId:seeded.agent.id,runId:run!.id,
       issueId:task.id,projectId:null,responsibleUserId:seeded.userId,actor:assembleInput.authorizationActor,
       query:"enterprise strategy"});
     expect(contextRead.witness).toBeDefined();
+    expect(contextRead.markdown).toContain(contextMemory.content);
+    expect(contextRead.sourceSet.policy.memoryIds).toContain(contextMemory.id);
     const bobId=`memory-bob-${randomUUID()}`;
     const bob=await seedCurrentHumanSourceActor(db,[seeded.companyId],bobId);
     await db.update(companyMemberships).set({membershipRole:"member"}).where(and(eq(companyMemberships.companyId,seeded.companyId),

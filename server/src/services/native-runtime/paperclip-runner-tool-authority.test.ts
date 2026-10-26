@@ -28,13 +28,14 @@ import {
   statusDecisions,
   workAssessments,
 } from "@paperclipai/db";
+import { seedCurrentHumanSourceActor } from "../../__tests__/helpers/current-human-source-fixture.js";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { initializeRunIdentity, reserveSteeredIdentity, reconcileSteeredIdentity } from "../run-identity.js";
 import { documentService } from "../documents.js";
 import type { DocumentRevisionSourceCapture } from "../documents.js";
 import { assertNativeDocumentRevisionCurrentSourceAccess } from "../native-direct-input.js";
-import { directHumanPayloadSnapshotSql } from "../native-direct-input.js";
 import { issueService } from "../issues.js";
+import type { NativeTaskSourceCapture } from "../issues.js";
 import { issueThreadInteractionService } from "../issue-thread-interactions.js";
 import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
 import type { NativeInputToolResultSource } from "./paperclip-runner-tool-authority.js";
@@ -48,6 +49,11 @@ import { createAssignedMcpTools } from "./assigned-mcp-tools.js";
 import type { ToolGatewayService } from "../tool-gateway.js";
 import { READ_CURRENT_WAKE_COMMENTS_TOOL_NAME } from "./current-wake-comments.js";
 import { CAPABILITY_SEMANTIC_TOOL_CATALOG, runnerCodexDynamicToolsFit } from "../../vendor/paperclip-runner/index.js";
+import { buildNativeExecutionInput, buildNativeBootstrapSourceSet } from "./native-execution-input.js";
+import { buildNativeModelEnvelope } from "../../vendor/paperclip-runner/index.js";
+import { nativeRuntimeContextFixture } from "./runtime-context.test-fixture.js";
+import { getIssueExecutionContext, buildPaperclipTaskMarkdown } from "../heartbeat.js";
+import { ensureNativeCompletionContract } from "./completion-contracts.js";
 
 describe("PaperclipRunnerToolAuthority", () => {
   let temporary: Awaited<
@@ -61,27 +67,41 @@ describe("PaperclipRunnerToolAuthority", () => {
   const userId = randomUUID();
 
   async function seedDocumentReader(payloadSourceProtocolVersion = 0) {
-    const companyId = randomUUID(), agentId = randomUUID(), issueId = randomUUID(), runId = randomUUID();
+    const companyId = randomUUID(), agentId = randomUUID(), runId = randomUUID();
+    let issueId = randomUUID();
     const issuePrefix = `RDR${companyId.slice(0, 4).toUpperCase()}`;
     await db.insert(companies).values({ id: companyId, name: "Document source reader", issuePrefix });
     await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId,
       membershipRole: "admin", status: "active" });
     await db.insert(agents).values({ id: agentId, companyId, name: "Document source reader", adapterType: "paperclip_runner", status: "active" });
-    await db.insert(issues).values({ id: issueId, companyId, issueNumber: 1, identifier: `${issuePrefix}-1`,
-      title: "Read document source", status: "in_progress", workMode: "standard", assigneeAgentId: agentId,
-      responsibleUserId: userId, visibility: "private", payloadSourceProtocolVersion,
-      payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: false });
+    const human = payloadSourceProtocolVersion === 1
+      ? await seedCurrentHumanSourceActor(db, [companyId], userId) : null;
+    if (human) {
+      const task = await issueService(db).create(companyId, {
+        title: "Read document source", status: "todo", workMode: "standard",
+        assigneeAgentId: agentId, createdByUserId: userId, responsibleUserId: userId, visibility: "private",
+      }, db, undefined, { manualInputActor: human, privacyActor: human, sourceAccessActor: human });
+      expect(task.payloadSourceProtocolVersion).toBe(1);
+      expect(task.payloadSourceSnapshot).not.toBeNull();
+      expect(task.payloadSourceSnapshotInvalidated).toBe(false);
+      issueId = task.id;
+    } else {
+      await db.insert(issues).values({ id: issueId, companyId, issueNumber: 1, identifier: `${issuePrefix}-1`,
+        title: "Read document source", status: "in_progress", workMode: "standard", assigneeAgentId: agentId,
+        responsibleUserId: userId, visibility: "private", payloadSourceProtocolVersion,
+        payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: false });
+    }
     await db.insert(heartbeatRuns).values({ id: runId, companyId, agentId, status: "running", runtimeMode: "native",
       nativeIssueId: issueId, responsibleUserId: userId, invocationSource: "assignment", triggerDetail: "system", contextSnapshot: { issueId } });
     await db.insert(contextManifests).values({ id: randomUUID(), companyId, runId, agentId, issueId,
       projectId: null, queryHash: "a".repeat(64), policySnapshotHash: "b".repeat(64), createdAt: new Date() });
-    await db.update(issues).set({ executionRunId: runId }).where(eq(issues.id, issueId));
-    return { companyId, agentId, issueId, runId,
+    await db.update(issues).set({ status: "in_progress", executionRunId: runId }).where(eq(issues.id, issueId));
+    return { companyId, agentId, issueId, runId, human,
       authority: new PaperclipRunnerToolAuthority(db, { companyId, agentId, issueId, runId }) };
   }
 
-  async function seedDispatchBoundAuthority() {
-    const fixture = await seedDocumentReader();
+  async function seedDispatchBoundAuthority(payloadSourceProtocolVersion = 0) {
+    const fixture = await seedDocumentReader(payloadSourceProtocolVersion);
     const controller = await currentNativeControllerIdentity();
     const leaseOwner = `tool-receipt-owner-${randomUUID()}`;
     const attempt = 3, eventSeq = 7;
@@ -94,13 +114,64 @@ describe("PaperclipRunnerToolAuthority", () => {
     await db.insert(heartbeatRunEvents).values({ companyId: fixture.companyId, runId: fixture.runId,
       agentId: fixture.agentId, seq: eventSeq, eventType: PROCESS_START_REQUESTED,
       payload: { fixture: "actual native launch event" } });
+    let qualifiedTurnInput: { message: { role: "user"; text: string }; requestedCollaborationMode: "default" } | null = null;
+    let bootstrapSourceClosure: { sourceSet: NonNullable<ReturnType<typeof buildNativeBootstrapSourceSet>>;
+      taskEnvelopeDigest: string } | null = null;
+    if (payloadSourceProtocolVersion === 1) {
+      if (!fixture.human) throw new Error("dispatch_fixture_current_human_unavailable");
+      const taskCaptureHolder: { value: NativeTaskSourceCapture | null } = { value: null };
+      const task = await getIssueExecutionContext(db, fixture.companyId, fixture.issueId,
+        capture => { taskCaptureHolder.value = capture; });
+      const taskCapture = taskCaptureHolder.value;
+      if (!task || !taskCapture?.payloadSourceSnapshot)
+        throw new Error("dispatch_fixture_task_source_snapshot_unavailable");
+      const references: Array<{ kind: "task" | "comment" | "document_revision" | "attachment" | "unknown"; id: string }> = [];
+      const rendered = buildPaperclipTaskMarkdown({ issue: { id: fixture.issueId, identifier: task.identifier,
+        title: task.title, description: task.description, workMode: task.workMode } },
+      { onRenderedSource: source => references.push(source) });
+      if (!rendered) throw new Error("dispatch_fixture_task_prompt_unavailable");
+      const completion = await ensureNativeCompletionContract({ db, companyId: fixture.companyId,
+        issue: { id: fixture.issueId, title: task.title, description: task.description }, actorId: fixture.agentId });
+      await db.update(heartbeatRuns).set({ completionContractId: completion.row.id,
+        completionContractSha256: completion.row.canonicalSha256 }).where(eq(heartbeatRuns.id, fixture.runId));
+      await initializeRunIdentity(db, { companyId: fixture.companyId, runId: fixture.runId,
+        issueId: fixture.issueId, responsibleUserId: userId, cause: "dispatch" });
+      const workspace = { id: fixture.runId, cwd: "/native", repoUrl: null, repoRef: null, branchName: null };
+      const execution = buildNativeExecutionInput({ companyId: fixture.companyId, runId: fixture.runId,
+        agentId: fixture.agentId, issue: { id: fixture.issueId, identifier: task.identifier, title: task.title,
+          description: task.description, workMode: task.workMode }, taskPrompt: rendered, workspace,
+        normalizedSessionId: null, provider: "opencode", model: "opencode-test",
+        completionContract: { id: completion.row.id, sha256: completion.row.canonicalSha256,
+          schemaVersion: completion.row.schemaVersion, contract: completion.contract },
+        runtimeContext: nativeRuntimeContextFixture() });
+      const sourceSet = buildNativeBootstrapSourceSet({ companyId: fixture.companyId, runId: fixture.runId,
+        agentId: fixture.agentId, issueId: fixture.issueId, renderedMarkdown: rendered,
+        renderedMarkdownDigest: createHash("sha256").update(rendered, "utf8").digest("hex"), references,
+        candidates: [{ kind: "task", id: fixture.issueId, input: taskCapture.input,
+          payloadSourceSnapshot: taskCapture.payloadSourceSnapshot }], runtimeInputs: [], contextManifestIds: [],
+        rolePackInputs: [], unsupportedInputPresent: false,
+        additionalInputs: [{ kind: "completion_contract", issueId: fixture.issueId, contractId: completion.row.id,
+          revision: String(completion.row.revision), contentHash: completion.row.canonicalSha256 },
+        { kind: "workspace_metadata", runId: fixture.runId, executionWorkspaceId: fixture.runId, origin: "task_session",
+          sourceVersion: `task-session:${fixture.runId}`, contentHash: createHash("sha256").update(JSON.stringify({
+            cwd: workspace.cwd, repoUrl: workspace.repoUrl, repoRef: workspace.repoRef, branchName: workspace.branchName,
+          }), "utf8").digest("hex") }] });
+      if (!sourceSet) throw new Error("dispatch_fixture_bootstrap_source_set_unavailable");
+      await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeExecutionInput: execution } })
+        .where(eq(heartbeatRuns.id, fixture.runId));
+      qualifiedTurnInput = { message: { role: "user", text: JSON.stringify(buildNativeModelEnvelope(execution)) },
+        requestedCollaborationMode: "default" };
+      bootstrapSourceClosure = { sourceSet, taskEnvelopeDigest: nativeSha256(execution.task) };
+    }
     const bindCall = async (tool: string, callId: string, turnId: string, expectAssociation = true,
       argumentsHash?: string) => {
-      const turnInput = { message: { role: "user" as const, text: `actual native input ${turnId}` } };
+      const turnInput = qualifiedTurnInput ?? { message: { role: "user" as const, text: `actual native input ${turnId}` } };
       const binding = { db, runId: fixture.runId, companyId: fixture.companyId, issueId: fixture.issueId,
         agentId: fixture.agentId, leaseOwner, attempt, controller, eventSeq };
-      const dispatchId = await recordNativeModelInputDispatchIntent({ ...binding, turnInput });
-      await recordNativeModelInputDispatchAcknowledgement({ ...binding, dispatchId, turnInput, turnId });
+      const dispatchId = await recordNativeModelInputDispatchIntent({ ...binding, turnInput,
+        ...(bootstrapSourceClosure ? { bootstrapSourceClosure } : {}) });
+      await recordNativeModelInputDispatchAcknowledgement({ ...binding, dispatchId, turnInput, turnId,
+        ...(bootstrapSourceClosure ? { sourceClosure: bootstrapSourceClosure } : {}) });
       const associationRecorded = await recordNativeToolCallDispatchAssociation({ ...binding, turnId, callId, tool, argumentsHash });
       if (expectAssociation) expect(associationRecorded).toBe(true);
       return { tool, callId, turnId, dispatchId, eventSeq, attempt };
@@ -310,10 +381,7 @@ describe("PaperclipRunnerToolAuthority", () => {
   });
 
   it("qualifies a pure task-context read from its exact retained Task owner", async () => {
-    const fixture = await seedDocumentReader();
-    await db.update(issues).set({ payloadSourceProtocolVersion: 1,
-      payloadSourceSnapshot: directHumanPayloadSnapshotSql("issue"), payloadSourceSnapshotInvalidated: false })
-      .where(eq(issues.id, fixture.issueId));
+    const fixture = await seedDocumentReader(1);
     const captures: NativeInputToolResultSource[] = [];
     const result = await fixture.authority.execute({ tool: "get_task_context", callId: "task-context-pure",
       arguments: {} }, { onNativeInputToolResult: async capture => { captures.push(capture); } });
@@ -325,15 +393,10 @@ describe("PaperclipRunnerToolAuthority", () => {
   });
 
   it("binds an accepted-plan task-context result to its exact revision and accepted interaction", async () => {
-    const fixture = await seedDocumentReader();
-    await db.update(issues).set({ payloadSourceProtocolVersion: 1,
-      payloadSourceSnapshot: directHumanPayloadSnapshotSql("issue"), payloadSourceSnapshotInvalidated: false })
-      .where(eq(issues.id, fixture.issueId));
+    const fixture = await seedDocumentReader(1);
     const plan = await documentService(db).upsertIssueDocument({ issueId: fixture.issueId, key: "plan",
-      title: "Owned source plan", format: "markdown", body: "This exact approved plan is part of task context." });
-    await db.update(documentRevisions).set({ payloadSourceProtocolVersion: 1,
-      payloadSourceSnapshot: directHumanPayloadSnapshotSql("document_revision"), payloadSourceSnapshotInvalidated: false })
-      .where(eq(documentRevisions.id, plan.document.latestRevisionId));
+      title: "Owned source plan", format: "markdown", body: "This exact approved plan is part of task context.",
+      createdByUserId: userId, manualInputActor: fixture.human! });
     const interactionId = randomUUID();
     await db.insert(issueThreadInteractions).values({ id: interactionId, companyId: fixture.companyId,
       issueId: fixture.issueId, kind: "request_confirmation", status: "accepted", resolvedByUserId: userId,
@@ -393,24 +456,20 @@ describe("PaperclipRunnerToolAuthority", () => {
       onNativeInputToolResult: async capture => { captures.push(capture); },
     });
     expect(result).toEqual({ comments: [] });
-    expect(captures).toEqual([{ sourceSet: { policy: { issueIds: [fixture.issueId], projectIds: [], runIds: [],
-      memoryIds: [], foundationRevisionIds: [] }, inputs: [] }, resultDigest: nativeSha256(result) }]);
+    expect(captures).toEqual([{ turnId: "empty-history-turn", callId: "empty-history-read",
+      tool: "get_task_history", argumentsHash: nativeSha256({}), result,
+      sourceSet: { policy: { issueIds: [fixture.issueId], projectIds: [], runIds: [],
+        memoryIds: [], foundationRevisionIds: [] }, inputs: [] },
+      observedSourceInputs: [], resultDigest: nativeSha256(result) }]);
   });
 
   it("persists a complete Native history read only against its acknowledged dispatch and exact result bytes", async () => {
-    const fixture = await seedDispatchBoundAuthority();
+    const fixture = await seedDispatchBoundAuthority(1);
     const args = {}, argumentsHash = nativeSha256(args);
     const call = await fixture.bindCall("get_task_history", "native-empty-history", "native-empty-history-turn", true, argumentsHash);
     const [runBefore] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
-    const policy = { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] };
-    const initialBody = { version: 1 as const,
-      binding: { companyId: fixture.companyId, runId: fixture.runId, agentId: fixture.agentId,
-        responsibleUserId: runBefore!.responsibleUserId!, issueId: fixture.issueId },
-      bootstrap: { executionInputDigest: "a".repeat(64), policy, inputs: [] },
-      dispatches: [], additionalInputs: [] };
-    const receipt = nativeRunInputSourceReceiptSchema.parse({ ...initialBody, digest: "b".repeat(64) });
-    await db.update(heartbeatRuns).set({ runnerProfileJson: { ...runBefore!.runnerProfileJson, nativeInputSourceReceipt: receipt } })
-      .where(eq(heartbeatRuns.id, fixture.runId));
+    expect(runBefore?.nativeInputSourceProtocolVersion).toBe(1);
+    expect(runBefore?.runnerProfileJson).toHaveProperty("nativeInputSourceReceipt");
     let captured: Parameters<typeof recordNativeInputToolResultIntent>[0]["capture"] | null = null;
     const result = await fixture.authority.execute({ tool: call.tool, callId: call.callId, arguments: args }, {
       nativeToolCallIdentity: call,
@@ -442,10 +501,7 @@ describe("PaperclipRunnerToolAuthority", () => {
   });
 
   it("keeps assigned-review context unknown and prevents a later read from repairing its output history", async () => {
-    const fixture = await seedDispatchBoundAuthority();
-    await db.update(issues).set({ payloadSourceProtocolVersion: 1,
-      payloadSourceSnapshot: directHumanPayloadSnapshotSql("issue"), payloadSourceSnapshotInvalidated: false })
-      .where(eq(issues.id, fixture.issueId));
+    const fixture = await seedDispatchBoundAuthority(1);
     const sourceAgentId = randomUUID(), sourceRunId = randomUUID(), contractId = randomUUID();
     const resultId = randomUUID(), assessmentId = randomUUID(), decisionId = randomUUID(), interactionId = randomUUID();
     await db.insert(agents).values({ id: sourceAgentId, companyId: fixture.companyId, name: "Assigned worker",
@@ -471,9 +527,6 @@ describe("PaperclipRunnerToolAuthority", () => {
       decisionJson: { projectedStatusVersion: 1 }, decisionDigest: "f".repeat(64), applicationState: "applied" });
     await db.update(issues).set({ status: "in_review", statusVersion: 1, lastStatusDecisionId: decisionId,
       assigneeAgentId: sourceAgentId }).where(eq(issues.id, fixture.issueId));
-    await db.update(issues).set({ payloadSourceProtocolVersion: 1,
-      payloadSourceSnapshot: directHumanPayloadSnapshotSql("issue"), payloadSourceSnapshotInvalidated: false })
-      .where(eq(issues.id, fixture.issueId));
     await db.insert(issueThreadInteractions).values({ id: interactionId, companyId: fixture.companyId,
       issueId: fixture.issueId, kind: "request_confirmation", status: "pending", sourceRunId,
       addresseeAgentId: fixture.agentId, payload: { version: 1, prompt: "Review the work",
@@ -482,14 +535,8 @@ describe("PaperclipRunnerToolAuthority", () => {
     const authority = new PaperclipRunnerToolAuthority(db, { companyId: fixture.companyId, agentId: fixture.agentId,
       issueId: fixture.issueId, runId: fixture.runId, nativeReview });
     const [runBefore] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
-    const policy = { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] };
-    const initialBody = { version: 1 as const,
-      binding: { companyId: fixture.companyId, runId: fixture.runId, agentId: fixture.agentId,
-        responsibleUserId: runBefore!.responsibleUserId!, issueId: fixture.issueId },
-      bootstrap: { executionInputDigest: "1".repeat(64), policy, inputs: [] }, dispatches: [], additionalInputs: [] };
-    const initialReceipt = nativeRunInputSourceReceiptSchema.parse({ ...initialBody, digest: "2".repeat(64) });
-    await db.update(heartbeatRuns).set({ runnerProfileJson: { ...runBefore!.runnerProfileJson,
-      nativeInputSourceReceipt: initialReceipt } }).where(eq(heartbeatRuns.id, fixture.runId));
+    expect(runBefore?.nativeInputSourceProtocolVersion).toBe(1);
+    expect(runBefore?.runnerProfileJson).toHaveProperty("nativeInputSourceReceipt");
 
     const contextArgs = {}, contextCallId = "assigned-review-context", contextTurnId = "assigned-review-turn";
     const contextCall = await fixture.bindCall("get_task_context", contextCallId, contextTurnId, true, nativeSha256(contextArgs));
@@ -532,22 +579,13 @@ describe("PaperclipRunnerToolAuthority", () => {
     const fixture = await seedDocumentReader(1);
     await db.update(companyMemberships).set({ membershipRole: "member" }).where(and(
       eq(companyMemberships.companyId, fixture.companyId), eq(companyMemberships.principalId, userId)));
-    const documentId = randomUUID(), revisionId = randomUUID(), documentKey = `v1-parent-acl-${randomUUID()}`;
-    await db.insert(documents).values({ id: documentId, companyId: fixture.companyId, title: "Frozen document source",
-      format: "markdown", latestBody: "Exact body", latestRevisionId: null, latestRevisionNumber: 1,
-      createdByUserId: userId, updatedByUserId: userId });
-    await db.insert(documentRevisions).values({ id: revisionId, companyId: fixture.companyId, documentId,
-      revisionNumber: 1, payloadSourceProtocolVersion: 1, payloadSourceSnapshot: null, body: "Exact body",
-      title: "Frozen document source", format: "markdown", createdByUserId: userId });
-    await db.insert(issueDocuments).values({ companyId: fixture.companyId, issueId: fixture.issueId,
-      documentId, key: documentKey });
-    await db.update(documents).set({ latestRevisionId: revisionId }).where(eq(documents.id, documentId));
-    await db.update(documentRevisions).set({ payloadSourceSnapshot: directHumanPayloadSnapshotSql("document_revision") })
-      .where(eq(documentRevisions.id, revisionId));
-    await db.update(issues).set({ payloadSourceProtocolVersion: 1,
-      payloadSourceSnapshot: directHumanPayloadSnapshotSql("issue"), payloadSourceSnapshotInvalidated: false })
-      .where(eq(issues.id, fixture.issueId));
-    const actor = { type: "board" as const, source: "session" as const, userId };
+    const documentKey = `v1-parent-acl-${randomUUID()}`;
+    const created = await documentService(db).upsertIssueDocument({ issueId: fixture.issueId,
+      key: documentKey, title: "Frozen document source", format: "markdown", body: "Exact body",
+      createdByUserId: userId, manualInputActor: fixture.human! });
+    const documentId = created.document.id, revisionId = created.document.latestRevisionId;
+    if (!revisionId) throw new Error("Canonical Human document revision is unavailable");
+    const actor = fixture.human!;
     const read = () => assertNativeDocumentRevisionCurrentSourceAccess(db, { companyId: fixture.companyId,
       issueId: fixture.issueId, revisionId, actor });
     await expect(read()).resolves.toBeUndefined();
@@ -575,10 +613,10 @@ describe("PaperclipRunnerToolAuthority", () => {
     }
     try {
       expect(observedWait, "the exact document source reader must wait on the pinned revision row").toBe(true);
-      const otherUserId = randomUUID();
-      await db.insert(authUsers).values({ id: otherUserId, name: "Other owner", email: `${otherUserId}@test.invalid`,
-        createdAt: new Date(), updatedAt: new Date() });
-      await db.update(issues).set({ responsibleUserId: otherUserId }).where(eq(issues.id, fixture.issueId));
+      // Revoke actual current company access. Changing the responsible Human
+      // alone does not revoke this independent Human author's retained rights.
+      await db.delete(companyMemberships).where(and(eq(companyMemberships.companyId, fixture.companyId),
+        eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, userId)));
     } finally {
       releaseLock();
       await lockHolder;

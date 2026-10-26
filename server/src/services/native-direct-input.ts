@@ -1793,6 +1793,15 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
             (value as Record<string, unknown>).attempt === attempt) as Record<string, unknown>[] : [];
         const managedUse = nativeSourceRecord(outputCapture.managedOpenCodeToolUse);
         const outputDispatch = nativeSourceRecord(outputCapture.dispatch);
+        const outputWorkerDispatchCurrent = outputDispatch.kind === "worker_model_dispatch" &&
+          outputDispatch.runId === input.runId && typeof outputDispatch.reservationId === "string";
+        const outputConversationDispatchCurrent = outputDispatch.kind === "conversation_model_dispatch" &&
+          outputDispatch.runId === input.runId && outputDispatch.agentId === input.actor.agentId &&
+          outputDispatch.issueId === input.issueId &&
+          outputDispatch.conversationSessionGeneration === run.contextSnapshot?.conversationSessionGeneration &&
+          typeof outputDispatch.executionManifestId === "string" &&
+          typeof outputDispatch.executionManifestHash === "string" && typeof outputDispatch.reservationId === "string";
+        const outputDispatchCurrent = outputWorkerDispatchCurrent || outputConversationDispatchCurrent;
         const turnInputDigest = turns[0]?.turnInputDigest;
         const exactWireIntents = Array.isArray(profile?.nativeAwModelWireIntents)
           ? profile.nativeAwModelWireIntents.filter(value => {
@@ -1825,7 +1834,7 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
           !workspaceSources.success || workspaceSources.data.some(value => value.kind !== "project_workspace") ||
           managedUse.callId !== source.callId || managedUse.toolName !== "create_project" ||
           managedUse.argumentsHash !== argumentsHash || outputCapture.runId !== input.runId ||
-          outputDispatch.kind !== "worker_model_dispatch" || outputDispatch.runId !== input.runId ||
+          !outputDispatchCurrent ||
           outputDispatch.reservationId !== exactWireIntents[0]?.reservationId || exactWireIntents.length !== 1 ||
           !exactAssociation || exactCreateEntries.length !== 1 || createSourceCopies !== 1)
           throw forbidden("A Native managed Project result changed");
