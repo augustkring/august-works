@@ -768,7 +768,7 @@ export async function assertNativePayloadSourceSetCurrent(db: Db | Transaction, 
 async function assertNativePayloadSourceSetCurrentInScope(db: Db | Transaction, input: {
   companyId: string; issueId: string; runId: string; actor: AuthorizationActor;
   policy: NativePayloadSourcePolicy; inputs: NativePayloadSourceInput[];
-}, scope: NativeSourceReadScope, receiptComponentsAlreadyBound = false): Promise<void> {
+}, scope: NativeSourceReadScope): Promise<void> {
   const policy = nativePayloadSourcePolicySchema.safeParse(input.policy);
   const inputs = nativePayloadSourceInputSchema.array().safeParse(input.inputs);
   if (!policy.success || !inputs.success || !await nativeSourceReaderHasCompanyAccess(db, input.companyId, input.actor))
@@ -782,7 +782,7 @@ async function assertNativePayloadSourceSetCurrentInScope(db: Db | Transaction, 
     receipt.data.binding.agentId !== run.agentId || receipt.data.binding.issueId !== input.issueId)
     throw forbidden("The Native source prefix owner is unavailable");
 
-  const matchingDispatches = receiptComponentsAlreadyBound ? [] : receipt.data.dispatches.flatMap(prefix => prefix.inputs.flatMap(source => {
+  const matchingDispatches = receipt.data.dispatches.flatMap(prefix => prefix.inputs.flatMap(source => {
     if (source.kind !== "worker_model_dispatch" || !isDeepStrictEqual(prefix.policy, policy.data)) return [];
     const preceding = prefix.inputs.filter(value => !(value.kind === "worker_model_dispatch" && isDeepStrictEqual(value, source)));
     return isDeepStrictEqual(preceding, inputs.data) ? [{ prefix, dispatch: source }] : [];
@@ -791,17 +791,16 @@ async function assertNativePayloadSourceSetCurrentInScope(db: Db | Transaction, 
   // before a managed provider request has produced a worker_model_dispatch.
   // Accept only the exact immutable receipt entry (same cumulative policy and
   // ordered inputs); this does not qualify any provider output by itself.
-  const matchingMarkerlessDispatches = receiptComponentsAlreadyBound ? [] : receipt.data.dispatches.filter(prefix =>
+  const matchingMarkerlessDispatches = receipt.data.dispatches.filter(prefix =>
     isDeepStrictEqual(prefix.policy, policy.data) &&
     !prefix.inputs.some(source => source.kind === "worker_model_dispatch") &&
     isDeepStrictEqual(prefix.inputs, inputs.data));
   const bootstrapMatches = isDeepStrictEqual(receipt.data.bootstrap.policy, policy.data) &&
     isDeepStrictEqual(receipt.data.bootstrap.inputs, inputs.data);
-  const matchingAdditionalInputs = receiptComponentsAlreadyBound ? [] : receipt.data.additionalInputs.filter(entry =>
+  const matchingAdditionalInputs = receipt.data.additionalInputs.filter(entry =>
     entry.responsibleUserId === run.responsibleUserId &&
     isDeepStrictEqual(entry.policy, policy.data) && isDeepStrictEqual(entry.inputs, inputs.data));
-  if (!receiptComponentsAlreadyBound && !matchingDispatches.length && !matchingMarkerlessDispatches.length &&
-    !bootstrapMatches && matchingAdditionalInputs.length !== 1)
+  if (!matchingDispatches.length && !matchingMarkerlessDispatches.length && !bootstrapMatches && matchingAdditionalInputs.length !== 1)
     throw forbidden("The Native source prefix is not in its original receipt");
 
   const captures = Array.isArray(profile?.nativeToolResultSourceCaptures)
@@ -1419,12 +1418,14 @@ async function assertNativeManagedConsumedSourceSetCurrentUncached(db: Db | Tran
     [...new Set(componentSets.flatMap(set => set.policy[key]))].sort()])) as NativePayloadSourcePolicy;
   if (!isDeepStrictEqual(combinedInputs, inputs.data) || !isDeepStrictEqual(combinedPolicy, policy.data))
     throw forbidden("The Native consumed source components do not match their source set");
-  // Receipt components and every dispatch marker above are now structurally
-  // bound. Recheck current authorization and owners once for the exact selected
-  // union; prior journal prefixes are provenance, not separate consumption.
-  const selectedOwnerInputs = combinedInputs.filter(source => source.kind !== "worker_model_dispatch");
-  await assertNativePayloadSourceSetCurrentInScope(db, { companyId: input.companyId, issueId: input.issueId,
-    runId: input.runId, actor: input.actor, policy: combinedPolicy, inputs: selectedOwnerInputs }, scope, true);
+  for (const [index, component] of input.components.entries()) {
+    const set = componentSets[index]!;
+    const marker = component.kind === "dispatch" ? set.inputs.filter((value): value is Extract<NativePayloadSourceInput, { kind: "worker_model_dispatch" }> =>
+      value.kind === "worker_model_dispatch").at(-1) : undefined;
+    const checkedInputs = marker ? set.inputs.filter(value => !isDeepStrictEqual(value, marker)) : set.inputs;
+    await assertNativePayloadSourceSetCurrentInScope(db, { companyId: input.companyId, issueId: input.issueId,
+      runId: input.runId, actor: input.actor, policy: set.policy, inputs: checkedInputs }, scope);
+  }
 }
 
 /** Revalidate a managed model request's ordered, server-captured union of
