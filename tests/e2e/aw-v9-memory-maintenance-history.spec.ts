@@ -5,8 +5,12 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type APIResponse } from "@playwright/test";
 import { eq } from "../../packages/db/node_modules/drizzle-orm/index.js";
-import { createDb, closeRegisteredClients, memoryBindings, memoryBindingTargets, memoryRecords, memoryJobs } from "../../packages/db/src/index.ts";
+import { createDb, closeRegisteredClients, memoryJobs } from "../../packages/db/src/index.ts";
 import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+import { seedCurrentHumanSourceActor } from "../../server/src/__tests__/helpers/current-human-source-fixture.ts";
+import { issueService } from "../../server/src/services/issues.ts";
+import { memoryService } from "../../server/src/services/memory/memory-service.ts";
+import { nativeSha256 } from "../../server/src/services/native-runtime/canonical.ts";
 
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 registerEnglishAccountLocaleIsolation(test);
@@ -30,7 +34,6 @@ test("Memory history follows an actual native index receipt, language changes an
   const pid = await readFile(path.join(config.database.embeddedPostgresDataDir, "postmaster.pid"), "utf8");
   const databaseUrl = `postgres://paperclip:paperclip@127.0.0.1:${pid.split("\n")[3]}/paperclip`;
   const db = createDb(databaseUrl);
-  const recordId = randomUUID(), bindingId = randomUUID();
   try {
     await json(await request.patch("/api/instance/settings/experimental", { data: {
       enableFoundationV1: true, enableContextEngineV1: true, enableCollectiveMemoryV1: true,
@@ -41,12 +44,26 @@ test("Memory history follows an actual native index receipt, language changes an
       governance_evidence_v7: true, readiness_engine_v7: true, core_stewards_v7: true,
       experience_projection_v9: true, progressive_shell_v9: true, maintenance_autopilot_v9: true,
     } }));
-    await db.insert(memoryBindings).values({ id: bindingId, companyId: company.id, key: `history-${bindingId}`, name: "Software shared source", providerKey: "local", enabled: true, config: {} });
-    await db.insert(memoryBindingTargets).values({ companyId: company.id, bindingId, targetType: "company", targetId: company.id });
-    await db.insert(memoryRecords).values({ id: recordId, companyId: company.id, bindingId, providerKey: "local",
-      memoryType: "observation", scopeType: "company", title: "never-display-memory-history-canary",
-      content: "Explicit software-only source for a native search-index check.", reviewState: "accepted", verificationState: "human_verified",
-      observedAt: new Date(), createdByActorType: "system", createdByActorId: "local-board" });
+    const human = await seedCurrentHumanSourceActor(db, [company.id]);
+    const actor = { principal: { type: "user" as const, userId: "local-board" }, authorizationActor: human };
+    const memories = memoryService(db);
+    const binding = await memories.createCompanyBinding(company.id, { key: `history-${randomUUID()}`,
+      name: "Software shared source", providerKey: "local", enabled: true, config: {} }, actor);
+    const content = "Explicit software-only source for a native search-index check.";
+    const task = await issueService(db).create(company.id, { title: "Human-provided index source", description: content,
+      createdByUserId: "local-board", responsibleUserId: "local-board" }, db, undefined, { manualInputActor: human });
+    const observedAt = new Date().toISOString();
+    const excerpt = `Status: ${task.status}\nPriority: ${task.priority}\nDescription: ${content}`;
+    const candidate = await memories.createCandidate(company.id, { bindingId: binding.id, memoryType: "observation",
+      scope: { type: "company", id: null }, subject: null, ownerAgentId: null, title: "never-display-memory-history-canary",
+      content, summary: null, sensitivity: "internal", importance: 50, confidenceScore: 1,
+      validFrom: null, validUntil: null, observedAt, retentionPolicy: "standard", expiresAt: null,
+      createdByOperationId: null, metadata: {}, evidence: [{ sourceClass: "task", sourceProvider: "august_works_tasks",
+        sourceType: "issue", sourceRef: `issue://${task.id}`, sourceVersion: task.updatedAt.toISOString(),
+        sourceUpdatedAt: task.updatedAt.toISOString(), observedAt, excerptHash: nativeSha256(excerpt),
+        citation: { label: `${task.identifier}: ${task.title}` }, trustLevel: "low", relation: "supports" }] }, actor);
+    const recordId = candidate.record.id;
+    await memories.reviewCandidate(company.id, recordId, { decision: "accept" }, actor);
     const base = `/api/companies/${company.id}/memory/experience/maintenance`;
     const initial = await json(await request.get(`${base}?expectedUserId=local-board`));
     expect(initial.entries).toEqual([]);

@@ -110,6 +110,22 @@ suite("Governed native Memory maintenance", () => {
     await db.delete(activityLog).where(eq(activityLog.id,receipt!.id));
     expect((await readMemoryMaintenanceHistory(db,historyActor(seeded),seeded.companyId)).entries).toHaveLength(0);
   });
+  it("retains only the original local operator's content-free index receipt after erasure", async () => {
+    const seeded = await seed(), svc = memoryJobService(db);
+    const local = { principal: { type: "system" as const, service: "local-board" } };
+    const job = await svc.enqueueMaintenance(seeded.companyId, { operationType: "index_refresh",
+      recordIds: [seeded.records[0]!.id] }, local, "local-history-erasure");
+    await execute(seeded.companyId, job.id);
+    await memoryService(db).forget(seeded.companyId, seeded.records[0]!.id, local);
+    const view = await readMemoryMaintenanceHistory(db, { type: "board", source: "local_implicit" }, seeded.companyId);
+    expect(view.entries).toEqual([expect.objectContaining({ jobId: job.id, outcome: "source_unavailable",
+      receiptId: null, indexedRecordCount: null })]);
+    expect(JSON.stringify(view)).not.toContain(seeded.records[0]!.id);
+    expect((await readMemoryMaintenanceHistory(db, historyActor(seeded), seeded.companyId)).entries).toEqual([]);
+    await db.delete(activityLog).where(and(eq(activityLog.companyId, seeded.companyId),
+      eq(activityLog.entityType, "memory_job"), eq(activityLog.entityId, job.id)));
+    expect((await readMemoryMaintenanceHistory(db, { type: "board", source: "local_implicit" }, seeded.companyId)).entries).toEqual([]);
+  });
   it("repeats native company and Memory owner admission rather than trusting an instance-admin claim", async () => {
     const seeded = await seed();
     await db.update(companyMemberships).set({ membershipRole: "member" }).where(eq(companyMemberships.companyId, seeded.companyId));

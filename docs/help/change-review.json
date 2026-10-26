@@ -2005,10 +2005,10 @@
     {
       "source": "server/src/services/memory/memory-jobs.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "01ebdf9eabfd47ef1211979a138af97edce6c91328e553b6bc3cb54b674a709a",
+      "sourceSha256": "92945471691dd2f9e696cef8260522ceb3766ea2272fe76496340d95e1ca0a1a",
       "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "no_change",
-      "rationale": "Reviewed the retained completion receipt after source erasure: only its original Human can see a content-free source_unavailable history row, with no old receipt/count/body disclosure. Existing EN/DA deletion and recovery guidance remains accurate."
+      "rationale": "Reviewed both deletion articles against the original index-history owner: after source erasure only the exact original session/user or local-trusted system/local-board atomic receipt permits content-free history; a different Human cannot inherit it, and removing the original receipt hides it. No source content, count, or receipt ID is restored. Existing EN/DA deletion guidance remains accurate."
     },
     {
       "source": "server/src/services/native-runtime/runtime-asset-retention.ts",
@@ -2029,10 +2029,10 @@
     {
       "source": "server/src/services/memory/memory-jobs.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "01ebdf9eabfd47ef1211979a138af97edce6c91328e553b6bc3cb54b674a709a",
+      "sourceSha256": "92945471691dd2f9e696cef8260522ceb3766ea2272fe76496340d95e1ca0a1a",
       "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "no_change",
-      "rationale": "Reviewed the retained completion receipt after source erasure: only its original Human can see a content-free source_unavailable history row, with no old receipt/count/body disclosure. Existing EN/DA deletion and recovery guidance remains accurate. This Danish article preserves the same customer scope as its English pair."
+      "rationale": "Reviewed both deletion articles against the original index-history owner: after source erasure only the exact original session/user or local-trusted system/local-board atomic receipt permits content-free history; a different Human cannot inherit it, and removing the original receipt hides it. No source content, count, or receipt ID is restored. Existing EN/DA deletion guidance remains accurate."
     },
     {
       "source": "server/src/services/native-runtime/runtime-asset-retention.ts",

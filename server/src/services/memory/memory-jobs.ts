@@ -192,23 +192,29 @@ async function readMemoryJobBeforeDeadline(db: Db, companyId: string, actor: Aut
 }
 
 async function ownIndexHistoryReceiptReadable(db: Db, actor: AuthorizationActor | undefined, job: MemoryJob) {
-  if (actor?.type !== "board" || actor.source !== "session" || !actor.userId || job.operationType !== "index_refresh"
+  if (actor?.type !== "board" || (actor.source !== "session" && actor.source !== "local_implicit") ||
+    (actor.source === "session" && !actor.userId) || job.operationType !== "index_refresh"
     || !job.jobKey.startsWith("maintenance:v1:")
     || job.status !== "succeeded" || !job.startedAt || !job.finishedAt || job.leaseExpiresAt) return false;
   const receipts = await db.select().from(activityLog).where(and(eq(activityLog.companyId, job.companyId), eq(activityLog.entityType, "memory_job"),
     eq(activityLog.entityId, job.id), eq(activityLog.action, "memory.index_refresh_completed"))).limit(2).for("share");
   const receipt = receipts[0];
+  const actorType = actor.source === "local_implicit" ? "system" : "user";
+  const actorId = actor.source === "local_implicit" ? "local-board" : actor.userId;
   // A forgotten source deliberately erases its job inputs/results. Keep only
   // the owner's content-free history row when its original atomic receipt is
   // still unique, actor-bound and in the completed attempt's time window.
-  const receiptBound = receipts.length === 1 && receipt!.actorType === "user" && receipt!.actorId === actor.userId
+  const receiptBound = receipts.length === 1 && receipt!.actorType === actorType && receipt!.actorId === actorId
     && receipt!.createdAt >= job.startedAt && receipt!.createdAt <= job.finishedAt && indexReadResult.safeParse(receipt!.details).success;
   if (!receiptBound) return false;
   const erasedSource = job.sourceRefJson !== null && typeof job.sourceRefJson === "object" && !Array.isArray(job.sourceRefJson)
     && Object.keys(job.sourceRefJson as Record<string, unknown>).length === 0 && job.resultJson === null;
   if (erasedSource) return true;
   const source = maintenanceReadSource.safeParse(job.sourceRefJson);
-  if (!source.success || source.data.requester.type !== "user" || source.data.requester.userId !== actor.userId ||
+  const requesterMatches = source.success && (actor.source === "local_implicit"
+    ? source.data.requester.type === "system" && source.data.requester.service === "local-board"
+    : source.data.requester.type === "user" && source.data.requester.userId === actor.userId);
+  if (!source.success || !requesterMatches ||
     Object.keys(source.data.recordVersions).length !== source.data.recordIds.length) return false;
   for (const id of source.data.recordIds) {
     const [row] = await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, job.companyId), eq(memoryRecords.id, id)));
