@@ -767,6 +767,7 @@ describe("remote runner process supervision", () => {
       stateDirectory: "/runtime",
       diagnosticsDirectory: "/runtime/diagnostics",
       runnerInstanceId: "runner-remote",
+      nativeSessionStart: true,
       onSpawn,
       onLog,
     });
@@ -788,8 +789,11 @@ describe("remote runner process supervision", () => {
     expect(launch).toMatchObject({
       timeoutMs: 20_000,
       bypassSession: true,
+      nativePreparationPurpose: "native_session_start",
     });
     expect(launch?.useSession).toBeUndefined();
+    expect(execute.mock.calls.filter(([input]) => input.nativePreparationPurpose === "native_session_start")
+      .map(([input]) => input.args?.[2])).toEqual(["paperclip-runner-launch"]);
     expect(launch?.args?.[1]).toContain("nohup setsid");
     expect(launch?.args?.[6]).toContain('"$$"');
     expect(launch?.args?.[6]).toContain('exec "$@"');

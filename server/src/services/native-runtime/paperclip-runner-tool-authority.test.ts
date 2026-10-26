@@ -115,7 +115,7 @@ describe("PaperclipRunnerToolAuthority", () => {
     await db.insert(heartbeatRunEvents).values({ companyId: fixture.companyId, runId: fixture.runId,
       agentId: fixture.agentId, seq: eventSeq, eventType: PROCESS_START_REQUESTED,
       payload: { fixture: "actual native launch event" } });
-    let qualifiedTurnInput: { message: { role: "user"; text: string }; requestedCollaborationMode: "default" } | null = null;
+    let qualifiedTurnInput: { message: { role: "user"; text: string }; requestedCollaborationMode: "default" | "plan" } | null = null;
     let bootstrapSourceClosure: { sourceSet: NonNullable<ReturnType<typeof buildNativeBootstrapSourceSet>>;
       taskEnvelopeDigest: string } | null = null;
     const prepareQualifiedDispatch = async () => {
@@ -171,9 +171,12 @@ describe("PaperclipRunnerToolAuthority", () => {
       bootstrapSourceClosure = { sourceSet, taskEnvelopeDigest: nativeSha256(execution.task) };
     };
     const bindCall = async (tool: string, callId: string, turnId: string, expectAssociation = true,
-      argumentsHash?: string) => {
+      argumentsHash?: string, requestedCollaborationMode?: "default" | "plan") => {
       await prepareQualifiedDispatch();
-      const turnInput = qualifiedTurnInput ?? { message: { role: "user" as const, text: `actual native input ${turnId}` } };
+      const turnInput = qualifiedTurnInput
+        ? { ...qualifiedTurnInput, ...(requestedCollaborationMode ? { requestedCollaborationMode } : {}) }
+        : { message: { role: "user" as const, text: `actual native input ${turnId}` },
+            ...(requestedCollaborationMode ? { requestedCollaborationMode } : {}) };
       const binding = { db, runId: fixture.runId, companyId: fixture.companyId, issueId: fixture.issueId,
         agentId: fixture.agentId, leaseOwner, attempt, controller, eventSeq };
       const dispatchId = await recordNativeModelInputDispatchIntent({ ...binding, turnInput,
@@ -574,7 +577,11 @@ describe("PaperclipRunnerToolAuthority", () => {
     const contextArgs = {}, contextCallId = "assigned-review-context", contextTurnId = "assigned-review-turn";
     const contextCall = await fixture.bindCall("get_task_context", contextCallId, contextTurnId, true, nativeSha256(contextArgs));
     const historyArgs = {}, historyCallId = "later-empty-history", historyTurnId = "later-history-turn";
-    const historyCall = await fixture.bindCall("get_task_history", historyCallId, historyTurnId, true, nativeSha256(historyArgs));
+    // A real second provider request may repeat the same source envelope while
+    // choosing a different supported collaboration mode. Keep its source bytes
+    // exact but give the acknowledged dispatch a distinct full-input digest.
+    const historyCall = await fixture.bindCall("get_task_history", historyCallId, historyTurnId, true,
+      nativeSha256(historyArgs), "plan");
 
     const [runBefore] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
     expect(runBefore?.nativeInputSourceProtocolVersion).toBe(1);

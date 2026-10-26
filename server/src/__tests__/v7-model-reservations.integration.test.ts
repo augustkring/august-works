@@ -762,6 +762,9 @@ const support = await getEmbeddedPostgresTestSupport();
             runExecutionStage: facts.run?.executionStage ?? null,
             runRuntimeMode: facts.run?.runtimeMode ?? null,
             runSourceProtocol: facts.run?.nativeInputSourceProtocolVersion ?? null,
+            manifestSkillPins: facts.manifest && typeof facts.manifest.manifest === "object"
+              ? ((facts.manifest.manifest as { skills?: Array<{ skillId?: string; versionId?: string; key?: string }> }).skills ?? [])
+                .map(pin => ({ skillId: pin.skillId ?? null, versionId: pin.versionId ?? null, key: pin.key ?? null })) : null,
             manifestPresent: facts.manifest !== null,
             sourceReceiptPresent: facts.nativeInputSourceReceipt !== null && facts.nativeInputSourceReceipt !== undefined,
             reservationStatus: facts.reservation?.status ?? null,
@@ -901,11 +904,10 @@ const support = await getEmbeddedPostgresTestSupport();
           });
         }, async ({ db: frameDb, actor, companyId, agentId }) => {
           if (!actor.userId) throw new Error("conversation_fixture_human_missing_for_skill_seed");
-          // This case exercises the original legacy runtime bundle path. The
-          // selected skill is a real Human-created company Skill, resolved
-          // from the exact configured runtime selection before the Native
-          // bootstrap freezes its input profile.
-          await instanceSettingsService(frameDb).updateExperimental({ skill_lifecycle_v5: false });
+          // Exercise an actual V5 manifest pin: the selected skill is a real
+          // Human-created company Skill resolved from the published Role Pack
+          // before the Native bootstrap freezes its input profile.
+          await instanceSettingsService(frameDb).updateExperimental({ skill_lifecycle_v5: true });
           const skill = await companySkillService(frameDb).createLocalSkill(companyId, {
             name: "Erasure fixture skill", slug: "erasure-fixture-skill",
             markdown: "---\nname: Erasure fixture skill\n---\n# Skill\nHistorical procedure.\n",

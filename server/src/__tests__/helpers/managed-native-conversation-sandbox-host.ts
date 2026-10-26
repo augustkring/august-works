@@ -70,6 +70,24 @@ export async function configureManagedConversationSandboxHost(input: {
   const taskWorkspaceNamespace = join(await realpath(resolvePaperclipInstanceRoot()), "chat-workspaces", companyId, agentId);
   const runtime = runtimeControlService(db, { runtime: { suspectSeconds: 90, unreachableSeconds: 600, relayPort: 3102 } } as SaasPlatformConfig,
     undefined, { credentialBrokerOrigin: brokerOrigin, workerModels: input.gateway as any });
+  let nativeSessionStartCredentialNegativeControls: { missingTokenDenied: boolean; mismatchedTokenDenied: boolean } | null = null;
+  const executeOpenShell = runtime.relay.executeOpenShell.bind(runtime.relay);
+  runtime.relay.executeOpenShell = async relayInput => {
+    const request = relayInput.request;
+    const credential = request.modelBrokerCredential;
+    if (!nativeSessionStartCredentialNegativeControls && request.argv[0] === "sh" &&
+      request.argv[3] === "paperclip-runner-launch" && credential) {
+      const expectDenied = async (tampered: typeof relayInput.request) => {
+        try { await executeOpenShell({ ...relayInput, request: tampered }); return false; }
+        catch { return true; }
+      };
+      const missingTokenDenied = await expectDenied({ ...request, modelBrokerCredential: undefined });
+      const mismatchedTokenDenied = await expectDenied({ ...request,
+        modelBrokerCredential: { ...credential, capabilityToken: "invalid-model-capability" } });
+      nativeSessionStartCredentialNegativeControls = { missingTokenDenied, mismatchedTokenDenied };
+    }
+    return executeOpenShell(relayInput);
+  };
   const hostKeys = generateKeyPairSync("rsa", { modulusLength: 3072 });
   await instanceSettingsService(db).updateExperimental({
     sandbox_abstraction_v7: true, openshell_v7: true, runtime_host_agent_v6: true,
@@ -247,6 +265,7 @@ export async function configureManagedConversationSandboxHost(input: {
   let prepareHostForRun: ((runId: string, leaseId: string) => Promise<void>) | null = null;
   const hostAdmissionByRun = new Map<string, { leaseId: string; promise: Promise<void> }>();
   const sandboxExecutionChecks: Array<Record<string, boolean | number | string | null>> = [];
+  let negativeNativeSessionStartControls: { wrongCommandDenied: boolean; wrongRootDenied: boolean; noExecution: boolean } | null = null;
   const executeSandboxTask: typeof runtime.executeSandboxTask = async execInput => {
     if (!execInput.runId || !execInput.leaseId || !prepareHostForRun)
       throw new Error("conversation_software_host_run_binding_unavailable");
@@ -254,7 +273,10 @@ export async function configureManagedConversationSandboxHost(input: {
     // provider callback. Admit the same real manifest-bound host here, at the
     // original RuntimeControl execution seam, before delegating its signed exec.
     await prepareHostForRun(execInput.runId, execInput.leaseId);
-    if (execInput.runId && sandboxExecutionChecks.length < 8) {
+    const commandName = execInput.command.toLowerCase().split("/").at(-1) ?? "";
+    const args = execInput.args ?? [];
+    const runnerLaunch = commandName === "sh" && args[2] === "paperclip-runner-launch";
+    if (execInput.runId && (sandboxExecutionChecks.length < 8 || runnerLaunch)) {
       const [run] = await db.select({ status: heartbeatRuns.status, startedAt: heartbeatRuns.startedAt,
         agentId: heartbeatRuns.agentId, nativeIssueId: heartbeatRuns.nativeIssueId,
         responsibleUserId: heartbeatRuns.responsibleUserId, runtimeMode: heartbeatRuns.runtimeMode,
@@ -273,20 +295,21 @@ export async function configureManagedConversationSandboxHost(input: {
       const cancellation = run?.resultJson?.executionCancellation;
       const cancellationRequested = Boolean(cancellation && typeof cancellation === "object" &&
         "state" in cancellation && cancellation.state === "requested");
-      const commandName = execInput.command.toLowerCase().split("/").at(-1) ?? "";
       const commandKind = commandName.includes("opencode") ? "opencode" : commandName.includes("runner") ? "runner" :
         commandName.includes("rsync") ? "rsync" : commandName === "git" ? "git" :
           commandName === "bash" ? "bash" : commandName === "sh" ? "shell" :
             commandName === "tar" ? "tar" : commandName === "node" ? "node" : "other";
-      const args = execInput.args ?? [];
       const managedGitContextProbe = commandName === "sh" && args[0] === "-c" && args[2] === "paperclip-git-context" &&
         (args[3] === "managed" || args[3] === "host");
       const unstartedSessionClaimProbe = commandName === "sh" && args[0] === "-c" && args[2] === "paperclip-runner-claim-unstarted-session";
       const credentialEnvNames = Object.keys(execInput.env ?? {})
         .filter(name => /(?:TOKEN|SECRET|PASSWORD|CREDENTIAL|API[_-]?KEY|PRIVATE[_-]?KEY|AUTHORIZATION)/i.test(name))
         .sort().slice(0, 16).join(",");
+      const nativePreparationPurpose = execInput.nativePreparationPurpose ?? null;
       sandboxExecutionChecks.push({ expectedRun: execInput.runId === expectedRunId,
         commandKind, cwdAbsolute: Boolean(execInput.cwd?.startsWith("/")), argumentCount: (execInput.args ?? []).length,
+        runnerLaunch,
+        nativePreparationPurpose,
         managedGitContextProbe, unstartedSessionClaimProbe, credentialEnvNames,
         runtimeMode: run?.runtimeMode ?? null, runStatus: run?.status ?? null, runStatusRunning: run?.status === "running",
         startedAtPresent: Boolean(run?.startedAt), agentIdPresent: Boolean(run?.agentId),
@@ -319,6 +342,7 @@ export async function configureManagedConversationSandboxHost(input: {
   }
   if (!authenticated) throw new Error("conversation_software_host_relay_auth_failed");
   const execFacts: Array<{ executable: string; cwdExact: boolean; modelCredentialPresent: boolean;
+    managedModelBrokerOriginPresent: boolean;
     assignedMcpEnvironmentAbsent: boolean }> = [];
   relayHost.on("message", raw => {
     let message: Record<string, any>;
@@ -338,6 +362,7 @@ export async function configureManagedConversationSandboxHost(input: {
     const assignedMcpEnvironmentAbsent = !requestEnv.PAPERCLIP_NATIVE_MCP_NAME &&
       !requestEnv.PAPERCLIP_NATIVE_MCP_URL && !requestEnv.PAPERCLIP_NATIVE_MCP_TOKEN;
     execFacts.push({ executable: argv[0] ?? "", cwdExact: cwd === expectedTaskRoot, modelCredentialPresent,
+      managedModelBrokerOriginPresent: requestEnv.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === brokerOrigin,
       assignedMcpEnvironmentAbsent });
     const env = { ...process.env, ...requestEnv,
       PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: brokerOrigin,
@@ -447,13 +472,24 @@ export async function configureManagedConversationSandboxHost(input: {
       command: "true", cwd: taskRoot, timeoutMs: 1000 }));
     const wrongCwdDenied = await expectDenied(runtime.executeSandboxTask({ companyId, runId, leaseId: lease.id,
       command: "true", cwd: `${taskRoot}/outside`, timeoutMs: 1000 }));
+    const execCountBeforeStartProbes = execFacts.length;
+    const wrongSessionStartCommandDenied = await expectDenied(runtime.executeSandboxTask({ companyId, runId, leaseId: lease.id,
+      command: "sh", args: ["-c", "exit 0", "paperclip-not-runner-launch"], cwd: taskRoot, timeoutMs: 1000,
+      nativePreparationPurpose: "native_session_start" }));
+    const wrongSessionStartRootDenied = await expectDenied(runtime.executeSandboxTask({ companyId, runId, leaseId: lease.id,
+      command: "sh", args: ["-c", "exit 0", "paperclip-runner-launch"], cwd: `${taskRoot}/outside`, timeoutMs: 1000,
+      nativePreparationPurpose: "native_session_start" }));
+    const wrongSessionStartExecuted = execFacts.length !== execCountBeforeStartProbes;
     const broadened = structuredClone(candidate);
     broadened.filesystem.writePaths = ["/"];
     const wrongPolicy = compileSandboxPolicy({ boundary, candidate: broadened, capabilities: capabilities() as any,
       authorizedConnectionGrantHashes: {}, credentialBrokerOrigin: brokerOrigin, credentialBrokerBindings: [], sourcePolicyRefs: [] });
     const wrongPolicyDenied = wrongPolicy.failedBoundaries.includes("filesystem_write_expansion");
-    if (!wrongRunDenied || !wrongLeaseDenied || !wrongCwdDenied || !wrongPolicyDenied)
+    if (!wrongRunDenied || !wrongLeaseDenied || !wrongCwdDenied || !wrongPolicyDenied ||
+      !wrongSessionStartCommandDenied || !wrongSessionStartRootDenied || wrongSessionStartExecuted)
       throw new Error("conversation_software_host_negative_admission_control_failed");
+    negativeNativeSessionStartControls = { wrongCommandDenied: wrongSessionStartCommandDenied,
+      wrongRootDenied: wrongSessionStartRootDenied, noExecution: !wrongSessionStartExecuted };
   };
   prepareHostForRun = async (runId, leaseId) => {
     const existing = hostAdmissionByRun.get(runId);
@@ -482,8 +518,11 @@ export async function configureManagedConversationSandboxHost(input: {
       sandboxExecutionChecks,
       execCount: execFacts.length, exactPrivateCwdCount: execFacts.filter(fact => fact.cwdExact).length,
       managedModelCredentialCount: execFacts.filter(fact => fact.modelCredentialPresent).length,
+      execFacts,
       assignedMcpEnvironmentAbsentCount: execFacts.filter(fact => fact.assignedMcpEnvironmentAbsent).length,
       negativeControls: { wrongRunDenied: true, wrongLeaseDenied: true, wrongCwdDenied: true, wrongPolicyDenied: true },
+      negativeNativeSessionStartControls,
+      nativeSessionStartCredentialNegativeControls,
       executableNames: [...new Set(execFacts.map(fact => fact.executable.split("/").pop() ?? ""))] }),
     close: async () => { relayHost.close(); await new Promise<void>(resolve => relayServer.close(() => resolve())); await runtime.relay.stop(); },
   };

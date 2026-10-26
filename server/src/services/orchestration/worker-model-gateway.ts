@@ -659,6 +659,79 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
             policy: readEntry.policy, inputs: readEntry.inputs });
           continue;
         }
+        if (toolName === "create_task" && source.invocationId === null) {
+          const taskRef = managedRecord(capture.taskRef);
+          const taskId = taskRef.issueId;
+          const taskSource = receipt.data.additionalInputs.flatMap(entry => entry.inputs).find((value): value is Extract<NativePayloadSourceInput, { kind: "task" }> =>
+            value.kind === "task" && value.issueId === taskId);
+          const expectedTaskPolicy = typeof taskId === "string" ? { issueIds: [taskId], projectIds: [], runIds: [],
+            memoryIds: [], foundationRevisionIds: [] } : null;
+          const taskEntries = expectedTaskPolicy && taskSource ? receipt.data.additionalInputs.filter(entry =>
+            entry.responsibleUserId === claims.responsible_user_id && isDeepStrictEqual(entry.policy, expectedTaskPolicy) &&
+            isDeepStrictEqual(entry.inputs, [source, taskSource])) : [];
+          const exactTaskResultCopies = receipt.data.additionalInputs.reduce((count, entry) => count + entry.inputs.filter(value =>
+            value.kind === "tool_result" && isDeepStrictEqual(value, source)).length, 0);
+          const conflictingTaskResults = receipt.data.additionalInputs.some(entry => entry.inputs.some(value =>
+            value.kind === "tool_result" && value.callId === source.callId && !isDeepStrictEqual(value, source)));
+          const [task] = typeof taskId === "string" ? await db.select({ id: issues.id, companyId: issues.companyId,
+            identifier: issues.identifier, title: issues.title, description: issues.description, status: issues.status,
+            priority: issues.priority, projectId: issues.projectId, parentId: issues.parentId,
+            assigneeAgentId: issues.assigneeAgentId, responsibleUserId: issues.responsibleUserId,
+            createdByAgentId: issues.createdByAgentId,
+            sourceVersion: sql<string>`extract(epoch from ${issues.updatedAt})::text`,
+            contentHash: sql<string>`public.aw_native_payload_body_hash('issue',to_jsonb(${issues}))`,
+            hiddenAt: issues.hiddenAt, payloadSourceProtocolVersion: issues.payloadSourceProtocolVersion,
+            payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated,
+          }).from(issues).where(and(eq(issues.companyId, claims.company_id), eq(issues.id, taskId))).for("share") : [];
+          const [conversationRoot] = task?.parentId === null && run.nativeIssueId
+            ? await db.select({ conversationAgentId: issues.conversationAgentId,
+              conversationUserId: issues.conversationUserId, conversationState: issues.conversationState,
+              conversationSessionGeneration: issues.conversationSessionGeneration,
+              conversationRetiredAt: issues.conversationRetiredAt, parentId: issues.parentId,
+              assigneeAgentId: issues.assigneeAgentId, executionRunId: issues.executionRunId,
+              payloadSourceProtocolVersion: issues.payloadSourceProtocolVersion,
+              payloadSourceSnapshot: issues.payloadSourceSnapshot,
+              payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated,
+            }).from(issues).where(and(eq(issues.companyId, claims.company_id), eq(issues.id, run.nativeIssueId))).for("share") : [];
+          const conversationModelRootCurrent = claims.scope === "conversation_model" && !!run.nativeIssueId &&
+            claims.conversation_model.issueId === run.nativeIssueId && isCurrentConversationModelRoot({
+              root: conversationRoot, contextSnapshot: run.contextSnapshot, companyId: claims.company_id,
+              agentId: claims.sub, responsibleUserId: claims.responsible_user_id, runId: claims.run_id,
+              binding: claims.conversation_model,
+            });
+          const taskResultChecks = {
+            managedCapture: capture.managedOpenCode === true && capture.nativeReadResult !== true && capture.tool === "create_task",
+            callAndArgs: capture.callId === block.tool_use_id && capture.argumentsHash === providerUse.argumentsHash,
+            resultAndTurn: capture.resultDigest === sourceResultDigest && content === JSON.stringify(result) &&
+              capture.turnId === matchingAssociations[0]!.turnId && capture.eventSeq === matchingAssociations[0]!.eventSeq &&
+              capture.attempt === matchingAssociations[0]!.attempt,
+            sourceIdentity: source.runId === claims.run_id && source.toolName === "create_task" &&
+              source.callId === block.tool_use_id && source.invocationId === null && source.contentHash === sourceResultDigest,
+            taskRefAndSource: typeof taskId === "string" && Boolean(task && taskSource) &&
+              taskSource?.sourceVersion === task?.sourceVersion && taskSource?.contentHash === task?.contentHash,
+            taskOwner: task?.parentId === null && task.hiddenAt === null && task.payloadSourceProtocolVersion === 1 &&
+              task.payloadSourceSnapshotInvalidated === false && task.createdByAgentId === claims.sub &&
+              task.responsibleUserId === claims.responsible_user_id,
+            exactReceipt: taskEntries.length === 1 && exactTaskResultCopies === 1 && !conflictingTaskResults,
+            currentConversationRoot: conversationModelRootCurrent,
+          };
+          const failedTaskResultChecks = Object.entries(taskResultChecks).filter(([, valid]) => !valid).map(([name]) => name);
+          if (failedTaskResultChecks.length) {
+            if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1")
+              console.error("managed-native-conversation-task-result-checks", JSON.stringify(failedTaskResultChecks));
+            throw forbidden("Managed OpenCode conversation Task result is not an exact current source receipt");
+          }
+          if (!task) throw forbidden("Managed OpenCode conversation Task source is unavailable");
+          consumedSourceComponents.push({ kind: "additional_input", responsibleUserId: taskEntries[0]!.responsibleUserId,
+            policy: taskEntries[0]!.policy, inputs: taskEntries[0]!.inputs });
+          await assertV7Authorization(db, {
+            type: "agent", source: "agent_jwt", companyId: claims.company_id, agentId: claims.sub,
+            runId: claims.run_id, onBehalfOfUserId: claims.responsible_user_id,
+          }, claims.company_id, "issue:read", { type: "issue", companyId: claims.company_id,
+            issueId: task.id, projectId: task.projectId, parentIssueId: task.parentId,
+            assigneeAgentId: task.assigneeAgentId, assigneeUserId: null, status: task.status });
+          continue;
+        }
         if (typeof invocationId !== "string")
           throw forbidden("managed_opencode_tool_result_invocation_missing");
         const [invocation] = await db.select().from(toolInvocations).where(and(

@@ -155,10 +155,21 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
     expect(Number(runtimeFacts?.assignedMcpEnvironmentAbsentCount)).toBeGreaterThan(0);
     expect(runtimeFacts?.negativeControls).toEqual({ wrongRunDenied: true, wrongLeaseDenied: true,
       wrongCwdDenied: true, wrongPolicyDenied: true });
+    expect(runtimeFacts?.negativeNativeSessionStartControls).toEqual({ wrongCommandDenied: true,
+      wrongRootDenied: true, noExecution: true });
+    expect(runtimeFacts?.nativeSessionStartCredentialNegativeControls).toEqual({ missingTokenDenied: true,
+      mismatchedTokenDenied: true });
+    const relayExecFacts = Array.isArray(runtimeFacts?.execFacts)
+      ? runtimeFacts.execFacts as Array<Record<string, unknown>>
+      : [];
+    expect(relayExecFacts.some(fact => fact.modelCredentialPresent === true &&
+      fact.managedModelBrokerOriginPresent === true && fact.cwdExact === true)).toBe(true);
     const sandboxExecutionChecks = Array.isArray(runtimeFacts?.sandboxExecutionChecks)
       ? runtimeFacts.sandboxExecutionChecks as Array<Record<string, unknown>>
       : [];
     expect(sandboxExecutionChecks.length).toBeGreaterThan(0);
+    expect(sandboxExecutionChecks.some(check => check.runnerLaunch === true &&
+      check.nativePreparationPurpose === "native_session_start")).toBe(true);
     expect(sandboxExecutionChecks.every(check => check.managedGitContextProbe !== true)).toBe(true);
     expect(sandboxExecutionChecks.some(check => check.runtimeMode === "native" &&
       check.runStatusRunning === true && check.nativeIssueIdPresent === true &&
@@ -423,7 +434,7 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
         const rows=Array.isArray(receipt?.additionalInputs)?receipt!.additionalInputs:[];
         const entries=rows.filter(entry=>Array.isArray(entry.inputs)&&entry.inputs.some(value=>{
           const item=value&&typeof value==="object"&&!Array.isArray(value)?value as Record<string,unknown>:{};
-          return item.kind==="tool_result"&&item.toolName==="create_task"&&item.callId===callId&&item.invocationId!==null;
+          return item.kind==="tool_result"&&item.toolName==="create_task"&&item.callId===callId&&item.invocationId===null;
         }));
         expect(entries).toHaveLength(1);
         const inputs=entries[0]!.inputs!.map(value=>value&&typeof value==="object"&&!Array.isArray(value)
@@ -432,7 +443,7 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
         expect(taskSources).toHaveLength(1);
         const taskId=String(taskSources[0]!.issueId);
         expect(entries[0]!.policy).toMatchObject({issueIds:[taskId]});
-        expect(inputs).toEqual(expect.arrayContaining([expect.objectContaining({kind:"tool_result",callId,toolName:"create_task"})]));
+        expect(inputs).toEqual(expect.arrayContaining([expect.objectContaining({kind:"tool_result",callId,toolName:"create_task",invocationId:null})]));
         const [created]=await db.select().from(issues).where(and(eq(issues.companyId,facts.companyId),eq(issues.id,taskId)));
         expect(created).toMatchObject({title:taskTitle,parentId:null,status:"todo",responsibleUserId:facts.actor.userId,
           createdByAgentId:facts.actor.agentId,payloadSourceProtocolVersion:1,payloadSourceSnapshotInvalidated:false});

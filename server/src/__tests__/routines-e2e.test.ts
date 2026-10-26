@@ -46,8 +46,8 @@ function registerRoutineServiceMock() {
 
     return {
       ...actual,
-      routineService: (db: any, options: any = {}) =>
-        actual.routineService(db, {
+      routineService: (db: any, options: any = {}) => {
+        return actual.routineService(db, {
           ...options,
           heartbeat: {
             wakeup: async (agentId: string, wakeupOpts: any) => {
@@ -84,7 +84,8 @@ function registerRoutineServiceMock() {
               return { id: queuedRunId };
             },
           },
-        }),
+        });
+      },
     };
   });
 }

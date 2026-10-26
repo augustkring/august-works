@@ -12377,6 +12377,8 @@ async function cleanupRemoteRunnerAfterIdentityFailure(input: {
 export function createRemoteRunnerProcessLauncher(input: {
   target: Extract<AdapterExecutionTarget, { kind: "remote" }>;
   runner: CommandManagedRuntimeRunner;
+  /** Exact server-selected conversation OpenCode startup phase, never user supplied. */
+  nativeSessionStart?: boolean;
   remoteBinary: string;
   processIdentityPath: string;
   stateDirectory: string;
@@ -12502,6 +12504,7 @@ export function createRemoteRunnerProcessLauncher(input: {
         env: processEnvironment(spec.environment),
         timeoutMs: 20_000,
         bypassSession: true,
+        ...(input.nativeSessionStart ? { nativePreparationPurpose: "native_session_start" as const } : {}),
         onLog: input.onLog,
       });
       if (launchResult.exitCode !== 0 || launchResult.timedOut) {
@@ -13454,6 +13457,7 @@ async function createRunnerdBackendWithinSessionClaim(
           cwd: remoteTarget.remoteCwd,
           bypassSession: true,
           timeoutMs: 10_000,
+          nativePreparationPurpose: "provider_artifact",
         });
         return probe.exitCode === 0 && !probe.timedOut &&
           /^[a-f0-9]{64}\s/.test(probe.stdout) &&
@@ -13707,6 +13711,7 @@ async function createRunnerdBackendWithinSessionClaim(
                 cwd: remoteTarget.remoteCwd,
                 bypassSession: true,
                 timeoutMs: 10_000,
+                nativePreparationPurpose: "provider_artifact",
               });
               if (linked.exitCode !== 0 || linked.timedOut) {
                 throw new Error(
@@ -14586,6 +14591,9 @@ async function createRunnerdBackendWithinSessionClaim(
       ? createRemoteRunnerProcessLauncher({
           target: remoteTarget,
           runner: remoteCommandRunner,
+          nativeSessionStart: input.conversationMode === true &&
+            remoteTarget.transport === "sandbox" && input.execution.provider.kind === "opencode" &&
+            input.execution.session.driverKind === "opencode_server",
           remoteBinary,
           processIdentityPath: posix.join(
             remoteStateDirectory,

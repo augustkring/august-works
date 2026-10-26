@@ -358,14 +358,6 @@ async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string
  diagnosticStage="retained_context_lookup";
  const condition="issueId" in scope?or(eq(contextManifests.issueId,scope.issueId),
   sql`exists(select 1 from heartbeat_runs h where h.company_id=${companyId}::uuid and h.id=${contextManifests.runId} and h.agent_id=${contextManifests.agentId} and h.issue_id=${scope.issueId}::uuid)`):or(eq(contextManifests.runId,scope.runId),conversationIssueId?eq(contextManifests.issueId,conversationIssueId):undefined,sql`exists(select 1 from ${agentExecutionManifests} e where e.company_id=${companyId}::uuid and e.run_id=${scope.runId}::uuid and e.context_manifest_id=${contextManifests.id})`);
- const retainedContexts=await db.select({id:contextManifests.id}).from(contextManifests)
-  .where(and(eq(contextManifests.companyId,companyId),condition)).limit(1);
- if(!retainedContexts.length)return;
- const hasRoots=await db.select({id:analyticalContextRoots.memoryRecordId}).from(contextManifests)
-  .innerJoin(contextManifestMemoryRoots,and(eq(contextManifestMemoryRoots.companyId,contextManifests.companyId),eq(contextManifestMemoryRoots.manifestId,contextManifests.id)))
-  .innerJoin(analyticalContextRoots,and(eq(analyticalContextRoots.companyId,contextManifests.companyId),eq(analyticalContextRoots.memoryRecordId,contextManifestMemoryRoots.memoryRecordId)))
-  .where(and(eq(contextManifests.companyId,companyId),condition)).limit(1);
- if(!actor)throw forbidden("A current reader is required for source-dependent analytical payloads");
  const {lockAnalyticalCompany}=await import("./analytical-privacy.js"),{lockMemoryPrivacy}=await import("./memory/memory-privacy.js");
  const inspectIn=async(tx:Db)=>{
   // The caller already owns a pinned source transaction in the batched/Home
@@ -377,6 +369,57 @@ async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string
    await tx.execute(sql`set local statement_timeout='8s'`);
    await lockAnalyticalCompany(tx,companyId);await lockMemoryPrivacy(tx,companyId);
   }
+  const currentActor=actor;
+  if(!currentActor)throw forbidden("A current reader is required for source-dependent analytical payloads");
+  if(!companyLocksHeld){
+   diagnosticStage="task_reader_acl_recheck";
+   const canRead="issueId" in scope
+    ? await canActorReadIssuePrivacy(tx,currentActor,{companyId,id:scope.issueId})
+    : await canActorReadHeartbeatRunPrivacy(tx,currentActor,{companyId,id:scope.runId});
+   if(!canRead&&process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS==="1"&&"runId"in scope&&currentActor.type==="agent"){
+    const facts=await tx.execute<{runExists:boolean;runRunning:boolean;agentMatches:boolean;humanMatches:boolean;agentUsable:boolean;
+     scopeKind:string|null;issueRefCount:number;contextObject:boolean;contextIssueRef:boolean;contextTaskRef:boolean;
+     boundIssueOpen:boolean;boundConversationIdentity:boolean;retainedRootCount:number}>(sql`
+     select exists(select 1 from heartbeat_runs r where r.company_id=${companyId}::uuid and r.id=${scope.runId}::uuid) as "runExists",
+      exists(select 1 from heartbeat_runs r where r.company_id=${companyId}::uuid and r.id=${scope.runId}::uuid and r.status='running') as "runRunning",
+      exists(select 1 from heartbeat_runs r where r.company_id=${companyId}::uuid and r.id=${scope.runId}::uuid and r.agent_id=${currentActor.agentId}::uuid) as "agentMatches",
+      exists(select 1 from heartbeat_runs r where r.company_id=${companyId}::uuid and r.id=${scope.runId}::uuid and r.responsible_user_id=${currentActor.onBehalfOfUserId??null}::uuid) as "humanMatches",
+      exists(select 1 from agents a where a.company_id=${companyId}::uuid and a.id=${currentActor.agentId}::uuid and a.status not in ('paused','terminated','pending_approval','error')) as "agentUsable",
+      (select r.scope_kind from heartbeat_runs r where r.company_id=${companyId}::uuid and r.id=${scope.runId}::uuid limit 1) as "scopeKind",
+      (select count(distinct ref.id)::int from heartbeat_runs r cross join lateral (values (r.issue_id),(r.native_issue_id),
+        (case when r.context_snapshot->>'issueId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' then (r.context_snapshot->>'issueId')::uuid end),
+        (case when r.context_snapshot->>'taskId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' then (r.context_snapshot->>'taskId')::uuid end)) ref(id)
+       where r.company_id=${companyId}::uuid and r.id=${scope.runId}::uuid) as "issueRefCount",
+      exists(select 1 from heartbeat_runs r where r.company_id=${companyId}::uuid and r.id=${scope.runId}::uuid and jsonb_typeof(coalesce(r.context_snapshot,'{}'::jsonb))='object') as "contextObject",
+      exists(select 1 from heartbeat_runs r where r.company_id=${companyId}::uuid and r.id=${scope.runId}::uuid and coalesce(r.context_snapshot,'{}'::jsonb) ? 'issueId') as "contextIssueRef",
+      exists(select 1 from heartbeat_runs r where r.company_id=${companyId}::uuid and r.id=${scope.runId}::uuid and coalesce(r.context_snapshot,'{}'::jsonb) ? 'taskId') as "contextTaskRef",
+      exists(select 1 from heartbeat_runs r join issues i on i.company_id=r.company_id and i.id in (r.issue_id,r.native_issue_id,
+        case when r.context_snapshot->>'issueId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' then (r.context_snapshot->>'issueId')::uuid end,
+        case when r.context_snapshot->>'taskId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' then (r.context_snapshot->>'taskId')::uuid end)
+        where r.company_id=${companyId}::uuid and r.id=${scope.runId}::uuid and i.visibility='open') as "boundIssueOpen",
+      exists(select 1 from heartbeat_runs r join issues i on i.company_id=r.company_id and i.id in (r.issue_id,r.native_issue_id,
+        case when r.context_snapshot->>'issueId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' then (r.context_snapshot->>'issueId')::uuid end,
+        case when r.context_snapshot->>'taskId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' then (r.context_snapshot->>'taskId')::uuid end)
+        where r.company_id=${companyId}::uuid and r.id=${scope.runId}::uuid and i.conversation_user_id=${currentActor.onBehalfOfUserId??null}::uuid
+          and i.conversation_agent_id=${currentActor.agentId}::uuid and i.conversation_retired_at is null) as "boundConversationIdentity",
+      (select count(*)::int from context_manifests c join context_manifest_memory_roots cmr on cmr.company_id=c.company_id and cmr.manifest_id=c.id
+        join analytical_context_roots ar on ar.company_id=cmr.company_id and ar.memory_record_id=cmr.memory_record_id
+        where c.company_id=${companyId}::uuid and c.run_id=${scope.runId}::uuid) as "retainedRootCount"
+    `);
+    const row=facts[0];
+    console.info("native-analytical-run-reader-denial-facts",JSON.stringify(row??{}));
+   }
+   if(!canRead)throw new HttpError(403,"Native task source access is unavailable",{code:"analytical_source_access_lost"});
+  }
+  diagnosticStage="retained_context_lookup";
+  const retainedContexts=await tx.select({id:contextManifests.id}).from(contextManifests)
+   .where(and(eq(contextManifests.companyId,companyId),condition)).limit(1);
+  if(!retainedContexts.length)return;
+  const hasRoots=await tx.select({id:analyticalContextRoots.memoryRecordId}).from(contextManifests)
+   .innerJoin(contextManifestMemoryRoots,and(eq(contextManifestMemoryRoots.companyId,contextManifests.companyId),eq(contextManifestMemoryRoots.manifestId,contextManifests.id)))
+   .innerJoin(analyticalContextRoots,and(eq(analyticalContextRoots.companyId,contextManifests.companyId),eq(analyticalContextRoots.memoryRecordId,contextManifestMemoryRoots.memoryRecordId)))
+   .where(and(eq(contextManifests.companyId,companyId),condition)).limit(1);
+  const inspectCurrentSources=async()=>{
   diagnosticStage="retained_root_lookup";
   const roots=await tx.selectDistinct({id:analyticalContextRoots.memoryRecordId,sourceCount:analyticalContextRoots.sourceCount,pins:analyticalContextRoots.authorityPins,expiresAt:analyticalContextRoots.expiresAt}).from(contextManifests).innerJoin(contextManifestMemoryRoots,and(eq(contextManifestMemoryRoots.companyId,contextManifests.companyId),eq(contextManifestMemoryRoots.manifestId,contextManifests.id)))
    .innerJoin(analyticalContextRoots,and(eq(analyticalContextRoots.companyId,contextManifests.companyId),eq(analyticalContextRoots.memoryRecordId,contextManifestMemoryRoots.memoryRecordId))).where(and(eq(contextManifests.companyId,companyId),condition)).limit(257);
@@ -394,10 +437,10 @@ async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string
   diagnosticStage="retained_memory_reader";
   for(const root of memoryRoots){
    if(analyticalIds.has(root.id)){
-    await assertAnalyticalRetentionRootOwnerCurrent(tx,companyId,actor,root.id);
+    await assertAnalyticalRetentionRootOwnerCurrent(tx,companyId,currentActor,root.id);
     continue;
    }
-   if(performance.now()>deadline || !await canActorReadMemorySources(tx,companyId,actor,root.id))
+   if(performance.now()>deadline || !await canActorReadMemorySources(tx,companyId,currentActor,root.id))
     throw forbidden("Retained Context source access is unavailable");
   }
   const foundation=await tx.selectDistinct({ref:contextManifestItems.sourceRef}).from(contextManifests)
@@ -405,10 +448,10 @@ async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string
    .where(and(eq(contextManifests.companyId,companyId),condition,eq(contextManifestItems.sourceProvider,"august_works_foundation"))).limit(257);
   if(foundation.length>256)throw forbidden("The complete learned Context exceeds its source review budget");
   if(foundation.length){
-   const {accessService}=await import("./access.js"),access=await accessService(tx).decide({actor,enforceResponsibleUserIntersection:true,action:"foundation:read",resource:{type:"company",companyId}});
+   const {accessService}=await import("./access.js"),access=await accessService(tx).decide({actor:currentActor,enforceResponsibleUserIntersection:true,action:"foundation:read",resource:{type:"company",companyId}});
    if(!access.allowed)throw forbidden("The learned Foundation Context is no longer authorized");
    const {assertLearnedAssetAnalyticalSources}=await import("./learning/learning-analytical-sources.js");
-   for(const item of foundation){const ref=/^foundation:\/\/[a-f0-9-]{36}\/([a-f0-9-]{36})\/(?:\d+|whole)$/i.exec(item.ref);if(!ref||performance.now()>deadline)throw forbidden("The exact learned Foundation Context is unavailable");await assertLearnedAssetAnalyticalSources(tx,companyId,"document_revision",ref[1]!,actor,readScope);}
+   for(const item of foundation){const ref=/^foundation:\/\/[a-f0-9-]{36}\/([a-f0-9-]{36})\/(?:\d+|whole)$/i.exec(item.ref);if(!ref||performance.now()>deadline)throw forbidden("The exact learned Foundation Context is unavailable");await assertLearnedAssetAnalyticalSources(tx,companyId,"document_revision",ref[1]!,currentActor,readScope);}
   }
   for(const root of roots){
    diagnosticStage="retained_root_shape";
@@ -416,21 +459,23 @@ async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string
    diagnosticStage="retained_root_expiry";
    if(root.expiresAt.getTime()<=Date.now())throw forbidden("The analytical conversation requires current source review");
    diagnosticStage="retained_root_pin_revalidation";
-   const current=await inspectAnalyticalContextPins(tx,companyId,actor,root.pins,deadline);
+   const current=await inspectAnalyticalContextPins(tx,companyId,currentActor,root.pins,deadline);
    diagnosticStage="retained_root_dependency_read";
    const retained=await tx.select({id:analyticalContextDependencies.sourceManifestId}).from(analyticalContextDependencies).where(and(eq(analyticalContextDependencies.companyId,companyId),eq(analyticalContextDependencies.memoryRecordId,root.id))).limit(26201);
    diagnosticStage="retained_root_dependency_match";
    if(retained.length!==root.sourceCount||JSON.stringify(retained.map(source=>source.id).sort())!==JSON.stringify(current.manifestIds))throw forbidden("The complete retained analytical source authority changed");
   }
+  };
+  if(hasRoots.length&&currentActor.type==="agent"){
+   const {withNativeAnalyticalReader,withNativeAnalyticalSourceReader}=await import("./analytical-reader.js");
+   return currentActor.source==="none"
+    ? await withNativeAnalyticalSourceReader(tx,companyId,currentActor,inspectCurrentSources,readScope??"task")
+    : await withNativeAnalyticalReader(tx,companyId,currentActor,inspectCurrentSources,readScope);
+  }
+  return inspectCurrentSources();
  };
  const inspect=()=>is(db,PgTransaction)?inspectIn(db):db.transaction(rawTx=>inspectIn(rawTx as unknown as Db));
  try {
-  if(actor.type==="agent" && hasRoots.length){
-   const {withNativeAnalyticalReader,withNativeAnalyticalSourceReader}=await import("./analytical-reader.js");
-   return actor.source==="none"
-    ? await withNativeAnalyticalSourceReader(db,companyId,actor,inspect,readScope??"task")
-    : await withNativeAnalyticalReader(db,companyId,actor,inspect,readScope);
-  }
   return await inspect();
  }catch(error){
   if(error instanceof HttpError&&[403,404,409,422].includes(error.status))throw new HttpError(error.status,"Analytical conversation source access is unavailable",{code:"analytical_source_access_lost"});

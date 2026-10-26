@@ -70,8 +70,19 @@ async function withNativeReaderPermit<T>(db:Db,companyId:string,actor:Authorizat
 export async function assertAnalyticalReader(db:Db,companyId:string,actor:AuthorizationActor) {
  if(actor.type==="board"){v7HumanActorId(actor);return;}
  const permit=nativeReads.getStore();
- if(!permit?.active||permit.companyId!==companyId||permit.agentId!==actor.agentId||permit.runId!==actor.runId||permit.userId!==actor.onBehalfOfUserId)throw forbidden("Analytical reads require the native retained tool boundary");
- await assertNativeReaderIdentity(db,companyId,actor,permit.scope,permit.sourceRevalidation);
+ if(!permit?.active||permit.companyId!==companyId||permit.agentId!==actor.agentId||permit.runId!==actor.runId||permit.userId!==actor.onBehalfOfUserId){
+  if(process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS==="1")console.info("native-analytical-reader-diagnostic",JSON.stringify({stage:"permit_binding",permitPresent:Boolean(permit),permitActive:permit?.active??false,companyMatch:permit?.companyId===companyId,agentMatch:permit?.agentId===actor.agentId,runMatch:permit?.runId===actor.runId,userMatch:permit?.userId===actor.onBehalfOfUserId}));
+  throw forbidden("Analytical reads require the native retained tool boundary");
+ }
+ try{await assertNativeReaderIdentity(db,companyId,actor,permit.scope,permit.sourceRevalidation)}catch(error){
+  if(process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS==="1"){
+   const candidate=error&&typeof error==="object"?error as {status?:unknown;details?:unknown}:null;
+   const details=candidate?.details&&typeof candidate.details==="object"?candidate.details as Record<string,unknown>:null;
+   const code=typeof details?.code==="string"&&/^[a-z][a-z0-9_]{0,63}$/.test(details.code)?details.code:null;
+   console.info("native-analytical-reader-diagnostic",JSON.stringify({stage:"identity_recheck",scope:permit.scope,sourceRevalidation:permit.sourceRevalidation,status:typeof candidate?.status==="number"?candidate.status:null,code}));
+  }
+  throw error;
+ }
 }
 /** Used only after current read admission, when comparing declared human owners. */
 export function analyticalPrincipalId(actor:AuthorizationActor){return actor.type==="agent"&&actor.onBehalfOfUserId?actor.onBehalfOfUserId:v7HumanActorId(actor);}

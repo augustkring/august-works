@@ -1626,28 +1626,34 @@ export async function withReadMemoryTemporalSources<T>(db: Db | DbTransaction, a
   if (!binding?.valid) { diagnostic("source_body_hash", { bodyAndSnapshotDigestValid: binding?.valid === true }); return false; }
   const contextInputs = snapshot.data.inputs.filter((input): input is Extract<typeof input, { kind: "context" }> => input.kind === "context");
   const { assertNativeMemoryOutputSnapshotCurrent, assertNativeTemporalContextInputsCurrent } = await import("./native-direct-input.js");
+  const scope: MemoryTemporalReadScope = { db: db as object, companyId, recordId, actorKey: routineActorKey(actor),
+    issueIds: new Set(row.sourceIssueIds), runIds: new Set(capturedRunIds),
+    contextIds: contextInputs.map(input => input.manifestId).sort(), active: true };
   let currentnessStage: "output_snapshot_currentness" | "context_inputs_currentness" = "output_snapshot_currentness";
   try {
-    if (dispatch) await assertNativeMemoryOutputSnapshotCurrent(db as Db, { companyId, recordId, snapshot: snapshot.data, actor });
-    currentnessStage = "context_inputs_currentness";
-    await assertNativeTemporalContextInputsCurrent(db as Db, companyId, contextInputs);
-  } catch (error) {
-    if (error instanceof HttpError && [403, 404, 409, 422].includes(error.status)) {
-      const frames = (typeof error.stack === "string" ? error.stack : "").split("\n").flatMap(line => {
-        const match = /server\/src\/services\/([A-Za-z0-9_./-]+\.ts):(\d+):\d+/.exec(line);
-        return match ? [`${match[1]}:${match[2]}`] : [];
-      }).slice(0, 5);
-      diagnostic(currentnessStage, { status: error.status,
-        errorName: ["HttpError", "Error"].includes(error.name) ? error.name : "other", frames: frames.join(",") });
-      return false;
-    }
-    throw error;
-  }
-  const scope: MemoryTemporalReadScope = { db: db as object, companyId, recordId, actorKey: routineActorKey(actor),
-    issueIds: new Set(row.sourceIssueIds), runIds: new Set(snapshot.data.policy.runIds),
-    contextIds: contextInputs.map(input => input.manifestId).sort(), active: true };
-  try {
-    const result = await memoryTemporalReadScopes.run(scope, read);
+    const result = await memoryTemporalReadScopes.run(scope, async () => {
+      try {
+        // The exact frozen Context prefix must govern the Memory owner proof
+        // itself, not only the final caller. Otherwise validating an older
+        // Memory can consult a later Context manifest before its ALS scope is
+        // installed and retroactively taint the earlier output.
+        if (dispatch) await assertNativeMemoryOutputSnapshotCurrent(db as Db, { companyId, recordId, snapshot: snapshot.data, actor });
+        currentnessStage = "context_inputs_currentness";
+        await assertNativeTemporalContextInputsCurrent(db as Db, companyId, contextInputs);
+      } catch (error) {
+        if (error instanceof HttpError && [403, 404, 409, 422].includes(error.status)) {
+          const frames = (typeof error.stack === "string" ? error.stack : "").split("\n").flatMap(line => {
+            const match = /server\/src\/services\/([A-Za-z0-9_./-]+\.ts):(\d+):\d+/.exec(line);
+            return match ? [`${match[1]}:${match[2]}`] : [];
+          }).slice(0, 5);
+          diagnostic(currentnessStage, { status: error.status,
+            errorName: ["HttpError", "Error"].includes(error.name) ? error.name : "other", frames: frames.join(",") });
+          return false;
+        }
+        throw error;
+      }
+      return read();
+    });
     if (result === false) diagnostic("callback_reader", { callbackReturnedFalse: true });
     return result;
   }

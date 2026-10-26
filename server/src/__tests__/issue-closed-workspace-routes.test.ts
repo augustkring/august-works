@@ -111,7 +111,8 @@ function registerServiceMocks() {
     heartbeatService: () => mockHeartbeatService,
   }));
 
-  vi.doMock("../services/issues.js", () => ({
+  vi.doMock("../services/issues.js", async () => ({
+    ...(await vi.importActual<typeof import("../services/issues.js")>("../services/issues.js")),
     issueService: () => mockIssueService,
   }));
 
@@ -295,13 +296,13 @@ describe.sequential("closed isolated workspace issue routes", () => {
       .post(`/api/issues/${issueId}/comments`)
       .send({ body: "hello" });
 
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
     expect(mockExecutionWorkspaceService.reopenClosedIsolatedExecutionWorkspaceForIssue).toHaveBeenCalledWith({
       workspaceId: closedWorkspaceId,
       issue: { id: issueId, companyId: "company-1", projectId: null },
       actor: expect.objectContaining({ type: "board", source: "local_implicit", userId: "local-board" }),
     });
     // The closed-workspace dead end is gone: the comment is accepted.
-    expect(res.status).toBe(201);
   });
 
   it("reopens the closed isolated workspace and accepts a comment update", async () => {

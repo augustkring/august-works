@@ -1172,6 +1172,18 @@ const support = await getEmbeddedPostgresTestSupport();
       const options={actor,readScope:"task" as const,selectedSkillKeys:new Set([skill!.key]),versionSelections:new Map([[skill!.key,candidate.candidateId]]),allowCandidateVersionsForTest:mode==="candidate"};
       const [entry]=await original.listRuntimeSkillEntries(companyId,options);expect(entry).toMatchObject({sourceStatus:"available",versionId:candidate.candidateId});expect(await fs.readFile(path.join(entry!.source,"SKILL.md"),"utf8")).toBe(markdown);
       if(mode==="active"){
+        // V5 writes the exact manifest before heartbeat commits Native mode.
+        // During that bounded preselection window only this still-current,
+        // company-visible version is materializable; the manifest pin and
+        // complete source graph remain mandatory.
+        await db.update(heartbeatRuns).set({runtimeMode:null,runtimeModeResolvedAt:null}).where(eq(heartbeatRuns.id,run!.id));
+        const [preselectionEntry]=await original.listRuntimeSkillEntries(companyId,options);
+        expect(preselectionEntry).toMatchObject({sourceStatus:"available",versionId:candidate.candidateId});
+        expect(await fs.readFile(path.join(preselectionEntry!.source,"SKILL.md"),"utf8")).toBe(markdown);
+        await db.update(heartbeatRuns).set({runtimeMode:"legacy",runtimeModeResolvedAt:new Date()}).where(eq(heartbeatRuns.id,run!.id));
+        const [resolvedLegacyEntry]=await original.listRuntimeSkillEntries(companyId,options);
+        expect(resolvedLegacyEntry?.sourceStatus).toBe("missing");
+        await db.update(heartbeatRuns).set({runtimeMode:"native",runtimeModeResolvedAt:new Date()}).where(eq(heartbeatRuns.id,run!.id));
         const privateDraft=await lifecycle.propose(owner,companyId,created.skillId,{baseActiveVersionId:candidate.candidateId,markdown:"PRIVATE NEXT VERSION MUST NOT REPLACE THE PIN",summary:"Unreviewed follow-up",dependencies:[],sharing:"private_draft"});
         expect(await original.getVersion(companyId,created.skillId,privateDraft.id,actor,"task")).toBeNull();
         await expect(fabric.loadSkill(actor,companyId,run!.id,created.skillId)).resolves.toMatchObject({versionId:candidate.candidateId,markdown});

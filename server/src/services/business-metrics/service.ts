@@ -51,10 +51,23 @@ export function businessMetricService(db: Db) {
     queryTimeBudget(deadline);
   }
   async function admit(tx: Db, companyId: string, actor: AuthorizationActor, write = false, checkFlags = true) {
-    if(write)v7HumanActorId(actor);else await assertAnalyticalReader(tx,companyId,actor);
-    await assertV7Authorization(tx, actor, companyId, write ? "users:manage_permissions" : "company_scope:read");
-    const flags = await instanceSettingsService(tx).getExperimental();
-    if (checkFlags && (!v8FeatureEnabled(flags, "business_metrics_v8") || !v7FeatureEnabled(flags, "governance_evidence_v7"))) throw notFound("Governed business metrics are not enabled");
+    let stage=write?"human_writer":"analytical_reader";
+    try{
+      if(write)v7HumanActorId(actor);else await assertAnalyticalReader(tx,companyId,actor);
+      stage="company_authorization";
+      await assertV7Authorization(tx, actor, companyId, write ? "users:manage_permissions" : "company_scope:read");
+      stage="feature_flags";
+      const flags = await instanceSettingsService(tx).getExperimental();
+      if (checkFlags && (!v8FeatureEnabled(flags, "business_metrics_v8") || !v7FeatureEnabled(flags, "governance_evidence_v7"))) throw notFound("Governed business metrics are not enabled");
+    }catch(error){
+      if(process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS==="1"&&!write){
+        const candidate=error&&typeof error==="object"?error as {status?:unknown;details?:unknown}:null;
+        const details=candidate?.details&&typeof candidate.details==="object"?candidate.details as Record<string,unknown>:null;
+        const code=typeof details?.code==="string"&&/^[a-z][a-z0-9_]{0,63}$/.test(details.code)?details.code:null;
+        console.info("native-analytical-reader-diagnostic",JSON.stringify({stage,status:typeof candidate?.status==="number"?candidate.status:null,code}));
+      }
+      throw error;
+    }
   }
   async function metric(tx: Db, companyId: string, id: string, lock = false) {
     const query = tx.select().from(businessMetrics).where(and(eq(businessMetrics.companyId, companyId), eq(businessMetrics.id, id)));
@@ -73,14 +86,21 @@ export function businessMetricService(db: Db) {
   }
   async function inspectCurrentObservationWithLineage(companyId: string, actor: AuthorizationActor, observationId: string): Promise<CurrentMetricObservationLineage> {
       if (!is(db, PgTransaction)) return db.transaction(async tx => businessMetricService(tx as unknown as Db).inspectCurrentObservationWithLineage(companyId, actor, observationId));
+      let sourceStage="reader_admission";
+      try{
       await admit(db, companyId, actor);
+      sourceStage="observation_lookup";
       const [observation] = await db.select().from(businessMetricObservations).where(and(eq(businessMetricObservations.companyId, companyId), eq(businessMetricObservations.id, observationId))).for("share");
       if (!observation || observation.expiresAt.getTime() <= Date.now()) throw conflict("Metric observation is no longer current");
+      sourceStage="observation_manifest_retention";
       await assertMemorySourcesRetained(db,companyId,[{sourceProvider:"august_works_analytical",sourceRef:`manifest://${observation.lineageManifestId}`}]);
+      sourceStage="metric_publication";
       const row = await metric(db, companyId, observation.metricId);
       if (row.status !== "published") throw conflict("Metric is not currently published");
+      sourceStage="metric_definition";
       const revision = await version(db, companyId, row.id, observation.versionId);
       await definitionAdmission(db, companyId, actor, revision.definition);
+      sourceStage="lineage_lookup";
       const [manifest] = await db.select().from(analyticalLineageManifests).where(and(eq(analyticalLineageManifests.companyId, companyId), eq(analyticalLineageManifests.id, observation.lineageManifestId))).for("share");
       const edges = await db.select().from(analyticalLineageEdges).where(and(eq(analyticalLineageEdges.companyId, companyId), eq(analyticalLineageEdges.manifestId, observation.lineageManifestId))).limit(20066).for("share");
       const calculation = revision.definition.calculation;
@@ -88,10 +108,12 @@ export function businessMetricService(db: Db) {
       if (!manifest || manifest.expiresAt.getTime() <= Date.now() || manifest.inputHash !== observation.inputHash || manifest.definitionHash !== revision.contentHash
         || edges.length > 20065 || !edges.some(edge => edge.inputType === "metric_version" && edge.inputRef === revision.id && edge.inputHash === revision.contentHash)
         || !population || edges.filter(edge => edge.inputType === population.entity).length !== manifest.sourceCount) throw conflict("Metric observation lineage is unavailable");
+      sourceStage="population_scope";
       if (population.entity === "issue" && population.projectId && (!edges.some(edge => edge.inputType === "project" && edge.inputRef === population.projectId)
         || !await permitted(db, companyId, actor, "project", population.projectId))) throw forbidden("Metric population scope is outside the current authorization boundary");
       const deadline = performance.now() + 30_000;
       const issueIds=edges.filter(edge=>edge.inputType==="issue").map(edge=>edge.inputRef);
+      sourceStage="population_privacy";
       await accessService(db).withReadSources(companyId, issueIds, edges.filter(edge => edge.inputType === "project").map(edge => edge.inputRef), async sourceAccess => {
         const issuePrivacyIds = [...new Set(issueIds)];
         const projectPrivacyIds = [...new Set([
@@ -100,8 +122,18 @@ export function businessMetricService(db: Db) {
         ])];
         await sourceAccess.assertTaskPrivacyBatch(actor, issuePrivacyIds, projectPrivacyIds);
       });
+      sourceStage="source_erasure_currentness";
       await assertAnalyticalSourcesNotErased(db, companyId, edges.filter(e => e.inputType === "issue").map(e => e.inputRef), edges.filter(e => e.inputType === "project").map(e => e.inputRef));
       return { result: observation.result, observation, manifest, edges, revision };
+      }catch(error){
+       if(process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS==="1"){
+        const candidate=error&&typeof error==="object"?error as {status?:unknown;details?:unknown}:null;
+        const details=candidate?.details&&typeof candidate.details==="object"?candidate.details as Record<string,unknown>:null;
+        const code=typeof details?.code==="string"&&/^[a-z][a-z0-9_]{0,63}$/.test(details.code)?details.code:null;
+        console.info("native-analytical-reader-diagnostic",JSON.stringify({stage:sourceStage,status:typeof candidate?.status==="number"?candidate.status:null,code}));
+       }
+       throw error;
+      }
   }
   async function inspectCurrentObservationsWithLineage(companyId:string,actor:AuthorizationActor,metricId:string,versionId:string,observationIds:string[],deadline:number):Promise<CurrentMetricObservationLineageBatch> {
     if (!is(db, PgTransaction)) return db.transaction(async tx => businessMetricService(tx as unknown as Db).inspectCurrentObservationsWithLineage(companyId,actor,metricId,versionId,observationIds,deadline));

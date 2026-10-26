@@ -50,6 +50,7 @@ import {
   runtimeHeartbeatSchema,
   runtimeOperationSchema,
   nativePayloadSourceSnapshotSchema,
+  nativePayloadSourceInputSchema,
 } from "@paperclipai/shared";
 import type { z } from "zod";
 import type { SaasPlatformConfig } from "../../saas-platform-config.js";
@@ -78,6 +79,9 @@ import type { workerModelGateway } from "../orchestration/worker-model-gateway.j
 import { verifyRuntimeToolsToken } from "../../runtime-tools-token.js";
 import { findNativeChatWorkspaceScope, nativeChatWorkspaceCwd } from "../native-runtime/native-chat-workspace.js";
 import { assertNativePayloadSourceSetCurrent, assertNativeTaskSourceOwnerCurrent } from "../native-direct-input.js";
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
+import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
+import { parseNativeExecutionInput } from "../../vendor/paperclip-runner/index.js";
 
 type IssuedWorkerModelCredential = Awaited<
   ReturnType<ReturnType<typeof workerModelGateway>["issueForRun"]>
@@ -2289,6 +2293,11 @@ export function runtimeControlService(
       throw forbidden("Sandbox execution capability scope mismatch");
     return db.transaction(async transaction => {
       const tx = transaction as unknown as Db;
+      // Source readers and erasers share these company-scoped advisory locks.
+      // Acquire them before pinning the host command / Run rows, then perform
+      // the final exact source-owner check below in this same transaction.
+      await lockAnalyticalCompany(tx, claims.company_id);
+      await lockMemoryPrivacy(tx, claims.company_id);
       const [operation] = await tx.select().from(runtimeHostCommands).where(and(
         eq(runtimeHostCommands.companyId, claims.company_id), eq(runtimeHostCommands.runtimeCellId, input.cellId),
         eq(runtimeHostCommands.cellGeneration, BigInt(input.generation)),
@@ -2317,12 +2326,17 @@ export function runtimeControlService(
       const credentials = source.policy.compilation.compiledPolicy.credentials;
       const brokerCredential = request.brokerCredential;
       const nativePreparationPurpose = expected.nativePreparationPurpose;
-      if (nativePreparationPurpose !== undefined && nativePreparationPurpose !== "provider_artifact")
+      if (nativePreparationPurpose !== undefined && nativePreparationPurpose !== "provider_artifact" &&
+        nativePreparationPurpose !== "native_session_start")
         throw forbidden("Sandbox preparation purpose is unsupported");
       const providerArtifactPreparation = nativePreparationPurpose === "provider_artifact";
+      const nativeSessionStart = nativePreparationPurpose === "native_session_start";
+      let nativeSessionStartValid = false;
       if (providerArtifactPreparation) {
         const task = source.source.task;
         const taskSnapshot = nativePayloadSourceSnapshotSchema.safeParse(task.payloadSourceSnapshot);
+        const [taskOwnerVersion] = await tx.select({ sourceVersion: sql<string>`extract(epoch from ${issues.updatedAt})::text` })
+          .from(issues).where(and(eq(issues.companyId, claims.company_id), eq(issues.id, task.id))).limit(1);
         const contextSnapshot = source.run.contextSnapshot && typeof source.run.contextSnapshot === "object" &&
           !Array.isArray(source.run.contextSnapshot) ? source.run.contextSnapshot as Record<string, unknown> : {};
         const generation = typeof contextSnapshot.conversationSessionGeneration === "number"
@@ -2354,7 +2368,7 @@ export function runtimeControlService(
           !exactConversation || !taskSnapshot.success || taskSnapshot.data.owner.kind !== "issue" ||
           taskSnapshot.data.owner.companyId !== claims.company_id || taskSnapshot.data.owner.id !== task.id ||
           task.payloadSourceProtocolVersion !== 1 || task.payloadSourceSnapshotInvalidated ||
-          !expectedTaskRoot ||
+          !taskOwnerVersion?.sourceVersion || !expectedTaskRoot ||
           path.resolve(request.cwd) !== expectedTaskRoot ||
           !readRoots.some(root => typeof root === "string" && path.resolve(root) === expectedTaskRoot) ||
           !writeRoots.some(root => typeof root === "string" && path.resolve(root) === expectedTaskRoot) ||
@@ -2363,8 +2377,83 @@ export function runtimeControlService(
           throw forbidden("Sandbox provider-artifact preparation is outside the exact current conversation Task scope");
         await assertNativeTaskSourceOwnerCurrent(tx, { companyId: claims.company_id,
           actor: { type: "board", source: "session", userId: claims.responsible_user_id },
-          source: { kind: "task", issueId: task.id, sourceVersion: task.updatedAt.toISOString(),
+          source: { kind: "task", issueId: task.id, sourceVersion: taskOwnerVersion.sourceVersion,
             contentHash: taskSnapshot.data.owner.contentHash } });
+      }
+      if (nativeSessionStart) {
+        const task = source.source.task;
+        const taskSnapshot = nativePayloadSourceSnapshotSchema.safeParse(task.payloadSourceSnapshot);
+        const [taskOwnerVersion] = await tx.select({ sourceVersion: sql<string>`extract(epoch from ${issues.updatedAt})::text` })
+          .from(issues).where(and(eq(issues.companyId, claims.company_id), eq(issues.id, task.id))).limit(1);
+        const profile = source.run.runnerProfileJson && typeof source.run.runnerProfileJson === "object" &&
+          !Array.isArray(source.run.runnerProfileJson) ? source.run.runnerProfileJson as Record<string, unknown> : {};
+        let execution: ReturnType<typeof parseNativeExecutionInput> | null = null;
+        try { execution = parseNativeExecutionInput(profile.nativeExecutionInput); } catch { execution = null; }
+        const bootstrapComments = profile.nativeBootstrapWakeCommentSources &&
+          typeof profile.nativeBootstrapWakeCommentSources === "object" && !Array.isArray(profile.nativeBootstrapWakeCommentSources)
+          ? profile.nativeBootstrapWakeCommentSources as Record<string, unknown> : {};
+        const requestComment = bootstrapComments.request && typeof bootstrapComments.request === "object" && !Array.isArray(bootstrapComments.request)
+          ? bootstrapComments.request as Record<string, unknown> : {};
+        const capturedComment = nativePayloadSourceInputSchema.safeParse(requestComment.input);
+        const markdownMap = profile.nativeBootstrapTaskMarkdownSourceMap && typeof profile.nativeBootstrapTaskMarkdownSourceMap === "object" &&
+          !Array.isArray(profile.nativeBootstrapTaskMarkdownSourceMap) ? profile.nativeBootstrapTaskMarkdownSourceMap as Record<string, unknown> : {};
+        const markdownReferences = Array.isArray(markdownMap.references)
+          ? markdownMap.references.filter((value): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value)) : [];
+        const contextSnapshot = source.run.contextSnapshot && typeof source.run.contextSnapshot === "object" &&
+          !Array.isArray(source.run.contextSnapshot) ? source.run.contextSnapshot as Record<string, unknown> : {};
+        const generation = typeof contextSnapshot.conversationSessionGeneration === "number"
+          ? contextSnapshot.conversationSessionGeneration : null;
+        const workspaceScope = generation !== null ? await findNativeChatWorkspaceScope(db, {
+          adapterType: source.source.agent.adapterType, environmentDriver: "sandbox", companyId: claims.company_id,
+          agentId: source.run.agentId!, issueId: task.id, runId: source.run.id,
+          responsibleUserId: source.run.responsibleUserId, conversationSessionGeneration: generation,
+        }) : null;
+        const expectedTaskRoot = workspaceScope?.projectId === null ? nativeChatWorkspaceCwd(workspaceScope, null, false) : null;
+        const filesystem = source.policy.compilation.compiledPolicy.filesystem;
+        const readRoots = Array.isArray(filesystem?.readPaths) ? filesystem.readPaths : [];
+        const writeRoots = Array.isArray(filesystem?.writePaths) ? filesystem.writePaths : [];
+        const snapshotComment = taskSnapshot.success && taskSnapshot.data.inputs.length === 1
+          ? nativePayloadSourceInputSchema.safeParse(taskSnapshot.data.inputs[0]) : null;
+        const commentId = capturedComment?.success && capturedComment.data.kind === "comment"
+          ? capturedComment.data.commentId : null;
+        const exactNativeInput = execution !== null && execution.binding.companyId === claims.company_id &&
+          execution.binding.runId === source.run.id && execution.binding.issueId === task.id &&
+          execution.binding.agentId === source.run.agentId && execution.session.driverKind === "opencode_server" &&
+          execution.session.normalizedSessionId === source.run.nativeSessionId &&
+          execution.completionContract.id === source.run.completionContractId &&
+          execution.completionContract.sha256 === source.run.completionContractSha256 &&
+          execution.provider.kind === "opencode" && execution.workspace.cwd === expectedTaskRoot &&
+          typeof execution.task.prompt === "string" && execution.task.prompt.length > 0;
+        const exactHumanTask = task.conversationAgentId === source.run.agentId &&
+          task.conversationUserId === source.run.responsibleUserId && task.assigneeAgentId === source.run.agentId &&
+          task.conversationState === "active" && task.conversationRetiredAt === null &&
+          task.executionRunId === source.run.id && task.conversationSessionGeneration === generation && generation !== null &&
+          ["in_review", "in_progress"].includes(task.status) && source.run.status === "running" &&
+          source.run.runtimeMode === "native" && source.run.scopeKind === "issue" && source.run.nativeIssueId === task.id &&
+          contextSnapshot.conversationSessionGeneration === generation && source.manifest.runId === source.run.id &&
+          source.manifest.agentId === source.run.agentId && source.manifest.manifest.responsibleUserId === source.run.responsibleUserId;
+        const exactCurrentComment = snapshotComment?.success && snapshotComment.data.kind === "comment" &&
+          snapshotComment.data.issueId === task.id && commentId === snapshotComment.data.commentId &&
+          contextSnapshot.wakeCommentId === commentId && markdownMap.version === 1 &&
+          typeof markdownMap.renderedMarkdownDigest === "string" && /^[a-f0-9]{64}$/.test(markdownMap.renderedMarkdownDigest) &&
+          markdownReferences.some(reference => reference.kind === "task" && reference.id === task.id) &&
+          markdownReferences.some(reference => reference.kind === "comment" && reference.id === commentId);
+        const exactWorkspace = expectedTaskRoot !== null && path.resolve(request.cwd) === expectedTaskRoot &&
+          readRoots.some(root => typeof root === "string" && path.resolve(root) === expectedTaskRoot) &&
+          writeRoots.some(root => typeof root === "string" && path.resolve(root) === expectedTaskRoot);
+        if (resolvePaperclipRunnerProviderProfile(source.source.agent.adapterConfig)?.provider !== "opencode" ||
+          !exactNativeInput || !exactHumanTask || !exactCurrentComment || !exactWorkspace ||
+          request.argv[0] !== "sh" || request.argv[3] !== "paperclip-runner-launch" ||
+          !taskSnapshot.success || taskSnapshot.data.owner.kind !== "issue" || taskSnapshot.data.owner.companyId !== claims.company_id ||
+          taskSnapshot.data.owner.id !== task.id || task.payloadSourceProtocolVersion !== 1 || task.payloadSourceSnapshotInvalidated ||
+          !taskOwnerVersion?.sourceVersion || credentials.mode !== "none" || credentials.bindings.length !== 0 ||
+          request.modelBrokerCredential === undefined || request.brokerCredential !== undefined)
+          throw forbidden("Native session start is outside the current conversation Run, input, Human and workspace scope");
+        await assertNativeTaskSourceOwnerCurrent(tx, { companyId: claims.company_id,
+          actor: { type: "board", source: "session", userId: claims.responsible_user_id },
+          source: { kind: "task", issueId: task.id, sourceVersion: taskOwnerVersion.sourceVersion,
+            contentHash: taskSnapshot.data.owner.contentHash } });
+        nativeSessionStartValid = true;
       }
       if (!providerArtifactPreparation && credentials.mode === "brokered") {
         const brokerClaims = brokerCredential ? verifySandboxBrokerJwt(brokerCredential.capabilityToken) : null;
@@ -2456,16 +2545,17 @@ export function runtimeControlService(
           const profile = source.run.runnerProfileJson && typeof source.run.runnerProfileJson === "object" &&
             !Array.isArray(source.run.runnerProfileJson) ? source.run.runnerProfileJson as Record<string, unknown> : {};
           const receipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
-          const receiptBody = receipt.success ? (({ digest: _digest, ...body }) => body)(receipt.data) : null;
+          const receiptData = receipt.success ? receipt.data : null;
+          const receiptBody = receiptData ? (({ digest: _digest, ...body }) => body)(receiptData) : null;
           const [receiptDigest] = receiptBody ? await tx.execute<{ digest: string }>(sql`
             select encode(sha256(convert_to((${JSON.stringify(receiptBody)}::jsonb)::text,'UTF8')),'hex') as digest
           `) : [];
           conversationCredentialChecks = {
-            receiptDigest: Boolean(receipt.success && receiptBody && receiptDigest?.digest === receipt.data.digest),
-            receiptBinding: Boolean(receipt.success && receipt.data.binding.companyId === claims.company_id &&
-              receipt.data.binding.runId === source.run.id && receipt.data.binding.agentId === source.run.agentId &&
-              receipt.data.binding.responsibleUserId === source.run.responsibleUserId &&
-              receipt.data.binding.issueId === task.id && source.run.nativeInputSourceProtocolVersion === 1),
+            receiptDigestOrSessionStartOwner: nativeSessionStartValid || Boolean(receiptData && receiptBody && receiptDigest?.digest === receiptData.digest),
+            receiptBindingOrSessionStartOwner: nativeSessionStartValid || Boolean(receiptData && receiptData.binding.companyId === claims.company_id &&
+              receiptData.binding.runId === source.run.id && receiptData.binding.agentId === source.run.agentId &&
+              receiptData.binding.responsibleUserId === source.run.responsibleUserId &&
+              receiptData.binding.issueId === task.id && source.run.nativeInputSourceProtocolVersion === 1),
             tokenIdentity: conversationModelClaims.scope === "conversation_model" &&
               conversationModelClaims.company_id === claims.company_id && conversationModelClaims.sub === source.run.agentId &&
               conversationModelClaims.run_id === source.run.id &&
@@ -2488,10 +2578,12 @@ export function runtimeControlService(
               source.manifest.hash === conversationBinding.executionManifestHash &&
               source.manifest.manifest.responsibleUserId === source.run.responsibleUserId,
           };
-          if (Object.values(conversationCredentialChecks).every(Boolean)) {
+          if (Object.values(conversationCredentialChecks).every(Boolean) && receiptData) {
             await assertNativePayloadSourceSetCurrent(tx, { companyId: claims.company_id, issueId: task.id,
               runId: source.run.id, actor: { type: "board", source: "session", userId: claims.responsible_user_id },
-              policy: receipt.data.bootstrap.policy, inputs: receipt.data.bootstrap.inputs });
+              policy: receiptData.bootstrap.policy, inputs: receiptData.bootstrap.inputs });
+          }
+          if (Object.values(conversationCredentialChecks).every(Boolean) && (receiptData || nativeSessionStartValid)) {
             conversationCredentialValid = conversationModelClaims.exp * 1000 > Date.now() &&
               Date.parse(modelCredential.expiresAt) > Date.now() && Date.parse(request.deadlineAt) > Date.now();
           }
@@ -2591,7 +2683,7 @@ export function runtimeControlService(
     env?: Record<string, string>;
     stdin?: string;
     timeoutMs?: number;
-    nativePreparationPurpose?: "provider_artifact";
+    nativePreparationPurpose?: "provider_artifact" | "native_session_start";
     signal?: AbortSignal;
     onOutput?: (stream: "stdout" | "stderr", chunk: string) => void | Promise<void>;
   }): Promise<{ exitCode: number | null; signal: null; timedOut: boolean; stdout: string; stderr: string } | null> {
@@ -2599,7 +2691,8 @@ export function runtimeControlService(
     const command = input.command, argv = [command, ...(input.args ?? [])];
     const cwd = input.cwd;
     const requestedNativePreparationPurpose = input.nativePreparationPurpose;
-    if (requestedNativePreparationPurpose !== undefined && requestedNativePreparationPurpose !== "provider_artifact")
+    if (requestedNativePreparationPurpose !== undefined && requestedNativePreparationPurpose !== "provider_artifact" &&
+      requestedNativePreparationPurpose !== "native_session_start")
       throw conflict("Sandbox preparation purpose is unsupported");
     if (!cwd || !cwd.startsWith("/")) throw conflict("Sandbox execution requires an absolute workspace path");
     const env = { ...(input.env ?? {}) };
@@ -2629,8 +2722,12 @@ export function runtimeControlService(
     // The shared remote artifact helpers also serve ordinary Worker runs. Only
     // a route-created conversation Task can use this pre-receipt setup lane;
     // Workers retain their existing typed model/MCP credential path.
+    if (requestedNativePreparationPurpose === "native_session_start" && !hasConversationIdentity)
+      throw conflict("Native session start requires an authenticated conversation Task");
     const nativePreparationPurpose = requestedNativePreparationPurpose && hasConversationIdentity
       ? requestedNativePreparationPurpose : undefined;
+    const providerArtifactPreparation = nativePreparationPurpose === "provider_artifact";
+    const nativeSessionStart = nativePreparationPurpose === "native_session_start";
     if (conversationTask.conversationAgentId !== null || conversationTask.conversationUserId !== null) {
       const contextSnapshot = initialSource.run.contextSnapshot &&
         typeof initialSource.run.contextSnapshot === "object"
@@ -2677,7 +2774,7 @@ export function runtimeControlService(
     const runnerProfile = initialSource.source.agent.adapterType === "paperclip_runner"
       ? resolvePaperclipRunnerProviderProfile(initialSource.source.agent.adapterConfig)
       : null;
-    if (nativePreparationPurpose) {
+    if (providerArtifactPreparation || nativeSessionStart) {
       const task = initialSource.source.task;
       const contextSnapshot = initialSource.run.contextSnapshot && typeof initialSource.run.contextSnapshot === "object"
         ? initialSource.run.contextSnapshot as Record<string, unknown> : {};
@@ -2690,10 +2787,10 @@ export function runtimeControlService(
         initialSource.manifest.runId !== initialSource.run.id || initialSource.manifest.agentId !== initialSource.run.agentId ||
         initialSource.manifest.manifest.responsibleUserId !== initialSource.run.responsibleUserId)
         throw conflict("Provider artifact preparation requires the current Native conversation Run and manifest");
-      if (credentials.mode !== "none" || credentials.bindings.length !== 0 || managedModelPlaceholder)
+      if (providerArtifactPreparation && (credentials.mode !== "none" || credentials.bindings.length !== 0 || managedModelPlaceholder))
         throw conflict("Provider artifact preparation cannot receive workload credentials");
     }
-    if (runnerProfile?.provider === "opencode" && !nativePreparationPurpose) {
+    if (runnerProfile?.provider === "opencode" && (!nativePreparationPurpose || nativeSessionStart)) {
       const profile = initialSource.capability.modelBrokerProviderProfile;
       if (!options.workerModels || !profile || !credentialBrokerOrigin || !managedModelBrokerOrigin)
         throw conflict("Qualified managed model broker is unavailable");

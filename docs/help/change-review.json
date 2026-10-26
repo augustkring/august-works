@@ -669,10 +669,10 @@
     {
       "source": "server/src/services/memory/memory-privacy.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "0ab50a23b98d22e51ec70b78101e8133b61a97099e6113ab3b8f410381a1e820",
+      "sourceSha256": "de68dce526b3b9db0adf0b3e02e3fcb9e459b430e6bc737b8b7727a3f93ddbf9",
       "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "no_change",
-      "rationale": "Reviewed both EN/DA deletion articles after exact current company-operation binding and null-safe retention of succeeded runtime erasure receipts. The original graph walker also rejects a proposed Memory cycle. Customer actions and the documented Stop/retention/minimal-receipt limits remain unchanged."
+      "rationale": "Reviewed exact current-operation runtime erasure receipts, legacy digest batches, Stop-owned physical file deletion and final purge rechecks. The paired article already distinguishes requested deletion, pending cleanup, managed files, retained finance receipts and completion; no new customer action or broader provider-data coverage is introduced. Temporary bounded source diagnostics do not change those instructions."
     },
     {
       "source": "server/src/services/memory/memory-service.ts",
@@ -693,18 +693,18 @@
     {
       "source": "server/src/services/saas/company-purge.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "211128c7b22daa87f6f9ae4b51d33c87c111f62dcae60145ffa0e872b5f9a043",
+      "sourceSha256": "c4eb59e2612040c12e0c82f6a91e7ca8a5ed6b9422103f69a71bef47221b3d7a",
       "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "no_change",
-      "rationale": "Reviewed both EN/DA deletion articles: the canonical purge now returns its already-computed minimal conversation funding aggregate after removing detailed cost payloads. The documented retention of minimal financial and deletion receipts remains accurate; complete integrated qualification is pending."
+      "rationale": "Reviewed exact current-operation runtime erasure receipts, legacy digest batches, Stop-owned physical file deletion and final purge rechecks. The paired article already distinguishes requested deletion, pending cleanup, managed files, retained finance receipts and completion; no new customer action or broader provider-data coverage is introduced. Temporary bounded source diagnostics do not change those instructions."
     },
     {
       "source": "server/src/services/saas/offboarding.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "934e4a8969c07901a90ab781a170b0493265f8ff4e0abb2978cf02bab8e9e4b1",
+      "sourceSha256": "45bb8e3ea58726bc56e93794a51e4d5dce4399a7f3e41439e2c064cd687c55cb",
       "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "no_change",
-      "rationale": "Reviewed both EN/DA deletion articles: final offboarding evidence preserves the minimal conversation funding aggregate returned by canonical database purge. The documented staged deletion and minimal financial receipt guidance remains accurate; full qualification is pending."
+      "rationale": "Reviewed exact current-operation runtime erasure receipts, legacy digest batches, Stop-owned physical file deletion and final purge rechecks. The paired article already distinguishes requested deletion, pending cleanup, managed files, retained finance receipts and completion; no new customer action or broader provider-data coverage is introduced. Temporary bounded source diagnostics do not change those instructions."
     },
     {
       "source": "ui/src/pages/CompanyExport.tsx",
@@ -749,10 +749,10 @@
     {
       "source": "server/src/services/memory/memory-privacy.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "0ab50a23b98d22e51ec70b78101e8133b61a97099e6113ab3b8f410381a1e820",
+      "sourceSha256": "de68dce526b3b9db0adf0b3e02e3fcb9e459b430e6bc737b8b7727a3f93ddbf9",
       "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "no_change",
-      "rationale": "Reviewed both EN/DA deletion articles after exact current company-operation binding and null-safe retention of succeeded runtime erasure receipts. The original graph walker also rejects a proposed Memory cycle. Customer actions and the documented Stop/retention/minimal-receipt limits remain unchanged."
+      "rationale": "Reviewed exact current-operation runtime erasure receipts, legacy digest batches, Stop-owned physical file deletion and final purge rechecks. The paired article already distinguishes requested deletion, pending cleanup, managed files, retained finance receipts and completion; no new customer action or broader provider-data coverage is introduced. Temporary bounded source diagnostics do not change those instructions."
     },
     {
       "source": "server/src/services/memory/memory-service.ts",
@@ -773,18 +773,18 @@
     {
       "source": "server/src/services/saas/company-purge.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "211128c7b22daa87f6f9ae4b51d33c87c111f62dcae60145ffa0e872b5f9a043",
+      "sourceSha256": "c4eb59e2612040c12e0c82f6a91e7ca8a5ed6b9422103f69a71bef47221b3d7a",
       "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "no_change",
-      "rationale": "Reviewed both EN/DA deletion articles: the canonical purge now returns its already-computed minimal conversation funding aggregate after removing detailed cost payloads. The documented retention of minimal financial and deletion receipts remains accurate; complete integrated qualification is pending."
+      "rationale": "Reviewed exact current-operation runtime erasure receipts, legacy digest batches, Stop-owned physical file deletion and final purge rechecks. The paired article already distinguishes requested deletion, pending cleanup, managed files, retained finance receipts and completion; no new customer action or broader provider-data coverage is introduced. Temporary bounded source diagnostics do not change those instructions."
     },
     {
       "source": "server/src/services/saas/offboarding.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "934e4a8969c07901a90ab781a170b0493265f8ff4e0abb2978cf02bab8e9e4b1",
+      "sourceSha256": "45bb8e3ea58726bc56e93794a51e4d5dce4399a7f3e41439e2c064cd687c55cb",
       "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "no_change",
-      "rationale": "Reviewed both EN/DA deletion articles: final offboarding evidence preserves the minimal conversation funding aggregate returned by canonical database purge. The documented staged deletion and minimal financial receipt guidance remains accurate; full qualification is pending."
+      "rationale": "Reviewed exact current-operation runtime erasure receipts, legacy digest batches, Stop-owned physical file deletion and final purge rechecks. The paired article already distinguishes requested deletion, pending cleanup, managed files, retained finance receipts and completion; no new customer action or broader provider-data coverage is introduced. Temporary bounded source diagnostics do not change those instructions."
     },
     {
       "source": "ui/src/pages/CompanyExport.tsx",
@@ -901,10 +901,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "a5120585510a95f103f37596289b5678c727e0ff63a1a847ff420ce2f7a993a0",
+      "sourceSha256": "47d491a723c31743c798876ae51668d95b8e76b4955c5d55af818d91965157fa",
       "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "no_change",
-      "rationale": "Reviewed paired EN/DA Help and recovery guidance: every original route gate now admits only the exact current authenticated owner changing workMode alone on its empty conversation shell. Other mutations and source access retain their original guards. Existing customer recovery instructions remain accurate; integrated C0 creation acceptance is pending."
+      "rationale": "Reviewed the issue route delta: the exact current-Human empty-shell predicate moves to the original service for shared use; source-loss recovery diagnostics preserve denial. Help navigation, search, support intake and the paired customer support instructions are unchanged."
     },
     {
       "source": "server/src/routes/saas.ts",
@@ -1213,10 +1213,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "a5120585510a95f103f37596289b5678c727e0ff63a1a847ff420ce2f7a993a0",
+      "sourceSha256": "47d491a723c31743c798876ae51668d95b8e76b4955c5d55af818d91965157fa",
       "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "no_change",
-      "rationale": "Reviewed paired EN/DA Help and recovery guidance: every original route gate now admits only the exact current authenticated owner changing workMode alone on its empty conversation shell. Other mutations and source access retain their original guards. Existing customer recovery instructions remain accurate; integrated C0 creation acceptance is pending."
+      "rationale": "Reviewed the issue route delta: the exact current-Human empty-shell predicate moves to the original service for shared use; source-loss recovery diagnostics preserve denial. Help navigation, search, support intake and the paired customer support instructions are unchanged."
     },
     {
       "source": "server/src/routes/saas.ts",
@@ -1541,10 +1541,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "a5120585510a95f103f37596289b5678c727e0ff63a1a847ff420ce2f7a993a0",
+      "sourceSha256": "47d491a723c31743c798876ae51668d95b8e76b4955c5d55af818d91965157fa",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Reviewed paired EN/DA Help and recovery guidance: every original route gate now admits only the exact current authenticated owner changing workMode alone on its empty conversation shell. Other mutations and source access retain their original guards. Existing customer recovery instructions remain accurate; integrated C0 creation acceptance is pending."
+      "rationale": "Reviewed current-Human empty conversation shell checks, exact comment/wake projections, retained-run resume witnesses and source-loss recovery guards. Existing guidance still requires the original task, current source/workspace access, checking the latest run and waiting for confirmed Stop; these changes add no alternative retry or permission bypass. Integrated runtime/browser acceptance remains open."
     },
     {
       "source": "server/src/services/execution-workspaces.ts",
@@ -1565,10 +1565,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "8c46761d85f8f5dd8a808ddbccf2082c80c9d12f2f5cba7ac20eabcba4b72a7b",
+      "sourceSha256": "a51d1375008c7ec50428e1cf8febd508aed65ca0291ee37a8d7d0969fa12d7dd",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Reviewed paired EN/DA recovery and deletion guidance: checkout metadata now reflects this exact current Run, and earlier conversation lines qualify only through complete current per-comment source capture. Existing source-loss refusal, recovery, Stop and retention instructions remain accurate; full chat continuation acceptance is pending."
+      "rationale": "Reviewed current-Human empty conversation shell checks, exact comment/wake projections, retained-run resume witnesses and source-loss recovery guards. Existing guidance still requires the original task, current source/workspace access, checking the latest run and waiting for confirmed Stop; these changes add no alternative retry or permission bypass. Integrated runtime/browser acceptance remains open."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1581,10 +1581,10 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "d7129d5b1e9edc0ca5f9d2cf0dfb59b4c499e84d5232a3caf9cdd06c46fec6f0",
+      "sourceSha256": "62c92534b038e8fdbcfb30b097bcf20c2ef5a4264dd899d1df559a8cf8ca7733",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Reviewed against both EN/DA recovering-work articles: manual comment source capture now shares the original transaction-aware current Human/ACL/seal path; canonical Task hashes distinguish payload edits from operational transitions. The article already tells readers to preserve the original Task and review refused source-dependent updates before retrying."
+      "rationale": "Reviewed current-Human empty conversation shell checks, exact comment/wake projections, retained-run resume witnesses and source-loss recovery guards. Existing guidance still requires the original task, current source/workspace access, checking the latest run and waiting for confirmed Stop; these changes add no alternative retry or permission bypass. Integrated runtime/browser acceptance remains open."
     },
     {
       "source": "server/src/services/managed-repository-checkout.ts",
@@ -1645,10 +1645,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "a5120585510a95f103f37596289b5678c727e0ff63a1a847ff420ce2f7a993a0",
+      "sourceSha256": "47d491a723c31743c798876ae51668d95b8e76b4955c5d55af818d91965157fa",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Reviewed paired EN/DA Help and recovery guidance: every original route gate now admits only the exact current authenticated owner changing workMode alone on its empty conversation shell. Other mutations and source access retain their original guards. Existing customer recovery instructions remain accurate; integrated C0 creation acceptance is pending."
+      "rationale": "Reviewed current-Human empty conversation shell checks, exact comment/wake projections, retained-run resume witnesses and source-loss recovery guards. Existing guidance still requires the original task, current source/workspace access, checking the latest run and waiting for confirmed Stop; these changes add no alternative retry or permission bypass. Integrated runtime/browser acceptance remains open."
     },
     {
       "source": "server/src/services/execution-workspaces.ts",
@@ -1669,10 +1669,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "8c46761d85f8f5dd8a808ddbccf2082c80c9d12f2f5cba7ac20eabcba4b72a7b",
+      "sourceSha256": "a51d1375008c7ec50428e1cf8febd508aed65ca0291ee37a8d7d0969fa12d7dd",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Reviewed paired EN/DA recovery and deletion guidance: checkout metadata now reflects this exact current Run, and earlier conversation lines qualify only through complete current per-comment source capture. Existing source-loss refusal, recovery, Stop and retention instructions remain accurate; full chat continuation acceptance is pending."
+      "rationale": "Reviewed current-Human empty conversation shell checks, exact comment/wake projections, retained-run resume witnesses and source-loss recovery guards. Existing guidance still requires the original task, current source/workspace access, checking the latest run and waiting for confirmed Stop; these changes add no alternative retry or permission bypass. Integrated runtime/browser acceptance remains open."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1685,10 +1685,10 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "d7129d5b1e9edc0ca5f9d2cf0dfb59b4c499e84d5232a3caf9cdd06c46fec6f0",
+      "sourceSha256": "62c92534b038e8fdbcfb30b097bcf20c2ef5a4264dd899d1df559a8cf8ca7733",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Reviewed against both EN/DA recovering-work articles: manual comment source capture now shares the original transaction-aware current Human/ACL/seal path; canonical Task hashes distinguish payload edits from operational transitions. The article already tells readers to preserve the original Task and review refused source-dependent updates before retrying."
+      "rationale": "Reviewed current-Human empty conversation shell checks, exact comment/wake projections, retained-run resume witnesses and source-loss recovery guards. Existing guidance still requires the original task, current source/workspace access, checking the latest run and waiting for confirmed Stop; these changes add no alternative retry or permission bypass. Integrated runtime/browser acceptance remains open."
     },
     {
       "source": "server/src/services/managed-repository-checkout.ts",
@@ -2005,18 +2005,18 @@
     {
       "source": "server/src/services/memory/memory-jobs.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "92945471691dd2f9e696cef8260522ceb3766ea2272fe76496340d95e1ca0a1a",
+      "sourceSha256": "8815d4051fda7025ca8fc402cec79e8222e7f43ebad3ea87914e35bc831f69bd",
       "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "no_change",
-      "rationale": "Reviewed both deletion articles against the original index-history owner: after source erasure only the exact original session/user or local-trusted system/local-board atomic receipt permits content-free history; a different Human cannot inherit it, and removing the original receipt hides it. No source content, count, or receipt ID is restored. Existing EN/DA deletion guidance remains accurate."
+      "rationale": "Reviewed exact current-operation runtime erasure receipts, legacy digest batches, Stop-owned physical file deletion and final purge rechecks. The paired article already distinguishes requested deletion, pending cleanup, managed files, retained finance receipts and completion; no new customer action or broader provider-data coverage is introduced. Temporary bounded source diagnostics do not change those instructions."
     },
     {
       "source": "server/src/services/native-runtime/runtime-asset-retention.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "48e4ed1bf1f1cbc89c9fe213edf9ff60ab6a4f3b85b576b931e967b24f72c49a",
+      "sourceSha256": "d7b128b648d7c2e97f86a05d7a538673604987603948820d646829852e3831e8",
       "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
-      "decision": "updated",
-      "rationale": "Reviewed the run-scoped managed OpenCode storage owner: deletion is path-bound and waits for Native Stop plus Source or canonical offboarding proof; the article does not claim external provider erasure."
+      "decision": "no_change",
+      "rationale": "Reviewed exact current-operation runtime erasure receipts, legacy digest batches, Stop-owned physical file deletion and final purge rechecks. The paired article already distinguishes requested deletion, pending cleanup, managed files, retained finance receipts and completion; no new customer action or broader provider-data coverage is introduced. Temporary bounded source diagnostics do not change those instructions."
     },
     {
       "source": "server/src/services/native-local-process-stop.ts",
@@ -2029,18 +2029,18 @@
     {
       "source": "server/src/services/memory/memory-jobs.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "92945471691dd2f9e696cef8260522ceb3766ea2272fe76496340d95e1ca0a1a",
+      "sourceSha256": "8815d4051fda7025ca8fc402cec79e8222e7f43ebad3ea87914e35bc831f69bd",
       "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "no_change",
-      "rationale": "Reviewed both deletion articles against the original index-history owner: after source erasure only the exact original session/user or local-trusted system/local-board atomic receipt permits content-free history; a different Human cannot inherit it, and removing the original receipt hides it. No source content, count, or receipt ID is restored. Existing EN/DA deletion guidance remains accurate."
+      "rationale": "Reviewed exact current-operation runtime erasure receipts, legacy digest batches, Stop-owned physical file deletion and final purge rechecks. The paired article already distinguishes requested deletion, pending cleanup, managed files, retained finance receipts and completion; no new customer action or broader provider-data coverage is introduced. Temporary bounded source diagnostics do not change those instructions."
     },
     {
       "source": "server/src/services/native-runtime/runtime-asset-retention.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "48e4ed1bf1f1cbc89c9fe213edf9ff60ab6a4f3b85b576b931e967b24f72c49a",
+      "sourceSha256": "d7b128b648d7c2e97f86a05d7a538673604987603948820d646829852e3831e8",
       "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
-      "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: reviewed the run-scoped managed OpenCode storage owner: deletion is path-bound and waits for Native Stop plus Source or canonical offboarding proof; the article does not claim external provider erasure."
+      "decision": "no_change",
+      "rationale": "Reviewed exact current-operation runtime erasure receipts, legacy digest batches, Stop-owned physical file deletion and final purge rechecks. The paired article already distinguishes requested deletion, pending cleanup, managed files, retained finance receipts and completion; no new customer action or broader provider-data coverage is introduced. Temporary bounded source diagnostics do not change those instructions."
     },
     {
       "source": "server/src/services/native-local-process-stop.ts",
@@ -2053,18 +2053,18 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "8c46761d85f8f5dd8a808ddbccf2082c80c9d12f2f5cba7ac20eabcba4b72a7b",
+      "sourceSha256": "a51d1375008c7ec50428e1cf8febd508aed65ca0291ee37a8d7d0969fa12d7dd",
       "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "no_change",
-      "rationale": "Reviewed paired EN/DA recovery and deletion guidance: checkout metadata now reflects this exact current Run, and earlier conversation lines qualify only through complete current per-comment source capture. Existing source-loss refusal, recovery, Stop and retention instructions remain accurate; full chat continuation acceptance is pending."
+      "rationale": "Reviewed exact current-operation runtime erasure receipts, legacy digest batches, Stop-owned physical file deletion and final purge rechecks. The paired article already distinguishes requested deletion, pending cleanup, managed files, retained finance receipts and completion; no new customer action or broader provider-data coverage is introduced. Temporary bounded source diagnostics do not change those instructions."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "8c46761d85f8f5dd8a808ddbccf2082c80c9d12f2f5cba7ac20eabcba4b72a7b",
+      "sourceSha256": "a51d1375008c7ec50428e1cf8febd508aed65ca0291ee37a8d7d0969fa12d7dd",
       "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "no_change",
-      "rationale": "Reviewed paired EN/DA recovery and deletion guidance: checkout metadata now reflects this exact current Run, and earlier conversation lines qualify only through complete current per-comment source capture. Existing source-loss refusal, recovery, Stop and retention instructions remain accurate; full chat continuation acceptance is pending."
+      "rationale": "Reviewed exact current-operation runtime erasure receipts, legacy digest batches, Stop-owned physical file deletion and final purge rechecks. The paired article already distinguishes requested deletion, pending cleanup, managed files, retained finance receipts and completion; no new customer action or broader provider-data coverage is introduced. Temporary bounded source diagnostics do not change those instructions."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",

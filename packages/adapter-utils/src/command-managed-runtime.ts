@@ -104,9 +104,9 @@ export interface CommandManagedRuntimeRunner {
      * `useSession`. The default keeps the context-based session selection.
      */
     bypassSession?: boolean;
-    /** Server-owned Native provider artifact inspection/staging only. Never set
-     * for a command produced by provider/model output. */
-    nativePreparationPurpose?: "provider_artifact";
+    /** Server-owned Native setup phase: pinned artifact inspection/staging, or
+     * the one run-scoped conversation Runnerd launch. Never model supplied. */
+    nativePreparationPurpose?: "provider_artifact" | "native_session_start";
   }): Promise<RunProcessResult>;
   /**
    * Optional native inbound file transfer. Present only when the sandbox
