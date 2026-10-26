@@ -1,0 +1,37 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+(node:1175975) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 SIGINT listeners added to [process]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1175975) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 SIGTERM listeners added to [process]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+ ❯ src/__tests__/v7-cognitive-memory.integration.test.ts (5 tests | 1 failed) 10555ms
+     × preserves private scope and rejects foreign binding references and agent configuration 950ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-cognitive-memory.integration.test.ts > V7 governed cognitive provider > preserves private scope and rejects foreign binding references and agent configuration
+Error: Current Agent Memory authority changed
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ memorySourceActor src/services/memory/memory-service.ts:82:65
+ ❯ visibleMemorySources src/services/memory/memory-service.ts:560:16
+ ❯ src/services/memory/memory-service.ts:584:29
+ ❯ ../packages/db/src/work-signals.ts:38:22
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ PostgresJsDatabase.connection.transaction ../packages/db/src/work-signals.ts:35:22
+ ❯ cognitiveEligibleRecords src/services/memory/cognitive-memory.ts:75:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 28 passed (29)
+   Start at  09:02:54
+   Duration  29.04s (transform 9.94s, setup 188ms, import 17.79s, tests 10.69s, environment 0ms)
+

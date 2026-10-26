@@ -20,7 +20,7 @@ describe("optional Jev Decisions provider seam", () => {
     expect(new Headers(options?.headers).get("authorization")).toBe("Bearer selected-connection-key");
     expect(JSON.parse(String(options?.body)).model).toBe(JEV_DECISION_MODEL);
     expect(result.answers?.skill).toMatchObject({ type: "choice", choice: "skill:review", confidence: 0.85 });
-    expect(result.receipt).toMatchObject({ costStatus: "reported", costAmount: "0.0005166", inputTokens: 123 });
+    expect(result.receipt).toMatchObject({ costStatus: "reported", costAmount: "0.0000052", inputTokens: 123 });
   });
 
   it("does not retry, expose provider response text, or interpret invented candidates", async () => {

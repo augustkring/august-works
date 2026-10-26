@@ -42,7 +42,7 @@ const {
   }) as never);
   const createBetterAuthInstanceMock = vi.fn(() => ({}));
   const createDbMock = vi.fn(() => ({
-    execute: vi.fn(async () => []),
+    execute: vi.fn(async () => [{ next_at: null }]),
     select: vi.fn(() => ({
       from: vi.fn(() => ({ where: vi.fn(async () => []) })),
     })),
@@ -55,6 +55,7 @@ const {
   }));
   const heartbeatServiceMock = {
     resolveSchedulingSuppression: resolveHeartbeatSchedulingSuppressionMock,
+    schedulingSuppressionSnapshot: () => resolveHeartbeatSchedulingSuppressionMock(),
     recoverNativeRunsAfterRestart: vi.fn(async () => ({
       restartKind: "hard",
       dispositions: [],
@@ -84,6 +85,7 @@ const {
     sweepPendingCleanupLeases: vi.fn(async () => ({ swept: 0, destroyed: 0, capped: 0 })),
     sweepExpiredRuntimeStatuses: vi.fn(() => 0),
     tickTimers: vi.fn(async () => ({ checked: 0, enqueued: 0, skipped: 0 })),
+    tickIssueMonitors: vi.fn(async () => ({ checked: 0, enqueued: 0, skipped: 0 })),
   };
   const heartbeatServiceFactoryMock = vi.fn(() => heartbeatServiceMock);
   const issueThreadInteractionServiceMock = {
@@ -215,6 +217,7 @@ vi.mock("detect-port", () => ({
 vi.mock("@paperclipai/db", async (importOriginal) => ({
   ...await importOriginal<typeof import("@paperclipai/db")>(),
   createDb: createDbMock,
+  subscribeDatabaseWork: vi.fn(() => () => {}),
   ensurePostgresDatabase: vi.fn(),
   getPostgresDataDirectory: vi.fn(),
   inspectMigrations: vi.fn(async () => ({ status: "upToDate" })),
@@ -648,7 +651,7 @@ describe("startServer feedback export wiring", () => {
     }
   });
 
-  it("keeps routine ticks and setup cleanup active when heartbeat scheduling is suppressed", async () => {
+  it("keeps housekeeping active without dispatching routines while the worktree is suppressed", async () => {
     loadConfigMock.mockReturnValue(buildTestConfig({
       heartbeatSchedulerEnabled: true,
       heartbeatSchedulerIntervalMs: 30000,
@@ -681,7 +684,7 @@ describe("startServer feedback export wiring", () => {
       expect(externalObjectsServiceMock.refreshDueObjectsForActiveCompanies).toHaveBeenCalledTimes(1);
       expect(issueThreadInteractionServiceMock.sweepMergedPullRequestConfirmations).toHaveBeenCalledTimes(1);
       expect(executionWorkspaceServiceMock.sweepTerminalWorkspaces).toHaveBeenCalledTimes(1);
-      expect(routineServiceMock.tickScheduledTriggers).toHaveBeenCalledTimes(1);
+      expect(routineServiceMock.tickScheduledTriggers).not.toHaveBeenCalled();
       expect(environmentCustomImagesServiceMock.cleanupExpiredSetupSessions).toHaveBeenCalledTimes(2);
     } finally {
       setIntervalSpy.mockRestore();
