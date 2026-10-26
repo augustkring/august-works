@@ -1316,6 +1316,10 @@ export class PaperclipRunnerToolAuthority {
         originIdentityContextId: identityContextId,
         continuationIdentityContextId: identityContextId,
         originFingerprint: inputFingerprint,
+        // Responsibility comes from the locked, current run. The model never
+        // chooses the Human whose authority scopes this private work.
+        responsibleUserId: context.run.responsibleUserId,
+        actorResponsibleUserId: context.run.responsibleUserId,
         actorAgentId: this.binding.agentId,
         actorRunId: this.binding.runId,
         idempotencyKey: durableIdempotencyKey,

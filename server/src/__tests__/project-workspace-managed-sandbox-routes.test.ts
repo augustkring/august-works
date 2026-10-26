@@ -40,6 +40,7 @@ const mockGetTelemetryClient = vi.hoisted(() => vi.fn());
 const mockAccessService = vi.hoisted(() => ({
   decide: vi.fn(),
 }));
+const mockCanReadProjectPrivacy = vi.hoisted(() => vi.fn(async () => true));
 
 vi.mock("../telemetry.js", () => ({
   getTelemetryClient: mockGetTelemetryClient,
@@ -105,6 +106,16 @@ function registerModuleMocks() {
   vi.doMock("../services/workspace-runtime.js", () => ({
     startRuntimeServicesForWorkspaceControl: vi.fn(),
     stopRuntimeServicesForProjectWorkspace: vi.fn(),
+  }));
+
+  vi.doMock("../services/authorization.js", async () => ({
+    ...await vi.importActual<typeof import("../services/authorization.js")>("../services/authorization.js"),
+    canActorReadProjectPrivacy: mockCanReadProjectPrivacy,
+  }));
+
+  vi.doMock("../services/issues.js", async () => ({
+    ...await vi.importActual<typeof import("../services/issues.js")>("../services/issues.js"),
+    lockIssuePrivacyTree: vi.fn(async () => undefined),
   }));
 }
 
@@ -207,10 +218,15 @@ describe("project workspace host-path floor", () => {
       reason: "allow_test",
       explanation: "Allowed by test mock.",
     });
-    mockGetTelemetryClient.mockReturnValue({ track: vi.fn() });
+    mockGetTelemetryClient.mockReturnValue({
+      track: vi.fn(),
+      hashPrivateRef: vi.fn((value: string) => `hashed:${value}`),
+    });
+    mockCanReadProjectPrivacy.mockReset().mockResolvedValue(true);
     mockProjectService.resolveByReference.mockResolvedValue({ ambiguous: false, project: null });
     mockProjectService.getById.mockResolvedValue(buildProject());
-    mockProjectService.create.mockResolvedValue(buildProject());
+    mockProjectService.create.mockImplementation(async (_companyId: string, projectData: Record<string, unknown>) =>
+      buildProject(projectData));
     mockProjectService.createWorkspace.mockResolvedValue(buildWorkspace());
     mockProjectService.updateWorkspace.mockResolvedValue(buildWorkspace());
     mockProjectService.listWorkspaces.mockResolvedValue([buildWorkspace()]);
@@ -229,6 +245,17 @@ describe("project workspace host-path floor", () => {
       "project-1",
       expect.objectContaining({ cwd: "/srv/projects/paperclip" }),
     );
+  });
+
+  it("does not create a workspace when the project privacy check denies the actor", async () => {
+    mockCanReadProjectPrivacy.mockResolvedValue(false);
+    const app = await createApp();
+    const res = await request(app)
+      .post("/api/projects/project-1/workspaces")
+      .send({ name: "Primary", cwd: "/srv/projects/paperclip" });
+
+    expect(res.status).toBe(404);
+    expect(mockProjectService.createWorkspace).not.toHaveBeenCalled();
   });
 
   it("refuses a project workspace create that carries a cwd when the policy is on", async () => {

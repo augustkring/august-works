@@ -1,0 +1,38 @@
+ M .github/workflows/aw-v4-verification.yml
+ M cli/src/__tests__/company-delete.test.ts
+ M cli/src/__tests__/company.test.ts
+ M packages/paperclip-runner/src/drivers/acpx/installation-integrity.test.ts
+ M packages/paperclip-runner/src/drivers/acpx/installation-integrity.ts
+ M packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.test.ts
+ M scripts/__tests__/e2e-shard.test.mjs
+ M scripts/e2e-shard.mjs
+ M server/src/__tests__/artifact-review-document-routes.test.ts
+ M server/src/__tests__/document-annotation-routes.test.ts
+ M server/src/__tests__/environment-selection-route-guards.test.ts
+ M server/src/__tests__/helpers/runner-api-server.ts
+ M server/src/__tests__/issue-activity-events-routes.test.ts
+ M server/src/__tests__/issue-assigned-backlog-contract-routes.test.ts
+ M server/src/__tests__/manual-task-payload-source.integration.test.ts
+ M server/src/__tests__/project-workspace-managed-sandbox-routes.test.ts
+ M server/src/__tests__/v9-conversation-authoring.integration.test.ts
+ M server/src/services/context/context-engine-integration.test.ts
+ M server/src/services/context/context-manifest.test.ts
+ M server/src/services/context/context-manifest.ts
+ M server/src/services/experience/conversation-authoring.ts
+ M server/src/services/issues.ts
+ M server/src/services/memory/memory-privacy.ts
+ M server/src/services/memory/memory-service.ts
+ M server/src/services/native-runtime/native-session-executor.ts
+ M server/src/services/native-runtime/paperclip-runner-tool-authority.test.ts
+ M server/src/services/native-runtime/paperclip-runner-tool-authority.ts
+ M server/src/services/native-runtime/runner-api.integration.test.ts
+ M server/src/services/orchestration/worker-model-gateway.ts
+ M tests/e2e/agentmail.spec.ts
+ M tests/e2e/aw-v9-insight-forecasts.spec.ts
+ M tests/e2e/playwright.config.ts
+?? doc/operations/aw-v10-evidence/dependency-high-fixes-2026-10-25/ci-40b-triage.md
+?? doc/operations/aw-v10-evidence/dependency-high-fixes-2026-10-25/ci40b-cli-fixture-fix/
+?? doc/operations/aw-v10-evidence/managed-opencode-context-closure-2026-10-25/
+?? doc/operations/aw-v10-evidence/manual-task-private-source-2026-10-25/
+?? doc/operations/aw-v10-evidence/memory-context-owner-2026-10-26/
+?? doc/operations/aw-v10-evidence/runner-ci-fixes-2026-10-26/

@@ -1,0 +1,7 @@
+ef856b5872bbff88e1e987d3c61d428027207f582abe9ba2334f575d0167d145  server/src/__tests__/helpers/runner-api-server.ts
+5abdf18e43718b4b92496d3ca548b38753b9483d7f358bc31e0c787227b273ce  server/src/services/native-runtime/runner-api.integration.test.ts
+a38480f62b6062f6d9a16c40dae8416355dd4ee1e7702ebc4f2369797712c0a0  packages/paperclip-runner/src/drivers/acpx/installation-integrity.ts
+eec43546f4d1b51e8f5451df88b71ef39e7ffe304d089b7ae311bdc9486c7315  packages/paperclip-runner/src/drivers/acpx/installation-integrity.test.ts
+bd697349e0ab4c4b0c1ee836148ac788e93d97507254f5edf71247beb742b23e  packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.test.ts
+a710365e54bf19dc0511042cd7e7582c89491bbfb9eec657d01a5255a1c3c82e  pnpm-workspace.yaml
+6bce79ea6e951c5c96a0cf93b93eb3abb853495a7e38c6a6aa7633bd138b1bb2  pnpm-lock.yaml

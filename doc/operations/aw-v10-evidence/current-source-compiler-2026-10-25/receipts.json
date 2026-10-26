@@ -18,7 +18,8 @@
         "credential_field": 0,
         "url_credential": 0
       },
-      "summary": []
+      "summary": [],
+      "sourceCommit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb"
     },
     {
       "name": "v10-new-deps-server-typecheck-retry",
@@ -34,7 +35,8 @@
         "credential_field": 0,
         "url_credential": 0
       },
-      "summary": []
+      "summary": [],
+      "sourceCommit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb"
     },
     {
       "name": "context-manifest-deadline-cancel-focused-20261025",
@@ -55,7 +57,8 @@
         "Test Files  1 failed (1)",
         "Tests  1 failed | 6 skipped (7)",
         "Duration  19.22s (transform 9.50s, setup 76ms, import 13.39s, tests 5.63s, environment 0ms)"
-      ]
+      ],
+      "sourceCommit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb"
     },
     {
       "name": "context-manifest-deadline-cancel-focused-rerun-20261025",
@@ -75,6 +78,33 @@
         "Test Files  1 passed (1)",
         "Tests  1 passed | 6 skipped (7)",
         "Duration  18.37s (transform 9.31s, setup 97ms, import 12.97s, tests 5.16s, environment 0ms)"
+      ],
+      "sourceCommit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb"
+    },
+    {
+      "name": "v10-new-deps-ui-typecheck-20261025",
+      "exitCode": 0,
+      "exitSidecar": "v10-new-deps-ui-typecheck-20261025.exit",
+      "rawSha256": "ea1b84fd6c3cf504d434a57186194460e192e57000f02a1ab96d1fed3a34bce3",
+      "sanitizedSha256": "ea1b84fd6c3cf504d434a57186194460e192e57000f02a1ab96d1fed3a34bce3",
+      "archiveSha256": "5cfad1742803b90bcf2c9c40359f922180bb87868aab714fb6529cfd71090307",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "40b354f61cb4fc693e007b797da408739802f6ae"
+    }
+  ],
+  "updates": [
+    {
+      "sourceCommit": "40b354f61cb4fc693e007b797da408739802f6ae",
+      "meaning": "Scoped UI typecheck passed on the new dependency qualification tree; UI sources unchanged since its recorded snapshot. This does not establish final all-workspace acceptance. Existing server/full-command receipts retain their separate scope.",
+      "logs": [
+        "v10-new-deps-ui-typecheck-20261025"
       ]
     }
   ]

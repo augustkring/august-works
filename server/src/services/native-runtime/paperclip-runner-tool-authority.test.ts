@@ -1417,6 +1417,31 @@ describe("PaperclipRunnerToolAuthority", () => {
     ).toHaveLength(3);
   });
 
+  it("binds a private Agent-created Task to the locked run Human and denies stale Human access", async () => {
+    const f = await seedDocumentReader();
+    const receipt = await f.authority.execute({ tool: "create_task", callId: "private-bound-task", arguments: {
+      idempotencyKey: "private-bound-task", title: "Private follow-up", status: "backlog",
+      responsibleUserId: "model-selected-human",
+    } }) as { task: { id: string } };
+    const [created] = await db.select().from(issues).where(eq(issues.id, receipt.task.id));
+    expect(created).toMatchObject({ visibility: "private", responsibleUserId: userId,
+      createdByAgentId: f.agentId, originRunId: f.runId });
+
+    const stale = await seedDocumentReader();
+    const wrongHumanId = randomUUID(), now = new Date();
+    await db.insert(authUsers).values({ id: wrongHumanId, name: "Different active Human",
+      email: `${wrongHumanId}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now });
+    await db.insert(companyMemberships).values({ companyId: stale.companyId, principalType: "user",
+      principalId: wrongHumanId, membershipRole: "admin", status: "active" });
+    await db.update(heartbeatRuns).set({ responsibleUserId: wrongHumanId }).where(eq(heartbeatRuns.id, stale.runId));
+    await expect(stale.authority.execute({ tool: "create_task", callId: "stale-human-task", arguments: {
+      idempotencyKey: "stale-human-task", title: "Stale Human follow-up", status: "backlog",
+    } })).rejects.toThrow();
+    expect(await db.select().from(issues).where(and(
+      eq(issues.companyId, stale.companyId), eq(issues.originRunId, stale.runId),
+    ))).toEqual([]);
+  });
+
   it("commits exact acknowledged dispatch identity with the native Task mutation receipt", async () => {
     const fixture = await seedDispatchBoundAuthority();
     const nativeCall = await fixture.bindCall("create_task", "receipt-call-exact", "provider-turn-receipt-exact");

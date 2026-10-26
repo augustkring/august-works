@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   agents,
@@ -219,8 +219,6 @@ describeEmbeddedPostgres("Context Manifest service", () => {
 
     const deadlineAt = Date.now() + 1_500;
     const controller = new AbortController();
-    const deadlineError = new Error("Context manifest deadline reached");
-    const timer = setTimeout(() => controller.abort(deadlineError), deadlineAt - Date.now());
     try {
       const creation = contextManifestService(db).create({
         companyId: seeded.companyId,
@@ -244,9 +242,14 @@ describeEmbeddedPostgres("Context Manifest service", () => {
         if (!acquiredPrivacyLocks) await new Promise(resolve => setTimeout(resolve, 10));
       }
       expect(acquiredPrivacyLocks).toBe(true);
-      expect(await outcome).toEqual({ succeeded: false, error: deadlineError });
+      const settled = await outcome;
+      expect(settled.succeeded).toBe(false);
+      if (settled.succeeded) throw new Error("Deadline-bound manifest unexpectedly committed");
+      expect(settled.error).toMatchObject({ status: 503, details: {
+        code: "source_unavailable", reason: "context_deadline", stage: "context_manifest",
+      } });
+      expect(controller.signal.aborted).toBe(false);
     } finally {
-      clearTimeout(timer);
       releaseTreeLock();
       await blocker;
     }
@@ -257,6 +260,69 @@ describeEmbeddedPostgres("Context Manifest service", () => {
     `);
     expect(locks).toEqual({ businessEvents: true, memoryPrivacy: true });
     expect(await db.select().from(contextManifests)).toHaveLength(0);
+  });
+
+  it.each([false, true])("rechecks same-company admission after a privacy-lock wait (revoked=%s)", async revoked => {
+    const seeded = await seedCompanyAndAgent("Current manifest admission");
+    const [run] = await db.insert(heartbeatRuns).values({ companyId: seeded.companyId, agentId: seeded.agent.id,
+      responsibleUserId: seeded.userId, status: "running" }).returning();
+    let markTreeLockHeld!: () => void;
+    const treeLockHeld = new Promise<void>(resolve => { markTreeLockHeld = resolve; });
+    let releaseTreeLock!: () => void;
+    const treeLockRelease = new Promise<void>(resolve => { releaseTreeLock = resolve; });
+    const blocker = db.transaction(async tx => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`issue-privacy-tree:${seeded.companyId}`}, 0))`);
+      markTreeLockHeld();
+      await treeLockRelease;
+    });
+    await treeLockHeld;
+
+    let acquiredPrivacyLocks = false;
+    const creation = contextManifestService(db).create({
+      companyId: seeded.companyId,
+      runId: run!.id,
+      agentId: seeded.agent.id,
+      query: "Current membership at manifest commit",
+      policySnapshot: {},
+      selected: [],
+    });
+    const outcome = creation.then(
+      value => ({ succeeded: true as const, value }),
+      error => ({ succeeded: false as const, error }),
+    );
+    try {
+      const waitUntil = Date.now() + 1_000;
+      while (Date.now() < waitUntil && !acquiredPrivacyLocks) {
+        const [locks] = await db.execute<{ businessEvents: boolean; memoryPrivacy: boolean }>(sql`
+          select pg_try_advisory_xact_lock(hashtextextended(${`business-events:${seeded.companyId}`}, 0)) as "businessEvents",
+            pg_try_advisory_xact_lock(hashtextextended(${`memory:privacy:${seeded.companyId}`}, 0)) as "memoryPrivacy"
+        `);
+        acquiredPrivacyLocks = locks?.businessEvents === false && locks.memoryPrivacy === false;
+        if (!acquiredPrivacyLocks) await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(acquiredPrivacyLocks).toBe(true);
+      if (revoked) {
+        await db.update(companyMemberships).set({ status: "inactive", updatedAt: new Date() }).where(and(
+          eq(companyMemberships.companyId, seeded.companyId), eq(companyMemberships.principalType, "user"),
+          eq(companyMemberships.principalId, seeded.userId)));
+      }
+    } finally {
+      releaseTreeLock();
+      await blocker;
+    }
+
+    const settled = await outcome;
+    if (revoked) {
+      expect(settled.succeeded).toBe(false);
+      if (settled.succeeded) throw new Error("Manifest committed after responsible-user membership was revoked");
+      expect(settled.error).toMatchObject({ status: 403 });
+      expect(await db.select().from(contextManifests)).toHaveLength(0);
+    } else {
+      expect(settled.succeeded).toBe(true);
+      if (!settled.succeeded) throw settled.error;
+      expect(settled.value.manifest.id).toMatch(/^[0-9a-f-]{36}$/);
+      expect(await db.select().from(contextManifests)).toHaveLength(1);
+    }
   });
 
   it("hashes policy snapshots deterministically across object-key order", () => {

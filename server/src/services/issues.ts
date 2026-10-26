@@ -2255,7 +2255,7 @@ type IssueCreateInput = Omit<typeof issues.$inferInsert, "companyId"> & {
  * manual task. Related, generated and historical bodies remain unknown. */
 function isManualRootPayloadInput(data: IssueCreateInput) {
   return (!data.originKind || data.originKind === "manual") &&
-    (!data.visibility || data.visibility === "open") &&
+    (!data.visibility || data.visibility === "open" || data.visibility === "private") &&
     (!data.status || data.status === "backlog" || data.status === "todo") &&
     !data.blockedByIssueIds?.length && !data.labelIds?.length &&
     (data.payloadSourceProtocolVersion == null || data.payloadSourceProtocolVersion === 0) &&
@@ -2263,7 +2263,7 @@ function isManualRootPayloadInput(data: IssueCreateInput) {
     [data.parentId, data.projectId, data.privacyParentIssueId, data.privacyRootIssueId,
       data.originId, data.originRunId, data.originFingerprint, data.originIdentityContextId,
       data.continuationIdentityContextId, data.actorRunId, data.watchdogActorRunId,
-      data.createdByAgentId, data.assigneeAgentId, data.assigneeUserId, data.assigneeAdapterOverrides,
+      data.createdByAgentId, data.assigneeUserId, data.assigneeAdapterOverrides,
       data.projectWorkspaceId, data.executionWorkspaceId, data.executionWorkspacePreference,
       data.executionWorkspaceSettings, data.inheritExecutionWorkspaceFromIssueId,
       data.conversationAgentId, data.conversationUserId, data.executionState, data.monitorNotes,
@@ -10148,6 +10148,9 @@ export function issueService(db: Db) {
           !manualActor.userId || !manualActor.sessionId || manualActor.runId ||
           data.createdByUserId !== manualActor.userId || data.createdByAgentId))
         throw forbidden("A current native manual input actor is required");
+      if (manualActor && data.visibility === "private" &&
+          data.responsibleUserId !== manualActor.userId)
+        throw forbidden("Private manual Task sources require the authenticated Human as responsible user");
       if (suppliedPrivacyActor && (
         suppliedPrivacyActor.type === "none" ||
         (suppliedPrivacyActor.type === "board" && suppliedPrivacyActor.source === "local_implicit" && data.createdByAgentId) ||
@@ -10795,7 +10798,12 @@ export function issueService(db: Db) {
           agentId: issue.createdByAgentId, userId: issue.createdByUserId,
         });
         if (assignmentGrant) privacyPublications.push(assignmentGrant.publication);
-        if (issue.visibility === "private" && !(await canActorReadIssuePrivacy(tx, currentSourceAccessActor ?? creatorActor, issue))) {
+        if (captureManualInput && manualActor && manualExpiresAt !== null) {
+          issue = await bindManualTaskPayload(tx, issue,
+            { ...manualActor, isInstanceAdmin: false, ignoreInstanceAdmin: !manualOperator }, privacyPublications);
+        }
+        if (issue.visibility === "private" && !(await canActorReadIssuePrivacy(tx,
+          currentSourceAccessActor ?? manualActor ?? creatorActor, issue))) {
           throw forbidden("Private task creation is outside the current actor authority");
         }
         if (idempotencyKey) {
@@ -10837,10 +10845,6 @@ export function issueService(db: Db) {
             createdByAgentId: issueData.createdByAgentId, createdByUserId: issueData.createdByUserId,
             createdByRunId: actorRunId,
           });
-        }
-        if (captureManualInput && manualActor && manualExpiresAt !== null) {
-          issue = await bindManualTaskPayload(tx, issue,
-            { ...manualActor, isInstanceAdmin: false, ignoreInstanceAdmin: !manualOperator }, privacyPublications);
         }
         const [enriched] = await withIssueLabels(tx, [issue]);
         const [withRelations] = await withIssueRelationSummaries(

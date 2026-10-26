@@ -23,7 +23,7 @@ import type {
   EvidenceItem,
 } from "@paperclipai/shared";
 import { agentExecutionScopeSchema, crossCompanyPolicySchema, type AgentExecutionScope } from "@paperclipai/shared";
-import { conflict, forbidden, unprocessable } from "../../errors.js";
+import { conflict, forbidden, HttpError, unprocessable } from "../../errors.js";
 import { learningAssetRoots,retainLearnedAssetsInContext } from "../learning/learning-assets.js";
 import { memoryPayloadVisible, canActorReadMemorySources, lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { modelLineage, observationLineage } from "../memory/derived-memory.js";
@@ -513,13 +513,17 @@ export function contextManifestService(db: Db) {
     create: async (input: CreateContextManifestInput, nativeBootstrap?: { renderedMarkdown: string }, options: CreateContextManifestOptions = {}) => {
       const queryHash = hashContextQuery(input.query);
       const policySnapshotHash = hashContextPolicySnapshot(input.policySnapshot);
+      const contextDeadlineError = () => new HttpError(503, "Context assembly deadline exceeded", {
+        code: "source_unavailable", reason: "context_deadline", stage: "context_manifest",
+      });
 
       const assertActive = () => {
-        if (options.signal?.aborted) throw options.signal.reason ?? new Error("Context manifest assembly aborted");
+        if (options.signal?.aborted) throw options.signal.reason ?? contextDeadlineError();
         if (options.deadlineAt !== undefined && options.deadlineAt <= Date.now())
-          throw options.signal?.reason ?? new Error("Context manifest assembly deadline exceeded");
+          throw contextDeadlineError();
       };
       assertActive();
+      let statementDeadlineAt: number | null = null;
       try {
       return await db.transaction(async (tx) => {
         const refreshStatementTimeout = async () => {
@@ -531,6 +535,7 @@ export function contextManifestService(db: Db) {
           // caller has moved on to native-tool fencing.
           const statementTimeoutMs = Math.max(1, Math.floor(options.deadlineAt - Date.now() - 25));
           await tx.execute(sql`select set_config('statement_timeout', ${String(statementTimeoutMs)}, true)`);
+          statementDeadlineAt = Date.now() + statementTimeoutMs;
           assertActive();
         };
         await refreshStatementTimeout();
@@ -588,6 +593,11 @@ export function contextManifestService(db: Db) {
             (sourceActor.source !== "agent_jwt" && sourceActor.source !== "none"))
             throw forbidden("Context actor does not match its actual accountable run");
         }
+        const assertCompanyAdmission = async () => {
+          const admission = await authorizationService(sourceDb).decide({actor:sourceActor,action:"company_scope:read",
+            resource:{type:"company",companyId:input.companyId},enforceResponsibleUserIntersection:true});
+          if (!admission.allowed) throw forbidden("Context source access is unavailable");
+        };
         // Retrieval may have waited while membership or sharing changed. The
         // original privacy transaction owns admission of the retained copy.
         const assertScopePrivacy = async () => {
@@ -620,23 +630,30 @@ export function contextManifestService(db: Db) {
             ));
             if(!currentRun)throw forbidden("Context accountable run changed during assembly");
           }
-          const admission = await authorizationService(sourceDb).decide({actor:sourceActor,action:"company_scope:read",
-            resource:{type:"company",companyId:input.companyId},enforceResponsibleUserIntersection:true});
-          if (!admission.allowed) throw forbidden("Context source access is unavailable");
+          await assertCompanyAdmission();
           if ((issueId && !await canActorReadIssuePrivacy(sourceDb,sourceActor,{companyId:input.companyId,id:issueId}))
             || (input.runId && !await canActorReadHeartbeatRunPrivacy(sourceDb,sourceActor,{companyId:input.companyId,id:input.runId}))
             || (input.projectId && !await canActorReadProjectPrivacy(sourceDb,sourceActor,{companyId:input.companyId,id:input.projectId})))
             throw forbidden("Context source access is unavailable");
           assertActive();
         };
+        // Reject an unqualified same-company caller before source work. The
+        // complete current-scope proof remains in this publishing transaction
+        // immediately before commit.
+        if (!delegated) {
+          await refreshStatementTimeout();
+          await assertCompanyAdmission();
+        }
         // Pin current primary/guest authority before touching Task privacy
         // roots, then recheck in the same physical source transaction after
         // the privacy tree is locked.
         if (delegated) await assertScopePrivacy();
         await refreshStatementTimeout();
         await lockIssuePrivacyTree(tx,input.companyId);
-        await refreshStatementTimeout();
-        await assertScopePrivacy();
+        if (delegated) {
+          await refreshStatementTimeout();
+          await assertScopePrivacy();
+        }
         const selectedTaskIds: string[] = [];
         const selectedPayloadSnapshots = new Map<string, typeof issues.$inferSelect["payloadSourceSnapshot"]>();
         const sourceKey = (provider: string, ref: string) => `${provider}:${ref.toLowerCase()}`;
@@ -648,7 +665,7 @@ export function contextManifestService(db: Db) {
           if (!ref) throw forbidden("Context source access is unavailable");
           const [current] = await tx.select({updatedAt:issues.updatedAt,payloadSourceSnapshot:issues.payloadSourceSnapshot}).from(issues)
             .where(and(eq(issues.companyId,input.companyId),eq(issues.id,ref[1]!))).for("share");
-          if (!current || !await canActorReadIssuePrivacy(sourceDb,sourceActor,{companyId:input.companyId,id:ref[1]!}))
+          if (!current || (delegated && !await canActorReadIssuePrivacy(sourceDb,sourceActor,{companyId:input.companyId,id:ref[1]!})))
             throw forbidden("Context source access is unavailable");
           if (current.updatedAt.toISOString() !== evidence.sourceVersion)
             throw conflict("Context task changed during assembly");
@@ -656,11 +673,13 @@ export function contextManifestService(db: Db) {
           selectedPayloadSnapshots.set(sourceKey(evidence.sourceProvider,evidence.sourceRef),current.payloadSourceSnapshot);
         }
         // A later selected row may have waited after an earlier source passed.
-        await assertScopePrivacy();
-        assertActive();
-        for (const id of selectedTaskIds)
-          if (!await canActorReadIssuePrivacy(sourceDb,sourceActor,{companyId:input.companyId,id}))
-            throw forbidden("Context source access is unavailable");
+        if (delegated) {
+          await assertScopePrivacy();
+          assertActive();
+          for (const id of selectedTaskIds)
+            if (!await canActorReadIssuePrivacy(sourceDb,sourceActor,{companyId:input.companyId,id}))
+              throw forbidden("Context source access is unavailable");
+        }
         await refreshStatementTimeout();
         const [manifest] = await tx
           .insert(contextManifests)
@@ -760,7 +779,8 @@ export function contextManifestService(db: Db) {
           for(const root of roots){
             if(root.scopeType==="agent" && root.ownerAgentId!==input.agentId)
               throw forbidden("Context private Memory belongs to another agent");
-            if(!await canActorReadMemorySources(sourceDb,input.companyId,sourceActor,root.id))throw forbidden("Context Memory source access is unavailable");
+            if(delegated && !await canActorReadMemorySources(sourceDb,input.companyId,sourceActor,root.id))
+              throw forbidden("Context Memory source access is unavailable");
           }
           if(roots.some(root=>expectedRoots.get(root.id)!==root.updatedAt.toISOString()))
             throw conflict("Context Memory roots changed during assembly");
@@ -828,15 +848,9 @@ export function contextManifestService(db: Db) {
           ? error.code
           : cause && typeof cause === "object" && "code" in cause && typeof cause.code === "string"
             ? cause.code : null;
-        if (code === "57014" && options.signal && options.deadlineAt !== undefined && !options.signal.aborted) {
-          await new Promise<void>(resolve => {
-            if (options.signal!.aborted) return resolve();
-            options.signal!.addEventListener("abort", () => resolve(), { once: true });
-          });
-        }
         if (options.signal?.aborted) throw options.signal.reason ?? error;
-        if (options.deadlineAt !== undefined && options.deadlineAt <= Date.now())
-          throw options.signal?.reason ?? error;
+        if (code === "57014" && statementDeadlineAt !== null && Date.now() >= statementDeadlineAt)
+          throw contextDeadlineError();
         throw error;
       }
     },

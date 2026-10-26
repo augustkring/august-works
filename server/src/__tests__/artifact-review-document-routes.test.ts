@@ -31,12 +31,17 @@ const mockLogActivity = vi.hoisted(() => vi.fn(async () => undefined));
 const mockEnsureForWorkProduct = vi.hoisted(() => vi.fn());
 const mockSyncDocumentSafely = vi.hoisted(() => vi.fn(async () => undefined));
 const mockCanReadIssue = vi.hoisted(() => vi.fn(async () => true));
+const mockAnalyticalPayloadAccess = vi.hoisted(() => vi.fn(async () => undefined));
 
 function registerRouteMocks() {
   // Isolate review-document HTTP behavior; source policies have PostgreSQL coverage.
   vi.doMock("../services/authorization.js", async () => ({
     ...await vi.importActual<typeof import("../services/authorization.js")>("../services/authorization.js"),
     canActorReadIssuePrivacy: mockCanReadIssue,
+  }));
+  vi.doMock("../services/analytical-context-authority.js", async () => ({
+    ...await vi.importActual<typeof import("../services/analytical-context-authority.js")>("../services/analytical-context-authority.js"),
+    assertAnalyticalContextPayloadAccess: mockAnalyticalPayloadAccess,
   }));
   vi.doMock("@paperclipai/shared/telemetry", () => ({
     trackAgentTaskCompleted: vi.fn(),
@@ -221,6 +226,7 @@ describe("work product review-document route", () => {
     vi.clearAllMocks();
     registerRouteMocks();
     mockCanReadIssue.mockResolvedValue(true);
+    mockAnalyticalPayloadAccess.mockResolvedValue(undefined);
     mockIssueService.getById.mockResolvedValue(makeIssue());
     mockWorkProductService.getById.mockResolvedValue(makeWorkProduct());
   });
@@ -232,6 +238,20 @@ describe("work product review-document route", () => {
       `/api/issues/${ISSUE_ID}/work-products/${WORK_PRODUCT_ID}/review-document`,
     );
     expect(res.status).toBe(404);
+    expect(mockEnsureForWorkProduct).not.toHaveBeenCalled();
+    expect(mockLogActivity).not.toHaveBeenCalled();
+  });
+
+  it("denies an unavailable analytical Source before materializing a review document", async () => {
+    const { HttpError } = await vi.importActual<typeof import("../errors.js")>("../errors.js");
+    mockAnalyticalPayloadAccess.mockRejectedValue(new HttpError(403, "Analytical Source unavailable"));
+
+    const app = await createApp();
+    const res = await request(app).post(
+      `/api/issues/${ISSUE_ID}/work-products/${WORK_PRODUCT_ID}/review-document`,
+    );
+
+    expect(res.status).toBe(403);
     expect(mockEnsureForWorkProduct).not.toHaveBeenCalled();
     expect(mockLogActivity).not.toHaveBeenCalled();
   });

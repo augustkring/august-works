@@ -401,7 +401,7 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
           const contextSources = sources.filter((value) => managedRecord(value).kind === "context");
           if (capture.managedOpenCode !== true || contextCapture.contentDigest !== contentHash ||
             !nativePayloadSourcePolicySchema.safeParse(policy).success || !nativePayloadSourceInputSchema.array().safeParse(sources).success ||
-            contextSources.length !== 1 || sources.length !== 1 || !Array.isArray(manifestIds) ||
+            contextSources.length !== 1 || !Array.isArray(manifestIds) ||
             !isDeepStrictEqual(consumedEntry.policy, policy) ||
             !isDeepStrictEqual(consumedEntry.inputs, [source, ...sources]) ||
             source.toolName !== "read_context")

@@ -121,6 +121,19 @@ test("the V7 authenticated suite is covered by its dedicated product-browser lan
   assert.match(workflow, /journey: V7 authenticated discovery and governance\s+config: tests\/e2e\/aw-v7-authenticated\.config\.ts\s+spec: tests\/e2e\/aw-v7-authenticated\.spec\.ts/);
 });
 
+test("V10 authenticated suites run in dedicated authenticated browser lanes", () => {
+  const workflow = readFileSync(path.join(repoRoot, ".github", "workflows", "aw-v4-verification.yml"), "utf8");
+  for (const [spec, config, journey] of [
+    ["aw-v10-native-auth.spec.ts", "aw-v10-native-auth.config.ts", "V10 authenticated native auth"],
+    ["aw-v10-support.spec.ts", "aw-v10-support.config.ts", "V10 authenticated support Help"],
+  ]) {
+    assert.ok(IGNORED_SPECS.includes(spec), `${spec} must not run in the local_trusted default lane`);
+    assert.match(readFileSync(playwrightConfig, "utf8"), new RegExp(`"${spec}"`));
+    assert.match(readFileSync(path.join(repoRoot, "tests", "e2e", config), "utf8"), /import authenticated from "\.\/aw-v5-authenticated\.config\.js"/);
+    assert.match(workflow, new RegExp(`journey: ${journey}\\s+config: tests/e2e/${config}\\s+spec: tests/e2e/${spec}`));
+  }
+});
+
 test("the duration manifest only names specs that still exist", () => {
   const durations = loadShardDurations(durationsManifest);
   assert.ok(Object.keys(durations).length > 0, "expected a populated duration manifest");

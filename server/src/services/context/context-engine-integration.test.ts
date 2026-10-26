@@ -9,6 +9,7 @@ import {
   workflowStepRuns,
   agents,
   authUsers,
+  authSessions,
   companies,
   companyMemberships,
   contextManifestItems,
@@ -46,7 +47,7 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "../../__tests__/helpers/embedded-postgres.js";
 import { memoryService } from "../memory/memory-service.js";
-import { assertMemorySourcesRetained, expireMemoryPayloads } from "../memory/memory-privacy.js";
+import { assertMemorySourcesRetained, canActorReadMemorySources, expireMemoryPayloads } from "../memory/memory-privacy.js";
 import { issueService, type NativeTaskSourceCapture } from "../issues.js";
 import { workflowService } from "../workflows/workflow-service.js";
 import { workflowExecutorService } from "../workflows/workflow-executor.js";
@@ -60,6 +61,7 @@ import { errorHandler } from "../../middleware/index.js";
 import { issueRoutes } from "../../routes/issues.js";
 import { buildPaperclipTaskMarkdown, getIssueExecutionContext } from "../heartbeat.js";
 import { buildNativeBootstrapSourceSet } from "../native-runtime/native-execution-input.js";
+import { assembleNativeContextRead, assertNativeContextReadSourceSetCurrent } from "../native-direct-input.js";
 import { createLocalAgentJwt, verifyLocalAgentJwt } from "../../agent-auth-jwt.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { createToolGatewayService } from "../tool-gateway.js";
@@ -350,6 +352,10 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     expiresAt?: Date | null;
     verificationState?: "unverified" | "corroborated" | "human_verified" | "system_verified";
     sourceTaskBody?: string;
+    sourceSnapshotState?: "missing" | "invalidated";
+    expireHumanCredential?: boolean;
+    privateSourceTask?: boolean;
+    foreignSource?: { id: string; updatedAt: Date; identifier: string; title: string };
     onNativeRun?: (run: { id: string; actor: AuthorizationActor; issueId: string }) => void;
   }) {
     const scope = input.scope ?? "company";
@@ -382,20 +388,31 @@ describeEmbeddedPostgres("Context Engine integration", () => {
         permissionKey:"company_scope:read"}).onConflictDoNothing();
       await db.insert(principalPermissionGrants).values({companyId:input.companyId,principalType:"user",principalId:userId,
         permissionKey:"company_scope:read"}).onConflictDoNothing();
-      const sourceTask=await issueService(db).create(input.companyId,{
+      let sourceTask=await issueService(db).create(input.companyId,{
         title:`Human Memory evidence ${randomUUID()}`,description:`${input.content}\n\nThis is the source Task for the reviewed Memory candidate.`,
         createdByUserId:userId,responsibleUserId:userId,
-      },db,undefined,{manualInputActor:human,privacyActor:human,sourceAccessActor:human});
+        ...(input.privateSourceTask?{visibility:"private" as const,status:"todo" as const,assigneeAgentId:input.agentId}:{}),
+      },db,undefined,input.sourceSnapshotState==="missing"
+        ?{privacyActor:human,sourceAccessActor:human}
+        :{manualInputActor:human,privacyActor:human,sourceAccessActor:human});
+      if(input.sourceSnapshotState==="invalidated"){
+        await issueService(db).update(sourceTask.id,{description:`${sourceTask.description}\nEdited after direct Human input.`,
+          actorUserId:userId,privacyActor:human},db);
+        sourceTask=(await db.select().from(issues).where(and(eq(issues.companyId,input.companyId),eq(issues.id,sourceTask.id))))[0]!;
+      }
       const humanActor={principal:{type:"user" as const,userId},authorizationActor:human};
+      if(input.expireHumanCredential&&human.sessionId)await db.update(authSessions).set({expiresAt:new Date(Date.now()-1000)})
+        .where(eq(authSessions.id,human.sessionId));
+      const evidenceTask=input.foreignSource??sourceTask;
       const candidate=await memoryService(db).createCandidate(input.companyId,{
         bindingId:binding!.id,memoryType:"lesson",scope:{type:"company",id:null},subject:{type:"company",id:input.companyId},
         ownerAgentId:null,title:null,content:input.content,summary:null,sensitivity:input.sensitivity??"internal",importance:50,
         confidenceScore:0.8,validFrom:null,validUntil:null,observedAt:observedAt.toISOString(),retentionPolicy:"standard",
         expiresAt:input.expiresAt?.toISOString()??null,createdByOperationId:null,metadata:{},evidence:[{
-          sourceClass:"task",sourceProvider:"august_works_tasks",sourceType:"issue",sourceRef:`issue://${sourceTask.id}`,
-          sourceVersion:sourceTask.updatedAt.toISOString(),sourceUpdatedAt:sourceTask.updatedAt.toISOString(),observedAt:observedAt.toISOString(),
+          sourceClass:"task",sourceProvider:"august_works_tasks",sourceType:"issue",sourceRef:`issue://${evidenceTask.id}`,
+          sourceVersion:evidenceTask.updatedAt.toISOString(),sourceUpdatedAt:evidenceTask.updatedAt.toISOString(),observedAt:observedAt.toISOString(),
           excerptHash:createHash("sha256").update(input.content).digest("hex"),
-          citation:{label:`${sourceTask.identifier}: ${sourceTask.title}`},
+          citation:{label:`${evidenceTask.identifier}: ${evidenceTask.title}`},
           trustLevel:"low",relation:"supports"}],
       },humanActor);
       let record=candidate.record;
@@ -405,10 +422,9 @@ describeEmbeddedPostgres("Context Engine integration", () => {
         record=reviewed.record;
       }
       if(input.revokedAt){
-        const [revoked]=await db.update(memoryRecords).set({revokedAt:input.revokedAt,revokedByActorType:"system",
-          revokedByActorId:"context-memory-test",revocationReason:"Test revocation"})
-          .where(and(eq(memoryRecords.companyId,input.companyId),eq(memoryRecords.id,record.id))).returning();
-        record=revoked!;
+        await memoryService(db).revoke(input.companyId,record.id,{reason:"Context fixture revocation"},humanActor);
+        record=(await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId,input.companyId),
+          eq(memoryRecords.id,record.id))))[0]!;
       }
       return record;
     }
@@ -672,6 +688,42 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     ]));
     expect(sourceSet?.policy.foundationRevisionIds).toEqual([foundation.latestRevisionId]);
 
+    await instanceSettingsService(db).updateExperimental({ enableContextEngineV1: true, enableFoundationV1: true,
+      enableCollectiveMemoryV1:true });
+    const contextMemory=await seedMemory({companyId:seeded.companyId,agentId:seeded.agent.id,
+      content:"Enterprise strategy context memory from a directly captured Human Task.",privateSourceTask:true});
+    const memoryTaskId=contextMemory.sourceIssueIds[0];
+    if(!memoryTaskId)throw new Error("Human Memory source Task was not retained");
+    const contextRead=await assembleNativeContextRead(db,{companyId:seeded.companyId,agentId:seeded.agent.id,runId:run!.id,
+      issueId:task.id,projectId:null,responsibleUserId:seeded.userId,actor:assembleInput.authorizationActor,
+      query:"enterprise strategy"});
+    expect(contextRead.witness).toBeDefined();
+    const bobId=`memory-bob-${randomUUID()}`;
+    const bob=await seedCurrentHumanSourceActor(db,[seeded.companyId],bobId);
+    await db.update(companyMemberships).set({membershipRole:"member"}).where(and(eq(companyMemberships.companyId,seeded.companyId),
+      eq(companyMemberships.principalType,"user"),eq(companyMemberships.principalId,bobId)));
+    await db.delete(principalPermissionGrants).where(and(eq(principalPermissionGrants.companyId,seeded.companyId),
+      eq(principalPermissionGrants.principalType,"user"),eq(principalPermissionGrants.principalId,bobId)));
+    await db.insert(principalPermissionGrants).values({companyId:seeded.companyId,principalType:"user",principalId:bobId,
+      permissionKey:"company_scope:read"}).onConflictDoNothing();
+    expect(await canActorReadMemorySources(db,seeded.companyId,bob,contextMemory.id)).toBe(false);
+    expect(contextRead.sourceSet.inputs).toEqual(expect.arrayContaining([
+      expect.objectContaining({kind:"task",issueId:memoryTaskId}),
+      expect.objectContaining({kind:"context",manifestId:contextRead.manifestIds[0]!.contextManifestId}),
+    ]));
+    expect(contextRead.sourceSet.inputs.filter(value=>value.kind==="task"&&value.issueId===memoryTaskId)).toHaveLength(1);
+    expect(contextRead.sourceSet.inputs.filter(value=>value.kind==="context")).toHaveLength(1);
+    const contextReadInput={companyId:seeded.companyId,agentId:seeded.agent.id,runId:run!.id,issueId:task.id,
+      actor:assembleInput.authorizationActor,sourceSet:contextRead.sourceSet,manifestIds:contextRead.manifestIds};
+    await expect(assertNativeContextReadSourceSetCurrent(db,contextReadInput)).resolves.toBeUndefined();
+    const taskInput=contextRead.sourceSet.inputs.find(value=>value.kind==="task");
+    if(!taskInput||taskInput.kind!=="task")throw new Error("Native Context source Task input is unavailable");
+    await expect(assertNativeContextReadSourceSetCurrent(db,{...contextReadInput,sourceSet:{...contextRead.sourceSet,
+      inputs:contextRead.sourceSet.inputs.filter(value=>value.kind!=="task")}})).rejects.toMatchObject({status:403});
+    await expect(assertNativeContextReadSourceSetCurrent(db,{...contextReadInput,sourceSet:{...contextRead.sourceSet,
+      inputs:contextRead.sourceSet.inputs.map(value=>value.kind==="task"?{...value,contentHash:"0".repeat(64)}:value)}}))
+      .rejects.toMatchObject({status:403});
+
     const witnessInput = { witness: context.nativeBootstrapWitness!, companyId: seeded.companyId, runId: run!.id,
       agentId: seeded.agent.id, issueId: task.id, renderedMarkdown: context.markdown,
       manifestIds: [{ companyId: seeded.companyId, contextManifestId: context.packet.manifest!.id }] };
@@ -893,6 +945,13 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       content: "Enterprise launch works best with a staged security review.",
       verificationState: "human_verified",
     });
+    expect(shared.payloadSourceProtocolVersion).toBe(1);
+    expect(shared.payloadSourceSnapshot).toMatchObject({
+      version: 1,
+      owner: { kind: "memory_record", companyId: seeded.companyId, id: shared.id },
+      policy: { issueIds: shared.sourceIssueIds },
+      inputs: [expect.objectContaining({ kind: "task", issueId: shared.sourceIssueIds[0] })],
+    });
     const nativeRuns: Array<{ id: string; actor: AuthorizationActor; issueId: string }> = [];
     const privateRecord = await seedMemory({
       companyId: seeded.companyId,
@@ -992,6 +1051,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
         excerpt: "Enterprise launch follow-ups should name the decision owner.",
       }),
     ]);
+
     expect(result.markdown).toContain("Accepted shared memory");
     expect(result.markdown).toContain("Private agent memory");
     expect(result.markdown).toContain(
@@ -1030,6 +1090,27 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     expect(JSON.stringify(manifestItems)).not.toContain(
       "decision owner",
     );
+  });
+
+  it("keeps unsupported, expired, erased, and foreign Human Task evidence out of Memory payload snapshots", async () => {
+    const seeded=await seed();
+    const missing=await seedMemory({companyId:seeded.companyId,agentId:seeded.agent.id,
+      content:"Missing source snapshot must remain unknown.",sourceSnapshotState:"missing"});
+    const erased=await seedMemory({companyId:seeded.companyId,agentId:seeded.agent.id,
+      content:"Erased source snapshot must remain unknown.",sourceSnapshotState:"invalidated"});
+    await expect(seedMemory({companyId:seeded.companyId,agentId:seeded.agent.id,
+      content:"Expired Human credential must remain unauthorized.",expireHumanCredential:true})).rejects.toMatchObject({status:403});
+    expect([missing,erased].map(record=>record.payloadSourceProtocolVersion)).toEqual([0,0]);
+    expect([missing,erased].map(record=>record.payloadSourceSnapshot)).toEqual([null,null]);
+
+    const foreign=await seed();
+    const foreignHuman=await seedCurrentHumanSourceActor(db,[foreign.companyId],foreign.userId);
+    const foreignTask=await issueService(db).create(foreign.companyId,{title:"Foreign Memory source",description:"Other company.",
+      createdByUserId:foreign.userId,responsibleUserId:foreign.userId},
+      db,undefined,{manualInputActor:foreignHuman,privacyActor:foreignHuman,sourceAccessActor:foreignHuman});
+    await expect(seedMemory({companyId:seeded.companyId,agentId:seeded.agent.id,content:"Foreign source must be denied.",
+      foreignSource:{id:foreignTask.id,updatedAt:foreignTask.updatedAt,identifier:foreignTask.identifier,title:foreignTask.title}}))
+      .rejects.toMatchObject({status:403});
   });
 
   it("omits Foundation without foundation:read but still admits authorized task context", async () => {

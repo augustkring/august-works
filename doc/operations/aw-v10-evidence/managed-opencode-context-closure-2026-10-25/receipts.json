@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-25",
+  "status": "open_actual_binary_acceptance",
+  "acceptance": {
+    "actualPinnedBinaryRunGreen": false,
+    "privateRMemorySelected": false,
+    "aBeforeRAndBAfterRProved": false,
+    "finishAndCurrentReaderProved": false
+  },
+  "ownerSuite": {
+    "log": "context-owner-cancel-revocation.log",
+    "exit": 0,
+    "passed": 3,
+    "skipped": 6,
+    "sourcePins": "context-owner-source-pins.json"
+  },
+  "actualRuns": [
+    { "log": "actual-e2e-startup-failure.log", "exit": 1, "result": "opencode-ai postinstall was missing" },
+    { "log": "actual-e2e-pre-dedupe-failure.log", "exit": 1, "result": "Context manifest stage exceeded existing runtime deadline" },
+    { "log": "actual-e2e-witness-failure.log", "exit": 1, "result": "Native Context read witness unavailable; no successful read_context capture" }
+  ],
+  "postinstall": {
+    "log": "opencode-postinstall.log",
+    "exit": 0,
+    "path": "opencode-postinstall.path",
+    "sha256": "opencode-postinstall.sha256",
+    "sameAsPinned": "opencode-postinstall.same-as-pinned"
+  }
+}

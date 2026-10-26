@@ -21,7 +21,9 @@ const mockLogActivity = vi.hoisted(() => vi.fn(async () => undefined));
 const mockAccessService = vi.hoisted(() => ({
   canUser: vi.fn(async () => false),
   hasPermission: vi.fn(async () => false),
+  decide: vi.fn(async () => ({ allowed: true, explanation: "Allowed by test mock." })),
 }));
+const mockCanReadIssuePrivacy = vi.hoisted(() => vi.fn(async () => true));
 const mockHeartbeatService = vi.hoisted(() => ({
   wakeup: vi.fn(async () => undefined),
   reportRunActivity: vi.fn(async () => undefined),
@@ -52,6 +54,11 @@ const mockRunnerGoalService = vi.hoisted(() => ({
 }));
 
 function registerModuleMocks() {
+  vi.doMock("../services/authorization.js", async () => ({
+    ...await vi.importActual<typeof import("../services/authorization.js")>("../services/authorization.js"),
+    canActorReadIssuePrivacy: mockCanReadIssuePrivacy,
+  }));
+
   vi.doMock("../services/access.js", () => ({
     accessService: () => mockAccessService,
   }));
@@ -69,7 +76,10 @@ function registerModuleMocks() {
   }));
 
   vi.doMock("../services/instance-settings.js", () => ({
-    instanceSettingsService: () => mockInstanceSettingsService,
+    instanceSettingsService: () => ({
+      ...mockInstanceSettingsService,
+      getExperimental: vi.fn(async () => ({ enableExternalObjects: false })),
+    }),
   }));
 
   vi.doMock("../services/issues.js", () => ({
@@ -200,6 +210,7 @@ describe("issue activity event routes", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.doUnmock("../services/access.js");
+    vi.doUnmock("../services/authorization.js");
     vi.doUnmock("../services/activity-log.js");
     vi.doUnmock("../services/feedback.js");
     vi.doUnmock("../services/heartbeat.js");
@@ -220,6 +231,8 @@ describe("issue activity event routes", () => {
     mockIssueService.getWakeableParentAfterChildCompletion.mockResolvedValue(null);
     mockAccessService.canUser.mockResolvedValue(false);
     mockAccessService.hasPermission.mockResolvedValue(false);
+    mockAccessService.decide.mockResolvedValue({ allowed: true, explanation: "Allowed by test mock." });
+    mockCanReadIssuePrivacy.mockReset().mockResolvedValue(true);
     mockFeedbackService.listIssueVotesForUser.mockResolvedValue([]);
     mockFeedbackService.saveIssueVote.mockResolvedValue({
       vote: null,

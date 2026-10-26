@@ -32,7 +32,10 @@ test("Insights reads a retained Native baseline forecast without another run or 
       analytical_lineage_v8: true, business_metrics_v8: true, business_forecasting_v8: true, ai_use_cases_v7: true, governance_evidence_v7: true } }));
     const purpose = analyticalPurpose(); purpose.analyticalPurpose!.capabilities = ["metrics", "forecast"];
     const policy = await aiGovernanceService(db).obligation(actor, company.id, purpose);
-    const [project] = await db.insert(projects).values({ companyId: company.id, name: "Synthetic retained history", createdAt: new Date(Date.now() - 20 * 86400000) }).returning();
+    const project = await json(await request.post(`/api/companies/${company.id}/projects`, {
+      data: { name: "Synthetic retained history" },
+    }));
+    await db.update(projects).set({ createdAt: new Date(Date.now() - 20 * 86400000) }).where(eq(projects.id, project.id));
     const history = await businessForecastHistoryFixture(db, company.id, project.id, policy.id), owner = businessForecastService(db);
     const definition = businessForecastDefinitionSchema.parse({ name: "Recorded baseline workload estimate", businessQuestion: "What could this declared baseline estimate?", decisionUse: "Human review without changing commitments", ownerUserId: "local-board", metricId: history.metricId, metricVersionId: history.versionId,
       scope: { type: "project", id: project.id }, frequency: "daily_utc", horizon: 1, provider: "aw_native", candidate: { kind: "naive" }, baselines: [{ kind: "naive" }], minimumHistory: 8, captureLatencySeconds: 60,

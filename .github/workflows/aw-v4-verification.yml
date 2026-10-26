@@ -231,6 +231,12 @@ jobs:
           - journey: V7 authenticated discovery and governance
             config: tests/e2e/aw-v7-authenticated.config.ts
             spec: tests/e2e/aw-v7-authenticated.spec.ts
+          - journey: V10 authenticated native auth
+            config: tests/e2e/aw-v10-native-auth.config.ts
+            spec: tests/e2e/aw-v10-native-auth.spec.ts
+          - journey: V10 authenticated support Help
+            config: tests/e2e/aw-v10-support.config.ts
+            spec: tests/e2e/aw-v10-support.spec.ts
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

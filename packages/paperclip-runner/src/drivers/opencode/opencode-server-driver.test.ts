@@ -765,7 +765,7 @@ describe("OpenCodeServerDriver", () => {
     expect(
       (await stat(join(sessionRoot, "config", "opencode", "opencode.json")))
         .mode & 0o777,
-    ).toBe(0o600);
+    ).toBe(0o400);
     const config = await readFile(
       join(sessionRoot, "config", "opencode", "opencode.json"),
       "utf8",

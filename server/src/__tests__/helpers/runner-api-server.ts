@@ -98,7 +98,8 @@ export async function startRunnerApiTestServer() {
         const hex = createHash("sha256").update(`runner-api-fixture:${key}`).digest("hex");
         return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
       };
-      const companyId = id("company"), agentId = id("agent"), issueId = id("issue"), runId = id("run"), projectId = id("project");
+      const companyId = id("company"), agentId = id("agent"), issueId = id("issue"), runId = id("run");
+      let projectId = id("project");
       const foreignCompanyId = id("foreign-company"), foreignProjectId = id("foreign-project");
       const projectWorkspaceId = id("workspace"), artifactId = id("artifact"), binaryArtifactId = id("binary-artifact"), goalId = id("goal");
       const blockerId = id("blocker"), approvalId = id("approval");
@@ -117,7 +118,7 @@ export async function startRunnerApiTestServer() {
           token: randomUUID(), createdAt: new Date(), updatedAt: new Date(), expiresAt: new Date(Date.now() + 60 * 60_000) });
       }
       await db.insert(agents).values({ id: agentId, companyId, name: "API eval agent", adapterType: "paperclip_runner", adapterConfig: { provider: "codex", cwd: workspace }, runtimeConfig: { heartbeat: { enabled: false } }, status: "active" });
-      if (options.projectReadSource) await db.insert(companyMemberships).values({ companyId, principalType: "agent",
+      await db.insert(companyMemberships).values({ companyId, principalType: "agent",
         principalId: agentId, status: "active", membershipRole: "member" });
       await db.insert(projects).values([
         { id: projectId, companyId, name: "Aurora", description: "The project verification code is violet-otter.", status: "in_progress" },
@@ -129,12 +130,12 @@ export async function startRunnerApiTestServer() {
         const saved = await storage.putFile({ companyId, namespace: "eval", originalFilename: filename, contentType, body });
         await db.insert(assets).values({ id, companyId, ...saved, createdByAgentId: agentId });
       }
-      // The legacy raw Project below is deliberately not provenance-qualified.
-      // Keep it out of this opt-in Human-source run's retained Task graph; the
-      // canonical Human-created qualified Project is tested separately.
+      // Keep the raw Project row out of ordinary source-free Task fixtures.
+      // Project-coupled cases attach the Human-created qualified Project and
+      // its workspace below, after the canonical route has produced them.
       await db.insert(issues).values({ id: issueId, companyId,
-        projectId: options.projectReadSource ? null : projectId,
-        projectWorkspaceId: options.projectReadSource ? null : projectWorkspaceId,
+        projectId: null,
+        projectWorkspaceId: null,
         issueNumber: 1, identifier: "E" + companyId.replaceAll("-", "").slice(0, 8) + "-1", ...(options.conversation ? { conversationAgentId: agentId, conversationUserId: responsibleUserId, conversationState: "active" as const } : {}), title: "Verify runner API tools", description: "Fixture marker: amber-fox.", status: "in_progress", workMode: options.mode ?? "standard", assigneeAgentId: agentId });
       await db.insert(heartbeatRuns).values({ id: runId, companyId, agentId, status: "running", responsibleUserId, runtimeMode: "native", nativeIssueId: issueId, invocationSource: "assignment", triggerDetail: "system", contextSnapshot: { issueId, ...(options.conversation ? { conversationSessionGeneration: 0 } : {}) } });
       await db.update(issues).set({ executionRunId: runId }).where(eq(issues.id, issueId));
@@ -158,6 +159,7 @@ export async function startRunnerApiTestServer() {
         };
         qualifiedProjectId = await createAsHuman(companyId, responsibleUserId, humanSessionId,
           "Human-owned runner API Project");
+        projectId = qualifiedProjectId;
 
         // The foreign denial proves company isolation against an independently
         // qualified project, rather than a row rejected for missing provenance.
@@ -170,8 +172,12 @@ export async function startRunnerApiTestServer() {
           createdAt: now, updatedAt: now, expiresAt: new Date(now.getTime() + 60 * 60_000) });
         qualifiedForeignProjectId = await createAsHuman(foreignCompanyId, foreignUserId, foreignSessionId,
           "Qualified foreign runner API Project");
+        await db.update(projectWorkspaces).set({ projectId: qualifiedProjectId })
+          .where(eq(projectWorkspaces.id, projectWorkspaceId));
+        await db.update(issues).set({ projectId: qualifiedProjectId, projectWorkspaceId })
+          .where(eq(issues.id, issueId));
       }
-      await db.insert(issues).values({ id: blockerId, companyId, projectId, issueNumber: 2, identifier: "E" + companyId.replaceAll("-", "").slice(0, 8) + "-2", title: "Dependency gate", description: "Complete before shipping.", status: "todo", assigneeAgentId: agentId });
+      await db.insert(issues).values({ id: blockerId, companyId, projectId: options.projectReadSource ? projectId : null, issueNumber: 2, identifier: "E" + companyId.replaceAll("-", "").slice(0, 8) + "-2", title: "Dependency gate", description: "Complete before shipping.", status: "todo", assigneeAgentId: agentId });
       await db.insert(approvals).values({ id: approvalId, companyId, type: "runner_review", status: "pending", requestedByAgentId: agentId, payload: { title: "Launch review" } });
       await documentService(db).upsertIssueDocument({ issueId, key: "notes", title: "Fixture notes", format: "markdown", body: "Document verification code: silver-wren.", baseRevisionId: null, changeSummary: null, createdByAgentId: agentId, createdByRunId: runId });
       let customConnectionService: string | null = null;

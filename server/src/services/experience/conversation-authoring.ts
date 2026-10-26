@@ -105,7 +105,10 @@ export function conversationAuthoringService(db: Db) {
           and t.conversation_agent_id is null and t.conversation_retired_at is null and t.hidden_at is null
         order by t.created_at desc,t.id desc limit 11`);
       const savedTasks = [];
-      const readTask = async (candidate: { id: string; run_id: string }) => {
+      // Pin exact task and origin rows before doing the rest of the Home read.
+      // Their share locks and the company/privacy locks above keep the receipt,
+      // task state, and erasure boundary stable until final admission below.
+      const pinTask = async (candidate: { id: string; run_id: string }) => {
         currentSignal.throwIfAborted();
         const [origin] = await tx.select({ id: heartbeatRuns.id, receipts: heartbeatRuns.resultJson }).from(heartbeatRuns).where(and(
           eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, candidate.run_id),
@@ -133,19 +136,24 @@ export function conversationAuthoringService(db: Db) {
           if (!z.object({ operationId: z.literal("create_task"), result: z.object({ task: z.object({ id: z.literal(task.id) }) }) }).safeParse(receipt).success)
             throw conflict("The Original saved task receipt is unavailable");
         }
-        const access = await authorizationService(tx).decide({ actor: initial.current, action: "issue:read", resource: {
+        return task;
+      };
+      const authorizeTask = async (candidate: { id: string; run_id: string }, task: typeof issues.$inferSelect, current: AuthorizationActor) => {
+        currentSignal.throwIfAborted();
+        const access = await authorizationService(tx).decide({ actor: current, action: "issue:read", resource: {
           type: "issue", companyId, issueId: task.id, projectId: task.projectId, parentIssueId: task.parentId,
           status: task.status, assigneeAgentId: task.assigneeAgentId, assigneeUserId: task.assigneeUserId,
         } });
         if (!access.allowed) throw forbidden("Current saved task read authority is required");
         // The new projection inherits both the created task and originating
         // run's current source authority; it stores no copied task body.
-        await assertAnalyticalContextPayloadAccess(tx, companyId, initial.current, { runId: candidate.run_id });
-        await assertAnalyticalContextPayloadAccess(tx, companyId, initial.current, { issueId: task.id });
-        return task;
+        await assertAnalyticalContextPayloadAccess(tx, companyId, current, { runId: candidate.run_id });
+        await assertAnalyticalContextPayloadAccess(tx, companyId, current, { issueId: task.id });
       };
+      const pinnedTasks: Array<{ candidate: { id: string; run_id: string }; task: typeof issues.$inferSelect }> = [];
       for (const candidate of tasks.slice(0, 10)) {
-        const task = await readTask(candidate);
+        const task = await pinTask(candidate);
+        pinnedTasks.push({ candidate, task });
         savedTasks.push({ kind: "task" as const, id: task.id, title: task.title.slice(0, 400), titleTruncated: task.title.length > 400,
           status: task.status, statusVersion: task.statusVersion,
           executionStarted: !!(task.startedAt || task.executionRunId), href: `/issues/${task.id}` });
@@ -257,17 +265,24 @@ export function conversationAuthoringService(db: Db) {
       const savedAgentDrafts = [];
       for (const candidate of agentDraftCandidates.slice(0, 10)) savedAgentDrafts.push(await readAgentDraft(candidate));
       currentSignal.throwIfAborted();
+      // Final source checks run after every selected row has been pinned. These
+      // checks are current database decisions, not cached results from the
+      // projection-building phase.
+      for (const candidate of routineCandidates.slice(0, 10)) await readRoutine(candidate);
+      for(const candidate of foundationCandidates.slice(0,10))await readFoundation(candidate);
+      for(const candidate of notificationCandidates.slice(0,10))await readNotification(candidate.id);
+      for (const candidate of agentDraftCandidates.slice(0, 10)) await readAgentDraft(candidate);
+      // The per-task live reader and source checks run after the other selected
+      // Home sources have completed their waits; task rows stay share-locked.
+      for (const { candidate, task } of pinnedTasks) await authorizeTask(candidate, task, initial.current);
+      if (candidates.length) await assertV5Authorization(tx, initial.current, companyId, "workflows:read");
+      // Keep the final Human/company/conversation credential check after the
+      // selected source reads and waits, in this same read transaction.
       const final = await owner(tx, actor, companyId, conversationId);
       currentSignal.throwIfAborted();
       if (final.conversation.conversationAgentId !== initial.conversation.conversationAgentId ||
         final.conversation.conversationSessionGeneration !== initial.conversation.conversationSessionGeneration)
         throw conflict("The current conversation changed; reload its saved proposals");
-      if (candidates.length) await assertV5Authorization(tx, final.current, companyId, "workflows:read");
-      for (const candidate of tasks.slice(0, 10)) await readTask(candidate);
-      for (const candidate of routineCandidates.slice(0, 10)) await readRoutine(candidate);
-      for(const candidate of foundationCandidates.slice(0,10))await readFoundation(candidate);
-      for(const candidate of notificationCandidates.slice(0,10))await readNotification(candidate.id);
-      for (const candidate of agentDraftCandidates.slice(0, 10)) await readAgentDraft(candidate);
       return conversationAuthoringViewSchema.parse({ companyId, conversationId, agentId: initial.conversation.conversationAgentId,
         generation: initial.conversation.conversationSessionGeneration, observedAt: new Date().toISOString(), hasMore: candidates.length > 10,
         savedAgentDrafts, hasMoreAgentDrafts: agentDraftCandidates.length > 10,

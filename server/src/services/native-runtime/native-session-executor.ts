@@ -140,7 +140,7 @@ import { appendHeartbeatRunEvent } from "../heartbeat-run-events.js";
 import { nativeSha256 } from "./canonical.js";
 import { resolveDefaultAgentWorkspaceDir } from "../../home-paths.js";
 import { assertAnalyticalContextPayloadAccess } from "../analytical-context-authority.js";
-import { assembleNativeContextRead, assertNativeManagedConsumedSourceSetCurrent, assertNativeMemorySourceInputCurrent,
+import { assembleNativeContextRead, assertNativeContextReadSourceSetCurrent, assertNativeManagedConsumedSourceSetCurrent, assertNativeMemorySourceInputCurrent,
   nativeMemoryReviewTransitionStateHash,
   assertNativePayloadSourceSetCurrent, type NativeContextReadBinding } from "../native-direct-input.js";
 import { canActorReadIssuePrivacy, type AuthorizationActor } from "../authorization.js";
@@ -7769,11 +7769,19 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         const visible = record(input.result);
         const context = input.contextRead;
         const contextInputs = context?.sourceSet.inputs.filter(source => source.kind === "context") ?? [];
+        const contextSourceReferenceCount = context
+          ? context.sourceSet.inputs.length + Object.values(context.sourceSet.policy).reduce((sum, ids) => sum + ids.length, 0)
+          : Number.POSITIVE_INFINITY;
         if (!context || typeof visible.markdown !== "string" || visible.markdown !== context.markdown ||
-          Object.keys(visible).length !== 1 || contextInputs.length !== 1 || context.sourceSet.inputs.length !== 1 ||
+          Object.keys(visible).length !== 1 || contextInputs.length !== 1 || contextSourceReferenceCount > 256 ||
           context.manifestIds.length !== 1 || context.manifestIds[0]?.contextManifestId !== contextInputs[0]?.manifestId ||
           context.manifestIds[0]?.companyId !== input.companyId || context.markdown.length > 64_000)
           throw new Error("managed_opencode_tool_result_binding_invalid");
+        await assertNativeContextReadSourceSetCurrent(tx as unknown as Db, { companyId: input.companyId,
+          agentId: input.agentId, runId: input.runId, issueId: input.issueId,
+          actor: { type: "agent", source: "none", companyId: input.companyId, agentId: input.agentId,
+            runId: input.runId, onBehalfOfUserId: run.responsibleUserId ?? undefined },
+          sourceSet: context.sourceSet, manifestIds: context.manifestIds });
         contextReadCapture = { manifestIds: context.manifestIds, sourceSet: context.sourceSet, contentDigest: digest };
       }
       let returnedDocumentSource: Extract<NativePayloadSourceInput, { kind: "document_revision" }> | null = null;
@@ -9415,14 +9423,16 @@ async function executePaperclipNativeSessionWithinScope(
                     throw new Error("native_attachment_stage_capture_budget_exceeded");
                   if (launchEventSeq === null || !stagedAttachments)
                     throw new Error("native_attachment_stage_capture_binding_changed");
-                  const persistedExecution = parseNativeExecutionInput(profile.nativeExecutionInput);
-                  const immutableExecution = baseExecution ?? persistedExecution;
-                  if (nativeSha256(immutableExecution) !== nativeSha256(persistedExecution))
-                    throw new Error("native_attachment_stage_capture_binding_changed");
+                  const immutableExecution = baseExecution ?? input.execution;
                   const baseTaskDigest = nativeTaskDigest(immutableExecution.task);
                   const finalTaskDigest = nativeTaskDigest(input.execution.task);
                   const closureAttachmentInputs = input.bootstrapSourceClosure?.sourceSet.inputs.filter(
                     (source): source is Extract<NativePayloadSourceInput, { kind: "attachment" }> => source.kind === "attachment") ?? [];
+                  // Ordinary historical staging remains an observation. Only a
+                  // new qualified source closure requires the immutable profile binding.
+                  if (previous.length === 0 && closureAttachmentInputs.length &&
+                    nativeSha256(immutableExecution) !== nativeSha256(parseNativeExecutionInput(profile.nativeExecutionInput)))
+                    throw new Error("native_attachment_stage_capture_binding_changed");
                   const sourceInputs = stagedAttachmentSources.map(capture => capture.input);
                   if (closureAttachmentInputs.length && (!isDeepStrictEqual(closureAttachmentInputs, sourceInputs) ||
                     input.bootstrapSourceClosure?.taskEnvelopeDigest !== finalTaskDigest))

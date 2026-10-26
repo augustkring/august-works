@@ -411,7 +411,8 @@ export async function captureMemorySources(db: Db, companyId: string, actor: Aut
         throw forbidden("Human Memory Task evidence is unavailable");
       }
       const issueId = ref[1]!;
-      const [issue] = await db.select({ id: issues.id, updatedAt: issues.updatedAt }).from(issues).where(and(
+      const [issue] = await db.select({ id: issues.id, updatedAt: issues.updatedAt,
+        privacyParentIssueId: issues.privacyParentIssueId, privacyRootIssueId: issues.privacyRootIssueId }).from(issues).where(and(
         eq(issues.companyId, companyId), eq(issues.id, issueId),
       )).for("share");
       if (!issue || issue.updatedAt.toISOString() !== item.sourceVersion ||
@@ -419,6 +420,8 @@ export async function captureMemorySources(db: Db, companyId: string, actor: Aut
         throw forbidden("Human Memory Task evidence is no longer current");
       }
       sources.sourceIssueIds.push(issueId);
+      if(issue.privacyParentIssueId)sources.sourceIssueIds.push(issue.privacyParentIssueId);
+      if(issue.privacyRootIssueId)sources.sourceIssueIds.push(issue.privacyRootIssueId);
     }
   } else return sources;
   for (const key of ["sourceRunIds","sourceIssueIds","sourceProjectIds","sourceMemoryIds","sourceFoundationRevisionIds"] as const)

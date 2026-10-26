@@ -30,7 +30,7 @@ describe("runner API against real HTTP routes", () => {
   });
 
   it.skipIf(!process.env.PAPERCLIP_REQUIRE_RUNNER_API_INTEGRATION && !existsSync(defaultCapabilityRunnerdBinary())).each(["current", "legacy_http"])("runs runnerd → PRP → authority → actual authenticated HTTP (%s receipt)", async (receiptFormat) => {
-    const fixture = await server.fixture();
+    const fixture = await server.fixture({ projectReadSource: true });
     const provider = join(server.root, `scripted-api-provider-${receiptFormat}.mjs`);
     await writeFile(provider, `#!${process.execPath}
 import { createInterface } from 'node:readline';
@@ -45,7 +45,7 @@ if(!m.method) {if(String(m.id).startsWith('call-')) {
     const envelope=JSON.parse(m.result.contentItems[0].text);
     if(envelope.operationId!=='call_api'||envelope.callId!=='api-call-'+step) throw new Error('API receipt lost semantic call identity');
     const receipt=envelope.result;
-    if(step===2 && (receipt.status!==200||receipt.data[0].name!=='Aurora')) throw new Error('Provider did not receive successful HTTP result');
+    if(step===2 && (receipt.status!==200||receipt.data[0].name!=='Human-owned runner API Project')) throw new Error('Provider did not receive successful HTTP result');
     if(step===3 && (receipt.status!==404||receipt.ok!==false)) throw new Error('Provider did not receive HTTP denial');
   }
   next();
@@ -88,7 +88,7 @@ else if(m.id!==undefined) send({id:m.id,result:{}});
         ]);
       } finally { clearTimeout(timeout); }
       expect(results).toHaveLength(3);
-      expect(results[1]).toMatchObject({ status: 200, apiOperationId: "GET /api/companies/{companyId}/projects", data: [{ id: fixture.projectId, name: "Aurora" }] });
+      expect(results[1]).toMatchObject({ status: 200, apiOperationId: "GET /api/companies/{companyId}/projects", data: [{ id: fixture.qualifiedProjectId, name: "Human-owned runner API Project" }] });
       expect(results[2]).toMatchObject({ ok: false, status: 404 });
       expect(bundle.evidence().diagnostics).toContain("runnerd authenticated to the durable PRP control plane");
     } finally { await bundle.transport.close(); }
@@ -151,7 +151,7 @@ else if(m.id!==undefined) send({id:m.id,result:{}});
   });
 
   it("supports routine annotation collaboration without changing scheduling", async () => {
-    const fixture = await server.fixture();
+    const fixture = await server.fixture({ projectReadSource: true });
     const [document] = await server.db.select().from(documents).where(eq(documents.companyId, fixture.companyId));
     const [routine] = await server.db.insert(routines).values({ companyId: fixture.companyId, projectId: fixture.projectId, title: "Review schedule", description: document.latestBody, assigneeAgentId: fixture.agentId, status: "paused" }).returning();
     await server.db.insert(routineDocuments).values({ companyId: fixture.companyId, routineId: routine.id, documentId: document.id, key: "description" });
@@ -173,15 +173,26 @@ else if(m.id!==undefined) send({id:m.id,result:{}});
     const fixture = await server.fixture();
     const operations = runnerApiCatalog().filter(operation => operation.transport === "rest" && !["GET", "HEAD", "OPTIONS"].includes(operation.method) && operation.callPolicy === "restricted");
     expect(operations.length).toBeGreaterThan(5);
-    for (const operation of operations) {
-      await expect(fixture.authority.execute({ tool: "call_api", callId: operation.operationId, arguments: { operationId: operation.operationId } })).rejects.toThrow(/cannot bypass|credential broker/);
+    // These calls are rejected by the local call-policy gate before dispatch,
+    // so run them concurrently to keep the complete catalog check bounded.
+    const outcomes = await Promise.all(operations.map(async operation => {
+      try {
+        await fixture.authority.execute({ tool: "call_api", callId: operation.operationId, arguments: { operationId: operation.operationId } });
+        return { operationId: operation.operationId, rejected: false, message: "" };
+      } catch (error) {
+        return { operationId: operation.operationId, rejected: true, message: String(error) };
+      }
+    }));
+    for (const outcome of outcomes) {
+      expect(outcome, outcome.operationId).toMatchObject({ rejected: true });
+      expect(outcome.message, outcome.operationId).toMatch(/cannot bypass|credential broker/);
     }
     const [run] = await server.db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
     expect((run.resultJson as Record<string, unknown> | null)?.apiToolReceipts).toBeUndefined();
   });
 
   it("preserves route validation, authorization and audit; replays mutations once", async () => {
-    const fixture = await server.fixture();
+    const fixture = await server.fixture({ projectReadSource: true });
     const call = (callId: string, args: unknown) => fixture.authority.execute({ tool: "call_api", callId, arguments: args });
     await expect(call("foreign", { operationId: "GET /api/projects/{id}", pathParams: { id: fixture.foreignProjectId } })).resolves.toMatchObject({ ok: false, status: 404 });
     await expect(call("invalid", { operationId: "POST /api/companies/{companyId}/projects", body: {} })).resolves.toMatchObject({ ok: false, status: 400 });
@@ -210,7 +221,7 @@ else if(m.id!==undefined) send({id:m.id,result:{}});
   });
 
   it("allows API-only options while protecting task completion", async () => {
-    const fixture = await server.fixture();
+    const fixture = await server.fixture({ projectReadSource: true });
     const call = (body: unknown) => fixture.authority.execute({ tool: "call_api", callId: randomUUID(), arguments: { operationId: "PATCH /api/issues/{id}", pathParams: { id: fixture.issueId }, body } });
     await expect(call({ billingCode: "API-EXTRA" })).resolves.toMatchObject({ status: 200 });
     await expect(call({ status: "done" })).rejects.toThrow("lifecycle");
@@ -274,7 +285,7 @@ else if(m.id!==undefined) send({id:m.id,result:{}});
   });
 
   it("contains workspace files, checks artifact ownership, and persists downloads", async () => {
-    const fixture = await server.fixture();
+    const fixture = await server.fixture({ projectReadSource: true });
     const foreign = await server.fixture();
     const upload = (files: unknown) => fixture.authority.execute({ tool: "call_api", callId: randomUUID(), arguments: { operationId: "POST /api/companies/{companyId}/issues/{issueId}/attachments", pathParams: { issueId: fixture.issueId }, files } });
     await expect(upload([{ artifactId: foreign.artifactId }])).rejects.toThrow("not available");

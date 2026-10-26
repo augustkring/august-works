@@ -46,6 +46,7 @@ const mockIssueThreadInteractionService = vi.hoisted(() => ({
 }));
 const mockLogActivity = vi.hoisted(() => vi.fn(async () => undefined));
 const mockAnalyticalPayloadAccess = vi.hoisted(() => vi.fn());
+const mockCanReadIssuePrivacy = vi.hoisted(() => vi.fn(async () => true));
 
 const documentPayload = {
   id: "document-1",
@@ -114,6 +115,11 @@ const annotationComment = {
 };
 
 function registerModuleMocks() {
+  vi.doMock("../services/authorization.js", async () => ({
+    ...await vi.importActual<typeof import("../services/authorization.js")>("../services/authorization.js"),
+    canActorReadIssuePrivacy: mockCanReadIssuePrivacy,
+  }));
+
   // The annotation route stub has no PostgreSQL Source graph; control and
   // deny-test its current Source admission independently of annotation data.
   vi.doMock("../services/analytical-context-authority.js", () => ({
@@ -161,6 +167,14 @@ function registerModuleMocks() {
     routineService: () => ({ syncRunStatusForIssue: vi.fn(async () => undefined) }),
     workProductService: () => ({}),
   }));
+
+  vi.doMock("../services/instance-settings.js", () => ({
+    instanceSettingsService: () => ({
+      getExperimental: vi.fn(async () => ({ enableExternalObjects: false })),
+      get: vi.fn(async () => ({ id: "settings", general: {} })),
+      getGeneral: vi.fn(async () => ({})),
+    }),
+  }));
 }
 
 async function createApp(actor: "board" | "agent" = "board", actorCompanyId = companyId) {
@@ -197,9 +211,12 @@ describe("document annotation routes", () => {
     vi.resetModules();
     vi.doUnmock("../routes/issues.js");
     vi.doUnmock("../middleware/index.js");
+    vi.doUnmock("../services/authorization.js");
+    vi.doUnmock("../services/instance-settings.js");
     registerModuleMocks();
     vi.clearAllMocks();
     mockAnalyticalPayloadAccess.mockReset().mockResolvedValue(undefined);
+    mockCanReadIssuePrivacy.mockReset().mockResolvedValue(true);
     mockIssueService.getById.mockResolvedValue({
       id: issueId,
       companyId,
@@ -376,6 +393,22 @@ describe("document annotation routes", () => {
       }),
     }));
     expect(mockHeartbeatService.wakeup).not.toHaveBeenCalled();
+  });
+
+  it("does not create an annotation thread when issue privacy denies the actor", async () => {
+    mockCanReadIssuePrivacy.mockResolvedValue(false);
+
+    const res = await request(await createApp())
+      .post(`/api/issues/${issueId}/documents/plan/annotations`)
+      .send({
+        baseRevisionId: documentPayload.latestRevisionId,
+        baseRevisionNumber: 1,
+        selector: annotationThread.anchorSelector,
+        body: "Denied annotation",
+      });
+
+    expect(res.status).toBe(404);
+    expect(mockAnnotationService.createThread).not.toHaveBeenCalled();
   });
 
   it("rejects agent cross-company annotation reads with a uniform 404", async () => {

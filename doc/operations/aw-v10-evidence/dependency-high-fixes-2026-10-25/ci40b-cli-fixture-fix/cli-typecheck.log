@@ -1,0 +1,4 @@
+
+> paperclipai@0.3.1 typecheck /workspace/v10-dep-qualification/cli
+> tsc --noEmit --singleThreaded
+

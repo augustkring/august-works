@@ -14,6 +14,7 @@ import {
   contextManifestMemoryRoots,
   contextManifests,
   heartbeatRuns,
+  issues,
   memoryBindings,
   memoryBindingTargets,
   memoryEvidence,
@@ -45,6 +46,7 @@ import {
   nativePayloadSourceInputSchema,
   nativePayloadSourceSnapshotSchema,
   type NativePayloadSourceInput,
+  type NativePayloadSourcePolicy,
 } from "@paperclipai/shared";
 import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
 import { isUniqueViolation } from "../../db-errors.js";
@@ -52,8 +54,8 @@ import { lockMemoryPrivacy, assertMemoryOperationRetained, assertMemorySourcesRe
   purgeMemoryRecords, memoryDeletionKey, memoryPayloadVisible, reapplyMemoryDeletionMarkers, canActorReadMemorySources, captureMemorySources, capturePrivateShareSource, memoryShareContentFingerprint, withNativeMemoryCaptureSources, type NativeMemoryCaptureReceipt } from "./memory-privacy.js";
 import { learningActorFromPrincipal } from "../learning/learning-analytical-sources.js";
 import { persistActivity, publishActivity, type ActivityPublication } from "../activity-log.js";
-import { pinCurrentBoardActor, type AuthorizationActor } from "../authorization.js";
-import { assertNativeMemoryToolInvocationCurrent, captureNativeTemporalContext, nativePayloadSnapshotSql } from "../native-direct-input.js";
+import { canActorReadIssuePrivacy, pinCurrentBoardActor, type AuthorizationActor } from "../authorization.js";
+import { assertDirectInputSessionCurrent, assertNativeMemoryToolInvocationCurrent, captureNativeTemporalContext, nativePayloadSnapshotSql } from "../native-direct-input.js";
 import type { NativeModelOutputCapture } from "../native-runtime/native-execution-input.js";
 import {
   lockMemoryResolution,
@@ -97,6 +99,62 @@ async function assertCurrentMemoryHumanCredential(db:Db,actor:AuthorizationActor
   const [currentDeadline]=await db.execute<{active:boolean}>(sql`select
     ${deadline===null?sql`true`:sql`${deadline}::double precision>extract(epoch from clock_timestamp())*1000`} as active`);
   if(!currentDeadline?.active)throw forbidden("The original Human credential expired before review committed");
+}
+
+async function captureHumanManualTaskMemorySources(db:Db,companyId:string,principal:ExecutionPrincipal,
+  actor:AuthorizationActor|undefined,provenance:Awaited<ReturnType<typeof captureMemorySources>>,
+  evidence:MemoryCandidateInputParsed["evidence"]):Promise<{policy:NativePayloadSourcePolicy;inputs:NativePayloadSourceInput[];
+    credentialExpiresAt:number|null}|null> {
+  if(principal.type!=="user"||actor?.type!=="board"||actor.userId!==principal.userId||
+    (actor.source!=="session"&&actor.source!=="board_key")||!provenance.sourceProvenanceQualified||
+    !evidence.length||evidence.some(item=>item.sourceClass!=="task"||item.sourceProvider!=="august_works_tasks"||
+      item.sourceType!=="issue"||!item.sourceVersion||item.sourceUpdatedAt!==item.sourceVersion))return null;
+  const pinned=await pinCurrentBoardActor(db,actor);
+  if(!pinned)return null;
+  const [membership]=await db.select({id:companyMemberships.id}).from(companyMemberships).where(and(
+    eq(companyMemberships.companyId,companyId),eq(companyMemberships.principalType,"user"),
+    eq(companyMemberships.principalId,principal.userId),eq(companyMemberships.status,"active"),
+  )).for("share",{noWait:true});
+  if(!membership)return null;
+  const policy:NativePayloadSourcePolicy={issueIds:[...provenance.sourceIssueIds],projectIds:[...provenance.sourceProjectIds],
+    runIds:[...provenance.sourceRunIds],memoryIds:[...provenance.sourceMemoryIds],
+    foundationRevisionIds:[...provenance.sourceFoundationRevisionIds]};
+  const inputs:NativePayloadSourceInput[]=[];
+  for(const item of evidence){
+    const ref=/^issue:\/\/([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})$/i.exec(item.sourceRef);
+    if(!ref)return null;
+    const issueId=ref[1]!;
+    const [source]=await db.select({id:issues.id,companyId:issues.companyId,identifier:issues.identifier,title:issues.title,
+      description:issues.description,workMode:issues.workMode,updatedAt:issues.updatedAt,
+      createdByUserId:issues.createdByUserId,originKind:issues.originKind,
+      payloadSourceProtocolVersion:issues.payloadSourceProtocolVersion,
+      payloadSourceSnapshot:issues.payloadSourceSnapshot,payloadSourceSnapshotInvalidated:issues.payloadSourceSnapshotInvalidated})
+      .from(issues).where(and(eq(issues.companyId,companyId),eq(issues.id,issueId))).for("share");
+    const snapshot=nativePayloadSourceSnapshotSchema.safeParse(source?.payloadSourceSnapshot);
+    const [bodyHash]=await db.execute<{hash:string;snapshotDigestValid:boolean}>(sql`select
+      public.aw_native_payload_body_hash('issue',to_jsonb(i)) as hash,
+      i.payload_source_snapshot->>'digest'=encode(sha256(convert_to((i.payload_source_snapshot-'digest')::text,'UTF8')),'hex') as "snapshotDigestValid"
+      from issues i where i.company_id=${companyId}::uuid and i.id=${issueId}::uuid`);
+    // Human-created Task roots currently have an empty original dependency
+    // set. Nonempty/unsupported Task graphs stay unknown until every family
+    // can be revalidated through the same current-source contract.
+    if(!source||source.payloadSourceProtocolVersion!==1||source.payloadSourceSnapshotInvalidated||!snapshot.success||snapshot.data.owner.kind!=="issue"||
+      snapshot.data.owner.companyId!==companyId||snapshot.data.owner.id!==issueId||!bodyHash||
+      !bodyHash.snapshotDigestValid||snapshot.data.owner.contentHash!==bodyHash.hash||source.updatedAt.toISOString()!==item.sourceVersion||
+      !source.createdByUserId||source.originKind!=null&&source.originKind!=="manual"||
+      Object.values(snapshot.data.policy).some(ids=>ids.length>0)||snapshot.data.inputs.length!==0||
+      !await canActorReadIssuePrivacy(db,actor,{companyId,id:issueId}))return null;
+    for(const key of Object.keys(policy) as (keyof NativePayloadSourcePolicy)[])
+      policy[key]=[...new Set([...policy[key],...snapshot.data.policy[key]])];
+    const input:NativePayloadSourceInput={kind:"task",issueId,sourceVersion:item.sourceVersion,
+      contentHash:createHash("sha256").update(JSON.stringify({id:issueId,identifier:source.identifier,title:source.title,
+        description:source.description,workMode:source.workMode}),"utf8").digest("hex")};
+    if(!inputs.some(existing=>JSON.stringify(existing)===JSON.stringify(input)))inputs.push(input);
+  }
+  if(inputs.length+Object.values(policy).reduce((sum,ids)=>sum+ids.length,0)>256)return null;
+  for(const key of Object.keys(policy) as (keyof NativePayloadSourcePolicy)[])
+    policy[key]=[...new Set(policy[key])].sort();
+  return {policy,inputs,credentialExpiresAt:pinned.credentialExpiresAt};
 }
 
 interface SharePrivateMemoryInternalContext {
@@ -664,6 +722,7 @@ async function insertCandidate(
       | "system_verified";
     sourceMemoryIds?: string[];
     sourceProvenance?: Awaited<ReturnType<typeof captureMemorySources>>;
+    humanCredential?: { actor: AuthorizationActor; credentialExpiresAt: number|null };
   } = {},
 ) {
   await assertMemorySourcesRetained(tx, companyId, input.evidence);
@@ -722,14 +781,18 @@ async function insertCandidate(
   }
   const temporalContext = actor.principal.type === "agent" && actor.runId && sourceProvenance.sourceProvenanceQualified
     ? await captureNativeTemporalContext(tx, companyId, actor.runId, "memory_record") : null;
+  const humanTaskSources = outputCapture ? null : await captureHumanManualTaskMemorySources(tx,companyId,actor.principal,
+    memorySourceActor(companyId,actor),sourceProvenance,input.evidence);
+  if(humanTaskSources&&actor.authorizationActor)state.humanCredential={actor:actor.authorizationActor,
+    credentialExpiresAt:humanTaskSources.credentialExpiresAt};
   const temporalContextPolicy = {
     issueIds: sourceProvenance.sourceIssueIds, projectIds: sourceProvenance.sourceProjectIds,
     runIds: sourceProvenance.sourceRunIds, memoryIds: sourceProvenance.sourceMemoryIds,
     foundationRevisionIds: sourceProvenance.sourceFoundationRevisionIds,
   };
-  const snapshotPolicy = outputCapture?.sourceSet.policy ?? temporalContextPolicy;
-  const snapshotInputs = outputCapture ? [...outputCapture.sourceSet.inputs, outputCapture.dispatch] : temporalContext?.inputs ?? [];
-  const freezeTemporalContext = !!outputCapture || !!temporalContext?.complete && temporalContext.inputs.length + temporalContextPolicy.issueIds.length +
+  const snapshotPolicy = outputCapture?.sourceSet.policy ?? humanTaskSources?.policy ?? temporalContextPolicy;
+  const snapshotInputs = outputCapture ? [...outputCapture.sourceSet.inputs, outputCapture.dispatch] : humanTaskSources?.inputs ?? temporalContext?.inputs ?? [];
+  const freezeTemporalContext = !!outputCapture || !!humanTaskSources || !!temporalContext?.complete && temporalContext.inputs.length + temporalContextPolicy.issueIds.length +
     temporalContextPolicy.projectIds.length + temporalContextPolicy.runIds.length + temporalContextPolicy.memoryIds.length +
     temporalContextPolicy.foundationRevisionIds.length <= 256;
 
@@ -794,6 +857,9 @@ async function insertCandidate(
       capture: outputCapture, invocationId: actor.nativeToolInvocationId, status: "executing" });
   } else if(!await canActorReadMemorySources(tx,companyId,memorySourceActor(companyId,actor),record.id))
     throw forbidden("Memory candidate source access is unavailable");
+  if(state.humanCredential){
+    await assertCurrentMemoryHumanCredential(tx,state.humanCredential.actor,state.humanCredential);
+  }
 
   return persistedRecord;
 }
@@ -1048,13 +1114,14 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
             memoryResolution: resolution.metadata,
           },
         };
+        const candidateState:{sourceMemoryIds:string[];humanCredential?:{actor:AuthorizationActor;credentialExpiresAt:number|null}}={sourceMemoryIds};
         const created = await insertCandidate(
           txDb,
           companyId,
           candidate,
           actor,
           supersedesRecordId,
-          {sourceMemoryIds},
+          candidateState,
         );
         publications.push(
           await persistMemoryActivity(txDb, actor, {
@@ -1069,6 +1136,11 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
             },
           }),
         );
+        if(candidateState.humanCredential){
+          await assertCurrentMemoryHumanCredential(txDb,candidateState.humanCredential.actor,candidateState.humanCredential);
+          await assertDirectInputSessionCurrent(tx,candidateState.humanCredential.actor,candidateState.humanCredential.credentialExpiresAt,
+            "The original Human Memory input session is unavailable");
+        }
         return { recordId: created.id, resolution: resolution.metadata, replayed:false as const };
         };
         return nativeCapture
@@ -1995,15 +2067,16 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
       const reviewed = await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
         const sourceActor=actor.authorizationActor?memorySourceActor(companyId,actor):null;
-        const pinnedBoard=sourceActor?await pinCurrentBoardActor(txDb,sourceActor):null;
-        if(sourceActor&&!pinnedBoard)throw forbidden("Current Human credential is unavailable");
+        const currentHumanActor=sourceActor?.type==="board"&&sourceActor.source!=="local_implicit"?sourceActor:null;
+        const pinnedBoard=currentHumanActor?await pinCurrentBoardActor(txDb,currentHumanActor):null;
+        if(currentHumanActor&&!pinnedBoard)throw forbidden("Current Human credential is unavailable");
         await lockAnalyticalCompany(txDb,companyId); await lockMemoryPrivacy(txDb,companyId);
         await assertActorCompanyScope(txDb, companyId, actor);
       await assertSaasDomainAdmission(txDb, companyId, "memory.use");
-        if(sourceActor?.type==="board"&&sourceActor.userId){
+        if(currentHumanActor?.userId){
           const [membership]=await txDb.select({id:companyMemberships.id}).from(companyMemberships).where(and(
             eq(companyMemberships.companyId,companyId),eq(companyMemberships.principalType,"user"),
-            eq(companyMemberships.principalId,sourceActor.userId),eq(companyMemberships.status,"active"),
+            eq(companyMemberships.principalId,currentHumanActor.userId),eq(companyMemberships.status,"active"),
           )).for("share",{noWait:true});
           if(!membership)throw forbidden("Current Human company membership is unavailable");
         }
@@ -2189,8 +2262,18 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
 
       const revoked = await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
+        const sourceActor=actor.authorizationActor?memorySourceActor(companyId,actor):null;
+        const pinnedBoard=sourceActor?await pinCurrentBoardActor(txDb,sourceActor):null;
+        if(sourceActor&&!pinnedBoard)throw forbidden("Current Human credential is unavailable");
         await lockAnalyticalCompany(txDb,companyId); await lockMemoryPrivacy(txDb,companyId);
         await assertActorCompanyScope(txDb, companyId, actor);
+        if(sourceActor?.type==="board"&&sourceActor.userId){
+          const [membership]=await txDb.select({id:companyMemberships.id}).from(companyMemberships).where(and(
+            eq(companyMemberships.companyId,companyId),eq(companyMemberships.principalType,"user"),
+            eq(companyMemberships.principalId,sourceActor.userId),eq(companyMemberships.status,"active"),
+          )).for("share",{noWait:true});
+          if(!membership)throw forbidden("Current Human company membership is unavailable");
+        }
         const record = await txDb
           .select()
           .from(memoryRecords)
@@ -2208,7 +2291,17 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
         if (record.reviewState !== "accepted") {
           throw conflict("Only accepted memory can be revoked");
         }
-        if (record.revokedAt) return record;
+        if (record.revokedAt) {
+          const evidence=await txDb.select().from(memoryEvidence).where(and(eq(memoryEvidence.companyId,companyId),
+            eq(memoryEvidence.memoryRecordId,record.id))).orderBy(memoryEvidence.createdAt);
+          await assertActorCompanyScope(txDb,companyId,actor);
+          if(currentHumanActor&&pinnedBoard){
+            await assertCurrentMemoryHumanCredential(txDb,currentHumanActor,pinnedBoard);
+            await assertDirectInputSessionCurrent(tx,currentHumanActor,pinnedBoard.credentialExpiresAt,
+              "The original Human Memory revocation session is unavailable");
+          }
+          return {record,evidence};
+        }
 
         const identity = actorIdentity(actor);
         const now = new Date();
@@ -2242,10 +2335,18 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
             }),
           );
         }
-        return result;
+        const evidence=await txDb.select().from(memoryEvidence).where(and(eq(memoryEvidence.companyId,companyId),
+          eq(memoryEvidence.memoryRecordId,result.id))).orderBy(memoryEvidence.createdAt);
+        await assertActorCompanyScope(txDb,companyId,actor);
+        if(currentHumanActor&&pinnedBoard){
+          await assertCurrentMemoryHumanCredential(txDb,currentHumanActor,pinnedBoard);
+          await assertDirectInputSessionCurrent(tx,currentHumanActor,pinnedBoard.credentialExpiresAt,
+            "The original Human Memory revocation session is unavailable");
+        }
+        return {record:result,evidence};
       });
       publishOrDefer(publications);
-      return requireCurrentMemoryDetail(db,companyId,revoked.id,actor);
+      return recordDetail(revoked.record,revoked.evidence);
     },
 
     listEligible: async (

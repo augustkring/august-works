@@ -5,6 +5,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   activityLog,
+  agents,
   authSessions,
   authUsers,
   companies,
@@ -122,6 +123,70 @@ describe("manual Human Task payload source capture", () => {
     expect(JSON.stringify(audit[0]!.details)).not.toContain("A direct request body.");
   });
 
+  it("captures an independent private manual Task with optional same-company Agent assignment", async () => {
+    const f = await seed();
+    const [agent] = await db.insert(agents).values({ companyId: f.companyId, name: "Private task worker",
+      adapterType: "paperclip_runner", status: "active" }).returning();
+    const createPrivate = (title: string, assigneeAgentId?: string) => issueService(db).create(f.companyId, {
+      title, description: `Bound body for ${title}.`, visibility: "private", status: "todo",
+      ...(assigneeAgentId ? { assigneeAgentId } : {}), responsibleUserId: f.userId, createdByUserId: f.userId,
+    }, db, undefined, manualActorOptions(f.actor));
+    const unassigned = await createPrivate("Private Human draft");
+    const assigned = await createPrivate("Private Agent task", agent!.id);
+    for (const created of [unassigned, assigned]) {
+      const { row, proof } = await readOwner(created.id);
+      expect(row).toMatchObject({ visibility: "private", responsibleUserId: f.userId,
+        assigneeAgentId: created.id === assigned.id ? agent!.id : null,
+        payloadSourceProtocolVersion: 1, payloadSourceSnapshotInvalidated: false });
+      expect(row.payloadSourceSnapshot).toMatchObject({ version: 1,
+        owner: { kind: "issue", companyId: f.companyId, id: row.id, contentHash: proof.bodyHash },
+        policy: { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] }, inputs: [] });
+      expect(proof.digestValid).toBe(true);
+      const audit = await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.companyId),
+        eq(activityLog.entityId, row.id), eq(activityLog.action, "issue.payload_source_captured")));
+      expect(audit).toHaveLength(1);
+      expect(audit[0]).toMatchObject({ actorType: "user", actorId: f.userId });
+      expect(JSON.stringify(audit[0]!.details)).not.toContain(`Bound body for ${created.title}.`);
+    }
+
+    const bob = await seed();
+    // Place Bob in the same company while keeping his own independent session.
+    await db.insert(companyMemberships).values({ companyId: f.companyId, principalType: "user", principalId: bob.userId,
+      membershipRole: "member", status: "active" });
+    const bobActor = { ...bob.actor, companyIds: [f.companyId], memberships: [{ companyId: f.companyId,
+      membershipRole: "member" as const, status: "active" as const }] };
+    for (const created of [unassigned, assigned]) {
+      const bobRead = await request(appFor(bobActor)).get(`/api/issues/${created.id}`);
+      expect([403, 404]).toContain(bobRead.status);
+      expect(JSON.stringify(bobRead.body)).not.toContain(`Bound body for ${created.title}.`);
+    }
+
+    const publicRoute = await request(appFor(f.actor)).post(`/api/companies/${f.companyId}/issues`).send({
+      title: "Private route remains closed", description: "Route admission is not expanded.", visibility: "private",
+      status: "todo", assigneeAgentId: agent!.id, responsibleUserId: f.userId,
+    });
+    expect(publicRoute.status).toBe(422);
+  });
+
+  it("refuses a private source when responsibility belongs to another Human or Agent crosses company scope", async () => {
+    const f = await seed();
+    const otherHuman = await seed();
+    const [sameCompanyAgent] = await db.insert(agents).values({ companyId: f.companyId, name: "Same company worker",
+      adapterType: "paperclip_runner", status: "active" }).returning();
+    const [foreignCompanyAgent] = await db.insert(agents).values({ companyId: otherHuman.companyId, name: "Foreign worker",
+      adapterType: "paperclip_runner", status: "active" }).returning();
+    const wrongHumanTitle = "Wrong Human private source";
+    await expect(issueService(db).create(f.companyId, { title: wrongHumanTitle, visibility: "private", status: "todo",
+      assigneeAgentId: sameCompanyAgent!.id, responsibleUserId: otherHuman.userId, createdByUserId: f.userId },
+    db, undefined, manualActorOptions(f.actor))).rejects.toMatchObject({ status: 403 });
+    const foreignAgentTitle = "Foreign Agent private source";
+    await expect(issueService(db).create(f.companyId, { title: foreignAgentTitle, visibility: "private", status: "todo",
+      assigneeAgentId: foreignCompanyAgent!.id, responsibleUserId: f.userId, createdByUserId: f.userId },
+    db, undefined, manualActorOptions(f.actor))).rejects.toMatchObject({ status: 422 });
+    for (const title of [wrongHumanTitle, foreignAgentTitle])
+      expect(await db.select().from(issues).where(and(eq(issues.companyId, f.companyId), eq(issues.title, title)))).toHaveLength(0);
+  });
+
   it("preserves an operational edit, invalidates changed content and keeps both write responses private", async () => {
     const f = await seed("admin"), http = request(appFor(f.actor));
     const created = await http.post(`/api/companies/${f.companyId}/issues`)
@@ -210,6 +275,21 @@ describe("manual Human Task payload source capture", () => {
       .where(and(eq(issueDocuments.issueId, row.id), eq(issueDocuments.key, "plan")));
     expect(plan).toHaveLength(1);
     expect(plan[0]!.body).toContain("Server-stored separate document.");
+  });
+
+  it("leaves a Human Task with a related parent source unqualified", async () => {
+    const f = await seed();
+    const parent = await issueService(db).create(f.companyId, {
+      title: "Existing related parent", description: "The Task body inherits context.", createdByUserId: f.userId,
+    });
+    const child = await issueService(db).create(f.companyId, {
+      title: "Related Human child", description: "Do not claim a direct-root source.", parentId: parent.id,
+      responsibleUserId: f.userId, createdByUserId: f.userId,
+    }, db, undefined, manualActorOptions(f.actor));
+    expect((await readOwner(child.id)).row).toMatchObject({ payloadSourceProtocolVersion: 0,
+      payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: false });
+    expect(await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.companyId),
+      eq(activityLog.entityId, child.id), eq(activityLog.action, "issue.payload_source_captured")))).toHaveLength(0);
   });
 
   it("does not upgrade an unqualified deduplication replay", async () => {
