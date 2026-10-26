@@ -16,6 +16,7 @@ import {
   companies,
   costEvents,
   createDb,
+  environmentLeases,
   issues,
   heartbeatRuns,
   memoryJobs,
@@ -50,7 +51,8 @@ import { COMPANY_SEARCH_HELP_ARTICLES } from "../services/company-search-help.ge
 import { supportGuideKnowledgePin } from "../services/experience/support-assistant-grounding.js";
 import { enqueueCompanyManagedOpenCodeRuntimeErasure, managedOpenCodeRuntimeDirectory } from "../services/native-runtime/runtime-asset-retention.js";
 import { memoryJobService } from "../services/memory/memory-jobs.js";
-import { PROCESS_IDENTITY_RECORDED, recordNativeLocalProcessStop } from "../services/native-local-process-stop.js";
+import { PROCESS_IDENTITY_RECORDED, hasNativeLocalProcessStop, recordNativeLocalProcessStop } from "../services/native-local-process-stop.js";
+import { hasRemoteTerminationReceipt } from "../services/remote-execution-termination.js";
 import { appendHeartbeatRunEvent } from "../services/heartbeat-run-events.js";
 import { firstPartySupportModelGateway, supportAssistantPolicyRevision } from "../services/orchestration/first-party-support-model-gateway.js";
 import { searchAuthorizedSupportHelp } from "../services/experience/support-assistant-help.js";
@@ -321,7 +323,7 @@ const support = await getEmbeddedPostgresTestSupport();
       });
     type ConversationFrameFacts = Parameters<NonNullable<Parameters<typeof runManagedNativeConversationFrame>[0]["beforeProviderResponse"]>>[0];
     type ConversationAfterRunFacts = Parameters<NonNullable<Parameters<typeof runManagedNativeConversationFrame>[0]["afterRunSettledBeforeTeardown"]>>[0];
-    type ConversationOffboardingFacts = Pick<ConversationAfterRunFacts, "actor" | "companyId" | "agentId">;
+    type ConversationOffboardingFacts = Pick<ConversationAfterRunFacts, "actor" | "companyId" | "agentId" | "run">;
     const conversationBinary = () => {
       const configured = process.env.PAPERCLIP_QUALIFIED_OPENCODE_BINARY?.trim();
       if (configured) return configured;
@@ -365,6 +367,24 @@ const support = await getEmbeddedPostgresTestSupport();
       const identity = await agentIdentityService(db).rehome(rehomeActor, facts.companyId, presence.agentIdentityId, targetCompanyId);
       expect(identity.homeCompanyId).toBe(targetCompanyId);
       return targetCompanyId;
+    }
+    async function nativeStopFacts(facts: ConversationOffboardingFacts) {
+      const [run] = facts.run ? await db.select().from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.companyId, facts.companyId), eq(heartbeatRuns.id, facts.run.id))).limit(1) : [];
+      if (!run) return { runPresent: false };
+      const leases = await db.select().from(environmentLeases).where(and(
+        eq(environmentLeases.companyId, facts.companyId), eq(environmentLeases.heartbeatRunId, run.id)));
+      const [finalization] = await db.select({ phase: nativeRunFinalizations.phase,
+        leaseOwner: nativeRunFinalizations.leaseOwner, leaseExpiresAt: nativeRunFinalizations.leaseExpiresAt })
+        .from(nativeRunFinalizations).where(and(eq(nativeRunFinalizations.companyId, facts.companyId),
+          eq(nativeRunFinalizations.runId, run.id))).limit(1);
+      return { runPresent: true, runStatus: run.status, processPidPresent: run.processPid !== null,
+        processGroupPresent: run.processGroupId !== null, controllerLeasePresent: run.controllerLeaseExpiresAt !== null,
+        finalizationPhase: finalization?.phase ?? null, finalizationLeaseHeld: !!finalization?.leaseOwner || !!finalization?.leaseExpiresAt,
+        nativeLocalStopReceipt: await hasNativeLocalProcessStop(db, facts.companyId, run.id),
+        leases: leases.map(lease => ({ provider: lease.provider, status: lease.status,
+          cleanupStatus: lease.cleanupStatus, released: lease.releasedAt !== null,
+          remoteTerminationReceipt: hasRemoteTerminationReceipt(lease) })) };
     }
     function conversationReservationService(facts: ConversationFrameFacts) {
       const service = modelReservationService(db, {
@@ -436,14 +456,18 @@ const support = await getEmbeddedPostgresTestSupport();
       for (let index = 0; index < 4; index += 1)
         expect(await offboarding.processOne(new Date(Date.now() + 1_000))).toBe(true);
       const operation = await offboarding.get(companyId);
-      expect(operation).toMatchObject({ stage: "purge", status: "processing" });
+      if (!operation || operation.stage !== "purge" || operation.status !== "processing")
+        throw new Error(`conversation_offboarding_not_ready:${JSON.stringify({ stage: operation?.stage ?? null,
+          status: operation?.status ?? null, nativeStop: await nativeStopFacts(facts) })}`);
       return { offboarding, operation: operation! };
     }
     async function purgeConversationCompany(facts: ConversationOffboardingFacts, idempotencyKey: string) {
       const { offboarding, operation } = await startConversationOffboarding(facts, idempotencyKey);
       expect(await offboarding.processOne(new Date(Date.now() + 1_000))).toBe(true);
       const completed = await offboarding.get(facts.companyId);
-      expect(completed).toMatchObject({ id: operation.id, stage: "completed", status: "completed" });
+      if (!completed || completed.id !== operation.id || completed.stage !== "completed" || completed.status !== "completed")
+        throw new Error(`conversation_offboarding_purge_incomplete:${JSON.stringify({ stage: completed?.stage ?? null,
+          status: completed?.status ?? null, nativeStop: await nativeStopFacts(facts) })}`);
       return completed!;
     }
     const supportGateway = (

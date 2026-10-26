@@ -18730,14 +18730,16 @@ export function heartbeatService(
         | "live_process_identifier"
         | "observed_owner_unverified"
         | "adopted_runner_authentication_timeout"
-        | "native_chat_workspace_scope_mismatch";
+        | "native_chat_workspace_scope_mismatch"
+        | "native_chat_sandbox_workspace_root_mismatch";
       processPidAlive?: boolean;
       processGroupAlive?: boolean;
     },
   ) {
     const durableOwnershipHold =
       evidence.reason === "adopted_runner_authentication_timeout" ||
-      evidence.reason === "native_chat_workspace_scope_mismatch";
+      evidence.reason === "native_chat_workspace_scope_mismatch" ||
+      evidence.reason === "native_chat_sandbox_workspace_root_mismatch";
     if (
       run.errorCode === NATIVE_OWNERSHIP_UNVERIFIED_ERROR_CODE &&
       run.error === NATIVE_OWNERSHIP_UNVERIFIED_MESSAGE &&
@@ -22324,6 +22326,7 @@ export function heartbeatService(
         executionWorkspace.source === "task_session" &&
         executionWorkspace.projectId === null &&
         executionWorkspace.workspaceId === null &&
+        Array.isArray(executionWorkspace.additionalWorkspaces) &&
         executionWorkspace.additionalWorkspaces.length === 0 &&
         executionWorkspace.repoUrl === null &&
         executionWorkspace.repoRef === null

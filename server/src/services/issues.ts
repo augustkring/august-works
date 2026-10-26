@@ -10839,7 +10839,81 @@ export function issueService(db: Db) {
         if (issue.visibility === "private") {
           const finalPrivacyReader = currentSourceAccessActor ?? manualActor ?? creatorActor;
           const finalPrivateRead = await canActorReadIssuePrivacy(tx, finalPrivacyReader, issue);
-          if (!finalPrivateRead) throw forbidden("Private task creation is outside the current actor authority");
+          if (!finalPrivateRead) {
+            if (process.env.PAPERCLIP_NATIVE_ISSUE_PRIVACY_DIAGNOSTICS === "1") {
+              let facts: {
+                activeHumanMembership: boolean;
+                activeAgent: boolean;
+                currentRun: boolean;
+                issueAgentPrincipal: boolean;
+                issueHumanPrincipal: boolean;
+                snapshotOwnerCurrent: boolean;
+                snapshotPolicyIssueCount: number;
+                issueSourceEdgeCount: number;
+                sourceKinds: string[];
+                inputKinds: string[];
+              } | undefined;
+              try {
+                const [row] = await tx.execute<NonNullable<typeof facts>>(sql`
+                select
+                  exists(select 1 from "user" u join company_memberships m on m.principal_type='user'
+                    and m.principal_id=u.id and m.company_id=${companyId} and m.status='active'
+                    where u.id=${finalPrivacyReader.type === "board" ? finalPrivacyReader.userId ?? null
+                      : finalPrivacyReader.type === "agent" ? finalPrivacyReader.onBehalfOfUserId ?? null : null})
+                    as "activeHumanMembership",
+                  exists(select 1 from agents a where a.id=${finalPrivacyReader.type === "agent" ? finalPrivacyReader.agentId ?? null : null}
+                    and a.company_id=${companyId} and a.status not in ('paused','terminated','pending_approval','error')) as "activeAgent",
+                  exists(select 1 from heartbeat_runs r where r.id=${finalPrivacyReader.type === "agent" ? finalPrivacyReader.runId ?? null : null}
+                    and r.company_id=${companyId} and r.agent_id=${finalPrivacyReader.type === "agent" ? finalPrivacyReader.agentId ?? null : null}
+                    and r.responsible_user_id=${finalPrivacyReader.type === "agent" ? finalPrivacyReader.onBehalfOfUserId ?? null : null}
+                    and r.status='running') as "currentRun",
+                  exists(select 1 from issue_access_grants g where g.company_id=${companyId} and g.issue_id=${issue.id}
+                    and g.subject_type='agent' and g.subject_id=${finalPrivacyReader.type === "agent" ? finalPrivacyReader.agentId ?? null : null}
+                    and g.revoked_at is null) or ${issue.assigneeAgentId === (finalPrivacyReader.type === "agent" ? finalPrivacyReader.agentId : null)}
+                    as "issueAgentPrincipal",
+                  ${issue.responsibleUserId === (finalPrivacyReader.type === "board" ? finalPrivacyReader.userId
+                    : finalPrivacyReader.type === "agent" ? finalPrivacyReader.onBehalfOfUserId : null)} as "issueHumanPrincipal",
+                  exists(select 1 from issues i where i.company_id=${companyId} and i.id=${issue.id}
+                    and i.payload_source_protocol_version=1 and i.payload_source_snapshot is not null
+                    and i.payload_source_snapshot_invalidated=false
+                    and i.payload_source_snapshot->'owner'->>'kind'='issue'
+                    and i.payload_source_snapshot->'owner'->>'id'=i.id::text
+                    and i.payload_source_snapshot->'owner'->>'companyId'=i.company_id::text
+                    and i.payload_source_snapshot->'owner'->>'contentHash'=public.aw_native_payload_body_hash('issue',to_jsonb(i))
+                    and i.payload_source_snapshot->>'digest'=encode(sha256(convert_to((i.payload_source_snapshot-'digest')::text,'UTF8')),'hex'))
+                    as "snapshotOwnerCurrent",
+                  jsonb_array_length(coalesce(${issue.payloadSourceSnapshot}::jsonb->'policy'->'issueIds','[]'::jsonb))::int
+                    as "snapshotPolicyIssueCount",
+                  (select count(*)::int from issue_privacy_sources s where s.company_id=${companyId} and s.issue_id=${issue.id}
+                    and s.source_kind='issue') as "issueSourceEdgeCount",
+                  coalesce((select array_agg(distinct s.source_kind order by s.source_kind)
+                    from issue_privacy_sources s where s.company_id=${companyId} and s.issue_id=${issue.id}),array[]::text[])
+                    as "sourceKinds",
+                  coalesce((select array_agg(distinct input->>'kind' order by input->>'kind')
+                    from jsonb_array_elements(coalesce(${issue.payloadSourceSnapshot}::jsonb->'inputs','[]'::jsonb)) input),array[]::text[])
+                    as "inputKinds"
+                `);
+                facts = row;
+              } catch {
+                // Diagnostics must never replace the original privacy denial.
+              }
+              console.info("native-private-task-reader-denied", JSON.stringify({
+                diagnosticAvailable: facts !== undefined,
+                readerType: finalPrivacyReader.type,
+                activeHumanMembership: facts?.activeHumanMembership === true,
+                activeAgent: facts?.activeAgent === true,
+                currentRun: facts?.currentRun === true,
+                issueAgentPrincipal: facts?.issueAgentPrincipal === true,
+                issueHumanPrincipal: facts?.issueHumanPrincipal === true,
+                snapshotOwnerCurrent: facts?.snapshotOwnerCurrent === true,
+                snapshotPolicyIssueCount: facts?.snapshotPolicyIssueCount ?? -1,
+                issueSourceEdgeCount: facts?.issueSourceEdgeCount ?? -1,
+                sourceKinds: facts?.sourceKinds ?? [],
+                inputKinds: facts?.inputKinds ?? [],
+              }));
+            }
+            throw forbidden("Private task creation is outside the current actor authority");
+          }
         }
         if (idempotencyKey) {
           await tx.insert(issueCreateIdempotencyKeys).values({

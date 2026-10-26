@@ -4,7 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   authUsers, companies, companyMemberships, createDb, documents, documentRevisions,
   EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, issues, learningCycles, learningDomainCandidates,
-  learningEvaluations, learningEvidence, learningHypotheses, learningRetainedAssets,
+  learningEvaluations, learningEvidence, learningHypotheses, learningRetainedAssets, memoryEvidence,
   memoryBindings, memoryRecords, principalPermissionGrants,
 } from "@paperclipai/db";
 import { authorizationService, type AuthorizationActor } from "../services/authorization.js";
@@ -49,6 +49,16 @@ describe("Learning retains ordinary private Memory authority without analytical 
       content: "PRIVATE learned outcome", observedAt: new Date(), createdByActorType: "user", createdByActorId: ownerId,
       sourceProvenanceQualified: true, sourceIssueIds: [issueId], ...input,
     }).returning();
+    for (const sourceId of row!.sourceIssueIds) {
+      const [source] = await db.select({ updatedAt: issues.updatedAt }).from(issues).where(and(
+        eq(issues.companyId, companyId), eq(issues.id, sourceId)));
+      if (!source) throw new Error("Learning fixture Task source is missing");
+      const sourceVersion = source.updatedAt.toISOString();
+      await db.insert(memoryEvidence).values({ companyId, memoryRecordId: row!.id, sourceClass: "task",
+        sourceProvider: "august_works_tasks", sourceType: "issue", sourceRef: `issue://${sourceId}`,
+        sourceVersion, sourceUpdatedAt: source.updatedAt, observedAt: new Date(), excerptHash: "a".repeat(64),
+        citationJson: { label: "Reviewed Task outcome" }, trustLevel: "high", supportsOrContradicts: "supports" });
+    }
     return row!;
   }
   async function cycle(rootIds: string[]) {

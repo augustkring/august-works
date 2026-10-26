@@ -47,7 +47,7 @@ interface NativeSourceReadContext { db: object; txOrdinal?: number; scopes: Map<
   deferredAnalyticalTasks: Map<string, { companyId: string; actor: AuthorizationActor; issueIds: Set<string>;
     checkedIssueIds: Set<string> }>;
   deferredReadResultChecks: Map<string, { companyId: string; issueId: string; runId: string; actor: AuthorizationActor;
-    tool: "get_task_context" | "get_task_history" | "read_chat_attachment"; sourceSet: NativePayloadSourceSet }>;
+    tool: "get_task_context" | "get_task_history" | "read_chat_attachment" | "query_business_metric"; sourceSet: NativePayloadSourceSet; resultDigest?: string }>;
   checkedReadResultChecks: Set<string>;
   pendingReaderChecks: Set<string>; activeReaderChecks: Set<string> }
 interface NativeSourceReadScope { context: NativeSourceReadContext; actorKey: string; active: Set<string>; complete: Set<string>;
@@ -232,7 +232,7 @@ function deferNativeAnalyticalTaskChecks(scope: NativeSourceReadScope, companyId
 }
 function deferNativeReadResultOwnerCheck(scope: NativeSourceReadScope, input: {
   companyId: string; issueId: string; runId: string; actor: AuthorizationActor;
-  tool: "get_task_context" | "get_task_history" | "read_chat_attachment"; sourceSet: NativePayloadSourceSet;
+  tool: "get_task_context" | "get_task_history" | "read_chat_attachment" | "query_business_metric"; sourceSet: NativePayloadSourceSet; resultDigest?: string;
 }) {
   const key = nativeSha256(input);
   if (scope.context.deferredReadResultChecks.has(key)) return;
@@ -1353,8 +1353,8 @@ async function assertNativePayloadSourceSetCurrentInScope(db: Db | Transaction, 
  * Read results cannot bootstrap another tool result or model dispatch. */
 export async function assertNativeReadResultSourceSetOwnersCurrent(db: Db | Transaction, input: {
   companyId: string; issueId: string; runId: string; actor: AuthorizationActor;
-  tool: "get_task_context" | "get_task_history" | "read_chat_attachment";
-  sourceSet: NativePayloadSourceSet;
+  tool: "get_task_context" | "get_task_history" | "read_chat_attachment" | "query_business_metric";
+  sourceSet: NativePayloadSourceSet; resultDigest?: string;
 }): Promise<void> {
   const policy = nativePayloadSourcePolicySchema.safeParse(input.sourceSet?.policy);
   const inputs = nativePayloadSourceInputSchema.array().safeParse(input.sourceSet?.inputs);
@@ -1373,6 +1373,11 @@ export async function assertNativeReadResultSourceSetOwnersCurrent(db: Db | Tran
     source.kind === "attachment" && source.disposition === "delivered") : [];
   const exactEmptyHistory = policy.success && inputs.success && inputs.data.length === 0 &&
     isDeepStrictEqual(policy.data, { issueIds: [input.issueId], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] });
+  const {NATIVE_ANALYTICAL_RESULT_POLICY_HASH}=await import("./analytical-context-privacy.js");
+  const exactAnalyticalResult = policy.success && inputs.success && inputs.data.length === 1 &&
+    inputs.data[0]?.kind === "context" && input.resultDigest === inputs.data[0].queryHash &&
+    inputs.data[0].policySnapshotHash === NATIVE_ANALYTICAL_RESULT_POLICY_HASH &&
+    isDeepStrictEqual(policy.data,{issueIds:[input.issueId],projectIds:[],runIds:[],memoryIds:[],foundationRevisionIds:[]});
   const pureTaskContext = policy.success && inputs.success && taskSources.length > 0 &&
     taskSources.length + contextSourceInputs.length === inputs.data.length && policy.data.projectIds.length === 0 && policy.data.runIds.length === 0 &&
     policy.data.memoryIds.length === 0 && policy.data.foundationRevisionIds.length === 0 &&
@@ -1384,6 +1389,7 @@ export async function assertNativeReadResultSourceSetOwnersCurrent(db: Db | Tran
   if (!policy.success || !inputs.success || !policy.data.issueIds.includes(input.issueId) ||
     inputs.data.some(source => !ownerKinds.has(source.kind)) ||
     (input.tool === "get_task_context" && !pureTaskContext) ||
+    (input.tool === "query_business_metric" && !exactAnalyticalResult) ||
     (input.tool === "get_task_history" && !exactEmptyHistory &&
       (taskComments.length === 0 || taskComments.some(source => source.issueId !== input.issueId))) ||
     (input.tool === "read_chat_attachment" && deliveredAttachments.every(source => source.issueId !== input.issueId)))
@@ -1392,6 +1398,16 @@ export async function assertNativeReadResultSourceSetOwnersCurrent(db: Db | Tran
     await lockNativeSourceReadPrivacy(tx, input.companyId, scope);
     if (!await nativeSourceReaderHasCompanyAccess(tx, input.companyId, input.actor))
       throw forbidden("The Native read result source set is unavailable");
+    if(input.tool==="query_business_metric"){
+      const boundRun=await nativeSourceReadRun(tx,input.companyId,input.runId,scope);
+      if(!boundRun)throw forbidden("The Native analytical read result binding is unavailable");
+      const source=inputs.data[0];
+      const [manifest]=source?.kind==="context"?await tx.select({id:contextManifests.id}).from(contextManifests).where(and(
+        eq(contextManifests.companyId,input.companyId),eq(contextManifests.id,source.manifestId),
+        eq(contextManifests.runId,input.runId),eq(contextManifests.issueId,input.issueId),
+        eq(contextManifests.agentId,boundRun.agentId),isNull(contextManifests.projectId))).for("share"):[];
+      if(!manifest)throw forbidden("The Native analytical read result binding is unavailable");
+    }
     return assertNativePayloadSourceSetCurrentUncachedInScope(tx, {
       companyId: input.companyId, issueId: input.issueId, runId: input.runId, actor: input.actor,
       policy: policy.data, inputs: inputs.data,
@@ -1689,7 +1705,7 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
     if (source.kind === "tool_result") {
       const projectApiResult = source.toolName === "call_api" && source.invocationId === null;
       const managedProjectCreateResult = source.toolName === "create_project" && source.invocationId === null;
-      const nativeReadResultTool = ["get_task_context", "get_task_history", "read_chat_attachment"].includes(source.toolName);
+      const nativeReadResultTool = ["get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric"].includes(source.toolName);
       if ((source.invocationId === null && !projectApiResult && !managedProjectCreateResult && !nativeReadResultTool) ||
         (source.toolName === "call_api" && source.invocationId !== null) ||
         (source.toolName === "create_project" && source.invocationId !== null))
@@ -1858,8 +1874,8 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
           throw forbidden("A Native read tool result changed");
         deferNativeReadResultOwnerCheck(scope, { companyId: input.companyId,
           issueId: input.issueId, runId: input.runId, actor: input.actor,
-          tool: source.toolName as "get_task_context" | "get_task_history" | "read_chat_attachment",
-          sourceSet: { policy: sourcePolicy.data, inputs: sourceInputs.data } });
+          tool: source.toolName as "get_task_context" | "get_task_history" | "read_chat_attachment" | "query_business_metric",
+          resultDigest: source.contentHash, sourceSet: { policy: sourcePolicy.data, inputs: sourceInputs.data } });
       }
       const contextRead = capture.contextRead && typeof capture.contextRead === "object" && !Array.isArray(capture.contextRead)
         ? capture.contextRead as Record<string, unknown> : null;
@@ -2371,7 +2387,7 @@ async function assertNativeContextReadSourceSetCurrentInScope(db: Db | Transacti
     eq(contextManifestMemoryRoots.manifestId, source.manifestId))).orderBy(contextManifestMemoryRoots.memoryRecordId);
   if (!manifest || !issue || items.length > 256 || roots.length > 256 ||
     manifest.queryHash !== source.queryHash || manifest.policySnapshotHash !== source.policySnapshotHash ||
-    temporalContextContentHash(manifest, items, roots) !== source.contentHash)
+    nativeTemporalContextContentHash(manifest, items, roots) !== source.contentHash)
     throw forbidden("The Native Context read source changed");
   if (!await canActorReadIssuePrivacy(db as Db, input.actor, { id: input.issueId, companyId: input.companyId }))
     throw forbidden("A Native Context Task source is unavailable");
@@ -2485,7 +2501,7 @@ export async function assembleNativeContextRead(db: Db | Transaction, input: {
   if (!witnessClosure) throw forbidden("The Native Context read source witness is unavailable");
   const contextInput: Extract<NativePayloadSourceInput, { kind: "context" }> = { kind: "context", manifestId,
     queryHash: manifests[0]!.queryHash, policySnapshotHash: manifests[0]!.policySnapshotHash,
-    contentHash: temporalContextContentHash(manifests[0]!, items, roots) };
+    contentHash: nativeTemporalContextContentHash(manifests[0]!, items, roots) };
   const sourceSet: NativeContextReadBinding["sourceSet"] = { policy: witnessClosure.policy,
     inputs: [...witnessClosure.inputs, contextInput] };
   await assertNativeContextReadSourceSetCurrent(db, { companyId: input.companyId, agentId: input.agentId,
@@ -2494,7 +2510,7 @@ export async function assembleNativeContextRead(db: Db | Transaction, input: {
   return { markdown: assembled.markdown, witness, manifestIds, sourceSet };
 }
 
-function temporalContextContentHash(manifest: typeof contextManifests.$inferSelect,
+export function nativeTemporalContextContentHash(manifest: typeof contextManifests.$inferSelect,
   items: (typeof contextManifestItems.$inferSelect)[], roots: (typeof contextManifestMemoryRoots.$inferSelect)[]) {
   return createHash("sha256").update(JSON.stringify({
     manifest: { id: manifest.id, companyId: manifest.companyId, runId: manifest.runId, agentId: manifest.agentId,
@@ -2686,6 +2702,33 @@ async function assertNativeTaskSnapshotOwnerCurrentInScope(db: Db | Transaction,
   deferNativeSourceOwnerReaderChecks(scope, { companyId, actor, issueIds: [issueId] });
 }
 
+/** Recognize only the original managed analytical copy owner. Other Memory
+ * and Context families continue through their ordinary snapshot validators. */
+async function assertNativeAnalyticalResultContextCurrent(db:Db,companyId:string,actor:AuthorizationActor,
+ manifest:typeof contextManifests.$inferSelect,items:(typeof contextManifestItems.$inferSelect)[],
+ roots:(typeof contextManifestMemoryRoots.$inferSelect)[]):Promise<boolean>{
+ const {NATIVE_ANALYTICAL_RESULT_POLICY_HASH}=await import("./analytical-context-privacy.js");
+ if(manifest.policySnapshotHash!==NATIVE_ANALYTICAL_RESULT_POLICY_HASH)return false;
+ if(!manifest.runId||!manifest.issueId||items.length!==0||roots.length!==1||roots[0]!.payloadSourceSnapshot!==null)
+  throw forbidden("The complete Native analytical result source is unavailable");
+ const {analyticalContextRoots}=await import("@paperclipai/db");
+ const [root]=await db.select().from(analyticalContextRoots).where(and(eq(analyticalContextRoots.companyId,companyId),
+  eq(analyticalContextRoots.memoryRecordId,roots[0]!.memoryRecordId))).for("share");
+ if(!root||root.contentHash!==roots[0]!.sourceVersion)
+  throw forbidden("The Native analytical result source changed");
+ const {assertAnalyticalContextPayloadAccess,assertAnalyticalRetentionRootOwnerCurrent}=await import("./analytical-context-authority.js");
+ const owner=await assertAnalyticalRetentionRootOwnerCurrent(db,companyId,actor,root.memoryRecordId);
+ const [producer]=await db.select({agentId:heartbeatRuns.agentId,responsibleUserId:heartbeatRuns.responsibleUserId,
+  nativeIssueId:heartbeatRuns.nativeIssueId}).from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId,companyId),
+  eq(heartbeatRuns.id,manifest.runId))).for("share");
+ if(!producer||producer.agentId!==manifest.agentId||producer.nativeIssueId!==manifest.issueId||
+  producer.responsibleUserId!==owner.privateOwnerUserId||
+  owner.ownerAgentId!==manifest.agentId||owner.sourceRunIds.length!==1||owner.sourceRunIds[0]!==manifest.runId)
+  throw forbidden("The Native analytical result owner changed");
+ await assertAnalyticalContextPayloadAccess(db,companyId,actor,{runId:manifest.runId},"task");
+ return true;
+}
+
 async function assertNativeContextInputOwnersCurrent(db: Db, companyId: string, actor: AuthorizationActor,
   inputs: Extract<NativePayloadSourceInput, { kind: "context" }>[], scope: NativeSourceReadScope,
   alreadyValidatedMemoryIds: ReadonlySet<string> = new Set()) {
@@ -2719,6 +2762,8 @@ async function assertNativeContextInputOwnersCurrent(db: Db, companyId: string, 
   `) : [];
   const taskHashById = new Map(taskHashes.map(owner => [owner.id, owner]));
   for (const manifest of manifests) {
+    if(await assertNativeAnalyticalResultContextCurrent(db,companyId,actor,manifest,
+      items.filter(value=>value.manifestId===manifest.id),roots.filter(value=>value.manifestId===manifest.id)))continue;
     for (const item of items.filter(value => value.manifestId === manifest.id)) {
       nativeSourceReadWork(scope);
       if (item.sourceProvider === "august_works_tasks") {
@@ -2808,7 +2853,7 @@ export async function assertNativeTemporalContextInputsCurrent(db: Db, companyId
   for (const input of inputs) {
     const manifest=manifests.find(row=>row.id===input.manifestId);
     if (!manifest || manifest.queryHash!==input.queryHash || manifest.policySnapshotHash!==input.policySnapshotHash ||
-      temporalContextContentHash(manifest,items.filter(item=>item.manifestId===manifest.id),roots.filter(root=>root.manifestId===manifest.id))!==input.contentHash)
+      nativeTemporalContextContentHash(manifest,items.filter(item=>item.manifestId===manifest.id),roots.filter(root=>root.manifestId===manifest.id))!==input.contentHash)
       throw forbidden("Captured Context source changed");
   }
 }
@@ -2976,6 +3021,8 @@ async function assertNativeDocumentRevisionCurrentSourceAccessInScope(db: Db, in
     const roots = await db.select().from(contextManifestMemoryRoots).where(and(eq(contextManifestMemoryRoots.companyId, input.companyId), inArray(contextManifestMemoryRoots.manifestId, ids)));
     for (const manifest of manifests) {
       const manifestItems = items.filter(item => item.manifestId === manifest.id);
+      if(await assertNativeAnalyticalResultContextCurrent(db,input.companyId,input.actor,manifest,manifestItems,
+        roots.filter(value=>value.manifestId===manifest.id)))continue;
       for (const item of manifestItems) {
         nativeSourceReadWork(scope);
         if (item.sourceProvider === "august_works_tasks") {
@@ -3397,7 +3444,7 @@ export async function captureNativeTemporalContext(db: Db, companyId: string, ru
     }
     if (roots.length && owner !== "memory_record") complete = false;
     roots.forEach(root => memoryIds.add(root.memoryRecordId));
-    const contentHash = temporalContextContentHash(manifest, manifestItems, roots);
+    const contentHash = nativeTemporalContextContentHash(manifest, manifestItems, roots);
     inputRows.push({ kind: "context", manifestId: manifest.id, queryHash: manifest.queryHash,
       policySnapshotHash: manifest.policySnapshotHash, contentHash });
   }

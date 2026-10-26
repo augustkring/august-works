@@ -64,7 +64,7 @@ export async function runManagedNativeConversationFrame(input: {
   }) => Promise<{
     sandboxExec?: NonNullable<Parameters<typeof heartbeatService>[1]>["sandboxExec"];
     environmentRuntime?: NonNullable<Parameters<typeof heartbeatService>[1]>["environmentRuntime"];
-    beforeNativeExecution?: (args: Parameters<NonNullable<Parameters<typeof heartbeatService>[1]>["testNativeRunnerEnvironment"]>[0]) => Promise<Record<string, string>>;
+    beforeNativeExecution?: (args: Parameters<NonNullable<NonNullable<Parameters<typeof heartbeatService>[1]>["testNativeRunnerEnvironment"]>>[0]) => Promise<Record<string, string>>;
     close?: () => Promise<void>;
     facts?: () => Record<string, unknown>;
   }>;
@@ -390,7 +390,6 @@ export async function runManagedNativeConversationFrame(input: {
       .send({ body: "Please respond briefly and complete this conversation turn.", clientRequestId: randomUUID() }));
     if (sent.status !== 201) throw new Error(`conversation_fixture_first_comment_failed_${sent.status}`);
     const deadline = Date.now() + 180_000;
-    let run: typeof heartbeatRuns.$inferSelect | null = null;
     while (Date.now() < deadline) {
       const [candidate] = await db.select().from(heartbeatRuns).where(and(
         eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, agentId),
@@ -398,13 +397,12 @@ export async function runManagedNativeConversationFrame(input: {
         sql`${heartbeatRuns.contextSnapshot}->>'wakeCommentId' = ${sent.body.id}`,
       )).orderBy(desc(heartbeatRuns.startedAt)).limit(1);
       if (candidate && ["succeeded", "failed", "timed_out", "cancelled", "superseded"].includes(candidate.status)) {
-        run = candidate;
         break;
       }
       await new Promise(resolve => setTimeout(resolve, 100));
     }
     await heartbeat.drainActiveRunExecutions();
-    const [finalRun] = run ? [run] : await db.select().from(heartbeatRuns).where(and(
+    const [finalRun] = await db.select().from(heartbeatRuns).where(and(
       eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, agentId),
       sql`${heartbeatRuns.contextSnapshot}->>'issueId' = ${chat.body.id}`,
       sql`${heartbeatRuns.contextSnapshot}->>'wakeCommentId' = ${sent.body.id}`,

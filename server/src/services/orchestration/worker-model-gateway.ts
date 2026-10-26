@@ -353,7 +353,7 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
   }).sort((a, b) => a.name.localeCompare(b.name));
   if (!isDeepStrictEqual(actualTools, expectedTools) ||
     actualTools.some((tool) => !["read_document", "write_document", "create_task", "create_project", "self_remember", "read_context", "call_api",
-      "get_task_context", "get_task_history", "read_chat_attachment", "paperclip_finish", "paperclip_block"].includes(tool.name)))
+      "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric", "paperclip_finish", "paperclip_block"].includes(tool.name)))
     throw forbidden("Managed OpenCode tool schemas do not match the exact current Native catalog");
 
   const intents = Array.isArray(profile.nativeAwModelWireIntents) ? profile.nativeAwModelWireIntents.map(managedRecord) : [];
@@ -473,7 +473,7 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
         }
         if (matchingCaptures.length !== 1 || matchingAssociations.length !== 1 ||
           !["read_document", "write_document", "create_task", "create_project", "self_remember", "read_context", "call_api",
-            "get_task_context", "get_task_history", "read_chat_attachment"].includes(toolName))
+            "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric"].includes(toolName))
           throw forbidden("Managed OpenCode tool result has no original qualified invocation receipt");
         const capture = matchingCaptures[0]!;
         const source = managedRecord(capture.source);
@@ -613,7 +613,7 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
             policy: createEntry.policy, inputs: createEntry.inputs });
           continue;
         }
-        if (["get_task_context", "get_task_history", "read_chat_attachment"].includes(toolName)) {
+        if (["get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric"].includes(toolName)) {
           const sourceSetValue = managedRecord(capture.sourceSet);
           const sourcePolicy = nativePayloadSourcePolicySchema.safeParse(sourceSetValue.policy);
           const sourceInputs = nativePayloadSourceInputSchema.array().safeParse(sourceSetValue.inputs);

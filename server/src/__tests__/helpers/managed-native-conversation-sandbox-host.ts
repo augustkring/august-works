@@ -8,15 +8,15 @@ import { WebSocket } from "ws";
 import { and, eq } from "drizzle-orm";
 import {
   agentProviderBindings, billingAccounts, billingAccountCompanies, billingSubscriptions, createDb,
-  agents, environmentLeases, runtimeCapacityProfiles, runtimeCells, runtimeHosts, runtimeHostRequestNonces,
-  runtimeVersionCatalog,
+  agents, agentExecutionManifests, environmentLeases, runtimeCapacityProfiles, runtimeCells, runtimeHosts, runtimeHostRequestNonces,
+  runtimeVersionCatalog, sandboxQualificationRuns,
 } from "@paperclipai/db";
 import { SANDBOX_CONTROLS, runtimeRequestSigningInput } from "@paperclipai/shared";
 import type { AuthorizationActor } from "../../services/authorization.js";
 import { environmentService } from "../../services/environments.js";
 import { environmentRuntimeService } from "../../services/environment-runtime.js";
 import { executionSandboxService } from "../../services/execution-sandbox/sandbox-service.js";
-import type { SandboxIdentity } from "../../services/execution-sandbox/backend.js";
+import type { SandboxIdentity, SandboxProbeCase } from "../../services/execution-sandbox/backend.js";
 import { nativeSandboxHostTransport } from "../../services/execution-sandbox/native-host-bridge.js";
 import { agentProviderBindingService } from "../../services/agent-provider-bindings.js";
 import { discoverNativeCapabilities } from "../../services/native-provider-conformance.js";
@@ -79,7 +79,9 @@ export async function configureManagedConversationSandboxHost(input: {
     publicKeyPem: hostKeys.publicKey.export({ type: "spki", format: "pem" }).toString(), status: "READY",
     hostAgentVersion: "6.0.2", lastHeartbeatAt: new Date() }).returning();
   if (!host) throw new Error("conversation_software_host_row_missing");
-  const [account] = await db.insert(billingAccounts).values({ displayName: "Conversation software host fixture", payerUserId: actor.userId }).returning();
+  const payerUserId = actor.userId;
+  if (!payerUserId) throw new Error("conversation_software_host_payer_missing");
+  const [account] = await db.insert(billingAccounts).values({ displayName: "Conversation software host fixture", payerUserId }).returning();
   if (!account) throw new Error("conversation_software_host_billing_account_missing");
   await db.insert(billingAccountCompanies).values({ companyId, billingAccountId: account.id });
   for (const productKeys of [["platform", "runtime_standard"], ["runtime_standard"]])
@@ -104,8 +106,12 @@ export async function configureManagedConversationSandboxHost(input: {
   await providerService.recordDiscovery(companyId, agentId, providerSnapshotInput,
     Object.fromEntries(providerConformanceRequirements(providerSnapshot, "isolated_per_presence").map(check => [check, true])));
   const qualifiedProvider = await providerService.assertRuntime(companyId, agentId);
-  input.profile.providerProfileRef = qualifiedProvider.runtime.providerProfileRef;
-  input.profile.providerSnapshotHash = qualifiedProvider.provider.capabilitySnapshotHash;
+  const providerProfileRef = qualifiedProvider.runtime.providerProfileRef;
+  if (!providerProfileRef) throw new Error("conversation_software_host_provider_profile_missing");
+  input.profile.providerProfileRef = providerProfileRef;
+  const providerSnapshotHash = qualifiedProvider.provider.capabilitySnapshotHash;
+  if (!providerSnapshotHash) throw new Error("conversation_software_host_provider_snapshot_missing");
+  input.profile.providerSnapshotHash = providerSnapshotHash;
   const environment = await environmentService(db).ensureManagedSandboxEnvironment({ companyId,
     name: `Conversation managed sandbox ${agentId}`, provider: "fake", stockVersion: "conversation-software-host-v1",
     config: { image: "ubuntu:24.04", reuseLease: false } }).then(result => result.environment);
@@ -148,7 +154,7 @@ export async function configureManagedConversationSandboxHost(input: {
         },
         stopWorkload: async (value: { idempotencyKey: string }) => { const reply = await bridge.stop({ ...identity, idempotencyKey: value.idempotencyKey }); state.set(identity.cellId, "stopped"); return { operationId: reply.operationId }; },
         destroySandbox: (value: { idempotencyKey: string }) => bridge.destroy({ ...identity, idempotencyKey: value.idempotencyKey }),
-        probeBoundary: async (value: { test: { caseId: string } }) => {
+        probeBoundary: async (value: { test: SandboxProbeCase }) => {
           await bridge.probe({ ...identity, test: value.test });
           return { verdict: "pass", observationHash: createHash("sha256").update(`controlled:${value.test.caseId}`).digest("hex") };
         },
@@ -200,7 +206,22 @@ export async function configureManagedConversationSandboxHost(input: {
     return output.value;
   };
   const qualification = await driveHost(service.qualify(actor, companyId, binding.id, 1));
-  if (qualification.status !== "ready") throw new Error("conversation_software_host_qualification_failed");
+  if (qualification.status !== "ready") {
+    const [report] = qualification.qualificationRunId ? await db.select({ status: sandboxQualificationRuns.status,
+      suiteVersion: sandboxQualificationRuns.suiteVersion, evidenceKind: sandboxQualificationRuns.evidenceKind,
+      results: sandboxQualificationRuns.results, exceptions: sandboxQualificationRuns.exceptions })
+      .from(sandboxQualificationRuns).where(eq(sandboxQualificationRuns.id, qualification.qualificationRunId)).limit(1) : [];
+    const results = Array.isArray(report?.results) ? report.results.map(result => ({
+      caseId: result.caseId, control: result.control, verdict: result.verdict,
+      observationHashPresent: typeof result.observationHash === "string" && /^[a-f0-9]{64}$/.test(result.observationHash),
+    })) : [];
+    const exceptions = Array.isArray(report?.exceptions) ? report.exceptions.filter((value): value is string =>
+      typeof value === "string" && /^[a-z0-9_:-]{1,100}$/.test(value)).slice(0, 32) : [];
+    throw new Error(`conversation_software_host_qualification_failed:${JSON.stringify({
+      bindingStatus: qualification.status, reportStatus: report?.status ?? null,
+      suiteVersion: report?.suiteVersion ?? null, evidenceKind: report?.evidenceKind ?? null, results, exceptions,
+    })}`);
+  }
   const runtime = runtimeControlService(db, { runtime: { suspectSeconds: 90, unreachableSeconds: 600, relayPort: 3102 } } as SaasPlatformConfig,
     undefined, { credentialBrokerOrigin: brokerOrigin, workerModels: input.gateway as any });
   const environmentRuntime = environmentRuntimeService(db, { executeSandboxTask: runtime.executeSandboxTask });
@@ -214,7 +235,7 @@ export async function configureManagedConversationSandboxHost(input: {
   const proof = signedRelayProof(host.id, hostKeys.privateKey); relayHost.send(JSON.stringify({ type: "hello", proof: proof.proof }));
   let authenticated = false;
   for (let i = 0; i < 150; i++) {
-    const [nonce] = await db.select({ id: runtimeHostRequestNonces.id }).from(runtimeHostRequestNonces)
+    const [nonce] = await db.select({ nonce: runtimeHostRequestNonces.nonce }).from(runtimeHostRequestNonces)
       .where(eq(runtimeHostRequestNonces.nonce, proof.nonce)).limit(1);
     if (nonce) { authenticated = true; break; }
     await new Promise(resolve => setTimeout(resolve, 10));
@@ -228,7 +249,10 @@ export async function configureManagedConversationSandboxHost(input: {
     if (message.type !== "exec_open" || !Array.isArray(message.request?.argv) || typeof message.channelId !== "string") return;
     const request = message.request as Record<string, any>;
     const requestEnv = request.env && typeof request.env === "object" ? request.env as Record<string, unknown> : {};
-    if (requestEnv.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN !== brokerOrigin) return;
+    if (requestEnv.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN !== brokerOrigin) {
+      relayHost.send(JSON.stringify({ type: "exec_exit", channelId: message.channelId, exitCode: 126, timedOut: false }));
+      return;
+    }
     const modelToken = request.modelBrokerCredential?.capabilityToken;
     const modelCredentialPresent = typeof modelToken === "string";
     if (typeof modelToken === "string") input.setBrokerToken(modelToken);

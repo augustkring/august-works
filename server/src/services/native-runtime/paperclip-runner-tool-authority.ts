@@ -708,7 +708,8 @@ export class PaperclipRunnerToolAuthority {
     const context = await this.#boundContext();
     const reader: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: this.binding.companyId,
       agentId: this.binding.agentId, runId: this.binding.runId, onBehalfOfUserId: context.run.responsibleUserId };
-    if(isManagementAnalyticalTool(call.tool))return executeManagementAnalyticalTool(this.db,this.binding.companyId,{type:"agent",source:"agent_jwt",companyId:this.binding.companyId,agentId:this.binding.agentId,runId:this.binding.runId,onBehalfOfUserId:context.run.responsibleUserId},call.tool,call.arguments);
+    if(isManagementAnalyticalTool(call.tool))return executeManagementAnalyticalTool(this.db,this.binding.companyId,{type:"agent",source:"agent_jwt",companyId:this.binding.companyId,agentId:this.binding.agentId,runId:this.binding.runId,onBehalfOfUserId:context.run.responsibleUserId},call.tool,call.arguments,
+      sourceSet=>onNativeInputSource?.({sourceSet,observedSourceInputs:sourceSet.inputs}));
     const input = record(call.arguments);
     if (call.tool === MANAGED_NATIVE_CONTEXT_READ_TOOL) {
       if (!this.binding.nativeModelOutputCapture || !this.binding.managedNativeContextRead ||
@@ -2295,6 +2296,29 @@ export class PaperclipRunnerToolAuthority {
           .where(eq(heartbeatRuns.id, this.binding.runId));
         return result;
       } catch (error) {
+        if (process.env.PAPERCLIP_NATIVE_ISSUE_PRIVACY_DIAGNOSTICS === "1") {
+          const errorRecord = error && typeof error === "object" ? error as Record<string, unknown> : {};
+          const message = error instanceof Error ? error.message : "";
+          const code = typeof errorRecord.code === "string" && /^[a-z][a-z0-9_]{1,95}$/.test(errorRecord.code)
+            ? errorRecord.code
+            : /^[a-z][a-z0-9_]{1,95}$/.test(message) ? message : "unclassified_native_tool_error";
+          const status = typeof errorRecord.status === "number" && Number.isInteger(errorRecord.status)
+            ? errorRecord.status : typeof errorRecord.statusCode === "number" && Number.isInteger(errorRecord.statusCode)
+              ? errorRecord.statusCode : null;
+          const sourceFrames = error instanceof Error && typeof error.stack === "string"
+            ? error.stack.split("\n").slice(1).flatMap(frame => {
+              const match = /(?:^|\/)([^/]+\.ts):(\d+):(\d+)\)?$/.exec(frame.trim());
+              return match ? [{ file: match[1], line: Number(match[2]), column: Number(match[3]) }] : [];
+            }).slice(0, 4)
+            : [];
+          console.info("native-managed-mutation-failure", JSON.stringify({
+            operationId,
+            errorClass: error instanceof Error ? error.constructor.name : "NonError",
+            code,
+            status,
+            sourceFrames,
+          }));
+        }
         await options.onDefinitePreCommitFailure?.().catch(() => undefined);
         throw error;
       }

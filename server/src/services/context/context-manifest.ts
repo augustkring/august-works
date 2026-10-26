@@ -572,7 +572,12 @@ export function contextManifestService(db: Db) {
           if (!home || home.agentIdentityId !== delegated.homeAgentIdentityId || !request || request.issueId !== home.issueId ||
             hashContextPolicySnapshot(agentExecutionScopeSchema.parse(request.scope)) !== hashContextPolicySnapshot(scope))
             throw forbidden("Delegated Context requires its exact current home Run and claimed scope request");
-          if (delegated.homeActor.type !== "agent" || delegated.homeActor.source !== "agent_jwt" ||
+          // Native V5 fabric assembly uses a DB-derived source:none actor
+          // after loading the exact active Run and claimed Human scope request.
+          // Keep that credential-free identity distinct; the locked Run,
+          // accountable Human and scope-request checks above are its authority.
+          if (delegated.homeActor.type !== "agent" ||
+            !(delegated.homeActor.source === "agent_jwt" || delegated.homeActor.source === "none") ||
             delegated.homeActor.companyId !== delegated.homeCompanyId || delegated.homeActor.agentId !== delegated.homeAgentId ||
             delegated.homeActor.runId !== delegated.homeRunId || delegated.homeActor.onBehalfOfUserId !== delegated.responsibleUserId)
             throw forbidden("Delegated Context requires its original authenticated home actor");

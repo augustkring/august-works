@@ -3,7 +3,7 @@ import { enqueueSkillVersionFileErasure } from "../learning/skill-file-erasure.j
 import { and, eq, inArray, is, sql, type SQL } from "drizzle-orm";
 import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
 import * as schema from "@paperclipai/db";
-import { customerFeedback, supportCases, projectRoadmapProposals, causalClaims, businessScenarios, forecastSpecs, businessMetrics, businessMetricTargets, strategyExecutionLinks, processAnalysisDefinitions, decisionContexts, automationArtifacts, automationArtifactVersions, companies, companyDeletionOperations, orchestrationCompanyPurposeBudgets, orchestrationCompanyPurposeReservations, issues, memoryRecords, type Db } from "@paperclipai/db";
+import { customerFeedback, supportCases, projectRoadmapProposals, causalClaims, businessScenarios, forecastSpecs, businessMetrics, businessMetricTargets, strategyExecutionLinks, processAnalysisDefinitions, decisionContexts, automationArtifacts, automationArtifactVersions, companySkills, companySkillVersions, companies, companyDeletionOperations, orchestrationCompanyPurposeBudgets, orchestrationCompanyPurposeReservations, issues, memoryRecords, type Db } from "@paperclipai/db";
 import { conflict } from "../../errors.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
@@ -340,6 +340,22 @@ export async function purgeCompanyContent(
           }
           pending.delete(automationArtifacts);
           pending.delete(automationArtifactVersions);
+          continue;
+        }
+        // A Skill owns immutable version rows, and its current-version pointer
+        // points back into that same set. Use the Skill root's normal cascade
+        // only after every other scoped child has been removed; the file
+        // erasure outbox was already recorded above, so version guards and
+        // asynchronous filesystem cleanup remain in force.
+        const exactSkillCycle = pending.has(companySkills) && pending.has(companySkillVersions) &&
+          ![...pending].some((table) => table !== companySkills && table !== companySkillVersions &&
+            (edges.get(table)?.has(companySkills) || edges.get(table)?.has(companySkillVersions)));
+        if (exactSkillCycle) {
+          const scope = scopes.get(companySkills)!;
+          const roots = await tx.execute<{ id: string }>(sql`delete from ${companySkills} where ${scope} returning id`);
+          if (roots.length) deleted.push(getTableConfig(companySkills).name, getTableConfig(companySkillVersions).name);
+          pending.delete(companySkills);
+          pending.delete(companySkillVersions);
           continue;
         }
         throw conflict(

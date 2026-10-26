@@ -11,7 +11,8 @@ export class NativeRunnerOwnershipUnverifiedError extends Error {
   constructor(
     readonly reason:
       | "adopted_runner_authentication_timeout"
-      | "native_chat_workspace_scope_mismatch" = "adopted_runner_authentication_timeout",
+      | "native_chat_workspace_scope_mismatch"
+      | "native_chat_sandbox_workspace_root_mismatch" = "adopted_runner_authentication_timeout",
   ) {
     super(NATIVE_OWNERSHIP_UNVERIFIED_ERROR_CODE);
     this.name = "NativeRunnerOwnershipUnverifiedError";

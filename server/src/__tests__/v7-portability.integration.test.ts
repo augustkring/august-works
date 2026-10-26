@@ -5,7 +5,7 @@ import {
   createDb,
   memoryBindings,
   memoryRecords,
-  memoryEvidence,
+  memoryBindingTargets,
   companyMemberships,
   type Db,
 } from "@paperclipai/db";
@@ -15,11 +15,13 @@ import { cognitiveMemoryActor } from "../services/memory/cognitive-memory.js";
 import { derivedMemoryService } from "../services/memory/derived-memory.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
+import { issueService } from "../services/issues.js";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
+import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 const support = await getEmbeddedPostgresTestSupport();
 (support.supported ? describe : describe.skip)(
   "native owner V7 portability",
@@ -35,6 +37,7 @@ const support = await getEmbeddedPostgresTestSupport();
       await instanceSettingsService(db).getExperimental();
       await enableV5ForTest(db);
       f = await seedV5Presences(db);
+      const sourceActor = await seedCurrentHumanSourceActor(db, [f.home], f.userId);
       await instanceSettingsService(db).updateExperimental({
         enableCollectiveMemoryV1: true,
         enableContextEngineV1: true,
@@ -44,6 +47,17 @@ const support = await getEmbeddedPostgresTestSupport();
       });
       first = randomUUID();
       second = randomUUID();
+      const taskSources = new Map<string, Date>();
+      for (const [index, id] of [first, second].entries()) {
+        const task = await issueService(db).create(f.home, {
+          id,
+          title: `Human-reviewed portable source ${index + 1}`,
+          description: `Original Human task evidence ${index + 1}`,
+          createdByUserId: f.userId,
+          responsibleUserId: f.userId,
+        }, db, undefined, { manualInputActor: sourceActor, privacyActor: sourceActor, sourceAccessActor: sourceActor });
+        taskSources.set(id, task.updatedAt);
+      }
       const [binding] = await db
         .insert(memoryBindings)
         .values({
@@ -54,39 +68,47 @@ const support = await getEmbeddedPostgresTestSupport();
         })
         .returning();
       const roots = [first, second];
-      for (const id of roots) {
-        await db
-          .insert(memoryRecords)
-          .values({
-            id,
-            companyId: f.home,
-            bindingId: binding!.id,
-            providerKey: "local",
-            memoryType: "outcome",
-            scopeType: "company",
-            content: "Portable shared reviewed outcome",
-            reviewState: "accepted",
-            verificationState: "human_verified",
-            observedAt: new Date(),
-            createdByActorType: "user",
-            createdByActorId: f.userId,
-          });
-        await db
-          .insert(memoryEvidence)
-          .values({
-            companyId: f.home,
-            memoryRecordId: id,
+      await db.insert(memoryBindingTargets).values({ companyId: f.home, bindingId: binding!.id,
+        targetType: "company", targetId: f.home });
+      const memoryActor = { principal: { type: "user" as const, userId: f.userId }, authorizationActor: sourceActor };
+      for (const [index, id] of roots.entries()) {
+        const observedAt = new Date();
+        const sourceVersion = taskSources.get(id)!.toISOString();
+        const candidate = await memoryService(db).createCandidate(f.home, {
+          bindingId: binding!.id,
+          memoryType: "outcome",
+          scope: { type: "company", id: null },
+          subject: null,
+          ownerAgentId: null,
+          title: `Portable shared reviewed outcome ${index + 1}`,
+          content: `Portable shared reviewed outcome ${index + 1}`,
+          summary: "A current Human reviewed portable Task outcome",
+          sensitivity: "internal",
+          importance: 50,
+          confidenceScore: 0.8,
+          validFrom: null,
+          validUntil: null,
+          expiresAt: null,
+          observedAt: observedAt.toISOString(),
+          retentionPolicy: "standard",
+          createdByOperationId: randomUUID(),
+          metadata: {},
+          evidence: [{
             sourceClass: "task",
             sourceProvider: "august_works_tasks",
             sourceType: "issue",
             sourceRef: `issue://${id}`,
-            sourceVersion: "1",
-            observedAt: new Date(),
-            excerptHash: id === first ? "a".repeat(64) : "b".repeat(64),
-            citationJson: { label: "Reviewed outcome" },
+            sourceVersion,
+            sourceUpdatedAt: sourceVersion,
+            observedAt: observedAt.toISOString(),
+            excerptHash: nativeSha256({ taskId: id, updatedAt: sourceVersion, index }),
+            citation: { label: "Reviewed outcome" },
             trustLevel: "high",
-            supportsOrContradicts: "supports",
-          });
+            relation: "supports",
+          }],
+        }, memoryActor);
+        await memoryService(db).reviewCandidate(f.home, candidate.record.id,
+          { decision: "accept", reason: "The current Human reviewed this portable Task outcome" }, memoryActor);
       }
       await db
         .insert(memoryRecords)

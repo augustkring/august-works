@@ -2110,7 +2110,14 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     if (nativeDelegatedContextReadScopes.get(db as object)?.active)
       throw forbidden("Nested delegated Context source scopes are unavailable.");
     const scope = agentExecutionScopeSchema.parse(input.scope);
-    if (input.homeActor.type !== "agent" || input.homeActor.source !== "agent_jwt" || !input.homeActor.runId ||
+    // Authenticated Runner requests carry agent_jwt. The V5 fabric also uses
+    // a deliberately credential-free `source:none` actor after it has loaded
+    // the exact persisted run and claimed the current Human-authored scope
+    // request. Preserve that distinction: it is admitted only through the
+    // same run, responsible-Human, scope-request, and current membership pins
+    // below, and is never relabeled as a JWT.
+    if (input.homeActor.type !== "agent" ||
+      !(input.homeActor.source === "agent_jwt" || input.homeActor.source === "none") || !input.homeActor.runId ||
       !input.homeActor.agentId || !input.homeActor.onBehalfOfUserId || input.homeActor.companyId !== scope.primaryCompanyId ||
       input.homeActor.agentId !== scope.primaryAgentPresenceId)
       throw forbidden("Delegated Context reads require their original accountable home actor.");

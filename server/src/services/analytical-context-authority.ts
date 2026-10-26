@@ -1,12 +1,32 @@
 import {and,eq,inArray,or,sql} from "drizzle-orm";
 import { is } from "drizzle-orm";
 import { PgTransaction } from "drizzle-orm/pg-core";
-import {analyticalContextDependencies,analyticalContextRoots,contextManifestMemoryRoots,contextManifestItems,contextManifests,agentExecutionManifests,decisionContextVersions,decisionOutcomeReviewReceipts,processAnalysisVersions,issues,heartbeatRuns,workflowStepRuns,workflowRuns,companyMemberships,authUsers,agents,type Db} from "@paperclipai/db";
+import {analyticalContextDependencies,analyticalContextRoots,contextManifestMemoryRoots,contextManifestItems,contextManifests,memoryRecords,agentExecutionManifests,decisionContextVersions,decisionOutcomeReviewReceipts,processAnalysisVersions,issues,heartbeatRuns,workflowStepRuns,workflowRuns,companyMemberships,authUsers,agents,type Db} from "@paperclipai/db";
 import {analyticalContextAuthorityPinSchema,type AnalyticalContextAuthorityPin} from "@paperclipai/shared";
 import {z} from "zod";
 import {authorizationService,canActorReadHeartbeatRunPrivacy,canActorReadIssuePrivacy,issueReadSqlCondition,type AuthorizationActor} from "./authorization.js";
 import type {NativeReadScope} from "./analytical-reader.js";
 import {HttpError,conflict,forbidden,unprocessable} from "../errors.js";
+
+/** Analytical retention is a private copy owner, never an ordinary Memory
+ * candidate or a verified model output. Its exact owner still has to exist. */
+export async function assertAnalyticalRetentionRootOwnerCurrent(db:Db,companyId:string,actor:AuthorizationActor,rootId:string){
+ const {memoryPayloadVisible}=await import("./memory/memory-privacy.js");
+ const [owner]=await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId,companyId),
+  eq(memoryRecords.id,rootId),memoryPayloadVisible())).for("share");
+ const reader=actor.type==="board"?actor.userId:actor.onBehalfOfUserId;
+ if(!owner||!reader||owner.privateOwnerUserId!==reader||owner.scopeType!=="agent"||
+  !owner.ownerAgentId||owner.scopeId!==owner.ownerAgentId||actor.type==="agent"&&owner.ownerAgentId!==actor.agentId||
+  owner.createdByActorType!=="system"||owner.createdByActorId!=="native_analytical_retention"||
+  owner.content!=="Private analytical retention root; not a verified Task outcome"||
+  owner.providerKey!=="local"||owner.memoryType!=="observation"||owner.sensitivityLabel!=="restricted"||
+  owner.reviewState!=="rejected"||owner.verificationState!=="unverified"||!owner.sourceProvenanceQualified||
+  owner.payloadSourceSnapshotInvalidated||owner.revokedAt||owner.supersededByRecordId||owner.retentionState==="expired"||
+  owner.validUntil&&owner.validUntil.getTime()<=Date.now()||
+  !owner.expiresAt||owner.expiresAt.getTime()<=Date.now())
+  throw forbidden("The private analytical retention owner is unavailable");
+ return owner;
+}
 
 const pinsSchema=z.array(analyticalContextAuthorityPinSchema).min(1).max(32);
 type AnalyticalPayloadScope={issueId:string}|{runId:string};
@@ -342,7 +362,12 @@ async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string
    .where(and(eq(contextManifests.companyId,companyId),condition)).limit(257);
   if(memoryRoots.length>256)throw forbidden("The complete retained Context exceeds its source review budget");
   const {canActorReadMemorySources}=await import("./memory/memory-privacy.js");
+  const analyticalIds=new Set(roots.map(root=>root.id));
   for(const root of memoryRoots){
+   if(analyticalIds.has(root.id)){
+    await assertAnalyticalRetentionRootOwnerCurrent(tx,companyId,actor,root.id);
+    continue;
+   }
    if(performance.now()>deadline || !await canActorReadMemorySources(tx,companyId,actor,root.id))
     throw forbidden("Retained Context source access is unavailable");
   }
@@ -366,8 +391,10 @@ async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string
  const inspect=()=>is(db,PgTransaction)?inspectIn(db):db.transaction(rawTx=>inspectIn(rawTx as unknown as Db));
  try {
   if(actor.type==="agent" && hasRoots.length){
-   const {withNativeAnalyticalReader}=await import("./analytical-reader.js");
-   return await withNativeAnalyticalReader(db,companyId,actor,inspect,readScope);
+   const {withNativeAnalyticalReader,withNativeAnalyticalSourceReader}=await import("./analytical-reader.js");
+   return actor.source==="none"
+    ? await withNativeAnalyticalSourceReader(db,companyId,actor,inspect,readScope??"task")
+    : await withNativeAnalyticalReader(db,companyId,actor,inspect,readScope);
   }
   return await inspect();
  }catch(error){

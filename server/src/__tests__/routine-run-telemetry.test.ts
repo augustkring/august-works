@@ -3,7 +3,10 @@ import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   agents,
+  authUsers,
+  authSessions,
   companies,
+  companyMemberships,
   createDb,
   documentRevisions,
   documents,
@@ -11,6 +14,7 @@ import {
   heartbeatRuns,
   issues,
   projectWorkspaces,
+  principalPermissionGrants,
   projects,
   routineDocuments,
   routineRuns,
@@ -40,6 +44,7 @@ vi.mock("@paperclipai/shared/telemetry", async () => {
 });
 
 import { routineService } from "../services/routines.ts";
+import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -67,7 +72,11 @@ describeEmbeddedPostgres("routine run telemetry", () => {
     await db.delete(projectWorkspaces);
     await db.delete(projects);
     await db.delete(agents);
+    await db.delete(principalPermissionGrants);
+    await db.delete(companyMemberships);
+    await db.delete(authSessions);
     await db.delete(companies);
+    await db.delete(authUsers);
   });
 
   afterAll(async () => {
@@ -86,6 +95,7 @@ describeEmbeddedPostgres("routine run telemetry", () => {
       requireBoardApprovalForNewAgents: false,
       defaultResponsibleUserId: "responsible-user",
     });
+    const sourceActor = await seedCurrentHumanSourceActor(db, [companyId], "responsible-user");
 
     await db.insert(agents).values({
       id: agentId,
@@ -107,6 +117,7 @@ describeEmbeddedPostgres("routine run telemetry", () => {
     });
 
     const svc = routineService(db, {
+      sourceActor,
       heartbeat: {
         wakeup: async (wakeupAgentId, wakeupOpts) => {
           const issueId =
@@ -153,15 +164,15 @@ describeEmbeddedPostgres("routine run telemetry", () => {
       {},
     );
 
-    return { routine, svc };
+    return { routine, svc, sourceActor };
   }
 
   it("emits telemetry for routine runs from the service layer", async () => {
-    const { routine, svc } = await seedFixture();
+    const { routine, svc, sourceActor } = await seedFixture();
 
-    const run = await svc.runRoutine(routine.id, { source: "manual" });
+    const run = await svc.runRoutine(routine.id, { source: "manual" }, sourceActor);
 
-    expect(run.status).toBe("issue_created");
+    expect(run.status, run.failureReason ?? undefined).toBe("issue_created");
     expect(mockTrackRoutineRun).toHaveBeenCalledWith(mockTelemetryClient, {
       source: "manual",
       status: "issue_created",

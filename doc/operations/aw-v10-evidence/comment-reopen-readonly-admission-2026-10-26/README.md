@@ -1,0 +1,1 @@
+Current-source focused regression: 100/100 executed tests passed; numeric test exit 0. The source snapshot pins define the tested state. This is scoped verification and does not establish full V10 or CI qualification.

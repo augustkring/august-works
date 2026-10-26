@@ -5,16 +5,19 @@ import type {AnalyticalContextAuthorityPin} from "@paperclipai/shared";
 import {inspectAnalyticalContextPins} from "./analytical-context-authority.js";
 import type {AuthorizationActor} from "./authorization.js";
 import {assertAnalyticalReader,withNativeAnalyticalReader} from "./analytical-reader.js";
-import {nativeSha256} from "./native-runtime/canonical.js";
+import {canonicalNativeJson,nativeSha256} from "./native-runtime/canonical.js";
 import {lockAnalyticalCompany} from "./analytical-privacy.js";
 import {lockMemoryPrivacy,memoryDeletionKey,purgeMemoryRecords,captureMemorySources} from "./memory/memory-privacy.js";
+import type {NativePayloadSourceSet} from "./native-runtime/native-execution-input.js";
+import {contextManifestService,hashContextPolicySnapshot} from "./context/context-manifest.js";
 import {conflict,forbidden} from "../errors.js";
 
 /** Private in-process boundary: the callback must read the actual source owners
  * using this transaction and actor before returning their full manifest set.
  * No result crosses the tool boundary before its retention root is committed. */
 export async function withAnalyticalConversationRetention<T>(db:Db,companyId:string,actor:AuthorizationActor,
- read:(tx:Db)=>Promise<RetainedAnalyticalResult<T>>) {
+ read:(tx:Db)=>Promise<RetainedAnalyticalResult<T>>,
+ onNativeSourceCapture?:(source:NativePayloadSourceSet)=>void) {
  const deadline=performance.now()+30000;
  return withNativeAnalyticalReader(db,companyId,actor,()=>db.transaction(async rawTx=>{
   const tx=rawTx as unknown as Db;await tx.execute(sql`set local statement_timeout='8s'`);
@@ -22,9 +25,30 @@ export async function withAnalyticalConversationRetention<T>(db:Db,companyId:str
   if(actor.type!=="agent"||!actor.runId||!actor.agentId)throw forbidden("A native conversation is required for analytical retention");
   const [context]=await tx.select().from(contextManifests).where(and(eq(contextManifests.companyId,companyId),eq(contextManifests.runId,actor.runId),eq(contextManifests.agentId,actor.agentId),sql`${contextManifests.issueId}=(select h.native_issue_id from ${heartbeatRuns} h where h.company_id=${companyId}::uuid and h.id=${actor.runId}::uuid)`)).orderBy(sql`${contextManifests.createdAt} desc`,sql`${contextManifests.id} desc`).limit(1).for("share");
   if(!context?.issueId)throw conflict("The native conversation Context manifest is unavailable");
-  return retainAnalyticalContextResult(tx,companyId,actor,context.id,await read(tx),deadline);
+  const captured=await read(tx);
+  // A dispatched Context is immutable input. Retain a newly delivered result
+  // in its own original Context owner instead of changing the earlier hash.
+  if(onNativeSourceCapture){
+   const dedicated=await contextManifestService(tx).create({companyId,agentId:actor.agentId,runId:actor.runId,
+    issueId:context.issueId,projectId:null,responsibleUserId:actor.onBehalfOfUserId,
+    authorizationActor:actor,query:canonicalNativeJson(captured.result),
+    policySnapshot:NATIVE_ANALYTICAL_RESULT_POLICY,selected:[]});
+   const result=await retainAnalyticalContextResult(tx,companyId,actor,dedicated.manifest.id,captured,deadline);
+   const roots=await tx.select().from(contextManifestMemoryRoots).where(and(eq(contextManifestMemoryRoots.companyId,companyId),
+    eq(contextManifestMemoryRoots.manifestId,dedicated.manifest.id))).orderBy(contextManifestMemoryRoots.memoryRecordId);
+   const {nativeTemporalContextContentHash}=await import("./native-direct-input.js");
+   onNativeSourceCapture({policy:{issueIds:[context.issueId],projectIds:[],runIds:[],memoryIds:[],foundationRevisionIds:[]},
+    inputs:[{kind:"context",manifestId:dedicated.manifest.id,queryHash:dedicated.manifest.queryHash,
+     policySnapshotHash:dedicated.manifest.policySnapshotHash,
+     contentHash:nativeTemporalContextContentHash(dedicated.manifest,[],roots)}]});
+   return result;
+  }
+  return retainAnalyticalContextResult(tx,companyId,actor,context.id,captured,deadline);
  }),"conversation");
 }
+
+export const NATIVE_ANALYTICAL_RESULT_POLICY={kind:"native_analytical_result",version:1} as const;
+export const NATIVE_ANALYTICAL_RESULT_POLICY_HASH=hashContextPolicySnapshot(NATIVE_ANALYTICAL_RESULT_POLICY);
 
 type RetainedAnalyticalResult<T>={result:T;sourceManifestIds?:string[];retentionUntil:Date;authorityPins?:AnalyticalContextAuthorityPin[]};
 /** The caller holds company -> Memory and has read the actual source owners.

@@ -2432,7 +2432,8 @@ export function runtimeControlService(
             await assertNativePayloadSourceSetCurrent(tx, { companyId: claims.company_id, issueId: task.id,
               runId: source.run.id, actor: { type: "board", source: "session", userId: claims.responsible_user_id },
               policy: receipt.data.bootstrap.policy, inputs: receipt.data.bootstrap.inputs });
-            conversationCredentialValid = true;
+            conversationCredentialValid = conversationModelClaims.exp * 1000 > Date.now() &&
+              Date.parse(modelCredential.expiresAt) > Date.now() && Date.parse(request.deadlineAt) > Date.now();
           }
         }
         if (!modelCredential || !source.capability.modelBrokerProviderProfile || !exactProfileAndEnvironment ||

@@ -81,7 +81,10 @@ suite("Native V8 business event projection on migrated PostgreSQL", () => {
       for (const entry of entries) await copyFile(new URL(`${entry.tag}.sql`, migrationsRoot), join(directory, `${entry.tag}.sql`));
       await writeFile(join(directory, "meta/_journal.json"), JSON.stringify({ ...journal, entries }));
       await migrate(legacy, { migrationsFolder: directory });
-      await legacy.insert(companies).values({ id: companyId, name: "Legacy metadata software fixture", issuePrefix: randomUUID() });
+      // This database deliberately stops before the locale/timezone migration;
+      // use its real legacy column set instead of the current Drizzle schema.
+      await legacy.execute(sql`insert into companies (id, name, issue_prefix)
+        values (${companyId}::uuid, 'Legacy metadata software fixture', ${randomUUID()})`);
       const id = randomUUID();
       await legacy.execute(sql`insert into business_event_backfill_runs
         (id,company_id,projector_version,window_from,window_until,last_source_cursor_json,batch_limit,projected,unchanged,status)

@@ -1,3 +1,4 @@
+import type {NativePayloadSourceSet} from "./native-execution-input.js";
 import {z} from "zod";
 import {and,eq} from "drizzle-orm";
 import {analyticalLineageEdges,analyticalLineageManifests,businessMetricVersions,type Db} from "@paperclipai/db";
@@ -31,7 +32,7 @@ export async function nativeManagementToolsAvailable(db:Db,binding:{companyId:st
  catch(error){if(error instanceof HttpError&&[403,404].includes(error.status))return false;throw error;}
 }
 
-export async function executeManagementAnalyticalTool(db:Db,companyId:string,actor:AuthorizationActor,name:ManagementChatToolName,raw:unknown){
+export async function executeManagementAnalyticalTool(db:Db,companyId:string,actor:AuthorizationActor,name:ManagementChatToolName,raw:unknown,onNativeSourceCapture?:(source:NativePayloadSourceSet)=>void){
  if(actor.type!=="agent")throw forbidden("Management tools require their native bound conversation");
  // Parse before source access. Unknown identity/prose/value fields are rejected.
  managementChatToolSchemas[name].parse(raw);
@@ -114,5 +115,5 @@ export async function executeManagementAnalyticalTool(db:Db,companyId:string,act
   const payload={tool:name,citations:pins,result,executionAuthority:"read_only_or_advisory"};
   if(Buffer.byteLength(JSON.stringify(payload),"utf8")>256000)throw unprocessable("The complete management result exceeds its bounded output budget");
   return {result:payload,retentionUntil:new Date(Date.now()+300000),authorityPins:pins};
- });
+ },name==="query_business_metric"?onNativeSourceCapture:undefined);
 }

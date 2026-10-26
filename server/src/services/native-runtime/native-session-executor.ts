@@ -1473,7 +1473,7 @@ class SessionToolAuthorityEpoch {
     private readonly onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>,
     private readonly onNativeInputToolResult?: (source: NativeInputToolResultSource) => Promise<void>,
     private readonly onNativeToolCall?: (call: { tool: string; callId: string; turnId: string; argumentsHash: string; arguments: unknown }) => Promise<void>,
-    private readonly onManagedOpenCodeToolResult?: (call: { tool: "read_document" | "write_document" | "create_task" | "create_project" | "self_remember" | "read_context" | "call_api" | "get_task_context" | "get_task_history" | "read_chat_attachment"; callId: string; turnId: string; argumentsHash: string; result: unknown; contextRead?: NativeContextReadBinding; projectRead?: NativeProjectToolResultSource; projectCreate?: NativeManagedProjectCreateCapture }) => Promise<void>,
+    private readonly onManagedOpenCodeToolResult?: (call: { tool: "read_document" | "write_document" | "create_task" | "create_project" | "self_remember" | "read_context" | "call_api" | "get_task_context" | "get_task_history" | "read_chat_attachment" | "query_business_metric"; callId: string; turnId: string; argumentsHash: string; result: unknown; contextRead?: NativeContextReadBinding; projectRead?: NativeProjectToolResultSource; projectCreate?: NativeManagedProjectCreateCapture }) => Promise<void>,
     private readonly managedContextReadCapture?: { value: NativeContextReadBinding | null }) {
     this.runId = runId;
     this.#authority = authority;
@@ -1522,7 +1522,7 @@ class SessionToolAuthorityEpoch {
         }));
       const argumentsHash = nativeSha256(call.arguments);
       if (this.onManagedOpenCodeToolResult && (call.tool === "call_api" || call.tool === "create_project" || call.tool === "get_task_context" ||
-        call.tool === "get_task_history" || call.tool === "read_chat_attachment") && !call.turnId)
+        call.tool === "get_task_history" || call.tool === "read_chat_attachment" || call.tool === "query_business_metric") && !call.turnId)
         throw new Error("managed_opencode_tool_call_source_binding_invalid");
       if (call.turnId) {
         try {
@@ -1553,7 +1553,7 @@ class SessionToolAuthorityEpoch {
       }
       if (call.turnId && (call.tool === "read_document" || call.tool === "write_document" ||
         call.tool === "create_task" || call.tool === "self_remember" || call.tool === "read_context" ||
-        call.tool === "get_task_context" || call.tool === "get_task_history" || call.tool === "read_chat_attachment")) {
+        call.tool === "get_task_context" || call.tool === "get_task_history" || call.tool === "read_chat_attachment" || call.tool === "query_business_metric")) {
         if (toolResultDiagnostics && call.tool === "create_task")
           console.error("managed_create_task_result_callback_invoked", JSON.stringify({ turnIdPresent: true }));
         try {
@@ -6343,7 +6343,7 @@ export function assertNativeRunReadSourceHistoryQualified(profile: Record<string
   if (rawCaptures !== undefined && !Array.isArray(rawCaptures)) deny();
   for (const raw of (rawCaptures as unknown[] | undefined) ?? []) {
     const capture = record(raw);
-    const isReadTool = ["get_task_context", "get_task_history", "read_chat_attachment"].includes(String(capture.tool));
+    const isReadTool = ["get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric"].includes(String(capture.tool));
     if (isReadTool && capture.nativeReadResult !== true) deny();
     if (capture.nativeReadResult !== true) continue;
     const sourceResult = nativePayloadSourceInputSchema.safeParse(capture.source);
@@ -6356,7 +6356,7 @@ export function assertNativeRunReadSourceHistoryQualified(profile: Record<string
       sourceResult.data.callId !== capture.callId || sourceResult.data.toolName !== capture.tool ||
       sourceResult.data.contentHash !== capture.resultDigest || !sourcePolicy.success || !sourceInputs.success ||
       !capturedInputs.success || !isDeepStrictEqual(capturedInputs.data, sourceInputs.data) ||
-      !["get_task_context", "get_task_history", "read_chat_attachment"].includes(String(capture.tool)) ||
+      !["get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric"].includes(String(capture.tool)) ||
       typeof capture.turnId !== "string" || !/^[0-9a-f]{64}$/.test(String(capture.argumentsHash)) ||
       !receipt.data.additionalInputs.some(entry => entry.responsibleUserId === input.responsibleUserId &&
         isDeepStrictEqual(entry.policy, sourcePolicy.data) &&
@@ -7972,7 +7972,7 @@ export async function recordNativeToolCallDispatchAssociation(input: Parameters<
 async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
   agentId: string; turnId: string; callId: string; argumentsHash: string;
   tool: "read_document" | "write_document" | "create_task" | "create_project" | "self_remember" | "read_context" | "call_api" |
-    "get_task_context" | "get_task_history" | "read_chat_attachment"; result: unknown;
+    "get_task_context" | "get_task_history" | "read_chat_attachment" | "query_business_metric"; result: unknown;
   contextRead?: NativeContextReadBinding;
   projectRead?: NativeProjectToolResultSource;
   projectCreate?: NativeManagedProjectCreateCapture;
@@ -8017,9 +8017,9 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         value.argumentsHash === input.argumentsHash) : [];
       const invocationToolName = input.tool === "self_remember" ? "paperclip-self:remember" : input.tool;
       const nativeReadResultTool = input.tool === "get_task_context" || input.tool === "get_task_history" ||
-        input.tool === "read_chat_attachment";
+        input.tool === "read_chat_attachment" || input.tool === "query_business_metric";
       const nativeReadTool = input.tool === "get_task_context" || input.tool === "get_task_history" ||
-        input.tool === "read_chat_attachment" ? input.tool : null;
+        (input.tool === "read_chat_attachment" || input.tool === "query_business_metric") ? input.tool : null;
       const nullInvocationTool = input.tool === "call_api" || input.tool === "create_project" || nativeReadResultTool;
       const [invocation] = nullInvocationTool ? [] : await tx.select().from(toolInvocations).where(and(
         eq(toolInvocations.companyId, input.companyId), eq(toolInvocations.runId, input.runId),
@@ -8065,7 +8065,7 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         const actor: AuthorizationActor = { type: "agent", source: "none", companyId: input.companyId,
           agentId: input.agentId, runId: input.runId, onBehalfOfUserId: run?.responsibleUserId ?? undefined };
         await assertNativeReadResultSourceSetOwnersCurrent(tx as unknown as Db, { companyId: input.companyId,
-          issueId: input.issueId, runId: input.runId, actor, tool: nativeReadTool!, sourceSet: { policy: sourcePolicy.data,
+          issueId: input.issueId, runId: input.runId, actor, tool: nativeReadTool!, resultDigest: contentHash, sourceSet: { policy: sourcePolicy.data,
             inputs: sourceInputs.data } });
         nativeReadCapture = { source: sourceResult.data, sourceSet: { policy: sourcePolicy.data, inputs: sourceInputs.data },
           additionalInput: entries[0]! };
@@ -8702,7 +8702,7 @@ export async function recordNativeInputToolResultIntent(input: Parameters<typeof
   try {
     const capture = input.capture;
     const readTool = capture.tool === "get_task_context" || capture.tool === "get_task_history" ||
-      capture.tool === "read_chat_attachment" ? capture.tool : null;
+      (capture.tool === "read_chat_attachment" || capture.tool === "query_business_metric") ? capture.tool : null;
     const supportedNativeRead = readTool !== null;
     if (!Number.isSafeInteger(input.eventSeq) || input.eventSeq < 0 || !supportedNativeRead ||
       !/^[\x21-\x7e]{1,240}$/.test(capture.callId) || !/^[\x21-\x7e]{1,240}$/.test(capture.tool) ||
@@ -8774,7 +8774,7 @@ export async function recordNativeInputToolResultIntent(input: Parameters<typeof
             // transaction locks used to append the additional-input receipt.
             await assertNativeReadResultSourceSetOwnersCurrent(tx as unknown as Db, { companyId: input.companyId,
               issueId: input.issueId, runId: input.runId,
-              tool: readTool!,
+              tool: readTool!, resultDigest: capture.resultDigest,
               actor: { type: "agent", source: "none", companyId: input.companyId, agentId: input.agentId,
                 runId: input.runId, onBehalfOfUserId: run.responsibleUserId },
               sourceSet: qualifiedSourceSet });
@@ -12500,7 +12500,7 @@ export async function createRunnerdBackend(input: {
   onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>;
   onNativeInputToolResult?: (source: NativeInputToolResultSource) => Promise<void>;
   onNativeToolCall?: (call: { tool: string; callId: string; turnId: string; argumentsHash: string; arguments: unknown }) => Promise<void>;
-  onManagedOpenCodeToolResult?: (call: { tool: "read_document" | "write_document" | "create_task" | "create_project" | "self_remember" | "read_context" | "call_api" | "get_task_context" | "get_task_history" | "read_chat_attachment"; callId: string; turnId: string; argumentsHash: string; result: unknown; contextRead?: NativeContextReadBinding; projectRead?: NativeProjectToolResultSource; projectCreate?: NativeManagedProjectCreateCapture }) => Promise<void>;
+  onManagedOpenCodeToolResult?: (call: { tool: "read_document" | "write_document" | "create_task" | "create_project" | "self_remember" | "read_context" | "call_api" | "get_task_context" | "get_task_history" | "read_chat_attachment" | "query_business_metric"; callId: string; turnId: string; argumentsHash: string; result: unknown; contextRead?: NativeContextReadBinding; projectRead?: NativeProjectToolResultSource; projectCreate?: NativeManagedProjectCreateCapture }) => Promise<void>;
   onLog?: (stream: "stdout" | "stderr", chunk: string) => Promise<void>;
   stopTaskForReassignment?: (target: { companyId: string; issueId: string; agentId: string; runId: string | null }) => Promise<void>;
   enqueueWakeup?: (
@@ -12707,7 +12707,7 @@ async function createRunnerdBackendWithinSessionClaim(
   let managedOpenCodeDynamicTools: Readonly<Record<string, unknown>>[] | null = null;
   if (managedOpenCode) {
     const allowedNames = new Set(["read_document", "write_document", "create_task", "create_project", "self_remember", "read_context",
-      "call_api", "get_task_context", "get_task_history", "read_chat_attachment", "paperclip_finish", "paperclip_block"]);
+      "call_api", "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric", "paperclip_finish", "paperclip_block"]);
     const schemas: Array<Record<string, unknown>> = dynamicTools.flatMap((raw): Array<Record<string, unknown>> => {
       if (typeof raw.name !== "string") return [];
       let name = raw.name;
@@ -12782,7 +12782,7 @@ async function createRunnerdBackendWithinSessionClaim(
     // pass only Paperclip CRUD tools to the bridge to avoid duplicate names.
     managedOpenCodeDynamicTools = schemas.filter((tool) =>
       ["read_document", "write_document", "create_task", "create_project", "self_remember", "read_context", "call_api",
-        "get_task_context", "get_task_history", "read_chat_attachment"].includes(String(tool.name)));
+        "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric"].includes(String(tool.name)));
     const resumeToolNames = managedOpenCodeDynamicTools.map((tool) => String(tool.name));
     if (new Set(resumeToolNames).size !== resumeToolNames.length ||
       !["read_document", "write_document", "create_task"].every(name => resumeToolNames.includes(name)) ||
@@ -12790,7 +12790,7 @@ async function createRunnerdBackendWithinSessionClaim(
       (input.nativeModelOutputCapture && !resumeToolNames.includes("self_remember")) ||
       (input.nativeModelOutputCapture && !resumeToolNames.includes("read_context")) ||
       resumeToolNames.some(name => !["read_document", "write_document", "create_task", "create_project", "self_remember", "read_context", "call_api",
-        "get_task_context", "get_task_history", "read_chat_attachment"].includes(name)))
+        "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric"].includes(name)))
       throw new Error("managed_opencode_resume_tool_catalog_invalid");
     const taskEnvelope = createCodexTaskEnvelope({
       objective: input.execution.completionContract.contract.objective,

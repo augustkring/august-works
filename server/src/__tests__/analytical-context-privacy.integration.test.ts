@@ -42,6 +42,7 @@ import {businessMetricService} from "../services/business-metrics/service.js";
 import {aiGovernanceService} from "../services/ai-governance/governance-service.js";
 import {contextManifestService} from "../services/context/context-manifest.js";
 import {assertAnalyticalContextPayloadAccess,assertNativeAnalyticalRunPayloadAccess} from "../services/analytical-context-authority.js";
+import type {NativePayloadSourceSet} from "../services/native-runtime/native-execution-input.js";
 import {withAnalyticalConversationRetention} from "../services/analytical-context-privacy.js";
 import {heartbeatMemoryPayloadRetained,reapplyMemoryDeletionMarkers} from "../services/memory/memory-privacy.js";
 import {purgeCompanyContent} from "../services/saas/company-purge.js";
@@ -81,12 +82,39 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
   const policy=(await aiGovernanceService(db).obligation(board,companyId,analyticalPurpose())).id,owner=businessMetricService(db),created=await owner.create(companyId,board,{key:"native",definition:{...metricDefinition(policy),ownerUserId:userId,...(count?{valueType:"count" as const,unit:"objects",calculation:{kind:"native_count" as const,population:{entity:"issue" as const,statuses:["done" as const],projectId:null}}}:{})}});await owner.publish(companyId,board,created.metric.id,{expectedRevision:1,versionId:created.version.id});
   const sourceId=randomUUID();await db.insert(issues).values({id:sourceId,companyId,title:"Synthetic source task",status:"done",responsibleUserId:userId});
   const now=new Date(),query={metricId:created.metric.id,versionId:created.version.id,from:new Date(now.getTime()-86400000).toISOString(),until:new Date(now.getTime()+1000).toISOString(),dimensions:[],maxRows:100};
-  async function capture(){return withAnalyticalConversationRetention(db,companyId,actor(),async tx=>{const result=await businessMetricService(tx).query(companyId,actor(),query);return {result,sourceManifestIds:[result.lineageManifestId],retentionUntil:new Date(result.expiresAt)};});}
+  async function capture(onCapture?:(source:NativePayloadSourceSet)=>void){return withAnalyticalConversationRetention(db,companyId,actor(),async tx=>{const result=await businessMetricService(tx).query(companyId,actor(),query);return {result,sourceManifestIds:[result.lineageManifestId],retentionUntil:new Date(result.expiresAt)};},onCapture);}
   return {sourceId,capture,query};
  }
  async function copied(){await db.update(heartbeatRuns).set({contextSnapshot:{sensitive:"Synthetic analytical context"},resultJson:{body:"Synthetic analytical result"},stdoutExcerpt:"Synthetic analytical output"}).where(eq(heartbeatRuns.id,runId));await db.insert(issueComments).values({companyId,issueId,body:"Synthetic analytical answer"});}
  async function root(){return (await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId)))[0]!;}
  async function erased(){expect(await heartbeatMemoryPayloadRetained(db,companyId,runId)).toBe(false);const [run]=await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,runId));expect(run!.resultJson).toBeNull();expect(run!.contextSnapshot).toEqual({});expect((await db.select().from(issueComments).where(eq(issueComments.issueId,issueId))).every(c=>c.body==="Source payload erased")).toBe(true);}
+
+ it("retains a managed metric result in a separate immutable Context and revokes its original sources",async()=>{
+  const f=await fixture();
+  const original=await db.select().from(contextManifests).where(eq(contextManifests.runId,runId));
+  expect(original).toHaveLength(1);
+  const captures:NativePayloadSourceSet[]=[];
+  const result=await f.capture(source=>captures.push(source));
+  expect(captures).toHaveLength(1);
+  expect(captures[0]!.policy).toEqual({issueIds:[issueId],projectIds:[],runIds:[],memoryIds:[],foundationRevisionIds:[]});
+  expect(captures[0]!.inputs).toEqual([expect.objectContaining({kind:"context",queryHash:nativeSha256(result)})]);
+  const source=captures[0]!.inputs[0]!;
+  if(source.kind!=="context")throw new Error("Expected the actual retained result Context");
+  expect(source.manifestId).not.toBe(original[0]!.id);
+  expect(await db.select().from(contextManifestMemoryRoots).where(eq(contextManifestMemoryRoots.manifestId,original[0]!.id))).toEqual([]);
+  expect(await db.select().from(contextManifestMemoryRoots).where(eq(contextManifestMemoryRoots.manifestId,source.manifestId))).toHaveLength(1);
+  const {assertAnalyticalRetentionRootOwnerCurrent}=await import("../services/analytical-context-authority.js");
+  const retained=await root();
+  await expect(assertAnalyticalRetentionRootOwnerCurrent(db,companyId,actor(),retained.memoryRecordId)).resolves.toBeDefined();
+  await expect(assertAnalyticalRetentionRootOwnerCurrent(db,companyId,{...actor(),onBehalfOfUserId:randomUUID()},retained.memoryRecordId)).rejects.toMatchObject({status:403});
+  await expect(assertAnalyticalContextPayloadAccess(db,companyId,reader,{runId})).resolves.toBeUndefined();
+  const {withNativeAnalyticalSourceReader}=await import("../services/analytical-reader.js");
+  const sourceActor={...actor(),source:"none" as const};
+  await expect(withNativeAnalyticalSourceReader(db,companyId,{...sourceActor,runId:randomUUID()},async()=>true)).rejects.toMatchObject({status:403});
+  await expect(withNativeAnalyticalSourceReader(db,companyId,{...sourceActor,onBehalfOfUserId:randomUUID()},async()=>true)).rejects.toMatchObject({status:403});
+  await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,f.sourceId));
+  await expect(assertAnalyticalContextPayloadAccess(db,companyId,reader,{runId})).rejects.toMatchObject({status:403});
+ });
 
  it("withdraws routine execution payloads when an actual analytical authoring input becomes hidden",async()=>{
   const f=await fixture();await f.capture();

@@ -4282,14 +4282,12 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
   it.each(["cancelled", "paused", "blocked", "closed-workspace"] as const)("does not bypass %s task guards from the Slack Board composer or its outbox", async (guard) => {
     const { issueTreeHolds, issueRelations, executionWorkspaces, projects } = await import("@paperclipai/db");
     const fixture = await seedCompany();
-    const { callbacks, endpoint, service, wakeup, runtime } = await configuredSlackEndpoint(fixture);
+    const { callbacks, endpoint, service, wakeup, runtime } = await configuredSlackEndpoint(fixture, { linkedBoardUser: true });
     const channel = makeThread({ channelId: "CGUARD", id: "slack:CGUARD:8100.1", name: "guard" });
     await deliverMessage({ callbacks, endpointId: endpoint.id, thread: channel.thread,
-      message: makeMessage({ id: "8100.1", text: "@maya start here", mentioned: true }), trigger: "mention" });
+      message: makeMessage({ id: "8100.1", text: "@maya start here", mentioned: true, userId: "UBOARD" }), trigger: "mention" });
     await db.update(chatEndpoints).set({ status: "active" }).where(eq(chatEndpoints.id, endpoint.id));
     const [conversation] = await service.listConversations(endpoint.id);
-    const [principal] = await db.insert(chatExternalPrincipals).values({ companyId: fixture.companyId, provider: "slack", providerAccountId: "T-PAPERCLIP", externalId: "UBOARD" }).returning();
-    await db.insert(chatIdentityLinks).values({ companyId: fixture.companyId, endpointId: endpoint.id, principalId: principal.id, paperclipUserId: "owner-user", status: "linked", confirmedAt: new Date() });
     runtime.endpoints.get(endpoint.id)!.posts.length = 0;
     wakeup.mockClear();
     wakeup.mockRejectedValueOnce(new Error("scheduler unavailable"));
@@ -4365,7 +4363,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     const { callbacks, endpoint, service, wakeup, runtime } = await configuredSlackEndpoint(fixture, { linkedBoardUser: true });
     const channel = makeThread({ channelId: "CPOOL", id: "slack:CPOOL:8300.1", name: "pool" });
     await deliverMessage({ callbacks, endpointId: endpoint.id, thread: channel.thread,
-      message: makeMessage({ id: "8300.1", text: "@maya start here", mentioned: true }), trigger: "mention" });
+      message: makeMessage({ id: "8300.1", text: "@maya start here", mentioned: true, userId: "UBOARD" }), trigger: "mention" });
     await db.update(chatEndpoints).set({ status: "active" }).where(eq(chatEndpoints.id, endpoint.id));
     const [conversation] = await service.listConversations(endpoint.id);
     runtime.endpoints.get(endpoint.id)!.posts.length = 0;
@@ -42169,6 +42167,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
         id: "4400.1",
         text: "@maya start a board-send task",
         mentioned: true,
+        userId: "UBOARD",
       }),
       trigger: "mention",
     });
@@ -60277,6 +60276,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
         id: "7125.1",
         text: "@maya send a reply for the preflight race",
         mentioned: true,
+        userId: "UBOARD",
       }),
       trigger: "mention",
     });
@@ -61101,6 +61101,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
         id: "7135.1",
         text: "@maya send a reply for the link lock race",
         mentioned: true,
+        userId: "UBOARD",
       }),
       trigger: "mention",
     });
@@ -61464,6 +61465,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
         id: "7145.1",
         text: "@maya prepare a reply before reach changes",
         mentioned: true,
+        userId: "UBOARD",
       }),
       trigger: "mention",
     });
@@ -66684,10 +66686,11 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     expect(committed.providerRuntime.slackFilePublicationAttempts).toBe(2);
   });
 
-  async function deferredChatQueueFixture(admissionFails = false) {
+  async function deferredChatQueueFixture(admissionFails = false, linkedBoardUser = false) {
     const fixture = await seedCompany();
     let ownerId: string | null = null;
     const configured = await configuredSlackEndpoint(fixture, {
+      linkedBoardUser,
       wakeup: async (agentId, opts) => {
         if (admissionFails)
           throw new Error("PRIVATE admission failure token=do-not-publish");
@@ -66755,6 +66758,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
           id,
           text: "@maya exact queued request",
           mentioned: id === "1999000.1",
+          ...(linkedBoardUser ? { userId: "UBOARD" } : {}),
         }),
         trigger: id === "1999000.1" ? "mention" : "subscribed_message",
       });
@@ -67265,7 +67269,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
   });
 
   it("retires only the removed source's pre-run FIFO notice after its surviving batch promotes", async () => {
-    const context = await deferredChatQueueFixture();
+    const context = await deferredChatQueueFixture(false, true);
     try {
       await context.service.processPendingPublications();
       const [queued] = await db
@@ -70996,6 +71000,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
             id: provider === "slack" ? "9900.1" : "99001",
             text: "@maya begin the long Board publication fixture",
             mentioned: true,
+            ...(provider === "slack" ? { userId: "UBOARD" } : {}),
           }),
           trigger: "mention",
         });

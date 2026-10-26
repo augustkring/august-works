@@ -16,6 +16,7 @@ import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
 import { workflowService } from "../services/workflows/workflow-service.js";
 import { assertRoutineSourceAccess } from "../services/routine-source-authority.js";
 import { companyPortabilityService } from "../services/company-portability.js";
+import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 
 describe("Conversation routine drafts use the Original owner without execution authority", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>;
@@ -31,6 +32,7 @@ describe("Conversation routine drafts use the Original owner without execution a
   beforeEach(async () => {
     await instanceSettingsService(db).updateExperimental({ experience_projection_v9: true, ambient_commands_v9: true });
     f = await seedV5Presences(db);
+    f = { ...f, actor: await seedCurrentHumanSourceActor(db, [f.home], f.userId) };
     await db.insert(principalPermissionGrants).values({ companyId: f.home, principalType: "agent", principalId: f.presence.id,
       permissionKey: "tasks:assign" }).onConflictDoNothing();
     const conversation = await issueService(db).create(f.home, { title: "Owned routine authoring conversation", assigneeAgentId: f.presence.id,
@@ -275,8 +277,12 @@ describe("Conversation routine drafts use the Original owner without execution a
   });
   it.each(["native", "legacy"] as const)("inherits source erasure in actual %s routine execution tasks and runs", async mode => {
     const saved = await create();
+    const [routineExecution] = await db.insert(routineRuns).values({ companyId: f.home, routineId: saved.routineId,
+      routineRevisionId: saved.currentRevisionId, source: "api", status: "received", responsibleUserId: f.userId }).returning();
     const task = await issueService(db).create(f.home, { title: "PRIVATE execution title", description: "PRIVATE execution body",
-      originKind: "routine_execution", originId: saved.routineId, assigneeAgentId: f.presence.id });
+      originKind: "routine_execution", originId: saved.routineId, originRunId: routineExecution!.id,
+      assigneeAgentId: f.presence.id, createdByUserId: f.userId, responsibleUserId: f.userId,
+      actorResponsibleUserId: f.userId, trustExplicitResponsibleUserId: true }, db, undefined, { privacyActor: f.actor });
     const [execution] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id,
       responsibleUserId: f.userId, status: "queued", runtimeMode: mode, nativeIssueId: mode === "native" ? task.id : null,
       contextSnapshot: { issueId: task.id, prompt: "PRIVATE execution context" }, resultJson: { body: "PRIVATE execution result" } }).returning();
@@ -293,8 +299,12 @@ describe("Conversation routine drafts use the Original owner without execution a
   });
   it("scrubs the routine execution task before any heartbeat has been created", async () => {
     const saved = await create();
+    const [routineExecution] = await db.insert(routineRuns).values({ companyId: f.home, routineId: saved.routineId,
+      routineRevisionId: saved.currentRevisionId, source: "api", status: "received", responsibleUserId: f.userId }).returning();
     const task = await issueService(db).create(f.home, { title: "PRIVATE no-run execution", description: "PRIVATE copied routine",
-      originKind: "routine_execution", originId: saved.routineId });
+      originKind: "routine_execution", originId: saved.routineId, originRunId: routineExecution!.id,
+      createdByUserId: f.userId, responsibleUserId: f.userId, actorResponsibleUserId: f.userId,
+      trustExplicitResponsibleUserId: true }, db, undefined, { privacyActor: f.actor });
     await db.transaction(async rawTx => {
       const tx = rawTx as unknown as typeof db; await lockMemoryPrivacy(tx, f.home);
       await tx.insert(memoryDeletionMarkers).values({ companyId: f.home, kind: "source", key: `memory-run-source-erasure:v1:${runId}` });
