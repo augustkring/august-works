@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
-import { and, eq, gte, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, is, isNull, sql } from "drizzle-orm";
+import { PgTransaction } from "drizzle-orm/pg-core";
 import { agents, issues, projects, issueComments, documentRevisions, issueDocuments, issueAttachments, assets,
   contextManifests, contextManifestItems, contextManifestMemoryRoots, accountDeletionOperations, memoryRecords,
   memoryDeletionMarkers,
@@ -34,6 +35,10 @@ function nativeSourceReadWork(scope: NativeSourceReadScope) {
   if (++scope.work > 512) throw forbidden("The Native source graph exceeds its total-work bound");
 }
 function nativeSourceReadScope(): NativeSourceReadScope { return { active: new Set(), complete: new Set(), work: 0 }; }
+function inNativeSourceReadTransaction<T>(db: Db | Transaction, read: (tx: Db | Transaction) => Promise<T>): Promise<T> {
+  if (is(db, PgTransaction)) return read(db);
+  return db.transaction(tx => read(tx as unknown as Db));
+}
 async function nativeSourceReaderHasCompanyAccess(db: Db | Transaction, companyId: string, actor: AuthorizationActor) {
   // Agent identities bind one company. Human readers use current memberships,
   // rather than the Agent-only companyId field on the authorization actor.
@@ -164,9 +169,12 @@ export interface NativeIssueEffectPrefix {
  * run receipt source set. The caller never supplies this object. */
 export async function assertNativeModelOutputCaptureCurrent(db: Db | Transaction, companyId: string, issueId: string,
   capture: NativeModelOutputCapture, expectedToolName: string, currentReader?: AuthorizationActor): Promise<void> {
-  if (currentReader && !await nativeSourceReaderHasCompanyAccess(db, companyId, currentReader))
-    throw forbidden("The Native output reader is unavailable");
-  await assertNativeModelOutputCaptureCurrentInScope(db, companyId, issueId, capture, expectedToolName, nativeSourceReadScope(), 0, currentReader);
+  return inNativeSourceReadTransaction(db, async tx => {
+    if (currentReader && !await nativeSourceReaderHasCompanyAccess(tx, companyId, currentReader))
+      throw forbidden("The Native output reader is unavailable");
+    await assertNativeModelOutputCaptureCurrentInScope(tx, companyId, issueId, capture, expectedToolName,
+      nativeSourceReadScope(), 0, currentReader);
+  });
 }
 
 async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction, companyId: string, issueId: string,
@@ -590,7 +598,7 @@ export async function assertNativePayloadSourceSetCurrent(db: Db | Transaction, 
   companyId: string; issueId: string; runId: string; actor: AuthorizationActor;
   policy: NativePayloadSourcePolicy; inputs: NativePayloadSourceInput[];
 }): Promise<void> {
-  return assertNativePayloadSourceSetCurrentInScope(db, input, nativeSourceReadScope());
+  return inNativeSourceReadTransaction(db, tx => assertNativePayloadSourceSetCurrentInScope(tx, input, nativeSourceReadScope()));
 }
 
 async function assertNativePayloadSourceSetCurrentInScope(db: Db | Transaction, input: {
@@ -734,8 +742,8 @@ async function assertNativePayloadSourceSetCurrentInScope(db: Db | Transaction, 
       continue;
     }
     if (source.kind === "document_revision" && source.issueId) {
-      await assertNativeDocumentRevisionCurrentSourceAccess(db as Db, { companyId: input.companyId, issueId: source.issueId,
-        revisionId: source.revisionId, actor: input.actor, requireLatest: false });
+      await assertNativeDocumentRevisionCurrentSourceAccessInScope(db as Db, { companyId: input.companyId, issueId: source.issueId,
+        revisionId: source.revisionId, actor: input.actor, requireLatest: false }, scope, 0);
       continue;
     }
     if (source.kind === "memory") {
@@ -913,8 +921,8 @@ async function assertNativePayloadSourceSetCurrentInScope(db: Db | Transaction, 
       if (documentRevision) {
         if (typeof documentRevision.issueId !== "string" || typeof documentRevision.revisionId !== "string")
           throw forbidden("A Native historical document tool result changed");
-        await assertNativeDocumentRevisionCurrentSourceAccess(db as Db, { companyId: input.companyId,
-          issueId: documentRevision.issueId, revisionId: documentRevision.revisionId, actor: input.actor, requireLatest: false });
+        await assertNativeDocumentRevisionCurrentSourceAccessInScope(db as Db, { companyId: input.companyId,
+          issueId: documentRevision.issueId, revisionId: documentRevision.revisionId, actor: input.actor, requireLatest: false }, scope, 0);
       }
       continue;
     }
@@ -1003,8 +1011,8 @@ async function assertNativePayloadSourceSetCurrentInScope(db: Db | Transaction, 
     }
     if (source.kind === "document_revision") {
       if (!source.issueId) throw forbidden("A Native document source is unavailable");
-      await assertNativeDocumentRevisionCurrentSourceAccess(db as Db, { companyId: input.companyId, issueId: source.issueId,
-        revisionId: source.revisionId, actor: input.actor, requireLatest: false });
+      await assertNativeDocumentRevisionCurrentSourceAccessInScope(db as Db, { companyId: input.companyId, issueId: source.issueId,
+        revisionId: source.revisionId, actor: input.actor, requireLatest: false }, scope, 0);
       continue;
     }
     throw forbidden("A Native source family needs a completed original result receipt");
@@ -1260,7 +1268,7 @@ export async function assertNativeManagedConsumedSourceSetCurrent(db: Db | Trans
   companyId: string; issueId: string; runId: string; actor: AuthorizationActor;
   components: NativeConsumedSourceComponent[]; sourceSet: NativePayloadSourceSet;
 }): Promise<void> {
-  await assertNativeManagedConsumedSourceSetCurrentInScope(db, input, nativeSourceReadScope());
+  return inNativeSourceReadTransaction(db, tx => assertNativeManagedConsumedSourceSetCurrentInScope(tx, input, nativeSourceReadScope()));
 }
 
 export interface NativeTemporalContextCapture {
@@ -1288,7 +1296,7 @@ export async function assertNativeContextReadSourceSetCurrent(db: Db | Transacti
   sourceSet: NativeContextReadBinding["sourceSet"];
   manifestIds: readonly { companyId: string; contextManifestId: string }[];
 }): Promise<void> {
-  return assertNativeContextReadSourceSetCurrentInScope(db, input, nativeSourceReadScope());
+  return inNativeSourceReadTransaction(db, tx => assertNativeContextReadSourceSetCurrentInScope(tx, input, nativeSourceReadScope()));
 }
 
 async function assertNativeContextReadSourceSetCurrentInScope(db: Db | Transaction, input: {
@@ -1568,33 +1576,36 @@ export async function assertNativeTemporalContextInputsCurrent(db: Db, companyId
 export async function assertNativeDocumentRevisionCurrentSourceAccess(db: Db, input: {
   companyId: string; issueId: string; revisionId: string; actor: AuthorizationActor; requireLatest?: boolean;
 }): Promise<void> {
-  await assertNativeDocumentRevisionCurrentSourceAccessInScope(db, input, nativeSourceReadScope(), 0);
+  return inNativeSourceReadTransaction(db, tx => assertNativeDocumentRevisionCurrentSourceAccessInScope(tx as Db, input,
+    nativeSourceReadScope(), 0));
 }
 
 async function assertNativeDocumentRevisionCurrentSourceAccessInScope(db: Db, input: {
   companyId: string; issueId: string; revisionId: string; actor: AuthorizationActor; requireLatest?: boolean;
 }, scope: NativeSourceReadScope, depth: number): Promise<void> {
-  const visitKey = `${input.companyId}:${input.revisionId}`;
-  if (depth > 8 || scope.active.has(visitKey)) throw forbidden("Native document source chain exceeds its bound");
-  if (scope.complete.has(visitKey)) return;
+  const activeKey = `${input.companyId}:${input.revisionId}`;
+  const completeKey = nativeSha256({ companyId: input.companyId, issueId: input.issueId, revisionId: input.revisionId,
+    requireLatest: input.requireLatest !== false, actor: input.actor });
+  if (depth > 8 || scope.active.has(activeKey)) throw forbidden("Native document source chain exceeds its bound");
+  if (scope.complete.has(completeKey)) return;
   nativeSourceReadWork(scope);
-  scope.active.add(visitKey);
+  scope.active.add(activeKey);
   const [selected] = await db.select({ revision: documentRevisions, latestRevisionId: documents.latestRevisionId,
     documentId: documents.id, issueId: issueDocuments.issueId }).from(documentRevisions)
     .innerJoin(documents, and(eq(documents.companyId, documentRevisions.companyId), eq(documents.id, documentRevisions.documentId)))
     .innerJoin(issueDocuments, and(eq(issueDocuments.companyId, documents.companyId), eq(issueDocuments.documentId, documents.id)))
     .where(and(eq(documentRevisions.companyId, input.companyId), eq(documentRevisions.id, input.revisionId),
-      eq(issueDocuments.issueId, input.issueId)));
+      eq(issueDocuments.issueId, input.issueId))).for("share", { of: [documentRevisions, documents, issueDocuments] });
   if (!selected || input.requireLatest !== false && selected.latestRevisionId !== input.revisionId)
     throw forbidden("The selected Native document revision is unavailable");
   const [parentTask] = await db.select({ id: issues.id, companyId: issues.companyId }).from(issues).where(and(
-    eq(issues.companyId, input.companyId), eq(issues.id, selected.issueId)));
+    eq(issues.companyId, input.companyId), eq(issues.id, selected.issueId))).for("share");
   if (!parentTask || !await canActorReadIssuePrivacy(db, input.actor, parentTask))
     throw forbidden("The selected Native document Task is unavailable");
   await assertAnalyticalContextPayloadAccess(db, input.companyId, input.actor, { issueId: selected.issueId });
   const revision = selected.revision;
   if (revision.payloadSourceProtocolVersion === 0 || revision.payloadSourceProtocolVersion === null) {
-    scope.active.delete(visitKey); scope.complete.add(visitKey); return;
+    scope.active.delete(activeKey); scope.complete.add(completeKey); return;
   }
   if (revision.payloadSourceProtocolVersion !== 1) throw forbidden("The Native document source protocol is unsupported");
   const parsed = nativePayloadSourceSnapshotSchema.safeParse(revision.payloadSourceSnapshot);
@@ -1609,6 +1620,10 @@ async function assertNativeDocumentRevisionCurrentSourceAccessInScope(db: Db, in
   const policy = snapshot.policy;
   const taskSourceIds = [...new Set([...policy.issueIds, ...snapshot.inputs.flatMap(source =>
     source.kind === "task" ? [source.issueId] : [])])];
+  const pinnedTaskSources = taskSourceIds.length ? await db.select({ id: issues.id }).from(issues)
+    .where(and(eq(issues.companyId, input.companyId), inArray(issues.id, taskSourceIds))).for("share") : [];
+  if (pinnedTaskSources.length !== taskSourceIds.length)
+    throw forbidden("A Native document Task source is unavailable");
   for (const issueId of taskSourceIds) {
     nativeSourceReadWork(scope);
     const taskInputs = snapshot.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "task" }> =>
@@ -2072,8 +2087,8 @@ async function assertNativeDocumentRevisionCurrentSourceAccessInScope(db: Db, in
     }
     throw forbidden("A Native document source family is unsupported");
   }
-  scope.active.delete(visitKey);
-  scope.complete.add(visitKey);
+  scope.active.delete(activeKey);
+  scope.complete.add(completeKey);
 }
 
 /** Capture only same-company persisted Context roots. Unsupported providers keep

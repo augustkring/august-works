@@ -1,0 +1,41 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/__tests__/v7-foundation-bootstrap.integration.test.ts > V7 Foundation discovery on migrated PostgreSQL > creates one canonical Task under concurrent idempotent starts and rejects key reuse 118ms
+ ✓ src/__tests__/v7-foundation-bootstrap.integration.test.ts > V7 Foundation discovery on migrated PostgreSQL > creates evidence-linked drafts with separate canonical approval and replay-safe publication 132ms
+ ✓ src/__tests__/v7-foundation-bootstrap.integration.test.ts > V7 Foundation discovery on migrated PostgreSQL > requires answers before draft publication and makes stale versions fail 95ms
+ ✓ src/__tests__/v7-foundation-bootstrap.integration.test.ts > V7 Foundation discovery on migrated PostgreSQL > rejects fabricated citations, changed evidence and cross-company access 79ms
+ × src/__tests__/v7-foundation-bootstrap.integration.test.ts > V7 Foundation discovery on migrated PostgreSQL > fences agent candidate writes to the current live checked-out worker attempt 447ms
+   → Context requires its actual accountable run
+ ✓ src/__tests__/v7-foundation-bootstrap.integration.test.ts > V7 Foundation discovery on migrated PostgreSQL > marks external assertions untrusted and cannot lower evidence sensitivity 13ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-foundation-bootstrap.integration.test.ts > V7 Foundation discovery on migrated PostgreSQL > fences agent candidate writes to the current live checked-out worker attempt
+Error: Context requires its actual accountable run
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ src/services/context/context-manifest.ts:582:19
+ ❯ ../packages/db/src/work-signals.ts:38:22
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ PostgresJsDatabase.connection.transaction ../packages/db/src/work-signals.ts:35:22
+ ❯ Object.create src/services/context/context-manifest.ts:528:14
+ ❯ withProviderDeadline src/services/context/context-engine.ts:174:12
+ ❯ withContextStageDeadline src/services/context/context-engine.ts:204:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { status: 403, details: undefined }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 5 passed (6)
+   Start at  00:45:22
+   Duration  17.85s (transform 8.96s, setup 75ms, import 12.91s, tests 4.76s, environment 0ms)
+

@@ -1,0 +1,7 @@
+# bd041 server-shard fixture findings
+
+Workflow run `40248926933`, general-server 1/12 job `121336363349`, failed `workflow-direct-agent.test.ts` when its cleanup path called `memoryService.forget`. `assertActorCompanyScope` intentionally verifies active user membership by joining `companyMemberships` to `authUsers`; this test seeded the membership without its auth user, so the correct guard returned 403. The fixture now inserts its user before membership. The correct test owner (`dependency_finish`) is validating that edit against the qualified workspace with fresh source pins.
+
+The same job failed `v9-feedback-restore-migration.integration.test.ts` while starting a database from migration journal entries before index 485. The fixture used the current Drizzle `companies` table model to seed the historical schema, but migration `0544_watery_dazzler.sql` adds `companies.locale` and `companies.timezone` later. It now seeds only the legacy `(id, name, issue_prefix)` columns using raw SQL before current migrations finish. The targeted current-source migration rerun is queued under the shared host flock; its raw log, exit, and source pins will be archived here.
+
+The corrected migration test passed from the qualified workspace: `ci40b-locale-migration-fixture-v1`, exit 0, 1/1 tests. The log, numeric exit, and 68-file source pins are archived beside this note. The host flock has been released.

@@ -11,6 +11,7 @@ import {HttpError,conflict,forbidden,unprocessable} from "../errors.js";
 const pinsSchema=z.array(analyticalContextAuthorityPinSchema).min(1).max(32);
 type AnalyticalPayloadScope={issueId:string}|{runId:string};
 type AnalyticalPayloadWorklist={
+ directSources:Map<string,AnalyticalPayloadScope>;
  sharedSources:Map<string,AnalyticalPayloadScope>;
  finalChecks:Array<()=>Promise<void>>;
  workflowRunIds:Set<string>;
@@ -122,7 +123,11 @@ export async function assertAnalyticalContextPayloadAccessBatch(db:Db,companyId:
   throw new HttpError(403,"The complete analytical Task population is unavailable",{code:"analytical_source_access_lost"});
  if(!ids.length)return;
  if(!is(db,PgTransaction))return db.transaction(tx=>assertAnalyticalContextPayloadAccessBatch(tx as unknown as Db,companyId,actor,ids,readScope));
- const worklist:AnalyticalPayloadWorklist={sharedSources:new Map(),finalChecks:[],workflowRunIds:new Set()};
+ // Match source erasure's ordering: company privacy locks precede all source
+ // discovery and row pins, avoiding an advisory-lock/row-lock inversion.
+ const {lockAnalyticalCompany}=await import("./analytical-privacy.js"),{lockMemoryPrivacy}=await import("./memory/memory-privacy.js");
+ await lockAnalyticalCompany(db,companyId);await lockMemoryPrivacy(db,companyId);
+ const worklist:AnalyticalPayloadWorklist={directSources:new Map(),sharedSources:new Map(),finalChecks:[],workflowRunIds:new Set()};
  for(const issueId of ids)
   await assertAnalyticalContextPayloadAccessInternal(db,companyId,actor,{issueId},readScope,worklist);
  const sourceIssueIds=[...new Set([...ids,...[...worklist.sharedSources.values()].flatMap(source=>"issueId"in source?[source.issueId]:[])])];
@@ -139,7 +144,9 @@ export async function assertAnalyticalContextPayloadAccessBatch(db:Db,companyId:
   if(locked.length!==sourceRunIds.length)throw new HttpError(403,"Native task source access is unavailable",{code:"analytical_source_access_lost"});
  }
  const finalize=async()=>{
-  for(const source of worklist.sharedSources.values())await assertDirectAnalyticalContextPayloadAccess(db,companyId,actor,source,readScope);
+  const directScopes=new Map([...worklist.directSources,...worklist.sharedSources]);
+  await db.execute(sql`set local statement_timeout='8s'`);
+  for(const source of directScopes.values())await assertDirectAnalyticalContextPayloadAccess(db,companyId,actor,source,readScope,true);
   for(const check of worklist.finalChecks)await check();
  };
  const workflowRunIds=[...worklist.workflowRunIds].sort();
@@ -196,7 +203,8 @@ async function assertAnalyticalContextPayloadAccessInternal(db:Db,companyId:stri
  if(workflowRunIds.length>256)throw new HttpError(403,"Complete Workflow task source access is unavailable",{code:"analytical_source_access_lost"});
  if(worklist)workflowRunIds.forEach(runId=>worklist.workflowRunIds.add(runId));
  const inspect=async()=>{
- await assertDirectAnalyticalContextPayloadAccess(db,companyId,actor,scope,readScope);
+ if(worklist)worklist.directSources.set("issueId"in scope?`issue:${scope.issueId}`:`run:${scope.runId}`,scope);
+ else await assertDirectAnalyticalContextPayloadAccess(db,companyId,actor,scope,readScope);
  for(const source of initial){
    // Each actual ancestor keeps its Original current-reader policy, not just
    // an erasure marker or the descendant task's company membership.
@@ -239,7 +247,7 @@ async function assertAnalyticalContextPayloadAccessInternal(db:Db,companyId:stri
  return inspect();
 }
 
-async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,scope:{issueId:string}|{runId:string},readScope?:NativeReadScope) {
+async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,scope:{issueId:string}|{runId:string},readScope?:NativeReadScope,companyLocksHeld=false) {
  // Ordinary conversation prose has source privacy even without analytical
  // retention roots. Every actual ancestor goes through this same narrowing.
  if(!actor || !("issueId" in scope
@@ -266,8 +274,15 @@ async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string
   .where(and(eq(contextManifests.companyId,companyId),condition)).limit(1);
  if(!actor)throw forbidden("A current reader is required for source-dependent analytical payloads");
  const {lockAnalyticalCompany}=await import("./analytical-privacy.js"),{lockMemoryPrivacy}=await import("./memory/memory-privacy.js");
- const inspect=()=>db.transaction(async rawTx=>{
-  const tx=rawTx as unknown as Db;await tx.execute(sql`set local statement_timeout='8s'`);await lockAnalyticalCompany(tx,companyId);await lockMemoryPrivacy(tx,companyId);
+ const inspectIn=async(tx:Db)=>{
+  // The caller already owns a pinned source transaction in the batched/Home
+  // path. Opening a savepoint for every retained Context root adds a full
+  // round trip per Task without strengthening the locks or current checks.
+  // Keep a transaction only for standalone callers.
+  if(!companyLocksHeld){
+   await tx.execute(sql`set local statement_timeout='8s'`);
+   await lockAnalyticalCompany(tx,companyId);await lockMemoryPrivacy(tx,companyId);
+  }
   const roots=await tx.selectDistinct({id:analyticalContextRoots.memoryRecordId,sourceCount:analyticalContextRoots.sourceCount,pins:analyticalContextRoots.authorityPins,expiresAt:analyticalContextRoots.expiresAt}).from(contextManifests).innerJoin(contextManifestMemoryRoots,and(eq(contextManifestMemoryRoots.companyId,contextManifests.companyId),eq(contextManifestMemoryRoots.manifestId,contextManifests.id)))
    .innerJoin(analyticalContextRoots,and(eq(analyticalContextRoots.companyId,contextManifests.companyId),eq(analyticalContextRoots.memoryRecordId,contextManifestMemoryRoots.memoryRecordId))).where(and(eq(contextManifests.companyId,companyId),condition)).limit(257);
   if(roots.length>256)throw forbidden("The complete analytical conversation exceeds its source review budget");
@@ -299,7 +314,8 @@ async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string
    const retained=await tx.select({id:analyticalContextDependencies.sourceManifestId}).from(analyticalContextDependencies).where(and(eq(analyticalContextDependencies.companyId,companyId),eq(analyticalContextDependencies.memoryRecordId,root.id))).limit(26201);
    if(retained.length!==root.sourceCount||JSON.stringify(retained.map(source=>source.id).sort())!==JSON.stringify(current.manifestIds))throw forbidden("The complete retained analytical source authority changed");
   }
- });
+ };
+ const inspect=()=>is(db,PgTransaction)?inspectIn(db):db.transaction(rawTx=>inspectIn(rawTx as unknown as Db));
  try {
   if(actor.type==="agent" && hasRoots.length){
    const {withNativeAnalyticalReader}=await import("./analytical-reader.js");

@@ -1,0 +1,51 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "4b54b6f363e6589b8a8010783ce2877442a75798",
+  "sourceCommitMeaning": "Archive checkout identity; scoped runs may predate it. Only separately recorded unchanged-source gates establish final tested source identity.",
+  "meaning": "First current-dependency browser attempt could not launch: Playwright headless-shell was absent. No browser behavior is qualified by this attempt. A rerun uses the existing system Chromium through the supported executable option.",
+  "logs": [
+    {
+      "name": "v10-browser-current-20261026",
+      "exitCode": 1,
+      "exitSidecar": "v10-browser-current-20261026.exit",
+      "rawSha256": "c77d801942496fa0c2e02996d458bfddae2d2f7edf97baabee6b60549cd5efc7",
+      "sanitizedSha256": "c77d801942496fa0c2e02996d458bfddae2d2f7edf97baabee6b60549cd5efc7",
+      "archiveSha256": "2cc6bd51c986f282d3e27edd38329a8cbe16cf50b2d34790fca3372e634517cd",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "4b54b6f363e6589b8a8010783ce2877442a75798"
+    },
+    {
+      "name": "v10-browser-system-chromium-20261026",
+      "exitCode": 1,
+      "exitSidecar": "v10-browser-system-chromium-20261026.exit",
+      "rawSha256": "bcd37428de933b44f7bfe7cc413e565852690f88c79394d122d4c193c997ddb2",
+      "sanitizedSha256": "bcd37428de933b44f7bfe7cc413e565852690f88c79394d122d4c193c997ddb2",
+      "archiveSha256": "96b62b06fb67fbfa7344c15d26bc56a9a0e0d7e578b1fa4a0b6294fd08cda8c0",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "4b54b6f363e6589b8a8010783ce2877442a75798"
+    }
+  ],
+  "updates": [
+    {
+      "sourceCommit": "4b54b6f363e6589b8a8010783ce2877442a75798",
+      "meaning": "The system Chromium rerun reached server startup but a stale PostgreSQL socket from the first disposable browser instance prevented startup. The recorded PID is a zombie and no TCP listener remains; only the exact stale socket and socket lock were removed. Its database/source files were preserved. No browser assertion ran.",
+      "logs": [
+        "v10-browser-system-chromium-20261026"
+      ]
+    }
+  ]
+}

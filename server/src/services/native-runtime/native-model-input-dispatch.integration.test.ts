@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdtemp, mkdir, rm } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, readdir, rm } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -94,7 +94,16 @@ describe("native model input dispatch intent", () => {
 
   afterAll(async () => {
     await database?.cleanup();
-    if (storageRoot) await rm(storageRoot, { recursive: true, force: true });
+    if (storageRoot) {
+      const restoreDirectoryPermissions = async (path: string) => {
+        await chmod(path, 0o700).catch(() => undefined);
+        for (const entry of await readdir(path, { withFileTypes: true }).catch(() => [])) {
+          if (entry.isDirectory()) await restoreDirectoryPermissions(join(path, entry.name));
+        }
+      };
+      await restoreDirectoryPermissions(storageRoot);
+      await rm(storageRoot, { recursive: true, force: true });
+    }
     if (originalPaperclipHome === undefined) delete process.env.PAPERCLIP_HOME;
     else process.env.PAPERCLIP_HOME = originalPaperclipHome;
     if (originalJwtSecret === undefined) delete process.env.PAPERCLIP_AGENT_JWT_SECRET;
@@ -299,7 +308,8 @@ describe("native model input dispatch intent", () => {
     const started = new Promise<void>(resolve => { signalStart = resolve; });
     const backend: NativeSessionBackend = {
       async descriptor() { return { kind: "mock", name: "verified-attachment-pg", version: "1",
-        capabilities: { resume: false, typedEvents: true, steering: false, interruption: true, structuredResult: true } }; },
+        capabilities: { resume: false, typedEvents: true, steering: false, interruption: true, structuredResult: true },
+        runtimeContextCapabilities: { instructions: "native", skills: "native", mcp: "native" } }; },
       async openSession(openInput) {
         return { identity: () => openInput.identity,
           async capabilities() { return { resume: false, typedEvents: true, steering: false, interruption: true, structuredResult: true }; },

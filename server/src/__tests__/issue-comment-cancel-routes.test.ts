@@ -10,6 +10,7 @@ const mockIssueService = vi.hoisted(() => ({
   removeComment: vi.fn(),
   tombstoneComment: vi.fn(),
 }));
+const mockCanActorReadIssuePrivacy = vi.hoisted(() => vi.fn(async () => true));
 
 const mockAccessService = vi.hoisted(() => ({
   canUser: vi.fn(),
@@ -98,6 +99,11 @@ function registerModuleMocks() {
   vi.doMock("../services/access.js", () => ({
     accessService: () => mockAccessService,
   }));
+
+  vi.doMock("../services/authorization.js", async () => {
+    const actual = await vi.importActual<typeof import("../services/authorization.js")>("../services/authorization.js");
+    return { ...actual, canActorReadIssuePrivacy: mockCanActorReadIssuePrivacy };
+  });
 
   vi.doMock("../services/activity-log.js", () => ({
     logActivity: mockLogActivity,
@@ -260,6 +266,7 @@ describe.sequential("issue comment cancel routes", () => {
     });
     mockAccessService.canUser.mockResolvedValue(false);
     mockAccessService.hasPermission.mockResolvedValue(false);
+    mockCanActorReadIssuePrivacy.mockResolvedValue(true);
     mockFeedbackService.listIssueVotesForUser.mockResolvedValue([]);
     mockFeedbackService.saveIssueVote.mockResolvedValue({
       vote: null,
@@ -483,6 +490,17 @@ describe.sequential("issue comment cancel routes", () => {
 
     expect(res.status).toBe(403);
     expect(res.body.error).toBe("Only the comment author can delete comments");
+    expect(mockIssueService.removeComment).not.toHaveBeenCalled();
+    expect(mockIssueService.tombstoneComment).not.toHaveBeenCalled();
+  });
+
+  it("does not cancel or delete comments when the issue privacy check denies access", async () => {
+    mockCanActorReadIssuePrivacy.mockResolvedValue(false);
+
+    const res = await request(await installActor(createApp()))
+      .delete("/api/issues/11111111-1111-4111-8111-111111111111/comments/comment-1?mode=cancel");
+
+    expect(res.status).toBe(404);
     expect(mockIssueService.removeComment).not.toHaveBeenCalled();
     expect(mockIssueService.tombstoneComment).not.toHaveBeenCalled();
   });

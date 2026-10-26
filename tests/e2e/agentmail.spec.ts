@@ -138,8 +138,8 @@ test("AgentMail setup and email work through the normal task conversation", asyn
   await expect(
     page.getByRole("heading", { name: "Give an agent an email address" }),
   ).toBeVisible();
+  await page.getByRole("combobox", { name: "Choose an agent", exact: true }).click();
   const agentPicker = page.getByPlaceholder("Search all agents…");
-  await agentPicker.click();
   await agentPicker.fill("Mail agent");
   await page.getByRole("option", { name: "Mail agent" }).click();
   await expect(

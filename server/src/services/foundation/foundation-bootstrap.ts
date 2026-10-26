@@ -43,12 +43,22 @@ export function foundationBootstrapService(db: Db) {
     if (!row || (actor.type === "agent" ? actor.agentId !== row.agentId || (row.responsibleUserId !== null && actor.onBehalfOfUserId !== row.responsibleUserId) : v7HumanActorId(actor) !== row.startedBy)) throw notFound("Discovery run not found");
     return row;
   }
-  async function collect(run: Pick<Run, "companyId" | "agentId" | "responsibleUserId" | "query" | "id" | "answers">) {
-    const result = await contextEngineService(db).assemble({ companyId: run.companyId, agentId: run.agentId,
+  async function collect(run: Pick<Run, "companyId" | "agentId" | "responsibleUserId" | "query" | "id" | "answers"> & Partial<Pick<Run, "taskId">>,
+    actor: AuthorizationActor, sourceDb: Db = db) {
+    const input = { companyId: run.companyId, agentId: run.agentId,
       responsibleUserId: run.responsibleUserId, enforceResponsibleUserIntersection: run.responsibleUserId !== null,
-      query: run.query, intent: "foundation_bootstrap", includeFoundation: true, sensitivityCeiling: "internal" });
+      query: run.query, intent: "foundation_bootstrap", includeFoundation: true as const, sensitivityCeiling: "internal" as const };
+    const context = contextEngineService(sourceDb);
+    // Bootstrap begins before a worker Run exists. Read current company sources
+    // under the initiating Human's live inspection authority; a bootstrap row
+    // ID is never substituted for an accountable heartbeat Run or manifest.
+    const result = actor.type === "board"
+      ? await context.inspectReadOnly(input, actor)
+      : actor.type === "agent" && actor.runId && run.taskId
+        ? await context.assemble({ ...input, runId: actor.runId, issueId: run.taskId })
+        : (() => { throw forbidden("A live accountable worker Run is required for agent Context reads"); })();
     const evidence = result.decisions.map((decision) => decision.evidence).filter((item) => item.sourceClass !== "private_memory");
-    const [company] = await db.select({ name: companies.name, description: companies.description, updatedAt: companies.updatedAt }).from(companies).where(eq(companies.id, run.companyId));
+    const [company] = await sourceDb.select({ name: companies.name, description: companies.description, updatedAt: companies.updatedAt }).from(companies).where(eq(companies.id, run.companyId));
     if (!company) throw notFound("Company not found");
     evidence.push({ id: `company:${run.companyId}`, companyId: run.companyId, sourceClass: "task", sourceProvider: "august_works", sourceType: "company_profile",
       sourceRef: `company://${run.companyId}/profile`, sourceVersion: company.updatedAt.toISOString(), title: "Company profile",
@@ -64,7 +74,9 @@ export function foundationBootstrapService(db: Db) {
   async function candidates(tx: Db, companyId: string, id: string) {
     return tx.select().from(foundationBootstrapCandidates).where(and(eq(foundationBootstrapCandidates.companyId, companyId), eq(foundationBootstrapCandidates.bootstrapRunId, id), or(eq(foundationBootstrapCandidates.status, "candidate"), eq(foundationBootstrapCandidates.status, "proposed"))));
   }
-  async function currentSources(run: Run) { return (await collect(run)).evidence.map(companySourceProjection); }
+  async function currentSources(run: Run, actor: AuthorizationActor, sourceDb: Db = db) {
+    return (await collect(run, actor, sourceDb)).evidence.map(companySourceProjection);
+  }
   function matchSource(old: BootstrapSource, current: BootstrapSource[]) {
     return current.some((source) => source.sourceRef === old.sourceRef && source.sourceVersion === old.sourceVersion && source.contentHash === old.contentHash);
   }
@@ -78,7 +90,7 @@ export function foundationBootstrapService(db: Db) {
       const [existing] = await db.select().from(foundationBootstrapRuns).where(and(eq(foundationBootstrapRuns.companyId, companyId), eq(foundationBootstrapRuns.startedBy, startedBy), eq(foundationBootstrapRuns.idempotencyKey, input.idempotencyKey)));
       if (existing) { if (existing.requestHash !== requestHash) throw conflict("The discovery request key was reused for different inputs"); return existing; }
       const runId = randomUUID(), responsibleUserId = actor.source === "local_implicit" ? null : startedBy;
-      const found = await collect({ id: runId, companyId, agentId: input.agentId, responsibleUserId, query: input.query, answers: {} });
+      const found = await collect({ id: runId, companyId, agentId: input.agentId, responsibleUserId, query: input.query, answers: {} }, actor);
       return withV7ActivityTransaction(db, async (tx, publications) => {
         await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${companyId}:${startedBy}:${input.idempotencyKey}`},0))`);
         const [raced] = await tx.select().from(foundationBootstrapRuns).where(and(eq(foundationBootstrapRuns.companyId, companyId), eq(foundationBootstrapRuns.startedBy, startedBy), eq(foundationBootstrapRuns.idempotencyKey, input.idempotencyKey)));
@@ -95,7 +107,7 @@ export function foundationBootstrapService(db: Db) {
       });
     },
     get: async (actor: AuthorizationActor, companyId: string, id: string) => {
-      const run = await get(db, actor, companyId, id), current = await currentSources(run);
+      const run = await get(db, actor, companyId, id), current = await currentSources(run, actor);
       const records = await candidates(db, companyId, id);
       const allowed = records.filter((record) => record.evidenceRefs.every((source) => matchSource(source, current)));
       return { ...run, sources: run.sources.filter((source) => matchSource(source, current)), candidates: allowed.map((record) => ({ ...record.candidate, id: record.id, status: record.status, foundationDocumentId: record.foundationDocumentId })),
@@ -103,7 +115,7 @@ export function foundationBootstrapService(db: Db) {
     },
     sources: async (actor: AuthorizationActor, companyId: string, id: string) => {
       const run = await get(db, actor, companyId, id);
-      const current = await collect(run);
+      const current = await collect(run, actor);
       return { version: run.version, evidence: current.evidence.filter((item) => run.sources.some((source) => source.sourceRef === item.sourceRef) || item.sourceType === "bootstrap_answer") };
     },
     submit: async (actor: AuthorizationActor, companyId: string, id: string, raw: z.infer<typeof submitBootstrapCandidatesSchema>) => {
@@ -120,7 +132,7 @@ export function foundationBootstrapService(db: Db) {
           const [task] = await tx.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, run.taskId))).for("share");
           if (!task || task.assigneeAgentId !== actor.agentId || task.executionRunId !== actor.runId || task.checkoutRunId !== actor.runId || task.status !== "in_progress") throw forbidden("Worker attempt no longer owns the discovery task");
         }
-        const current = await currentSources(run);
+        const current = await currentSources(run, actor, tx);
         const checked = input.candidates.map((candidate) => validateBootstrapCandidate(candidate, current));
         await tx.update(foundationBootstrapCandidates).set({ status: "superseded" }).where(and(eq(foundationBootstrapCandidates.companyId, companyId), eq(foundationBootstrapCandidates.bootstrapRunId, id), eq(foundationBootstrapCandidates.status, "candidate")));
         await tx.insert(foundationBootstrapCandidates).values(checked.map((item) => ({ companyId, bootstrapRunId: id, foundationKey: item.candidate.foundationKey, version: run.version + 1, candidate: item.candidate, evidenceRefs: item.evidence })));
@@ -150,7 +162,7 @@ export function foundationBootstrapService(db: Db) {
         const run = await get(tx, actor, companyId, id, true);
         if (run.status === "proposals_created") return run;
         if (run.version !== expectedVersion || run.status !== "ready_for_review") throw conflict("Discovery must finish questions and candidate review first");
-        const records = await candidates(tx, companyId, id), current = await currentSources(run);
+        const records = await candidates(tx, companyId, id), current = await currentSources(run, actor, tx);
         if (!records.length) throw conflict("No candidates exist");
         const foundation = foundationService(tx);
         const foundationActor: FoundationMutationActor = actor.source === "local_implicit" ? { principal: { type: "system", service: "local-board" } } : { principal: { type: "user", userId } };

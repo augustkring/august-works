@@ -2,12 +2,12 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { createDurableRunLogStore } from "../run-log-store.js";
 import { memoryJobService } from "../memory/memory-jobs.js";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { agents, agentWakeupRequests, companies, companyMemberships, createDb, heartbeatRuns, heartbeatRunEvents,
+import { agents, agentWakeupRequests, authUsers, companies, companyMemberships, createDb, heartbeatRuns, heartbeatRunEvents,
   issues, issueComments, issueDocuments, documents, documentRevisions, workflowWaits, workflowStepRuns,
-  completionContracts, nativeRunResults, agentTaskSessions, issueWorkProducts, memoryBindings, memoryRecords, memoryJobs, memoryDeletionMarkers, instanceUserRoles } from "@paperclipai/db";
+  completionContracts, nativeRunResults, agentTaskSessions, issueWorkProducts, memoryRecords, memoryJobs, memoryDeletionMarkers, instanceUserRoles } from "@paperclipai/db";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { workflowService } from "./workflow-service.js";
 import { workflowExecutorService } from "./workflow-executor.js";
@@ -15,6 +15,8 @@ import { submitWorkflowDirectResult, workflowDirectAgentPrompt } from "./workflo
 import { memoryService } from "../memory/memory-service.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { heartbeatMemoryPayloadRetained, reapplyMemoryDeletionMarkers } from "../memory/memory-privacy.js";
+import { issueService } from "../issues.js";
+import { seedCurrentHumanSourceActor } from "../../__tests__/helpers/current-human-source-fixture.js";
 
 const support = await getEmbeddedPostgresTestSupport();
 const suite = support.supported ? describe.sequential : describe.skip;
@@ -26,6 +28,8 @@ suite("Bounded Direct Agent Call", () => {
   async function seed() {
     const [company] = await db.insert(companies).values({ name: "Direct call", issuePrefix: `D${randomUUID().slice(0, 6).toUpperCase()}` }).returning();
     const companyId = company!.id, userId = `owner-${randomUUID()}`;
+    const now = new Date();
+    await db.insert(authUsers).values({ id: userId, name: "Direct call owner", email: `${userId}@test.invalid`, createdAt: now, updatedAt: now });
     await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId, membershipRole: "owner", status: "active" });
     const [agent] = await db.insert(agents).values({ companyId, name: "Bounded responder", status: "idle", adapterType: "process", role: "research" }).returning();
     const actor = { principal: { type: "user" as const, userId } };
@@ -140,14 +144,37 @@ suite("Bounded Direct Agent Call", () => {
   it("erases delegated payloads, queues log erasure and blocks late or restored agent writes", async () => {
     const seeded = await seed();
     await instanceSettingsService(db).updateExperimental({ enableCollectiveMemoryV1: true });
-    const [binding] = await db.insert(memoryBindings).values({ companyId: seeded.companyId, key: "shared", name: "Shared", providerKey: "local", config: {} }).returning();
-    const [record] = await db.insert(memoryRecords).values({ companyId: seeded.companyId, bindingId: binding!.id, providerKey: "local", memoryType: "observation",
-      scopeType: "company", title: "Private source", content: "Private source data", summary: "Private source", observedAt: new Date(),
-      reviewState: "accepted", verificationState: "human_verified", createdByActorType: "user", createdByActorId: seeded.userId }).returning();
-    await db.update(workflowStepRuns).set({ memoryRecordIds: [record!.id] }).where(and(eq(workflowStepRuns.workflowRunId, seeded.waiting.run.id), eq(workflowStepRuns.nodeId, "call")));
+    const human = await seedCurrentHumanSourceActor(db, [seeded.companyId], seeded.userId);
+    const memoryActor = { principal: seeded.actor.principal, authorizationActor: human };
+    const memory = memoryService(db);
+    const binding = await memory.createBinding(seeded.companyId,
+      { key: "shared", name: "Shared", providerKey: "local", config: {} }, memoryActor);
+    await memory.addBindingTarget(seeded.companyId, binding.id,
+      { targetType: "company", targetId: seeded.companyId }, memoryActor);
+    const task = await issueService(db).create(seeded.companyId, {
+      title: "Private source task", description: "Private source data", createdByUserId: seeded.userId,
+      responsibleUserId: seeded.userId,
+    }, db, undefined, { manualInputActor: human, privacyActor: human, sourceAccessActor: human });
+    const [source] = await db.select({ identifier: issues.identifier, title: issues.title, updatedAt: issues.updatedAt })
+      .from(issues).where(and(eq(issues.companyId, seeded.companyId), eq(issues.id, task.id)));
+    if (!source) throw new Error("Canonical Human Memory source Task was not persisted");
+    const now = new Date().toISOString();
+    const candidate = await memory.createCandidate(seeded.companyId, {
+      bindingId: binding.id, memoryType: "observation", scope: { type: "company", id: null },
+      subject: null, ownerAgentId: null, title: "Private source", content: "Private source data", summary: "Private source",
+      sensitivity: "internal", importance: 50, confidenceScore: 0.8, validFrom: null, validUntil: null,
+      observedAt: now, retentionPolicy: "standard", expiresAt: null, createdByOperationId: null, metadata: {},
+      evidence: [{ sourceClass: "task", sourceProvider: "august_works_tasks", sourceType: "issue", sourceRef: `issue://${task.id}`,
+        sourceVersion: source.updatedAt.toISOString(), sourceUpdatedAt: source.updatedAt.toISOString(), observedAt: now,
+        excerptHash: createHash("sha256").update("Private source data").digest("hex"),
+        citation: { label: `${source.identifier}: ${source.title}` }, trustLevel: "high", relation: "supports" }],
+    }, memoryActor);
+    await memory.reviewCandidate(seeded.companyId, candidate.record.id, { decision: "accept" }, memoryActor);
+    const [record] = await db.select().from(memoryRecords).where(eq(memoryRecords.id, candidate.record.id));
+    if (!record) throw new Error("Reviewed Memory fixture was not persisted");
+    await db.update(workflowStepRuns).set({ memoryRecordIds: [record.id] }).where(and(eq(workflowStepRuns.workflowRunId, seeded.waiting.run.id), eq(workflowStepRuns.nodeId, "call")));
     await db.update(heartbeatRuns).set({ logStore: "local_file", logRef: `${seeded.companyId}/${seeded.agentId}/${seeded.executionId}.ndjson`, stdoutExcerpt: "Private source" }).where(eq(heartbeatRuns.id, seeded.executionId));
     await db.insert(heartbeatRunEvents).values({ companyId: seeded.companyId, agentId: seeded.agentId, runId: seeded.executionId, seq: 1, eventType: "log", message: "Private source", payload: { data: "Private source" } });
-    const [task] = await db.insert(issues).values({ companyId: seeded.companyId, title: "Private source task", description: "Private source" }).returning();
     await db.insert(workflowWaits).values({ companyId: seeded.companyId, workflowRunId: seeded.waiting.run.id, nodeId: "call", waitKey: "delegated-copy",
       kind: "task_completion", status: "resolved", referenceType: "issue", referenceId: task!.id, resolvedAt: new Date() });
     await db.insert(issueComments).values({ companyId: seeded.companyId, issueId: task!.id, body: "Private source" });
@@ -167,7 +194,7 @@ suite("Bounded Direct Agent Call", () => {
     const logStore = createDurableRunLogStore({ basePath: logDir });
     const handle = await logStore.begin({ companyId: seeded.companyId, agentId: seeded.agentId, runId: seeded.executionId });
     await logStore.append(handle, { stream: "stdout", chunk: "Private source", ts: "fixture" });
-    await memoryService(db).forget(seeded.companyId, record!.id, seeded.actor);
+    await memoryService(db).forget(seeded.companyId, record.id, memoryActor);
     expect((await db.select().from(nativeRunResults).where(eq(nativeRunResults.id, nativeResult!.id)))[0]?.resultJson).toEqual({ payloadDeleted: true });
     expect((await db.select().from(completionContracts).where(eq(completionContracts.id, nativeContract!.id)))[0]?.contractJson).toEqual({ payloadDeleted: true });
     expect((await db.select().from(agentTaskSessions).where(eq(agentTaskSessions.lastRunId, seeded.executionId)))[0]?.sessionParamsJson).toBeNull();
@@ -197,7 +224,7 @@ suite("Bounded Direct Agent Call", () => {
     expect((await db.select().from(memoryJobs).where(eq(memoryJobs.companyId, seeded.companyId))).some((job) => job.sourceRefJson.kind === "run_log_erasure")).toBe(true);
     await db.update(heartbeatRuns).set({ stdoutExcerpt: "late private source", contextSnapshot: { private: true }, resultJson: { private: true } }).where(eq(heartbeatRuns.id, seeded.executionId));
     expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.executionId)))[0]).toMatchObject({ stdoutExcerpt: null, contextSnapshot: {}, resultJson: null });
-    await db.update(memoryRecords).set({ deletedAt: null, content: "restored private source" }).where(eq(memoryRecords.id, record!.id));
+    await db.update(memoryRecords).set({ deletedAt: null, content: "restored private source" }).where(eq(memoryRecords.id, record.id));
     expect(await db.select().from(memoryDeletionMarkers).where(eq(memoryDeletionMarkers.companyId, seeded.companyId))).not.toHaveLength(0);
     expect(await heartbeatMemoryPayloadRetained(db, seeded.companyId, seeded.executionId)).toBe(false);
     await reapplyMemoryDeletionMarkers(db, seeded.companyId);

@@ -15,21 +15,34 @@ import * as analyticalContextAuthority from "../analytical-context-authority.js"
 import { nativePayloadSourceSnapshotSchema } from "@paperclipai/shared";
 
 const managedContextReadFailures: Array<{ name: string; code: string | null; causeCode: string | null; frames: string[] }> = [];
-const managedContextSourceCheckTimings: Array<{ phase: string; elapsedMs: number; outcome: "ok" | "throw" }> = [];
+const managedContextSourceCheckTimings: Array<{ phase: string; caller: string; elapsedMs: number; outcome: "ok" | "throw" }> = [];
 const managedContextSourceCheckCounts: Record<string, number> = {};
+const managedContextSourceCheckCallerCounts: Record<string, number> = {};
 
-function recordManagedContextSourceCheckTiming(phase: string, startedAt: number, outcome: "ok" | "throw") {
+function managedContextSourceCheckCaller(): string {
+  const frames = new Error().stack?.split("\n").slice(1) ?? [];
+  for (const frame of frames) {
+    if (frame.includes("native-opencode-managed-source.integration.test.ts")) continue;
+    const match = /server\/src\/services\/([^\s():]+\.ts):(\d+):\d+/.exec(frame);
+    if (match) return `${match[1]}:${match[2]}`;
+  }
+  return "unknown";
+}
+
+function recordManagedContextSourceCheckTiming(phase: string, caller: string, startedAt: number, outcome: "ok" | "throw") {
   managedContextSourceCheckCounts[phase] = (managedContextSourceCheckCounts[phase] ?? 0) + 1;
+  managedContextSourceCheckCallerCounts[`${phase}@${caller}`] = (managedContextSourceCheckCallerCounts[`${phase}@${caller}`] ?? 0) + 1;
   if (managedContextSourceCheckTimings.length >= 64) managedContextSourceCheckTimings.shift();
-  managedContextSourceCheckTimings.push({ phase, elapsedMs: Math.max(0, Date.now() - startedAt), outcome });
+  managedContextSourceCheckTimings.push({ phase, caller, elapsedMs: Math.max(0, Date.now() - startedAt), outcome });
 }
 
 async function timeManagedContextSourceCheck<T>(phase: string, check: () => Promise<T>): Promise<T> {
+  const caller = managedContextSourceCheckCaller();
   const startedAt = Date.now();
   let outcome: "ok" | "throw" = "ok";
   try { return await check(); }
   catch (error) { outcome = "throw"; throw error; }
-  finally { recordManagedContextSourceCheckTiming(phase, startedAt, outcome); }
+  finally { recordManagedContextSourceCheckTiming(phase, caller, startedAt, outcome); }
 }
 
 function safeErrorCode(value: unknown): string | null {
@@ -136,6 +149,7 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
           const message = error instanceof Error ? error.message : "managed_opencode_fixture_failed";
           throw new Error(`${message}\nmanaged Context read failure facts: ${JSON.stringify({
             failures: managedContextReadFailures, sourceCheckCounts: managedContextSourceCheckCounts,
+            sourceCheckCallerCounts: managedContextSourceCheckCallerCounts,
             recentSourceCheckTimings: managedContextSourceCheckTimings,
           })}`);
         }

@@ -27,6 +27,7 @@ import {
   isPaperclipExternalChatQuestionResponseTurn,
   renderPaperclipWakePrompt,
 } from "@paperclipai/adapter-utils/server-utils";
+import { nativeSha256 } from "./canonical.js";
 
 const NATIVE_GITHUB_ATTACHMENT_RECOVERY_GUIDANCE = [
   "## GitHub attachment recovery navigation",
@@ -90,7 +91,7 @@ function exactInteractionSources(input: {
   const ordered: Extract<NativePayloadSourceInput, { kind: "interaction" }>[] = [];
   for (const response of responses) {
     const source = sourcesById.get(response.interactionId);
-    if (!source || createHash("sha256").update(JSON.stringify(response), "utf8").digest("hex") !== source.contentHash) return null;
+    if (!source || nativeSha256(response) !== source.contentHash) return null;
     ordered.push(source);
   }
   return ordered;

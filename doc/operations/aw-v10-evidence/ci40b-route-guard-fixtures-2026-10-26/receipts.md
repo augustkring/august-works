@@ -12,3 +12,7 @@ The six-file run (`ci40b-focused-route-vitest-v3`) exited 1 with 45/49 tests pas
 - `document-annotation-routes.test.ts`
 
 The route unit fixtures stub the exact analytical-context and native document Source authorization boundaries because these tests use fake DBs. Explicit privacy/Source-denial controls assert no protected action occurs. Separate PG integration suites continue to cover underlying authorization policy.
+
+## OAuth callback session/reconnect regression
+
+`ci40b-oauth-session-reconnect-v1` exited 0: 3 targeted tests passed, 348 unrelated tests skipped. It covered the callback-session binding case (anonymous, different user, wrong session for the same user, downgraded membership all denied before provider fetch; original session completes) and both page/task personal OAuth callback variants, including valid reconnect of the retained personal grant. Source pins and raw log are included.

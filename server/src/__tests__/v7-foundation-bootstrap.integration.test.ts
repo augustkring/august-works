@@ -1,21 +1,29 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { agentIdentities, agents, companies, companyMemberships, createDb, foundationDocuments, heartbeatRuns, issues, principalPermissionGrants } from "@paperclipai/db";
+import { agentIdentities, agents, authSessions, authUsers, companies, companyMemberships, createDb, foundationDocuments, heartbeatRuns, issues, principalPermissionGrants } from "@paperclipai/db";
 import { bootstrapCandidateSchema, type BootstrapCandidate } from "@paperclipai/shared";
 import { foundationBootstrapService, validateBootstrapCandidate } from "../services/foundation/foundation-bootstrap.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
+import { grantsForHumanRole } from "../services/company-member-roles.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 const support = await getEmbeddedPostgresTestSupport();
 (support.supported ? describe : describe.skip)("V7 Foundation discovery on migrated PostgreSQL", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>;
   let companyId: string, agentId: string;
+  const fixtureUserIds: string[] = [];
   const owner = { type: "board" as const, source: "local_implicit" as const };
   beforeAll(async () => {
     database = await startEmbeddedPostgresTestDatabase("aw-v7-bootstrap-"); db = createDb(database.connectionString);
     await instanceSettingsService(db).updateExperimental({ enableFoundationV1: true, enableContextEngineV1: true, readiness_engine_v7: true, foundation_bootstrap_v7: true });
   });
-  afterAll(async () => { await database?.cleanup(); });
+  afterAll(async () => {
+    for (const userId of fixtureUserIds.splice(0)) {
+      await db.delete(authSessions).where(eq(authSessions.userId, userId));
+      await db.delete(authUsers).where(eq(authUsers.id, userId));
+    }
+    await database?.cleanup();
+  });
   beforeEach(async () => {
     companyId = randomUUID(); agentId = randomUUID();
     await db.insert(companies).values({ id: companyId, name: "Discovery fixture", issuePrefix: `D${companyId.slice(0, 7)}` });
@@ -33,6 +41,7 @@ const support = await getEmbeddedPostgresTestSupport();
     const svc = foundationBootstrapService(db);
     const runs = await Promise.all([svc.start(owner, companyId, request()), svc.start(owner, companyId, request())]);
     expect(runs[0]!.id).toBe(runs[1]!.id);
+    expect(runs[0]!.sourceManifestId).toBeNull();
     expect(await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.originKind, "v7_foundation_bootstrap")))).toHaveLength(1);
     await expect(svc.start(owner, companyId, { ...request(), query: "A different goal" })).rejects.toMatchObject({ status: 409 });
   });
@@ -70,9 +79,17 @@ const support = await getEmbeddedPostgresTestSupport();
     await expect(svc.get({ type: "agent", source: "agent_key", companyId, agentId: randomUUID() }, companyId, run.id)).rejects.toMatchObject({ status: 403 });
   });
   it("fences agent candidate writes to the current live checked-out worker attempt", async () => {
-    const svc = foundationBootstrapService(db), run = await svc.start(owner, companyId, request());
-    const actor = { type: "agent" as const, source: "agent_key" as const, companyId, agentId, runId: randomUUID() };
-    await db.insert(heartbeatRuns).values({ id: actor.runId, companyId, agentId, status: "running", contextSnapshot: { issueId: run.taskId } });
+    const userId = randomUUID(), sessionId = randomUUID(), now = new Date();
+    fixtureUserIds.push(userId);
+    await db.insert(authUsers).values({ id: userId, name: "Discovery owner", email: `${userId}@fixture.invalid`, emailVerified: true, createdAt: now, updatedAt: now });
+    await db.insert(authSessions).values({ id: sessionId, userId, token: randomUUID(), createdAt: now, updatedAt: now, expiresAt: new Date(now.getTime() + 60_000) });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId, status: "active", membershipRole: "owner" });
+    await db.insert(principalPermissionGrants).values(grantsForHumanRole("owner").map((grant) => ({ companyId, principalType: "user", principalId: userId, ...grant })));
+    const human = { type: "board" as const, source: "session" as const, userId, sessionId, companyIds: [companyId] };
+    const svc = foundationBootstrapService(db), run = await svc.start(human, companyId, request());
+    const actor = { type: "agent" as const, source: "agent_key" as const, companyId, agentId, runId: randomUUID(), onBehalfOfUserId: userId };
+    await db.insert(heartbeatRuns).values({ id: actor.runId, companyId, agentId, status: "running", responsibleUserId: userId,
+      issueId: run.taskId, contextSnapshot: { issueId: run.taskId } });
     await expect(svc.submit(actor, companyId, run.id, { expectedVersion: 1, candidates: [candidate()] })).rejects.toMatchObject({ status: 403 });
     await db.update(issues).set({ status: "in_progress", checkoutRunId: actor.runId, executionRunId: actor.runId }).where(eq(issues.id, run.taskId));
     await db.update(heartbeatRuns).set({ resultJson: { executionCancellation: { state: "requested" } } }).where(eq(heartbeatRuns.id, actor.runId));

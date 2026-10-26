@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { eq, sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { expect, it } from "vitest";
-import { createDb, companies, customerFeedback, customerFeedbackImages, customerFeedbackDeletionMarkers,
+import { createDb, customerFeedback, customerFeedbackImages, customerFeedbackDeletionMarkers,
   feedbackRetentionErasures } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 
@@ -26,7 +26,11 @@ it("upgrades actual pre-V9-restore erasure receipts and image states into immuta
       await migrate(legacy, { migrationsFolder: prior });
       expect(await legacy.execute(sql`select to_regclass('public.customer_feedback_deletion_markers') as markers`))
         .toEqual([{ markers: null }]);
-      await legacy.insert(companies).values({ id: companyId, name: "Owned prior erasure source", issuePrefix: `P${companyId.slice(0, 6)}` });
+      // Seed the legacy schema through its historical columns only. The
+      // current companies model includes locale/timezone, which arrive later
+      // than this fixture's 485-migration pre-upgrade boundary.
+      await legacy.execute(sql`insert into companies (id, name, issue_prefix) values
+        (${companyId}, 'Owned prior erasure source', ${`P${companyId.slice(0, 6)}`})`);
       const original = { companyId, category: "BUG", body: "OWNED-PRE-UPGRADE-PRIVATE-FEEDBACK", omitName: true,
         status: "CLOSED", createdAt: new Date(Date.now() - 150 * 86400000), closedAt: new Date(Date.now() - 100 * 86400000),
         context: { surfaceKey: "home", locale: "en", timezone: "UTC", viewportClass: "wide" } };

@@ -25,6 +25,7 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "../../__tests__/helpers/embedded-postgres.js";
 import { memoryService, type MemoryMutationActor } from "./memory-service.js";
+import { issueService } from "../issues.js";
 import { initializeRunIdentity } from "../run-identity.js";
 import { reapplyMemoryDeletionMarkers, expireMemoryPayloads } from "./memory-privacy.js";
 
@@ -186,6 +187,25 @@ describePg("Memory Core service", () => {
     return { principal: { type: "user", userId }, authorizationActor: {
       type: "board", source: "session", userId, sessionId, authenticatedCredentialExpiresAt: expiresAt.getTime(),
     } };
+  }
+  async function humanTaskSource(seeded: Awaited<ReturnType<typeof seed>>, content: string) {
+    const actor = await verifiedUserActor(seeded.userId);
+    const task = await issueService(db).create(seeded.companyId, {
+      title: "Memory source deletion fixture",
+      description: content,
+      createdByUserId: seeded.userId,
+      responsibleUserId: seeded.userId,
+    }, db, undefined, { manualInputActor: actor.authorizationActor });
+    const [source] = await db.select({ identifier: issues.identifier, title: issues.title, updatedAt: issues.updatedAt })
+      .from(issues).where(and(eq(issues.companyId, seeded.companyId), eq(issues.id, task.id)));
+    if (!source) throw new Error("The current Human Task source fixture was not persisted");
+    return {
+      actor,
+      task,
+      evidence: [{ ...evidence(content)[0]!, sourceRef: `issue://${task.id}`,
+        sourceVersion: source.updatedAt.toISOString(), sourceUpdatedAt: source.updatedAt.toISOString(),
+        citation: { label: source.identifier ? `${source.identifier}: ${source.title}` : source.title } }],
+    };
   }
   const nativeActors = new Map<string, Promise<MemoryMutationActor>>();
   function agentActor(agentId: string, responsibleUserId?: string): Promise<MemoryMutationActor> {
@@ -985,13 +1005,14 @@ describePg("Memory Core service", () => {
     const seeded = await seed();
     const companyBinding = await binding(seeded.companyId, seeded.userId);
     const svc = memoryService(db);
-    const actor = userActor(seeded.userId);
-    const created = await svc.createCandidate(seeded.companyId, candidate(companyBinding.id), actor);
+    const taskSource = await humanTaskSource(seeded, "The source should be forgotten with its derived Memory.");
+    const sourceCandidate = candidate(companyBinding.id, { evidence: taskSource.evidence });
+    const created = await svc.createCandidate(seeded.companyId, sourceCandidate, taskSource.actor);
     const deleted = await svc.forgetSource(seeded.companyId,
-      { sourceProvider: "august_works_tasks", sourceRef: "issue://test" }, actor);
+      { sourceProvider: "august_works_tasks", sourceRef: `issue://${taskSource.task.id}` }, userActor(seeded.userId));
     expect(deleted.deletedRecordCount).toBe(1);
-    expect(await svc.getShared(seeded.companyId, created.record.id, actor)).toBeNull();
-    await expect(svc.createCandidate(seeded.companyId, candidate(companyBinding.id), actor)).rejects.toMatchObject({
+    expect(await svc.getShared(seeded.companyId, created.record.id, userActor(seeded.userId))).toBeNull();
+    await expect(svc.createCandidate(seeded.companyId, sourceCandidate, taskSource.actor)).rejects.toMatchObject({
       status: 409, details: { code: "memory_source_deleted" },
     });
   });
@@ -1418,10 +1439,11 @@ describePg("Memory Core service", () => {
     const seeded = await seed();
     const b = await binding(seeded.companyId, seeded.userId);
     const svc = memoryService(db);
+    const taskSource = await humanTaskSource(seeded, "Company cascade evidence belongs to a current Human Task.");
     const created = await svc.createCandidate(
       seeded.companyId,
-      candidate(b.id),
-      userActor(seeded.userId),
+      candidate(b.id, { evidence: taskSource.evidence }),
+      taskSource.actor,
     );
 
     expect(created.evidence).toHaveLength(1);

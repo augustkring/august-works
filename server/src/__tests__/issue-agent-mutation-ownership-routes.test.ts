@@ -42,6 +42,7 @@ const mockAccessService = vi.hoisted(() => ({
   decide: vi.fn(),
   hasPermission: vi.fn(),
 }));
+const mockCanActorReadIssuePrivacy = vi.hoisted(() => vi.fn(async () => true));
 
 const mockAgentService = vi.hoisted(() => ({
   getById: vi.fn(),
@@ -178,6 +179,35 @@ function registerRouteMocks() {
 
   vi.doMock("../services/access.js", () => ({
     accessService: () => mockAccessService,
+  }));
+
+  vi.doMock("../services/authorization.js", async () => {
+    const actual = await vi.importActual<typeof import("../services/authorization.js")>("../services/authorization.js");
+    return { ...actual, canActorReadIssuePrivacy: mockCanActorReadIssuePrivacy };
+  });
+
+  // This fixture uses a small query stub, not a native PgTransaction. Keep
+  // the route's company-scope decision real at its authorization boundary;
+  // task-source policy itself is covered by the source integration suites.
+  vi.doMock("../services/task-source-read-scope.js", () => ({
+    withCurrentTaskSourceRead: async (
+      db: unknown,
+      scopedCompanyId: string,
+      actor: Record<string, unknown>,
+      read: (queryDb: unknown, hasTaskSourceReferences: boolean) => Promise<unknown>,
+      _includeTaskSources = true,
+      requireCompanyScope = true,
+    ) => {
+      const decision = await mockAccessService.decide({
+        actor,
+        action: "company_scope:read",
+        resource: { type: "company", companyId: scopedCompanyId },
+      });
+      if (requireCompanyScope && !decision.allowed) {
+        throw new HttpError(403, "Company search is outside this actor's authorization boundary");
+      }
+      return read(db, false);
+    },
   }));
 
   vi.doMock("../services/agents.js", () => ({
@@ -462,6 +492,7 @@ describe("agent issue mutation checkout ownership", () => {
     __clearIssueListResponseCacheForTests();
     vi.clearAllMocks();
     mockAnalyticalPayloadAccess.mockReset().mockResolvedValue(undefined);
+    mockCanActorReadIssuePrivacy.mockReset().mockResolvedValue(true);
     mockIssueTreeControlService.getActivePauseHoldGate.mockReset().mockResolvedValue(null);
     mockChatRunRetries.prepareFailedChatRunRetry.mockReset();
     mockChatRunRetries.processFailedChatRunRetry.mockReset();

@@ -1,6 +1,7 @@
 import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { forbidden } from "../errors.ts";
 
 const mockCompanyService = vi.hoisted(() => ({
   list: vi.fn(),
@@ -42,6 +43,7 @@ const mockFeedbackService = vi.hoisted(() => ({
   getFeedbackTraceById: vi.fn(),
   saveIssueVote: vi.fn(),
 }));
+const mockAssertCompanyCeoAgentOrBoard = vi.hoisted(() => vi.fn());
 
 vi.mock("../services/index.js", () => ({
   accessService: () => mockAccessService,
@@ -56,6 +58,26 @@ vi.mock("../services/index.js", () => ({
   }),
   logActivity: mockLogActivity,
 }));
+
+vi.mock("../services/authorization.js", async () => {
+  const actual = await vi.importActual<typeof import("../services/authorization.js")>("../services/authorization.js");
+  return { ...actual, assertCompanyCeoAgentOrBoard: mockAssertCompanyCeoAgentOrBoard };
+});
+
+function resetAuthorizationFixture() {
+  mockAssertCompanyCeoAgentOrBoard.mockImplementation(async (
+    _db: unknown,
+    companyId: string,
+    actor: { type?: string; agentId?: string },
+    capability: string,
+  ) => {
+    if (actor.type === "board") return;
+    if (actor.type !== "agent" || !actor.agentId) throw forbidden("Agent authentication required");
+    const agent = await mockAgentService.getById(actor.agentId);
+    if (!agent || agent.companyId !== companyId) throw forbidden("Agent key cannot access another company");
+    if (agent.role !== "ceo") throw forbidden(`Only CEO agents can manage ${capability}`);
+  });
+}
 
 function createCompany() {
   const now = new Date("2026-03-19T02:00:00.000Z");
@@ -99,6 +121,7 @@ describe("PATCH /api/companies/:companyId/branding", () => {
     vi.doUnmock("../routes/authz.js");
     vi.doUnmock("../middleware/index.js");
     vi.clearAllMocks();
+    resetAuthorizationFixture();
   });
 
   it("rejects non-CEO agent callers", async () => {
@@ -257,6 +280,7 @@ describe("PATCH /api/companies/:companyId", () => {
     vi.doUnmock("../routes/authz.js");
     vi.doUnmock("../middleware/index.js");
     vi.clearAllMocks();
+    resetAuthorizationFixture();
   });
 
   it("rejects non-CEO agent callers before loading the company or validating settings body shape", async () => {
