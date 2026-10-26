@@ -46,6 +46,7 @@ const mockIssueThreadInteractionService = vi.hoisted(() => ({
 }));
 const mockLogActivity = vi.hoisted(() => vi.fn(async () => undefined));
 const mockAnalyticalPayloadAccess = vi.hoisted(() => vi.fn());
+const mockNativeDocumentSourceAccess = vi.hoisted(() => vi.fn());
 const mockCanReadIssuePrivacy = vi.hoisted(() => vi.fn(async () => true));
 
 const documentPayload = {
@@ -124,6 +125,10 @@ function registerModuleMocks() {
   // deny-test its current Source admission independently of annotation data.
   vi.doMock("../services/analytical-context-authority.js", () => ({
     assertAnalyticalContextPayloadAccess: mockAnalyticalPayloadAccess,
+  }));
+  vi.doMock("../services/native-direct-input.js", async () => ({
+    ...await vi.importActual<typeof import("../services/native-direct-input.js")>("../services/native-direct-input.js"),
+    assertNativeDocumentRevisionCurrentSourceAccess: mockNativeDocumentSourceAccess,
   }));
   vi.doMock("../services/index.js", () => ({
     accessService: () => ({
@@ -216,6 +221,7 @@ describe("document annotation routes", () => {
     registerModuleMocks();
     vi.clearAllMocks();
     mockAnalyticalPayloadAccess.mockReset().mockResolvedValue(undefined);
+    mockNativeDocumentSourceAccess.mockReset().mockResolvedValue(undefined);
     mockCanReadIssuePrivacy.mockReset().mockResolvedValue(true);
     mockIssueService.getById.mockResolvedValue({
       id: issueId,
@@ -286,6 +292,20 @@ describe("document annotation routes", () => {
     expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(expect.anything(), companyId, expect.objectContaining({ type: "agent", companyId }), { issueId });
     expect(mockDocumentService.getIssueDocumentByKey).not.toHaveBeenCalled();
     expect(mockAnnotationService.listThreadsForIssueDocument).not.toHaveBeenCalled();
+  });
+
+  it("withholds document annotations when current native document Source access is denied", async () => {
+    const { HttpError } = await vi.importActual<typeof import("../errors.js")>("../errors.js");
+    mockNativeDocumentSourceAccess.mockRejectedValue(new HttpError(403, "Document Source unavailable"));
+
+    await request(await createApp("agent"))
+      .get(`/api/issues/${issueId}/documents/plan`)
+      .expect(403);
+
+    expect(mockNativeDocumentSourceAccess).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ companyId, issueId, revisionId: documentPayload.latestRevisionId }),
+    );
   });
 
   it("updates issue documents without waking the assignee through the issue-comment path", async () => {

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import { chmodSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
@@ -86,6 +88,67 @@ test("the general-server shards form a complete, non-overlapping partition", () 
   // Every suite runs exactly once: union covers the whole set with no overlap.
   assert.equal(selectedTotal, total, "every suite must be selected exactly once");
   assert.equal(seen.size, total, "union of shards must cover the whole suite set");
+});
+
+test("only the shard selecting the built-server restart suite prepares the runtime bundle", { skip: process.platform === "win32" }, () => {
+  const restartSuite = "server/src/__tests__/scheduled-work-server-restart.integration.test.ts";
+  const selectedShard = Array.from({ length: SHARD_COUNT }, (_, index) => ({
+    index,
+    files: dryRunJson([
+      "--mode", "general", "--group", "general-server",
+      "--shard-index", String(index), "--shard-count", String(SHARD_COUNT),
+    ]).selectedGeneralServerSuites,
+  })).find((shard) => shard.files.includes(restartSuite));
+  assert.ok(selectedShard, "the restart integration suite must belong to one general-server shard");
+  const unrelatedShard = Array.from({ length: SHARD_COUNT }, (_, index) => ({
+    index,
+    files: dryRunJson([
+      "--mode", "general", "--group", "general-server",
+      "--shard-index", String(index), "--shard-count", String(SHARD_COUNT),
+    ]).selectedGeneralServerSuites,
+  })).find((shard) => !shard.files.includes(restartSuite));
+  assert.ok(unrelatedShard, "another shard must not select the restart integration suite");
+
+  const tempRoot = mkdtempSync(path.join(os.tmpdir(), "vitest-build-preflight-"));
+  const fakeBin = path.join(tempRoot, "bin");
+  const capturedCommands = path.join(tempRoot, "commands.jsonl");
+  mkdirSync(fakeBin);
+  const fakePnpm = path.join(fakeBin, "pnpm");
+  writeFileSync(fakePnpm, `#!/usr/bin/env node
+import { appendFileSync } from 'node:fs';
+appendFileSync(process.env.PNPM_CAPTURE, JSON.stringify(process.argv.slice(2)) + '\\n');
+`);
+  chmodSync(fakePnpm, 0o755);
+  const runShard = (index) => spawnSync(process.execPath, [script,
+    "--mode", "general", "--group", "general-server",
+    "--shard-index", String(index), "--shard-count", String(SHARD_COUNT),
+  ], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    env: workflowEnv({
+      PATH: `${fakeBin}${path.delimiter}${process.env.PATH ?? ""}`,
+      PNPM_CAPTURE: capturedCommands,
+    }),
+  });
+  try {
+    const targetRun = runShard(selectedShard.index);
+    assert.equal(targetRun.status, 0, targetRun.stderr);
+    const targetCommands = readFileSync(capturedCommands, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+    assert.deepEqual(targetCommands.slice(0, 2), [
+      ["--filter", "@paperclipai/server", "build"],
+      ["--filter", "@paperclipai/server", "build:runtime"],
+    ]);
+    assert.ok(targetCommands[2].includes("vitest"), "the selected shard must launch Vitest after preparation");
+
+    rmSync(capturedCommands, { force: true });
+    const unrelatedRun = runShard(unrelatedShard.index);
+    assert.equal(unrelatedRun.status, 0, unrelatedRun.stderr);
+    const unrelatedCommands = readFileSync(capturedCommands, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+    assert.equal(unrelatedCommands.length, 1, "an unrelated shard should launch Vitest without either build");
+    assert.ok(unrelatedCommands[0].includes("vitest"));
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
 });
 
 test("a route/authz suite never leaks into the general-server shards", () => {

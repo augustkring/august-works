@@ -71,6 +71,8 @@ const generalServerWithoutChatGroupName = "general-server-without-chat";
 const generalChatGroupName = "general-chat";
 const generalServerNativeRunnerGroupName = "general-server-native-runner";
 const chatSuite = "server/src/__tests__/chat-channels.integration.test.ts";
+const scheduledWorkServerRestartSuite =
+  "server/src/__tests__/scheduled-work-server-restart.integration.test.ts";
 // This suite rebuilds the Runner release binaries with cargo in beforeAll.
 // Inside the PR workflow's plain server shards, which carry no Rust cache,
 // that build was a ~4m30s cold compile of every third-party crate on each run
@@ -302,9 +304,31 @@ function selectSerializedSuites(routeTests, shardIndex, shardCount) {
   return shardFiles.map((file) => byRepoPath.get(file));
 }
 
-function runVitest(args, label, testShard = null) {
+function prepareBuiltServerRuntime() {
+  for (const commandArgs of [
+    ["--filter", "@paperclipai/server", "build"],
+    ["--filter", "@paperclipai/server", "build:runtime"],
+  ]) {
+    const result = spawnSync("pnpm", commandArgs, {
+      cwd: repoRoot,
+      env: process.env,
+      stdio: "inherit",
+    });
+    if (result.error || result.status !== 0) {
+      fail(`Server runtime preparation failed (${commandArgs.at(-1)}): ${result.error?.message ?? result.status}`);
+    }
+  }
+}
+
+function runVitest(args, label, testShard = null, selectedServerFiles = []) {
   console.log(`\n[test:run] ${label}`);
   invocationIndex += 1;
+  // UP13 starts the actual emitted server bundle. Prepare the ordinary server
+  // build and runtime bundle only for invocations whose selected files include
+  // that process-level integration test; unrelated server shards stay build-free.
+  if (selectedServerFiles.includes(scheduledWorkServerRestartSuite)) {
+    prepareBuiltServerRuntime();
+  }
   // Allow a short disk-backed root on hosts where /tmp has a small tmpfs quota.
   const tempRootParent = process.env.PAPERCLIP_TEST_TMPDIR || (process.platform === "win32" ? os.tmpdir() : "/tmp");
   // Production workspace/security checks reject symlink aliases. In particular
@@ -378,13 +402,15 @@ function runProjectGroup(projects, groupName, shardIndex = null, shardCount = nu
 function runGeneralGroup(routeTests, groupName, shardIndex = null, shardCount = null) {
   if (groupName === generalChatGroupName) {
     runVitest(["--project", "@paperclipai/server", ...serializedServerVitestArgs, chatSuite],
-      "chat integration test shard", { index: shardIndex ?? 0, count: shardCount ?? 1 });
+      "chat integration test shard", { index: shardIndex ?? 0, count: shardCount ?? 1 }, [chatSuite]);
     return;
   }
   if (groupName === generalServerNativeRunnerGroupName) {
     runVitest(
       ["--project", "@paperclipai/server", ...serializedServerVitestArgs, nativeRunnerSuite],
       "native runner vertical-slice suite",
+      null,
+      [nativeRunnerSuite],
     );
     return;
   }
@@ -418,6 +444,8 @@ function runGeneralGroup(routeTests, groupName, shardIndex = null, shardCount = 
           ...shardFiles,
         ],
         `${groupName} shard ${shardIndex + 1}/${shardCount}`,
+        null,
+        shardFiles,
       );
       return;
     }
@@ -436,6 +464,8 @@ function runGeneralGroup(routeTests, groupName, shardIndex = null, shardCount = 
         ...excludeRouteArgs,
       ],
       `${groupName} server suites excluding ${routeTests.length} serialized suites`,
+      null,
+      files,
     );
     return;
   }
@@ -473,6 +503,8 @@ function runSerializedSuites(routeTests, shardIndex, shardCount) {
         "--isolate",
       ],
       routeTest.repoPath,
+      null,
+      [routeTest.repoPath],
     );
   }
 }

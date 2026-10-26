@@ -7,7 +7,7 @@ import { authorizationService, type AuthorizationActor } from "../authorization.
 import { assertV5Authorization, v5HumanActorId } from "../v5-authorization.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
-import { assertAnalyticalContextPayloadAccess } from "../analytical-context-authority.js";
+import { assertAnalyticalContextPayloadAccess, assertAnalyticalContextPayloadAccessBatch } from "../analytical-context-authority.js";
 import { workflowService } from "../workflows/workflow-service.js";
 import { workflowNodeRegistryService } from "../workflows/workflow-node-registry.js";
 import { ExperienceOverloadError } from "./projection.js";
@@ -88,9 +88,13 @@ export function conversationAuthoringService(db: Db) {
       // actual task receipts. The existing Source helper verifies both origins;
       // model prose or a copied origin is not a saved result. Match the current
       // conversation, Agent/responsible user and exact run generation.
-      const tasks = await tx.execute<{ id: string; run_id: string }>(sql`
-        select t.id,h.id as run_id from issues t join heartbeat_runs h
-          on h.company_id=t.company_id and h.id::text=t.origin_run_id
+      const tasks = await tx.execute<{ id: string; run_id: string; title: string; status: string; status_version: number;
+        started_at: Date | null; execution_run_id: string | null; created_by_agent_id: string | null; origin_id: string;
+        receipt: unknown; source_run_id: string | null; source_task_id: string | null; invalid: boolean }>(sql`
+        select t.id,h.id as run_id,t.title,t.status,t.status_version,t.started_at,t.execution_run_id,t.created_by_agent_id,t.origin_id,
+          h.result_json->'semanticToolReceipts'->substr(t.origin_id,length(${`paperclip-runner:create-task:${conversationId}:`})+1) as receipt,
+          proof.source_run_id,proof.source_task_id,proof.invalid
+        from issues t join heartbeat_runs h on h.company_id=t.company_id and h.id::text=t.origin_run_id
         cross join lateral aw_runner_task_origin(t.company_id,t.id) proof
         where t.company_id=${companyId}::uuid and t.origin_kind='manual'
           and proof.invalid is false and proof.source_run_id=h.id and proof.source_task_id=${conversationId}::uuid
@@ -103,56 +107,22 @@ export function conversationAuthoringService(db: Db) {
           and h.agent_id=${initial.conversation.conversationAgentId}::uuid and h.responsible_user_id=${initial.userId}
           and coalesce(h.context_snapshot->>'conversationSessionGeneration','0')=${String(initial.conversation.conversationSessionGeneration)}
           and t.conversation_agent_id is null and t.conversation_retired_at is null and t.hidden_at is null
-        order by t.created_at desc,t.id desc limit 11`);
+        order by t.created_at desc,t.id desc limit 11 for share of t,h`);
       const savedTasks = [];
-      // Pin exact task and origin rows before doing the rest of the Home read.
-      // Their share locks and the company/privacy locks above keep the receipt,
-      // task state, and erasure boundary stable until final admission below.
-      const pinTask = async (candidate: { id: string; run_id: string }) => {
+      const pinnedTasks: Array<{ candidate: (typeof tasks)[number]; task: {
+        id: string; projectId: null; title: string; status: string; statusVersion: number;
+        startedAt: Date | null; executionRunId: string | null;
+      } }> = [];
+      for (const candidate of tasks.slice(0, 10)) {
         currentSignal.throwIfAborted();
-        const [origin] = await tx.select({ id: heartbeatRuns.id, receipts: heartbeatRuns.resultJson }).from(heartbeatRuns).where(and(
-          eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, candidate.run_id),
-          eq(heartbeatRuns.agentId, initial.conversation.conversationAgentId!), eq(heartbeatRuns.responsibleUserId, initial.userId),
-          eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.nativeIssueId, conversationId),
-          sql`coalesce(${heartbeatRuns.contextSnapshot}->>'conversationSessionGeneration','0')=${String(initial.conversation.conversationSessionGeneration)}`,
-        )).for("share");
-        if (!origin) throw conflict("The saved task's conversation provenance changed");
-        const [task] = await tx.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, candidate.id),
-          isNull(issues.hiddenAt), isNull(issues.conversationAgentId), isNull(issues.conversationRetiredAt),
-          eq(issues.originKind, "manual"),
-          or(and(eq(issues.createdByAgentId, initial.conversation.conversationAgentId!), sql`${issues.originId} like ${`paperclip-runner:create-task:${conversationId}:%`}`),
-            and(isNull(issues.createdByAgentId), sql`${issues.originId} like 'paperclip-suggested-task:%'`)),
-          eq(issues.originRunId, candidate.run_id))).for("share");
-        if (!task) throw conflict("The saved conversation task changed; refresh its current owner");
-        const proof = await tx.execute<{ source_run_id: string | null; source_task_id: string | null; invalid: boolean }>(sql`
-          select * from aw_runner_task_origin(${companyId}::uuid,${task.id}::uuid)`);
-        if (proof.length !== 1 || proof[0].invalid || proof[0].source_run_id !== candidate.run_id || proof[0].source_task_id !== conversationId)
+        if (candidate.invalid || candidate.source_run_id !== candidate.run_id || candidate.source_task_id !== conversationId)
           throw conflict("The Original saved task source receipt is unavailable");
-        if (task.createdByAgentId !== null) {
-          const receiptKey = task.originId!.slice(`paperclip-runner:create-task:${conversationId}:`.length);
-          const receipts = origin.receipts?.semanticToolReceipts;
-          const receipt = receipts && typeof receipts === "object" && !Array.isArray(receipts)
-            ? (receipts as Record<string, unknown>)[receiptKey] : undefined;
-          if (!z.object({ operationId: z.literal("create_task"), result: z.object({ task: z.object({ id: z.literal(task.id) }) }) }).safeParse(receipt).success)
+        if (candidate.created_by_agent_id !== null) {
+          if (!z.object({ operationId: z.literal("create_task"), result: z.object({ task: z.object({ id: z.literal(candidate.id) }) }) }).safeParse(candidate.receipt).success)
             throw conflict("The Original saved task receipt is unavailable");
         }
-        return task;
-      };
-      const authorizeTask = async (candidate: { id: string; run_id: string }, task: typeof issues.$inferSelect, current: AuthorizationActor) => {
-        currentSignal.throwIfAborted();
-        const access = await authorizationService(tx).decide({ actor: current, action: "issue:read", resource: {
-          type: "issue", companyId, issueId: task.id, projectId: task.projectId, parentIssueId: task.parentId,
-          status: task.status, assigneeAgentId: task.assigneeAgentId, assigneeUserId: task.assigneeUserId,
-        } });
-        if (!access.allowed) throw forbidden("Current saved task read authority is required");
-        // The new projection inherits both the created task and originating
-        // run's current source authority; it stores no copied task body.
-        await assertAnalyticalContextPayloadAccess(tx, companyId, current, { runId: candidate.run_id });
-        await assertAnalyticalContextPayloadAccess(tx, companyId, current, { issueId: task.id });
-      };
-      const pinnedTasks: Array<{ candidate: { id: string; run_id: string }; task: typeof issues.$inferSelect }> = [];
-      for (const candidate of tasks.slice(0, 10)) {
-        const task = await pinTask(candidate);
+        const task = { id: candidate.id, projectId: null, title: candidate.title, status: candidate.status,
+          statusVersion: Number(candidate.status_version), startedAt: candidate.started_at, executionRunId: candidate.execution_run_id };
         pinnedTasks.push({ candidate, task });
         savedTasks.push({ kind: "task" as const, id: task.id, title: task.title.slice(0, 400), titleTruncated: task.title.length > 400,
           status: task.status, statusVersion: task.statusVersion,
@@ -274,7 +244,16 @@ export function conversationAuthoringService(db: Db) {
       for (const candidate of agentDraftCandidates.slice(0, 10)) await readAgentDraft(candidate);
       // The per-task live reader and source checks run after the other selected
       // Home sources have completed their waits; task rows stay share-locked.
-      for (const { candidate, task } of pinnedTasks) await authorizeTask(candidate, task, initial.current);
+      if (pinnedTasks.length) {
+        const issueIds = pinnedTasks.map(({ task }) => task.id);
+        const projectIds: string[] = [];
+        await authorizationService(tx).withReadSources(companyId, issueIds, projectIds, async owner => {
+          await owner.assertTaskPrivacyBatch(initial.current, issueIds, projectIds, performance.now() + remainingMs());
+        });
+        // Keep every exact Task's retained roots and lineage checks while
+        // evaluating shared Original run/conversation ancestors once.
+        await assertAnalyticalContextPayloadAccessBatch(tx, companyId, initial.current, issueIds);
+      }
       if (candidates.length) await assertV5Authorization(tx, initial.current, companyId, "workflows:read");
       // Keep the final Human/company/conversation credential check after the
       // selected source reads and waits, in this same read transaction.

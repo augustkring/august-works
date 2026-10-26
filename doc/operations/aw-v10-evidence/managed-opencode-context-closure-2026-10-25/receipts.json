@@ -3,7 +3,7 @@
   "status": "open_actual_binary_acceptance",
   "acceptance": {
     "actualPinnedBinaryRunGreen": false,
-    "privateRMemorySelected": false,
+    "privateRMemorySelected": true,
     "aBeforeRAndBAfterRProved": false,
     "finishAndCurrentReaderProved": false
   },
@@ -15,9 +15,42 @@
     "sourcePins": "context-owner-source-pins.json"
   },
   "actualRuns": [
-    { "log": "actual-e2e-startup-failure.log", "exit": 1, "result": "opencode-ai postinstall was missing" },
-    { "log": "actual-e2e-pre-dedupe-failure.log", "exit": 1, "result": "Context manifest stage exceeded existing runtime deadline" },
-    { "log": "actual-e2e-witness-failure.log", "exit": 1, "result": "Native Context read witness unavailable; no successful read_context capture" }
+    {
+      "log": "actual-e2e-startup-failure.log",
+      "exit": 1,
+      "result": "opencode-ai postinstall was missing"
+    },
+    {
+      "log": "actual-e2e-pre-dedupe-failure.log",
+      "exit": 1,
+      "result": "Context manifest stage exceeded existing runtime deadline"
+    },
+    {
+      "log": "actual-e2e-witness-failure.log",
+      "exit": 1,
+      "result": "Native Context read witness unavailable; no successful read_context capture"
+    },
+    {
+      "log": "actual-e2e-rselected-gateway-length-failure-2026-10-26.log",
+      "exit": 1,
+      "sourcePins": "actual-e2e-rselected-gateway-length-failure-source-pins-2026-10-26.json",
+      "binarySha256": "actual-e2e-rselected-gateway-length-failure-binary-sha256-2026-10-26",
+      "result": "DB-backed facts prove private R Memory selected in a two-input Task+Context set; gateway's total-input length-one guard rejected it"
+    },
+    {
+      "log": "actual-e2e-corrected-postread-55p03-failure-2026-10-26.log",
+      "exit": 1,
+      "sourcePins": "actual-e2e-corrected-postread-55p03-failure-source-pins-2026-10-26.json",
+      "binarySha256": "actual-e2e-corrected-postread-55p03-failure-binary-sha256-2026-10-26",
+      "result": "read_context succeeded and capture persisted; runner hit its existing 90-second session deadline before model request 4; failure-persistence SELECT heartbeat_runs FOR UPDATE then raised SQLSTATE 55P03; A/R/B plus finish/current-reader not proved"
+    },
+    {
+      "log": "actual-e2e-postcapture-stall-diagnostic-2026-10-26.log",
+      "exit": 1,
+      "sourcePins": "actual-e2e-postcapture-stall-diagnostic-source-pins-2026-10-26.json",
+      "binarySha256": "actual-e2e-postcapture-stall-diagnostic-binary-sha256-2026-10-26",
+      "result": "read_context capture persisted; after-capture 15-second probe remained at provider fetch 3 with no PG blockers; test-only timings show 182 successful analytical-context access checks (latest 63 median 204 ms); existing 90-second runner deadline expired before request 4, so complete A/R/B and finish/current-reader are not proved"
+    }
   ],
   "postinstall": {
     "log": "opencode-postinstall.log",

@@ -1,0 +1,212 @@
+{
+  "qualificationBaseCommit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+  "sourceHead": "40b354f61cb4fc693e007b797da408739802f6ae",
+  "qualificationWorkspace": "/workspace/v10-dep-qualification",
+  "copiedFiles": [
+    {
+      "path": ".github/docker-context-checks.Dockerfile",
+      "sha256": "8133009f5b3fc345eabdcd38a10960991ed88e3e44b1381d6b9a2e575f4076a1"
+    },
+    {
+      "path": ".github/workflows/aw-v4-verification.yml",
+      "sha256": "6f5155875350237f882f666c3a66796fbf4e53b1f3a53b44ceb362ec2a9233fa"
+    },
+    {
+      "path": "cli/src/__tests__/company-delete.test.ts",
+      "sha256": "fda04f9ebdeb77ab68bd7f47c4474e8faa60ed8b17ee284fc62f22231d881d3f"
+    },
+    {
+      "path": "cli/src/__tests__/company.test.ts",
+      "sha256": "256f0ea6e7a7a7d36ec2670fdd033741adf45bd8a093623f9b4a96abe7092f22"
+    },
+    {
+      "path": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "sha256": "0c985a8c40fe398cd95fe1a68b344f853f55ed2139a4bacaf16f8f9424bf9567"
+    },
+    {
+      "path": "doc/plans/2026-10-22-blentera-v10-recovery.md",
+      "sha256": "4e78c100b3406c594f9963f0c9f670e32e985c97e43ce53c75c4ca158037d02a"
+    },
+    {
+      "path": "doc/plans/2026-10-23-blentera-v10-native-payload-source-contract.md",
+      "sha256": "493ae1dad425abdf0374936815bac0b276995d21d3c5b653d54ccae5f68db170"
+    },
+    {
+      "path": "package.json",
+      "sha256": "dd176b5d872614c7269da5dc1119e8ff60522e217e842533ae10a765217283e7"
+    },
+    {
+      "path": "packages/adapters/claude-local/package.json",
+      "sha256": "22ad853fb08bfe01b1b8ee4fe73c480abb9f160a7fabe95db12e94b5e3832e90"
+    },
+    {
+      "path": "packages/paperclip-runner/package.json",
+      "sha256": "dae589d7d800bc0e063f9e77b481a2d81090c10f660d5d704c3557e73a57329a"
+    },
+    {
+      "path": "packages/paperclip-runner/src/drivers/acpx/installation-integrity.test.ts",
+      "sha256": "eec43546f4d1b51e8f5451df88b71ef39e7ffe304d089b7ae311bdc9486c7315"
+    },
+    {
+      "path": "packages/paperclip-runner/src/drivers/acpx/installation-integrity.ts",
+      "sha256": "a38480f62b6062f6d9a16c40dae8416355dd4ee1e7702ebc4f2369797712c0a0"
+    },
+    {
+      "path": "packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.test.ts",
+      "sha256": "bd697349e0ab4c4b0c1ee836148ac788e93d97507254f5edf71247beb742b23e"
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "sha256": "6bce79ea6e951c5c96a0cf93b93eb3abb853495a7e38c6a6aa7633bd138b1bb2"
+    },
+    {
+      "path": "pnpm-workspace.yaml",
+      "sha256": "a710365e54bf19dc0511042cd7e7582c89491bbfb9eec657d01a5255a1c3c82e"
+    },
+    {
+      "path": "scripts/__tests__/e2e-shard.test.mjs",
+      "sha256": "b788ae1c32996dcbd4080a4dcd7f16a9899fcc9fd33a25fd5654f4aae778dfd8"
+    },
+    {
+      "path": "scripts/e2e-shard.mjs",
+      "sha256": "07519e718244ea968cc1d687bd0fb10c91ebf40e3fecd3978e78e965821e9d7a"
+    },
+    {
+      "path": "server/package.json",
+      "sha256": "302937840cc0b0ded39dbf3e2bc19444dc8f30d2528e4179cc5e072c21efad71"
+    },
+    {
+      "path": "server/src/__tests__/document-annotation-routes.test.ts",
+      "sha256": "164818ba00e5ca81ded975c7cd5a28d1b45118e880684608a264c78998a51e12"
+    },
+    {
+      "path": "server/src/__tests__/environment-selection-route-guards.test.ts",
+      "sha256": "2004ef13259405f9df0afd41f9af1a411192e9595f0400a6b81880d6fd1d6fe3"
+    },
+    {
+      "path": "server/src/__tests__/heartbeat-process-recovery.test.ts",
+      "sha256": "8b04a2e8d46ad3d050d01e488d88a1cb271958c9493b140112d81cb9b16e7887"
+    },
+    {
+      "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+      "sha256": "ed97f2b67f7eaf6c1fc5ba48fa1404758c7d35e716cb9a234ac8dafd60b84185"
+    },
+    {
+      "path": "server/src/__tests__/helpers/runner-api-server.ts",
+      "sha256": "c7bc6d8ea998b0fda5db42f621c61ec9013a5d892a400bceae2c1c5fbf659a52"
+    },
+    {
+      "path": "server/src/__tests__/issue-activity-events-routes.test.ts",
+      "sha256": "3f696f62f5d7fb3b8d3af7fc246f3e2e8b3197ef8b576b3b90d95968c8a7003f"
+    },
+    {
+      "path": "server/src/__tests__/issue-assigned-backlog-contract-routes.test.ts",
+      "sha256": "dda8b74b54a25e0f85df816c38750fd61e8fc818c10aae428fafc85ecec9bd10"
+    },
+    {
+      "path": "server/src/__tests__/manual-task-payload-source.integration.test.ts",
+      "sha256": "f07784d64dfa36a318ebc44793f0bd4d35a234c717a89c55449f6d65aab49f36"
+    },
+    {
+      "path": "server/src/__tests__/project-workspace-managed-sandbox-routes.test.ts",
+      "sha256": "c107a05ed6c25e602b40c8ee6d9fabfcd0e096c36baced8b248e1d9dca991f54"
+    },
+    {
+      "path": "server/src/__tests__/tool-access-service.test.ts",
+      "sha256": "6ff80b86d755180f606c56ab91bfc927fc0069743e6c176a532c9f12434901c7"
+    },
+    {
+      "path": "server/src/__tests__/v7-learning.integration.test.ts",
+      "sha256": "e8a527742124376932df002d3c48f9c72557bb5ac9d0bf32636e528f3c8aca0a"
+    },
+    {
+      "path": "server/src/__tests__/v9-conversation-authoring.integration.test.ts",
+      "sha256": "73819ee709f22f02e15b36d1ce0f89ab1e8b4257a2812aacb160085c02e9d04b"
+    },
+    {
+      "path": "server/src/services/context/context-engine-integration.test.ts",
+      "sha256": "a8c4099d598b26cb1593aeb07f5d640ce55d3ad16a7fe7182183ab521659cd5b"
+    },
+    {
+      "path": "server/src/services/context/context-engine.ts",
+      "sha256": "a24f5ce7bf8a591c16fcc09f505af783e39e0d0eae2bff209784fc07c2f06b36"
+    },
+    {
+      "path": "server/src/services/context/context-manifest.test.ts",
+      "sha256": "1efb9787a28720968b3716ee18ee2d52d133c980f0bd624553fd094763a91fb3"
+    },
+    {
+      "path": "server/src/services/context/context-manifest.ts",
+      "sha256": "23198995e01b14efaeb3b4b50990953588a42fcab4f56184490ecc2b631f26b4"
+    },
+    {
+      "path": "server/src/services/heartbeat.ts",
+      "sha256": "9ea3cd43f0aab314aea4d0f463987445a9002e0935b529894284a9d2bb7f908f"
+    },
+    {
+      "path": "server/src/services/issues.ts",
+      "sha256": "a754515f224ccf9a79af40d913e00fa0c8a0a7eac6407a0e455a7c297bc97a44"
+    },
+    {
+      "path": "server/src/services/knowledge/connected-knowledge.test.ts",
+      "sha256": "49ff2a9de8cd8e3090ee5a921b2ae8e4fb6fddc8779c3a83eaf2f20a37c1d7f9"
+    },
+    {
+      "path": "server/src/services/memory/memory-privacy.ts",
+      "sha256": "898e2a76fc8bc0e80c9ecb9121f3355d8da153ed17bd026cfa8e31d5a0d4201f"
+    },
+    {
+      "path": "server/src/services/memory/memory-service.ts",
+      "sha256": "bd31de4887470113780413f67e7ea707a11730aebc92674085a472cb48bf1c0c"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+      "sha256": "0fbfea96f1716a9371dc86baa5c89213a508aa93fca98084468c1e13817b284a"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-execution-input.ts",
+      "sha256": "e54ac8d1b73a88b827285166b36709f6ebd03b58cf07c9d8419fe90d92280342"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+      "sha256": "d517de15e015eebb74734e53e1f5c9e883542810b82dc1df58b3c3a8b9a844b6"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
+      "sha256": "077fb5702a3a78952714b60be96fb8f5cca280c71dfcca2be2dd670b0ec7fa70"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-session-executor.ts",
+      "sha256": "48ec01cb47be9203857d3e53d654dc0656b6f57f5e7a4e93acd23116db02f2af"
+    },
+    {
+      "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.test.ts",
+      "sha256": "4c0a8134c9f3b58046aa7553cb35ff32766d3967a29184df3535ce6edda2a585"
+    },
+    {
+      "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+      "sha256": "6a0ec9362b13403c1d3e122ac50c58a3b4bb8c0ac8af029a66bbab0bb4b4e476"
+    },
+    {
+      "path": "server/src/services/native-runtime/runner-api.integration.test.ts",
+      "sha256": "bb90da6104452ac1bcb97cc3fbc67ed034e7fc3808ff9028685626405ac67d69"
+    },
+    {
+      "path": "tests/e2e/agentmail.spec.ts",
+      "sha256": "748f45e50c4c315e18efd0eef582ce2dde4e71fe2ab952de3e8ca50e5f02d5cc"
+    },
+    {
+      "path": "tests/e2e/aw-v9-insight-forecasts.spec.ts",
+      "sha256": "1e2e845ed42892aa71cd041803887cb8a71e4f1db9117453825021c1543f1b77"
+    },
+    {
+      "path": "tests/e2e/playwright.config.ts",
+      "sha256": "86c80af7641ebcaf5436f056639fc7b94fc8ce9e3b596a6e775e37cc641b838f"
+    },
+    {
+      "path": "ui/package.json",
+      "sha256": "5e84ab58534a6d6340b0925a7d24d35f50c21432422a44d0c22189c1aeaf834e"
+    }
+  ],
+  "limits": "Current source snapshot at compiler start; later main-tree edits excluded. New locked dependencies installed with pnpm9. Reuses derived Rust target cache with no Rust source drift."
+}

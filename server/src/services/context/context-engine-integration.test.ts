@@ -388,22 +388,26 @@ describeEmbeddedPostgres("Context Engine integration", () => {
         permissionKey:"company_scope:read"}).onConflictDoNothing();
       await db.insert(principalPermissionGrants).values({companyId:input.companyId,principalType:"user",principalId:userId,
         permissionKey:"company_scope:read"}).onConflictDoNothing();
-      let sourceTask=await issueService(db).create(input.companyId,{
+      const sourceTask=await issueService(db).create(input.companyId,{
         title:`Human Memory evidence ${randomUUID()}`,description:`${input.content}\n\nThis is the source Task for the reviewed Memory candidate.`,
         createdByUserId:userId,responsibleUserId:userId,
         ...(input.privateSourceTask?{visibility:"private" as const,status:"todo" as const,assigneeAgentId:input.agentId}:{}),
       },db,undefined,input.sourceSnapshotState==="missing"
         ?{privacyActor:human,sourceAccessActor:human}
         :{manualInputActor:human,privacyActor:human,sourceAccessActor:human});
+      let sourceTaskUpdatedAt=sourceTask.updatedAt;
       if(input.sourceSnapshotState==="invalidated"){
         await issueService(db).update(sourceTask.id,{description:`${sourceTask.description}\nEdited after direct Human input.`,
           actorUserId:userId,privacyActor:human},db);
-        sourceTask=(await db.select().from(issues).where(and(eq(issues.companyId,input.companyId),eq(issues.id,sourceTask.id))))[0]!;
+        const [updatedSourceTask]=await db.select({updatedAt:issues.updatedAt}).from(issues).where(and(
+          eq(issues.companyId,input.companyId),eq(issues.id,sourceTask.id)));
+        if(!updatedSourceTask)throw new Error("Edited Human Memory source Task disappeared");
+        sourceTaskUpdatedAt=updatedSourceTask.updatedAt;
       }
       const humanActor={principal:{type:"user" as const,userId},authorizationActor:human};
       if(input.expireHumanCredential&&human.sessionId)await db.update(authSessions).set({expiresAt:new Date(Date.now()-1000)})
         .where(eq(authSessions.id,human.sessionId));
-      const evidenceTask=input.foreignSource??sourceTask;
+      const evidenceTask=input.foreignSource??{...sourceTask,updatedAt:sourceTaskUpdatedAt};
       const candidate=await memoryService(db).createCandidate(input.companyId,{
         bindingId:binding!.id,memoryType:"lesson",scope:{type:"company",id:null},subject:{type:"company",id:input.companyId},
         ownerAgentId:null,title:null,content:input.content,summary:null,sensitivity:input.sensitivity??"internal",importance:50,
@@ -1109,7 +1113,8 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       createdByUserId:foreign.userId,responsibleUserId:foreign.userId},
       db,undefined,{manualInputActor:foreignHuman,privacyActor:foreignHuman,sourceAccessActor:foreignHuman});
     await expect(seedMemory({companyId:seeded.companyId,agentId:seeded.agent.id,content:"Foreign source must be denied.",
-      foreignSource:{id:foreignTask.id,updatedAt:foreignTask.updatedAt,identifier:foreignTask.identifier,title:foreignTask.title}}))
+      foreignSource:{id:foreignTask.id,updatedAt:foreignTask.updatedAt,identifier:foreignTask.identifier??"FOREIGN",
+        title:foreignTask.title??"Foreign Memory source"}}))
       .rejects.toMatchObject({status:403});
   });
 

@@ -11,9 +11,26 @@ import { instanceSettingsService } from "../instance-settings.js";
 import { makeFixtureTreeWritable, runManagedNativeOpenCodeFixture } from "../../__tests__/helpers/managed-native-opencode-e2e-fixture.js";
 import { memoryService } from "../memory/memory-service.js";
 import * as nativeDirectInput from "../native-direct-input.js";
+import * as analyticalContextAuthority from "../analytical-context-authority.js";
 import { nativePayloadSourceSnapshotSchema } from "@paperclipai/shared";
 
 const managedContextReadFailures: Array<{ name: string; code: string | null; causeCode: string | null; frames: string[] }> = [];
+const managedContextSourceCheckTimings: Array<{ phase: string; elapsedMs: number; outcome: "ok" | "throw" }> = [];
+const managedContextSourceCheckCounts: Record<string, number> = {};
+
+function recordManagedContextSourceCheckTiming(phase: string, startedAt: number, outcome: "ok" | "throw") {
+  managedContextSourceCheckCounts[phase] = (managedContextSourceCheckCounts[phase] ?? 0) + 1;
+  if (managedContextSourceCheckTimings.length >= 64) managedContextSourceCheckTimings.shift();
+  managedContextSourceCheckTimings.push({ phase, elapsedMs: Math.max(0, Date.now() - startedAt), outcome });
+}
+
+async function timeManagedContextSourceCheck<T>(phase: string, check: () => Promise<T>): Promise<T> {
+  const startedAt = Date.now();
+  let outcome: "ok" | "throw" = "ok";
+  try { return await check(); }
+  catch (error) { outcome = "throw"; throw error; }
+  finally { recordManagedContextSourceCheckTiming(phase, startedAt, outcome); }
+}
 
 function safeErrorCode(value: unknown): string | null {
   return typeof value === "string" && /^[A-Z0-9_:-]{1,80}$/i.test(value) ? value : null;
@@ -62,6 +79,12 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
         throw error;
       }
     });
+    const assertContextSourceSetCurrent = nativeDirectInput.assertNativeContextReadSourceSetCurrent;
+    vi.spyOn(nativeDirectInput, "assertNativeContextReadSourceSetCurrent").mockImplementation(async (...args) =>
+      timeManagedContextSourceCheck("assertNativeContextReadSourceSetCurrent", () => assertContextSourceSetCurrent(...args)));
+    const assertAnalyticalContextPayloadAccess = analyticalContextAuthority.assertAnalyticalContextPayloadAccess;
+    vi.spyOn(analyticalContextAuthority, "assertAnalyticalContextPayloadAccess").mockImplementation(async (...args) =>
+      timeManagedContextSourceCheck("assertAnalyticalContextPayloadAccess", () => assertAnalyticalContextPayloadAccess(...args)));
   }, 60_000);
 
   afterAll(async () => {
@@ -109,9 +132,12 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
         { afterModelToolCallId: memoryAId, action: "create_private_context_root" },
       ],
       onPreserveDebugArtifacts: () => { preserveDebugArtifacts = true; } }).catch(error => {
-        if (managedContextReadFailures.length) {
+        if (managedContextReadFailures.length || managedContextSourceCheckTimings.length) {
           const message = error instanceof Error ? error.message : "managed_opencode_fixture_failed";
-          throw new Error(`${message}\nmanaged Context read failure facts: ${JSON.stringify(managedContextReadFailures)}`);
+          throw new Error(`${message}\nmanaged Context read failure facts: ${JSON.stringify({
+            failures: managedContextReadFailures, sourceCheckCounts: managedContextSourceCheckCounts,
+            recentSourceCheckTimings: managedContextSourceCheckTimings,
+          })}`);
         }
         throw error;
       });

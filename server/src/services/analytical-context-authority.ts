@@ -9,6 +9,12 @@ import type {NativeReadScope} from "./analytical-reader.js";
 import {HttpError,conflict,forbidden,unprocessable} from "../errors.js";
 
 const pinsSchema=z.array(analyticalContextAuthorityPinSchema).min(1).max(32);
+type AnalyticalPayloadScope={issueId:string}|{runId:string};
+type AnalyticalPayloadWorklist={
+ sharedSources:Map<string,AnalyticalPayloadScope>;
+ finalChecks:Array<()=>Promise<void>>;
+ workflowRunIds:Set<string>;
+};
 /** Exact native source owners reauthorize retained identities. No copied fact,
  * historical requester or feature flag supplies a current reader privilege. */
 export async function inspectAnalyticalContextPins(tx:Db,companyId:string,actor:AuthorizationActor,raw:AnalyticalContextAuthorityPin[],deadline=performance.now()+30000,historicalQualification=true,learningCycleScope?:{cycleId:string;purpose:string}) {
@@ -103,6 +109,48 @@ export async function assertLearnedWorkflowPayloadAccess(db:Db,companyId:string,
 }
 
 export async function assertAnalyticalContextPayloadAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,scope:{issueId:string}|{runId:string},readScope?:NativeReadScope):Promise<void> {
+ return assertAnalyticalContextPayloadAccessInternal(db,companyId,actor,scope,readScope);
+}
+
+/** Verify a complete selected Task population while checking its shared
+ * Original ancestors once. Every exact Task still receives its own direct
+ * reader, retained-root, and lineage review in this physical transaction. */
+export async function assertAnalyticalContextPayloadAccessBatch(db:Db,companyId:string,actor:AuthorizationActor|undefined,
+ issueIds:string[],readScope?:NativeReadScope):Promise<void> {
+ const ids=[...new Set(issueIds)];
+ if(ids.length>256||ids.some(id=>!z.string().uuid().safeParse(id).success))
+  throw new HttpError(403,"The complete analytical Task population is unavailable",{code:"analytical_source_access_lost"});
+ if(!ids.length)return;
+ if(!is(db,PgTransaction))return db.transaction(tx=>assertAnalyticalContextPayloadAccessBatch(tx as unknown as Db,companyId,actor,ids,readScope));
+ const worklist:AnalyticalPayloadWorklist={sharedSources:new Map(),finalChecks:[],workflowRunIds:new Set()};
+ for(const issueId of ids)
+  await assertAnalyticalContextPayloadAccessInternal(db,companyId,actor,{issueId},readScope,worklist);
+ const sourceIssueIds=[...new Set([...ids,...[...worklist.sharedSources.values()].flatMap(source=>"issueId"in source?[source.issueId]:[])])];
+ const sourceRunIds=[...new Set([...worklist.sharedSources.values()].flatMap(source=>"runId"in source?[source.runId]:[]))];
+ // Pin the exact lineage rows after all per-Task source discovery, before its
+ // final current-owner checks. The caller's broader privacy transaction stays
+ // open through the complete worklist and final checks below.
+ if(sourceIssueIds.length){
+  const locked=await db.select({id:issues.id}).from(issues).where(and(eq(issues.companyId,companyId),inArray(issues.id,sourceIssueIds))).for("share");
+  if(locked.length!==sourceIssueIds.length)throw new HttpError(403,"Native task source access is unavailable",{code:"analytical_source_access_lost"});
+ }
+ if(sourceRunIds.length){
+  const locked=await db.select({id:heartbeatRuns.id}).from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId,companyId),inArray(heartbeatRuns.id,sourceRunIds))).for("share");
+  if(locked.length!==sourceRunIds.length)throw new HttpError(403,"Native task source access is unavailable",{code:"analytical_source_access_lost"});
+ }
+ const finalize=async()=>{
+  for(const source of worklist.sharedSources.values())await assertDirectAnalyticalContextPayloadAccess(db,companyId,actor,source,readScope);
+  for(const check of worklist.finalChecks)await check();
+ };
+ const workflowRunIds=[...worklist.workflowRunIds].sort();
+ if(workflowRunIds.length){
+  if(workflowRunIds.length>256||!actor)throw new HttpError(403,"Complete Workflow task source access is unavailable",{code:"analytical_source_access_lost"});
+  await authorizationService(db).withReadWorkflowSources(companyId,actor,workflowRunIds,finalize);
+ }else await finalize();
+}
+
+async function assertAnalyticalContextPayloadAccessInternal(db:Db,companyId:string,actor:AuthorizationActor|undefined,
+ scope:{issueId:string}|{runId:string},readScope?:NativeReadScope,worklist?:AnalyticalPayloadWorklist):Promise<void>{
  const origins=()=>db.execute<{source_run_id:string|null;source_task_id:string|null;invalid:boolean}>(sql`
    select source_run_id,source_task_id,invalid from aw_runner_task_source_chain(${companyId}::uuid,
      ${"runId"in scope?scope.runId:null}::uuid,${"issueId"in scope?scope.issueId:null}::uuid)
@@ -146,19 +194,31 @@ export async function assertAnalyticalContextPayloadAccess(db:Db,companyId:strin
   .where(and(eq(workflowStepRuns.companyId,companyId),eq(workflowStepRuns.heartbeatRunId,scope.runId))).limit(257):[];
  const workflowRunIds=[...new Set([...workflowTasks.map(task=>task.runId).filter((id):id is string=>!!id),...stepRuns.map(row=>row.runId)])].sort();
  if(workflowRunIds.length>256)throw new HttpError(403,"Complete Workflow task source access is unavailable",{code:"analytical_source_access_lost"});
+ if(worklist)workflowRunIds.forEach(runId=>worklist.workflowRunIds.add(runId));
  const inspect=async()=>{
  await assertDirectAnalyticalContextPayloadAccess(db,companyId,actor,scope,readScope);
  for(const source of initial){
    // Each actual ancestor keeps its Original current-reader policy, not just
    // an erasure marker or the descendant task's company membership.
-   await assertDirectAnalyticalContextPayloadAccess(db,companyId,actor,{runId:source.source_run_id!},readScope);
-   await assertDirectAnalyticalContextPayloadAccess(db,companyId,actor,{issueId:source.source_task_id!},readScope);
+   if(worklist){
+    worklist.sharedSources.set(`run:${source.source_run_id}`,{runId:source.source_run_id!});
+    worklist.sharedSources.set(`issue:${source.source_task_id}`,{issueId:source.source_task_id!});
+   }else{
+    await assertDirectAnalyticalContextPayloadAccess(db,companyId,actor,{runId:source.source_run_id!},readScope);
+    await assertDirectAnalyticalContextPayloadAccess(db,companyId,actor,{issueId:source.source_task_id!},readScope);
+   }
  }
  for(const source of initialRoutines){
-   await assertDirectAnalyticalContextPayloadAccess(db,companyId,actor,{runId:source.source_run_id},readScope);
-   await assertDirectAnalyticalContextPayloadAccess(db,companyId,actor,{issueId:source.source_task_id},readScope);
+   if(worklist){
+    worklist.sharedSources.set(`run:${source.source_run_id}`,{runId:source.source_run_id});
+    worklist.sharedSources.set(`issue:${source.source_task_id}`,{issueId:source.source_task_id});
+   }else{
+    await assertDirectAnalyticalContextPayloadAccess(db,companyId,actor,{runId:source.source_run_id},readScope);
+    await assertDirectAnalyticalContextPayloadAccess(db,companyId,actor,{issueId:source.source_task_id},readScope);
+   }
  }
  if(initial.length||initialRoutines.length){
+  const recheck=async()=>{
    const final=await origins();
    if(JSON.stringify(initialRoutines)!==JSON.stringify(await routineOrigins()))
      throw new HttpError(403,"Routine source provenance changed",{code:"analytical_source_access_lost"});
@@ -167,6 +227,9 @@ export async function assertAnalyticalContextPayloadAccess(db:Db,companyId:strin
    const [receipt]=await db.execute<{erased:boolean}>(sql`select aw_workflow_memory_erased(${companyId}::uuid,
      ${"runId"in scope?scope.runId:null}::uuid,${"issueId"in scope?scope.issueId:null}::uuid) as erased`);
    if(receipt?.erased)throw new HttpError(403,"Native task source access is unavailable",{code:"analytical_source_access_lost"});
+  };
+  if(worklist)worklist.finalChecks.push(recheck);
+  else await recheck();
  }
  };
  if(workflowRunIds.length){

@@ -1,0 +1,6 @@
+5e6ce3e7884cc8272c212dfe5c3807715e5b9861a0560db3c88ae653dd542008  scripts/run-vitest-stable.mjs
+982c9f1f8cd27d1ace3318ee65b7d3723f2be95f5da4080f4a5598e55352f368  scripts/__tests__/run-vitest-stable-shard.test.mjs
+ad1e9279436897e9f293f64e7afc01681927443ceb10d266e99e897cf24e7394  server/src/__tests__/scheduled-work-server-restart.integration.test.ts
+1a1b1bd46e34c8c7ef88a63e1822139e0984fffa9dabd94d2a84d89dd28bec22  doc/operations/aw-v10-evidence/up13-server-restart-preflight-2026-10-26/source-pins.json
+16b0197bd3478bb71204f7123d3ef96b50da5372beaa53887669af5212beced5  doc/operations/aw-v10-evidence/up13-server-restart-preflight-2026-10-26/server-build.log
+5acd733821a1224b97056479d2d45c62f9830a9a3206f83225b40c0ff3bcd1e4  doc/operations/aw-v10-evidence/up13-server-restart-preflight-2026-10-26/runner-wiring.log

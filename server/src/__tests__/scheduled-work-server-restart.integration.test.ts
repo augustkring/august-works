@@ -39,9 +39,10 @@ describe.skipIf(!support.supported)("UP13 assembled built server scheduled resta
   let originalBundle:Awaited<ReturnType<typeof bundleFingerprint>>;
   const sourceHashes:Record<string,string>={};
   beforeAll(async()=>{
-    // Build preparation uses the repository's original server build and
-    // scripts/bundle-runtime.mjs, outside this test under the shared PG lock.
-    // Never substitute the isolated worker or a fixture scheduler for index.ts.
+    // `pnpm test:run` prepares this suite with the original server build and
+    // scripts/bundle-runtime.mjs before Vitest launches. A direct Vitest run
+    // must run those same build commands first. Never substitute the isolated
+    // worker or a fixture scheduler for index.ts.
     await fs.access(entry);
     originalBundle=await bundleFingerprint();
     for(const relative of ["index.ts","services/scheduled-work.ts","services/routines.ts","services/delivery-work-coordinator.ts"])

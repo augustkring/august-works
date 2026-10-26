@@ -24,6 +24,7 @@ const mockAccessService = vi.hoisted(() => ({
   decide: vi.fn(async () => ({ allowed: true, explanation: "Allowed by test mock." })),
 }));
 const mockCanReadIssuePrivacy = vi.hoisted(() => vi.fn(async () => true));
+const mockAnalyticalPayloadAccess = vi.hoisted(() => vi.fn(async () => undefined));
 const mockHeartbeatService = vi.hoisted(() => ({
   wakeup: vi.fn(async () => undefined),
   reportRunActivity: vi.fn(async () => undefined),
@@ -44,6 +45,7 @@ const mockInstanceSettingsService = vi.hoisted(() => ({
     },
   })),
   listCompanyIds: vi.fn(async () => ["company-1"]),
+  getExperimental: vi.fn(async () => ({ enableExternalObjects: false })),
 }));
 const mockRoutineService = vi.hoisted(() => ({
   syncRunStatusForIssue: vi.fn(async () => undefined),
@@ -57,6 +59,10 @@ function registerModuleMocks() {
   vi.doMock("../services/authorization.js", async () => ({
     ...await vi.importActual<typeof import("../services/authorization.js")>("../services/authorization.js"),
     canActorReadIssuePrivacy: mockCanReadIssuePrivacy,
+  }));
+
+  vi.doMock("../services/analytical-context-authority.js", () => ({
+    assertAnalyticalContextPayloadAccess: mockAnalyticalPayloadAccess,
   }));
 
   vi.doMock("../services/access.js", () => ({
@@ -193,6 +199,8 @@ function issueUpdateWithReceipt(issue: ReturnType<typeof makeIssue>, patch: Reco
     actorRunStopId: _actorRunStopId,
     actorUserId: _actorUserId,
     blockedByIssueIds: _blockedByIssueIds,
+    privacyActor: _privacyActor,
+    privateWorkAdmission: _privateWorkAdmission,
     ...issuePatch
   } = patch;
   const updated = {
@@ -210,6 +218,7 @@ describe("issue activity event routes", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.doUnmock("../services/access.js");
+    vi.doUnmock("../services/analytical-context-authority.js");
     vi.doUnmock("../services/authorization.js");
     vi.doUnmock("../services/activity-log.js");
     vi.doUnmock("../services/feedback.js");
@@ -233,6 +242,7 @@ describe("issue activity event routes", () => {
     mockAccessService.hasPermission.mockResolvedValue(false);
     mockAccessService.decide.mockResolvedValue({ allowed: true, explanation: "Allowed by test mock." });
     mockCanReadIssuePrivacy.mockReset().mockResolvedValue(true);
+    mockAnalyticalPayloadAccess.mockReset().mockResolvedValue(undefined);
     mockFeedbackService.listIssueVotesForUser.mockResolvedValue([]);
     mockFeedbackService.saveIssueVote.mockResolvedValue({
       vote: null,
@@ -251,8 +261,22 @@ describe("issue activity event routes", () => {
         feedbackDataSharingPreference: "prompt",
       },
     });
+    mockInstanceSettingsService.getExperimental.mockResolvedValue({ enableExternalObjects: false });
     mockInstanceSettingsService.listCompanyIds.mockResolvedValue(["company-1"]);
     mockRoutineService.syncRunStatusForIssue.mockResolvedValue(undefined);
+  });
+
+  it("does not update an issue when privacy denies the actor", async () => {
+    const issue = makeIssue();
+    mockIssueService.getById.mockResolvedValue(issue);
+    mockCanReadIssuePrivacy.mockResolvedValue(false);
+
+    const response = await request(await createApp())
+      .patch(`/api/issues/${issue.id}`)
+      .send({ priority: "high" });
+
+    expect(response.status).toBe(404);
+    expect(mockIssueService.update).not.toHaveBeenCalled();
   });
 
   it("returns a field-change receipt and omits a requested no-op field", async () => {

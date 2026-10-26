@@ -269,6 +269,8 @@ export async function runManagedNativeOpenCodeFixture(input: {
   let contextProbeStartedAt: number | null = null;
   let contextProbeCompletedAt: number | null = null;
   let contextProbeSamples = 0;
+  let contextPostCaptureProbeStartedAt: number | null = null;
+  let contextPostCaptureProbeSamples = 0;
   const contextTransactionOwners = new Set<string>();
   const ownerDb = db as typeof db & { transaction: typeof db.transaction };
   const originalRootTransaction = ownerDb.transaction.bind(ownerDb);
@@ -1090,13 +1092,16 @@ export async function runManagedNativeOpenCodeFixture(input: {
       pgMonitorInFlight = true;
       try {
         const [sample] = await pgMonitor<{ active: number; idleInTransaction: number; waiters: Array<{
-          pid: number; waitEventType: string | null; waitEvent: string | null; blockedBy: number[]; queryKind: string;
-        }>; sessions: Array<{ pid: number; applicationName: string; state: string | null; backendType: string | null;
+          pid: number; appLabel: string; waitEventType: string | null; waitEvent: string | null; blockedBy: number[]; queryKind: string;
+        }>; sessions: Array<{ pid: number; appLabel: string; state: string | null; backendType: string | null;
           waitEventType: string | null; waitEvent: string | null; xactAgeMs: number | null; queryAgeMs: number | null;
-          queryKind: string; advisoryLockCount: number; relationLockCount: number }> }[]>`
+          queryKind: string; queryLength: number; querySha256: string; blockedBy: number[];
+          advisoryLockCount: number; relationLockCount: number }> }[]>`
           select count(*) filter (where state = 'active')::int as active,
             count(*) filter (where state = 'idle in transaction')::int as "idleInTransaction",
-            coalesce(json_agg(json_build_object('pid', pid, 'waitEventType', wait_event_type,
+            coalesce(json_agg(json_build_object('pid', pid,
+              'appLabel', left(regexp_replace(coalesce(application_name, ''), '[^A-Za-z0-9_.-]', '', 'g'), 64),
+              'waitEventType', wait_event_type,
               'waitEvent', wait_event, 'blockedBy', pg_blocking_pids(pid),
               'queryKind', case when query ilike '%issues%' then 'issues'
                 when query ilike '%heartbeat_runs%' then 'heartbeat_runs'
@@ -1104,7 +1109,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
                 else lower(split_part(query, ' ', 1)) end))
               filter (where state = 'active' and wait_event_type is not null), '[]'::json) as waiters,
             coalesce((select json_agg(json_build_object('pid', tracked.pid,
-              'applicationName', left(regexp_replace(coalesce(tracked.application_name, ''), '[^A-Za-z0-9_.-]', '', 'g'), 64),
+              'appLabel', left(regexp_replace(coalesce(tracked.application_name, ''), '[^A-Za-z0-9_.-]', '', 'g'), 64),
               'state', tracked.state, 'backendType', tracked.backend_type,
               'waitEventType', tracked.wait_event_type, 'waitEvent', tracked.wait_event,
               'xactAgeMs', case when tracked.xact_start is null then null
@@ -1115,6 +1120,9 @@ export async function runManagedNativeOpenCodeFixture(input: {
                 when tracked.query ilike '%heartbeat_runs%' then 'heartbeat_runs'
                 when tracked.query ilike '%native_run_finalizations%' then 'run_finalizations'
                 else lower(split_part(tracked.query, ' ', 1)) end,
+              'queryLength', length(coalesce(tracked.query, '')),
+              'querySha256', encode(sha256(convert_to(coalesce(tracked.query, ''), 'UTF8')), 'hex'),
+              'blockedBy', pg_blocking_pids(tracked.pid),
               'advisoryLockCount', (select count(*)::int from pg_locks where pid = tracked.pid and locktype = 'advisory'),
               'relationLockCount', (select count(*)::int from pg_locks where pid = tracked.pid and locktype = 'relation')))
               from (select activity.* from pg_stat_activity activity
@@ -1144,6 +1152,12 @@ export async function runManagedNativeOpenCodeFixture(input: {
               ) as present
             `)[0]?.present === true
             : false;
+          if (contextResultCapturePresent && contextPostCaptureProbeStartedAt === null) {
+            contextPostCaptureProbeStartedAt = Date.now();
+            contextPostCaptureProbeSamples = 0;
+            diagnostics.push(`managed Context post-capture probe started: ${JSON.stringify({ providerFetchCount: responseCount })}`);
+          }
+          if (contextPostCaptureProbeStartedAt !== null) contextPostCaptureProbeSamples += 1;
           if (contextInvocation?.status === "succeeded" && contextProbeCompletedAt === null)
             contextProbeCompletedAt = Date.now();
           const sampleFacts = {
@@ -1151,18 +1165,40 @@ export async function runManagedNativeOpenCodeFixture(input: {
             contextProbeElapsedMs: contextProbeStartedAt === null ? null : Math.max(0, Date.now() - contextProbeStartedAt),
             contextProbeCompletedElapsedMs: contextProbeCompletedAt === null ? null : Math.max(0, Date.now() - contextProbeCompletedAt),
             contextProbeSample: contextProbeCallId ? contextProbeSamples : null,
+            contextPostCaptureElapsedMs: contextPostCaptureProbeStartedAt === null ? null :
+              Math.max(0, Date.now() - contextPostCaptureProbeStartedAt),
+            contextPostCaptureSample: contextPostCaptureProbeStartedAt === null ? null : contextPostCaptureProbeSamples,
+            providerFetchCount: responseCount,
             contextInvocationStatus: contextInvocation?.status ?? (contextProbeCallId ? "not_started" : null),
             contextResultCapturePresent,
             ...sample,
           };
-          if (!contextProbeCallId || sample.waiters.length || sample.sessions.length || contextProbeSamples <= 1 ||
-            contextInvocation?.status && contextInvocation.status !== "executing")
+          const postCaptureHasActivity = sample.sessions.length > 0 || sample.waiters.length > 0;
+          if (!contextProbeCallId || sample.waiters.length ||
+            (contextPostCaptureProbeStartedAt === null && (sample.sessions.length || contextProbeSamples <= 1 ||
+              contextInvocation?.status && contextInvocation.status !== "executing")) ||
+            (contextPostCaptureProbeStartedAt !== null &&
+              (contextPostCaptureProbeSamples === 1 || contextPostCaptureProbeSamples % 4 === 0 || postCaptureHasActivity)))
             diagnostics.push(`independent PG wait sample: ${JSON.stringify(sampleFacts)}`);
           const invocationFinished = contextInvocation?.status && contextInvocation.status !== "executing";
           const completedCaptureStillPending = contextInvocation?.status === "succeeded" && !contextResultCapturePresent &&
             contextProbeCompletedAt !== null && Date.now() - contextProbeCompletedAt < 5_000;
-          if (contextProbeCallId && ((invocationFinished && !completedCaptureStillPending) ||
-            contextProbeStartedAt !== null && Date.now() - contextProbeStartedAt >= 10_000)) {
+          const fourthModelFetchStarted = contextPostCaptureProbeStartedAt !== null && responseCount >= 4;
+          const postCaptureProbeExpired = contextPostCaptureProbeStartedAt !== null &&
+            (Date.now() - contextPostCaptureProbeStartedAt >= 15_000 || contextPostCaptureProbeSamples >= 60);
+          const contextInvocationFailed = invocationFinished && contextInvocation?.status !== "succeeded";
+          const captureWaitExpired = contextProbeCompletedAt !== null && !contextResultCapturePresent &&
+            Date.now() - contextProbeCompletedAt >= 5_000;
+          const preCaptureProbeExpired = contextPostCaptureProbeStartedAt === null && contextProbeStartedAt !== null &&
+            Date.now() - contextProbeStartedAt >= 10_000;
+          if (contextProbeCallId && (fourthModelFetchStarted || postCaptureProbeExpired || contextInvocationFailed ||
+            captureWaitExpired || preCaptureProbeExpired)) {
+            if (contextPostCaptureProbeStartedAt !== null)
+              diagnostics.push(`managed Context post-capture probe stopped: ${JSON.stringify({
+                reason: fourthModelFetchStarted ? "fourth_model_fetch" : postCaptureProbeExpired ? "bounded_window" : "invocation_finished",
+                elapsedMs: Date.now() - contextPostCaptureProbeStartedAt,
+                samples: contextPostCaptureProbeSamples, providerFetchCount: responseCount,
+              })}`);
             if (contextProbeTimer) clearInterval(contextProbeTimer);
             contextProbeTimer = undefined;
             contextProbeCallId = null;
@@ -1193,7 +1229,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
           contextProbeSamples = 0;
           if (contextInvocationWatchTimer) clearInterval(contextInvocationWatchTimer);
           contextInvocationWatchTimer = undefined;
-          contextProbeTimer = setInterval(() => { void inspectPostgresWaits(); }, 150);
+          contextProbeTimer = setInterval(() => { void inspectPostgresWaits(); }, 250);
           void inspectPostgresWaits();
           return;
         }

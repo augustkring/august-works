@@ -2263,14 +2263,15 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
       const revoked = await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
         const sourceActor=actor.authorizationActor?memorySourceActor(companyId,actor):null;
-        const pinnedBoard=sourceActor?await pinCurrentBoardActor(txDb,sourceActor):null;
-        if(sourceActor&&!pinnedBoard)throw forbidden("Current Human credential is unavailable");
+        const currentHumanActor=sourceActor?.type==="board"&&sourceActor.source!=="local_implicit"?sourceActor:null;
+        const pinnedBoard=currentHumanActor?await pinCurrentBoardActor(txDb,currentHumanActor):null;
+        if(currentHumanActor&&!pinnedBoard)throw forbidden("Current Human credential is unavailable");
         await lockAnalyticalCompany(txDb,companyId); await lockMemoryPrivacy(txDb,companyId);
         await assertActorCompanyScope(txDb, companyId, actor);
-        if(sourceActor?.type==="board"&&sourceActor.userId){
+        if(currentHumanActor?.userId){
           const [membership]=await txDb.select({id:companyMemberships.id}).from(companyMemberships).where(and(
             eq(companyMemberships.companyId,companyId),eq(companyMemberships.principalType,"user"),
-            eq(companyMemberships.principalId,sourceActor.userId),eq(companyMemberships.status,"active"),
+            eq(companyMemberships.principalId,currentHumanActor.userId),eq(companyMemberships.status,"active"),
           )).for("share",{noWait:true});
           if(!membership)throw forbidden("Current Human company membership is unavailable");
         }

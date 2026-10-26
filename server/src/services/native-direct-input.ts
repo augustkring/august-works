@@ -12,7 +12,7 @@ import { nativePayloadSourceInputSchema, nativePayloadSourcePolicySchema, native
   AUTHORED_AGENT_DEFINITION_KEY, type NativePayloadSourceInput, type NativePayloadSourcePolicy,
   type NativePayloadSourceSnapshot, type NativeRunInputSourceReceipt } from "@paperclipai/shared";
 import { forbidden } from "../errors.js";
-import { assertAnalyticalContextPayloadAccess } from "./analytical-context-authority.js";
+import { assertAnalyticalContextPayloadAccess, assertAnalyticalContextPayloadAccessBatch } from "./analytical-context-authority.js";
 import { canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, authorizationService,
   type AuthorizationActor } from "./authorization.js";
 import { canActorReadMemorySources, memoryPayloadVisible } from "./memory/memory-privacy.js";
@@ -1465,26 +1465,38 @@ async function assertNativeContextInputOwnersCurrent(db: Db, companyId: string, 
   const roots = await db.select().from(contextManifestMemoryRoots).where(and(eq(contextManifestMemoryRoots.companyId, companyId), inArray(contextManifestMemoryRoots.manifestId, ids)));
   if (manifests.length !== ids.length || items.length > 256 || roots.length > 256)
     throw forbidden("A Native Context manifest source is unavailable");
+  const taskIds = items.filter(item => item.sourceProvider === "august_works_tasks").map(item => {
+    const match = /^issue:\/\/([0-9a-f-]{36})$/i.exec(item.sourceRef);
+    if (!match) throw forbidden("A Native Context Task source changed or was erased");
+    return match[1]!;
+  });
+  const taskIssueIds = [...new Set(taskIds)];
+  const taskOwners = taskIssueIds.length ? await db.select({ id: issues.id, updatedAt: issues.updatedAt,
+    payloadSourceSnapshot: issues.payloadSourceSnapshot, payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated })
+    .from(issues).where(and(eq(issues.companyId, companyId), inArray(issues.id, taskIssueIds))).for("share") : [];
+  if (taskOwners.length !== taskIssueIds.length) throw forbidden("A Native Context Task source changed or was erased");
+  const taskOwnerById = new Map(taskOwners.map(owner => [owner.id, owner]));
+  const taskHashes = taskIssueIds.length ? await db.execute<{ id: string; hash: string }>(sql`
+    select i.id::text as id,public.aw_native_payload_body_hash('issue',to_jsonb(i)) as hash
+    from issues i where i.company_id=${companyId}::uuid and i.id in (${sql.join(taskIssueIds.map(id => sql`${id}::uuid`), sql`, `)})
+  `) : [];
+  const taskHashById = new Map(taskHashes.map(owner => [owner.id, owner.hash]));
   for (const manifest of manifests) {
     for (const item of items.filter(value => value.manifestId === manifest.id)) {
       nativeSourceReadWork(scope);
       if (item.sourceProvider === "august_works_tasks") {
         const match = /^issue:\/\/([0-9a-f-]{36})$/i.exec(item.sourceRef);
-        const [owner] = match ? await db.select({ id: issues.id, updatedAt: issues.updatedAt,
-          payloadSourceSnapshot: issues.payloadSourceSnapshot, payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated })
-          .from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, match[1]!))) : [];
-        const [ownerHash] = match ? await db.execute<{ hash: string }>(sql`select public.aw_native_payload_body_hash('issue',to_jsonb(i)) as hash
-          from issues i where i.company_id=${companyId}::uuid and i.id=${match[1]!}::uuid`) : [];
+        const owner = match ? taskOwnerById.get(match[1]!) : undefined;
+        const ownerHash = match ? taskHashById.get(match[1]!) : undefined;
         const snapshot = nativePayloadSourceSnapshotSchema.safeParse(owner?.payloadSourceSnapshot);
         if (!match || !owner || !ownerHash || owner.payloadSourceSnapshotInvalidated || !snapshot.success ||
-          snapshot.data.owner.kind !== "issue" || snapshot.data.owner.contentHash !== ownerHash.hash ||
+          snapshot.data.owner.kind !== "issue" || snapshot.data.owner.contentHash !== ownerHash ||
           item.sourceVersion !== owner.updatedAt.toISOString() || !item.payloadSourceSnapshot ||
           !isDeepStrictEqual(item.payloadSourceSnapshot, owner.payloadSourceSnapshot))
           throw forbidden("A Native Context Task source changed or was erased");
         await canActorReadIssuePrivacy(db, actor, { id: match[1]!, companyId }).then(allowed => {
           if (!allowed) throw forbidden("A Native Context Task source is unavailable");
         });
-        await assertAnalyticalContextPayloadAccess(db, companyId, actor, { issueId: match[1]! });
       } else if (item.sourceProvider === "august_works_memory" || item.sourceProvider === "august_works_derived_memory") {
         const match = /^memory:\/\/(?:record|derived)\/([0-9a-f-]{36})$/i.exec(item.sourceRef);
         if (!match || !await canActorReadMemorySources(db, companyId, actor, match[1]!))
@@ -1522,6 +1534,7 @@ async function assertNativeContextInputOwnersCurrent(db: Db, companyId: string, 
         throw forbidden("A Native Context Memory root is unavailable");
     }
   }
+  if (taskIssueIds.length) await assertAnalyticalContextPayloadAccessBatch(db, companyId, actor, taskIssueIds);
 }
 
 export async function assertNativeTemporalContextInputsCurrent(db: Db, companyId: string,
