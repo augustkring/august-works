@@ -693,18 +693,18 @@
     {
       "source": "server/src/services/saas/company-purge.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "8d0aa274a25ca46a49eef4be8671ed588d82b2e7fe32fbb0d1fde49fd762f8ce",
+      "sourceSha256": "211128c7b22daa87f6f9ae4b51d33c87c111f62dcae60145ffa0e872b5f9a043",
       "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "no_change",
-      "rationale": "Reviewed both EN/DA deletion articles: exact typed timestamp selection identifies retired conversation Runs, then the original erasure owner retains its current operation receipt through Run cascade. Customer deletion actions, stages, Stop and retention guidance are unchanged; integrated purge qualification is still pending."
+      "rationale": "Reviewed both EN/DA deletion articles: the canonical purge now returns its already-computed minimal conversation funding aggregate after removing detailed cost payloads. The documented retention of minimal financial and deletion receipts remains accurate; complete integrated qualification is pending."
     },
     {
       "source": "server/src/services/saas/offboarding.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "ebe6c8e74df9c112c766ce2ab0ddfee4251033e05aab1d180854eba81105e225",
+      "sourceSha256": "934e4a8969c07901a90ab781a170b0493265f8ff4e0abb2978cf02bab8e9e4b1",
       "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "no_change",
-      "rationale": "Reviewed current staged offboarding: the displayed process remains pending until managed erasure and unresolved outcomes are reconciled, matching the article status guidance."
+      "rationale": "Reviewed both EN/DA deletion articles: final offboarding evidence preserves the minimal conversation funding aggregate returned by canonical database purge. The documented staged deletion and minimal financial receipt guidance remains accurate; full qualification is pending."
     },
     {
       "source": "ui/src/pages/CompanyExport.tsx",
@@ -773,18 +773,18 @@
     {
       "source": "server/src/services/saas/company-purge.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "8d0aa274a25ca46a49eef4be8671ed588d82b2e7fe32fbb0d1fde49fd762f8ce",
+      "sourceSha256": "211128c7b22daa87f6f9ae4b51d33c87c111f62dcae60145ffa0e872b5f9a043",
       "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "no_change",
-      "rationale": "Reviewed both EN/DA deletion articles: exact typed timestamp selection identifies retired conversation Runs, then the original erasure owner retains its current operation receipt through Run cascade. Customer deletion actions, stages, Stop and retention guidance are unchanged; integrated purge qualification is still pending."
+      "rationale": "Reviewed both EN/DA deletion articles: the canonical purge now returns its already-computed minimal conversation funding aggregate after removing detailed cost payloads. The documented retention of minimal financial and deletion receipts remains accurate; complete integrated qualification is pending."
     },
     {
       "source": "server/src/services/saas/offboarding.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "ebe6c8e74df9c112c766ce2ab0ddfee4251033e05aab1d180854eba81105e225",
+      "sourceSha256": "934e4a8969c07901a90ab781a170b0493265f8ff4e0abb2978cf02bab8e9e4b1",
       "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "no_change",
-      "rationale": "Danish version checked against the same current source behavior: reviewed current staged offboarding: the displayed process remains pending until managed erasure and unresolved outcomes are reconciled, matching the article status guidance."
+      "rationale": "Reviewed both EN/DA deletion articles: final offboarding evidence preserves the minimal conversation funding aggregate returned by canonical database purge. The documented staged deletion and minimal financial receipt guidance remains accurate; full qualification is pending."
     },
     {
       "source": "ui/src/pages/CompanyExport.tsx",
@@ -901,10 +901,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "f45306613c46fa4c21097a01e1826ce5a5b758963777c7f73d466c0525804956",
+      "sourceSha256": "1a93fdc4b5f1bbb017faffdc30c19aa576a83aec04d013fe1e284add6ef2e8b1",
       "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "no_change",
-      "rationale": "Reviewed paired EN/DA Help/support and recovery guidance: the exact authenticated owner of an empty conversation shell may select its work mode before the first Human message, through the existing credential-pinned route. Read-only Ask/Plan execution policy, existing-source refusals and support/recovery actions are unchanged."
+      "rationale": "Reviewed paired EN/DA Help and recovery guidance: the exact current session owner may select workMode on an empty conversation shell before the first message. The handler now uses the same narrow shell admission as the route gate; Ask/Plan execution policy and all other mutations retain their existing authority checks. Customer support and recovery instructions remain accurate."
     },
     {
       "source": "server/src/routes/saas.ts",
@@ -1213,10 +1213,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "f45306613c46fa4c21097a01e1826ce5a5b758963777c7f73d466c0525804956",
+      "sourceSha256": "1a93fdc4b5f1bbb017faffdc30c19aa576a83aec04d013fe1e284add6ef2e8b1",
       "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "no_change",
-      "rationale": "Reviewed paired EN/DA Help/support and recovery guidance: the exact authenticated owner of an empty conversation shell may select its work mode before the first Human message, through the existing credential-pinned route. Read-only Ask/Plan execution policy, existing-source refusals and support/recovery actions are unchanged."
+      "rationale": "Reviewed paired EN/DA Help and recovery guidance: the exact current session owner may select workMode on an empty conversation shell before the first message. The handler now uses the same narrow shell admission as the route gate; Ask/Plan execution policy and all other mutations retain their existing authority checks. Customer support and recovery instructions remain accurate."
     },
     {
       "source": "server/src/routes/saas.ts",
@@ -1541,10 +1541,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "f45306613c46fa4c21097a01e1826ce5a5b758963777c7f73d466c0525804956",
+      "sourceSha256": "1a93fdc4b5f1bbb017faffdc30c19aa576a83aec04d013fe1e284add6ef2e8b1",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Reviewed paired EN/DA Help/support and recovery guidance: the exact authenticated owner of an empty conversation shell may select its work mode before the first Human message, through the existing credential-pinned route. Read-only Ask/Plan execution policy, existing-source refusals and support/recovery actions are unchanged."
+      "rationale": "Reviewed paired EN/DA Help and recovery guidance: the exact current session owner may select workMode on an empty conversation shell before the first message. The handler now uses the same narrow shell admission as the route gate; Ask/Plan execution policy and all other mutations retain their existing authority checks. Customer support and recovery instructions remain accurate."
     },
     {
       "source": "server/src/services/execution-workspaces.ts",
@@ -1645,10 +1645,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "f45306613c46fa4c21097a01e1826ce5a5b758963777c7f73d466c0525804956",
+      "sourceSha256": "1a93fdc4b5f1bbb017faffdc30c19aa576a83aec04d013fe1e284add6ef2e8b1",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Reviewed paired EN/DA Help/support and recovery guidance: the exact authenticated owner of an empty conversation shell may select its work mode before the first Human message, through the existing credential-pinned route. Read-only Ask/Plan execution policy, existing-source refusals and support/recovery actions are unchanged."
+      "rationale": "Reviewed paired EN/DA Help and recovery guidance: the exact current session owner may select workMode on an empty conversation shell before the first message. The handler now uses the same narrow shell admission as the route gate; Ask/Plan execution policy and all other mutations retain their existing authority checks. Customer support and recovery instructions remain accurate."
     },
     {
       "source": "server/src/services/execution-workspaces.ts",
