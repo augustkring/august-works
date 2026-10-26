@@ -395,6 +395,32 @@ function handleToolResult(message) {
   }
   const diagnosticCode = value => typeof value?.code === "string" && /^[a-z][a-z0-9_]{1,63}$/.test(value.code)
     ? value.code : null;
+  const historyResultShape = pending.name === "get_task_history" ? {
+    errorType: message.error === undefined || message.error === null ? null : typeof message.error,
+    errorKeys: message.error && typeof message.error === "object" && !Array.isArray(message.error)
+      ? Object.keys(message.error).sort().slice(0, 12) : [],
+    envelopeKeys: message.result && typeof message.result === "object" && !Array.isArray(message.result)
+      ? Object.keys(message.result).sort().slice(0, 12) : [],
+    success: typeof message.result?.success === "boolean" ? message.result.success : null,
+    isError: message.result?.isError === true,
+    ok: typeof message.result?.ok === "boolean" ? message.result.ok : null,
+    resultErrorType: message.result?.error === undefined || message.result?.error === null
+      ? null : typeof message.result.error,
+    resultErrorCode: typeof message.result?.error?.code === "number" && Number.isSafeInteger(message.result.error.code)
+      ? message.result.error.code : diagnosticCode(message.result?.error),
+    protocolErrorCode: typeof message.error?.code === "number" && Number.isSafeInteger(message.error.code)
+      ? message.error.code : diagnosticCode(message.error),
+    contentItemCount: Array.isArray(message.result?.contentItems) ? message.result.contentItems.length : null,
+    firstContentItem: firstContentItem && typeof firstContentItem === "object" ? {
+      keys: Object.keys(firstContentItem).sort().slice(0, 12),
+      textLength: firstContentText?.length ?? null,
+      parsedType: parsedContentText === null ? "null" : Array.isArray(parsedContentText)
+        ? "array" : typeof parsedContentText,
+      parsedKeys: parsedContentText && typeof parsedContentText === "object" && !Array.isArray(parsedContentText)
+        ? Object.keys(parsedContentText).sort().slice(0, 16) : [],
+      parsedCode: diagnosticCode(parsedContentText),
+    } : null,
+  } : undefined;
   const contextResultShape = pending.name === "get_task_context" ? {
     errorType: message.error === undefined || message.error === null ? null : typeof message.error,
     errorKeys: message.error && typeof message.error === "object" && !Array.isArray(message.error)
@@ -433,7 +459,8 @@ function handleToolResult(message) {
   } : undefined;
   note({ event: "tool_result", turn: pending.turn.number, tool: pending.name,
     failed: Boolean(message.error || details.isError === true || details.ok === false || details.success === false || details.error),
-    errorCode, ...(contextResultShape ? { contextResultShape } : {}) });
+    errorCode, ...(contextResultShape ? { contextResultShape } : {}),
+    ...(historyResultShape ? { historyResultShape } : {}) });
   pending.next(value);
   return true;
 }

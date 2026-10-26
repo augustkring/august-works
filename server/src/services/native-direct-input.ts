@@ -13,9 +13,9 @@ import { toolInvocations } from "@paperclipai/db";
 import { nativePayloadSourceInputSchema, nativePayloadSourcePolicySchema, nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema,
   AUTHORED_AGENT_DEFINITION_KEY, conversationModelBindingSchema, type NativePayloadSourceInput, type NativePayloadSourcePolicy,
   type NativePayloadSourceSnapshot, type NativeRunInputSourceReceipt } from "@paperclipai/shared";
-import { forbidden } from "../errors.js";
+import { HttpError, forbidden } from "../errors.js";
 import { assertAnalyticalContextPayloadAccessBatch } from "./analytical-context-authority.js";
-import { activeMemoryTemporalContexts, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, authorizationService,
+import { activeMemoryTemporalContexts, withReadPinnedNativeTaskSnapshot, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, authorizationService,
   type AuthorizationActor } from "./authorization.js";
 import { canActorReadMemorySources, memoryPayloadVisible } from "./memory/memory-privacy.js";
 import { resolveDefaultAgentWorkspaceDir } from "../home-paths.js";
@@ -55,6 +55,7 @@ interface NativeSourceReadContext { db: object; txOrdinal?: number; scopes: Map<
   pendingReaderChecks: Set<string>; activeReaderChecks: Set<string> }
 interface NativeSourceReadScope { context: NativeSourceReadContext; actorKey: string; active: Set<string>; complete: Set<string>;
   frozenTaskSnapshots: Set<string>;
+  taskTemporalScopes: Map<string, { contentHash: string }>;
   conversationRootComments: Set<string>;
   deferredReaderSets: Map<string, { companyId: string; runId: string; policy: NativePayloadSourcePolicy;
     inputs: NativePayloadSourceInput[] }> }
@@ -159,7 +160,7 @@ function nativeSourceReadScope(db: Db | Transaction, actor: AuthorizationActor):
     pendingReaderChecks: new Set(), activeReaderChecks: new Set(),
     privacyLockedCompanies: new Set(), active: true };
   const scope: NativeSourceReadScope = { context, actorKey: nativeSha256(actor), active: new Set(), complete: new Set(),
-    frozenTaskSnapshots: new Set(), conversationRootComments: new Set(), deferredReaderSets: new Map() };
+    frozenTaskSnapshots: new Set(), taskTemporalScopes: new Map(), conversationRootComments: new Set(), deferredReaderSets: new Map() };
   context.scopes.set(scope.actorKey, scope);
   return scope;
 }
@@ -341,7 +342,7 @@ function withNativeSourceReadScope<T>(db: Db | Transaction, actor: Authorization
   if (current?.active && current.db === (db as object)) {
     let scope = current.scopes.get(actorKey);
     if (!scope) {
-      scope = { context: current, actorKey, active: new Set(), complete: new Set(), frozenTaskSnapshots: new Set(),
+      scope = { context: current, actorKey, active: new Set(), complete: new Set(), frozenTaskSnapshots: new Set(), taskTemporalScopes: new Map(),
         conversationRootComments: new Set(), deferredReaderSets: new Map() };
       current.scopes.set(actorKey, scope);
       nativeSourceMemoCount("scopes", actor);
@@ -414,8 +415,14 @@ async function assertNativeSourceSetsReaderAccessCurrent(db: Db | Transaction, i
     if (source.kind === "runtime_instructions") runtimeInstructions.set(nativeSha256({ runId: set.runId, source }), { runId: set.runId, source });
     if (source.kind === "context") contextIds.add(source.manifestId);
   }
-  for (const issueId of issueIds) if (!await canActorReadIssuePrivacy(db, input.actor,
-    { id: issueId, companyId: input.companyId })) throw forbidden("A Native source Task is unavailable");
+  for (const issueId of issueIds) {
+    const temporal = scope?.taskTemporalScopes.get(issueId);
+    const allowed = temporal ? await withReadPinnedNativeTaskSnapshot(db, input.actor, input.companyId, issueId,
+      currentOwnerHash => currentOwnerHash === temporal.contentHash && canActorReadIssuePrivacy(db, input.actor,
+        { id: issueId, companyId: input.companyId })) : await canActorReadIssuePrivacy(db, input.actor,
+          { id: issueId, companyId: input.companyId });
+    if (!allowed) throw forbidden("A Native source Task is unavailable");
+  }
   for (const projectId of projectIds) if (!await canActorReadProjectPrivacy(db, input.actor,
     { id: projectId, companyId: input.companyId })) throw forbidden("A Native source Project is unavailable");
   for (const runId of runIds) if (!await canActorReadHeartbeatRunPrivacy(db, input.actor,
@@ -933,22 +940,32 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
     value.kind === "task" && value.issueId === input.issueId);
   const [taskSource] = taskSources;
   const run = await nativeSourceReadRun(db, input.companyId, input.runId, scope);
-  const [task] = await db.select({ id: issues.id, identifier: issues.identifier, title: issues.title,
-    description: issues.description, status: issues.status, priority: issues.priority, workMode: issues.workMode,
-    sourceVersion: sql<string>`extract(epoch from ${issues.updatedAt})::text` }).from(issues)
-    .where(and(eq(issues.companyId, input.companyId), eq(issues.id, input.issueId))).for("share");
   const context = run?.contextSnapshot && typeof run.contextSnapshot === "object" && !Array.isArray(run.contextSnapshot)
     ? run.contextSnapshot as Record<string, unknown> : null;
-  const current = run && task && context && run.nativeIssueId === input.issueId && taskSources.length === 1 &&
-    taskSource?.sourceVersion === input.source.sourceVersion
+  const wake = context?.paperclipWake;
+  const wakeRecord = wake && typeof wake === "object" && !Array.isArray(wake) ? wake as Record<string, unknown> : null;
+  const issueValue = wakeRecord?.issue;
+  const wakeIssue = issueValue && typeof issueValue === "object" && !Array.isArray(issueValue)
+    ? issueValue as Record<string, unknown> : null;
+  // The wake is an immutable event captured when this Run was created. Its
+  // status/priority and source version must be read from that persisted event.
+  // The enclosing source-set validator has already rechecked taskSource
+  // through the canonical Task owner/snapshot/ACL path; do not apply that
+  // current projection to the historical wake a second time here.
+  const wakeTask = wakeIssue && typeof wakeIssue.id === "string" &&
+    (typeof wakeIssue.identifier === "string" || wakeIssue.identifier === null) && typeof wakeIssue.title === "string" &&
+    (typeof wakeIssue.description === "string" || wakeIssue.description === null) && typeof wakeIssue.status === "string" &&
+    typeof wakeIssue.priority === "string" && typeof wakeIssue.workMode === "string"
+    ? { id: wakeIssue.id, identifier: wakeIssue.identifier as string | null, title: wakeIssue.title,
+      description: wakeIssue.description as string | null, status: wakeIssue.status,
+      priority: wakeIssue.priority, workMode: wakeIssue.workMode } : null;
+  const current = run && run.nativeIssueId === input.issueId && taskSources.length === 1 && taskSource && wakeTask &&
+    taskSource.sourceVersion === input.source.sourceVersion
     ? captureNativeTaskWakeSource({ companyId: input.companyId, runId: input.runId, issueId: input.issueId,
-      sourceVersion: task.sourceVersion, persistedWakeReason: typeof context.wakeReason === "string" ? context.wakeReason : null,
-      task: { id: task.id, identifier: task.identifier, title: task.title, description: task.description,
-        status: task.status, priority: task.priority, workMode: task.workMode },
-      checkoutRunId: context.paperclipHarnessCheckedOut === true ? input.runId : null,
+      sourceVersion: taskSource.sourceVersion, persistedWakeReason: typeof context?.wakeReason === "string" ? context.wakeReason : null,
+      task: wakeTask, checkoutRunId: context?.paperclipHarnessCheckedOut === true ? input.runId : null,
       commentSources: input.inputs.filter((value): value is Extract<NativePayloadSourceInput, { kind: "comment" }> =>
-        value.kind === "comment"),
-      payload: context.paperclipWake }) : null;
+        value.kind === "comment"), payload: wake }) : null;
   if (!current || !isDeepStrictEqual(current, input.source) ||
     input.source.runId !== input.runId || input.source.issueId !== input.issueId ||
     input.bootstrapInputs.filter(value => value.kind === "native_task_wake" && value.runId === input.runId &&
@@ -985,8 +1002,8 @@ async function assertNativeConversationTaskResultCurrentInScope(db: Db | Transac
     capture.callId !== input.source.callId || capture.resultDigest !== input.source.contentHash ||
     !turnId || !/^[0-9a-f]{64}$/.test(argumentsHash) || !Number.isSafeInteger(eventSeq) || !Number.isSafeInteger(attempt) ||
     typeof taskId !== "string") fail("capture_binding");
-  if (typeof taskId !== "string") fail("capture_binding");
-  const qualifiedTaskId: string = taskId;
+  if (typeof taskId !== "string") return fail("capture_binding");
+  const qualifiedTaskId = taskId;
   if (!Number.isSafeInteger(eventSeq) || !Number.isSafeInteger(attempt)) fail("capture_binding");
   const qualifiedEventSeq: number = eventSeq as number;
   const qualifiedAttempt: number = attempt as number;
@@ -1091,7 +1108,7 @@ async function assertNativeConversationTaskResultCurrentInScope(db: Db | Transac
     }
     fail("dispatch_wire");
   }
-  if (!binding.success) fail("dispatch_binding");
+  if (!binding.success) return fail("dispatch_binding");
   const currentBinding = binding.data;
   const [conversationRoot] = await db.select({ conversationAgentId: issues.conversationAgentId,
     conversationUserId: issues.conversationUserId, conversationState: issues.conversationState,
@@ -1511,6 +1528,44 @@ export async function assertNativeTaskSourceOwnerCurrent(db: Db | Transaction, i
   return inNativeSourceReadTransaction(db, tx => withNativeSourceReadScope(tx, input.actor, async scope => {
     await lockNativeSourceReadPrivacy(tx, input.companyId, scope);
     await assertNativeTaskSourceInputCurrentInScope(tx, input.companyId, input.actor, input.source, scope);
+  }));
+}
+
+/** Recheck a Task reader under that Task's own immutable protocol-1 Context
+ * prefix. Memory readers may contain several Tasks captured at different
+ * points in time; applying the enclosing Memory prefix to each Task would let
+ * a later Context retroactively change an earlier Task's reader result. */
+export async function canActorReadNativeTaskSource(db: Db | Transaction, input: {
+  companyId: string; actor: AuthorizationActor; issueId: string;
+}): Promise<boolean | null> {
+  return inNativeSourceReadTransaction(db, tx => withNativeSourceReadScope(tx, input.actor, async scope => {
+    await lockNativeSourceReadPrivacy(tx, input.companyId, scope);
+    const [owner] = await tx.select({ payloadSourceProtocolVersion: issues.payloadSourceProtocolVersion,
+      payloadSourceSnapshot: issues.payloadSourceSnapshot }).from(issues).where(and(
+      eq(issues.companyId, input.companyId), eq(issues.id, input.issueId))).for("share");
+    if (!owner) return false;
+    if (owner.payloadSourceProtocolVersion === 0 || owner.payloadSourceProtocolVersion === null) return null;
+    if (owner.payloadSourceProtocolVersion !== 1) return false;
+    const snapshot = nativePayloadSourceSnapshotSchema.safeParse(owner.payloadSourceSnapshot);
+    if (!snapshot.success || snapshot.data.owner.kind !== "issue" || snapshot.data.owner.companyId !== input.companyId ||
+      snapshot.data.owner.id !== input.issueId) return false;
+    if (!snapshot.data.inputs.some(source => source.kind === "worker_model_dispatch" || source.kind === "conversation_model_dispatch"))
+      return null;
+    try {
+      return await withReadPinnedNativeTaskSnapshot(tx, input.actor, input.companyId, input.issueId, async currentOwnerHash => {
+        if (currentOwnerHash !== snapshot.data.owner.contentHash) return false;
+        const priorProof = scope.taskTemporalScopes.get(input.issueId);
+        if (priorProof?.contentHash !== snapshot.data.owner.contentHash) {
+          const source: Extract<NativePayloadSourceInput, { kind: "task" }> = { kind: "task", issueId: input.issueId,
+            sourceVersion: "snapshot-owner-current", contentHash: snapshot.data.owner.contentHash };
+          await assertNativeTaskSourceInputCurrentInScope(tx, input.companyId, input.actor, source, scope);
+        }
+        return canActorReadIssuePrivacy(tx, input.actor, { id: input.issueId, companyId: input.companyId });
+      });
+    } catch (error) {
+      if (error instanceof HttpError && [403, 404, 409, 422].includes(error.status)) return false;
+      throw error;
+    }
   }));
 }
 
@@ -2977,10 +3032,13 @@ async function assertConversationCommentSourceCurrent(db: Db | Transaction, inpu
   // final reader pass so cumulative prefixes do not rerun the same recursive
   // privacy query before later owner-row waits.
   if (activeMemoryTemporalContexts(db, input.actor, "issue", input.source.issueId) !== undefined) {
-    // An already-active frozen Memory read carries the exact Context prefix
-    // needed by the Issue predicate; keep that ACL check inside its ALS scope.
-    if (!await canActorReadIssuePrivacy(db, input.actor, { id: input.source.issueId, companyId: input.companyId }))
-      reject("reader_acl");
+    // This exact Issue is part of the active Memory owner's sourceIssueIds.
+    // The sole withReadMemoryTemporalSources caller is
+    // canActorReadMemorySources in memory-privacy.ts; its callback performs the
+    // mandatory current reader check after this full frozen owner proof returns,
+    // while the same captured Context scope is still active. Checking it here
+    // would run before the remaining owner waits and could retroactively apply
+    // this later Memory prefix to an older Task/comment snapshot.
   } else {
     deferNativeSourceOwnerReaderChecks(scope, { companyId: input.companyId, actor: input.actor,
       issueIds: [input.source.issueId] });
@@ -3007,20 +3065,31 @@ async function assertNativeTaskSnapshotOwnerCurrentInScope(db: Db | Transaction,
     if (!snapshot.success || snapshot.data.owner.kind !== "issue" || snapshot.data.owner.companyId !== companyId ||
       snapshot.data.owner.id !== issueId || !ownerHash || !ownerHash.digestValid || snapshot.data.owner.contentHash !== ownerHash.hash)
       throw forbidden("A Native Task source snapshot is unavailable");
-    if (owner.conversationAgentId && owner.conversationUserId) {
-      const source = snapshot.data.inputs.length === 1 ? snapshot.data.inputs[0] : null;
-      const exactCommentRoot = source?.kind === "comment" && source.issueId === issueId &&
-        isDeepStrictEqual(snapshot.data.policy, { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] });
-      const [comment] = exactCommentRoot ? await db.select({ authorUserId: issueComments.authorUserId,
-        authorType: issueComments.authorType }).from(issueComments).where(and(eq(issueComments.companyId, companyId),
-        eq(issueComments.issueId, issueId), eq(issueComments.id, source.commentId), isNull(issueComments.deletedAt))).for("share") : [];
-      if (!exactCommentRoot || !comment || comment.authorUserId !== owner.conversationUserId || comment.authorType !== "user")
-        throw forbidden("The Native conversation source witness is unavailable");
-      await assertConversationCommentSourceCurrent(db, { companyId, actor, source, policy: snapshot.data.policy,
-        inputs: snapshot.data.inputs, selfOwnedConversationTaskId: issueId }, scope);
-      if (validatedTaskSource?.issueId === issueId)
-        scope.conversationRootComments.add(nativeSha256({ companyId, task: validatedTaskSource, source }));
-    } else await assertNativeFrozenTaskSnapshotCurrent(db, companyId, actor, issueId, snapshot.data, scope);
+    const validateProtocolOneTask = async () => {
+      if (owner.conversationAgentId && owner.conversationUserId) {
+        const source = snapshot.data.inputs.length === 1 ? snapshot.data.inputs[0] : null;
+        const exactCommentRoot = source?.kind === "comment" && source.issueId === issueId &&
+          isDeepStrictEqual(snapshot.data.policy, { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] });
+        const [comment] = exactCommentRoot ? await db.select({ authorUserId: issueComments.authorUserId,
+          authorType: issueComments.authorType }).from(issueComments).where(and(eq(issueComments.companyId, companyId),
+          eq(issueComments.issueId, issueId), eq(issueComments.id, source.commentId), isNull(issueComments.deletedAt))).for("share") : [];
+        if (!exactCommentRoot || !comment || comment.authorUserId !== owner.conversationUserId || comment.authorType !== "user")
+          throw forbidden("The Native conversation source witness is unavailable");
+        await assertConversationCommentSourceCurrent(db, { companyId, actor, source, policy: snapshot.data.policy,
+          inputs: snapshot.data.inputs, selfOwnedConversationTaskId: issueId }, scope);
+        if (validatedTaskSource?.issueId === issueId)
+          scope.conversationRootComments.add(nativeSha256({ companyId, task: validatedTaskSource, source }));
+      } else await assertNativeFrozenTaskSnapshotCurrent(db, companyId, actor, issueId, snapshot.data, scope);
+      if (snapshot.data.inputs.some(source =>
+        source.kind === "worker_model_dispatch" || source.kind === "conversation_model_dispatch"))
+        scope.taskTemporalScopes.set(issueId, { contentHash: snapshot.data.owner.contentHash });
+      deferNativeSourceOwnerReaderChecks(scope, { companyId, actor, issueIds: [issueId] });
+    };
+    if (snapshot.data.inputs.some(source =>
+      source.kind === "worker_model_dispatch" || source.kind === "conversation_model_dispatch"))
+      await withReadPinnedNativeTaskSnapshot(db, actor, companyId, issueId, validateProtocolOneTask);
+    else await validateProtocolOneTask();
+    return;
   } else if (owner.payloadSourceProtocolVersion === 0 || owner.payloadSourceProtocolVersion === null) {
     deferNativeAnalyticalTaskChecks(scope, companyId, actor, [issueId]);
   } else throw forbidden("A Native Task source protocol is unsupported");

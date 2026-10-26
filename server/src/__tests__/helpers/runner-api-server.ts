@@ -105,6 +105,7 @@ export async function startRunnerApiTestServer() {
       const blockerId = id("blocker"), approvalId = id("approval");
       const responsibleUserId = options.connectionScenario || options.conversation || options.projectReadSource ? id("responsible-user") : null;
       const humanSessionId = options.projectReadSource ? id("project-human-session") : null;
+      const humanSessionToken = humanSessionId ? randomUUID() : null;
       const workspace = await mkdtemp(join(root, "workspace-"));
       await writeFile(join(workspace, "sample.txt"), "API escape hatch fixture\n");
       await db.insert(companies).values([
@@ -115,7 +116,7 @@ export async function startRunnerApiTestServer() {
         await db.insert(authUsers).values({ id: responsibleUserId, name: "Eval responsible user", email: `${responsibleUserId}@fixture.invalid`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() }).onConflictDoNothing();
         await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: responsibleUserId, status: "active", membershipRole: "member" });
         if (humanSessionId) await db.insert(authSessions).values({ id: humanSessionId, userId: responsibleUserId,
-          token: randomUUID(), createdAt: new Date(), updatedAt: new Date(), expiresAt: new Date(Date.now() + 60 * 60_000) });
+          token: humanSessionToken!, createdAt: new Date(), updatedAt: new Date(), expiresAt: new Date(Date.now() + 60 * 60_000) });
       }
       await db.insert(agents).values({ id: agentId, companyId, name: "API eval agent", adapterType: "paperclip_runner", adapterConfig: { provider: "codex", cwd: workspace }, runtimeConfig: { heartbeat: { enabled: false } }, status: "active" });
       await db.insert(companyMemberships).values({ companyId, principalType: "agent",
@@ -226,6 +227,7 @@ export async function startRunnerApiTestServer() {
         ...binding, projectId, qualifiedProjectId, qualifiedForeignProjectId, projectWorkspaceId, artifactId, binaryArtifactId, goalId, blockerId, approvalId, foreignCompanyId, foreignProjectId, workspace,
         conversation: options.conversation ?? false,
         connectionScenario: options.connectionScenario ?? null, responsibleUserId, userId: responsibleUserId, sourceRunId: runId,
+        humanSessionToken,
         customConnectionService, foreignConnectionService, pendingInteractionId,
         initialInteractionIds: pendingInteractionId ? [pendingInteractionId] : [],
         authority: new PaperclipRunnerToolAuthority(db, binding),

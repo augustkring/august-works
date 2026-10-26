@@ -40,6 +40,7 @@ import {
   memoryRecords,
   memoryDeletionMarkers,
   contextManifests,
+  contextManifestItems,
 } from "@paperclipai/db";
 import { agentExecutionScopeSchema, nativePayloadSourceSnapshotSchema, pluginOperationIssueOriginKind,
   routineRevisionSnapshotV1Schema, type AgentExecutionScope } from "@paperclipai/shared";
@@ -1660,6 +1661,48 @@ export async function withReadMemoryTemporalSources<T>(db: Db | DbTransaction, a
   finally { scope.active = false; }
 }
 
+/** Install the Context prefix from one exact, current Native output Task row.
+ * The Native direct-input owner validator must run inside the callback before
+ * any read result escapes; this scope only narrows the existing reader
+ * predicate to the frozen Context manifests and does not grant access. */
+export async function withReadPinnedNativeTaskSnapshot<T>(db: Db | DbTransaction, actor: AuthorizationActor,
+  companyId: string, issueId: string, read: (currentOwnerHash: string) => Promise<T>): Promise<T> {
+  const [owner] = await db.select({ payloadSourceProtocolVersion: issues.payloadSourceProtocolVersion,
+    payloadSourceSnapshot: issues.payloadSourceSnapshot, payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated,
+    ownerHash: sql<string>`public.aw_native_payload_body_hash('issue',to_jsonb(${issues}))`,
+    digestValid: sql<boolean>`encode(sha256(convert_to((${issues.payloadSourceSnapshot}-'digest')::text,'UTF8')),'hex')=${issues.payloadSourceSnapshot}->>'digest'` })
+    .from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, issueId))).for("share");
+  const snapshot = owner && nativePayloadSourceSnapshotSchema.safeParse(owner.payloadSourceSnapshot);
+  if (!owner || owner.payloadSourceProtocolVersion !== 1 || owner.payloadSourceSnapshotInvalidated ||
+    owner.digestValid !== true || !snapshot?.success || snapshot.data.owner.kind !== "issue" ||
+    snapshot.data.owner.companyId !== companyId || snapshot.data.owner.id !== issueId ||
+    snapshot.data.owner.contentHash !== owner.ownerHash)
+    throw forbidden("The Native Task temporal scope is unavailable");
+  const contextIds = snapshot.data.inputs.flatMap(input => input.kind === "context" ? [input.manifestId] : []);
+  const dispatches = snapshot.data.inputs.filter((input): input is Extract<typeof input,
+    { kind: "worker_model_dispatch" | "conversation_model_dispatch" }> =>
+    input.kind === "worker_model_dispatch" || input.kind === "conversation_model_dispatch");
+  const dispatch = dispatches.at(-1);
+  if (!dispatch || dispatches.length > 64 || snapshot.data.inputs.at(-1) !== dispatch)
+    throw forbidden("The Native Task temporal scope has no retained output dispatch");
+  const runIds = [...new Set([...snapshot.data.policy.runIds, ...(dispatch ? [dispatch.runId] : [])])].sort();
+  const issueIds = new Set([issueId, ...snapshot.data.policy.issueIds, ...snapshot.data.inputs.flatMap(input =>
+    input.kind === "task" ? [input.issueId] : [])]);
+  if (contextIds.length) {
+    const items = await db.select({ sourceProvider: contextManifestItems.sourceProvider, sourceRef: contextManifestItems.sourceRef })
+      .from(contextManifestItems).where(and(eq(contextManifestItems.companyId, companyId),
+        inArray(contextManifestItems.manifestId, contextIds))).for("share");
+    for (const item of items) if (item.sourceProvider === "august_works_tasks") {
+      const match = /^issue:\/\/([0-9a-f-]{36})$/i.exec(item.sourceRef);
+      if (match) issueIds.add(match[1]!);
+    }
+  }
+  const scope: MemoryTemporalReadScope = { db: db as object, companyId, recordId: issueId,
+    actorKey: routineActorKey(actor), issueIds, runIds: new Set(runIds), contextIds: [...new Set(contextIds)].sort(), active: true };
+  try { return await memoryTemporalReadScopes.run(scope, () => read(snapshot.data.owner.contentHash)); }
+  finally { scope.active = false; }
+}
+
 export function activeMemoryTemporalContexts(db: Db | DbTransaction, actor: AuthorizationActor,
   kind: "issue" | "run", id: string): readonly string[] | undefined {
   const scope = memoryTemporalReadScopes.getStore();
@@ -2293,9 +2336,17 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
           if (nativeRoutineReadScopes.get(db as object) === context) nativeRoutineReadScopes.delete(db as object);
         }
       } else if (purpose === "workflow_sources" || purpose === "workflow_task_candidates") {
-        try { await db.execute(sql`select set_config('paperclip.native_workflow_run_ids', '', true),
-          set_config('paperclip.native_workflow_actor_hash', '', true),
-          set_config('paperclip.native_workflow_scope_token', '', true)`); }
+        try {
+          await db.execute(sql`select set_config('paperclip.native_workflow_run_ids', '', true),
+            set_config('paperclip.native_workflow_actor_hash', '', true),
+            set_config('paperclip.native_workflow_scope_token', '', true)`);
+        } catch (cleanupError) {
+          // A failed source query can abort the transaction; preserve that
+          // original source/authorization error when transaction-local GUC
+          // cleanup can no longer execute. The surrounding transaction
+          // rollback clears these settings in that case.
+          if (!readFailed) throw cleanupError;
+        }
         finally {
           context.active = false;
           if (nativeWorkflowReadScopes.get(db as object) === context) nativeWorkflowReadScopes.delete(db as object);

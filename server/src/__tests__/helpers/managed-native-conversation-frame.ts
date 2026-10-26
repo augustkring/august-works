@@ -211,7 +211,8 @@ export async function runManagedNativeConversationFrame(input: {
   let providerStubFailure: { stage: string; code: string } | null = null;
   let providerToolNames: string[] = [];
   const brokerRequestFacts: Array<{ requestHash: string; status: number; code?: string; stage?: string;
-    sqlState?: string; constraint?: string }> = [];
+    sqlState?: string; constraint?: string; errorName?: string; errorStatus?: number;
+    errorCode?: string; serviceFrames?: string[] }> = [];
   const providerCalls: Array<{ body: Record<string, unknown>; keyMatches: boolean }> = [];
   const gateway = workerModelGateway(db, { profiles: [profile], sourceSha,
     protectedEvidenceOrigin: "https://protected.test.invalid", fetch: async (url, init) => {
@@ -308,6 +309,21 @@ export async function runManagedNativeConversationFrame(input: {
   brokerApp.use(runtimeConnectionIntentRoutes(db, gateway));
   brokerApp.use((error: unknown, req: express.Request, _res: express.Response, next: express.NextFunction) => {
     const fact = brokerRequestByObject.get(req);
+    const diagnostic = error && typeof error === "object" ? error as Error & {
+      code?: unknown; status?: unknown; statusCode?: unknown; cause?: { code?: unknown };
+    } : null;
+    const safeIdentifier = (value: unknown) => typeof value === "string" && /^[A-Za-z0-9_:-]{1,96}$/.test(value) ? value : null;
+    if (fact && diagnostic) {
+      fact.errorName = safeIdentifier(diagnostic.name) ?? "UnknownError";
+      fact.errorCode = safeIdentifier(diagnostic.code) ?? safeIdentifier(diagnostic.cause?.code) ?? undefined;
+      const status = typeof diagnostic.status === "number" ? diagnostic.status
+        : typeof diagnostic.statusCode === "number" ? diagnostic.statusCode : null;
+      if (status !== null && status >= 400 && status <= 599) fact.errorStatus = status;
+      fact.serviceFrames = diagnostic.stack?.split("\n").slice(1).flatMap(frame => {
+        const match = /server\/src\/services\/([^\s():]+\.ts):(\d+):\d+/.exec(frame);
+        return match ? [`${match[1]}:${match[2]}`] : [];
+      }).slice(0, 6) ?? [];
+    }
     const details = error && typeof error === "object" &&
       (error as Record<string, unknown>).details && typeof (error as Record<string, unknown>).details === "object"
       ? (error as Record<string, unknown>).details as Record<string, unknown> : null;

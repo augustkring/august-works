@@ -263,6 +263,7 @@ export async function configureManagedConversationSandboxHost(input: {
   let acquiredLeaseExpiresAt: string | null = null;
   let preAdmissionObservation: { state: string; generationMatches: boolean; imageDigestMatches: boolean; controlsHealthy: boolean } | null = null;
   let prepareHostForRun: ((runId: string, leaseId: string) => Promise<void>) | null = null;
+  let activeNativePreparationPurpose: string | null = null;
   const hostAdmissionByRun = new Map<string, { leaseId: string; promise: Promise<void> }>();
   const sandboxExecutionChecks: Array<Record<string, boolean | number | string | null>> = [];
   let negativeNativeSessionStartControls: { wrongCommandDenied: boolean; wrongRootDenied: boolean; noExecution: boolean } | null = null;
@@ -339,7 +340,13 @@ export async function configureManagedConversationSandboxHost(input: {
         contextIssueExecutionRunMatches: contextIssue?.executionRunId === execInput.runId,
         nativeIssueMatchesContext: Boolean(run?.nativeIssueId && contextIssueId && run.nativeIssueId === contextIssueId) });
     }
-    return await runtime.executeSandboxTask(execInput);
+    const previousPurpose = activeNativePreparationPurpose;
+    activeNativePreparationPurpose = execInput.nativePreparationPurpose ?? null;
+    try {
+      return await runtime.executeSandboxTask(execInput);
+    } finally {
+      activeNativePreparationPurpose = previousPurpose;
+    }
   };
   const environmentRuntime = environmentRuntimeService(db, { executeSandboxTask });
   const relayServer = createServer(); runtime.relay.attach(relayServer);
@@ -360,14 +367,23 @@ export async function configureManagedConversationSandboxHost(input: {
   if (!authenticated) throw new Error("conversation_software_host_relay_auth_failed");
   const execFacts: Array<{ executable: string; cwdExact: boolean; modelCredentialPresent: boolean;
     managedModelBrokerOriginPresent: boolean;
-    assignedMcpEnvironmentAbsent: boolean }> = [];
+    assignedMcpEnvironmentAbsent: boolean; credentialEnvironmentAbsent: boolean;
+    nativePreparationPurpose: string | null }> = [];
   relayHost.on("message", raw => {
     let message: Record<string, any>;
     try { message = JSON.parse(raw.toString()) as Record<string, any>; } catch { return; }
     if (message.type !== "exec_open" || !Array.isArray(message.request?.argv) || typeof message.channelId !== "string") return;
     const request = message.request as Record<string, any>;
     const requestEnv = request.env && typeof request.env === "object" ? request.env as Record<string, unknown> : {};
-    if (requestEnv.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN !== brokerOrigin) {
+    const noBrokerPreparation = ["provider_artifact", "native_harness_state", "native_workspace_prepare"]
+      .includes(activeNativePreparationPurpose ?? "");
+    const managedModelOriginMatches = requestEnv.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === brokerOrigin &&
+      Boolean(request.modelBrokerCredential);
+    const noCredentialEnvironment = !Object.keys(requestEnv).some(name =>
+      /(?:TOKEN|SECRET|PASSWORD|CREDENTIAL|API[_-]?KEY|PRIVATE[_-]?KEY|AUTHORIZATION)/i.test(name));
+    const credentialFreePreparation = noBrokerPreparation && !managedModelOriginMatches &&
+      !request.modelBrokerCredential && !request.brokerCredential && noCredentialEnvironment;
+    if (!managedModelOriginMatches && !credentialFreePreparation) {
       relayHost.send(JSON.stringify({ type: "exec_exit", channelId: message.channelId, exitCode: 126, timedOut: false }));
       return;
     }
@@ -380,10 +396,16 @@ export async function configureManagedConversationSandboxHost(input: {
       !requestEnv.PAPERCLIP_NATIVE_MCP_URL && !requestEnv.PAPERCLIP_NATIVE_MCP_TOKEN;
     execFacts.push({ executable: argv[0] ?? "", cwdExact: cwd === expectedTaskRoot, modelCredentialPresent,
       managedModelBrokerOriginPresent: requestEnv.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === brokerOrigin,
-      assignedMcpEnvironmentAbsent });
+      assignedMcpEnvironmentAbsent, credentialEnvironmentAbsent: noCredentialEnvironment,
+      nativePreparationPurpose: activeNativePreparationPurpose });
     const env = { ...process.env, ...requestEnv,
-      PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: brokerOrigin,
       ...(request.modelBrokerCredential ? { ANTHROPIC_API_KEY: "paperclip-managed-model-broker" } : {}) } as NodeJS.ProcessEnv;
+    if (credentialFreePreparation) {
+      for (const name of ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN",
+        "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND", "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS",
+        "PAPERCLIP_SANDBOX_BROKER_TOKEN", "PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN",
+        "PAPERCLIP_SANDBOX_BROKER_SESSION_ID"]) delete env[name];
+    }
     const child = spawn(argv[0]!, argv.slice(1), { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
     if (typeof request.stdinBase64 === "string") child.stdin.end(Buffer.from(request.stdinBase64, "base64")); else child.stdin.end();
     for (const [stream, output] of [["stdout", child.stdout], ["stderr", child.stderr]] as const)

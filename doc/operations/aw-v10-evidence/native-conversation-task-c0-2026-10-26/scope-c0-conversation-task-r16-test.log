@@ -1,0 +1,60 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > uses the authenticated chat route and actual heartbeat to dispatch a pinned OpenCode turn under a conversation issuer token, without worker-plan rows
+ ↓ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > runs the route-created conversation through RuntimeControl and its signed qualified sandbox relay
+ ↓ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > continues the real conversation after a metric tool result with its original immutable source receipt
+ ↓ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates one private Project from a current conversation dispatch and carries its exact result into the next request
+stderr | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates a source-bound Task from an ordinary conversation model turn and carries the exact result into the next request
+managed_create_task_callback_test_facts {"turnIdPresent":true,"nativeToolCallCallbackPresent":true,"managedResultCallbackPresent":true}
+
+stderr | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates a source-bound Task from an ordinary conversation model turn and carries the exact result into the next request
+managed_create_task_result_callback_invoked {"turnIdPresent":true}
+
+stderr | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates a source-bound Task from an ordinary conversation model turn and carries the exact result into the next request
+managed_create_task_run_receipt_test_facts {"runPresent":true,"sourceAuthorityVersion":1,"receiptValid":true,"callCount":1,"resultDigestPresent":true,"invocationPresent":false,"invocationResultMatches":false,"invocationIssueMatches":false,"receiptCompanyMatches":true,"receiptRunMatches":true,"receiptAgentMatches":true,"receiptHumanMatches":true}
+
+[22:00:54] [31mERROR[39m: [36mheartbeat execution setup failed[39m [90m{"runId":"cfc303cf-16ad-4e92-b1c7-8e0ea9be0492","failureCode":"setup_failed"}[39m
+ × src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates a source-bound Task from an ordinary conversation model turn and carries the exact result into the next request 33766ms
+   → expected { …(76) } to match object { …(7) }
+(74 matching properties omitted from actual)
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates a source-bound Task from an ordinary conversation model turn and carries the exact result into the next request
+AssertionError: expected { …(76) } to match object { …(7) }
+(74 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "createdByAgentId": undefined,
++   "createdByAgentId": "aa9b3872-61c1-4657-951a-ad6b40d3c901",
+    "parentId": null,
+    "payloadSourceProtocolVersion": 1,
+    "payloadSourceSnapshotInvalidated": false,
+    "responsibleUserId": "user-24e8f982-3e7d-4f39-87d4-ba36643a2380",
+-   "status": "todo",
++   "status": "blocked",
+    "title": "Conversation-created private Task",
+  }
+
+ ❯ Object.afterRunSettledBeforeTeardown src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts:459:25
+    457|         expect(inputs).toEqual(expect.arrayContaining([expect.objectCo…
+    458|         const [created]=await db.select().from(issues).where(and(eq(is…
+    459|         expect(created).toMatchObject({title:taskTitle,parentId:null,s…
+       |                         ^
+    460|           createdByAgentId:facts.actor.agentId,payloadSourceProtocolVe…
+    461|         expect(created?.payloadSourceSnapshot).toMatchObject({owner:{k…
+ ❯ runManagedNativeConversationFrame src/__tests__/helpers/managed-native-conversation-frame.ts:479:7
+ ❯ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts:408:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 skipped (5)
+   Start at  22:00:07
+   Duration  51.93s (transform 10.44s, setup 67ms, import 14.00s, tests 37.74s, environment 0ms)
+

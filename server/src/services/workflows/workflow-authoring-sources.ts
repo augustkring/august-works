@@ -171,7 +171,12 @@ async function inspectWorkflowRunPayloadSourceAccess(db: Db, companyId: string, 
   const stepRows = await db.select({ id: workflowStepRuns.id, memoryRecordIds: workflowStepRuns.memoryRecordIds,
     artifactVersionId: workflowStepRuns.automationArtifactVersionId })
     .from(workflowStepRuns).where(and(eq(workflowStepRuns.companyId, companyId), eq(workflowStepRuns.workflowRunId, runId)))
-    .orderBy(workflowStepRuns.id).limit(257).for("share", { noWait: true });
+    // A live executor may be committing the step row while an authorized
+    // reader rechecks the same run (for example, an idempotent request replay).
+    // Wait under the surrounding bounded transaction timeout, then inspect
+    // the committed row values. NOWAIT turns ordinary execution into a 500 and
+    // prevents a current-source replay from completing.
+    .orderBy(workflowStepRuns.id).limit(257).for("share");
   if (stepRows.length > 256) throw forbidden("The complete workflow run source population exceeds its bound");
   const stepMemoryIds = stepRows.map(step => memorySources.safeParse(step.memoryRecordIds));
   if (stepMemoryIds.some(ids => !ids.success || new Set(ids.data).size !== ids.data.length))

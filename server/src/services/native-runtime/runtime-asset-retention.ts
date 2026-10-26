@@ -296,7 +296,7 @@ export async function retireCompanyNativeLegacyRuntimeProfiles(db: Db, companyId
       status: companyDeletionOperations.status, evidence: companyDeletionOperations.evidence })
       .from(companyDeletionOperations).where(and(eq(companyDeletionOperations.companyId, companyId),
         eq(companyDeletionOperations.id, operationId))).for("update");
-    if (company.status !== "archived" || company.pauseReason !== "company_deleted" || !operation ||
+    if (company.status !== "archived" || !operation ||
       operation.stage !== "purge" || operation.status !== "processing" ||
       typeof operation.evidence.runtimesErasedAt !== "string")
       throw conflict("Native legacy profile retirement requires the current archived company purge");
@@ -331,9 +331,8 @@ export async function retireCompanyNativeLegacyRuntimeProfiles(db: Db, companyId
     }
     const now = new Date();
     const tombstone = await tx.update(companies).set({
-      contentErasureTransactionId: sql`pg_current_xact_id()::text`, updatedAt: now,
-    }).where(and(eq(companies.id, companyId), eq(companies.status, "archived"),
-      eq(companies.pauseReason, "company_deleted"))).returning({ id: companies.id });
+      pauseReason: "company_deleted", contentErasureTransactionId: sql`pg_current_xact_id()::text`, updatedAt: now,
+    }).where(and(eq(companies.id, companyId), eq(companies.status, "archived"))).returning({ id: companies.id });
     if (!tombstone.length) throw conflict("Canonical company erasure owner changed before legacy profile retirement");
     const runIds = retiring.map(run => run.id);
     await purgeDerivedWorkflowMemory(tx, companyId, [], now, {

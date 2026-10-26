@@ -1,0 +1,43 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > uses the authenticated chat route and actual heartbeat to dispatch a pinned OpenCode turn under a conversation issuer token, without worker-plan rows
+ ↓ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > runs the route-created conversation through RuntimeControl and its signed qualified sandbox relay
+ ↓ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > continues the real conversation after a metric tool result with its original immutable source receipt
+ ↓ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates one private Project from a current conversation dispatch and carries its exact result into the next request
+stdout | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates a source-bound Task from an ordinary conversation model turn and carries the exact result into the next request
+conversation_task_setup_failure_ownership {"mainRunId":"f9006b68-460c-4072-af1d-339c4c244784","mainRunStatus":"failed","mainRunErrorCode":"native_session_interrupted","createdTaskId":null,"failedRuns":[{"runId":"f9006b68-460c-4072-af1d-339c4c244784","nativeIssueId":"1af114a0-a77e-4958-8fb8-2714c9db5c3e","contextIssueId":"1af114a0-a77e-4958-8fb8-2714c9db5c3e","nativeIssueMatchesCreatedTask":false,"contextIssueMatchesCreatedTask":false,"status":"failed","errorCode":"other"}]}
+
+stdout | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates a source-bound Task from an ordinary conversation model turn and carries the exact result into the next request
+conversation_task_native_failure_phase {"runId":"f9006b68-460c-4072-af1d-339c4c244784","runStatus":"failed","runErrorCode":"native_session_interrupted","finalizationPhase":"retryable_failure","finalizationAttempt":1,"finalizationFailureCode":"native_session_interrupted","safeFailureDetail":{}}
+
+ × src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates a source-bound Task from an ordinary conversation model turn and carries the exact result into the next request 16341ms
+   → {"status":"failed","errorCode":"native_session_interrupted","calls":0,"providerStubFailure":null,"broker":[],"sourceProtocol":0,"taskResultFacts":{"found":false,"isError":false,"contentPresent":false,"jsonParsed":false,"disposition":null,"taskPresent":false,"taskIdPresent":false,"taskIsRoot":false,"taskIsTodo":false}}: expected false to be true // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates a source-bound Task from an ordinary conversation model turn and carries the exact result into the next request
+AssertionError: {"status":"failed","errorCode":"native_session_interrupted","calls":0,"providerStubFailure":null,"broker":[],"sourceProtocol":0,"taskResultFacts":{"found":false,"isError":false,"contentPresent":false,"jsonParsed":false,"disposition":null,"taskPresent":false,"taskIdPresent":false,"taskIsRoot":false,"taskIsTodo":false}}: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts:541:58
+    539|       calls:result.providerCallCount,providerStubFailure:result.provid…
+    540|       sourceProtocol:result.run?.nativeInputSourceProtocolVersion,task…
+    541|       stderr:result.run?.stderrExcerpt?.slice(0,1000)})).toBe(true);
+       |                                                          ^
+    542|     expect(result.providerCallCount).toBe(2);
+    543|     expect(result.workerPlan).toBeNull();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 skipped (5)
+   Start at  22:32:08
+   Duration  34.64s (transform 10.57s, setup 76ms, import 14.20s, tests 20.25s, environment 0ms)
+

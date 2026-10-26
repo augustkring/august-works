@@ -1,0 +1,31 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > executes the actual immutable draft as test without publishing, cloning or admitting live work
+ ✓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > serializes identical original requests and recovers one receipt after draft replacement and publication 770ms
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > retains queued test recovery on the original revision after draft replacement
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > rejects stale before native admission
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > rejects revision before native admission
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > rejects workflow before native admission
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > rejects false_ack before native admission
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > rejects production_input before native admission
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > rejects wrong_expected_result before native admission
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > does not allow retry or optimizer correction/trace to convert a test to live evidence
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > rechecks the initiating human's current role during queued recovery
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > revokes original test receipt and queued execution after actual workflows:read grant loss
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > revokes original test receipt and queued execution after actual workflows:edit grant loss
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > revokes original test receipt and queued execution after actual workflows:run grant loss
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > refuses a native draft requiring long_deadline before any test run
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > refuses a native draft requiring input_contract before any test run
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > refuses a native draft requiring variables before any test run
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > keeps another human's original receipt private and rejects reused UUID with changed command
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > rejects altered retained receipt bindings instead of displaying a different run
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > keeps legacy manual admission from choosing an unpublished test source
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > enforces rollout at the native enqueue owner as well as the customer route
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > blocks fresh admission on Pause and rollout rollback while preserving the native run
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 21 skipped (22)
+   Start at  22:40:45
+   Duration  19.79s (transform 10.14s, setup 75ms, import 14.31s, tests 5.27s, environment 0ms)
+

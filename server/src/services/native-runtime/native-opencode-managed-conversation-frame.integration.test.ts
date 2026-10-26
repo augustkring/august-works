@@ -1,11 +1,12 @@
-import {and,eq,sql} from "drizzle-orm";
+import {and,eq,gte,sql} from "drizzle-orm";
 import {randomUUID} from "node:crypto";
-import {authSessions,authUsers,companyMemberships,heartbeatRunEvents,issues,nativeRunFinalizations,nativeRunResults,projectWorkspaces,projects} from "@paperclipai/db";
+import {authSessions,authUsers,companyMemberships,heartbeatRunEvents,heartbeatRuns,issues,nativeRunFinalizations,nativeRunResults,projectWorkspaces,projects} from "@paperclipai/db";
 import type {BusinessMetricQuery} from "@paperclipai/shared";
 import {instanceSettingsService} from "../instance-settings.js";
 import {businessMetricService} from "../business-metrics/service.js";
 import {aiGovernanceService} from "../ai-governance/governance-service.js";
 import {issueService} from "../issues.js";
+import {documentService} from "../documents.js";
 import {analyticalPurpose,metricDefinition} from "../../__tests__/helpers/business-metric-fixture.js";
 import { execFileSync } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -164,6 +165,10 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
       : [];
     expect(relayExecFacts.some(fact => fact.modelCredentialPresent === true &&
       fact.managedModelBrokerOriginPresent === true && fact.cwdExact === true)).toBe(true);
+    expect(relayExecFacts.some(fact => fact.nativePreparationPurpose === "native_workspace_prepare" &&
+      fact.modelCredentialPresent === false && fact.managedModelBrokerOriginPresent === false &&
+      fact.credentialEnvironmentAbsent === true && fact.assignedMcpEnvironmentAbsent === true &&
+      fact.cwdExact === true)).toBe(true);
     const sandboxExecutionChecks = Array.isArray(runtimeFacts?.sandboxExecutionChecks)
       ? runtimeFacts.sandboxExecutionChecks as Array<Record<string, unknown>>
       : [];
@@ -401,6 +406,7 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
     vi.stubEnv("PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS","1");
     const callId="conversation-task-create-c0";
     const taskTitle="Conversation-created private Task";
+    const taskPlan="# Execution plan\n\nImplement and verify the clarified outcome.";
     let providerConsumedResult=false;
     const taskResultFacts:{found:boolean;isError:boolean;contentPresent:boolean;jsonParsed:boolean;disposition:string|null;taskPresent:boolean;taskIdPresent:boolean;taskIsRoot:boolean;taskIsTodo:boolean}=
       {found:false,isError:false,contentPresent:false,jsonParsed:false,disposition:null,taskPresent:false,taskIdPresent:false,taskIsRoot:false,taskIsTodo:false};
@@ -413,6 +419,7 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
           if(!tool)throw new Error("conversation_task_create_tool_not_advertised");
           return {stop_reason:"tool_use",content:[{type:"tool_use",id:callId,name:tool.name,input:{
             title:taskTitle,description:"Created from this authenticated conversation turn.",
+            initialPlan:taskPlan,
             idempotencyKey:"conversation-task-create-c0"}}]};
         }
         if(callIndex!==2)throw new Error("conversation_task_create_unexpected_provider_retry");
@@ -440,7 +447,53 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
         return undefined;
       },
       afterRunSettledBeforeTeardown:async facts=>{
-        if(!facts.run||facts.run.status!=="succeeded")return;
+        if(!facts.run)return;
+        const diagnosticReceipt=facts.nativeInputSourceReceipt as {additionalInputs?:Array<{inputs?:unknown[]}>}|null;
+        const diagnosticTaskSource=(diagnosticReceipt?.additionalInputs??[]).flatMap(entry=>entry.inputs??[])
+          .map(value=>value&&typeof value==="object"&&!Array.isArray(value)?value as Record<string,unknown>:{})
+          .find(value=>value.kind==="task"&&typeof value.issueId==="string");
+        const diagnosticTaskId=typeof diagnosticTaskSource?.issueId==="string"?diagnosticTaskSource.issueId:null;
+        const failedRuns=await db.select({id:heartbeatRuns.id,nativeIssueId:heartbeatRuns.nativeIssueId,
+          status:heartbeatRuns.status,errorCode:heartbeatRuns.errorCode,contextSnapshot:heartbeatRuns.contextSnapshot})
+          .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId,facts.companyId),eq(heartbeatRuns.agentId,facts.agentId),
+            eq(heartbeatRuns.status,"failed"),gte(heartbeatRuns.startedAt,facts.run.startedAt)));
+        console.info("conversation_task_setup_failure_ownership",JSON.stringify({mainRunId:facts.run.id,
+          mainRunStatus:facts.run.status,mainRunErrorCode:facts.run.errorCode,createdTaskId:diagnosticTaskId,
+          failedRuns:failedRuns.map(run=>{
+            const context=run.contextSnapshot&&typeof run.contextSnapshot==="object"&&!Array.isArray(run.contextSnapshot)
+              ?run.contextSnapshot as Record<string,unknown>:{};
+            return {runId:run.id,nativeIssueId:run.nativeIssueId,contextIssueId:typeof context.issueId==="string"?context.issueId:null,
+              nativeIssueMatchesCreatedTask:!!diagnosticTaskId&&run.nativeIssueId===diagnosticTaskId,
+              contextIssueMatchesCreatedTask:!!diagnosticTaskId&&context.issueId===diagnosticTaskId,
+              status:run.status,errorCode:run.errorCode==="setup_failed"?"setup_failed":run.errorCode?"other":"none"};
+          })}));
+        const [failure]=await db.select({phase:nativeRunFinalizations.phase,attempt:nativeRunFinalizations.attempt,
+          failureCode:nativeRunFinalizations.failureCode,failureDetail:nativeRunFinalizations.failureDetail})
+          .from(nativeRunFinalizations).where(eq(nativeRunFinalizations.runId,facts.run.id)).limit(1);
+        const detail=failure?.failureDetail&&typeof failure.failureDetail==="object"&&!Array.isArray(failure.failureDetail)
+          ?failure.failureDetail as Record<string,unknown>:{};
+        const safeFailureDetail=Object.fromEntries(["code","failureCode","phase","retryReasonCode","retryable"]
+          .filter(key=>Object.hasOwn(detail,key)).map(key=>[key,typeof detail[key]==="string"
+            ?(/^[a-z0-9_]{2,80}$/i.test(detail[key] as string)?detail[key]:"other"):detail[key]]));
+        const runEvents=await db.select({eventType:heartbeatRunEvents.eventType,stream:heartbeatRunEvents.stream,
+          level:heartbeatRunEvents.level,message:heartbeatRunEvents.message,payload:heartbeatRunEvents.payload})
+          .from(heartbeatRunEvents).where(eq(heartbeatRunEvents.runId,facts.run.id)).orderBy(heartbeatRunEvents.seq);
+        const safeEvents=runEvents.map(event=>{
+          const payload=event.payload&&typeof event.payload==="object"&&!Array.isArray(event.payload)
+            ?event.payload as Record<string,unknown>:{};
+          const safePayload=Object.fromEntries(["phase","failureCode","retryReasonCode","code","attempt","recoveryAction"]
+            .filter(key=>Object.hasOwn(payload,key)).map(key=>[key,typeof payload[key]==="string"
+              ?(/^[a-z0-9_]{2,80}$/i.test(payload[key] as string)?payload[key]:"other"):payload[key]]));
+          const message=event.message??"";
+          const messageClass=message.includes("transport interrupted")?"transport_interrupted"
+            :message.includes("setup failed")?"setup_failed":message.includes("provider turn")?"provider_turn":message?"other":"none";
+          return {eventType:event.eventType,stream:event.stream,level:event.level,messageClass,safePayload};
+        });
+        console.info("conversation_task_native_failure_phase",JSON.stringify({runId:facts.run.id,
+          runStatus:facts.run.status,runErrorCode:facts.run.errorCode,finalizationPhase:failure?.phase??null,
+          finalizationAttempt:failure?.attempt??null,finalizationFailureCode:failure?.failureCode??null,safeFailureDetail,
+          events:safeEvents}));
+        if(facts.run.status!=="succeeded")return;
         const receipt=facts.nativeInputSourceReceipt as {additionalInputs?:Array<{policy?:unknown;inputs?:unknown[]}>}|null;
         const rows=Array.isArray(receipt?.additionalInputs)?receipt!.additionalInputs:[];
         const entries=rows.filter(entry=>Array.isArray(entry.inputs)&&entry.inputs.some(value=>{
@@ -463,6 +516,7 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
         expect(created).toMatchObject({title:taskTitle,parentId:null,responsibleUserId:facts.actor.userId,
           createdByAgentId:facts.agentId,payloadSourceProtocolVersion:1,payloadSourceSnapshotInvalidated:false});
         expect(created?.payloadSourceSnapshot).toMatchObject({owner:{kind:"issue",companyId:facts.companyId,id:taskId}});
+        expect((await documentService(db).getIssueDocumentByKey(taskId,"plan"))?.body).toBe(taskPlan);
         const [ownerSession]=await db.select({id:authSessions.id,userId:authSessions.userId,token:authSessions.token})
           .from(authSessions).where(and(eq(authSessions.id,facts.actor.sessionId!),eq(authSessions.userId,facts.actor.userId!)));
         const foreignUserId=`conversation-task-foreign-${randomUUID()}`;

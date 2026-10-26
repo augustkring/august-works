@@ -1,0 +1,78 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > conservative native model cost quotes > rounds fractional aggregate charges upward without floating-point under-reservation
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > conservative native model cost quotes > rejects expiry, future evidence, wrong revision, non-integer token limits and unsupported currency
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > binds live reservations to the actual Human session and current conversation generation
+stdout | src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > settles the actual qualified conversation usage once and preserves the exact debit in canonical purge
+Native conversation workspace scope {"nativeAdapter":true,"supportedEnvironment":true,"issuePresent":true,"conversationChannelOrigin":false,"chatConversationRowPresent":false,"canonicalConversationAgentMatches":true,"canonicalConversationHumanMatches":true,"canonicalConversationStateActive":true,"canonicalConversationGenerationMatches":true,"canonicalConversationRunMatches":true,"selectedCanonicalConversationScope":true}
+
+stderr | src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > settles the actual qualified conversation usage once and preserves the exact debit in canonical purge
+native_model_input_dispatch_closure_diagnostic {
+  closurePresent: true,
+  closureMatches: true,
+  mismatch: 'unclassified',
+  sourceProtocolVersion: 0,
+  responsibleUserPresent: true,
+  existingReceiptValid: false,
+  noPriorNativeEffects: true,
+  priorIntentCount: 0,
+  priorAssociationCount: 0,
+  priorResultCaptureCount: 0,
+  attachmentStagePresent: false
+}
+
+ × src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > settles the actual qualified conversation usage once and preserves the exact debit in canonical purge 29433ms
+   → conversation_offboarding_purge_incomplete:{"stage":"purge","status":"processing","runtime":{"operation":{"stage":"purge","status":"processing","errorCode":"offboarding_reconciliation_pending","lastPurgeReconciliationFailure":{"stage":"legacy_profile_retirement","name":"Error","status":409,"sqlState":null,"constraint":null}},"jobs":[{"jobKey":"runtime-asset-erasure:v1:f6956f08-c355-44a5-add8-ab76a3d6f010","status":"succeeded","errorCode":null,"attemptNumber":1}]},"purgeProbe":{"outcome":"allowed_in_probe"},"nativeStop":{"runPresent":true,"runStatus":"succeeded","runtimeMode":"native","processPidPresent":false,"processGroupPresent":false,"controllerLeasePresent":false,"controllerBootIdPresent":false,"finalizationPhase":"committed","finalizationLeaseHeld":false,"nativeLocalStopReceipt":true,"leases":[{"provider":"local","status":"released","cleanupStatus":null,"released":true,"remoteTerminationReceipt":false}]}}
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > allows the last exact-budget dispatch and rejects the next reservation
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > dispatches the 64th actual funded call and refuses the 65th
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > rolls back settlement if an actual reservation receipt is preempted, then settles once
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > retains an actual unknown conversation hold and blocks canonical company purge
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > requires a current accountable Agent run and active Worker attempt for decision-shadow spend
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > serializes concurrent reservations before spend and debits the native counter exactly once
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > requires a current price ceiling, original principal and current source at preflight
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > rechecks price and source before a single irreversible dispatch claim
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > retains the entire debit after unknown dispatch or expired preflight, without reopening retry spend
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > blocks authority loss between reservation and dispatch while keeping immutable financial metadata
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > keeps taskless support funding closed without operator qualification and rejects customer-supplied funding
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > admits only the registered Jev Skill purpose through the same taskless budget owner without a Support package pin
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > serializes concurrent platform budget-profile creation and rejects overlapping period keys
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > atomically caps concurrent taskless company-purpose reservations and retains unknown exposure
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > requires the original company Human and unchanged source and funding profile at dispatch
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > keeps the exact package version pinned and refuses dispatch after that release is revoked
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > keeps the taskless support release out of customer catalog and Agent installation
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > runs one software-only first-party Help answer through the original reservation and grounding owners
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > keeps unknown transport outcomes held and does not retry, and spends nothing when Help evidence is outside the package pins
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > settles provider usage after Human membership is revoked during dispatch but withholds the Help quote
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > withholds citations but settles actual usage when the pinned package is revoked in flight
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > withholds citations but settles actual usage when the deployment funding profile disappears in flight
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > bounds taskless invocations even when a qualified fixture tariff computes zero minor units
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > rechecks the original Human, source and funding profile before returning completed support content
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > settles a dispatched call after principal revocation but refuses content return
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > keeps unknown spend held when the original provider account cannot prove a late result
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > cancels undispatched holds, waits for dispatched outcomes, then purges only through the canonical offboarding receipt
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > settles the actual qualified conversation usage once and preserves the exact debit in canonical purge
+Error: conversation_offboarding_purge_incomplete:{"stage":"purge","status":"processing","runtime":{"operation":{"stage":"purge","status":"processing","errorCode":"offboarding_reconciliation_pending","lastPurgeReconciliationFailure":{"stage":"legacy_profile_retirement","name":"Error","status":409,"sqlState":null,"constraint":null}},"jobs":[{"jobKey":"runtime-asset-erasure:v1:f6956f08-c355-44a5-add8-ab76a3d6f010","status":"succeeded","errorCode":null,"attemptNumber":1}]},"purgeProbe":{"outcome":"allowed_in_probe"},"nativeStop":{"runPresent":true,"runStatus":"succeeded","runtimeMode":"native","processPidPresent":false,"processGroupPresent":false,"controllerLeasePresent":false,"controllerBootIdPresent":false,"finalizationPhase":"committed","finalizationLeaseHeld":false,"nativeLocalStopReceipt":true,"leases":[{"provider":"local","status":"released","cleanupStatus":null,"released":true,"remoteTerminationReceipt":false}]}}
+ ❯ purgeConversationCompany src/__tests__/v7-model-reservations.integration.test.ts:646:15
+    644|       const completed = await offboarding.get(facts.companyId);
+    645|       if (!completed || completed.id !== operation.id || completed.sta…
+    646|         throw new Error(`conversation_offboarding_purge_incomplete:${J…
+       |               ^
+    647|           status: completed?.status ?? null, runtime: await offboardin…
+    648|           purgeProbe: await probePurgeFailure(facts.companyId, operati…
+ ❯ Object.async.db [as afterRunSettledBeforeTeardown] src/__tests__/v7-model-reservations.integration.test.ts:909:31
+ ❯ runManagedNativeConversationFrame src/__tests__/helpers/managed-native-conversation-frame.ts:479:7
+ ❯ conversationReservationFixture src/__tests__/v7-model-reservations.integration.test.ts:353:22
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:781:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 30 skipped (31)
+   Start at  22:34:00
+   Duration  47.80s (transform 10.23s, setup 70ms, import 14.31s, tests 33.31s, environment 0ms)
+

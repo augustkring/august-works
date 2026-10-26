@@ -7548,11 +7548,11 @@ async function nativeTurnFrameMatchesSourceClosure(tx: Parameters<Parameters<Db[
   const wakeInputs = closure.sourceSet.inputs.filter((input): input is Extract<NativePayloadSourceInput, { kind: "native_task_wake" }> =>
     input.kind === "native_task_wake");
   if (wakeInputs.length > 1 || wakeInputs.some(input => input.runId !== run.id || input.issueId !== run.nativeIssueId)) return no("wake_binding");
-  if (wakeInputs.length === 1) {
-    const [wakeTask] = await tx.select({ sourceVersion: sql<string>`extract(epoch from ${issues.updatedAt})::text` }).from(issues).where(and(
-      eq(issues.companyId, run.companyId), eq(issues.id, run.nativeIssueId!)));
-    if (!wakeTask || wakeTask.sourceVersion !== wakeInputs[0]!.sourceVersion) return no("wake_version");
-  }
+  // The Task source was checked against its current payload-only owner hash
+  // immediately above. Bind the wake to that captured Task source version;
+  // `issues.updatedAt` also changes for operational conversation activity.
+  if (wakeInputs.length === 1 && (!taskInput || wakeInputs[0]!.sourceVersion !== taskInput.sourceVersion))
+    return no("wake_version");
 
   if (!run.completionContractId || !run.completionContractSha256 ||
     parsedExecution.completionContract.id !== run.completionContractId ||

@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/__tests__/chat-project-tools.test.ts
+test_pattern=chat project tool handoff

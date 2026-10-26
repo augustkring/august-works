@@ -77,8 +77,9 @@ function makeSpawnRunner(options: {
         child.stderr.on("data", (chunk) => {
           stderr += chunk.toString("utf8");
         });
-        child.on("error", () => {
-          resolve({ exitCode: 127, signal: null, timedOut: false, stdout, stderr, pid: null, startedAt });
+        child.on("error", (error) => {
+          resolve({ exitCode: 127, signal: null, timedOut: false, stdout,
+            stderr: `${error.name}:${error.message}; cwd=${input.cwd ?? ""}`, pid: null, startedAt });
         });
         child.on("close", async (code) => {
           if (

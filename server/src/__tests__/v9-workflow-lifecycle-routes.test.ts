@@ -47,6 +47,7 @@ const describePg = support.supported ? describe.sequential : describe.skip;
 describePg("V9 native workflow lifecycle", () => {
   let db!: ReturnType<typeof createDb>;
   let fixture: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
+  const routeErrors: Array<{ name: string; message: string; top: string[] }> = [];
   const local: Express.Request["actor"] = {
     type: "board",
     source: "local_implicit",
@@ -88,6 +89,14 @@ describePg("V9 native workflow lifecycle", () => {
       next();
     });
     app.use("/api", workflowRoutes(db));
+    app.use((err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
+      if (err instanceof Error) routeErrors.push({
+        name: err.name,
+        message: err.message,
+        top: (err.stack ?? "").split("\n").slice(0, 7),
+      });
+      errorHandler(err, req, res, next);
+    });
     app.use(errorHandler);
     return request(app);
   }
@@ -961,6 +970,7 @@ describePg("V9 native workflow lifecycle", () => {
     ).toHaveLength(1);
   });
   it("admits one immutable native run and reconciles its original receipt after Pause", async () => {
+    routeErrors.length = 0;
     const detail = await seed(),
       input = launchCommand(detail);
     const revisionBefore = await db
@@ -971,7 +981,8 @@ describePg("V9 native workflow lifecycle", () => {
       http().post(launchPath(detail)).send(input),
       http().post(launchPath(detail)).send(input),
     ]);
-    for (const response of responses) expect(response.status, JSON.stringify(response.body)).toBe(200);
+    for (const response of responses)
+      expect(response.status, JSON.stringify({ body: response.body, routeErrors })).toBe(200);
     expect(responses[0].body).toEqual(responses[1].body);
     expect(responses[0].body).toMatchObject({
       disposition: "admitted",

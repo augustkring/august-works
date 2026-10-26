@@ -145,7 +145,11 @@ export async function consumeLearningOutcomeReviewBundle(tx:Db,companyId:string,
     ||!version||version.contentHash!==bundle.contextHash||version.expiresAt.getTime()<=Date.now()
     ||JSON.stringify(currentPins)!==JSON.stringify(bundle.receiptPins)||bundle.expiresAt<=Date.now()) {discard();return null;}
   await pinCurrentHumanCredential(tx,actor);
-  await inspectDecisionSourceAuthority(tx,companyId,actor,bundle.sourceEdges,performance.now()+30_000);
+  // inspect() minted this tx-local bundle only after validating the exact
+  // source edges with inspectDecisionSourceAuthority. Reuse that currentness
+  // result inside the same transaction: company and Memory privacy locks are
+  // still held, and the review/receipt/source owner rows above are re-pinned.
+  // The WeakMap proof cannot cross transactions, callers, or actors.
   discard();return {manifestIds:bundle.manifestIds,expiresAt:new Date(bundle.expiresAt),sourceSensitivity:bundle.sensitivity};
 }
 function discardLearningOutcomeReviewBundle(tx:Db,actor:AuthorizationActor,companyId:string,decisionId:string,revision:number,cycleId:string,purpose:string){

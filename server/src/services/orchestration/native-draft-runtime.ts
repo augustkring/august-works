@@ -324,11 +324,28 @@ export async function prepareNativeDraftBackend(
     id: execution.binding.issueId, identifier: execution.task.identifier, title: execution.task.title,
     description: execution.task.description, workMode: execution.task.workMode,
   }), "utf8").digest("hex");
-  if (!sourceClosure || !taskSource || taskSource.contentHash !== expectedTaskDigest || !completionSource ||
-    !instructionSource || skillSources.length !== execution.runtimeContext.skills.length ||
-    execution.runtimeContext.skills.some((skill) => !skillSources.some((source) => source.kind === "runtime_skill" &&
-      source.key === skill.key && source.versionId === skill.versionId && source.bundleDigest === skill.bundle.digest &&
-      source.manifestDigest === skill.bundle.manifestDigest)))
+  const taskDigestMatches = Boolean(taskSource && taskSource.contentHash === expectedTaskDigest);
+  const completionContractMatches = Boolean(completionSource);
+  const runtimeInstructionsMatch = Boolean(instructionSource);
+  const runtimeSkillsMatch = execution.runtimeContext.skills.every((skill) => skillSources.some((source) =>
+    source.kind === "runtime_skill" && source.key === skill.key && source.versionId === skill.versionId &&
+    source.bundleDigest === skill.bundle.digest && source.manifestDigest === skill.bundle.manifestDigest));
+  const sourceClosureComplete = Boolean(sourceClosure && taskDigestMatches && completionContractMatches &&
+    runtimeInstructionsMatch && skillSources.length === execution.runtimeContext.skills.length && runtimeSkillsMatch);
+  if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1") {
+    console.info("Native draft source closure qualification", JSON.stringify({
+      closurePresent: Boolean(sourceClosure),
+      taskFound: Boolean(taskSource),
+      taskDigestMatches,
+      completionContractMatches,
+      runtimeInstructionsMatch,
+      runtimeSkillCount: execution.runtimeContext.skills.length,
+      runtimeSkillSourceCount: skillSources.length,
+      runtimeSkillsMatch,
+      closureComplete: sourceClosureComplete,
+    }));
+  }
+  if (!sourceClosureComplete)
     throw forbidden("The native draft source closure does not cover its exact Task, contract, instructions and Skills");
   const completion = orchestrationCompletionSchema.parse(
     contract.row.contractJson.v7,

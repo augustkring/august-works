@@ -347,6 +347,7 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
   };
   if (!await visit(recordId)) { diagnosticDenied("nested_source"); return false; }
   const {withReadMemoryTemporalSources}=await import("../authorization.js");
+  const {canActorReadNativeTaskSource}=await import("../native-direct-input.js");
   const temporalOwnerChecks = new Map<string, { runs: string[]; tasks: string[] }>();
   const temporalChecksFor = (ownerId: string) => {
     let checks = temporalOwnerChecks.get(ownerId);
@@ -375,7 +376,9 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
       }
       for (const id of checks.tasks) {
         try { assertMemorySourceReadActive(state); } catch { diagnosticDenied("source_deadline"); return false; }
-        if (!await canActorReadIssuePrivacy(db,actor,{companyId,id})) { diagnosticDenied("task_reader"); return false; }
+        const nativeAllowed = await canActorReadNativeTaskSource(db, { companyId, actor, issueId: id });
+        if (nativeAllowed === false || nativeAllowed === null &&
+          !await canActorReadIssuePrivacy(db,actor,{companyId,id})) { diagnosticDenied("task_reader"); return false; }
       }
       return true;
     }, qualifiedOutputMemoryExpectations.get(ownerId));

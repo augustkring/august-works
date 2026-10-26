@@ -403,13 +403,70 @@ const support = await getEmbeddedPostgresTestSupport();
     }
     async function offboardingRuntimeFacts(companyId: string) {
       const [operation] = await db.select({ stage: companyDeletionOperations.stage,
-        status: companyDeletionOperations.status, errorCode: companyDeletionOperations.errorCode })
+        status: companyDeletionOperations.status, errorCode: companyDeletionOperations.errorCode,
+        evidence: companyDeletionOperations.evidence })
         .from(companyDeletionOperations).where(eq(companyDeletionOperations.companyId, companyId)).limit(1);
       const jobs = await db.select({ jobKey: memoryJobs.jobKey, status: memoryJobs.status,
         errorCode: memoryJobs.errorCode, attemptNumber: memoryJobs.attemptNumber })
         .from(memoryJobs).where(and(eq(memoryJobs.companyId, companyId), eq(memoryJobs.operationType, "retention")))
         .orderBy(memoryJobs.jobKey, memoryJobs.attemptNumber);
-      return { operation: operation ?? null, jobs };
+      const evidence = operation?.evidence && typeof operation.evidence === "object" && !Array.isArray(operation.evidence)
+        ? operation.evidence as Record<string, unknown> : {};
+      const failure = evidence.lastPurgeReconciliationFailure && typeof evidence.lastPurgeReconciliationFailure === "object" &&
+        !Array.isArray(evidence.lastPurgeReconciliationFailure)
+        ? evidence.lastPurgeReconciliationFailure as Record<string, unknown> : null;
+      return { operation: operation ? { stage: operation.stage, status: operation.status, errorCode: operation.errorCode,
+        lastPurgeReconciliationFailure: failure ? { stage: failure.stage ?? null, name: failure.name ?? null,
+          status: failure.status ?? null, sqlState: failure.sqlState ?? null, constraint: failure.constraint ?? null } : null } : null, jobs };
+    }
+    async function nativeLegacyProfileFacts(companyId: string, operationId: string) {
+      const runs = await db.select({ id: heartbeatRuns.id, status: heartbeatRuns.status,
+        processPid: heartbeatRuns.processPid, processGroupId: heartbeatRuns.processGroupId,
+        controllerLeaseExpiresAt: heartbeatRuns.controllerLeaseExpiresAt, runnerProfileJson: heartbeatRuns.runnerProfileJson })
+        .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.runtimeMode, "native"),
+          eq(heartbeatRuns.driverKind, "opencode_server"))).limit(100);
+      const facts = [];
+      for (const run of runs) {
+        const profile = run.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson)
+          ? run.runnerProfileJson as Record<string, unknown> : {};
+        const input = profile.nativeExecutionInput && typeof profile.nativeExecutionInput === "object" &&
+          !Array.isArray(profile.nativeExecutionInput) ? profile.nativeExecutionInput as Record<string, unknown> : {};
+        const context = input.runtimeContext && typeof input.runtimeContext === "object" && !Array.isArray(input.runtimeContext)
+          ? input.runtimeContext as Record<string, unknown> : {};
+        const instruction = context.instructions && typeof context.instructions === "object" && !Array.isArray(context.instructions)
+          ? (context.instructions as Record<string, unknown>).bundle : null;
+        const skills = Array.isArray(context.skills) ? context.skills : [];
+        const bundles = [instruction, ...skills.map(skill => skill && typeof skill === "object" && !Array.isArray(skill)
+          ? (skill as Record<string, unknown>).bundle : null)];
+        const legacySuffix = `${path.sep}runtime-context-assets${path.sep}bundles${path.sep}`;
+        const legacy = bundles.filter((bundle): bundle is Record<string, unknown> => !!bundle && typeof bundle === "object" &&
+          !Array.isArray(bundle) && typeof (bundle as Record<string, unknown>).rootPath === "string" &&
+          ((bundle as Record<string, unknown>).rootPath as string).includes(legacySuffix));
+        if (!legacy.length) continue;
+        const malformedCount = legacy.filter(bundle => typeof bundle.digest !== "string" ||
+          !/^[a-f0-9]{64}$/.test(bundle.digest) ||
+          !(bundle.rootPath as string).endsWith(`${legacySuffix}${bundle.digest}`)).length;
+        const hasStopReceipt = await hasNativeLocalProcessStop(db, companyId, run.id);
+        const [finalization] = await db.select({ phase: nativeRunFinalizations.phase,
+          leaseOwner: nativeRunFinalizations.leaseOwner, leaseExpiresAt: nativeRunFinalizations.leaseExpiresAt })
+          .from(nativeRunFinalizations).where(and(eq(nativeRunFinalizations.companyId, companyId),
+            eq(nativeRunFinalizations.runId, run.id))).limit(1);
+        const [baseJob] = await db.select({ status: memoryJobs.status, sourceRefJson: memoryJobs.sourceRefJson })
+          .from(memoryJobs).where(and(eq(memoryJobs.companyId, companyId),
+            eq(memoryJobs.jobKey, `runtime-asset-erasure:v1:${run.id}`)))
+          .orderBy(sql`${memoryJobs.attemptNumber} desc`).limit(1);
+        const source = baseJob?.sourceRefJson && typeof baseJob.sourceRefJson === "object" && !Array.isArray(baseJob.sourceRefJson)
+          ? baseJob.sourceRefJson as Record<string, unknown> : {};
+        facts.push({ status: run.status, processPidPresent: run.processPid !== null,
+          processGroupPresent: run.processGroupId !== null, controllerLeasePresent: run.controllerLeaseExpiresAt !== null,
+          legacyBundleCount: legacy.length, malformedLegacyBundleCount: malformedCount, hasStopReceipt,
+          finalizationPhase: finalization?.phase ?? null,
+          finalizationLeaseHeld: !!finalization && (finalization.leaseOwner !== null || finalization.leaseExpiresAt !== null),
+          baseJobStatus: baseJob?.status ?? null, baseJobKindMatches: source.kind === "runtime_asset_erasure",
+          baseJobRunMatches: source.runId === run.id, baseJobOperationMatches: source.companyPurgeOperationId === operationId,
+          baseJobEmptyLegacyDigests: Array.isArray(source.legacyDigests) && source.legacyDigests.length === 0 });
+      }
+      return facts;
     }
     function safeFailureFacts(error: unknown) {
       const value = error && typeof error === "object" ? error as Record<string, unknown> : {};
@@ -637,6 +694,7 @@ const support = await getEmbeddedPostgresTestSupport();
       if (!completed || completed.id !== operation.id || completed.stage !== "completed" || completed.status !== "completed")
         throw new Error(`conversation_offboarding_purge_incomplete:${JSON.stringify({ stage: completed?.stage ?? null,
           status: completed?.status ?? null, runtime: await offboardingRuntimeFacts(facts.companyId),
+          legacyProfiles: await nativeLegacyProfileFacts(facts.companyId, operation.id),
           purgeProbe: await probePurgeFailure(facts.companyId, operation.id),
           nativeStop: await nativeStopFacts(facts) })}`);
       return completed!;
