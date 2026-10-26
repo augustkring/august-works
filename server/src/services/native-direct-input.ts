@@ -55,7 +55,7 @@ interface NativeSourceReadContext { db: object; txOrdinal?: number; scopes: Map<
   pendingReaderChecks: Set<string>; activeReaderChecks: Set<string> }
 interface NativeSourceReadScope { context: NativeSourceReadContext; actorKey: string; active: Set<string>; complete: Set<string>;
   frozenTaskSnapshots: Set<string>;
-  taskTemporalScopes: Map<string, { contentHash: string }>;
+  taskTemporalScopes: Map<string, { contentHash: string; snapshotDigest: string }>;
   conversationRootComments: Set<string>;
   deferredReaderSets: Map<string, { companyId: string; runId: string; policy: NativePayloadSourcePolicy;
     inputs: NativePayloadSourceInput[] }> }
@@ -418,7 +418,8 @@ async function assertNativeSourceSetsReaderAccessCurrent(db: Db | Transaction, i
   for (const issueId of issueIds) {
     const temporal = scope?.taskTemporalScopes.get(issueId);
     const allowed = temporal ? await withReadPinnedNativeTaskSnapshot(db, input.actor, input.companyId, issueId,
-      currentOwnerHash => currentOwnerHash === temporal.contentHash && canActorReadIssuePrivacy(db, input.actor,
+      async (currentOwnerHash, currentSnapshotDigest) => currentOwnerHash === temporal.contentHash &&
+        currentSnapshotDigest === temporal.snapshotDigest && await canActorReadIssuePrivacy(db, input.actor,
         { id: issueId, companyId: input.companyId })) : await canActorReadIssuePrivacy(db, input.actor,
           { id: issueId, companyId: input.companyId });
     if (!allowed) throw forbidden("A Native source Task is unavailable");
@@ -1552,10 +1553,11 @@ export async function canActorReadNativeTaskSource(db: Db | Transaction, input: 
     if (!snapshot.data.inputs.some(source => source.kind === "worker_model_dispatch" || source.kind === "conversation_model_dispatch"))
       return null;
     try {
-      return await withReadPinnedNativeTaskSnapshot(tx, input.actor, input.companyId, input.issueId, async currentOwnerHash => {
-        if (currentOwnerHash !== snapshot.data.owner.contentHash) return false;
+      return await withReadPinnedNativeTaskSnapshot(tx, input.actor, input.companyId, input.issueId,
+        async (currentOwnerHash, currentSnapshotDigest) => {
+        if (currentOwnerHash !== snapshot.data.owner.contentHash || currentSnapshotDigest !== snapshot.data.digest) return false;
         const priorProof = scope.taskTemporalScopes.get(input.issueId);
-        if (priorProof?.contentHash !== snapshot.data.owner.contentHash) {
+        if (priorProof?.contentHash !== snapshot.data.owner.contentHash || priorProof.snapshotDigest !== snapshot.data.digest) {
           const source: Extract<NativePayloadSourceInput, { kind: "task" }> = { kind: "task", issueId: input.issueId,
             sourceVersion: "snapshot-owner-current", contentHash: snapshot.data.owner.contentHash };
           await assertNativeTaskSourceInputCurrentInScope(tx, input.companyId, input.actor, source, scope);
@@ -3082,7 +3084,7 @@ async function assertNativeTaskSnapshotOwnerCurrentInScope(db: Db | Transaction,
       } else await assertNativeFrozenTaskSnapshotCurrent(db, companyId, actor, issueId, snapshot.data, scope);
       if (snapshot.data.inputs.some(source =>
         source.kind === "worker_model_dispatch" || source.kind === "conversation_model_dispatch"))
-        scope.taskTemporalScopes.set(issueId, { contentHash: snapshot.data.owner.contentHash });
+        scope.taskTemporalScopes.set(issueId, { contentHash: snapshot.data.owner.contentHash, snapshotDigest: snapshot.data.digest });
       deferNativeSourceOwnerReaderChecks(scope, { companyId, actor, issueIds: [issueId] });
     };
     if (snapshot.data.inputs.some(source =>

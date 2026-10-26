@@ -1,0 +1,2 @@
+../server/src/services/native-direct-input.ts(421,27): error TS2322: Type 'false | Promise<boolean>' is not assignable to type 'Promise<boolean>'.
+  Type 'boolean' is not assignable to type 'Promise<boolean>'.

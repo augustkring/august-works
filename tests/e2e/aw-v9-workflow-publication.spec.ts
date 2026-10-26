@@ -16,6 +16,8 @@ test("reviewed internal publication recovers a lost native receipt without publi
   const original = await json(
     await request.get("/api/instance/settings/experimental"),
   );
+  const session = await json(await request.get("/api/auth/get-session"));
+  const expectedUserId = encodeURIComponent(session.user.id);
   await json(
     await request.patch("/api/instance/settings/experimental", {
       data: {
@@ -62,7 +64,7 @@ test("reviewed internal publication recovers a lost native receipt without publi
   try {
     const testReceipt = await json(
       await request.post(
-        `${base}/workflows/${detail.id}/experience/test?expectedUserId=local-board`,
+        `${base}/workflows/${detail.id}/experience/test?expectedUserId=${expectedUserId}`,
         {
           data: {
             requestId: crypto.randomUUID(),
@@ -147,7 +149,7 @@ test("reviewed internal publication recovers a lost native receipt without publi
     ).toBeVisible();
     const replay = await json(
       await request.post(
-        `${base}/workflows/${detail.id}/experience/publication?expectedUserId=local-board`,
+        `${base}/workflows/${detail.id}/experience/publication?expectedUserId=${expectedUserId}`,
         { data: commands[0] },
       ),
     );

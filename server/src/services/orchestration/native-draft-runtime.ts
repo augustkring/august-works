@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { isDeepStrictEqual } from "node:util";
+import { and, eq, sql } from "drizzle-orm";
 import {
   heartbeatRuns,
   issues,
@@ -13,6 +13,7 @@ import type {
   NativeExecutionInput,
   NativeSessionBackend,
 } from "../../vendor/paperclip-runner/index.js";
+import { nativeSha256 } from "../native-runtime/canonical.js";
 import { conflict, forbidden } from "../../errors.js";
 import { assertV7Authorization } from "../v7-authorization.js";
 import type { workerModelGateway } from "./worker-model-gateway.js";
@@ -320,31 +321,46 @@ export async function prepareNativeDraftBackend(
     source.bundleDigest === execution.runtimeContext.instructions.bundle.digest &&
     source.manifestDigest === execution.runtimeContext.instructions.bundle.manifestDigest);
   const skillSources = sourceClosure?.sourceSet.inputs.filter((source) => source.kind === "runtime_skill") ?? [];
-  const expectedTaskDigest = createHash("sha256").update(JSON.stringify({
-    id: execution.binding.issueId, identifier: execution.task.identifier, title: execution.task.title,
-    description: execution.task.description, workMode: execution.task.workMode,
-  }), "utf8").digest("hex");
-  const taskDigestMatches = Boolean(taskSource && taskSource.contentHash === expectedTaskDigest);
+  const [currentTask] = await db.select({
+    id: issues.id,
+    identifier: issues.identifier,
+    title: issues.title,
+    description: issues.description,
+    workMode: issues.workMode,
+    ownerBodyHash: sql<string>`public.aw_native_payload_body_hash('issue',to_jsonb(${issues}))`,
+  }).from(issues).where(and(
+    eq(issues.companyId, execution.binding.companyId),
+    eq(issues.id, execution.binding.issueId),
+  )).for("share");
+  const currentTaskProjection = currentTask && {
+    identifier: currentTask.identifier,
+    title: currentTask.title,
+    description: currentTask.description,
+    workMode: currentTask.workMode,
+  };
+  const renderedTaskProjection = {
+    identifier: execution.task.identifier,
+    title: execution.task.title,
+    description: execution.task.description,
+    workMode: execution.task.workMode,
+  };
+  const legacyRenderedTaskHash = currentTask && nativeSha256({
+    id: currentTask.id,
+    ...currentTaskProjection,
+  });
+  const taskSourceMatchesCurrentOwner = Boolean(taskSource && currentTask && (
+    taskSource.contentHash === currentTask.ownerBodyHash ||
+    taskSource.contentHash === legacyRenderedTaskHash
+  ) && isDeepStrictEqual(renderedTaskProjection, currentTaskProjection));
+  const taskEnvelopeMatches = Boolean(sourceClosure &&
+    sourceClosure.taskEnvelopeDigest === nativeSha256(execution.task));
   const completionContractMatches = Boolean(completionSource);
   const runtimeInstructionsMatch = Boolean(instructionSource);
   const runtimeSkillsMatch = execution.runtimeContext.skills.every((skill) => skillSources.some((source) =>
     source.kind === "runtime_skill" && source.key === skill.key && source.versionId === skill.versionId &&
     source.bundleDigest === skill.bundle.digest && source.manifestDigest === skill.bundle.manifestDigest));
-  const sourceClosureComplete = Boolean(sourceClosure && taskDigestMatches && completionContractMatches &&
+  const sourceClosureComplete = Boolean(sourceClosure && taskSourceMatchesCurrentOwner && taskEnvelopeMatches && completionContractMatches &&
     runtimeInstructionsMatch && skillSources.length === execution.runtimeContext.skills.length && runtimeSkillsMatch);
-  if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1") {
-    console.info("Native draft source closure qualification", JSON.stringify({
-      closurePresent: Boolean(sourceClosure),
-      taskFound: Boolean(taskSource),
-      taskDigestMatches,
-      completionContractMatches,
-      runtimeInstructionsMatch,
-      runtimeSkillCount: execution.runtimeContext.skills.length,
-      runtimeSkillSourceCount: skillSources.length,
-      runtimeSkillsMatch,
-      closureComplete: sourceClosureComplete,
-    }));
-  }
   if (!sourceClosureComplete)
     throw forbidden("The native draft source closure does not cover its exact Task, contract, instructions and Skills");
   const completion = orchestrationCompletionSchema.parse(
@@ -378,6 +394,7 @@ export async function prepareNativeDraftBackend(
     },
     outputKey: completion.requiredOutputs[0]!.key,
     maxOutputTokens: qualified.maxOutputTokens,
+    expectedTask: execution.task,
     runtimeContextText: {
       aggregateDigest: execution.runtimeContext.aggregateDigest,
       instructionFiles,

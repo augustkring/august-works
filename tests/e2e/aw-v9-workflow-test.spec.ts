@@ -17,6 +17,8 @@ test("an unpublished internal test recovers its original receipt after reload an
   const original = await json(
     await request.get("/api/instance/settings/experimental"),
   );
+  const session = await json(await request.get("/api/auth/get-session"));
+  const expectedUserId = encodeURIComponent(session.user.id);
   const enabled = {
     enableWorkflowsV1: true,
     enableWorkflowBuilderV1: true,
@@ -101,7 +103,7 @@ test("an unpublished internal test recovers its original receipt after reload an
       }),
     );
     expect(prepared.publishedRevisionId).toBeNull();
-    const endpoint = `${workflows}/${draft.id}/experience/test?expectedUserId=local-board`;
+    const endpoint = `${workflows}/${draft.id}/experience/test?expectedUserId=${expectedUserId}`;
     const commands: Record<string, unknown>[] = [];
     let accepted: Record<string, unknown> | undefined;
     await page.route(`**${endpoint}`, async (route) => {
@@ -174,7 +176,7 @@ test("an unpublished internal test recovers its original receipt after reload an
     expect(current.draftRevisionId).toBe(prepared.draftRevisionId);
     const recovered = await json(
       await request.get(
-        `${workflows}/${draft.id}/experience?expectedUserId=local-board`,
+        `${workflows}/${draft.id}/experience?expectedUserId=${expectedUserId}`,
       ),
     );
     expect(recovered.testReceipt).toEqual(accepted);
@@ -220,7 +222,7 @@ test("an unpublished internal test recovers its original receipt after reload an
     });
     const observed = await json(
       await request.get(
-        `${base}/workflow-runs/${accepted!.runId}/experience?expectedUserId=local-board`,
+        `${base}/workflow-runs/${accepted!.runId}/experience?expectedUserId=${expectedUserId}`,
       ),
     );
     expect(observed).toMatchObject({

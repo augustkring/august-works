@@ -100,8 +100,10 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
     expect(result.manifest).toMatchObject({ runId: result.run?.id, agentId: result.run?.agentId });
     expect(result.agentReply).toMatchObject({ authorAgentId: result.run?.agentId, createdByRunId: result.run?.id,
       body: "I’ve received your message and am ready to continue." });
+    expect(result.conversationCommentCount).toBe(2);
+    expect(result.reviewInteractionCount).toBe(0);
     expect(result.conversationIssue).toMatchObject({ status: "in_review", conversationState: "waiting",
-      executionRunId: result.run?.id });
+      executionRunId: null });
     expect([403, 404]).toContain(result.foreignWriteStatus);
     expect(result.foreignWriteDidNotMutate).toBe(true);
     expect(result.reservation).toMatchObject({ purpose: "conversation_model", conversationRunId: result.run?.id,
@@ -453,10 +455,12 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
           .map(value=>value&&typeof value==="object"&&!Array.isArray(value)?value as Record<string,unknown>:{})
           .find(value=>value.kind==="task"&&typeof value.issueId==="string");
         const diagnosticTaskId=typeof diagnosticTaskSource?.issueId==="string"?diagnosticTaskSource.issueId:null;
+        const diagnosticStartedAt=facts.run.startedAt;
+        if(!diagnosticStartedAt)throw new Error("conversation_task_run_start_time_missing");
         const failedRuns=await db.select({id:heartbeatRuns.id,nativeIssueId:heartbeatRuns.nativeIssueId,
           status:heartbeatRuns.status,errorCode:heartbeatRuns.errorCode,contextSnapshot:heartbeatRuns.contextSnapshot})
           .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId,facts.companyId),eq(heartbeatRuns.agentId,facts.agentId),
-            eq(heartbeatRuns.status,"failed"),gte(heartbeatRuns.startedAt,facts.run.startedAt)));
+            eq(heartbeatRuns.status,"failed"),gte(heartbeatRuns.startedAt,diagnosticStartedAt)));
         console.info("conversation_task_setup_failure_ownership",JSON.stringify({mainRunId:facts.run.id,
           mainRunStatus:facts.run.status,mainRunErrorCode:facts.run.errorCode,createdTaskId:diagnosticTaskId,
           failedRuns:failedRuns.map(run=>{

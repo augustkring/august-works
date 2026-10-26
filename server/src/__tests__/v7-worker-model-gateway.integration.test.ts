@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { chmod, lstat, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -78,87 +78,6 @@ import { registerNativeDraftGateway } from "../services/orchestration/native-dra
 import { heartbeatService } from "../services/heartbeat.js";
 import { discoverNativeCapabilities } from "../services/native-provider-conformance.js";
 
-function nativeDraftSourceFailureFacts(
-  run: typeof heartbeatRuns.$inferSelect | null | undefined,
-) {
-  const profile = run?.runnerProfileJson && typeof run.runnerProfileJson === "object"
-    ? run.runnerProfileJson as Record<string, unknown>
-    : {};
-  const parsedReceipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
-  const inputs = parsedReceipt.success ? parsedReceipt.data.bootstrap.inputs : [];
-  const executionInput = profile.nativeExecutionInput && typeof profile.nativeExecutionInput === "object"
-    ? profile.nativeExecutionInput as Record<string, unknown>
-    : {};
-  const taskCapture = profile.nativeBootstrapTaskSource && typeof profile.nativeBootstrapTaskSource === "object"
-    ? profile.nativeBootstrapTaskSource as Record<string, unknown>
-    : {};
-  const taskCaptureInput = taskCapture.input && typeof taskCapture.input === "object"
-    ? taskCapture.input as Record<string, unknown>
-    : {};
-  const authoredCapture = profile.nativeBootstrapAuthoredSources && typeof profile.nativeBootstrapAuthoredSources === "object"
-    ? profile.nativeBootstrapAuthoredSources as Record<string, unknown>
-    : {};
-  const authoredInputs = Array.isArray(authoredCapture.inputs) ? authoredCapture.inputs.filter(
-    (value): value is Record<string, unknown> => Boolean(value) && typeof value === "object",
-  ) : [];
-  const task = executionInput.task && typeof executionInput.task === "object"
-    ? executionInput.task as Record<string, unknown>
-    : {};
-  const completionContract = executionInput.completionContract && typeof executionInput.completionContract === "object"
-    ? executionInput.completionContract as Record<string, unknown>
-    : {};
-  const runtimeContext = executionInput.runtimeContext && typeof executionInput.runtimeContext === "object"
-    ? executionInput.runtimeContext as Record<string, unknown>
-    : {};
-  const instructions = runtimeContext.instructions && typeof runtimeContext.instructions === "object"
-    ? runtimeContext.instructions as Record<string, unknown>
-    : {};
-  const instructionBundle = instructions.bundle && typeof instructions.bundle === "object"
-    ? instructions.bundle as Record<string, unknown>
-    : {};
-  const skills = Array.isArray(runtimeContext.skills) ? runtimeContext.skills : [];
-  const taskDigest = createHash("sha256").update(JSON.stringify({
-    id: run?.issueId,
-    identifier: task.identifier,
-    title: task.title,
-    description: task.description,
-    workMode: task.workMode,
-  }), "utf8").digest("hex");
-  const taskSource = inputs.find((source) => source.kind === "task" && source.issueId === run?.issueId);
-  const contractSource = inputs.find((source) => source.kind === "completion_contract" &&
-    source.issueId === run?.issueId && source.contractId === completionContract.id &&
-    source.contentHash === completionContract.sha256);
-  const instructionSource = inputs.find((source) => source.kind === "runtime_instructions" &&
-    source.agentId === run?.agentId && source.bundleDigest === instructionBundle.digest &&
-    source.manifestDigest === instructionBundle.manifestDigest);
-  const runtimeSkills = inputs.filter((source) => source.kind === "runtime_skill");
-  const skillMatches = skills.map((value) => {
-    const skill = value && typeof value === "object" ? value as Record<string, unknown> : {};
-    const bundle = skill.bundle && typeof skill.bundle === "object" ? skill.bundle as Record<string, unknown> : {};
-    return runtimeSkills.some((source) => source.kind === "runtime_skill" && source.key === skill.key &&
-      source.versionId === skill.versionId && source.bundleDigest === bundle.digest &&
-      source.manifestDigest === bundle.manifestDigest);
-  });
-  return {
-    receiptValid: parsedReceipt.success,
-    bootstrapKinds: inputs.map((source) => source.kind),
-    profileKeys: Object.keys(profile).sort(),
-    executionInputKeys: Object.keys(executionInput).sort(),
-    taskCaptureKind: taskCaptureInput.kind ?? null,
-    authoredSourceKinds: authoredInputs.map((source) => source.kind ?? "unknown"),
-    runtimeContextKeys: Object.keys(runtimeContext).sort(),
-    taskFound: Boolean(taskSource),
-    taskDigestMatches: taskSource?.contentHash === taskDigest,
-    completionContractFound: Boolean(contractSource),
-    completionContractRevision: inputs.find((source) => source.kind === "completion_contract")?.kind === "completion_contract"
-      ? inputs.find((source) => source.kind === "completion_contract")!.revision
-      : null,
-    instructionFound: Boolean(instructionSource),
-    skillCount: skills.length,
-    skillSourceCount: runtimeSkills.length,
-    skillMatches,
-  };
-}
 import {
   validatePrpEvent,
   validatePrpStructuredRunResult,
@@ -671,15 +590,6 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         .select()
         .from(heartbeatRuns)
         .where(eq(heartbeatRuns.id, attempts[0]!.runId!));
-      if (actualRun?.status !== "succeeded") {
-        const persistedError = typeof actualRun?.error === "string" ? actualRun.error : null;
-        console.info("Worker heartbeat persisted failure", JSON.stringify({
-          status: actualRun?.status ?? null,
-          errorCode: actualRun?.errorCode ?? null,
-          error: persistedError?.slice(0, 512).replaceAll(credential, "[redacted]") ?? null,
-          sourceClosure: nativeDraftSourceFailureFacts(actualRun),
-        }));
-      }
       expect(actualRun?.issueId, "the exercised scheduler run must retain the canonical human-authored Task").toBe(task.id);
       expect(actualRun).toMatchObject({
         status: "succeeded",
@@ -803,15 +713,6 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         .select()
         .from(heartbeatRuns)
         .where(eq(heartbeatRuns.id, invocation!.id));
-      if (actualRun?.status !== "succeeded") {
-        const persistedError = typeof actualRun?.error === "string" ? actualRun.error : null;
-        console.info("Worker heartbeat persisted failure", JSON.stringify({
-          status: actualRun?.status ?? null,
-          errorCode: actualRun?.errorCode ?? null,
-          error: persistedError?.slice(0, 512).replaceAll(credential, "[redacted]") ?? null,
-          sourceClosure: nativeDraftSourceFailureFacts(actualRun),
-        }));
-      }
       expect(calls).toBe(1);
       expect(
         await documentService(db).getIssueDocumentByKey(task.id, "result"),

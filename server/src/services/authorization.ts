@@ -648,6 +648,7 @@ export async function issueReadSqlCondition(_db: Db | DbTransaction, actor: Auth
 }
 
 let nativeIssuePrivacyDiagnosticStatements = 0;
+let nativeTaskReaderScopeDiagnostics = 0;
 const nativeIssuePrivacyDiagnosticPlans = new Set<string>();
 const nativeIssuePrivacyDiagnosticObservedSettings = new Set<string>();
 const nativeIssuePrivacyDiagnosticGroups = new Map<string, { stage: string; actorType: string; actorSource: string;
@@ -1433,6 +1434,113 @@ export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: Au
     await issueReadSqlConditionInMemoryScope(db, actor, issue.id))).limit(1);
   const readable = (await nativeIssuePrivacyDiagnosticQuery(db, actor, "effective_acl", readQuery,
     () => readQuery)).length > 0;
+  const temporalScope = memoryTemporalReadScopes.getStore();
+  if (!readable && process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1" &&
+      temporalScope?.active && temporalScope.companyId === issue.companyId &&
+      nativeTaskReaderScopeDiagnostics < 16) {
+    nativeTaskReaderScopeDiagnostics += 1;
+    const company = sql`${issue.companyId}::uuid`;
+    const rowId = sql`${issue.id}::uuid`;
+    const ownerRead = issuePrincipalAccess(actor, rowId, company);
+    const humanId = actor.type === "board" ? actor.userId : actor.onBehalfOfUserId;
+    const actorRunCurrent = actor.type === "agent" && actor.agentId && actor.runId
+      ? sql`exists(select 1 from heartbeat_runs r where r.id=${actor.runId} and r.company_id=${company}
+          and r.agent_id=${actor.agentId} and r.responsible_user_id=${humanId ?? null} and r.status='running')`
+      : sql`false`;
+    const conversationRead = actor.type === "agent" && actor.agentId && humanId
+      ? sql`exists(select 1 from issues i where i.id=${rowId} and i.company_id=${company}
+          and i.conversation_agent_id=${actor.agentId} and i.conversation_user_id=${humanId}
+          and ${privatePrincipalCurrent(actor, company)})` : sql`false`;
+    const [facts] = await db.execute<{ ownerExists: boolean; isOpen: boolean; ownerAcl: boolean;
+      principalCurrent: boolean; conversationIdentity: boolean; protocolOne: boolean; snapshotPresent: boolean;
+      snapshotInvalidated: boolean; snapshotOwnerHashValid: boolean; snapshotDigestValid: boolean;
+      actorRunStatusRunning: boolean;
+      issuePolicyEdgesValid: boolean; projectPolicyEdgesValid: boolean; runPolicyEdgesValid: boolean;
+      recognizedInputKinds: boolean; taskInputOwnersValid: boolean; contextInputOwnersValid: boolean;
+      finalDispatchPrefixValid: boolean; sourceEdgeKinds: string[]; unreadableDirectIssueSources: number;
+      scopeContextCount: number; scopeRunCount: number }>(sql`
+      select exists(select 1 from issues i where i.id=${rowId} and i.company_id=${company}) as "ownerExists",
+        coalesce((select i.visibility='open' from issues i where i.id=${rowId} and i.company_id=${company}),false) as "isOpen",
+        ${ownerRead} as "ownerAcl", ${privatePrincipalCurrent(actor, company)} as "principalCurrent",
+        ${actorRunCurrent} as "actorRunStatusRunning",
+        ${conversationRead} as "conversationIdentity",
+        coalesce((select i.payload_source_protocol_version=1 from issues i where i.id=${rowId} and i.company_id=${company}),false) as "protocolOne",
+        coalesce((select i.payload_source_snapshot is not null from issues i where i.id=${rowId} and i.company_id=${company}),false) as "snapshotPresent",
+        coalesce((select i.payload_source_snapshot_invalidated from issues i where i.id=${rowId} and i.company_id=${company}),true) as "snapshotInvalidated",
+        coalesce((select i.payload_source_snapshot->'owner'->>'contentHash'=
+          public.aw_native_payload_body_hash('issue',to_jsonb(i)) from issues i where i.id=${rowId} and i.company_id=${company}),false)
+          as "snapshotOwnerHashValid",
+        coalesce((select encode(sha256(convert_to((i.payload_source_snapshot-'digest')::text,'UTF8')),'hex')=
+          i.payload_source_snapshot->>'digest' from issues i where i.id=${rowId} and i.company_id=${company}),false) as "snapshotDigestValid",
+        coalesce((select i.payload_source_snapshot->'policy'->'issueIds'=coalesce((select jsonb_agg(source_id::text order by source_id::text)
+          from (select distinct s.source_id from issue_privacy_sources s where s.company_id=i.company_id and s.issue_id=i.id
+            and s.source_kind='issue') captured),'[]'::jsonb) from issues i where i.id=${rowId} and i.company_id=${company}),false)
+          as "issuePolicyEdgesValid",
+        coalesce((select i.payload_source_snapshot->'policy'->'projectIds'=coalesce((select jsonb_agg(source_id::text order by source_id::text)
+          from (select distinct s.source_id from issue_privacy_sources s where s.company_id=i.company_id and s.issue_id=i.id
+            and s.source_kind='project') captured),'[]'::jsonb) from issues i where i.id=${rowId} and i.company_id=${company}),false)
+          as "projectPolicyEdgesValid",
+        coalesce((select i.payload_source_snapshot->'policy'->'runIds'=coalesce((select jsonb_agg(source_id::text order by source_id::text)
+          from (select distinct s.source_id from issue_privacy_sources s where s.company_id=i.company_id and s.issue_id=i.id
+            and s.source_kind='run') captured),'[]'::jsonb) from issues i where i.id=${rowId} and i.company_id=${company}),false)
+          as "runPolicyEdgesValid",
+        coalesce((select array_agg(distinct edge.source_kind order by edge.source_kind) from issue_privacy_sources edge
+          where edge.company_id=${company} and edge.issue_id=${rowId}),array[]::text[]) as "sourceEdgeKinds",
+        coalesce((select count(*) from issue_privacy_sources edge join issues source on source.company_id=edge.company_id
+          and source.id=edge.source_id where edge.company_id=${company} and edge.issue_id=${rowId} and edge.source_kind='issue'
+          and source.visibility<>'open' and not ${issuePrincipalAccess(actor, sql`source.id`, company)}),0)::integer
+          as "unreadableDirectIssueSources",
+        coalesce((select not exists(select 1 from jsonb_array_elements(case when jsonb_typeof(i.payload_source_snapshot->'inputs')='array'
+          then i.payload_source_snapshot->'inputs' else '[]'::jsonb end) input
+          where input->>'kind' not in ('context','task','project','memory','foundation_revision','comment','interaction',
+            'document_revision','attachment','skill_version','runtime_skill','playbook_revision','role_pack_version',
+            'authored_definition','runtime_instructions','retained_run','retained_workspace','tool_result',
+            'completion_contract','native_task_wake','workspace_metadata','worker_model_dispatch','conversation_model_dispatch'))
+          from issues i where i.id=${rowId} and i.company_id=${company}),false) as "recognizedInputKinds",
+        coalesce((select not exists(select 1 from jsonb_array_elements(case when jsonb_typeof(i.payload_source_snapshot->'inputs')='array'
+          then i.payload_source_snapshot->'inputs' else '[]'::jsonb end) input where input->>'kind'='task' and not exists(
+            select 1 from issues src join issue_privacy_sources edge on edge.company_id=src.company_id and edge.source_id=src.id
+            where src.company_id=i.company_id and src.id::text=input->>'issueId' and edge.issue_id=i.id
+              and edge.source_kind='issue' and edge.context_manifest_id is null
+              and input->>'contentHash'=public.aw_native_payload_body_hash('issue',to_jsonb(src))))
+          from issues i where i.id=${rowId} and i.company_id=${company}),false) as "taskInputOwnersValid",
+        coalesce((select not exists(
+          select 1 from jsonb_array_elements(case when jsonb_typeof(i.payload_source_snapshot->'inputs')='array'
+            then i.payload_source_snapshot->'inputs' else '[]'::jsonb end) input
+          left join context_manifests cm on cm.company_id=i.company_id and cm.id::text=input->>'manifestId'
+          where input->>'kind'='context' and (cm.id is null or cm.query_hash is distinct from input->>'queryHash'
+            or cm.policy_snapshot_hash is distinct from input->>'policySnapshotHash'
+            or cm.run_id::text not in (
+              select jsonb_array_elements_text(case when jsonb_typeof(i.payload_source_snapshot->'policy'->'runIds')='array'
+                then i.payload_source_snapshot->'policy'->'runIds' else '[]'::jsonb end)
+              union all
+              select dispatch->>'runId' from jsonb_array_elements(case when jsonb_typeof(i.payload_source_snapshot->'inputs')='array'
+                then i.payload_source_snapshot->'inputs' else '[]'::jsonb end) dispatch
+                where dispatch->>'kind' in ('worker_model_dispatch','conversation_model_dispatch')))
+          ) from issues i where i.id=${rowId} and i.company_id=${company}),false) as "contextInputOwnersValid",
+        coalesce((select exists(select 1 from jsonb_array_elements(case when jsonb_typeof(i.payload_source_snapshot->'inputs')='array'
+          then i.payload_source_snapshot->'inputs' else '[]'::jsonb end) with ordinality dispatch(value,ordinality)
+          where dispatch.value->>'kind' in ('worker_model_dispatch','conversation_model_dispatch')
+            and dispatch.ordinality=(select max(candidate.ordinality) from jsonb_array_elements(
+              case when jsonb_typeof(i.payload_source_snapshot->'inputs')='array' then i.payload_source_snapshot->'inputs'
+                else '[]'::jsonb end) with ordinality candidate(value,ordinality)
+              where candidate.value->>'kind' in ('worker_model_dispatch','conversation_model_dispatch'))
+            and exists(select 1 from heartbeat_runs producer cross join lateral jsonb_array_elements(
+              coalesce(producer.runner_profile_json->'nativeInputSourceReceipt'->'dispatches','[]'::jsonb)) prefix(value)
+              where producer.company_id=i.company_id and producer.id::text=dispatch.value->>'runId'
+                and producer.native_input_source_protocol_version=1 and prefix.value->'policy'=i.payload_source_snapshot->'policy'
+                and prefix.value->'inputs'=i.payload_source_snapshot->'inputs'
+                and prefix.value->'inputs'->(jsonb_array_length(prefix.value->'inputs')-1)=dispatch.value))
+          from issues i where i.id=${rowId} and i.company_id=${company}),false) as "finalDispatchPrefixValid",
+        ${temporalScope.contextIds.length}::integer as "scopeContextCount",
+        ${temporalScope.runIds.size}::integer as "scopeRunCount"
+    `);
+    console.error("native_task_reader_scope_denial", JSON.stringify({ actorType: actor.type,
+      actorSource: actor.source ?? "unknown", scopeDbMatches: temporalScope.db === (db as object),
+      scopeActorMatches: temporalScope.actorKey === routineActorKey(actor), scopeIssueMember: temporalScope.issueIds.has(issue.id),
+      scopeRunMember: actor.type === "agent" && actor.runId ? temporalScope.runIds.has(actor.runId) : false,
+      facts: facts ?? null }));
+  }
   return readable;
 }
 /** Typed Task execution owners are distinct namespaces from heartbeat runs.
@@ -1666,7 +1774,7 @@ export async function withReadMemoryTemporalSources<T>(db: Db | DbTransaction, a
  * any read result escapes; this scope only narrows the existing reader
  * predicate to the frozen Context manifests and does not grant access. */
 export async function withReadPinnedNativeTaskSnapshot<T>(db: Db | DbTransaction, actor: AuthorizationActor,
-  companyId: string, issueId: string, read: (currentOwnerHash: string) => Promise<T>): Promise<T> {
+  companyId: string, issueId: string, read: (currentOwnerHash: string, currentSnapshotDigest: string) => Promise<T>): Promise<T> {
   const [owner] = await db.select({ payloadSourceProtocolVersion: issues.payloadSourceProtocolVersion,
     payloadSourceSnapshot: issues.payloadSourceSnapshot, payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated,
     ownerHash: sql<string>`public.aw_native_payload_body_hash('issue',to_jsonb(${issues}))`,
@@ -1699,7 +1807,7 @@ export async function withReadPinnedNativeTaskSnapshot<T>(db: Db | DbTransaction
   }
   const scope: MemoryTemporalReadScope = { db: db as object, companyId, recordId: issueId,
     actorKey: routineActorKey(actor), issueIds, runIds: new Set(runIds), contextIds: [...new Set(contextIds)].sort(), active: true };
-  try { return await memoryTemporalReadScopes.run(scope, () => read(snapshot.data.owner.contentHash)); }
+  try { return await memoryTemporalReadScopes.run(scope, () => read(snapshot.data.owner.contentHash, snapshot.data.digest)); }
   finally { scope.active = false; }
 }
 

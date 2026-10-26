@@ -8,7 +8,7 @@ import { execFileSync } from "node:child_process";
 import express from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { agents, agentExecutionManifests, authSessions, authUsers, companies, companyMemberships,
-  heartbeatRuns, issueComments, issues,
+  heartbeatRuns, issueComments, issueThreadInteractions, issues,
   orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, createDb } from "@paperclipai/db";
 import { workerModelProfileSchema, type WorkerModelProfile } from "../../services/orchestration/worker-model-profiles.js";
 import { workerModelGateway } from "../../services/orchestration/worker-model-gateway.js";
@@ -481,6 +481,8 @@ export async function runManagedNativeConversationFrame(input: {
     const profileValue = finalRun?.runnerProfileJson && typeof finalRun.runnerProfileJson === "object"
       ? finalRun.runnerProfileJson as Record<string, unknown> : {};
     const comments = await db.select().from(issueComments).where(eq(issueComments.issueId, chat.body.id as string));
+    const reviewInteractionCount = await db.select({ id: issueThreadInteractions.id }).from(issueThreadInteractions)
+      .where(eq(issueThreadInteractions.issueId, chat.body.id as string));
     const agentReply = comments.find(comment => comment.authorAgentId === agentId && comment.createdByRunId === finalRun?.id) ?? null;
     const [conversationIssue] = await db.select({ status: issues.status, conversationState: issues.conversationState,
       executionRunId: issues.executionRunId }).from(issues).where(eq(issues.id, chat.body.id as string)).limit(1);
@@ -502,7 +504,8 @@ export async function runManagedNativeConversationFrame(input: {
       providerHookInvoked, providerHookFailure, providerStubFailure, providerToolNames, brokerRequestFacts,
       providerKeyMatched: providerCalls.length > 0 && providerCalls.every(call => call.keyMatches),
       issuerFacts, nativeInputSourceReceipt,
-      agentReply, conversationIssue: conversationIssue ?? null, foreignWriteStatus: foreignWrite.status,
+      agentReply, conversationCommentCount: comments.length, reviewInteractionCount: reviewInteractionCount.length,
+      conversationIssue: conversationIssue ?? null, foreignWriteStatus: foreignWrite.status,
       foreignWriteDidNotMutate: commentsAfterForeignWrite.length === countBeforeForeignWrite,
       sandboxRuntimeFacts,
       runStatus: finalRun?.status ?? "not_started", success: finalRun?.status === "succeeded" };

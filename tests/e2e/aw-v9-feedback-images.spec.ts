@@ -15,6 +15,7 @@ test("selected images survive an unknown transport reply through read-only statu
   const flags = await json(await request.get("/api/instance/settings/experimental"));
   const company = await json(await request.post("/api/companies", { data: { name: "Disposable selected-image browser fixture" } }));
   const base = `/api/companies/${company.id}/customer-feedback`, session = await json(await request.get("/api/auth/get-session"));
+  const expectedUserId = encodeURIComponent(session.user.id);
   const bytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAUAAAAECAIAAADJUWIXAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAEElEQVQImWNgYPiPikjjAwBp8hPtBUNYegAAAABJRU5ErkJggg==", "base64");
   let writes = 0, binaryReads = 0, receipt: { id: string; feedbackId: string } | undefined;
   let holdSession = false, releaseSession: (() => void) | undefined;
@@ -37,7 +38,7 @@ test("selected images survive an unknown transport reply through read-only statu
   });
   await page.route(`**${base}/*/images**`, async route => {
     const request = route.request(), url = new URL(request.url());
-    expect(url.searchParams.get("expectedUserId")).toBe("local-board");
+    expect(url.searchParams.get("expectedUserId")).toBe(session.user.id);
     expect(receipt).toBeDefined(); expect(url.pathname).toContain(`/${receipt!.id}/images`);
     if (request.method() === "POST") {
       writes++; expect(writes).toBe(1);
@@ -91,9 +92,9 @@ test("selected images survive an unknown transport reply through read-only statu
     await expect(dialog).not.toContainText(receipt!.feedbackId);
     holdSession = false; releaseSession!(); await expect(dialog).toContainText(receipt!.feedbackId);
     expect(binaryReads).toBe(1); expect(writes).toBe(1);
-    const native = await json(await request.get(`${base}/${receipt!.id}?expectedUserId=local-board`));
+    const native = await json(await request.get(`${base}/${receipt!.id}?expectedUserId=${expectedUserId}`));
     expect(native.body).toBe("Owned selected-image browser feedback");
-    expect(await json(await request.get(`${base}?expectedUserId=local-board`))).toHaveLength(1);
+    expect(await json(await request.get(`${base}?expectedUserId=${expectedUserId}`))).toHaveLength(1);
   } finally {
     holdSession = false; releaseSession?.();
     await json(await request.patch("/api/instance/settings/experimental", { data: flags }));

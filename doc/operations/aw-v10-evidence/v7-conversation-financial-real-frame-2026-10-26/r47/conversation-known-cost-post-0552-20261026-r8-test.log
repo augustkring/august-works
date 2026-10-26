@@ -1,0 +1,81 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > conservative native model cost quotes > rounds fractional aggregate charges upward without floating-point under-reservation
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > conservative native model cost quotes > rejects expiry, future evidence, wrong revision, non-integer token limits and unsupported currency
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > binds live reservations to the actual Human session and current conversation generation
+stdout | src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > settles the actual qualified conversation usage once and preserves the exact debit in canonical purge
+Native conversation workspace scope {"nativeAdapter":true,"supportedEnvironment":true,"issuePresent":true,"conversationChannelOrigin":false,"chatConversationRowPresent":false,"canonicalConversationAgentMatches":true,"canonicalConversationHumanMatches":true,"canonicalConversationStateActive":true,"canonicalConversationGenerationMatches":true,"canonicalConversationRunMatches":true,"selectedCanonicalConversationScope":true}
+
+stderr | src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > settles the actual qualified conversation usage once and preserves the exact debit in canonical purge
+native_model_input_dispatch_closure_diagnostic {
+  closurePresent: true,
+  closureMatches: true,
+  mismatch: 'unclassified',
+  sourceProtocolVersion: 0,
+  responsibleUserPresent: true,
+  existingReceiptValid: false,
+  noPriorNativeEffects: true,
+  priorIntentCount: 0,
+  priorAssociationCount: 0,
+  priorResultCaptureCount: 0,
+  attachmentStagePresent: false
+}
+
+ × src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > settles the actual qualified conversation usage once and preserves the exact debit in canonical purge 28927ms
+   → expected undefined to be 'succeeded' // Object.is equality
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > allows the last exact-budget dispatch and rejects the next reservation
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > dispatches the 64th actual funded call and refuses the 65th
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > rolls back settlement if an actual reservation receipt is preempted, then settles once
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > retains an actual unknown conversation hold and blocks canonical company purge
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > requires a current accountable Agent run and active Worker attempt for decision-shadow spend
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > serializes concurrent reservations before spend and debits the native counter exactly once
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > requires a current price ceiling, original principal and current source at preflight
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > rechecks price and source before a single irreversible dispatch claim
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > retains the entire debit after unknown dispatch or expired preflight, without reopening retry spend
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > blocks authority loss between reservation and dispatch while keeping immutable financial metadata
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > keeps taskless support funding closed without operator qualification and rejects customer-supplied funding
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > admits only the registered Jev Skill purpose through the same taskless budget owner without a Support package pin
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > serializes concurrent platform budget-profile creation and rejects overlapping period keys
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > atomically caps concurrent taskless company-purpose reservations and retains unknown exposure
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > requires the original company Human and unchanged source and funding profile at dispatch
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > keeps the exact package version pinned and refuses dispatch after that release is revoked
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > keeps the taskless support release out of customer catalog and Agent installation
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > runs one software-only first-party Help answer through the original reservation and grounding owners
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > keeps unknown transport outcomes held and does not retry, and spends nothing when Help evidence is outside the package pins
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > settles provider usage after Human membership is revoked during dispatch but withholds the Help quote
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > withholds citations but settles actual usage when the pinned package is revoked in flight
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > withholds citations but settles actual usage when the deployment funding profile disappears in flight
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > bounds taskless invocations even when a qualified fixture tariff computes zero minor units
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > rechecks the original Human, source and funding profile before returning completed support content
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > settles a dispatched call after principal revocation but refuses content return
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > keeps unknown spend held when the original provider account cannot prove a late result
+ ↓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > cancels undispatched holds, waits for dispatched outcomes, then purges only through the canonical offboarding receipt
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > settles the actual qualified conversation usage once and preserves the exact debit in canonical purge
+AssertionError: expected undefined to be 'succeeded' // Object.is equality
+
+- Expected:
+"succeeded"
+
++ Received:
+undefined
+
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:1042:44
+    1040|       )).orderBy(sql`${memoryJobs.attemptNumber} desc`).limit(1);
+    1041|       const legacyErasureRef = legacyErasureReceipt?.sourceRefJson as …
+    1042|       expect(legacyErasureReceipt?.status).toBe("succeeded");
+       |                                            ^
+    1043|       expect(legacyErasureRef).toMatchObject({ kind: "runtime_asset_er…
+    1044|         legacyDigests, companyPurgeOperationId: operation.id });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 30 skipped (31)
+   Start at  22:43:59
+   Duration  50.15s (transform 11.51s, setup 132ms, import 16.45s, tests 33.44s, environment 0ms)
+

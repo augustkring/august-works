@@ -37,27 +37,31 @@ export async function setup(request: APIRequestContext, page?: Page) {
     }
     request = page!.request;
     instanceControlRequest = request;
-    // The isolated instance has one bootstrap Human claim. Reuse that account
-    // across this serial browser lane instead of attempting a second claim in
-    // every test; each test still creates an independent company and agents.
-    const email = `agent-chat-owner-${process.env.PAPERCLIP_E2E_PORT ?? "3199"}@test.invalid`;
-    const password = "Agent-chat browser test passphrase 2026!";
-    const login = await request.post("/api/auth/sign-in/email", { data: { email, password } });
-    if (login.status() === 401 || login.status() === 404) {
-      await json(await request.post("/api/auth/sign-up/email", { data: {
-        name: "Authenticated agent-chat reviewer", email, password,
-      } }));
-      const invitation = execFileSync("pnpm", [
-        "--filter", "@paperclipai/db", "exec", "tsx",
-        path.resolve("packages/db/scripts/create-auth-bootstrap-invite.ts"),
-        "--config", config,
-        "--base-url", baseURL,
-      ], { encoding: "utf8", env: process.env, stdio: ["ignore", "pipe", "pipe"] }).trim();
-      const invitationToken = new URL(invitation).pathname.split("/").at(-1);
-      if (!invitationToken) throw new Error("Authenticated agent-chat bootstrap invitation was malformed");
-      await json(await request.post(`/api/invites/${invitationToken}/accept`, { data: { requestType: "human" } }));
-    } else if (!login.ok()) {
-      throw new Error(`Authenticated agent-chat login failed: ${login.status()} ${await login.text()}`);
+    const currentSession = await request.get("/api/auth/get-session");
+    const existingHuman = currentSession.ok() && (await currentSession.json())?.user?.id;
+    if (!existingHuman) {
+      // The isolated instance has one bootstrap Human claim. Reuse that account
+      // across this serial browser lane instead of attempting a second claim in
+      // every test; each test still creates an independent company and agents.
+      const email = `agent-chat-owner-${process.env.PAPERCLIP_E2E_PORT ?? "3199"}@test.invalid`;
+      const password = "Agent-chat browser test passphrase 2026!";
+      const login = await request.post("/api/auth/sign-in/email", { data: { email, password } });
+      if (login.status() === 401 || login.status() === 404) {
+        await json(await request.post("/api/auth/sign-up/email", { data: {
+          name: "Authenticated agent-chat reviewer", email, password,
+        } }));
+        const invitation = execFileSync("pnpm", [
+          "--filter", "@paperclipai/db", "exec", "tsx",
+          path.resolve("packages/db/scripts/create-auth-bootstrap-invite.ts"),
+          "--config", config,
+          "--base-url", baseURL,
+        ], { encoding: "utf8", env: process.env, stdio: ["ignore", "pipe", "pipe"] }).trim();
+        const invitationToken = new URL(invitation).pathname.split("/").at(-1);
+        if (!invitationToken) throw new Error("Authenticated agent-chat bootstrap invitation was malformed");
+        await json(await request.post(`/api/invites/${invitationToken}/accept`, { data: { requestType: "human" } }));
+      } else if (!login.ok()) {
+        throw new Error(`Authenticated agent-chat login failed: ${login.status()} ${await login.text()}`);
+      }
     }
   }
   const company = await json(

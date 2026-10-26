@@ -179,8 +179,6 @@ export function saasOffboardingService(
       .orderBy(companyDeletionOperations.createdAt)
       .limit(1);
     if (!operation) return false;
-    let purgeStage: "base_erasure" | "legacy_profile_retirement" | "legacy_worker" | "runtime_absence" |
-      "object_erasure" | "content_purge" | "feedback_cleanup" | "final_receipt" | null = null;
     try {
       if (operation.stage === "revoke") {
         await companyService(db).archive(operation.companyId, {
@@ -351,7 +349,6 @@ export function saasOffboardingService(
         return true;
       }
       if (operation.stage === "purge") {
-        purgeStage = "base_erasure";
         const admitted = await db.transaction(async tx => {
           await tx.execute(sql`set local statement_timeout='5s'`);
           await tx.execute(sql`set local lock_timeout='1s'`);
@@ -407,7 +404,6 @@ export function saasOffboardingService(
             return true;
           }
         }
-        purgeStage = "legacy_profile_retirement";
         const retiredLegacyRunIds = await retireCompanyNativeLegacyRuntimeProfiles(db, operation.companyId, operation.id);
         if (retiredLegacyRunIds.length) {
           // The first pass proves provider-home Stop and queues old global
@@ -415,11 +411,9 @@ export function saasOffboardingService(
           // owner retire frozen profile references while retaining Run and
           // Stop rows. A second real worker pass can then erase unreferenced
           // bytes before the final company transaction deletes those owners.
-          purgeStage = "legacy_worker";
           await enqueueCompanyManagedOpenCodeRuntimeErasure(db, operation.companyId, operation.id);
           await memoryJobService(db).tick({ limit: 50, companyId: operation.companyId });
         }
-        purgeStage = "runtime_absence";
         try {
           await assertCompanyManagedOpenCodeRuntimeDataErased(db, operation.companyId, operation.id);
         } catch (error) {
@@ -429,25 +423,21 @@ export function saasOffboardingService(
             .where(eq(companyDeletionOperations.id, operation.id));
           return true;
         }
-        purgeStage = "object_erasure";
         const objectEvidence = await objects.erase(
           operation.companyId,
           now,
           operation.evidence.storageTargets,
         );
-        purgeStage = "content_purge";
         const databaseEvidence = await purgeCompanyContent(
           db,
           operation.companyId,
           { operationId: operation.id },
         );
-        purgeStage = "feedback_cleanup";
         await removeFeedbackImages?.(operation.companyId);
         const [pendingImage] = await db.select({ id: feedbackImageDeletions.id }).from(feedbackImageDeletions).where(and(
           eq(feedbackImageDeletions.companyId, operation.companyId), isNull(feedbackImageDeletions.deletedAt),
         )).limit(1);
         if (pendingImage) throw conflict("Feedback image erasure is awaiting physical confirmation");
-        purgeStage = "final_receipt";
         await db
           .update(companyDeletionOperations)
           .set({
@@ -472,27 +462,12 @@ export function saasOffboardingService(
         return true;
       }
       throw conflict("Unknown offboarding stage");
-    } catch (error) {
-      const purgeFailure = operation.stage === "purge" ? (() => {
-        const value = error && typeof error === "object" ? error as Record<string, unknown> : {};
-        const cause = value.cause && typeof value.cause === "object" ? value.cause as Record<string, unknown> : {};
-        const safeName = typeof value.name === "string" && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(value.name)
-          ? value.name : "Error";
-        const safeSqlState = typeof cause.code === "string" && /^[0-9A-Z]{5}$/.test(cause.code)
-          ? cause.code : null;
-        const safeConstraint = typeof cause.constraint_name === "string" && /^[A-Za-z0-9_]{1,120}$/.test(cause.constraint_name)
-          ? cause.constraint_name : null;
-        return { stage: purgeStage ?? "base_erasure", name: safeName,
-          status: typeof value.status === "number" && Number.isSafeInteger(value.status) ? value.status : null,
-          sqlState: safeSqlState, constraint: safeConstraint };
-      })() : null;
+    } catch {
       await db
         .update(companyDeletionOperations)
         .set({
           notBefore: new Date(now.getTime() + 60000),
           errorCode: "offboarding_reconciliation_pending",
-          ...(purgeFailure ? { evidence: { ...operation.evidence,
-            lastPurgeReconciliationFailure: purgeFailure } } : {}),
         })
         .where(eq(companyDeletionOperations.id, operation.id));
       return true;

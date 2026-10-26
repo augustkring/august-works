@@ -38,7 +38,7 @@ type AnalyticalPayloadWorklist={
 };
 /** Exact native source owners reauthorize retained identities. No copied fact,
  * historical requester or feature flag supplies a current reader privilege. */
-export async function inspectAnalyticalContextPins(tx:Db,companyId:string,actor:AuthorizationActor,raw:AnalyticalContextAuthorityPin[],deadline=performance.now()+30000,historicalQualification=true,learningCycleScope?:{cycleId:string;purpose:string}) {
+export async function inspectAnalyticalContextPins(tx:Db,companyId:string,actor:AuthorizationActor,raw:AnalyticalContextAuthorityPin[],deadline=performance.now()+30000,historicalQualification=true,learningCycleScope?:{cycleId:string|null;purpose:string}) {
  let sourceSensitivity:"internal"|"confidential"="internal";
  const retainSensitivity=(value:string)=>{if(value==="confidential")sourceSensitivity="confidential";};
  const pins=pinsSchema.parse(raw),manifestIds=new Set<string>();let expiresAt=Infinity;
