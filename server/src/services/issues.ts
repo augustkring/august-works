@@ -2195,11 +2195,6 @@ async function resolveIssuePrivacy(
 async function assertIssuePrivacySourcesReadable(tx: DbTransaction, actor: AuthorizationActor,
   companyId: string, sources: Array<{ sourceKind: "issue" | "project" | "run" | "run_copy" | "workflow_run" | "routine_run"; sourceId: string }>) {
   for (const source of sources) {
-    if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") {
-      console.info("[plugin-managed-routine-source-read-start]", source.sourceKind);
-      if (source.sourceKind === "routine_run") console.info("[plugin-managed-routine-source-read-stack]",
-        new Error().stack?.split("\n").slice(1, 10).map(frame => frame.trim()).join(" <- "));
-    }
     const readable = source.sourceKind === "run_copy"
       ? await isNativeOutputRunCopyCurrent(tx, companyId, source.sourceId)
       : source.sourceKind === "run"
@@ -2209,10 +2204,7 @@ async function assertIssuePrivacySourcesReadable(tx: DbTransaction, actor: Autho
       : source.sourceKind === "issue"
       ? await canActorReadIssuePrivacy(tx, actor, { id: source.sourceId, companyId })
       : await canActorReadProjectPrivacy(tx, actor, { id: source.sourceId, companyId });
-    if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") console.info("[plugin-managed-routine-source-read-done]", source.sourceKind, readable);
     if (!readable) {
-      if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1")
-        console.info("[plugin-managed-routine-source-denied]", source.sourceKind, source.sourceId, actor.type, actor.source ?? null);
       throw notFound("Task privacy source is unavailable");
     }
   }
@@ -10171,11 +10163,6 @@ export function issueService(db: Db) {
         nativeEffectClaim?: NativeToolEffectClaim; nativeModelOutputCapture?: NativeModelOutputCapture;
         nativeModelOutputToolName?: string } = {},
     ) => {
-      const issueCreateProfileStartedAt = performance.now();
-      const issueCreateProfile = (stage: string) => {
-        if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1")
-          console.info(`[plugin-managed-routine-create-profile] ${stage} ${Math.round(performance.now() - issueCreateProfileStartedAt)}ms`);
-      };
       const ownedPrivacyPublications: ActivityPublication[] = [];
       const privacyPublications = postCommitActivityPublications ?? ownedPrivacyPublications;
       // This carrier is supplied by the original HTTP owner, never the DTO.
@@ -10256,10 +10243,8 @@ export function issueService(db: Db) {
       ) {
         throw unprocessable("in_progress issues require an assignee");
       }
-      issueCreateProfile("preflight-complete");
       const persist = async (tx: DbTransaction) => {
-        issueCreateProfile("transaction-entered");
-        let manualExpiresAt: number | null = null;
+          let manualExpiresAt: number | null = null;
         let manualOperator = false;
         let privacyActorExpiresAt: number | null = null;
         let privacyActorPinned = false;
@@ -10340,10 +10325,8 @@ export function issueService(db: Db) {
             enforceResponsibleUserIntersection: true });
           if (!sourceReaderDecision.allowed) throw forbidden("The current Task source reader is unavailable");
         }
-        issueCreateProfile("actors-pinned");
-        await lockIssuePrivacyTree(tx, companyId);
-        issueCreateProfile("privacy-tree-locked");
-        await assertExecutionTaskParent(tx as unknown as Db, companyId, issueData.parentId);
+          await lockIssuePrivacyTree(tx, companyId);
+          await assertExecutionTaskParent(tx as unknown as Db, companyId, issueData.parentId);
         if (issueData.conversationAgentId && issueData.conversationUserId) {
           await lockBusinessEventCompany(tx, companyId);
           await lockMemoryPrivacy(tx as unknown as Db, companyId);
@@ -10710,8 +10693,7 @@ export function issueService(db: Db) {
         const privacy = await resolveIssuePrivacy(tx, companyId, { ...issueData, id: issueData.id }, null, actorRunId,
           workspaceInheritanceIssueId ? [workspaceInheritanceIssueId] : [], !!suppliedPrivacyActor && suppliedPrivacyActor.type === "agent" && !nativeEffectClaim,
           nativeEffectPrefix?.runId);
-        issueCreateProfile("privacy-resolved");
-        if (nativeEffectPrefix) {
+          if (nativeEffectPrefix) {
           const addCapturedSources = async (kind: "issue" | "project" | "run", ids: readonly string[]) => {
             for (const sourceId of ids) {
               if (kind === "issue" && sourceId === issueData.id) throw forbidden("Native Task input source is ambiguous");
@@ -10766,10 +10748,8 @@ export function issueService(db: Db) {
           ? { type: "agent", agentId: issueData.createdByAgentId, companyId, runId: actorRunId ?? undefined,
               onBehalfOfUserId: responsibleUserId ?? undefined }
           : issueData.createdByUserId ? { type: "board", userId: issueData.createdByUserId, source: "session" } : { type: "none" });
-        issueCreateProfile("before-source-read");
-        await assertIssuePrivacySourcesReadable(tx, currentSourceAccessActor ?? creatorActor, companyId, privacy.sources);
-        issueCreateProfile("source-read-complete");
-        if (privacy.visibility === "private") await pinIssueMutationHuman(tx, currentSourceAccessActor ?? creatorActor, companyId);
+          await assertIssuePrivacySourcesReadable(tx, currentSourceAccessActor ?? creatorActor, companyId, privacy.sources);
+          if (privacy.visibility === "private") await pinIssueMutationHuman(tx, currentSourceAccessActor ?? creatorActor, companyId);
         const values = {
           ...issueData,
           visibility: privacy.visibility,
@@ -10856,9 +10836,10 @@ export function issueService(db: Db) {
           issue = await bindManualTaskPayload(tx, issue,
             { ...manualActor, isInstanceAdmin: false, ignoreInstanceAdmin: !manualOperator }, privacyPublications);
         }
-        if (issue.visibility === "private" && !(await canActorReadIssuePrivacy(tx,
-          currentSourceAccessActor ?? manualActor ?? creatorActor, issue))) {
-          throw forbidden("Private task creation is outside the current actor authority");
+        if (issue.visibility === "private") {
+          const finalPrivacyReader = currentSourceAccessActor ?? manualActor ?? creatorActor;
+          const finalPrivateRead = await canActorReadIssuePrivacy(tx, finalPrivacyReader, issue);
+          if (!finalPrivateRead) throw forbidden("Private task creation is outside the current actor authority");
         }
         if (idempotencyKey) {
           await tx.insert(issueCreateIdempotencyKeys).values({

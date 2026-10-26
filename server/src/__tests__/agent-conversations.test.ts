@@ -11,7 +11,7 @@ import { errorHandler } from "../middleware/index.js";
 import { actorMiddleware } from "../middleware/auth.js";
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   activityLog,
   authUsers,
@@ -151,6 +151,83 @@ const support = await getEmbeddedPostgresTestSupport();
           .returning()
       )[0]!;
     }
+    it("routes the first authenticated Human comment through the configured heartbeat owner", async () => {
+      const userId = randomUUID();
+      await db.insert(authUsers).values({ id: userId, name: "Configured heartbeat owner",
+        email: `${userId}@example.test`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
+      await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId,
+        status: "active", membershipRole: "operator" });
+      await ensureHumanRoleDefaultGrants(db, { companyId, principalId: userId, membershipRole: "operator", grantedByUserId: null });
+      const sessionId = await seedNativePasskeySession(db, userId);
+      const heartbeat = { wakeup: vi.fn(async () => null) } as unknown as ReturnType<typeof heartbeatService>;
+      const app = express();
+      app.use(express.json());
+      app.use((req, _res, next) => {
+        req.actor = { type: "board", source: "session", userId, sessionId, companyIds: [companyId] };
+        next();
+      });
+      app.use("/api", issueRoutes(db, {} as never, { heartbeat }));
+      app.use(errorHandler);
+
+      const path = `/api/companies/${companyId}/chats/${agentId}`;
+      const shell = await request(app).post(path);
+      expect(shell.status, JSON.stringify(shell.body)).toBe(200);
+      const foreignApp = express();
+      foreignApp.use(express.json());
+      foreignApp.use((req, _res, next) => {
+        req.actor = { type: "board", source: "session", userId: "local-board",
+          sessionId: localBoardSessionId, companyIds: [companyId] };
+        next();
+      });
+      foreignApp.use("/api", issueRoutes(db, {} as never, { heartbeat }));
+      foreignApp.use(errorHandler);
+      const foreignFirstComment = await request(foreignApp).post(`/api/issues/${shell.body.id}/comments`).send({
+        body: "A different Human must not start this conversation.", clientRequestId: randomUUID(),
+      });
+      expect(foreignFirstComment.status).toBe(404);
+      expect(heartbeat.wakeup).not.toHaveBeenCalled();
+      expect(await db.select().from(issueComments).where(eq(issueComments.issueId, shell.body.id))).toHaveLength(0);
+      const linkedOwnerId = randomUUID();
+      await db.insert(authUsers).values({ id: linkedOwnerId, name: "Linked shell owner",
+        email: `${linkedOwnerId}@example.test`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
+      await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: linkedOwnerId,
+        status: "active", membershipRole: "operator" });
+      await ensureHumanRoleDefaultGrants(db, { companyId, principalId: linkedOwnerId,
+        membershipRole: "operator", grantedByUserId: null });
+      const linkedSessionId = await seedNativePasskeySession(db, linkedOwnerId);
+      const linkedApp = express();
+      linkedApp.use(express.json());
+      linkedApp.use((req, _res, next) => {
+        req.actor = { type: "board", source: "session", userId: linkedOwnerId,
+          sessionId: linkedSessionId, companyIds: [companyId] };
+        next();
+      });
+      linkedApp.use("/api", issueRoutes(db, {} as never, { heartbeat }));
+      linkedApp.use(errorHandler);
+      const linkedShell = await request(linkedApp).post(path);
+      expect(linkedShell.status, JSON.stringify(linkedShell.body)).toBe(200);
+      const parent = await issueService(db).create(companyId, { title: "A shell with a parent is not empty" });
+      await db.update(issues).set({ parentId: parent.id }).where(eq(issues.id, linkedShell.body.id));
+      const linkedComment = await request(linkedApp).post(`/api/issues/${linkedShell.body.id}/comments`).send({
+        body: "A linked shell must not be admitted as an empty conversation.", clientRequestId: randomUUID(),
+      });
+      expect([403, 404]).toContain(linkedComment.status);
+      expect(heartbeat.wakeup).not.toHaveBeenCalled();
+      expect(await db.select().from(issueComments).where(eq(issueComments.issueId, linkedShell.body.id))).toHaveLength(0);
+      const firstComment = await request(app).post(`/api/issues/${shell.body.id}/comments`).send({
+        body: "Create the first authenticated Native conversation input.", clientRequestId: randomUUID(),
+      });
+      expect(firstComment.status, JSON.stringify(firstComment.body)).toBe(201);
+      expect(heartbeat.wakeup).toHaveBeenCalledTimes(1);
+      expect(heartbeat.wakeup).toHaveBeenCalledWith(agentId, expect.objectContaining({
+        reason: "issue_commented", requestedByActorType: "user", requestedByActorId: userId,
+        contextSnapshot: expect.objectContaining({ issueId: shell.body.id, source: "issue.comment" }),
+      }));
+      const [persisted] = await db.select().from(issues).where(eq(issues.id, shell.body.id));
+      expect(persisted).toMatchObject({ conversationState: "active", conversationUserId: userId,
+        payloadSourceProtocolVersion: 1, payloadSourceSnapshot: expect.any(Object) });
+      expect((await db.select().from(issueComments).where(eq(issueComments.id, firstComment.body.id)))).toHaveLength(1);
+    });
     it("atomically resolves one task per person and agent and excludes it from ordinary lists", async () => {
       const user = randomUUID();
       expect(

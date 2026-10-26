@@ -214,7 +214,10 @@ function actionAfterHistory(turn, comments) {
   const text = typeof command === "object" && command.action === "reply"
     ? `Reply generation ${turn.generation}: ${command.text}`
     : "Codex completed the fake turn.";
-  progress(turn, text, () => finish(turn, text));
+  // An ordinary chat response has no intermediate status to publish. Avoid an
+  // unnecessary tool round-trip so concurrent first-send E2E turns exercise
+  // the actual reply/finalization path within the existing idle budget.
+  finish(turn, text);
 }
 
 function executeDelegatedTask(turn) {

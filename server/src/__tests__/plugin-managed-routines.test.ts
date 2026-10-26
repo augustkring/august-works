@@ -1,4 +1,3 @@
-import { writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -14,6 +13,7 @@ import {
   documentRevisions,
   documents,
   issues,
+  issuePrivacySources,
   pluginManagedResources,
   principalPermissionGrants,
   plugins,
@@ -115,11 +115,7 @@ describeEmbeddedPostgres("plugin-managed routines", () => {
 
   beforeAll(async () => {
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-plugin-managed-routines-");
-    if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") {
-      const portFile = process.env.PLUGIN_MANAGED_ROUTINE_PORT_FILE ?? "/workspace/v10-preparation/depfix-plugin-managed-routine-port";
-      writeFileSync(portFile, new URL(tempDb.connectionString).port);
-      db = createDb(tempDb.connectionString, { applicationName: "plugin-managed-routine-source-test" });
-    } else db = createDb(tempDb.connectionString);
+    db = createDb(tempDb.connectionString);
   }, 20_000);
 
   afterEach(async () => {
@@ -272,7 +268,6 @@ describeEmbeddedPostgres("plugin-managed routines", () => {
     const routinesSvc = routineService(db, { heartbeat: { wakeup }, sourceActor });
 
     const run = await routinesSvc.runRoutine(routine.routineId!, { source: "manual" }, { userId: "responsible-user" });
-    if (run.status !== "issue_created") console.info("[plugin-managed-routine-test-run]", run);
     expect(run.status).toBe("issue_created");
     const [issue] = await db.select().from(issues).where(eq(issues.id, run.linkedIssueId!));
     expect(issue).toMatchObject({
@@ -282,12 +277,37 @@ describeEmbeddedPostgres("plugin-managed routines", () => {
       projectId: project.id,
       assigneeAgentId: agent.agentId,
     });
+    const retainedSources = await db.select({ sourceKind: issuePrivacySources.sourceKind, sourceId: issuePrivacySources.sourceId })
+      .from(issuePrivacySources).where(eq(issuePrivacySources.issueId, issue!.id));
+    expect(retainedSources).toContainEqual({ sourceKind: "routine_run", sourceId: run.id });
+    expect(retainedSources).not.toContainEqual({ sourceKind: "run", sourceId: run.id });
+
+    const [managedRoutine] = await db.select().from(routines).where(eq(routines.id, routine.routineId!));
+    const [revision] = await db.select().from(routineRevisions).where(eq(routineRevisions.id, managedRoutine!.latestRevisionId!));
+    const [scheduledRun] = await db.insert(routineRuns).values({ companyId, routineId: routine.routineId!,
+      routineRevisionId: revision!.id, responsibleUserId: sourceActor.userId,
+      source: "schedule", status: "received" }).returning();
+    const [scheduledOperation] = await db.insert(issues).values({ companyId, title: "Scheduled plugin operation source",
+      visibility: "private", createdByUserId: sourceActor.userId, responsibleUserId: sourceActor.userId,
+      originKind: "plugin:paperclip.managed-routines-test:operation", originId: "operation:nightly-lint",
+      originRunId: scheduledRun!.id }).returning();
+    const scheduledSources = await db.select({ sourceKind: issuePrivacySources.sourceKind, sourceId: issuePrivacySources.sourceId })
+      .from(issuePrivacySources).where(eq(issuePrivacySources.issueId, scheduledOperation!.id));
+    expect(scheduledSources).toContainEqual({ sourceKind: "routine_run", sourceId: scheduledRun!.id });
+    expect(scheduledSources).not.toContainEqual({ sourceKind: "run", sourceId: scheduledRun!.id });
+
     expect(wakeup).toHaveBeenCalledWith(agent.agentId, expect.objectContaining({
       reason: "issue_assigned",
     }));
 
-    const [managedRoutine] = await db.select().from(routines).where(eq(routines.id, routine.routineId!));
-    const [revision] = await db.select().from(routineRevisions).where(eq(routineRevisions.id, managedRoutine!.latestRevisionId!));
+    await expect(db.update(issues).set({ originKind: "plugin:foreign:operation" })
+      .where(eq(issues.id, issue!.id))).rejects.toMatchObject({
+        cause: { code: "23514", message: expect.stringContaining("Plugin operation source binding is invalid") },
+      });
+    const [originAfterRejectedRetarget] = await db.select({ originKind: issues.originKind })
+      .from(issues).where(eq(issues.id, issue!.id));
+    expect(originAfterRejectedRetarget?.originKind).toBe("plugin:paperclip.managed-routines-test:operation");
+
     const foreignRoutineId = randomUUID();
     const [foreignRoutine] = await db.insert(routines).values({
       ...managedRoutine!, id: foreignRoutineId, originKind: "manual", originId: null,

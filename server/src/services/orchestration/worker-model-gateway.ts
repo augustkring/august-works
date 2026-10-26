@@ -599,12 +599,8 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
             exactProviderVisibleJson: content === JSON.stringify(result),
           };
           const failedCreateChecks = Object.entries(createProjectChecks).filter(([, passed]) => !passed).map(([name]) => name);
-          if (failedCreateChecks.length) {
-            if (process.env.PAPERCLIP_MANAGED_PROJECT_CREATE_DIAGNOSTICS === "1")
-              process.stderr.write(`managed_project_create_diagnostic ${JSON.stringify({ stage: "gateway_receipt_rejected",
-                failedChecks: failedCreateChecks })}\n`);
+          if (failedCreateChecks.length)
             throw forbidden("Managed OpenCode create_project result is not an exact private Project source receipt");
-          }
           if (!sourcePolicy.success || !sourceInputs.success)
             throw forbidden("Managed OpenCode create_project source set is malformed");
           await assertNativeManagedProjectCreateReceiptCurrent(db, { companyId: claims.company_id,
@@ -1189,7 +1185,7 @@ export function workerModelGateway(db: Db, options: Options) {
       !issue || issue.conversationAgentId !== claims.sub || issue.conversationUserId !== claims.responsible_user_id ||
       issue.conversationSessionGeneration !== binding.conversationSessionGeneration || issue.conversationState !== "active" ||
       issue.conversationRetiredAt || issue.assigneeAgentId !== claims.sub || issue.executionRunId !== claims.run_id ||
-      issue.status !== "in_review" || !manifest || manifest.hash !== binding.executionManifestHash ||
+      !["in_review", "in_progress"].includes(issue.status) || !manifest || manifest.hash !== binding.executionManifestHash ||
       manifest.manifest.responsibleUserId !== claims.responsible_user_id ||
       manifest.manifest.executionScope.delegatedScopes.some(scope => scope.companyId !== claims.company_id) ||
       (requireInputReceipt && (run.nativeInputSourceProtocolVersion !== 1 ||
@@ -1510,7 +1506,8 @@ export function workerModelGateway(db: Db, options: Options) {
       if (!run || run.runtimeMode !== "native" || run.status !== "running" || run.scopeKind !== "issue" ||
         run.responsibleUserId !== input.responsibleUserId || !issue || issue.conversationAgentId !== input.agentId ||
         issue.conversationUserId !== input.responsibleUserId || issue.conversationState !== "active" ||
-        issue.conversationSessionGeneration === null || issue.executionRunId !== input.runId || issue.status !== "in_review" ||
+        issue.conversationSessionGeneration === null || issue.executionRunId !== input.runId ||
+        !["in_review", "in_progress"].includes(issue.status) ||
         !manifest || manifest.manifest.responsibleUserId !== input.responsibleUserId)
         throw forbidden("One exact active authenticated Native conversation is required");
       const binding: ConversationModelBinding = { issueId: issue.id,

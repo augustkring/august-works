@@ -48,6 +48,7 @@ import {
   chatPublications,
   companyMemberships,
   issueAccessGrants,
+  issueAttachments,
   issuePrivacySources,
   projectAccessMembers,
   projects,
@@ -242,6 +243,7 @@ import {
   assertCompanyAccess,
   getAccessibleResource,
   getActorInfo,
+  hasCompanyAccess,
 } from "./authz.js";
 import {
   assertNoAgentHostWorkspaceCommandMutation,
@@ -3529,6 +3531,8 @@ export function issueRoutes(
     searchService?: CompanySearchService | CompanySearchServiceFactory;
     searchRateLimiter?: CompanySearchRateLimiter;
     pluginWorkerManager?: PluginWorkerManager;
+    /** The application heartbeat owner, including its configured native sandbox executor. */
+    heartbeat?: ReturnType<typeof heartbeatService>;
     taskWatchdogEnqueueWakeup?: TaskWatchdogServiceDeps["enqueueWakeup"] | null;
     recoveryActionEnqueueWakeup?: (
       agentId: string,
@@ -3583,10 +3587,14 @@ export function issueRoutes(
       }
     }
     for (const id of sources) {
-      if (!(await canActorReadIssuePrivacy(db, req.actor, { id, companyId }))) throw notFound("Issue not found");
-      let ownedNativeConversation = false;
+      const canReadCurrentPrivacy = await canActorReadIssuePrivacy(db, req.actor, { id, companyId });
       const isNativeConversationCommentWrite = req.method === "POST" &&
         req.originalUrl.split("?")[0]!.endsWith(`/issues/${id}/comments`);
+      if (!canReadCurrentPrivacy && !(isNativeConversationCommentWrite && req.actor.type === "board" &&
+          req.actor.source === "session" && req.actor.sessionId && req.actor.userId &&
+          await db.transaction(tx => isCurrentUnsealedConversationShell(tx, req.actor, { id, companyId }, "issue:comment"))))
+        throw notFound("Issue not found");
+      let ownedNativeConversation = false;
       const requestPath = req.originalUrl.split("?")[0]!;
       const isNativeConversationWorkModeWrite = req.method === "PATCH" &&
         requestPath.endsWith(`/issues/${id}`) &&
@@ -3602,6 +3610,8 @@ export function issueRoutes(
           const pinned = await pinCurrentBoardActor(tx, req.actor);
           if (!pinned || pinned.credentialExpiresAt === null) throw notFound("Issue not found");
           await assertDirectInputSessionCurrent(tx, pinned.actor, pinned.credentialExpiresAt);
+          if (isNativeConversationCommentWrite && await isCurrentUnsealedConversationShell(tx, pinned.actor,
+            { id, companyId }, "issue:comment")) return true;
           if (!await canActorReadIssuePrivacy(tx, pinned.actor, { id, companyId })) throw notFound("Issue not found");
           return true;
         });
@@ -3636,7 +3646,7 @@ export function issueRoutes(
   }
   const access = accessService(db);
   const secretProposals = createSecretProposalsService(db);
-  const heartbeat = heartbeatService(db, {
+  const heartbeat = opts.heartbeat ?? heartbeatService(db, {
     pluginWorkerManager: opts.pluginWorkerManager,
   });
   const commentWasCreatedByAssigneeRun = async (
@@ -5270,27 +5280,49 @@ export function issueRoutes(
       eq(issueRows.id, issue.id), eq(issueRows.companyId, issue.companyId),
       eq(issueRows.payloadSourceProtocolVersion, 1), isNull(issueRows.payloadSourceSnapshot),
       eq(issueRows.payloadSourceSnapshotInvalidated, false),
+      isNull(issueRows.projectId), isNull(issueRows.parentId), isNull(issueRows.description),
+      isNull(issueRows.createdByAgentId), eq(issueRows.originKind, "manual"), isNull(issueRows.originId),
       eq(issueRows.createdByUserId, ownerUserId),
       eq(issueRows.conversationUserId, ownerUserId),
       isNotNull(issueRows.conversationAgentId), eq(issueRows.conversationState, "waiting"),
       eq(issueRows.conversationSessionGeneration, 0), isNull(issueRows.conversationBoundaryCommentId),
       isNull(issueRows.conversationRetiredAt),
       isNull(issueRows.executionRunId), eq(issueRows.status, "in_review"),
-    )).for("share", { noWait: true });
-    if (!current) return false;
+    )).for("share");
+    await assertDirectInputSessionCurrent(tx, pinned.actor, pinned.credentialExpiresAt,
+      "The current conversation owner session is unavailable");
+    if (!current) {
+      return false;
+    }
     const [priorComment] = await tx.select({ id: issueComments.id }).from(issueComments).where(and(
       eq(issueComments.companyId, issue.companyId), eq(issueComments.issueId, issue.id),
     )).limit(1);
     if (priorComment) return false;
-    const decision = await accessService(tx).decide({ actor: pinned.actor, action,
-      resource: { type: "issue", companyId: current.companyId, issueId: current.id,
-        projectId: current.projectId, parentIssueId: current.parentId,
-        assigneeAgentId: current.assigneeAgentId, assigneeUserId: current.assigneeUserId,
-        status: current.status },
-      scope: { issueId: current.id, projectId: current.projectId, parentIssueId: current.parentId,
-        assigneeAgentId: current.assigneeAgentId, assigneeUserId: current.assigneeUserId },
-    });
-    return decision.allowed;
+    const [opened] = await tx.select({ id: activityLog.id }).from(activityLog).where(and(
+      eq(activityLog.companyId, current.companyId), eq(activityLog.actorType, "user"),
+      eq(activityLog.actorId, ownerUserId), eq(activityLog.action, "issue.conversation_opened"),
+      eq(activityLog.entityType, "issue"), eq(activityLog.entityId, current.id),
+      sql`${activityLog.details}->>'agentId'=${current.conversationAgentId}`,
+    )).limit(1);
+    if (!opened) return false;
+    const [linkedSource] = await tx.select({ id: issuePrivacySources.id }).from(issuePrivacySources).where(and(
+      eq(issuePrivacySources.companyId, current.companyId), eq(issuePrivacySources.issueId, current.id),
+    )).limit(1);
+    const [linkedDocument] = await tx.select({ id: issueDocuments.id }).from(issueDocuments).where(and(
+      eq(issueDocuments.companyId, current.companyId), eq(issueDocuments.issueId, current.id),
+    )).limit(1);
+    const [linkedAttachment] = await tx.select({ id: issueAttachments.id }).from(issueAttachments).where(and(
+      eq(issueAttachments.companyId, current.companyId), eq(issueAttachments.issueId, current.id),
+    )).limit(1);
+    if (linkedSource || linkedDocument || linkedAttachment) return false;
+    // General issue privacy correctly rejects this unsealed private shell. Its
+    // sole permitted reader/writer is the exact creator+conversation owner,
+    // after current Human credential and active company membership are pinned.
+    const membership = await pinIssueMutationHuman(tx, pinned.actor, current.companyId, true);
+    await assertDirectInputSessionCurrent(tx, pinned.actor, pinned.credentialExpiresAt,
+      "The current conversation owner session is unavailable");
+    return (action === "issue:read" || action === "issue:comment") &&
+      (membership === "member" || membership === "instance_admin");
   }
 
   async function assertIssueWriteInfluenceAllowed(
@@ -9363,12 +9395,16 @@ export function issueRoutes(
   router.get("/issues/:id", async (req, res) => {
     const requestStartedAt = performance.now();
     const id = req.params.id as string;
-    const issue = await getAccessibleResource(
-      req,
-      res,
-      getIssueById(req, id),
-      "Issue not found",
-    );
+    const candidate = await getIssueById(req, id);
+    const shellOwner = candidate && hasCompanyAccess(req, candidate.companyId) && req.actor.type === "board" &&
+      req.actor.userId != null && await db.transaction(tx => isCurrentUnsealedConversationShell(tx,
+        { ...req.actor, userId: req.actor.userId ?? undefined }, candidate, "issue:read"));
+    if (shellOwner && candidate) {
+      assertCompanyAccess(req, candidate.companyId);
+      res.json(publicNativePayloadRow(candidate));
+      return;
+    }
+    const issue = await getAccessibleResource(req, res, candidate, "Issue not found");
     if (!issue) return;
     if (!(await assertIssueReadAllowed(req, res, issue))) return;
     const inboxArchiveFieldsPromise =
@@ -10372,12 +10408,7 @@ export function issueRoutes(
     validate(refreshExternalObjectsSchema),
     async (req, res) => {
       const id = req.params.id as string;
-      const issue = await getAccessibleResource(
-        req,
-        res,
-        svc.getById(id),
-        "Issue not found",
-      );
+      const issue = await getAccessibleResource(req, res, svc.getById(id), "Issue not found");
       if (!issue) return;
       if (!(await assertAgentIssueMutationAllowed(req, res, issue))) return;
       const actor = getActorInfo(req);
@@ -10457,6 +10488,10 @@ export function issueRoutes(
       });
       return;
     }
+    // Annotation responses always include the Task's current Context. Check
+    // that authority before fetching any document or annotation body, then
+    // retain the post-read checks below for changes during owner-row waits.
+    if (shouldIncludeDocumentAnnotations(req) && !(await assertIssueReadAllowed(req, res, issue))) return;
     let revisionId: string | null = null;
     let capturedSnapshot: unknown = null;
     const doc = await documentsSvc.getIssueDocumentByKey(issue.id, keyParsed.data, {
@@ -16010,13 +16045,15 @@ export function issueRoutes(
 
   router.get("/issues/:id/comments", async (req, res) => {
     const id = req.params.id as string;
-    const issue = await getAccessibleResource(
-      req,
-      res,
-      getIssueById(req, id),
-      "Issue not found",
-    );
+    const candidate = await getIssueById(req, id);
+    const shellOwner = candidate && hasCompanyAccess(req, candidate.companyId) && req.actor.type === "board" &&
+      req.actor.userId != null && await db.transaction(tx => isCurrentUnsealedConversationShell(tx,
+        { ...req.actor, userId: req.actor.userId ?? undefined }, candidate, "issue:read"));
+    const issue = shellOwner && candidate
+      ? (assertCompanyAccess(req, candidate.companyId), candidate)
+      : await getAccessibleResource(req, res, candidate, "Issue not found");
     if (!issue) return;
+    if (shellOwner) { res.json([]); return; }
     if (!(await assertIssueReadAllowed(req, res, issue))) return;
     const afterCommentId =
       typeof req.query.after === "string" && req.query.after.trim().length > 0
@@ -17986,18 +18023,29 @@ export function issueRoutes(
         if (input.replaceInaccessibleIssueId === existing.id && !retireConversationId) throw conflict("The current conversation does not require source recovery");
       }
       if ((existing && !retireConversationId) || method === "get") { res.json(existing); return; }
-      const issue = await svc.create(companyId, {
-        privateWorkAdmission: "closed",
-        title: `Chat with ${agent.name}`, assigneeAgentId: agent.id,
-        conversationAgentId: agent.id, conversationUserId: req.actor.userId,
-        conversationState: "waiting", status: "in_review", createdByUserId: req.actor.userId, retireConversationId,
-        // The first authenticated Human message will seal this conversation
-        // Task to its exact captured comment inside the same guarded write.
-        payloadSourceProtocolVersion: 1,
+      const publications: ActivityPublication[] = [];
+      const issue = await db.transaction(async (tx) => {
+        const created = await svc.create(companyId, {
+          privateWorkAdmission: "closed",
+          title: `Chat with ${agent.name}`, assigneeAgentId: agent.id,
+          conversationAgentId: agent.id, conversationUserId: req.actor.userId,
+          conversationState: "waiting", status: "in_review", createdByUserId: req.actor.userId, retireConversationId,
+          // The first authenticated Human message will seal this conversation
+          // Task to its exact captured comment inside the same guarded write.
+          payloadSourceProtocolVersion: 1,
+        }, tx, publications);
+        const [opened] = await tx.select({ id: activityLog.id }).from(activityLog).where(and(
+          eq(activityLog.companyId, companyId), eq(activityLog.actorType, "user"),
+          eq(activityLog.actorId, req.actor.userId!), eq(activityLog.action, "issue.conversation_opened"),
+          eq(activityLog.entityType, "issue"), eq(activityLog.entityId, created.id),
+          sql`${activityLog.details}->>'agentId'=${agent.id}`,
+        )).limit(1);
+        if (!opened) await logActivity(tx as unknown as Db, { companyId, actorType: "user", actorId: req.actor.userId!,
+          action: "issue.conversation_opened", entityType: "issue", entityId: created.id,
+          details: { agentId: agent.id } }, publications);
+        return created;
       });
-      await logActivity(db, { companyId, actorType: "user", actorId: req.actor.userId,
-        action: "issue.conversation_opened", entityType: "issue", entityId: issue.id,
-        details: { agentId: agent.id } });
+      for (const publication of publications) publishActivity(publication);
       res.json(publicNativePayloadRow(issue));
     });
   }
@@ -18007,12 +18055,13 @@ export function issueRoutes(
     validate(addIssueCommentSchema),
     async (req, res) => {
       const id = req.params.id as string;
-      const issue = await getAccessibleResource(
-        req,
-        res,
-        svc.getById(id),
-        "Issue not found",
-      );
+      const candidate = await svc.getById(id);
+      const shellOwner = candidate && hasCompanyAccess(req, candidate.companyId) && req.actor.type === "board" &&
+        req.actor.userId != null && await db.transaction(tx => isCurrentUnsealedConversationShell(tx,
+          { ...req.actor, userId: req.actor.userId ?? undefined }, candidate, "issue:comment"));
+      const issue = shellOwner && candidate
+        ? (assertCompanyAccess(req, candidate.companyId), candidate)
+        : await getAccessibleResource(req, res, candidate, "Issue not found");
       if (!issue) return;
       if (issue.conversationAgentId && req.actor.type === "board") {
         if (!(await instanceSettings.getExperimental()).enableAgentChat) throw notFound("Agent Chat is disabled");
@@ -18038,10 +18087,11 @@ export function issueRoutes(
           const issueCommentDecision = await authorizationService(tx).decide({ actor: pinned.actor, action: "issue:comment",
             resource: { type: "issue", companyId: lockedIssue.companyId, issueId: lockedIssue.id,
               projectId: lockedIssue.projectId, parentIssueId: lockedIssue.parentId,
-              assigneeAgentId: lockedIssue.assigneeAgentId, assigneeUserId: lockedIssue.assigneeUserId,
+              assigneeAgentId: null, assigneeUserId: userId,
               status: lockedIssue.status }, enforceResponsibleUserIntersection: true });
           const ownerShell = await isCurrentUnsealedConversationShell(tx, { ...pinned.actor, userId }, lockedIssue, "issue:comment");
-          if (!issueCommentDecision.allowed || (!ownerShell && !await canActorReadIssuePrivacy(tx, pinned.actor, lockedIssue)))
+          if ((!issueCommentDecision.allowed && !ownerShell) ||
+            (!ownerShell && !await canActorReadIssuePrivacy(tx, pinned.actor, lockedIssue)))
             throw notFound("Conversation not found");
           const [existing] = await tx.select({ id: issueComments.id }).from(issueComments).where(and(
             eq(issueComments.issueId, issue.id), eq(issueComments.authorUserId, userId),
@@ -18071,7 +18121,7 @@ export function issueRoutes(
             const commentSnapshot = nativePayloadSourceSnapshotSchema.parse(capturedComment.payloadSourceSnapshot);
             let taskDigest: string | null = null;
             if (ownerShell) {
-              const sourcePolicy = { issueIds: [issue.id], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] };
+              const sourcePolicy = { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] };
               const [capturedIssue] = await tx.update(issueRows)
                 .set({ payloadSourceSnapshot: nativePayloadSnapshotSql("issue", sourcePolicy, [source]) })
                 .where(and(eq(issueRows.id, issue.id), eq(issueRows.companyId, issue.companyId),

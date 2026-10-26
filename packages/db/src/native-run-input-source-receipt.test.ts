@@ -31,7 +31,7 @@ describe("Original run input receipt database binding", () => {
     return {...body,digest:await digest(body)} as Receipt;
   }
   async function insert(protocol=1, profile:Parameters<typeof db.json>[0]|null=null, mode="native", issueId:string|null=null){
-    const [row]=await db`insert into heartbeat_runs(company_id,agent_id,responsible_user_id,native_input_source_protocol_version,runtime_mode,issue_id,runner_profile_json)
+    const [row]=await db`insert into heartbeat_runs(company_id,agent_id,responsible_user_id,native_input_source_protocol_version,runtime_mode,native_issue_id,runner_profile_json)
       values(${companyId},${agentId},${alice},${protocol},${mode},${issueId},${profile===null?null:db.json(profile)}) returning *`;
     return row!;
   }
@@ -62,15 +62,16 @@ describe("Original run input receipt database binding", () => {
     // This DB-contract fixture exercises integrity and ordering only; it does
     // not claim that its structural source is a real provider input.
     const runId=randomUUID(), issueId=randomUUID(), dispatchId=randomUUID(), eventSeq=17, attempt=2;
+    const boundExecution={...execution,binding:{companyId,runId,agentId,issueId}};
     await db`insert into issues(id,company_id,title) values(${issueId},${companyId},'Intent owner')`;
-    const [row]=await db`insert into heartbeat_runs(id,company_id,agent_id,responsible_user_id,native_input_source_protocol_version,runtime_mode,status,issue_id,runner_profile_json)
-      values(${runId},${companyId},${agentId},${alice},0,'native','running',${issueId},${db.json({nativeExecutionInput:execution})}) returning *`;
+    const [row]=await db`insert into heartbeat_runs(id,company_id,agent_id,responsible_user_id,native_input_source_protocol_version,runtime_mode,status,native_issue_id,runner_profile_json)
+      values(${runId},${companyId},${agentId},${alice},0,'native','running',${issueId},${db.json({nativeExecutionInput:boundExecution})}) returning *`;
     const turnInputDigest=await digest({message:{role:"user",text:"exact rendered frame"}});
     const intent={dispatchId,eventSeq,attempt,responsibleUserId:alice,turnInputDigest,byteSize:40,continuation:false};
     const receipt=await receiptFor(row!,{binding:{companyId,runId,agentId,responsibleUserId:alice,issueId},
-      bootstrap:{executionInputDigest:await digest(execution),policy:policy(),inputs:[{kind:"task",issueId,sourceVersion:"1",contentHash:"a".repeat(64)}]},
+      bootstrap:{executionInputDigest:await digest(boundExecution),policy:policy(),inputs:[{kind:"task",issueId,sourceVersion:"1",contentHash:"a".repeat(64)}]},
       dispatches:[],additionalInputs:[]});
-    const profile={nativeExecutionInput:execution,nativeInputSourceReceipt:receipt,nativeModelInputDispatchIntents:[intent]};
+    const profile={nativeExecutionInput:boundExecution,nativeInputSourceReceipt:receipt,nativeModelInputDispatchIntents:[intent]};
     await db`update heartbeat_runs set runner_profile_json=${db.json(profile)},native_input_source_protocol_version=1 where id=${runId}`;
     const sourceDispatch={executionInputDigest:turnInputDigest,responsibleUserId:alice,policy:policy(),
       inputs:[{kind:"task",issueId,sourceVersion:"1",contentHash:"a".repeat(64)}]};
@@ -82,13 +83,14 @@ describe("Original run input receipt database binding", () => {
     expect(saved!.runner_profile_json.nativeInputSourceReceipt.dispatches).toEqual([sourceDispatch]);
 
     const badRunId=randomUUID();
-    const [badRow]=await db`insert into heartbeat_runs(id,company_id,agent_id,responsible_user_id,native_input_source_protocol_version,runtime_mode,status,issue_id,runner_profile_json)
-      values(${badRunId},${companyId},${agentId},${alice},0,'native','running',${issueId},${db.json({nativeExecutionInput:execution})}) returning *`;
+    const badExecution={...execution,binding:{companyId,runId:badRunId,agentId,issueId}};
+    const [badRow]=await db`insert into heartbeat_runs(id,company_id,agent_id,responsible_user_id,native_input_source_protocol_version,runtime_mode,status,native_issue_id,runner_profile_json)
+      values(${badRunId},${companyId},${agentId},${alice},0,'native','running',${issueId},${db.json({nativeExecutionInput:badExecution})}) returning *`;
     const badReceipt=await receiptFor(badRow!,{binding:{companyId,runId:badRunId,agentId,responsibleUserId:alice,issueId},
-      bootstrap:{executionInputDigest:await digest(execution),policy:policy(),inputs:[]}});
-    await expect(db`update heartbeat_runs set runner_profile_json=${db.json({nativeExecutionInput:execution,nativeInputSourceReceipt:badReceipt})},
+      bootstrap:{executionInputDigest:await digest(badExecution),policy:policy(),inputs:[]}});
+    await expect(db`update heartbeat_runs set runner_profile_json=${db.json({nativeExecutionInput:badExecution,nativeInputSourceReceipt:badReceipt})},
       native_input_source_protocol_version=1 where id=${badRunId}`).rejects.toMatchObject(denied);
-    const badIntentProfile={nativeExecutionInput:execution,nativeInputSourceReceipt:badReceipt,
+    const badIntentProfile={nativeExecutionInput:badExecution,nativeInputSourceReceipt:badReceipt,
       nativeModelInputDispatchIntents:[{...intent,dispatchId:randomUUID(),turnId:"actual-turn"}]};
     await expect(db`update heartbeat_runs set runner_profile_json=${db.json(badIntentProfile)},native_input_source_protocol_version=1 where id=${badRunId}`)
       .rejects.toMatchObject(denied);
@@ -172,13 +174,18 @@ describe("Original run input receipt database binding", () => {
     ])await expect(write(row,await sign(invalid))).rejects.toMatchObject(denied);
   });
 
-  it("validates issue binding after the original run source trigger fills the native Task",async()=>{
+  it("binds the explicit native Task before the original source trigger fills derived issue scope",async()=>{
     const issueId=randomUUID();
     await db`insert into issues(id,company_id,title) values(${issueId},${companyId},'Run binding source')`;
     const id=randomUUID(), receipt=await receiptFor({id,issue_id:issueId});
-    const [row]=await db`insert into heartbeat_runs(id,company_id,agent_id,responsible_user_id,native_input_source_protocol_version,runtime_mode,context_snapshot,runner_profile_json)
-      values(${id},${companyId},${agentId},${alice},1,'native',${db.json({issueId})},${db.json({nativeExecutionInput:execution,nativeInputSourceReceipt:receipt})}) returning issue_id`;
+    const [row]=await db`insert into heartbeat_runs(id,company_id,agent_id,responsible_user_id,native_input_source_protocol_version,runtime_mode,native_issue_id,context_snapshot,runner_profile_json)
+      values(${id},${companyId},${agentId},${alice},1,'native',${issueId},${db.json({issueId})},${db.json({nativeExecutionInput:execution,nativeInputSourceReceipt:receipt})}) returning issue_id`;
     expect(row!.issue_id).toBe(issueId);
+    // Derived scope alone must never supply the canonical Native Task binding.
+    const derivedOnlyId=randomUUID(), derivedOnlyReceipt=await receiptFor({id:derivedOnlyId,issue_id:issueId});
+    await expect(db`insert into heartbeat_runs(id,company_id,agent_id,responsible_user_id,native_input_source_protocol_version,runtime_mode,context_snapshot,runner_profile_json)
+      values(${derivedOnlyId},${companyId},${agentId},${alice},1,'native',${db.json({issueId})},${db.json({nativeExecutionInput:execution,nativeInputSourceReceipt:derivedOnlyReceipt})})`)
+      .rejects.toMatchObject(denied);
   });
 
   it("permits only marker-backed whole-profile erasure and forbids resurrection",async()=>{

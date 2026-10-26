@@ -702,19 +702,11 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       updatedAt: new Date() }).where(and(eq(issues.companyId, seeded.companyId), eq(issues.id, task.id)));
     await expect(assertNativeTaskSourceOwnerCurrent(db, { companyId: seeded.companyId,
       actor: assembleInput.authorizationActor, source: taskCapture.input })).resolves.toBeUndefined();
-    const changedTitle = `${capturedTask.title} changed after Context capture`;
-    await issueService(db).update(task.id, { title: changedTitle, actorUserId: seeded.userId, privacyActor: human });
-    const [changedTask] = await db.select({ title: issues.title, snapshot: issues.payloadSourceSnapshot,
-      invalidated: issues.payloadSourceSnapshotInvalidated }).from(issues)
-      .where(and(eq(issues.companyId, seeded.companyId), eq(issues.id, task.id)));
-    expect(changedTask).toMatchObject({ title: changedTitle, snapshot: null, invalidated: true });
-    await expect(assertNativeTaskSourceOwnerCurrent(db, { companyId: seeded.companyId,
-      actor: assembleInput.authorizationActor, source: taskCapture.input })).rejects.toMatchObject({ status: 403 });
-
     const contextMemory=await seedMemory({companyId:seeded.companyId,agentId:seeded.agent.id,
       content:"Enterprise strategy context memory from a directly captured Human Task.",privateSourceTask:true});
     const memoryTaskId=contextMemory.sourceIssueIds[0];
     if(!memoryTaskId)throw new Error("Human Memory source Task was not retained");
+    await instanceSettingsService(db).updateExperimental({ enableContextEngineV1: true });
     const contextRead=await assembleNativeContextRead(db,{companyId:seeded.companyId,agentId:seeded.agent.id,runId:run!.id,
       issueId:task.id,projectId:null,responsibleUserId:seeded.userId,actor:assembleInput.authorizationActor,
       query:"enterprise strategy"});
@@ -748,6 +740,14 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       agentId: seeded.agent.id, issueId: task.id, renderedMarkdown: context.markdown,
       manifestIds: [{ companyId: seeded.companyId, contextManifestId: context.packet.manifest!.id }] };
     await expect(revalidateNativeBootstrapContextWitness(db, witnessInput)).resolves.toBeUndefined();
+    const changedTitle = `${capturedTask.title} changed after Context capture`;
+    await issueService(db).update(task.id, { title: changedTitle, actorUserId: seeded.userId, privacyActor: human });
+    const [changedTask] = await db.select({ title: issues.title, snapshot: issues.payloadSourceSnapshot,
+      invalidated: issues.payloadSourceSnapshotInvalidated }).from(issues)
+      .where(and(eq(issues.companyId, seeded.companyId), eq(issues.id, task.id)));
+    expect(changedTask).toMatchObject({ title: changedTitle, snapshot: null, invalidated: true });
+    await expect(assertNativeTaskSourceOwnerCurrent(db, { companyId: seeded.companyId,
+      actor: assembleInput.authorizationActor, source: taskCapture.input })).rejects.toMatchObject({ status: 403 });
     await db.delete(companyMemberships).where(and(eq(companyMemberships.companyId, seeded.companyId),
       eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, seeded.userId)));
     await expect(revalidateNativeBootstrapContextWitness(db, witnessInput)).rejects.toMatchObject({ status: 403 });
@@ -755,6 +755,32 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     await seedCurrentHumanSourceActor(db, [seeded.companyId], seeded.userId);
     await issueService(db).remove(task.id);
     await expect(revalidateNativeBootstrapContextWitness(db, witnessInput)).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("preserves an original Human Task source across status changes and rejects it after a canonical body edit", async () => {
+    const seeded = await seed();
+    const human = await seedCurrentHumanSourceActor(db, [seeded.companyId], seeded.userId);
+    const task = await issueService(db).create(seeded.companyId, {
+      title: "Human source Task for currentness", description: "The original captured body.",
+      createdByUserId: seeded.userId, responsibleUserId: seeded.userId, assigneeAgentId: seeded.agent.id,
+    }, db, undefined, { manualInputActor: human, privacyActor: human, sourceAccessActor: human });
+    const captureHolder: { value: NativeTaskSourceCapture | null } = { value: null };
+    const selected = await getIssueExecutionContext(db, seeded.companyId, task.id, capture => { captureHolder.value = capture; });
+    const capture = captureHolder.value;
+    if (!selected || !capture?.payloadSourceSnapshot) throw new Error("Canonical Human Task source capture is unavailable");
+    const actor = { type: "agent" as const, source: "none" as const, companyId: seeded.companyId,
+      agentId: seeded.agent.id, runId: seeded.run.id, onBehalfOfUserId: seeded.userId };
+    await issueService(db).update(task.id, { status: "in_progress", actorUserId: seeded.userId, privacyActor: human });
+    await expect(assertNativeTaskSourceOwnerCurrent(db, { companyId: seeded.companyId, actor, source: capture.input }))
+      .resolves.toBeUndefined();
+    const editedTitle = `${task.title} edited by its Human owner`;
+    await issueService(db).update(task.id, { title: editedTitle, actorUserId: seeded.userId, privacyActor: human });
+    const [current] = await db.select({ title: issues.title, snapshot: issues.payloadSourceSnapshot,
+      invalidated: issues.payloadSourceSnapshotInvalidated }).from(issues)
+      .where(and(eq(issues.companyId, seeded.companyId), eq(issues.id, task.id)));
+    expect(current).toMatchObject({ title: editedTitle, snapshot: null, invalidated: true });
+    await expect(assertNativeTaskSourceOwnerCurrent(db, { companyId: seeded.companyId, actor, source: capture.input }))
+      .rejects.toMatchObject({ status: 403 });
   });
 
   it("retrieves only issue-authorized synced GitHub evidence into the governed Context packet", async () => {

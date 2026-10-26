@@ -204,6 +204,7 @@ const support = await getEmbeddedPostgresTestSupport();
         saas_deployment_profile_v6: true,
         billing_v6: true,
         enableWorkflowsV1: true,
+        enableAgentChat: true,
         readiness_engine_v7: true,
         orchestration_v7: true,
         agent_packages_v7: true,
@@ -340,7 +341,8 @@ const support = await getEmbeddedPostgresTestSupport();
         { authorType: "user", clientRequestId: `conversation-source-${randomUUID()}` }, tx, 1));
       const [capturedComment] = await db.update(issueComments).set({ payloadSourceSnapshot: directHumanPayloadSnapshotSql("comment") })
         .where(eq(issueComments.id, comment.id)).returning({ updatedAt: issueComments.updatedAt });
-      const sourceVersion = (await db.execute<{ source_version: string }>(sql`select extract(epoch from ${capturedComment!.updatedAt})::text as source_version`))[0]!.source_version;
+      const [{ sourceVersion }] = await db.select({ sourceVersion: sql<string>`extract(epoch from ${issueComments.updatedAt})::text` })
+        .from(issueComments).where(eq(issueComments.id, comment.id));
       const sourceSet = { policy: { issueIds: [conversation!.id], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] },
         inputs: [{ kind: "comment" as const, issueId: conversation!.id, commentId: comment.id, sourceVersion,
           contentHash: nativeCommentProjectionHash({ body: comment.body, presentation: comment.presentation, metadata: comment.metadata }) }] };

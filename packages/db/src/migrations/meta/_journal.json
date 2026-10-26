@@ -3830,6 +3830,13 @@
       "when": 1793009891277,
       "tag": "0548_native_conversation_dispatch_sources",
       "breakpoints": true
+    },
+    {
+      "idx": 549,
+      "version": "7",
+      "when": 1793012901762,
+      "tag": "0549_native_plugin_routine_source_binding",
+      "breakpoints": true
     }
   ]
 }

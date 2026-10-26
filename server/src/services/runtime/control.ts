@@ -2498,12 +2498,26 @@ export function runtimeControlService(
       const profile = initialSource.capability.modelBrokerProviderProfile;
       if (!options.workerModels || !profile || !credentialBrokerOrigin)
         throw conflict("Qualified managed model broker is unavailable");
-      const minted = await options.workerModels.issueForRun({
-        companyId: input.companyId,
-        agentId: initialSource.run.agentId!,
-        runId: initialSource.run.id,
-        responsibleUserId: initialSource.run.responsibleUserId!,
-      });
+      const conversationTask = initialSource.source.task;
+      const hasConversationIdentity = conversationTask.conversationAgentId !== null || conversationTask.conversationUserId !== null;
+      if (hasConversationIdentity && (conversationTask.conversationAgentId !== initialSource.run.agentId ||
+        conversationTask.conversationUserId !== initialSource.run.responsibleUserId ||
+        conversationTask.conversationState !== "active" || conversationTask.conversationRetiredAt !== null ||
+        conversationTask.conversationSessionGeneration < 0 || conversationTask.executionRunId !== initialSource.run.id ||
+        !["in_review", "in_progress"].includes(conversationTask.status) || initialSource.run.scopeKind !== "issue" ||
+        initialSource.run.nativeIssueId !== conversationTask.id ||
+        initialSource.run.contextSnapshot?.conversationSessionGeneration !== conversationTask.conversationSessionGeneration ||
+        initialSource.manifest.runId !== initialSource.run.id || initialSource.manifest.agentId !== initialSource.run.agentId ||
+        initialSource.manifest.manifest.responsibleUserId !== initialSource.run.responsibleUserId))
+        throw conflict("Current Native conversation Human, generation, Run and manifest are required");
+      const mintInput = { companyId: input.companyId, agentId: initialSource.run.agentId!,
+        runId: initialSource.run.id, responsibleUserId: initialSource.run.responsibleUserId! };
+      // A conversation token is only a capability to reach the local broker.
+      // The gateway still requires the persisted initial Native input receipt,
+      // current source ACLs, and the current Human before it reserves or sends.
+      const minted = hasConversationIdentity
+        ? await options.workerModels.issueForConversationRun(mintInput)
+        : await options.workerModels.issueForRun(mintInput);
       const expiresAt = new Date(Math.min(Date.parse(minted.expiresAt), deadlineAt.getTime(), initialSource.lease.expiresAt!.getTime()));
       if (expiresAt <= now) throw conflict("Managed model broker capability expired before sandbox dispatch");
       modelBrokerCredential = { capabilityToken: minted.token, profileId: profile.id, profileHash: profile.hash,

@@ -215,6 +215,9 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
         }
         throw error;
       });
+    if (!("runId" in result) || !Array.isArray(result.documents) || !result.privateRoot ||
+      !Array.isArray(result.toolResults) || !Array.isArray(result.contextReadCaptures) || !Array.isArray(result.memoryOutputs))
+      throw new Error("managed_opencode_success_result_shape_invalid");
     expect(result.runId).toMatch(/^[0-9a-f-]{36}$/);
     expect(result.sourceReceipt).toBeDefined();
     expect(result.contextResultConsumers).toContainEqual({ callId: contextReadId, consumed: true });
@@ -230,10 +233,6 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
     expect(sourceSnapshotA.inputs.some(source => source.kind === "context")).toBe(false);
     expect(sourceSnapshotB.policy.memoryIds).toContain(result.privateRoot.memoryId);
     expect(sourceSnapshotB.inputs.some(source => source.kind === "context")).toBe(true);
-    if (!("runId" in result) || !("toolResults" in result) || !Array.isArray(result.toolResults) ||
-      !("contextReadCaptures" in result) || !Array.isArray(result.contextReadCaptures) ||
-      !("memoryOutputs" in result) || !Array.isArray(result.memoryOutputs) || !result.privateRoot)
-      throw new Error("managed_opencode_success_result_shape_invalid");
     const sessionIds = [result.aliceActor.sessionId, result.bobActor.sessionId];
     if (!sessionIds[0] || !sessionIds[1]) throw new Error("Managed A/R/B authenticated sessions are unavailable");
     const sessions = await db.select({ id: authSessions.id, userId: authSessions.userId, token: authSessions.token,
@@ -305,12 +304,6 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
     expect(JSON.stringify(legacyRead.body)).not.toContain("Legacy private-context title");
     expect(legacy.document.latestRevisionId).toBeTruthy();
 
-    await issueService(db).update(result.issueId, { visibility: "private",
-      actorUserId: result.aliceUserId, privacyActor: result.aliceActor });
-    const withdrawnBaseTask = await bobHttp.get(`/api/issues/${result.issueId}/documents/managed-source-a`).set("cookie", bobCookie);
-    expect([403, 404]).toContain(withdrawnBaseTask.status);
-    expect(JSON.stringify(withdrawnBaseTask.body)).not.toContain(documentABody);
-
     const toolResults = result.toolResults;
     const contextReadCaptures = result.contextReadCaptures;
     const memoryOutputs = result.memoryOutputs;
@@ -354,6 +347,12 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
     expect(snapshotA.policy.memoryIds).not.toContain(privateRoot.memoryId);
     expect(snapshotB.policy.memoryIds).toContain(privateRoot.memoryId);
     expect(snapshotB.inputs).toContainEqual(expect.objectContaining({ kind: "context", manifestId: contextManifestId }));
+
+    await issueService(db).update(result.issueId, { visibility: "private",
+      actorUserId: result.aliceUserId, privacyActor: result.aliceActor });
+    const withdrawnBaseTask = await bobHttp.get(`/api/issues/${result.issueId}/documents/managed-source-a`).set("cookie", bobCookie);
+    expect([403, 404]).toContain(withdrawnBaseTask.status);
+    expect(JSON.stringify(withdrawnBaseTask.body)).not.toContain(documentABody);
   }, 240_000);
 
   it("replays the exact scoped Gateway Memory call once, then rejects after the Human revokes its output", async () => {

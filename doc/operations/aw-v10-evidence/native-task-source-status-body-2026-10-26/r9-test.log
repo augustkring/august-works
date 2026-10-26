@@ -1,0 +1,28 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/services/context/context-engine-integration.test.ts (9 tests | 1 failed | 8 skipped) 7324ms
+     × binds actual approved Foundation and private Task Context to one native bootstrap witness and rechecks current Human authority 3376ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/context/context-engine-integration.test.ts > Context Engine integration > binds actual approved Foundation and private Task Context to one native bootstrap witness and rechecks current Human authority
+Error: The Native Context read witness is unavailable
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ assembleNativeContextRead src/services/native-direct-input.ts:2268:11
+ ❯ src/services/context/context-engine-integration.test.ts:719:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 8 skipped (9)
+   Start at  10:49:34
+   Duration  21.86s (transform 10.17s, setup 81ms, import 14.33s, tests 7.32s, environment 0ms)
+

@@ -87,6 +87,10 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode private Project c
         tamperedSourceReceipt.projectSource.contentHash = "0".repeat(64);
         const tamperedProjectReceipt = structuredClone(created.receipt);
         tamperedProjectReceipt.sourceSnapshotDigest = "0".repeat(64);
+        const tamperedResultReceipt = structuredClone(created.receipt);
+        tamperedResultReceipt.resultDigest = "0".repeat(64);
+        const tamperedSourceSetReceipt = structuredClone(created.receipt);
+        tamperedSourceSetReceipt.sourceSetHash = "0".repeat(64);
         const tamperedResult = { ...created.project, description: "forged Project DTO" };
         const tamperedSourceSet = { ...created.sourceSet,
           policy: { ...created.sourceSet.policy, projectIds: [...created.sourceSet.policy.projectIds, randomUUID()] } };
@@ -97,6 +101,8 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode private Project c
         for (const invalid of [
           { ...currentnessInput, receipt: tamperedSourceReceipt },
           { ...currentnessInput, receipt: tamperedProjectReceipt },
+          { ...currentnessInput, receipt: tamperedResultReceipt },
+          { ...currentnessInput, receipt: tamperedSourceSetReceipt },
           { ...currentnessInput, result: tamperedResult },
           { ...currentnessInput, sourceSet: tamperedSourceSet },
           { ...currentnessInput, receipt: tamperedWorkspaceReceipt },
@@ -166,6 +172,6 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode private Project c
 
     const snapshot = nativePayloadSourceSnapshotSchema.parse(project!.payloadSourceSnapshot);
     expect(snapshot.inputs).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "task", issueId: result.issueId })]));
-    expect(snapshot.policy.issueIds).toContain(result.issueId);
+    expect(project!.sourceIssueIds).toContain(result.issueId);
   }, 240_000);
 });

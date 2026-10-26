@@ -9246,6 +9246,14 @@ export interface HeartbeatServiceOptions {
   nativeSessionBackendFactory?: (
     execution: NativeExecutionInput,
   ) => NativeSessionBackend;
+  /** Test-only, run-bound environment additions used by managed provider boundary fixtures. */
+  testNativeRunnerEnvironment?: (input: {
+    execution: NativeExecutionInput;
+    runId: string;
+    issueId: string | null;
+    agentId: string;
+    responsibleUserId: string | null;
+  }) => Promise<Record<string, string>>;
   /** Test seam for observing the native-session shutdown boundary before lease destruction. */
   closeWarmNativeSessionsForRun?: (input: {
     runId: string;
@@ -24493,6 +24501,15 @@ export function heartbeatService(
                         process.env,
                         executionWorkspace.cwd,
                       ),
+                      ...(options.testNativeRunnerEnvironment
+                        ? await options.testNativeRunnerEnvironment({
+                            execution: nativeExecution,
+                            runId: run.id,
+                            issueId: issueId ?? null,
+                            agentId: agent.id,
+                            responsibleUserId: run.responsibleUserId ?? responsibleUserId ?? null,
+                          })
+                        : {}),
                       ...(nativeMcpServer
                         ? {
                             PAPERCLIP_NATIVE_MCP_NAME: nativeMcpServer.name,

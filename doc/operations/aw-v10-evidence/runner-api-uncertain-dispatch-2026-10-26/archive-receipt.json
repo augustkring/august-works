@@ -1,0 +1,26 @@
+[
+  {
+    "originalArtifact": "runner-api-uncertain-dispatch-r1-20261026-source-pins.json",
+    "storedArtifact": "source-pins.json",
+    "originalSha256": "25468b5226dd853ae723e98a0846c643bdeaa8aae1a3cad2654c910e196278b9",
+    "storedSha256": "25468b5226dd853ae723e98a0846c643bdeaa8aae1a3cad2654c910e196278b9"
+  },
+  {
+    "originalArtifact": "runner-api-uncertain-dispatch-r1-20261026-snapshot.log",
+    "storedArtifact": "snapshot.log.gz",
+    "originalSha256": "9fb7e0e1b77909185dd954b11266e511d200f73c7f8a3d875a53689a5c703113",
+    "storedSha256": "00435f0a87b1e91c811335d62508606fa6393f1572ef2b7e078e6417093409a6"
+  },
+  {
+    "originalArtifact": "runner-api-uncertain-dispatch-r1-20261026-test.log",
+    "storedArtifact": "test.log.gz",
+    "originalSha256": "f1a6c6a28e27d997b4e3d51f6a9b3db1d5a815db9da7418708bb93a5a36aebeb",
+    "storedSha256": "27d83165bd16df69d01e6a81f25a94e4e5df7023ac6267ef748b6956728e7f54"
+  },
+  {
+    "originalArtifact": "runner-api-uncertain-dispatch-r1-20261026-test.exit",
+    "storedArtifact": "test.exit",
+    "originalSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+  }
+]

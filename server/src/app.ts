@@ -1039,6 +1039,7 @@ export async function createApp(
   // route prefixes, so this dependency does not change issue-route precedence.
   api.use(issueRoutes(db, scopedStorage, {
     chatRunRetries: chatChannels,
+    heartbeat: connectionIntentHeartbeat,
     feedbackExportService: opts.feedbackExportService,
     pluginWorkerManager: workerManager,
     approveToolActionRequest: (input) => toolGateway.approveActionRequest(input),

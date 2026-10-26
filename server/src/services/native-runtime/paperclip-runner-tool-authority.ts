@@ -354,11 +354,6 @@ function record(value: unknown): Record<string, unknown> {
     : {};
 }
 
-function managedProjectCreateDiagnostic(stage: string, facts: Record<string, unknown>): void {
-  if (process.env.PAPERCLIP_MANAGED_PROJECT_CREATE_DIAGNOSTICS === "1")
-    process.stderr.write(`managed_project_create_diagnostic ${JSON.stringify({ stage, ...facts })}\n`);
-}
-
 export function resolveNativeInputDispatchReceiptIdentity(
   runnerProfile: unknown,
   call: NativeBackendToolCallIdentity | null | undefined,
@@ -799,13 +794,6 @@ export class PaperclipRunnerToolAuthority {
       case "create_project":
       case "list_project_repositories":
       case "list_projects": {
-        const projectCapture = this.binding.nativeModelOutputCapture?.value;
-        if (call.tool === "create_project") managedProjectCreateDiagnostic("authority_entry", {
-          captureRefPresent: Boolean(this.binding.nativeModelOutputCapture), capturePresent: Boolean(projectCapture),
-          managedUsePresent: Boolean(projectCapture?.managedOpenCodeToolUse),
-          managedUseTool: projectCapture?.managedOpenCodeToolUse?.toolName ?? null,
-          managedUseCallMatches: projectCapture?.managedOpenCodeToolUse?.callId === call.callId,
-        });
         // Managed OpenCode advertises this operation only when the exact
         // provider response capture is installed. Never silently fall back to
         // the ordinary API route if that per-call capture was lost.
@@ -825,35 +813,9 @@ export class PaperclipRunnerToolAuthority {
             ...(input.description === undefined ? {} : { description: input.description as string }),
             workspace: { name: record(input.workspace).name as string } };
           await this.binding.testBeforeManagedProjectCreate?.(managedCapture);
-          let created: Awaited<ReturnType<typeof createManagedNativeProjectOutput>>;
-          try {
-            created = await createManagedNativeProjectOutput({ db: this.db, actor: reader,
+          const created = await createManagedNativeProjectOutput({ db: this.db, actor: reader,
             companyId: this.binding.companyId, issueId: this.binding.issueId, callId: call.callId,
             arguments: managedArguments, capture: managedCapture });
-          } catch (error) {
-            const allowedErrors = new Set([
-              "Managed Project creation requires the exact current provider tool use",
-              "Managed Project creation requires the current accountable Human", "Managed Project run authority changed",
-              "Managed Project result is unavailable", "Managed Project source closure is ambiguous",
-              "Managed Project workspace could not be created", "Managed Project source snapshot was not stored",
-              "Managed Project creation did not produce a qualified result",
-            ]);
-            const diagnosticError = error && typeof error === "object" ? error as {
-              name?: unknown; code?: unknown; status?: unknown; statusCode?: unknown; cause?: { code?: unknown }; stack?: unknown } : {};
-            const safeText = (value: unknown): string | null => typeof value === "string" && /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(value)
-              ? value : null;
-            const ownerFrames = typeof diagnosticError.stack === "string"
-              ? diagnosticError.stack.split("\n").slice(1).map(line => line.match(/(?:server\/src\/services\/)([^\s()]+\.ts:\d+:\d+)/)?.[1] ?? null)
-                .filter((value): value is string => value !== null).slice(0, 4)
-              : [];
-            managedProjectCreateDiagnostic("service_rejected", { error: error instanceof Error && allowedErrors.has(error.message)
-              ? error.message : "unclassified", name: safeText(diagnosticError.name), code: safeText(diagnosticError.code) ??
-                safeText(diagnosticError.cause?.code), status: Number.isInteger(diagnosticError.status) ? diagnosticError.status :
-                Number.isInteger(diagnosticError.statusCode) ? diagnosticError.statusCode : null, ownerFrames });
-            throw error;
-          }
-          managedProjectCreateDiagnostic("service_accepted", { projectIdPresent: typeof created.project.id === "string",
-            sourceInputs: created.sourceSet.inputs.length, workspacePins: created.receipt.workspaceSources.length });
           await this.binding.testAfterManagedProjectCreate?.({ actor: reader, companyId: this.binding.companyId,
             issueId: this.binding.issueId, capture: managedCapture, callId: call.callId,
             arguments: managedArguments,

@@ -9920,8 +9920,6 @@ async function executePaperclipNativeSessionWithinScope(
               if (managedOpenCodeOutputCaptureRef) {
                 managedOpenCodeOutputCaptureRef.value = null;
                 if (managedContextReadCaptureRef) managedContextReadCaptureRef.value = null;
-                if (call.tool === "create_project" && process.env.PAPERCLIP_MANAGED_PROJECT_CREATE_DIAGNOSTICS === "1")
-                  process.stderr.write(`managed_project_create_diagnostic ${JSON.stringify({ stage: "native_call", tool: call.tool, turnBound: Boolean(call.turnId) })}\n`);
                 if (launchEventSeq === null) throw new Error("managed_opencode_tool_call_source_binding_invalid");
                 await assertManagedOpenCodeToolCallCurrent({ db: input.db, runId, companyId: input.execution.binding.companyId,
                   issueId: input.execution.binding.issueId, agentId: input.execution.binding.agentId,
@@ -9939,10 +9937,6 @@ async function executePaperclipNativeSessionWithinScope(
                   issueId: input.execution.binding.issueId, agentId: input.execution.binding.agentId,
                   leaseOwner, attempt, controller, eventSeq: launchEventSeq, ...call,
                 });
-                if (call.tool === "create_project" && process.env.PAPERCLIP_MANAGED_PROJECT_CREATE_DIAGNOSTICS === "1")
-                  process.stderr.write(`managed_project_create_diagnostic ${JSON.stringify({ stage: "capture_prepared",
-                    toolUsePresent: Boolean(managedOpenCodeOutputCaptureRef.value.managedOpenCodeToolUse),
-                    toolUseName: managedOpenCodeOutputCaptureRef.value.managedOpenCodeToolUse?.toolName ?? null })}\n`);
               }
             },
             ...(input.execution.provider.kind === "opencode" && (input.runnerEnvironment ?? process.env).PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN?.trim()

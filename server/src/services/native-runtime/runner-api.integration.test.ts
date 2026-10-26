@@ -253,11 +253,19 @@ else if(m.id!==undefined) send({id:m.id,result:{}});
     const fixture = await server.fixture();
     const args = { operationId: "POST /api/companies/{companyId}/projects", body: { name: "Uncertain" } };
     let rejectNetwork!: (error: Error) => void;
-    const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise((_resolve, reject) => { rejectNetwork = reject; }));
+    let markDispatched!: () => void;
+    const dispatched = new Promise<void>((resolve) => { markDispatched = resolve; });
+    const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise((_resolve, reject) => {
+      rejectNetwork = reject;
+      markDispatched();
+    }));
     try {
       const call = () => fixture.authority.execute({ tool: "call_api", callId: "uncertain", arguments: args });
       const pending = call();
-      await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+      // Source/actor checks precede dispatch. Observe the actual dispatch
+      // rather than relying on vi.waitFor's shorter default polling deadline.
+      await Promise.race([dispatched, pending.then(() => { throw new Error("Mutation completed before controlled dispatch"); })]);
+      expect(fetcher).toHaveBeenCalledTimes(1);
       expect(await call()).toMatchObject({ status: null, outcome: "unknown", error: "api_outcome_unknown" });
       rejectNetwork(new Error("lost response"));
       const result = await pending;

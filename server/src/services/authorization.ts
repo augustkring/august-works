@@ -821,8 +821,8 @@ function pipelineAutomationRoutineSourceCondition(company: SQL): SQL<boolean> {
                     is not distinct from coalesce(output.item->'sourceTrust','null'::jsonb))
             else false
           end
-        )))
-  )`;
+        ))
+  ))`;
 }
 
 /** One native Task/Project source graph; this never authorizes a company action.
@@ -968,7 +968,49 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
     and (not exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_input
       where captured_input->>'kind' not in ('context','task')) or exists(
         select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_dispatch
-        where captured_dispatch->>'kind' in ('worker_model_dispatch','conversation_model_dispatch')))
+        where captured_dispatch->>'kind' in ('worker_model_dispatch','conversation_model_dispatch')) or (
+          temporal_owner.conversation_agent_id is not null and temporal_owner.conversation_user_id is not null
+          and jsonb_array_length(temporal_owner.payload_source_snapshot->'inputs')=1
+          and temporal_owner.payload_source_snapshot->'policy'->'issueIds'='[]'::jsonb
+          and temporal_owner.payload_source_snapshot->'policy'->'projectIds'='[]'::jsonb
+          and temporal_owner.payload_source_snapshot->'policy'->'runIds'='[]'::jsonb
+          and temporal_owner.payload_source_snapshot->'policy'->'memoryIds'='[]'::jsonb
+          and temporal_owner.payload_source_snapshot->'policy'->'foundationRevisionIds'='[]'::jsonb
+          and not exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') conversation_input
+            where conversation_input->>'kind'<>'comment' or conversation_input->>'issueId'<>temporal_owner.id::text
+              or conversation_input->>'commentId' !~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$')
+          and exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') conversation_input
+            join issue_comments conversation_comment on
+              conversation_comment.id=case when conversation_input->>'commentId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+                then (conversation_input->>'commentId')::uuid end
+            where conversation_comment.company_id=temporal_owner.company_id
+              and conversation_comment.issue_id=temporal_owner.id
+              and conversation_input->>'kind'='comment'
+              and conversation_input->>'issueId'=temporal_owner.id::text
+              and conversation_comment.deleted_at is null and conversation_comment.author_type='user'
+              and conversation_comment.author_user_id=temporal_owner.conversation_user_id
+              and conversation_input->>'sourceVersion'=extract(epoch from conversation_comment.updated_at)::text
+              and conversation_comment.payload_source_protocol_version=1
+              and conversation_comment.payload_source_snapshot is not null
+              and conversation_comment.payload_source_snapshot_invalidated=false
+              and conversation_comment.payload_source_snapshot->'owner'->>'kind'='comment'
+              and conversation_comment.payload_source_snapshot->'owner'->>'id'=conversation_comment.id::text
+              and conversation_comment.payload_source_snapshot->'owner'->>'companyId'=conversation_comment.company_id::text
+              and conversation_comment.payload_source_snapshot->'owner'->>'contentHash'=
+                public.aw_native_payload_body_hash('comment',to_jsonb(conversation_comment))
+              and conversation_comment.payload_source_snapshot->'policy'->'issueIds'=
+                jsonb_build_array(temporal_owner.id::text)
+              and conversation_comment.payload_source_snapshot->'policy'->'projectIds'='[]'::jsonb
+              and conversation_comment.payload_source_snapshot->'policy'->'runIds'='[]'::jsonb
+              and conversation_comment.payload_source_snapshot->'policy'->'memoryIds'='[]'::jsonb
+              and conversation_comment.payload_source_snapshot->'policy'->'foundationRevisionIds'='[]'::jsonb
+              and conversation_comment.payload_source_snapshot->'inputs'='[]'::jsonb
+              and conversation_comment.payload_source_snapshot->>'digest'=
+                encode(sha256(convert_to((conversation_comment.payload_source_snapshot-'digest')::text,'UTF8')),'hex')
+              and conversation_input->>'contentHash'=encode(sha256(convert_to(public.aw_native_canonical_jsonb(
+                jsonb_build_object('body',conversation_comment.body,'presentation',conversation_comment.presentation,
+                  'metadata',conversation_comment.metadata)),'UTF8')),'hex'))
+        ))
     and not exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_input
       where captured_input->>'kind'='context' and (
         not exists(select 1 from context_manifests captured_context
@@ -1016,14 +1058,42 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
         and exists(select 1 from workflow_runs scoped_wr where scoped_wr.id=n.id and scoped_wr.company_id=${company}
           and scoped_wr.id=any(string_to_array(nullif(current_setting('paperclip.native_workflow_run_ids',true),''),',')::uuid[]))`
     : sql`false`;
+  // Plugin operation Tasks keep their originRunId in the Routine Run
+  // namespace. Only classify that edge after proving the exact current
+  // plugin-managed Routine binding and operation template; malformed or
+  // unbound plugin-shaped origins remain an invalid typed node below.
+  const pluginOperationOriginBinding = sql`exists(select 1 from routine_runs operation_run
+    join routines operation_routine on operation_routine.id=operation_run.routine_id
+      and operation_routine.company_id=operation_run.company_id
+    join routine_revisions operation_revision on operation_revision.id=operation_run.routine_revision_id
+      and operation_revision.routine_id=operation_run.routine_id and operation_revision.company_id=operation_run.company_id
+    join plugin_managed_resources operation_resource on operation_resource.company_id=operation_run.company_id
+      and operation_resource.resource_kind='routine' and operation_resource.resource_id=operation_routine.id
+    join plugins operation_plugin on operation_plugin.id=operation_resource.plugin_id
+      and operation_plugin.plugin_key=operation_resource.plugin_key
+    where operation_run.company_id=i.company_id
+      and operation_run.id=case when i.origin_run_id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+        then i.origin_run_id::uuid end
+      and operation_run.source in ('manual','api','schedule','webhook') and operation_routine.origin_kind='manual'
+      and operation_run.responsible_user_id is not distinct from operation_routine.responsible_user_id
+      and i.origin_kind='plugin:'||operation_plugin.plugin_key||':operation'
+      and operation_resource.defaults_json->'issueTemplate'->>'surfaceVisibility'='plugin_operation'
+      and operation_resource.defaults_json->'issueTemplate'->>'originId'=i.origin_id
+      and operation_revision.snapshot->'version'='1'::jsonb
+      and operation_revision.snapshot->'routine'->>'id'=operation_routine.id::text
+      and operation_revision.snapshot->'routine'->>'companyId'=operation_run.company_id::text
+      and not aw_conversation_routine_source_erased(operation_routine.company_id,operation_routine.id))`;
   const edges = sql`        select 'issue'::text as kind,i.privacy_parent_issue_id as id from issues i
           where n.kind='issue' and i.id=n.id and i.company_id=${company} and i.privacy_parent_issue_id is not null
         union all select 'issue',i.privacy_root_issue_id from issues i
           where n.kind='issue' and i.id=n.id and i.company_id=${company} and i.privacy_root_issue_id is not null and i.privacy_root_issue_id<>i.id
         union all select 'project',i.project_id from issues i
           where n.kind='issue' and i.id=n.id and i.company_id=${company} and i.project_id is not null
-        union all select case i.origin_kind when 'workflow_task' then 'workflow_run'
-            when 'routine_execution' then 'routine_run' else 'run' end,
+        union all select case when i.origin_kind='workflow_task' then 'workflow_run'
+            when i.origin_kind='routine_execution' then 'routine_run'
+            when i.origin_kind ~ '^plugin:[^:]+:operation(:|$)' then case when ${pluginOperationOriginBinding}
+              then 'routine_run' else 'invalid_typed_origin' end
+            else 'run' end,
           case when i.origin_run_id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
             and (i.origin_kind not in ('workflow_task','routine_execution') or
               (i.origin_id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' and case i.origin_kind
@@ -1035,7 +1105,8 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
                   and rr.routine_id=case when i.origin_id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' then i.origin_id::uuid end) end))
             then i.origin_run_id::uuid end
           from issues i where n.kind='issue' and i.id=n.id and i.company_id=${company}
-            and (i.origin_run_id is not null or i.origin_kind in ('workflow_task','routine_execution'))
+            and (i.origin_run_id is not null or i.origin_kind in ('workflow_task','routine_execution')
+              or i.origin_kind ~ '^plugin:[^:]+:operation(:|$)')
             and (i.origin_kind in ('workflow_task','routine_execution') or not exists(
               select 1 from ${heartbeatRuns} own_run where own_run.company_id=i.company_id
                 and own_run.id::text=i.origin_run_id and coalesce(own_run.issue_id,own_run.native_issue_id)=i.id))
@@ -1228,8 +1299,10 @@ export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: Au
       });
     }
   }
-  return (await db.select({ id: issues.id }).from(issues).where(and(eq(issues.id, issue.id), eq(issues.companyId, issue.companyId),
-    await issueReadSqlConditionInMemoryScope(db, actor, issue.id))).limit(1)).length > 0;
+  const readQuery = db.select({ id: issues.id }).from(issues).where(and(eq(issues.id, issue.id), eq(issues.companyId, issue.companyId),
+    await issueReadSqlConditionInMemoryScope(db, actor, issue.id))).limit(1);
+  const readable = (await readQuery).length > 0;
+  return readable;
 }
 /** Typed Task execution owners are distinct namespaces from heartbeat runs.
  * Workflow and Routine payload reads enter their original native authoring
@@ -1238,6 +1311,9 @@ export async function canActorReadTypedTaskSourcePrivacy(db: Db | DbTransaction,
   source: { sourceKind: "workflow_run" | "routine_run"; id: string; companyId: string }): Promise<boolean> {
   const table = source.sourceKind === "workflow_run" ? workflowRuns : routineRuns;
   const routineScope = nativeRoutineReadScopes.get(db as object);
+  if (source.sourceKind === "routine_run" && routineScope?.active &&
+    (routineScope.companyId !== source.companyId || routineScope.routineActorKey !== routineActorKey(actor) ||
+      !routineScope.routineRunIds?.has(source.id))) return false;
   if (source.sourceKind === "routine_run" && actor.type === "board" && routineScope?.active &&
     routineScope.companyId === source.companyId && routineScope.routineActorKey === routineActorKey(actor) &&
     routineScope.routinePluginOperationRunIds?.has(source.id)) {
@@ -1272,19 +1348,6 @@ export async function canActorReadTypedTaskSourcePrivacy(db: Db | DbTransaction,
   }
   const sourceCondition = await taskSourcePrivacySqlCondition(db, source.sourceKind, sql`${table.id}`, sql`${table.companyId}`, actor);
   const rows = await db.select({ id: table.id }).from(table).where(and(eq(table.id, source.id), eq(table.companyId, source.companyId), sourceCondition)).limit(1);
-  if (!rows.length && source.sourceKind === "routine_run" && process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") {
-    const [detail] = await db.select({ originKind: routines.originKind, snapshot: routineRevisions.snapshot })
-      .from(routineRuns).innerJoin(routines, and(eq(routines.id, routineRuns.routineId), eq(routines.companyId, routineRuns.companyId)))
-      .innerJoin(routineRevisions, and(eq(routineRevisions.id, routineRuns.routineRevisionId),
-        eq(routineRevisions.routineId, routineRuns.routineId), eq(routineRevisions.companyId, routineRuns.companyId)))
-      .where(and(eq(routineRuns.id, source.id), eq(routineRuns.companyId, source.companyId)));
-    const baseline = await canActorReadTypedTaskSourcePrivacy(db, { type: "none" }, source);
-    console.info("[plugin-managed-routine-source-filter]", detail?.originKind ?? null,
-      detail?.snapshot?.version ?? null, detail?.snapshot?.routine?.id ?? null,
-      detail?.snapshot?.routine?.companyId ?? null, baseline,
-      nativeRoutineReadScopes.get(db as object)?.active ?? false,
-      nativeRoutineReadScopes.get(db as object)?.routineRunIds?.has(source.id) ?? false);
-  }
   return rows.length > 0;
 }
 export async function canActorReadProjectPrivacy(db: Db | DbTransaction, actor: AuthorizationActor, project: ProjectPrivacyRow) {
@@ -1679,8 +1742,6 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       const authorized = new Set<string>();
       context.routineAgentIds ??= new Set<string>();
       if (!company.allowed) {
-        if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1")
-          console.info("[plugin-managed-routine-scope-company-denied]", companyId, runIds.length, actor.type, actor.source ?? null);
         context.routineRunIds = authorized;
         context.routineActorKey = routineActorKey(actor);
         return [];
@@ -1698,8 +1759,6 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
           eq(routineRevisions.id, run.revisionId), eq(routineRevisions.routineId, routine.id),
           eq(routineRevisions.companyId, companyId))).for("share", { noWait: true });
         if (!revision) continue;
-        if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1")
-          console.info("[plugin-managed-routine-scope-candidate]", runId, routine.originKind, company.allowed);
         if (routine.originKind === "pipeline_automation") {
           const [source] = await db.execute<{ valid: boolean }>(sql`
             select ${pipelineAutomationRoutineSourceCondition(sql`${companyId}::uuid`)} as valid
@@ -1780,7 +1839,6 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
             enforceResponsibleUserIntersection: true });
           if (!agentDecision.allowed || !issueDecision.allowed) continue;
         }
-        if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") console.info("[plugin-managed-routine-source-check-start]", runId, routine.originKind);
         try {
           await assertRoutineSourceAccess(db, { id: routine.id, companyId: routine.companyId, originKind: routine.originKind,
             originId: routine.originId, createdByAgentId: routine.createdByAgentId, responsibleUserId: routine.responsibleUserId }, sourceActor!);
@@ -1788,7 +1846,6 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
           if (error instanceof HttpError && (error.status === 403 || error.status === 404)) continue;
           throw error;
         }
-        if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") console.info("[plugin-managed-routine-source-check-done]", runId);
         if (routine.originKind === "conversation_draft") {
           authorized.add(runId);
           continue;
@@ -1799,14 +1856,12 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
         // manual Routines do not enter this source scope.
         if (routine.originKind === "manual" && sourceActor?.type === "board" && sourceActor.source === "session" &&
           sourceActor.userId === routine.responsibleUserId && !sourceActor.keyId && !sourceActor.authenticatedKeyHash) {
-          if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") console.info("[plugin-managed-routine-binding-start]", runId);
           const [binding] = await db.select({ pluginKey: pluginManagedResources.pluginKey,
             defaultsJson: pluginManagedResources.defaultsJson })
             .from(pluginManagedResources).innerJoin(plugins, and(eq(plugins.id, pluginManagedResources.pluginId),
               eq(plugins.pluginKey, pluginManagedResources.pluginKey)))
             .where(and(eq(pluginManagedResources.companyId, companyId), eq(pluginManagedResources.resourceKind, "routine"),
               eq(pluginManagedResources.resourceId, routine.id))).for("share", { noWait: true });
-          if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") console.info("[plugin-managed-routine-binding-done]", runId, Boolean(binding));
           const defaults = binding?.defaultsJson && typeof binding.defaultsJson === "object" && !Array.isArray(binding.defaultsJson)
             ? binding.defaultsJson as Record<string, unknown> : null;
           const template = defaults?.issueTemplate && typeof defaults.issueTemplate === "object" && !Array.isArray(defaults.issueTemplate)
@@ -1830,12 +1885,6 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
               ? sourceRun.triggerPayload as Record<string, unknown> : null;
             const automation = triggerPayload?.automation && typeof triggerPayload.automation === "object" && !Array.isArray(triggerPayload.automation)
               ? triggerPayload.automation as Record<string, unknown> : null;
-            if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") console.info("[plugin-managed-routine-source-proof]",
-              sourceRun?.source === "manual", sourceRun?.responsibleUserId === sourceActor.userId,
-              routine.responsibleUserId === sourceActor.userId, Boolean(snapshot?.success),
-              snapshot?.success ? snapshot.data.routine.id.toLowerCase() === routine.id.toLowerCase() : false,
-              snapshot?.success ? snapshot.data.routine.companyId.toLowerCase() === companyId.toLowerCase() : false,
-              !automation?.automationExecutionId);
             let refsReadable = Boolean(sourceRun && sourceRun.source === "manual" &&
               sourceRun.responsibleUserId === sourceActor.userId && routine.responsibleUserId === sourceActor.userId &&
               snapshot?.success && snapshot.data.routine.id.toLowerCase() === routine.id.toLowerCase() &&
@@ -1844,30 +1893,23 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
             const projectId = snapshot?.success ? snapshot.data.routine.projectId : null;
             const parentIssueId = snapshot?.success ? snapshot.data.routine.parentIssueId : null;
             if (refsReadable && projectId) {
-              if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") console.info("[plugin-managed-routine-project-start]");
               const [project] = await db.select({ ...projectReadColumns,
                 sourceProvenanceQualified: projects.sourceProvenanceQualified }).from(projects).where(and(
                 eq(projects.companyId, companyId), eq(projects.id, projectId))).for("share", { noWait: true });
               refsReadable = Boolean(project && (await db.select({ id: projects.id }).from(projects).where(and(
                 eq(projects.companyId, companyId), eq(projects.id, projectId), await projectReadSqlCondition(db, sourceActor))).limit(1)).length);
-              if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") console.info("[plugin-managed-routine-project-done]",
-                Boolean(project), project?.sourceProvenanceQualified ?? null, project?.visibility ?? null, refsReadable);
             }
             if (refsReadable && parentIssueId) {
-              if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") console.info("[plugin-managed-routine-parent-start]");
               const [parent] = await db.select(issueReadColumns).from(issues).where(and(
                 eq(issues.companyId, companyId), eq(issues.id, parentIssueId))).for("share", { noWait: true });
               refsReadable = Boolean(parent && (await db.select({ id: issues.id }).from(issues).where(and(
                 eq(issues.companyId, companyId), eq(issues.id, parentIssueId), await issueReadSqlCondition(db, sourceActor))).limit(1)).length);
-              if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") console.info("[plugin-managed-routine-parent-done]", Boolean(parent), refsReadable);
             }
             if (refsReadable) {
-              if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") console.info("[plugin-managed-routine-erasure-start]");
               const [sourceCurrent] = await db.execute<{ erased: boolean }>(sql`
                 select aw_conversation_routine_source_erased(${companyId}::uuid,${routine.id}::uuid) as erased
               `);
               refsReadable = sourceCurrent?.erased === false;
-              if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") console.info("[plugin-managed-routine-erasure-done]", sourceCurrent?.erased ?? null);
             }
             if (refsReadable) {
               authorized.add(runId);
@@ -1875,15 +1917,12 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
               context.routinePluginOperationRunIds.add(runId);
             }
           }
-          if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") console.info("[plugin-managed-routine-binding-validated]", runId,
-            Boolean(operationOriginKind), template?.surfaceVisibility ?? null, typeof template?.originId === "string");
         }
       }
       context.routineRunIds = authorized;
       context.routineActorKey = routineActorKey(actor);
       context.routineActor = actor;
       await db.execute(sql`select set_config('paperclip.native_routine_source_ids', ${[...authorized].join(",")}, true)`);
-      if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") console.info("[plugin-managed-routine-scope-ready]", authorized.size);
       return [...authorized];
     };
     owner.readWorkflowSources = async (runIds, actor, mode = "strict") => {
@@ -1978,6 +2017,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     for (const row of issueRows) context.issues.set(row.id, row);
     for (const row of projectRows) context.projects.set(row.id, row);
     const priorDelegatedContext = purpose === "delegated_context" ? nativeDelegatedContextReadScopes.get(db as object) : undefined;
+    let readFailed = false;
     try {
       if (purpose === "routine_sources") nativeRoutineReadScopes.set(db as object, context);
       if (purpose === "workflow_sources" || purpose === "workflow_task_candidates") nativeWorkflowReadScopes.set(db as object, context);
@@ -2017,11 +2057,22 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       }
       return result;
     }
+    catch (error) {
+      readFailed = true;
+      throw error;
+    }
     finally {
       if (purpose === "routine_sources") {
-        try { await db.execute(sql`select set_config('paperclip.native_routine_source_ids', '', true),
-          set_config('paperclip.native_routine_actor_hash', '', true),
-          set_config('paperclip.native_routine_scope_token', '', true)`); }
+        try {
+          await db.execute(sql`select set_config('paperclip.native_routine_source_ids', '', true),
+            set_config('paperclip.native_routine_actor_hash', '', true),
+            set_config('paperclip.native_routine_scope_token', '', true)`);
+        } catch (cleanupError) {
+          // A failed statement can leave the transaction aborted, so GUC
+          // cleanup may fail too. Preserve the original read/authorization
+          // error instead of masking it with the cleanup failure.
+          if (!readFailed) throw cleanupError;
+        }
         finally {
           context.active = false;
           if (nativeRoutineReadScopes.get(db as object) === context) nativeRoutineReadScopes.delete(db as object);

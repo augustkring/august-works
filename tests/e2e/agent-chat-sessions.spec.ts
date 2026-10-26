@@ -80,13 +80,15 @@ test("chat first open is read-only; concurrent first sends and retries share one
       /\/api\/issues\/[^/]+\/comments$/.test(new URL(response.url()).pathname),
       { timeout: 15_000 },
     );
-    const initialCommentResponses = Promise.all([
-      waitForInitialComment(page),
-      waitForInitialComment(other),
-    ]);
+    const initialCommentResponses = [waitForInitialComment(page), waitForInitialComment(other)];
     await Promise.all([send(page, "Same first message"), send(other, "Same first message")]);
-    for (const response of await initialCommentResponses)
-      expect(response.status(), `Initial chat comment failed: ${await response.text()}`).toBe(201);
+    const initialCommentOutcomes = await Promise.all([
+      ...initialCommentResponses,
+    ].map((response) => response.then(
+      (result) => ({ status: result.status() }),
+      (error) => ({ waitError: error instanceof Error ? error.name : "unknown" }),
+    )));
+    expect(initialCommentOutcomes).toEqual([{ status: 201 }, { status: 201 }]);
     const issue = await idle(request, f.chatPath, 2);
     const initialComments = await json(await request.get(`/api/issues/${issue.id}/comments`));
     expect(initialComments.filter((comment: any) => !comment.authorAgentId && comment.body === "Same first message")).toHaveLength(2);
