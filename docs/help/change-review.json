@@ -104,7 +104,7 @@
       "sourceSha256": "1a2b3d7becdbb50b9ff8c12dfc4cd7071795fa3474fd7cc22c879093cdb3e5aa",
       "articleSha256": "ce2b7703039362ccc1a7747cfb7b11bb189be5d72007cd6297e5ac49d200fe82",
       "decision": "updated",
-      "rationale": "The Access step discloses that Slack consent authorizes the signed-in person and that organization sharing shares that person’s connection; setup retains managed and advanced own-app choices."
+      "rationale": "The Access step discloses that Slack consent authorizes the signed-in person and that organization sharing shares that person\u2019s connection; setup retains managed and advanced own-app choices."
     },
     {
       "source": "ui/src/pages/apps/app-detail/PermissionsPanel.tsx",
@@ -120,7 +120,7 @@
       "sourceSha256": "2c5de01bbf0adc3eb74f4d8678055cf8b15a5fe69946453ffcb4bdc2f4746608",
       "articleSha256": "ce2b7703039362ccc1a7747cfb7b11bb189be5d72007cd6297e5ac49d200fe82",
       "decision": "updated",
-      "rationale": "The paired article directs administrators to inspect an app’s active connection and permissions before asking a Co-worker to use it."
+      "rationale": "The paired article directs administrators to inspect an app\u2019s active connection and permissions before asking a Co-worker to use it."
     },
     {
       "source": "ui/src/pages/apps/AppNotConnected.tsx",
@@ -128,7 +128,7 @@
       "sourceSha256": "218b58f14a1feb713347afaf7760ac3549ccf20bb0be5259073015376c0ecd3b",
       "articleSha256": "ce2b7703039362ccc1a7747cfb7b11bb189be5d72007cd6297e5ac49d200fe82",
       "decision": "updated",
-      "rationale": "The paired article covers this screen’s unavailable-connection recovery through the same provider sign-in and permission review, without promising reconnection is always available."
+      "rationale": "The paired article covers this screen\u2019s unavailable-connection recovery through the same provider sign-in and permission review, without promising reconnection is always available."
     },
     {
       "source": "ui/src/pages/apps/Connections.tsx",
@@ -192,7 +192,7 @@
       "sourceSha256": "1a2b3d7becdbb50b9ff8c12dfc4cd7071795fa3474fd7cc22c879093cdb3e5aa",
       "articleSha256": "0c498d8afe04b324bf1ef354b4a717e8952f6e8907d11ba37a9206a2ffe3c7f9",
       "decision": "updated",
-      "rationale": "Danish version checked against the current UI: The Access step discloses that Slack consent authorizes the signed-in person and that organization sharing shares that person’s connection; setup retains managed and advanced own-app choices."
+      "rationale": "Danish version checked against the current UI: The Access step discloses that Slack consent authorizes the signed-in person and that organization sharing shares that person\u2019s connection; setup retains managed and advanced own-app choices."
     },
     {
       "source": "ui/src/pages/apps/app-detail/PermissionsPanel.tsx",
@@ -208,7 +208,7 @@
       "sourceSha256": "2c5de01bbf0adc3eb74f4d8678055cf8b15a5fe69946453ffcb4bdc2f4746608",
       "articleSha256": "0c498d8afe04b324bf1ef354b4a717e8952f6e8907d11ba37a9206a2ffe3c7f9",
       "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: The paired article directs administrators to inspect an app’s active connection and permissions before asking a Co-worker to use it."
+      "rationale": "Danish version checked against the same current source behavior: The paired article directs administrators to inspect an app\u2019s active connection and permissions before asking a Co-worker to use it."
     },
     {
       "source": "ui/src/pages/apps/AppNotConnected.tsx",
@@ -216,7 +216,7 @@
       "sourceSha256": "218b58f14a1feb713347afaf7760ac3549ccf20bb0be5259073015376c0ecd3b",
       "articleSha256": "0c498d8afe04b324bf1ef354b4a717e8952f6e8907d11ba37a9206a2ffe3c7f9",
       "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: The paired article covers this screen’s unavailable-connection recovery through the same provider sign-in and permission review, without promising reconnection is always available."
+      "rationale": "Danish version checked against the same current source behavior: The paired article covers this screen\u2019s unavailable-connection recovery through the same provider sign-in and permission review, without promising reconnection is always available."
     },
     {
       "source": "ui/src/pages/apps/Connections.tsx",
@@ -1096,7 +1096,7 @@
       "sourceSha256": "3f407de9eae33be8153e390c27b71ce81388ab807becfc8ecc2ce502cb747127",
       "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "updated",
-      "rationale": "Help utilities retain direct human support and the optional assistant route; the article keeps those paths independent and describes the assistant’s consent and read-only limits."
+      "rationale": "Help utilities retain direct human support and the optional assistant route; the article keeps those paths independent and describes the assistant\u2019s consent and read-only limits."
     },
     {
       "source": "ui/src/lib/help-navigation.ts",
@@ -1408,7 +1408,7 @@
       "sourceSha256": "3f407de9eae33be8153e390c27b71ce81388ab807becfc8ecc2ce502cb747127",
       "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: Help utilities retain direct human support and the optional assistant route; the article keeps those paths independent and describes the assistant’s consent and read-only limits."
+      "rationale": "Danish version checked against the same current source behavior: Help utilities retain direct human support and the optional assistant route; the article keeps those paths independent and describes the assistant\u2019s consent and read-only limits."
     },
     {
       "source": "ui/src/lib/help-navigation.ts",
@@ -1624,7 +1624,7 @@
       "sourceSha256": "90983e55a2fa9ea9a8abe2b33a5aab817e05a463a65bf5d5795335149d769fd2",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "updated",
-      "rationale": "The blocked-task notice is covered by the article’s instruction to read the displayed blocker and use only the next action shown for the original task."
+      "rationale": "The blocked-task notice is covered by the article\u2019s instruction to read the displayed blocker and use only the next action shown for the original task."
     },
     {
       "source": "ui/src/lib/wait-for-stopped-runs.ts",
@@ -1632,7 +1632,7 @@
       "sourceSha256": "ce5726db6b535d3dd592bfde111b94de36291c1fe7dd5a85198dd22799bbe8c2",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "updated",
-      "rationale": "The stop-waiting UI is covered by the article’s instruction to keep the task open, wait for status, and inspect the original run when an outcome is unknown."
+      "rationale": "The stop-waiting UI is covered by the article\u2019s instruction to keep the task open, wait for status, and inspect the original run when an outcome is unknown."
     },
     {
       "source": "ui/src/pages/IssueDetail.tsx",
@@ -1728,7 +1728,7 @@
       "sourceSha256": "90983e55a2fa9ea9a8abe2b33a5aab817e05a463a65bf5d5795335149d769fd2",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: The blocked-task notice is covered by the article’s instruction to read the displayed blocker and use only the next action shown for the original task."
+      "rationale": "Danish version checked against the same current source behavior: The blocked-task notice is covered by the article\u2019s instruction to read the displayed blocker and use only the next action shown for the original task."
     },
     {
       "source": "ui/src/lib/wait-for-stopped-runs.ts",
@@ -1736,7 +1736,7 @@
       "sourceSha256": "ce5726db6b535d3dd592bfde111b94de36291c1fe7dd5a85198dd22799bbe8c2",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: The stop-waiting UI is covered by the article’s instruction to keep the task open, wait for status, and inspect the original run when an outcome is unknown."
+      "rationale": "Danish version checked against the same current source behavior: The stop-waiting UI is covered by the article\u2019s instruction to keep the task open, wait for status, and inspect the original run when an outcome is unknown."
     },
     {
       "source": "ui/src/pages/IssueDetail.tsx",
