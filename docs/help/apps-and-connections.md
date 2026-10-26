@@ -29,6 +29,8 @@ For Slack agent tools, the standard option uses the Blentera-managed Slack app w
 
 If a connection says **Reconnect** or **Reconnect required**, open that connection and use its reconnect action. Sign in to the same provider account and review the current access request. Some apps may ask you to replace credentials or choose a workspace again; the details vary by provider.
 
+If your Blentera session changed during sign-in, reopen the connection and start sign-in again. A consent link from an earlier session cannot finish the connection in a different session.
+
 Check the connection status after returning. Do not paste passwords, API keys, or recovery codes into a task or support request. If reconnect is not available or the status remains unclear, contact [human support](/help/index) with the app name and the non-secret status shown on screen.
 
 ## Optional Jev Skill decisions

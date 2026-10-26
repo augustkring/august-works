@@ -29,6 +29,8 @@ Til Slack-agentværktøjer bruger standardvalget Blenteras administrerede Slack-
 
 Hvis en forbindelse viser **Reconnect** eller **Reconnect required**, skal du åbne den og bruge handlingen til at genoprette forbindelsen. Log ind på den samme udbyderkonto, og gennemgå den aktuelle adgangsanmodning. Nogle apps kan bede dig om at erstatte adgangsoplysninger eller vælge en arbejdsplads igen. Detaljerne varierer mellem udbydere.
 
+Hvis din Blentera-session ændres under login, skal du åbne forbindelsen igen og starte login forfra. Et samtykkelink fra en tidligere session kan ikke færdiggøre forbindelsen i en anden session.
+
 Kontrollér forbindelsens status, når du vender tilbage. Indsæt ikke adgangskoder, API-nøgler eller gendannelseskoder i en opgave eller supportanmodning. Hvis genforbindelse ikke er tilgængelig, eller status stadig er uklar, kan du kontakte [menneskelig support](/da/help/index) med appens navn og den ikke-hemmelige status, der vises.
 
 ## Valgfrie Jev-beslutninger om Skills
