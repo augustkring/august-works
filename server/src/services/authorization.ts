@@ -1310,17 +1310,23 @@ const memoryTemporalReadScopes = new AsyncLocalStorage<MemoryTemporalReadScope>(
 /** Bind a no-live-future-Context read to one existing immutable Memory output.
  * This is callable only by the Memory source owner, never from request fields. */
 export async function withReadMemoryTemporalSources<T>(db: Db | DbTransaction, actor: AuthorizationActor,
-  companyId: string, recordId: string, read: () => Promise<T>): Promise<T> {
+  companyId: string, recordId: string, read: () => Promise<T>, expected?: { sourceVersion: string; snapshot: unknown;
+    issueIds: string[]; projectIds: string[]; runIds: string[]; memoryIds: string[]; foundationRevisionIds: string[] }): Promise<T | false> {
   const [row] = await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, companyId), eq(memoryRecords.id, recordId),
     isNull(memoryRecords.deletedAt), sql`not exists(select 1 from ${memoryDeletionMarkers} d
-      where d.company_id=${companyId} and d.record_id=${recordId})`));
+      where d.company_id=${companyId} and d.record_id=${recordId})`)).for("share");
   const snapshot = row && nativePayloadSourceSnapshotSchema.safeParse(row.payloadSourceSnapshot);
-  const dispatch = snapshot?.success ? snapshot.data.inputs.find((input): input is Extract<typeof input, { kind: "worker_model_dispatch" }> =>
-    input.kind === "worker_model_dispatch") : undefined;
+  const dispatch = snapshot?.success ? snapshot.data.inputs.filter((input): input is Extract<typeof input, { kind: "worker_model_dispatch" }> =>
+    input.kind === "worker_model_dispatch").at(-1) : undefined;
   const capturedRunIds = dispatch
     ? [...new Set([...(snapshot?.success ? snapshot.data.policy.runIds : []), dispatch.runId])].sort()
     : row?.sourceRunIds ?? [];
-  if (!row || !snapshot?.success || !row.sourceProvenanceQualified || row.payloadSourceProtocolVersion !== 1 || row.payloadSourceSnapshotInvalidated
+  if (!row || expected && (row.updatedAt.toISOString() !== expected.sourceVersion ||
+      !isDeepStrictEqual(row.payloadSourceSnapshot, expected.snapshot) || !isDeepStrictEqual(row.sourceIssueIds, expected.issueIds) ||
+      !isDeepStrictEqual(row.sourceProjectIds, expected.projectIds) || !isDeepStrictEqual(row.sourceRunIds, expected.runIds) ||
+      !isDeepStrictEqual(row.sourceMemoryIds, expected.memoryIds) ||
+      !isDeepStrictEqual(row.sourceFoundationRevisionIds, expected.foundationRevisionIds)) ||
+    !snapshot?.success || !row.sourceProvenanceQualified || row.payloadSourceProtocolVersion !== 1 || row.payloadSourceSnapshotInvalidated
     || snapshot.data.owner.kind !== "memory_record" || snapshot.data.owner.companyId !== companyId || snapshot.data.owner.id !== recordId
     || !dispatch && (!snapshot.data.policy.runIds.length || snapshot.data.inputs.some(input => input.kind !== "context"))
     || !isDeepStrictEqual(snapshot.data.policy.issueIds, [...row.sourceIssueIds].sort())
@@ -1328,17 +1334,22 @@ export async function withReadMemoryTemporalSources<T>(db: Db | DbTransaction, a
     || !isDeepStrictEqual([...row.sourceRunIds].sort(), capturedRunIds)
     || !isDeepStrictEqual(snapshot.data.policy.memoryIds, [...row.sourceMemoryIds].sort())
     || !isDeepStrictEqual(snapshot.data.policy.foundationRevisionIds, [...row.sourceFoundationRevisionIds].sort()))
-    throw forbidden("Captured Memory Context source is unavailable");
+    return false;
   const [binding] = await db.execute<{ valid: boolean }>(sql`select
     public.aw_native_payload_body_hash('memory_record',to_jsonb(m))=${snapshot.data.owner.contentHash}
       and encode(sha256(convert_to((m.payload_source_snapshot-'digest')::text,'UTF8')),'hex')=${snapshot.data.digest} as valid
     from ${memoryRecords} m where m.company_id=${companyId} and m.id=${recordId}
       and m.payload_source_snapshot is not null and m.payload_source_snapshot_invalidated=false`);
-  if (!binding?.valid) throw forbidden("Captured Memory Context source binding is unavailable");
+  if (!binding?.valid) return false;
   const contextInputs = snapshot.data.inputs.filter((input): input is Extract<typeof input, { kind: "context" }> => input.kind === "context");
   const { assertNativeMemoryOutputSnapshotCurrent, assertNativeTemporalContextInputsCurrent } = await import("./native-direct-input.js");
-  if (dispatch) await assertNativeMemoryOutputSnapshotCurrent(db as Db, { companyId, recordId, snapshot: snapshot.data, actor });
-  await assertNativeTemporalContextInputsCurrent(db as Db, companyId, contextInputs);
+  try {
+    if (dispatch) await assertNativeMemoryOutputSnapshotCurrent(db as Db, { companyId, recordId, snapshot: snapshot.data, actor });
+    await assertNativeTemporalContextInputsCurrent(db as Db, companyId, contextInputs);
+  } catch (error) {
+    if (error instanceof HttpError && [403, 404, 409, 422].includes(error.status)) return false;
+    throw error;
+  }
   const scope: MemoryTemporalReadScope = { db: db as object, companyId, recordId, actorKey: routineActorKey(actor),
     issueIds: new Set(row.sourceIssueIds), runIds: new Set(snapshot.data.policy.runIds),
     contextIds: contextInputs.map(input => input.manifestId).sort(), active: true };

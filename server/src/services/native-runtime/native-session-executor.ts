@@ -7432,8 +7432,13 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
     | "source_owner_recheck"
     | "lease_recheck_after" = "lease_recheck_before";
   await input.db.transaction(async tx => {
-    // Keep the original coordinator -> run lock order, and repeat the actual
-    // lease check after intervening waits before committing this fact.
+    // Source closure rechecks below use the company privacy locks. Take them
+    // before the coordinator/run rows so event admission cannot hold those
+    // advisory locks while waiting on this transaction's run row.
+    await lockAnalyticalCompany(tx as unknown as Db, input.companyId);
+    await lockMemoryPrivacy(tx as unknown as Db, input.companyId);
+    // Preserve the original coordinator -> run order after source locks, and
+    // repeat the actual lease check after intervening waits before commit.
     await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
     stage = "run_binding";
     const [run] = await tx.select().from(heartbeatRuns).where(and(
@@ -7600,6 +7605,11 @@ export async function recordNativeModelInputDispatchAcknowledgement(input: Param
     throw new Error("native_model_input_ack_binding_invalid");
   const digest = createHash("sha256").update(JSON.stringify(input.turnInput)).digest("hex");
   await input.db.transaction(async tx => {
+    // This acknowledgement repeats source-closure validation while holding
+    // the run row, so acquire the same company privacy locks first as intent
+    // persistence and native event admission.
+    await lockAnalyticalCompany(tx as unknown as Db, input.companyId);
+    await lockMemoryPrivacy(tx as unknown as Db, input.companyId);
     await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
     const [run] = await tx.select().from(heartbeatRuns).where(and(
       eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.companyId, input.companyId),
@@ -8131,10 +8141,15 @@ async function prepareManagedOpenCodeOutputCapture(input: Parameters<typeof rene
     throw new Error("managed_opencode_output_capture_consumed_sources_invalid");
   const sourceSet: NativePayloadSourceSet = { policy: consumedPolicy.data, inputs: consumedInputs.data };
   const typedComponents = sourceComponents as NativeConsumedSourceComponent[];
-  await assertNativeManagedConsumedSourceSetCurrent(input.db, { companyId: input.companyId, issueId: input.issueId,
-    runId: input.runId, actor: { type: "agent", source: "none", companyId: input.companyId,
-      agentId: input.agentId, runId: input.runId, onBehalfOfUserId: run.responsibleUserId ?? undefined },
-    components: typedComponents, sourceSet });
+  if (input.tool !== "self_remember") {
+    await assertNativeManagedConsumedSourceSetCurrent(input.db, { companyId: input.companyId, issueId: input.issueId,
+      runId: input.runId, actor: { type: "agent", source: "none", companyId: input.companyId,
+        agentId: input.agentId, runId: input.runId, onBehalfOfUserId: run.responsibleUserId ?? undefined },
+      components: typedComponents, sourceSet });
+  }
+  // Managed self_remember rechecks the complete captured source closure after
+  // its canonical Memory detail read and before the creating transaction commits;
+  // the succeeded-result sealing pass rechecks it again after the Gateway settles.
   return {
     runId: input.runId,
     sourceSet,

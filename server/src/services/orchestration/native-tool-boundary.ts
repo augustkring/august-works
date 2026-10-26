@@ -23,6 +23,7 @@ import {
   agentRunWritesRevoked,
 } from "../../agent-run-cancellation.js";
 import { assertV7Authorization, assertV7Enabled } from "../v7-authorization.js";
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import {
   heartbeatMemoryPayloadRetained,
   lockMemoryPrivacy,
@@ -120,11 +121,12 @@ async function scope(db: Db, b: Binding) {
   return null;
 }
 
-/** Called before Task/run mutation locks, preserving Memory -> plan -> Task -> run order. */
+/** Acquire source locks in the shared analytical -> Memory -> plan -> Task/run order. */
 export async function lockNativeToolPlan(db: Db, b: Binding) {
+  await lockAnalyticalCompany(db, b.companyId);
+  await lockMemoryPrivacy(db, b.companyId);
   const bound = await scope(db, b);
   if (!bound) return null;
-  await lockMemoryPrivacy(db, b.companyId);
   const [plan] = await db
     .select()
     .from(orchestrationPlans)
@@ -346,6 +348,7 @@ export async function assertNativeToolPlanCurrent(
 
 async function fence(db: Db, b: Binding, planId: string, reasonCode: string) {
   await withV7ActivityTransaction(db, async (tx, publications) => {
+    await lockAnalyticalCompany(tx, b.companyId);
     await lockMemoryPrivacy(tx, b.companyId);
     const [plan] = await tx
       .select()
@@ -445,7 +448,6 @@ export async function withOrchestrationNativeTool(
   let exhausted = false;
   const reservation = await db.transaction(async (tx) => {
     const t = tx as unknown as Db;
-    await lockMemoryPrivacy(t, b.companyId);
     await lockNativeToolPlan(t, b);
     const bound = await assertNativeToolPlanCurrent(
       t,
@@ -533,7 +535,6 @@ export async function withOrchestrationNativeTool(
     const result = nativeToolWireResult(await effect());
     await db.transaction(async (tx) => {
       const t = tx as unknown as Db;
-      await lockMemoryPrivacy(t, b.companyId);
       await lockNativeToolPlan(t, b);
       await assertNativeToolPlanCurrent(t, b, draftWrites.has(call.tool));
     });

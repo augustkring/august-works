@@ -669,18 +669,18 @@
     {
       "source": "server/src/services/memory/memory-privacy.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "898e2a76fc8bc0e80c9ecb9121f3355d8da153ed17bd026cfa8e31d5a0d4201f",
+      "sourceSha256": "aeb7b7f4820fcb3cca626e0a68ac1200dc26b3773be56accabc7caacf26a9546",
       "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "no_change",
-      "rationale": "Reviewed both EN/DA export/deletion articles: exact current Task evidence, source withdrawal and private-owner checks strengthen the documented retained-source restriction. Existing copy already says a share does not publish its private Task and source deletion can remove copied text; no additional customer action changed."
+      "rationale": "Reviewed grouped validation of each immutable Memory output and all its original Task/Run sources. Current source access, expiry, revocation and deletion still apply; the implementation avoids repeating the same proof within that transaction. Existing EN/DA source-restriction and erasure guidance remains accurate."
     },
     {
       "source": "server/src/services/memory/memory-service.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "0f31b6075f3d040d7704f79b61c4181343a84ed08a7199b563aaa1f10bc255e6",
+      "sourceSha256": "f85d0533f77080eafc22af4729c5b9259469768dc7da9e524fd590475b48226b",
       "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "updated",
-      "rationale": "Updated EN/DA guidance for Human evidence attachment: current account and all existing/new Task sources are rechecked in the transaction; if a source is unavailable, the update rolls back and the earlier restrictions remain. The evidence query also retains the existing persisted citation, timestamps and trust fields when revalidating that complete source set; the customer steps are unchanged."
+      "rationale": "Reviewed canonical Native Memory detail projection and final source validation in one publishing transaction, including retained Human evidence rules. The customer actions and original-source restrictions in both EN/DA articles remain unchanged."
     },
     {
       "source": "server/src/services/saas/account-deletion.ts",
@@ -749,18 +749,18 @@
     {
       "source": "server/src/services/memory/memory-privacy.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "898e2a76fc8bc0e80c9ecb9121f3355d8da153ed17bd026cfa8e31d5a0d4201f",
+      "sourceSha256": "aeb7b7f4820fcb3cca626e0a68ac1200dc26b3773be56accabc7caacf26a9546",
       "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "no_change",
-      "rationale": "Reviewed both EN/DA export/deletion articles: exact current Task evidence, source withdrawal and private-owner checks strengthen the documented retained-source restriction. Existing copy already says a share does not publish its private Task and source deletion can remove copied text; no additional customer action changed."
+      "rationale": "Reviewed grouped validation of each immutable Memory output and all its original Task/Run sources. Current source access, expiry, revocation and deletion still apply; the implementation avoids repeating the same proof within that transaction. Existing EN/DA source-restriction and erasure guidance remains accurate. This Danish article preserves the same customer scope as its English pair."
     },
     {
       "source": "server/src/services/memory/memory-service.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "0f31b6075f3d040d7704f79b61c4181343a84ed08a7199b563aaa1f10bc255e6",
+      "sourceSha256": "f85d0533f77080eafc22af4729c5b9259469768dc7da9e524fd590475b48226b",
       "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "updated",
-      "rationale": "Danish article now states the same reviewed current-source behavior: Updated EN/DA guidance for Human evidence attachment: current account and all existing/new Task sources are rechecked in the transaction; if a source is unavailable, the update rolls back and the earlier restrictions remain. The evidence query also retains the existing persisted citation, timestamps and trust fields when revalidating that complete source set; the customer steps are unchanged."
+      "rationale": "Reviewed canonical Native Memory detail projection and final source validation in one publishing transaction, including retained Human evidence rules. The customer actions and original-source restrictions in both EN/DA articles remain unchanged. This Danish article preserves the same customer scope as its English pair."
     },
     {
       "source": "server/src/services/saas/account-deletion.ts",
@@ -2005,10 +2005,10 @@
     {
       "source": "server/src/services/memory/memory-jobs.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "67e1040ab671e47e72a67253cdc15cb056eaa112d72065a8c29f7c2011b91ecc",
+      "sourceSha256": "01ebdf9eabfd47ef1211979a138af97edce6c91328e553b6bc3cb54b674a709a",
       "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "no_change",
-      "rationale": "The current index-history receipt remains bound to the requesting Human and current source access. Rechecking that reader change confirms it does not alter the Help article’s conditional, managed-runtime erasure guidance."
+      "rationale": "Reviewed the retained completion receipt after source erasure: only its original Human can see a content-free source_unavailable history row, with no old receipt/count/body disclosure. Existing EN/DA deletion and recovery guidance remains accurate."
     },
     {
       "source": "server/src/services/native-runtime/runtime-asset-retention.ts",
@@ -2029,10 +2029,10 @@
     {
       "source": "server/src/services/memory/memory-jobs.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "67e1040ab671e47e72a67253cdc15cb056eaa112d72065a8c29f7c2011b91ecc",
+      "sourceSha256": "01ebdf9eabfd47ef1211979a138af97edce6c91328e553b6bc3cb54b674a709a",
       "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "no_change",
-      "rationale": "The current index-history receipt remains bound to the requesting Human and current source access. Rechecking that reader change confirms it does not alter the Help article’s conditional, managed-runtime erasure guidance."
+      "rationale": "Reviewed the retained completion receipt after source erasure: only its original Human can see a content-free source_unavailable history row, with no old receipt/count/body disclosure. Existing EN/DA deletion and recovery guidance remains accurate. This Danish article preserves the same customer scope as its English pair."
     },
     {
       "source": "server/src/services/native-runtime/runtime-asset-retention.ts",

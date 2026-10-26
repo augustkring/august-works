@@ -13,7 +13,7 @@ import { nativePayloadSourceInputSchema, nativePayloadSourcePolicySchema, native
   AUTHORED_AGENT_DEFINITION_KEY, type NativePayloadSourceInput, type NativePayloadSourcePolicy,
   type NativePayloadSourceSnapshot, type NativeRunInputSourceReceipt } from "@paperclipai/shared";
 import { forbidden } from "../errors.js";
-import { assertAnalyticalContextPayloadAccess, assertAnalyticalContextPayloadAccessBatch } from "./analytical-context-authority.js";
+import { assertAnalyticalContextPayloadAccessBatch } from "./analytical-context-authority.js";
 import { canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, authorizationService,
   type AuthorizationActor } from "./authorization.js";
 import { canActorReadMemorySources, memoryPayloadVisible } from "./memory/memory-privacy.js";
@@ -318,7 +318,7 @@ async function assertNativeMemorySourceCurrent(db: Db | Transaction, companyId: 
       console.error("native_exact_memory_source_test_failure", JSON.stringify({
         rowPresent: Boolean(memory), versionMatches, transitionEvidencePresent: Boolean(transitionEvidence), acceptedReviewMatches,
         contentHashMatches, readable, actorType: actor.type, actorIsAgent: actor.type === "agent",
-        actorSource: actor.source === "board_session" ? "board_session" : actor.source === "local_implicit" ? "local_implicit" :
+        actorSource: actor.source === "local_implicit" ? "local_implicit" :
           actor.source === "agent_jwt" ? "agent_jwt" : actor.source === "none" ? "none" : "other",
         actorHasUser: Boolean(actor.userId),
         actorHasRun: Boolean(actor.runId), actorHasResponsibleHuman: Boolean(actor.onBehalfOfUserId),
@@ -1659,6 +1659,32 @@ async function assertNativeFrozenTaskSnapshotCurrent(db: Db | Transaction, compa
   }
 }
 
+async function assertNativeTaskSnapshotOwnerCurrentInScope(db: Db | Transaction, companyId: string, actor: AuthorizationActor,
+  issueId: string, scope: NativeSourceReadScope, expected?: { sourceVersion: string; snapshot: unknown }): Promise<void> {
+  const [owner] = await db.select({ id: issues.id, companyId: issues.companyId, updatedAt: issues.updatedAt,
+    payloadSourceProtocolVersion: issues.payloadSourceProtocolVersion, payloadSourceSnapshot: issues.payloadSourceSnapshot,
+    payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated }).from(issues).where(and(
+    eq(issues.companyId, companyId), eq(issues.id, issueId))).for("share");
+  if (!owner || owner.payloadSourceSnapshotInvalidated || expected && (owner.updatedAt.toISOString() !== expected.sourceVersion ||
+    !isDeepStrictEqual(owner.payloadSourceSnapshot, expected.snapshot)))
+    throw forbidden("A Native Task source changed or was erased");
+  if (owner.payloadSourceProtocolVersion === 1) {
+    const snapshot = nativePayloadSourceSnapshotSchema.safeParse(owner.payloadSourceSnapshot);
+    const [ownerHash] = await db.execute<{ hash: string; digestValid: boolean }>(sql`select
+      public.aw_native_payload_body_hash('issue',to_jsonb(i)) as hash,
+      encode(sha256(convert_to((i.payload_source_snapshot-'digest')::text,'UTF8')),'hex')=i.payload_source_snapshot->>'digest'
+        as "digestValid" from issues i where i.company_id=${companyId}::uuid and i.id=${issueId}::uuid`);
+    if (!snapshot.success || snapshot.data.owner.kind !== "issue" || snapshot.data.owner.companyId !== companyId ||
+      snapshot.data.owner.id !== issueId || !ownerHash || !ownerHash.digestValid || snapshot.data.owner.contentHash !== ownerHash.hash)
+      throw forbidden("A Native Task source snapshot is unavailable");
+    await assertNativeFrozenTaskSnapshotCurrent(db, companyId, actor, issueId, snapshot.data, scope);
+  } else if (owner.payloadSourceProtocolVersion === 0 || owner.payloadSourceProtocolVersion === null) {
+    await assertAnalyticalContextPayloadAccessBatch(db as Db, companyId, actor, [issueId]);
+  } else throw forbidden("A Native Task source protocol is unsupported");
+  if (!await canActorReadIssuePrivacy(db, actor, { id: issueId, companyId }))
+    throw forbidden("A Native Task source is unavailable");
+}
+
 async function assertNativeContextInputOwnersCurrent(db: Db, companyId: string, actor: AuthorizationActor,
   inputs: Extract<NativePayloadSourceInput, { kind: "context" }>[], scope: NativeSourceReadScope,
   alreadyValidatedMemoryIds: ReadonlySet<string> = new Set()) {
@@ -1821,7 +1847,7 @@ async function assertNativeDocumentRevisionCurrentSourceAccessInScope(db: Db, in
   // The complete v1 snapshot below revalidates its exact owners and current
   // readers; legacy revisions retain the broader fail-closed Task check.
   if (revision.payloadSourceProtocolVersion !== 1)
-    await assertAnalyticalContextPayloadAccess(db, input.companyId, input.actor, { issueId: selected.issueId });
+    await assertAnalyticalContextPayloadAccessBatch(db, input.companyId, input.actor, [selected.issueId]);
   if (revision.payloadSourceProtocolVersion === 0 || revision.payloadSourceProtocolVersion === null) {
     scope.active.delete(activeKey); scope.complete.add(completeKey); return;
   }
@@ -1932,16 +1958,10 @@ async function assertNativeDocumentRevisionCurrentSourceAccessInScope(db: Db, in
         nativeSourceReadWork(scope);
         if (item.sourceProvider === "august_works_tasks") {
           const match = /^issue:\/\/([0-9a-f-]{36})$/i.exec(item.sourceRef);
-          const [owner] = match ? await db.select({ payloadSourceSnapshot: issues.payloadSourceSnapshot,
-            payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated }).from(issues).where(and(
-              eq(issues.companyId, input.companyId), eq(issues.id, match[1]!))) : [];
-          if (!match || !owner || owner.payloadSourceSnapshotInvalidated || !item.payloadSourceSnapshot ||
-            !isDeepStrictEqual(owner.payloadSourceSnapshot, item.payloadSourceSnapshot))
+          if (!match || !item.sourceVersion || !item.payloadSourceSnapshot)
             throw forbidden("A selected Context Task source changed or was erased");
-          const nested = nativePayloadSourceSnapshotSchema.safeParse(item.payloadSourceSnapshot);
-          if (!nested.success || nested.data.owner.kind !== "issue" || nested.data.owner.id !== match[1])
-            throw forbidden("A selected Context Task source is unavailable");
-          await assertAnalyticalContextPayloadAccess(db, input.companyId, input.actor, { issueId: match[1]! });
+          await assertNativeTaskSnapshotOwnerCurrentInScope(db, input.companyId, input.actor, match[1]!, scope,
+            { sourceVersion: item.sourceVersion, snapshot: item.payloadSourceSnapshot });
         } else if (item.sourceProvider === "august_works_memory" || item.sourceProvider === "august_works_derived_memory") {
           const match = /^memory:\/\/(?:record|derived)\/([0-9a-f-]{36})$/i.exec(item.sourceRef);
           if (!match || !await canActorReadMemorySources(db, input.companyId, input.actor, match[1]!))
@@ -2168,7 +2188,7 @@ async function assertNativeDocumentRevisionCurrentSourceAccessInScope(db: Db, in
         source.commentId !== attachment.attachment.issueCommentId ||
         source.disposition === "delivered" && (source.assetId !== attachment.asset.id || source.sha256 !== attachment.asset.sha256 ||
           source.byteSize !== attachment.asset.byteSize)) throw forbidden("A Native document attachment source changed or was erased");
-      await assertAnalyticalContextPayloadAccess(db, input.companyId, input.actor, { issueId: source.issueId });
+      await assertNativeTaskSnapshotOwnerCurrentInScope(db, input.companyId, input.actor, source.issueId, scope);
       continue;
     }
     if (source.kind === "authored_definition") {

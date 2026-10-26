@@ -183,6 +183,9 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
   if (!await admitted()) return false;
   const active = new Set<string>(), visited = new Set<string>();
   const runChecks = new Map<string, Map<string, string | null>>(), taskChecks = new Map<string, Map<string, string | null>>();
+  const qualifiedOutputMemoryIds = new Set<string>();
+  const qualifiedOutputMemoryExpectations = new Map<string, { sourceVersion: string; snapshot: unknown; issueIds: string[];
+    projectIds: string[]; runIds: string[]; memoryIds: string[]; foundationRevisionIds: string[] }>();
   const projectIds = new Set<string>(), revisions = new Set<string>();
   const addScoped = (map:Map<string,Map<string,string|null>>,id:string,ownerId:string,contextIds:string[]|null) => {
     let values=map.get(id);if(!values){values=new Map();map.set(id,values);}values.set(ownerId,contextIds===null?null:JSON.stringify(contextIds));
@@ -199,7 +202,8 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
     const visitKey=`${id}:${ancestor?"ancestor":"root"}:${authorizedPrivateOwnerEdge?"published-edge":"ordinary-edge"}`;
     if (visited.has(visitKey)) return true;
     state.work++;
-    const [row] = await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId,companyId),eq(memoryRecords.id,id),memoryPayloadVisible()));
+    const [row] = await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId,companyId),eq(memoryRecords.id,id),memoryPayloadVisible()))
+      .for("share");
     if (!row?.sourceProvenanceQualified || (row.expiresAt && row.expiresAt.getTime()<=Date.now())) return false;
     if (row.payloadSourceProtocolVersion === 1 && row.payloadSourceSnapshot === null) return false;
     const publicationSource=authorizedPrivateOwnerEdge;
@@ -280,34 +284,17 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
               exactPolicy, dispatchCount: dispatches.length, dispatchAtEnd, actorPresent: Boolean(actor), uniqueDispatch }));
           return false;
         }
-        try {
-          const { assertNativeMemoryOutputSnapshotCurrent } = await import("../native-direct-input.js");
-          await assertNativeMemoryOutputSnapshotCurrent(db, { companyId, recordId: row.id, snapshot: capturedSnapshot.data, actor });
-          capturedContextIds = capturedSnapshot.data.inputs.filter((value): value is Extract<typeof value, { kind: "context" }> =>
-            value.kind === "context").map(value => value.manifestId).sort();
-          capturedReadRunIds = capturedSnapshot.data.policy.runIds;
-        } catch (error) {
-          if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1") {
-            const value = error instanceof Error ? error as Error & { code?: unknown; status?: unknown; cause?: unknown } : null;
-            let cause: unknown = value?.cause;
-            let code: string | null = typeof value?.code === "string" && /^[A-Z0-9_:-]{1,80}$/i.test(value.code) ? value.code : null;
-            let status: number | null = typeof value?.status === "number" && [400, 403, 404, 409, 422, 429, 500, 503].includes(value.status)
-              ? value.status : null;
-            for (let depth = 0; depth < 3 && cause && typeof cause === "object"; depth++) {
-              const current = cause as { code?: unknown; status?: unknown; cause?: unknown };
-              if (!code && typeof current.code === "string" && /^[A-Z0-9_:-]{1,80}$/i.test(current.code)) code = current.code;
-              if (!status && typeof current.status === "number" && [400, 403, 404, 409, 422, 429, 500, 503].includes(current.status)) status = current.status;
-              cause = current.cause;
-            }
-            const frames = value?.stack?.split("\n").slice(1).filter(frame => /^\s*at /.test(frame))
-              .map(frame => /server\/src\/services\/([^\s():]+\.ts):(\d+):\d+/.exec(frame))
-              .filter((frame): frame is RegExpExecArray => Boolean(frame)).slice(0, 5)
-              .map(frame => `${frame[1]}:${frame[2]}`) ?? [];
-            console.error("native_memory_source_access_test_denial", JSON.stringify({ reason: "output_snapshot_currentness",
-              errorName: value?.name === "HttpError" || value?.name === "Error" ? value.name : "other", code, status, frames }));
-          }
-          return false;
-        }
+        // The complete frozen proof is performed once inside the single
+        // withReadMemoryTemporalSources callback below, together with every
+        // selected Task/Run current-reader check for this owner. The row stays
+        // shared-locked from this structural read until that proof completes.
+        qualifiedOutputMemoryIds.add(row.id);
+        qualifiedOutputMemoryExpectations.set(row.id, { sourceVersion: row.updatedAt.toISOString(), snapshot: row.payloadSourceSnapshot,
+          issueIds: [...row.sourceIssueIds], projectIds: [...row.sourceProjectIds], runIds: [...row.sourceRunIds],
+          memoryIds: [...row.sourceMemoryIds], foundationRevisionIds: [...row.sourceFoundationRevisionIds] });
+        capturedContextIds = capturedSnapshot.data.inputs.filter((value): value is Extract<typeof value, { kind: "context" }> =>
+          value.kind === "context").map(value => value.manifestId).sort();
+        capturedReadRunIds = capturedSnapshot.data.policy.runIds;
       } else if (exactPolicy && !dispatch && capturedSnapshot.data.policy.runIds.length > 0 &&
         capturedSnapshot.data.inputs.every(value => value.kind === "context")) {
         capturedContextIds = capturedSnapshot.data.inputs.map(value => value.kind === "context" ? value.manifestId : "").sort();
@@ -332,17 +319,39 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
   };
   if (!await visit(recordId)) return false;
   const {withReadMemoryTemporalSources}=await import("../authorization.js");
+  const temporalOwnerChecks = new Map<string, { runs: string[]; tasks: string[] }>();
+  const temporalChecksFor = (ownerId: string) => {
+    let checks = temporalOwnerChecks.get(ownerId);
+    if (!checks) { checks = { runs: [], tasks: [] }; temporalOwnerChecks.set(ownerId, checks); }
+    return checks;
+  };
   for (const [id,owners] of runChecks) for (const [ownerId,encoded] of owners) {
     try { assertMemorySourceReadActive(state); } catch { return false; }
-    const check=()=>canActorReadHeartbeatRunPrivacy(db,actor,{companyId,id});
-    if (performance.now()>deadline || (encoded===null ? !await check()
-      : !await withReadMemoryTemporalSources(db,actor,companyId,ownerId,check))) return false;
+    if (encoded === null) {
+      if (performance.now()>deadline || !await canActorReadHeartbeatRunPrivacy(db,actor,{companyId,id})) return false;
+    } else temporalChecksFor(ownerId).runs.push(id);
   }
   for (const [id,owners] of taskChecks) for (const [ownerId,encoded] of owners) {
     try { assertMemorySourceReadActive(state); } catch { return false; }
-    const check=()=>canActorReadIssuePrivacy(db,actor,{companyId,id});
-    if (performance.now()>deadline || (encoded===null ? !await check()
-      : !await withReadMemoryTemporalSources(db,actor,companyId,ownerId,check))) return false;
+    if (encoded === null) {
+      if (performance.now()>deadline || !await canActorReadIssuePrivacy(db,actor,{companyId,id})) return false;
+    } else temporalChecksFor(ownerId).tasks.push(id);
+  }
+  for (const ownerId of new Set([...qualifiedOutputMemoryIds, ...temporalOwnerChecks.keys()])) {
+    try { assertMemorySourceReadActive(state); } catch { return false; }
+    const checks = temporalOwnerChecks.get(ownerId) ?? { runs: [], tasks: [] };
+    const allowed = await withReadMemoryTemporalSources(db,actor,companyId,ownerId,async () => {
+      for (const id of checks.runs) {
+        try { assertMemorySourceReadActive(state); } catch { return false; }
+        if (!await canActorReadHeartbeatRunPrivacy(db,actor,{companyId,id})) return false;
+      }
+      for (const id of checks.tasks) {
+        try { assertMemorySourceReadActive(state); } catch { return false; }
+        if (!await canActorReadIssuePrivacy(db,actor,{companyId,id})) return false;
+      }
+      return true;
+    }, qualifiedOutputMemoryExpectations.get(ownerId));
+    if (!allowed) return false;
   }
   for (const id of projectIds) {
     try { assertMemorySourceReadActive(state); } catch { return false; }

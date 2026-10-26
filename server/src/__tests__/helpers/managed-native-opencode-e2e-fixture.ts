@@ -271,6 +271,8 @@ export async function runManagedNativeOpenCodeFixture(input: {
   onPreserveDebugArtifacts?: () => void;
 }) {
   const { db, root, instanceId } = input;
+  const diagnosticsEnabled = process.env.PAPERCLIP_MANAGED_OPENCODE_E2E_DIAGNOSTICS === "1";
+  const ownerFrameDiagnosticsEnabled = process.env.PAPERCLIP_MANAGED_OPENCODE_OWNER_FRAMES === "1";
   let contextProbeCallId: string | null = null;
   let pendingContextProbeCallId: string | null = null;
   let pendingContextProbeStartedAt: number | null = null;
@@ -280,26 +282,33 @@ export async function runManagedNativeOpenCodeFixture(input: {
   let contextPostCaptureProbeStartedAt: number | null = null;
   let contextPostCaptureProbeSamples = 0;
   const contextTransactionOwners = new Set<string>();
+  const contextTransactionOwnerFrames = new Map<string, string[]>();
   const ownerDb = db as typeof db & { transaction: typeof db.transaction };
   const originalRootTransaction = ownerDb.transaction.bind(ownerDb);
   const instrumentedRootTransaction = (async (...args: Parameters<typeof db.transaction>) => {
     const [callback, config] = args;
     return originalRootTransaction(async tx => {
-      if (contextProbeCallId) {
+      if (contextProbeCallId || ownerFrameDiagnosticsEnabled) {
         const stack = new Error().stack ?? "";
-        const serviceFrame = stack.split("\n").map(line => line.trim()).find(line =>
-          /server\/src\/services\/[A-Za-z0-9_./-]+\.ts:\d+:\d+/.test(line));
-        const sourceLocation = serviceFrame && /server\/src\/services\/([A-Za-z0-9_./-]+\.ts):(\d+):\d+/.exec(serviceFrame);
+        const serviceFrames = stack.split("\n").map(line => line.trim())
+          .map(line => /server\/src\/services\/([A-Za-z0-9_./-]+\.ts):(\d+):\d+/.exec(line))
+          .filter((frame): frame is RegExpExecArray => Boolean(frame)).slice(0, 6)
+          .map(frame => `${frame[1]}:${frame[2]}`);
+        const sourceLocation = serviceFrames[0] && /([A-Za-z0-9_./-]+\.ts):(\d+)/.exec(serviceFrames[0]);
         const moduleName = sourceLocation?.[1]?.split("/").at(-1)?.replace(/\.ts$/, "") ?? "service";
         const lineNumber = sourceLocation?.[2] ?? "0";
         const ownerLabel = `fx.${moduleName}:${lineNumber}`.slice(0, 63);
         contextTransactionOwners.add(ownerLabel);
-        await tx.execute(sql`select set_config('application_name', ${ownerLabel}, true)`);
+        if (!contextTransactionOwnerFrames.has(ownerLabel) && contextTransactionOwnerFrames.size < 160)
+          contextTransactionOwnerFrames.set(ownerLabel, serviceFrames);
+        if (contextProbeCallId)
+          await tx.execute(sql`select set_config('application_name', ${ownerLabel}, true)`);
       }
       return callback(tx);
     }, config);
   }) as typeof db.transaction;
-  Object.defineProperty(ownerDb, "transaction", { configurable: true, writable: true, value: instrumentedRootTransaction });
+  if (diagnosticsEnabled || ownerFrameDiagnosticsEnabled)
+    Object.defineProperty(ownerDb, "transaction", { configurable: true, writable: true, value: instrumentedRootTransaction });
   await instanceSettingsService(db).getExperimental();
   await enableV5ForTest(db);
   await instanceSettingsService(db).updateExperimental({ enableWorkflowsV1: true,
@@ -313,6 +322,9 @@ export async function runManagedNativeOpenCodeFixture(input: {
     { tool: "paperclip_finish", id: "managed-e2e-finish-1" },
   ];
   const modelSteps = input.steps ?? defaultSteps;
+  // The managed E2E performs one bounded real provider roundtrip per step;
+  // scale only this fixture's whole-turn allowance, never product deadlines.
+  const fixtureTurnTimeoutMs = Math.max(90_000, 30_000 * modelSteps.length);
   if (modelSteps.length < 2 || modelSteps.at(-1)?.tool !== "paperclip_finish" ||
     modelSteps.slice(0, -1).some(step => step.tool === "paperclip_finish") ||
     new Set(modelSteps.map((step, index) => step.id ?? `managed-e2e-${step.tool}-${index}`)).size !== modelSteps.length)
@@ -730,7 +742,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
         const tools = (body.tools as Array<Record<string, unknown>>) ?? [];
         const step = modelSteps[responseCount - 1];
         if (!step) throw new Error("Managed fixture provider exhausted its configured model steps.");
-        if (step.tool === "read_context") {
+        if (step.tool === "read_context" && diagnosticsEnabled) {
           pendingContextProbeCallId = step.id ?? `managed-e2e-${step.tool}-${responseCount - 1}`;
           pendingContextProbeStartedAt = Date.now();
           if (pgMonitorTimer) {
@@ -1304,7 +1316,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
           const invocationFinished = contextInvocation?.status && contextInvocation.status !== "executing";
           const completedCaptureStillPending = contextInvocation?.status === "succeeded" && !contextResultCapturePresent &&
             contextProbeCompletedAt !== null && Date.now() - contextProbeCompletedAt < 5_000;
-          const fifthModelFetchStarted = contextPostCaptureProbeStartedAt !== null && responseCount >= 5;
+          const sixthModelFetchStarted = contextPostCaptureProbeStartedAt !== null && responseCount >= 6;
           const postCaptureProbeExpired = contextPostCaptureProbeStartedAt !== null &&
             (Date.now() - contextPostCaptureProbeStartedAt >= 15_000 || contextPostCaptureProbeSamples >= 60);
           const contextInvocationFailed = invocationFinished && contextInvocation?.status !== "succeeded";
@@ -1312,11 +1324,11 @@ export async function runManagedNativeOpenCodeFixture(input: {
             Date.now() - contextProbeCompletedAt >= 5_000;
           const preCaptureProbeExpired = contextPostCaptureProbeStartedAt === null && contextProbeStartedAt !== null &&
             Date.now() - contextProbeStartedAt >= 10_000;
-          if (contextProbeCallId && (fifthModelFetchStarted || postCaptureProbeExpired || contextInvocationFailed ||
+          if (contextProbeCallId && (sixthModelFetchStarted || postCaptureProbeExpired || contextInvocationFailed ||
             captureWaitExpired || preCaptureProbeExpired)) {
             if (contextPostCaptureProbeStartedAt !== null)
               diagnostics.push(`managed Context post-capture probe stopped: ${JSON.stringify({
-                reason: fifthModelFetchStarted ? "fifth_model_fetch" : postCaptureProbeExpired ? "bounded_window" : "invocation_finished",
+                reason: sixthModelFetchStarted ? "sixth_model_fetch" : postCaptureProbeExpired ? "bounded_window" : "invocation_finished",
                 elapsedMs: Date.now() - contextPostCaptureProbeStartedAt,
                 samples: contextPostCaptureProbeSamples, providerFetchCount: responseCount,
               })}`);
@@ -1422,6 +1434,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
       const { pid } = meta;
       diagnostics.push(`runner process pid ${pid}`);
       const observed = new Set<number>();
+      let timer: ReturnType<typeof setInterval> | undefined;
       const inspect = async () => {
         const descendants: Array<{ pid: number; parent: number }> = [];
         const pending = [pid];
@@ -1473,7 +1486,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
         // Runnerd may own the process boundary and omit the provider PID from
         // its reported tree. Inspect live /proc entries for the exact pinned
         // executable, then retain only booleans about its managed environment.
-        for (const entry of await readdir("/proc", { withFileTypes: true }).catch(() => [])) {
+        if (!observedOpenCodePids.size) for (const entry of await readdir("/proc", { withFileTypes: true }).catch(() => [])) {
           if (!entry.isDirectory() || !/^\d+$/.test(entry.name)) continue;
           const childPid = Number(entry.name);
           if (observedOpenCodePids.has(childPid)) continue;
@@ -1497,14 +1510,15 @@ export async function runManagedNativeOpenCodeFixture(input: {
             shaMatchesQualifiedBinary: runningHash === qualifiedOpenCodeSha256, managedEnvironment,
           })}`);
         }
+        if (observedOpenCodePids.size && timer) clearInterval(timer);
       };
-      const timer = setInterval(() => { void inspect(); }, 250);
+      timer = setInterval(() => { void inspect(); }, 250);
       void inspect();
       processTreeTimers.push(timer);
     };
     try {
       const result = await executePaperclipNativeSession({ db, execution, bootstrapSourceClosure, useRunnerd: true, onSpawn,
-        runnerInstanceId: prepared.runnerInstanceId, leaseOwner, turnTimeoutMs: 90_000, adapterType: "paperclip_runner",
+        runnerInstanceId: prepared.runnerInstanceId, leaseOwner, turnTimeoutMs: fixtureTurnTimeoutMs, adapterType: "paperclip_runner",
         runnerEnvironment, onLog: async (stream, chunk) => {
           for (const line of chunk.split(/\r?\n/)) {
             if (!line.trim()) continue;
@@ -1543,7 +1557,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
                 }
                 if (event.eventType === "session.started")
                   void assertManagedConfigIsReadOnlyBeforeSpawn().catch(() => diagnostics.push("managed config probe unavailable"));
-                if (event.eventType === "session.started" && !pgMonitorTimer) {
+                if (diagnosticsEnabled && event.eventType === "session.started" && !pgMonitorTimer) {
                   pgMonitorStartedAt = Date.now();
                   pgMonitorTimer = setInterval(() => { void inspectPostgresWaits(); }, 5_000);
                   void inspectPostgresWaits();
@@ -1577,6 +1591,9 @@ export async function runManagedNativeOpenCodeFixture(input: {
             .map(line => line.trim().replace(/\s+/g, " ").slice(0, 220)) ?? [];
           const metadata = { name: failure?.name ?? "UnknownError", code: safeCode(failure?.code),
             causeCode: safeCode(failure?.cause?.code), stage: safeCode(failure?.stage), frames };
+          diagnostics.push(`managed context transaction owners: ${JSON.stringify([...contextTransactionOwners].slice(0, 160).map(owner => ({
+            owner, frames: contextTransactionOwnerFrames.get(owner) ?? [],
+          })))}`);
           diagnostics.push(`execution failure metadata: ${JSON.stringify(metadata)}`);
           const safeMessage = safeCode(failure?.message) ?? "native_session_execution_failed";
           throw new Error(`${safeMessage}\n${diagnostics.join("\n")}\nBroker: ${JSON.stringify(brokerFailureFacts())}\nArtifacts: ${runRoot}`);
@@ -1854,7 +1871,9 @@ export async function runManagedNativeOpenCodeFixture(input: {
         diagnostics.push(`managed memory output source facts: ${JSON.stringify(memoryOutputSourceFacts)}`);
         diagnostics.push(`managed context invocation facts: ${JSON.stringify(contextInvocationFacts)}`);
         diagnostics.push(`managed Context source facts: ${JSON.stringify(contextReadSourceFacts)}`);
-        diagnostics.push(`managed context transaction owners: ${JSON.stringify([...contextTransactionOwners].slice(0, 40))}`);
+        diagnostics.push(`managed context transaction owners: ${JSON.stringify([...contextTransactionOwners].slice(0, 160).map(owner => ({
+          owner, frames: contextTransactionOwnerFrames.get(owner) ?? [],
+        })))}`);
         if (input.expectProjectWorkspaceSourceDenial) {
           const denied = brokerRequests.some(value => value.includes("response POST /runtime-tools/model/v1/messages 403"));
           expect(denied, "a workspace edit must make the prior Project source stale before the next provider dispatch").toBe(true);

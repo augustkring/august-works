@@ -142,8 +142,10 @@ test("V10 authenticated suites run in dedicated authenticated browser lanes", ()
   assert.match(workflow, /journey: V10 authenticated agent chat\s+config: tests\/e2e\/aw-v10-agent-chat\.config\.ts\s+spec: tests\/e2e\/agent-chat-\*\.spec\.ts/);
   const localRunner = readFileSync(path.join(repoRoot, "scripts/e2e-runner.mjs"), "utf8");
   assert.match(readFileSync(path.join(repoRoot, "package.json"), "utf8"), /"test:e2e": "node scripts\/e2e-runner\.mjs"/);
-  assert.match(localRunner, /if \(defaultStatus !== 0 \|\| args\.length > 0\) process\.exit\(defaultStatus\)/);
+  assert.match(localRunner, /if \(args\.length > 0\) process\.exit\(defaultStatus\)/);
+  assert.match(localRunner, /if \(args\[0\] === "--"\) args\.shift\(\)/);
   assert.match(localRunner, /aw-v10-agent-chat\.config\.ts/);
+  assert.match(localRunner, /process\.exit\(defaultStatus !== 0 \? defaultStatus : chatStatus\)/);
 });
 
 test("the duration manifest only names specs that still exist", () => {

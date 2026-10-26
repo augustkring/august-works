@@ -1,0 +1,3 @@
+# Authenticated chat lane diagnostic — 2026-10-26
+
+`agent-chat-first-send.log` is a completed focused browser run under the authenticated server config. A real signed-up Human session opened a conversation and both first Human messages were accepted. The legacy process adapter's reply then received HTTP 422 (`Private tasks are not available`) at the private-task admission guard; the test ended with a blocked run and no agent replies. Exit 1 is preserved accurately. This is not a pass or a test-fixture authorization failure. The dedicated authenticated lane is wired, but full chat-send behavior still requires the qualified native conversation delivery owner; no guard or private-admission setting was changed here.

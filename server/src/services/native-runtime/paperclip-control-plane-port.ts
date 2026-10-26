@@ -198,24 +198,26 @@ export class PaperclipControlPlanePort implements ControlPlanePort {
           event.sourceInstanceId === this.#binding.internalDraftSourceInstanceId)) {
       throw new Error("native_event_source_binding_mismatch");
     }
-    if (event.sourceKind !== "control_plane" || event.sourceInstanceId === this.#binding.internalDraftSourceInstanceId) {
-      await assertNativeAnalyticalRunPayloadAccess(this.#db, this.#binding.companyId, this.#binding.runId);
-    }
-    const persisted = await appendHeartbeatRunEvent(this.#db, {
-      companyId: this.#binding.companyId,
-      runId: this.#binding.runId,
-      agentId: this.#binding.agentId,
-      eventType: event.eventType,
-      stream: "system",
-      level: event.eventType.includes("failed") ? "error" : "info",
-      payload: { prpEvent: event as unknown as Record<string, unknown> },
-      nativeSource: {
-        sourceInstanceId: event.sourceInstanceId,
-        sourceEventId: event.sourceEventId,
-        sourceSeq: event.sourceSeq,
-        protocolSchemaVersion: event.schemaVersion,
-        canonicalPayload: event as unknown as Record<string, unknown>,
-      },
+    const persisted = await this.#db.transaction(async rawTx => {
+      const tx = rawTx as unknown as Db;
+      if (event.sourceKind !== "control_plane" || event.sourceInstanceId === this.#binding.internalDraftSourceInstanceId)
+        await assertNativeAnalyticalRunPayloadAccess(tx, this.#binding.companyId, this.#binding.runId);
+      return appendHeartbeatRunEvent(tx, {
+        companyId: this.#binding.companyId,
+        runId: this.#binding.runId,
+        agentId: this.#binding.agentId,
+        eventType: event.eventType,
+        stream: "system",
+        level: event.eventType.includes("failed") ? "error" : "info",
+        payload: { prpEvent: event as unknown as Record<string, unknown> },
+        nativeSource: {
+          sourceInstanceId: event.sourceInstanceId,
+          sourceEventId: event.sourceEventId,
+          sourceSeq: event.sourceSeq,
+          protocolSchemaVersion: event.schemaVersion,
+          canonicalPayload: event as unknown as Record<string, unknown>,
+        },
+      });
     });
     if (persisted.disposition === "committed") {
       publishChatPublicationCommitSignal({

@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const playwrightCli = path.join(repoRoot, "node_modules/@playwright/test/cli.js");
 const args = process.argv.slice(2);
+if (args[0] === "--") args.shift();
 
 function run(config, specArgs = []) {
   const result = spawnSync(process.execPath, [playwrightCli, "test", "--config", config, ...specArgs], {
@@ -20,5 +21,6 @@ function run(config, specArgs = []) {
 // no-argument local aggregate also runs the authenticated chat journey, whose
 // comment writes require a real Human session.
 const defaultStatus = run("tests/e2e/playwright.config.ts", args);
-if (defaultStatus !== 0 || args.length > 0) process.exit(defaultStatus);
-process.exit(run("tests/e2e/aw-v10-agent-chat.config.ts"));
+if (args.length > 0) process.exit(defaultStatus);
+const chatStatus = run("tests/e2e/aw-v10-agent-chat.config.ts");
+process.exit(defaultStatus !== 0 ? defaultStatus : chatStatus);

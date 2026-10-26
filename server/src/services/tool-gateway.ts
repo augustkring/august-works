@@ -10940,7 +10940,8 @@ export function createToolGatewayService(
       if (scopedMemoryCapture) {
         const capture = scopedMemoryCapture;
         const use = capture.managedOpenCodeToolUse;
-        if (tool.name !== "paperclip-self:remember" || !use || use.toolName !== tool.name ||
+        if (tool.name !== "paperclip-self:remember" || tool.providerType !== "paperclip_self" ||
+          tool.pluginId !== "paperclip-self" || !use || use.toolName !== tool.name ||
           capture.runId !== session.runId || capture.dispatch.runId !== session.runId ||
           !session.agentId || !session.issueId ||
           !capture.sourceSet.inputs.some(source => source.kind === "task" && source.issueId === session.issueId) ||
@@ -10954,10 +10955,42 @@ export function createToolGatewayService(
         if (!capturedRun || capturedRun.agentId !== session.agentId || capturedRun.issueId !== session.issueId ||
           capturedRun.responsibleUserId !== (session.responsibleUserId ?? null))
           throw new ToolGatewayHttpError(403, "Native Memory output session binding changed", "native_memory_capture_invalid");
-        const { assertNativeModelOutputCaptureCurrent } = await import("./native-direct-input.js");
-        await assertNativeModelOutputCaptureCurrent(db, session.companyId, session.issueId, capture, "paperclip-self:remember");
+        // The canonical Native Memory write transaction revalidates this exact
+        // capture after reading the persisted detail and before commit; sealing
+        // repeats the complete check once the Gateway invocation succeeds.
         input = { ...input, idempotencyKey: `aw-native-tool:${capture.runId}:${use.callId}` };
       }
+      const revalidateScopedMemoryReplay = async (replay: { invocationId: string; argumentsHash: string; result: unknown }) => {
+        if (!scopedMemoryCapture) return;
+        if (!session.issueId) throw new ToolGatewayHttpError(403,
+          "Managed Memory replay has no current Task binding", "native_memory_capture_invalid");
+        const resultSummary = validateToolContent({ value: replay.result, direction: "result",
+          sensitiveMode: "redact", promptInjectionMode: "block" }).summary;
+        if (!replay.argumentsHash || !resultSummary.sha256) throw new ToolGatewayHttpError(403,
+          "Managed Memory replay receipt is unavailable", "native_memory_capture_invalid");
+        const { assertNativeModelOutputCaptureCurrent } = await import("./native-direct-input.js");
+        const { lockAnalyticalCompany } = await import("./analytical-privacy.js");
+        const { lockMemoryPrivacy } = await import("./memory/memory-privacy.js");
+        await db.transaction(async rawTx => {
+          const tx = rawTx as unknown as Db;
+          await lockAnalyticalCompany(tx, session.companyId);
+          await lockMemoryPrivacy(tx, session.companyId);
+          const [current] = await tx.select({ status: toolInvocations.status, argumentsHash: toolInvocations.argumentsHash,
+            resultHash: toolInvocations.resultHash, workflowResultJson: toolInvocations.workflowResultJson })
+            .from(toolInvocations).where(and(eq(toolInvocations.id, replay.invocationId),
+              eq(toolInvocations.companyId, session.companyId), eq(toolInvocations.runId, session.runId!),
+              eq(toolInvocations.agentId, session.agentId!), eq(toolInvocations.issueId, session.issueId!),
+              eq(toolInvocations.idempotencyKey, `aw-native-tool:${scopedMemoryCapture.runId}:${scopedMemoryCapture.managedOpenCodeToolUse!.callId}`),
+              eq(toolInvocations.toolName, "paperclip-self:remember"))).for("share");
+          if (!current || current.status !== "succeeded" || current.argumentsHash !== replay.argumentsHash ||
+            current.resultHash !== resultSummary.sha256 || current.workflowResultJson === null ||
+            nativeSha256(current.workflowResultJson) !== nativeSha256(replay.result))
+            throw new ToolGatewayHttpError(403, "Managed Memory replay receipt is no longer current",
+              "native_memory_capture_invalid");
+          await assertNativeModelOutputCaptureCurrent(tx, session.companyId, session.issueId!, scopedMemoryCapture,
+            "paperclip-self:remember");
+        });
+      };
       if (scopedContext && tool.name === "paperclip-self:remember" && !scopedMemoryCapture) {
         throw new ToolGatewayHttpError(403, "Managed Native Memory writes require a current provider tool-use capture", "native_memory_capture_required");
       }
@@ -11132,6 +11165,8 @@ export function createToolGatewayService(
           argumentsHash: argumentValidation.summary.sha256 ?? "",
         });
         if (replay?.matched) {
+          await revalidateScopedMemoryReplay({ invocationId: replay.invocationId,
+            argumentsHash: argumentValidation.summary.sha256 ?? "", result: replay.result });
           return {
             invocationId: replay.invocationId,
             status: "replayed" as const,
@@ -11541,6 +11576,8 @@ export function createToolGatewayService(
           if ((session.workflowRunId || scopedContext) && recorded.invocation.status !== "succeeded") throw new ToolGatewayHttpError(409,
             "The original tool operation is pending or failed; its effects cannot be repeated",
             "tool_idempotency_unsettled", { invocationId, status: recorded.invocation.status });
+          const replayResult = session.workflowRunId || scopedContext
+            ? recorded.invocation.workflowResultJson : storedInvocationResult(recorded.invocation);
           await writeAudit({
             session,
             companyId: session.companyId,
@@ -11557,11 +11594,13 @@ export function createToolGatewayService(
               replayed: true,
             },
           });
+          await revalidateScopedMemoryReplay({ invocationId, argumentsHash: argumentValidation.summary.sha256 ?? "",
+            result: replayResult });
           return {
             invocationId,
             status: "replayed" as const,
             tool: tool.name,
-            result: session.workflowRunId || scopedContext ? recorded.invocation.workflowResultJson : storedInvocationResult(recorded.invocation),
+            result: replayResult,
           };
         }
         if (accessDecision.decision === "require_approval") {

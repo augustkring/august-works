@@ -83,44 +83,48 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
     instanceId = `managed-opencode-${randomUUID()}`;
     vi.stubEnv("PAPERCLIP_INSTANCE_ID", instanceId);
     vi.stubEnv("PAPERCLIP_AGENT_JWT_SECRET", `managed-opencode-e2e-${randomUUID()}-${randomUUID()}`);
-    vi.stubEnv("PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS", "1");
+    const diagnosticsEnabled = process.env.PAPERCLIP_MANAGED_OPENCODE_E2E_DIAGNOSTICS === "1";
+    const sourceTimingsEnabled = diagnosticsEnabled || process.env.PAPERCLIP_MANAGED_OPENCODE_SOURCE_TIMINGS === "1";
+    if (diagnosticsEnabled) vi.stubEnv("PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS", "1");
     database = await startEmbeddedPostgresTestDatabase("managed-opencode-source-e2e-");
     db = createDb(database.connectionString);
     await instanceSettingsService(db).getExperimental();
     await enableV5ForTest(db);
     await instanceSettingsService(db).updateExperimental({ enableWorkflowsV1: true,
       role_packs_v5: false, skill_resolver_v5: false, readiness_engine_v7: true, orchestration_v7: true });
-    const assemble = nativeDirectInput.assembleNativeContextRead;
-    vi.spyOn(nativeDirectInput, "assembleNativeContextRead").mockImplementation(async (...args) => {
-      try { return await assemble(...args); }
-      catch (error) {
-        managedContextReadFailures.push(managedContextFailureFacts(error));
-        throw error;
-      }
-    });
-    const assertContextSourceSetCurrent = nativeDirectInput.assertNativeContextReadSourceSetCurrent;
-    vi.spyOn(nativeDirectInput, "assertNativeContextReadSourceSetCurrent").mockImplementation(async (...args) =>
-      timeManagedContextSourceCheck("assertNativeContextReadSourceSetCurrent", () => assertContextSourceSetCurrent(...args)));
-    const assertManagedConsumedSourceSetCurrent = nativeDirectInput.assertNativeManagedConsumedSourceSetCurrent;
-    vi.spyOn(nativeDirectInput, "assertNativeManagedConsumedSourceSetCurrent").mockImplementation(async function (
-      this: unknown, ...args) {
-      return timeManagedContextSourceCheck("assertNativeManagedConsumedSourceSetCurrent", () => assertManagedConsumedSourceSetCurrent(...args));
-    });
-    const assertAnalyticalContextPayloadAccess = analyticalContextAuthority.assertAnalyticalContextPayloadAccess;
-    vi.spyOn(analyticalContextAuthority, "assertAnalyticalContextPayloadAccess").mockImplementation(async (...args) =>
-      timeManagedContextSourceCheck("assertAnalyticalContextPayloadAccess", () => assertAnalyticalContextPayloadAccess(...args)));
-    const executeTool = PaperclipRunnerToolAuthority.prototype.execute;
-    vi.spyOn(PaperclipRunnerToolAuthority.prototype, "execute").mockImplementation(async function (
-      this: PaperclipRunnerToolAuthority, call, ...args) {
-      try { return await executeTool.call(this, call, ...args); }
-      catch (error) {
-        if (call.tool === "self_remember") {
-          const facts = managedContextFailureFacts(error);
-          managedMemoryToolFailures.push({ tool: call.tool, callId: call.callId, ...facts });
+    if (sourceTimingsEnabled) {
+      const assemble = nativeDirectInput.assembleNativeContextRead;
+      vi.spyOn(nativeDirectInput, "assembleNativeContextRead").mockImplementation(async (...args) => {
+        try { return await assemble(...args); }
+        catch (error) {
+          managedContextReadFailures.push(managedContextFailureFacts(error));
+          throw error;
         }
-        throw error;
-      }
-    });
+      });
+      const assertContextSourceSetCurrent = nativeDirectInput.assertNativeContextReadSourceSetCurrent;
+      vi.spyOn(nativeDirectInput, "assertNativeContextReadSourceSetCurrent").mockImplementation(async (...args) =>
+        timeManagedContextSourceCheck("assertNativeContextReadSourceSetCurrent", () => assertContextSourceSetCurrent(...args)));
+      const assertManagedConsumedSourceSetCurrent = nativeDirectInput.assertNativeManagedConsumedSourceSetCurrent;
+      vi.spyOn(nativeDirectInput, "assertNativeManagedConsumedSourceSetCurrent").mockImplementation(async function (
+        this: unknown, ...args) {
+        return timeManagedContextSourceCheck("assertNativeManagedConsumedSourceSetCurrent", () => assertManagedConsumedSourceSetCurrent(...args));
+      });
+      const assertAnalyticalContextPayloadAccess = analyticalContextAuthority.assertAnalyticalContextPayloadAccess;
+      vi.spyOn(analyticalContextAuthority, "assertAnalyticalContextPayloadAccess").mockImplementation(async (...args) =>
+        timeManagedContextSourceCheck("assertAnalyticalContextPayloadAccess", () => assertAnalyticalContextPayloadAccess(...args)));
+      const executeTool = PaperclipRunnerToolAuthority.prototype.execute;
+      vi.spyOn(PaperclipRunnerToolAuthority.prototype, "execute").mockImplementation(async function (
+        this: PaperclipRunnerToolAuthority, call, ...args) {
+        try { return await executeTool.call(this, call, ...args); }
+        catch (error) {
+          if (call.tool === "self_remember") {
+            const facts = managedContextFailureFacts(error);
+            managedMemoryToolFailures.push({ tool: call.tool, callId: call.callId, ...facts });
+          }
+          throw error;
+        }
+      });
+    }
   }, 60_000);
 
   afterAll(async () => {
@@ -235,7 +239,7 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
     expect(snapshotA.policy.memoryIds).not.toContain(privateRoot.memoryId);
     expect(snapshotB.policy.memoryIds).toContain(privateRoot.memoryId);
     expect(snapshotB.inputs).toContainEqual(expect.objectContaining({ kind: "context", manifestId: contextManifestId }));
-  }, 180_000);
+  }, 240_000);
 
   it("binds a managed Project GET result to the exact current public Project projection", async () => {
     const callId = "managed-e2e-project-read";

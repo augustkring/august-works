@@ -473,6 +473,9 @@ async function seedLowTrustFixture(db: Db) {
   const outOfScopeProject = await createCanonicalHumanProject(db, company!.id, currentHuman, `Out ${nonce}`, {
     description: canary("FLAG-PROJECT-7R4G"), status: "in_progress",
   });
+  const standardProject = await createCanonicalHumanProject(db, company!.id, currentHuman, `Standard ${nonce}`, {
+    status: "in_progress",
+  });
 
   const [collaborator] = await db
     .insert(agents)
@@ -574,6 +577,57 @@ async function seedLowTrustFixture(db: Db) {
       responsibleUserId: "board-user",
     })
     .returning();
+  const [standardReportGrandparent] = await db
+    .insert(issues)
+    .values({
+      companyId: company!.id,
+      projectId: standardProject.id,
+      title: "Standard report grandparent",
+      status: "in_progress",
+      priority: "medium",
+      assigneeAgentId: cto!.id,
+      responsibleUserId: "board-user",
+    })
+    .returning();
+  const [standardReportParent] = await db
+    .insert(issues)
+    .values({
+      companyId: company!.id,
+      projectId: standardProject.id,
+      parentId: standardReportGrandparent!.id,
+      title: "Standard report parent",
+      status: "in_progress",
+      priority: "medium",
+      assigneeAgentId: cto!.id,
+      responsibleUserId: "board-user",
+    })
+    .returning();
+  const [standardReportPeer] = await db
+    .insert(issues)
+    .values({
+      companyId: company!.id,
+      projectId: standardProject.id,
+      parentId: standardReportParent!.id,
+      title: "Standard report peer",
+      status: "todo",
+      priority: "medium",
+      assigneeAgentId: cto!.id,
+      responsibleUserId: "board-user",
+    })
+    .returning();
+  const [standardReportTask] = await db
+    .insert(issues)
+    .values({
+      companyId: company!.id,
+      projectId: standardProject.id,
+      parentId: standardReportParent!.id,
+      title: "Standard report task",
+      status: "in_progress",
+      priority: "medium",
+      assigneeAgentId: standard!.id,
+      responsibleUserId: "board-user",
+    })
+    .returning();
   const [siblingOutOfScope] = await db
     .insert(issues)
     .values({
@@ -668,7 +722,7 @@ async function seedLowTrustFixture(db: Db) {
       agentId: standard!.id,
       responsibleUserId: "board-user",
       status: "running",
-      contextSnapshot: { issueId: standardChild!.id },
+      contextSnapshot: { issueId: standardReportTask!.id },
     })
     .returning();
   await db
@@ -688,9 +742,9 @@ async function seedLowTrustFixture(db: Db) {
       checkoutRunId: standardReportRun!.id,
       executionRunId: standardReportRun!.id,
     })
-    .where(eq(issues.id, standardChild!.id));
-  standardChild!.checkoutRunId = standardReportRun!.id;
-  standardChild!.executionRunId = standardReportRun!.id;
+    .where(eq(issues.id, standardReportTask!.id));
+  standardReportTask!.checkoutRunId = standardReportRun!.id;
+  standardReportTask!.executionRunId = standardReportRun!.id;
 
   await db.insert(issueComments).values({
     companyId: company!.id,
@@ -858,13 +912,17 @@ async function seedLowTrustFixture(db: Db) {
       collaborator: collaborator!,
       cto: cto!,
     },
-    projects: { allowed: allowedProject!, outOfScope: outOfScopeProject! },
+    projects: { allowed: allowedProject!, outOfScope: outOfScopeProject!, standard: standardProject },
     sessionId,
     issues: {
       reviewGrandparent: reviewGrandparent!,
       reviewRoot: reviewRoot!,
       assignedReview: assignedReview!,
       standardChild: standardChild!,
+      standardReportGrandparent: standardReportGrandparent!,
+      standardReportParent: standardReportParent!,
+      standardReportPeer: standardReportPeer!,
+      standardReportTask: standardReportTask!,
       sameBoundaryChild: sameBoundaryChild!,
       siblingOutOfScope: siblingOutOfScope!,
     },
@@ -997,7 +1055,7 @@ describeEmbeddedPostgres(
       const lowTrustApp = createApp(db, agentActor(fixture));
 
       const parentComment = await request(standardApp)
-        .post(`/api/issues/${fixture.issues.reviewRoot.id}/comments`)
+        .post(`/api/issues/${fixture.issues.standardReportParent.id}/comments`)
         .send({ body: "Direct parent report" });
       expect(parentComment.status, JSON.stringify(parentComment.body)).toBe(
         201,
@@ -1008,7 +1066,7 @@ describeEmbeddedPostgres(
         .from(activityLog)
         .where(
           and(
-            eq(activityLog.entityId, fixture.issues.reviewRoot.id),
+            eq(activityLog.entityId, fixture.issues.standardReportParent.id),
             eq(activityLog.action, "issue.comment_added"),
           ),
         );
@@ -1024,10 +1082,10 @@ describeEmbeddedPostgres(
 
       const defaultOpenComments = [
         request(standardApp)
-          .post(`/api/issues/${fixture.issues.reviewGrandparent.id}/comments`)
+          .post(`/api/issues/${fixture.issues.standardReportGrandparent.id}/comments`)
           .send({ body: "Visible grandparent context" }),
         request(standardApp)
-          .post(`/api/issues/${fixture.issues.sameBoundaryChild.id}/comments`)
+          .post(`/api/issues/${fixture.issues.standardReportPeer.id}/comments`)
           .send({ body: "Visible sibling context" }),
       ];
       for (const defaultOpenComment of defaultOpenComments) {
@@ -1036,7 +1094,7 @@ describeEmbeddedPostgres(
       }
 
       const checkedOutPeerUpdate = await request(standardApp)
-        .patch(`/api/issues/${fixture.issues.reviewRoot.id}`)
+        .patch(`/api/issues/${fixture.issues.standardReportParent.id}`)
         .send({ status: "blocked" });
       expect(
         checkedOutPeerUpdate.status,
@@ -1048,7 +1106,7 @@ describeEmbeddedPostgres(
 
       const documentWrite = await request(standardApp)
         .put(
-          `/api/issues/${fixture.issues.reviewRoot.id}/documents/upward-write`,
+          `/api/issues/${fixture.issues.standardReportParent.id}/documents/upward-write`,
         )
         .send({ format: "markdown", body: "No upward document write" });
       expect(documentWrite.status, JSON.stringify(documentWrite.body)).toBe(
@@ -1071,10 +1129,10 @@ describeEmbeddedPostgres(
             status: "done",
             assigneeAgentId: closedParent.assigneeAgentId,
           })
-          .where(eq(issues.id, fixture.issues.reviewRoot.id));
+          .where(eq(issues.id, fixture.issues.standardReportParent.id));
 
         const closedParentComment = await request(standardApp)
-          .post(`/api/issues/${fixture.issues.reviewRoot.id}/comments`)
+          .post(`/api/issues/${fixture.issues.standardReportParent.id}/comments`)
           .send({
             body: "Comment only on closed parent",
             ...closedParent.intent,
@@ -1087,7 +1145,7 @@ describeEmbeddedPostgres(
         const [persistedParent] = await db
           .select({ status: issues.status })
           .from(issues)
-          .where(eq(issues.id, fixture.issues.reviewRoot.id));
+            .where(eq(issues.id, fixture.issues.standardReportParent.id));
         expect(persistedParent?.status).toBe("done");
       }
     });
@@ -1164,7 +1222,7 @@ describeEmbeddedPostgres(
         .send({ status: "done" })
         .expect(200);
 
-      const relayComments = await db
+      const relayComments = (await db
         .select({
           body: issueComments.body,
           authorType: issueComments.authorType,
@@ -1175,29 +1233,31 @@ describeEmbeddedPostgres(
             eq(issueComments.issueId, fixture.issues.reviewRoot.id),
             eq(issueComments.authorType, "system"),
           ),
-        );
-      expect(relayComments).toHaveLength(2);
-      expect(relayComments.map((comment) => comment.body)).toEqual(
+        )).filter((comment) => comment.body.startsWith("System relay:"));
+      expect(relayComments).toHaveLength(3);
+      const assignedReviewRelays = relayComments.filter((comment) =>
+        comment.body.includes(fixture.issues.assignedReview.identifier ?? fixture.issues.assignedReview.id),
+      );
+      const standardChildRelays = relayComments.filter((comment) =>
+        comment.body.includes(fixture.issues.standardChild.identifier ?? fixture.issues.standardChild.id),
+      );
+      expect(assignedReviewRelays).toHaveLength(2);
+      expect(assignedReviewRelays.map(({ body }) => body)).toEqual(
         expect.arrayContaining([
-          expect.stringContaining(`transitioned to \`blocked\``),
-          expect.stringContaining(`transitioned to \`cancelled\``),
+          expect.stringContaining("transitioned to `blocked`"),
+          expect.stringContaining("transitioned to `cancelled`"),
         ]),
       );
+      expect(standardChildRelays).toHaveLength(1);
+      expect(standardChildRelays[0]?.body).toContain("transitioned to `blocked`");
       for (const relay of relayComments) {
         expect(relay.authorType).toBe("system");
-        expect(relay.body).toContain(
-          fixture.issues.assignedReview.identifier ??
-            fixture.issues.assignedReview.id,
-        );
         expect(relay.body).not.toContain(fixture.canaries.raw);
         expect(relay.body).not.toContain("in_review");
         expect(relay.body).not.toContain("done");
-        expect(relay.body).not.toContain(
-          fixture.issues.standardChild.identifier,
-        );
       }
 
-      const reparentedRelayComments = await db
+      const reparentedRelayComments = (await db
         .select({
           body: issueComments.body,
           authorType: issueComments.authorType,
@@ -1208,7 +1268,7 @@ describeEmbeddedPostgres(
             eq(issueComments.issueId, fixture.issues.reviewGrandparent.id),
             eq(issueComments.authorType, "system"),
           ),
-        );
+        )).filter((comment) => comment.body.startsWith("System relay:"));
       expect(reparentedRelayComments).toHaveLength(1);
       expect(reparentedRelayComments[0]?.body).toContain(
         "transitioned to `blocked`",
@@ -1839,10 +1899,7 @@ describeEmbeddedPostgres(
     it("redacts quarantined low-trust output from higher-trust wake and continuation contexts", async () => {
       const fixture = await seedLowTrustFixture(db);
       const lowTrustApp = createApp(db, agentActor(fixture));
-      const standardApp = createApp(
-        db,
-        agentActor(fixture, fixture.agents.standard.id),
-      );
+      const standardApp = createApp(db, standardReportActor(fixture));
       const gateway = await createControlledGatewayServer();
       const heartbeat = heartbeatService(db, {
         runtimeEnv: {
@@ -1871,7 +1928,7 @@ describeEmbeddedPostgres(
         await createQuarantinedContinuationSummary(
           db,
           fixture,
-          fixture.issues.reviewRoot.id,
+          fixture.issues.standardReportParent.id,
         );
 
         const lowTrustContext = await request(lowTrustApp)
@@ -1894,7 +1951,7 @@ describeEmbeddedPostgres(
           .insert(issueComments)
           .values({
             companyId: fixture.company.id,
-            issueId: fixture.issues.reviewRoot.id,
+            issueId: fixture.issues.standardReportParent.id,
             authorAgentId: fixture.agents.lowTrust.id,
             createdByRunId: fixture.runs.lowTrust.id,
             body: `malicious scoped result ${fixture.canaries.raw}`,
@@ -1912,7 +1969,7 @@ describeEmbeddedPostgres(
           .then((rows) => rows[0]!);
 
         const higherTrustContext = await request(standardApp).get(
-          `/api/issues/${fixture.issues.reviewRoot.id}/heartbeat-context`,
+          `/api/issues/${fixture.issues.standardReportParent.id}/heartbeat-context`,
         );
         expect(
           higherTrustContext.status,
@@ -1935,7 +1992,7 @@ describeEmbeddedPostgres(
           runId: randomUUID(),
         });
         const bogusRunContext = await request(bogusRunStandardApp).get(
-          `/api/issues/${fixture.issues.reviewRoot.id}/heartbeat-context`,
+          `/api/issues/${fixture.issues.standardReportParent.id}/heartbeat-context`,
         );
         expect(
           bogusRunContext.status,
@@ -1982,19 +2039,23 @@ describeEmbeddedPostgres(
             status: "succeeded",
             finishedAt: new Date("2026-05-14T12:02:00.000Z"),
           })
-          .where(eq(heartbeatRuns.id, fixture.runs.standard.id));
+          .where(eq(heartbeatRuns.id, fixture.runs.standardReport.id));
+        await db
+          .update(issues)
+          .set({ checkoutRunId: null, executionRunId: null })
+          .where(eq(issues.id, fixture.issues.standardReportTask.id));
 
         const run = await heartbeat.wakeup(fixture.agents.standard.id, {
           source: "automation",
           triggerDetail: "system",
           reason: "issue_commented",
           payload: {
-            issueId: fixture.issues.reviewRoot.id,
+            issueId: fixture.issues.standardReportParent.id,
             commentId: scopedComment.id,
           },
           contextSnapshot: {
-            issueId: fixture.issues.reviewRoot.id,
-            taskId: fixture.issues.reviewRoot.id,
+            issueId: fixture.issues.standardReportParent.id,
+            taskId: fixture.issues.standardReportParent.id,
             wakeCommentId: scopedComment.id,
             wakeCommentIds: [scopedComment.id],
             wakeReason: "issue_commented",
@@ -2026,15 +2087,15 @@ describeEmbeddedPostgres(
         expect(wake).toMatchObject({
           reason: "issue_commented",
           issue: {
-            id: fixture.issues.reviewRoot.id,
-            title: fixture.issues.reviewRoot.title,
+            id: fixture.issues.standardReportParent.id,
+            title: fixture.issues.standardReportParent.title,
           },
           latestCommentId: scopedComment.id,
           commentIds: [scopedComment.id],
           comments: [
             {
               id: scopedComment.id,
-              issueId: fixture.issues.reviewRoot.id,
+              issueId: fixture.issues.standardReportParent.id,
               body: LOW_TRUST_QUARANTINED_BODY,
             },
           ],
