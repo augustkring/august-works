@@ -47,7 +47,10 @@ export default defineConfig({
       PATH: `${providerDir}${path.delimiter}${process.env.PATH ?? ""}`,
       PAPERCLIP_E2E_AUTH_MODE: "authenticated",
       PAPERCLIP_AUTH_RATE_LIMIT_ENABLED: "false",
+      PAPERCLIP_E2E_SOURCE_DENIAL_OBSERVER: "1",
     },
   },
-  outputDir: path.resolve(import.meta.dirname, "../../test-results/v10-agent-chat-authenticated"),
+  outputDir: process.env.PAPERCLIP_AGENT_CHAT_OUTPUT_DIR
+    ? path.resolve(process.env.PAPERCLIP_AGENT_CHAT_OUTPUT_DIR)
+    : path.resolve(import.meta.dirname, "../../test-results/v10-agent-chat-authenticated"),
 });

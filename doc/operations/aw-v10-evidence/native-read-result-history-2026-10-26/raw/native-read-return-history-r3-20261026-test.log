@@ -1,0 +1,35 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts (43 tests | 1 failed | 42 skipped) 7269ms
+     × appends only an actual acknowledged Native history read with current source owners 2285ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > appends only an actual acknowledged Native history read with current source owners
+AssertionError: promise resolved "undefined" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+undefined
+
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts:977:92
+    975|       (readInput!.inputs.find(source => source.kind === "comment") as …
+    976|     await expect(assertNativePayloadSourceSetCurrent(db, { companyId, …
+    977|       actor: nativeActor, policy: readInput!.policy as never, inputs: …
+       |                                                                                            ^
+    978|
+    979|     const missingAssociation = await runRead("missing");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 42 skipped (43)
+   Start at  06:52:11
+   Duration  22.86s (transform 11.02s, setup 80ms, import 15.38s, tests 7.27s, environment 0ms)
+

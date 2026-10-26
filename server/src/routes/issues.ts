@@ -3566,7 +3566,7 @@ export function issueRoutes(
   // Temporary admission closure while every private derivative and delivery
   // owner is qualified. This is removed by the complete privacy release, not
   // by an operator flag or a client assertion of safe source content.
-  async function assertPublicTaskWriteAdmission(req: Request, companyId: string, issueIds: string[] = []) {
+  async function assertPublicTaskWriteAdmission(req: Request, companyId: string, issueIds: string[] = [], res?: Response) {
     if (req.body?.visibility === "private") throw unprocessable("Private tasks are not available");
     const sources = new Set(issueIds);
     for (const value of [req.body?.parentId, req.body?.privacyParentIssueId, req.body?.privacyRootIssueId,
@@ -3584,7 +3584,13 @@ export function issueRoutes(
       let ownedNativeConversation = false;
       const isNativeConversationCommentWrite = req.method === "POST" &&
         req.originalUrl.split("?")[0]!.endsWith(`/issues/${id}/comments`);
-      if (isNativeConversationCommentWrite && req.actor.type === "board" && req.actor.source === "session" && req.actor.sessionId && req.actor.userId) {
+      const requestPath = req.originalUrl.split("?")[0]!;
+      const isNativeConversationWorkModeWrite = req.method === "PATCH" &&
+        requestPath.endsWith(`/issues/${id}`) &&
+        req.body != null && typeof req.body === "object" && !Array.isArray(req.body) &&
+        Object.keys(req.body).length === 1 && Object.hasOwn(req.body, "workMode");
+      if ((isNativeConversationCommentWrite || isNativeConversationWorkModeWrite) &&
+          req.actor.type === "board" && req.actor.source === "session" && req.actor.sessionId && req.actor.userId) {
         ownedNativeConversation = await db.transaction(async tx => {
           const [conversation] = await tx.select({ conversationAgentId: issueRows.conversationAgentId,
             conversationUserId: issueRows.conversationUserId }).from(issueRows)
@@ -3597,6 +3603,8 @@ export function issueRoutes(
           return true;
         });
       }
+      const ownedConversationWorkModeWrite = ownedNativeConversation && isNativeConversationWorkModeWrite;
+      if (ownedConversationWorkModeWrite && res) res.locals.ownedConversationWorkModeWrite = true;
       if (!ownedNativeConversation && !(await canActorReadIssuePrivacy(db, { type: "none" }, { id, companyId })))
         throw unprocessable("Private tasks are not available");
     }
@@ -3609,12 +3617,12 @@ export function issueRoutes(
   router.use("/issues/:id", async (req, _res, next) => {
     if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) return next();
     const issue = await svc.getById(req.params.id as string);
-    if (issue) await assertPublicTaskWriteAdmission(req, issue.companyId, [issue.id]);
+    if (issue) await assertPublicTaskWriteAdmission(req, issue.companyId, [issue.id], _res);
     next();
   });
   router.use("/companies/:companyId/issues", async (req, _res, next) => {
     if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
-      await assertPublicTaskWriteAdmission(req, req.params.companyId as string);
+      await assertPublicTaskWriteAdmission(req, req.params.companyId as string, [], _res);
     }
     next();
   });
@@ -14168,7 +14176,8 @@ export function issueRoutes(
       const issueUpdateData = {
         ...updateFields,
         privacyActor: req.actor,
-        privateWorkAdmission: "closed" as const,
+        privateWorkAdmission: res.locals.ownedConversationWorkModeWrite === true
+          ? "owned_conversation_work_mode" as const : "closed" as const,
         actorAgentId: actor.agentId ?? null,
         actorRunId: actor.agentId ? actor.runId : null,
         actorRunStopId: actor.agentId && interruptedRunId === actor.runId ? issueMutationStopId : null,

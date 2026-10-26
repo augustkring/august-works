@@ -1,12 +1,36 @@
 #!/usr/bin/env node
 import readline from "node:readline";
 
-const threadId = `agent-chat-${process.pid}`;
+let threadId = `agent-chat-${process.pid}`;
 let turnNumber = 0;
 const pendingTools = new Map();
 const lineReader = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
 
 function send(value) { process.stdout.write(`${JSON.stringify(value)}\n`); }
+
+function completionContractFrom(value, depth = 0) {
+  if (depth > 8 || value === null || value === undefined) return null;
+  if (typeof value === "string") {
+    try { return completionContractFrom(JSON.parse(value), depth + 1); }
+    catch { return null; }
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = completionContractFrom(item, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (typeof value !== "object") return null;
+  const direct = value.completionContract;
+  if (direct && typeof direct.revision === "string" && Array.isArray(direct.criteria))
+    return direct;
+  for (const nested of Object.values(value)) {
+    const found = completionContractFrom(nested, depth + 1);
+    if (found) return found;
+  }
+  return null;
+}
 
 function collectStrings(value, output = []) {
   if (typeof value === "string") output.push(value);
@@ -46,10 +70,39 @@ function progress(turn, body, next = () => finish(turn, body)) {
 }
 
 function finish(turn, text) {
-  send({ method: "item/completed", params: { threadId, turnId: turn.turnId, item: {
-    id: `agent-chat-message-${turn.number}`, type: "agentMessage", status: "completed", text,
-  } } });
-  send({ method: "turn/completed", params: { threadId, turn: { id: turn.turnId, status: "completed" } } });
+  const emitReply = () => {
+    const item = { id: `agent-chat-message-${turn.number}`, type: "agentMessage", phase: "final_answer", text };
+    send({ method: "item/started", params: { threadId, turnId: turn.turnId, item } });
+    send({ method: "item/completed", params: { threadId, turnId: turn.turnId, item: { ...item, status: "completed" } } });
+    if ([...pendingTools.values()].some((pending) => pending.turn === turn))
+      throw new Error("fixture attempted to complete a turn with pending tool replies");
+    send({ method: "turn/completed", params: { threadId, turn: { id: turn.turnId, status: "completed" } } });
+  };
+  const reportYieldedReply = turn.workMode === "planning" ||
+    (turn.workMode === "ask" && turn.command?.action !== "question");
+  if (!reportYieldedReply) return emitReply();
+  if (!turn.completionContract?.revision || !Array.isArray(turn.completionContract.criteria))
+    throw new Error("planning turn lacks the current completion contract");
+  const result = {
+    schema: "paperclip.run_result.v1",
+    reportedWorkDisposition: "yielded",
+    summary: text,
+    completionClaim: {
+      contractRevision: turn.completionContract.revision,
+      objectiveSatisfied: false,
+      criteria: turn.completionContract.criteria.map(({ id }) => ({
+        criterionId: id, status: "unknown", evidenceRefs: [],
+      })),
+      remainingWork: [{ description: "Wait for the next message in this conversation.", blocksCompletion: true }],
+    },
+    evidence: [], verification: [], attentionRequests: [], artifacts: [],
+    continuation: {
+      kind: "response_wake",
+      summary: "Wait for the next message in this conversation.",
+      idempotencyKey: `agent-chat-response:${turn.commentId ?? turn.number}`,
+    },
+  };
+  tool(turn, "paperclip_finish", result, emitReply);
 }
 
 function resultText(value) {
@@ -64,7 +117,7 @@ function actionAfterHistory(turn, comments) {
   const needsContext = humanComments.length === 0 || command.action === "question" ||
     (command.action === "project" && command.direct === true) ||
     (command.action === "plan" && command.approval === true);
-  if (needsContext && !turn.activeTask) {
+  if (!turn.activeTask) {
     return tool(turn, "get_task_context", {}, context => {
       turn.companyId = context?.company?.id;
       turn.issueId = context?.activeTask?.id;
@@ -128,7 +181,11 @@ function actionAfterHistory(turn, comments) {
       return writePlan(turn, command.text, true);
     });
   }
-  if (command.action === "project") return createProject(turn, command, false);
+  if (command.action === "project") {
+    if (turn.workMode === "planning" || turn.workMode === "ask")
+      return finish(turn, "I can discuss a project plan here, but I will not create a project in this mode.");
+    return createProject(turn, command, false);
+  }
   if (command.action === "handoff") return handoff(turn, command);
   if (command.action === "delayed") {
     return progress(turn, "Turn started before feature disable.", () => setTimeout(() =>
@@ -301,15 +358,30 @@ lineReader.on("line", line => {
     case "initialize": send({ id, result: { user: { sessionId: "agent-chat-test-session" } } }); break;
     case "initialized": break;
     case "thread/start":
-    case "thread/resume": send({ id, result: { thread: { id: threadId, sessionId: "agent-chat-test-session" } } }); break;
+    case "thread/resume": {
+      if (message.method === "thread/resume" && typeof message.params?.threadId === "string")
+        threadId = message.params.threadId;
+      send({ id, result: { thread: { id: threadId, sessionId: "agent-chat-test-session" } } });
+      break;
+    }
+    case "thread/read":
+      send({ id, result: { thread: { id: threadId, turns: [] } } });
+      break;
     case "turn/start": {
       turnNumber += 1;
-      const turnId = `agent-chat-turn-${turnNumber}`;
-      const turn = { turnId, number: turnNumber, step: 0 };
+      const turnId = `agent-chat-turn-${process.pid}-${turnNumber}`;
+      const turn = { turnId, number: turnNumber, step: 0,
+        completionContract: completionContractFrom(message.params?.input ?? message.params) };
       send({ id, result: { turn: { id: turnId, status: "inProgress" } } });
       send({ method: "turn/started", params: { threadId, turn: { id: turnId } } });
-      tool(turn, "get_task_history", { limit: 100 }, history =>
-        actionAfterHistory(turn, Array.isArray(history?.comments) ? history.comments : []));
+      tool(turn, "get_task_context", {}, context => {
+        turn.companyId = context?.company?.id;
+        turn.issueId = context?.activeTask?.id;
+        turn.activeTask = context?.activeTask;
+        turn.workMode = context?.activeTask?.workMode;
+        tool(turn, "get_task_history", { limit: 100 }, history =>
+          actionAfterHistory(turn, Array.isArray(history?.comments) ? history.comments : []));
+      });
       break;
     }
     case "turn/interrupt": {

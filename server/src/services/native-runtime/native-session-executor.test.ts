@@ -273,6 +273,7 @@ import {
   createGovernedWaitEventObservation,
   createRemoteRunnerProcessLauncher,
   createRunnerdBackend,
+  createRunnerDiagnosticLogSink,
   executePaperclipNativeSession,
   detachNativeSessionsForRestart,
   NativeControllerDetachedForRestartError,
@@ -379,6 +380,44 @@ describe("first meaningful native agent event", () => {
       event("turn.started", { kind: "agentMessage", text: "message" }),
       event("tool.execution.started", { name: "Terminal" }),
     ]) expect(firstMeaningfulAgentEventKind(candidate)).toBeNull();
+  });
+});
+
+describe("runner diagnostic callback authority failure", () => {
+  it("revokes tools and requests one session cancellation without an unhandled rejection", async () => {
+    const onLog = vi.fn(async () => { throw new Error("source access denied"); });
+    const revokeToolAuthority = vi.fn();
+    const cancelSession = vi.fn(async () => { throw new Error("already stopping"); });
+    const sink = createRunnerDiagnosticLogSink({
+      runId: "run-diagnostic-source-loss",
+      onLog,
+      revokeToolAuthority,
+      cancelSession,
+    });
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      sink("runner diagnostic 1");
+      sink("runner diagnostic 2");
+      await new Promise<void>(resolve => setImmediate(resolve));
+      expect(onLog).toHaveBeenCalledTimes(2);
+      expect(revokeToolAuthority).toHaveBeenCalledOnce();
+      expect(cancelSession).toHaveBeenCalledTimes(1);
+      expect(cancelSession).toHaveBeenCalledWith(
+        "run-diagnostic-source-loss",
+        "Runner diagnostic output authorization failed",
+      );
+      expect(unhandled).toEqual([]);
+      const authorizedToolEffect = vi.fn();
+      expect(() => {
+        if (revokeToolAuthority.mock.calls.length) throw new Error("native_tool_authority_epoch_revoked");
+        authorizedToolEffect();
+      }).toThrow("native_tool_authority_epoch_revoked");
+      expect(authorizedToolEffect).not.toHaveBeenCalled();
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
   });
 });
 
@@ -7763,6 +7802,41 @@ describe("runnerd provider runtime wiring", () => {
       process.env.PAPERCLIP_RUNNER_STATE_DIR = previousStateDirectory;
     }
     await rm(isolatedStateDirectory, { recursive: true, force: true });
+  });
+
+  it("survives a rejected diagnostic log and fences the current tool epoch", async () => {
+    const diagnosticExecution = {
+      ...execution,
+      binding: { ...execution.binding, runId: "run-diagnostic-log-rejection" },
+    } as NativeExecutionInputV1;
+    const onLog = vi.fn(async () => { throw new Error("source access denied"); });
+    state.toolAuthorityExecute.mockClear();
+    await createRunnerdBackend({
+      db: leaseDb(diagnosticExecution),
+      execution: diagnosticExecution,
+      runnerInstanceId: "runner-diagnostic-log-rejection",
+      onLog,
+    });
+    const backendOptions = state.createBackend.mock.calls.at(-1)![1];
+    backendOptions.codexTransportFactory!();
+    const transportOptions = state.createTransport.mock.calls.at(-1)![0] as RunnerTransportOptions & {
+      onDiagnostic?: (message: string) => void;
+    };
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      transportOptions.onDiagnostic!("bounded diagnostic fixture");
+      await new Promise<void>(resolve => setImmediate(resolve));
+      expect(onLog).toHaveBeenCalledOnce();
+      await expect(backendOptions.dynamicToolHandler!({
+        tool: "read_document", callId: "after-log-rejection", arguments: {},
+      })).rejects.toThrow("native_tool_authority_epoch_revoked");
+      expect(state.toolAuthorityExecute).not.toHaveBeenCalled();
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
   });
 
   it.each([

@@ -121,6 +121,7 @@ import {
   clampIssueRequestDepth,
   extractAgentMentionIds,
   extractProjectMentionIds,
+  ISSUE_WORK_MODES,
   issueCommentAuthorTypeSchema,
   issueCommentMetadataSchema,
   issueCommentPresentationSchema,
@@ -11304,7 +11305,7 @@ export function issueService(db: Db) {
         actorRunStopId?: string | null;
         actorUserId?: string | null;
         privacyActor?: AuthorizationActor;
-        privateWorkAdmission?: "closed";
+        privateWorkAdmission?: "closed" | "owned_conversation_work_mode";
         companyGuard?: string;
       },
       dbOrTx: any = db,
@@ -11631,6 +11632,23 @@ export function issueService(db: Db) {
           .for("update")
           .then((rows: Array<typeof issues.$inferSelect>) => rows[0] ?? null);
         if (!receiptExisting) return null;
+        if (privateWorkAdmission === "owned_conversation_work_mode") {
+          const modeOnly = Object.keys(issueData).length === 1 && Object.hasOwn(issueData, "workMode") &&
+            ISSUE_WORK_MODES.includes(issueData.workMode as typeof ISSUE_WORK_MODES[number]);
+          if (!modeOnly || privacyActor?.type !== "board" || privacyActor.source !== "session" ||
+              !privacyActor.userId || !privacyActor.sessionId ||
+              !receiptExisting.conversationAgentId || receiptExisting.conversationUserId !== privacyActor.userId) {
+            throw forbidden("The native conversation work mode change is unavailable");
+          }
+          const pinned = await pinCurrentBoardActor(tx, privacyActor).catch(error => {
+            if (isAuthenticationStateBusy(error))
+              throw conflict("Authentication state is changing; try again", { code: "authentication_state_busy" });
+            throw error;
+          });
+          if (!pinned || pinned.credentialExpiresAt === null) throw notFound("Issue not found");
+          await assertManualInputCredentialCurrent(tx, pinned.actor, pinned.credentialExpiresAt);
+          if (!await canActorReadIssuePrivacy(tx, pinned.actor, receiptExisting)) throw notFound("Issue not found");
+        }
         if (privateWorkAdmission === "closed" && (!(await canActorReadIssuePrivacy(tx, { type: "none" }, receiptExisting))
           || issueData.visibility === "private")) throw unprocessable("Private tasks are not available");
         let privacy: Awaited<ReturnType<typeof resolveIssuePrivacy>> | undefined;

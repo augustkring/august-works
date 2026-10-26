@@ -12,6 +12,13 @@ import {
   agents,
   authUsers,
   authSessions,
+  chatConversations,
+  chatDeliveries,
+  chatEndpointResources,
+  chatEndpoints,
+  chatExternalPrincipals,
+  chatIdentityLinks,
+  chatMessageLinks,
   companyMemberships,
   companies,
   createDb,
@@ -22,15 +29,20 @@ import {
   issues,
   issueThreadInteractions,
   nativeRunFinalizations,
+  toolApplications,
+  toolConnections,
 } from "@paperclipai/db";
 import type { ContextAuthorityDecision, NativePayloadSourceInput } from "@paperclipai/shared";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { PROCESS_START_REQUESTED } from "../native-local-process-stop.js";
 import { recordNativeModelInputDispatchIntent, recordNativeModelInputDispatchAcknowledgement, recordNativeToolCallDispatchAssociation,
-  recordNativeDocumentToolResultIntent, recordNativeProjectToolResultIntent } from "./native-session-executor.js";
+  recordNativeDocumentToolResultIntent, recordNativeProjectToolResultIntent, recordNativeInputToolResultIntent,
+  assertNativeRunReadSourceHistoryQualified } from "./native-session-executor.js";
+import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
+import { NativeChatAttachmentReadScope } from "./chat-attachment-read.js";
 import type { NativeProjectToolResultSource } from "./paperclip-runner-tool-authority.js";
 import { documentService, type DocumentRevisionSourceCapture } from "../documents.js";
-import { nativeSha256 } from "./canonical.js";
+import { nativeCommentProjectionHash, nativeSha256 } from "./canonical.js";
 import { currentNativeControllerIdentity } from "./native-restart-recovery.js";
 import { buildNativeModelEnvelope, NATIVE_EXECUTION_INPUT_SCHEMA_V2, parseNativeExecutionInput } from "@paperclipai/paperclip-runner";
 import { buildNativeExecutionInput, buildNativeBootstrapSourceSet, prepareNativeTurnWithContext,
@@ -51,7 +63,7 @@ import { contextEngineService } from "../context/context-engine.js";
 import { issueThreadInteractionService } from "../issue-thread-interactions.js";
 import { resolveDefaultAgentWorkspaceDir } from "../../home-paths.js";
 import { materializeNativeInteractionResponses } from "./native-interaction-bridge.js";
-import { assertNativePayloadSourceSetCurrent } from "../native-direct-input.js";
+import { assertNativePayloadSourceSetCurrent, assertNativeReadResultSourceSetOwnersCurrent } from "../native-direct-input.js";
 import { configureSaasStorageService } from "../../storage/index.js";
 import { createLocalDiskStorageProvider } from "../../storage/local-disk-provider.js";
 import { createStorageService } from "../../storage/service.js";
@@ -878,6 +890,280 @@ describe("native model input dispatch intent", () => {
     await interactionService.submitItemVerdicts({ id: createdIssue.id, companyId, status: "in_progress" }, interactionId,
       { verdicts: [{ id: "two", verdict: "reject", reason: "Needs revision" }] }, { userId });
     await expect(checkCurrent()).rejects.toThrow("A Native source Interaction changed or was erased");
+  });
+
+  it("appends only an actual acknowledged Native history read with current source owners", async () => {
+    const userId = randomUUID(), sessionId = randomUUID(), now = new Date();
+    await db.insert(authUsers).values({ id: userId, name: "History source Human", email: `${userId}@test.invalid`, createdAt: now, updatedAt: now });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId, status: "active", membershipRole: "member" });
+    await db.insert(authSessions).values({ id: sessionId, userId, token: randomUUID(), createdAt: now, updatedAt: now,
+      expiresAt: new Date(now.getTime() + 3_600_000) });
+    const boardActor = { type: "board" as const, source: "session" as const, userId, sessionId, companyIds: [companyId],
+      memberships: [{ companyId, membershipRole: "member", status: "active" as const }] };
+
+    const runRead = async (association: "exact" | "missing" | "forged") => {
+      const createdIssue = await issueService(db).create(companyId, { title: "Read exact Task history", description: "A current Human source",
+        createdByUserId: userId }, db, undefined, { manualInputActor: boardActor });
+      const seeded = await seed({ existingIssueId: createdIssue.id, responsibleUserId: userId });
+      await db.update(issues).set({ status: "in_progress", assigneeAgentId: agentId, executionRunId: seeded.runId })
+        .where(and(eq(issues.companyId, companyId), eq(issues.id, createdIssue.id)));
+      const comment = await issueService(db).addComment(createdIssue.id, "Current authored history result.", { userId },
+        { manualInputActor: boardActor });
+      const taskCaptureHolder: { value: NativeTaskSourceCapture | null } = { value: null };
+      const task = await getIssueExecutionContext(db, companyId, createdIssue.id, capture => { taskCaptureHolder.value = capture; });
+      expect(task).not.toBeNull();
+      const references: Array<{ kind: "task" | "comment" | "document_revision" | "attachment" | "unknown"; id: string }> = [];
+      const markdown = buildPaperclipTaskMarkdown({ issue: { id: createdIssue.id, identifier: task!.identifier,
+        title: task!.title, description: task!.description, workMode: task!.workMode } },
+        { onRenderedSource: source => references.push(source) })!;
+      const workspace = { id: seeded.runId, cwd: "/native", repoUrl: null, repoRef: null, branchName: null };
+      const completion = await ensureNativeCompletionContract({ db, companyId,
+        issue: { id: createdIssue.id, title: task!.title, description: task!.description }, actorId: agentId });
+      await db.update(heartbeatRuns).set({ completionContractId: completion.row.id,
+        completionContractSha256: completion.row.canonicalSha256 }).where(eq(heartbeatRuns.id, seeded.runId));
+      const sourceSet = buildNativeBootstrapSourceSet({ companyId, runId: seeded.runId, agentId, issueId: createdIssue.id,
+        renderedMarkdown: markdown, renderedMarkdownDigest: createHash("sha256").update(markdown, "utf8").digest("hex"), references,
+        candidates: [{ kind: "task", id: createdIssue.id, input: taskCaptureHolder.value!.input,
+          payloadSourceSnapshot: taskCaptureHolder.value!.payloadSourceSnapshot }], runtimeInputs: [], contextManifestIds: [],
+        additionalInputs: [{ kind: "completion_contract", issueId: createdIssue.id, contractId: completion?.row.id ?? "",
+          revision: String(completion?.row.revision ?? ""), contentHash: completion?.row.canonicalSha256 ?? "" },
+          { kind: "workspace_metadata", runId: seeded.runId, executionWorkspaceId: seeded.runId, origin: "task_session",
+            sourceVersion: `task-session:${seeded.runId}`, contentHash: createHash("sha256").update(JSON.stringify({ cwd: workspace.cwd,
+              repoUrl: workspace.repoUrl, repoRef: workspace.repoRef, branchName: workspace.branchName }), "utf8").digest("hex") }],
+        rolePackInputs: [], unsupportedInputPresent: false });
+      expect(sourceSet).not.toBeNull();
+      await initializeRunIdentity(db, { companyId, runId: seeded.runId, issueId: createdIssue.id,
+        responsibleUserId: userId, cause: "dispatch" });
+      const execution = buildNativeExecutionInput({ companyId, runId: seeded.runId, agentId,
+        issue: { id: createdIssue.id, identifier: task!.identifier, title: task!.title, description: task!.description, workMode: "standard" },
+        taskPrompt: markdown, workspace: { id: seeded.runId, cwd: "/native", repoUrl: null, repoRef: null, branchName: null },
+        normalizedSessionId: null, completionContract: { id: completion.row.id, sha256: completion.row.canonicalSha256,
+          schemaVersion: completion.row.schemaVersion, contract: completion.contract }, runtimeContext: nativeRuntimeContextFixture() });
+      await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeExecutionInput: execution } }).where(eq(heartbeatRuns.id, seeded.runId));
+      const turnInput = { message: { role: "user" as const, text: JSON.stringify(buildNativeModelEnvelope(execution)) }, requestedCollaborationMode: "default" as const };
+      const closure = { sourceSet: sourceSet!, taskEnvelopeDigest: nativeSha256(execution.task) };
+      const dispatchArgsForRead = dispatchArgs(seeded, turnInput);
+      const dispatchId = await recordNativeModelInputDispatchIntent({ ...dispatchArgsForRead, bootstrapSourceClosure: closure });
+      const turnId = `native-history-turn-${seeded.runId}`;
+      const callId = `native-history-call-${seeded.runId}`;
+      await recordNativeModelInputDispatchAcknowledgement({ ...acknowledgementArgs(seeded, dispatchId, turnInput, turnId), sourceClosure: closure });
+      const argsHash = nativeSha256({});
+      if (association !== "missing") expect(await recordNativeToolCallDispatchAssociation({ ...dispatchArgsForRead,
+        turnId, callId, tool: "get_task_history", argumentsHash: association === "forged" ? nativeSha256({ other: true }) : argsHash })).toBe(true);
+      const authority = new PaperclipRunnerToolAuthority(db, { companyId, agentId, issueId: createdIssue.id, runId: seeded.runId });
+      const binding = { ...dispatchArgs(seeded, turnInput), agentId };
+      const callback = async (capture: Parameters<typeof recordNativeInputToolResultIntent>[0]["capture"]) => {
+        if (capture.sourceSet) {
+          for (const commentSource of capture.sourceSet.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "comment" }> =>
+            source.kind === "comment")) {
+            const [row] = await db.select({ sourceVersion: sql<string>`extract(epoch from ${issueComments.updatedAt})::text`,
+              payloadSourceSnapshot: issueComments.payloadSourceSnapshot,
+              payloadSourceSnapshotInvalidated: issueComments.payloadSourceSnapshotInvalidated }).from(issueComments)
+              .where(eq(issueComments.id, commentSource.commentId));
+            const view = await issueService(db).getComment(commentSource.commentId);
+            const snapshot = row?.payloadSourceSnapshot as { owner?: Record<string, unknown>; policy?: Record<string, string[]>; inputs?: unknown[] } | null;
+            expect(row?.sourceVersion).toBe(commentSource.sourceVersion);
+            expect(row?.payloadSourceSnapshotInvalidated).toBe(false);
+            expect(view).not.toBeNull();
+            expect(snapshot?.owner?.contentHash).toMatch(/^[0-9a-f]{64}$/);
+            expect(nativeCommentProjectionHash({ body: view?.body, presentation: view?.presentation, metadata: view?.metadata }))
+              .toBe(commentSource.contentHash);
+            expect((snapshot?.inputs ?? []).every(root => capture.sourceSet!.inputs.some(value => nativeSha256(value) === nativeSha256(root))))
+              .toBe(true);
+            expect(Object.entries(snapshot?.policy ?? {}).every(([key, values]) => values.every(sourceId =>
+              (capture.sourceSet!.policy as unknown as Record<string, string[]>)[key]?.includes(sourceId)))).toBe(true);
+          }
+          await assertNativeReadResultSourceSetOwnersCurrent(db, { companyId, issueId: createdIssue.id,
+            runId: seeded.runId, tool: "get_task_history", actor: { type: "agent", source: "none", companyId, agentId,
+              runId: seeded.runId, onBehalfOfUserId: userId }, sourceSet: capture.sourceSet });
+        }
+        await recordNativeInputToolResultIntent({ ...binding, capture });
+      };
+      const result = await authority.execute({ tool: "get_task_history", callId, arguments: {} }, {
+        nativeToolCallIdentity: { tool: "get_task_history", callId, turnId }, onNativeInputToolResult: callback,
+      });
+      expect(result).toMatchObject({ comments: expect.arrayContaining([expect.objectContaining({ id: comment.id, body: comment.body })]) });
+      const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
+      return { seeded, run: run!, result };
+    };
+
+    const positive = await runRead("exact");
+    expect(positive.run.nativeInputSourceProtocolVersion).toBe(1);
+    const positiveProfile = positive.run.runnerProfileJson!;
+    const captures = positiveProfile.nativeToolResultSourceCaptures as Array<Record<string, unknown>>;
+    expect(captures).toHaveLength(1);
+    const capture = captures[0]!;
+    expect(capture).toMatchObject({ nativeReadResult: true, tool: "get_task_history", turnId: expect.any(String),
+      callId: expect.any(String), argumentsHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+      resultDigest: nativeSha256(positive.result), source: { kind: "tool_result", invocationId: null } });
+    const receipt = positiveProfile.nativeInputSourceReceipt as { additionalInputs: Array<{ policy: unknown; inputs: NativePayloadSourceInput[] }> };
+    const readInput = receipt.additionalInputs.find(entry => entry.inputs.some(source => source.kind === "tool_result" &&
+      source.callId === capture.callId));
+    expect(readInput).toBeDefined();
+    expect(readInput!.inputs[0]).toMatchObject({ kind: "tool_result", callId: capture.callId, contentHash: capture.resultDigest });
+    const nativeActor = { type: "agent" as const, source: "none" as const, companyId, agentId, runId: positive.seeded.runId,
+      onBehalfOfUserId: userId };
+    await expect(assertNativePayloadSourceSetCurrent(db, { companyId, issueId: positive.seeded.issueId, runId: positive.seeded.runId,
+      actor: nativeActor, policy: readInput!.policy as never, inputs: readInput!.inputs })).resolves.toBeUndefined();
+    expect(() => assertNativeRunReadSourceHistoryQualified(positiveProfile, { runId: positive.seeded.runId, responsibleUserId: userId })).not.toThrow();
+    await db.update(issueComments).set({ payloadSourceSnapshot: null }).where(eq(issueComments.id,
+      (readInput!.inputs.find(source => source.kind === "comment") as Extract<NativePayloadSourceInput, { kind: "comment" }>).commentId));
+    await expect(assertNativePayloadSourceSetCurrent(db, { companyId, issueId: positive.seeded.issueId, runId: positive.seeded.runId,
+      actor: nativeActor, policy: readInput!.policy as never, inputs: readInput!.inputs })).rejects.toThrow();
+
+    const missingAssociation = await runRead("missing");
+    expect(missingAssociation.run.nativeInputSourceProtocolVersion).toBe(1);
+    const missingProfile = missingAssociation.run.runnerProfileJson!;
+    expect(missingProfile.nativeToolResultSourceCaptures).toEqual([expect.objectContaining({ nativeReadResult: true, source: null })]);
+    expect((missingProfile.nativeInputSourceReceipt as { additionalInputs: unknown[] }).additionalInputs).toEqual([]);
+    expect(() => assertNativeRunReadSourceHistoryQualified(missingProfile, { runId: missingAssociation.seeded.runId,
+      responsibleUserId: userId })).toThrow("native_read_result_source_history_unavailable");
+
+    const forgedAssociation = await runRead("forged");
+    const forgedProfile = forgedAssociation.run.runnerProfileJson!;
+    expect(forgedProfile.nativeToolCallDispatchAssociations).toEqual([expect.objectContaining({
+      callId: expect.stringContaining(forgedAssociation.seeded.runId), argumentsHash: nativeSha256({ other: true }),
+    })]);
+    expect(forgedProfile.nativeToolResultSourceCaptures).toEqual([expect.objectContaining({ nativeReadResult: true, source: null })]);
+    expect((forgedProfile.nativeInputSourceReceipt as { additionalInputs: unknown[] }).additionalInputs).toEqual([]);
+    expect(() => assertNativeRunReadSourceHistoryQualified(forgedProfile, { runId: forgedAssociation.seeded.runId,
+      responsibleUserId: userId })).toThrow("native_read_result_source_history_unavailable");
+  });
+
+  it("appends a real same-conversation attachment read only under its acknowledged Native call", async () => {
+    const now = new Date(), sessionId = randomUUID();
+    await db.insert(authSessions).values({ id: sessionId, userId: responsibleUserId, token: randomUUID(), createdAt: now,
+      updatedAt: now, expiresAt: new Date(now.getTime() + 3_600_000) });
+    const boardActor = { type: "board" as const, source: "session" as const, userId: responsibleUserId, sessionId,
+      companyIds: [companyId], memberships: [{ companyId, membershipRole: "admin", status: "active" as const }] };
+    const createdIssue = await issueService(db).create(companyId, { title: "Read same-conversation attachment",
+      description: "Open the earlier file from this conversation.", createdByUserId: responsibleUserId }, db, undefined,
+      { manualInputActor: boardActor });
+    const seeded = await seed({ existingIssueId: createdIssue.id, responsibleUserId });
+    await db.update(issues).set({ status: "in_progress", assigneeAgentId: agentId, executionRunId: seeded.runId })
+      .where(and(eq(issues.companyId, companyId), eq(issues.id, createdIssue.id)));
+
+    const endpointId = randomUUID(), connectionId = randomUUID(), applicationId = randomUUID(), resourceId = randomUUID();
+    const conversationId = randomUUID(), principalId = randomUUID();
+    await db.insert(toolApplications).values({ id: applicationId, companyId, applicationKey: `chat:discord:${endpointId}`,
+      name: "Native attachment read fixture", type: "chat", status: "active" });
+    await db.insert(toolConnections).values({ id: connectionId, companyId, applicationId, name: "Native attachment read fixture",
+      uid: `chat-discord-${endpointId}`, connectionPurpose: "channel", transport: "chat_sdk", status: "active", enabled: true });
+    await db.insert(chatEndpoints).values({ id: endpointId, companyId, connectionId, provider: "discord", publicId: randomUUID(),
+      assignedAgentId: agentId, status: "active", providerAccountId: `guild-${endpointId}`, allowUnlinkedPeople: false });
+    await db.insert(chatEndpointResources).values({ id: resourceId, companyId, endpointId, type: "channel",
+      providerResourceId: `channel-${endpointId}`, label: "#files", availability: "available", enabled: true });
+    await db.insert(chatConversations).values({ id: conversationId, companyId, endpointId, resourceId, issueId: createdIssue.id,
+      externalConversationId: `channel-${endpointId}`, externalThreadId: `thread-${endpointId}`, externalLabel: "#files thread", state: "active" });
+    await db.insert(chatExternalPrincipals).values({ id: principalId, companyId, provider: "discord",
+      providerAccountId: `guild-${endpointId}`, externalId: `discord-user-${endpointId}`, kind: "user" });
+    await db.insert(chatIdentityLinks).values({ companyId, endpointId, principalId, paperclipUserId: responsibleUserId, status: "linked" });
+
+    const sourceComment = await issueService(db).addComment(createdIssue.id, "Earlier file in this conversation.",
+      { userId: responsibleUserId }, { manualInputActor: boardActor });
+    const bytes = Buffer.from("Actual same-conversation attachment bytes.\n", "utf8");
+    const stored = await storage.putFile({ companyId, namespace: `issues/${createdIssue.id}`, originalFilename: "earlier.txt",
+      contentType: "text/plain", body: bytes });
+    const attachment = await issueService(db).createAttachment({ issueId: createdIssue.id, issueCommentId: sourceComment.id,
+      provider: stored.provider, objectKey: stored.objectKey, contentType: stored.contentType, byteSize: stored.byteSize,
+      sha256: stored.sha256, originalFilename: stored.originalFilename, createdByUserId: responsibleUserId },
+      { actor: boardActor, bytes });
+    const currentComment = await issueService(db).addComment(createdIssue.id, "Please inspect that earlier file.",
+      { userId: responsibleUserId }, { manualInputActor: boardActor });
+    for (const [commentId, suffix] of [[sourceComment.id, "source"], [currentComment.id, "current"]] as const) {
+      const deliveryId = randomUUID();
+      await db.insert(chatDeliveries).values({ id: deliveryId, companyId, endpointId, conversationId, principalId,
+        providerEventId: `attachment-${suffix}-${deliveryId}`, deduplicationKey: `attachment-${suffix}-${deliveryId}`,
+        eventKind: "message", normalizedEvent: {}, state: "processed", attempts: 1, processedAt: new Date() });
+      await db.insert(chatMessageLinks).values({ companyId, endpointId, conversationId, deliveryId, commentId,
+        providerMessageId: `attachment-${suffix}-${deliveryId}`, direction: "inbound" });
+    }
+    await db.update(heartbeatRuns).set({ contextSnapshot: { source: "chat:discord", paperclipHarnessCheckedOut: true,
+      wakeCommentIds: [currentComment.id], commentId: currentComment.id, paperclipWake: { reason: "External chat message received",
+        externalChatProvider: "discord", checkedOutByHarness: true,
+        issue: { id: createdIssue.id, workMode: "standard" }, commentIds: [currentComment.id] } } })
+      .where(eq(heartbeatRuns.id, seeded.runId));
+
+    const taskCaptureHolder: { value: NativeTaskSourceCapture | null } = { value: null };
+    const task = await getIssueExecutionContext(db, companyId, createdIssue.id, capture => { taskCaptureHolder.value = capture; });
+    expect(task).not.toBeNull();
+    const references: Array<{ kind: "task" | "comment" | "document_revision" | "attachment" | "unknown"; id: string }> = [];
+    const markdown = buildPaperclipTaskMarkdown({ issue: { id: createdIssue.id, identifier: task!.identifier,
+      title: task!.title, description: task!.description, workMode: task!.workMode } },
+      { onRenderedSource: source => references.push(source) })!;
+    const workspace = { id: seeded.runId, cwd: "/native", repoUrl: null, repoRef: null, branchName: null };
+    const completion = await ensureNativeCompletionContract({ db, companyId,
+      issue: { id: createdIssue.id, title: task!.title, description: task!.description }, actorId: agentId });
+    await db.update(heartbeatRuns).set({ completionContractId: completion.row.id,
+      completionContractSha256: completion.row.canonicalSha256 }).where(eq(heartbeatRuns.id, seeded.runId));
+    const sourceSet = buildNativeBootstrapSourceSet({ companyId, runId: seeded.runId, agentId, issueId: createdIssue.id,
+      renderedMarkdown: markdown, renderedMarkdownDigest: createHash("sha256").update(markdown, "utf8").digest("hex"), references,
+      candidates: [{ kind: "task", id: createdIssue.id, input: taskCaptureHolder.value!.input,
+        payloadSourceSnapshot: taskCaptureHolder.value!.payloadSourceSnapshot }], runtimeInputs: [], contextManifestIds: [],
+      additionalInputs: [{ kind: "completion_contract", issueId: createdIssue.id, contractId: completion.row.id,
+        revision: String(completion.row.revision), contentHash: completion.row.canonicalSha256 },
+        { kind: "workspace_metadata", runId: seeded.runId, executionWorkspaceId: seeded.runId, origin: "task_session",
+          sourceVersion: `task-session:${seeded.runId}`, contentHash: createHash("sha256").update(JSON.stringify({ cwd: workspace.cwd,
+            repoUrl: workspace.repoUrl, repoRef: workspace.repoRef, branchName: workspace.branchName }), "utf8").digest("hex") }],
+      rolePackInputs: [], unsupportedInputPresent: false });
+    expect(sourceSet).not.toBeNull();
+    await initializeRunIdentity(db, { companyId, runId: seeded.runId, issueId: createdIssue.id,
+      responsibleUserId, cause: "dispatch" });
+    const execution = buildNativeExecutionInput({ companyId, runId: seeded.runId, agentId,
+      issue: { id: createdIssue.id, identifier: task!.identifier, title: task!.title, description: task!.description, workMode: "standard" },
+      taskPrompt: markdown, workspace, normalizedSessionId: null,
+      completionContract: { id: completion.row.id, sha256: completion.row.canonicalSha256,
+        schemaVersion: completion.row.schemaVersion, contract: completion.contract }, runtimeContext: nativeRuntimeContextFixture() });
+    await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeExecutionInput: execution } }).where(eq(heartbeatRuns.id, seeded.runId));
+    const turnInput = { message: { role: "user" as const, text: JSON.stringify(buildNativeModelEnvelope(execution)) }, requestedCollaborationMode: "default" as const };
+    const closure = { sourceSet: sourceSet!, taskEnvelopeDigest: nativeSha256(execution.task) };
+    const dispatchArgsForRead = dispatchArgs(seeded, turnInput);
+    const dispatchId = await recordNativeModelInputDispatchIntent({ ...dispatchArgsForRead, bootstrapSourceClosure: closure });
+    const turnId = `native-attachment-turn-${seeded.runId}`, callId = `native-attachment-call-${seeded.runId}`;
+    await recordNativeModelInputDispatchAcknowledgement({ ...acknowledgementArgs(seeded, dispatchId, turnInput, turnId), sourceClosure: closure });
+    const readArguments = { sourceCommentId: sourceComment.id, attachmentId: attachment.id };
+    expect(await recordNativeToolCallDispatchAssociation({ ...dispatchArgsForRead, turnId, callId,
+      tool: "read_chat_attachment", argumentsHash: nativeSha256(readArguments) })).toBe(true);
+
+    const workspaceRoot = join(storageRoot, `chat-read-${seeded.runId}`);
+    await mkdir(workspaceRoot, { recursive: true });
+    const reader = new NativeChatAttachmentReadScope({ db, binding: { companyId, agentId, issueId: createdIssue.id, runId: seeded.runId },
+      workspaceRoot, executionTargetKind: "local", storage });
+    const authority = new PaperclipRunnerToolAuthority(db, { companyId, agentId, issueId: createdIssue.id, runId: seeded.runId,
+      workspaceRoot, executionTargetKind: "local", storage, chatAttachmentReadScope: reader });
+    const binding = { ...dispatchArgs(seeded, turnInput), agentId };
+    const captureHolder: { value: Parameters<typeof recordNativeInputToolResultIntent>[0]["capture"] | null } = { value: null };
+    try {
+      const result = await authority.execute({ tool: "read_chat_attachment", callId, arguments: readArguments }, {
+        nativeToolCallIdentity: { tool: "read_chat_attachment", callId, turnId },
+        onNativeInputToolResult: async capture => {
+          captureHolder.value = capture;
+          await recordNativeInputToolResultIntent({ ...binding, capture });
+        },
+      });
+      expect(captureHolder.value).not.toBeNull();
+      if (!captureHolder.value) throw new Error("The Native attachment read result capture is unavailable");
+      expect(captureHolder.value.resultDigest).toBe(nativeSha256(result));
+      expect(captureHolder.value.sourceSet?.inputs).toContainEqual(expect.objectContaining({ kind: "attachment",
+        issueId: createdIssue.id, attachmentId: attachment.id, commentId: sourceComment.id, assetId: attachment.assetId,
+        sha256: stored.sha256, byteSize: bytes.length, disposition: "delivered" }));
+      const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
+      expect(run!.nativeInputSourceProtocolVersion).toBe(1);
+      const profile = run!.runnerProfileJson!;
+      expect(profile.nativeToolResultSourceCaptures).toEqual([expect.objectContaining({ nativeReadResult: true,
+        tool: "read_chat_attachment", source: { kind: "tool_result", runId: seeded.runId, callId, toolName: "read_chat_attachment",
+          invocationId: null, contentHash: nativeSha256(result) } })]);
+      const receipt = profile.nativeInputSourceReceipt as { additionalInputs: Array<{ policy: unknown; inputs: NativePayloadSourceInput[] }> };
+      const readInput = receipt.additionalInputs.find(entry => entry.inputs.some(source => source.kind === "tool_result" && source.callId === callId));
+      expect(readInput?.inputs[0]).toMatchObject({ kind: "tool_result", runId: seeded.runId, callId,
+        toolName: "read_chat_attachment", contentHash: nativeSha256(result) });
+      const nativeActor = { type: "agent" as const, source: "none" as const, companyId, agentId, runId: seeded.runId,
+        onBehalfOfUserId: responsibleUserId };
+      await expect(assertNativePayloadSourceSetCurrent(db, { companyId, issueId: createdIssue.id, runId: seeded.runId,
+        actor: nativeActor, policy: readInput!.policy as never, inputs: readInput!.inputs })).resolves.toBeUndefined();
+    } finally {
+      await reader.close();
+    }
   });
 
   it("qualifies only the current PG attachment bytes staged by executor admission", async () => {

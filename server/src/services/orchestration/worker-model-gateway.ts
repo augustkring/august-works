@@ -248,7 +248,8 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
       input_schema: tool.input_schema };
   }).sort((a, b) => a.name.localeCompare(b.name));
   if (!isDeepStrictEqual(actualTools, expectedTools) ||
-    actualTools.some((tool) => !["read_document", "write_document", "create_task", "self_remember", "read_context", "call_api", "paperclip_finish", "paperclip_block"].includes(tool.name)))
+    actualTools.some((tool) => !["read_document", "write_document", "create_task", "self_remember", "read_context", "call_api",
+      "get_task_context", "get_task_history", "read_chat_attachment", "paperclip_finish", "paperclip_block"].includes(tool.name)))
     throw forbidden("Managed OpenCode tool schemas do not match the exact current Native catalog");
 
   const intents = Array.isArray(profile.nativeAwModelWireIntents) ? profile.nativeAwModelWireIntents.map(managedRecord) : [];
@@ -351,7 +352,8 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
           item.turnId === matchingAssociations[0]!.turnId && item.eventSeq === matchingAssociations[0]!.eventSeq &&
           item.attempt === matchingAssociations[0]!.attempt);
         if (matchingCaptures.length !== 1 || matchingAssociations.length !== 1 ||
-          !["read_document", "write_document", "create_task", "self_remember", "read_context", "call_api"].includes(toolName))
+          !["read_document", "write_document", "create_task", "self_remember", "read_context", "call_api",
+            "get_task_context", "get_task_history", "read_chat_attachment"].includes(toolName))
           throw forbidden("Managed OpenCode tool result has no original qualified invocation receipt");
         const capture = matchingCaptures[0]!;
         const source = managedRecord(capture.source);
@@ -414,6 +416,31 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
           const projectSet = projectEntries[0]!;
           consumedSourceComponents.push({ kind: "additional_input", responsibleUserId: projectSet.responsibleUserId,
             policy: projectSet.policy, inputs: projectSet.inputs });
+          continue;
+        }
+        if (["get_task_context", "get_task_history", "read_chat_attachment"].includes(toolName)) {
+          const sourceSetValue = managedRecord(capture.sourceSet);
+          const sourcePolicy = nativePayloadSourcePolicySchema.safeParse(sourceSetValue.policy);
+          const sourceInputs = nativePayloadSourceInputSchema.array().safeParse(sourceSetValue.inputs);
+          const capturedInputs = nativePayloadSourceInputSchema.array().safeParse(capture.sourceInputs);
+          const readToolResult = source.kind === "tool_result" && source.runId === claims.run_id &&
+            source.callId === block.tool_use_id && source.toolName === toolName && source.invocationId === null &&
+            source.contentHash === sourceResultDigest;
+          const readEntries = receipt.data.additionalInputs.filter(entry => entry.responsibleUserId === claims.responsible_user_id &&
+            sourcePolicy.success && sourceInputs.success && isDeepStrictEqual(entry.policy, sourcePolicy.data) &&
+            isDeepStrictEqual(entry.inputs, [source, ...sourceInputs.data]));
+          const exactReadCopies = receipt.data.additionalInputs.reduce((count, entry) => count +
+            entry.inputs.filter(value => value.kind === "tool_result" && isDeepStrictEqual(value, source)).length, 0);
+          const conflictingReadCopies = receipt.data.additionalInputs.some(entry => entry.inputs.some(value =>
+            value.kind === "tool_result" && value.callId === source.callId && !isDeepStrictEqual(value, source)));
+          if (capture.nativeReadResult !== true || !readToolResult || !sourcePolicy.success || !sourceInputs.success ||
+            !capturedInputs.success || !isDeepStrictEqual(capturedInputs.data, sourceInputs.data) ||
+            capture.argumentsHash !== providerUse.argumentsHash ||
+            content !== JSON.stringify(result) || readEntries.length !== 1 || exactReadCopies !== 1 || conflictingReadCopies)
+            throw forbidden("Managed OpenCode Native read result is not an exact source receipt");
+          const readEntry = readEntries[0]!;
+          consumedSourceComponents.push({ kind: "additional_input", responsibleUserId: readEntry.responsibleUserId,
+            policy: readEntry.policy, inputs: readEntry.inputs });
           continue;
         }
         if (typeof invocationId !== "string")

@@ -1,0 +1,23 @@
+{
+  "status": "verified",
+  "verificationLog": "dependency-module-recovery.log.gz",
+  "sourcePins": "focused-route-source-pins.json",
+  "qualificationWorkspace": "/workspace/v10-dep-qualification",
+  "qualificationSourceHead": "995880c247e3f57b5dcbb5403a49d4f0998ac18a",
+  "qualificationBaseCommit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+  "mainWorkspaceLinkCounts": {
+    "rootNodeModulesLinksIncludingScoped": 9,
+    "workspacePackageNodeModulesLinks": 415,
+    "total": 424
+  },
+  "resolvedVersions": {
+    "axe-core": "4.13.0",
+    "@playwright/test": "1.62.1",
+    "vitest": "4.1.11",
+    "typescript": "7.0.2",
+    "pnpm": "9.15.4"
+  },
+  "method": "Recreated dependency and workspace symlinks to existing qualification payloads and current main workspace package directories. Kept the existing main .pnpm payload tree; no package payload copy or install was performed.",
+  "checkedAtSourceCheckout": "76d7cc8f3bfa365438a0bb892b5b1e9e5da45040",
+  "sourceCheckoutMeaning": "Archive-time checkout identity, not the source identity for the qualification; per-file pins above are authoritative."
+}

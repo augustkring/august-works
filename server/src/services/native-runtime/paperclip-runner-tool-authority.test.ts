@@ -9,29 +9,36 @@ import {
   agents,
   approvals,
   companies,
+  completionContracts,
   contextManifests,
   contextManifestItems,
   createDb,
   documents,
+  documentRevisions,
   heartbeatRuns,
   heartbeatRunEvents,
   nativeRunFinalizations,
+  nativeRunResults,
   issueApprovals,
   issueComments,
   issueThreadInteractions,
   issues,
   issuePrivacySources,
+  statusDecisions,
+  workAssessments,
 } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { initializeRunIdentity, reserveSteeredIdentity, reconcileSteeredIdentity } from "../run-identity.js";
 import { documentService } from "../documents.js";
 import type { DocumentRevisionSourceCapture } from "../documents.js";
 import { assertNativeDocumentRevisionCurrentSourceAccess } from "../native-direct-input.js";
+import { directHumanPayloadSnapshotSql } from "../native-direct-input.js";
 import { issueService } from "../issues.js";
 import { issueThreadInteractionService } from "../issue-thread-interactions.js";
 import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
+import type { NativeInputToolResultSource } from "./paperclip-runner-tool-authority.js";
 import { nativeSha256 } from "./canonical.js";
-import { recordNativeModelInputDispatchIntent, recordNativeModelInputDispatchAcknowledgement, recordNativeToolCallDispatchAssociation,
+import { assertNativeRunReadSourceHistoryQualified, recordNativeModelInputDispatchIntent, recordNativeModelInputDispatchAcknowledgement, recordNativeToolCallDispatchAssociation,
   recordNativeDocumentToolResultIntent, recordNativeInputToolResultIntent } from "./native-session-executor.js";
 import { PROCESS_START_REQUESTED } from "../native-local-process-stop.js";
 import { currentNativeControllerIdentity } from "./native-restart-recovery.js";
@@ -300,6 +307,56 @@ describe("PaperclipRunnerToolAuthority", () => {
     expect(captures).toHaveLength(1);
   });
 
+  it("qualifies a pure task-context read from its exact retained Task owner", async () => {
+    const fixture = await seedDocumentReader();
+    await db.update(issues).set({ payloadSourceProtocolVersion: 1,
+      payloadSourceSnapshot: directHumanPayloadSnapshotSql("issue"), payloadSourceSnapshotInvalidated: false })
+      .where(eq(issues.id, fixture.issueId));
+    const captures: NativeInputToolResultSource[] = [];
+    const result = await fixture.authority.execute({ tool: "get_task_context", callId: "task-context-pure",
+      arguments: {} }, { onNativeInputToolResult: async capture => { captures.push(capture); } });
+    expect(result).toMatchObject({ activeTask: { id: fixture.issueId } });
+    expect(captures).toHaveLength(1);
+    expect(captures[0]).toMatchObject({ sourceSet: { policy: { issueIds: [fixture.issueId] },
+      inputs: [expect.objectContaining({ kind: "task", issueId: fixture.issueId })] },
+      observedSourceInputs: [expect.objectContaining({ kind: "task", issueId: fixture.issueId })] });
+  });
+
+  it("binds an accepted-plan task-context result to its exact revision and accepted interaction", async () => {
+    const fixture = await seedDocumentReader();
+    await db.update(issues).set({ payloadSourceProtocolVersion: 1,
+      payloadSourceSnapshot: directHumanPayloadSnapshotSql("issue"), payloadSourceSnapshotInvalidated: false })
+      .where(eq(issues.id, fixture.issueId));
+    const plan = await documentService(db).upsertIssueDocument({ issueId: fixture.issueId, key: "plan",
+      title: "Owned source plan", format: "markdown", body: "This exact approved plan is part of task context." });
+    await db.update(documentRevisions).set({ payloadSourceProtocolVersion: 1,
+      payloadSourceSnapshot: directHumanPayloadSnapshotSql("document_revision"), payloadSourceSnapshotInvalidated: false })
+      .where(eq(documentRevisions.id, plan.document.latestRevisionId));
+    const interactionId = randomUUID();
+    await db.insert(issueThreadInteractions).values({ id: interactionId, companyId: fixture.companyId,
+      issueId: fixture.issueId, kind: "request_confirmation", status: "accepted", resolvedByUserId: userId,
+      resolvedAt: new Date(), payload: { version: 1, prompt: "Approved exact plan",
+        target: { type: "issue_document", issueId: fixture.issueId, documentId: plan.document.id, key: "plan",
+          revisionId: plan.document.latestRevisionId, revisionNumber: plan.document.latestRevisionNumber } },
+      result: { version: 1, outcome: "accepted" } });
+    await db.update(heartbeatRuns).set({ contextSnapshot: { issueId: fixture.issueId,
+      planReviewInteraction: { acceptedTargetRevision: { issueId: fixture.issueId,
+        documentId: plan.document.id, key: "plan", revisionId: plan.document.latestRevisionId,
+        revisionNumber: plan.document.latestRevisionNumber } } } }).where(eq(heartbeatRuns.id, fixture.runId));
+    const captures: NativeInputToolResultSource[] = [];
+    const result = await fixture.authority.execute({ tool: "get_task_context", callId: "task-context-plan",
+      arguments: {} }, { onNativeInputToolResult: async capture => { captures.push(capture); } });
+    expect(result).toMatchObject({ acceptedPlan: { revisionId: plan.document.latestRevisionId,
+      markdown: "This exact approved plan is part of task context." } });
+    expect(captures).toHaveLength(1);
+    expect(captures[0]!.sourceSet?.inputs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "task", issueId: fixture.issueId }),
+      expect.objectContaining({ kind: "document_revision", revisionId: plan.document.latestRevisionId,
+        issueId: fixture.issueId }),
+      expect.objectContaining({ kind: "interaction", interactionId, issueId: fixture.issueId }),
+    ]));
+  });
+
   it("captures actual get_task_history comments but leaves missing retained roots unknown", async () => {
     const fixture = await seedDocumentReader();
     const [comment] = await db.insert(issueComments).values({ companyId: fixture.companyId,
@@ -380,6 +437,83 @@ describe("PaperclipRunnerToolAuthority", () => {
     const forged = { ...captured!, result: { comments: [{ id: "forged", body: "not returned" }] } };
     await expect(recordNativeInputToolResultIntent({ ...fixture.documentCaptureBinding, capture: forged }))
       .rejects.toThrow("native_tool_result_capture_persistence_failed");
+  });
+
+  it("keeps assigned-review context unknown and prevents a later read from repairing its output history", async () => {
+    const fixture = await seedDispatchBoundAuthority();
+    await db.update(issues).set({ payloadSourceProtocolVersion: 1,
+      payloadSourceSnapshot: directHumanPayloadSnapshotSql("issue"), payloadSourceSnapshotInvalidated: false })
+      .where(eq(issues.id, fixture.issueId));
+    const sourceAgentId = randomUUID(), sourceRunId = randomUUID(), contractId = randomUUID();
+    const resultId = randomUUID(), assessmentId = randomUUID(), decisionId = randomUUID(), interactionId = randomUUID();
+    await db.insert(agents).values({ id: sourceAgentId, companyId: fixture.companyId, name: "Assigned worker",
+      adapterType: "paperclip_runner", status: "active" });
+    await db.insert(completionContracts).values({ id: contractId, companyId: fixture.companyId, issueId: fixture.issueId,
+      revision: 1, schemaVersion: "paperclip.completion-contract.v1", policyVersion: "test-context-review",
+      risk: "standard", completionAuthority: "server_arbiter", incompleteCriteriaPolicy: "preserve_non_terminal",
+      contractJson: {}, canonicalSha256: randomUUID().replaceAll("-", "").padEnd(64, "a").slice(0, 64),
+      createdByActorType: "system", createdByActorId: "context-test" });
+    await db.insert(heartbeatRuns).values({ id: sourceRunId, companyId: fixture.companyId, agentId: sourceAgentId,
+      status: "succeeded", runtimeMode: "native", nativeIssueId: fixture.issueId,
+      completionContractId: contractId, completionContractSha256: "c".repeat(64) });
+    await db.insert(nativeRunResults).values({ id: resultId, companyId: fixture.companyId, issueId: fixture.issueId,
+      runId: sourceRunId, completionContractId: contractId, serverFingerprint: `context-review-${resultId}`,
+      schemaStatus: "accepted", resultJson: {}, canonicalSha256: "d".repeat(64) });
+    await db.insert(workAssessments).values({ id: assessmentId, companyId: fixture.companyId, issueId: fixture.issueId,
+      runId: sourceRunId, contractId, resultId, triggerKind: "turn_finished", triggerActorCompanyId: fixture.companyId,
+      priorIssueStatus: "in_progress", priorStatusVersion: 0, policyVersion: "test-context-review",
+      assessmentJson: {}, inputDigest: "e".repeat(64) });
+    await db.insert(statusDecisions).values({ id: decisionId, companyId: fixture.companyId, issueId: fixture.issueId,
+      runId: sourceRunId, assessmentId, decisionVersion: 1, policyVersion: "test-context-review",
+      fromStatus: "in_review", toStatus: "in_review", reasonCode: "review_required",
+      decisionJson: { projectedStatusVersion: 1 }, decisionDigest: "f".repeat(64), applicationState: "applied" });
+    await db.update(issues).set({ status: "in_review", statusVersion: 1, lastStatusDecisionId: decisionId,
+      assigneeAgentId: sourceAgentId }).where(eq(issues.id, fixture.issueId));
+    await db.update(issues).set({ payloadSourceProtocolVersion: 1,
+      payloadSourceSnapshot: directHumanPayloadSnapshotSql("issue"), payloadSourceSnapshotInvalidated: false })
+      .where(eq(issues.id, fixture.issueId));
+    await db.insert(issueThreadInteractions).values({ id: interactionId, companyId: fixture.companyId,
+      issueId: fixture.issueId, kind: "request_confirmation", status: "pending", sourceRunId,
+      addresseeAgentId: fixture.agentId, payload: { version: 1, prompt: "Review the work",
+        target: { type: "custom", key: "native_completion_review", revisionId: decisionId } } });
+    const nativeReview = { nativeReviewInteractionId: interactionId, nativeReviewDecisionId: decisionId };
+    const authority = new PaperclipRunnerToolAuthority(db, { companyId: fixture.companyId, agentId: fixture.agentId,
+      issueId: fixture.issueId, runId: fixture.runId, nativeReview });
+    const [runBefore] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
+    const policy = { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] };
+    const initialBody = { version: 1 as const,
+      binding: { companyId: fixture.companyId, runId: fixture.runId, agentId: fixture.agentId,
+        responsibleUserId: runBefore!.responsibleUserId!, issueId: fixture.issueId },
+      bootstrap: { executionInputDigest: "1".repeat(64), policy, inputs: [] }, dispatches: [], additionalInputs: [] };
+    const initialReceipt = nativeRunInputSourceReceiptSchema.parse({ ...initialBody, digest: "2".repeat(64) });
+    await db.update(heartbeatRuns).set({ runnerProfileJson: { ...runBefore!.runnerProfileJson,
+      nativeInputSourceReceipt: initialReceipt } }).where(eq(heartbeatRuns.id, fixture.runId));
+
+    const contextArgs = {}, contextCallId = "assigned-review-context", contextTurnId = "assigned-review-turn";
+    const contextCall = await fixture.bindCall("get_task_context", contextCallId, contextTurnId, true, nativeSha256(contextArgs));
+    let contextCapture: Parameters<typeof recordNativeInputToolResultIntent>[0]["capture"] | null = null;
+    const contextResult = await authority.execute({ tool: "get_task_context", callId: contextCallId, arguments: contextArgs }, {
+      nativeToolCallIdentity: contextCall, onNativeInputToolResult: async capture => {
+        contextCapture = capture;
+        await recordNativeInputToolResultIntent({ ...fixture.documentCaptureBinding, capture });
+      },
+    });
+    expect(contextResult).toMatchObject({ assignedReview: { id: interactionId, status: "pending" } });
+    expect(contextCapture).toMatchObject({ sourceSet: null, tool: "get_task_context",
+      observedSourceInputs: [expect.objectContaining({ kind: "task", issueId: fixture.issueId })] });
+
+    const historyArgs = {}, historyCallId = "later-empty-history", historyTurnId = "later-history-turn";
+    const historyCall = await fixture.bindCall("get_task_history", historyCallId, historyTurnId, true, nativeSha256(historyArgs));
+    const historyResult = await authority.execute({ tool: "get_task_history", callId: historyCallId, arguments: historyArgs }, {
+      nativeToolCallIdentity: historyCall, onNativeInputToolResult: async capture => {
+        await recordNativeInputToolResultIntent({ ...fixture.documentCaptureBinding, capture });
+      },
+    });
+    expect(historyResult).toEqual({ comments: [] });
+    const [stored] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
+    expect(() => assertNativeRunReadSourceHistoryQualified(stored!.runnerProfileJson as Record<string, unknown>, {
+      runId: fixture.runId, responsibleUserId: userId,
+    })).toThrow("native_read_result_source_history_unavailable");
   });
 
   it("does not let a legacy document revision bypass its parent Task privacy check", async () => {

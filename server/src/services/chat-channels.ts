@@ -258,7 +258,8 @@ import {
   queueIssueAssignmentWakeup,
   type IssueAssignmentWakeupDeps,
 } from "./issue-assignment-wakeup.js";
-import { issueService } from "./issues.js";
+import { issueService, lockIssuePrivacyTree } from "./issues.js";
+import { canActorReadIssuePrivacy } from "./authorization.js";
 import {
   authorizeNativeChatReviewPresentation,
   NativeChatReviewPresentationContentionError,
@@ -31467,6 +31468,23 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
     );
   }
 
+  async function teamsBoardAuthorCanReadTask(
+    tx: DbTransaction,
+    companyId: string,
+    userId: string,
+    issueId: string,
+  ) {
+    if (!(await teamsBoardAuthorIsCurrent(tx, companyId, userId))) return false;
+    // Reuse the current native Task privacy/source resolver after provider
+    // waits; an active company membership alone does not authorize a private
+    // source payload.
+    return canActorReadIssuePrivacy(
+      tx,
+      { type: "board", source: "session", userId, companyIds: [companyId], ignoreInstanceAdmin: true },
+      { id: issueId, companyId },
+    );
+  }
+
   function teamsBoardFileIntentPayload(
     scope: NonNullable<Awaited<ReturnType<typeof teamsFileCurrentScope>>>,
     source: NonNullable<Awaited<ReturnType<typeof teamsFileSourceBinding>>>,
@@ -31588,10 +31606,11 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
         !scope.comment.authorUserId ||
         scope.comment.authorAgentId ||
         scope.comment.createdByRunId ||
-        !(await teamsBoardAuthorIsCurrent(
+        !(await teamsBoardAuthorCanReadTask(
           tx,
           scope.endpoint.companyId,
           scope.comment.authorUserId,
+          scope.conversation.issueId,
         ))
       )
         return null;
@@ -31881,6 +31900,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
               runtime.get(expected.endpointId))
         )
           throw denied();
+        await lockIssuePrivacyTree(tx, expected.companyId);
         const [publication] = await tx
           .select()
           .from(chatPublications)
@@ -33854,6 +33874,10 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
   } | null> {
     return db.transaction(async (tx) => {
       await input.credentialLease.assertOwned(tx);
+      // Recheck retained private Task sources under the source-lifecycle lock
+      // order before locking the publication receipt or claiming provider I/O.
+      if (input.publication.commentId)
+        await lockIssuePrivacyTree(tx, input.publication.companyId);
       const currentPublication = await tx
         .select({ id: chatPublications.id })
         .from(chatPublications)

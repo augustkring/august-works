@@ -16,3 +16,11 @@ export function canonicalNativeJson(value: unknown): string {
 export function nativeSha256(value: unknown): string {
   return createHash("sha256").update(canonicalNativeJson(value), "utf8").digest("hex");
 }
+
+/** Hash the exact public comment projection returned by Native history reads.
+ * This is deliberately distinct from the database owner-snapshot body hash. */
+export function nativeCommentProjectionHash(input: { body: unknown; presentation?: unknown; metadata?: unknown }): string {
+  const json = JSON.parse(JSON.stringify({ body: input.body ?? null,
+    presentation: input.presentation ?? null, metadata: input.metadata ?? null }));
+  return nativeSha256(json);
+}

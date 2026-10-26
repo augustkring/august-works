@@ -119,6 +119,7 @@ const support = await getEmbeddedPostgresTestSupport();
       });
     }, 90000);
     afterAll(async () => {
+      if (db) await heartbeatService(db).drainActiveRunExecutions();
       await db?.$client.end({ timeout: 0 });
       await database?.cleanup();
     });
@@ -246,6 +247,37 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(
         (await request(appFor(randomUUID(), false)).get(path)).status,
       ).toBe(403);
+      const chatId = resolved[0].body.id;
+      const beforeModeChange = await issueService(db).getById(chatId);
+      expect(beforeModeChange?.workMode).toBe("standard");
+      expect(beforeModeChange).toMatchObject({ conversationAgentId: agentId, conversationUserId: owner });
+      await expect(issueService(db).update(chatId, {
+        workMode: "planning",
+        privateWorkAdmission: "owned_conversation_work_mode",
+        privacyActor: { type: "board", source: "session", userId: colleague, sessionId: sessionIds.get(colleague)! },
+      })).rejects.toThrow("The native conversation work mode change is unavailable");
+      await expect(issueService(db).update(chatId, {
+        workMode: "planning",
+        title: "Service token must not admit extra fields",
+        privateWorkAdmission: "owned_conversation_work_mode",
+        privacyActor: { type: "board", source: "session", userId: owner, sessionId: sessionIds.get(owner)! },
+      })).rejects.toThrow("The native conversation work mode change is unavailable");
+      expect((await issueService(db).getById(chatId))?.workMode).toBe("standard");
+      const ownerModeChange = await request(appFor(owner)).patch(`/api/issues/${chatId}`)
+        .send({ workMode: "planning" });
+      expect(ownerModeChange.status, JSON.stringify(ownerModeChange.body)).toBe(200);
+      expect((await issueService(db).getById(chatId))?.workMode).toBe("planning");
+      const colleagueModeChange = await request(appFor(colleague)).patch(`/api/issues/${chatId}`)
+        .send({ workMode: "standard" });
+      expect(colleagueModeChange.status).toBe(404);
+      expect((await issueService(db).getById(chatId))?.workMode).toBe("planning");
+      const expandedModeChange = await request(appFor(owner)).patch(`/api/issues/${chatId}`)
+        .send({ workMode: "standard", title: "Must not change through the narrow exception" });
+      expect(expandedModeChange.status).toBe(422);
+      expect(await issueService(db).getById(chatId)).toMatchObject({
+        title: beforeModeChange!.title,
+        workMode: "planning",
+      });
       const privateWorkTask = await issueService(db).create(companyId, {
         title: "Private work must remain unavailable",
         visibility: "private",
@@ -257,7 +289,6 @@ const support = await getEmbeddedPostgresTestSupport();
         .send({ body: "Hello", clientRequestId: randomUUID() });
       expect(genericPrivateTaskWrite.status).toBe(422);
       expect(genericPrivateTaskWrite.body.error).toBe("Private tasks are not available");
-      const chatId = resolved[0].body.id;
       const queuedInterrupt = { queueId: randomUUID(), revision: "queue-revision", targetRunId: randomUUID() };
       expect((await request(appFor(colleague)).post(`/api/issues/${chatId}/queued-comments/interrupt`)
         .send(queuedInterrupt)).status).toBe(404);
@@ -314,6 +345,10 @@ const support = await getEmbeddedPostgresTestSupport();
       const revokedOwnerMessage = await request(appFor(owner)).post(`/api/issues/${chatId}/comments`)
         .send({ body: "Stale session", clientRequestId: randomUUID() });
       expect(revokedOwnerMessage.status).toBe(404);
+      const revokedOwnerModeChange = await request(appFor(owner)).patch(`/api/issues/${chatId}`)
+        .send({ workMode: "standard" });
+      expect(revokedOwnerModeChange.status).toBe(404);
+      expect((await issueService(db).getById(chatId))?.workMode).toBe("planning");
       const messagesAfterRevokedAttempt = await db.select().from(issueComments).where(eq(issueComments.issueId, chatId));
       expect(messagesAfterRevokedAttempt.some(comment => comment.body === "Stale session")).toBe(false);
       const local = await request(appFor()).post(path);

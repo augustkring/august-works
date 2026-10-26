@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-26",
+  "sourceHead": "76d7cc8f3bfa365438a0bb892b5b1e9e5da45040",
+  "qualificationBaseCommit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+  "qualificationWorkspace": "/workspace/v10-dep-qualification",
+  "sourceFiles": {
+    "server/src/services/authorization.ts": "c1ddfce723d35a4b826f3c7b92da8e5c1d750a5f7abb7f36f3151dc17a46d551",
+    "server/src/services/slack-board-authority.ts": "942f93c7f44005ff1841fba51dc60686394c85cb4390d29dba478cabe6e294f4",
+    "server/src/services/chat-channels.ts": "b0be02060cb959e60e4cf72106f9afb61b75eaaa63cc571f57a54c57a10daca9",
+    "server/src/__tests__/chat-channels.integration.test.ts": "c03096c8d7018963d30299c54539835a46951825af9c1c317dc56e4987c5a6a2"
+  },
+  "checks": {
+    "snapshot": 0,
+    "syntaxPreflight": 0,
+    "focusedRegressions": 0,
+    "tests": [
+      "rechecks a private Routine Task current owner before queued Slack effect",
+      "withholds a Teams file when the Board author private Task source grant is withdrawn after consent"
+    ],
+    "result": "2 passed; Slack private owner positive, public Task positive, erased-source delivery cancelled with zero posts; Teams source grant withdrawal after consent left transfer unchanged with zero PUT/uploaded-file effects"
+  },
+  "log": "focused-regressions.log.gz",
+  "sourcePins": "current-source-pins.json",
+  "limits": "Mock Slack/Teams provider effects in PostgreSQL-backed integration tests; not real-tenant/provider qualification. No dependency install or build was run."
+}

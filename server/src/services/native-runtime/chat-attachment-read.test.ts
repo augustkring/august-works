@@ -447,6 +447,36 @@ describe("native same-conversation historical attachment reading", () => {
     }
   });
 
+  it("withholds staged bytes when the bound Native session is withdrawn during storage", async () => {
+    let release!: () => void;
+    let acquired!: () => void;
+    const ready = new Promise<void>((resolve) => { acquired = resolve; });
+    const blocked = new Promise<void>((resolve) => { release = resolve; });
+    const getObject = vi.fn(async (...args: Parameters<StorageService["getObject"]>) => {
+      acquired();
+      await blocked;
+      return storage.getObject(...args);
+    });
+    const stage = stagingControl.beforeStage;
+    const stageSpy = vi.fn(async () => { await stage?.(); });
+    stagingControl.beforeStage = stageSpy;
+    const reader = scope({ storage: { ...storage, getObject } });
+    const pending = reader.read(selection());
+    try {
+      await ready;
+      await db.update(heartbeatRuns).set({ status: "failed" }).where(eq(heartbeatRuns.id, runId));
+      release();
+      await expect(pending).rejects.toThrow("read_not_authorized");
+      expect(getObject).toHaveBeenCalledTimes(1);
+      expect(stageSpy).not.toHaveBeenCalled();
+    } finally {
+      release();
+      await reader.close();
+      stagingControl.beforeStage = stage;
+      await db.update(heartbeatRuns).set({ status: "running" }).where(eq(heartbeatRuns.id, runId));
+    }
+  });
+
   it("rejects hash or size mismatches without exposing a path", async () => {
     for (const body of [
       Buffer.from("x".repeat(sourceBody.length)),

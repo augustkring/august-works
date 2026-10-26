@@ -54,7 +54,7 @@ import { environmentRuntimeService } from "../../services/environment-runtime.js
 import { documentService } from "../../services/documents.js";
 import { memoryService, type MemoryMutationActor } from "../../services/memory/memory-service.js";
 import { canActorReadMemorySources } from "../../services/memory/memory-privacy.js";
-import { assertNativeMemoryOutputSnapshotCurrent } from "../../services/native-direct-input.js";
+import { assertNativeMemoryOutputSnapshotCurrent, assertNativePayloadSourceSetCurrent } from "../../services/native-direct-input.js";
 import type { AuthorizationActor } from "../../services/authorization.js";
 import { instanceSettingsService } from "../../services/instance-settings.js";
 import { orchestrationService } from "../../services/orchestration/orchestration-service.js";
@@ -249,6 +249,19 @@ export type ManagedNativeOpenCodeHumanAction = {
   action: "accept_memory_candidate" | "create_private_context_root" | "edit_project_workspace";
 };
 
+export type ManagedNativeMemoryReplayProbe = {
+  callId: string;
+  run: (input: {
+    companyId: string;
+    runId: string;
+    callId: string;
+    initialResult: unknown;
+    replay: () => Promise<unknown>;
+    revokeOutput: (recordId: string) => Promise<void>;
+    assertConsumedInputsCurrent: (recordId: string) => Promise<void>;
+  }) => Promise<void>;
+};
+
 type ManagedNativePrivateRoot = {
   issueId: string;
   memoryId: string;
@@ -267,12 +280,15 @@ export async function runManagedNativeOpenCodeFixture(input: {
   privateContextContent?: string;
   /** Return early after a Human workspace change is rejected as a stale Project source. */
   expectProjectWorkspaceSourceDenial?: boolean;
+  /** Test-only probe that repeats one actual, sealed Gateway Memory call with its original scoped invocation context. */
+  nativeMemoryReplayProbe?: ManagedNativeMemoryReplayProbe;
   reuseIdentity?: { companyId: string; agentId: string; aliceUserId: string; bobUserId: string };
   onPreserveDebugArtifacts?: () => void;
 }) {
   const { db, root, instanceId } = input;
   const diagnosticsEnabled = process.env.PAPERCLIP_MANAGED_OPENCODE_E2E_DIAGNOSTICS === "1";
   const ownerFrameDiagnosticsEnabled = process.env.PAPERCLIP_MANAGED_OPENCODE_OWNER_FRAMES === "1";
+  const sourceMemoDiagnosticsEnabled = process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS === "1";
   let contextProbeCallId: string | null = null;
   let pendingContextProbeCallId: string | null = null;
   let pendingContextProbeStartedAt: number | null = null;
@@ -284,13 +300,43 @@ export async function runManagedNativeOpenCodeFixture(input: {
   let finalExchangeProbeTimer: ReturnType<typeof setInterval> | undefined;
   let finalExchangeProbeStartedAt: number | null = null;
   let finalExchangeProbeSamples = 0;
+  let sourceLockSnapshotTimer: ReturnType<typeof setTimeout> | undefined;
+  let captureSourceLockSnapshot: () => Promise<void> = async () => undefined;
+  let sourceLockSnapshot: { elapsedMs: number; rows: Array<Record<string, unknown>> } | null = null;
+  let sourceLockSnapshotStartedAt: number | null = null;
+  let sourceMemoLabelTransactions = false;
   const contextTransactionOwners = new Set<string>();
   const contextTransactionOwnerFrames = new Map<string, string[]>();
+  const sourceMemoTransactionRecords: Array<{ txOrdinal: number; startedAtElapsedMs: number; heldMs: number; frames: string[] }> = [];
+  const sourceMemoActiveTransactions = new Map<number, { startedAtElapsedMs: number; startedAt: number; frames: string[] }>();
+  const sourceMemoStartedAt = performance.now();
+  const sourceMemoTxOrdinalMap = new WeakMap<object, number>();
+  const sourceMemoTxOrdinalSymbol = Symbol.for("paperclip.nativeSourceMemoDiagnosticTxOrdinals.v1");
+  if (sourceMemoDiagnosticsEnabled)
+    (globalThis as unknown as Record<PropertyKey, unknown>)[sourceMemoTxOrdinalSymbol] = sourceMemoTxOrdinalMap;
+  let sourceMemoTxOrdinal = 0;
   const ownerDb = db as typeof db & { transaction: typeof db.transaction };
   const originalRootTransaction = ownerDb.transaction.bind(ownerDb);
   const instrumentedRootTransaction = (async (...args: Parameters<typeof db.transaction>) => {
     const [callback, config] = args;
-    return originalRootTransaction(async tx => {
+    let memoTxOrdinal: number | undefined;
+    let memoTxStartedAt: number | undefined;
+    let memoTxObject: object | undefined;
+    const memoTxFrames = sourceMemoDiagnosticsEnabled ? new Error().stack?.split("\n").flatMap(line => {
+      const match = /server\/src\/services\/([A-Za-z0-9_./-]+\.ts):(\d+):\d+/.exec(line);
+      return match ? [`${match[1]}:${match[2]}`] : [];
+    }).slice(0, 4) ?? [] : [];
+    try { return await originalRootTransaction(async tx => {
+      if (sourceMemoDiagnosticsEnabled) {
+        memoTxOrdinal = ++sourceMemoTxOrdinal;
+        memoTxStartedAt = performance.now();
+        memoTxObject = tx as object;
+        sourceMemoTxOrdinalMap.set(memoTxObject, memoTxOrdinal);
+        sourceMemoActiveTransactions.set(memoTxOrdinal, {
+          startedAtElapsedMs: Math.max(0, memoTxStartedAt - sourceMemoStartedAt),
+          startedAt: memoTxStartedAt, frames: memoTxFrames,
+        });
+      }
       if (contextProbeCallId || finalExchangeProbeStartedAt !== null || ownerFrameDiagnosticsEnabled) {
         const stack = new Error().stack ?? "";
         const serviceFrames = stack.split("\n").map(line => line.trim())
@@ -307,10 +353,28 @@ export async function runManagedNativeOpenCodeFixture(input: {
         if (contextProbeCallId || finalExchangeProbeStartedAt !== null)
           await tx.execute(sql`select set_config('application_name', ${ownerLabel}, true)`);
       }
+      if (sourceMemoDiagnosticsEnabled && sourceMemoLabelTransactions && memoTxOrdinal !== undefined) {
+        const firstFrame = memoTxFrames[0] ?? "unknown:0";
+        const [frameFile, frameLine] = firstFrame.split(":");
+        const txLabel = `fx.${memoTxOrdinal}.${frameFile?.split("/").at(-1)?.replace(/\.ts$/, "") ?? "service"}:${frameLine ?? "0"}`
+          .slice(0, 63);
+        await tx.execute(sql`select set_config('application_name', ${txLabel}, true)`);
+      }
       return callback(tx);
-    }, config);
+    }, config); }
+    finally {
+      if (memoTxOrdinal !== undefined && memoTxStartedAt !== undefined) {
+        const elapsed = Math.max(0, performance.now() - memoTxStartedAt);
+        if (memoTxObject) sourceMemoTxOrdinalMap.delete(memoTxObject);
+        sourceMemoActiveTransactions.delete(memoTxOrdinal);
+        sourceMemoTransactionRecords.push({ txOrdinal: memoTxOrdinal,
+          startedAtElapsedMs: Math.max(0, memoTxStartedAt - sourceMemoStartedAt), heldMs: elapsed, frames: memoTxFrames });
+        sourceMemoTransactionRecords.sort((a, b) => b.heldMs - a.heldMs);
+        sourceMemoTransactionRecords.length = Math.min(sourceMemoTransactionRecords.length, 16);
+      }
+    }
   }) as typeof db.transaction;
-  if (diagnosticsEnabled || ownerFrameDiagnosticsEnabled)
+  if (diagnosticsEnabled || ownerFrameDiagnosticsEnabled || sourceMemoDiagnosticsEnabled)
     Object.defineProperty(ownerDb, "transaction", { configurable: true, writable: true, value: instrumentedRootTransaction });
   await instanceSettingsService(db).getExperimental();
   await enableV5ForTest(db);
@@ -675,6 +739,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
       controllerProcessStartedAt: controller.processStartedAt });
 
     let responseCount = 0;
+    let brokerPostCount = 0;
     const fakeFetchEntrances: Array<{ host: string; path: string; apiKeyHeader: boolean; bearerHeader: boolean }> = [];
     let qualifiedManagedProcessAtFirstProviderRequest = false;
     const modelCalls: Array<Record<string, unknown>> = [];
@@ -686,6 +751,27 @@ export async function runManagedNativeOpenCodeFixture(input: {
     const submittedPromptFacts: Array<{ length: number; sha256: string }> = [];
     let managedConfigReadOnlyVerified = false;
     const assignedToolGateway = createToolGatewayService(db);
+    let pendingNativeMemoryReplayProbe: { initialResult: unknown; replay: () => Promise<unknown> } | null = null;
+    let nativeMemoryReplayProbeCompleted = false;
+    if (input.nativeMemoryReplayProbe) {
+      const probe = input.nativeMemoryReplayProbe;
+      const probeStep = modelSteps.find(step => step.id === probe.callId && step.tool === "self_remember");
+      const idempotencyKey = probeStep?.input?.idempotencyKey;
+      if (typeof idempotencyKey !== "string") throw new Error("managed_fixture_memory_replay_probe_step_missing");
+      const executeAssignedTool = assignedToolGateway.executeTool.bind(assignedToolGateway);
+      let probeCompleted = false;
+      assignedToolGateway.executeTool = async (call, workflowContext, scopedContext) => {
+        const initialResult = await executeAssignedTool(call, workflowContext, scopedContext);
+        const parameters = call.parameters && typeof call.parameters === "object" && !Array.isArray(call.parameters)
+          ? call.parameters as Record<string, unknown> : {};
+        if (!probeCompleted && call.tool === "paperclip-self:remember" && parameters.idempotencyKey === idempotencyKey) {
+          probeCompleted = true;
+          pendingNativeMemoryReplayProbe = { initialResult,
+            replay: () => executeAssignedTool(call, workflowContext, scopedContext) };
+        }
+        return initialResult;
+      };
+    }
     registerAssignedMcpGateway(db, assignedToolGateway, scopedDb => createToolGatewayService(scopedDb));
     expect(getAssignedMcpGateway(db)).toBe(assignedToolGateway);
     await db.insert(toolPolicies).values({ companyId,
@@ -707,6 +793,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
         const body = JSON.parse(String(init.body)) as Record<string, unknown>;
         modelCalls.push(body);
         responseCount += 1;
+        if (sourceMemoDiagnosticsEnabled && responseCount === 5) sourceMemoLabelTransactions = true;
         if (responseCount > 1 && modelSteps[responseCount - 2]?.tool === "read_context") {
           const previousStep = modelSteps[responseCount - 2]!;
           const callId = previousStep.id ?? `managed-e2e-${previousStep.tool}-${responseCount - 2}`;
@@ -810,6 +897,15 @@ export async function runManagedNativeOpenCodeFixture(input: {
     app.use(express.json({ limit: "2mb" }));
     app.use(async (req, res, next) => {
       brokerRequests.push(`${req.method} ${req.path}`);
+      if (req.method === "POST" && req.path === "/runtime-tools/model/v1/messages") {
+        brokerPostCount += 1;
+        if (sourceMemoDiagnosticsEnabled && brokerPostCount === 6) {
+          sourceMemoLabelTransactions = true;
+          if (!sourceLockSnapshotTimer) sourceLockSnapshotTimer = setTimeout(() => {
+            void captureSourceLockSnapshot().catch(() => undefined);
+          }, 4_000);
+        }
+      }
       if (diagnosticsEnabled && req.method === "POST" && req.path === "/runtime-tools/model/v1/messages" &&
         responseCount >= 5 && finalExchangeProbeTimer === undefined) {
         if (contextProbeTimer) clearInterval(contextProbeTimer);
@@ -1231,6 +1327,35 @@ export async function runManagedNativeOpenCodeFixture(input: {
     const observedOpenCodePids = new Set<number>();
     let managedProviderConfigReported = false;
     const pgMonitor = postgres(input.connectionString, { max: 1 });
+    captureSourceLockSnapshot = async () => {
+      if (sourceLockSnapshot || !sourceMemoDiagnosticsEnabled) return;
+      sourceLockSnapshotStartedAt = performance.now();
+      const rows = await pgMonitor<Array<{ pid: number; application_name: string; state: string | null;
+        wait_event_type: string | null; wait_event: string | null; xact_age_ms: number | string | null;
+        blocked_by: number[]; blockers: Array<{ pid: number; application_name: string; state: string | null;
+          xact_age_ms: number | string | null }> | null }>>`
+        select a.pid, left(a.application_name, 64) as application_name, a.state,
+          a.wait_event_type, a.wait_event,
+          case when a.xact_start is null then null
+            else greatest(0, extract(epoch from (clock_timestamp() - a.xact_start)) * 1000)::bigint end as xact_age_ms,
+          pg_blocking_pids(a.pid) as blocked_by,
+          (select json_agg(json_build_object('pid', b.pid, 'application_name', left(b.application_name, 64),
+            'state', b.state, 'xact_age_ms', case when b.xact_start is null then null
+              else greatest(0, extract(epoch from (clock_timestamp() - b.xact_start)) * 1000)::bigint end))
+            from pg_stat_activity b where b.pid = any(pg_blocking_pids(a.pid))) as blockers
+        from pg_stat_activity a
+        where a.datname = current_database() and a.pid <> pg_backend_pid()
+          and (cardinality(pg_blocking_pids(a.pid)) > 0 or
+            (a.state = 'active' and a.xact_start < clock_timestamp() - interval '2 seconds'))
+        order by a.xact_start asc nulls last limit 12
+      `;
+      sourceLockSnapshot = { elapsedMs: Math.max(0, performance.now() - sourceLockSnapshotStartedAt),
+        rows: rows.map(row => ({ pid: row.pid, applicationName: row.application_name, state: row.state,
+          waitEventType: row.wait_event_type, waitEvent: row.wait_event,
+          xactAgeMs: row.xact_age_ms === null ? null : Number(row.xact_age_ms), blockedBy: row.blocked_by,
+          blockers: row.blockers?.map(blocker => ({ pid: blocker.pid, applicationName: blocker.application_name,
+            state: blocker.state, xactAgeMs: blocker.xact_age_ms === null ? null : Number(blocker.xact_age_ms) })) ?? [] })) };
+    };
     let pgMonitorStartedAt: number | null = null;
     let pgMonitorTimer: ReturnType<typeof setInterval> | undefined;
     let contextProbeTimer: ReturnType<typeof setInterval> | undefined;
@@ -1548,7 +1673,48 @@ export async function runManagedNativeOpenCodeFixture(input: {
     try {
       const result = await executePaperclipNativeSession({ db, execution, bootstrapSourceClosure, useRunnerd: true, onSpawn,
         runnerInstanceId: prepared.runnerInstanceId, leaseOwner, turnTimeoutMs: fixtureTurnTimeoutMs, adapterType: "paperclip_runner",
-        runnerEnvironment, onLog: async (stream, chunk) => {
+        runnerEnvironment,
+        ...(input.nativeMemoryReplayProbe ? { prepareTurnSourceClosure: async (turnInput, baseClosure) => {
+          const pending = pendingNativeMemoryReplayProbe;
+          if (pending && !nativeMemoryReplayProbeCompleted) {
+            nativeMemoryReplayProbeCompleted = true;
+            const probe = input.nativeMemoryReplayProbe!;
+            const envelope = pending.initialResult && typeof pending.initialResult === "object" && !Array.isArray(pending.initialResult)
+              ? pending.initialResult as Record<string, unknown> : {};
+            const result = envelope.result && typeof envelope.result === "object" && !Array.isArray(envelope.result)
+              ? envelope.result as Record<string, unknown> : {};
+            const data = result.data && typeof result.data === "object" && !Array.isArray(result.data)
+              ? result.data as Record<string, unknown> : {};
+            const outputRecord = data.record && typeof data.record === "object" && !Array.isArray(data.record)
+              ? data.record as Record<string, unknown> : {};
+            const recordId = typeof outputRecord.id === "string" ? outputRecord.id : null;
+            if (!recordId || envelope.status !== "completed")
+              throw new Error("managed_fixture_memory_replay_initial_result_unavailable");
+            const [output] = await db.select({ payloadSourceSnapshot: memoryRecords.payloadSourceSnapshot }).from(memoryRecords)
+              .where(and(eq(memoryRecords.companyId, companyId), eq(memoryRecords.id, recordId)));
+            const snapshot = nativePayloadSourceSnapshotSchema.parse(output?.payloadSourceSnapshot);
+            const dispatchIndex = snapshot.inputs.findIndex(value => value.kind === "worker_model_dispatch");
+            if (dispatchIndex !== snapshot.inputs.length - 1 || dispatchIndex < 0)
+              throw new Error("managed_fixture_memory_replay_source_prefix_missing");
+            const actor: AuthorizationActor = { type: "agent", source: "none", companyId, agentId,
+              runId: run!.id, onBehalfOfUserId: aliceUserId };
+            await probe.run({ companyId, runId: run!.id, callId: probe.callId, initialResult: pending.initialResult,
+              replay: pending.replay,
+              revokeOutput: async requestedRecordId => {
+                if (requestedRecordId !== recordId) throw new Error("managed_fixture_memory_replay_output_changed");
+                await memoryService(db).revoke(companyId, recordId,
+                  { reason: "The Human revoked this output during its live Native replay test." }, aliceMemoryActor);
+              },
+              assertConsumedInputsCurrent: async requestedRecordId => {
+                if (requestedRecordId !== recordId) throw new Error("managed_fixture_memory_replay_output_changed");
+                await assertNativePayloadSourceSetCurrent(db, { companyId, issueId: task.id, runId: run!.id, actor,
+                  policy: snapshot.policy, inputs: snapshot.inputs.slice(0, dispatchIndex) });
+              },
+            });
+          }
+          return { turnInput, sourceClosure: baseClosure ?? undefined };
+        } } : {}),
+        onLog: async (stream, chunk) => {
           for (const line of chunk.split(/\r?\n/)) {
             if (!line.trim()) continue;
             try {
@@ -1608,8 +1774,17 @@ export async function runManagedNativeOpenCodeFixture(input: {
                 }
               }
             } catch {
-              if (stream === "stderr" && /(?:error|failed|failure|denied|unavailable|timeout|timed out|disconnect|exit code|command_execution_failed)/i.test(line))
-                diagnostics.push(`runner stderr: ${line.replace(/\s+/g, " ").slice(0, 240)}`);
+              if (stream === "stderr" && /(?:error|failed|failure|denied|unavailable|timeout|timed out|disconnect|exit code|command_execution_failed)/i.test(line)) {
+                const safeLine = line.replace(/\s+/g, " ");
+                const isFailureFacts = safeLine.includes("native session original failure facts:");
+                diagnostics.push(`${isFailureFacts ? "runner failure facts" : "runner stderr"}: ${safeLine.slice(0, isFailureFacts ? 360 : 240)}`);
+                if (isFailureFacts && sourceMemoDiagnosticsEnabled) diagnostics.push(
+                  `managed source active root transactions at original failure: ${JSON.stringify(
+                    [...sourceMemoActiveTransactions.entries()].map(([txOrdinal, tx]) => ({ txOrdinal,
+                      startedAtElapsedMs: tx.startedAtElapsedMs,
+                      heldMs: Math.max(0, performance.now() - tx.startedAt), frames: tx.frames,
+                    })).sort((a, b) => b.heldMs - a.heldMs).slice(0, 12))}`);
+              }
             }
           }
         } }).catch(error => {
@@ -1623,6 +1798,15 @@ export async function runManagedNativeOpenCodeFixture(input: {
           diagnostics.push(`managed context transaction owners: ${JSON.stringify([...contextTransactionOwners].slice(0, 160).map(owner => ({
             owner, frames: contextTransactionOwnerFrames.get(owner) ?? [],
           })))}`);
+          if (sourceMemoDiagnosticsEnabled) diagnostics.push(`managed source transaction diagnostics: ${JSON.stringify({
+            longest: sourceMemoTransactionRecords,
+            active: [...sourceMemoActiveTransactions.entries()].map(([txOrdinal, tx]) => ({ txOrdinal,
+              startedAtElapsedMs: tx.startedAtElapsedMs,
+              heldMs: Math.max(0, performance.now() - tx.startedAt), frames: tx.frames,
+            })).sort((a, b) => b.heldMs - a.heldMs).slice(0, 12),
+          })}`);
+          if (sourceMemoDiagnosticsEnabled && sourceLockSnapshot)
+            diagnostics.push(`managed source lock snapshot: ${JSON.stringify(sourceLockSnapshot)}`);
           diagnostics.push(`execution failure metadata: ${JSON.stringify(metadata)}`);
           const safeMessage = safeCode(failure?.message) ?? "native_session_execution_failed";
           throw new Error(`${safeMessage}\n${diagnostics.join("\n")}\nBroker: ${JSON.stringify(brokerFailureFacts())}\nArtifacts: ${runRoot}`);
@@ -1903,6 +2087,24 @@ export async function runManagedNativeOpenCodeFixture(input: {
         diagnostics.push(`managed context transaction owners: ${JSON.stringify([...contextTransactionOwners].slice(0, 160).map(owner => ({
           owner, frames: contextTransactionOwnerFrames.get(owner) ?? [],
         })))}`);
+        if (sourceMemoDiagnosticsEnabled) diagnostics.push(`managed source transaction diagnostics: ${JSON.stringify({
+          longest: sourceMemoTransactionRecords,
+          active: [...sourceMemoActiveTransactions.entries()].map(([txOrdinal, tx]) => ({ txOrdinal,
+            startedAtElapsedMs: tx.startedAtElapsedMs,
+            heldMs: Math.max(0, performance.now() - tx.startedAt), frames: tx.frames,
+          })).sort((a, b) => b.heldMs - a.heldMs).slice(0, 12),
+        })}`);
+        if (sourceMemoDiagnosticsEnabled && sourceLockSnapshot)
+          diagnostics.push(`managed source lock snapshot: ${JSON.stringify(sourceLockSnapshot)}`);
+        if (input.nativeMemoryReplayProbe) {
+          const denied = brokerRequests.some(value => value.includes("response POST /runtime-tools/model/v1/messages 403"));
+          expect(nativeMemoryReplayProbeCompleted, "the probe must run after the managed result owner persists the sealed receipt").toBe(true);
+          expect(denied, "revoked Memory output must stop the next managed source boundary").toBe(true);
+          expect(responseCount).toBe(1);
+          return { companyId, runId: run!.id,
+            nativeMemoryReplaySourceDenial: { status: 403, providerResponsesBeforeDenial: responseCount,
+            replayProbeCompleted: nativeMemoryReplayProbeCompleted } };
+        }
         if (input.expectProjectWorkspaceSourceDenial) {
           const denied = brokerRequests.some(value => value.includes("response POST /runtime-tools/model/v1/messages 403"));
           expect(denied, "a workspace edit must make the prior Project source stale before the next provider dispatch").toBe(true);
@@ -1951,6 +2153,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
       if (pgMonitorTimer) clearInterval(pgMonitorTimer);
       if (contextProbeTimer) clearInterval(contextProbeTimer);
       if (finalExchangeProbeTimer) clearInterval(finalExchangeProbeTimer);
+      if (sourceLockSnapshotTimer) clearTimeout(sourceLockSnapshotTimer);
       if (contextInvocationWatchTimer) clearInterval(contextInvocationWatchTimer);
       await pgMonitor.end({ timeout: 1 });
       broker.closeAllConnections();
@@ -1961,6 +2164,10 @@ export async function runManagedNativeOpenCodeFixture(input: {
       }
       if (originalPaperclipApiUrl === undefined) delete process.env.PAPERCLIP_API_URL;
       else process.env.PAPERCLIP_API_URL = originalPaperclipApiUrl;
+      if (sourceMemoDiagnosticsEnabled) {
+        const globals = globalThis as unknown as Record<PropertyKey, unknown>;
+        if (globals[sourceMemoTxOrdinalSymbol] === sourceMemoTxOrdinalMap) delete globals[sourceMemoTxOrdinalSymbol];
+      }
     }
     const [persistedRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, run!.id));
     const sourceReceipt = persistedRun!.runnerProfileJson as Record<string, unknown>;

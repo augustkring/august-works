@@ -16,6 +16,9 @@ import {
   boardApiKeys,
   accountDeletionOperations,
   companyMemberships,
+  chatEndpoints,
+  chatExternalPrincipals,
+  chatIdentityLinks,
   heartbeatRuns,
   instanceUserRoles,
   issueComments,
@@ -92,11 +95,15 @@ export type AuthorizationActor =
       | "local_implicit"
       | "session"
       | "board_key"
+      | "chat_link"
       | "agent_key"
       | "agent_jwt"
       | "cloud_tenant"
       | "cloud_control"
       | "none";
+    /** Exact current provider identity proof created only by the outbound
+     * chat author resolver. This is not an HTTP session or a generic grant. */
+    chatLink?: { companyId: string; endpointId: string; principalId: string; provider: "slack" | "microsoft-teams" };
     nativeToolEffect?: NativeToolEffectClaim;
   };
 
@@ -1489,6 +1496,42 @@ export async function pinCurrentBoardActor(db: Db | DbTransaction, actor: Author
     const [key] = await db.select().from(boardApiKeys).where(eq(boardApiKeys.id, actor.keyId)).for("share", { noWait: true });
     if (!key || key.keyHash !== actor.authenticatedKeyHash || key.userId !== actor.userId || key.revokedAt || (key.expiresAt && key.expiresAt.getTime() <= Date.now())) return null;
     if (key.expiresAt) credentialExpiresAt = Math.min(credentialExpiresAt ?? Infinity, key.expiresAt.getTime());
+  }
+  if (actor.source === "chat_link") {
+    const proof = actor.chatLink;
+    if (!proof || !proof.companyId || !proof.endpointId || !proof.principalId ||
+      (actor.companyIds?.length && !actor.companyIds.includes(proof.companyId)) ||
+      !["slack", "microsoft-teams"].includes(proof.provider)) return null;
+    const [link] = await db.select({ id: chatIdentityLinks.id })
+      .from(chatIdentityLinks)
+      .innerJoin(chatEndpoints, and(
+        eq(chatEndpoints.companyId, chatIdentityLinks.companyId),
+        eq(chatEndpoints.id, chatIdentityLinks.endpointId),
+        eq(chatEndpoints.provider, proof.provider),
+      ))
+      .innerJoin(chatExternalPrincipals, and(
+        eq(chatExternalPrincipals.companyId, chatIdentityLinks.companyId),
+        eq(chatExternalPrincipals.id, chatIdentityLinks.principalId),
+        eq(chatExternalPrincipals.provider, proof.provider),
+        eq(chatExternalPrincipals.providerAccountId, chatEndpoints.providerAccountId ?? ""),
+        eq(chatExternalPrincipals.isBot, false),
+      ))
+      .where(and(
+        eq(chatIdentityLinks.companyId, proof.companyId),
+        eq(chatIdentityLinks.endpointId, proof.endpointId),
+        eq(chatIdentityLinks.principalId, proof.principalId),
+        eq(chatIdentityLinks.paperclipUserId, actor.userId),
+        eq(chatIdentityLinks.status, "linked"),
+        isNull(chatIdentityLinks.revokedAt),
+      )).for("share", { noWait: true });
+    if (!link) return null;
+    const [membership] = await db.select({ status: companyMemberships.status, membershipRole: companyMemberships.membershipRole })
+      .from(companyMemberships).where(and(
+        eq(companyMemberships.companyId, proof.companyId),
+        eq(companyMemberships.principalType, "user"),
+        eq(companyMemberships.principalId, actor.userId),
+      )).for("share", { noWait: true });
+    if (membership?.status !== "active" || membership.membershipRole === "viewer") return null;
   }
   // Native instance roles are read by isInstanceAdmin below. A DTO bit is
   // never a pinned role, including cloud tenant actors.

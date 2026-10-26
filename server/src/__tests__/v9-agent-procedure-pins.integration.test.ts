@@ -186,6 +186,38 @@ const support = await getEmbeddedPostgresTestSupport();
       { kind: "playbook_revision", resultDigest: expect.stringMatching(/^[a-f0-9]{64}$/), sourceQualified: false, source: null },
     ] });
   });
+  it("does not deliver or record a Playbook read after the authenticated Native Run is withdrawn while waiting", async () => {
+    const f = await installed(true);
+    await agentRuntimeFabricService(db).prepare(f.execution);
+    let release!: () => void;
+    let acquired!: () => void;
+    const ready = new Promise<void>(resolve => { acquired = resolve; });
+    const blocked = new Promise<void>(resolve => { release = resolve; });
+    const holder = db.transaction(async tx => {
+      await tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(eq(heartbeatRuns.id, f.run.id)).for("update");
+      acquired();
+      await blocked;
+      await tx.update(heartbeatRuns).set({ status: "failed", responsibleUserId: null }).where(eq(heartbeatRuns.id, f.run.id));
+    });
+    await ready;
+    let settledState = "pending";
+    const loading = agentRuntimeFabricService(db).loadPlaybook({ type: "agent", source: "agent_jwt", companyId: f.f.home,
+      agentId: f.agent.id, runId: f.run.id, onBehalfOfUserId: f.f.userId, ignoreInstanceAdmin: true },
+      f.f.home, f.run.id, f.playbook!.playbookId).then(() => { settledState = "resolved"; return true; }, error => {
+        settledState = `rejected:${error instanceof Error ? error.message : String(error)}`; return false;
+      });
+    try {
+      await new Promise(resolve => setTimeout(resolve, 50));
+      expect(settledState).toBe("pending");
+    } finally {
+      release();
+      await holder;
+    }
+    expect(await loading).toBe(false);
+    const [withdrawn] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, f.run.id));
+    expect(withdrawn!.responsibleUserId).toBeNull();
+    expect(withdrawn!.runnerProfileJson ?? {}).not.toHaveProperty("nativeRuntimeProcedureReadObservations");
+  });
   it("captures exact authored sources and retained Memory roots for the combined runtime input", async () => {
     const f = await installed(true, true, true);
     const captures: NativeRuntimeAuthoredSourceCapture[] = [];

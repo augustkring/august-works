@@ -12,7 +12,7 @@ import { callCreateSkillTool } from "../skill-tools.js";
 import { callProjectTool } from "../project-tools.js";
 import { isConnectorTool, executeConnectorTool, type ConnectorAssignment } from "../connector-runtime.js";
 import { resolveNativeRuntimeMcpSnapshot } from "./runtime-context.js";
-import { nativeSha256 } from "./canonical.js";
+import { nativeCommentProjectionHash, nativeSha256 } from "./canonical.js";
 import { connectionIntentService } from "../connection-intents.js";
 import { RUNTIME_CONNECTION_TOOL_DEFINITIONS } from "../connection-tool-definitions.js";
 import { connectionsSearchInputSchema, connectionRequestInputSchema, CONNECTION_INTENT_AGENT_GUIDANCE,
@@ -958,8 +958,8 @@ export class PaperclipRunnerToolAuthority {
           if (projection) owners.push({ companyId: this.binding.companyId,
             input: { kind: "comment", issueId: this.binding.issueId, commentId: row.id,
               sourceVersion: row.sourceVersion,
-              contentHash: nativeSha256({ body: projection.body, presentation: projection.presentation ?? null,
-                metadata: projection.metadata ?? null }) },
+              contentHash: nativeCommentProjectionHash({ body: projection.body, presentation: projection.presentation,
+                metadata: projection.metadata }) },
             payloadSourceSnapshot: row.payloadSourceSnapshot,
             invalidated: row.payloadSourceSnapshotInvalidated });
           else exactProjection = false;

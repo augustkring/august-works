@@ -1,7 +1,7 @@
 import {and,eq,inArray,or,sql} from "drizzle-orm";
 import { is } from "drizzle-orm";
 import { PgTransaction } from "drizzle-orm/pg-core";
-import {analyticalContextDependencies,analyticalContextRoots,contextManifestMemoryRoots,contextManifestItems,contextManifests,agentExecutionManifests,decisionContextVersions,decisionOutcomeReviewReceipts,processAnalysisVersions,issues,heartbeatRuns,workflowStepRuns,workflowRuns,type Db} from "@paperclipai/db";
+import {analyticalContextDependencies,analyticalContextRoots,contextManifestMemoryRoots,contextManifestItems,contextManifests,agentExecutionManifests,decisionContextVersions,decisionOutcomeReviewReceipts,processAnalysisVersions,issues,heartbeatRuns,workflowStepRuns,workflowRuns,companyMemberships,authUsers,agents,type Db} from "@paperclipai/db";
 import {analyticalContextAuthorityPinSchema,type AnalyticalContextAuthorityPin} from "@paperclipai/shared";
 import {z} from "zod";
 import {authorizationService,canActorReadHeartbeatRunPrivacy,canActorReadIssuePrivacy,type AuthorizationActor} from "./authorization.js";
@@ -333,5 +333,51 @@ async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string
 export async function assertNativeAnalyticalRunPayloadAccess(db:Db,companyId:string,runId:string) {
  const [run]=await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.id,runId))).limit(1);
  if(!run)throw new HttpError(403,"Analytical conversation source access is unavailable",{code:"analytical_source_access_lost"});
- await assertAnalyticalContextPayloadAccess(db,companyId,{type:"agent",source:"agent_jwt",companyId,agentId:run.agentId,runId:run.id,onBehalfOfUserId:run.responsibleUserId},{runId:run.id},"task");
+ const actor:AuthorizationActor={type:"agent",source:"agent_jwt",companyId,agentId:run.agentId,runId:run.id,onBehalfOfUserId:run.responsibleUserId};
+ try {
+  await assertAnalyticalContextPayloadAccess(db,companyId,actor,{runId:run.id},"task");
+ } catch (error) {
+  // E2E-only, metadata-only observer for source-denial diagnosis. It does not
+  // inspect or log issue prose, snapshots, credentials, or provider content.
+  if(process.env.PAPERCLIP_E2E_SOURCE_DENIAL_OBSERVER==="1") {
+   try {
+    const candidateIds=[...new Set([run.nativeIssueId,run.issueId].filter((id):id is string=>Boolean(id)))];
+    const issueRows=candidateIds.length?await db.select({id:issues.id,status:issues.status,executionRunId:issues.executionRunId,
+      protocol:issues.payloadSourceProtocolVersion,invalidated:issues.payloadSourceSnapshotInvalidated,
+      bodyHashValid:sql<boolean>`issues.payload_source_snapshot->'owner'->>'contentHash'=public.aw_native_payload_body_hash('issue',to_jsonb(issues))`,
+      snapshotDigestValid:sql<boolean>`issues.payload_source_snapshot is not null and issues.payload_source_snapshot->>'digest'=encode(sha256(convert_to((issues.payload_source_snapshot-'digest')::text,'UTF8')),'hex')`
+     }).from(issues).where(and(eq(issues.companyId,companyId),inArray(issues.id,candidateIds))):[];
+    const [agent]=await db.select({status:agents.status}).from(agents).where(and(eq(agents.companyId,companyId),eq(agents.id,run.agentId))).limit(1);
+    const [humanAccounts,humanMemberships]=run.responsibleUserId?await Promise.all([
+      db.select({userId:authUsers.id}).from(authUsers).where(eq(authUsers.id,run.responsibleUserId)).limit(1),
+      db.select({status:companyMemberships.status}).from(companyMemberships).where(and(eq(companyMemberships.companyId,companyId),eq(companyMemberships.principalType,"user"),eq(companyMemberships.principalId,run.responsibleUserId))).limit(1),
+    ]):[[],[]];
+    const bound=run.nativeIssueId?issueRows.find(row=>row.id===run.nativeIssueId):undefined;
+    const boundRun=bound?.executionRunId?await db.select({status:heartbeatRuns.status,responsibleUserId:heartbeatRuns.responsibleUserId,
+      nativeIssueId:heartbeatRuns.nativeIssueId,issueId:heartbeatRuns.issueId}).from(heartbeatRuns)
+      .where(and(eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.id,bound.executionRunId))).limit(1):[];
+    const humanActor:AuthorizationActor={type:"board",source:"session",companyId,userId:run.responsibleUserId};
+    const readDecisions=await Promise.all(issueRows.map(async row=>({
+      asHuman:run.responsibleUserId?await canActorReadIssuePrivacy(db,humanActor,{companyId,id:row.id}):false,
+      asAgent:await canActorReadIssuePrivacy(db,actor,{companyId,id:row.id}),
+    })));
+    console.warn("[e2e-source-denial-observer]",JSON.stringify({
+      runStatus:run.status,runNativeInputProtocol:run.nativeInputSourceProtocolVersion,
+      runHasResponsibleHuman:Boolean(run.responsibleUserId),runIsBoundToNativeIssue:Boolean(run.nativeIssueId),
+      agentStatus:agent?.status??"missing",humanAccountExists:Boolean(humanAccounts.length),
+      humanMembershipStatus:humanMemberships[0]?.status??"missing",
+      issues:issueRows.map((row,index)=>({status:row.status,protocol:row.protocol,invalidated:row.invalidated,
+        snapshotBodyHashValid:row.bodyHashValid,snapshotDigestValid:row.snapshotDigestValid,
+        executionRunMatches:row.executionRunId===run.id,
+        boundRun:row.id===bound?.id?{status:boundRun[0]?.status??"missing",
+          humanMatches:boundRun[0]?.responsibleUserId===run.responsibleUserId,
+          nativeIssueMatches:boundRun[0]?.nativeIssueId===row.id&&boundRun[0]?.issueId===row.id}:null,
+        privacyRead:readDecisions[index]})),
+    }));
+   } catch (observerError) {
+    console.warn("[e2e-source-denial-observer] metadata capture failed",observerError instanceof Error?observerError.name:"unknown");
+   }
+  }
+  throw error;
+ }
 }

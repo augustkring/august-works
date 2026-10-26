@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { createDb } from "@paperclipai/db";
+import { and, eq } from "drizzle-orm";
+import { createDb, memoryRecords, toolInvocations } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { enableV5ForTest } from "../../__tests__/helpers/v5-fixtures.js";
 import { instanceSettingsService } from "../instance-settings.js";
@@ -85,6 +86,8 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
     vi.stubEnv("PAPERCLIP_AGENT_JWT_SECRET", `managed-opencode-e2e-${randomUUID()}-${randomUUID()}`);
     const diagnosticsEnabled = process.env.PAPERCLIP_MANAGED_OPENCODE_E2E_DIAGNOSTICS === "1";
     const sourceTimingsEnabled = diagnosticsEnabled || process.env.PAPERCLIP_MANAGED_OPENCODE_SOURCE_TIMINGS === "1";
+    const sourceMemoDiagnosticsEnabled = process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS === "1";
+    if (sourceMemoDiagnosticsEnabled) nativeDirectInput.resetNativeSourceMemoDiagnosticsForTest();
     if (diagnosticsEnabled) vi.stubEnv("PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS", "1");
     database = await startEmbeddedPostgresTestDatabase("managed-opencode-source-e2e-");
     db = createDb(database.connectionString);
@@ -172,13 +175,16 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
         { afterModelToolCallId: memoryAId, action: "create_private_context_root" },
       ],
       onPreserveDebugArtifacts: () => { preserveDebugArtifacts = true; } }).catch(error => {
-        if (managedContextReadFailures.length || managedContextSourceCheckTimings.length) {
+        if (managedContextReadFailures.length || managedContextSourceCheckTimings.length ||
+          process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS === "1") {
           const message = error instanceof Error ? error.message : "managed_opencode_fixture_failed";
           throw new Error(`${message}\nmanaged Context read failure facts: ${JSON.stringify({
             failures: managedContextReadFailures, sourceCheckCounts: managedContextSourceCheckCounts,
             sourceCheckCallerCounts: managedContextSourceCheckCallerCounts,
             managedMemoryToolFailures,
             recentSourceCheckTimings: managedContextSourceCheckTimings,
+            nativeSourceMemo: process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS === "1"
+              ? nativeDirectInput.nativeSourceMemoDiagnosticsForTest() : undefined,
           })}`);
         }
         throw error;
@@ -239,6 +245,61 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
     expect(snapshotA.policy.memoryIds).not.toContain(privateRoot.memoryId);
     expect(snapshotB.policy.memoryIds).toContain(privateRoot.memoryId);
     expect(snapshotB.inputs).toContainEqual(expect.objectContaining({ kind: "context", manifestId: contextManifestId }));
+  }, 240_000);
+
+  it("replays the exact scoped Gateway Memory call once, then rejects after the Human revokes its output", async () => {
+    const callId = `managed-e2e-memory-replay-${randomUUID()}`;
+    const operationKey = randomUUID();
+    let exercised = false;
+    const result = await runManagedNativeOpenCodeFixture({ db, connectionString: database.connectionString,
+      root, instanceId,
+      steps: [
+        { tool: "self_remember", id: callId, input: { scope: "company", memoryType: "outcome",
+          title: "Scoped replay output", content: "A real managed Memory output used to test cached replay.",
+          idempotencyKey: operationKey } },
+        { tool: "paperclip_finish", id: `${callId}-finish` },
+      ],
+      nativeMemoryReplayProbe: { callId, run: async probe => {
+        const initial = probe.initialResult as { status?: unknown; result?: { data?: { record?: { id?: unknown } } } };
+        expect(initial.status).toBe("completed");
+        const recordId = initial.result?.data?.record?.id;
+        expect(recordId).toMatch(/^[0-9a-f-]{36}$/i);
+        if (typeof recordId !== "string") throw new Error("managed_memory_replay_output_id_missing");
+
+        await probe.assertConsumedInputsCurrent(recordId);
+        const firstReplay = await probe.replay() as { status?: unknown; result?: unknown };
+        expect(firstReplay).toMatchObject({ status: "replayed", result: initial.result });
+        await probe.assertConsumedInputsCurrent(recordId);
+        const invocationKey = `aw-native-tool:${probe.runId}:${probe.callId}`;
+        const [beforeRevoke] = await db.select().from(toolInvocations).where(and(
+          eq(toolInvocations.companyId, probe.companyId), eq(toolInvocations.idempotencyKey, invocationKey)));
+        expect(beforeRevoke?.status).toBe("succeeded");
+
+        await probe.revokeOutput(recordId);
+        // The exact consumed Task/dispatch prefix remains current after the Human
+        // revokes only the output Memory row.
+        await probe.assertConsumedInputsCurrent(recordId);
+        await expect(probe.replay()).rejects.toMatchObject({ reasonCode: "native_memory_capture_invalid" });
+        const invocations = await db.select({ id: toolInvocations.id }).from(toolInvocations).where(and(
+          eq(toolInvocations.companyId, probe.companyId), eq(toolInvocations.idempotencyKey, invocationKey)));
+        expect(invocations).toHaveLength(1);
+        const [output] = await db.select({ id: memoryRecords.id, revokedAt: memoryRecords.revokedAt }).from(memoryRecords)
+          .where(and(eq(memoryRecords.companyId, probe.companyId), eq(memoryRecords.id, recordId)));
+        expect(output).toMatchObject({ id: recordId });
+        expect(output?.revokedAt).toBeInstanceOf(Date);
+        exercised = true;
+      } },
+    });
+    expect(exercised).toBe(true);
+    expect(result).toHaveProperty("nativeMemoryReplaySourceDenial", {
+      status: 403, providerResponsesBeforeDenial: 1, replayProbeCompleted: true,
+    });
+    if (typeof result.companyId !== "string" || typeof result.runId !== "string")
+      throw new Error("Managed replay fixture did not return its required invocation binding");
+    const invocations = await db.select({ id: toolInvocations.id }).from(toolInvocations).where(and(
+      eq(toolInvocations.companyId, result.companyId), eq(toolInvocations.idempotencyKey,
+        `aw-native-tool:${result.runId}:${callId}`)));
+    expect(invocations).toHaveLength(1);
   }, 240_000);
 
   it("binds a managed Project GET result to the exact current public Project projection", async () => {

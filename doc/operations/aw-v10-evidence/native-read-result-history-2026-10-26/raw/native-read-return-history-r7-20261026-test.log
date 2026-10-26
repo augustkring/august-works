@@ -1,0 +1,33 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts (43 tests | 1 failed | 42 skipped) 5017ms
+     × appends only an actual acknowledged Native history read with current source owners 1094ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > appends only an actual acknowledged Native history read with current source owners
+AssertionError: expected '4b8afec739ba1f08d140af53aad38cff99504…' to be 'a13306b7cc48f2e935c2dcdfbe598a936ae22…' // Object.is equality
+
+Expected: "a13306b7cc48f2e935c2dcdfbe598a936ae22495298cef0da5bc0f65f10d9e69"
+Received: "4b8afec739ba1f08d140af53aad38cff9950429d75a318702b1cc62dbf684fc3"
+
+ ❯ Object.callback [as onNativeInputToolResult] src/services/native-runtime/native-model-input-dispatch.integration.test.ts:958:50
+    956|             expect(row?.payloadSourceSnapshotInvalidated).toBe(false);
+    957|             expect(view).not.toBeNull();
+    958|             expect(snapshot?.owner?.contentHash).toBe(commentSource.co…
+       |                                                  ^
+    959|             expect(nativeSha256({ body: view?.body, presentation: view…
+    960|               .toBe(commentSource.contentHash);
+ ❯ src/services/native-runtime/paperclip-runner-tool-authority.ts:590:9
+ ❯ runRead src/services/native-runtime/native-model-input-dispatch.integration.test.ts:972:22
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts:980:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 42 skipped (43)
+   Start at  06:59:01
+   Duration  18.37s (transform 9.51s, setup 74ms, import 13.15s, tests 5.02s, environment 0ms)
+

@@ -1471,7 +1471,7 @@ class SessionToolAuthorityEpoch {
     private readonly onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>,
     private readonly onNativeInputToolResult?: (source: NativeInputToolResultSource) => Promise<void>,
     private readonly onNativeToolCall?: (call: { tool: string; callId: string; turnId: string; argumentsHash: string; arguments: unknown }) => Promise<void>,
-    private readonly onManagedOpenCodeToolResult?: (call: { tool: "read_document" | "write_document" | "create_task" | "self_remember" | "read_context" | "call_api"; callId: string; turnId: string; argumentsHash: string; result: unknown; contextRead?: NativeContextReadBinding; projectRead?: NativeProjectToolResultSource }) => Promise<void>,
+    private readonly onManagedOpenCodeToolResult?: (call: { tool: "read_document" | "write_document" | "create_task" | "self_remember" | "read_context" | "call_api" | "get_task_context" | "get_task_history" | "read_chat_attachment"; callId: string; turnId: string; argumentsHash: string; result: unknown; contextRead?: NativeContextReadBinding; projectRead?: NativeProjectToolResultSource }) => Promise<void>,
     private readonly managedContextReadCapture?: { value: NativeContextReadBinding | null }) {
     this.runId = runId;
     this.#authority = authority;
@@ -1497,7 +1497,8 @@ class SessionToolAuthorityEpoch {
     const execute = async () => {
       this.#assertCurrent();
       const argumentsHash = nativeSha256(call.arguments);
-      if (this.onManagedOpenCodeToolResult && call.tool === "call_api" && !call.turnId)
+      if (this.onManagedOpenCodeToolResult && (call.tool === "call_api" || call.tool === "get_task_context" ||
+        call.tool === "get_task_history" || call.tool === "read_chat_attachment") && !call.turnId)
         throw new Error("managed_opencode_tool_call_source_binding_invalid");
       if (call.turnId) await this.onNativeToolCall?.({ tool: call.tool, callId: call.callId,
         turnId: call.turnId, argumentsHash, arguments: call.arguments });
@@ -1512,7 +1513,8 @@ class SessionToolAuthorityEpoch {
         ...(call.turnId ? { nativeToolCallIdentity: { tool: call.tool, callId: call.callId, turnId: call.turnId } } : {}),
       });
       if (call.turnId && (call.tool === "read_document" || call.tool === "write_document" ||
-        call.tool === "create_task" || call.tool === "self_remember" || call.tool === "read_context"))
+        call.tool === "create_task" || call.tool === "self_remember" || call.tool === "read_context" ||
+        call.tool === "get_task_context" || call.tool === "get_task_history" || call.tool === "read_chat_attachment"))
         await this.onManagedOpenCodeToolResult?.({ tool: call.tool, callId: call.callId, turnId: call.turnId, argumentsHash, result,
           ...(call.tool === "read_context" && this.managedContextReadCapture?.value ? { contextRead: this.managedContextReadCapture.value } : {}) });
       if (call.turnId && call.tool === "call_api" && projectReadCapture.value?.source)
@@ -1534,6 +1536,38 @@ class SessionToolAuthorityEpoch {
     if (call.tool === "read_document") this.#assertCurrent();
     return result;
   }
+}
+
+/** Runner diagnostics are best-effort output, but a failed current-source
+ * check must still fence tools and stop the session. The onLog owner also
+ * records the durable source-loss cancellation; this is the in-memory runner
+ * stop needed to prevent another provider action while that settles. */
+export function createRunnerDiagnosticLogSink(input: {
+  runId: string;
+  onLog?: (stream: "stdout" | "stderr", chunk: string) => Promise<void>;
+  revokeToolAuthority: () => void;
+  cancelSession?: (runId: string, reason: string) => Promise<unknown>;
+}) {
+  let cancellation: Promise<void> | null = null;
+  let failedClosed = false;
+  const failClosed = () => {
+    if (failedClosed) return;
+    failedClosed = true;
+    input.revokeToolAuthority();
+    if (!cancellation) {
+      cancellation = Promise.resolve()
+        .then(() => (input.cancelSession ?? cancelNativeSession)(input.runId, "Runner diagnostic output authorization failed"))
+        .then(() => undefined, () => undefined);
+    }
+  };
+  return (chunk: string) => {
+    try {
+      const delivery = input.onLog?.("stderr", chunk);
+      if (delivery) void Promise.resolve(delivery).catch(failClosed);
+    } catch {
+      failClosed();
+    }
+  };
 }
 
 const sessionToolAuthorityEpochs = new Map<string, SessionToolAuthorityEpoch>();
@@ -6248,7 +6282,7 @@ function record(value: unknown): Record<string, unknown> {
 /** Unknown same-run Native reads are monotonic: a later qualified read cannot
  * repair an earlier result whose owner roots were unavailable. Check these
  * persisted observations at every managed output-capture boundary. */
-function assertNativeRunReadSourceHistoryQualified(profile: Record<string, unknown>, input: {
+export function assertNativeRunReadSourceHistoryQualified(profile: Record<string, unknown>, input: {
   runId: string; responsibleUserId: string | null;
 }): void {
   const deny = () => { throw new Error("native_read_result_source_history_unavailable"); };
@@ -7796,7 +7830,8 @@ export async function recordNativeToolCallDispatchAssociation(input: Parameters<
 
 async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
   agentId: string; turnId: string; callId: string; argumentsHash: string;
-  tool: "read_document" | "write_document" | "create_task" | "self_remember" | "read_context" | "call_api"; result: unknown;
+  tool: "read_document" | "write_document" | "create_task" | "self_remember" | "read_context" | "call_api" |
+    "get_task_context" | "get_task_history" | "read_chat_attachment"; result: unknown;
   contextRead?: NativeContextReadBinding;
   projectRead?: NativeProjectToolResultSource;
 }): Promise<void> {
@@ -7830,7 +7865,12 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         value.callId === input.callId && value.turnId === input.turnId && value.tool === input.tool &&
         value.argumentsHash === input.argumentsHash) : [];
       const invocationToolName = input.tool === "self_remember" ? "paperclip-self:remember" : input.tool;
-      const [invocation] = input.tool === "call_api" ? [] : await tx.select().from(toolInvocations).where(and(
+      const nativeReadResultTool = input.tool === "get_task_context" || input.tool === "get_task_history" ||
+        input.tool === "read_chat_attachment";
+      const nativeReadTool = input.tool === "get_task_context" || input.tool === "get_task_history" ||
+        input.tool === "read_chat_attachment" ? input.tool : null;
+      const nullInvocationTool = input.tool === "call_api" || nativeReadResultTool;
+      const [invocation] = nullInvocationTool ? [] : await tx.select().from(toolInvocations).where(and(
         eq(toolInvocations.companyId, input.companyId), eq(toolInvocations.runId, input.runId),
         eq(toolInvocations.agentId, input.agentId),
         eq(toolInvocations.idempotencyKey, `aw-native-tool:${input.runId}:${input.callId}`),
@@ -7838,8 +7878,49 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         eq(toolInvocations.argumentsHash, input.argumentsHash),
       )).for("share");
       const contentHash = digest;
+      let nativeReadCapture: { source: Extract<NativePayloadSourceInput, { kind: "tool_result" }>;
+        sourceSet: NativePayloadSourceSet; additionalInput: NativeRunInputSourceReceipt["additionalInputs"][number] } | null = null;
+      if (nativeReadResultTool) {
+        const capturesRaw = profile.nativeToolResultSourceCaptures;
+        const rawCaptures = Array.isArray(capturesRaw) ? capturesRaw.map(record) : [];
+        if (capturesRaw !== undefined && !Array.isArray(capturesRaw)) throw new Error("managed_opencode_tool_result_binding_invalid");
+        const matches = rawCaptures.filter(value => value.managedOpenCode !== true && value.nativeReadResult === true &&
+          value.callId === input.callId && value.turnId === input.turnId && value.tool === input.tool &&
+          value.eventSeq === call[0]?.eventSeq && value.attempt === call[0]?.attempt &&
+          value.argumentsHash === input.argumentsHash && value.resultDigest === contentHash);
+        if (matches.length !== 1) throw new Error("managed_opencode_tool_result_binding_invalid");
+        const observed = matches[0]!;
+        const sourceResult = nativePayloadSourceInputSchema.safeParse(observed.source);
+        const sourceSetValue = record(observed.sourceSet);
+        const sourcePolicy = nativePayloadSourcePolicySchema.safeParse(sourceSetValue.policy);
+        const sourceInputs = nativePayloadSourceInputSchema.array().safeParse(sourceSetValue.inputs);
+        const observedInputs = nativePayloadSourceInputSchema.array().safeParse(observed.sourceInputs);
+        if (!sourceResult.success || sourceResult.data.kind !== "tool_result" || sourceResult.data.runId !== input.runId ||
+          sourceResult.data.callId !== input.callId || sourceResult.data.toolName !== input.tool ||
+          sourceResult.data.invocationId !== null || sourceResult.data.contentHash !== contentHash ||
+          observed.resultDigest !== contentHash || !sourcePolicy.success || !sourceInputs.success || !observedInputs.success ||
+          !isDeepStrictEqual(sourceInputs.data, observedInputs.data) ||
+          new Set(sourceInputs.data.map(value => JSON.stringify(value))).size !== sourceInputs.data.length)
+          throw new Error("managed_opencode_tool_result_binding_invalid");
+        const entries = parsed.success ? parsed.data.additionalInputs.filter(entry => entry.responsibleUserId === run?.responsibleUserId &&
+          isDeepStrictEqual(entry.policy, sourcePolicy.data) &&
+          isDeepStrictEqual(entry.inputs, [sourceResult.data, ...sourceInputs.data])) : [];
+        const exactCopies = parsed.success ? parsed.data.additionalInputs.reduce((count, entry) => count +
+          entry.inputs.filter(value => value.kind === "tool_result" && isDeepStrictEqual(value, sourceResult.data)).length, 0) : 0;
+        const conflictingCopies = parsed.success && parsed.data.additionalInputs.some(entry => entry.inputs.some(value =>
+          value.kind === "tool_result" && value.callId === input.callId && !isDeepStrictEqual(value, sourceResult.data)));
+        if (!parsed.success || entries.length !== 1 || exactCopies !== 1 || conflictingCopies)
+          throw new Error("managed_opencode_tool_result_binding_invalid");
+        const actor: AuthorizationActor = { type: "agent", source: "none", companyId: input.companyId,
+          agentId: input.agentId, runId: input.runId, onBehalfOfUserId: run?.responsibleUserId ?? undefined };
+        await assertNativeReadResultSourceSetOwnersCurrent(tx as unknown as Db, { companyId: input.companyId,
+          issueId: input.issueId, runId: input.runId, actor, tool: nativeReadTool!, sourceSet: { policy: sourcePolicy.data,
+            inputs: sourceInputs.data } });
+        nativeReadCapture = { source: sourceResult.data, sourceSet: { policy: sourcePolicy.data, inputs: sourceInputs.data },
+          additionalInput: entries[0]! };
+      }
       if (!run || sourceAuthority.version !== 1 || !parsed.success || call.length !== 1 ||
-        !contentHash || (input.tool !== "call_api" && (!invocation || invocation.resultHash !== contentHash ||
+        !contentHash || (!nullInvocationTool && (!invocation || invocation.resultHash !== contentHash ||
           invocation.issueId !== input.issueId)) ||
         (input.tool === "self_remember" && nativeSha256(invocation?.workflowResultJson) !== contentHash) ||
         parsed.data.binding.companyId !== input.companyId ||
@@ -7905,7 +7986,7 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
           actor: projectActor, source: projectSource.data });
         returnedProjectSource = projectSource.data;
       }
-      const inputSource = nativePayloadSourceInputSchema.parse({ kind: "tool_result", runId: input.runId,
+      const inputSource = nativeReadCapture?.source ?? nativePayloadSourceInputSchema.parse({ kind: "tool_result", runId: input.runId,
         callId: input.callId, toolName: invocationToolName, invocationId: invocation?.id ?? null, contentHash });
       const resultDocument = record(record(input.result).document);
       const documentRevision = input.tool === "write_document" && typeof resultDocument.id === "string" &&
@@ -8007,38 +8088,50 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         createdTask = { id: child.id, source: taskInput };
       }
       const capturesRaw = profile.nativeToolResultSourceCaptures;
-      if (capturesRaw !== undefined && (!Array.isArray(capturesRaw) || capturesRaw.length >= 256))
+      if (capturesRaw !== undefined && !Array.isArray(capturesRaw))
         throw new Error("managed_opencode_tool_result_budget_exceeded");
       const captures = Array.isArray(capturesRaw) ? capturesRaw : [];
       if (captures.some(value => {
         const item = record(value);
         return item.callId === input.callId && item.turnId === input.turnId && item.tool === input.tool && item.managedOpenCode === true;
       })) throw new Error("managed_opencode_tool_result_duplicate");
-      const nextCaptures = [...captures, { eventSeq: call[0]!.eventSeq, attempt: call[0]!.attempt,
-        turnId: input.turnId, callId: input.callId, tool: input.tool, resultDigest: contentHash,
+      // Replace the provisional original-owner read observation with the
+      // provider-settled capture so later validators see one exact source row.
+      const priorCaptures = nativeReadCapture ? captures.filter(value => {
+        const item = record(value);
+        return !(item.managedOpenCode !== true && item.nativeReadResult === true && item.callId === input.callId &&
+          item.turnId === input.turnId && item.tool === input.tool && item.resultDigest === contentHash);
+      }) : captures;
+      if (priorCaptures.length >= 256) throw new Error("managed_opencode_tool_result_budget_exceeded");
+      const nextCaptures = [...priorCaptures, { eventSeq: call[0]!.eventSeq, attempt: call[0]!.attempt,
+        turnId: input.turnId, callId: input.callId, tool: input.tool, argumentsHash: input.argumentsHash, resultDigest: contentHash,
         source: { kind: "tool_result", runId: input.runId, callId: input.callId, toolName: invocationToolName,
           invocationId: invocation?.id ?? null, contentHash }, documentRevision,
+        ...(nativeReadCapture ? { nativeReadResult: true, sourceSet: nativeReadCapture.sourceSet,
+          sourceInputs: nativeReadCapture.sourceSet.inputs } : {}),
         ...(returnedProjectSource ? { projectSource: returnedProjectSource } : {}),
         taskRef: createdTask ? { issueId: createdTask.id } : null,
         ...(contextReadCapture ? { contextRead: contextReadCapture } : {}), managedOpenCode: true }];
       const { digest: _receiptDigest, ...body } = parsed.data;
-      const updatedReceiptBody = { ...body, additionalInputs: [...parsed.data.additionalInputs, {
-        responsibleUserId: run.responsibleUserId,
-        ...(input.tool === "read_context" && input.contextRead ? {
-          policy: input.contextRead.sourceSet.policy,
-          inputs: [inputSource, ...input.contextRead.sourceSet.inputs],
-        } : {
-          // The tool_result.runId is provenance for this invocation, not a consumed
-          // retained_run source. Only returned Task/document owners add source policy.
-          policy: { issueIds: [...new Set([...(createdTask ? [createdTask.id] : []),
-            ...(returnedDocumentSource?.issueId ? [returnedDocumentSource.issueId] : [])])],
-            projectIds: returnedProjectSource ? [returnedProjectSource.projectId] : [],
-            runIds: [], memoryIds: returnedMemorySource ? [returnedMemorySource.memoryId] : [], foundationRevisionIds: [] },
-          inputs: [inputSource, ...(returnedDocumentSource ? [returnedDocumentSource] : []),
-            ...(createdTask ? [createdTask.source] : []), ...(returnedMemorySource ? [returnedMemorySource] : []),
-            ...(returnedProjectSource ? [returnedProjectSource] : [])],
-        }),
-      }] };
+      const updatedReceiptBody = { ...body, additionalInputs: nativeReadCapture
+        ? parsed.data.additionalInputs
+        : [...parsed.data.additionalInputs, {
+          responsibleUserId: run.responsibleUserId,
+          ...(input.tool === "read_context" && input.contextRead ? {
+            policy: input.contextRead.sourceSet.policy,
+            inputs: [inputSource, ...input.contextRead.sourceSet.inputs],
+          } : {
+            // The tool_result.runId is provenance for this invocation, not a consumed
+            // retained_run source. Only returned Task/document owners add source policy.
+            policy: { issueIds: [...new Set([...(createdTask ? [createdTask.id] : []),
+              ...(returnedDocumentSource?.issueId ? [returnedDocumentSource.issueId] : [])])],
+              projectIds: returnedProjectSource ? [returnedProjectSource.projectId] : [],
+              runIds: [], memoryIds: returnedMemorySource ? [returnedMemorySource.memoryId] : [], foundationRevisionIds: [] },
+            inputs: [inputSource, ...(returnedDocumentSource ? [returnedDocumentSource] : []),
+              ...(createdTask ? [createdTask.source] : []), ...(returnedMemorySource ? [returnedMemorySource] : []),
+              ...(returnedProjectSource ? [returnedProjectSource] : [])],
+          }),
+        }] };
       diagnosticPhase = "receipt_build";
       const receipt = { ...updatedReceiptBody, digest: await postgresJsonbSha256(tx, updatedReceiptBody) };
       if (!nativeRunInputSourceReceiptSchema.safeParse(receipt).success || Buffer.byteLength(JSON.stringify(nextCaptures)) > 2 * 1024 * 1024)
@@ -10339,7 +10432,8 @@ async function executePaperclipNativeSessionWithinScope(
           `[paperclip-runner] native session execution failed: ${executionFailureMessage}\n`,
         ),
       );
-      if (process.env.PAPERCLIP_MANAGED_OPENCODE_E2E_DIAGNOSTICS === "1") {
+      if (process.env.PAPERCLIP_MANAGED_OPENCODE_E2E_DIAGNOSTICS === "1" ||
+          process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS === "1") {
         const originalError = error instanceof Error ? error as Error & { code?: unknown; cause?: { code?: unknown } } : null;
         const safeCode = (value: unknown) => typeof value === "string" && /^[A-Z0-9_]{1,32}$/.test(value)
           ? value : undefined;
@@ -12137,7 +12231,7 @@ export async function createRunnerdBackend(input: {
   onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>;
   onNativeInputToolResult?: (source: NativeInputToolResultSource) => Promise<void>;
   onNativeToolCall?: (call: { tool: string; callId: string; turnId: string; argumentsHash: string; arguments: unknown }) => Promise<void>;
-  onManagedOpenCodeToolResult?: (call: { tool: "read_document" | "write_document" | "create_task" | "self_remember" | "read_context" | "call_api"; callId: string; turnId: string; argumentsHash: string; result: unknown; contextRead?: NativeContextReadBinding; projectRead?: NativeProjectToolResultSource }) => Promise<void>;
+  onManagedOpenCodeToolResult?: (call: { tool: "read_document" | "write_document" | "create_task" | "self_remember" | "read_context" | "call_api" | "get_task_context" | "get_task_history" | "read_chat_attachment"; callId: string; turnId: string; argumentsHash: string; result: unknown; contextRead?: NativeContextReadBinding; projectRead?: NativeProjectToolResultSource }) => Promise<void>;
   onLog?: (stream: "stdout" | "stderr", chunk: string) => Promise<void>;
   stopTaskForReassignment?: (target: { companyId: string; issueId: string; agentId: string; runId: string | null }) => Promise<void>;
   enqueueWakeup?: (
@@ -12322,6 +12416,11 @@ async function createRunnerdBackendWithinSessionClaim(
     input.onManagedOpenCodeToolResult,
     input.managedNativeContextReadCapture,
   );
+  const logRunnerDiagnostic = createRunnerDiagnosticLogSink({
+    runId: input.execution.binding.runId,
+    onLog: input.onLog,
+    revokeToolAuthority: () => authorityEpoch.revoke(),
+  });
   let dynamicTools: Awaited<
     ReturnType<SessionToolAuthorityEpoch["definitions"]>
   >;
@@ -12337,7 +12436,7 @@ async function createRunnerdBackendWithinSessionClaim(
   let managedOpenCodeDynamicTools: Readonly<Record<string, unknown>>[] | null = null;
   if (managedOpenCode) {
     const allowedNames = new Set(["read_document", "write_document", "create_task", "self_remember", "read_context",
-      "call_api", "paperclip_finish", "paperclip_block"]);
+      "call_api", "get_task_context", "get_task_history", "read_chat_attachment", "paperclip_finish", "paperclip_block"]);
     const schemas: Array<Record<string, unknown>> = dynamicTools.flatMap((raw): Array<Record<string, unknown>> => {
       if (typeof raw.name !== "string") return [];
       let name = raw.name;
@@ -12393,13 +12492,15 @@ async function createRunnerdBackendWithinSessionClaim(
     // terminal controls. Keep them in the broker's exact catalog proof, but
     // pass only Paperclip CRUD tools to the bridge to avoid duplicate names.
     managedOpenCodeDynamicTools = schemas.filter((tool) =>
-      ["read_document", "write_document", "create_task", "self_remember", "read_context", "call_api"].includes(String(tool.name)));
+      ["read_document", "write_document", "create_task", "self_remember", "read_context", "call_api",
+        "get_task_context", "get_task_history", "read_chat_attachment"].includes(String(tool.name)));
     const resumeToolNames = managedOpenCodeDynamicTools.map((tool) => String(tool.name));
     if (new Set(resumeToolNames).size !== resumeToolNames.length ||
       !["read_document", "write_document", "create_task"].every(name => resumeToolNames.includes(name)) ||
       (input.nativeModelOutputCapture && !resumeToolNames.includes("self_remember")) ||
       (input.nativeModelOutputCapture && !resumeToolNames.includes("read_context")) ||
-      resumeToolNames.some(name => !["read_document", "write_document", "create_task", "self_remember", "read_context", "call_api"].includes(name)))
+      resumeToolNames.some(name => !["read_document", "write_document", "create_task", "self_remember", "read_context", "call_api",
+        "get_task_context", "get_task_history", "read_chat_attachment"].includes(name)))
       throw new Error("managed_opencode_resume_tool_catalog_invalid");
     const taskEnvelope = createCodexTaskEnvelope({
       objective: input.execution.completionContract.contract.objective,
@@ -14243,8 +14344,7 @@ async function createRunnerdBackendWithinSessionClaim(
         adoptExistingRunner: adoptedProcess,
         environment: effectiveRunnerEnvironment,
         onDiagnostic: (message) => {
-          void input.onLog?.(
-            "stderr",
+          logRunnerDiagnostic(
             `[paperclip-runner] runnerd diagnostic: ${redactSensitiveText(message).slice(-4_096)}\n`,
           );
         },
@@ -14528,8 +14628,7 @@ async function createRunnerdBackendWithinSessionClaim(
                         authority,
                         endpoint: transport.ingress,
                         onStateChange: (state, failureCode) => {
-                          void input.onLog?.(
-                            "stderr",
+                          logRunnerDiagnostic(
                             `[paperclip-runner] transport mode=provider_ingress state=${state}${failureCode ? ` failure=${failureCode}` : ""}\n`,
                           );
                         },

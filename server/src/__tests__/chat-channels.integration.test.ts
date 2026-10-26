@@ -52,6 +52,7 @@ import {
   agentWakeupRequests,
   activityLog,
   assets,
+  authSessions,
   authUsers,
   chatActions,
   chatConversations,
@@ -76,6 +77,7 @@ import {
   heartbeatRunEvents,
   heartbeatRuns,
   issueComments,
+  issueAccessGrants,
   issueAttachments,
   issueWorkProducts,
   issueQuestionResponseDeliveries,
@@ -84,6 +86,8 @@ import {
   issues,
   nativeRunResults,
   nativeRunFinalizations,
+  memoryDeletionMarkers,
+  routineRuns,
   environmentLeases,
   principalPermissionGrants,
   toolConnections,
@@ -137,6 +141,11 @@ import {
 } from "../services/chat-teams-personal-recipient.js";
 import * as discordQuestionForms from "../services/chat-discord-question-forms.js";
 import { issueService } from "../services/issues.js";
+import { mirrorSlackBoardComment } from "../services/slack-board-messages.js";
+import { canActorReadIssuePrivacy } from "../services/authorization.js";
+import { routineAuthoringToolsService } from "../services/routine-authoring-tools.js";
+import { grantsForHumanRole } from "../services/company-member-roles.js";
+import { lockMemoryPrivacy, purgeDerivedWorkflowMemory } from "../services/memory/memory-privacy.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { getExternalChannelBindingSummary } from "../services/chat-channel-binding.js";
 import { PaperclipRunnerToolAuthority } from "../services/native-runtime/paperclip-runner-tool-authority.js";
@@ -4073,6 +4082,147 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     await service.processPendingPublications();
     expect(await db.select().from(chatActions).where(and(eq(chatActions.endpointId, endpoint.id), eq(chatActions.kind, "slack_board_message"), eq(chatActions.status, "received")))).toHaveLength(0);
     expect(runtime.endpoints.get(endpoint.id)!.posts.filter(post => post.text.includes("Retry this work"))).toHaveLength(1);
+  });
+
+  it("rechecks a private Routine Task's current owner before the queued Slack effect", async () => {
+    await instanceSettingsService(db).updateExperimental({
+      enableChatConnectors: true,
+      experience_projection_v9: true,
+      ambient_commands_v9: true,
+    });
+    const fixture = await seedCompany();
+    const foreign = await seedCompany();
+    const now = new Date();
+    const bobId = `bob-${randomUUID()}`;
+    const foreignUserId = `foreign-${randomUUID()}`;
+    await db.insert(authUsers).values([
+      { id: bobId, name: "Bob", email: `${bobId}@example.test`, emailVerified: true, createdAt: now, updatedAt: now },
+      { id: foreignUserId, name: "Foreign user", email: `${foreignUserId}@example.test`, emailVerified: true, createdAt: now, updatedAt: now },
+    ]);
+    await db.insert(companyMemberships).values([
+      { companyId: fixture.companyId, principalType: "user", principalId: bobId, status: "active", membershipRole: "owner" },
+      { companyId: foreign.companyId, principalType: "user", principalId: foreignUserId, status: "active", membershipRole: "owner" },
+    ]);
+    await db.insert(principalPermissionGrants).values([
+      ...grantsForHumanRole("owner").map(grant => ({ companyId: fixture.companyId, principalType: "user" as const, principalId: "owner-user", ...grant })),
+      ...grantsForHumanRole("owner").map(grant => ({ companyId: fixture.companyId, principalType: "user" as const, principalId: bobId, ...grant })),
+      ...grantsForHumanRole("owner").map(grant => ({ companyId: foreign.companyId, principalType: "user" as const, principalId: foreignUserId, ...grant })),
+      { companyId: fixture.companyId, principalType: "agent" as const, principalId: fixture.assignedAgentId, permissionKey: "tasks:assign", scope: null },
+    ]).onConflictDoNothing();
+    await db.update(companyMemberships).set({ membershipRole: "owner" }).where(and(
+      eq(companyMemberships.companyId, fixture.companyId), eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, "owner-user"),
+    ));
+
+    async function currentActor(companyId: string, userId: string) {
+      const sessionId = randomUUID();
+      const createdAt = new Date();
+      await db.insert(authSessions).values({ id: sessionId, userId, token: randomUUID(), createdAt, updatedAt: createdAt,
+        expiresAt: new Date(createdAt.getTime() + 60 * 60_000) });
+      return { type: "board" as const, source: "session" as const, userId, sessionId, companyIds: [companyId],
+        memberships: [{ companyId, status: "active", membershipRole: "owner" }] };
+    }
+    const alice = await currentActor(fixture.companyId, "owner-user");
+    const bob = await currentActor(fixture.companyId, bobId);
+    const foreignActor = await currentActor(foreign.companyId, foreignUserId);
+
+    const { callbacks, endpoint, runtime, service } = await configuredSlackEndpoint(fixture, { linkedBoardUser: true });
+    const channel = makeThread({ channelId: "C-PRIVATE-SOURCE", id: "slack:C-PRIVATE-SOURCE:private-source", name: "private-source" });
+    await deliverMessage({ callbacks, endpointId: endpoint.id, thread: channel.thread,
+      message: makeMessage({ id: "private-source-origin", text: "@maya begin private source task", mentioned: true, userId: "UBOARD" }), trigger: "mention" });
+    await db.update(chatEndpoints).set({ status: "active" }).where(eq(chatEndpoints.id, endpoint.id));
+    const [conversation] = await service.listConversations(endpoint.id);
+    if (!conversation) throw new Error("Slack private-source fixture did not create its conversation");
+
+    // Build the same real Routine-run-backed private Task used by the current
+    // typed-source integration fixture, then bind the local Slack conversation
+    // to that Task so the provider worker handles its actual comment.
+    const authoringConversation = await issueService(db).create(fixture.companyId, {
+      title: "Routine authoring conversation", assigneeAgentId: fixture.assignedAgentId,
+      conversationAgentId: fixture.assignedAgentId, conversationUserId: "owner-user",
+      conversationState: "active", createdByUserId: "owner-user",
+    });
+    const authoringRunId = randomUUID();
+    await db.insert(heartbeatRuns).values({ id: authoringRunId, companyId: fixture.companyId, agentId: fixture.assignedAgentId,
+      responsibleUserId: "owner-user", nativeIssueId: authoringConversation.id, runtimeMode: "native", status: "running",
+      contextSnapshot: { conversationSessionGeneration: 0 } });
+    await db.update(issues).set({ executionRunId: authoringRunId }).where(eq(issues.id, authoringConversation.id));
+    const authored = await routineAuthoringToolsService(db).create(
+      { companyId: fixture.companyId, agentId: fixture.assignedAgentId, runId: authoringRunId },
+      { idempotencyKey: `slack-private-source-${randomUUID()}`, title: "Private outbound source", description: "Private source body", priority: "medium" },
+    );
+    const [routineRun] = await db.insert(routineRuns).values({ companyId: fixture.companyId, routineId: authored.routineId,
+      routineRevisionId: authored.currentRevisionId!, source: "api", status: "received", responsibleUserId: "owner-user" }).returning();
+    if (!routineRun) throw new Error("Routine source run was not created");
+    const privateTask = await issueService(db).create(fixture.companyId, {
+      title: "Private Routine Task", description: "Private Task payload",
+      assigneeAgentId: fixture.assignedAgentId, originKind: "routine_execution", originId: authored.routineId,
+      originRunId: routineRun.id, createdByUserId: "owner-user", responsibleUserId: "owner-user",
+      actorResponsibleUserId: "owner-user", trustExplicitResponsibleUserId: true,
+    }, db, undefined, { privacyActor: alice });
+    await db.update(chatConversations).set({ issueId: privateTask.id }).where(eq(chatConversations.id, conversation.id));
+
+    expect(await canActorReadIssuePrivacy(db, alice, privateTask)).toBe(true);
+    expect(await canActorReadIssuePrivacy(db, bob, privateTask)).toBe(false);
+    expect(await canActorReadIssuePrivacy(db, foreignActor, privateTask)).toBe(false);
+    runtime.endpoints.get(endpoint.id)!.posts.length = 0;
+
+    await issueService(db).addComment(privateTask.id, "Owner-authorized private source positive", { userId: "owner-user" },
+      { authorType: "user", mirrorToSlack: true, manualInputActor: alice });
+    await service.processPendingPublications();
+    expect(runtime.endpoints.get(endpoint.id)!.posts.map(post => post.text)).toEqual([
+      "**Owner User (via Paperclip)**\n\nOwner-authorized private source positive",
+    ]);
+
+    const publicTask = await issueService(db).create(fixture.companyId, {
+      title: "Public manual Slack control", visibility: "open", createdByUserId: "owner-user",
+      assigneeAgentId: fixture.assignedAgentId,
+    });
+    expect(await canActorReadIssuePrivacy(db, { type: "none" }, publicTask)).toBe(true);
+    await db.update(chatConversations).set({ issueId: publicTask.id }).where(eq(chatConversations.id, conversation.id));
+    runtime.endpoints.get(endpoint.id)!.posts.length = 0;
+    const publicComment = await issueService(db).addComment(publicTask.id, "Public task output still sends", { userId: "owner-user" },
+      { authorType: "user", manualInputActor: alice });
+    await mirrorSlackBoardComment(db, publicComment, { publicationKey: `public-control-${randomUUID()}`,
+      endpointId: endpoint.id, conversationId: conversation.id });
+    await service.processPendingPublications();
+    const publicPublications = await db.select({ state: chatPublications.state }).from(chatPublications).where(and(
+      eq(chatPublications.companyId, fixture.companyId), eq(chatPublications.endpointId, endpoint.id),
+      eq(chatPublications.issueId, publicTask.id),
+    ));
+    expect(publicPublications.map(row => row.state)).toEqual(["published"]);
+    expect(runtime.endpoints.get(endpoint.id)!.posts.map(post => post.text)).toEqual([
+      "**Owner User (via Paperclip)**\n\nPublic task output still sends",
+    ]);
+
+    runtime.endpoints.get(endpoint.id)!.posts.length = 0;
+    await db.update(chatConversations).set({ issueId: privateTask.id }).where(eq(chatConversations.id, conversation.id));
+    const revokedComment = await issueService(db).addComment(privateTask.id, "WITHHELD-after-source-withdrawal", { userId: "owner-user" },
+      { authorType: "user", mirrorToSlack: true, manualInputActor: alice });
+    const pending = await db.select().from(chatPublications).where(and(
+      eq(chatPublications.companyId, fixture.companyId), eq(chatPublications.endpointId, endpoint.id), eq(chatPublications.commentId, revokedComment.id),
+    ));
+    expect(pending).toHaveLength(1);
+    expect(pending[0]!.state).toBe("pending");
+
+    // This is the native source-erasure operation: it retires the exact
+    // authoring input and its derived Tasks while keeping Alice's company and
+    // Slack identities active.
+    await db.transaction(async rawTx => {
+      const tx = rawTx as unknown as TestDb;
+      await lockMemoryPrivacy(tx, fixture.companyId);
+      await tx.insert(memoryDeletionMarkers).values({ companyId: fixture.companyId, kind: "source",
+        key: `memory-run-source-erasure:v1:${authoringRunId}` });
+      await purgeDerivedWorkflowMemory(tx, fixture.companyId, [], new Date(), {
+        workflowRevisionIds: [], artifactVersionIds: [], runIds: [authoringRunId],
+      });
+    });
+    const [withdrawnTask] = await db.select().from(issues).where(eq(issues.id, privateTask.id));
+    expect(await canActorReadIssuePrivacy(db, alice, withdrawnTask!)).toBe(false);
+
+    await service.processPendingPublications();
+    const [afterDelivery] = await db.select().from(chatPublications).where(eq(chatPublications.id, pending[0]!.id));
+    expect(runtime.endpoints.get(endpoint.id)!.posts).toEqual([]);
+    expect(afterDelivery?.state).toBe("cancelled");
   });
 
   it.each(["revoked", "relinked", "private-membership", "later-cancelled"] as const)("rechecks %s authority before queued Slack Board messages and replies", async (change) => {
@@ -70119,6 +70269,55 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
         expect(context.fileCards).toHaveLength(1);
         expect(context.uploadRequest).toHaveBeenCalledTimes(1);
         expect(context.wakeup).toHaveBeenCalledTimes(wakeCount);
+      } finally {
+        await retirePublicationFixture(context.service, context.endpoint.id);
+      }
+    });
+
+    it("withholds a Teams file when the Board author's private Task source grant is withdrawn after consent", async () => {
+      const context = await teamsFileAuthorityFixture();
+      try {
+        const authorId = `teams-source-author-${randomUUID()}`;
+        const now = new Date();
+        await db.insert(authUsers).values({ id: authorId, name: "Source author", email: `${authorId}@example.test`,
+          emailVerified: true, createdAt: now, updatedAt: now });
+        await db.insert(companyMemberships).values({ companyId: context.fixture.companyId, principalType: "user",
+          principalId: authorId, status: "active", membershipRole: "operator" });
+        await db.update(issues).set({ visibility: "private", privacyRootIssueId: context.issue.id })
+          .where(and(eq(issues.companyId, context.fixture.companyId), eq(issues.id, context.issue.id)));
+        await db.insert(issueAccessGrants).values({ companyId: context.fixture.companyId, issueId: context.issue.id,
+          subjectType: "user", subjectId: authorId, source: "explicit", grantedByUserId: "owner-user" });
+        const sessionId = randomUUID();
+        await db.insert(authSessions).values({ id: sessionId, userId: authorId, token: randomUUID(), createdAt: now,
+          updatedAt: now, expiresAt: new Date(now.getTime() + 60 * 60_000) });
+        const actor = { type: "board" as const, source: "session" as const, userId: authorId, sessionId,
+          companyIds: [context.fixture.companyId] };
+        expect(await canActorReadIssuePrivacy(db, actor, context.issue)).toBe(true);
+
+        const attachment = await context.createFile();
+        const publication = await context.service.publishBoardMessage(context.endpoint.id, context.conversation.id,
+          "Share only while the private source grant remains current", `teams-source-withdrawal-${randomUUID()}`,
+          authorId, [attachment.id]);
+        const [transfer] = await db.select().from(chatTeamsFileTransfers)
+          .where(eq(chatTeamsFileTransfers.publicationId, publication.id));
+        expect(transfer?.phase).toBe("awaiting_consent");
+        await expect(context.dispatchConsent()).resolves.toEqual({ status: 200 });
+        const [accepted] = await db.select().from(chatTeamsFileTransfers)
+          .where(eq(chatTeamsFileTransfers.publicationId, publication.id));
+
+        await db.update(issueAccessGrants).set({ revokedAt: new Date() }).where(and(
+          eq(issueAccessGrants.companyId, context.fixture.companyId), eq(issueAccessGrants.issueId, context.issue.id),
+          eq(issueAccessGrants.subjectType, "user"), eq(issueAccessGrants.subjectId, authorId),
+          eq(issueAccessGrants.source, "explicit"),
+        ));
+        expect(await canActorReadIssuePrivacy(db, actor, context.issue)).toBe(false);
+        await context.service.processPendingPublications();
+
+        const [after] = await db.select().from(chatTeamsFileTransfers).where(eq(chatTeamsFileTransfers.id, transfer!.id));
+        expect(after).toEqual(accepted);
+        expect(context.uploadRequest).not.toHaveBeenCalled();
+        expect(context.fileCards).toEqual([]);
+        expect(context.consentCards).toHaveLength(1);
       } finally {
         await retirePublicationFixture(context.service, context.endpoint.id);
       }

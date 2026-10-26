@@ -8,6 +8,13 @@ import { projectRoutes } from "../../routes/projects.js";
 import { grantsForHumanRole } from "../../services/company-member-roles.js";
 import { seedNativePasskeySession } from "./native-authentication-fixtures.js";
 
+function assertCanonicalHumanSessionActor(actor: AuthorizationActor): asserts actor is AuthorizationActor & {
+  type: "board"; source: "session"; userId: string; sessionId: string;
+} {
+  if (actor.type !== "board" || actor.source !== "session" || !actor.userId || !actor.sessionId)
+    throw new Error("Canonical Human project fixture requires a seeded board session actor");
+}
+
 export async function seedCurrentHumanSourceActor(db: Db, companyIds: string[], userId = "local-board"): Promise<AuthorizationActor> {
   const now = new Date();
   await db.insert(authUsers).values({ id: userId, name: "Current Human source owner", email: `${userId}@fixture.invalid`, emailVerified: true, createdAt: now, updatedAt: now }).onConflictDoNothing();
@@ -20,6 +27,7 @@ export async function seedCurrentHumanSourceActor(db: Db, companyIds: string[], 
 
 export async function createCanonicalHumanProject(db: Db, companyId: string, actor: AuthorizationActor, name: string,
   options: { description?: string; status?: string } = {}) {
+  assertCanonicalHumanSessionActor(actor);
   const app = express();
   app.use(express.json());
   app.use(((req, _res, next) => {
@@ -40,6 +48,7 @@ export async function createCanonicalHumanProject(db: Db, companyId: string, act
 
 export async function updateCanonicalHumanProject(db: Db, companyId: string, actor: AuthorizationActor, projectId: string,
   updates: { executionWorkspacePolicy: unknown }) {
+  assertCanonicalHumanSessionActor(actor);
   const app = express();
   app.use(express.json());
   app.use(((req, _res, next) => {
