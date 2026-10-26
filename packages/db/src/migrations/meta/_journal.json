@@ -3851,6 +3851,13 @@
       "when": 1793042991923,
       "tag": "0551_native_runtime_erasure_receipt_merge",
       "breakpoints": true
+    },
+    {
+      "idx": 552,
+      "version": "7",
+      "when": 1793050809173,
+      "tag": "0552_role_pack_company_purge",
+      "breakpoints": true
     }
   ]
 }

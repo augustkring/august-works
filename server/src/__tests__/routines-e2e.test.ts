@@ -39,6 +39,7 @@ import {
 } from "./helpers/embedded-postgres.js";
 import { createCanonicalHumanProject, seedCurrentHumanSourceActor, updateCanonicalHumanProject } from "./helpers/current-human-source-fixture.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
+import { authorizationService, canActorReadTypedTaskSourcePrivacy } from "../services/authorization.js";
 
 function registerRoutineServiceMock() {
   vi.doMock("../services/routines.js", async () => {
@@ -443,6 +444,28 @@ describeEmbeddedPostgres("routine routes end-to-end", () => {
     expect(runRes.body.source).toBe("manual");
     expect(runRes.body.linkedIssueId).toBeTruthy();
 
+    const canReadRoutineRun = (actor: typeof humanActor, runId = runRes.body.id) => db.transaction(tx =>
+      canActorReadTypedTaskSourcePrivacy(tx, actor, {
+        sourceKind: "routine_run",
+        id: runId,
+        companyId,
+      }));
+    expect(await canReadRoutineRun(humanActor)).toBe(true);
+    const foreignHumanActor = await seedCurrentHumanSourceActor(db, [companyId], randomUUID());
+    expect(await canReadRoutineRun(foreignHumanActor)).toBe(false);
+    expect(await canReadRoutineRun({ ...humanActor, sessionId: undefined })).toBe(false);
+    const localImplicitActor = { type: "board" as const, source: "local_implicit" as const, companyIds: [companyId] };
+    await expect(db.transaction(tx => authorizationService(tx).withReadRoutineSources(
+      companyId, localImplicitActor, [runRes.body.id], async () => true,
+    ))).rejects.toMatchObject({ status: 403 });
+    expect(await canReadRoutineRun({
+      ...humanActor,
+      source: "board_key",
+      sessionId: undefined,
+      keyId: randomUUID(),
+      authenticatedKeyHash: "unbacked-fixture-key",
+    })).toBe(false);
+
     const listRes = await request(app).get(`/api/companies/${companyId}/routines`);
     expect(listRes.status).toBe(200);
     const listed = listRes.body.find((r: { id: string }) => r.id === routineId);
@@ -502,6 +525,15 @@ describeEmbeddedPostgres("routine routes end-to-end", () => {
         "routine.run_triggered",
       ]),
     );
+
+    await db.update(routineTriggers).set({ nextRunAt: new Date(Date.now() - 60_000) })
+      .where(eq(routineTriggers.id, createdTrigger.id));
+    const { routineService } = await import("../services/routines.js");
+    await routineService(db, { sourceActor: humanActor }).tickScheduledTriggers(new Date());
+    const scheduledRun = (await db.select().from(routineRuns).where(eq(routineRuns.routineId, routineId)))
+      .find(candidate => candidate.source === "schedule");
+    expect(scheduledRun).toBeDefined();
+    expect(await canReadRoutineRun(humanActor, scheduledRun!.id)).toBe(false);
   }, 15_000);
 
   it("runs routines with variable inputs and interpolates the execution issue description", async () => {

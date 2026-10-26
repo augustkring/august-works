@@ -315,7 +315,10 @@ export function buildNativeBootstrapSourceSet(input: {
     createHash("sha256").update(input.renderedMarkdown, "utf8").digest("hex") !== input.renderedMarkdownDigest ||
     !input.runtimeInputs || !input.contextManifestIds || input.contextManifestIds.length > 0 && !context ||
     input.governedContextMarkdown?.trim() && !context ||
-    !input.rolePackInputs || input.rolePackInputs.length !== 0 ||
+    !input.rolePackInputs || input.rolePackInputs.some(source => {
+      const parsed = nativePayloadSourceInputSchema.safeParse(source);
+      return !parsed.success || parsed.data.kind !== "role_pack_version";
+    }) ||
     input.references.some(reference => reference.kind === "unknown")) return reject("unsupported_or_missing_witness");
   const policy: NativePayloadSourcePolicy = { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] };
   const inputs: NativePayloadSourceInput[] = [];

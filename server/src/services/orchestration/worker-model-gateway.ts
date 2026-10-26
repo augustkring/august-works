@@ -707,8 +707,13 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
               capture.attempt === matchingAssociations[0]!.attempt,
             sourceIdentity: source.runId === claims.run_id && source.toolName === "create_task" &&
               source.callId === block.tool_use_id && source.invocationId === null && source.contentHash === sourceResultDigest,
-            taskRefAndSource: typeof taskId === "string" && Boolean(task && taskSource) &&
-              taskSource?.sourceVersion === task?.sourceVersion && taskSource?.contentHash === task?.contentHash,
+            // Task.updatedAt tracks operational changes (for example status
+            // transitions) after the tool returns. The captured sourceVersion
+            // remains in the receipt as provenance; currentness is proved by
+            // the immutable body owner hash and the source validator below,
+            // which also rechecks the exact snapshot and reader ACL.
+            taskRefAndSource: typeof taskId === "string" && taskSource?.issueId === taskId && Boolean(task) &&
+              typeof taskSource.sourceVersion === "string" && taskSource.contentHash === task?.contentHash,
             taskOwner: task?.parentId === null && task.hiddenAt === null && task.payloadSourceProtocolVersion === 1 &&
               task.payloadSourceSnapshotInvalidated === false && task.createdByAgentId === claims.sub &&
               task.responsibleUserId === claims.responsible_user_id,

@@ -701,7 +701,7 @@
     {
       "source": "server/src/services/saas/offboarding.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "45bb8e3ea58726bc56e93794a51e4d5dce4399a7f3e41439e2c064cd687c55cb",
+      "sourceSha256": "f6cf84a8fed2c63e6893c4ffd373186fa330030bc2e77fb7002cb43ae6fea180",
       "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "no_change",
       "rationale": "Reviewed exact current-operation runtime erasure receipts, legacy digest batches, Stop-owned physical file deletion and final purge rechecks. The paired article already distinguishes requested deletion, pending cleanup, managed files, retained finance receipts and completion; no new customer action or broader provider-data coverage is introduced. Temporary bounded source diagnostics do not change those instructions."
@@ -781,7 +781,7 @@
     {
       "source": "server/src/services/saas/offboarding.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "45bb8e3ea58726bc56e93794a51e4d5dce4399a7f3e41439e2c064cd687c55cb",
+      "sourceSha256": "f6cf84a8fed2c63e6893c4ffd373186fa330030bc2e77fb7002cb43ae6fea180",
       "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "no_change",
       "rationale": "Reviewed exact current-operation runtime erasure receipts, legacy digest batches, Stop-owned physical file deletion and final purge rechecks. The paired article already distinguishes requested deletion, pending cleanup, managed files, retained finance receipts and completion; no new customer action or broader provider-data coverage is introduced. Temporary bounded source diagnostics do not change those instructions."
@@ -1581,7 +1581,7 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "62c92534b038e8fdbcfb30b097bcf20c2ef5a4264dd899d1df559a8cf8ca7733",
+      "sourceSha256": "68815a74425b64c0ef8da824b1cf0a55989ad627617c4476bd53dbf4992d4337",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
       "rationale": "Reviewed current-Human empty conversation shell checks, exact comment/wake projections, retained-run resume witnesses and source-loss recovery guards. Existing guidance still requires the original task, current source/workspace access, checking the latest run and waiting for confirmed Stop; these changes add no alternative retry or permission bypass. Integrated runtime/browser acceptance remains open."
@@ -1685,7 +1685,7 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "62c92534b038e8fdbcfb30b097bcf20c2ef5a4264dd899d1df559a8cf8ca7733",
+      "sourceSha256": "68815a74425b64c0ef8da824b1cf0a55989ad627617c4476bd53dbf4992d4337",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
       "rationale": "Reviewed current-Human empty conversation shell checks, exact comment/wake projections, retained-run resume witnesses and source-loss recovery guards. Existing guidance still requires the original task, current source/workspace access, checking the latest run and waiting for confirmed Stop; these changes add no alternative retry or permission bypass. Integrated runtime/browser acceptance remains open."
@@ -2013,7 +2013,7 @@
     {
       "source": "server/src/services/native-runtime/runtime-asset-retention.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "d7b128b648d7c2e97f86a05d7a538673604987603948820d646829852e3831e8",
+      "sourceSha256": "a12a93e7b416bc21f6273a8f3e41d74eaa9f1593fbec24900fd783fa76502b82",
       "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "no_change",
       "rationale": "Reviewed exact current-operation runtime erasure receipts, legacy digest batches, Stop-owned physical file deletion and final purge rechecks. The paired article already distinguishes requested deletion, pending cleanup, managed files, retained finance receipts and completion; no new customer action or broader provider-data coverage is introduced. Temporary bounded source diagnostics do not change those instructions."
@@ -2037,7 +2037,7 @@
     {
       "source": "server/src/services/native-runtime/runtime-asset-retention.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "d7b128b648d7c2e97f86a05d7a538673604987603948820d646829852e3831e8",
+      "sourceSha256": "a12a93e7b416bc21f6273a8f3e41d74eaa9f1593fbec24900fd783fa76502b82",
       "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "no_change",
       "rationale": "Reviewed exact current-operation runtime erasure receipts, legacy digest batches, Stop-owned physical file deletion and final purge rechecks. The paired article already distinguishes requested deletion, pending cleanup, managed files, retained finance receipts and completion; no new customer action or broader provider-data coverage is introduced. Temporary bounded source diagnostics do not change those instructions."

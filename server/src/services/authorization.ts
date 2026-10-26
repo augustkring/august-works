@@ -1916,11 +1916,13 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       }
       for (const runId of runIds) {
         const [run] = await db.select({ id: routineRuns.id, routineId: routineRuns.routineId,
-          revisionId: routineRuns.routineRevisionId, triggerPayload: routineRuns.triggerPayload }).from(routineRuns).where(and(
+          revisionId: routineRuns.routineRevisionId, triggerPayload: routineRuns.triggerPayload,
+          source: routineRuns.source, responsibleUserId: routineRuns.responsibleUserId }).from(routineRuns).where(and(
             eq(routineRuns.id, runId), eq(routineRuns.companyId, companyId))).for("share", { noWait: true });
         if (!run) continue;
         const [routine] = await db.select({ id: routines.id, companyId: routines.companyId, originKind: routines.originKind,
-          originId: routines.originId, createdByAgentId: routines.createdByAgentId, responsibleUserId: routines.responsibleUserId })
+          originId: routines.originId, createdByAgentId: routines.createdByAgentId, responsibleUserId: routines.responsibleUserId,
+          projectId: routines.projectId, parentIssueId: routines.parentIssueId })
           .from(routines).where(and(eq(routines.id, run.routineId), eq(routines.companyId, companyId))).for("share", { noWait: true });
         if (!routine || !run.revisionId) continue;
         const [revision] = await db.select({ id: routineRevisions.id }).from(routineRevisions).where(and(
@@ -2017,6 +2019,51 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
         if (routine.originKind === "conversation_draft") {
           authorized.add(runId);
           continue;
+        }
+        // An ordinary Human-authored manual Routine execution is a private
+        // Routine source only for the current Human who owns both live rows.
+        // Its exact immutable revision and both current and revision-bound
+        // Project/parent references must remain readable in this same scope.
+        if (routine.originKind === "manual" && routine.originId === null && !routine.createdByAgentId &&
+          sourceActor?.type === "board" && sourceActor.source === "session" && sourceActor.sessionId &&
+          sourceActor.userId && !sourceActor.keyId && !sourceActor.authenticatedKeyHash &&
+          sourceActor.userId === routine.responsibleUserId && run.source === "manual" &&
+          run.responsibleUserId === sourceActor.userId) {
+          const [binding] = await db.select({ id: pluginManagedResources.id }).from(pluginManagedResources).where(and(
+            eq(pluginManagedResources.companyId, companyId), eq(pluginManagedResources.resourceKind, "routine"),
+            eq(pluginManagedResources.resourceId, routine.id))).for("share", { noWait: true });
+          if (!binding) {
+            const [currentRevision] = await db.select({ snapshot: routineRevisions.snapshot }).from(routineRevisions).where(and(
+              eq(routineRevisions.companyId, companyId), eq(routineRevisions.id, run.revisionId),
+              eq(routineRevisions.routineId, routine.id))).for("share", { noWait: true });
+            const snapshot = routineRevisionSnapshotV1Schema.safeParse(currentRevision?.snapshot);
+            const snapshotRoutine = snapshot.success ? snapshot.data.routine : null;
+            let refsReadable = Boolean(snapshotRoutine && snapshotRoutine.id.toLowerCase() === routine.id.toLowerCase() &&
+              snapshotRoutine.companyId.toLowerCase() === companyId.toLowerCase() &&
+              snapshotRoutine.responsibleUserId === sourceActor.userId);
+            const projectIds = [...new Set([routine.projectId, snapshotRoutine?.projectId].filter((id): id is string => typeof id === "string"))];
+            const parentIssueIds = [...new Set([routine.parentIssueId, snapshotRoutine?.parentIssueId].filter((id): id is string => typeof id === "string"))];
+            for (const projectId of projectIds) {
+              if (!refsReadable) break;
+              const [project] = await db.select({ id: projects.id }).from(projects).where(and(
+                eq(projects.companyId, companyId), eq(projects.id, projectId))).for("share", { noWait: true });
+              refsReadable = Boolean(project && (await db.select({ id: projects.id }).from(projects).where(and(
+                eq(projects.companyId, companyId), eq(projects.id, projectId),
+                await projectReadSqlCondition(db, sourceActor))).limit(1)).length);
+            }
+            for (const parentIssueId of parentIssueIds) {
+              if (!refsReadable) break;
+              const [parent] = await db.select({ id: issues.id }).from(issues).where(and(
+                eq(issues.companyId, companyId), eq(issues.id, parentIssueId))).for("share", { noWait: true });
+              refsReadable = Boolean(parent && (await db.select({ id: issues.id }).from(issues).where(and(
+                eq(issues.companyId, companyId), eq(issues.id, parentIssueId),
+                await issueReadSqlCondition(db, sourceActor))).limit(1)).length);
+            }
+            if (refsReadable) {
+              authorized.add(runId);
+              continue;
+            }
+          }
         }
         // A plugin-managed manual Routine is an accountable operation source
         // only for its current responsible Human. The active resource binding

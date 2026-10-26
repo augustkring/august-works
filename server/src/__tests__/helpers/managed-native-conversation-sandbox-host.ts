@@ -299,6 +299,22 @@ export async function configureManagedConversationSandboxHost(input: {
         commandName.includes("rsync") ? "rsync" : commandName === "git" ? "git" :
           commandName === "bash" ? "bash" : commandName === "sh" ? "shell" :
             commandName === "tar" ? "tar" : commandName === "node" ? "node" : "other";
+      const commandScript = args[1] ?? "";
+      const commandOwner = runnerLaunch ? "runner_process_launch" : args[2] === "paperclip-runner-monitor"
+        ? "runner_process_monitor" : args[2] === "paperclip-runner-process-identity"
+          ? "runner_process_identity_read" : args[2] === "paperclip-runner-diagnostics"
+            ? "runner_diagnostic_tail" : commandScript.startsWith("command -v ")
+              ? "managed_runtime_install_probe" : commandScript.startsWith("mkdir -p ")
+                ? "managed_runtime_directory_prepare" : commandScript.startsWith("umask 077; install -d -m 0700 ")
+                  ? "runner_harness_directory_prepare" : commandScript.includes("runner-state.json") && commandScript.includes("base64 <")
+                    ? "runner_harness_state_read" : commandScript.includes("base64 -d")
+                      ? "managed_runtime_file_transfer" : commandScript.includes("tar -xf")
+                        ? "managed_runtime_archive_extract" : commandScript.startsWith("rm -rf ")
+                          ? "managed_runtime_remove" : commandScript.startsWith("chmod ")
+                            ? "managed_runtime_permissions" : commandScript.startsWith("test -")
+                              ? "managed_runtime_path_probe" : commandScript.startsWith("if ")
+                                ? "managed_runtime_listing" : commandScript.startsWith("set ")
+                                  ? "managed_runtime_sync" : "other";
       const managedGitContextProbe = commandName === "sh" && args[0] === "-c" && args[2] === "paperclip-git-context" &&
         (args[3] === "managed" || args[3] === "host");
       const unstartedSessionClaimProbe = commandName === "sh" && args[0] === "-c" && args[2] === "paperclip-runner-claim-unstarted-session";
@@ -307,7 +323,8 @@ export async function configureManagedConversationSandboxHost(input: {
         .sort().slice(0, 16).join(",");
       const nativePreparationPurpose = execInput.nativePreparationPurpose ?? null;
       sandboxExecutionChecks.push({ expectedRun: execInput.runId === expectedRunId,
-        commandKind, cwdAbsolute: Boolean(execInput.cwd?.startsWith("/")), argumentCount: (execInput.args ?? []).length,
+        commandKind, commandOwner, stdinBytes: Buffer.byteLength(execInput.stdin ?? "", "utf8"),
+        cwdAbsolute: Boolean(execInput.cwd?.startsWith("/")), argumentCount: (execInput.args ?? []).length,
         runnerLaunch,
         nativePreparationPurpose,
         managedGitContextProbe, unstartedSessionClaimProbe, credentialEnvNames,

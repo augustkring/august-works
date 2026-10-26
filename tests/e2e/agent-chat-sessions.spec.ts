@@ -5,7 +5,6 @@ import {eq} from "../../server/node_modules/drizzle-orm/index.js";
 import {createDb,memoryRecords,analyticalContextRoots,analyticalContextDependencies,contextManifestMemoryRoots,contextManifests,heartbeatRuns,businessMetricObservations,businessMetricVersions} from "../../packages/db/src/index.ts";
 import {nativeRunInputSourceReceiptSchema} from "../../packages/shared/src/validators/native-payload-source-snapshot.ts";
 import {analyticalPurpose,metricDefinition} from "../../server/src/__tests__/helpers/business-metric-fixture.ts";
-import {assertNativeAnalyticalRunPayloadAccess} from "../../server/src/services/analytical-context-authority.ts";
 import { expect, test, type Page } from "@playwright/test";
 
 import { createLocalAgentJwt } from "../../server/src/agent-auth-jwt";
@@ -93,7 +92,88 @@ test("chat first open is read-only; concurrent first sends and retries share one
     // responses are captured so its application polling cannot add background
     // load while the two Native runs finish.
     await other.close();
-    const issue = await idle(request, f.chatPath, 2);
+    const issue = await idle(request, f.chatPath, 2).catch(async (error) => {
+      // Temporary, content-free capture of the canonical run/checkpoint facts
+      // when concurrent first sends expose a rejected retained-session source.
+      const config = JSON.parse(await readFile(process.env.PAPERCLIP_E2E_SERVER_CONFIG!, "utf8"));
+      const pid = await readFile(path.join(config.database.embeddedPostgresDataDir, "postmaster.pid"), "utf8");
+      const db = createDb(`postgres://paperclip:paperclip@127.0.0.1:${pid.split("\n")[3]}/paperclip`);
+      try {
+        const chatResponse = await request.get(f.chatPath);
+        const failedIssueId = chatResponse.ok() ? (await chatResponse.json()).id : null;
+        const rows = failedIssueId
+          ? await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.nativeIssueId, failedIssueId))
+          : [];
+        const sanitized = rows.map((run) => {
+          const profile = typeof run.runnerProfileJson === "object" && run.runnerProfileJson !== null
+            ? run.runnerProfileJson as Record<string, any> : {};
+          const context = typeof run.contextSnapshot === "object" && run.contextSnapshot !== null
+            ? run.contextSnapshot as Record<string, any> : {};
+          const checkpoint = profile.sessionCheckpoint && typeof profile.sessionCheckpoint === "object"
+            ? profile.sessionCheckpoint as Record<string, any> : null;
+          const identity = checkpoint?.identity && typeof checkpoint.identity === "object"
+            ? checkpoint.identity as Record<string, any> : {};
+          const receipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+          const intents = Array.isArray(profile.nativeModelInputDispatchIntents)
+            ? profile.nativeModelInputDispatchIntents as Array<Record<string, any>> : [];
+          const dispatches = receipt.success ? receipt.data.dispatches : [];
+          const associations = Array.isArray(profile.nativeToolCallDispatchAssociations)
+            ? profile.nativeToolCallDispatchAssociations : [];
+          const resultCaptures = Array.isArray(profile.nativeToolResultSourceCaptures)
+            ? profile.nativeToolResultSourceCaptures : [];
+          const wireIntents = Array.isArray(profile.nativeAwModelWireIntents)
+            ? profile.nativeAwModelWireIntents : [];
+          const execution = profile.nativeExecutionInput && typeof profile.nativeExecutionInput === "object"
+            ? profile.nativeExecutionInput as Record<string, any> : {};
+          const binding = execution.binding && typeof execution.binding === "object"
+            ? execution.binding as Record<string, any> : {};
+          const prior = rows.filter((candidate) => candidate.id !== run.id &&
+            candidate.nativeSessionId === run.nativeSessionId && candidate.createdAt < run.createdAt)
+            .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())[0];
+          return {
+            status: run.status,
+            runtimeMode: run.runtimeMode,
+            sourceProtocolVersion: run.nativeInputSourceProtocolVersion,
+            responsibleUserPresent: Boolean(run.responsibleUserId),
+            generation: Number.isSafeInteger(context.conversationSessionGeneration)
+              ? context.conversationSessionGeneration : null,
+            nativeSessionPresent: Boolean(run.nativeSessionId),
+            priorSameSessionStatus: prior?.status ?? null,
+            priorSameSessionResponsibleUserMatches: prior ? prior.responsibleUserId === run.responsibleUserId : null,
+            priorSameSessionGenerationMatches: prior
+              ? (prior.contextSnapshot as Record<string, any> | null)?.conversationSessionGeneration === context.conversationSessionGeneration
+              : null,
+            checkpointPresent: Boolean(checkpoint),
+            checkpointSessionPresent: typeof checkpoint?.sessionId === "string",
+            checkpointIdentityMatches: {
+              run: identity.runId === run.id,
+              company: identity.companyId === run.companyId,
+              issue: identity.issueId === run.nativeIssueId,
+              agent: identity.agentId === run.agentId,
+              session: identity.sessionId === run.nativeSessionId,
+            },
+            toolContractFingerprintPresent: typeof profile.nativeToolContractFingerprint === "string",
+            executionBindingMatches: binding.runId === run.id && binding.companyId === run.companyId &&
+              binding.issueId === run.nativeIssueId && binding.agentId === run.agentId &&
+              execution.session?.normalizedSessionId === run.nativeSessionId,
+            receiptValid: receipt.success,
+            receiptBindingMatches: receipt.success && receipt.data.binding.runId === run.id &&
+              receipt.data.binding.companyId === run.companyId && receipt.data.binding.issueId === run.nativeIssueId &&
+              receipt.data.binding.agentId === run.agentId && receipt.data.binding.responsibleUserId === run.responsibleUserId,
+            intentCount: intents.length,
+            dispatchCount: dispatches.length,
+            intentDispatchCountsMatch: intents.length === dispatches.length,
+            associationCount: associations.length,
+            resultCaptureCount: resultCaptures.length,
+            wireIntentCount: wireIntents.length,
+          };
+        });
+        console.info("native-resume-witness-facts", JSON.stringify({ issueAvailable: Boolean(failedIssueId), rows: sanitized }));
+      } finally {
+        await db.$client.end();
+      }
+      throw error;
+    });
     const initialComments = await json(await request.get(`/api/issues/${issue.id}/comments`));
     expect(initialComments.filter((comment: any) => !comment.authorAgentId && comment.body === "Same first message")).toHaveLength(2);
     const resolved = await Promise.all(
@@ -239,7 +319,10 @@ test("an owner can explicitly recover after source visibility is lost while orig
     const [observation]=await db.select().from(businessMetricObservations).where(eq(businessMetricObservations.metricId,metric.metric.id));expect(observation).toBeTruthy();
     const [runRow]=await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,run.id));expect(runRow).toBeTruthy();
     const retention=await db.select().from(memoryRecords).where(eq(memoryRecords.createdByActorId,"native_analytical_retention")).then(rows=>rows.find(row=>row.companyId===f.company.id&&row.ownerAgentId===f.agent.id));expect(retention).toBeTruthy();
-    await assertNativeAnalyticalRunPayloadAccess(db,f.company.id,run.id);
+    const currentHumanConversation=await request.get(f.chatPath);expect(currentHumanConversation.status()).toBe(200);
+    expect((await currentHumanConversation.json()).id).toBe(original.id);
+    const currentHumanHistory=await json(await request.get(`/api/issues/${original.id}/comments`));
+    expect(currentHumanHistory.some((comment:any)=>comment.body===firstMessage)).toBe(true);
     expect(runRow!.responsibleUserId).toBe(session.user.id);
     const profile=runRow!.runnerProfileJson as Record<string,any>,captures=Array.isArray(profile.nativeToolResultSourceCaptures)?profile.nativeToolResultSourceCaptures as Array<Record<string,any>>:[];
     const metricCaptures=captures.filter(capture=>capture.tool==="query_business_metric"&&capture.nativeReadResult===true&&capture.sourceSet&&capture.sourceSet.inputs);
@@ -293,7 +376,7 @@ test("an owner can explicitly recover after source visibility is lost while orig
     await expect(page.getByText("Private analytical history before source visibility changes",{exact:true})).toHaveCount(0);
     await page.screenshot({path:test.info().outputPath("source-visibility-lost.png"),fullPage:true});
     await page.getByRole("button",{name:"Start a new conversation"}).click();await expect(page.getByTestId("task-chat-composer-input")).toBeVisible();
-    const fresh=await json(await request.get(f.chatPath));expect(fresh.id).not.toBe(original.id);expect((await request.get(`/api/issues/${original.id}/comments`)).status()).toBe(403);
+    const fresh=await json(await request.get(f.chatPath));expect(fresh.id).not.toBe(original.id);expect((await request.get(`/api/issues/${original.id}/comments`)).status()).toBe(404);
     expect((await db.select().from(memoryRecords).where(eq(memoryRecords.id,retention!.id)))[0]!.deletedAt).not.toBeNull();
     expect((await db.select().from(businessMetricObservations).where(eq(businessMetricObservations.id,observation!.id)))[0]!.id).toBe(observation!.id);
     expect((await db.select().from(businessMetricVersions).where(eq(businessMetricVersions.id,metric.version.id)))[0]!.id).toBe(metric.version.id);

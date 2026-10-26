@@ -7734,6 +7734,25 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
       sourceClosure, profile.nativeExecutionInput, { eventSeq: input.eventSeq, attempt: input.attempt },
       reason => { sourceClosureMismatchReason = reason; });
     const existingReceipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+    if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1" &&
+      (run.nativeInputSourceProtocolVersion === 0 || !existingReceipt.success)) {
+      console.warn("native_model_input_dispatch_closure_diagnostic", {
+        closurePresent: Boolean(sourceClosure),
+        closureMatches: sourceClosureMatches === true,
+        mismatch: sourceClosureMismatchReason && nativeTurnFrameSourceMismatchReasons.has(sourceClosureMismatchReason)
+          ? sourceClosureMismatchReason : sourceClosure ? "unclassified" : "closure_missing",
+        sourceProtocolVersion: run.nativeInputSourceProtocolVersion,
+        responsibleUserPresent: typeof run.responsibleUserId === "string" && run.responsibleUserId.length > 0,
+        existingReceiptValid: existingReceipt.success,
+        noPriorNativeEffects,
+        priorIntentCount: previous.length,
+        priorAssociationCount: Array.isArray(profile.nativeToolCallDispatchAssociations)
+          ? profile.nativeToolCallDispatchAssociations.length : 0,
+        priorResultCaptureCount: Array.isArray(profile.nativeToolResultSourceCaptures)
+          ? profile.nativeToolResultSourceCaptures.length : 0,
+        attachmentStagePresent: attachmentStage !== undefined,
+      });
+    }
     if (profile.nativeOpenCodeSourceAuthority && !sourceClosureMatches) {
       const reason = process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1" &&
         sourceClosureMismatchReason && nativeTurnFrameSourceMismatchReasons.has(sourceClosureMismatchReason)
@@ -12122,6 +12141,7 @@ export async function syncRemoteRunnerDirectoryOut(input: {
 async function readRemoteRunnerState(input: {
   runner: CommandManagedRuntimeRunner;
   stateDirectory: string;
+  nativeHarnessState?: boolean;
 }): Promise<Record<string, unknown>> {
   const statePath = posix.join(input.stateDirectory, "runner-state.json");
   const escapedPath = statePath.replaceAll("'", "'\\''");
@@ -12130,6 +12150,7 @@ async function readRemoteRunnerState(input: {
     args: ["-c", `test -f '${escapedPath}' && base64 < '${escapedPath}'`],
     bypassSession: true,
     timeoutMs: 10_000,
+    ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
   });
   if (result.exitCode !== 0 || result.timedOut) {
     throw new Error(
@@ -12147,6 +12168,7 @@ async function readRemoteRunnerProviderState(input: {
   runner: CommandManagedRuntimeRunner;
   stateDirectory: string;
   execution: NativeExecutionInput;
+  nativeHarnessState?: boolean;
 }): Promise<Record<string, unknown>> {
   const statePath = posix.join(
     input.stateDirectory,
@@ -12158,6 +12180,7 @@ async function readRemoteRunnerProviderState(input: {
     args: ["-c", `test -f '${escapedPath}' && base64 < '${escapedPath}'`],
     bypassSession: true,
     timeoutMs: 10_000,
+    ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
   });
   if (result.exitCode !== 0 || result.timedOut) {
     throw new Error("runner_remote_provider_state_unavailable");
@@ -12324,6 +12347,7 @@ async function waitForRemoteRunnerProcessIdentity(input: {
   identityPath: string;
   nonce: string;
   runnerInstanceId: string;
+  nativeHarnessState?: boolean;
 }): Promise<{ pid: number; startedAt: string }> {
   const deadline = Date.now() + REMOTE_RUNNER_PROCESS_IDENTITY_WAIT_MS;
   while (Date.now() < deadline) {
@@ -12338,6 +12362,7 @@ async function waitForRemoteRunnerProcessIdentity(input: {
         ],
         bypassSession: true,
         timeoutMs: 2_000,
+        ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
       })
       .catch(() => null);
     const identity =
@@ -12379,6 +12404,8 @@ export function createRemoteRunnerProcessLauncher(input: {
   runner: CommandManagedRuntimeRunner;
   /** Exact server-selected conversation OpenCode startup phase, never user supplied. */
   nativeSessionStart?: boolean;
+  /** Exact read-only Runner state owner; never user or model supplied. */
+  nativeHarnessState?: boolean;
   remoteBinary: string;
   processIdentityPath: string;
   stateDirectory: string;
@@ -12521,6 +12548,7 @@ export function createRemoteRunnerProcessLauncher(input: {
           identityPath: input.processIdentityPath,
           nonce: identityNonce,
           runnerInstanceId: input.runnerInstanceId,
+          nativeHarnessState: input.nativeHarnessState,
         });
       } catch {
         const cleanupStartedAtMs = Date.now();
@@ -12573,6 +12601,7 @@ export function createRemoteRunnerProcessLauncher(input: {
           ],
           bypassSession: true,
           timeoutMs: 10_000,
+          ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
         });
         if (observed.exitCode === 0 && !observed.timedOut) {
           await new Promise<void>((resolve) =>
@@ -12593,6 +12622,7 @@ export function createRemoteRunnerProcessLauncher(input: {
             ],
             bypassSession: true,
             timeoutMs: 10_000,
+            ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
           })
           .catch(() => null);
         const diagnosticTail =
@@ -12602,6 +12632,7 @@ export function createRemoteRunnerProcessLauncher(input: {
         const durableState = await readRemoteRunnerState({
           runner,
           stateDirectory: input.stateDirectory,
+          nativeHarnessState: input.nativeHarnessState,
         }).catch(() => null);
         const lifecycle =
           typeof durableState?.lifecycle === "string"
@@ -12676,6 +12707,8 @@ export function remoteCheckpointIncompleteFailure(
 export async function createRunnerdBackend(input: {
   db: Db;
   execution: NativeExecutionInput;
+  /** Trusted Heartbeat-owned route-created conversation owner context. */
+  conversationMode?: boolean;
   nativeBootstrapExecutionInputHash?: string;
   bootstrapSourceClosure?: NativeBootstrapSourceClosure | null;
   runnerInstanceId: string;
@@ -12784,6 +12817,8 @@ async function createRunnerdBackendWithinSessionClaim(
   let recoveryPending = retainedTransition !== undefined;
   const target = input.runnerExecutionTarget ?? { kind: "local" as const };
   const remoteTarget = target.kind === "remote" ? target : null;
+  const nativeConversationHarnessState = input.conversationMode === true && remoteTarget?.transport === "sandbox" &&
+    input.execution.provider.kind === "opencode" && input.execution.session.driverKind === "opencode_server";
   const remoteCommandRunner = remoteTarget
     ? remoteTarget.transport === "ssh"
       ? createNativeSshCommandRunner({
@@ -13813,6 +13848,7 @@ async function createRunnerdBackendWithinSessionClaim(
       ],
       bypassSession: true,
       timeoutMs: 10_000,
+      ...(nativeConversationHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
     });
     if (inspected.exitCode !== 0 || inspected.timedOut) {
       return {
@@ -13854,6 +13890,7 @@ async function createRunnerdBackendWithinSessionClaim(
         runner: remoteCommandRunner,
         stateDirectory: remoteStateDirectory,
         execution: input.execution,
+        nativeHarnessState: nativeConversationHarnessState,
       });
     } catch {
       throw new Error("runner_harness_state_mismatch: provider_state_unreadable");
@@ -14056,6 +14093,7 @@ async function createRunnerdBackendWithinSessionClaim(
         args: ["-c", `umask 077; install -d -m 0700 '${escapedTarget}'`],
         bypassSession: true,
         timeoutMs: 10_000,
+        ...(nativeConversationHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
       });
       if (created.exitCode !== 0 || created.timedOut) {
         throw new Error("runner_remote_directory_staging_failed");
@@ -14591,6 +14629,7 @@ async function createRunnerdBackendWithinSessionClaim(
       ? createRemoteRunnerProcessLauncher({
           target: remoteTarget,
           runner: remoteCommandRunner,
+          nativeHarnessState: nativeConversationHarnessState,
           nativeSessionStart: input.conversationMode === true &&
             remoteTarget.transport === "sandbox" && input.execution.provider.kind === "opencode" &&
             input.execution.session.driverKind === "opencode_server",
@@ -14853,6 +14892,7 @@ async function createRunnerdBackendWithinSessionClaim(
                 readRemoteRunnerState({
                   runner: remoteCommandRunner,
                   stateDirectory: remoteStateDirectory,
+                  nativeHarnessState: nativeConversationHarnessState,
                 })
             : undefined,
         prepareExternalRunnerState,

@@ -6,7 +6,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { companies, companyDeletionOperations, heartbeatRuns, memoryJobs, nativeRunFinalizations, type Db } from "@paperclipai/db";
 import { resolvePaperclipInstanceRoot } from "../../home-paths.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
-import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
+import { lockMemoryPrivacy, purgeDerivedWorkflowMemory } from "../memory/memory-privacy.js";
 import { hasNativeLocalProcessStop } from "../native-local-process-stop.js";
 import { assertRuntimeStorageDirectories, removeRuntimeStorageTree } from "../runtime-skill-cache.js";
 import { conflict } from "../../errors.js";
@@ -66,6 +66,21 @@ function runtimeAssetDigestBatches(digests: string[]) {
   const batches: string[][] = [];
   for (let offset = 0; offset < sorted.length; offset += 256) batches.push(sorted.slice(offset, offset + 256));
   return batches;
+}
+
+async function legacyAssetDigestSetAbsent(digests: string[]) {
+  const root = resolvePaperclipInstanceRoot(), assetsRoot = nativeRuntimeAssetsRoot();
+  for (const digest of new Set(digests)) {
+    for (const target of [path.join(assetsRoot, "bundles", digest), path.join(assetsRoot, "manifests", `${digest}.json`)]) {
+      try {
+        await assertRuntimeStorageDirectories(target, root);
+        return false;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
+    }
+  }
+  return true;
 }
 
 async function companyManagedOpenCodeRuntimeRunIds(companyId: string) {
@@ -139,6 +154,8 @@ export async function assertCompanyManagedOpenCodeRuntimeDataErased(db: Db, comp
       }
       if (refs.some(digest => !covered.has(digest)))
         throw conflict("Native OpenCode legacy asset erasure has not covered every current profile digest");
+      if (!await legacyAssetDigestSetAbsent(refs))
+        throw conflict("Native OpenCode legacy runtime assets remain on disk after their erasure receipt");
     }
   }
   const attempts = await db.select({ jobKey: memoryJobs.jobKey, attemptNumber: memoryJobs.attemptNumber, status: memoryJobs.status,
@@ -147,15 +164,21 @@ export async function assertCompanyManagedOpenCodeRuntimeDataErased(db: Db, comp
     .orderBy(memoryJobs.jobKey, desc(memoryJobs.attemptNumber));
   const latest = new Map<string, typeof attempts[number]>();
   for (const job of attempts) if (!latest.has(job.jobKey)) latest.set(job.jobKey, job);
+  const erasedLegacyDigests = new Set<string>();
   if ([...latest.values()].some(job => {
     const source = job.sourceRefJson as Record<string, unknown>;
-    return job.status !== "succeeded" || source.kind !== "runtime_asset_erasure" ||
+    const invalid = job.status !== "succeeded" || source.kind !== "runtime_asset_erasure" ||
       typeof source.runId !== "string" || !nativeRuns.some(run => run.id === source.runId) ||
       source.companyPurgeOperationId !== operationId || !Array.isArray(source.legacyDigests) ||
       source.legacyDigests.some(digest => typeof digest !== "string" || !digestPattern.test(digest)) ||
       source.legacyDigests.length > 256 || runtimeAssetJobKey(source.runId as string, source.legacyDigests as string[]) !== job.jobKey;
+    if (!invalid && Array.isArray(source.legacyDigests))
+      for (const digest of source.legacyDigests as string[]) erasedLegacyDigests.add(digest);
+    return invalid;
   }))
     throw conflict("Managed OpenCode runtime erasure outbox has not succeeded");
+  if (!await legacyAssetDigestSetAbsent([...erasedLegacyDigests]))
+    throw conflict("Native OpenCode legacy runtime assets remain on disk after their erasure receipt");
 }
 
 /** Durable first phase for canonical company offboarding; Run rows remain until these jobs finish. */
@@ -163,8 +186,10 @@ export async function enqueueCompanyManagedOpenCodeRuntimeErasure(db: Db, compan
   if (!uuidPattern.test(operationId)) throw new Error("Invalid company offboarding erasure binding");
   return db.transaction(async rawTx => {
     const tx = rawTx as unknown as Db;
-    await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, companyId)).for("update");
     await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
+    // Privacy advisory locks precede Company/Run/Operation row pins throughout
+    // the Native source owner graph. Re-read every row only after those waits.
+    await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, companyId)).for("update");
     const [operation] = await tx.select({ stage: companyDeletionOperations.stage, status: companyDeletionOperations.status,
       evidence: companyDeletionOperations.evidence }).from(companyDeletionOperations).where(and(
       eq(companyDeletionOperations.id, operationId), eq(companyDeletionOperations.companyId, companyId))).for("update");
@@ -222,7 +247,8 @@ export async function enqueueCompanyManagedOpenCodeRuntimeErasure(db: Db, compan
           spec.digests.every(digest => (source.legacyDigests as unknown[]).includes(digest));
         const exactSucceededReceipt = existing?.status === "succeeded" && existing.operationType === "retention" &&
           source?.kind === "runtime_asset_erasure" && source.runId === run.id &&
-          source.companyPurgeOperationId === operationId && sameDigestSet;
+          source.companyPurgeOperationId === operationId && sameDigestSet &&
+          await legacyAssetDigestSetAbsent(spec.digests);
         const providerHomeMustRun = spec.digests.length === 0 && providerHomes.has(run.id);
         if (exactSucceededReceipt && !providerHomeMustRun) continue;
         if (existing?.status === "running") { runNeedsWork = true; continue; }
@@ -247,6 +273,73 @@ export async function enqueueCompanyManagedOpenCodeRuntimeErasure(db: Db, compan
       if (runNeedsWork) scheduled.push(run.id);
     }
     return scheduled;
+  });
+}
+
+/**
+ * Retire old global-bundle references only after the canonical company purge
+ * has a current Run-owned empty-digest erasure receipt. Run/Stop owners remain
+ * present so the existing bounded retention worker can prove physical removal
+ * on its next pass.
+ */
+export async function retireCompanyNativeLegacyRuntimeProfiles(db: Db, companyId: string, operationId: string) {
+  if (!uuidPattern.test(companyId) || !uuidPattern.test(operationId))
+    throw conflict("Native legacy profile retirement binding is invalid");
+  return db.transaction(async rawTx => {
+    const tx = rawTx as unknown as Db;
+    await lockAnalyticalCompany(tx, companyId);
+    await lockMemoryPrivacy(tx, companyId);
+    const [company] = await tx.select({ id: companies.id, status: companies.status, pauseReason: companies.pauseReason })
+      .from(companies).where(eq(companies.id, companyId)).for("update");
+    if (!company) throw conflict("Native legacy profile retirement has no current Company owner");
+    const [operation] = await tx.select({ id: companyDeletionOperations.id, stage: companyDeletionOperations.stage,
+      status: companyDeletionOperations.status, evidence: companyDeletionOperations.evidence })
+      .from(companyDeletionOperations).where(and(eq(companyDeletionOperations.companyId, companyId),
+        eq(companyDeletionOperations.id, operationId))).for("update");
+    if (company.status !== "archived" || company.pauseReason !== "company_deleted" || !operation ||
+      operation.stage !== "purge" || operation.status !== "processing" ||
+      typeof operation.evidence.runtimesErasedAt !== "string")
+      throw conflict("Native legacy profile retirement requires the current archived company purge");
+    const runs = await tx.select({ id: heartbeatRuns.id, status: heartbeatRuns.status, runtimeMode: heartbeatRuns.runtimeMode,
+      driverKind: heartbeatRuns.driverKind, processPid: heartbeatRuns.processPid, processGroupId: heartbeatRuns.processGroupId,
+      controllerLeaseExpiresAt: heartbeatRuns.controllerLeaseExpiresAt, runnerProfileJson: heartbeatRuns.runnerProfileJson })
+      .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.runtimeMode, "native"),
+        eq(heartbeatRuns.driverKind, "opencode_server"))).for("update");
+    const retiring = runs.filter(run => legacyProfileDigests(run.runnerProfileJson).length > 0);
+    if (!retiring.length) return [] as string[];
+    for (const run of retiring) {
+      if (run.runtimeMode !== "native" || run.driverKind !== "opencode_server" ||
+        !["succeeded", "interrupted", "failed", "cancelled", "timed_out"].includes(run.status) ||
+        run.processPid !== null || run.processGroupId !== null || run.controllerLeaseExpiresAt !== null ||
+        !await hasNativeLocalProcessStop(tx, companyId, run.id))
+        throw conflict("Native legacy profile retirement awaits the exact Run Stop owner");
+      const [finalization] = await tx.select({ phase: nativeRunFinalizations.phase,
+        leaseOwner: nativeRunFinalizations.leaseOwner, leaseExpiresAt: nativeRunFinalizations.leaseExpiresAt })
+        .from(nativeRunFinalizations).where(and(eq(nativeRunFinalizations.companyId, companyId),
+          eq(nativeRunFinalizations.runId, run.id))).for("share");
+      if (!finalization || !["committed", "terminal_failure"].includes(finalization.phase) ||
+        finalization.leaseOwner !== null || finalization.leaseExpiresAt !== null)
+        throw conflict("Native legacy profile retirement awaits the committed Run finalization");
+      const [baseJob] = await tx.select({ status: memoryJobs.status, sourceRefJson: memoryJobs.sourceRefJson })
+        .from(memoryJobs).where(and(eq(memoryJobs.companyId, companyId),
+          eq(memoryJobs.jobKey, runtimeAssetJobKey(run.id, []))))
+        .orderBy(desc(memoryJobs.attemptNumber)).limit(1).for("share");
+      const source = baseJob?.sourceRefJson as Record<string, unknown> | undefined;
+      if (baseJob?.status !== "succeeded" || source?.kind !== "runtime_asset_erasure" || source.runId !== run.id ||
+        source.companyPurgeOperationId !== operationId || !Array.isArray(source.legacyDigests) || source.legacyDigests.length !== 0)
+        throw conflict("Native legacy profile retirement requires the current provider-home erasure receipt");
+    }
+    const now = new Date();
+    const tombstone = await tx.update(companies).set({
+      contentErasureTransactionId: sql`pg_current_xact_id()::text`, updatedAt: now,
+    }).where(and(eq(companies.id, companyId), eq(companies.status, "archived"),
+      eq(companies.pauseReason, "company_deleted"))).returning({ id: companies.id });
+    if (!tombstone.length) throw conflict("Canonical company erasure owner changed before legacy profile retirement");
+    const runIds = retiring.map(run => run.id);
+    await purgeDerivedWorkflowMemory(tx, companyId, [], now, {
+      workflowRevisionIds: [], artifactVersionIds: [], runIds, companyPurgeOperationId: operationId,
+    });
+    return runIds;
   });
 }
 
@@ -316,12 +409,14 @@ export async function eraseNativeRuntimeAssets(db: Db, owner: NativeRuntimeAsset
     // ponytail: scan original persisted profiles for each of at most 256 legacy digests;
     // use a native expression index if historical profile volume needs it.
     for (const digest of new Set(legacyDigests)) {
-      await eraseUnreferencedLegacyAsset(tx, digest);
+      const erased = await eraseUnreferencedLegacyAsset(tx, digest);
+      if (erased === null)
+        throw conflict("Native legacy runtime asset is still retained by a current Run profile");
     }
   });
 }
 
-async function eraseUnreferencedLegacyAsset(tx: Db, digest: string) {
+async function eraseUnreferencedLegacyAsset(tx: Db, digest: string): Promise<boolean | null> {
   const storageRoot = resolvePaperclipInstanceRoot();
   const root = nativeRuntimeAssetsRoot(), bundle = path.join(root, "bundles", digest), manifest = path.join(root, "manifests", `${digest}.json`);
   await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${'native-runtime-asset:'+digest},0))`);
@@ -330,7 +425,7 @@ async function eraseUnreferencedLegacyAsset(tx: Db, digest: string) {
     or exists(select 1 from jsonb_array_elements(case when jsonb_typeof(h.runner_profile_json #> '{nativeExecutionInput,runtimeContext,skills}')='array'
       then h.runner_profile_json #> '{nativeExecutionInput,runtimeContext,skills}' else '[]'::jsonb end) s
       where (s->'bundle') @> ${JSON.stringify({ digest, rootPath: bundle })}::jsonb)) as present`);
-  if (retained?.present) return false;
+  if (retained?.present !== false) return null;
   let removed = false;
   try {
     await assertRuntimeStorageDirectories(bundle, storageRoot);

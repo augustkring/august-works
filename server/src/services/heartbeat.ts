@@ -21059,6 +21059,7 @@ export function heartbeatService(
       const nativeBootstrapTaskMarkdownSourceMap = taskMarkdown
         ? { version: 1 as const,
             renderedMarkdownDigest: createHash("sha256").update(taskMarkdown, "utf8").digest("hex"),
+            renderedMarkdownLength: taskMarkdown.length,
             references: taskMarkdownSourceReferences }
         : null;
       const redactedWakeComment = parseObject(context.paperclipWakeComment);

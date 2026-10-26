@@ -10,6 +10,7 @@ import type { NativeInteractionResponseEnvelope } from "../../vendor/paperclip-r
 import { nativeRuntimeContextFixture } from "./runtime-context.test-fixture.js";
 import { captureNativeBootstrapContextWitness } from "../context/native-bootstrap-context-witness.js";
 import { nativeCommentProjectionHash, nativeSha256 } from "./canonical.js";
+import type { NativePayloadSourceInput } from "@paperclipai/shared";
 
 describe("native bootstrap rendered-source closure", () => {
   const companyId = randomUUID(), issueId = randomUUID(), runId = randomUUID(), agentId = randomUUID(), renderedMarkdown = "Task body rendered by the native task renderer.";
@@ -32,6 +33,14 @@ describe("native bootstrap rendered-source closure", () => {
     expect(input({ candidates: [{ kind: "task", id: issueId, input: { kind: "task", issueId, sourceVersion: "1", contentHash: hash }, payloadSourceSnapshot: snapshot(randomUUID()) }] })).toBeNull();
     expect(input({ candidates: [{ kind: "task", id: issueId, input: { kind: "project", projectId: issueId, sourceVersion: "1", contentHash: hash }, payloadSourceSnapshot: snapshot() }] })).toBeNull();
     expect(input({ candidates: [{ kind: "task", id: issueId, input: { kind: "task", issueId: randomUUID(), sourceVersion: "1", contentHash: hash }, payloadSourceSnapshot: snapshot() }] })).toBeNull();
+  });
+
+  it("retains only exact Role Pack version inputs and fails closed on missing or foreign-family role inputs", () => {
+    const rolePack = { kind: "role_pack_version" as const, rolePackId: randomUUID(), versionId: randomUUID(), contentHash: hash };
+    expect(input({ rolePackInputs: [rolePack] })?.inputs).toContainEqual(rolePack);
+    expect(input({ rolePackInputs: null })).toBeNull();
+    expect(input({ rolePackInputs: [{ kind: "task", issueId, sourceVersion: "1", contentHash: hash }] })).toBeNull();
+    expect(input({ rolePackInputs: [{ kind: "unknown" } as unknown as NativePayloadSourceInput] })).toBeNull();
   });
 
   it("admits only the exact rendered attachment owner after byte verification", () => {

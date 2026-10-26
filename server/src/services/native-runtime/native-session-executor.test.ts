@@ -683,6 +683,7 @@ describe("remote runner process supervision", () => {
         timeoutMs?: number;
         useSession?: boolean;
         bypassSession?: boolean;
+        nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare";
       }) => {
         const label = input.args?.[2];
         if (label === "paperclip-runner-launch") {
@@ -768,6 +769,7 @@ describe("remote runner process supervision", () => {
       diagnosticsDirectory: "/runtime/diagnostics",
       runnerInstanceId: "runner-remote",
       nativeSessionStart: true,
+      nativeHarnessState: true,
       onSpawn,
       onLog,
     });
@@ -794,6 +796,15 @@ describe("remote runner process supervision", () => {
     expect(launch?.useSession).toBeUndefined();
     expect(execute.mock.calls.filter(([input]) => input.nativePreparationPurpose === "native_session_start")
       .map(([input]) => input.args?.[2])).toEqual(["paperclip-runner-launch"]);
+    const harnessStateCalls = execute.mock.calls
+      .filter(([input]) => input.nativePreparationPurpose === "native_harness_state")
+      .map(([input]) => input);
+    expect(harnessStateCalls.slice(0, 3).map(input => input.args?.[2])).toEqual([
+      "paperclip-runner-process-identity",
+      "paperclip-runner-monitor",
+      "paperclip-runner-diagnostics",
+    ]);
+    expect(harnessStateCalls.at(-1)?.args?.[1]).toContain("base64");
     expect(launch?.args?.[1]).toContain("nohup setsid");
     expect(launch?.args?.[6]).toContain('"$$"');
     expect(launch?.args?.[6]).toContain('exec "$@"');

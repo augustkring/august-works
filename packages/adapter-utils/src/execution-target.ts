@@ -1425,6 +1425,8 @@ export async function prepareAdapterExecutionTargetRuntime(input: {
   workspaceBaseline?: DirectorySnapshot;
   workspaceGitSnapshot?: GitWorkspaceSnapshot | null;
   workspaceRepositoryMode?: "discover" | "server_verified_none";
+  /** Internal capability set only by the verified Native workspace-sync owner. */
+  nativeWorkspacePreparation?: boolean;
   workspaceExclude?: string[];
   preserveAbsentOnRestore?: string[];
   assets?: AdapterManagedRuntimeAsset[];
@@ -1506,6 +1508,7 @@ export async function prepareAdapterExecutionTargetRuntime(input: {
     workspaceBaseline: input.workspaceBaseline,
     workspaceGitSnapshot: input.workspaceGitSnapshot,
     workspaceRepositoryMode: input.workspaceRepositoryMode,
+    nativeWorkspacePreparation: input.nativeWorkspacePreparation,
     workspaceExclude: input.workspaceExclude,
     preserveAbsentOnRestore: input.preserveAbsentOnRestore,
     assets: input.assets,

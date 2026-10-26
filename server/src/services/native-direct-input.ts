@@ -59,6 +59,7 @@ interface NativeSourceReadScope { context: NativeSourceReadContext; actorKey: st
   deferredReaderSets: Map<string, { companyId: string; runId: string; policy: NativePayloadSourcePolicy;
     inputs: NativePayloadSourceInput[] }> }
 const nativeSourceReadScopes = new AsyncLocalStorage<NativeSourceReadContext>();
+let nativeSourceWorkBudgetDiagnostics = 0;
 const nativeSourceMemoDiagnostics = { roots: 0, actorScopes: 0, nestedScopeReuses: 0, memoHits: 0,
   memoMisses: 0, uncachedProofMs: 0, maxUncachedProofMs: 0, documentRowCacheHits: 0,
   documentRowCacheMisses: 0, parentTaskRowCacheHits: 0, parentTaskRowCacheMisses: 0,
@@ -135,7 +136,18 @@ export function resetNativeSourceMemoDiagnosticsForTest() {
 }
 export function nativeSourceMemoDiagnosticsForTest() { return structuredClone(nativeSourceMemoDiagnostics); }
 function nativeSourceReadWork(scope: NativeSourceReadScope) {
-  if (++scope.context.work > 512) throw forbidden("The Native source graph exceeds its total-work bound");
+  if (++scope.context.work > 512) {
+    if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1" && nativeSourceWorkBudgetDiagnostics < 1) {
+      nativeSourceWorkBudgetDiagnostics += 1;
+      const frames = new Error().stack?.split("\n").flatMap(line => {
+        const match = /server\/src\/services\/([A-Za-z0-9_./-]+\.ts):(\d+):\d+/.exec(line);
+        return match ? [`${match[1]}:${match[2]}`] : [];
+      }).slice(0, 5) ?? [];
+      console.error("native_source_work_budget_test_denial", JSON.stringify({ limit: 512, work: scope.context.work, frames,
+        frozenTaskMemoByKind: nativeSourceMemoDiagnosticsEnabled() ? nativeSourceMemoDiagnostics.frozenTaskMemoByKind : undefined }));
+    }
+    throw forbidden("The Native source graph exceeds its total-work bound");
+  }
 }
 function nativeSourceReadScope(db: Db | Transaction, actor: AuthorizationActor): NativeSourceReadScope {
   const txOrdinal = nativeSourceMemoTransactionOrdinal(db as object);
@@ -246,6 +258,7 @@ function deferNativeReadResultOwnerCheck(scope: NativeSourceReadScope, input: {
   scope.context.deferredReadResultChecks.set(key, input);
 }
 async function flushNativeSourceReaderChecks(context: NativeSourceReadContext) {
+  const checkedWorkspaceSources = new Set<string>();
   while (true) {
     // Finish all exact receipt/owner work and legacy graph walks before the
     // final current-reader pass. Those checks can wait on source rows, so an
@@ -272,6 +285,31 @@ async function flushNativeSourceReaderChecks(context: NativeSourceReadContext) {
         }
         for (const issueId of pendingIssueIds) group.checkedIssueIds.add(issueId);
       }
+    }
+    // Workspace currentness is independent of the reader actor. Gather the
+    // exact tuples across actor groups and run the existing FOR SHARE owner
+    // check once per company/source after all deferred owner checks, before
+    // any final actor ACL decisions.
+    const pendingWorkspaceSources = new Map<string, { companyId: string; source: Extract<NativePayloadSourceInput, { kind: "workspace_metadata" }>; scope: NativeSourceReadScope }>();
+    for (const group of context.deferredReaderChecks.values()) {
+      const scope = context.scopes.get(nativeSha256(group.actor));
+      if (!scope) continue;
+      for (const set of group.sets.values()) for (const source of set.inputs) if (source.kind === "workspace_metadata") {
+        const key = nativeSha256({ companyId: group.companyId, source });
+        if (checkedWorkspaceSources.has(key)) continue;
+        if (!pendingWorkspaceSources.has(key)) pendingWorkspaceSources.set(key, { companyId: group.companyId, source, scope });
+      }
+    }
+    const pendingWorkspaceByCompany = new Map<string, { scope: NativeSourceReadScope; sources: Extract<NativePayloadSourceInput, { kind: "workspace_metadata" }>[] }>();
+    for (const { companyId, source, scope } of pendingWorkspaceSources.values()) {
+      let group = pendingWorkspaceByCompany.get(companyId);
+      if (!group) { group = { scope, sources: [] }; pendingWorkspaceByCompany.set(companyId, group); }
+      if (group.sources.length >= 512) throw forbidden("The Native source workspace recheck exceeds its work bound");
+      group.sources.push(source);
+    }
+    for (const [companyId, group] of pendingWorkspaceByCompany) {
+      await assertNativeWorkspaceMetadataSourcesCurrent(context.db as Db, companyId, group.sources, group.scope);
+      for (const source of group.sources) checkedWorkspaceSources.add(nativeSha256({ companyId, source }));
     }
     if (context.pendingReaderChecks.size) {
       const groupKeys = [...context.pendingReaderChecks];
@@ -370,18 +408,10 @@ async function assertNativeSourceSetsReaderAccessCurrent(db: Db | Transaction, i
   const runIds = new Set(input.sets.flatMap(set => set.policy.runIds));
   const foundationRevisionIds = new Set(input.sets.flatMap(set => set.inputs.flatMap(source =>
     source.kind === "foundation_revision" ? [source.revisionId] : [])));
-  const workspaceSources = new Map<string, Extract<NativePayloadSourceInput, { kind: "workspace_metadata" }>>();
   const runtimeInstructions = new Map<string, { runId: string; source: Extract<NativePayloadSourceInput, { kind: "runtime_instructions" }> }>();
   const contextIds = new Set<string>();
   for (const set of input.sets) for (const source of set.inputs) {
     if (source.kind === "runtime_instructions") runtimeInstructions.set(nativeSha256({ runId: set.runId, source }), { runId: set.runId, source });
-    if (source.kind === "workspace_metadata") {
-      const workspaceKey = nativeSha256(source);
-      if (!workspaceSources.has(workspaceKey)) {
-        if (workspaceSources.size >= 512) throw forbidden("The Native source workspace recheck exceeds its work bound");
-        workspaceSources.set(workspaceKey, source);
-      }
-    }
     if (source.kind === "context") contextIds.add(source.manifestId);
   }
   for (const issueId of issueIds) if (!await canActorReadIssuePrivacy(db, input.actor,
@@ -410,11 +440,6 @@ async function assertNativeSourceSetsReaderAccessCurrent(db: Db | Transaction, i
   }
   for (const memoryId of memoryIds) if (!await canActorReadMemorySources(db as Db, input.companyId, input.actor, memoryId))
     throw forbidden("A Native source Memory is unavailable");
-  // Workspace tuples are an input owner too. Re-read them after the source ACL
-  // checks below, pin the persisted Run and ExecutionWorkspace rows in this
-  // same transaction, and keep this before the final reader revalidation. This
-  // makes frozen Task-prefix reuse safe for workspace inputs.
-  await assertNativeWorkspaceMetadataSourcesCurrent(db, input.companyId, [...workspaceSources.values()], scope);
   // Runtime bundles are the only filesystem reads in this source pass. Finish
   // them after the batched owner and ACL reads.
   for (const { runId, source } of runtimeInstructions.values())
@@ -942,29 +967,35 @@ async function assertNativeConversationTaskResultCurrentInScope(db: Db | Transac
   source: Extract<NativePayloadSourceInput, { kind: "tool_result" }>;
   capture: Record<string, unknown>;
 }): Promise<void> {
-  const fail = (reason: "capture_binding" | "additional_input" | "task_owner" | "task_source" | "dispatch" | "conversation_root"): never => {
+  const fail = (reason: "capture_binding" | "additional_input" | "task_owner" | "task_source" |
+    "dispatch_association" | "dispatch_turn" | "dispatch_wire" | "dispatch_binding" | "conversation_root"): never => {
     if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1")
       console.error("native_conversation_task_source_test_failure", reason);
     throw forbidden("A Native conversation Task result source changed");
   };
   const capture = input.capture;
   const taskRef = nativeSourceRecord(capture.taskRef);
-  const taskId = taskRef.issueId;
+  const taskId: unknown = taskRef.issueId;
   const turnId = typeof capture.turnId === "string" ? capture.turnId : "";
   const argumentsHash = typeof capture.argumentsHash === "string" ? capture.argumentsHash : "";
-  const eventSeq = capture.eventSeq;
-  const attempt = capture.attempt;
+  const eventSeq: unknown = capture.eventSeq;
+  const attempt: unknown = capture.attempt;
   if (input.source.runId !== input.run.id || input.source.toolName !== "create_task" || input.source.invocationId !== null ||
     capture.managedOpenCode !== true || capture.nativeReadResult === true || capture.tool !== "create_task" ||
     capture.callId !== input.source.callId || capture.resultDigest !== input.source.contentHash ||
     !turnId || !/^[0-9a-f]{64}$/.test(argumentsHash) || !Number.isSafeInteger(eventSeq) || !Number.isSafeInteger(attempt) ||
     typeof taskId !== "string") fail("capture_binding");
+  if (typeof taskId !== "string") fail("capture_binding");
+  const qualifiedTaskId: string = taskId;
+  if (!Number.isSafeInteger(eventSeq) || !Number.isSafeInteger(attempt)) fail("capture_binding");
+  const qualifiedEventSeq: number = eventSeq as number;
+  const qualifiedAttempt: number = attempt as number;
 
   const additionalEntries = input.receipt.additionalInputs.filter(entry => entry.responsibleUserId === input.run.responsibleUserId &&
-    entry.inputs[0]?.kind === "tool_result" && isDeepStrictEqual(entry.inputs[0], input.source));
+    isDeepStrictEqual(entry.inputs[0], input.source));
   const taskInputs = additionalEntries.flatMap(entry => entry.inputs).filter((value): value is Extract<NativePayloadSourceInput, { kind: "task" }> =>
-    value.kind === "task" && value.issueId === taskId);
-  const expectedPolicy: NativePayloadSourcePolicy = { issueIds: [taskId], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] };
+    value.kind === "task" && value.issueId === qualifiedTaskId);
+  const expectedPolicy: NativePayloadSourcePolicy = { issueIds: [qualifiedTaskId], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] };
   if (additionalEntries.length !== 1 || additionalEntries[0]!.inputs.length !== 2 || taskInputs.length !== 1 ||
     !isDeepStrictEqual(additionalEntries[0]!.policy, expectedPolicy) ||
     !isDeepStrictEqual(additionalEntries[0]!.inputs, [input.source, taskInputs[0]]))
@@ -974,7 +1005,7 @@ async function assertNativeConversationTaskResultCurrentInScope(db: Db | Transac
     responsibleUserId: issues.responsibleUserId, createdByAgentId: issues.createdByAgentId,
     payloadSourceProtocolVersion: issues.payloadSourceProtocolVersion,
     payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated,
-  }).from(issues).where(and(eq(issues.companyId, input.companyId), eq(issues.id, taskId))).for("share");
+  }).from(issues).where(and(eq(issues.companyId, input.companyId), eq(issues.id, qualifiedTaskId))).for("share");
   if (!task || task.parentId !== null || task.responsibleUserId !== input.run.responsibleUserId ||
     task.createdByAgentId !== input.run.agentId || task.payloadSourceProtocolVersion !== 1 || task.payloadSourceSnapshotInvalidated)
     fail("task_owner");
@@ -986,13 +1017,13 @@ async function assertNativeConversationTaskResultCurrentInScope(db: Db | Transac
       (value as Record<string, unknown>).callId === input.source.callId &&
       (value as Record<string, unknown>).turnId === turnId && (value as Record<string, unknown>).tool === "create_task" &&
       (value as Record<string, unknown>).argumentsHash === argumentsHash &&
-      (value as Record<string, unknown>).eventSeq === eventSeq && (value as Record<string, unknown>).attempt === attempt)
+      (value as Record<string, unknown>).eventSeq === qualifiedEventSeq && (value as Record<string, unknown>).attempt === qualifiedAttempt)
     : [];
   const modelTurns = Array.isArray(input.profile.nativeModelInputDispatchIntents)
     ? input.profile.nativeModelInputDispatchIntents.filter(value => value && typeof value === "object" && !Array.isArray(value) &&
       (value as Record<string, unknown>).dispatchId === (associations[0] as Record<string, unknown> | undefined)?.dispatchId &&
-      (value as Record<string, unknown>).turnId === turnId && (value as Record<string, unknown>).eventSeq === eventSeq &&
-      (value as Record<string, unknown>).attempt === attempt &&
+      (value as Record<string, unknown>).turnId === turnId && (value as Record<string, unknown>).eventSeq === qualifiedEventSeq &&
+      (value as Record<string, unknown>).attempt === qualifiedAttempt &&
       (value as Record<string, unknown>).responsibleUserId === input.run.responsibleUserId)
     : [];
   const wireIntents = Array.isArray(input.profile.nativeAwModelWireIntents) ? input.profile.nativeAwModelWireIntents.filter(value => {
@@ -1004,12 +1035,12 @@ async function assertNativeConversationTaskResultCurrentInScope(db: Db | Transac
       nativeProviderToolName((use as Record<string, unknown>).name as string) === "create_task" &&
       (use as Record<string, unknown>).argumentsHash === argumentsHash) : [];
     const binding = conversationModelBindingSchema.safeParse(intent.conversationModelBinding);
-    const dispatchCopies = typeof intent.sourceDispatchDigest === "string"
+    const dispatchCopies = binding.success && typeof intent.sourceDispatchDigest === "string"
       ? input.receipt.dispatches.filter(dispatch => dispatch.executionInputDigest === intent.sourceDispatchDigest &&
         dispatch.inputs.some(source => source.kind === "conversation_model_dispatch" && source.runId === input.run.id &&
           source.issueId === input.issueId && source.reservationId === intent.reservationId &&
-          source.agentId === input.run.agentId && source.conversationSessionGeneration === intent.conversationSessionGeneration &&
-          source.executionManifestId === intent.executionManifestId && source.executionManifestHash === intent.executionManifestHash))
+          source.agentId === input.run.agentId && source.conversationSessionGeneration === binding.data.conversationSessionGeneration &&
+          source.executionManifestId === binding.data.executionManifestId && source.executionManifestHash === binding.data.executionManifestHash))
       : [];
     return intent.modelPurpose === "conversation_model" && responseUses.length === 1 && binding.success &&
       binding.data.issueId === input.issueId && binding.data.conversationSessionGeneration === input.run.contextSnapshot?.conversationSessionGeneration &&
@@ -1020,8 +1051,48 @@ async function assertNativeConversationTaskResultCurrentInScope(db: Db | Transac
   const wireIntent = wireIntents[0] as Record<string, unknown> | undefined;
   const binding = conversationModelBindingSchema.safeParse(wireIntent?.conversationModelBinding);
   const modelTurn = modelTurns[0] as Record<string, unknown> | undefined;
-  if (associations.length !== 1 || modelTurns.length !== 1 || wireIntents.length !== 1 || !binding.success)
-    fail("dispatch");
+  if (associations.length !== 1) fail("dispatch_association");
+  if (modelTurns.length !== 1) fail("dispatch_turn");
+  if (wireIntents.length !== 1) {
+    if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1") {
+      const intents = Array.isArray(input.profile.nativeAwModelWireIntents) ? input.profile.nativeAwModelWireIntents : [];
+      console.error("native_conversation_task_wire_test_facts", JSON.stringify({ intentCount: intents.length,
+        candidates: intents.slice(-8).map(raw => {
+          const intent = nativeSourceRecord(raw);
+          const uses = Array.isArray(intent.responseToolUses) ? intent.responseToolUses.map(nativeSourceRecord) : [];
+          const matchedUses = uses.filter(use => typeof use.name === "string" && use.id === input.source.callId &&
+            nativeProviderToolName(use.name) === "create_task" && use.argumentsHash === argumentsHash);
+          const bindingCheck = conversationModelBindingSchema.safeParse(intent.conversationModelBinding);
+          const digestDispatches = typeof intent.sourceDispatchDigest === "string" ? input.receipt.dispatches.filter(dispatch =>
+            dispatch.executionInputDigest === intent.sourceDispatchDigest) : [];
+          const dispatchSources = input.receipt.dispatches.flatMap(dispatch => dispatch.inputs.filter(source =>
+            source.kind === "conversation_model_dispatch").map(source => ({ dispatch, source })));
+          const runIssueSources = dispatchSources.filter(({ source }) => source.runId === input.run.id && source.issueId === input.issueId);
+          const dispatchMatches = bindingCheck.success ? digestDispatches.filter(dispatch => dispatch.inputs.some(source =>
+            source.kind === "conversation_model_dispatch" && source.runId === input.run.id && source.issueId === input.issueId &&
+            source.reservationId === intent.reservationId && source.agentId === input.run.agentId &&
+            source.conversationSessionGeneration === bindingCheck.data.conversationSessionGeneration &&
+            source.executionManifestId === bindingCheck.data.executionManifestId && source.executionManifestHash === bindingCheck.data.executionManifestHash)) : [];
+          return { purpose: intent.modelPurpose === "conversation_model" || intent.modelPurpose === "worker_model" ? intent.modelPurpose : "other",
+            sourcePolicyHashMatches: intent.sourcePolicyHash === nativeSha256(input.receipt.bootstrap),
+            matchingCreateTaskUses: matchedUses.length, bindingValid: bindingCheck.success,
+            bindingIssueMatches: bindingCheck.success && bindingCheck.data.issueId === input.issueId,
+            bindingGenerationMatches: bindingCheck.success && bindingCheck.data.conversationSessionGeneration === input.run.contextSnapshot?.conversationSessionGeneration,
+            reservationPresent: typeof intent.reservationId === "string", dispatchDigestPresent: typeof intent.sourceDispatchDigest === "string",
+            digestDispatches: digestDispatches.length, conversationDispatchSources: dispatchSources.length,
+            sameRunIssueSources: runIssueSources.length,
+            sameReservationSources: runIssueSources.filter(({ source }) => source.reservationId === intent.reservationId).length,
+            sameAgentSources: runIssueSources.filter(({ source }) => source.agentId === input.run.agentId).length,
+            sameGenerationSources: bindingCheck.success ? runIssueSources.filter(({ source }) => source.conversationSessionGeneration === bindingCheck.data.conversationSessionGeneration).length : 0,
+            sameManifestIdSources: bindingCheck.success ? runIssueSources.filter(({ source }) => source.executionManifestId === bindingCheck.data.executionManifestId).length : 0,
+            sameManifestHashSources: bindingCheck.success ? runIssueSources.filter(({ source }) => source.executionManifestHash === bindingCheck.data.executionManifestHash).length : 0,
+            matchingDispatches: dispatchMatches.length };
+        }) }));
+    }
+    fail("dispatch_wire");
+  }
+  if (!binding.success) fail("dispatch_binding");
+  const currentBinding = binding.data;
   const [conversationRoot] = await db.select({ conversationAgentId: issues.conversationAgentId,
     conversationUserId: issues.conversationUserId, conversationState: issues.conversationState,
     conversationSessionGeneration: issues.conversationSessionGeneration, conversationRetiredAt: issues.conversationRetiredAt,
@@ -1031,8 +1102,7 @@ async function assertNativeConversationTaskResultCurrentInScope(db: Db | Transac
   }).from(issues).where(and(eq(issues.companyId, input.companyId), eq(issues.id, input.issueId))).for("share");
   if (!isCurrentConversationModelRoot({ root: conversationRoot, contextSnapshot: input.run.contextSnapshot,
     companyId: input.companyId, agentId: input.run.agentId, responsibleUserId: input.run.responsibleUserId,
-    runId: input.run.id, binding: binding.data }) || binding.data.executionManifestId !== wireIntent!.executionManifestId ||
-    binding.data.executionManifestHash !== wireIntent!.executionManifestHash ||
+    runId: input.run.id, binding: currentBinding }) ||
     association!.dispatchId !== modelTurn!.dispatchId ||
     modelTurn!.turnInputDigest !== wireIntent!.sourceDispatchDigest)
     fail("conversation_root");
@@ -1131,15 +1201,6 @@ async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction
     throw forbidden("The Native output capture lacks its consumed source components");
   await assertNativeManagedConsumedSourceSetCurrentInScope(db, { companyId, issueId, runId: capture.runId,
     actor, components: capture.consumedSourceComponents, sourceSet: capture.sourceSet }, scope);
-  const taskInputs = capture.sourceSet.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "task" }> =>
-    source.kind === "task");
-  const taskRootIds = [...new Set([...capture.sourceSet.policy.issueIds, ...taskInputs.map(source => source.issueId)])].sort();
-  for (const taskId of taskRootIds) {
-    const sources = taskInputs.filter(source => source.issueId === taskId);
-    if (sources.length) {
-      for (const source of sources) await assertNativeTaskSourceInputCurrentInScope(db, companyId, actor, source, scope);
-    } else await assertNativeTaskSnapshotOwnerCurrentInScope(db, companyId, actor, taskId, scope);
-  }
   for (const memoryId of capture.sourceSet.policy.memoryIds) {
     const [memory] = await db.select({ payloadSourceSnapshot: memoryRecords.payloadSourceSnapshot,
       payloadSourceSnapshotInvalidated: memoryRecords.payloadSourceSnapshotInvalidated,
@@ -1323,7 +1384,7 @@ async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction
     }
   }
   for (const source of capture.sourceSet.inputs) {
-    if (["task", "project", "memory", "context", "document_revision", "completion_contract", "runtime_instructions", "runtime_skill", "workspace_metadata", "worker_model_dispatch", "conversation_model_dispatch", "native_task_wake", "tool_result", "comment"].includes(source.kind)) {
+    if (["task", "project", "memory", "context", "document_revision", "completion_contract", "runtime_instructions", "runtime_skill", "workspace_metadata", "worker_model_dispatch", "conversation_model_dispatch", "native_task_wake", "tool_result", "comment", "interaction", "attachment", "authored_definition", "skill_version", "playbook_revision", "foundation_revision", "role_pack_version"].includes(source.kind)) {
       if (source.kind === "memory") {
         if (!capture.sourceSet.policy.memoryIds.includes(source.memoryId)) throw forbidden("A Native Memory source is unavailable");
         const evidence = receipt?.success ? nativeMemoryReviewEvidence(receipt.data, source) : undefined;
@@ -1456,7 +1517,7 @@ export async function assertNativeTaskSourceOwnerCurrent(db: Db | Transaction, i
 async function assertNativePayloadSourceSetCurrentInScope(db: Db | Transaction, input: {
   companyId: string; issueId: string; runId: string; actor: AuthorizationActor;
   policy: NativePayloadSourcePolicy; inputs: NativePayloadSourceInput[];
-}, scope: NativeSourceReadScope): Promise<void> {
+}, scope: NativeSourceReadScope, completedTaskSourceProofs?: Set<string>): Promise<void> {
   const policy = nativePayloadSourcePolicySchema.safeParse(input.policy);
   const inputs = nativePayloadSourceInputSchema.array().safeParse(input.inputs);
   if (!policy.success || !inputs.success)
@@ -1468,7 +1529,7 @@ async function assertNativePayloadSourceSetCurrentInScope(db: Db | Transaction, 
     throw forbidden("The Native source prefix is unavailable");
   if (!memoEligible) return assertNativePayloadSourceSetCurrentUncachedInScope(db, {
     ...input, policy: policy.data, inputs: inputs.data,
-  }, scope);
+  }, scope, true, completedTaskSourceProofs);
   const completeKey = `payload-source-set:${nativeSha256({ companyId: input.companyId, issueId: input.issueId,
     runId: input.runId, actor: input.actor, policy: policy.data, inputs: inputs.data })}`;
   if (scope.active.has(completeKey)) throw forbidden("The Native source prefix contains a cycle");
@@ -1495,7 +1556,7 @@ async function assertNativePayloadSourceSetCurrentInScope(db: Db | Transaction, 
   try {
     await assertNativePayloadSourceSetCurrentUncachedInScope(db, {
       ...input, policy: policy.data, inputs: inputs.data,
-    }, scope);
+    }, scope, true, completedTaskSourceProofs);
     scope.complete.add(completeKey);
     deferNativeSourceReaderCheck(scope, { companyId: input.companyId, runId: input.runId, actor: input.actor,
       policy: policy.data, inputs: inputs.data });
@@ -1578,7 +1639,8 @@ export async function assertNativeReadResultSourceSetOwnersCurrent(db: Db | Tran
 async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Transaction, input: {
   companyId: string; issueId: string; runId: string; actor: AuthorizationActor;
   policy: NativePayloadSourcePolicy; inputs: NativePayloadSourceInput[];
-}, scope: NativeSourceReadScope, requireReceiptMembership = true): Promise<void> {
+}, scope: NativeSourceReadScope, requireReceiptMembership = true,
+  completedTaskSourceProofs?: Set<string>): Promise<void> {
   const policy = nativePayloadSourcePolicySchema.safeParse(input.policy);
   const inputs = nativePayloadSourceInputSchema.array().safeParse(input.inputs);
   if (!policy.success || !inputs.success)
@@ -1665,7 +1727,22 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
     const sources = inputs.data.filter((source): source is Extract<NativePayloadSourceInput, { kind: "task" }> =>
       source.kind === "task" && source.issueId === issueId);
     if (sources.length) {
-      for (const source of sources) await assertNativeTaskSourceInputCurrentInScope(db, input.companyId, input.actor, source, scope);
+      for (const source of sources) {
+        const proofKey = completedTaskSourceProofs && nativeSha256({ phase: "managed-consumed-direct-component-task",
+          companyId: input.companyId, actor: input.actor, source });
+        if (proofKey && completedTaskSourceProofs.has(proofKey)) {
+          // Receipt/component membership is still checked independently for
+          // every cumulative component. This local traversal may reuse only
+          // the exact Task owner+snapshot proof whose row was FOR SHARE pinned
+          // earlier in this read-only traversal; current reader ACL is queued
+          // again for the mandatory after-wait pass.
+          deferNativeSourceOwnerReaderChecks(scope, { companyId: input.companyId, actor: input.actor,
+            issueIds: [source.issueId] });
+          continue;
+        }
+        await assertNativeTaskSourceInputCurrentInScope(db, input.companyId, input.actor, source, scope);
+        if (proofKey) completedTaskSourceProofs!.add(proofKey);
+      }
     } else await assertNativeTaskSnapshotOwnerCurrentInScope(db, input.companyId, input.actor, issueId, scope);
   }
   const projectSourceIds = [...new Set([...policy.data.projectIds, ...inputs.data.flatMap(source =>
@@ -2521,13 +2598,17 @@ async function assertNativeManagedConsumedSourceSetCurrentUncached(db: Db | Tran
     [...new Set(componentSets.flatMap(set => set.policy[key]))].sort()])) as NativePayloadSourcePolicy;
   if (!isDeepStrictEqual(combinedInputs, inputs.data) || !isDeepStrictEqual(combinedPolicy, policy.data))
     throw forbidden("The Native consumed source components do not match their source set");
+  // This local memo is scoped to this read-only component traversal only. It
+  // never crosses a source-set call, transaction, actor, or temporal reader
+  // scope; ordered component membership above still runs for every component.
+  const completedTaskSourceProofs = new Set<string>();
   for (const [index, component] of input.components.entries()) {
     const set = componentSets[index]!;
     const marker = component.kind === "dispatch" ? set.inputs.filter((value): value is Extract<NativePayloadSourceInput, { kind: "worker_model_dispatch" | "conversation_model_dispatch" }> =>
       value.kind === "worker_model_dispatch" || value.kind === "conversation_model_dispatch").at(-1) : undefined;
     const checkedInputs = marker ? set.inputs.filter(value => !isDeepStrictEqual(value, marker)) : set.inputs;
     await assertNativePayloadSourceSetCurrentInScope(db, { companyId: input.companyId, issueId: input.issueId,
-      runId: input.runId, actor: input.actor, policy: set.policy, inputs: checkedInputs }, scope);
+      runId: input.runId, actor: input.actor, policy: set.policy, inputs: checkedInputs }, scope, completedTaskSourceProofs);
   }
 }
 
@@ -2752,14 +2833,13 @@ async function assertNativeFrozenTaskSnapshotCurrent(db: Db | Transaction, compa
   if (scope.active.has(visitKey)) throw forbidden("The frozen Native Task source graph contains a cycle");
   scope.active.add(visitKey);
   try {
-    nativeSourceReadWork(scope);
     // A Task snapshot can be reached through several later cumulative source
     // prefixes in one read-only transaction. Reuse its structural dispatch
     // proof only when every nested owner family is supported by the ordinary
     // exact source-set validator. The final reader pass is still queued on a
     // hit, so current source ACLs, runtime bundle retention, and actor/company
     // authority are re-evaluated after all source-row waits.
-    const reusableKinds = new Set<NativePayloadSourceInput["kind"]>(["task", "project", "project_workspace", "memory",
+    const reusableKinds = new Set<NativePayloadSourceInput["kind"]>(["task", "project", "project_workspace", "memory", "comment",
       "context", "document_revision", "completion_contract", "runtime_instructions", "workspace_metadata",
       "worker_model_dispatch", "conversation_model_dispatch", "tool_result", "foundation_revision"]);
     const reusable = snapshot.inputs.every(source => reusableKinds.has(source.kind)) &&
@@ -2769,10 +2849,26 @@ async function assertNativeFrozenTaskSnapshotCurrent(db: Db | Transaction, compa
     const completeKey = `frozen-task-snapshot:${nativeSha256({ companyId, issueId, snapshot })}`;
     if (reusable && scope.frozenTaskSnapshots.has(completeKey)) {
       nativeSourceMemoRecordFrozenTask(snapshot.inputs, "hit");
+      // Comments are mutable owner rows, so they are deliberately re-read on
+      // every frozen Task proof hit. Only the already-validated ancestor and
+      // dispatch graph is reused; each exact comment rendition, snapshot, and
+      // current reader authority still gets its original check.
+      for (const source of snapshot.inputs) if (source.kind === "comment") {
+        const rootTask = snapshot.inputs.find((candidate): candidate is Extract<NativePayloadSourceInput, { kind: "task" }> =>
+          candidate.kind === "task" && candidate.issueId === source.issueId);
+        const selfOwnedConversationTaskId = rootTask && scope.conversationRootComments.has(
+          nativeSha256({ companyId, task: rootTask, source })) ? source.issueId : undefined;
+        await assertConversationCommentSourceCurrent(db, { companyId, actor, source, policy: snapshot.policy,
+          inputs: snapshot.inputs, ...(selfOwnedConversationTaskId ? { selfOwnedConversationTaskId } : {}) }, scope);
+      }
       deferNativeSourceReaderCheck(scope, { companyId, runId: last.source.runId, actor,
         policy: snapshot.policy, inputs: snapshot.inputs });
       return;
     }
+    // Charge only a cold recursive proof. The exact-hit path above still checks
+    // the per-component receipt and cycle bindings and queues fresh reader
+    // authority, but does not repeat this bounded owner graph traversal.
+    nativeSourceReadWork(scope);
     if (reusable) nativeSourceMemoRecordFrozenTask(snapshot.inputs, "miss");
     const [producer] = await db.select({ issueId: heartbeatRuns.nativeIssueId,
       profile: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns).where(and(

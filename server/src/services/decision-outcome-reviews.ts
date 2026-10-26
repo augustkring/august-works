@@ -169,17 +169,19 @@ export function decisionOutcomeReviewService(db:Db) {
       v7HumanActorId(actor);const input=startDecisionReviewLearningSchema.parse(raw);
       return withV7ActivityTransaction(db,async(tx,publications)=>{
         let bundleScope:LearningReviewBundleScope|undefined;
+        const started=performance.now();
+        const mark=(stage:string)=>{if(process.env.PAPERCLIP_OUTCOME_FIXTURE_STAGES==="1")console.info("outcome-conversion-source-stage",JSON.stringify({stage,elapsedMs:Math.round(performance.now()-started)}));};
         try {
-        const bound=await inspectBoundDecisionContext(tx,companyId,actor,decisionId,true),prior=await root(tx,companyId,decisionId);
+        mark("before_bound");const bound=await inspectBoundDecisionContext(tx,companyId,actor,decisionId,true);mark("bound");const prior=await root(tx,companyId,decisionId);
         if(!prior||prior.revision!==input.expectedRevision||!["completed","inconclusive"].includes(prior.status))throw conflict("Complete the current outcome review before starting Learning");
         bundleScope=prior.learningCycleId?{cycleId:prior.learningCycleId,purpose:input.purpose}:undefined;
-        const inspected=await inspect(tx,prior,actor,bound,bundleScope);
+        const inspected=await inspect(tx,prior,actor,bound,bundleScope);mark("review_inspected");
         const learning=learningService(tx);
         if(prior.learningCycleId){
-          const cycle=await learning.get(actor,companyId,prior.learningCycleId);
+          const cycle=await learning.get(actor,companyId,prior.learningCycleId);mark("cycle_read");
           const edges=await tx.select({id:learningEvidence.memoryRecordId}).from(learningEvidence).where(and(eq(learningEvidence.companyId,companyId),eq(learningEvidence.cycleId,cycle.id)));
           if(cycle.purpose!==input.purpose||cycle.trigger!==input.trigger||cycle.maxHypotheses!==input.maxHypotheses||cycle.maxEvaluations!==input.maxEvaluations||JSON.stringify(edges.map(edge=>edge.id).sort())!==JSON.stringify([...input.memoryRecordIds].sort()))throw conflict("This review already started a Learning cycle with different inputs");
-          await pinCurrentHumanCredential(tx,actor);return {review:{...inspected,learningCycleId:prior.learningCycleId},cycleId:cycle.id};
+          await pinCurrentHumanCredential(tx,actor);mark("replay_done");return {review:{...inspected,learningCycleId:prior.learningCycleId},cycleId:cycle.id};
         }
         const {expectedRevision,...cycleInput}=input;
         const cycle=await learning.createInTransaction(actor,companyId,{...cycleInput,scope:{type:"company",id:null},analyticalSources:[{kind:"outcome_review",decisionId,revision:expectedRevision}]},publications);

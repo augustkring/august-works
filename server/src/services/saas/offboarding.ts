@@ -24,7 +24,8 @@ import type { companyObjectErasure } from "./object-erasure.js";
 import { companyService } from "../companies.js";
 import type { billingService } from "../billing/billing.js";
 import type { runtimeControlService } from "../runtime/control.js";
-import { enqueueCompanyManagedOpenCodeRuntimeErasure } from "../native-runtime/runtime-asset-retention.js";
+import { assertCompanyManagedOpenCodeRuntimeDataErased, enqueueCompanyManagedOpenCodeRuntimeErasure,
+  retireCompanyNativeLegacyRuntimeProfiles } from "../native-runtime/runtime-asset-retention.js";
 import { memoryJobService } from "../memory/memory-jobs.js";
 export function saasOffboardingService(
   db: Db,
@@ -402,6 +403,25 @@ export function saasOffboardingService(
               errorCode: "managed_provider_erasure_pending" }).where(eq(companyDeletionOperations.id, operation.id));
             return true;
           }
+        }
+        const retiredLegacyRunIds = await retireCompanyNativeLegacyRuntimeProfiles(db, operation.companyId, operation.id);
+        if (retiredLegacyRunIds.length) {
+          // The first pass proves provider-home Stop and queues old global
+          // bundle digests. Only after that proof does the canonical company
+          // owner retire frozen profile references while retaining Run and
+          // Stop rows. A second real worker pass can then erase unreferenced
+          // bytes before the final company transaction deletes those owners.
+          await enqueueCompanyManagedOpenCodeRuntimeErasure(db, operation.companyId, operation.id);
+          await memoryJobService(db).tick({ limit: 50, companyId: operation.companyId });
+        }
+        try {
+          await assertCompanyManagedOpenCodeRuntimeDataErased(db, operation.companyId, operation.id);
+        } catch (error) {
+          if (!(error && typeof error === "object" && "status" in error && error.status === 409)) throw error;
+          await db.update(companyDeletionOperations).set({ notBefore: new Date(now.getTime() + 10000),
+            errorCode: retiredLegacyRunIds.length ? "legacy_runtime_asset_erasure_pending" : "managed_provider_erasure_pending" })
+            .where(eq(companyDeletionOperations.id, operation.id));
+          return true;
         }
         const objectEvidence = await objects.erase(
           operation.companyId,

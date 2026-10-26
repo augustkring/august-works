@@ -3,7 +3,7 @@ import { enqueueSkillVersionFileErasure } from "../learning/skill-file-erasure.j
 import { and, eq, inArray, is, sql, type SQL } from "drizzle-orm";
 import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
 import * as schema from "@paperclipai/db";
-import { customerFeedback, supportCases, projectRoadmapProposals, causalClaims, businessScenarios, forecastSpecs, businessMetrics, businessMetricTargets, strategyExecutionLinks, processAnalysisDefinitions, decisionContexts, automationArtifacts, automationArtifactVersions, companySkills, companySkillVersions, companies, companyDeletionOperations, orchestrationCompanyPurposeBudgets, orchestrationCompanyPurposeReservations, agentExecutionManifests, heartbeatRuns, issues, memoryDeletionMarkers, memoryRecords, type Db } from "@paperclipai/db";
+import { customerFeedback, supportCases, projectRoadmapProposals, causalClaims, businessScenarios, forecastSpecs, businessMetrics, businessMetricTargets, strategyExecutionLinks, processAnalysisDefinitions, decisionContexts, automationArtifacts, automationArtifactVersions, companySkills, companySkillVersions, rolePacks, rolePackVersions, companies, companyDeletionOperations, orchestrationCompanyPurposeBudgets, orchestrationCompanyPurposeReservations, agentExecutionManifests, heartbeatRuns, issues, memoryDeletionMarkers, memoryRecords, type Db } from "@paperclipai/db";
 import { conflict } from "../../errors.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy, purgeDerivedWorkflowMemory } from "../memory/memory-privacy.js";
@@ -392,6 +392,28 @@ export async function purgeCompanyContent(
           ),
       );
       if (!leaves.length) {
+        // A Role Pack's published-version pointer points into the version
+        // table, while each version is owned by its Role Pack. Break only
+        // that isolated two-row cycle inside the exact canonical purge; the
+        // 0552 DELETE guard still protects published versions/items from all
+        // ordinary callers, and the planner then removes versions before roots.
+        const exactRolePackCycle = pending.has(rolePacks) && pending.has(rolePackVersions) &&
+          ![...pending].some((table) => table !== rolePacks && table !== rolePackVersions &&
+            (edges.get(table)?.has(rolePacks) || edges.get(table)?.has(rolePackVersions)));
+        if (exactRolePackCycle) {
+          if (options.restoreQuarantine || !options.operationId)
+            throw conflict("Published Role Pack erasure requires the canonical company purge operation");
+          const [operation] = await tx.select({ stage: companyDeletionOperations.stage,
+            status: companyDeletionOperations.status }).from(companyDeletionOperations).where(and(
+            eq(companyDeletionOperations.id, options.operationId), eq(companyDeletionOperations.companyId, companyId),
+          )).for("update");
+          if (!operation || operation.stage !== "purge" || operation.status !== "processing")
+            throw conflict("Published Role Pack erasure requires the current processing company purge");
+          await tx.update(rolePacks).set({ publishedVersionId: null, updatedAt: new Date() })
+            .where(eq(rolePacks.companyId, companyId));
+          edges.get(rolePacks)?.delete(rolePackVersions);
+          continue;
+        }
         // An Artifact root and its immutable versions intentionally reference
         // each other: the root pins its latest version, while each version is
         // owned by the root. Let the native root cascade own this exact pair

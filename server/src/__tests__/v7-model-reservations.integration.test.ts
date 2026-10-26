@@ -29,6 +29,8 @@ import {
   orchestrationCompanyPurposeBudgets,
   orchestrationCompanyPurposeReservations,
   nativeRunFinalizations,
+  rolePackItems,
+  rolePackVersions,
 } from "@paperclipai/db";
 import { nativeRunInputSourceReceiptSchema, type CompanyPurposeFunding, type ModelTariffCeiling } from "@paperclipai/shared";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
@@ -53,7 +55,7 @@ import { seedNativePasskeySession } from "./helpers/native-authentication-fixtur
 import { runManagedNativeConversationFrame } from "./helpers/managed-native-conversation-frame.js";
 import { COMPANY_SEARCH_HELP_ARTICLES } from "../services/company-search-help.generated.js";
 import { supportGuideKnowledgePin } from "../services/experience/support-assistant-grounding.js";
-import { enqueueCompanyManagedOpenCodeRuntimeErasure, managedOpenCodeRuntimeDirectory } from "../services/native-runtime/runtime-asset-retention.js";
+import { enqueueCompanyManagedOpenCodeRuntimeErasure, managedOpenCodeRuntimeDirectory, nativeRuntimeAssetsRoot } from "../services/native-runtime/runtime-asset-retention.js";
 import { memoryJobService } from "../services/memory/memory-jobs.js";
 import { PROCESS_IDENTITY_RECORDED, hasNativeLocalProcessStop, recordNativeLocalProcessStop } from "../services/native-local-process-stop.js";
 import { hasRemoteTerminationReceipt } from "../services/remote-execution-termination.js";
@@ -417,9 +419,27 @@ const support = await getEmbeddedPostgresTestSupport();
       const token = (candidate: unknown, pattern: RegExp) => typeof candidate === "string" && pattern.test(candidate) ? candidate : null;
       const pgMessage = typeof cause.message === "string" ? cause.message : "";
       const checkConstraint = /^new row for relation "([a-z0-9_]{1,80})" violates check constraint "([a-z0-9_]{1,120})"$/.exec(pgMessage);
+      const knownConflict = new Map<string, string>([
+        ["Company content has a non-null reference cycle; scoped migration required", "company_content_fk_cycle"],
+        ["Native OpenCode runs require the current company-purge erasure receipt", "native_run_erasure_receipt_missing"],
+        ["Native OpenCode provider-home erasure has not succeeded for the current purge operation", "provider_home_receipt_missing"],
+        ["Native OpenCode legacy asset erasure batch is not an exact succeeded receipt", "legacy_batch_receipt_invalid"],
+        ["Native OpenCode legacy asset erasure has not covered every current profile digest", "legacy_digest_coverage_incomplete"],
+        ["Native OpenCode legacy runtime assets remain on disk after their erasure receipt", "legacy_asset_bytes_remain"],
+        ["Managed OpenCode runtime erasure outbox has not succeeded", "runtime_erasure_outbox_incomplete"],
+        ["Managed OpenCode runtime data must be erased before company content purge", "runtime_data_not_erased"],
+        ["Native conversation model receipts require the canonical company offboarding operation", "conversation_operation_required"],
+        ["The canonical company offboarding purge operation is required", "purge_operation_not_current"],
+        ["Company offboarding is blocked while Native conversation model outcomes are unresolved", "conversation_outcome_unresolved"],
+        ["Native legacy profile retirement awaits the exact Run Stop owner", "legacy_retirement_stop_missing"],
+        ["Native legacy profile retirement awaits the committed Run finalization", "legacy_retirement_finalization_missing"],
+        ["Native legacy profile retirement requires the current provider-home erasure receipt", "legacy_retirement_provider_receipt_missing"],
+        ["Unsafe Native runtime asset storage blocks company erasure", "runtime_asset_storage_unsafe"],
+      ]).get(typeof value.message === "string" ? value.message : "") ?? null;
       return { name: token(value.name, /^[A-Za-z][A-Za-z0-9_]{0,63}$/),
         status: typeof value.status === "number" && Number.isSafeInteger(value.status) ? value.status : null,
         code: token(value.code, /^[a-z0-9_]{1,80}$/), detailsCode: token(details.code, /^[a-z0-9_]{1,80}$/),
+        conflictReason: knownConflict,
         sqlState: token(cause.code, /^[0-9A-Z]{5}$/),
         databaseRule: token(pgMessage, /^[a-z0-9_]{1,80}$/),
         constraint: token(cause.constraint_name, /^[A-Za-z0-9_]{1,120}$/) ??
@@ -745,6 +765,8 @@ const support = await getEmbeddedPostgresTestSupport();
       let settledOnceBeforePurge = false;
       let runtimeErasureBeforePurge: Record<string, unknown> | null = null;
       let legacyDigests: string[] = [];
+      let runtimeContextBundlePaths: string[] = [];
+      let publishedRolePackVersionId: string | null = null;
       const usagePricedTariff: ModelTariffCeiling = { ...tariff(), provider: "anthropic", model: "fixture-managed-conversation-v1",
         inputMinorPerMillion: 1000, outputMinorPerMillion: 2000, fixedMinor: 0,
         qualificationHash: "b".repeat(64), expiresAt: new Date(Date.now() + 60 * 60_000).toISOString() };
@@ -773,6 +795,10 @@ const support = await getEmbeddedPostgresTestSupport();
             .from(agentExecutionManifests).where(and(eq(agentExecutionManifests.companyId, providerFrame.companyId),
               eq(agentExecutionManifests.id, providerFrame.manifest.id))).limit(1);
           expect(capturedManifest?.id).toBe(providerFrame.manifest.id);
+          if (!publishedRolePackVersionId) throw new Error("conversation_fixture_role_pack_pin_missing");
+          await expect(db.delete(rolePackItems).where(eq(rolePackItems.versionId, publishedRolePackVersionId))).rejects.toThrow();
+          await expect(db.delete(rolePackVersions).where(and(eq(rolePackVersions.companyId, providerFrame.companyId),
+            eq(rolePackVersions.id, publishedRolePackVersionId)))).rejects.toThrow();
           await expect(db.delete(agentExecutionManifests).where(and(eq(agentExecutionManifests.companyId, providerFrame.companyId),
             eq(agentExecutionManifests.id, providerFrame.manifest.id)))).rejects.toThrow();
           await expect(db.update(agentExecutionManifests).set({ manifest: { payloadDeleted: true } }).where(and(
@@ -849,13 +875,21 @@ const support = await getEmbeddedPostgresTestSupport();
           const skills = Array.isArray(runtimeContext.skills) ? runtimeContext.skills : [];
           const bundles = [instructionBundle, ...skills.map(skill => skill && typeof skill === "object"
             ? (skill as Record<string, unknown>).bundle : null)].filter((bundle): bundle is Record<string, unknown> =>
-              !!bundle && typeof bundle === "object" && typeof bundle.digest === "string" && typeof bundle.rootPath === "string" &&
-              bundle.rootPath.includes(`${path.sep}runtime-context-assets${path.sep}bundles${path.sep}`));
-          legacyDigests = [...new Set(bundles.map(bundle => bundle.digest as string))].sort();
-          if (legacyDigests.length !== 2)
-            throw new Error(`conversation_fixture_expected_two_frozen_legacy_bundles:${JSON.stringify({ count: legacyDigests.length,
-              skillCount: skills.length, instructionBundlePresent: !!instructionBundle })}`);
-          const legacyAssetPaths = new Map(bundles.map(bundle => [bundle.digest as string, bundle.rootPath as string]));
+              !!bundle && typeof bundle === "object" && typeof bundle.digest === "string" && typeof bundle.rootPath === "string");
+          const runAssetsRoot = nativeRuntimeAssetsRoot({ companyId: providerFrame.companyId, runId: run.id });
+          const runBundleRoot = path.join(runAssetsRoot, "bundles") + path.sep;
+          if (bundles.length !== 2 || !bundles.every(bundle =>
+            /^[a-f0-9]{64}$/.test(bundle.digest as string) && path.resolve(bundle.rootPath as string).startsWith(runBundleRoot)))
+            throw new Error(`conversation_fixture_expected_two_run_owned_context_bundles:${JSON.stringify({ count: bundles.length,
+              skillCount: skills.length, instructionBundlePresent: !!instructionBundle,
+              bundlesRunOwned: bundles.every(bundle => path.resolve(bundle.rootPath as string).startsWith(runBundleRoot)) })}`);
+          runtimeContextBundlePaths = bundles.map(bundle => bundle.rootPath as string);
+          for (const bundlePath of runtimeContextBundlePaths) await fs.stat(bundlePath);
+          // New Native profiles place these bundles beneath the exact Run-owned
+          // runtime asset root. The empty-digest outbox entry erases that root;
+          // legacy global bundles are separately covered only for profiles that
+          // actually retain those old-wire references.
+          legacyDigests = [];
           const [prePurgeJob] = await db.select().from(memoryJobs).where(and(
             eq(memoryJobs.companyId, providerFrame.companyId), eq(memoryJobs.jobKey, `runtime-asset-erasure:v1:${run.id}`),
           )).orderBy(sql`${memoryJobs.attemptNumber} desc`).limit(1);
@@ -864,43 +898,15 @@ const support = await getEmbeddedPostgresTestSupport();
             hasRetryParent: Boolean(prePurgeJob?.retryOfJobId), errorCode: prePurgeJob?.errorCode ?? null,
             kind: prePurgeRef?.kind ?? null, runId: prePurgeRef?.runId ?? null,
             companyPurgeOperationId: prePurgeRef?.companyPurgeOperationId ?? null };
-          const legacyA = legacyDigests[0]!;
           purgeHolder.value = await purgeConversationCompany(exactFrame, "conversation-known-cost-purge", async operationId => {
-            const completeBatchKey = `runtime-asset-erasure:v1:${run.id}:${createHash("sha256").update(legacyDigests.join(",")).digest("hex")}`;
-            const partialBatchKey = `runtime-asset-erasure:v1:${run.id}:${createHash("sha256").update(legacyA).digest("hex")}`;
-            const [completeQueuedJob] = await db.select().from(memoryJobs).where(and(eq(memoryJobs.companyId, providerFrame.companyId),
-              eq(memoryJobs.jobKey, completeBatchKey)))
-              .orderBy(sql`${memoryJobs.attemptNumber} desc`).limit(1);
-            const completeRef = completeQueuedJob?.sourceRefJson as Record<string, unknown> | undefined;
-            expect(completeQueuedJob?.status).toBe("queued");
-            expect(completeRef?.legacyDigests).toEqual(legacyDigests);
-            // Model a canonical but incomplete queued batch. No success/Stop
-            // receipt is fabricated: the real retention worker must erase A,
-            // and the immutable current profile still requires B.
-            await db.delete(memoryJobs).where(eq(memoryJobs.id, completeQueuedJob!.id));
-            const [partialJob] = await db.insert(memoryJobs).values({ companyId: providerFrame.companyId,
-              operationType: "retention", jobKey: partialBatchKey,
-              sourceRefJson: { kind: "runtime_asset_erasure", runId: run.id, legacyDigests: [legacyA], companyPurgeOperationId: operationId },
-            }).returning();
             await memoryJobService(db).tick({ limit: 100 });
-            const [partialReceipt] = await db.select().from(memoryJobs).where(eq(memoryJobs.id, partialJob!.id));
-            expect(partialReceipt?.status).toBe("succeeded");
-            await expect(fs.stat(legacyAssetPaths.get(legacyA)!)).rejects.toMatchObject({ code: "ENOENT" });
-            const missingDigest = legacyDigests.find(digest => digest !== legacyA)!;
-            await expect(fs.stat(legacyAssetPaths.get(missingDigest)!)).resolves.toBeDefined();
-            await expect(purgeCompanyContent(db, providerFrame.companyId, { operationId })).rejects.toMatchObject({ status: 409 });
-            expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, run.id))).toHaveLength(1);
-            const rebound = await enqueueCompanyManagedOpenCodeRuntimeErasure(db, providerFrame.companyId, operationId);
-            expect(rebound).toContain(run.id);
-            const [expandedJob] = await db.select().from(memoryJobs).where(and(eq(memoryJobs.companyId, providerFrame.companyId),
-              eq(memoryJobs.jobKey, completeBatchKey)))
-              .orderBy(sql`${memoryJobs.attemptNumber} desc`).limit(1);
-            const expandedRef = expandedJob?.sourceRefJson as Record<string, unknown> | undefined;
-            expect(expandedRef?.legacyDigests).toEqual(legacyDigests);
-            await memoryJobService(db).tick({ limit: 100 });
-            const [expandedReceipt] = await db.select().from(memoryJobs).where(eq(memoryJobs.id, expandedJob!.id));
-            expect(expandedReceipt?.status).toBe("succeeded");
-            await expect(fs.stat(legacyAssetPaths.get(legacyDigests[1]!)!)).rejects.toMatchObject({ code: "ENOENT" });
+            const [ownedAssetReceipt] = await db.select().from(memoryJobs).where(and(
+              eq(memoryJobs.companyId, providerFrame.companyId), eq(memoryJobs.jobKey, `runtime-asset-erasure:v1:${run.id}`),
+            )).orderBy(sql`${memoryJobs.attemptNumber} desc`).limit(1);
+            expect(ownedAssetReceipt?.status).toBe("succeeded");
+            expect((ownedAssetReceipt?.sourceRefJson as Record<string, unknown> | undefined)?.legacyDigests).toEqual([]);
+            for (const bundlePath of runtimeContextBundlePaths)
+              await expect(fs.stat(bundlePath)).rejects.toMatchObject({ code: "ENOENT" });
           });
         }, async ({ db: frameDb, actor, companyId, agentId }) => {
           if (!actor.userId) throw new Error("conversation_fixture_human_missing_for_skill_seed");
@@ -930,6 +936,7 @@ const support = await getEmbeddedPostgresTestSupport();
           await packs.publish(actor, companyId, pack.id, version.id, null);
           await packs.assign(actor, companyId, { scopeType: "agent", scopeId: agentId, rolePackId: pack.id,
             versionPolicy: "pinned", pinnedVersionId: version.id });
+          publishedRolePackVersionId = version.id;
         });
       const facts = factsHolder.value;
       if (!facts) throw new Error("conversation_frame_facts_missing");

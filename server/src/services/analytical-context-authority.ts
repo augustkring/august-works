@@ -376,39 +376,6 @@ async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string
    const canRead="issueId" in scope
     ? await canActorReadIssuePrivacy(tx,currentActor,{companyId,id:scope.issueId})
     : await canActorReadHeartbeatRunPrivacy(tx,currentActor,{companyId,id:scope.runId});
-   if(!canRead&&process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS==="1"&&"runId"in scope&&currentActor.type==="agent"){
-    const facts=await tx.execute<{runExists:boolean;runRunning:boolean;agentMatches:boolean;humanMatches:boolean;agentUsable:boolean;
-     scopeKind:string|null;issueRefCount:number;contextObject:boolean;contextIssueRef:boolean;contextTaskRef:boolean;
-     boundIssueOpen:boolean;boundConversationIdentity:boolean;retainedRootCount:number}>(sql`
-     select exists(select 1 from heartbeat_runs r where r.company_id=${companyId}::uuid and r.id=${scope.runId}::uuid) as "runExists",
-      exists(select 1 from heartbeat_runs r where r.company_id=${companyId}::uuid and r.id=${scope.runId}::uuid and r.status='running') as "runRunning",
-      exists(select 1 from heartbeat_runs r where r.company_id=${companyId}::uuid and r.id=${scope.runId}::uuid and r.agent_id=${currentActor.agentId}::uuid) as "agentMatches",
-      exists(select 1 from heartbeat_runs r where r.company_id=${companyId}::uuid and r.id=${scope.runId}::uuid and r.responsible_user_id=${currentActor.onBehalfOfUserId??null}::uuid) as "humanMatches",
-      exists(select 1 from agents a where a.company_id=${companyId}::uuid and a.id=${currentActor.agentId}::uuid and a.status not in ('paused','terminated','pending_approval','error')) as "agentUsable",
-      (select r.scope_kind from heartbeat_runs r where r.company_id=${companyId}::uuid and r.id=${scope.runId}::uuid limit 1) as "scopeKind",
-      (select count(distinct ref.id)::int from heartbeat_runs r cross join lateral (values (r.issue_id),(r.native_issue_id),
-        (case when r.context_snapshot->>'issueId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' then (r.context_snapshot->>'issueId')::uuid end),
-        (case when r.context_snapshot->>'taskId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' then (r.context_snapshot->>'taskId')::uuid end)) ref(id)
-       where r.company_id=${companyId}::uuid and r.id=${scope.runId}::uuid) as "issueRefCount",
-      exists(select 1 from heartbeat_runs r where r.company_id=${companyId}::uuid and r.id=${scope.runId}::uuid and jsonb_typeof(coalesce(r.context_snapshot,'{}'::jsonb))='object') as "contextObject",
-      exists(select 1 from heartbeat_runs r where r.company_id=${companyId}::uuid and r.id=${scope.runId}::uuid and coalesce(r.context_snapshot,'{}'::jsonb) ? 'issueId') as "contextIssueRef",
-      exists(select 1 from heartbeat_runs r where r.company_id=${companyId}::uuid and r.id=${scope.runId}::uuid and coalesce(r.context_snapshot,'{}'::jsonb) ? 'taskId') as "contextTaskRef",
-      exists(select 1 from heartbeat_runs r join issues i on i.company_id=r.company_id and i.id in (r.issue_id,r.native_issue_id,
-        case when r.context_snapshot->>'issueId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' then (r.context_snapshot->>'issueId')::uuid end,
-        case when r.context_snapshot->>'taskId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' then (r.context_snapshot->>'taskId')::uuid end)
-        where r.company_id=${companyId}::uuid and r.id=${scope.runId}::uuid and i.visibility='open') as "boundIssueOpen",
-      exists(select 1 from heartbeat_runs r join issues i on i.company_id=r.company_id and i.id in (r.issue_id,r.native_issue_id,
-        case when r.context_snapshot->>'issueId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' then (r.context_snapshot->>'issueId')::uuid end,
-        case when r.context_snapshot->>'taskId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' then (r.context_snapshot->>'taskId')::uuid end)
-        where r.company_id=${companyId}::uuid and r.id=${scope.runId}::uuid and i.conversation_user_id=${currentActor.onBehalfOfUserId??null}::uuid
-          and i.conversation_agent_id=${currentActor.agentId}::uuid and i.conversation_retired_at is null) as "boundConversationIdentity",
-      (select count(*)::int from context_manifests c join context_manifest_memory_roots cmr on cmr.company_id=c.company_id and cmr.manifest_id=c.id
-        join analytical_context_roots ar on ar.company_id=cmr.company_id and ar.memory_record_id=cmr.memory_record_id
-        where c.company_id=${companyId}::uuid and c.run_id=${scope.runId}::uuid) as "retainedRootCount"
-    `);
-    const row=facts[0];
-    console.info("native-analytical-run-reader-denial-facts",JSON.stringify(row??{}));
-   }
    if(!canRead)throw new HttpError(403,"Native task source access is unavailable",{code:"analytical_source_access_lost"});
   }
   diagnosticStage="retained_context_lookup";

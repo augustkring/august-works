@@ -1,0 +1,5 @@
+# Actual conversation known-cost Role Pack closure diagnosis, attempt R36
+
+Snapshot and syntax preflight passed, and one selected Vitest case executed (30 skipped). This run failed before provider IO because the Native bootstrap source-set builder returned `unsupported_or_missing_witness` even though its unsupported-input flags were empty and its Human wake source was valid. The actual manifest contained the published, assigned V5 Role Pack Skill pin. Static inspection isolated the refusal to a blanket `rolePackInputs.length !== 0` check despite canonical server-captured `role_pack_version` inputs already being appended and covered by source-currentness visitors. The follow-up removes only that blanket check, requires a non-null array of schema-valid Role Pack sources, and preserves the 256-reference bound; the actual-frame rerun remains pending.
+
+The log contains only finite source-closure failure facts; no prompt, source body, SQL, or provider payload was recorded. Pins, logs, binary identity, and numeric exits are preserved.

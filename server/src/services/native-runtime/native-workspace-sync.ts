@@ -703,6 +703,7 @@ async function prepareRuntime(input: {
     workspaceBaseline: input.baseline,
     workspaceGitSnapshot: input.gitSnapshot,
     workspaceRepositoryMode: input.workspaceRepositoryMode,
+    nativeWorkspacePreparation: input.workspaceRepositoryMode === "server_verified_none",
   });
 }
 

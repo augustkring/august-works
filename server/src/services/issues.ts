@@ -2201,20 +2201,12 @@ async function resolveIssuePrivacy(
   for (const runId of heartbeatRunIds) {
     if (!isUuidLike(runId)) throw unprocessable("Task privacy source run is invalid");
     const [run] = await tx.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.id, runId), eq(heartbeatRuns.companyId, companyId)));
-    if (!run) {
-      if (process.env.PAPERCLIP_ROUTINE_SOURCE_DIAGNOSTICS === "1")
-        console.warn("routine-privacy-source-diagnostic", JSON.stringify({ stage: "heartbeat_run_missing", actorRunId: !!actorRunId, typedOriginCount: typedOrigins.length, typedOriginNext: typedOrigins.some(origin => origin === next), nextHasOriginRun: !!next.originRunId, nextOriginKind: next.originKind ?? null }));
-      throw notFound("Task privacy source is unavailable");
-    }
+    if (!run) throw notFound("Task privacy source is unavailable");
     const context = run.contextSnapshot ?? {};
     const candidates = [run.issueId, run.nativeIssueId, context.issueId, context.taskId].filter((id): id is string => typeof id === "string" && id.length > 0);
     if (candidates.some(id => !isUuidLike(id)) || new Set(candidates).size > 1) throw unprocessable("Task privacy source run is ambiguous");
     const sourceId = candidates[0];
-    if (run.scopeKind === "issue" && !sourceId) {
-      if (process.env.PAPERCLIP_ROUTINE_SOURCE_DIAGNOSTICS === "1")
-        console.warn("routine-privacy-source-diagnostic", JSON.stringify({ stage: "heartbeat_issue_scope_missing_source", actorRunId: !!actorRunId, typedOriginCount: typedOrigins.length, typedOriginNext: typedOrigins.some(origin => origin === next), nextHasOriginRun: !!next.originRunId, nextOriginKind: next.originKind ?? null, runScopeKind: run.scopeKind }));
-      throw notFound("Task privacy source is unavailable");
-    }
+    if (run.scopeKind === "issue" && !sourceId) throw notFound("Task privacy source is unavailable");
     if (sourceId === next.id) continue;
     if (runId === nativeOutputRunId) {
       // The model-dispatch Run is an output provenance/retention edge. Its
@@ -2241,11 +2233,7 @@ async function resolveIssuePrivacy(
   for (const parentId of parents) {
     if (parentId === next.id) throw unprocessable("A task cannot inherit its own privacy source");
     const [parent] = await tx.select().from(issues).where(and(eq(issues.id, parentId), eq(issues.companyId, companyId)));
-    if (!parent) {
-      if (process.env.PAPERCLIP_ROUTINE_SOURCE_DIAGNOSTICS === "1")
-        console.warn("routine-privacy-source-diagnostic", JSON.stringify({ stage: "parent_issue_missing", actorRunId: !!actorRunId, typedOriginCount: typedOrigins.length, parentCount: parents.size, hasNextParent: !!next.parentId, hasNextPrivacyParent: !!next.privacyParentIssueId }));
-      throw notFound("Task privacy source is unavailable");
-    }
+    if (!parent) throw notFound("Task privacy source is unavailable");
     if (!contextOnlyParents.has(parentId)) sources.push({ sourceKind: "issue", sourceId: parentId });
     if (!(await canActorReadIssuePrivacy(tx, { type: "none" }, parent))) {
       visibility = "private";
@@ -2275,11 +2263,7 @@ async function assertIssuePrivacySourcesReadable(tx: DbTransaction, actor: Autho
       : source.sourceKind === "issue"
       ? await canActorReadIssuePrivacy(tx, actor, { id: source.sourceId, companyId })
       : await canActorReadProjectPrivacy(tx, actor, { id: source.sourceId, companyId });
-    if (!readable) {
-      if (process.env.PAPERCLIP_ROUTINE_SOURCE_DIAGNOSTICS === "1")
-        console.warn("routine-privacy-source-diagnostic", JSON.stringify({ stage: "source_unreadable", sourceKind: source.sourceKind, actorType: actor.type, actorSource: actor.type === "board" ? actor.source ?? null : null, actorHasUser: actor.type === "board" && !!actor.userId, sourceCount: sources.length }));
-      throw notFound("Task privacy source is unavailable");
-    }
+    if (!readable) throw notFound("Task privacy source is unavailable");
   }
 }
 
