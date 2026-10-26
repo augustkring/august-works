@@ -120,6 +120,11 @@ function assertMemorySourceReadActive(state: MemorySourceReadScope) {
   if (performance.now() > state.deadline) throw new Error("Memory source read deadline exceeded");
 }
 const memorySourceReads=new AsyncLocalStorage<MemorySourceReadScope>();
+let nativeMemorySourceFailureDiagnostics = 0;
+type NativeMemorySourceFailureStage = "source_owner" | "source_snapshot" | "private_owner" | "agent_scope" |
+  "ancestor_retention" | "root_shape" | "human_evidence" | "snapshot_binding" | "published_share" |
+  "nested_source" | "run_reader" | "task_reader" | "memory_temporal_reader" | "project_reader" |
+  "foundation_reader" | "foundation_source" | "source_deadline" | "source_cycle" | "source_budget";
 export function memoryShareContentFingerprint(record:typeof memoryRecords.$inferSelect):string {
   return createHash("sha256").update(JSON.stringify({
     companyId:record.companyId,bindingId:record.bindingId,memoryType:record.memoryType,scopeType:record.scopeType,scopeId:record.scopeId,
@@ -133,11 +138,13 @@ export async function canActorReadMemorySources(db: Db, companyId: string, actor
   budget: MemorySourceReadBudget = {}):Promise<boolean> {
   const inherited=memorySourceReads.getStore(),state=inherited??{active:new Set<string>(),deadline:performance.now()+8000,work:0,
     ...(budget.signal ? { signal: budget.signal } : {})};
-  const diagnosticDenied = (reason: "scope_guard" | "cycle" | "deadline" | "work_budget") => {
-    if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1")
+  const diagnosticDenied = (reason: NativeMemorySourceFailureStage | "scope_guard" | "cycle" | "deadline" | "work_budget") => {
+    if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1" && nativeMemorySourceFailureDiagnostics < 8) {
+      nativeMemorySourceFailureDiagnostics += 1;
       console.error("native_memory_source_access_test_denial", JSON.stringify({ reason, inherited: Boolean(inherited),
         activeCount: state.active.size, work: state.work, deadlineExpired: performance.now() > state.deadline,
         signalAborted: state.signal?.aborted ?? false }));
+    }
   };
   if (budget.deadlineAt !== undefined) state.deadline = Math.min(state.deadline, performance.now() + Math.max(0, budget.deadlineAt - Date.now()));
   if (budget.signal && !state.signal) state.signal = budget.signal;
@@ -194,12 +201,12 @@ async function memorySourceActorCurrent(db:Db,companyId:string,actor:Authorizati
   return (await authorizationService(db).decide({actor,action:"company_scope:read",resource:{type:"company",companyId},enforceResponsibleUserIntersection:true})).allowed;
 }
 async function inspectMemorySourceAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,recordId:string,
-  state:MemorySourceReadScope,diagnosticDenied:(reason:"scope_guard"|"cycle"|"deadline"|"work_budget")=>void,
+  state:MemorySourceReadScope,diagnosticDenied:(reason:NativeMemorySourceFailureStage|"scope_guard"|"cycle"|"deadline"|"work_budget")=>void,
   forbiddenRecordId?:string):Promise<boolean> {
-  if (!actor) return false;
+  if (!actor) { diagnosticDenied("source_owner"); return false; }
   const { authorizationService, canActorReadIssuePrivacy, canActorReadProjectPrivacy, canActorReadHeartbeatRunPrivacy } = await import("../authorization.js");
   const admitted = () => memorySourceActorCurrent(db,companyId,actor,recordId);
-  if (!await admitted()) return false;
+  if (!await admitted()) { diagnosticDenied("source_owner"); return false; }
   const active = new Set<string>(), visited = new Set<string>();
   const runChecks = new Map<string, Map<string, string | null>>(), taskChecks = new Map<string, Map<string, string | null>>();
   const qualifiedOutputMemoryIds = new Set<string>();
@@ -224,8 +231,8 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
     state.work++;
     const [row] = await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId,companyId),eq(memoryRecords.id,id),memoryPayloadVisible()))
       .for("share");
-    if (!row?.sourceProvenanceQualified || (row.expiresAt && row.expiresAt.getTime()<=Date.now())) return false;
-    if (row.payloadSourceProtocolVersion === 1 && row.payloadSourceSnapshot === null) return false;
+    if (!row?.sourceProvenanceQualified || (row.expiresAt && row.expiresAt.getTime()<=Date.now())) { diagnosticDenied("source_owner"); return false; }
+    if (row.payloadSourceProtocolVersion === 1 && row.payloadSourceSnapshot === null) { diagnosticDenied("source_snapshot"); return false; }
     const publicationSource=authorizedPrivateOwnerEdge;
     const readerUserId=actor.type==="board"?actor.userId:actor.onBehalfOfUserId;
     // A run may legitimately change Human after acknowledged steering. Its
@@ -236,13 +243,13 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
         console.error("native_memory_source_access_test_denial", JSON.stringify({ reason: "private_owner_mismatch",
           actorType: actor.type, actorHasReaderUser: Boolean(readerUserId), privateOwnerMatchesReader: row.privateOwnerUserId === readerUserId,
           publicationSource, agentScopeMissingOwner: row.scopeType === "agent" && !row.privateOwnerUserId }));
-      return false;
+      diagnosticDenied("private_owner"); return false;
     }
     if(row.scopeType==="agent" && actor.type==="agent"
-      && (row.ownerAgentId!==actor.agentId || row.scopeId!==actor.agentId) && !publicationSource)return false;
-    if(ancestor && (row.revokedAt || row.retentionState==="expired" || row.validUntil && row.validUntil.getTime()<=Date.now()))return false;
+      && (row.ownerAgentId!==actor.agentId || row.scopeId!==actor.agentId) && !publicationSource) { diagnosticDenied("agent_scope"); return false; }
+    if(ancestor && (row.revokedAt || row.retentionState==="expired" || row.validUntil && row.validUntil.getTime()<=Date.now())) { diagnosticDenied("ancestor_retention"); return false; }
     const ids = [...row.sourceRunIds,...row.sourceIssueIds,...row.sourceProjectIds,...row.sourceMemoryIds,...row.sourceFoundationRevisionIds];
-    if (ids.length>256 || ids.some(value=>typeof value!=="string" || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value))) return false;
+    if (ids.length>256 || ids.some(value=>typeof value!=="string" || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value))) { diagnosticDenied("root_shape"); return false; }
     if (row.createdByActorType === "user" && row.sourceIssueIds.length && row.sourceMemoryIds.length === 0) {
       const evidenceRows = await db.select({ sourceRef: memoryEvidence.sourceRef, sourceProvider: memoryEvidence.sourceProvider,
         sourceType: memoryEvidence.sourceType, sourceVersion: memoryEvidence.sourceVersion, sourceUpdatedAt: memoryEvidence.sourceUpdatedAt })
@@ -250,20 +257,20 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
           eq(memoryEvidence.sourceClass, "task")));
       const versions = new Map<string, string>();
       for (const item of evidenceRows) {
-        if (item.sourceProvider !== "august_works_tasks" || item.sourceType !== "issue") return false;
+        if (item.sourceProvider !== "august_works_tasks" || item.sourceType !== "issue") { diagnosticDenied("human_evidence"); return false; }
         const ref = /^issue:\/\/([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})$/i.exec(item.sourceRef);
-        if (!ref || !item.sourceVersion || item.sourceUpdatedAt?.toISOString() !== item.sourceVersion) return false;
+        if (!ref || !item.sourceVersion || item.sourceUpdatedAt?.toISOString() !== item.sourceVersion) { diagnosticDenied("human_evidence"); return false; }
         const previous = versions.get(ref[1]!);
-        if (previous && previous !== item.sourceVersion) return false;
+        if (previous && previous !== item.sourceVersion) { diagnosticDenied("human_evidence"); return false; }
         versions.set(ref[1]!, item.sourceVersion);
       }
       if (versions.size !== new Set(row.sourceIssueIds).size || row.sourceIssueIds.some(issueId => !versions.has(issueId)))
-        return false;
+        { diagnosticDenied("human_evidence"); return false; }
       for (const [issueId, version] of versions) {
         const [issue] = await db.select({ updatedAt: issues.updatedAt }).from(issues).where(and(
           eq(issues.companyId, companyId), eq(issues.id, issueId),
         )).for("share");
-        if (!issue || issue.updatedAt.toISOString() !== version) return false;
+        if (!issue || issue.updatedAt.toISOString() !== version) { diagnosticDenied("human_evidence"); return false; }
       }
     }
     visited.add(visitKey);active.add(id);
@@ -277,7 +284,7 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
       ["worker_model_dispatch", "conversation_model_dispatch"].includes(String((value as Record<string, unknown>).kind)));
     if (row.payloadSourceProtocolVersion === 1 && claimsModelOutput && (!capturedSnapshot.success || row.payloadSourceSnapshotInvalidated ||
       capturedSnapshot.data.owner.kind !== "memory_record" || capturedSnapshot.data.owner.companyId !== companyId ||
-      capturedSnapshot.data.owner.id !== row.id)) return false;
+      capturedSnapshot.data.owner.id !== row.id)) { diagnosticDenied("snapshot_binding"); return false; }
     if (capturedSnapshot.success && row.payloadSourceProtocolVersion===1 && !row.payloadSourceSnapshotInvalidated &&
       capturedSnapshot.data.owner.kind==="memory_record" && capturedSnapshot.data.owner.companyId===companyId &&
       capturedSnapshot.data.owner.id===row.id) {
@@ -302,7 +309,7 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
           if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1")
             console.error("native_memory_source_access_test_denial", JSON.stringify({ reason: "output_snapshot_binding",
               exactPolicy, dispatchCount: dispatches.length, dispatchAtEnd, actorPresent: Boolean(actor), uniqueDispatch }));
-          return false;
+          diagnosticDenied("snapshot_binding"); return false;
         }
         // The complete frozen proof is performed once inside the single
         // withReadMemoryTemporalSources callback below, together with every
@@ -324,20 +331,21 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
     row.sourceIssueIds.forEach(value=>addScoped(taskChecks,value,row.id,capturedContextIds));
     row.sourceProjectIds.forEach(value=>projectIds.add(value));row.sourceFoundationRevisionIds.forEach(value=>revisions.add(value));
     if (row.scopeType==="project") {
-      if (!row.scopeId || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(row.scopeId)) return false;
+      if (!row.scopeId || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(row.scopeId)) { diagnosticDenied("root_shape"); return false; }
       projectIds.add(row.scopeId);
     }
     const publishedSourceId=await publishedShareSourceEdge(db,companyId,row);
-    if(publishedSourceId===false)return false;
+    if(publishedSourceId===false) { diagnosticDenied("published_share"); return false; }
     for (const source of row.sourceMemoryIds) {
-      try { assertMemorySourceReadActive(state); } catch { return false; }
-      if (!await visit(source,true,source===publishedSourceId)) return false;
+      try { assertMemorySourceReadActive(state); } catch { diagnosticDenied("source_deadline"); return false; }
+      if (!await visit(source,true,source===publishedSourceId)) { diagnosticDenied("nested_source"); return false; }
     }
     active.delete(id);
     const scopedReads=[...runChecks.values(),...taskChecks.values()].reduce((count,scopes)=>count+scopes.size,0);
-    return visited.size+scopedReads+projectIds.size+revisions.size<=256;
+    if (visited.size+scopedReads+projectIds.size+revisions.size>256) { diagnosticDenied("source_budget"); return false; }
+    return true;
   };
-  if (!await visit(recordId)) return false;
+  if (!await visit(recordId)) { diagnosticDenied("nested_source"); return false; }
   const {withReadMemoryTemporalSources}=await import("../authorization.js");
   const temporalOwnerChecks = new Map<string, { runs: string[]; tasks: string[] }>();
   const temporalChecksFor = (ownerId: string) => {
@@ -346,50 +354,52 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
     return checks;
   };
   for (const [id,owners] of runChecks) for (const [ownerId,encoded] of owners) {
-    try { assertMemorySourceReadActive(state); } catch { return false; }
+    try { assertMemorySourceReadActive(state); } catch { diagnosticDenied("source_deadline"); return false; }
     if (encoded === null) {
-      if (performance.now()>deadline || !await canActorReadHeartbeatRunPrivacy(db,actor,{companyId,id})) return false;
+      if (performance.now()>deadline || !await canActorReadHeartbeatRunPrivacy(db,actor,{companyId,id})) { diagnosticDenied("run_reader"); return false; }
     } else temporalChecksFor(ownerId).runs.push(id);
   }
   for (const [id,owners] of taskChecks) for (const [ownerId,encoded] of owners) {
-    try { assertMemorySourceReadActive(state); } catch { return false; }
+    try { assertMemorySourceReadActive(state); } catch { diagnosticDenied("source_deadline"); return false; }
     if (encoded === null) {
-      if (performance.now()>deadline || !await canActorReadIssuePrivacy(db,actor,{companyId,id})) return false;
+      if (performance.now()>deadline || !await canActorReadIssuePrivacy(db,actor,{companyId,id})) { diagnosticDenied("task_reader"); return false; }
     } else temporalChecksFor(ownerId).tasks.push(id);
   }
   for (const ownerId of new Set([...qualifiedOutputMemoryIds, ...temporalOwnerChecks.keys()])) {
-    try { assertMemorySourceReadActive(state); } catch { return false; }
+    try { assertMemorySourceReadActive(state); } catch { diagnosticDenied("source_deadline"); return false; }
     const checks = temporalOwnerChecks.get(ownerId) ?? { runs: [], tasks: [] };
     const allowed = await withReadMemoryTemporalSources(db,actor,companyId,ownerId,async () => {
       for (const id of checks.runs) {
-        try { assertMemorySourceReadActive(state); } catch { return false; }
-        if (!await canActorReadHeartbeatRunPrivacy(db,actor,{companyId,id})) return false;
+        try { assertMemorySourceReadActive(state); } catch { diagnosticDenied("source_deadline"); return false; }
+        if (!await canActorReadHeartbeatRunPrivacy(db,actor,{companyId,id})) { diagnosticDenied("run_reader"); return false; }
       }
       for (const id of checks.tasks) {
-        try { assertMemorySourceReadActive(state); } catch { return false; }
-        if (!await canActorReadIssuePrivacy(db,actor,{companyId,id})) return false;
+        try { assertMemorySourceReadActive(state); } catch { diagnosticDenied("source_deadline"); return false; }
+        if (!await canActorReadIssuePrivacy(db,actor,{companyId,id})) { diagnosticDenied("task_reader"); return false; }
       }
       return true;
     }, qualifiedOutputMemoryExpectations.get(ownerId));
-    if (!allowed) return false;
+    if (!allowed) { diagnosticDenied("memory_temporal_reader"); return false; }
   }
   for (const id of projectIds) {
-    try { assertMemorySourceReadActive(state); } catch { return false; }
-    if (performance.now()>deadline || !await canActorReadProjectPrivacy(db,actor,{companyId,id})) return false;
+    try { assertMemorySourceReadActive(state); } catch { diagnosticDenied("source_deadline"); return false; }
+    if (performance.now()>deadline || !await canActorReadProjectPrivacy(db,actor,{companyId,id})) { diagnosticDenied("project_reader"); return false; }
   }
   if (revisions.size) {
-    if (!(await authorizationService(db).decide({actor,action:"foundation:read",resource:{type:"company",companyId},enforceResponsibleUserIntersection:true})).allowed) return false;
+    if (!(await authorizationService(db).decide({actor,action:"foundation:read",resource:{type:"company",companyId},enforceResponsibleUserIntersection:true})).allowed) { diagnosticDenied("foundation_reader"); return false; }
     const {assertLearnedAssetAnalyticalSources} = await import("../learning/learning-analytical-sources.js");
     for (const id of revisions) {
-      try { assertMemorySourceReadActive(state); } catch { return false; }
-      if (performance.now()>deadline) return false;
+      try { assertMemorySourceReadActive(state); } catch { diagnosticDenied("source_deadline"); return false; }
+      if (performance.now()>deadline) { diagnosticDenied("source_deadline"); return false; }
       const [source] = await db.select({id:documentRevisions.id}).from(documentRevisions).where(and(eq(documentRevisions.companyId,companyId),eq(documentRevisions.id,id)));
-      if (!source) return false;
+      if (!source) { diagnosticDenied("foundation_source"); return false; }
       try {await assertLearnedAssetAnalyticalSources(db,companyId,"document_revision",id,actor,"task");}
-      catch(error){if(error instanceof HttpError && [403,404,409,422].includes(error.status))return false;throw error;}
+      catch(error){if(error instanceof HttpError && [403,404,409,422].includes(error.status)){diagnosticDenied("foundation_source");return false;}throw error;}
     }
   }
-  return performance.now()<=deadline && await admitted();
+  if (performance.now()>deadline) { diagnosticDenied("source_deadline"); return false; }
+  if (!await admitted()) { diagnosticDenied("source_owner"); return false; }
+  return true;
 }
 
 /** Grants one edge only when the exact share payload, source version, owner

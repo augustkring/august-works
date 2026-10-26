@@ -9,7 +9,7 @@ import { buildNativeBootstrapSourceSet, buildNativeExecutionInput, captureNative
 import type { NativeInteractionResponseEnvelope } from "../../vendor/paperclip-runner/index.js";
 import { nativeRuntimeContextFixture } from "./runtime-context.test-fixture.js";
 import { captureNativeBootstrapContextWitness } from "../context/native-bootstrap-context-witness.js";
-import { nativeSha256 } from "./canonical.js";
+import { nativeCommentProjectionHash, nativeSha256 } from "./canonical.js";
 
 describe("native bootstrap rendered-source closure", () => {
   const companyId = randomUUID(), issueId = randomUUID(), runId = randomUUID(), agentId = randomUUID(), renderedMarkdown = "Task body rendered by the native task renderer.";
@@ -96,17 +96,26 @@ describe("native bootstrap rendered-source closure", () => {
       payload: { ...payload, connectorSkillInstructions: "" } })).toMatchObject({
       kind: "native_task_wake", runId, issueId, sourceVersion: "1", contentHash: expect.stringMatching(/^[0-9a-f]{64}$/),
     });
-    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand", task, payload })).toMatchObject({ kind: "native_task_wake" });
+    const wake = captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand", task, payload });
+    expect(wake).toMatchObject({ kind: "native_task_wake" });
+    const reorderedPayload = Object.fromEntries(Object.entries(payload).reverse());
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand",
+      task, payload: reorderedPayload })?.contentHash).toBe(wake?.contentHash);
     const commentId = randomUUID();
     const commentSource = { kind: "comment" as const, issueId, commentId, sourceVersion: "2",
-      contentHash: createHash("sha256").update(JSON.stringify({ body: "Please finish this task.",
-        presentation: null, metadata: null }), "utf8").digest("hex") };
+      contentHash: nativeCommentProjectionHash({ body: "Please finish this task.", presentation: null, metadata: null }) };
     const comment = { id: commentId, issueId, authorType: "user", body: "Please finish this task.", bodyTruncated: false,
       presentation: null, metadata: null, deletedAt: null };
     const commentWake = { ...payload, commentIds: [commentId], latestCommentId: commentId, comments: [comment],
       commentWindow: { requestedCount: 1, includedCount: 1, missingCount: 0 } };
     expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand",
       task, payload: commentWake, commentSources: [commentSource] })).toMatchObject({ kind: "native_task_wake", runId, issueId });
+    const unrelatedRendition = { ...commentSource,
+      contentHash: nativeCommentProjectionHash({ body: "redacted alternate rendition", presentation: null, metadata: null }) };
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand",
+      task, payload: commentWake, commentSources: [unrelatedRendition, commentSource] })).toMatchObject({ kind: "native_task_wake" });
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand",
+      task, payload: commentWake, commentSources: [commentSource, { ...commentSource, sourceVersion: "3" }] })).toBeNull();
     expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand",
       task, payload: commentWake })).toBeNull();
     expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand",

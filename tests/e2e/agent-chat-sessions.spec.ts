@@ -2,9 +2,10 @@ import {randomUUID} from "node:crypto";
 import {readFile} from "node:fs/promises";
 import path from "node:path";
 import {eq} from "../../server/node_modules/drizzle-orm/index.js";
-import {createDb,memoryRecords,analyticalContextRoots,analyticalContextDependencies,contextManifestMemoryRoots,contextManifests,heartbeatRuns,agentExecutionManifests,businessMetricObservations,businessMetricVersions} from "../../packages/db/src/index.ts";
+import {createDb,memoryRecords,analyticalContextRoots,analyticalContextDependencies,contextManifestMemoryRoots,contextManifests,heartbeatRuns,businessMetricObservations,businessMetricVersions} from "../../packages/db/src/index.ts";
 import {nativeRunInputSourceReceiptSchema} from "../../packages/shared/src/validators/native-payload-source-snapshot.ts";
 import {analyticalPurpose,metricDefinition} from "../../server/src/__tests__/helpers/business-metric-fixture.ts";
+import {assertNativeAnalyticalRunPayloadAccess} from "../../server/src/services/analytical-context-authority.ts";
 import { expect, test, type Page } from "@playwright/test";
 
 import { createLocalAgentJwt } from "../../server/src/agent-auth-jwt";
@@ -238,6 +239,7 @@ test("an owner can explicitly recover after source visibility is lost while orig
     const [observation]=await db.select().from(businessMetricObservations).where(eq(businessMetricObservations.metricId,metric.metric.id));expect(observation).toBeTruthy();
     const [runRow]=await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,run.id));expect(runRow).toBeTruthy();
     const retention=await db.select().from(memoryRecords).where(eq(memoryRecords.createdByActorId,"native_analytical_retention")).then(rows=>rows.find(row=>row.companyId===f.company.id&&row.ownerAgentId===f.agent.id));expect(retention).toBeTruthy();
+    await assertNativeAnalyticalRunPayloadAccess(db,f.company.id,run.id);
     expect(runRow!.responsibleUserId).toBe(session.user.id);
     const profile=runRow!.runnerProfileJson as Record<string,any>,captures=Array.isArray(profile.nativeToolResultSourceCaptures)?profile.nativeToolResultSourceCaptures as Array<Record<string,any>>:[];
     const metricCaptures=captures.filter(capture=>capture.tool==="query_business_metric"&&capture.nativeReadResult===true&&capture.sourceSet&&capture.sourceSet.inputs);
@@ -269,10 +271,16 @@ test("an owner can explicitly recover after source visibility is lost while orig
     const resultContextId=resultContextInputs[0]!.manifestId as string;
     const [resultContext]=await db.select().from(contextManifests).where(eq(contextManifests.id,resultContextId));
     expect(resultContext).toMatchObject({companyId:f.company.id,runId:run.id,agentId:f.agent.id,issueId:original.id});
-    const [execution]=await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId,run.id));expect(execution).toBeTruthy();
-    expect(resultContextId).not.toBe(execution!.contextManifestId);
+    const bootstrapContexts=Array.isArray(profile.nativeBootstrapContextManifests)
+      ? profile.nativeBootstrapContextManifests as Array<{companyId:string;contextManifestId:string}>
+      : [];
+    expect(bootstrapContexts).toHaveLength(1);
+    const bootstrapContextId=bootstrapContexts[0]!.contextManifestId;
+    const [bootstrapContext]=await db.select().from(contextManifests).where(eq(contextManifests.id,bootstrapContextId));
+    expect(bootstrapContext).toMatchObject({companyId:f.company.id,runId:run.id,agentId:f.agent.id,issueId:original.id});
+    expect(resultContextId).not.toBe(bootstrapContextId);
     const retainedContext=await db.select().from(contextManifestMemoryRoots).where(eq(contextManifestMemoryRoots.manifestId,resultContextId));expect(retainedContext.some(row=>row.memoryRecordId===retention!.id)).toBe(true);
-    const bootstrapRoots=await db.select().from(contextManifestMemoryRoots).where(eq(contextManifestMemoryRoots.manifestId,execution!.contextManifestId));
+    const bootstrapRoots=await db.select().from(contextManifestMemoryRoots).where(eq(contextManifestMemoryRoots.manifestId,bootstrapContextId));
     expect(bootstrapRoots.some(row=>row.memoryRecordId===retention!.id)).toBe(false);
     expect(receipt.additionalInputs).toContainEqual({responsibleUserId:runRow!.responsibleUserId,policy:metricSourceSet.policy,inputs:[metricSource,...metricSourceSet.inputs]});
     const authority=await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.memoryRecordId,retention!.id)).then(rows=>rows[0]);

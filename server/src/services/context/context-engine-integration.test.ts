@@ -356,6 +356,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     expireHumanCredential?: boolean;
     privateSourceTask?: boolean;
     foreignSource?: { id: string; updatedAt: Date; identifier: string; title: string };
+    humanActor?: AuthorizationActor;
     onNativeRun?: (run: { id: string; actor: AuthorizationActor; issueId: string }) => void;
   }) {
     const scope = input.scope ?? "company";
@@ -379,8 +380,9 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     const observedAt = new Date("2026-09-30T12:00:00.000Z");
     const [company] = await db.select().from(companies).where(eq(companies.id,input.companyId));
     const userId=company!.defaultResponsibleUserId!;
-    const human=await seedCurrentHumanSourceActor(db,[input.companyId],userId);
-    if(human.type!=="board"||human.source!=="session"||!human.userId)throw new Error("Canonical Memory Human fixture lacks its verified session");
+    const human=input.humanActor??await seedCurrentHumanSourceActor(db,[input.companyId],userId);
+    if(human.type!=="board"||human.source!=="session"||!human.userId||!human.sessionId||human.userId!==userId||
+      !human.companyIds?.includes(input.companyId))throw new Error("Canonical Memory Human fixture lacks its verified session");
     if(scope==="company"){
       // Shared Memory uses a current, canonical Human-authored Task as its
       // evidence source; no synthetic/manual URI stands in for source access.
@@ -642,14 +644,9 @@ describeEmbeddedPostgres("Context Engine integration", () => {
 
   it("binds actual approved Foundation and private Task Context to one native bootstrap witness and rechecks current Human authority", async () => {
     const seeded = await seed();
-    const seededHuman = await seedCurrentHumanSourceActor(db, [seeded.companyId], seeded.userId);
-    if (seededHuman.type !== "board" || seededHuman.source !== "session" || !seededHuman.sessionId)
+    const human = await seedCurrentHumanSourceActor(db, [seeded.companyId], seeded.userId);
+    if (human.type !== "board" || human.source !== "session" || !human.sessionId)
       throw new Error("Context mutation fixture did not retain its actual Human session");
-    const [humanSession] = await db.select({ expiresAt: authSessions.expiresAt }).from(authSessions)
-      .where(eq(authSessions.id, seededHuman.sessionId)).limit(1);
-    if (!humanSession || humanSession.expiresAt.getTime() <= Date.now())
-      throw new Error("Context mutation fixture Human session is unavailable or expired");
-    const human = { ...seededHuman, authenticatedCredentialExpiresAt: humanSession.expiresAt.getTime() };
     const task = await issueService(db).create(seeded.companyId, {
       title: "Prepare enterprise Context source", description: "Use only the current Task and approved guidance.",
       createdByUserId: seeded.userId, responsibleUserId: seeded.userId }, db, undefined,
@@ -717,7 +714,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       manifestIds: [{ companyId: seeded.companyId, contextManifestId: context.packet.manifest!.id }] }))
       .rejects.toMatchObject({ status: 403 });
     context = await contextEngineService(db).assembleNativeBootstrap(assembleInput);
-    const contextMemory=await seedMemory({companyId:seeded.companyId,agentId:seeded.agent.id,
+    const contextMemory=await seedMemory({companyId:seeded.companyId,agentId:seeded.agent.id,humanActor:human,
       content:"Enterprise strategy context memory from a directly captured Human Task.",privateSourceTask:true});
     const memoryTaskId=contextMemory.sourceIssueIds[0];
     if(!memoryTaskId)throw new Error("Human Memory source Task was not retained");

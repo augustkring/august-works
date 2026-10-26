@@ -383,13 +383,20 @@ export function saasOffboardingService(
         if (managedRunIds.length) {
           await memoryJobService(db).tick({ limit: 32, companyId: operation.companyId });
           const keys = managedRunIds.map(runId => `runtime-asset-erasure:v1:${runId}`);
-          const attempts = await db.select({ jobKey: memoryJobs.jobKey, attemptNumber: memoryJobs.attemptNumber, status: memoryJobs.status })
+          const attempts = await db.select({ jobKey: memoryJobs.jobKey, attemptNumber: memoryJobs.attemptNumber,
+            status: memoryJobs.status, sourceRefJson: memoryJobs.sourceRefJson })
             .from(memoryJobs).where(and(
             eq(memoryJobs.companyId, operation.companyId), inArray(memoryJobs.jobKey, keys),
           )).orderBy(memoryJobs.jobKey, desc(memoryJobs.attemptNumber));
           const latest = new Map<string, typeof attempts[number]>();
           for (const job of attempts) if (!latest.has(job.jobKey)) latest.set(job.jobKey, job);
-          if (managedRunIds.some(runId => latest.get(`runtime-asset-erasure:v1:${runId}`)?.status !== "succeeded")) {
+          const hasCurrentReceipt = (runId: string) => {
+            const job = latest.get(`runtime-asset-erasure:v1:${runId}`);
+            const source = job?.sourceRefJson as Record<string, unknown> | undefined;
+            return job?.status === "succeeded" && source?.kind === "runtime_asset_erasure" &&
+              source.runId === runId && source.companyPurgeOperationId === operation.id;
+          };
+          if (managedRunIds.some(runId => !hasCurrentReceipt(runId))) {
             const waitingOnStop = managedRunIds.some(runId => latest.get(`runtime-asset-erasure:v1:${runId}`)?.status === "failed");
             await db.update(companyDeletionOperations).set({ notBefore: new Date(now.getTime() + (waitingOnStop ? 60000 : 10000)),
               errorCode: "managed_provider_erasure_pending" }).where(eq(companyDeletionOperations.id, operation.id));

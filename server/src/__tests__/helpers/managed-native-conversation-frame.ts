@@ -7,8 +7,8 @@ import { createServer as createHttpsServer } from "node:https";
 import { execFileSync } from "node:child_process";
 import express from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { activityLog, agents, agentExecutionManifests, authSessions, authUsers, companies, companyMemberships,
-  heartbeatRuns, issueAttachments, issueComments, issueDocuments, issuePrivacySources, issues,
+import { agents, agentExecutionManifests, authSessions, authUsers, companies, companyMemberships,
+  heartbeatRuns, issueComments, issues,
   orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, createDb } from "@paperclipai/db";
 import { workerModelProfileSchema, type WorkerModelProfile } from "../../services/orchestration/worker-model-profiles.js";
 import { workerModelGateway } from "../../services/orchestration/worker-model-gateway.js";
@@ -56,6 +56,13 @@ export async function runManagedNativeConversationFrame(input: {
   providerReply?: (facts:{body:Record<string,unknown>;callIndex:number}) => {
     stop_reason:"tool_use"|"end_turn";content:Array<Record<string,unknown>>;
   } | undefined;
+  /** Test-only canonical source setup before the Agent profile is qualified or chat opens. */
+  prepareNativeRuntimeContext?: (context: {
+    db: ReturnType<typeof createDb>;
+    actor: AuthorizationActor;
+    companyId: string;
+    agentId: string;
+  }) => Promise<void>;
   configureHeartbeat?: (context: {
     db: ReturnType<typeof createDb>;
     actor: AuthorizationActor;
@@ -158,10 +165,17 @@ export async function runManagedNativeConversationFrame(input: {
   const human = { type: "board", source: "session", userId, companyIds: [companyId],
     sessionId, isInstanceAdmin: false } satisfies AuthorizationActor & Express.Request["actor"];
   const model = "fixture-managed-conversation-v1";
-  const adapterConfig = { provider: "opencode", model: `anthropic/${model}`, lifecycleMode: "per_turn" };
-  await db.update(agents).set({ adapterType: "paperclip_runner", adapterConfig,
+  const baseAdapterConfig = { provider: "opencode", model: `anthropic/${model}`, lifecycleMode: "per_turn" };
+  await db.update(agents).set({ adapterType: "paperclip_runner", adapterConfig: baseAdapterConfig,
     runtimeConfig: { timeoutSec: 180 }, status: "idle" })
     .where(eq(agents.id, agentId));
+  await input.prepareNativeRuntimeContext?.({ db, actor: human, companyId, agentId });
+  const [configuredAgent] = await db.select({ adapterConfig: agents.adapterConfig })
+    .from(agents).where(and(eq(agents.companyId, companyId), eq(agents.id, agentId))).limit(1);
+  if (!configuredAgent || !configuredAgent.adapterConfig || typeof configuredAgent.adapterConfig !== "object" ||
+    Array.isArray(configuredAgent.adapterConfig))
+    throw new Error("conversation_fixture_adapter_configuration_missing");
+  const adapterConfig = configuredAgent.adapterConfig as Record<string, unknown>;
   const providerService = agentProviderBindingService(db);
   const providerBinding = await providerService.create(human, companyId, agentId, {
     providerType: "paperclip_native", providerAgentRef: agentId, isolationMode: "isolated_per_presence", providerEndpointRef: null,
@@ -419,30 +433,7 @@ export async function runManagedNativeConversationFrame(input: {
       if (mode.status !== 200) {
         const error = typeof mode.body?.error === "string" && /^[A-Za-z ]{1,80}$/.test(mode.body.error)
           ? mode.body.error.toLowerCase().replaceAll(" ", "_") : "unclassified";
-        const [opened] = await db.select({ id: activityLog.id }).from(activityLog).where(and(
-          eq(activityLog.companyId, companyId), eq(activityLog.actorType, "user"), eq(activityLog.actorId, userId),
-          eq(activityLog.action, "issue.conversation_opened"), eq(activityLog.entityType, "issue"),
-          eq(activityLog.entityId, chat.body.id as string), sql`${activityLog.details}->>'agentId'=${agentId}`,
-        )).limit(1);
-        const [priorComment] = await db.select({ id: issueComments.id }).from(issueComments).where(and(
-          eq(issueComments.companyId, companyId), eq(issueComments.issueId, chat.body.id as string),
-        )).limit(1);
-        const [linkedSource] = await db.select({ id: issuePrivacySources.id }).from(issuePrivacySources).where(and(
-          eq(issuePrivacySources.companyId, companyId), eq(issuePrivacySources.issueId, chat.body.id as string),
-        )).limit(1);
-        const [linkedDocument] = await db.select({ id: issueDocuments.id }).from(issueDocuments).where(and(
-          eq(issueDocuments.companyId, companyId), eq(issueDocuments.issueId, chat.body.id as string),
-        )).limit(1);
-        const [linkedAttachment] = await db.select({ id: issueAttachments.id }).from(issueAttachments).where(and(
-          eq(issueAttachments.companyId, companyId), eq(issueAttachments.issueId, chat.body.id as string),
-        )).limit(1);
-        const [membership] = await db.select({ principalId: companyMemberships.principalId }).from(companyMemberships).where(and(
-          eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
-          eq(companyMemberships.principalId, userId), eq(companyMemberships.status, "active"),
-        )).limit(1);
-        const shellFacts = [Boolean(opened), !priorComment, !linkedSource, !linkedDocument, !linkedAttachment,
-          Boolean(membership)].map(value => value ? "1" : "0").join("");
-        throw new Error(`conversation_fixture_work_mode_update_failed_${mode.status}_${error}_${shellFacts}`);
+        throw new Error(`conversation_fixture_work_mode_update_failed_${mode.status}_${error}`);
       }
     }
     const sent = await import("supertest").then(({ default: request }) => request(app)

@@ -289,8 +289,11 @@ function modelBrokerExecRequest() {
     exp: Math.floor(Date.parse(expiresAt) / 1000) + 1, worker_model: { workerAttemptId: randomUUID(), executionManifestId: request.manifestId } };
   const token = `fixture.${Buffer.from(JSON.stringify(claims)).toString("base64url")}.signature`;
   request.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN = "https://paperclip.example.test/";
+  request.env.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND = "100000";
+  request.env.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS = "1024";
   request.modelBrokerCredential = { capabilityToken: token, profileId: modelBrokerProfile.id,
-    profileHash: createHash("sha256").update(JSON.stringify(canonical(modelBrokerProfile))).digest("hex"), expiresAt };
+    profileHash: createHash("sha256").update(JSON.stringify(canonical(modelBrokerProfile))).digest("hex"), expiresAt,
+    inputTokensUpperBound: 100000, maxOutputTokens: 1024 };
   request.commandDigest = createHash("sha256").update(JSON.stringify(canonical({ argv: request.argv, cwd: request.cwd, env: request.env,
     stdinHash: createHash("sha256").update(Buffer.from(request.stdinBase64, "base64")).digest("hex"), timeoutDeadline: request.deadlineAt,
     brokerCapabilityHash: null, brokerProviderProfile: null,
@@ -758,7 +761,22 @@ test("managed model capability uses its exact Messages route profile and stays o
     assert.equal(calls.some(call => call.args.some(value => String(value).includes(token))), false);
     assert.equal(spawnedArgs.some(value => String(value).includes(token)), false);
     assert.equal(spawnedArgs.some(value => String(value).startsWith("PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN=")), true);
+    assert.equal(spawnedArgs.some(value => String(value) === "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND=100000"), true);
+    assert.equal(spawnedArgs.some(value => String(value) === "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS=1024"), true);
     assert.equal(spawnedArgs.some(value => String(value).startsWith("PAPERCLIP_SANDBOX_MODEL_TOKEN=")), false);
+    const forged = structuredClone(request);
+    forged.env.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND = "100001";
+    forged.commandDigest = createHash("sha256").update(JSON.stringify(canonical({
+      argv: forged.argv, cwd: forged.cwd, env: forged.env,
+      stdinHash: createHash("sha256").update(Buffer.from(forged.stdinBase64, "base64")).digest("hex"),
+      timeoutDeadline: forged.deadlineAt,
+      brokerCapabilityHash: null, brokerProviderProfile: null,
+      modelBrokerCapabilityHash: createHash("sha256").update(token).digest("hex"),
+      modelBrokerProviderProfile: { id: forged.modelBrokerCredential.profileId, hash: forged.modelBrokerCredential.profileHash },
+    }))).digest("hex");
+    await assert.rejects(() => engine.executeStream({
+      scope: scopeInput, request: forged, capabilityToken: "fixture-token",
+    }, () => {}), /sandbox_scope_changed/);
   }, hooks);
 });
 

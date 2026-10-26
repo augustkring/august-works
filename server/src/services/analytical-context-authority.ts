@@ -43,15 +43,20 @@ export async function inspectAnalyticalContextPins(tx:Db,companyId:string,actor:
  const retainSensitivity=(value:string)=>{if(value==="confidential")sourceSensitivity="confidential";};
  const pins=pinsSchema.parse(raw),manifestIds=new Set<string>();let expiresAt=Infinity;
  for(const pin of pins){
+  let pinStage="budget";
+  try {
   if(performance.now()>deadline)throw unprocessable("The complete analytical source review exceeded its time budget");
   if(pin.kind==="analytical_evidence"){
+   pinStage="analytical_evidence_capture";
    const {captureAnalyticalEvidence}=await import("./analytical-evidence.js");
    const captured=await captureAnalyticalEvidence(tx,companyId,actor,{sensitivity:"confidential",retentionDays:3650,evidence:[{key:"retained_source",source:pin.source}]},deadline,historicalQualification);
    retainSensitivity(captured.sourceSensitivity);captured.manifestIds.forEach(id=>manifestIds.add(id));expiresAt=Math.min(expiresAt,captured.expiresAt.getTime());
   }else if(pin.kind==="process_run"){
+   pinStage="process_run_revalidation";
    const {processAnalysisService}=await import("./process-analysis.js");
    const run=await processAnalysisService(tx).getRun(companyId,actor,pin.definitionId,pin.runId);const [version]=await tx.select().from(processAnalysisVersions).where(and(eq(processAnalysisVersions.companyId,companyId),eq(processAnalysisVersions.id,run.versionId))).for("share");if(!version)throw conflict("Native Process source definition is unavailable");retainSensitivity(version.definition.sensitivity);manifestIds.add(run.lineageManifestId);expiresAt=Math.min(expiresAt,Date.parse(run.expiresAt));
   }else if(pin.kind==="decision_context"){
+   pinStage="decision_context_revalidation";
    const {decisionIntelligenceService}=await import("./decision-intelligence.js");
    const view=await decisionIntelligenceService(tx).detail(companyId,actor,pin.decisionId),version=view.versions.find(v=>v.id===pin.versionId);
    if(!version)throw conflict("The retained native Decision context is unavailable");
@@ -59,6 +64,7 @@ export async function inspectAnalyticalContextPins(tx:Db,companyId:string,actor:
    if(!stored||stored.contentHash!==version.contentHash)throw conflict("The native Decision context changed");
    retainSensitivity(stored.definition.sensitivity);manifestIds.add(stored.lineageManifestId);expiresAt=Math.min(expiresAt,stored.expiresAt.getTime());
   }else if(pin.kind==="outcome_review"){
+   pinStage="outcome_review_revalidation";
    const {consumeLearningOutcomeReviewBundle,decisionOutcomeReviewService}=await import("./decision-outcome-reviews.js");
    const owned=learningCycleScope?await consumeLearningOutcomeReviewBundle(tx,companyId,actor,pin.decisionId,pin.revision,learningCycleScope.cycleId,learningCycleScope.purpose):null;
    if(owned){
@@ -72,11 +78,24 @@ export async function inspectAnalyticalContextPins(tx:Db,companyId:string,actor:
     for(const receipt of receipts){manifestIds.add(receipt.lineageManifestId);expiresAt=Math.min(expiresAt,Date.parse(receipt.payload.expiresAt));}
    }
   }else if(pin.kind==="planning_outcome"){
+   pinStage="planning_outcome_revalidation";
    const {inspectPlanningOutcome}=await import("./adaptive-planning/outcome.js"),source=await inspectPlanningOutcome(tx,companyId,actor,pin.projectId,pin.proposalId,pin.manifestId);retainSensitivity(source.sourceSensitivity);source.manifestIds.forEach(id=>manifestIds.add(id));expiresAt=Math.min(expiresAt,source.expiresAt.getTime());
   }else if(pin.kind==="metric_definition"){
+   pinStage="metric_definition_revalidation";
    const {inspectMetricDefinitionDisclosure}=await import("./business-metrics/definition-disclosure.js"),source=await inspectMetricDefinitionDisclosure(tx,companyId,actor,pin);retainSensitivity(source.sourceSensitivity);manifestIds.add(source.manifestId);expiresAt=Math.min(expiresAt,source.expiresAt.getTime());
   }else{
+   pinStage="forecast_definition_revalidation";
    const {inspectPublishedForecastDefinition}=await import("./business-forecasting/service.js"),source=await inspectPublishedForecastDefinition(tx,companyId,actor,pin.specId,pin.versionId);retainSensitivity(source.value.definition.sensitivity);source.manifestIds.forEach(id=>manifestIds.add(id));expiresAt=Math.min(expiresAt,source.expiresAt.getTime());
+  }
+  }catch(error){
+   if(process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS==="1"){
+    const candidate=error&&typeof error==="object"?error as {status?:unknown;details?:unknown}:null;
+    const details=candidate?.details&&typeof candidate.details==="object"?candidate.details as Record<string,unknown>:null;
+    const code=typeof details?.code==="string"&&/^[a-z][a-z0-9_]{0,63}$/.test(details.code)?details.code:null;
+    console.info("native-analytical-pin-revalidation-diagnostic",JSON.stringify({stage:pinStage,pinKind:pin.kind,
+     status:typeof candidate?.status==="number"?candidate.status:null,code}));
+   }
+   throw error;
   }
  }
  if(performance.now()>deadline)throw unprocessable("The complete analytical source review exceeded its time budget");
@@ -318,19 +337,25 @@ async function assertAnalyticalContextPayloadAccessInternal(db:Db,companyId:stri
 async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,scope:{issueId:string}|{runId:string},readScope?:NativeReadScope,companyLocksHeld=false) {
  // Ordinary conversation prose has source privacy even without analytical
  // retention roots. Every actual ancestor goes through this same narrowing.
+ let diagnosticStage="task_reader_acl";
+ try {
  if(!actor || !("issueId" in scope
    ? await canActorReadIssuePrivacy(db,actor,{companyId,id:scope.issueId})
    : await canActorReadHeartbeatRunPrivacy(db,actor,{companyId,id:scope.runId})))
    throw new HttpError(403,"Native task source access is unavailable",{code:"analytical_source_access_lost"});
+ diagnosticStage="task_erasure_currentness";
  const [sourceReceipt]=await db.execute<{erased:boolean}>(sql`select aw_workflow_memory_erased(${companyId}::uuid,${"runId"in scope?scope.runId:null}::uuid,${"issueId"in scope?scope.issueId:null}::uuid) as erased`);
  if(sourceReceipt?.erased)throw new HttpError(403,"Analytical conversation source access is unavailable",{code:"analytical_source_access_lost"});
+ diagnosticStage="learned_workflow_currentness";
  await assertLearnedWorkflowPayloadAccess(db,companyId,actor,scope,readScope);
+ diagnosticStage="conversation_retirement_check";
  const boundRun="runId" in scope?await db.select({issueId:heartbeatRuns.issueId}).from(heartbeatRuns)
   .where(and(eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.id,scope.runId))).limit(1):[];
  const conversationIssueId="issueId" in scope?scope.issueId:boundRun[0]?.issueId;
  const retired = await db.select({id:issues.id}).from(issues).where(and(eq(issues.companyId,companyId),sql`${issues.conversationRetiredAt} is not null`,
   "issueId" in scope?eq(issues.id,scope.issueId):sql`exists(select 1 from ${heartbeatRuns} h where h.company_id=${companyId}::uuid and h.id=${scope.runId}::uuid and h.native_issue_id=${issues.id})`)).limit(1);
  if(retired.length)throw new HttpError(403,"Analytical conversation source access is unavailable",{code:"analytical_source_access_lost"});
+ diagnosticStage="retained_context_lookup";
  const condition="issueId" in scope?or(eq(contextManifests.issueId,scope.issueId),
   sql`exists(select 1 from heartbeat_runs h where h.company_id=${companyId}::uuid and h.id=${contextManifests.runId} and h.agent_id=${contextManifests.agentId} and h.issue_id=${scope.issueId}::uuid)`):or(eq(contextManifests.runId,scope.runId),conversationIssueId?eq(contextManifests.issueId,conversationIssueId):undefined,sql`exists(select 1 from ${agentExecutionManifests} e where e.company_id=${companyId}::uuid and e.run_id=${scope.runId}::uuid and e.context_manifest_id=${contextManifests.id})`);
  const retainedContexts=await db.select({id:contextManifests.id}).from(contextManifests)
@@ -348,12 +373,15 @@ async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string
   // round trip per Task without strengthening the locks or current checks.
   // Keep a transaction only for standalone callers.
   if(!companyLocksHeld){
+   diagnosticStage="retained_context_privacy_locks";
    await tx.execute(sql`set local statement_timeout='8s'`);
    await lockAnalyticalCompany(tx,companyId);await lockMemoryPrivacy(tx,companyId);
   }
+  diagnosticStage="retained_root_lookup";
   const roots=await tx.selectDistinct({id:analyticalContextRoots.memoryRecordId,sourceCount:analyticalContextRoots.sourceCount,pins:analyticalContextRoots.authorityPins,expiresAt:analyticalContextRoots.expiresAt}).from(contextManifests).innerJoin(contextManifestMemoryRoots,and(eq(contextManifestMemoryRoots.companyId,contextManifests.companyId),eq(contextManifestMemoryRoots.manifestId,contextManifests.id)))
    .innerJoin(analyticalContextRoots,and(eq(analyticalContextRoots.companyId,contextManifests.companyId),eq(analyticalContextRoots.memoryRecordId,contextManifestMemoryRoots.memoryRecordId))).where(and(eq(contextManifests.companyId,companyId),condition)).limit(257);
   if(roots.length>256)throw forbidden("The complete analytical conversation exceeds its source review budget");
+  diagnosticStage="retained_run_erasure_currentness";
   const erased=await tx.execute<{erased:boolean}>(sql`select aw_workflow_memory_erased(${companyId}::uuid,${"runId"in scope?scope.runId:null}::uuid,${conversationIssueId??null}::uuid) as erased`);
   if(erased[0]?.erased)throw forbidden("The analytical conversation source was erased or expired");
   const deadline=performance.now()+30000;
@@ -363,6 +391,7 @@ async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string
   if(memoryRoots.length>256)throw forbidden("The complete retained Context exceeds its source review budget");
   const {canActorReadMemorySources}=await import("./memory/memory-privacy.js");
   const analyticalIds=new Set(roots.map(root=>root.id));
+  diagnosticStage="retained_memory_reader";
   for(const root of memoryRoots){
    if(analyticalIds.has(root.id)){
     await assertAnalyticalRetentionRootOwnerCurrent(tx,companyId,actor,root.id);
@@ -382,9 +411,15 @@ async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string
    for(const item of foundation){const ref=/^foundation:\/\/[a-f0-9-]{36}\/([a-f0-9-]{36})\/(?:\d+|whole)$/i.exec(item.ref);if(!ref||performance.now()>deadline)throw forbidden("The exact learned Foundation Context is unavailable");await assertLearnedAssetAnalyticalSources(tx,companyId,"document_revision",ref[1]!,actor,readScope);}
   }
   for(const root of roots){
-   if(!root.pins.length||root.expiresAt.getTime()<=Date.now())throw forbidden("The analytical conversation requires current source review");
+   diagnosticStage="retained_root_shape";
+   if(!root.pins.length)throw forbidden("The analytical conversation requires current source review");
+   diagnosticStage="retained_root_expiry";
+   if(root.expiresAt.getTime()<=Date.now())throw forbidden("The analytical conversation requires current source review");
+   diagnosticStage="retained_root_pin_revalidation";
    const current=await inspectAnalyticalContextPins(tx,companyId,actor,root.pins,deadline);
+   diagnosticStage="retained_root_dependency_read";
    const retained=await tx.select({id:analyticalContextDependencies.sourceManifestId}).from(analyticalContextDependencies).where(and(eq(analyticalContextDependencies.companyId,companyId),eq(analyticalContextDependencies.memoryRecordId,root.id))).limit(26201);
+   diagnosticStage="retained_root_dependency_match";
    if(retained.length!==root.sourceCount||JSON.stringify(retained.map(source=>source.id).sort())!==JSON.stringify(current.manifestIds))throw forbidden("The complete retained analytical source authority changed");
   }
  };
@@ -399,6 +434,17 @@ async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string
   return await inspect();
  }catch(error){
   if(error instanceof HttpError&&[403,404,409,422].includes(error.status))throw new HttpError(error.status,"Analytical conversation source access is unavailable",{code:"analytical_source_access_lost"});
+  throw error;
+ }
+ }catch(error){
+  if(process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS==="1"){
+   const candidate=error&&typeof error==="object"?error as {status?:unknown;code?:unknown;details?:unknown;cause?:unknown}:null;
+   const details=candidate?.details&&typeof candidate.details==="object"?candidate.details as Record<string,unknown>:null;
+   const code=typeof details?.code==="string"&&/^[a-z][a-z0-9_]{0,63}$/.test(details.code)?details.code:null;
+   console.info("native-analytical-source-review-diagnostic",JSON.stringify({stage:diagnosticStage,
+    scope:"issueId"in scope?"issue":"run",actorType:actor?.type??"none",
+    status:typeof candidate?.status==="number"?candidate.status:null,code}));
+  }
   throw error;
  }
 }

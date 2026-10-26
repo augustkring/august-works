@@ -38,6 +38,49 @@ const READ_OPERATION_IDS = [
   "list_document_revisions",
 ] as const satisfies readonly PaperclipSemanticActionId[];
 
+let nativeSemanticDispatchDiagnosticEmitted = false;
+
+function nativeSemanticDispatchDiagnostic(error: unknown): Record<string, unknown> {
+  const fields: Record<string, unknown> = {};
+  const seen = new Set<object>();
+  let current: unknown = error;
+  const frames: string[] = [];
+  for (let depth = 0; depth < 5 && current && typeof current === "object" && !seen.has(current); depth += 1) {
+    seen.add(current);
+    const candidate = current as {
+      name?: unknown;
+      status?: unknown;
+      statusCode?: unknown;
+      code?: unknown;
+      details?: unknown;
+      cause?: unknown;
+      stack?: unknown;
+    };
+    if (!fields.errorName && typeof candidate.name === "string" && /^[A-Za-z][A-Za-z0-9_$]{0,63}$/.test(candidate.name))
+      fields.errorName = candidate.name;
+    const status = typeof candidate.status === "number" ? candidate.status : candidate.statusCode;
+    if (!fields.httpStatus && typeof status === "number" && Number.isInteger(status) && status >= 400 && status <= 599)
+      fields.httpStatus = status;
+    if (!fields.sqlState && typeof candidate.code === "string" && /^[0-9A-Z]{5}$/.test(candidate.code))
+      fields.sqlState = candidate.code;
+    const details = candidate.details && typeof candidate.details === "object"
+      ? candidate.details as Record<string, unknown>
+      : null;
+    if (!fields.errorCode && typeof details?.code === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(details.code))
+      fields.errorCode = details.code;
+    if (typeof candidate.stack === "string") {
+      for (const line of candidate.stack.split(/\r?\n/)) {
+        const frame = /(?:^|[\\/])server[\\/]src[\\/]services[\\/](native-runtime[\\/]runner-semantic-authority|orchestration[\\/]native-tool-boundary)\.ts:(\d+):(\d+)/.exec(line);
+        if (frame) frames.push(`${frame[1]!.replaceAll("\\", "/")}.ts:${frame[2]}:${frame[3]}`);
+        if (frames.length >= 5) break;
+      }
+    }
+    current = candidate.cause;
+  }
+  if (frames.length) fields.serviceFrames = [...new Set(frames)].slice(0, 5);
+  return fields;
+}
+
 type BoundContext = {
   readonly run: typeof heartbeatRuns.$inferSelect;
   readonly issue: typeof issues.$inferSelect;
@@ -100,7 +143,17 @@ export class PaperclipRunnerSemanticAuthority {
     return withOrchestrationNativeTool(this.#db, this.#binding,
       { tool: call.operationId, callId: call.callId, arguments: call.input },
       () => this.#dispatcher.dispatch({ ...call, runId: this.#binding.runId }))
-      .then(result => result as PaperclipSemanticToolResult);
+      .then(result => result as PaperclipSemanticToolResult)
+      .catch(error => {
+        if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1" && !nativeSemanticDispatchDiagnosticEmitted) {
+          nativeSemanticDispatchDiagnosticEmitted = true;
+          console.warn("Native semantic dispatch diagnostic", {
+            operationId: call.operationId,
+            ...nativeSemanticDispatchDiagnostic(error),
+          });
+        }
+        throw error;
+      });
   }
 
   authorizationRecords(): readonly PaperclipSemanticAuthorizationRecord[] {

@@ -22,6 +22,7 @@ import { actorMiddleware } from "../../middleware/auth.js";
 import { errorHandler } from "../../middleware/error-handler.js";
 import type { BetterAuthSessionResult } from "../../auth/better-auth.js";
 import { projectRoutes } from "../../routes/projects.js";
+import { issueRoutes } from "../../routes/issues.js";
 import { seedNativePasskeySession } from "../../__tests__/helpers/native-authentication-fixtures.js";
 
 function qualifiedOpenCodeBinary(): string | null {
@@ -151,6 +152,7 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
     expect(Number(runtimeFacts?.execCount)).toBeGreaterThan(0);
     expect(Number(runtimeFacts?.exactPrivateCwdCount)).toBeGreaterThan(0);
     expect(Number(runtimeFacts?.managedModelCredentialCount)).toBeGreaterThan(0);
+    expect(Number(runtimeFacts?.assignedMcpEnvironmentAbsentCount)).toBeGreaterThan(0);
     expect(runtimeFacts?.negativeControls).toEqual({ wrongRunDenied: true, wrongLeaseDenied: true,
       wrongCwdDenied: true, wrongPolicyDenied: true });
     const sandboxExecutionChecks = Array.isArray(runtimeFacts?.sandboxExecutionChecks)
@@ -283,11 +285,23 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
           .where(eq(heartbeatRunEvents.runId,facts.run.id)).orderBy(heartbeatRunEvents.seq);
         const matchingProjects=await db.select({id:projects.id}).from(projects).where(and(
           eq(projects.companyId,facts.companyId),eq(projects.name,projectName)));
+        const failedProfile=facts.run.runnerProfileJson&&typeof facts.run.runnerProfileJson==="object"&&!Array.isArray(facts.run.runnerProfileJson)
+          ?facts.run.runnerProfileJson as Record<string,unknown>:{};
+        const failedWireIntents=Array.isArray(failedProfile.nativeAwModelWireIntents)?failedProfile.nativeAwModelWireIntents:[];
+        const createIntent=failedWireIntents.map(value=>value&&typeof value==="object"&&!Array.isArray(value)
+          ?value as Record<string,unknown>:{}).find(value=>Array.isArray(value.responseToolUses)&&
+            (value.responseToolUses as Array<Record<string,unknown>>).some(use=>use.id===callId&&use.name?.toString().endsWith("create_project")));
+        const consumedSet=createIntent?.consumedSourceSet&&typeof createIntent.consumedSourceSet==="object"&&
+          !Array.isArray(createIntent.consumedSourceSet)?createIntent.consumedSourceSet as Record<string,unknown>:{};
+        const consumedInputs=Array.isArray(consumedSet.inputs)?consumedSet.inputs:[];
+        const sourceKinds=consumedInputs.map(value=>value&&typeof value==="object"&&!Array.isArray(value)
+          ?(value as Record<string,unknown>).kind:null);
         const runError=typeof facts.run.error==="string"&&/^[a-zA-Z0-9_.:-]{1,120}$/.test(facts.run.error)
           ?facts.run.error:null;
         runDiagnostics={status:facts.run.status,errorCode:facts.run.errorCode??null,
           errorToken:runError,
           sourceProtocol:facts.run.nativeInputSourceProtocolVersion??null,manifestHash:facts.manifest?.hash??null,
+          sourceKinds,
           reservationStatus:facts.reservation?.status??null,eventTypes:runEvents.map(event=>event.eventType),
           matchingProjectCount:matchingProjects.length,
           relayAuthenticated:facts.sandboxRuntimeFacts?.relayAuthenticated??null,
@@ -373,6 +387,7 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
   it("creates a source-bound Task from an ordinary conversation model turn and carries the exact result into the next request",async()=>{
     const binary=qualifiedOpenCodeBinary();
     if(!binary)throw new Error("qualified_opencode_binary_unavailable");
+    vi.stubEnv("PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS","1");
     const callId="conversation-task-create-c0";
     const taskTitle="Conversation-created private Task";
     let providerConsumedResult=false;

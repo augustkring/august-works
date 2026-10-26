@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
+import { nativeCommentProjectionHash, nativeSha256 } from "./canonical.js";
 import { buildNativeContinuationPrompt } from "./native-continuation.js";
 import type {
   NativeAcpxAgent,
@@ -27,8 +29,6 @@ import {
   isPaperclipExternalChatQuestionResponseTurn,
   renderPaperclipWakePrompt,
 } from "@paperclipai/adapter-utils/server-utils";
-import { nativeSha256 } from "./canonical.js";
-
 const NATIVE_GITHUB_ATTACHMENT_RECOVERY_GUIDANCE = [
   "## GitHub attachment recovery navigation",
   "Paperclip owns recovery navigation for unavailable GitHub attachments. It may append an authenticated task link after an accepted response, only when the current source remains authorized and a safe configured Board URL is available. The model does not select or authorize that link.",
@@ -245,15 +245,23 @@ export function captureNativeTaskWakeSource(input: {
       const comment = comments[index];
       if (!comment || typeof comment !== "object" || Array.isArray(comment)) return reject("comment_shape_invalid");
       const item = comment as Record<string, unknown>;
-      const sources = (input.commentSources ?? []).filter(source => source.commentId === commentId);
-      if (sources.length !== 1 || sources[0]!.issueId !== input.issueId || item.id !== commentId ||
-        item.issueId !== input.issueId)
-        return reject("comment_source_invalid");
       if (item.bodyTruncated !== false || item.deletedAt !== null || item.attachments !== undefined || typeof item.body !== "string")
         return reject("comment_shape_invalid");
-      if (
-        createHash("sha256").update(JSON.stringify({ body: item.body, presentation: item.presentation ?? null,
-          metadata: item.metadata ?? null }), "utf8").digest("hex") !== sources[0]!.contentHash) return reject("comment_hash_mismatch");
+      if (item.id !== commentId || item.issueId !== input.issueId) return reject("comment_source_invalid", [
+        ...(item.id !== commentId ? ["payload_comment_id"] : []),
+        ...(item.issueId !== input.issueId ? ["payload_issue_binding"] : []),
+      ]);
+      const projectionHash = nativeCommentProjectionHash({ body: item.body,
+        presentation: item.presentation ?? null, metadata: item.metadata ?? null });
+      const observedSources = (input.commentSources ?? []).filter(source => source.commentId === commentId &&
+        source.issueId === input.issueId && source.contentHash === projectionHash);
+      const sources = observedSources.filter((source, index) => observedSources
+        .slice(0, index).every(previous => !isDeepStrictEqual(previous, source)));
+      if (sources.length !== 1) return reject("comment_source_invalid", [
+        ...(sources.length !== 1 ? ["matching_source_cardinality"] : []),
+        ...(observedSources.length > 1 && new Set(observedSources.map(source => source.sourceVersion)).size > 1
+          ? ["matching_source_versions_differ"] : []),
+      ]);
     }
   }
   const commentWindow = payload.commentWindow;
@@ -262,7 +270,7 @@ export function captureNativeTaskWakeSource(input: {
   if (commentWindowRecord.requestedCount !== commentIds.length || commentWindowRecord.includedCount !== commentIds.length ||
     commentWindowRecord.missingCount !== 0) return reject("comment_window_invalid");
   return { kind: "native_task_wake", runId: input.runId, issueId: input.issueId,
-    sourceVersion: input.sourceVersion, contentHash: createHash("sha256").update(JSON.stringify(payload), "utf8").digest("hex") };
+    sourceVersion: input.sourceVersion, contentHash: nativeSha256(payload) };
 }
 
 /** Resolve only references emitted by the real Markdown renderer. Missing,
@@ -278,6 +286,7 @@ export function buildNativeBootstrapSourceSet(input: {
   candidates: readonly NativePreparedSourceCandidate[];
   runtimeInputs: readonly NativePayloadSourceInput[] | null;
   additionalInputs?: readonly NativePayloadSourceInput[] | null;
+  additionalPolicy?: NativePayloadSourcePolicy | null;
   interactionResponses?: readonly NativeInteractionResponseEnvelope[] | null;
   interactionSources?: readonly Extract<NativePayloadSourceInput, { kind: "interaction" }>[] | null;
   contextManifestIds: readonly { companyId: string; contextManifestId: string }[] | null;
@@ -357,6 +366,7 @@ export function buildNativeBootstrapSourceSet(input: {
   for (const source of input.runtimeInputs) append(source);
   if (input.additionalInputs === null) return reject("additional_inputs_unknown");
   for (const source of input.additionalInputs ?? []) append(source);
+  if (input.additionalPolicy) mergePolicy(input.additionalPolicy);
   for (const source of interactionSources) append(source);
   if (context) {
     mergePolicy(context.policy);

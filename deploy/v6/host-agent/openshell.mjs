@@ -768,7 +768,12 @@ export function openShellHostEngine({
       request.argv.some(value => typeof value !== "string" || !value.length || value.length > 8192) ||
       typeof request.cwd !== "string" || !path.isAbsolute(request.cwd) ||
       !request.env || typeof request.env !== "object" || Array.isArray(request.env) || Object.keys(request.env).length > 64 ||
-      Object.entries(request.env).some(([key, value]) => !/^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(key) || typeof value !== "string" || value.length > 8192 || /(?:TOKEN|SECRET|PASSWORD|CREDENTIAL|API[_-]?KEY|PRIVATE[_-]?KEY|AUTHORIZATION)/i.test(key)) ||
+      Object.entries(request.env).some(([key, value]) => !/^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(key) || typeof value !== "string" || value.length > 8192 ||
+        (/(?:TOKEN|SECRET|PASSWORD|CREDENTIAL|API[_-]?KEY|PRIVATE[_-]?KEY|AUTHORIZATION)/i.test(key) &&
+          !(request.modelBrokerCredential && (
+            (key === "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND" && value === String(request.modelBrokerCredential.inputTokensUpperBound)) ||
+            (key === "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS" && value === String(request.modelBrokerCredential.maxOutputTokens))
+          )))) ||
       (request.brokerCredential !== undefined && (!request.brokerCredential || typeof request.brokerCredential.capabilityToken !== "string" || request.brokerCredential.capabilityToken.length > 16_384 ||
         typeof request.brokerCredential.profileId !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,99}$/.test(request.brokerCredential.profileId) ||
         typeof request.brokerCredential.profileHash !== "string" || !/^[a-f0-9]{64}$/.test(request.brokerCredential.profileHash) ||
@@ -777,8 +782,12 @@ export function openShellHostEngine({
       (request.modelBrokerCredential !== undefined && (!request.modelBrokerCredential || typeof request.modelBrokerCredential.capabilityToken !== "string" || request.modelBrokerCredential.capabilityToken.length > 16_384 ||
         typeof request.modelBrokerCredential.profileId !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,99}$/.test(request.modelBrokerCredential.profileId) ||
         typeof request.modelBrokerCredential.profileHash !== "string" || !/^[a-f0-9]{64}$/.test(request.modelBrokerCredential.profileHash) ||
-        typeof request.modelBrokerCredential.expiresAt !== "string" || !Number.isFinite(Date.parse(request.modelBrokerCredential.expiresAt)))) ||
+        typeof request.modelBrokerCredential.expiresAt !== "string" || !Number.isFinite(Date.parse(request.modelBrokerCredential.expiresAt)) ||
+        !Number.isSafeInteger(request.modelBrokerCredential.inputTokensUpperBound) || request.modelBrokerCredential.inputTokensUpperBound < 1 || request.modelBrokerCredential.inputTokensUpperBound > 2_000_000 ||
+        !Number.isSafeInteger(request.modelBrokerCredential.maxOutputTokens) || request.modelBrokerCredential.maxOutputTokens < 256 || request.modelBrokerCredential.maxOutputTokens > 8192)) ||
       (!!request.modelBrokerCredential !== (typeof request.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === "string")) ||
+      (request.modelBrokerCredential && (request.env.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND !== String(request.modelBrokerCredential.inputTokensUpperBound) ||
+        request.env.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS !== String(request.modelBrokerCredential.maxOutputTokens))) ||
       typeof request.stdinBase64 !== "string" || request.stdinBase64.length > 512 * 1024 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(request.stdinBase64) ||
       typeof input.capabilityToken !== "string" || input.capabilityToken.length > 16384 ||
       typeof onOutput !== "function") throw new Error("sandbox_scope_changed");

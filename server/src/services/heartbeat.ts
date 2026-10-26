@@ -81,7 +81,7 @@ import path from "node:path";
 import { execFile as execFileCallback } from "node:child_process";
 import { promisify } from "node:util";
 import { createHash, randomUUID } from "node:crypto";
-import { nativeSha256 } from "./native-runtime/canonical.js";
+import { nativeCommentProjectionHash, nativeSha256 } from "./native-runtime/canonical.js";
 import {
   and,
   asc,
@@ -247,6 +247,7 @@ import {
   NativeCancellationPendingRecoveryError,
   NativeControllerDetachedForRestartError,
   nativeToolContractFingerprintForTarget,
+  nativeRetainedRunResumeWitness,
   prepareNativeSessionBootstrapPersistence,
   prepareNativeWorkspaceSync,
   readNativeWorkspaceSyncReference,
@@ -914,15 +915,25 @@ export function nativeExecutionFailureLogFields(input: {
   let current: unknown = input.error;
   let sqlState: string | null = null;
   let deadlockDetail: string | null = null;
+  const serviceFrames: string[] = [];
   for (let depth = 0; depth < 5 && current && typeof current === "object" && !seen.has(current); depth += 1) {
     seen.add(current);
-    const candidate = current as { code?: unknown; detail?: unknown; cause?: unknown };
+    const candidate = current as { code?: unknown; detail?: unknown; cause?: unknown; stack?: unknown };
     if (!sqlState && typeof candidate.code === "string" && /^[0-9A-Z]{5}$/.test(candidate.code))
       sqlState = candidate.code;
     if (!deadlockDetail && typeof candidate.detail === "string") deadlockDetail = candidate.detail;
+    if ((process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1" ||
+      process.env.PAPERCLIP_NATIVE_FINALIZATION_DIAGNOSTICS === "1") && typeof candidate.stack === "string") {
+      for (const line of candidate.stack.split(/\r?\n/)) {
+        const frame = /(?:^|[\\/])server[\\/]src[\\/]services[\\/](heartbeat|native-runtime[\\/]native-session-executor|native-direct-input|agent-conversations|issues)\.ts:(\d+):(\d+)/.exec(line);
+        if (frame) serviceFrames.push(`${frame[1]!.replaceAll("\\", "/")}.ts:${frame[2]}:${frame[3]}`);
+        if (serviceFrames.length >= 5) break;
+      }
+    }
     current = candidate.cause;
   }
   if (sqlState) fields.sqlState = sqlState;
+  if (serviceFrames.length) fields.serviceFrames = [...new Set(serviceFrames)].slice(0, 5);
   if (input.includeDeadlockLockGraph && sqlState === "40P01" && deadlockDetail) {
     const waitEdges = deadlockDetail.split(/\r?\n/).flatMap((line) => {
       const match = POSTGRES_DEADLOCK_WAIT_EDGE.exec(line);
@@ -8167,8 +8178,8 @@ export async function buildPaperclipWakePayload(input: {
         input: { kind: "comment", issueId: source.issueId, commentId: source.id, sourceVersion: source.sourceVersion,
           // Exact final returned content after quarantine, body-budget and
           // secret redaction. Final provider framing is separately bound.
-          contentHash: createHash("sha256").update(JSON.stringify({ body: comment.body,
-            presentation: comment.presentation, metadata: comment.metadata }), "utf8").digest("hex") },
+          contentHash: nativeCommentProjectionHash({ body: comment.body,
+            presentation: comment.presentation, metadata: comment.metadata }) },
         payloadSourceSnapshot: source.payloadSourceSnapshot ?? null,
       });
     }
@@ -20758,8 +20769,8 @@ export function heartbeatService(
         return {
           input: { kind: "comment", issueId: issueRef.id, commentId: wakeCommentContext.id,
             sourceVersion: selected.sourceVersion,
-            contentHash: createHash("sha256").update(JSON.stringify({ body: rendition.body,
-              presentation: rendition.presentation, metadata: rendition.metadata }), "utf8").digest("hex") },
+            contentHash: nativeCommentProjectionHash({ body: rendition.body,
+              presentation: rendition.presentation, metadata: rendition.metadata }) },
           payloadSourceSnapshot: selected.payloadSourceSnapshot,
         };
       };
@@ -23303,6 +23314,7 @@ export function heartbeatService(
         let nativeBootstrapTaskPlanSources: DocumentRevisionSourceCapture[] | null = null;
         let nativeBootstrapPlanningSources: DocumentRevisionSourceCapture[] | null = null;
         let nativeBootstrapAncestorSources: NativeTaskSourceCapture[] | null = null;
+        let nativeBootstrapRetainedRunSource: ReturnType<typeof nativeRetainedRunResumeWitness> | null = null;
         let nativeBootstrapSourceClosure: NativeBootstrapSourceClosure | null = null;
         let nativeBootstrapAttachmentSourceClosureFactory: Parameters<typeof executePaperclipNativeSession>[0]["prepareBootstrapSourceClosure"];
         const nativeBootstrapInteractionSources: Array<Extract<NativePayloadSourceInput, { kind: "interaction" }>> = [];
@@ -23871,6 +23883,17 @@ export function heartbeatService(
               });
             nativeExecution = nativeExecutionWithCheckpoint.execution;
             nativeResumeCheckpoint = nativeExecutionWithCheckpoint.checkpoint;
+            nativeBootstrapRetainedRunSource = previousNativeRun && nativeResumeCheckpoint && !nativeReviewRequest
+              ? nativeRetainedRunResumeWitness({ previousRun: previousNativeRun,
+                  currentExecution: nativeExecution,
+                  currentResponsibleUserId: run.responsibleUserId ?? null,
+                  currentConversationSessionGeneration: (() => {
+                    const value = parseObject(run.contextSnapshot).conversationSessionGeneration;
+                    return Number.isSafeInteger(value) && (value as number) >= 0 ? value as number : null;
+                  })(),
+                  requireConversationGeneration: isConversation(issueContext),
+                  executionTargetKind: executionTarget?.kind === "remote" ? "remote" : "local" })
+              : null;
             const nativeSourceCandidates: NativePreparedSourceCandidate[] = [];
             const capturedTaskSource = taskSourceCapture.value;
             const capturedAuthoredSources = nativeBootstrapAuthoredSources.value;
@@ -23909,8 +23932,10 @@ export function heartbeatService(
               ? selectedNativeTaskPrompt : "";
             const nativeBootstrapUnsupported = {
               review: Boolean(nativeReviewRequest), directPrompt: Boolean(directAgentPrompt),
-              previousRun: Boolean(previousNativeRun), persistedInput: Boolean(persistedNativeExecutionInput),
-              resume: Boolean(nativeResumeCheckpoint), initialGuidance: Boolean("initialCommunicationGuidance" in nativeExecution && nativeExecution.initialCommunicationGuidance),
+              previousRun: Boolean(previousNativeRun && !nativeBootstrapRetainedRunSource),
+              persistedInput: Boolean(persistedNativeExecutionInput),
+              resume: Boolean(nativeResumeCheckpoint && !nativeBootstrapRetainedRunSource),
+              initialGuidance: Boolean("initialCommunicationGuidance" in nativeExecution && nativeExecution.initialCommunicationGuidance),
               continuation: Boolean("continuationPrompt" in nativeExecution && nativeExecution.continuationPrompt),
               planning: Boolean("planningContext" in nativeExecution && nativeExecution.planningContext),
               // Replay is qualified only when each exact rendered JSON line
@@ -23940,6 +23965,7 @@ export function heartbeatService(
                     issueId: issueRef.id, contractId: completionContract.row.id,
                     revision: String(completionContract.row.revision), contentHash: completionContract.row.canonicalSha256 }] : []),
                   ...(nativeTaskWakeSource ? [nativeTaskWakeSource] : []),
+                  ...(nativeBootstrapRetainedRunSource ? [nativeBootstrapRetainedRunSource.source] : []),
                   { kind: "workspace_metadata" as const, runId: run.id,
                     executionWorkspaceId: attachmentClosureExecution.binding.executionWorkspaceId,
                     origin: persistedExecutionWorkspace ? "execution_workspace" as const :
@@ -23951,6 +23977,9 @@ export function heartbeatService(
                       repoRef: attachmentClosureExecution.workspace.repoRef, branchName: attachmentClosureExecution.workspace.branchName,
                     }), "utf8").digest("hex") },
                 ],
+                additionalPolicy: nativeBootstrapRetainedRunSource
+                  ? { issueIds: [], projectIds: [], runIds: [nativeBootstrapRetainedRunSource.source.runId], memoryIds: [], foundationRevisionIds: [] }
+                  : null,
                 interactionResponses: attachmentClosureExecution.interactionResponses,
                 interactionSources: nativeBootstrapInteractionSources,
                 contextManifestIds: nativeBootstrapContextManifests,
@@ -25138,8 +25167,12 @@ export function heartbeatService(
                 companyId: run.companyId,
               });
             } catch (finalizeErr) {
+              const nativeFinalizeDiagnostic = process.env.PAPERCLIP_NATIVE_FINALIZATION_DIAGNOSTICS === "1"
+                ? nativeExecutionFailureLogFields({ error: finalizeErr, runId: run.id, failureCode: "adapter_failed" })
+                : undefined;
               logger.warn(
-                { err: finalizeErr, runId: run.id },
+                { err: finalizeErr, runId: run.id,
+                  ...(nativeFinalizeDiagnostic ? { nativeFinalizeDiagnostic } : {}) },
                 "native result could not be marked workspace_failed; the reconciliation loop will retry persisted results",
               );
             }

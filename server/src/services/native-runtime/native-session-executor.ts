@@ -78,6 +78,7 @@ import {
   completeTerminatedLocalNativeSessionCleanup,
   acpxRuntimeSessionDirectoryName,
   createNativeSessionBackend,
+  nativeMcpLaunchBinding,
   createRunnerdCodexTransport,
   executeNativeSession,
   nativeSystemInstructions,
@@ -1516,7 +1517,7 @@ class SessionToolAuthorityEpoch {
             typeof diagnostic?.statusCode === "number" ? diagnostic.statusCode : null, frames }));
       };
       const reportCreateTaskFailure = (event: string, error: unknown) => {
-        if (!toolResultDiagnostics || call.tool !== "create_task") return;
+        if (!toolResultDiagnostics || !["create_task", "create_project"].includes(call.tool)) return;
         const diagnostic = error && typeof error === "object"
           ? error as Error & { code?: unknown; status?: unknown; statusCode?: unknown; cause?: { code?: unknown; constraint_name?: unknown } } : null;
         const safeCode = (value: unknown) => typeof value === "string" && /^[A-Z0-9_:-]{1,100}$/i.test(value) ? value : null;
@@ -1586,8 +1587,13 @@ class SessionToolAuthorityEpoch {
         await this.onManagedOpenCodeToolResult?.({ tool: "call_api", callId: call.callId, turnId: call.turnId,
           argumentsHash, result, projectRead: projectReadCapture.value });
       if (call.turnId && call.tool === "create_project" && projectCreateCapture.value)
-        await this.onManagedOpenCodeToolResult?.({ tool: "create_project", callId: call.callId, turnId: call.turnId,
-          argumentsHash, result, projectCreate: projectCreateCapture.value });
+        try {
+          await this.onManagedOpenCodeToolResult?.({ tool: "create_project", callId: call.callId, turnId: call.turnId,
+            argumentsHash, result, projectCreate: projectCreateCapture.value });
+        } catch (error) {
+          reportCreateTaskFailure("managed_create_project_result_callback_failure_test_facts", error);
+          throw error;
+        }
       else if (call.turnId && call.tool === "create_project" && this.onManagedOpenCodeToolResult)
         throw new Error("managed_opencode_tool_result_binding_invalid");
       return result;
@@ -7867,13 +7873,16 @@ export async function recordNativeModelInputDispatchAcknowledgement(input: Param
     typeof input.turnId !== "string" || !/^[\x21-\x7e]{1,240}$/.test(input.turnId))
     throw new Error("native_model_input_ack_binding_invalid");
   const digest = createHash("sha256").update(JSON.stringify(input.turnInput)).digest("hex");
+  let ackPhase = "privacy_locks";
   await input.db.transaction(async tx => {
     // This acknowledgement repeats source-closure validation while holding
     // the run row, so acquire the same company privacy locks first as intent
     // persistence and native event admission.
     await lockAnalyticalCompany(tx as unknown as Db, input.companyId);
     await lockMemoryPrivacy(tx as unknown as Db, input.companyId);
+    ackPhase = "lease_before";
     await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
+    ackPhase = "run_lock";
     const [run] = await tx.select().from(heartbeatRuns).where(and(
       eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.companyId, input.companyId),
       eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId),
@@ -7881,6 +7890,7 @@ export async function recordNativeModelInputDispatchAcknowledgement(input: Param
     )).for("update");
     if (!run) throw new Error("native_model_input_ack_binding_invalid");
     const profile = record(run.runnerProfileJson);
+    ackPhase = "intent_match";
     const intents = profile.nativeModelInputDispatchIntents;
     if (!Array.isArray(intents)) throw new Error("native_model_input_ack_binding_invalid");
     const matching = intents.map((raw, index) => ({ raw: record(raw), index })).filter(({ raw }) =>
@@ -7893,6 +7903,7 @@ export async function recordNativeModelInputDispatchAcknowledgement(input: Param
     if (Buffer.byteLength(JSON.stringify(acknowledged)) > 2 * 1024 * 1024)
       throw new Error("native_model_input_ack_budget_exceeded");
     const parsedReceipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+    ackPhase = "receipt_validation";
     let nextReceipt: NativeRunInputSourceReceipt | null = null;
     if (parsedReceipt.success && run.nativeInputSourceProtocolVersion === 1 &&
       typeof run.responsibleUserId === "string" && run.responsibleUserId.length > 0 &&
@@ -7917,12 +7928,62 @@ export async function recordNativeModelInputDispatchAcknowledgement(input: Param
     const [stored] = await tx.update(heartbeatRuns).set({
       runnerProfileJson: nextProfile, updatedAt: new Date(),
     }).where(eq(heartbeatRuns.id, run.id)).returning({ profile: heartbeatRuns.runnerProfileJson });
+    ackPhase = "retained_intent_check";
     const retained = record(stored?.profile).nativeModelInputDispatchIntents;
-    if (!Array.isArray(retained) || nativeSha256(retained) !== nativeSha256(acknowledged))
+    const retainedMatches = Array.isArray(retained) && nativeSha256(retained) === nativeSha256(acknowledged);
+    if (!retainedMatches) {
+      if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1")
+        console.warn("native_model_input_ack_diagnostic", { phase: "retained_intent_check",
+          profileReturned: Boolean(stored?.profile && typeof stored.profile === "object" && !Array.isArray(stored.profile)),
+          retainedArray: Array.isArray(retained), retainedCount: Array.isArray(retained) ? retained.length : -1,
+          expectedCount: acknowledged.length, digestMatches: false });
       throw new Error("native_model_input_ack_persistence_failed");
+    }
+    ackPhase = "lease_after";
     await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
   }).catch((error: unknown) => {
     const message = error instanceof Error ? error.message : "";
+    if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1") {
+      const details = error && typeof error === "object" ? error as Record<string, unknown> : {};
+      const causes: Record<string, unknown>[] = [details];
+      for (let depth = 0; depth < 3; depth++) {
+        const cause = causes.at(-1)?.cause;
+        if (!cause || typeof cause !== "object") break;
+        causes.push(cause as Record<string, unknown>);
+      }
+      const sqlState = causes.map(value => value.code).find(value =>
+        typeof value === "string" && /^[0-9A-Z]{5}$/.test(value)) ?? null;
+      const constraint = causes.flatMap(value => [value.constraint, value.constraint_name]).find(value =>
+        typeof value === "string" && /^[A-Za-z0-9_]{1,100}$/.test(value)) ?? null;
+      const receiptFailureMessages = new Map([
+        ["Native dispatch source capture requires one exact acknowledged input", "dispatch_ack_mismatch"],
+        ["Native run input captures are append-only", "capture_not_append_only"],
+        ["Native run input capture Human mismatch", "capture_human_mismatch"],
+        ["Malformed native input policy vectors", "policy_shape"],
+        ["Malformed native input policy vector", "policy_vector_shape"],
+        ["Duplicate native input policy identity", "duplicate_policy_identity"],
+        ["Malformed native policy identity", "policy_identity_shape"],
+        ["Duplicate native captured input", "duplicate_captured_input"],
+        ["Malformed native captured input", "captured_input_shape"],
+        ["Malformed native input capture", "capture_shape"],
+        ["Native run input receipt bounds or digest mismatch", "receipt_digest_or_bounds"],
+        ["Native run bootstrap capture is immutable", "bootstrap_mutation"],
+        ["Native run input receipt owner mismatch", "receipt_owner_mismatch"],
+        ["Native run bootstrap input digest mismatch", "bootstrap_digest_mismatch"],
+      ]);
+      const databaseReason = causes.map(value => value.message).find(value =>
+        typeof value === "string" && receiptFailureMessages.has(value));
+      const exceptionName = error instanceof Error && ["Error", "TypeError", "RangeError", "DatabaseError", "PostgresError"].includes(error.name)
+        ? error.name : "unknown";
+      const safeCode = ["native_session_lease_lost", "native_session_lease_ttl_invalid",
+        "native_model_input_ack_binding_invalid", "native_model_input_ack_budget_exceeded",
+        "native_model_input_ack_persistence_failed", "native_input_source_receipt_persistence_failed"].includes(message)
+        ? message : null;
+      const internalMessageCode = /^[a-z][a-z0-9_]{1,100}$/.test(message) ? message : null;
+      console.warn("native_model_input_ack_diagnostic", { phase: ackPhase, exceptionName, safeCode,
+        internalMessageCode, sqlState, constraint,
+        databaseReason: typeof databaseReason === "string" ? receiptFailureMessages.get(databaseReason) : null });
+    }
     throw new Error(["native_session_lease_lost", "native_session_lease_ttl_invalid",
       "native_model_input_ack_binding_invalid", "native_model_input_ack_budget_exceeded",
       "native_model_input_ack_persistence_failed", "native_input_source_receipt_persistence_failed"].includes(message)
@@ -8063,6 +8124,25 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         eq(toolInvocations.toolName, invocationToolName), eq(toolInvocations.status, "succeeded"),
         eq(toolInvocations.argumentsHash, input.argumentsHash),
       )).for("share");
+      const resultTaskCandidate = record(record(input.result).task);
+      const conversationCreateTaskWireIntents = input.tool === "create_task" && resultTaskCandidate.parentId === null &&
+        parsed.success && Array.isArray(profile.nativeAwModelWireIntents)
+        ? profile.nativeAwModelWireIntents.map(record).filter(intent => {
+            if (intent.sourcePolicyHash !== nativeSha256(parsed.data.bootstrap) ||
+              intent.modelPurpose !== "conversation_model" || typeof intent.reservationId !== "string") return false;
+            const uses = Array.isArray(intent.responseToolUses) ? intent.responseToolUses.map(record) : [];
+            return uses.some(use => {
+              let name = typeof use.name === "string" ? use.name : "";
+              for (const prefix of ["paperclip__", "paperclip_", "paperclip."]) {
+                if (name.startsWith(prefix)) { name = name.slice(prefix.length); break; }
+              }
+              const binding = conversationModelBindingSchema.safeParse(intent.conversationModelBinding);
+              return use.id === input.callId && name === "create_task" && use.argumentsHash === input.argumentsHash &&
+                binding.success && binding.data.issueId === input.issueId &&
+                binding.data.conversationSessionGeneration === run?.contextSnapshot?.conversationSessionGeneration;
+            });
+          }) : [];
+      const nullInvocationCreateTask = conversationCreateTaskWireIntents.length === 1;
       const contentHash = digest;
       let nativeReadCapture: { source: Extract<NativePayloadSourceInput, { kind: "tool_result" }>;
         sourceSet: NativePayloadSourceSet; additionalInput: NativeRunInputSourceReceipt["additionalInputs"][number] } | null = null;
@@ -8105,8 +8185,17 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         nativeReadCapture = { source: sourceResult.data, sourceSet: { policy: sourcePolicy.data, inputs: sourceInputs.data },
           additionalInput: entries[0]! };
       }
+      if (input.tool === "create_task" && process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1")
+        console.error("managed_create_task_run_receipt_test_facts", JSON.stringify({ runPresent: Boolean(run),
+          sourceAuthorityVersion: sourceAuthority.version ?? null, receiptValid: parsed.success, callCount: call.length,
+          resultDigestPresent: Boolean(contentHash), invocationPresent: Boolean(invocation),
+          invocationResultMatches: invocation?.resultHash === contentHash, invocationIssueMatches: invocation?.issueId === input.issueId,
+          receiptCompanyMatches: parsed.success && parsed.data.binding.companyId === input.companyId,
+          receiptRunMatches: parsed.success && parsed.data.binding.runId === input.runId,
+          receiptAgentMatches: parsed.success && parsed.data.binding.agentId === input.agentId,
+          receiptHumanMatches: parsed.success && parsed.data.binding.responsibleUserId === run?.responsibleUserId }));
       if (!run || sourceAuthority.version !== 1 || !parsed.success || call.length !== 1 ||
-        !contentHash || (!nullInvocationTool && (!invocation || invocation.resultHash !== contentHash ||
+        !contentHash || (!nullInvocationTool && !nullInvocationCreateTask && (!invocation || invocation.resultHash !== contentHash ||
           invocation.issueId !== input.issueId)) ||
         (input.tool === "self_remember" && nativeSha256(invocation?.workflowResultJson) !== contentHash) ||
         parsed.data.binding.companyId !== input.companyId ||
@@ -11640,6 +11729,7 @@ async function stageRemoteRunnerFile(input: {
   sourcePath: string;
   targetPath: string;
   mode: number;
+  nativePreparationPurpose?: "provider_artifact";
 }): Promise<void> {
   const runner = input.runner;
   if (runner.syncIn) {
@@ -11669,6 +11759,7 @@ async function stageRemoteRunnerFile(input: {
     args: ["-c", script],
     stdin: bytes.toString("base64"),
     bypassSession: true,
+    nativePreparationPurpose: input.nativePreparationPurpose,
   });
   if (result.exitCode !== 0 || result.timedOut) {
     throw new Error("runner_remote_staging_failed");
@@ -11702,6 +11793,7 @@ export async function stageRemoteRunnerDirectory(input: {
   targetPath: string;
   mode: number;
   excludeEntries?: readonly string[];
+  nativePreparationPurpose?: "provider_artifact";
 }): Promise<void> {
   const excludeArgs = archiveExcludeArgs(input.excludeEntries ?? []);
   if (input.runner.syncIn) {
@@ -11754,6 +11846,7 @@ export async function stageRemoteRunnerDirectory(input: {
     args: ["-c", script],
     stdin: archive.toString("base64"),
     bypassSession: true,
+    nativePreparationPurpose: input.nativePreparationPurpose,
   });
   if (result.exitCode !== 0 || result.timedOut) {
     throw new Error("runner_remote_directory_staging_failed");
@@ -12742,6 +12835,10 @@ async function createRunnerdBackendWithinSessionClaim(
         workMode: input.execution.task.workMode,
       })
     : undefined;
+  const sandboxOpenCodeMcp = remoteTarget?.transport === "sandbox"
+    && input.execution.provider.kind === "opencode"
+    ? nativeMcpLaunchBinding(input.runnerEnvironment ?? {})
+    : null;
   const authority = new PaperclipRunnerToolAuthority(input.db, {
     managementToolsEnabled: !nativeReview && await nativeManagementToolsAvailable(input.db,input.execution.binding,reviewRun?.responsibleUserId??null),
     ...(nativeReview ? { nativeReview } : {}),
@@ -13136,6 +13233,7 @@ async function createRunnerdBackendWithinSessionClaim(
       cwd: remoteTarget.remoteCwd,
       bypassSession: true,
       timeoutMs: 30_000,
+      nativePreparationPurpose: "provider_artifact",
     });
     if (metadataResult.exitCode !== 0 || metadataResult.timedOut) {
       throw new Error("runner_remote_artifact_verification_failed");
@@ -13160,6 +13258,7 @@ async function createRunnerdBackendWithinSessionClaim(
       cwd: remoteTarget.remoteCwd,
       bypassSession: true,
       timeoutMs: 30_000,
+      nativePreparationPurpose: "provider_artifact",
     });
     if (versionResult.exitCode !== 0 || versionResult.timedOut) {
       throw new Error("runner_remote_codex_artifact_verification_failed");
@@ -13219,6 +13318,7 @@ async function createRunnerdBackendWithinSessionClaim(
       cwd: remoteTarget.remoteCwd,
       bypassSession: true,
       timeoutMs: 30_000,
+      nativePreparationPurpose: "provider_artifact",
     });
     if (verified.exitCode !== 0 || verified.timedOut) {
       throw new Error(
@@ -13235,6 +13335,7 @@ async function createRunnerdBackendWithinSessionClaim(
       cwd: remoteTarget.remoteCwd,
       bypassSession: true,
       timeoutMs: 30_000,
+      nativePreparationPurpose: "provider_artifact",
     });
     if (
       opencodeVersion.exitCode !== 0 ||
@@ -13258,6 +13359,7 @@ async function createRunnerdBackendWithinSessionClaim(
       cwd: remoteTarget.remoteCwd,
       bypassSession: true,
       timeoutMs: 10_000,
+      nativePreparationPurpose: "provider_artifact",
     });
     if (result.exitCode !== 0 || result.timedOut) return null;
     return parseRemoteExecutableCandidate(result.stdout);
@@ -13281,6 +13383,7 @@ async function createRunnerdBackendWithinSessionClaim(
       cwd: remoteTarget.remoteCwd,
       bypassSession: true,
       timeoutMs: 10_000,
+      nativePreparationPurpose: "provider_artifact",
     });
     if (result.exitCode !== 0 || result.timedOut) return null;
     return parseRemoteExecutableCandidate(result.stdout);
@@ -13306,6 +13409,7 @@ async function createRunnerdBackendWithinSessionClaim(
       cwd: remoteTarget.remoteCwd,
       bypassSession: true,
       timeoutMs: 10_000,
+      nativePreparationPurpose: "provider_artifact",
     });
     if (result.exitCode !== 0 || result.timedOut) {
       throw new Error("runner_remote_preinstalled_link_failed");
@@ -13418,6 +13522,7 @@ async function createRunnerdBackendWithinSessionClaim(
           cwd: remoteTarget.remoteCwd,
           bypassSession: true,
           timeoutMs: 10_000,
+          nativePreparationPurpose: "provider_artifact",
         });
         const [remoteOs = "", remoteArch = ""] = platform.stdout
           .trim()
@@ -13454,6 +13559,7 @@ async function createRunnerdBackendWithinSessionClaim(
         sourcePath: sourceBinary,
         targetPath: remoteBinary,
         mode: 0o700,
+        nativePreparationPurpose: "provider_artifact",
       });
     }
     await measureNativeRunnerSpan(input.trace, "runner.artifact.verify", () =>
@@ -13469,6 +13575,7 @@ async function createRunnerdBackendWithinSessionClaim(
         sourcePath: explicitRemoteCodex,
         targetPath: remoteCodexBinary,
         mode: 0o700,
+        nativePreparationPurpose: "provider_artifact",
       });
       await verifyRemoteCodex();
     }
@@ -13633,6 +13740,7 @@ async function createRunnerdBackendWithinSessionClaim(
             cwd: remoteTarget.remoteCwd,
             bypassSession: true,
             timeoutMs: 10_000,
+            nativePreparationPurpose: "provider_artifact",
           });
           if (cleared.exitCode !== 0 || cleared.timedOut) {
             throw new Error(
@@ -13645,6 +13753,7 @@ async function createRunnerdBackendWithinSessionClaim(
             sourcePath: configuredProviderPackRoot,
             targetPath: stagedRemoteProviderPackRoot,
             mode: 0o700,
+            nativePreparationPurpose: "provider_artifact",
           });
           await measureNativeRunnerSpan(input.trace, "provider_pack.verify", () =>
             verifyRemoteProviderPack(stagedRemoteProviderPackRoot),
@@ -14504,7 +14613,7 @@ async function createRunnerdBackendWithinSessionClaim(
   const effectiveRunnerEnvironmentBase: NodeJS.ProcessEnv = {
     ...(input.runnerEnvironment ?? process.env),
   };
-  if (relayAssignedMcp) {
+  if (relayAssignedMcp || (remoteTarget?.transport === "sandbox" && input.execution.provider.kind === "opencode")) {
     // The server-held tool authority owns this credential. Do not deliver a
     // duplicate HTTP MCP server or its bearer token to the remote provider.
     delete effectiveRunnerEnvironmentBase.PAPERCLIP_NATIVE_MCP_NAME;
@@ -14606,6 +14715,7 @@ async function createRunnerdBackendWithinSessionClaim(
       retainedTransition?.runnerInstanceId ?? input.runnerInstanceId,
     environment: effectiveRunnerEnvironment,
     opencodeEnvironment: effectiveRunnerEnvironment,
+    opencodeAssignedMcp: sandboxOpenCodeMcp,
     workingDirectoryAuthority: remoteTarget
       ? "remote_runner"
       : "local_filesystem",

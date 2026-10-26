@@ -78,6 +78,8 @@ import {
   runtimeHostCommands,
   runtimePolicySnapshots,
 } from "@paperclipai/db";
+
+let nativeRememberFailureDiagnostics = 0;
 import type { ToolRunContext } from "@paperclipai/plugin-sdk";
 import type {
   CreateToolMcpGateway,
@@ -3746,6 +3748,28 @@ export function createToolGatewayService(
                 : await memory.share(context, parameters);
         return { content: JSON.stringify(data), data };
       } catch (error) {
+        if (tool.name === "paperclip-self:remember" &&
+            process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS === "1" &&
+            nativeRememberFailureDiagnostics < 8) {
+          nativeRememberFailureDiagnostics += 1;
+          const candidate = error && typeof error === "object" ? error as Record<string, unknown> : {};
+          const details = candidate.details && typeof candidate.details === "object"
+            ? candidate.details as Record<string, unknown> : {};
+          const code = details.code ?? candidate.code;
+          const frames = (typeof candidate.stack === "string" ? candidate.stack : "").split("\n").flatMap((line) => {
+            const match = /server\/src\/services\/([A-Za-z0-9_./-]+\.ts):(\d+):\d+/.exec(line);
+            return match ? [`${match[1]}:${match[2]}`] : [];
+          }).slice(0, 5);
+          const errorName = typeof candidate.name === "string" ? candidate.name : "Error";
+          const safeCode = typeof code === "string" && /^(?:[a-z][a-z0-9_]{0,63}|[A-Z0-9_]{1,32})$/.test(code)
+            ? code : null;
+          console.error("native_managed_remember_failure", JSON.stringify({
+            name: ["Error", "HttpError", "TypeError", "RangeError", "ConflictError"].includes(errorName) ? errorName : "other",
+            status: typeof candidate.status === "number" ? candidate.status : null,
+            code: safeCode,
+            frames,
+          }));
+        }
         if (error instanceof HttpError) {
           const details =
             error.details && typeof error.details === "object"

@@ -1,0 +1,12 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+[18:58:01] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"37c148a6-c369-4b59-9b1a-bc27ebee939c","actorAgentId":"d3601a05-771d-43a5-a591-aff16126fca4","responsibleUserId":"user-37c148a6-c369-4b59-9b1a-bc27ebee939c"}[39m
+[18:58:01] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"37c148a6-c369-4b59-9b1a-bc27ebee939c","actorAgentId":"d3601a05-771d-43a5-a591-aff16126fca4","responsibleUserId":"user-37c148a6-c369-4b59-9b1a-bc27ebee939c"}[39m
+[18:58:31] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAUTHORIZED","reason":"deny_missing_grant","action":"foundation:read","resourceType":"company","companyId":"3f205079-54f3-46ec-8c33-5e5443de8358","actorAgentId":"927ac7a1-65e9-4053-9c15-33c13bb62d33","responsibleUserId":"user-3f205079-54f3-46ec-8c33-5e5443de8358"}[39m
+
+ Test Files  1 passed (1)
+      Tests  10 passed (10)
+   Start at  18:57:25
+   Duration  66.95s (transform 11.19s, setup 78ms, import 15.76s, tests 50.99s, environment 0ms)
+

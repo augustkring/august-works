@@ -2035,6 +2035,12 @@ async function startServerWithDatabaseTeardown(
 
   platform?.start();
   setStartupRecoveryPhase("ready");
+  if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1" ||
+    process.env.PAPERCLIP_NATIVE_FINALIZATION_DIAGNOSTICS === "1") {
+    logger.info({ nativeSourceClosureDiagnostics: process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1",
+      nativeFinalizationDiagnostics: process.env.PAPERCLIP_NATIVE_FINALIZATION_DIAGNOSTICS === "1" },
+    "Native source closure diagnostics enabled");
+  }
   logger.info(`Server startup recovery complete on ${config.host}:${listenPort}`);
   void systemdNotify(["--ready", `--status=Listening on ${config.host}:${listenPort}`]).then((notified) => {
     if (notified) logger.info("Notified systemd that Paperclip is ready");

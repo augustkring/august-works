@@ -536,6 +536,11 @@ describe("PaperclipRunnerToolAuthority", () => {
       decisionJson: { projectedStatusVersion: 1 }, decisionDigest: "f".repeat(64), applicationState: "applied" });
     await db.update(issues).set({ status: "in_review", statusVersion: 1, lastStatusDecisionId: decisionId,
       assigneeAgentId: sourceAgentId }).where(eq(issues.id, fixture.issueId));
+    const [reviewTaskAfterTransition] = await db.select({ statusVersion: issues.statusVersion })
+      .from(issues).where(and(eq(issues.companyId, fixture.companyId), eq(issues.id, fixture.issueId)));
+    if (!reviewTaskAfterTransition) throw new Error("assigned_review_task_projection_missing");
+    await db.update(statusDecisions).set({ decisionJson: { projectedStatusVersion: reviewTaskAfterTransition.statusVersion } })
+      .where(and(eq(statusDecisions.companyId, fixture.companyId), eq(statusDecisions.id, decisionId)));
     await db.insert(issueThreadInteractions).values({ id: interactionId, companyId: fixture.companyId,
       issueId: fixture.issueId, kind: "request_confirmation", status: "pending", sourceRunId,
       addresseeAgentId: fixture.agentId, payload: { version: 1, prompt: "Review the work",
@@ -554,7 +559,8 @@ describe("PaperclipRunnerToolAuthority", () => {
       statusVersion: issues.statusVersion, lastStatusDecisionId: issues.lastStatusDecisionId })
       .from(issues).where(and(eq(issues.companyId, fixture.companyId), eq(issues.id, fixture.issueId)));
     expect(reviewTaskOwner).toMatchObject({ assigneeAgentId: sourceAgentId, executionRunId: fixture.runId,
-      projectId: null, executionWorkspaceId: null, status: "in_review", statusVersion: 1,
+      projectId: null, executionWorkspaceId: null, status: "in_review",
+      statusVersion: reviewTaskAfterTransition.statusVersion,
       lastStatusDecisionId: decisionId });
     await expect(getNativeReviewAssignment(db, { companyId: fixture.companyId, issueId: fixture.issueId,
       agentId: fixture.agentId, contextSnapshot: { issueId: fixture.issueId,

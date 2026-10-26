@@ -3,6 +3,8 @@ import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { once } from "node:events";
+import { realpath } from "node:fs/promises";
+import { join } from "node:path";
 import express from "express";
 import { WebSocket } from "ws";
 import { and, eq } from "drizzle-orm";
@@ -31,6 +33,7 @@ import { projectOpenShellPolicy } from "../../services/execution-sandbox/openshe
 import { open as unseal } from "../../services/saas/crypto.js";
 import { nativeSha256 } from "../../services/native-runtime/canonical.js";
 import { compileSandboxPolicy } from "../../services/execution-sandbox/policy-compiler.js";
+import { resolvePaperclipInstanceRoot } from "../../home-paths.js";
 
 const imageDigest = `fixture.invalid/openshell@sha256:${"a".repeat(64)}`;
 
@@ -64,7 +67,9 @@ export async function configureManagedConversationSandboxHost(input: {
 }) {
   const { db, actor, companyId, agentId, providerBindingId } = input;
   const brokerOrigin = new URL(input.brokerOrigin).origin;
-  const taskWorkspaceNamespace = join(input.root, "chat-workspaces", companyId, agentId);
+  const taskWorkspaceNamespace = join(await realpath(resolvePaperclipInstanceRoot()), "chat-workspaces", companyId, agentId);
+  const runtime = runtimeControlService(db, { runtime: { suspectSeconds: 90, unreachableSeconds: 600, relayPort: 3102 } } as SaasPlatformConfig,
+    undefined, { credentialBrokerOrigin: brokerOrigin, workerModels: input.gateway as any });
   const hostKeys = generateKeyPairSync("rsa", { modulusLength: 3072 });
   await instanceSettingsService(db).updateExperimental({
     sandbox_abstraction_v7: true, openshell_v7: true, runtime_host_agent_v6: true,
@@ -135,14 +140,18 @@ export async function configureManagedConversationSandboxHost(input: {
     testedAt: capabilityTestedAt, expiresAt: capabilityExpiresAt,
     qualificationHash: "f".repeat(64), evidenceKind: "protected_host_report" });
   const service = executionSandboxService(db, { operatorUserIds: [actor.userId!], credentialBrokerOrigin: brokerOrigin,
+    assertRuntimeStartAdmission: (tx, start) => runtime.assertSandboxStartAdmission(tx, start),
+    recordRuntimeWorkloadState: (tx, stateChange) => runtime.recordSandboxWorkloadState(tx, stateChange),
     backendFor: (_binding: unknown, currentActor: AuthorizationActor) => {
       const bridge = transport.bridge(currentActor);
       return {
         backend: "openshell", evidenceKind: "protected_host_report",
         capabilities: async () => bridge.capabilities(identity),
         prepareSandbox: async (scope: SandboxIdentity) => ({ ...scope, backendVersion: "0.1.2", imageDigest }),
-        inspectWorkload: async (scope: SandboxIdentity) => ({ ...scope, state: state.get(scope.cellId) ?? "stopped",
-          policyHash: policies.get(scope.cellId) ?? null, imageDigest, controlsHealthy: true }),
+        // Admission and command execution must consume the exact response from
+        // the authenticated Native host relay, including its `generation`
+        // field. A local fixture map is not an observed workload receipt.
+        inspectWorkload: async (scope: SandboxIdentity) => bridge.inspect(scope),
         applyPolicy: async (value: { policy: unknown; expiresAt: string }) => {
           const policyHash = nativeSha256(value.policy);
           const reply = await bridge.apply({ ...identity, document: projectOpenShellPolicy((value.policy as any).compiledPolicy).document,
@@ -230,12 +239,11 @@ export async function configureManagedConversationSandboxHost(input: {
       suiteVersion: report?.suiteVersion ?? null, evidenceKind: report?.evidenceKind ?? null, results, exceptions,
     })}`);
   }
-  const runtime = runtimeControlService(db, { runtime: { suspectSeconds: 90, unreachableSeconds: 600, relayPort: 3102 } } as SaasPlatformConfig,
-    undefined, { credentialBrokerOrigin: brokerOrigin, workerModels: input.gateway as any });
   let expectedRunId: string | null = null;
   let expectedIssueId: string | null = null;
   let expectedTaskRoot: string | null = null;
   let acquiredLeaseExpiresAt: string | null = null;
+  let preAdmissionObservation: { state: string; generationMatches: boolean; imageDigestMatches: boolean; controlsHealthy: boolean } | null = null;
   let prepareHostForRun: ((runId: string, leaseId: string) => Promise<void>) | null = null;
   const hostAdmissionByRun = new Map<string, { leaseId: string; promise: Promise<void> }>();
   const sandboxExecutionChecks: Array<Record<string, boolean | number | string | null>> = [];
@@ -274,9 +282,12 @@ export async function configureManagedConversationSandboxHost(input: {
       const managedGitContextProbe = commandName === "sh" && args[0] === "-c" && args[2] === "paperclip-git-context" &&
         (args[3] === "managed" || args[3] === "host");
       const unstartedSessionClaimProbe = commandName === "sh" && args[0] === "-c" && args[2] === "paperclip-runner-claim-unstarted-session";
+      const credentialEnvNames = Object.keys(execInput.env ?? {})
+        .filter(name => /(?:TOKEN|SECRET|PASSWORD|CREDENTIAL|API[_-]?KEY|PRIVATE[_-]?KEY|AUTHORIZATION)/i.test(name))
+        .sort().slice(0, 16).join(",");
       sandboxExecutionChecks.push({ expectedRun: execInput.runId === expectedRunId,
         commandKind, cwdAbsolute: Boolean(execInput.cwd?.startsWith("/")), argumentCount: (execInput.args ?? []).length,
-        managedGitContextProbe, unstartedSessionClaimProbe,
+        managedGitContextProbe, unstartedSessionClaimProbe, credentialEnvNames,
         runtimeMode: run?.runtimeMode ?? null, runStatus: run?.status ?? null, runStatusRunning: run?.status === "running",
         startedAtPresent: Boolean(run?.startedAt), agentIdPresent: Boolean(run?.agentId),
         nativeIssueIdPresent: Boolean(run?.nativeIssueId), responsibleUserIdPresent: Boolean(run?.responsibleUserId),
@@ -307,7 +318,8 @@ export async function configureManagedConversationSandboxHost(input: {
     await new Promise(resolve => setTimeout(resolve, 10));
   }
   if (!authenticated) throw new Error("conversation_software_host_relay_auth_failed");
-  const execFacts: Array<{ executable: string; cwdExact: boolean; modelCredentialPresent: boolean }> = [];
+  const execFacts: Array<{ executable: string; cwdExact: boolean; modelCredentialPresent: boolean;
+    assignedMcpEnvironmentAbsent: boolean }> = [];
   relayHost.on("message", raw => {
     let message: Record<string, any>;
     try { message = JSON.parse(raw.toString()) as Record<string, any>; } catch { return; }
@@ -323,9 +335,13 @@ export async function configureManagedConversationSandboxHost(input: {
     if (typeof modelToken === "string") input.setBrokerToken(modelToken);
     const argv = request.argv as string[];
     const cwd = typeof request.cwd === "string" && request.cwd.startsWith("/") ? request.cwd : input.root;
-    execFacts.push({ executable: argv[0] ?? "", cwdExact: cwd === expectedTaskRoot, modelCredentialPresent });
+    const assignedMcpEnvironmentAbsent = !requestEnv.PAPERCLIP_NATIVE_MCP_NAME &&
+      !requestEnv.PAPERCLIP_NATIVE_MCP_URL && !requestEnv.PAPERCLIP_NATIVE_MCP_TOKEN;
+    execFacts.push({ executable: argv[0] ?? "", cwdExact: cwd === expectedTaskRoot, modelCredentialPresent,
+      assignedMcpEnvironmentAbsent });
     const env = { ...process.env, ...requestEnv,
-      PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: brokerOrigin } as NodeJS.ProcessEnv;
+      PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: brokerOrigin,
+      ...(request.modelBrokerCredential ? { ANTHROPIC_API_KEY: "paperclip-managed-model-broker" } : {}) } as NodeJS.ProcessEnv;
     const child = spawn(argv[0]!, argv.slice(1), { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
     if (typeof request.stdinBase64 === "string") child.stdin.end(Buffer.from(request.stdinBase64, "base64")); else child.stdin.end();
     for (const [stream, output] of [["stdout", child.stdout], ["stderr", child.stderr]] as const)
@@ -378,7 +394,7 @@ export async function configureManagedConversationSandboxHost(input: {
         ? run.contextSnapshot.conversationSessionGeneration : null;
     const scope = await findNativeChatWorkspaceScope(db, { adapterType: "paperclip_runner", environmentDriver: "sandbox",
       companyId, agentId, issueId, runId, responsibleUserId: run?.responsibleUserId,
-      conversationSessionGeneration: conversationGeneration, instanceRoot: input.root });
+      conversationSessionGeneration: conversationGeneration });
     const taskRoot = scope && scope.projectId === null ? nativeChatWorkspaceCwd(scope, null, false) : null;
     if (!taskRoot) throw new Error("conversation_software_host_private_task_root_missing");
     expectedTaskRoot = taskRoot;
@@ -404,6 +420,14 @@ export async function configureManagedConversationSandboxHost(input: {
         unsupportedFeatures: safeNames(proof?.unsupportedFeatures),
       })}`);
     }
+    const observedBeforeAdmission = await driveHost(transport.bridge(actor).inspect(identity));
+    preAdmissionObservation = { state: observedBeforeAdmission.state,
+      generationMatches: observedBeforeAdmission.generation === identity.cellGeneration,
+      imageDigestMatches: observedBeforeAdmission.imageDigest === imageDigest,
+      controlsHealthy: observedBeforeAdmission.controlsHealthy };
+    if (observedBeforeAdmission.state !== "stopped" || observedBeforeAdmission.generation !== identity.cellGeneration ||
+      observedBeforeAdmission.imageDigest !== imageDigest || !observedBeforeAdmission.controlsHealthy)
+      throw new Error(`conversation_software_host_pre_admission_observation_invalid_${JSON.stringify(preAdmissionObservation)}`);
     const admittedPromise = service.admit(actor, companyId, binding.id, { expectedVersion: 3, policySnapshotId: compiled.id });
     const admitted = await driveHost(admittedPromise);
     if (admitted.binding.status !== "running") throw new Error("conversation_software_host_workload_not_running");
@@ -454,9 +478,11 @@ export async function configureManagedConversationSandboxHost(input: {
     facts: () => ({ mode: "controlled_signed_host_relay", hostId: host.id, cellId: cell.id,
       bindingId: binding.id, environmentId: environment.id, relayAuthenticated: relayHost.readyState === WebSocket.OPEN,
       providerAttestedLeaseExpiresAt: acquiredLeaseExpiresAt,
+      preAdmissionObservation,
       sandboxExecutionChecks,
       execCount: execFacts.length, exactPrivateCwdCount: execFacts.filter(fact => fact.cwdExact).length,
       managedModelCredentialCount: execFacts.filter(fact => fact.modelCredentialPresent).length,
+      assignedMcpEnvironmentAbsentCount: execFacts.filter(fact => fact.assignedMcpEnvironmentAbsent).length,
       negativeControls: { wrongRunDenied: true, wrongLeaseDenied: true, wrongCwdDenied: true, wrongPolicyDenied: true },
       executableNames: [...new Set(execFacts.map(fact => fact.executable.split("/").pop() ?? ""))] }),
     close: async () => { relayHost.close(); await new Promise<void>(resolve => relayServer.close(() => resolve())); await runtime.relay.stop(); },

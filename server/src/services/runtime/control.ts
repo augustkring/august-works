@@ -49,6 +49,7 @@ import {
   runtimeCommandResultSchema,
   runtimeHeartbeatSchema,
   runtimeOperationSchema,
+  nativePayloadSourceSnapshotSchema,
 } from "@paperclipai/shared";
 import type { z } from "zod";
 import type { SaasPlatformConfig } from "../../saas-platform-config.js";
@@ -76,7 +77,7 @@ import { resolvePaperclipRunnerProviderProfile } from "../native-runtime/provide
 import type { workerModelGateway } from "../orchestration/worker-model-gateway.js";
 import { verifyRuntimeToolsToken } from "../../runtime-tools-token.js";
 import { findNativeChatWorkspaceScope, nativeChatWorkspaceCwd } from "../native-runtime/native-chat-workspace.js";
-import { assertNativePayloadSourceSetCurrent } from "../native-direct-input.js";
+import { assertNativePayloadSourceSetCurrent, assertNativeTaskSourceOwnerCurrent } from "../native-direct-input.js";
 
 type IssuedWorkerModelCredential = Awaited<
   ReturnType<ReturnType<typeof workerModelGateway>["issueForRun"]>
@@ -2315,7 +2316,57 @@ export function runtimeControlService(
         throw forbidden("Sandbox execution source changed before host dispatch");
       const credentials = source.policy.compilation.compiledPolicy.credentials;
       const brokerCredential = request.brokerCredential;
-      if (credentials.mode === "brokered") {
+      const nativePreparationPurpose = expected.nativePreparationPurpose;
+      if (nativePreparationPurpose !== undefined && nativePreparationPurpose !== "provider_artifact")
+        throw forbidden("Sandbox preparation purpose is unsupported");
+      const providerArtifactPreparation = nativePreparationPurpose === "provider_artifact";
+      if (providerArtifactPreparation) {
+        const task = source.source.task;
+        const taskSnapshot = nativePayloadSourceSnapshotSchema.safeParse(task.payloadSourceSnapshot);
+        const contextSnapshot = source.run.contextSnapshot && typeof source.run.contextSnapshot === "object" &&
+          !Array.isArray(source.run.contextSnapshot) ? source.run.contextSnapshot as Record<string, unknown> : {};
+        const generation = typeof contextSnapshot.conversationSessionGeneration === "number"
+          ? contextSnapshot.conversationSessionGeneration : null;
+        const workspaceScope = generation !== null ? await findNativeChatWorkspaceScope(db, {
+          adapterType: source.source.agent.adapterType, environmentDriver: "sandbox", companyId: claims.company_id,
+          agentId: source.run.agentId!, issueId: task.id, runId: source.run.id,
+          responsibleUserId: source.run.responsibleUserId, conversationSessionGeneration: generation,
+        }) : null;
+        const expectedTaskRoot = workspaceScope?.projectId === null ? nativeChatWorkspaceCwd(workspaceScope, null, false) : null;
+        const filesystem = source.policy.compilation.compiledPolicy.filesystem;
+        const readRoots = Array.isArray(filesystem?.readPaths) ? filesystem.readPaths : [];
+        const writeRoots = Array.isArray(filesystem?.writePaths) ? filesystem.writePaths : [];
+        const noCredentialEnvironment = !Object.keys(request.env ?? {}).some(key => [
+          "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "PAPERCLIP_SANDBOX_BROKER_TOKEN",
+          "PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN", "PAPERCLIP_SANDBOX_BROKER_SESSION_ID",
+          "PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN", "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND",
+          "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS",
+        ].includes(key));
+        const exactConversation = task.conversationAgentId === source.run.agentId &&
+          task.conversationUserId === source.run.responsibleUserId && task.assigneeAgentId === source.run.agentId &&
+          task.conversationState === "active" && task.conversationRetiredAt === null &&
+          task.executionRunId === source.run.id && task.conversationSessionGeneration === generation && generation !== null &&
+          ["in_review", "in_progress"].includes(task.status) && source.run.status === "running" &&
+          source.run.runtimeMode === "native" && source.run.scopeKind === "issue" && source.run.nativeIssueId === task.id &&
+          source.run.contextSnapshot?.conversationSessionGeneration === generation && source.manifest.runId === source.run.id &&
+          source.manifest.agentId === source.run.agentId && source.manifest.manifest.responsibleUserId === source.run.responsibleUserId;
+        if (resolvePaperclipRunnerProviderProfile(source.source.agent.adapterConfig)?.provider !== "opencode" ||
+          !exactConversation || !taskSnapshot.success || taskSnapshot.data.owner.kind !== "issue" ||
+          taskSnapshot.data.owner.companyId !== claims.company_id || taskSnapshot.data.owner.id !== task.id ||
+          task.payloadSourceProtocolVersion !== 1 || task.payloadSourceSnapshotInvalidated ||
+          !expectedTaskRoot ||
+          path.resolve(request.cwd) !== expectedTaskRoot ||
+          !readRoots.some(root => typeof root === "string" && path.resolve(root) === expectedTaskRoot) ||
+          !writeRoots.some(root => typeof root === "string" && path.resolve(root) === expectedTaskRoot) ||
+          credentials.mode !== "none" || credentials.bindings.length !== 0 || brokerCredential !== undefined ||
+          request.modelBrokerCredential !== undefined || !noCredentialEnvironment)
+          throw forbidden("Sandbox provider-artifact preparation is outside the exact current conversation Task scope");
+        await assertNativeTaskSourceOwnerCurrent(tx, { companyId: claims.company_id,
+          actor: { type: "board", source: "session", userId: claims.responsible_user_id },
+          source: { kind: "task", issueId: task.id, sourceVersion: task.updatedAt.toISOString(),
+            contentHash: taskSnapshot.data.owner.contentHash } });
+      }
+      if (!providerArtifactPreparation && credentials.mode === "brokered") {
         const brokerClaims = brokerCredential ? verifySandboxBrokerJwt(brokerCredential.capabilityToken) : null;
         const brokerCapability = brokerClaims?.sandbox_broker;
         const endpointOrigin = credentialBrokerOrigin;
@@ -2345,8 +2396,8 @@ export function runtimeControlService(
           nativeSha256(resolved.bindings) !== nativeSha256(brokerCapability.bindings) ||
           credentials.bindings.some(binding => resolved.authorizedConnectionGrantHashes[binding.connectionId] !== binding.grantVersionHash))
           throw forbidden("Current assigned ToolGateway grants changed before sandbox dispatch");
-      } else if (credentials.mode !== "none" || credentials.bindings.length ||
-        brokerCredential !== undefined) {
+      } else if (!providerArtifactPreparation && (credentials.mode !== "none" || credentials.bindings.length ||
+        brokerCredential !== undefined)) {
         throw forbidden("Sandbox execution contains an unauthorized broker capability");
       }
       const modelCredential = request.modelBrokerCredential;
@@ -2374,7 +2425,11 @@ export function runtimeControlService(
       const nativeProvider = source.source.agent.adapterType === "paperclip_runner"
         ? resolvePaperclipRunnerProviderProfile(source.source.agent.adapterConfig)
         : null;
-      if (nativeProvider?.provider === "opencode") {
+      if (providerArtifactPreparation) {
+        // The server-stored preparation purpose is the only path that may run
+        // a Native artifact command without either credential family.
+        if (modelCredential !== undefined) throw forbidden("Provider-artifact preparation cannot receive a model credential");
+      } else if (nativeProvider?.provider === "opencode") {
         const exactProfileAndEnvironment = !!modelCredential && !!source.capability.modelBrokerProviderProfile &&
           modelCredential.profileId === source.capability.modelBrokerProviderProfile.id &&
           modelCredential.profileHash === source.capability.modelBrokerProviderProfile.hash &&
@@ -2394,6 +2449,7 @@ export function runtimeControlService(
           modelClaims.exp * 1000 >= Date.now() && Date.parse(modelCredential.expiresAt) <= modelClaims.exp * 1000 &&
           !!modelAttempt && !!modelPlan && modelPlan.issueId === source.run.nativeIssueId;
         let conversationCredentialValid = false;
+        let conversationCredentialChecks: Record<string, boolean> | null = null;
         if (conversationModelClaims?.conversation_model && conversationBinding && modelCredential &&
           source.capability.modelBrokerProviderProfile && exactProfileAndEnvironment && inputAndExpiryValid) {
           const task = source.source.task;
@@ -2404,31 +2460,35 @@ export function runtimeControlService(
           const [receiptDigest] = receiptBody ? await tx.execute<{ digest: string }>(sql`
             select encode(sha256(convert_to((${JSON.stringify(receiptBody)}::jsonb)::text,'UTF8')),'hex') as digest
           `) : [];
-          if (receipt.success && receiptBody && receiptDigest?.digest === receipt.data.digest &&
-            source.run.nativeInputSourceProtocolVersion === 1 &&
-            receipt.data.binding.companyId === claims.company_id && receipt.data.binding.runId === source.run.id &&
-            receipt.data.binding.agentId === source.run.agentId && receipt.data.binding.responsibleUserId === source.run.responsibleUserId &&
-            receipt.data.binding.issueId === task.id &&
-            conversationModelClaims.scope === "conversation_model" &&
-            conversationModelClaims.company_id === claims.company_id && conversationModelClaims.sub === source.run.agentId &&
-            conversationModelClaims.run_id === source.run.id &&
-            conversationModelClaims.responsible_user_id === source.run.responsibleUserId &&
-            conversationModelClaims.exp * 1000 >= Date.now() &&
-            Date.parse(modelCredential.expiresAt) <= conversationModelClaims.exp * 1000 &&
-            conversationBinding.issueId === task.id &&
-            conversationBinding.conversationSessionGeneration === task.conversationSessionGeneration &&
-            conversationBinding.executionManifestId === source.manifest.id &&
-            conversationBinding.executionManifestHash === source.manifest.hash &&
-            source.run.status === "running" && source.run.runtimeMode === "native" && source.run.scopeKind === "issue" &&
-            source.run.nativeIssueId === task.id && source.run.responsibleUserId === task.conversationUserId &&
-            source.run.contextSnapshot?.conversationSessionGeneration === task.conversationSessionGeneration &&
-            task.conversationAgentId === source.run.agentId && task.conversationUserId === source.run.responsibleUserId &&
-            task.assigneeAgentId === source.run.agentId &&
-            task.conversationState === "active" && task.conversationRetiredAt === null &&
-            task.executionRunId === source.run.id && ["in_review", "in_progress"].includes(task.status) &&
-            source.manifest.runId === source.run.id && source.manifest.agentId === source.run.agentId &&
-            source.manifest.hash === conversationBinding.executionManifestHash &&
-            source.manifest.manifest.responsibleUserId === source.run.responsibleUserId) {
+          conversationCredentialChecks = {
+            receiptDigest: Boolean(receipt.success && receiptBody && receiptDigest?.digest === receipt.data.digest),
+            receiptBinding: Boolean(receipt.success && receipt.data.binding.companyId === claims.company_id &&
+              receipt.data.binding.runId === source.run.id && receipt.data.binding.agentId === source.run.agentId &&
+              receipt.data.binding.responsibleUserId === source.run.responsibleUserId &&
+              receipt.data.binding.issueId === task.id && source.run.nativeInputSourceProtocolVersion === 1),
+            tokenIdentity: conversationModelClaims.scope === "conversation_model" &&
+              conversationModelClaims.company_id === claims.company_id && conversationModelClaims.sub === source.run.agentId &&
+              conversationModelClaims.run_id === source.run.id &&
+              conversationModelClaims.responsible_user_id === source.run.responsibleUserId &&
+              conversationModelClaims.exp * 1000 >= Date.now() &&
+              Date.parse(modelCredential.expiresAt) <= conversationModelClaims.exp * 1000,
+            tokenBinding: conversationBinding.issueId === task.id &&
+              conversationBinding.conversationSessionGeneration === task.conversationSessionGeneration &&
+              conversationBinding.executionManifestId === source.manifest.id &&
+              conversationBinding.executionManifestHash === source.manifest.hash,
+            runBinding: source.run.status === "running" && source.run.runtimeMode === "native" &&
+              source.run.scopeKind === "issue" && source.run.nativeIssueId === task.id &&
+              source.run.responsibleUserId === task.conversationUserId &&
+              source.run.contextSnapshot?.conversationSessionGeneration === task.conversationSessionGeneration,
+            conversationOwner: task.conversationAgentId === source.run.agentId &&
+              task.conversationUserId === source.run.responsibleUserId && task.assigneeAgentId === source.run.agentId &&
+              task.conversationState === "active" && task.conversationRetiredAt === null &&
+              task.executionRunId === source.run.id && ["in_review", "in_progress"].includes(task.status),
+            manifestBinding: source.manifest.runId === source.run.id && source.manifest.agentId === source.run.agentId &&
+              source.manifest.hash === conversationBinding.executionManifestHash &&
+              source.manifest.manifest.responsibleUserId === source.run.responsibleUserId,
+          };
+          if (Object.values(conversationCredentialChecks).every(Boolean)) {
             await assertNativePayloadSourceSetCurrent(tx, { companyId: claims.company_id, issueId: task.id,
               runId: source.run.id, actor: { type: "board", source: "session", userId: claims.responsible_user_id },
               policy: receipt.data.bootstrap.policy, inputs: receipt.data.bootstrap.inputs });
@@ -2437,8 +2497,25 @@ export function runtimeControlService(
           }
         }
         if (!modelCredential || !source.capability.modelBrokerProviderProfile || !exactProfileAndEnvironment ||
-          !inputAndExpiryValid || (!workerCredentialValid && !conversationCredentialValid))
-          throw forbidden("Managed OpenCode model broker capability is missing or outside its exact run scope");
+          !inputAndExpiryValid || (!workerCredentialValid && !conversationCredentialValid)) {
+          const failedChecks = [
+            ...(!modelCredential ? ["credential_absent"] : []),
+            ...(!source.capability.modelBrokerProviderProfile ? ["provider_profile_absent"] : []),
+            ...(!exactProfileAndEnvironment ? ["profile_or_origin_mismatch"] : []),
+            ...(!inputAndExpiryValid ? ["bounds_or_expiry_invalid"] : []),
+            ...(!workerCredentialValid && !conversationCredentialValid
+              ? (conversationCredentialChecks
+                  ? Object.entries(conversationCredentialChecks).filter(([, valid]) => !valid).map(([name]) => name)
+                  : ["conversation_claim_or_binding_missing"])
+              : []),
+            ...(conversationCredentialChecks && Object.values(conversationCredentialChecks).every(Boolean) && !conversationCredentialValid
+              ? ["credential_expired_before_admission"] : []),
+          ];
+          throw forbidden(`Managed OpenCode model broker capability is missing or outside its exact run scope${
+            process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1"
+              ? `:${failedChecks.join(",") || "unclassified"}` : ""
+          }`);
+        }
       } else if (modelCredential !== undefined) {
         throw forbidden("Sandbox execution contains an unauthorized managed model capability");
       }
@@ -2514,14 +2591,27 @@ export function runtimeControlService(
     env?: Record<string, string>;
     stdin?: string;
     timeoutMs?: number;
+    nativePreparationPurpose?: "provider_artifact";
     signal?: AbortSignal;
     onOutput?: (stream: "stdout" | "stderr", chunk: string) => void | Promise<void>;
   }): Promise<{ exitCode: number | null; signal: null; timedOut: boolean; stdout: string; stderr: string } | null> {
     if (!input.runId) return null;
     const command = input.command, argv = [command, ...(input.args ?? [])];
     const cwd = input.cwd;
+    const requestedNativePreparationPurpose = input.nativePreparationPurpose;
+    if (requestedNativePreparationPurpose !== undefined && requestedNativePreparationPurpose !== "provider_artifact")
+      throw conflict("Sandbox preparation purpose is unsupported");
     if (!cwd || !cwd.startsWith("/")) throw conflict("Sandbox execution requires an absolute workspace path");
     const env = { ...(input.env ?? {}) };
+    // OpenCode uses this fixed non-secret sentinel to select its managed-model
+    // profile. It is never sent as an environment key over the host relay;
+    // the separately minted modelBrokerCredential is the typed authority the
+    // host uses to install the sentinel in the child process environment.
+    const managedModelPlaceholder = env.ANTHROPIC_API_KEY === "paperclip-managed-model-broker";
+    if (Object.hasOwn(env, "ANTHROPIC_API_KEY")) {
+      if (!managedModelPlaceholder) throw conflict("Raw model credentials are not supported in sandbox environment");
+      delete env.ANTHROPIC_API_KEY;
+    }
     for (const reserved of ["PAPERCLIP_SANDBOX_BROKER_TOKEN", "PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN", "PAPERCLIP_SANDBOX_BROKER_SESSION_ID", "PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN", "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND", "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS"])
       if (Object.hasOwn(env, reserved)) throw conflict("Sandbox broker variables are server-owned");
     const stdinBytes = Buffer.from(input.stdin ?? "", "utf8");
@@ -2535,6 +2625,12 @@ export function runtimeControlService(
     });
     if (!initialSource) return null;
     const conversationTask = initialSource.source.task;
+    const hasConversationIdentity = conversationTask.conversationAgentId !== null || conversationTask.conversationUserId !== null;
+    // The shared remote artifact helpers also serve ordinary Worker runs. Only
+    // a route-created conversation Task can use this pre-receipt setup lane;
+    // Workers retain their existing typed model/MCP credential path.
+    const nativePreparationPurpose = requestedNativePreparationPurpose && hasConversationIdentity
+      ? requestedNativePreparationPurpose : undefined;
     if (conversationTask.conversationAgentId !== null || conversationTask.conversationUserId !== null) {
       const contextSnapshot = initialSource.run.contextSnapshot &&
         typeof initialSource.run.contextSnapshot === "object"
@@ -2581,7 +2677,23 @@ export function runtimeControlService(
     const runnerProfile = initialSource.source.agent.adapterType === "paperclip_runner"
       ? resolvePaperclipRunnerProviderProfile(initialSource.source.agent.adapterConfig)
       : null;
-    if (runnerProfile?.provider === "opencode") {
+    if (nativePreparationPurpose) {
+      const task = initialSource.source.task;
+      const contextSnapshot = initialSource.run.contextSnapshot && typeof initialSource.run.contextSnapshot === "object"
+        ? initialSource.run.contextSnapshot as Record<string, unknown> : {};
+      if (runnerProfile?.provider !== "opencode" || task.conversationAgentId !== initialSource.run.agentId ||
+        task.conversationUserId !== initialSource.run.responsibleUserId || task.conversationState !== "active" ||
+        task.conversationRetiredAt !== null || task.executionRunId !== initialSource.run.id ||
+        !["in_review", "in_progress"].includes(task.status) || initialSource.run.runtimeMode !== "native" ||
+        initialSource.run.scopeKind !== "issue" || initialSource.run.nativeIssueId !== task.id ||
+        contextSnapshot.conversationSessionGeneration !== task.conversationSessionGeneration ||
+        initialSource.manifest.runId !== initialSource.run.id || initialSource.manifest.agentId !== initialSource.run.agentId ||
+        initialSource.manifest.manifest.responsibleUserId !== initialSource.run.responsibleUserId)
+        throw conflict("Provider artifact preparation requires the current Native conversation Run and manifest");
+      if (credentials.mode !== "none" || credentials.bindings.length !== 0 || managedModelPlaceholder)
+        throw conflict("Provider artifact preparation cannot receive workload credentials");
+    }
+    if (runnerProfile?.provider === "opencode" && !nativePreparationPurpose) {
       const profile = initialSource.capability.modelBrokerProviderProfile;
       if (!options.workerModels || !profile || !credentialBrokerOrigin || !managedModelBrokerOrigin)
         throw conflict("Qualified managed model broker is unavailable");
@@ -2615,7 +2727,9 @@ export function runtimeControlService(
       env.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND = String(minted.inputTokensUpperBound);
       env.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS = String(minted.maxOutputTokens);
     }
-    if (credentials.mode === "brokered") {
+    if (managedModelPlaceholder && !modelBrokerCredential)
+      throw conflict("Managed model sentinel requires its current typed broker credential");
+    if (credentials.mode === "brokered" && !nativePreparationPurpose) {
       if (credentials.bindings.length === 0) throw conflict("Brokered sandbox policy has no current credential bindings");
       brokerProviderProfile = initialSource.capability.credentialBrokerProviderProfile ?? null;
       if (!brokerProviderProfile) throw conflict("Qualified OpenShell broker provider profile is unavailable");
@@ -2681,7 +2795,8 @@ export function runtimeControlService(
       brokerCapabilityHash: brokerCapabilityToken ? sha256(brokerCapabilityToken) : null,
       brokerProviderProfile: brokerProviderProfile ? { id: brokerProviderProfile.id, hash: brokerProviderProfile.hash } : null,
       modelBrokerCapabilityHash: modelBrokerCredential ? sha256(modelBrokerCredential.capabilityToken) : null,
-      modelBrokerProviderProfile: modelBrokerCredential ? { id: modelBrokerCredential.profileId, hash: modelBrokerCredential.profileHash } : null });
+      modelBrokerProviderProfile: modelBrokerCredential ? { id: modelBrokerCredential.profileId, hash: modelBrokerCredential.profileHash } : null,
+      nativePreparationPurpose: nativePreparationPurpose ?? null });
     const attempt = initialSource.attempt?.attempt ?? Math.max(1, initialSource.run.continuationAttempt + 1);
     const prepared = await db.transaction(async transaction => {
       const tx = transaction as unknown as Db;
@@ -2709,6 +2824,7 @@ export function runtimeControlService(
         attempt, leaseId: source.lease.id, manifestId: source.manifest.id, manifestHash: source.manifest.hash,
         policySnapshotId: source.policy.id, policyHash: source.policy.policyHash,
         commandDigest, deadlineAt: deadlineAt.toISOString(),
+        ...(nativePreparationPurpose ? { nativePreparationPurpose } : {}),
       };
       const [claim] = await tx.insert(runtimeHostCommands).values({
         runtimeHostId: source.host.id, companyId: input.companyId, runtimeCellId: source.cell.id,

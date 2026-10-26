@@ -42,6 +42,7 @@ export * from "./drivers/codex/app-server-transport.js";
 export * from "./drivers/codex/codex-app-server-driver.js";
 export * from "./drivers/opencode/opencode-server-driver.js";
 export * from "./drivers/opencode/mcp-bridge.js";
+export { nativeMcpLaunchBinding, validateNativeMcpLaunchBinding, type NativeMcpLaunchBinding } from "./drivers/native-mcp.js";
 export * from "./drivers/acpx/qualified-profiles.js";
 export { acpxRuntimeSessionDirectoryName } from "./drivers/acpx/recovery-identity.js";
 export {

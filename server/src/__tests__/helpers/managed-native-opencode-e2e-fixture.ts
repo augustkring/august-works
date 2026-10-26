@@ -56,7 +56,8 @@ import { environmentRuntimeService } from "../../services/environment-runtime.js
 import { documentService } from "../../services/documents.js";
 import { memoryService, type MemoryMutationActor } from "../../services/memory/memory-service.js";
 import { canActorReadMemorySources } from "../../services/memory/memory-privacy.js";
-import { assertNativeMemoryOutputSnapshotCurrent, assertNativePayloadSourceSetCurrent } from "../../services/native-direct-input.js";
+import { assertNativeMemoryOutputSnapshotCurrent, assertNativePayloadSourceSetCurrent,
+  nativeSourceMemoDiagnosticsForTest } from "../../services/native-direct-input.js";
 import type { AuthorizationActor } from "../../services/authorization.js";
 import { instanceSettingsService } from "../../services/instance-settings.js";
 import { orchestrationService } from "../../services/orchestration/orchestration-service.js";
@@ -1571,7 +1572,9 @@ export async function runManagedNativeOpenCodeFixture(input: {
       PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: String(profile.maxOutputTokens),
       PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: `https://127.0.0.1:${address.port}`,
       ...(process.env.PAPERCLIP_MANAGED_OPENCODE_E2E_DIAGNOSTICS === "1"
-        ? { PAPERCLIP_MANAGED_OPENCODE_E2E_DIAGNOSTICS: "1" } : {}) };
+        ? { PAPERCLIP_MANAGED_OPENCODE_E2E_DIAGNOSTICS: "1" } : {}),
+      ...(process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS === "1"
+        ? { PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS: "1" } : {}) };
     const qualifiedOpenCodeSha256 = createHash("sha256")
       .update(await readFile(opencodeBinary)).digest("hex");
     const diagnostics: string[] = [];
@@ -2156,6 +2159,17 @@ export async function runManagedNativeOpenCodeFixture(input: {
               heldMs: Math.max(0, performance.now() - tx.startedAt), frames: tx.frames,
             })).sort((a, b) => b.heldMs - a.heldMs).slice(0, 12),
           })}`);
+          if (sourceMemoDiagnosticsEnabled) {
+            const memo = nativeSourceMemoDiagnosticsForTest();
+            const transactions = Object.entries(memo.byTransaction).map(([txOrdinal, stats]) => ({ txOrdinal,
+              hits: stats.hits, misses: stats.misses, uncachedProofMs: Math.round(stats.uncachedProofMs),
+              maxUncachedProofMs: Math.round(stats.maxUncachedProofMs), sourceKindMissCounts: stats.sourceKindMissCounts }))
+              .sort((left, right) => right.uncachedProofMs - left.uncachedProofMs).slice(0, 12);
+            diagnostics.push(`managed native source memo summary: ${JSON.stringify({ roots: memo.roots,
+              actorScopes: memo.actorScopes, nestedScopeReuses: memo.nestedScopeReuses,
+              memoHits: memo.memoHits, memoMisses: memo.memoMisses, uncachedProofMs: Math.round(memo.uncachedProofMs),
+              byActor: memo.byActor, transactions })}`);
+          }
           if (sourceMemoDiagnosticsEnabled && sourceLockSnapshot)
             diagnostics.push(`managed source lock snapshot: ${JSON.stringify(sourceLockSnapshot)}`);
           diagnostics.push(`execution failure metadata: ${JSON.stringify(metadata)}`);

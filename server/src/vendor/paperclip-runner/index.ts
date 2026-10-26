@@ -60,6 +60,8 @@ export type DurablePrpControlPlane =
   import("@paperclipai/paperclip-runner").DurablePrpControlPlane;
 export type PaperclipSemanticDispatcher =
   import("@paperclipai/paperclip-runner").PaperclipSemanticDispatcher;
+export type NativeMcpLaunchBinding =
+  import("@paperclipai/paperclip-runner").NativeMcpLaunchBinding;
 
 const sourceUrl = new URL(
   "../../../../packages/paperclip-runner/src/index.ts",
@@ -97,6 +99,8 @@ export const acpxRuntimeSessionDirectoryName =
 export const canonicalNativeRuntimeContextDigest =
   runner.canonicalNativeRuntimeContextDigest;
 export const createNativeSessionBackend = runner.createNativeSessionBackend;
+export const nativeMcpLaunchBinding = runner.nativeMcpLaunchBinding;
+export const validateNativeMcpLaunchBinding = runner.validateNativeMcpLaunchBinding;
 export const createPaperclipRunnerAuthorizedToolSet =
   runner.createPaperclipRunnerAuthorizedToolSet;
 export const createRunnerdCodexTransport: (

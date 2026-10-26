@@ -77,13 +77,37 @@ export async function modelLineage(db: Db, actor: AuthorizationActor, row: Model
   checkBudget();
   const evidence = await db.select().from(memoryModelEvidence).where(and(eq(memoryModelEvidence.companyId, row.companyId), eq(memoryModelEvidence.modelId, row.id), eq(memoryModelEvidence.modelVersion, row.version)));
   checkBudget();
-  const roots = await derivedRoots(db, actor, row.companyId, { type: row.scopeType as MemoryScope["type"], id: row.scopeId }, row.purpose, evidence.map((item) => item.memoryRecordId), new Map(evidence.map((item) => [item.memoryRecordId, item.sourceVersion])), checkBudget);
-  checkBudget();
   const observationIds = [...new Set(evidence.flatMap((item) => item.observationId ? [item.observationId] : []))];
   const observations = observationIds.length ? await db.select().from(memoryObservations).where(and(eq(memoryObservations.companyId, row.companyId), inArray(memoryObservations.id, observationIds))) : [];
   checkBudget();
-  if (observations.length !== observationIds.length || observations.some((observation) => observation.status !== "accepted" || observation.erasedAt || evidence.some((item) => item.observationId === observation.id && item.observationVersion !== observation.version))) throw conflict("Model observation evidence requires current review");
-  for (const observation of observations) { checkBudget(); await observationLineage(db, actor, observation, checkBudget); checkBudget(); }
+  if (observations.length !== observationIds.length || observations.some((observation) => observation.status !== "accepted" || observation.erasedAt ||
+    observation.scopeType !== row.scopeType || observation.scopeId !== row.scopeId || observation.purpose !== row.purpose ||
+    evidence.some((item) => item.observationId === observation.id && item.observationVersion !== observation.version)))
+    throw conflict("Model observation evidence requires current review");
+
+  // Model versions copy observation evidence into their own immutable evidence
+  // set. Qualify the union after loading every observation owner so each
+  // Memory root receives one complete current-source check. Re-walking each
+  // observation independently repeated the same recursive ACL graph for roots
+  // already covered by the model evidence, while adding no additional roots.
+  const observationEvidence = observationIds.length
+    ? await db.select().from(memoryObservationEvidence).where(and(
+      eq(memoryObservationEvidence.companyId, row.companyId), inArray(memoryObservationEvidence.observationId, observationIds),
+    ))
+    : [];
+  checkBudget();
+  if (observations.some((observation) => !observationEvidence.some((item) => item.observationId === observation.id)))
+    throw conflict("Model observation evidence requires current review");
+  const expectedVersions = new Map<string, string>();
+  for (const item of [...evidence, ...observationEvidence]) {
+    checkBudget();
+    const previous = expectedVersions.get(item.memoryRecordId);
+    if (previous && previous !== item.sourceVersion) throw conflict("Model evidence has conflicting Memory versions");
+    expectedVersions.set(item.memoryRecordId, item.sourceVersion);
+  }
+  const roots = await derivedRoots(db, actor, row.companyId, { type: row.scopeType as MemoryScope["type"], id: row.scopeId }, row.purpose,
+    [...expectedVersions.keys()], expectedVersions, checkBudget);
+  checkBudget();
   return { evidence, roots, observations };
 }
 async function modelSources(db: Db, actor: AuthorizationActor, companyId: string, input: z.infer<typeof createMemoryModelSchema>) {

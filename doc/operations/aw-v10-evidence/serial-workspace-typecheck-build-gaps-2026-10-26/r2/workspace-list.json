@@ -1,0 +1,217 @@
+[
+  {
+    "name": "paperclip",
+    "path": "/workspace/v10-dep-qualification",
+    "private": true
+  },
+  {
+    "name": "paperclipai",
+    "version": "0.3.1",
+    "path": "/workspace/v10-dep-qualification/cli",
+    "private": false
+  },
+  {
+    "name": "@paperclipai/adapter-utils",
+    "version": "0.3.1",
+    "path": "/workspace/v10-dep-qualification/packages/adapter-utils",
+    "private": false
+  },
+  {
+    "name": "@paperclipai/adapter-claude-local",
+    "version": "0.3.1",
+    "path": "/workspace/v10-dep-qualification/packages/adapters/claude-local",
+    "private": false
+  },
+  {
+    "name": "@paperclipai/adapter-codex-local",
+    "version": "0.3.1",
+    "path": "/workspace/v10-dep-qualification/packages/adapters/codex-local",
+    "private": false
+  },
+  {
+    "name": "@paperclipai/adapter-cursor-cloud",
+    "version": "0.3.1",
+    "path": "/workspace/v10-dep-qualification/packages/adapters/cursor-cloud",
+    "private": false
+  },
+  {
+    "name": "@paperclipai/adapter-cursor-local",
+    "version": "0.3.1",
+    "path": "/workspace/v10-dep-qualification/packages/adapters/cursor-local",
+    "private": false
+  },
+  {
+    "name": "@paperclipai/adapter-gemini-local",
+    "version": "0.3.1",
+    "path": "/workspace/v10-dep-qualification/packages/adapters/gemini-local",
+    "private": false
+  },
+  {
+    "name": "@paperclipai/adapter-grok-local",
+    "version": "0.3.1",
+    "path": "/workspace/v10-dep-qualification/packages/adapters/grok-local",
+    "private": false
+  },
+  {
+    "name": "@paperclipai/hermes-paperclip-adapter",
+    "version": "0.3.1",
+    "path": "/workspace/v10-dep-qualification/packages/adapters/hermes",
+    "private": false
+  },
+  {
+    "name": "@paperclipai/adapter-hermes-gateway",
+    "version": "0.1.0",
+    "path": "/workspace/v10-dep-qualification/packages/adapters/hermes-gateway",
+    "private": false
+  },
+  {
+    "name": "@paperclipai/adapter-kimi-local",
+    "version": "0.3.1",
+    "path": "/workspace/v10-dep-qualification/packages/adapters/kimi-local",
+    "private": false
+  },
+  {
+    "name": "@paperclipai/adapter-openclaw-gateway",
+    "version": "0.3.1",
+    "path": "/workspace/v10-dep-qualification/packages/adapters/openclaw-gateway",
+    "private": false
+  },
+  {
+    "name": "@paperclipai/adapter-opencode-local",
+    "version": "0.3.1",
+    "path": "/workspace/v10-dep-qualification/packages/adapters/opencode-local",
+    "private": false
+  },
+  {
+    "name": "@paperclipai/adapter-pi-local",
+    "version": "0.3.1",
+    "path": "/workspace/v10-dep-qualification/packages/adapters/pi-local",
+    "private": false
+  },
+  {
+    "name": "@paperclipai/db",
+    "version": "0.3.1",
+    "path": "/workspace/v10-dep-qualification/packages/db",
+    "private": false
+  },
+  {
+    "name": "@paperclipai/google-sheets-mcp-server",
+    "version": "0.1.0",
+    "path": "/workspace/v10-dep-qualification/packages/google-sheets-mcp-server",
+    "private": false
+  },
+  {
+    "name": "@paperclipai/kv-demo-mcp-server",
+    "version": "0.1.0",
+    "path": "/workspace/v10-dep-qualification/packages/kv-demo-mcp-server",
+    "private": false
+  },
+  {
+    "name": "@paperclipai/mcp-server",
+    "version": "0.1.0",
+    "path": "/workspace/v10-dep-qualification/packages/mcp-server",
+    "private": false
+  },
+  {
+    "name": "@paperclipai/paperclip-eval-kernel",
+    "version": "0.1.0",
+    "path": "/workspace/v10-dep-qualification/packages/paperclip-eval-kernel",
+    "private": true
+  },
+  {
+    "name": "@paperclipai/paperclip-runner",
+    "version": "0.0.0",
+    "path": "/workspace/v10-dep-qualification/packages/paperclip-runner",
+    "private": true
+  },
+  {
+    "name": "@paperclipai/create-paperclip-plugin",
+    "version": "0.1.0",
+    "path": "/workspace/v10-dep-qualification/packages/plugins/create-paperclip-plugin",
+    "private": false
+  },
+  {
+    "name": "@paperclipai/plugin-authoring-smoke-example",
+    "version": "0.1.0",
+    "path": "/workspace/v10-dep-qualification/packages/plugins/examples/plugin-authoring-smoke-example",
+    "private": true
+  },
+  {
+    "name": "@paperclipai/plugin-file-browser-example",
+    "version": "0.1.0",
+    "path": "/workspace/v10-dep-qualification/packages/plugins/examples/plugin-file-browser-example",
+    "private": true
+  },
+  {
+    "name": "@paperclipai/plugin-hello-world-example",
+    "version": "0.1.0",
+    "path": "/workspace/v10-dep-qualification/packages/plugins/examples/plugin-hello-world-example",
+    "private": true
+  },
+  {
+    "name": "@paperclipai/plugin-kitchen-sink-example",
+    "version": "0.1.0",
+    "path": "/workspace/v10-dep-qualification/packages/plugins/examples/plugin-kitchen-sink-example",
+    "private": true
+  },
+  {
+    "name": "@paperclipai/plugin-fake-sandbox",
+    "version": "0.1.0",
+    "path": "/workspace/v10-dep-qualification/packages/plugins/paperclip-plugin-fake-sandbox",
+    "private": true
+  },
+  {
+    "name": "@paperclipai/plugin-llm-wiki",
+    "version": "0.1.0",
+    "path": "/workspace/v10-dep-qualification/packages/plugins/plugin-llm-wiki",
+    "private": true
+  },
+  {
+    "name": "@paperclipai/plugin-workspace-diff",
+    "version": "0.1.0",
+    "path": "/workspace/v10-dep-qualification/packages/plugins/plugin-workspace-diff",
+    "private": false
+  },
+  {
+    "name": "@paperclipai/plugin-sdk",
+    "version": "1.0.0",
+    "path": "/workspace/v10-dep-qualification/packages/plugins/sdk",
+    "private": false
+  },
+  {
+    "name": "@paperclipai/shared",
+    "version": "0.3.1",
+    "path": "/workspace/v10-dep-qualification/packages/shared",
+    "private": false
+  },
+  {
+    "name": "@paperclipai/skills-catalog",
+    "version": "0.3.1",
+    "path": "/workspace/v10-dep-qualification/packages/skills-catalog",
+    "private": false
+  },
+  {
+    "name": "@paperclipai/tailscale-https-broker",
+    "version": "0.1.0",
+    "path": "/workspace/v10-dep-qualification/packages/tailscale-https-broker",
+    "private": true
+  },
+  {
+    "name": "@paperclipai/teams-catalog",
+    "version": "0.1.0",
+    "path": "/workspace/v10-dep-qualification/packages/teams-catalog",
+    "private": false
+  },
+  {
+    "name": "@paperclipai/server",
+    "version": "0.3.1",
+    "path": "/workspace/v10-dep-qualification/server",
+    "private": false
+  },
+  {
+    "name": "@paperclipai/ui",
+    "version": "0.3.1",
+    "path": "/workspace/v10-dep-qualification/ui",
+    "private": false
+  }
+]

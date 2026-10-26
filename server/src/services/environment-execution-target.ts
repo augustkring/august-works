@@ -494,6 +494,7 @@ export async function resolveEnvironmentExecutionTarget(input: {
                     // command on the persistent session. An explicit bypass wins
                     // over `forceSession` and over the active-step selection.
                     bypassSession: commandInput.bypassSession,
+                    nativePreparationPurpose: commandInput.nativePreparationPurpose,
                   });
                 } catch (error) {
                   // The provider execution threw. Mark the span failed with the

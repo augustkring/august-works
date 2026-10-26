@@ -69,7 +69,7 @@ import {
   startOpenCodeMcpBridge,
   type OpenCodeMcpBridge,
 } from "./mcp-bridge.js";
-import { nativeMcpLaunchBinding } from "../native-mcp.js";
+import { nativeMcpLaunchBinding, validateNativeMcpLaunchBinding } from "../native-mcp.js";
 import { materializeNativeRuntimeSkills } from "../runtime-context-materializer.js";
 
 export const OPENCODE_SERVER_DRIVER_KIND = "opencode_server" as const;
@@ -102,6 +102,8 @@ export interface OpenCodeServerDriverOptions {
   systemInstructions?: string;
   runtimeContext?: NativeRuntimeContextSnapshot | null;
   environment?: NodeJS.ProcessEnv;
+  /** Server-owned MCP launch credentials; kept out of the child environment. */
+  assignedMcp?: import("../native-mcp.js").NativeMcpLaunchBinding | null;
   dynamicTools?: readonly Readonly<Record<string, unknown>>[];
   dynamicToolHandler?: DynamicToolHandler;
   onSpawn?: (meta: {
@@ -2024,9 +2026,11 @@ async function startRuntime(input: {
     );
     throw error;
   });
-  const assignedMcp = nativeMcpLaunchBinding(
-    input.options.environment ?? process.env,
-  );
+  const assignedMcp = input.options.assignedMcp
+    ? validateNativeMcpLaunchBinding(input.options.assignedMcp)
+    : input.options.assignedMcp === null
+      ? null
+      : nativeMcpLaunchBinding(input.options.environment ?? process.env);
   input.trace?.addSensitiveValues([
     password,
     authHeader,

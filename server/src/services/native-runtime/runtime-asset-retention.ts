@@ -1,7 +1,8 @@
 import path from "node:path";
 import fs from "node:fs/promises";
 import type { Dir } from "node:fs";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { createHash } from "node:crypto";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { companies, companyDeletionOperations, heartbeatRuns, memoryJobs, nativeRunFinalizations, type Db } from "@paperclipai/db";
 import { resolvePaperclipInstanceRoot } from "../../home-paths.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
@@ -25,6 +26,46 @@ export function nativeRuntimeAssetsRoot(owner?: NativeRuntimeAssetOwner) {
 /** Managed OpenCode provider state is private to one canonical Native run. */
 export function managedOpenCodeRuntimeDirectory(owner: NativeRuntimeAssetOwner) {
   return path.join(nativeRuntimeAssetsRoot(owner), "provider-opencode");
+}
+
+function legacyProfileDigests(profile: unknown) {
+  if (!profile || typeof profile !== "object" || Array.isArray(profile)) return [] as string[];
+  const nativeInput = (profile as Record<string, unknown>).nativeExecutionInput;
+  if (!nativeInput || typeof nativeInput !== "object" || Array.isArray(nativeInput)) return [] as string[];
+  const runtimeContext = (nativeInput as Record<string, unknown>).runtimeContext;
+  if (!runtimeContext || typeof runtimeContext !== "object" || Array.isArray(runtimeContext)) return [] as string[];
+  const context = runtimeContext as Record<string, unknown>;
+  const instructions = context.instructions && typeof context.instructions === "object" && !Array.isArray(context.instructions)
+    ? (context.instructions as Record<string, unknown>).bundle : undefined;
+  const skills = Array.isArray(context.skills) ? context.skills : [];
+  const bundles = [instructions, ...skills.map(skill => skill && typeof skill === "object" && !Array.isArray(skill)
+    ? (skill as Record<string, unknown>).bundle : undefined)];
+  const legacySuffix = `${path.sep}runtime-context-assets${path.sep}bundles${path.sep}`;
+  const digests = new Set<string>();
+  for (const candidate of bundles) {
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) continue;
+    const ref = candidate as Record<string, unknown>;
+    if (typeof ref.rootPath !== "string" || !ref.rootPath.includes(legacySuffix)) continue;
+    if (typeof ref.digest !== "string" || !digestPattern.test(ref.digest) ||
+      !ref.rootPath.endsWith(`${legacySuffix}${ref.digest}`))
+      throw conflict("Native runtime profile has an invalid legacy asset reference");
+    digests.add(ref.digest);
+  }
+  const result = [...digests].sort();
+  if (result.length > 10_000) throw conflict("Native runtime profile exceeds the legacy asset erasure bound");
+  return result;
+}
+
+function runtimeAssetJobKey(runId: string, digests: string[]) {
+  return `runtime-asset-erasure:v1:${runId}${digests.length
+    ? `:${createHash("sha256").update([...new Set(digests)].sort().join(",")).digest("hex")}` : ""}`;
+}
+
+function runtimeAssetDigestBatches(digests: string[]) {
+  const sorted = [...new Set(digests)].sort();
+  const batches: string[][] = [];
+  for (let offset = 0; offset < sorted.length; offset += 256) batches.push(sorted.slice(offset, offset + 256));
+  return batches;
 }
 
 async function companyManagedOpenCodeRuntimeRunIds(companyId: string) {
@@ -58,15 +99,62 @@ async function companyManagedOpenCodeRuntimeRunIds(companyId: string) {
 }
 
 /** Company purge may delete Run owners only after their managed provider homes are gone. */
-export async function assertCompanyManagedOpenCodeRuntimeDataErased(db: Db, companyId: string) {
+export async function assertCompanyManagedOpenCodeRuntimeDataErased(db: Db, companyId: string, operationId?: string) {
   if ((await companyManagedOpenCodeRuntimeRunIds(companyId)).length)
     throw conflict("Managed OpenCode runtime data must be erased before company content purge");
-  const attempts = await db.select({ jobKey: memoryJobs.jobKey, attemptNumber: memoryJobs.attemptNumber, status: memoryJobs.status })
+  const nativeRuns = await db.select({ id: heartbeatRuns.id, runnerProfileJson: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.runtimeMode, "native"),
+    eq(heartbeatRuns.driverKind, "opencode_server"),
+  ));
+  if (nativeRuns.length) {
+    if (!operationId || !uuidPattern.test(operationId))
+      throw conflict("Native OpenCode runs require the current company-purge erasure receipt");
+    const runIds = nativeRuns.map(run => run.id);
+    const jobs = await db.select({ jobKey: memoryJobs.jobKey, attemptNumber: memoryJobs.attemptNumber,
+      status: memoryJobs.status, sourceRefJson: memoryJobs.sourceRefJson }).from(memoryJobs).where(and(
+      eq(memoryJobs.companyId, companyId),
+      inArray(sql<string>`${memoryJobs.sourceRefJson}->>'runId'`, runIds),
+      sql`${memoryJobs.sourceRefJson}->>'kind'='runtime_asset_erasure'`,
+    )).orderBy(memoryJobs.jobKey, desc(memoryJobs.attemptNumber));
+    const latest = new Map<string, typeof jobs[number]>();
+    for (const job of jobs) if (!latest.has(job.jobKey)) latest.set(job.jobKey, job);
+    for (const run of nativeRuns) {
+      const base = latest.get(runtimeAssetJobKey(run.id, []));
+      const baseSource = base?.sourceRefJson as Record<string, unknown> | undefined;
+      if (base?.status !== "succeeded" || baseSource?.kind !== "runtime_asset_erasure" || baseSource.runId !== run.id ||
+        baseSource.companyPurgeOperationId !== operationId || !Array.isArray(baseSource.legacyDigests) || baseSource.legacyDigests.length !== 0)
+        throw conflict("Native OpenCode provider-home erasure has not succeeded for the current purge operation");
+      const refs = legacyProfileDigests(run.runnerProfileJson);
+      const covered = new Set<string>();
+      for (const job of latest.values()) {
+        const source = job.sourceRefJson as Record<string, unknown>;
+        if (source.runId !== run.id || source.companyPurgeOperationId !== operationId) continue;
+        if (job.jobKey === runtimeAssetJobKey(run.id, [])) continue;
+        if (job.status !== "succeeded" || source.kind !== "runtime_asset_erasure" || !Array.isArray(source.legacyDigests) ||
+          source.legacyDigests.length < 1 || source.legacyDigests.length > 256 ||
+          source.legacyDigests.some(digest => typeof digest !== "string" || !digestPattern.test(digest)) ||
+          runtimeAssetJobKey(run.id, source.legacyDigests as string[]) !== job.jobKey)
+          throw conflict("Native OpenCode legacy asset erasure batch is not an exact succeeded receipt");
+        for (const digest of source.legacyDigests as string[]) covered.add(digest);
+      }
+      if (refs.some(digest => !covered.has(digest)))
+        throw conflict("Native OpenCode legacy asset erasure has not covered every current profile digest");
+    }
+  }
+  const attempts = await db.select({ jobKey: memoryJobs.jobKey, attemptNumber: memoryJobs.attemptNumber, status: memoryJobs.status,
+    sourceRefJson: memoryJobs.sourceRefJson })
     .from(memoryJobs).where(and(eq(memoryJobs.companyId, companyId), sql`${memoryJobs.sourceRefJson}->>'companyPurgeOperationId' is not null`))
     .orderBy(memoryJobs.jobKey, desc(memoryJobs.attemptNumber));
   const latest = new Map<string, typeof attempts[number]>();
   for (const job of attempts) if (!latest.has(job.jobKey)) latest.set(job.jobKey, job);
-  if ([...latest.values()].some(job => job.status !== "succeeded"))
+  if ([...latest.values()].some(job => {
+    const source = job.sourceRefJson as Record<string, unknown>;
+    return job.status !== "succeeded" || source.kind !== "runtime_asset_erasure" ||
+      typeof source.runId !== "string" || !nativeRuns.some(run => run.id === source.runId) ||
+      source.companyPurgeOperationId !== operationId || !Array.isArray(source.legacyDigests) ||
+      source.legacyDigests.some(digest => typeof digest !== "string" || !digestPattern.test(digest)) ||
+      source.legacyDigests.length > 256 || runtimeAssetJobKey(source.runId as string, source.legacyDigests as string[]) !== job.jobKey;
+  }))
     throw conflict("Managed OpenCode runtime erasure outbox has not succeeded");
 }
 
@@ -84,8 +172,10 @@ export async function enqueueCompanyManagedOpenCodeRuntimeErasure(db: Db, compan
       typeof operation.evidence.runtimesErasedAt !== "string")
       throw conflict("Managed OpenCode erasure requires the current canonical company purge operation");
     const runs = await tx.select({ id: heartbeatRuns.id, status: heartbeatRuns.status,
+      runtimeMode: heartbeatRuns.runtimeMode, driverKind: heartbeatRuns.driverKind,
       processPid: heartbeatRuns.processPid, processGroupId: heartbeatRuns.processGroupId,
-      controllerLeaseExpiresAt: heartbeatRuns.controllerLeaseExpiresAt }).from(heartbeatRuns)
+      controllerLeaseExpiresAt: heartbeatRuns.controllerLeaseExpiresAt,
+      runnerProfileJson: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns)
       .where(eq(heartbeatRuns.companyId, companyId)).for("update");
     const ownedRunIds = new Set(runs.map(run => run.id));
     const providerHomeRunIds = await companyManagedOpenCodeRuntimeRunIds(companyId);
@@ -94,35 +184,67 @@ export async function enqueueCompanyManagedOpenCodeRuntimeErasure(db: Db, compan
     const scheduled: string[] = [];
     const providerHomes = new Set(providerHomeRunIds);
     for (const run of runs) {
-      const jobKey = `runtime-asset-erasure:v1:${run.id}`;
-      const sourceRefJson = { kind: "runtime_asset_erasure", runId: run.id, legacyDigests: [], companyPurgeOperationId: operationId };
-      const [existing] = await tx.select({ id: memoryJobs.id, status: memoryJobs.status,
-        operationType: memoryJobs.operationType, sourceRefJson: memoryJobs.sourceRefJson }).from(memoryJobs)
-        .where(and(eq(memoryJobs.companyId, companyId), eq(memoryJobs.jobKey, jobKey)))
-        .orderBy(desc(memoryJobs.attemptNumber)).for("update").limit(1);
-      const authorizedPending = existing?.sourceRefJson.companyPurgeOperationId === operationId && existing.status !== "succeeded";
-      if (!providerHomes.has(run.id) && !authorizedPending) continue;
-      if (existing && existing.operationType !== "retention")
-        throw conflict("Managed OpenCode erasure found a conflicting outbox owner");
-      if (existing?.status === "running") {
-        scheduled.push(run.id);
-        continue;
+      const nativeOpenCodeRun = run.runtimeMode === "native" && run.driverKind === "opencode_server";
+      const existingJobs = await tx.select({ id: memoryJobs.id, jobKey: memoryJobs.jobKey,
+        attemptNumber: memoryJobs.attemptNumber, status: memoryJobs.status, operationType: memoryJobs.operationType,
+        sourceRefJson: memoryJobs.sourceRefJson }).from(memoryJobs).where(and(
+        eq(memoryJobs.companyId, companyId), sql`${memoryJobs.sourceRefJson}->>'runId'=${run.id}`,
+        sql`${memoryJobs.sourceRefJson}->>'kind'='runtime_asset_erasure'`))
+        .orderBy(memoryJobs.jobKey, desc(memoryJobs.attemptNumber)).for("update");
+      const latestByKey = new Map<string, typeof existingJobs[number]>();
+      for (const existing of existingJobs) if (!latestByKey.has(existing.jobKey)) latestByKey.set(existing.jobKey, existing);
+      const previousDigests: string[] = [];
+      for (const existing of latestByKey.values()) {
+        const source = existing.sourceRefJson as Record<string, unknown>;
+        if (!Array.isArray(source.legacyDigests) || source.legacyDigests.length > 256 ||
+          source.legacyDigests.some(value => typeof value !== "string" || !digestPattern.test(value)) ||
+          runtimeAssetJobKey(run.id, source.legacyDigests as string[]) !== existing.jobKey)
+          throw conflict("Managed OpenCode erasure has an invalid legacy digest receipt");
+        previousDigests.push(...source.legacyDigests as string[]);
       }
-      if (existing && existing.status !== "queued" &&
-        (run.processPid !== null || run.processGroupId !== null || run.controllerLeaseExpiresAt !== null ||
-          !["succeeded", "interrupted", "failed", "cancelled", "timed_out"].includes(run.status) ||
-          !await hasNativeLocalProcessStop(tx, companyId, run.id))) {
-        scheduled.push(run.id);
-        continue;
+      const currentDigests = nativeOpenCodeRun ? legacyProfileDigests(run.runnerProfileJson) : [];
+      const expectedDigests = [...new Set([...previousDigests, ...currentDigests])].sort();
+      if (expectedDigests.length > 10_000) throw conflict("Native runtime profile exceeds the legacy asset erasure bound");
+      const jobSpecs = [{ jobKey: runtimeAssetJobKey(run.id, []), digests: [] as string[] },
+        ...runtimeAssetDigestBatches(expectedDigests).map(digests => ({ jobKey: runtimeAssetJobKey(run.id, digests), digests }))];
+      const authorizedPending = [...latestByKey.values()].some(existing => {
+        const source = existing.sourceRefJson as Record<string, unknown>;
+        return source.companyPurgeOperationId === operationId && existing.status !== "succeeded";
+      });
+      if (!providerHomes.has(run.id) && !authorizedPending && !nativeOpenCodeRun) continue;
+      let runNeedsWork = false;
+      for (const spec of jobSpecs) {
+        const existing = latestByKey.get(spec.jobKey);
+        if (existing && existing.operationType !== "retention")
+          throw conflict("Managed OpenCode erasure found a conflicting outbox owner");
+        const source = existing?.sourceRefJson as Record<string, unknown> | undefined;
+        const sameDigestSet = Array.isArray(source?.legacyDigests) && source.legacyDigests.length === spec.digests.length &&
+          spec.digests.every(digest => (source.legacyDigests as unknown[]).includes(digest));
+        const exactSucceededReceipt = existing?.status === "succeeded" && existing.operationType === "retention" &&
+          source?.kind === "runtime_asset_erasure" && source.runId === run.id &&
+          source.companyPurgeOperationId === operationId && sameDigestSet;
+        const providerHomeMustRun = spec.digests.length === 0 && providerHomes.has(run.id);
+        if (exactSucceededReceipt && !providerHomeMustRun) continue;
+        if (existing?.status === "running") { runNeedsWork = true; continue; }
+        if (existing && existing.status !== "queued" &&
+          (run.processPid !== null || run.processGroupId !== null || run.controllerLeaseExpiresAt !== null ||
+            !["succeeded", "interrupted", "failed", "cancelled", "timed_out"].includes(run.status) ||
+            !await hasNativeLocalProcessStop(tx, companyId, run.id))) {
+          runNeedsWork = true;
+          continue;
+        }
+        const sourceRefJson = { kind: "runtime_asset_erasure", runId: run.id, legacyDigests: spec.digests,
+          companyPurgeOperationId: operationId };
+        if (existing) {
+          await tx.update(memoryJobs).set({ status: "queued", executionOwnerId: null, leaseExpiresAt: null,
+            finishedAt: null, resultJson: null, resultSummary: null, error: null, errorCode: null,
+            sourceRefJson, updatedAt: new Date() }).where(eq(memoryJobs.id, existing.id));
+        } else {
+          await tx.insert(memoryJobs).values({ companyId, operationType: "retention", jobKey: spec.jobKey, sourceRefJson });
+        }
+        runNeedsWork = true;
       }
-      if (existing) {
-        await tx.update(memoryJobs).set({ status: "queued", executionOwnerId: null, leaseExpiresAt: null,
-          finishedAt: null, resultJson: null, resultSummary: null, error: null, errorCode: null, sourceRefJson, updatedAt: new Date() })
-          .where(eq(memoryJobs.id, existing.id));
-      } else {
-        await tx.insert(memoryJobs).values({ companyId, operationType: "retention", jobKey, sourceRefJson });
-      }
-      scheduled.push(run.id);
+      if (runNeedsWork) scheduled.push(run.id);
     }
     return scheduled;
   });

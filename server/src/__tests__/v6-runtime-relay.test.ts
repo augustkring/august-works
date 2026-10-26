@@ -3,6 +3,7 @@ import type { AddressInfo } from "node:net";
 import { once } from "node:events";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WebSocket } from "ws";
+import { runtimeSandboxExecRelayRequestSchema } from "@paperclipai/shared";
 import { runtimeGatewayRelay } from "../services/runtime/gateway-relay.js";
 const hostId = "11111111-1111-4111-8111-111111111111",
   cellId = "22222222-2222-4222-8222-222222222222",
@@ -34,6 +35,37 @@ const execRequest = () => ({
   env: {},
   stdinBase64: "",
 });
+
+it("accepts only the exact nonsecret managed-model bounds tied to the typed broker credential", () => {
+  const request = execRequest();
+  const modelBrokerCredential = {
+    capabilityToken: "typed-capability-token",
+    profileId: "managed-model",
+    profileHash: "e".repeat(64),
+    expiresAt: new Date(Date.now() + 30_000).toISOString(),
+    inputTokensUpperBound: 100_000,
+    maxOutputTokens: 1024,
+  };
+  const valid = { ...request, env: {
+    PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://broker.example.test",
+    PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "100000",
+    PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "1024",
+  }, modelBrokerCredential };
+  expect(runtimeSandboxExecRelayRequestSchema.safeParse(valid).success).toBe(true);
+  expect(runtimeSandboxExecRelayRequestSchema.safeParse({
+    ...valid,
+    env: { ...valid.env, PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "100001" },
+  }).success).toBe(false);
+  expect(runtimeSandboxExecRelayRequestSchema.safeParse({
+    ...valid,
+    env: { ...valid.env, PAPERCLIP_PROVIDER_API_KEY: "must-stay-rejected" },
+  }).success).toBe(false);
+  expect(runtimeSandboxExecRelayRequestSchema.safeParse({
+    ...request,
+    env: { PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "100000" },
+  }).success).toBe(false);
+});
+
 const resources: {
   relay: ReturnType<typeof runtimeGatewayRelay>;
   server: Server;

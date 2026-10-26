@@ -23,6 +23,7 @@ import {
   issues,
   nativeRunResults,
 } from "@paperclipai/db";
+import { nativeRunInputSourceReceiptSchema } from "@paperclipai/shared";
 import { describe, expect, it, vi } from "vitest";
 import {
   CodexAppServerDriver,
@@ -66,6 +67,7 @@ import {
   nativeToolContractFingerprintForTarget,
   nativeSessionIdForBootstrapPersistence,
   nativeSessionProviderEvidence,
+  nativeRetainedRunResumeWitness,
   prepareNativeSessionBootstrapPersistence,
   rebindNativeSessionCheckpoint,
   selectNativeSessionResumeRun,
@@ -409,6 +411,48 @@ function previousRun(overrides: Record<string, unknown> = {}) {
     },
   };
 }
+
+it("seals an acknowledged retained session to its checkpoint, Human, and generation", () => {
+  const digest = "a".repeat(64);
+  const responsibleUserId = "90000000-0000-4000-8000-000000000009";
+  const marker = { kind: "worker_model_dispatch" as const, runId: previousRunId,
+    reservationId: "70000000-0000-4000-8000-000000000007", callId: "provider-call-1",
+    requestHash: digest, wireBodyHash: digest, responseHash: digest };
+  const receipt = { version: 1 as const,
+    binding: { companyId, runId: previousRunId, agentId, responsibleUserId, issueId },
+    bootstrap: { executionInputDigest: digest,
+      policy: { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] }, inputs: [] },
+    dispatches: [{ executionInputDigest: digest, responsibleUserId,
+      policy: { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] }, inputs: [marker] }],
+    additionalInputs: [], digest };
+  const prior = { ...previousRun({ nativeToolContractFingerprint: NATIVE_TOOL_CONTRACT_FINGERPRINT,
+    nativeExecutionInput: execution(previousRunId), nativeInputSourceReceipt: receipt,
+    nativeModelInputDispatchIntents: [{ dispatchId: "80000000-0000-4000-8000-000000000008", eventSeq: 1, attempt: 1,
+      responsibleUserId, turnInputDigest: digest, turnId: "turn-1" }] }),
+    nativeIssueId: issueId, runtimeMode: "native", status: "succeeded", nativeInputSourceProtocolVersion: 1,
+    responsibleUserId, contextSnapshot: { conversationSessionGeneration: 4 } };
+  expect(nativeRunInputSourceReceiptSchema.safeParse(receipt).success).toBe(true);
+  expect(rebindNativeSessionCheckpoint({ previousRun: prior as Parameters<typeof rebindNativeSessionCheckpoint>[0]["previousRun"],
+    currentExecution: execution(currentRunId), executionTargetKind: "local" })).not.toBeNull();
+  const build = (previousRun: typeof prior, currentResponsibleUserId = responsibleUserId, generation = 4) =>
+    nativeRetainedRunResumeWitness({ previousRun, currentExecution: execution(currentRunId),
+      currentResponsibleUserId, currentConversationSessionGeneration: generation, executionTargetKind: "local" });
+  const witness = build(prior);
+  expect(witness?.source).toMatchObject({ kind: "retained_run", runId: previousRunId });
+  expect(witness?.components).toHaveLength(2);
+  expect(build(prior, "90000000-0000-4000-8000-000000000010")).toBeNull();
+  expect(build(prior, responsibleUserId, 5)).toBeNull();
+  const changedCheckpoint = structuredClone(prior);
+  (changedCheckpoint.runnerProfileJson as Record<string, any>).sessionCheckpoint.cursor = "43";
+  expect(build(changedCheckpoint)?.source).not.toEqual(witness?.source);
+  const changedAcknowledgement = structuredClone(prior);
+  const acknowledgementProfile = changedAcknowledgement.runnerProfileJson as Record<string, any>;
+  acknowledgementProfile.nativeModelInputDispatchIntents[0].turnId = "turn-2";
+  expect(build(changedAcknowledgement)?.source).not.toEqual(witness?.source);
+  const unacknowledged = structuredClone(prior);
+  ((unacknowledged.runnerProfileJson as Record<string, any>).nativeModelInputDispatchIntents as Array<Record<string, unknown>>)[0]!.turnId = undefined;
+  expect(build(unacknowledged)).toBeNull();
+});
 
 it("wires exact-session recovery and guarded selected identity into heartbeat persistence", () => {
   const source = readFileSync(

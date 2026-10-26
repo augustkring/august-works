@@ -60,7 +60,11 @@ function decodeComment(comment) {
 }
 
 function tool(turn, name, args, next) {
-  const id = `agent-chat-tool-${turn.number}-${turn.step++}`;
+  // RunnerD can retain tool receipts across per-turn provider-process
+  // restarts, while a resumed thread keeps the same thread id. Include the
+  // process id so a new process never reuses a settled call id when its local
+  // turn counter resets.
+  const id = `agent-chat-${process.pid}-tool-${turn.number}-${turn.step++}`;
   pendingTools.set(id, { turn, name, next });
   note({ event: "tool_call", turn: turn.number, tool: name, workMode: turn.workMode ?? null });
   send({ id, method: "item/tool/call", params: {
@@ -133,12 +137,7 @@ function actionAfterHistory(turn, comments) {
     (command.action === "project" && command.direct === true) ||
     (command.action === "plan" && command.approval === true);
   if (!turn.activeTask) {
-    return tool(turn, "get_task_context", {}, context => {
-      turn.companyId = context?.company?.id;
-      turn.issueId = context?.activeTask?.id;
-      turn.activeTask = context?.activeTask;
-      actionAfterHistory(turn, comments);
-    });
+    return finish(turn, "I could not verify the current task context, so I cannot safely continue.");
   }
   if (humanComments.length === 0 && turn.activeTask?.parentId && turn.activeTask?.projectId)
     return executeDelegatedTask(turn);
@@ -473,6 +472,7 @@ lineReader.on("line", line => {
         turn.activeTask = context?.activeTask;
         turn.workMode = context?.activeTask?.workMode;
         note({ event: "task_context", turn: turn.number, workMode: turn.workMode ?? null });
+      if (!turn.activeTask) return finish(turn, "I could not verify the current task context, so I cannot safely continue.");
         tool(turn, "get_task_history", { limit: 100 }, history =>
           actionAfterHistory(turn, Array.isArray(history?.comments) ? history.comments : []));
       });

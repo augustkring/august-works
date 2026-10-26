@@ -664,12 +664,14 @@ export function memoryJobService(
       return { summary: "Erased the deleted procedure version's actual runtime copies.", result: { processedRunCount: 1 } };
     }
     if (source.kind === "runtime_asset_erasure") {
-      if (typeof source.runId !== "string" || !Array.isArray(source.legacyDigests) || source.legacyDigests.some(value => typeof value !== "string") ||
+      if (typeof source.runId !== "string" || !/^[a-f0-9-]{36}$/i.test(source.runId) || !Array.isArray(source.legacyDigests) ||
+        source.legacyDigests.some(value => typeof value !== "string" || !/^[a-f0-9]{64}$/.test(value)) ||
         (source.companyPurgeOperationId !== undefined && (typeof source.companyPurgeOperationId !== "string" || !/^[a-f0-9-]{36}$/i.test(source.companyPurgeOperationId))))
         throw unprocessable("Invalid native runtime asset erasure binding");
       const digests = source.legacyDigests as string[];
       const suffix = digests.length ? `:${createHash("sha256").update([...new Set(digests)].sort().join(",")).digest("hex")}` : "";
-      if (job.jobKey !== `runtime-asset-erasure:v1:${source.runId}${suffix}`) throw unprocessable("Invalid native runtime asset erasure binding");
+      if (job.jobKey !== `runtime-asset-erasure:v1:${source.runId}${suffix}`)
+        throw unprocessable("Invalid native runtime asset erasure binding");
       const { closeWarmNativeSessionsForRun } = await import("../native-runtime/native-session-executor.js");
       const stop = await closeWarmNativeSessionsForRun({ companyId: job.companyId, runId: source.runId,
         reason: source.companyPurgeOperationId ? "company offboarding" : "source erasure" });

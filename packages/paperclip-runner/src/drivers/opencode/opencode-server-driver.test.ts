@@ -937,9 +937,11 @@ describe("OpenCodeServerDriver", () => {
       environment: {
         PATH: process.env.PATH,
         OPENROUTER_API_KEY: "fixture-key",
-        PAPERCLIP_NATIVE_MCP_NAME: "paperclip-assigned",
-        PAPERCLIP_NATIVE_MCP_URL: "https://paperclip.example/mcp",
-        PAPERCLIP_NATIVE_MCP_TOKEN: "x".repeat(40),
+      },
+      assignedMcp: {
+        name: "paperclip-assigned",
+        url: "https://paperclip.example/mcp",
+        token: "x".repeat(40),
       },
       fetch: async (input, init) => {
         if (String(input).endsWith("/prompt_async"))

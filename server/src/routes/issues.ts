@@ -289,6 +289,7 @@ import {
   ISSUE_WAKE_DIAGNOSTICS_LOOKBACK_DAYS,
   ISSUE_WAKE_DIAGNOSTICS_MAX_ACTIVITY_RECORDS,
   ISSUE_WAKE_DIAGNOSTICS_MAX_WAKE_REQUESTS,
+  isCurrentUnsealedConversationShell,
   readAcceptedPlanConfirmationTarget,
   lockIssuePrivacyTree,
   pinIssueMutationHuman,
@@ -5263,74 +5264,6 @@ export function issueRoutes(
       .status(404)
       .json({ error: "Issue not found" });
     return false;
-  }
-
-  /**
-   * The first Human turn starts with an owner-only conversation shell. It is
-   * intentionally not a readable native payload until the first comment is
-   * captured; this exception permits only the owner to reopen that empty shell
-   * and submit that first comment. It does not authorize model/source reads.
-   */
-  type IssueRouteTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
-  async function isCurrentUnsealedConversationShell(
-    tx: IssueRouteTransaction,
-    actor: Parameters<typeof pinCurrentBoardActor>[1],
-    issue: { id: string; companyId: string },
-    action: "issue:read" | "issue:comment",
-  ) {
-    const ownerUserId = actor.userId;
-    if (actor.type !== "board" || typeof ownerUserId !== "string" || actor.source === "local_implicit") return false;
-    const pinned = await pinCurrentBoardActor(tx, actor);
-    if (!pinned || pinned.credentialExpiresAt === null) return false;
-    await assertDirectInputSessionCurrent(tx, pinned.actor, pinned.credentialExpiresAt,
-      "The current conversation owner session is unavailable");
-    const [current] = await tx.select().from(issueRows).where(and(
-      eq(issueRows.id, issue.id), eq(issueRows.companyId, issue.companyId),
-      eq(issueRows.payloadSourceProtocolVersion, 1), isNull(issueRows.payloadSourceSnapshot),
-      eq(issueRows.payloadSourceSnapshotInvalidated, false),
-      isNull(issueRows.projectId), isNull(issueRows.parentId), isNull(issueRows.description),
-      isNull(issueRows.createdByAgentId), eq(issueRows.originKind, "manual"), isNull(issueRows.originId),
-      eq(issueRows.createdByUserId, ownerUserId),
-      eq(issueRows.conversationUserId, ownerUserId),
-      isNotNull(issueRows.conversationAgentId), eq(issueRows.conversationState, "waiting"),
-      eq(issueRows.conversationSessionGeneration, 0), isNull(issueRows.conversationBoundaryCommentId),
-      isNull(issueRows.conversationRetiredAt),
-      isNull(issueRows.executionRunId), eq(issueRows.status, "in_review"),
-    )).for("share");
-    await assertDirectInputSessionCurrent(tx, pinned.actor, pinned.credentialExpiresAt,
-      "The current conversation owner session is unavailable");
-    if (!current) {
-      return false;
-    }
-    const [priorComment] = await tx.select({ id: issueComments.id }).from(issueComments).where(and(
-      eq(issueComments.companyId, issue.companyId), eq(issueComments.issueId, issue.id),
-    )).limit(1);
-    if (priorComment) return false;
-    const [opened] = await tx.select({ id: activityLog.id }).from(activityLog).where(and(
-      eq(activityLog.companyId, current.companyId), eq(activityLog.actorType, "user"),
-      eq(activityLog.actorId, ownerUserId), eq(activityLog.action, "issue.conversation_opened"),
-      eq(activityLog.entityType, "issue"), eq(activityLog.entityId, current.id),
-      sql`${activityLog.details}->>'agentId'=${current.conversationAgentId}`,
-    )).limit(1);
-    if (!opened) return false;
-    const [linkedSource] = await tx.select({ id: issuePrivacySources.id }).from(issuePrivacySources).where(and(
-      eq(issuePrivacySources.companyId, current.companyId), eq(issuePrivacySources.issueId, current.id),
-    )).limit(1);
-    const [linkedDocument] = await tx.select({ id: issueDocuments.id }).from(issueDocuments).where(and(
-      eq(issueDocuments.companyId, current.companyId), eq(issueDocuments.issueId, current.id),
-    )).limit(1);
-    const [linkedAttachment] = await tx.select({ id: issueAttachments.id }).from(issueAttachments).where(and(
-      eq(issueAttachments.companyId, current.companyId), eq(issueAttachments.issueId, current.id),
-    )).limit(1);
-    if (linkedSource || linkedDocument || linkedAttachment) return false;
-    // General issue privacy correctly rejects this unsealed private shell. Its
-    // sole permitted reader/writer is the exact creator+conversation owner,
-    // after current Human credential and active company membership are pinned.
-    const membership = await pinIssueMutationHuman(tx, pinned.actor, current.companyId, true);
-    await assertDirectInputSessionCurrent(tx, pinned.actor, pinned.credentialExpiresAt,
-      "The current conversation owner session is unavailable");
-    return (action === "issue:read" || action === "issue:comment") &&
-      (membership === "member" || membership === "instance_admin");
   }
 
   async function assertIssueWriteInfluenceAllowed(

@@ -542,6 +542,9 @@ export interface EnvironmentDriverExecuteInput extends EnvironmentDriverLeaseInp
    * span parents to the run trace. The default keeps the session path.
    */
   bypassSession?: boolean;
+  /** Private Native setup phase for the exact pinned provider artifact probes
+   * and staging commands. This is not user/model-supplied command metadata. */
+  nativePreparationPurpose?: "provider_artifact";
   /**
    * Force the command onto the lease's persistent session even when no run step
    * is active. The ACP process session bridge sets this so the long-lived agent
@@ -1295,6 +1298,7 @@ function createSandboxEnvironmentDriver(
       stdin?: string;
       timeoutMs?: number;
       signal?: AbortSignal;
+      nativePreparationPurpose?: "provider_artifact";
       onOutput?: (stream: "stdout" | "stderr", chunk: string) => void | Promise<void>;
     }) => Promise<PluginEnvironmentExecuteResult | null>;
     pluginWorkerReadyTimeoutMs?: number;
@@ -2805,6 +2809,7 @@ function createSandboxEnvironmentDriver(
           stdin: input.stdin,
           timeoutMs: input.timeoutMs,
           signal: input.signal,
+          nativePreparationPurpose: input.nativePreparationPurpose,
           onOutput: input.onLog,
         });
         if (nativeResult) return nativeResult;
@@ -3747,6 +3752,7 @@ export function environmentRuntimeService(
       stdin?: string;
       timeoutMs?: number;
       signal?: AbortSignal;
+      nativePreparationPurpose?: "provider_artifact";
       onOutput?: (stream: "stdout" | "stderr", chunk: string) => void | Promise<void>;
     }) => Promise<PluginEnvironmentExecuteResult | null>;
     pluginWorkerReadyTimeoutMs?: number;

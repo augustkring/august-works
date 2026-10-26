@@ -2010,6 +2010,65 @@ async function assertExecutionTaskParent(db: Db, companyId: string, parentId?: s
 
 type DbTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
+/**
+ * The exact pre-first-comment conversation shell is hidden by ordinary issue
+ * privacy. Its sole exception is the current authenticated Human who opened
+ * it, and only while its source-free, unsealed shape remains unchanged.
+ */
+export async function isCurrentUnsealedConversationShell(
+  tx: DbTransaction,
+  actor: AuthorizationActor,
+  issue: { id: string; companyId: string },
+  action: "issue:read" | "issue:comment",
+) {
+  const ownerUserId = actor.userId;
+  if (actor.type !== "board" || typeof ownerUserId !== "string" || actor.source === "local_implicit") return false;
+  const pinned = await pinCurrentBoardActor(tx, actor);
+  if (!pinned || pinned.credentialExpiresAt === null) return false;
+  await assertManualInputCredentialCurrent(tx, pinned.actor, pinned.credentialExpiresAt,
+    "The current conversation owner session is unavailable");
+  const [current] = await tx.select().from(issues).where(and(
+    eq(issues.id, issue.id), eq(issues.companyId, issue.companyId),
+    eq(issues.payloadSourceProtocolVersion, 1), isNull(issues.payloadSourceSnapshot),
+    eq(issues.payloadSourceSnapshotInvalidated, false),
+    isNull(issues.projectId), isNull(issues.parentId), isNull(issues.description),
+    isNull(issues.createdByAgentId), eq(issues.originKind, "manual"), isNull(issues.originId),
+    eq(issues.createdByUserId, ownerUserId), eq(issues.conversationUserId, ownerUserId),
+    isNotNull(issues.conversationAgentId), eq(issues.conversationState, "waiting"),
+    eq(issues.conversationSessionGeneration, 0), isNull(issues.conversationBoundaryCommentId),
+    isNull(issues.conversationRetiredAt), isNull(issues.executionRunId), eq(issues.status, "in_review"),
+  )).for("share");
+  await assertManualInputCredentialCurrent(tx, pinned.actor, pinned.credentialExpiresAt,
+    "The current conversation owner session is unavailable");
+  if (!current) return false;
+  const [priorComment] = await tx.select({ id: issueComments.id }).from(issueComments).where(and(
+    eq(issueComments.companyId, issue.companyId), eq(issueComments.issueId, issue.id),
+  )).limit(1);
+  if (priorComment) return false;
+  const [opened] = await tx.select({ id: activityLog.id }).from(activityLog).where(and(
+    eq(activityLog.companyId, current.companyId), eq(activityLog.actorType, "user"),
+    eq(activityLog.actorId, ownerUserId), eq(activityLog.action, "issue.conversation_opened"),
+    eq(activityLog.entityType, "issue"), eq(activityLog.entityId, current.id),
+    sql`${activityLog.details}->>'agentId'=${current.conversationAgentId}`,
+  )).limit(1);
+  if (!opened) return false;
+  const [linkedSource] = await tx.select({ id: issuePrivacySources.id }).from(issuePrivacySources).where(and(
+    eq(issuePrivacySources.companyId, current.companyId), eq(issuePrivacySources.issueId, current.id),
+  )).limit(1);
+  const [linkedDocument] = await tx.select({ id: issueDocuments.id }).from(issueDocuments).where(and(
+    eq(issueDocuments.companyId, current.companyId), eq(issueDocuments.issueId, current.id),
+  )).limit(1);
+  const [linkedAttachment] = await tx.select({ id: issueAttachments.id }).from(issueAttachments).where(and(
+    eq(issueAttachments.companyId, current.companyId), eq(issueAttachments.issueId, current.id),
+  )).limit(1);
+  if (linkedSource || linkedDocument || linkedAttachment) return false;
+  const membership = await pinIssueMutationHuman(tx, pinned.actor, current.companyId, true);
+  await assertManualInputCredentialCurrent(tx, pinned.actor, pinned.credentialExpiresAt,
+    "The current conversation owner session is unavailable");
+  return (action === "issue:read" || action === "issue:comment") &&
+    (membership === "member" || membership === "instance_admin");
+}
+
 export async function lockIssuePrivacyTree(tx: DbTransaction, companyId: string) {
   await lockBusinessEventCompany(tx, companyId);
   await lockMemoryPrivacy(tx as unknown as Db, companyId);
@@ -10335,19 +10394,48 @@ export function issueService(db: Db) {
           const [existing] = await tx.select().from(issues).where(and(eq(issues.companyId, companyId),
             eq(issues.conversationAgentId, issueData.conversationAgentId), eq(issues.conversationUserId, issueData.conversationUserId)));
           if (existing) {
-            const [source] = await tx.execute<{ erased: boolean }>(sql`select aw_workflow_memory_erased(${companyId}::uuid, null, ${existing.id}::uuid) as erased`);
+            const observeRecoveryDbFailure = (stage: string, error: unknown) => {
+              if (process.env.PAPERCLIP_CHAT_RECOVERY_DB_DIAGNOSTICS !== "1") return;
+              let current: unknown = error;
+              let sqlState: string | null = null, routine: string | null = null, position: number | null = null;
+              for (let depth = 0; depth < 5 && current && typeof current === "object"; depth++) {
+                const candidate = current as Record<string, unknown>;
+                if (!sqlState && typeof candidate.code === "string" && /^[0-9A-Z]{5}$/.test(candidate.code)) sqlState = candidate.code;
+                if (!routine && typeof candidate.routine === "string" && /^[A-Za-z0-9_.$]+$/.test(candidate.routine)) routine = candidate.routine;
+                if (position === null && typeof candidate.position === "string" && /^\d{1,7}$/.test(candidate.position)) position = Number(candidate.position);
+                current = candidate.cause;
+              }
+              console.warn("native-conversation-recovery-db-diagnostic", JSON.stringify({ stage, sqlState, routine, position }));
+            };
+            let source: { erased: boolean } | undefined;
+            try {
+              [source] = await tx.execute<{ erased: boolean }>(sql`select aw_workflow_memory_erased(${companyId}::uuid, null, ${existing.id}::uuid) as erased`);
+            } catch (error) {
+              observeRecoveryDbFailure("classify_existing_conversation", error);
+              throw error;
+            }
             if (!source?.erased && retireConversationId !== existing.id) {
               const [enriched] = await withIssueLabels(tx, [existing]);
               const [withRelations] = await withIssueRelationSummaries(companyId, [enriched], tx);
               return finishManualInput(withRelations);
             }
             const {eraseAnalyticalConversationRootsUnderMemory} = await import("./analytical-context-privacy.js");
-            await eraseAnalyticalConversationRootsUnderMemory(tx as unknown as Db,companyId,existing.id);
+            try {
+              await eraseAnalyticalConversationRootsUnderMemory(tx as unknown as Db,companyId,existing.id);
+            } catch (error) {
+              observeRecoveryDbFailure("erase_conversation_retention", error);
+              throw error;
+            }
             const at = new Date();
-            await tx.update(issues).set({ conversationAgentId: null, conversationUserId: null, conversationState: null,
-              conversationRetiredAt: at, status: "cancelled", cancelledAt: at, hiddenAt: at,
-              assigneeAgentId: null, assigneeUserId: null, executionRunId: null, checkoutRunId: null, updatedAt: at,
-            }).where(and(eq(issues.companyId, companyId), eq(issues.id, existing.id)));
+            try {
+              await tx.update(issues).set({ conversationAgentId: null, conversationUserId: null, conversationState: null,
+                conversationRetiredAt: at, status: "cancelled", cancelledAt: at, hiddenAt: at,
+                assigneeAgentId: null, assigneeUserId: null, executionRunId: null, checkoutRunId: null, updatedAt: at,
+              }).where(and(eq(issues.companyId, companyId), eq(issues.id, existing.id)));
+            } catch (error) {
+              observeRecoveryDbFailure("retire_existing_conversation", error);
+              throw error;
+            }
           }
         }
         const idempotencyKey = rawIdempotencyKey?.trim() || null;
@@ -11960,7 +12048,8 @@ export function issueService(db: Db) {
           });
           if (!pinned || pinned.credentialExpiresAt === null) throw notFound("Issue not found");
           await assertManualInputCredentialCurrent(tx, pinned.actor, pinned.credentialExpiresAt);
-          if (!await canActorReadIssuePrivacy(tx, pinned.actor, receiptExisting)) throw notFound("Issue not found");
+          if (!await isCurrentUnsealedConversationShell(tx, pinned.actor, receiptExisting, "issue:comment"))
+            throw notFound("Issue not found");
         }
         if (privateWorkAdmission === "closed" && (!(await canActorReadIssuePrivacy(tx, { type: "none" }, receiptExisting))
           || issueData.visibility === "private")) throw unprocessable("Private tasks are not available");
@@ -12070,17 +12159,24 @@ export function issueService(db: Db) {
               if (!current.allowed) throw conflict(current.reason);
             }
           } else {
-            await pinIssueMutationHuman(tx, currentActor, receiptExisting.companyId);
-            const decision = await authorizationService(tx).decide({ actor: currentActor,
-              action: "issue:mutate", enforceResponsibleUserIntersection: true,
-              resource: { type: "issue", companyId: receiptExisting.companyId, issueId: receiptExisting.id,
-                projectId: receiptExisting.projectId, parentIssueId: receiptExisting.parentId,
-                assigneeAgentId: receiptExisting.assigneeAgentId, assigneeUserId: receiptExisting.assigneeUserId,
-                status: receiptExisting.status, originKind: receiptExisting.originKind, originId: receiptExisting.originId } });
-            if (!decision.allowed) throw forbidden("Task mutation is outside the current actor authority");
+            if (privateWorkAdmission === "owned_conversation_work_mode") {
+              if (currentActor.type !== "board" || currentActor.userId !== receiptExisting.conversationUserId ||
+                  !await isCurrentUnsealedConversationShell(tx, currentActor, receiptExisting, "issue:comment"))
+                throw notFound("Issue not found");
+            } else {
+              await pinIssueMutationHuman(tx, currentActor, receiptExisting.companyId);
+              const decision = await authorizationService(tx).decide({ actor: currentActor,
+                action: "issue:mutate", enforceResponsibleUserIntersection: true,
+                resource: { type: "issue", companyId: receiptExisting.companyId, issueId: receiptExisting.id,
+                  projectId: receiptExisting.projectId, parentIssueId: receiptExisting.parentId,
+                  assigneeAgentId: receiptExisting.assigneeAgentId, assigneeUserId: receiptExisting.assigneeUserId,
+                  status: receiptExisting.status, originKind: receiptExisting.originKind, originId: receiptExisting.originId } });
+              if (!decision.allowed) throw forbidden("Task mutation is outside the current actor authority");
+            }
           }
         }
-        if (currentActor && !(await canActorReadIssuePrivacy(tx, currentActor, receiptExisting))) {
+        if (currentActor && privateWorkAdmission !== "owned_conversation_work_mode" &&
+            !(await canActorReadIssuePrivacy(tx, currentActor, receiptExisting))) {
           throw forbidden("Task not found");
         }
         if (issueData.visibility !== undefined && issueData.visibility !== receiptExisting.visibility) {

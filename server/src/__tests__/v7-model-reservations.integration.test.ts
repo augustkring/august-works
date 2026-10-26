@@ -12,6 +12,8 @@ import {
   authSessions,
   activityLog,
   companyMemberships,
+  companySkillVersions,
+  companySkills,
   companyDeletionOperations,
   companies,
   costEvents,
@@ -35,6 +37,8 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
+import { companySkillService } from "../services/company-skills.js";
+import { rolePackService } from "../services/role-packs.js";
 import { orchestrationService } from "../services/orchestration/orchestration-service.js";
 import { agentIdentityService } from "../services/agent-identities.js";
 import {
@@ -340,12 +344,13 @@ const support = await getEmbeddedPostgresTestSupport();
       budgetMonthlyCents = 2000,
       conversationTariff?: ModelTariffCeiling,
       afterRunSettledBeforeTeardown?: (facts: ConversationAfterRunFacts) => Promise<void>,
+      prepareNativeRuntimeContext?: Parameters<typeof runManagedNativeConversationFrame>[0]["prepareNativeRuntimeContext"],
     ) {
       const opencodeBinary = conversationBinary();
       if (!opencodeBinary) throw new Error("qualified_opencode_binary_unavailable");
       const result = await runManagedNativeConversationFrame({ db, root: os.tmpdir(), opencodeBinary,
         budgetMonthlyCents, ...(conversationTariff ? { tariff: conversationTariff } : {}), beforeProviderResponse,
-        afterRunSettledBeforeTeardown });
+        afterRunSettledBeforeTeardown, prepareNativeRuntimeContext });
       if (result.providerCallCount < 1) throw new Error(`conversation_provider_request_missing:${JSON.stringify({
         runStatus: result.runStatus,
         issuerFactCount: result.issuerFacts.length,
@@ -579,8 +584,34 @@ const support = await getEmbeddedPostgresTestSupport();
           nativeStop: await nativeStopFacts(facts) })}`);
       return { offboarding, operation: operation! };
     }
-    async function purgeConversationCompany(facts: ConversationOffboardingFacts, idempotencyKey: string) {
+    async function purgeConversationCompany(facts: ConversationOffboardingFacts, idempotencyKey: string,
+      afterRequeue?: (operationId: string) => Promise<void>) {
       const { offboarding, operation } = await startConversationOffboarding(facts, idempotencyKey);
+      const scheduledRunIds = await enqueueCompanyManagedOpenCodeRuntimeErasure(db, facts.companyId, operation.id);
+      if (!scheduledRunIds.includes(facts.run.id)) throw new Error(`conversation_run_not_scheduled_for_native_erasure:${JSON.stringify({
+        runId: facts.run.id, runtimeMode: facts.run.runtimeMode, driverKind: facts.run.driverKind, status: facts.run.status,
+        processPidPresent: facts.run.processPid !== null, processGroupPresent: facts.run.processGroupId !== null,
+        scheduledRunCount: scheduledRunIds.length,
+      })}`);
+      const [queuedErasure] = await db.select().from(memoryJobs).where(and(eq(memoryJobs.companyId, facts.companyId),
+        eq(memoryJobs.jobKey, `runtime-asset-erasure:v1:${facts.run.id}`))).orderBy(sql`${memoryJobs.attemptNumber} desc`).limit(1);
+      if (!queuedErasure || queuedErasure.status !== "queued")
+        throw new Error("conversation_fixture_native_erasure_job_not_queued_before_processing");
+      // Preserve the exact current operation and run, but omit the required
+      // legacyDigests array. Missing JSON is not an empty successful receipt.
+      await db.update(memoryJobs).set({ sourceRefJson: { kind: "runtime_asset_erasure", runId: facts.run.id,
+        companyPurgeOperationId: operation.id } })
+        .where(eq(memoryJobs.id, queuedErasure.id));
+      await expect(purgeCompanyContent(db, facts.companyId, { operationId: operation.id })).rejects.toMatchObject({ status: 409 });
+      expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, facts.run.id))).toHaveLength(1);
+      const [stillCurrent] = await db.select({ status: companyDeletionOperations.status }).from(companyDeletionOperations)
+        .where(eq(companyDeletionOperations.id, operation.id));
+      expect(stillCurrent?.status).toBe("processing");
+      await db.update(memoryJobs).set({ sourceRefJson: { kind: "runtime_asset_erasure", runId: facts.run.id,
+        legacyDigests: [], companyPurgeOperationId: operation.id } }).where(eq(memoryJobs.id, queuedErasure.id));
+      const reboundRunIds = await enqueueCompanyManagedOpenCodeRuntimeErasure(db, facts.companyId, operation.id);
+      expect(reboundRunIds).toContain(facts.run.id);
+      await afterRequeue?.(operation.id);
       expect(await offboarding.processOne(new Date(Date.now() + 1_000))).toBe(true);
       const completed = await offboarding.get(facts.companyId);
       if (!completed || completed.id !== operation.id || completed.stage !== "completed" || completed.status !== "completed")
@@ -692,10 +723,28 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(result.workerAttempts).toHaveLength(0);
     }, conversationFrameTestTimeoutMs);
     itNativeConversation("settles the actual qualified conversation usage once and preserves the exact debit in canonical purge", async () => {
+      const priorAssetHome = process.env.PAPERCLIP_HOME, priorAssetInstance = process.env.PAPERCLIP_INSTANCE_ID;
+      const assetHome = await fs.mkdtemp(path.join(os.tmpdir(), "aw-conversation-legacy-assets-"));
+      process.env.PAPERCLIP_HOME = assetHome;
+      process.env.PAPERCLIP_INSTANCE_ID = "conversation-legacy-assets";
+      cleanupOffboardingProviderFixture = async () => {
+        await instanceSettingsService(db).updateExperimental({ skill_lifecycle_v5: true });
+        if (priorAssetHome === undefined) delete process.env.PAPERCLIP_HOME; else process.env.PAPERCLIP_HOME = priorAssetHome;
+        if (priorAssetInstance === undefined) delete process.env.PAPERCLIP_INSTANCE_ID; else process.env.PAPERCLIP_INSTANCE_ID = priorAssetInstance;
+        const writable = async (directory: string): Promise<void> => {
+          const stat = await fs.lstat(directory).catch(() => null);
+          if (!stat?.isDirectory() || stat.isSymbolicLink()) return;
+          await fs.chmod(directory, 0o700);
+          for (const child of await fs.readdir(directory)) await writable(path.join(directory, child));
+        };
+        await writable(assetHome);
+        await fs.rm(assetHome, { recursive: true, force: true });
+      };
       const factsHolder: { value: ConversationFrameFacts | null } = { value: null };
       const purgeHolder: { value: Awaited<ReturnType<typeof purgeConversationCompany>> | null } = { value: null };
       let settledOnceBeforePurge = false;
       let runtimeErasureBeforePurge: Record<string, unknown> | null = null;
+      let legacyDigests: string[] = [];
       const usagePricedTariff: ModelTariffCeiling = { ...tariff(), provider: "anthropic", model: "fixture-managed-conversation-v1",
         inputMinorPerMillion: 1000, outputMinorPerMillion: 2000, fixedMinor: 0,
         qualificationHash: "b".repeat(64), expiresAt: new Date(Date.now() + 60 * 60_000).toISOString() };
@@ -708,6 +757,7 @@ const support = await getEmbeddedPostgresTestSupport();
             providerStubFailure: facts.providerStubFailure,
             runStatus: facts.run?.status ?? null,
             runErrorCode: facts.run?.errorCode ?? null,
+            runErrorPrefix: typeof facts.run?.error === "string" ? facts.run.error.slice(0, 180) : null,
             runNativePhase: facts.run?.nativePhase ?? null,
             runExecutionStage: facts.run?.executionStage ?? null,
             runRuntimeMode: facts.run?.runtimeMode ?? null,
@@ -785,13 +835,99 @@ const support = await getEmbeddedPostgresTestSupport();
           settledOnceBeforePurge = true;
           const exactFrame = { ...facts, run, reservation };
           await assertConversationNativeStopBeforeErasure(exactFrame);
+          const runnerProfile = run.runnerProfileJson && typeof run.runnerProfileJson === "object"
+            ? run.runnerProfileJson as Record<string, unknown> : {};
+          const nativeInput = runnerProfile.nativeExecutionInput && typeof runnerProfile.nativeExecutionInput === "object"
+            ? runnerProfile.nativeExecutionInput as Record<string, unknown> : {};
+          const runtimeContext = nativeInput.runtimeContext && typeof nativeInput.runtimeContext === "object"
+            ? nativeInput.runtimeContext as Record<string, unknown> : {};
+          const instructionBundle = runtimeContext.instructions && typeof runtimeContext.instructions === "object"
+            ? (runtimeContext.instructions as Record<string, unknown>).bundle : null;
+          const skills = Array.isArray(runtimeContext.skills) ? runtimeContext.skills : [];
+          const bundles = [instructionBundle, ...skills.map(skill => skill && typeof skill === "object"
+            ? (skill as Record<string, unknown>).bundle : null)].filter((bundle): bundle is Record<string, unknown> =>
+              !!bundle && typeof bundle === "object" && typeof bundle.digest === "string" && typeof bundle.rootPath === "string" &&
+              bundle.rootPath.includes(`${path.sep}runtime-context-assets${path.sep}bundles${path.sep}`));
+          legacyDigests = [...new Set(bundles.map(bundle => bundle.digest as string))].sort();
+          if (legacyDigests.length !== 2)
+            throw new Error(`conversation_fixture_expected_two_frozen_legacy_bundles:${JSON.stringify({ count: legacyDigests.length,
+              skillCount: skills.length, instructionBundlePresent: !!instructionBundle })}`);
+          const legacyAssetPaths = new Map(bundles.map(bundle => [bundle.digest as string, bundle.rootPath as string]));
           const [prePurgeJob] = await db.select().from(memoryJobs).where(and(
             eq(memoryJobs.companyId, providerFrame.companyId), eq(memoryJobs.jobKey, `runtime-asset-erasure:v1:${run.id}`),
           )).orderBy(sql`${memoryJobs.attemptNumber} desc`).limit(1);
           const prePurgeRef = prePurgeJob?.sourceRefJson as Record<string, unknown> | undefined;
-          runtimeErasureBeforePurge = { status: prePurgeJob?.status ?? null, kind: prePurgeRef?.kind ?? null,
-            runId: prePurgeRef?.runId ?? null, companyPurgeOperationId: prePurgeRef?.companyPurgeOperationId ?? null };
-          purgeHolder.value = await purgeConversationCompany(exactFrame, "conversation-known-cost-purge");
+          runtimeErasureBeforePurge = { status: prePurgeJob?.status ?? null, attemptNumber: prePurgeJob?.attemptNumber ?? null,
+            hasRetryParent: Boolean(prePurgeJob?.retryOfJobId), errorCode: prePurgeJob?.errorCode ?? null,
+            kind: prePurgeRef?.kind ?? null, runId: prePurgeRef?.runId ?? null,
+            companyPurgeOperationId: prePurgeRef?.companyPurgeOperationId ?? null };
+          const legacyA = legacyDigests[0]!;
+          purgeHolder.value = await purgeConversationCompany(exactFrame, "conversation-known-cost-purge", async operationId => {
+            const completeBatchKey = `runtime-asset-erasure:v1:${run.id}:${createHash("sha256").update(legacyDigests.join(",")).digest("hex")}`;
+            const partialBatchKey = `runtime-asset-erasure:v1:${run.id}:${createHash("sha256").update(legacyA).digest("hex")}`;
+            const [completeQueuedJob] = await db.select().from(memoryJobs).where(and(eq(memoryJobs.companyId, providerFrame.companyId),
+              eq(memoryJobs.jobKey, completeBatchKey)))
+              .orderBy(sql`${memoryJobs.attemptNumber} desc`).limit(1);
+            const completeRef = completeQueuedJob?.sourceRefJson as Record<string, unknown> | undefined;
+            expect(completeQueuedJob?.status).toBe("queued");
+            expect(completeRef?.legacyDigests).toEqual(legacyDigests);
+            // Model a canonical but incomplete queued batch. No success/Stop
+            // receipt is fabricated: the real retention worker must erase A,
+            // and the immutable current profile still requires B.
+            await db.delete(memoryJobs).where(eq(memoryJobs.id, completeQueuedJob!.id));
+            const [partialJob] = await db.insert(memoryJobs).values({ companyId: providerFrame.companyId,
+              operationType: "retention", jobKey: partialBatchKey,
+              sourceRefJson: { kind: "runtime_asset_erasure", runId: run.id, legacyDigests: [legacyA], companyPurgeOperationId: operationId },
+            }).returning();
+            await memoryJobService(db).tick({ limit: 100 });
+            const [partialReceipt] = await db.select().from(memoryJobs).where(eq(memoryJobs.id, partialJob!.id));
+            expect(partialReceipt?.status).toBe("succeeded");
+            await expect(fs.stat(legacyAssetPaths.get(legacyA)!)).rejects.toMatchObject({ code: "ENOENT" });
+            const missingDigest = legacyDigests.find(digest => digest !== legacyA)!;
+            await expect(fs.stat(legacyAssetPaths.get(missingDigest)!)).resolves.toBeDefined();
+            await expect(purgeCompanyContent(db, providerFrame.companyId, { operationId })).rejects.toMatchObject({ status: 409 });
+            expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, run.id))).toHaveLength(1);
+            const rebound = await enqueueCompanyManagedOpenCodeRuntimeErasure(db, providerFrame.companyId, operationId);
+            expect(rebound).toContain(run.id);
+            const [expandedJob] = await db.select().from(memoryJobs).where(and(eq(memoryJobs.companyId, providerFrame.companyId),
+              eq(memoryJobs.jobKey, completeBatchKey)))
+              .orderBy(sql`${memoryJobs.attemptNumber} desc`).limit(1);
+            const expandedRef = expandedJob?.sourceRefJson as Record<string, unknown> | undefined;
+            expect(expandedRef?.legacyDigests).toEqual(legacyDigests);
+            await memoryJobService(db).tick({ limit: 100 });
+            const [expandedReceipt] = await db.select().from(memoryJobs).where(eq(memoryJobs.id, expandedJob!.id));
+            expect(expandedReceipt?.status).toBe("succeeded");
+            await expect(fs.stat(legacyAssetPaths.get(legacyDigests[1]!)!)).rejects.toMatchObject({ code: "ENOENT" });
+          });
+        }, async ({ db: frameDb, actor, companyId, agentId }) => {
+          if (!actor.userId) throw new Error("conversation_fixture_human_missing_for_skill_seed");
+          // This case exercises the original legacy runtime bundle path. The
+          // selected skill is a real Human-created company Skill, resolved
+          // from the exact configured runtime selection before the Native
+          // bootstrap freezes its input profile.
+          await instanceSettingsService(frameDb).updateExperimental({ skill_lifecycle_v5: false });
+          const skill = await companySkillService(frameDb).createLocalSkill(companyId, {
+            name: "Erasure fixture skill", slug: "erasure-fixture-skill",
+            markdown: "---\nname: Erasure fixture skill\n---\n# Skill\nHistorical procedure.\n",
+          }, { type: "user", userId: actor.userId });
+          const skillVersionId = skill.currentVersionId;
+          if (!skillVersionId) throw new Error("conversation_fixture_skill_version_missing");
+          // Seed a current, shared Skill version for the bounded resolver
+          // fixture. The real Role Pack pins that version before the run; the
+          // resulting native input and bundle come from normal Fabric readers.
+          await frameDb.update(companySkillVersions).set({ state: "active", visibility: "company", activatedAt: new Date() })
+            .where(eq(companySkillVersions.id, skillVersionId));
+          await frameDb.update(companySkills).set({ lifecycleState: "active", activeVersionId: skillVersionId,
+            currentVersionId: skillVersionId, sharingScope: "company" }).where(eq(companySkills.id, skill.id));
+          const packs = rolePackService(frameDb);
+          const pack = await packs.create(actor, companyId, { key: `erasure-fixture-${randomUUID()}`,
+            name: "Erasure fixture procedure", description: "Pins the actual runtime asset used by the erasure test" });
+          const version = await packs.createVersion(actor, companyId, pack.id, { summary: "Required runtime procedure",
+            items: [{ type: "required_skill", ref: skill.id, versionId: skillVersionId, operation: "add",
+              loadPoint: "always", triggerTerms: [], excludeTerms: [] }] });
+          await packs.publish(actor, companyId, pack.id, version.id, null);
+          await packs.assign(actor, companyId, { scopeType: "agent", scopeId: agentId, rolePackId: pack.id,
+            versionPolicy: "pinned", pinnedVersionId: version.id });
         });
       const facts = factsHolder.value;
       if (!facts) throw new Error("conversation_frame_facts_missing");
@@ -821,12 +957,24 @@ const support = await getEmbeddedPostgresTestSupport();
         eq(memoryJobs.companyId, facts.companyId), eq(memoryJobs.jobKey, `runtime-asset-erasure:v1:${facts.run.id}`),
       )).orderBy(sql`${memoryJobs.attemptNumber} desc`).limit(1);
       const runtimeErasureRef = runtimeErasureReceipt?.sourceRefJson as Record<string, unknown> | undefined;
-      const runtimeErasureAfterPurge = { status: runtimeErasureReceipt?.status ?? null, kind: runtimeErasureRef?.kind ?? null,
-        runId: runtimeErasureRef?.runId ?? null, companyPurgeOperationId: runtimeErasureRef?.companyPurgeOperationId ?? null };
+      const runtimeErasureAfterPurge = { status: runtimeErasureReceipt?.status ?? null,
+        attemptNumber: runtimeErasureReceipt?.attemptNumber ?? null, hasRetryParent: Boolean(runtimeErasureReceipt?.retryOfJobId),
+        errorCode: runtimeErasureReceipt?.errorCode ?? null, kind: runtimeErasureRef?.kind ?? null,
+        runId: runtimeErasureRef?.runId ?? null, legacyDigests: runtimeErasureRef?.legacyDigests ?? null,
+        companyPurgeOperationId: runtimeErasureRef?.companyPurgeOperationId ?? null };
       if (runtimeErasureAfterPurge.status !== "succeeded" || runtimeErasureAfterPurge.kind !== "runtime_asset_erasure" ||
-        runtimeErasureAfterPurge.runId !== facts.run.id || runtimeErasureAfterPurge.companyPurgeOperationId !== operation.id)
+        runtimeErasureAfterPurge.runId !== facts.run.id || JSON.stringify(runtimeErasureAfterPurge.legacyDigests) !== JSON.stringify([]) ||
+        runtimeErasureAfterPurge.companyPurgeOperationId !== operation.id)
         throw new Error(`conversation_runtime_outbox_receipt_mismatch:${JSON.stringify({ beforePurge: runtimeErasureBeforePurge,
           afterPurge: runtimeErasureAfterPurge, operationId: operation.id, runId: facts.run.id })}`);
+      const [legacyErasureReceipt] = await db.select().from(memoryJobs).where(and(
+        eq(memoryJobs.companyId, facts.companyId), eq(memoryJobs.jobKey,
+          `runtime-asset-erasure:v1:${facts.run.id}:${createHash("sha256").update(legacyDigests.join(",")).digest("hex")}`),
+      )).orderBy(sql`${memoryJobs.attemptNumber} desc`).limit(1);
+      const legacyErasureRef = legacyErasureReceipt?.sourceRefJson as Record<string, unknown> | undefined;
+      expect(legacyErasureReceipt?.status).toBe("succeeded");
+      expect(legacyErasureRef).toMatchObject({ kind: "runtime_asset_erasure", runId: facts.run.id,
+        legacyDigests, companyPurgeOperationId: operation.id });
       expect(await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.id, reservation.id))).toHaveLength(0);
       expect(await db.select().from(issues).where(eq(issues.id, result.issueId))).toHaveLength(0);
     }, conversationFrameTestTimeoutMs);

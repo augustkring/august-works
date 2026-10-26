@@ -47,7 +47,7 @@ export async function purgeCompanyContent(
     await tx.execute(sql`set local statement_timeout='8s'`);
     await lockAnalyticalCompany(tx,companyId);
     await lockMemoryPrivacy(tx as unknown as Db,companyId);
-    await assertCompanyManagedOpenCodeRuntimeDataErased(tx as unknown as Db, companyId);
+    await assertCompanyManagedOpenCodeRuntimeDataErased(tx as unknown as Db, companyId, options.operationId);
     let platformModelFunding: Record<string, string> | undefined;
     let nativeConversationModelFunding: Record<string, string> | undefined;
     const [hasFunding] = await tx.select({ id: orchestrationCompanyPurposeBudgets.id })
@@ -200,6 +200,10 @@ export async function purgeCompanyContent(
         companyPurgeOperationId: options.operationId,
       });
     }
+    // Source/profile retirement can enqueue new runtime legacy references in
+    // the SQL trigger. Refuse the content delete in this transaction until the
+    // original Run-owned outbox has physically erased and acknowledged them.
+    await assertCompanyManagedOpenCodeRuntimeDataErased(tx as unknown as Db, companyId, options.operationId);
     // These purpose-ledger rows have a native DELETE guard and a retained
     // aggregate finance receipt above. Delete them through their owner in
     // child-before-parent order before generic company-content cleanup.

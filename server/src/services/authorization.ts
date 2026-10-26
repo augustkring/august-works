@@ -2,7 +2,7 @@ import { isDeepStrictEqual } from "node:util";
 import { createHash, randomUUID } from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { isSaasDeployment } from "../deployment-profile.js";
-import { and, eq, inArray, is, isNull, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, is, isNull, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { PgTransaction } from "drizzle-orm/pg-core";
 import type { Db } from "@paperclipai/db";
 import type { NativeToolEffectClaim } from "../agent-auth-jwt.js";
@@ -646,6 +646,116 @@ export async function issueReadSqlCondition(_db: Db | DbTransaction, actor: Auth
   return taskSourcePrivacySqlCondition(_db, "issue", sql`${issues.id}`, sql`${issues.companyId}`, actor);
 }
 
+let nativeIssuePrivacyDiagnosticStatements = 0;
+const nativeIssuePrivacyDiagnosticPlans = new Set<string>();
+const nativeIssuePrivacyDiagnosticObservedSettings = new Set<string>();
+const nativeIssuePrivacyDiagnosticGroups = new Map<string, { stage: string; actorType: string; actorSource: string;
+  caller: string; count: number; totalMs: number; maxMs: number }>();
+async function nativeIssuePrivacyDiagnosticQuery<T>(db: Db | DbTransaction, actor: AuthorizationActor,
+  stage: "retained_source_graph" | "effective_acl", query: SQLWrapper, execute: () => Promise<T>): Promise<T> {
+  if (process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS !== "1") return execute();
+  const startedAt = performance.now();
+  let succeeded = false;
+  let failureCode: string | null = null;
+  try {
+    const result = await execute();
+    succeeded = true;
+    return result;
+  } catch (error) {
+    const code = error && typeof error === "object" ? (error as { code?: unknown }).code : undefined;
+    failureCode = typeof code === "string" && /^[A-Z0-9_]{1,32}$/.test(code) ? code : null;
+    throw error;
+  } finally {
+    const elapsedMs = Math.max(0, performance.now() - startedAt);
+    const frames = new Error().stack?.split("\n").flatMap(line => {
+        const match = /server\/src\/services\/([A-Za-z0-9_./-]+\.ts):(\d+):\d+/.exec(line);
+        return match && match[1] !== "authorization.ts" ? [`${match[1]}:${match[2]}`] : [];
+      }).slice(0, 4) ?? [];
+    const relevant = actor.type === "agent" && frames.some(frame =>
+      /native-direct-input|worker-model-gateway|native-session-executor|analytical-context-authority/.test(frame));
+    const caller = frames.find(frame => /native-direct-input|worker-model-gateway|native-session-executor|analytical-context-authority/.test(frame)) ?? "native:unknown";
+    const actorSource = actor.source ?? "unknown";
+    if (relevant) {
+      const key = `${stage}:${actor.type}:${actorSource}:${caller}`;
+      const group = nativeIssuePrivacyDiagnosticGroups.get(key) ?? { stage, actorType: actor.type,
+        actorSource, caller, count: 0, totalMs: 0, maxMs: 0 };
+      group.count = Math.min(1_000_000, group.count + 1);
+      group.totalMs = Math.min(1_000_000_000, group.totalMs + elapsedMs);
+      group.maxMs = Math.max(group.maxMs, elapsedMs);
+      nativeIssuePrivacyDiagnosticGroups.set(key, group);
+      const totalCount = [...nativeIssuePrivacyDiagnosticGroups.values()].reduce((sum, value) => sum + value.count, 0);
+      if (totalCount % 16 === 0) console.error("native_issue_privacy_query_summary", JSON.stringify(
+        [...nativeIssuePrivacyDiagnosticGroups.values()].sort((left, right) => right.totalMs - left.totalMs)
+          .slice(0, 16).map(value => ({ ...value, totalMs: Math.round(value.totalMs), maxMs: Math.round(value.maxMs) }))));
+    }
+    if (relevant && elapsedMs >= 100 && nativeIssuePrivacyDiagnosticStatements < 48) {
+      nativeIssuePrivacyDiagnosticStatements += 1;
+      let plan: Record<string, unknown> | null = null;
+      let observedSettings: Record<string, unknown> | null = null;
+      if (stage === "effective_acl" && nativeIssuePrivacyDiagnosticObservedSettings.size < 32 &&
+          !nativeIssuePrivacyDiagnosticObservedSettings.has(`${actorSource}:${caller}`)) {
+        nativeIssuePrivacyDiagnosticObservedSettings.add(`${actorSource}:${caller}`);
+        try {
+          const [settings] = await db.execute<{ jit: string; jitAboveCost: string }>(sql`
+            select current_setting('jit') as jit, current_setting('jit_above_cost') as "jitAboveCost"
+          `);
+          observedSettings = { jit: settings?.jit === "on", jitAboveCost: settings?.jitAboveCost ?? null };
+        } catch {
+          observedSettings = { unavailable: true };
+        }
+      }
+      const planKey = `${stage}:${actorSource}:${caller}`;
+      if (succeeded && elapsedMs >= 100 && nativeIssuePrivacyDiagnosticPlans.size < 8 &&
+          !nativeIssuePrivacyDiagnosticPlans.has(planKey)) {
+        nativeIssuePrivacyDiagnosticPlans.add(planKey);
+        try {
+          const [row] = await db.execute<{ "QUERY PLAN": unknown }>(sql`explain (format json) ${query}`);
+          const raw = row?.["QUERY PLAN"];
+          const rootValue = Array.isArray(raw) ? raw[0] : raw;
+          const explainRoot = rootValue && typeof rootValue === "object" && !Array.isArray(rootValue)
+            ? rootValue as Record<string, unknown> : null;
+          const planRoot = explainRoot?.Plan && typeof explainRoot.Plan === "object" && !Array.isArray(explainRoot.Plan)
+            ? explainRoot.Plan as Record<string, unknown> : null;
+          const nodes: string[] = [];
+          const indexes: string[] = [];
+          const visit = (node: Record<string, unknown>, depth: number) => {
+            if (depth > 64 || nodes.length >= 512) return;
+            if (typeof node["Node Type"] === "string") nodes.push(node["Node Type"] as string);
+            if (typeof node["Index Name"] === "string") indexes.push(node["Index Name"] as string);
+            const children = Array.isArray(node.Plans) ? node.Plans : [];
+            for (const child of children) if (child && typeof child === "object" && !Array.isArray(child))
+              visit(child as Record<string, unknown>, depth + 1);
+          };
+          if (planRoot) visit(planRoot, 0);
+          const [settings] = await db.execute<{ jit: string; jitAboveCost: string;
+            jitInlineAboveCost: string; jitOptimizeAboveCost: string; planCacheMode: string;
+            statementTimeout: string; lockTimeout: string }>(sql`
+            select current_setting('jit') as jit, current_setting('jit_above_cost') as "jitAboveCost",
+              current_setting('jit_inline_above_cost') as "jitInlineAboveCost",
+              current_setting('jit_optimize_above_cost') as "jitOptimizeAboveCost",
+              current_setting('plan_cache_mode') as "planCacheMode",
+              current_setting('statement_timeout') as "statementTimeout",
+              current_setting('lock_timeout') as "lockTimeout"
+          `);
+          plan = { totalCost: typeof planRoot?.["Total Cost"] === "number" ? planRoot["Total Cost"] : null,
+            startupCost: typeof planRoot?.["Startup Cost"] === "number" ? planRoot["Startup Cost"] : null,
+            nodes: nodes.slice(0, 64), indexes: [...new Set(indexes)].slice(0, 64),
+            jit: settings?.jit === "on", jitAboveCost: settings?.jitAboveCost ?? null,
+            jitInlineAboveCost: settings?.jitInlineAboveCost ?? null,
+            jitOptimizeAboveCost: settings?.jitOptimizeAboveCost ?? null,
+            planCacheMode: settings?.planCacheMode ?? null,
+            statementTimeout: settings?.statementTimeout ?? null, lockTimeout: settings?.lockTimeout ?? null };
+        } catch {
+          plan = { unavailable: true };
+        }
+      }
+      console.error("native_issue_privacy_query_diagnostic", JSON.stringify({ stage,
+        elapsedMs: Math.round(elapsedMs), actorType: actor.type, actorSource,
+        succeeded, failureCode, frames, ...(observedSettings ? { observedSettings } : {}), ...(plan ? { plan } : {}) }));
+    }
+  }
+}
+
 async function issueReadSqlConditionInMemoryScope(db: Db | DbTransaction, actor: AuthorizationActor, issueId: string) {
   const capturedContextManifestIds=activeMemoryTemporalContexts(db,actor,"issue",issueId);
   return capturedContextManifestIds === undefined ? issueReadSqlCondition(db,actor)
@@ -1281,7 +1391,7 @@ export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: Au
   }
   const activeRoutineScope = nativeRoutineReadScopes.get(db as object);
   if (!activeRoutineScope?.active && actor.type !== "none" && actor.source !== "local_implicit") {
-    const [sourceRows] = await db.execute<{ ids: string[]; overflow: boolean }>(sql`
+    const sourceGraphQuery = sql`
       with recursive issue_chain(id) as (
         select ${issue.id}::uuid
         union
@@ -1301,7 +1411,9 @@ export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: Au
       ), bounded as materialized (select distinct id from routine_ids limit 257)
       select coalesce(array_agg(id::text) filter(where id is not null),array[]::text[]) as ids,
         ((select count(*) from bounded_nodes)>256 or (select count(*) from bounded)>256) as overflow from bounded
-    `);
+    `;
+    const [sourceRows] = await nativeIssuePrivacyDiagnosticQuery(db, actor, "retained_source_graph", sourceGraphQuery,
+      () => db.execute<{ ids: string[]; overflow: boolean }>(sourceGraphQuery));
     const routineIds = sourceRows?.ids ?? [];
     if (sourceRows?.overflow) return false;
     if (routineIds.length) {
@@ -1318,7 +1430,8 @@ export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: Au
   }
   const readQuery = db.select({ id: issues.id }).from(issues).where(and(eq(issues.id, issue.id), eq(issues.companyId, issue.companyId),
     await issueReadSqlConditionInMemoryScope(db, actor, issue.id))).limit(1);
-  const readable = (await readQuery).length > 0;
+  const readable = (await nativeIssuePrivacyDiagnosticQuery(db, actor, "effective_acl", readQuery,
+    () => readQuery)).length > 0;
   return readable;
 }
 /** Typed Task execution owners are distinct namespaces from heartbeat runs.
@@ -1457,12 +1570,21 @@ type MemoryTemporalReadScope = {
   active: boolean;
 };
 const memoryTemporalReadScopes = new AsyncLocalStorage<MemoryTemporalReadScope>();
+let nativeMemoryTemporalDiagnostics = 0;
 
 /** Bind a no-live-future-Context read to one existing immutable Memory output.
  * This is callable only by the Memory source owner, never from request fields. */
 export async function withReadMemoryTemporalSources<T>(db: Db | DbTransaction, actor: AuthorizationActor,
   companyId: string, recordId: string, read: () => Promise<T>, expected?: { sourceVersion: string; snapshot: unknown;
     issueIds: string[]; projectIds: string[]; runIds: string[]; memoryIds: string[]; foundationRevisionIds: string[] }): Promise<T | false> {
+  const diagnostic = (stage: "source_snapshot" | "source_body_hash" | "output_snapshot_currentness" |
+    "context_inputs_currentness" | "callback_reader",
+    facts: Record<string, boolean | number | string | null> = {}) => {
+    if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1" && nativeMemoryTemporalDiagnostics < 8) {
+      nativeMemoryTemporalDiagnostics += 1;
+      console.error("native_memory_temporal_reader_test_denial", JSON.stringify({ stage, ...facts }));
+    }
+  };
   const [row] = await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, companyId), eq(memoryRecords.id, recordId),
     isNull(memoryRecords.deletedAt), sql`not exists(select 1 from ${memoryDeletionMarkers} d
       where d.company_id=${companyId} and d.record_id=${recordId})`)).for("share");
@@ -1486,30 +1608,53 @@ export async function withReadMemoryTemporalSources<T>(db: Db | DbTransaction, a
     || !isDeepStrictEqual([...row.sourceRunIds].sort(), capturedRunIds)
     || !isDeepStrictEqual(snapshot.data.policy.memoryIds, [...row.sourceMemoryIds].sort())
     || !isDeepStrictEqual(snapshot.data.policy.foundationRevisionIds, [...row.sourceFoundationRevisionIds].sort()))
-    return false;
+    {
+      diagnostic("source_snapshot", { rowPresent: Boolean(row), expectedPresent: Boolean(expected), snapshotValid: Boolean(snapshot?.success),
+        sourceQualified: row?.sourceProvenanceQualified === true, protocolOne: row?.payloadSourceProtocolVersion === 1,
+        snapshotNotInvalidated: row?.payloadSourceSnapshotInvalidated === false,
+        ownerBound: Boolean(snapshot?.success && row && snapshot.data.owner.kind === "memory_record" &&
+          snapshot.data.owner.companyId === companyId && snapshot.data.owner.id === recordId),
+        expectedMatches: Boolean(row && expected && row.updatedAt.toISOString() === expected.sourceVersion &&
+          isDeepStrictEqual(row.payloadSourceSnapshot, expected.snapshot)) });
+      return false;
+    }
   const [binding] = await db.execute<{ valid: boolean }>(sql`select
     public.aw_native_payload_body_hash('memory_record',to_jsonb(m))=${snapshot.data.owner.contentHash}
       and encode(sha256(convert_to((m.payload_source_snapshot-'digest')::text,'UTF8')),'hex')=${snapshot.data.digest} as valid
     from ${memoryRecords} m where m.company_id=${companyId} and m.id=${recordId}
       and m.payload_source_snapshot is not null and m.payload_source_snapshot_invalidated=false`);
-  if (!binding?.valid) return false;
+  if (!binding?.valid) { diagnostic("source_body_hash", { bodyAndSnapshotDigestValid: binding?.valid === true }); return false; }
   const contextInputs = snapshot.data.inputs.filter((input): input is Extract<typeof input, { kind: "context" }> => input.kind === "context");
   const { assertNativeMemoryOutputSnapshotCurrent, assertNativeTemporalContextInputsCurrent } = await import("./native-direct-input.js");
+  let currentnessStage: "output_snapshot_currentness" | "context_inputs_currentness" = "output_snapshot_currentness";
   try {
     if (dispatch) await assertNativeMemoryOutputSnapshotCurrent(db as Db, { companyId, recordId, snapshot: snapshot.data, actor });
+    currentnessStage = "context_inputs_currentness";
     await assertNativeTemporalContextInputsCurrent(db as Db, companyId, contextInputs);
   } catch (error) {
-    if (error instanceof HttpError && [403, 404, 409, 422].includes(error.status)) return false;
+    if (error instanceof HttpError && [403, 404, 409, 422].includes(error.status)) {
+      const frames = (typeof error.stack === "string" ? error.stack : "").split("\n").flatMap(line => {
+        const match = /server\/src\/services\/([A-Za-z0-9_./-]+\.ts):(\d+):\d+/.exec(line);
+        return match ? [`${match[1]}:${match[2]}`] : [];
+      }).slice(0, 5);
+      diagnostic(currentnessStage, { status: error.status,
+        errorName: ["HttpError", "Error"].includes(error.name) ? error.name : "other", frames: frames.join(",") });
+      return false;
+    }
     throw error;
   }
   const scope: MemoryTemporalReadScope = { db: db as object, companyId, recordId, actorKey: routineActorKey(actor),
     issueIds: new Set(row.sourceIssueIds), runIds: new Set(snapshot.data.policy.runIds),
     contextIds: contextInputs.map(input => input.manifestId).sort(), active: true };
-  try { return await memoryTemporalReadScopes.run(scope, read); }
+  try {
+    const result = await memoryTemporalReadScopes.run(scope, read);
+    if (result === false) diagnostic("callback_reader", { callbackReturnedFalse: true });
+    return result;
+  }
   finally { scope.active = false; }
 }
 
-function activeMemoryTemporalContexts(db: Db | DbTransaction, actor: AuthorizationActor,
+export function activeMemoryTemporalContexts(db: Db | DbTransaction, actor: AuthorizationActor,
   kind: "issue" | "run", id: string): readonly string[] | undefined {
   const scope = memoryTemporalReadScopes.getStore();
   return scope?.active && scope.db === (db as object) && scope.actorKey === routineActorKey(actor)

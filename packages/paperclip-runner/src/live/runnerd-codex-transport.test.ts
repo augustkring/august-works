@@ -1682,6 +1682,19 @@ it("uses file-backed AWS workload identity without forwarding access keys or Pap
   expect(environment.PAPERCLIP_NATIVE_MCP_TOKEN).toBeUndefined();
 });
 
+it("does not merge ambient API credentials into an explicit OpenCode environment", () => {
+  const prior = process.env.OPENROUTER_API_KEY;
+  process.env.OPENROUTER_API_KEY = "ambient-server-only-key";
+  try {
+    const environment = runnerdEnvironmentInternals.createSanitizedOpenCodeRunnerEnvironment({ PATH: "/bin" });
+    expect(environment.PATH).toBe("/bin");
+    expect(environment.OPENROUTER_API_KEY).toBeUndefined();
+  } finally {
+    if (prior === undefined) delete process.env.OPENROUTER_API_KEY;
+    else process.env.OPENROUTER_API_KEY = prior;
+  }
+});
+
 it.each([
   {
     agent: "pi" as const,

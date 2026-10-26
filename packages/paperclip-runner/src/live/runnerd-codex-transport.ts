@@ -3210,7 +3210,20 @@ const MANAGED_OPEN_CODE_ENVIRONMENT_KEYS = [
 function createSanitizedOpenCodeRunnerEnvironment(
   source: NodeJS.ProcessEnv | undefined,
 ): NodeJS.ProcessEnv {
-  const candidate = { ...process.env, ...source };
+  // Heartbeat has already composed the provider's configured values with the
+  // small runner-owned host allowlist. Preserve non-secret host context when
+  // callers provide a partial source, but never reintroduce ambient credentials
+  // such as API keys or MCP bearer tokens into a sandbox exec request.
+  const candidate = { ...(source ?? process.env) };
+  if (source) {
+    for (const key of OPEN_CODE_RUNNER_ENVIRONMENT_KEYS) {
+      if (source[key] !== undefined || /(?:TOKEN|SECRET|PASSWORD|CREDENTIAL|API[_-]?KEY|PRIVATE[_-]?KEY|AUTHORIZATION)/i.test(key)) {
+        continue;
+      }
+      const value = process.env[key];
+      if (typeof value === "string") candidate[key] = value;
+    }
+  }
   const sanitized = Object.fromEntries(
     Object.entries(candidate).filter(
       ([key, value]) =>

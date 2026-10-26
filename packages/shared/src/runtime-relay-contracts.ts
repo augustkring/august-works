@@ -42,8 +42,25 @@ const sandboxExecRequest = z.object({
   const commandBytes = new TextEncoder().encode(JSON.stringify(value.argv)).byteLength + new TextEncoder().encode(JSON.stringify(value.env)).byteLength + (value.brokerCredential?.capabilityToken.length ?? 0) + (value.modelBrokerCredential?.capabilityToken.length ?? 0) + value.stdinBase64.length;
   if (commandBytes > 768 * 1024) ctx.addIssue({ code: "custom", message: "exec_request_too_large" });
   if (!value.cwd.startsWith("/")) ctx.addIssue({ code: "custom", message: "exec_workdir_must_be_absolute" });
-  if (Object.keys(value.env).some(key => /(?:TOKEN|SECRET|PASSWORD|CREDENTIAL|API[_-]?KEY|PRIVATE[_-]?KEY|AUTHORIZATION)/i.test(key)))
+  // These are public numeric limits, admitted only when they duplicate the
+  // typed credential exactly; they never carry a credential value.
+  const managedModelBoundNames = new Set([
+    "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND",
+    "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS",
+  ]);
+  if (Object.keys(value.env).some(key =>
+    /(?:TOKEN|SECRET|PASSWORD|CREDENTIAL|API[_-]?KEY|PRIVATE[_-]?KEY|AUTHORIZATION)/i.test(key) &&
+    !managedModelBoundNames.has(key)))
     ctx.addIssue({ code: "custom", message: "raw_managed_credentials_are_not_supported" });
+  const inputBound = value.env.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND;
+  const outputBound = value.env.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS;
+  if (value.modelBrokerCredential) {
+    if (inputBound !== String(value.modelBrokerCredential.inputTokensUpperBound) ||
+      outputBound !== String(value.modelBrokerCredential.maxOutputTokens))
+      ctx.addIssue({ code: "custom", message: "managed_model_bounds_do_not_match_typed_credential" });
+  } else if (inputBound !== undefined || outputBound !== undefined) {
+    ctx.addIssue({ code: "custom", message: "managed_model_bounds_require_typed_credential" });
+  }
 });
 export const runtimeSandboxExecRelayRequestSchema = sandboxExecRequest;
 export type RuntimeSandboxExecRelayRequest = z.infer<typeof sandboxExecRequest>;
