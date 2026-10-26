@@ -346,6 +346,12 @@ const support = await getEmbeddedPostgresTestSupport();
       const result = await runManagedNativeConversationFrame({ db, root: os.tmpdir(), opencodeBinary,
         budgetMonthlyCents, ...(conversationTariff ? { tariff: conversationTariff } : {}), beforeProviderResponse,
         afterRunSettledBeforeTeardown });
+      if (result.providerCallCount < 1) throw new Error(`conversation_provider_request_missing:${JSON.stringify({
+        runStatus: result.runStatus,
+        issuerFactCount: result.issuerFacts.length,
+        providerStubFailure: result.providerStubFailure,
+        providerHookInvoked: result.providerHookInvoked,
+      })}`);
       expect(result.providerCallCount).toBeGreaterThan(0);
       expect(result.providerKeyMatched).toBe(true);
       expect(result.issuerFacts).toHaveLength(1);
@@ -688,13 +694,34 @@ const support = await getEmbeddedPostgresTestSupport();
     itNativeConversation("settles the actual qualified conversation usage once and preserves the exact debit in canonical purge", async () => {
       const factsHolder: { value: ConversationFrameFacts | null } = { value: null };
       const purgeHolder: { value: Awaited<ReturnType<typeof purgeConversationCompany>> | null } = { value: null };
+      let settledOnceBeforePurge = false;
       const usagePricedTariff: ModelTariffCeiling = { ...tariff(), provider: "anthropic", model: "fixture-managed-conversation-v1",
         inputMinorPerMillion: 1000, outputMinorPerMillion: 2000, fixedMinor: 0,
         qualificationHash: "b".repeat(64), expiresAt: new Date(Date.now() + 60 * 60_000).toISOString() };
       const result = await conversationReservationFixture(async facts => { factsHolder.value = facts; }, 2000, usagePricedTariff,
         async facts => {
           const providerFrame = factsHolder.value;
-          if (!providerFrame) throw new Error("conversation_provider_frame_missing_for_purge");
+          if (!facts.providerHookInvoked || !providerFrame) throw new Error(`conversation_provider_frame_missing_for_purge:${JSON.stringify({
+            providerCallCount: facts.providerCallCount,
+            providerHookInvoked: facts.providerHookInvoked,
+            providerStubFailure: facts.providerStubFailure,
+          })}`);
+          const [capturedManifest] = await db.select({ id: agentExecutionManifests.id })
+            .from(agentExecutionManifests).where(and(eq(agentExecutionManifests.companyId, providerFrame.companyId),
+              eq(agentExecutionManifests.id, providerFrame.manifest.id))).limit(1);
+          expect(capturedManifest?.id).toBe(providerFrame.manifest.id);
+          await expect(db.delete(agentExecutionManifests).where(and(eq(agentExecutionManifests.companyId, providerFrame.companyId),
+            eq(agentExecutionManifests.id, providerFrame.manifest.id)))).rejects.toThrow();
+          await expect(db.update(agentExecutionManifests).set({ manifest: { payloadDeleted: true } }).where(and(
+            eq(agentExecutionManifests.companyId, providerFrame.companyId),
+            eq(agentExecutionManifests.id, providerFrame.manifest.id))).returning({ id: agentExecutionManifests.id })).rejects.toThrow();
+          const unrelatedCompanyId = randomUUID();
+          await db.insert(companies).values({ id: unrelatedCompanyId, name: "Unrelated erasure marker owner",
+            issuePrefix: `Z${unrelatedCompanyId.replaceAll("-", "").slice(0, 7)}` });
+          await db.update(companies).set({ status: "archived", pauseReason: "company_deleted",
+            contentErasureTransactionId: sql`pg_current_xact_id()::text` }).where(eq(companies.id, unrelatedCompanyId));
+          await expect(db.delete(agentExecutionManifests).where(and(eq(agentExecutionManifests.companyId, providerFrame.companyId),
+            eq(agentExecutionManifests.id, providerFrame.manifest.id)))).rejects.toThrow();
           const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, providerFrame.companyId),
             eq(heartbeatRuns.id, providerFrame.run.id))).limit(1);
           const [reservation] = await db.select().from(orchestrationModelReservations).where(and(
@@ -729,6 +756,23 @@ const support = await getEmbeddedPostgresTestSupport();
               selectedReservationMatches: facts.reservation?.id === reservation?.id,
             })}`);
           }
+          const actualTariff = providerFrame.tariffSnapshot as ModelTariffCeiling;
+          const expectedMinor = actualTariff.fixedMinor + Math.ceil((providerFrame.usage.inputTokens * actualTariff.inputMinorPerMillion +
+            providerFrame.usage.outputTokens * actualTariff.outputMinorPerMillion) / 1_000_000);
+          expect(expectedMinor).toBeGreaterThan(0);
+          expect(expectedMinor).toBeLessThan(reservation.maximumMinor);
+          const billingCode = `native-conversation-model:${reservation.id}`;
+          const settled = await db.select().from(costEvents).where(eq(costEvents.billingCode, billingCode));
+          expect(settled).toHaveLength(1);
+          expect(settled[0]).toMatchObject({ companyId: providerFrame.companyId, agentId: providerFrame.agentId,
+            issueId: providerFrame.issueId, heartbeatRunId: run.id, costCents: expectedMinor,
+            inputTokens: providerFrame.usage.inputTokens, outputTokens: providerFrame.usage.outputTokens, costStatus: "estimated" });
+          const broker = conversationReservationService(providerFrame).service;
+          await expect(broker.recordOutcome(providerFrame.companyId, reservation.id, {
+            status: "completed", providerResponseHash: providerFrame.providerResponseSha256, usage: providerFrame.usage,
+          })).rejects.toThrow();
+          expect(await db.select().from(costEvents).where(eq(costEvents.billingCode, billingCode))).toHaveLength(1);
+          settledOnceBeforePurge = true;
           const exactFrame = { ...facts, run, reservation };
           await assertConversationNativeStopBeforeErasure(exactFrame);
           purgeHolder.value = await purgeConversationCompany(exactFrame, "conversation-known-cost-purge");
@@ -739,6 +783,7 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(result.run?.id).toBe(factsHolder.value?.run.id);
       expect(result.workerPlan).toBeNull();
       expect(result.workerAttempts).toHaveLength(0);
+      expect(settledOnceBeforePurge).toBe(true);
       const reservation = result.reservation!;
       const actualTariff = facts.tariffSnapshot as ModelTariffCeiling;
       const expectedMinor = actualTariff.fixedMinor + Math.ceil((facts.usage.inputTokens * actualTariff.inputMinorPerMillion +
@@ -748,16 +793,7 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(reservation).toMatchObject({ purpose: "conversation_model", status: "completed",
         conversationRunId: result.run?.id, conversationIssueId: result.issueId });
       const billingCode = `native-conversation-model:${reservation.id}`;
-      const settled = await db.select().from(costEvents).where(eq(costEvents.billingCode, billingCode));
-      expect(settled).toHaveLength(1);
-      expect(settled[0]).toMatchObject({ companyId: facts.companyId, agentId: facts.agentId,
-        issueId: result.issueId, heartbeatRunId: result.run?.id, costCents: expectedMinor,
-        inputTokens: facts.usage.inputTokens, outputTokens: facts.usage.outputTokens, costStatus: "estimated" });
-      const broker = conversationReservationService(facts).service;
-      await expect(broker.recordOutcome(facts.companyId, reservation.id, {
-        status: "completed", providerResponseHash: facts.providerResponseSha256, usage: facts.usage,
-      })).rejects.toThrow();
-      expect(await db.select().from(costEvents).where(eq(costEvents.billingCode, billingCode))).toHaveLength(1);
+      expect(await db.select().from(costEvents).where(eq(costEvents.billingCode, billingCode))).toHaveLength(0);
       const operation = purgeHolder.value;
       if (!operation) throw new Error("conversation_known_cost_purge_missing");
       const [erasureReceipt] = await db.select().from(companyDeletionOperations).where(eq(companyDeletionOperations.id, operation.id));
@@ -834,7 +870,10 @@ const support = await getEmbeddedPostgresTestSupport();
       const result = await conversationReservationFixture(async () => {
         throw new Error("fixture_transport_lost_after_actual_dispatch");
       }, 2000, undefined, async facts => {
-        if (!facts.run || !facts.reservation) throw new Error("conversation_unknown_frame_missing_for_purge");
+        if (!facts.run || !facts.reservation) throw new Error(`conversation_unknown_frame_missing_for_purge:${JSON.stringify({
+          providerCallCount: facts.providerCallCount, providerHookInvoked: facts.providerHookInvoked,
+          providerStubFailure: facts.providerStubFailure,
+        })}`);
         await assertConversationNativeStopBeforeErasure(facts);
         const { operation } = await startConversationOffboarding(facts, "conversation-unknown-purge");
         const runIds = await enqueueCompanyManagedOpenCodeRuntimeErasure(db, facts.companyId, operation.id);

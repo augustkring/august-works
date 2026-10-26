@@ -3619,8 +3619,8 @@ export function issueRoutes(
           const pinned = await pinCurrentBoardActor(tx, req.actor);
           if (!pinned || pinned.credentialExpiresAt === null) throw notFound("Issue not found");
           await assertDirectInputSessionCurrent(tx, pinned.actor, pinned.credentialExpiresAt);
-          if (isNativeConversationCommentWrite && await isCurrentUnsealedConversationShell(tx, pinned.actor,
-            { id, companyId }, "issue:comment")) return true;
+          const ownerShell = await isCurrentUnsealedConversationShell(tx, pinned.actor, { id, companyId }, "issue:comment");
+          if (ownerShell && (isNativeConversationCommentWrite || isNativeConversationWorkModeWrite)) return true;
           if (!await canActorReadIssuePrivacy(tx, pinned.actor, { id, companyId })) throw notFound("Issue not found");
           return true;
         });

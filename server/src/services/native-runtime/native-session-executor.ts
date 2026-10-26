@@ -7468,13 +7468,25 @@ async function nativeTurnFrameMatchesSourceClosure(tx: Parameters<Parameters<Db[
     if (workspaceSource.runId !== run.id || workspaceSource.executionWorkspaceId !== parsedExecution.binding.executionWorkspaceId ||
       workspaceSource.sourceVersion !== `task-session:${run.id}`) return no("workspace_task_session_binding");
   } else return no("workspace_origin_unavailable");
-  const [currentTask] = await tx.select({ id: issues.id, companyId: issues.companyId, projectId: issues.projectId,
+  const [currentTask] = await tx.select({ id: issues.id, companyId: issues.companyId, identifier: issues.identifier,
+    title: issues.title, description: issues.description, workMode: issues.workMode,
+    ownerBodyHash: sql<string>`public.aw_native_payload_body_hash('issue',to_jsonb(${issues}))`,
+    projectId: issues.projectId,
     executionWorkspaceId: issues.executionWorkspaceId, assigneeAgentId: issues.assigneeAgentId,
     executionRunId: issues.executionRunId }).from(issues).where(and(eq(issues.companyId, run.companyId),
-      eq(issues.id, run.nativeIssueId!), eq(issues.assigneeAgentId, run.agentId), eq(issues.executionRunId, run.id))).for("share");
+      eq(issues.id, run.nativeIssueId!), eq(issues.executionRunId, run.id))).for("share");
+  const taskAssignmentCurrent = currentTask?.assigneeAgentId === run.agentId;
+  // A pending completion reviewer is intentionally not the Task assignee:
+  // the source Agent remains assigned while the distinct reviewer Agent owns
+  // this run. Reuse the existing exact interaction/decision/run authority;
+  // this does not change the Task body, ACL, or dispatch source checks below.
+  const assignedReviewCurrent = !!currentTask && !taskAssignmentCurrent && !!await getNativeReviewAssignment(tx as unknown as Db, {
+    companyId: run.companyId, issueId: currentTask.id, agentId: run.agentId,
+    contextSnapshot: run.contextSnapshot, actingRunId: run.id, issueExecutionRunId: currentTask.executionRunId,
+  });
   const sourceActor: AuthorizationActor = { type: "agent", source: "none", companyId: run.companyId,
     agentId: run.agentId, runId: run.id, onBehalfOfUserId: run.responsibleUserId };
-  if (!currentTask || workspaceSource.origin === "execution_workspace" &&
+  if (!currentTask || (!taskAssignmentCurrent && !assignedReviewCurrent) || workspaceSource.origin === "execution_workspace" &&
     (currentTask.executionWorkspaceId !== workspaceSource.executionWorkspaceId || currentTask.projectId !== workspaceProjectId))
     return no("workspace_task_binding");
   if (!await canActorReadIssuePrivacy(tx, sourceActor, currentTask)) return no("workspace_task_acl");
@@ -7513,9 +7525,14 @@ async function nativeTurnFrameMatchesSourceClosure(tx: Parameters<Parameters<Db[
 
   const taskInput = closure.sourceSet.inputs.find((input): input is Extract<NativePayloadSourceInput, { kind: "task" }> =>
     input.kind === "task" && input.issueId === parsedExecution.binding.issueId);
-  if (!taskInput || createHash("sha256").update(JSON.stringify({ id: taskInput.issueId,
-    identifier: parsedExecution.task.identifier, title: parsedExecution.task.title,
-    description: parsedExecution.task.description, workMode: parsedExecution.task.workMode }), "utf8").digest("hex") !== taskInput.contentHash)
+  const renderedTaskProjection = { identifier: parsedExecution.task.identifier, title: parsedExecution.task.title,
+    description: parsedExecution.task.description, workMode: parsedExecution.task.workMode };
+  const currentTaskProjection = currentTask && { identifier: currentTask.identifier, title: currentTask.title,
+    description: currentTask.description, workMode: currentTask.workMode };
+  const legacyRenderedTaskHash = currentTask && nativeSha256({ id: currentTask.id, ...currentTaskProjection });
+  if (!taskInput || !currentTask || taskInput.contentHash !== currentTask.ownerBodyHash &&
+    taskInput.contentHash !== legacyRenderedTaskHash ||
+    !isDeepStrictEqual(renderedTaskProjection, currentTaskProjection))
     return no("task_source");
 
   // Wake payload is rendered into task.prompt before the closed execution

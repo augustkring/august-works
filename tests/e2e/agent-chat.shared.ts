@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { createLocalAgentJwt } from "../../server/src/agent-auth-jwt";
 import {
@@ -30,6 +31,10 @@ export async function setup(request: APIRequestContext, page?: Page) {
     ?? `http://127.0.0.1:${process.env.PAPERCLIP_E2E_PORT ?? "3199"}`;
   if (authenticated) {
     if (!config || !baseURL) throw new Error("An isolated authenticated E2E server is required for agent chat");
+    const serverConfig = JSON.parse(readFileSync(config, "utf8")) as { server?: { deploymentMode?: string } };
+    if (serverConfig.server?.deploymentMode !== "authenticated") {
+      throw new Error("Authenticated agent-chat E2E requires an authenticated server configuration");
+    }
     request = page!.request;
     instanceControlRequest = request;
     // The isolated instance has one bootstrap Human claim. Reuse that account

@@ -13,7 +13,7 @@ export default defineConfig({
   use: { ...base.use, extraHTTPHeaders: { Origin: origin } },
   webServer: {
     ...server,
-    command: "pnpm --filter @paperclipai/ui build --outDir ../server/ui-dist --emptyOutDir && node cli/node_modules/tsx/dist/cli.mjs cli/src/index.ts onboard --yes --bind loopback --run",
+    command: "pnpm --filter @paperclipai/ui build --outDir ../server/ui-dist --emptyOutDir && node cli/node_modules/tsx/dist/cli.mjs cli/src/index.ts onboard --yes --bind lan --run",
     env: { ...server.env, PAPERCLIP_DEPLOYMENT_MODE: "authenticated", PAPERCLIP_PUBLIC_URL: origin, PAPERCLIP_AUTH_PUBLIC_BASE_URL: origin },
   },
   outputDir: path.resolve(import.meta.dirname, "../../test-results/v5-authenticated"),

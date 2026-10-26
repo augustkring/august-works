@@ -68,7 +68,7 @@ describe("PaperclipRunnerToolAuthority", () => {
 
   async function seedDocumentReader(payloadSourceProtocolVersion = 0) {
     const companyId = randomUUID(), agentId = randomUUID(), runId = randomUUID();
-    let issueId = randomUUID();
+    let issueId: string = randomUUID();
     const issuePrefix = `RDR${companyId.slice(0, 4).toUpperCase()}`;
     await db.insert(companies).values({ id: companyId, name: "Document source reader", issuePrefix });
     await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId,
@@ -117,7 +117,8 @@ describe("PaperclipRunnerToolAuthority", () => {
     let qualifiedTurnInput: { message: { role: "user"; text: string }; requestedCollaborationMode: "default" } | null = null;
     let bootstrapSourceClosure: { sourceSet: NonNullable<ReturnType<typeof buildNativeBootstrapSourceSet>>;
       taskEnvelopeDigest: string } | null = null;
-    if (payloadSourceProtocolVersion === 1) {
+    const prepareQualifiedDispatch = async () => {
+      if (payloadSourceProtocolVersion !== 1 || qualifiedTurnInput) return;
       if (!fixture.human) throw new Error("dispatch_fixture_current_human_unavailable");
       const taskCaptureHolder: { value: NativeTaskSourceCapture | null } = { value: null };
       const task = await getIssueExecutionContext(db, fixture.companyId, fixture.issueId,
@@ -140,7 +141,7 @@ describe("PaperclipRunnerToolAuthority", () => {
       const execution = buildNativeExecutionInput({ companyId: fixture.companyId, runId: fixture.runId,
         agentId: fixture.agentId, issue: { id: fixture.issueId, identifier: task.identifier, title: task.title,
           description: task.description, workMode: task.workMode }, taskPrompt: rendered, workspace,
-        normalizedSessionId: null, provider: "opencode", model: "opencode-test",
+        normalizedSessionId: null, provider: "opencode", model: "openrouter/deepseek/deepseek-v4-flash-0731",
         completionContract: { id: completion.row.id, sha256: completion.row.canonicalSha256,
           schemaVersion: completion.row.schemaVersion, contract: completion.contract },
         runtimeContext: nativeRuntimeContextFixture() });
@@ -162,9 +163,10 @@ describe("PaperclipRunnerToolAuthority", () => {
       qualifiedTurnInput = { message: { role: "user", text: JSON.stringify(buildNativeModelEnvelope(execution)) },
         requestedCollaborationMode: "default" };
       bootstrapSourceClosure = { sourceSet, taskEnvelopeDigest: nativeSha256(execution.task) };
-    }
+    };
     const bindCall = async (tool: string, callId: string, turnId: string, expectAssociation = true,
       argumentsHash?: string) => {
+      await prepareQualifiedDispatch();
       const turnInput = qualifiedTurnInput ?? { message: { role: "user" as const, text: `actual native input ${turnId}` } };
       const binding = { db, runId: fixture.runId, companyId: fixture.companyId, issueId: fixture.issueId,
         agentId: fixture.agentId, leaseOwner, attempt, controller, eventSeq };
@@ -497,7 +499,7 @@ describe("PaperclipRunnerToolAuthority", () => {
         invocationId: null }),] });
     const forged = { ...captured!, result: { comments: [{ id: "forged", body: "not returned" }] } };
     await expect(recordNativeInputToolResultIntent({ ...fixture.documentCaptureBinding, capture: forged }))
-      .rejects.toThrow("native_tool_result_capture_persistence_failed");
+      .rejects.toThrow("native_tool_result_capture_binding_invalid");
   });
 
   it("keeps assigned-review context unknown and prevents a later read from repairing its output history", async () => {
@@ -531,15 +533,20 @@ describe("PaperclipRunnerToolAuthority", () => {
       issueId: fixture.issueId, kind: "request_confirmation", status: "pending", sourceRunId,
       addresseeAgentId: fixture.agentId, payload: { version: 1, prompt: "Review the work",
         target: { type: "custom", key: "native_completion_review", revisionId: decisionId } } });
+    await db.update(heartbeatRuns).set({ contextSnapshot: { issueId: fixture.issueId,
+      nativeReviewInteractionId: interactionId, nativeReviewDecisionId: decisionId,
+      sourceRunId, revisionId: decisionId } }).where(eq(heartbeatRuns.id, fixture.runId));
     const nativeReview = { nativeReviewInteractionId: interactionId, nativeReviewDecisionId: decisionId };
     const authority = new PaperclipRunnerToolAuthority(db, { companyId: fixture.companyId, agentId: fixture.agentId,
       issueId: fixture.issueId, runId: fixture.runId, nativeReview });
+    const contextArgs = {}, contextCallId = "assigned-review-context", contextTurnId = "assigned-review-turn";
+    const contextCall = await fixture.bindCall("get_task_context", contextCallId, contextTurnId, true, nativeSha256(contextArgs));
+    const historyArgs = {}, historyCallId = "later-empty-history", historyTurnId = "later-history-turn";
+    const historyCall = await fixture.bindCall("get_task_history", historyCallId, historyTurnId, true, nativeSha256(historyArgs));
+
     const [runBefore] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
     expect(runBefore?.nativeInputSourceProtocolVersion).toBe(1);
     expect(runBefore?.runnerProfileJson).toHaveProperty("nativeInputSourceReceipt");
-
-    const contextArgs = {}, contextCallId = "assigned-review-context", contextTurnId = "assigned-review-turn";
-    const contextCall = await fixture.bindCall("get_task_context", contextCallId, contextTurnId, true, nativeSha256(contextArgs));
     let contextCapture: Parameters<typeof recordNativeInputToolResultIntent>[0]["capture"] | null = null;
     const contextResult = await authority.execute({ tool: "get_task_context", callId: contextCallId, arguments: contextArgs }, {
       nativeToolCallIdentity: contextCall, onNativeInputToolResult: async capture => {
@@ -551,8 +558,6 @@ describe("PaperclipRunnerToolAuthority", () => {
     expect(contextCapture).toMatchObject({ sourceSet: null, tool: "get_task_context",
       observedSourceInputs: [expect.objectContaining({ kind: "task", issueId: fixture.issueId })] });
 
-    const historyArgs = {}, historyCallId = "later-empty-history", historyTurnId = "later-history-turn";
-    const historyCall = await fixture.bindCall("get_task_history", historyCallId, historyTurnId, true, nativeSha256(historyArgs));
     const historyResult = await authority.execute({ tool: "get_task_history", callId: historyCallId, arguments: historyArgs }, {
       nativeToolCallIdentity: historyCall, onNativeInputToolResult: async capture => {
         await recordNativeInputToolResultIntent({ ...fixture.documentCaptureBinding, capture });

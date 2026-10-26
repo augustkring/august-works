@@ -617,8 +617,11 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
             exactProviderVisibleJson: content === JSON.stringify(result),
           };
           const failedCreateChecks = Object.entries(createProjectChecks).filter(([, passed]) => !passed).map(([name]) => name);
-          if (failedCreateChecks.length)
+          if (failedCreateChecks.length) {
+            if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1")
+              console.error("managed-native-create-project-result-checks", JSON.stringify(failedCreateChecks));
             throw forbidden("Managed OpenCode create_project result is not an exact private Project source receipt");
+          }
           if (!sourcePolicy.success || !sourceInputs.success)
             throw forbidden("Managed OpenCode create_project source set is malformed");
           await assertNativeManagedProjectCreateReceiptCurrent(db, { companyId: claims.company_id,

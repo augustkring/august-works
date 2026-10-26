@@ -1,9 +1,10 @@
-# Chat publication authorization regression
+# Chat channel publication authorization
 
-The removed-wake FIFO notice path now validates the exact removed wake receipt and visible prior queued notice before allowing the soft-deleted source through Slack Board author authorization. Other wake publications retain their previous authorization order, and the linked-author/private-task checks remain active.
+The removed-wake FIFO notice fix keeps ordinary source deletion denied. A soft-deleted comment is tolerated only after the exact `removed` wake receipt and previously published queue notice pass authorization; linked-author and private-task checks still run.
 
-`fifo-072` records the isolated regression: 1 passed, 1,050 skipped; snapshot, syntax, test, and final exit codes are all 0.
+- `fifo-072`: isolated removed FIFO notice regression passed 1/1.
+- `focused-073`: targeted composer, publication, attachment, reaction, FIFO, and large-comment selection passed 12/12.
+- `stable-shards-075`: all 1,051 chat integration tests passed across the repository's three exact-coverage shards.
+- `full-file-074-incomplete-timeout`: a separate unsharded run reached its 600-second harness cap without a Vitest completion summary. It is recorded as incomplete, not as a product failure or a pass.
 
-`focused-073` records the complete focused set: 12 passed, 1,039 skipped; snapshot, syntax, test, and final exit codes are all 0. It covers the removed FIFO notice, composer guards, one-connection publication, attachment idempotency, reaction replay, and large comment publication.
-
-The test logs include expected mocked wake retry warnings. The broad server typecheck r20 passed for the server before the FIFO authorization adjustment; a fresh server typecheck after that adjustment remains outstanding.
+The integrated server TSC r20 passed before the FIFO authorization change; the shared current TSC lane is responsible for its fresh compiler validation.

@@ -46,6 +46,7 @@ export async function runManagedNativeConversationFrame(input: {
   db: ReturnType<typeof createDb>;
   root: string;
   opencodeBinary: string;
+  conversationWorkMode?: "standard" | "planning" | "ask";
   budgetMonthlyCents?: number;
   tariff?: WorkerModelProfile["tariff"];
   providerReply?: (facts:{body:Record<string,unknown>;callIndex:number}) => {
@@ -101,6 +102,9 @@ export async function runManagedNativeConversationFrame(input: {
     reservation: typeof orchestrationModelReservations.$inferSelect | null;
     nativeInputSourceReceipt: unknown;
     sandboxRuntimeFacts: Record<string, unknown> | null;
+    providerCallCount: number;
+    providerHookInvoked: boolean;
+    providerStubFailure: { stage: string; code: string } | null;
   }) => Promise<void>;
 }) {
   const { db } = input;
@@ -397,6 +401,12 @@ export async function runManagedNativeConversationFrame(input: {
     const chat = await import("supertest").then(({ default: request }) => request(app)
       .post(`/api/companies/${companyId}/chats/${agentId}`).set("cookie", humanCookie));
     if (chat.status !== 200 || typeof chat.body.id !== "string") throw new Error(`conversation_fixture_chat_open_failed_${chat.status}`);
+    if (input.conversationWorkMode) {
+      const mode = await import("supertest").then(({ default: request }) => request(app)
+        .patch(`/api/issues/${chat.body.id}`).set("cookie", humanCookie)
+        .send({ workMode: input.conversationWorkMode }));
+      if (mode.status !== 200) throw new Error(`conversation_fixture_work_mode_update_failed_${mode.status}`);
+    }
     const sent = await import("supertest").then(({ default: request }) => request(app)
       .post(`/api/issues/${chat.body.id}/comments`).set("cookie", humanCookie)
       .send({ body: "Please respond briefly and complete this conversation turn.", clientRequestId: randomUUID() }));
@@ -439,7 +449,8 @@ export async function runManagedNativeConversationFrame(input: {
     if (finalRun && ["succeeded", "failed", "timed_out", "cancelled", "superseded"].includes(finalRun.status))
       await input.afterRunSettledBeforeTeardown?.({ db, actor: human, companyId, agentId,
         issueId: chat.body.id as string, run: finalRun, manifest: manifest ?? null, reservation: reservation ?? null,
-        nativeInputSourceReceipt, sandboxRuntimeFacts });
+        nativeInputSourceReceipt, sandboxRuntimeFacts, providerCallCount: providerCalls.length,
+        providerHookInvoked, providerStubFailure });
     return { issueId: chat.body.id as string, firstCommentId: sent.body.id as string, run: finalRun ?? null,
       manifest: manifest ?? null, reservation: reservation ?? null, workerPlan: plan ?? null,
       workerAttempts: attempts, providerCallCount: providerCalls.length,

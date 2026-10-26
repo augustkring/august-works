@@ -247,12 +247,14 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
   it("creates one private Project from a current conversation dispatch and carries its exact result into the next request",async()=>{
     const binary=qualifiedOpenCodeBinary();
     if(!binary)throw new Error("qualified_opencode_binary_unavailable");
+    vi.stubEnv("PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS","1");
     const callId="conversation-project-create-c0";
     const projectName="Conversation-created private Project";
     const workspaceName="Conversation local workspace";
     let providerConsumedResult=false;
-    let projectRead:{projectId:string;ownerStatus:number;foreignStatus:number}|null=null;
-    const result=await runManagedNativeConversationFrame({db,root,opencodeBinary:binary,
+    const projectRead:{current:{projectId:string;ownerStatus:number;foreignStatus:number}|null}={current:null};
+    let runDiagnostics:Record<string,unknown>|null=null;
+    const result=await runManagedNativeConversationFrame({db,root,opencodeBinary:binary,conversationWorkMode:"standard",
       providerReply:({body,callIndex})=>{
         if(callIndex===1){
           const tools=Array.isArray(body.tools)?body.tools as Array<Record<string,unknown>>:[];
@@ -276,7 +278,22 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
         return undefined;
       },
       afterRunSettledBeforeTeardown:async facts=>{
-        if(!facts.run||facts.run.status!=="succeeded")return;
+        if(!facts.run)return;
+        const runEvents=await db.select({eventType:heartbeatRunEvents.eventType}).from(heartbeatRunEvents)
+          .where(eq(heartbeatRunEvents.runId,facts.run.id)).orderBy(heartbeatRunEvents.seq);
+        const matchingProjects=await db.select({id:projects.id}).from(projects).where(and(
+          eq(projects.companyId,facts.companyId),eq(projects.name,projectName)));
+        const runError=typeof facts.run.error==="string"&&/^[a-zA-Z0-9_.:-]{1,120}$/.test(facts.run.error)
+          ?facts.run.error:null;
+        runDiagnostics={status:facts.run.status,errorCode:facts.run.errorCode??null,
+          errorToken:runError,
+          sourceProtocol:facts.run.nativeInputSourceProtocolVersion??null,manifestStatus:facts.manifest?.status??null,
+          reservationStatus:facts.reservation?.status??null,eventTypes:runEvents.map(event=>event.eventType),
+          matchingProjectCount:matchingProjects.length,
+          relayAuthenticated:facts.sandboxRuntimeFacts?.relayAuthenticated??null,
+          sandboxExecCount:facts.sandboxRuntimeFacts?.execCount??null,
+          modelCredentialCount:facts.sandboxRuntimeFacts?.managedModelCredentialCount??null};
+        if(facts.run.status!=="succeeded")return;
         const receipt=facts.nativeInputSourceReceipt as {additionalInputs?:Array<{inputs?:unknown[]}>}|null;
         const rows=Array.isArray(receipt?.additionalInputs)?receipt!.additionalInputs:[];
         const createdEntries=rows.filter(entry=>Array.isArray(entry.inputs)&&entry.inputs.some(value=>{
@@ -330,19 +347,23 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
           .set("cookie",`session_token=${encodeURIComponent(ownerSession.token)}`);
         const foreignResponse=await request(app).get(`/api/projects/${projectId}`)
           .set("cookie",`session_token=${encodeURIComponent(foreignSession.token)}`);
-        projectRead={projectId,ownerStatus:ownerResponse.status,foreignStatus:foreignResponse.status};
+        projectRead.current={projectId,ownerStatus:ownerResponse.status,foreignStatus:foreignResponse.status};
       }});
     expect(result.success,JSON.stringify({status:result.runStatus,errorCode:result.run?.errorCode,
-      calls:result.providerCallCount,providerStubFailure:result.providerStubFailure,broker:result.brokerRequestFacts,
-      sourceProtocol:result.run?.nativeInputSourceProtocolVersion,stdout:result.run?.stdoutExcerpt?.slice(0,800),
-      stderr:result.run?.stderrExcerpt?.slice(0,1000)})).toBe(true);
+      calls:result.providerCallCount,providerHookInvoked:result.providerHookInvoked,providerHookFailure:result.providerHookFailure,
+      providerStubFailure:result.providerStubFailure,broker:result.brokerRequestFacts,issuerFacts:result.issuerFacts,
+      sourceProtocol:result.run?.nativeInputSourceProtocolVersion,runDiagnostics,
+      sandbox:result.sandboxRuntimeFacts&&{mode:result.sandboxRuntimeFacts.mode,relayAuthenticated:result.sandboxRuntimeFacts.relayAuthenticated,
+        execCount:result.sandboxRuntimeFacts.execCount,exactPrivateCwdCount:result.sandboxRuntimeFacts.exactPrivateCwdCount,
+        managedModelCredentialCount:result.sandboxRuntimeFacts.managedModelCredentialCount,
+        executableNames:result.sandboxRuntimeFacts.executableNames}})).toBe(true);
     expect(result.providerCallCount).toBe(2);
     expect(result.workerPlan).toBeNull();
     expect(result.workerAttempts).toHaveLength(0);
     expect(result.foreignWriteDidNotMutate).toBe(true);
     expect(providerConsumedResult).toBe(true);
-    expect(projectRead).toMatchObject({ownerStatus:200});
-    expect(projectRead?.foreignStatus).toBeGreaterThanOrEqual(400);
+    expect(projectRead.current).toMatchObject({ownerStatus:200});
+    expect(projectRead.current?.foreignStatus).toBeGreaterThanOrEqual(400);
     expect(result.nativeInputSourceReceipt).toMatchObject({additionalInputs:expect.arrayContaining([
       expect.objectContaining({inputs:expect.arrayContaining([
         expect.objectContaining({kind:"tool_result",toolName:"create_project",invocationId:null,callId}),
@@ -355,7 +376,7 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
     const callId="conversation-task-create-c0";
     const taskTitle="Conversation-created private Task";
     let providerConsumedResult=false;
-    const result=await runManagedNativeConversationFrame({db,root,opencodeBinary:binary,
+    const result=await runManagedNativeConversationFrame({db,root,opencodeBinary:binary,conversationWorkMode:"standard",
       providerReply:({body,callIndex})=>{
         if(callIndex===1){
           const tools=Array.isArray(body.tools)?body.tools as Array<Record<string,unknown>>:[];

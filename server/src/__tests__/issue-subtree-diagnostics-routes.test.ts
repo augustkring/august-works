@@ -15,6 +15,8 @@ import {
   heartbeatRuns,
   issueComments,
   issueRelations,
+  memoryDeletionMarkers,
+  memoryJobs,
   issues,
   projects,
 } from "@paperclipai/db";
@@ -23,7 +25,7 @@ import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
-import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
+import { createCanonicalHumanProject, seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 import { errorHandler } from "../middleware/index.js";
 import { issueRoutes } from "../routes/issues.js";
 
@@ -113,12 +115,10 @@ async function seedAgent(db: Db, companyId: string, permissions: Record<string, 
 }
 
 async function seedProject(db: Db, companyId: string, name: string) {
-  const [project] = await db.insert(projects).values({
-    companyId,
-    name,
-    status: "in_progress",
-  }).returning();
-  return project!;
+  const [company] = await db.select().from(companies).where(eq(companies.id, companyId));
+  return createCanonicalHumanProject(db, companyId, { type: "board", source: "session",
+    userId: company!.defaultResponsibleUserId!, sessionId: humanSessions.get(companyId) }, name,
+  { status: "in_progress" });
 }
 
 async function seedIssue(
@@ -220,6 +220,11 @@ describeEmbeddedPostgres("issue subtree diagnostics route", () => {
     await db.delete(issues);
     await db.delete(agents);
     await db.delete(projects);
+    // Canonical source deletion may retain content-free erasure receipts/jobs.
+    await db.delete(memoryJobs);
+    await db.delete(memoryDeletionMarkers);
+    await db.delete(principalPermissionGrants);
+    await db.delete(companyMemberships);
     await db.delete(companies);
     await db.delete(authUsers);
     humanSessions.clear();

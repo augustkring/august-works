@@ -659,7 +659,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       intent: "native_task_execution", includeFoundation: true, sensitivityCeiling: "internal" as const,
       authorizationActor: { type: "agent" as const, source: "none" as const, companyId: seeded.companyId,
         agentId: seeded.agent.id, runId: run!.id, onBehalfOfUserId: seeded.userId } };
-    const context = await contextEngineService(db).assembleNativeBootstrap(assembleInput);
+    let context = await contextEngineService(db).assembleNativeBootstrap(assembleInput);
     expect(context.nativeBootstrapWitness).toBeDefined();
     expect(readNativeBootstrapContextWitness(context.nativeBootstrapWitness, { companyId: seeded.companyId,
       runId: run!.id, agentId: seeded.agent.id, issueId: task.id, renderedMarkdown: context.markdown,
@@ -702,6 +702,14 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       updatedAt: new Date() }).where(and(eq(issues.companyId, seeded.companyId), eq(issues.id, task.id)));
     await expect(assertNativeTaskSourceOwnerCurrent(db, { companyId: seeded.companyId,
       actor: assembleInput.authorizationActor, source: taskCapture.input })).resolves.toBeUndefined();
+    // The Task body stays current across a status transition, while Context
+    // explicitly rendered that old status. Its old witness must be refused.
+    await expect(revalidateNativeBootstrapContextWitness(db, { witness: context.nativeBootstrapWitness!,
+      companyId: seeded.companyId, runId: run!.id, agentId: seeded.agent.id, issueId: task.id,
+      renderedMarkdown: context.markdown,
+      manifestIds: [{ companyId: seeded.companyId, contextManifestId: context.packet.manifest!.id }] }))
+      .rejects.toMatchObject({ status: 403 });
+    context = await contextEngineService(db).assembleNativeBootstrap(assembleInput);
     const contextMemory=await seedMemory({companyId:seeded.companyId,agentId:seeded.agent.id,
       content:"Enterprise strategy context memory from a directly captured Human Task.",privateSourceTask:true});
     const memoryTaskId=contextMemory.sourceIssueIds[0];
@@ -743,6 +751,15 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     const witnessInput = { witness: context.nativeBootstrapWitness!, companyId: seeded.companyId, runId: run!.id,
       agentId: seeded.agent.id, issueId: task.id, renderedMarkdown: context.markdown,
       manifestIds: [{ companyId: seeded.companyId, contextManifestId: context.packet.manifest!.id }] };
+    const [initialTaskItem] = await db.select().from(contextManifestItems).where(and(
+      eq(contextManifestItems.manifestId, context.packet.manifest!.id),
+      eq(contextManifestItems.sourceProvider, "august_works_tasks"),
+      eq(contextManifestItems.sourceRef, `issue://${task.id}`)));
+    const [currentTaskOwner] = await db.select().from(issues).where(eq(issues.id, task.id));
+    expect(currentTaskOwner!.updatedAt.toISOString(), "refreshed Context Task version remains current")
+      .toBe(initialTaskItem!.sourceVersion);
+    expect(currentTaskOwner!.payloadSourceSnapshot, "later Context does not alter the original Human Task source")
+      .toEqual(initialTaskItem!.payloadSourceSnapshot);
     await expect(revalidateNativeBootstrapContextWitness(db, witnessInput)).resolves.toBeUndefined();
     const changedTitle = `${capturedTask.title} changed after Context capture`;
     await issueService(db).update(task.id, { title: changedTitle, actorUserId: seeded.userId, privacyActor: human });

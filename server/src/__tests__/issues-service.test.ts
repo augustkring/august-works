@@ -161,7 +161,7 @@ describeEmbeddedPostgres("issueService native ancestor source capture",()=>{
       from issues i where i.id=${seeded.selected.id}::uuid`);
     expect(captured[0]!.input.contentHash).toBe(currentHash!.hash);
     await expect(db.update(issues).set({title:"Changed Task payload"}).where(eq(issues.id,seeded.selected.id)))
-      .rejects.toThrow("Native payload source snapshot does not bind its owner and body");
+      .rejects.toMatchObject({ cause: expect.objectContaining({ code: "23514" }) });
     const [unchanged]=await db.select({title:issues.title,payloadSourceSnapshot:issues.payloadSourceSnapshot,
       payloadSourceSnapshotInvalidated:issues.payloadSourceSnapshotInvalidated}).from(issues)
       .where(eq(issues.id,seeded.selected.id));
