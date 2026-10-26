@@ -518,7 +518,7 @@ async function assertNativeMemoryReviewTransitionEvidence(db: Db | Transaction, 
     nativeMemoryReviewTransitionStateHash(memory) === source.reviewTransitionStateHash);
   const earlyChecksMatch = evidenceBound && captureStatesMatch && currentStatesMatch && timeAdvanced && stateHashMatches;
   if (!earlyChecksMatch) return false;
-  if (!evidence) return false;
+  if (!evidence || evidence.toolName !== "paperclip-self:remember" || evidence.invocationId === null) return false;
   const [invocation] = await db.select({ runId: toolInvocations.runId, toolName: toolInvocations.toolName,
     idempotencyKey: toolInvocations.idempotencyKey, status: toolInvocations.status,
     resultHash: toolInvocations.resultHash, workflowResultJson: toolInvocations.workflowResultJson })
