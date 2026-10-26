@@ -37,3 +37,27 @@ export async function createCanonicalHumanProject(db: Db, companyId: string, act
   if (created.status !== 201 || typeof created.body.id !== "string") throw new Error(`Canonical Human Project fixture creation failed: ${created.status}`);
   return (await db.select().from(projects).where(eq(projects.id, created.body.id)))[0]!;
 }
+
+export async function updateCanonicalHumanProject(db: Db, companyId: string, actor: AuthorizationActor, projectId: string,
+  updates: { executionWorkspacePolicy: unknown }) {
+  const app = express();
+  app.use(express.json());
+  app.use(((req, _res, next) => {
+    req.actor = { ...actor, userId: actor.userId ?? undefined, agentId: actor.agentId ?? undefined,
+      companyId: actor.companyId ?? undefined, keyId: actor.keyId ?? undefined,
+      authenticatedKeyHash: actor.authenticatedKeyHash ?? undefined,
+      authenticatedCredentialExpiresAt: actor.authenticatedCredentialExpiresAt ?? undefined,
+      keyScope: actor.keyScope ?? undefined, runId: actor.runId ?? undefined,
+      companyIds: [companyId], memberships: [{ companyId, membershipRole: "owner", status: "active" }] };
+    next();
+  }) as RequestHandler);
+  app.use("/api", projectRoutes(db));
+  app.use(errorHandler);
+  const updated = await request(app).patch(`/api/projects/${projectId}`).send(updates);
+  if (updated.status !== 200) {
+    const message = typeof updated.body?.error === "string" ? updated.body.error : "unspecified route error";
+    const code = typeof updated.body?.code === "string" ? ` (${updated.body.code})` : "";
+    throw new Error(`Canonical Human Project fixture update failed: ${updated.status}${code}: ${message}`);
+  }
+  return (await db.select().from(projects).where(eq(projects.id, projectId)))[0]!;
+}

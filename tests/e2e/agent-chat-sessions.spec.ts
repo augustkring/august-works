@@ -26,7 +26,8 @@ test("built chat initializes after service worker takeover and reload with a slo
   context,
   request,
 }) => {
-  const f = await setup(request);
+  const f = await setup(request, page);
+  request = f.request;
   try {
     const cdp = await context.newCDPSession(page);
     try {
@@ -61,7 +62,18 @@ test("chat first open is read-only; concurrent first sends and retries share one
   context,
   request,
 }) => {
-  const f = await setup(request);
+  const f = await setup(request, page);
+  request = f.request;
+  const chatCommentFailures: Promise<{ status: number; error?: string; code?: string } | null>[] = [];
+  page.on("response", (response) => {
+    if (response.request().method() !== "POST" || !response.url().includes("/api/issues/")
+      || !response.url().endsWith("/comments") || response.status() < 400) return;
+    chatCommentFailures.push(response.json().then((body) => ({
+      status: response.status(),
+      error: typeof body.error === "string" ? body.error : undefined,
+      code: typeof body.code === "string" ? body.code : undefined,
+    })).catch(() => null));
+  });
   try {
     await page.goto(f.route);
     await expect(page.getByTestId("task-chat-composer-input")).toBeVisible();
@@ -74,6 +86,8 @@ test("chat first open is read-only; concurrent first sends and retries share one
     const other = await context.newPage();
     await other.goto(f.route);
     await Promise.all([send(page, "Same first message"), send(other, "Same first message")]);
+    const rejectedComments = (await Promise.all(chatCommentFailures)).filter(Boolean);
+    if (rejectedComments.length) console.log("[test-only chat comment rejection]", JSON.stringify(rejectedComments));
     const issue = await idle(request, f.chatPath, 2);
     const initialComments = await json(await request.get(`/api/issues/${issue.id}/comments`));
     expect(initialComments.filter((comment: any) => !comment.authorAgentId && comment.body === "Same first message")).toHaveLength(2);
@@ -134,7 +148,8 @@ test("chat first open is read-only; concurrent first sends and retries share one
 // UI response-contract fixture; original source erasure and fresh native SDK
 // admission are separately exercised against PostgreSQL, without this routing.
 test("source loss refreshes the read-only chat identity and drops cached history before another send", async ({ page, request }) => {
-  const f = await setup(request);
+  const f = await setup(request, page);
+  request = f.request;
   try {
     const original = await json(await request.post(f.chatPath, { data: {} }));
     await json(await request.post(`/api/issues/${original.id}/comments`, { data: { body: "Private history before source loss", clientRequestId: "00000000-0000-4000-8000-000000000099" } }));
@@ -170,7 +185,8 @@ test("source loss refreshes the read-only chat identity and drops cached history
 // Live denial is an explicit UI response-contract fixture. Recipient admission
 // and source/IAM changes are independently exercised over real WS + PostgreSQL.
 test("live source denial removes cached chat history without a reload or implicit replacement", async ({page,request}) => {
-  const f=await setup(request);
+  const f=await setup(request, page);
+  request = f.request;
   try{
     const original=await json(await request.post(f.chatPath,{data:{}}));
     await json(await request.post(`/api/issues/${original.id}/comments`,{data:{body:"Private cached history before live source denial",clientRequestId:randomUUID()}}));await idle(request,f.chatPath,1);
@@ -192,7 +208,8 @@ test("live source denial removes cached chat history without a reload or implici
 });
 
 test("an owner can explicitly recover after source visibility is lost while original metric facts survive", async ({page,request}) => {
-  const f=await setup(request);
+  const f=await setup(request, page);
+  request = f.request;
   const config=JSON.parse(await readFile(process.env.PAPERCLIP_E2E_SERVER_CONFIG!,"utf8")),pid=await readFile(path.join(config.database.embeddedPostgresDataDir,"postmaster.pid"),"utf8");
   const db=createDb(`postgres://paperclip:paperclip@127.0.0.1:${pid.split("\n")[3]}/paperclip`);
   try{
@@ -233,7 +250,8 @@ test("feature flag blocks new sends and resets while preserving existing history
   page,
   request,
 }) => {
-  const f = await setup(request);
+  const f = await setup(request, page);
+  request = f.request;
   try {
     await page.goto(f.route);
     await send(page, "Visible history");
@@ -268,7 +286,8 @@ test("Stop then queued /new resets unpause the conversation without losing histo
   page,
   request,
 }) => {
-  const f = await setup(request);
+  const f = await setup(request, page);
+  request = f.request;
   try {
     await page.goto(f.route);
     await send(page, { action: "hold" });
@@ -360,7 +379,8 @@ test("sidebar discovery, stars, recent agents, configuration links, and drafts s
   page,
   request,
 }) => {
-  const f = await setup(request);
+  const f = await setup(request, page);
+  request = f.request;
   try {
     await page.goto(`/${f.company.issuePrefix}/dashboard`);
     const nav = page.getByRole("navigation");

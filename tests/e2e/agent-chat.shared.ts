@@ -1,8 +1,10 @@
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { createLocalAgentJwt } from "../../server/src/agent-auth-jwt";
 import {
   test,
   expect,
+  request as createRequestContext,
   type APIRequestContext,
   type Page,
 } from "@playwright/test";
@@ -16,17 +18,66 @@ export async function json(response: Awaited<ReturnType<APIRequestContext["get"]
   );
   return response.json();
 }
-export async function setup(request: APIRequestContext) {
+export async function setup(request: APIRequestContext, page?: Page) {
+  let instanceControlRequest = request;
+  let apiKeyId: string | undefined;
+  let ownsApiRequest = false;
+  const pageContext = page?.context();
+  const config = page ? process.env.PAPERCLIP_E2E_SERVER_CONFIG : undefined;
+  const authenticated = !!page && process.env.PAPERCLIP_E2E_AUTH_MODE === "authenticated";
+  const baseURL = process.env.PAPERCLIP_API_URL
+    ?? `http://127.0.0.1:${process.env.PAPERCLIP_E2E_PORT ?? "3199"}`;
+  if (authenticated) {
+    if (!config || !baseURL) throw new Error("An isolated authenticated E2E server is required for agent chat");
+    request = page!.request;
+    instanceControlRequest = request;
+    const stamp = Date.now();
+    const email = `agent-chat-${stamp}@test.invalid`;
+    await json(await request.post("/api/auth/sign-up/email", { data: {
+      name: "Authenticated agent-chat reviewer",
+      email,
+      password: "Agent-chat browser test passphrase 2026!",
+    } }));
+    const invitation = execFileSync("pnpm", [
+      "--filter", "@paperclipai/db", "exec", "tsx",
+      path.resolve("packages/db/scripts/create-auth-bootstrap-invite.ts"),
+      "--config", config,
+      "--base-url", baseURL,
+    ], { encoding: "utf8", env: process.env, stdio: ["ignore", "pipe", "pipe"] }).trim();
+    const invitationToken = new URL(invitation).pathname.split("/").at(-1);
+    if (!invitationToken) throw new Error("Authenticated agent-chat bootstrap invitation was malformed");
+    await json(await request.post(`/api/invites/${invitationToken}/accept`, { data: { requestType: "human" } }));
+  }
   const company = await json(
     await request.post("/api/companies", {
       data: { name: `Agent Chat ${Date.now()}` },
     }),
   );
+  if (page) {
+    if (!authenticated) {
+      if (!config || !baseURL) throw new Error("An isolated E2E server is required for the local-trusted chat fixture");
+      const key = JSON.parse(execFileSync("pnpm", [
+        "--filter", "@paperclipai/server", "exec", "tsx",
+        path.resolve("tests/e2e/fixtures/create-agent-chat-board-key.ts"),
+        "--config", config,
+        "--company-id", company.id,
+      ], { encoding: "utf8", env: process.env, stdio: ["ignore", "pipe", "pipe"] })) as { id: string; token: string };
+      apiKeyId = key.id;
+      request = await createRequestContext.newContext({
+        baseURL,
+        extraHTTPHeaders: { Authorization: `Bearer ${key.token}` },
+      });
+      ownsApiRequest = true;
+      await pageContext!.route("**/api/**", (route) => route.continue({
+        headers: { ...route.request().headers(), authorization: `Bearer ${key.token}` },
+      }));
+    }
+  }
   const original = await json(
-    await request.get("/api/instance/settings/experimental"),
+    await instanceControlRequest.get("/api/instance/settings/experimental"),
   );
   await json(
-    await request.patch("/api/instance/settings/experimental", {
+    await instanceControlRequest.patch("/api/instance/settings/experimental", {
       data: { enableAgentChat: true, enableClassicTaskInterface: false },
     }),
   );
@@ -122,15 +173,19 @@ export async function setup(request: APIRequestContext) {
             await request.post(`/api/heartbeat-runs/${run.id}/cancel`),
           );
         await json(
-          await request.patch("/api/instance/settings/experimental", {
+          await instanceControlRequest.patch("/api/instance/settings/experimental", {
             data: {
               enableAgentChat: original.enableAgentChat,
               enableClassicTaskInterface: original.enableClassicTaskInterface,
             },
           }),
         );
+        if (apiKeyId) await request.delete(`/api/board-api-keys/${apiKeyId}`);
+        if (pageContext) await pageContext.unroute("**/api/**");
+        if (ownsApiRequest) await request.dispose();
       }
     },
+    request,
   };
 }
 export async function send(page: Page, value: unknown) {
@@ -152,8 +207,10 @@ export async function idle(
   minimumReplies = 1,
 ) {
   let issue: any;
-  await expect
-    .poll(
+  let lastDiagnostic = "not polled";
+  try {
+    await expect
+      .poll(
       async () => {
         issue = await json(await request.get(chatPath));
         if (!issue) return false;
@@ -163,6 +220,13 @@ export async function idle(
         const live = await json(
           await request.get(`/api/issues/${issue.id}/live-runs`),
         );
+        lastDiagnostic = JSON.stringify({
+          issueId: issue.id,
+          status: issue.status,
+          conversationState: issue.conversationState,
+          agentReplyCount: replies.filter((c: any) => c.authorAgentId).length,
+          liveRunStates: live.map((run: any) => run.status),
+        });
         return (
           live.length === 0 &&
           issue.conversationState === "waiting" &&
@@ -171,7 +235,10 @@ export async function idle(
         );
       },
       { timeout: 60_000, intervals: [100, 250, 500] },
-    )
-    .toBe(true);
+      )
+      .toBe(true);
+  } catch (error) {
+    throw new Error(`${error instanceof Error ? error.message : String(error)}\nLatest chat idle state: ${lastDiagnostic}`);
+  }
   return issue;
 }

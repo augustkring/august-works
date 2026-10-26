@@ -2,8 +2,10 @@ import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
 import { activationViewSchema, initialActivationState } from "../../packages/shared/src/activation.ts";
 import { activationConnectionReviewSchema, activationConnectionConsentReceiptSchema } from "../../packages/shared/src/activation-connection-consent.ts";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
 
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
+registerEnglishAccountLocaleIsolation(test);
 async function json(response: APIResponse) { expect(response.ok(), await response.text()).toBe(true); return response.json(); }
 
 // Built UI with explicit software purpose/receipt responses. Actual Native

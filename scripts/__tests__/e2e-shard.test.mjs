@@ -130,8 +130,20 @@ test("V10 authenticated suites run in dedicated authenticated browser lanes", ()
     assert.ok(IGNORED_SPECS.includes(spec), `${spec} must not run in the local_trusted default lane`);
     assert.match(readFileSync(playwrightConfig, "utf8"), new RegExp(`"${spec}"`));
     assert.match(readFileSync(path.join(repoRoot, "tests", "e2e", config), "utf8"), /import authenticated from "\.\/aw-v5-authenticated\.config\.js"/);
-    assert.match(workflow, new RegExp(`journey: ${journey}\\s+config: tests/e2e/${config}\\s+spec: tests/e2e/${spec}`));
+    assert.match(workflow, new RegExp(`journey: ${journey}\\s+config: tests/e2e/${config}\\s+spec: tests/e2e/${spec.replaceAll(".", "\\.")}`));
   }
+  for (const spec of ["agent-chat-sessions.spec.ts", "agent-chat-projects.spec.ts"]) {
+    assert.ok(IGNORED_SPECS.includes(spec), `${spec} must run in the authenticated lane`);
+    assert.match(readFileSync(playwrightConfig, "utf8"), new RegExp(`"${spec}"`));
+  }
+  const chatConfig = readFileSync(path.join(repoRoot, "tests/e2e/aw-v10-agent-chat.config.ts"), "utf8");
+  assert.match(chatConfig, /PAPERCLIP_E2E_AUTH_MODE = "authenticated"/);
+  assert.match(chatConfig, /testMatch: \["agent-chat-sessions\.spec\.ts", "agent-chat-projects\.spec\.ts"\]/);
+  assert.match(workflow, /journey: V10 authenticated agent chat\s+config: tests\/e2e\/aw-v10-agent-chat\.config\.ts\s+spec: tests\/e2e\/agent-chat-\*\.spec\.ts/);
+  const localRunner = readFileSync(path.join(repoRoot, "scripts/e2e-runner.mjs"), "utf8");
+  assert.match(readFileSync(path.join(repoRoot, "package.json"), "utf8"), /"test:e2e": "node scripts\/e2e-runner\.mjs"/);
+  assert.match(localRunner, /if \(defaultStatus !== 0 \|\| args\.length > 0\) process\.exit\(defaultStatus\)/);
+  assert.match(localRunner, /aw-v10-agent-chat\.config\.ts/);
 });
 
 test("the duration manifest only names specs that still exist", () => {

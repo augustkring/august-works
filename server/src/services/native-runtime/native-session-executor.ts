@@ -7737,6 +7737,8 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
   contextRead?: NativeContextReadBinding;
   projectRead?: NativeProjectToolResultSource;
 }): Promise<void> {
+  let diagnosticPhase: "capture_binding" | "transaction_locks" | "run_receipt" | "provider_dispatch" |
+    "project_source" | "memory_source" | "context_source" | "document_task_source" | "receipt_build" | "receipt_persist" | "lease_renew" = "capture_binding";
   const projectRead = input.tool === "call_api" ? input.projectRead : undefined;
   if (input.tool === "call_api" && (!projectRead?.source || projectRead.tool !== "call_api" ||
     projectRead.operationId !== "GET /api/projects/{id}" || projectRead.callId !== input.callId ||
@@ -7745,9 +7747,11 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
   const digest = projectRead?.resultDigest ?? nativeSha256(input.result);
   try {
     await input.db.transaction(async tx => {
+      diagnosticPhase = "transaction_locks";
       await lockAnalyticalCompany(tx as unknown as Db, input.companyId);
       await lockMemoryPrivacy(tx as unknown as Db, input.companyId);
       await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
+      diagnosticPhase = "run_receipt";
       const [run] = await tx.select().from(heartbeatRuns).where(and(
         eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId),
         eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId),
@@ -7777,6 +7781,7 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         parsed.data.binding.runId !== input.runId || parsed.data.binding.agentId !== input.agentId ||
         parsed.data.binding.responsibleUserId !== run.responsibleUserId)
         throw new Error("managed_opencode_tool_result_binding_invalid");
+      diagnosticPhase = "provider_dispatch";
       const matchingModelCalls = Array.isArray(profile.nativeAwModelWireIntents)
         ? profile.nativeAwModelWireIntents.map(record).filter(intent => {
             const uses = Array.isArray(intent.responseToolUses) ? intent.responseToolUses.map(record) : [];
@@ -7794,6 +7799,7 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         throw new Error("managed_opencode_tool_result_binding_invalid");
       let returnedProjectSource: Extract<NativePayloadSourceInput, { kind: "project" }> | null = null;
       if (input.tool === "call_api") {
+        diagnosticPhase = "project_source";
         const source = projectRead?.source;
         const response = record(input.result);
         const { apiOperationId: _apiOperationId, ...responseBody } = response;
@@ -7843,6 +7849,7 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         : null;
       let returnedMemorySource: Extract<NativePayloadSourceInput, { kind: "memory" }> | null = null;
       if (input.tool === "self_remember") {
+        diagnosticPhase = "memory_source";
         const resultData = record(record(input.result).data);
         const resultMemory = record(resultData.record);
         const memoryId = resultMemory.id;
@@ -7872,6 +7879,7 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
       }
       let contextReadCapture: Record<string, unknown> | null = null;
       if (input.tool === "read_context") {
+        diagnosticPhase = "context_source";
         const visible = record(input.result);
         const context = input.contextRead;
         const contextInputs = context?.sourceSet.inputs.filter(source => source.kind === "context") ?? [];
@@ -7892,6 +7900,7 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
       }
       let returnedDocumentSource: Extract<NativePayloadSourceInput, { kind: "document_revision" }> | null = null;
       if (input.tool === "read_document") {
+        diagnosticPhase = "document_task_source";
         const readCaptures = Array.isArray(profile.nativeToolResultSourceCaptures)
           ? profile.nativeToolResultSourceCaptures.map(record).filter(value => value.managedOpenCode !== true &&
               value.callId === input.callId && value.tool === input.tool && value.resultDigest === digest)
@@ -7965,6 +7974,7 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
             ...(returnedProjectSource ? [returnedProjectSource] : [])],
         }),
       }] };
+      diagnosticPhase = "receipt_build";
       const receipt = { ...updatedReceiptBody, digest: await postgresJsonbSha256(tx, updatedReceiptBody) };
       if (!nativeRunInputSourceReceiptSchema.safeParse(receipt).success || Buffer.byteLength(JSON.stringify(nextCaptures)) > 2 * 1024 * 1024)
         throw new Error("managed_opencode_tool_result_budget_exceeded");
@@ -7972,14 +7982,34 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         ...profile, nativeInputSourceReceipt: receipt, nativeToolResultSourceCaptures: nextCaptures,
       }, updatedAt: new Date() }).where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.status, "running")))
         .returning({ profile: heartbeatRuns.runnerProfileJson });
+      diagnosticPhase = "receipt_persist";
       const retained = record(stored?.profile);
       if (!nativeRunInputSourceReceiptSchema.safeParse(retained.nativeInputSourceReceipt).success ||
         !Array.isArray(retained.nativeToolResultSourceCaptures) || nativeSha256(retained.nativeToolResultSourceCaptures) !== nativeSha256(nextCaptures))
         throw new Error("managed_opencode_tool_result_persistence_failed");
+      diagnosticPhase = "lease_renew";
       await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "";
+    if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1") {
+      const diagnostic = error && typeof error === "object" ? error as Error & { code?: unknown; cause?: { code?: unknown }; status?: unknown } : null;
+      const safeCode = (value: unknown) => typeof value === "string" && /^[A-Z0-9_:-]{1,80}$/i.test(value) ? value : null;
+      const frames = diagnostic?.stack?.split("\n").slice(1).flatMap(frame => {
+        const match = /server\/src\/services\/([^\s():]+\.ts):(\d+):\d+/.exec(frame);
+        return match ? [`${match[1]}:${match[2]}`] : [];
+      }).slice(0, 6) ?? [];
+      console.error("managed_opencode_tool_result_test_failure", JSON.stringify({
+        name: diagnostic?.name ?? "UnknownError", code: safeCode(diagnostic?.code), causeCode: safeCode(diagnostic?.cause?.code),
+        status: typeof diagnostic?.status === "number" && Number.isInteger(diagnostic.status) ? diagnostic.status : null,
+        mappedCode: ["native_session_lease_lost", "native_session_lease_ttl_invalid",
+          "managed_opencode_tool_result_binding_invalid", "managed_opencode_tool_result_budget_exceeded",
+          "managed_opencode_tool_result_duplicate", "managed_opencode_tool_result_persistence_failed"].includes(message)
+          ? message : "managed_opencode_tool_result_persistence_failed",
+        phase: diagnosticPhase,
+        frames,
+      }));
+    }
     throw new Error(["native_session_lease_lost", "native_session_lease_ttl_invalid",
       "managed_opencode_tool_result_binding_invalid", "managed_opencode_tool_result_budget_exceeded",
       "managed_opencode_tool_result_duplicate", "managed_opencode_tool_result_persistence_failed"].includes(message)

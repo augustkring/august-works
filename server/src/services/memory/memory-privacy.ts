@@ -133,14 +133,22 @@ export async function canActorReadMemorySources(db: Db, companyId: string, actor
   budget: MemorySourceReadBudget = {}):Promise<boolean> {
   const inherited=memorySourceReads.getStore(),state=inherited??{active:new Set<string>(),deadline:performance.now()+8000,work:0,
     ...(budget.signal ? { signal: budget.signal } : {})};
+  const diagnosticDenied = (reason: "scope_guard" | "cycle" | "deadline" | "work_budget") => {
+    if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1")
+      console.error("native_memory_source_access_test_denial", JSON.stringify({ reason, inherited: Boolean(inherited),
+        activeCount: state.active.size, work: state.work, deadlineExpired: performance.now() > state.deadline,
+        signalAborted: state.signal?.aborted ?? false }));
+  };
   if (budget.deadlineAt !== undefined) state.deadline = Math.min(state.deadline, performance.now() + Math.max(0, budget.deadlineAt - Date.now()));
   if (budget.signal && !state.signal) state.signal = budget.signal;
-  try { assertMemorySourceReadActive(state); } catch { return false; }
+  try { assertMemorySourceReadActive(state); } catch { diagnosticDenied("scope_guard"); return false; }
   const key=`${companyId}:${recordId}`;
-  if(state.active.has(key) || performance.now()>state.deadline || state.work>=256)return false;
+  if(state.active.has(key)) { diagnosticDenied("cycle"); return false; }
+  if(performance.now()>state.deadline) { diagnosticDenied("deadline"); return false; }
+  if(state.work>=256) { diagnosticDenied("work_budget"); return false; }
   const read=async()=>{
     state.active.add(key);
-    try{return await inspectMemorySourceAccess(db,companyId,actor,recordId,state);}
+    try{return await inspectMemorySourceAccess(db,companyId,actor,recordId,state,diagnosticDenied);}
     finally{state.active.delete(key);}
   };
   return inherited?read():memorySourceReads.run(state,read);
@@ -168,7 +176,7 @@ async function memorySourceActorCurrent(db:Db,companyId:string,actor:Authorizati
   return (await authorizationService(db).decide({actor,action:"company_scope:read",resource:{type:"company",companyId},enforceResponsibleUserIntersection:true})).allowed;
 }
 async function inspectMemorySourceAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,recordId:string,
-  state:MemorySourceReadScope):Promise<boolean> {
+  state:MemorySourceReadScope,diagnosticDenied:(reason:"scope_guard"|"cycle"|"deadline"|"work_budget")=>void):Promise<boolean> {
   if (!actor) return false;
   const { authorizationService, canActorReadIssuePrivacy, canActorReadProjectPrivacy, canActorReadHeartbeatRunPrivacy } = await import("../authorization.js");
   const admitted = () => memorySourceActorCurrent(db,companyId,actor,recordId);
@@ -181,8 +189,10 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
   };
   const deadline = state.deadline;
   const visit = async (id:string,ancestor=false,authorizedPrivateOwnerEdge=false):Promise<boolean> => {
-    try { assertMemorySourceReadActive(state); } catch { return false; }
-    if (active.has(id) || performance.now()>deadline || visited.size>=256 || state.work>=256) return false;
+    try { assertMemorySourceReadActive(state); } catch { diagnosticDenied("scope_guard"); return false; }
+    if (active.has(id)) { diagnosticDenied("cycle"); return false; }
+    if (performance.now()>deadline) { diagnosticDenied("deadline"); return false; }
+    if (visited.size>=256 || state.work>=256) { diagnosticDenied("work_budget"); return false; }
     // A row reached through the exact published edge is not equivalent to the
     // same row reached as a sibling source. Cache the edge context, never only
     // the record ID, or an allowed path could mask a forbidden direct path.
@@ -197,7 +207,13 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
     // A run may legitimately change Human after acknowledged steering. Its
     // current identity cannot transfer an earlier private Memory to that Human.
     if((row.scopeType==="agent" && !row.privateOwnerUserId)
-      || (row.privateOwnerUserId && row.privateOwnerUserId!==readerUserId && !publicationSource))return false;
+      || (row.privateOwnerUserId && row.privateOwnerUserId!==readerUserId && !publicationSource)) {
+      if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1")
+        console.error("native_memory_source_access_test_denial", JSON.stringify({ reason: "private_owner_mismatch",
+          actorType: actor.type, actorHasReaderUser: Boolean(readerUserId), privateOwnerMatchesReader: row.privateOwnerUserId === readerUserId,
+          publicationSource, agentScopeMissingOwner: row.scopeType === "agent" && !row.privateOwnerUserId }));
+      return false;
+    }
     if(row.scopeType==="agent" && actor.type==="agent"
       && (row.ownerAgentId!==actor.agentId || row.scopeId!==actor.agentId) && !publicationSource)return false;
     if(ancestor && (row.revokedAt || row.retentionState==="expired" || row.validUntil && row.validUntil.getTime()<=Date.now()))return false;
@@ -256,16 +272,42 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
         // A dispatch-qualified model output is readable only through the
         // exact body-bound model/tool receipt. Falling back to legacy Run ACL
         // would turn invalid provenance into broad read authority.
-        if (!exactPolicy || dispatches.length > 64 || dispatches.at(-1)!.index !== capturedSnapshot.data.inputs.length - 1 || !actor ||
-          dispatches.filter(value => isDeepStrictEqual(value.value, dispatch)).length !== 1)
+        const dispatchAtEnd = dispatches.at(-1)!.index === capturedSnapshot.data.inputs.length - 1;
+        const uniqueDispatch = dispatches.filter(value => isDeepStrictEqual(value.value, dispatch)).length === 1;
+        if (!exactPolicy || dispatches.length > 64 || !dispatchAtEnd || !actor || !uniqueDispatch) {
+          if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1")
+            console.error("native_memory_source_access_test_denial", JSON.stringify({ reason: "output_snapshot_binding",
+              exactPolicy, dispatchCount: dispatches.length, dispatchAtEnd, actorPresent: Boolean(actor), uniqueDispatch }));
           return false;
+        }
         try {
           const { assertNativeMemoryOutputSnapshotCurrent } = await import("../native-direct-input.js");
           await assertNativeMemoryOutputSnapshotCurrent(db, { companyId, recordId: row.id, snapshot: capturedSnapshot.data, actor });
           capturedContextIds = capturedSnapshot.data.inputs.filter((value): value is Extract<typeof value, { kind: "context" }> =>
             value.kind === "context").map(value => value.manifestId).sort();
           capturedReadRunIds = capturedSnapshot.data.policy.runIds;
-        } catch { return false; }
+        } catch (error) {
+          if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1") {
+            const value = error instanceof Error ? error as Error & { code?: unknown; status?: unknown; cause?: unknown } : null;
+            let cause: unknown = value?.cause;
+            let code: string | null = typeof value?.code === "string" && /^[A-Z0-9_:-]{1,80}$/i.test(value.code) ? value.code : null;
+            let status: number | null = typeof value?.status === "number" && [400, 403, 404, 409, 422, 429, 500, 503].includes(value.status)
+              ? value.status : null;
+            for (let depth = 0; depth < 3 && cause && typeof cause === "object"; depth++) {
+              const current = cause as { code?: unknown; status?: unknown; cause?: unknown };
+              if (!code && typeof current.code === "string" && /^[A-Z0-9_:-]{1,80}$/i.test(current.code)) code = current.code;
+              if (!status && typeof current.status === "number" && [400, 403, 404, 409, 422, 429, 500, 503].includes(current.status)) status = current.status;
+              cause = current.cause;
+            }
+            const frames = value?.stack?.split("\n").slice(1).filter(frame => /^\s*at /.test(frame))
+              .map(frame => /server\/src\/services\/([^\s():]+\.ts):(\d+):\d+/.exec(frame))
+              .filter((frame): frame is RegExpExecArray => Boolean(frame)).slice(0, 5)
+              .map(frame => `${frame[1]}:${frame[2]}`) ?? [];
+            console.error("native_memory_source_access_test_denial", JSON.stringify({ reason: "output_snapshot_currentness",
+              errorName: value?.name === "HttpError" || value?.name === "Error" ? value.name : "other", code, status, frames }));
+          }
+          return false;
+        }
       } else if (exactPolicy && !dispatch && capturedSnapshot.data.policy.runIds.length > 0 &&
         capturedSnapshot.data.inputs.every(value => value.kind === "context")) {
         capturedContextIds = capturedSnapshot.data.inputs.map(value => value.kind === "context" ? value.manifestId : "").sort();

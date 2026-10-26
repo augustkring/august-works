@@ -237,6 +237,9 @@ jobs:
           - journey: V10 authenticated support Help
             config: tests/e2e/aw-v10-support.config.ts
             spec: tests/e2e/aw-v10-support.spec.ts
+          - journey: V10 authenticated agent chat
+            config: tests/e2e/aw-v10-agent-chat.config.ts
+            spec: tests/e2e/agent-chat-*.spec.ts
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -278,6 +281,7 @@ jobs:
             tests/e2e/playwright-report
             test-results/v5-authenticated
             test-results/v7-authenticated
+            test-results/v10-agent-chat-authenticated
           if-no-files-found: ignore
 
   pilot-readiness:

@@ -597,35 +597,36 @@ async function assertMemorySourceAccess(db:Db,companyId:string,recordId:string,a
 }
 async function requireCurrentMemoryDetail(db:Db,companyId:string,recordId:string,actor:MemoryMutationActor):Promise<NonNullable<Awaited<ReturnType<typeof getRecordDetail>>>> {
   const nativeOutputCapture = actor.nativeModelOutputCapture;
-  const nativeToolInvocationId = actor.nativeToolInvocationId;
   if (nativeOutputCapture) {
     return db.transaction(async rawTx => {
       const tx = rawTx as unknown as Db;
       await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
-      const outputActor = memorySourceActor(companyId, actor);
-      const capture = nativeOutputCapture;
-      const use = capture.managedOpenCodeToolUse;
-      const [run] = await tx.select({ issueId: heartbeatRuns.nativeIssueId }).from(heartbeatRuns).where(and(
-        eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, capture.runId)));
-      if (!outputActor || outputActor.type !== "agent" || !run?.issueId || !use || !nativeToolInvocationId ||
-        actor.principal.type !== "agent") throw notFound("Memory record not found");
-      await assertNativeMemoryToolInvocationCurrent(tx, { companyId, issueId: run.issueId,
-        actor: outputActor, capture, invocationId: nativeToolInvocationId, status: "executing" });
-      const detail = await getRecordDetail(tx, companyId, recordId);
-      const record = detail?.record;
-      const metadata = record?.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
-        ? record.metadata as Record<string, unknown> : null;
-      if (!record || record.createdByActorType !== "agent" || record.createdByActorId !== actor.principal.agentId ||
-        record.payloadSourceProtocolVersion !== 1 || record.payloadSourceSnapshot !== null || !metadata ||
-        metadata.nativeManagedMemoryInvocationId !== nativeToolInvocationId ||
-        metadata.nativeManagedMemoryCallId !== use.callId || metadata.nativeManagedMemoryArgumentsHash !== use.argumentsHash)
-        throw notFound("Memory record not found");
-      return detail!;
+      return readCurrentNativeMemoryOutputDetail(tx,companyId,recordId,actor);
     });
   }
   const detail=await memoryService(db).get(companyId,recordId,actor);
   if(!detail)throw notFound("Memory record not found");
   return detail;
+}
+
+async function readCurrentNativeMemoryOutputDetail(db:Db,companyId:string,recordId:string,actor:MemoryMutationActor) {
+  const capture=actor.nativeModelOutputCapture, invocationId=actor.nativeToolInvocationId;
+  const outputActor=memorySourceActor(companyId,actor), use=capture?.managedOpenCodeToolUse;
+  if(!capture||!invocationId||!outputActor||outputActor.type!=="agent"||actor.principal.type!=="agent"||!use)
+    throw notFound("Memory record not found");
+  const [run]=await db.select({issueId:heartbeatRuns.nativeIssueId}).from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.id,capture.runId)));
+  if(!run?.issueId)throw notFound("Memory record not found");
+  const detail=await getRecordDetail(db,companyId,recordId), record=detail?.record;
+  const metadata=record?.metadata&&typeof record.metadata==="object"&&!Array.isArray(record.metadata)
+    ?record.metadata as Record<string,unknown>:null;
+  if(!record||record.createdByActorType!=="agent"||record.createdByActorId!==actor.principal.agentId||
+    record.payloadSourceProtocolVersion!==1||record.payloadSourceSnapshot!==null||!metadata||
+    metadata.nativeManagedMemoryInvocationId!==invocationId||metadata.nativeManagedMemoryCallId!==use.callId||
+    metadata.nativeManagedMemoryArgumentsHash!==use.argumentsHash)throw notFound("Memory record not found");
+  await assertNativeMemoryToolInvocationCurrent(db,{companyId,issueId:run.issueId,actor:outputActor,
+    capture,invocationId,status:"executing"});
+  return detail!;
 }
 
 async function persistedActivityRunId(
@@ -723,6 +724,7 @@ async function insertCandidate(
     sourceMemoryIds?: string[];
     sourceProvenance?: Awaited<ReturnType<typeof captureMemorySources>>;
     humanCredential?: { actor: AuthorizationActor; credentialExpiresAt: number|null };
+    deferNativeOutputCurrentCheck?: boolean;
   } = {},
 ) {
   await assertMemorySourcesRetained(tx, companyId, input.evidence);
@@ -765,8 +767,6 @@ async function insertCandidate(
         )))[0]?.issueId : null : null;
     if (!outputActor || !outputIssueId || !actor.nativeToolInvocationId || actor.runId !== outputCapture.runId)
       throw forbidden("Native Memory output binding is unavailable");
-    await assertNativeMemoryToolInvocationCurrent(tx, { companyId, issueId: outputIssueId, actor: outputActor,
-      capture: outputCapture, invocationId: actor.nativeToolInvocationId, status: "executing" });
     // The producer Run is retained so deleting it scrubs the copy. It is not
     // a whole-Run read dependency unless the exact captured policy says so.
     sourceProvenance = { ...sourceProvenance, sourceProvenanceQualified: true,
@@ -853,7 +853,7 @@ async function insertCandidate(
   if (outputCapture) {
     const outputActor = memorySourceActor(companyId, actor);
     if (!outputActor || !outputIssueId || !actor.nativeToolInvocationId) throw forbidden("Native Memory output binding is unavailable");
-    await assertNativeMemoryToolInvocationCurrent(tx, { companyId, issueId: outputIssueId, actor: outputActor,
+    if (!state.deferNativeOutputCurrentCheck) await assertNativeMemoryToolInvocationCurrent(tx, { companyId, issueId: outputIssueId, actor: outputActor,
       capture: outputCapture, invocationId: actor.nativeToolInvocationId, status: "executing" });
   } else if(!await canActorReadMemorySources(tx,companyId,memorySourceActor(companyId,actor),record.id))
     throw forbidden("Memory candidate source access is unavailable");
@@ -1193,7 +1193,9 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
             memoryResolution: resolution.metadata,
           },
         };
-        const candidateState:{sourceMemoryIds:string[];humanCredential?:{actor:AuthorizationActor;credentialExpiresAt:number|null}}={sourceMemoryIds};
+        const candidateState:{sourceMemoryIds:string[];humanCredential?:{actor:AuthorizationActor;credentialExpiresAt:number|null};
+          deferNativeOutputCurrentCheck?:boolean}={sourceMemoryIds,
+            ...(!nativeCapture&&actor.nativeModelOutputCapture?{deferNativeOutputCurrentCheck:true}:{})};
         const created = await insertCandidate(
           txDb,
           companyId,
@@ -1220,7 +1222,9 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
           await assertDirectInputSessionCurrent(tx,candidateState.humanCredential.actor,candidateState.humanCredential.credentialExpiresAt,
             "The original Human Memory input session is unavailable");
         }
-        return { recordId: created.id, resolution: resolution.metadata, replayed:false as const };
+        const nativeDetail=!nativeCapture&&actor.nativeModelOutputCapture
+          ?await readCurrentNativeMemoryOutputDetail(txDb,companyId,created.id,actor):null;
+        return { recordId: created.id, resolution: resolution.metadata, replayed:false as const, nativeDetail };
         };
         return nativeCapture
           ? withNativeMemoryCaptureSources(txDb,companyId,memorySourceActor(companyId,actor),options.nativeCaptureReceipt!,inspect)
@@ -2029,7 +2033,8 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
     createCandidate: async (companyId:string, rawInput:unknown, actor:MemoryMutationActor, sourceMemoryIds:string[]=[]) => {
       const outcome=await runCandidate(companyId,rawInput,actor,sourceMemoryIds,false);
       if(!outcome.resolution)throw new Error("Ordinary Memory candidate replay is unavailable");
-      const detail=await requireCurrentMemoryDetail(db,companyId,outcome.recordId,actor);
+      const detail = ("nativeDetail" in outcome ? outcome.nativeDetail : null) ??
+        await requireCurrentMemoryDetail(db, companyId, outcome.recordId, actor);
       return withResolution(detail,outcome.resolution);
     },
 

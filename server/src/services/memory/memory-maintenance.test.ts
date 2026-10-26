@@ -104,6 +104,11 @@ suite("Governed native Memory maintenance", () => {
     await memoryService(db).forget(seeded.companyId, seeded.records[0]!.id, seeded.actor);
     expect((await readMemoryMaintenanceHistory(db, historyActor(seeded), seeded.companyId)).entries[0])
       .toMatchObject({ outcome: "source_unavailable", receiptId: null, indexedRecordCount: null });
+    const [receipt]=await db.select({id:activityLog.id}).from(activityLog).where(and(eq(activityLog.companyId,seeded.companyId),
+      eq(activityLog.entityType,"memory_job"),eq(activityLog.entityId,job.id),eq(activityLog.action,"memory.index_refresh_completed")));
+    expect(receipt).toBeTruthy();
+    await db.delete(activityLog).where(eq(activityLog.id,receipt!.id));
+    expect((await readMemoryMaintenanceHistory(db,historyActor(seeded),seeded.companyId)).entries).toHaveLength(0);
   });
   it("repeats native company and Memory owner admission rather than trusting an instance-admin claim", async () => {
     const seeded = await seed();

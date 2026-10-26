@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { eq } from "../../packages/db/node_modules/drizzle-orm/index.js";
 import { expect, test, type APIResponse } from "@playwright/test";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
 import {
   createDb,
   closeRegisteredClients,
@@ -14,6 +15,7 @@ import {
   activityLog,
 } from "../../packages/db/src/index.ts";
 import type { PackageRelease } from "@paperclipai/shared";
+registerEnglishAccountLocaleIsolation(test);
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 async function json(response: APIResponse) {
   expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(

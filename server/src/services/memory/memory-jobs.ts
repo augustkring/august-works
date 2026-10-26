@@ -195,6 +195,18 @@ async function ownIndexHistoryReceiptReadable(db: Db, actor: AuthorizationActor 
   if (actor?.type !== "board" || actor.source !== "session" || !actor.userId || job.operationType !== "index_refresh"
     || !job.jobKey.startsWith("maintenance:v1:")
     || job.status !== "succeeded" || !job.startedAt || !job.finishedAt || job.leaseExpiresAt) return false;
+  const receipts = await db.select().from(activityLog).where(and(eq(activityLog.companyId, job.companyId), eq(activityLog.entityType, "memory_job"),
+    eq(activityLog.entityId, job.id), eq(activityLog.action, "memory.index_refresh_completed"))).limit(2).for("share");
+  const receipt = receipts[0];
+  // A forgotten source deliberately erases its job inputs/results. Keep only
+  // the owner's content-free history row when its original atomic receipt is
+  // still unique, actor-bound and in the completed attempt's time window.
+  const receiptBound = receipts.length === 1 && receipt!.actorType === "user" && receipt!.actorId === actor.userId
+    && receipt!.createdAt >= job.startedAt && receipt!.createdAt <= job.finishedAt && indexReadResult.safeParse(receipt!.details).success;
+  if (!receiptBound) return false;
+  const erasedSource = job.sourceRefJson !== null && typeof job.sourceRefJson === "object" && !Array.isArray(job.sourceRefJson)
+    && Object.keys(job.sourceRefJson as Record<string, unknown>).length === 0 && job.resultJson === null;
+  if (erasedSource) return true;
   const source = maintenanceReadSource.safeParse(job.sourceRefJson);
   if (!source.success || source.data.requester.type !== "user" || source.data.requester.userId !== actor.userId ||
     Object.keys(source.data.recordVersions).length !== source.data.recordIds.length) return false;
@@ -203,13 +215,9 @@ async function ownIndexHistoryReceiptReadable(db: Db, actor: AuthorizationActor 
     if (!row || source.data.recordVersions[id] !== row.updatedAt.toISOString() ||
       !await canActorReadMemorySources(db, job.companyId, actor, id)) return false;
   }
-  const receipts = await db.select().from(activityLog).where(and(eq(activityLog.companyId, job.companyId), eq(activityLog.entityType, "memory_job"),
-    eq(activityLog.entityId, job.id), eq(activityLog.action, "memory.index_refresh_completed"))).limit(2).for("share");
-  const receipt = receipts[0];
   // The original executor checked the requesting Human and every source before
   // atomically recording this exact postcondition. An actorId alone is not proof.
-  return receipts.length === 1 && receipt!.actorType === "user" && receipt!.actorId === actor.userId
-    && receipt!.createdAt >= job.startedAt && receipt!.createdAt <= job.finishedAt && indexReadResult.safeParse(receipt!.details).success;
+  return true;
 }
 
 /** Filtering precedes the output limit. The fixed scan/time ceilings can omit

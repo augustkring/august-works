@@ -16,7 +16,8 @@ for (const direct of [false, true])
     page,
     request,
   }) => {
-    const f = await setup(request);
+    const f = await setup(request, page);
+    request = f.request;
     try {
       await page.goto(f.route);
       await send(page, {
@@ -83,7 +84,8 @@ test("split handoff commits relevant plans before execution and never creates ch
   page,
   request,
 }) => {
-  const f = await setup(request);
+  const f = await setup(request, page);
+  request = f.request;
   try {
     await page.goto(f.route);
     await send(page, {
@@ -167,7 +169,8 @@ for (const bad of [
     page,
     request,
   }) => {
-    const f = await setup(request);
+    const f = await setup(request, page);
+    request = f.request;
     try {
       await page.goto(f.route);
       await send(page, { action: "project", ...bad });
@@ -193,7 +196,8 @@ test("first upload creates the chat without invoking its agent; shared attachmen
   page,
   request,
 }) => {
-  const f = await setup(request);
+  const f = await setup(request, page);
+  request = f.request;
   try {
     await page.goto(f.route);
     await page
@@ -253,7 +257,8 @@ for (const mode of ["Ask", "Plan"])
     page,
     request,
   }) => {
-    const f = await setup(request);
+    const f = await setup(request, page);
+    request = f.request;
     try {
       await page.goto(f.route);
       await page.getByTestId("task-chat-composer-mode").click();
@@ -317,7 +322,8 @@ for (const selection of [
     page,
     request,
   }) => {
-    const f = await setup(request);
+    const f = await setup(request, page);
+    request = f.request;
     try {
       const secret = await json(
         await request.post(`/api/companies/${f.company.id}/secrets`, {
@@ -394,7 +400,8 @@ test("plan approval hands the preserved revision to an assigned project task", a
   page,
   request,
 }) => {
-  const f = await setup(request);
+  const f = await setup(request, page);
+  request = f.request;
   try {
     await page.goto(f.route);
     await page.getByTestId("task-chat-composer-mode").click();
@@ -462,7 +469,8 @@ test("shared questions resume and existing project reuse creates no project card
   page,
   request,
 }) => {
-  const f = await setup(request);
+  const f = await setup(request, page);
+  request = f.request;
   try {
     const project = await json(
       await request.post(`/api/companies/${f.company.id}/projects`, {
@@ -529,7 +537,8 @@ test("shared history loads older messages without replacing the latest turn", as
   page,
   request,
 }) => {
-  const f = await setup(request);
+  const f = await setup(request, page);
+  request = f.request;
   try {
     await page.goto(f.route);
     await send(page, { action: "history" });
@@ -570,7 +579,8 @@ test("disabling the experiment lets an active turn settle and keeps idle history
     await request.get("/api/instance/settings/experimental"),
   );
   expect(original.enableAgentChat).toBe(false);
-  const f = await setup(request);
+  const f = await setup(request, page);
+  request = f.request;
   try {
     await page.goto(f.route);
     await send(page, { action: "delayed" });

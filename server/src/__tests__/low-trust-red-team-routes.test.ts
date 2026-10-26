@@ -52,7 +52,7 @@ import { drainHeartbeatRunsToQuiescence } from "./helpers/drain-heartbeat-runs.j
 import { errorHandler } from "../middleware/index.js";
 import { agentRoutes } from "../routes/agents.js";
 import { issueRoutes } from "../routes/issues.js";
-import { createCanonicalHumanProject, seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
+import { createCanonicalHumanProject, seedCurrentHumanSourceActor, updateCanonicalHumanProject } from "./helpers/current-human-source-fixture.js";
 import { heartbeatService } from "../services/heartbeat.js";
 import { LOW_TRUST_QUARANTINED_BODY } from "../services/source-trust.js";
 
@@ -458,6 +458,18 @@ async function seedLowTrustFixture(db: Db) {
   // The route requires source-qualified Projects. Create them through the
   // authenticated Human owner path; direct inserts would be unreadable Tasks.
   const allowedProject = await createCanonicalHumanProject(db, company!.id, currentHuman, `Allowed ${nonce}`, { status: "in_progress" });
+  await updateCanonicalHumanProject(db, company!.id, currentHuman, allowedProject.id, {
+    executionWorkspacePolicy: {
+      enabled: true,
+      authorizationPolicy: {
+        trustBoundary: {
+          mode: LOW_TRUST_REVIEW_PRESET,
+          companyId: company!.id,
+          projectIds: [allowedProject.id],
+        },
+      },
+    },
+  });
   const outOfScopeProject = await createCanonicalHumanProject(db, company!.id, currentHuman, `Out ${nonce}`, {
     description: canary("FLAG-PROJECT-7R4G"), status: "in_progress",
   });
@@ -1432,21 +1444,6 @@ describeEmbeddedPostgres(
         .update(issues)
         .set({ executionPolicy: null })
         .where(eq(issues.id, fixture.issues.assignedReview.id));
-
-      await db
-        .update(projects)
-        .set({
-          executionWorkspacePolicy: {
-            authorizationPolicy: {
-              trustBoundary: {
-                mode: LOW_TRUST_REVIEW_PRESET,
-                companyId: fixture.company.id,
-                projectIds: [fixture.projects.allowed.id],
-              },
-            },
-          },
-        })
-        .where(eq(projects.id, fixture.projects.allowed.id));
 
       const projectScopedLowTrustRes = await request(
         createApp(db, agentActor(fixture, fixture.agents.standard.id)),

@@ -83,6 +83,7 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
     instanceId = `managed-opencode-${randomUUID()}`;
     vi.stubEnv("PAPERCLIP_INSTANCE_ID", instanceId);
     vi.stubEnv("PAPERCLIP_AGENT_JWT_SECRET", `managed-opencode-e2e-${randomUUID()}-${randomUUID()}`);
+    vi.stubEnv("PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS", "1");
     database = await startEmbeddedPostgresTestDatabase("managed-opencode-source-e2e-");
     db = createDb(database.connectionString);
     await instanceSettingsService(db).getExperimental();

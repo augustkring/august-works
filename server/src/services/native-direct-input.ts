@@ -311,9 +311,29 @@ async function assertNativeMemorySourceCurrent(db: Db | Transaction, companyId: 
   const versionMatches = !!memory && memory.updatedAt.toISOString() === source.sourceVersion;
   const acceptedReviewMatches = !!memory && !versionMatches && await assertNativeMemoryReviewTransitionEvidence(db, companyId,
     source, transitionEvidence, memory);
-  if (!memory || (!versionMatches && !acceptedReviewMatches) || nativeSha256(memory.content) !== source.contentHash ||
-    !await canActorReadMemorySources(db as Db, companyId, actor, source.memoryId))
+  const contentHashMatches = !!memory && nativeSha256(memory.content) === source.contentHash;
+  const readable = await canActorReadMemorySources(db as Db, companyId, actor, source.memoryId);
+  if (!memory || (!versionMatches && !acceptedReviewMatches) || !contentHashMatches || !readable) {
+    if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1") {
+      console.error("native_exact_memory_source_test_failure", JSON.stringify({
+        rowPresent: Boolean(memory), versionMatches, transitionEvidencePresent: Boolean(transitionEvidence), acceptedReviewMatches,
+        contentHashMatches, readable, actorType: actor.type, actorIsAgent: actor.type === "agent",
+        actorSource: actor.source === "board_session" ? "board_session" : actor.source === "local_implicit" ? "local_implicit" :
+          actor.source === "agent_jwt" ? "agent_jwt" : actor.source === "none" ? "none" : "other",
+        actorHasUser: Boolean(actor.userId),
+        actorHasRun: Boolean(actor.runId), actorHasResponsibleHuman: Boolean(actor.onBehalfOfUserId),
+        transitionTool: transitionEvidence?.kind === "tool_result"
+          ? transitionEvidence.toolName === "self_remember" ? "self_remember" :
+            transitionEvidence.toolName === "read_context" ? "read_context" :
+            transitionEvidence.toolName === "write_document" ? "write_document" :
+            transitionEvidence.toolName === "create_task" ? "create_task" :
+            transitionEvidence.toolName === "read_document" ? "read_document" :
+            transitionEvidence.toolName === "call_api" ? "call_api" : "other"
+          : "none",
+      }));
+    }
     throw forbidden("A Native Memory source is unavailable");
+  }
 }
 
 /** Revalidate an exact Memory body delivered as a prior managed tool result.
@@ -432,7 +452,10 @@ async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction
         throw forbidden("A Native output Task source changed or was erased");
     }
   }
-  const exactCapturedMemoryIds = new Set(capture.sourceSet.inputs.flatMap(source => source.kind === "memory" ? [source.memoryId] : []));
+  // The exact consumed component walk above revalidated current Memory ACLs
+  // for the complete, component-bound policy union. Keep this second walk's
+  // independent owner snapshot/body binding, without recursing into those ACL
+  // graphs a second time inside the same read scope.
   for (const memoryId of capture.sourceSet.policy.memoryIds) {
     nativeSourceReadWork(scope);
     const [memory] = await db.select({ id: memoryRecords.id, companyId: memoryRecords.companyId,
@@ -442,10 +465,19 @@ async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction
     const owner = nativePayloadSourceSnapshotSchema.safeParse(memory?.payloadSourceSnapshot);
     const [ownerHash] = await db.execute<{ hash: string }>(sql`select public.aw_native_payload_body_hash('memory_record',to_jsonb(m)) as hash
       from memory_records m where m.company_id=${companyId}::uuid and m.id=${memoryId}::uuid and m.deleted_at is null`);
+    const ownerHashMatches = Boolean(owner.success && owner.data.owner.kind === "memory_record" && ownerHash &&
+      owner.data.owner.contentHash === ownerHash.hash);
     if (!memory || memory.payloadSourceSnapshotInvalidated || !owner.success || owner.data.owner.kind !== "memory_record" ||
-      !ownerHash || owner.data.owner.contentHash !== ownerHash.hash ||
-      (!exactCapturedMemoryIds.has(memoryId) && !await canActorReadMemorySources(db, companyId, actor, memoryId)))
+      !ownerHashMatches) {
+      if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1") {
+        console.error("native_output_memory_owner_test_failure", JSON.stringify({
+          rowPresent: Boolean(memory), snapshotInvalidated: memory?.payloadSourceSnapshotInvalidated ?? null,
+          ownerSnapshotValid: owner.success, ownerKindMatches: owner.success && owner.data.owner.kind === "memory_record",
+          ownerHashPresent: Boolean(ownerHash), ownerHashMatches,
+        }));
+      }
       throw forbidden("A Native output Memory source is unavailable");
+    }
   }
   if (capture.sourceSet.policy.foundationRevisionIds.length) {
     const access = await authorizationService(db).decide({ actor, action: "foundation:read",
@@ -843,7 +875,8 @@ async function assertNativePayloadSourceSetCurrentInScope(db: Db | Transaction, 
   }
   const contexts = inputs.data.filter((source): source is Extract<NativePayloadSourceInput, { kind: "context" }> => source.kind === "context");
   await assertNativeTemporalContextInputsCurrent(db as Db, input.companyId, contexts);
-  await assertNativeContextInputOwnersCurrent(db as Db, input.companyId, input.actor, contexts, scope);
+  await assertNativeContextInputOwnersCurrent(db as Db, input.companyId, input.actor, contexts, scope,
+    new Set(policy.data.memoryIds.filter(memoryId => !exactMemoryInputIds.has(memoryId))));
   for (const source of inputs.data) {
     nativeSourceReadWork(scope);
     if (source.kind === "task" || source.kind === "project" || source.kind === "project_workspace" || source.kind === "context") continue;
@@ -1589,8 +1622,46 @@ function temporalContextContentHash(manifest: typeof contextManifests.$inferSele
   }), "utf8").digest("hex");
 }
 
+async function assertNativeFrozenTaskSnapshotCurrent(db: Db | Transaction, companyId: string, actor: AuthorizationActor,
+  issueId: string, snapshot: NativePayloadSourceSnapshot, scope: NativeSourceReadScope): Promise<void> {
+  const references = snapshot.inputs.length + Object.values(snapshot.policy).reduce((total, values) => total + values.length, 0);
+  if (references > 256 || snapshot.inputs.length > 256)
+    throw forbidden("The frozen Native Task source closure exceeds its bound");
+  if (references === 0) return;
+  const dispatches = snapshot.inputs.flatMap((source, index) => source.kind === "worker_model_dispatch" ? [{ source, index }] : []);
+  const last = dispatches.at(-1);
+  if (!last || last.index !== snapshot.inputs.length - 1 || dispatches.length > 64 ||
+    last.source.kind !== "worker_model_dispatch")
+    throw forbidden("The frozen Native Task source closure has no retained dispatch receipt");
+  const visitKey = `frozen-task-snapshot:${companyId}:${issueId}:${snapshot.digest}`;
+  if (scope.active.has(visitKey)) throw forbidden("The frozen Native Task source graph contains a cycle");
+  scope.active.add(visitKey);
+  try {
+    nativeSourceReadWork(scope);
+    const [producer] = await db.select({ issueId: heartbeatRuns.nativeIssueId,
+      profile: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, last.source.runId), eq(heartbeatRuns.runtimeMode, "native")));
+    if (!producer?.issueId) throw forbidden("The frozen Native Task source producer is unavailable");
+    const profile = nativeSourceRecord(producer.profile);
+    const receipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+    const matchingDispatches = receipt.success ? receipt.data.dispatches.filter(value =>
+      isDeepStrictEqual(value.policy, snapshot.policy) && isDeepStrictEqual(value.inputs, snapshot.inputs) &&
+      value.inputs.at(-1)?.kind === "worker_model_dispatch" && isDeepStrictEqual(value.inputs.at(-1), last.source)) : [];
+    if (!receipt.success || matchingDispatches.length !== 1 || !/^[0-9a-f]{64}$/.test(matchingDispatches[0]!.executionInputDigest))
+      throw forbidden("The frozen Native Task dispatch prefix is unavailable");
+    const component: NativeConsumedSourceComponent = { kind: "dispatch",
+      executionInputDigest: matchingDispatches[0]!.executionInputDigest, policy: snapshot.policy, inputs: snapshot.inputs };
+    await assertNativeManagedConsumedSourceSetCurrentInScope(db, { companyId, issueId: producer.issueId,
+      runId: last.source.runId, actor, components: [component],
+      sourceSet: { policy: snapshot.policy, inputs: snapshot.inputs } }, scope);
+  } finally {
+    scope.active.delete(visitKey);
+  }
+}
+
 async function assertNativeContextInputOwnersCurrent(db: Db, companyId: string, actor: AuthorizationActor,
-  inputs: Extract<NativePayloadSourceInput, { kind: "context" }>[], scope: NativeSourceReadScope) {
+  inputs: Extract<NativePayloadSourceInput, { kind: "context" }>[], scope: NativeSourceReadScope,
+  alreadyValidatedMemoryIds: ReadonlySet<string> = new Set()) {
   if (!inputs.length) return;
   const ids = [...new Set(inputs.map(source => source.manifestId))];
   if (ids.length !== inputs.length) throw forbidden("A Native Context manifest source is ambiguous");
@@ -1606,15 +1677,19 @@ async function assertNativeContextInputOwnersCurrent(db: Db, companyId: string, 
   });
   const taskIssueIds = [...new Set(taskIds)];
   const taskOwners = taskIssueIds.length ? await db.select({ id: issues.id, updatedAt: issues.updatedAt,
+    payloadSourceProtocolVersion: issues.payloadSourceProtocolVersion,
     payloadSourceSnapshot: issues.payloadSourceSnapshot, payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated })
     .from(issues).where(and(eq(issues.companyId, companyId), inArray(issues.id, taskIssueIds))).for("share") : [];
   if (taskOwners.length !== taskIssueIds.length) throw forbidden("A Native Context Task source changed or was erased");
   const taskOwnerById = new Map(taskOwners.map(owner => [owner.id, owner]));
-  const taskHashes = taskIssueIds.length ? await db.execute<{ id: string; hash: string }>(sql`
-    select i.id::text as id,public.aw_native_payload_body_hash('issue',to_jsonb(i)) as hash
+  const legacyTaskIssueIds = new Set(taskIssueIds);
+  const taskHashes = taskIssueIds.length ? await db.execute<{ id: string; hash: string; snapshotDigestValid: boolean }>(sql`
+    select i.id::text as id,public.aw_native_payload_body_hash('issue',to_jsonb(i)) as hash,
+      encode(sha256(convert_to((i.payload_source_snapshot-'digest')::text,'UTF8')),'hex')=i.payload_source_snapshot->>'digest'
+        as "snapshotDigestValid"
     from issues i where i.company_id=${companyId}::uuid and i.id in (${sql.join(taskIssueIds.map(id => sql`${id}::uuid`), sql`, `)})
   `) : [];
-  const taskHashById = new Map(taskHashes.map(owner => [owner.id, owner.hash]));
+  const taskHashById = new Map(taskHashes.map(owner => [owner.id, owner]));
   for (const manifest of manifests) {
     for (const item of items.filter(value => value.manifestId === manifest.id)) {
       nativeSourceReadWork(scope);
@@ -1624,16 +1699,23 @@ async function assertNativeContextInputOwnersCurrent(db: Db, companyId: string, 
         const ownerHash = match ? taskHashById.get(match[1]!) : undefined;
         const snapshot = nativePayloadSourceSnapshotSchema.safeParse(owner?.payloadSourceSnapshot);
         if (!match || !owner || !ownerHash || owner.payloadSourceSnapshotInvalidated || !snapshot.success ||
-          snapshot.data.owner.kind !== "issue" || snapshot.data.owner.contentHash !== ownerHash ||
+          snapshot.data.owner.kind !== "issue" || snapshot.data.owner.companyId !== companyId ||
+          snapshot.data.owner.id !== match[1]! || snapshot.data.owner.contentHash !== ownerHash.hash ||
+          owner.payloadSourceProtocolVersion === 1 && !ownerHash.snapshotDigestValid ||
           item.sourceVersion !== owner.updatedAt.toISOString() || !item.payloadSourceSnapshot ||
           !isDeepStrictEqual(item.payloadSourceSnapshot, owner.payloadSourceSnapshot))
           throw forbidden("A Native Context Task source changed or was erased");
+        if (owner.payloadSourceProtocolVersion === 1) {
+          legacyTaskIssueIds.delete(match[1]!);
+          await assertNativeFrozenTaskSnapshotCurrent(db, companyId, actor, match[1]!, snapshot.data, scope);
+        }
         await canActorReadIssuePrivacy(db, actor, { id: match[1]!, companyId }).then(allowed => {
           if (!allowed) throw forbidden("A Native Context Task source is unavailable");
         });
       } else if (item.sourceProvider === "august_works_memory" || item.sourceProvider === "august_works_derived_memory") {
         const match = /^memory:\/\/(?:record|derived)\/([0-9a-f-]{36})$/i.exec(item.sourceRef);
-        if (!match || !await canActorReadMemorySources(db, companyId, actor, match[1]!))
+        if (!match || (!alreadyValidatedMemoryIds.has(match[1]!) &&
+          !await canActorReadMemorySources(db, companyId, actor, match[1]!)))
           throw forbidden("A Native Context Memory source is unavailable");
         const [memory] = await db.select({ updatedAt: memoryRecords.updatedAt, title: memoryRecords.title, content: memoryRecords.content,
           payloadSourceSnapshot: memoryRecords.payloadSourceSnapshot, payloadSourceSnapshotInvalidated: memoryRecords.payloadSourceSnapshotInvalidated,
@@ -1664,11 +1746,12 @@ async function assertNativeContextInputOwnersCurrent(db: Db, companyId: string, 
       if (!memory || memory.deletedAt || memory.revokedAt || memory.supersededByRecordId || memory.payloadSourceSnapshotInvalidated ||
         !nativePayloadSourceSnapshotSchema.safeParse(memory.payloadSourceSnapshot).success ||
         !isDeepStrictEqual(memory.payloadSourceSnapshot, root.payloadSourceSnapshot) ||
-        !await canActorReadMemorySources(db, companyId, actor, root.memoryRecordId))
+        (!alreadyValidatedMemoryIds.has(root.memoryRecordId) &&
+          !await canActorReadMemorySources(db, companyId, actor, root.memoryRecordId)))
         throw forbidden("A Native Context Memory root is unavailable");
     }
   }
-  if (taskIssueIds.length) await assertAnalyticalContextPayloadAccessBatch(db, companyId, actor, taskIssueIds);
+  if (legacyTaskIssueIds.size) await assertAnalyticalContextPayloadAccessBatch(db, companyId, actor, [...legacyTaskIssueIds]);
 }
 
 export async function assertNativeTemporalContextInputsCurrent(db: Db, companyId: string,

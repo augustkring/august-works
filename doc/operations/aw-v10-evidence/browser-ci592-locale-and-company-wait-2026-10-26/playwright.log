@@ -1,0 +1,513 @@
+[WebServer] (node:1087491) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] 
+[WebServer] > @paperclipai/ui@0.3.1 build /workspace/v10-dep-qualification/ui
+[WebServer] > vite build "--outDir" "../server/ui-dist" "--emptyOutDir"
+[WebServer] 
+[WebServer] (node:1087512) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+[WebServer]   - `__dirname` (vite.config.ts:15:30). Use `import.meta.dirname` instead
+[WebServer]   - import "./src/lib/vite-watch" without a file extension (vite.config.ts:5:41). Add the file extension
+[WebServer]   - import "./src/lib/vite-api-proxy" without a file extension (vite.config.ts:6:32). Add the file extension
+[WebServer]   - import "./src/lib/vite-sw-build-id" without a file extension (vite.config.ts:7:44). Add the file extension
+[WebServer]   - import "./src/lib/vite-build-commit" without a file extension (vite.config.ts:8:40). Add the file extension
+[WebServer] Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+[WebServer] Both esbuild and oxc options were set. oxc options will be used and esbuild options will be ignored. The following esbuild options were set: `{
+[WebServer]   keepNames: true,
+[WebServer]   drop: [ 'console', 'debugger' ],
+[WebServer]   legalComments: 'none'
+[WebServer] }`
+[WebServer] vite v8.3.5 building client environment for production...
+[WebServer] transforming...
+[WebServer] Found 4 warnings while optimizing generated CSS:
+[WebServer] 
+[WebServer] Issue #1:
+[WebServer] │   background-color: var(--streamlined-task-detail-bg);
+[WebServer] │ }
+[WebServer] │ ::highlight(paperclip-doc-annotation-open) {
+[WebServer] ┆             ^-- 'highlight' is not recognized as a valid pseudo-element. Did you mean ':highlight' (pseudo-class) or is this a typo?
+[WebServer] ┆
+[WebServer] │   background-color: transparent;
+[WebServer] │   color: inherit;
+[WebServer] 
+[WebServer] Issue #2:
+[WebServer] │   color: inherit;
+[WebServer] │ }
+[WebServer] │ ::highlight(paperclip-doc-annotation-focused) {
+[WebServer] ┆             ^-- 'highlight' is not recognized as a valid pseudo-element. Did you mean ':highlight' (pseudo-class) or is this a typo?
+[WebServer] ┆
+[WebServer] │   background-color: transparent;
+[WebServer] │   color: inherit;
+[WebServer] 
+[WebServer] Issue #3:
+[WebServer] │   color: inherit;
+[WebServer] │ }
+[WebServer] │ ::highlight(paperclip-doc-annotation-stale) {
+[WebServer] ┆             ^-- 'highlight' is not recognized as a valid pseudo-element. Did you mean ':highlight' (pseudo-class) or is this a typo?
+[WebServer] ┆
+[WebServer] │   background-color: transparent;
+[WebServer] │   color: inherit;
+[WebServer] 
+[WebServer] Issue #4:
+[WebServer] │   color: inherit;
+[WebServer] │ }
+[WebServer] │ ::highlight(paperclip-doc-annotation-resolved) {
+[WebServer] ┆             ^-- 'highlight' is not recognized as a valid pseudo-element. Did you mean ':highlight' (pseudo-class) or is this a typo?
+[WebServer] ┆
+[WebServer] │   background-color: transparent;
+[WebServer] │   color: inherit;
+[WebServer] 
+[WebServer] ✓ 8043 modules transformed.
+[WebServer] rendering chunks...
+[WebServer] computing gzip size...
+[WebServer] ../server/ui-dist/index.html                                             9.27 kB │ gzip:     2.70 kB
+[WebServer] ../server/ui-dist/assets/index-5lbHLGoI.css                            531.81 kB │ gzip:    76.04 kB
+[WebServer] ../server/ui-dist/assets/Costs.production-w72w5zel.js                    0.06 kB │ gzip:     0.07 kB
+[WebServer] ../server/ui-dist/assets/treemap-WGGIJYW6-CIduz1X1.js                    0.12 kB │ gzip:     0.12 kB
+[WebServer] ../server/ui-dist/assets/pie-WAS4IAKB-BpjgF-0j.js                        0.12 kB │ gzip:     0.12 kB
+[WebServer] ../server/ui-dist/assets/info-A6RAGUB7-Z6ypG_C0.js                       0.12 kB │ gzip:     0.13 kB
+[WebServer] ../server/ui-dist/assets/radar-RG4KPBEZ-D5mxR4cc.js                      0.12 kB │ gzip:     0.13 kB
+[WebServer] ../server/ui-dist/assets/packet-AYTQ26CC-bQ24UnVK.js                     0.12 kB │ gzip:     0.13 kB
+[WebServer] ../server/ui-dist/assets/cynefin-OW5HDTMX-BYcIk6u8.js                    0.12 kB │ gzip:     0.13 kB
+[WebServer] ../server/ui-dist/assets/wardley-WFR3VGLG-DdpAXmWT.js                    0.12 kB │ gzip:     0.13 kB
+[WebServer] ../server/ui-dist/assets/gitGraph-4MIJSDKK-B6NAq7QT.js                   0.12 kB │ gzip:     0.13 kB
+[WebServer] ../server/ui-dist/assets/railroad-74A4TZTK-CxLizjZv.js                   0.12 kB │ gzip:     0.13 kB
+[WebServer] ../server/ui-dist/assets/treeView-Q6P3EWNA-B2hmN4jv.js                   0.12 kB │ gzip:     0.13 kB
+[WebServer] ../server/ui-dist/assets/railroad-peg-WCYAUIDC-gz3Vg_YL.js               0.13 kB │ gzip:     0.13 kB
+[WebServer] ../server/ui-dist/assets/architecture-7GRP2DOG-DmEnny1y.js               0.13 kB │ gzip:     0.13 kB
+[WebServer] ../server/ui-dist/assets/railroad-abnf-HS5TGJTU-DiR6Tcmf.js              0.13 kB │ gzip:     0.13 kB
+[WebServer] ../server/ui-dist/assets/railroad-ebnf-LZEXJU2U-BGpqaH5S.js              0.13 kB │ gzip:     0.13 kB
+[WebServer] ../server/ui-dist/assets/eventmodeling-NTZA5JFV-CQda5Gy6.js              0.13 kB │ gzip:     0.13 kB
+[WebServer] ../server/ui-dist/assets/check-a-idIyBc.js                               0.13 kB │ gzip:     0.14 kB
+[WebServer] ../server/ui-dist/assets/chevron-down-BQkv_Jzg.js                        0.13 kB │ gzip:     0.14 kB
+[WebServer] ../server/ui-dist/assets/chevron-right-nMNghapi.js                       0.14 kB │ gzip:     0.14 kB
+[WebServer] ../server/ui-dist/assets/loader-circle-CBIugiuu.js                       0.15 kB │ gzip:     0.16 kB
+[WebServer] ../server/ui-dist/assets/x-nQFUOEgT.js                                   0.16 kB │ gzip:     0.15 kB
+[WebServer] ../server/ui-dist/assets/clock-Ckcoyl1Q.js                               0.17 kB │ gzip:     0.17 kB
+[WebServer] ../server/ui-dist/assets/iso-B3-tzSvQ.js                                 0.18 kB │ gzip:     0.17 kB
+[WebServer] ../server/ui-dist/assets/channel-BvQlvW2D.js                             0.20 kB │ gzip:     0.19 kB
+[WebServer] ../server/ui-dist/assets/array-CL5Tisss.js                               0.21 kB │ gzip:     0.18 kB
+[WebServer] ../server/ui-dist/assets/init-BXPE0p7i.js                                0.23 kB │ gzip:     0.19 kB
+[WebServer] ../server/ui-dist/assets/chunk-Y2CYZVJY-OvsAdhaO.js                      0.26 kB │ gzip:     0.17 kB
+[WebServer] ../server/ui-dist/assets/external-link-DIB46n2V.js                       0.26 kB │ gzip:     0.20 kB
+[WebServer] ../server/ui-dist/assets/chunk-XXDRQBXY-xkrKtz6o.js                      0.29 kB │ gzip:     0.24 kB
+[WebServer] ../server/ui-dist/assets/chunk-2Q5K7J3B-CkPHWFj-.js                      0.30 kB │ gzip:     0.22 kB
+[WebServer] ../server/ui-dist/assets/Agents.production-D-Ecpty3.js                   0.31 kB │ gzip:     0.25 kB
+[WebServer] ../server/ui-dist/assets/CompanySkills.production-SBZ41xLL.js            0.33 kB │ gzip:     0.25 kB
+[WebServer] ../server/ui-dist/assets/chunk-JWPE2WC7--HEGjv3t.js                      0.33 kB │ gzip:     0.23 kB
+[WebServer] ../server/ui-dist/assets/bot-BndT6Sfc.js                                 0.33 kB │ gzip:     0.23 kB
+[WebServer] ../server/ui-dist/assets/chunk-5VM5RSS4-2H3r6wq0.js                      0.36 kB │ gzip:     0.27 kB
+[WebServer] ../server/ui-dist/assets/diff-C60bAYOU.js                                0.39 kB │ gzip:     0.29 kB
+[WebServer] ../server/ui-dist/assets/useIsFetching-DZbFZRZE.js                       0.40 kB │ gzip:     0.31 kB
+[WebServer] ../server/ui-dist/assets/octagon-alert-BXE9UtbC.js                       0.43 kB │ gzip:     0.26 kB
+[WebServer] ../server/ui-dist/assets/partial-DQfgxqNJ.js                             0.49 kB │ gzip:     0.30 kB
+[WebServer] ../server/ui-dist/assets/flowDiagram-HODETNUW-D9NLlM2J.js                0.57 kB │ gzip:     0.31 kB
+[WebServer] ../server/ui-dist/assets/chunk-POPQ4Y6H-C2K4XO0o.js                      0.58 kB │ gzip:     0.40 kB
+[WebServer] ../server/ui-dist/assets/infoDiagram-27XIBGKW-BzNvWZ33.js                0.65 kB │ gzip:     0.42 kB
+[WebServer] ../server/ui-dist/assets/brainfuck-NEHkmXMc.js                           0.70 kB │ gzip:     0.38 kB
+[WebServer] ../server/ui-dist/assets/instanceSettings-Dq572614.js                    0.74 kB │ gzip:     0.35 kB
+[WebServer] ../server/ui-dist/assets/properties-BKTTDgau.js                          0.77 kB │ gzip:     0.40 kB
+[WebServer] ../server/ui-dist/assets/workflow-CPbuW54w.js                            0.78 kB │ gzip:     0.42 kB
+[WebServer] ../server/ui-dist/assets/classDiagram-ZZMXUADV-BHa5knaC.js               0.79 kB │ gzip:     0.46 kB
+[WebServer] ../server/ui-dist/assets/classDiagram-v2-VYDZK3BY-BHa5knaC.js            0.79 kB │ gzip:     0.46 kB
+[WebServer] ../server/ui-dist/assets/stateDiagram-v2-MP3YSRHH-DIhxcEhx.js            0.80 kB │ gzip:     0.46 kB
+[WebServer] ../server/ui-dist/assets/swimlanesDiagram-VR7AAH4N-BxYszxIS.js           0.83 kB │ gzip:     0.49 kB
+[WebServer] ../server/ui-dist/assets/business-metric-targets-Cno3mHA6.js             0.87 kB │ gzip:     0.43 kB
+[WebServer] ../server/ui-dist/assets/cmake-koz-qBlo.js                               0.92 kB │ gzip:     0.54 kB
+[WebServer] ../server/ui-dist/assets/asciiarmor-DFLNSgns.js                          0.92 kB │ gzip:     0.48 kB
+[WebServer] ../server/ui-dist/assets/rolldown-runtime-D6McoBPk.js                    0.94 kB │ gzip:     0.52 kB
+[WebServer] ../server/ui-dist/assets/protobuf-UWh8gh_j.js                            0.97 kB │ gzip:     0.59 kB
+[WebServer] ../server/ui-dist/assets/definition-1NhtxFCP.js                          0.99 kB │ gzip:     0.58 kB
+[WebServer] ../server/ui-dist/assets/solr-Dj8ahEwG.js                                1.06 kB │ gzip:     0.55 kB
+[WebServer] ../server/ui-dist/assets/ExperienceToolUI-B4g15nYj.js                    1.06 kB │ gzip:     0.64 kB
+[WebServer] ../server/ui-dist/assets/line-jfTMVaMB.js                                1.08 kB │ gzip:     0.55 kB
+[WebServer] ../server/ui-dist/assets/sizeCapture-INFHLROL-XURNLuv_.js                1.09 kB │ gzip:     0.58 kB
+[WebServer] ../server/ui-dist/assets/troff-Lns35Xcq.js                               1.09 kB │ gzip:     0.51 kB
+[WebServer] ../server/ui-dist/assets/enterprise-DTld-Edr.js                          1.11 kB │ gzip:     0.44 kB
+[WebServer] ../server/ui-dist/assets/http-0jwMmfWP.js                                1.12 kB │ gzip:     0.55 kB
+[WebServer] ../server/ui-dist/assets/useV9CurrentAccount-B0N4B2mj.js                 1.22 kB │ gzip:     0.65 kB
+[WebServer] ../server/ui-dist/assets/spreadsheet-B8doD_pL.js                         1.24 kB │ gzip:     0.59 kB
+[WebServer] ../server/ui-dist/assets/toml-Civ2fTsu.js                                1.24 kB │ gzip:     0.60 kB
+[WebServer] ../server/ui-dist/assets/ordinal-BJyFM1v8.js                             1.39 kB │ gzip:     0.67 kB
+[WebServer] ../server/ui-dist/assets/chunk-GVQU2GXP-DgQvZY_U.js                      1.53 kB │ gzip:     0.86 kB
+[WebServer] ../server/ui-dist/assets/mbox-JGl1Fgvq.js                                1.54 kB │ gzip:     0.74 kB
+[WebServer] ../server/ui-dist/assets/clipboard-Dp1lCbIk.js                           1.64 kB │ gzip:     0.92 kB
+[WebServer] ../server/ui-dist/assets/factor-CM3-9V3b.js                              1.67 kB │ gzip:     0.61 kB
+[WebServer] ../server/ui-dist/assets/railroadDiagram-O6MQD6OU-B3NuAmrw.js            1.67 kB │ gzip:     0.77 kB
+[WebServer] ../server/ui-dist/assets/rpm-Csj9nLHl.js                                 1.71 kB │ gzip:     0.88 kB
+[WebServer] ../server/ui-dist/assets/preload-helper-Bq-5Tx7W.js                      1.77 kB │ gzip:     0.94 kB
+[WebServer] ../server/ui-dist/assets/readiness-B0YjF5qf.js                           1.80 kB │ gzip:     0.90 kB
+[WebServer] ../server/ui-dist/assets/sieve-CcvsXPZo.js                               1.83 kB │ gzip:     0.87 kB
+[WebServer] ../server/ui-dist/assets/folder-CtwObi66.js                              1.84 kB │ gzip:     0.85 kB
+[WebServer] ../server/ui-dist/assets/StatusGlyph-CCYRTPEE.js                         1.84 kB │ gzip:     0.95 kB
+[WebServer] ../server/ui-dist/assets/z80-CB2cGLew.js                                 1.85 kB │ gzip:     0.88 kB
+[WebServer] ../server/ui-dist/assets/abnfDiagram-VCTEODGH-CjqUsRd-.js                1.86 kB │ gzip:     0.90 kB
+[WebServer] ../server/ui-dist/assets/provider-capabilities-BvnP8j0k.js               1.91 kB │ gzip:     0.83 kB
+[WebServer] ../server/ui-dist/assets/dockerfile-BttNdtK0.js                          1.93 kB │ gzip:     0.65 kB
+[WebServer] ../server/ui-dist/assets/chunk-P2QGCYS3-dl8RusC9.js                      1.96 kB │ gzip:     0.97 kB
+[WebServer] ../server/ui-dist/assets/eiffel-DuLnr4-r.js                              1.97 kB │ gzip:     1.02 kB
+[WebServer] ../server/ui-dist/assets/chunk-F27PBJKO-CI0uaVtT.js                      2.02 kB │ gzip:     0.91 kB
+[WebServer] ../server/ui-dist/assets/pegDiagram-XKGWAZYB-D63zeW43.js                 2.03 kB │ gzip:     0.94 kB
+[WebServer] ../server/ui-dist/assets/mathematica-CE9SaVsW.js                         2.07 kB │ gzip:     0.90 kB
+[WebServer] ../server/ui-dist/assets/dist-YH7EZ8d1.js                                2.08 kB │ gzip:     1.31 kB
+[WebServer] ../server/ui-dist/assets/ebnf-bm-I2WIh.js                                2.08 kB │ gzip:     0.86 kB
+[WebServer] ../server/ui-dist/assets/ebnfDiagram-PWID7BFC-BMS11QDH.js                2.08 kB │ gzip:     0.89 kB
+[WebServer] ../server/ui-dist/assets/elm-njbaCU-L.js                                 2.12 kB │ gzip:     0.95 kB
+[WebServer] ../server/ui-dist/assets/turtle-DTIS1YQ7.js                              2.17 kB │ gzip:     1.01 kB
+[WebServer] ../server/ui-dist/assets/mumps-C7oS353s.js                               2.20 kB │ gzip:     1.07 kB
+[WebServer] ../server/ui-dist/assets/ntriples-5ckCopnn.js                            2.22 kB │ gzip:     0.81 kB
+[WebServer] ../server/ui-dist/assets/smalltalk-Cmg-4mjQ.js                           2.24 kB │ gzip:     0.96 kB
+[WebServer] ../server/ui-dist/assets/dtd-CCVZU5Da.js                                 2.26 kB │ gzip:     0.98 kB
+[WebServer] ../server/ui-dist/assets/fcl-nWsMJ92o.js                                 2.27 kB │ gzip:     1.04 kB
+[WebServer] ../server/ui-dist/assets/yacas-BG9ha7tU.js                               2.35 kB │ gzip:     1.19 kB
+[WebServer] ../server/ui-dist/assets/dist-BWAQU_8v.js                                2.39 kB │ gzip:     1.09 kB
+[WebServer] ../server/ui-dist/assets/apl-MHzTCvfx.js                                 2.41 kB │ gzip:     1.30 kB
+[WebServer] ../server/ui-dist/assets/octave-D1J2QQNt.js                              2.48 kB │ gzip:     1.20 kB
+[WebServer] ../server/ui-dist/assets/commonlisp-C4OOCwkD.js                          2.49 kB │ gzip:     1.20 kB
+[WebServer] ../server/ui-dist/assets/pascal-B-I6JP0Y.js                              2.50 kB │ gzip:     1.29 kB
+[WebServer] ../server/ui-dist/assets/simple-mode-B79cVo-x.js                         2.52 kB │ gzip:     1.22 kB
+[WebServer] ../server/ui-dist/assets/path-D6mommQw.js                                2.53 kB │ gzip:     1.14 kB
+[WebServer] ../server/ui-dist/assets/tcl-RZa1cqc-.js                                 2.56 kB │ gzip:     1.33 kB
+[WebServer] ../server/ui-dist/assets/webidl-ChvzbZ5-.js                              2.64 kB │ gzip:     1.32 kB
+[WebServer] ../server/ui-dist/assets/forth-DSRmH8Tm.js                               2.68 kB │ gzip:     1.41 kB
+[WebServer] ../server/ui-dist/assets/puppet-BAHVzCkO.js                              2.69 kB │ gzip:     1.28 kB
+[WebServer] ../server/ui-dist/assets/pig-FQI0W3S3.js                                 2.70 kB │ gzip:     1.48 kB
+[WebServer] ../server/ui-dist/assets/dist-DoBOMP6Y.js                                2.71 kB │ gzip:     1.55 kB
+[WebServer] ../server/ui-dist/assets/button-CCVgGbBn.js                              2.78 kB │ gzip:     1.28 kB
+[WebServer] ../server/ui-dist/assets/shell-BSKClwid.js                               2.80 kB │ gzip:     1.33 kB
+[WebServer] ../server/ui-dist/assets/v9-feature-flags-D5PJ9HcQ.js                    2.87 kB │ gzip:     1.30 kB
+[WebServer] ../server/ui-dist/assets/velocity-BIIn-Nl2.js                            2.88 kB │ gzip:     1.22 kB
+[WebServer] ../server/ui-dist/assets/tiddlywiki-C9bm_Oju.js                          3.04 kB │ gzip:     1.20 kB
+[WebServer] ../server/ui-dist/assets/modelica-5XCgKQt8.js                            3.04 kB │ gzip:     1.41 kB
+[WebServer] ../server/ui-dist/assets/r-CktBKya9.js                                   3.14 kB │ gzip:     1.47 kB
+[WebServer] ../server/ui-dist/assets/oz-CPsllMDD.js                                  3.17 kB │ gzip:     1.42 kB
+[WebServer] ../server/ui-dist/assets/BusinessExperimentMetricPicker-EJGi2ELp.js      3.35 kB │ gzip:     1.55 kB
+[WebServer] ../server/ui-dist/assets/dialog-DSVnY8m2.js                              3.37 kB │ gzip:     1.27 kB
+[WebServer] ../server/ui-dist/assets/stex-CW6K5Nmu.js                                3.44 kB │ gzip:     1.36 kB
+[WebServer] ../server/ui-dist/assets/dist-BDnkwdyH.js                                3.45 kB │ gzip:     1.76 kB
+[WebServer] ../server/ui-dist/assets/NewGovernedSkill-DBsAjrdV.js                    3.55 kB │ gzip:     1.36 kB
+[WebServer] ../server/ui-dist/assets/vhdl-Cn8cC8Yb.js                                3.60 kB │ gzip:     1.63 kB
+[WebServer] ../server/ui-dist/assets/lua-Vher-70I.js                                 3.61 kB │ gzip:     1.56 kB
+[WebServer] ../server/ui-dist/assets/tiki-DJOT-rFT.js                                3.63 kB │ gzip:     1.45 kB
+[WebServer] ../server/ui-dist/assets/mscgen-mVFg19ri.js                              3.71 kB │ gzip:     1.09 kB
+[WebServer] ../server/ui-dist/assets/v5-feature-flags-DE9-Ob2d.js                    3.71 kB │ gzip:     1.43 kB
+[WebServer] ../server/ui-dist/assets/cypher-z2oFsVv2.js                              3.73 kB │ gzip:     1.63 kB
+[WebServer] ../server/ui-dist/assets/arc-D5D5GoGh.js                                 3.75 kB │ gzip:     1.62 kB
+[WebServer] ../server/ui-dist/assets/sparql-LAJYmgfk.js                              3.77 kB │ gzip:     1.76 kB
+[WebServer] ../server/ui-dist/assets/d-Dkt6y7AQ.js                                   3.97 kB │ gzip:     1.82 kB
+[WebServer] ../server/ui-dist/assets/coffeescript-CXYzYf-Y.js                        4.09 kB │ gzip:     1.81 kB
+[WebServer] ../server/ui-dist/assets/vb-BO8UacKu.js                                  4.15 kB │ gzip:     1.93 kB
+[WebServer] ../server/ui-dist/assets/asn1-CfPVWRYE.js                                4.20 kB │ gzip:     2.08 kB
+[WebServer] ../server/ui-dist/assets/swift-BD82LMDK.js                               4.22 kB │ gzip:     1.93 kB
+[WebServer] ../server/ui-dist/assets/livescript-DSHsJPcD.js                          4.22 kB │ gzip:     1.70 kB
+[WebServer] ../server/ui-dist/assets/dylan-3pmV5wzs.js                               4.23 kB │ gzip:     1.75 kB
+[WebServer] ../server/ui-dist/assets/q-Cooe-Nh8.js                                   4.31 kB │ gzip:     1.84 kB
+[WebServer] ../server/ui-dist/assets/ttcn-cfg-B8qhhp6o.js                            4.31 kB │ gzip:     1.84 kB
+[WebServer] ../server/ui-dist/assets/haskell-CHSpCNOy.js                             4.38 kB │ gzip:     2.03 kB
+[WebServer] ../server/ui-dist/assets/diagram-Z3DM3KII-akGbbnHM.js                    4.44 kB │ gzip:     1.94 kB
+[WebServer] ../server/ui-dist/assets/groovy-ByXGF8cx.js                              4.47 kB │ gzip:     1.94 kB
+[WebServer] ../server/ui-dist/assets/ConfigureBuiltInAgentModal-ln--UFyy.js          4.47 kB │ gzip:     2.05 kB
+[WebServer] ../server/ui-dist/assets/asterisk-CJ4OeA7Y.js                            4.58 kB │ gzip:     1.85 kB
+[WebServer] ../server/ui-dist/assets/model-DL5biheO.js                               4.74 kB │ gzip:     2.19 kB
+[WebServer] ../server/ui-dist/assets/gas-ByO0qYMr.js                                 4.74 kB │ gzip:     1.39 kB
+[WebServer] ../server/ui-dist/assets/fortran-DHJe28ev.js                             4.80 kB │ gzip:     2.12 kB
+[WebServer] ../server/ui-dist/assets/agent-retirement-Db08y_bc.js                    4.88 kB │ gzip:     2.27 kB
+[WebServer] ../server/ui-dist/assets/mllike-DuNQsEw8.js                              5.02 kB │ gzip:     1.67 kB
+[WebServer] ../server/ui-dist/assets/ttcn-7vlxVTUK.js                                5.09 kB │ gzip:     2.26 kB
+[WebServer] ../server/ui-dist/assets/dist-B3dt9U3A.js                                5.14 kB │ gzip:     2.46 kB
+[WebServer] ../server/ui-dist/assets/defaultLocale-C2Bpu8Ih.js                       5.21 kB │ gzip:     2.42 kB
+[WebServer] ../server/ui-dist/assets/linear-DkvTQoQG.js                              5.25 kB │ gzip:     2.24 kB
+[WebServer] ../server/ui-dist/assets/dist-D4eDFHwN.js                                5.28 kB │ gzip:     1.84 kB
+[WebServer] ../server/ui-dist/assets/ecl-BIv3PrZb.js                                 5.38 kB │ gzip:     2.44 kB
+[WebServer] ../server/ui-dist/assets/crystal-BlJXQDvy.js                             5.42 kB │ gzip:     2.22 kB
+[WebServer] ../server/ui-dist/assets/ruby-bGx9eo-K.js                                5.50 kB │ gzip:     2.32 kB
+[WebServer] ../server/ui-dist/assets/experience-CYA8bAqq.js                          5.58 kB │ gzip:     2.38 kB
+[WebServer] ../server/ui-dist/assets/CustomerSupport-Cig05dZn.js                     5.66 kB │ gzip:     2.08 kB
+[WebServer] ../server/ui-dist/assets/julia-KVJvUu_F.js                               5.69 kB │ gzip:     2.30 kB
+[WebServer] ../server/ui-dist/assets/ExperienceProjectDraft-BH1hM5sv.js              5.84 kB │ gzip:     2.20 kB
+[WebServer] ../server/ui-dist/assets/ExperienceTaskDraft-D006u0Qy.js                 5.86 kB │ gzip:     2.25 kB
+[WebServer] ../server/ui-dist/assets/SecurityEvents-Bi-CUTX-.js                      5.89 kB │ gzip:     2.41 kB
+[WebServer] ../server/ui-dist/assets/companySkills-Ucqc5LpE.js                       5.94 kB │ gzip:     1.15 kB
+[WebServer] ../server/ui-dist/assets/vbscript-DWLru3lT.js                            6.03 kB │ gzip:     2.71 kB
+[WebServer] ../server/ui-dist/assets/mirc-BGWbO906.js                                6.11 kB │ gzip:     2.82 kB
+[WebServer] ../server/ui-dist/assets/MyFeedback-C3CfS9pw.js                          6.17 kB │ gzip:     2.62 kB
+[WebServer] ../server/ui-dist/assets/diagram-UQ7AKVKN-bW6v8mXD.js                    6.32 kB │ gzip:     2.71 kB
+[WebServer] ../server/ui-dist/assets/cobol-Bo8Zw9gB.js                               6.38 kB │ gzip:     3.08 kB
+[WebServer] ../server/ui-dist/assets/chunk-PWAF6VOD-BqqbRkPJ.js                      6.44 kB │ gzip:     3.00 kB
+[WebServer] ../server/ui-dist/assets/pieDiagram-E7YTZNPT-CWXhQnoI.js                 6.54 kB │ gzip:     2.77 kB
+[WebServer] ../server/ui-dist/assets/scheme-DcjG9bAf.js                              6.67 kB │ gzip:     2.55 kB
+[WebServer] ../server/ui-dist/assets/AgentAvatar-DIfyI4Gx.js                         6.68 kB │ gzip:     2.84 kB
+[WebServer] ../server/ui-dist/assets/AgentPause-Be2_TtyT.js                          6.72 kB │ gzip:     2.56 kB
+[WebServer] ../server/ui-dist/assets/python-C2DOnsac.js                              6.84 kB │ gzip:     2.91 kB
+[WebServer] ../server/ui-dist/assets/AgentRetirement-jjjDrW8N.js                     7.01 kB │ gzip:     2.53 kB
+[WebServer] ../server/ui-dist/assets/nsis-KFC6hioG.js                                7.06 kB │ gzip:     3.08 kB
+[WebServer] ../server/ui-dist/assets/xquery-BKN7qEbU.js                              7.07 kB │ gzip:     2.80 kB
+[WebServer] ../server/ui-dist/assets/customer-support-BBdvNPZU.js                    7.10 kB │ gzip:     2.95 kB
+[WebServer] ../server/ui-dist/assets/queryClient-CAXh8Mmt.js                         7.16 kB │ gzip:     2.25 kB
+[WebServer] ../server/ui-dist/assets/textile-C-BY_OGF.js                             7.29 kB │ gzip:     2.63 kB
+[WebServer] ../server/ui-dist/assets/pug-C20tNwmy.js                                 7.53 kB │ gzip:     2.34 kB
+[WebServer] ../server/ui-dist/assets/nginx-DXVlpyCz.js                               7.56 kB │ gzip:     2.84 kB
+[WebServer] ../server/ui-dist/assets/AgentMonitor-D-VPSYR3.js                        7.62 kB │ gzip:     2.68 kB
+[WebServer] ../server/ui-dist/assets/StatusIcon-BLmFfYNC.js                          8.04 kB │ gzip:     3.45 kB
+[WebServer] ../server/ui-dist/assets/MemoryMaintenanceHistory-4-QGUwTH.js            8.06 kB │ gzip:     2.97 kB
+[WebServer] ../server/ui-dist/assets/MaintenanceHistory-MnUwu3fx.js                  8.17 kB │ gzip:     2.80 kB
+[WebServer] ../server/ui-dist/assets/powershell-BAu6x78A.js                          8.18 kB │ gzip:     3.48 kB
+[WebServer] ../server/ui-dist/assets/v7-feature-flags-D0ZihWlv.js                    8.22 kB │ gzip:     2.83 kB
+[WebServer] ../server/ui-dist/assets/ExperienceMeasures-CODvKayy.js                  8.30 kB │ gzip:     3.25 kB
+[WebServer] ../server/ui-dist/assets/diagram-S7CK7UJ4-w_IUUnsA.js                    8.57 kB │ gzip:     3.81 kB
+[WebServer] ../server/ui-dist/assets/erlang-CuhOC2I8.js                              8.57 kB │ gzip:     3.16 kB
+[WebServer] ../server/ui-dist/assets/status-colors-C6gjYtMb.js                       8.59 kB │ gzip:     1.82 kB
+[WebServer] ../server/ui-dist/assets/haxe-P2jh68ck.js                                8.80 kB │ gzip:     3.38 kB
+[WebServer] ../server/ui-dist/assets/verilog-BVYlmXGg.js                             8.82 kB │ gzip:     3.74 kB
+[WebServer] ../server/ui-dist/assets/dist-BXoB5t8y.js                                8.97 kB │ gzip:     3.90 kB
+[WebServer] ../server/ui-dist/assets/sas-Drou_EQ9.js                                 9.46 kB │ gzip:     4.19 kB
+[WebServer] ../server/ui-dist/assets/src-DXg3fFhc.js                                 9.55 kB │ gzip:     4.00 kB
+[WebServer] ../server/ui-dist/assets/chunk-L3NEJ4N5-eIsZqjaH.js                      9.88 kB │ gzip:     2.70 kB
+[WebServer] ../server/ui-dist/assets/perl-CI8WIWBi.js                                9.97 kB │ gzip:     3.63 kB
+[WebServer] ../server/ui-dist/assets/gherkin-CwOmHL5K.js                            10.26 kB │ gzip:     5.17 kB
+[WebServer] ../server/ui-dist/assets/cynefinDiagram-5FMLGOSQ-CVOTo6Ft.js            10.41 kB │ gzip:     3.73 kB
+[WebServer] ../server/ui-dist/assets/RolePacks-DisSJztq.js                          10.41 kB │ gzip:     2.86 kB
+[WebServer] ../server/ui-dist/assets/OrgChart.production-Pztxfmvl.js                10.46 kB │ gzip:     3.94 kB
+[WebServer] ../server/ui-dist/assets/stateDiagram-D77RDMKH-llRLmDk1.js              10.81 kB │ gzip:     3.83 kB
+[WebServer] ../server/ui-dist/assets/clojure-DFaIEz5O.js                            11.00 kB │ gzip:     4.19 kB
+[WebServer] ../server/ui-dist/assets/dagre-GXQ25YYZ-BIB_Va-0.js                     11.08 kB │ gzip:     4.24 kB
+[WebServer] ../server/ui-dist/assets/diagram-VSXAHHWV-Dbg9YVIq.js                   11.59 kB │ gzip:     4.35 kB
+[WebServer] ../server/ui-dist/assets/idl-DTVVj6r5.js                                11.75 kB │ gzip:     4.73 kB
+[WebServer] ../server/ui-dist/assets/dist-BhITMUB9.js                               12.33 kB │ gzip:     4.52 kB
+[WebServer] ../server/ui-dist/assets/dist-DZgNtG8a.js                               12.83 kB │ gzip:     5.74 kB
+[WebServer] ../server/ui-dist/assets/CompanyActivity.production-DG5VaOHb.js         13.17 kB │ gzip:     4.45 kB
+[WebServer] ../server/ui-dist/assets/Portfolio-D4yxqeOq.js                          13.95 kB │ gzip:     3.89 kB
+[WebServer] ../server/ui-dist/assets/createLucideIcon-BqxdEa8D.js                   14.19 kB │ gzip:     5.29 kB
+[WebServer] ../server/ui-dist/assets/dist-CXeuJs-w.js                               15.00 kB │ gzip:     6.12 kB
+[WebServer] ../server/ui-dist/assets/Playbooks-DhJodmsy.js                          15.18 kB │ gzip:     4.01 kB
+[WebServer] ../server/ui-dist/assets/chunk-SVP7TREG-oVUXzZXU.js                     15.90 kB │ gzip:     4.49 kB
+[WebServer] ../server/ui-dist/assets/dist-C9_V7e_t.js                               16.37 kB │ gzip:     7.55 kB
+[WebServer] ../server/ui-dist/assets/diagram-VX7I27RA-DDWvQsD_.js                   16.84 kB │ gzip:     6.03 kB
+[WebServer] ../server/ui-dist/assets/ishikawaDiagram-5VMMS53U-D91dIDqQ.js           17.94 kB │ gzip:     6.82 kB
+[WebServer] ../server/ui-dist/assets/mermaid-parser.core-M--q8VDe.js                18.53 kB │ gzip:     4.20 kB
+[WebServer] ../server/ui-dist/assets/javascript-Cblpdx44.js                         19.01 kB │ gzip:     6.65 kB
+[WebServer] ../server/ui-dist/assets/Enterprise-Ddb3OmI1.js                         19.03 kB │ gzip:     4.98 kB
+[WebServer] ../server/ui-dist/assets/kanban-definition-UXKFOSKX-CeDIV2WK.js         20.88 kB │ gzip:     7.44 kB
+[WebServer] ../server/ui-dist/assets/dist-DPrdcOq2.js                               21.07 kB │ gzip:     9.55 kB
+[WebServer] ../server/ui-dist/assets/dist-D4dnwuVi.js                               21.16 kB │ gzip:     7.26 kB
+[WebServer] ../server/ui-dist/assets/NewAgent-TIlJ9N8v.js                           21.29 kB │ gzip:     7.36 kB
+[WebServer] ../server/ui-dist/assets/dist-ZLgJfnCn.js                               21.34 kB │ gzip:     9.89 kB
+[WebServer] ../server/ui-dist/assets/ManagementReviews-BLyDQS9m.js                  21.85 kB │ gzip:     6.37 kB
+[WebServer] ../server/ui-dist/assets/SkillGovernance-5Pjy5iLN.js                    22.55 kB │ gzip:     5.65 kB
+[WebServer] ../server/ui-dist/assets/dist-DZGpgg3X.js                               23.21 kB │ gzip:    10.53 kB
+[WebServer] ../server/ui-dist/assets/clike-CIx9nZSv.js                              23.27 kB │ gzip:     8.28 kB
+[WebServer] ../server/ui-dist/assets/AgentRuntimeFabric-CAHbQDgv.js                 23.95 kB │ gzip:     6.19 kB
+[WebServer] ../server/ui-dist/assets/CustomerSupportCases-Cn7tgH3C.js               24.06 kB │ gzip:     6.66 kB
+[WebServer] ../server/ui-dist/assets/mindmap-definition-YA3MSWOX-DuBfuOSy.js        24.09 kB │ gzip:     8.24 kB
+[WebServer] ../server/ui-dist/assets/journeyDiagram-3NMN7TZE-DGAduNGZ.js            24.11 kB │ gzip:     8.50 kB
+[WebServer] ../server/ui-dist/assets/sankeyDiagram-P5KCCOFB-BG16G3yS.js             24.78 kB │ gzip:     9.20 kB
+[WebServer] ../server/ui-dist/assets/character-CguPM7IG.js                          24.98 kB │ gzip:     2.50 kB
+[WebServer] ../server/ui-dist/assets/StrategyExecution-DnLPqviE.js                  25.67 kB │ gzip:     7.18 kB
+[WebServer] ../server/ui-dist/assets/wardleyDiagram-VM6X3IG4-TnKVIVY1.js            26.03 kB │ gzip:     6.96 kB
+[WebServer] ../server/ui-dist/assets/CustomAgent-S3DmCTlT.js                        26.04 kB │ gzip:     6.56 kB
+[WebServer] ../server/ui-dist/assets/tooltip-DF3Y58z0.js                            26.21 kB │ gzip:     7.31 kB
+[WebServer] ../server/ui-dist/assets/stylus-BS-Ienrc.js                             26.36 kB │ gzip:     8.97 kB
+[WebServer] ../server/ui-dist/assets/CompanyExport-Cgut3WzQ.js                      26.37 kB │ gzip:     9.30 kB
+[WebServer] ../server/ui-dist/assets/dist-Bs8B1orN.js                               26.49 kB │ gzip:     8.96 kB
+[WebServer] ../server/ui-dist/assets/graphlib-DHhK3saS.js                           26.69 kB │ gzip:     9.56 kB
+[WebServer] ../server/ui-dist/assets/css-DEZwfVpY.js                                27.41 kB │ gzip:     8.70 kB
+[WebServer] ../server/ui-dist/assets/AgentPackages-DwpXKHwm.js                      28.37 kB │ gzip:     9.54 kB
+[WebServer] ../server/ui-dist/assets/rough.esm-DnC5Tr1g.js                          28.63 kB │ gzip:     9.68 kB
+[WebServer] ../server/ui-dist/assets/dist-DAStEcd8.js                               28.69 kB │ gzip:    13.08 kB
+[WebServer] ../server/ui-dist/assets/agent-authoring-BakopfQM.js                    28.99 kB │ gzip:     7.85 kB
+[WebServer] ../server/ui-dist/assets/dist-Xc3I6gtU.js                               29.22 kB │ gzip:    11.99 kB
+[WebServer] ../server/ui-dist/assets/FeedbackTriage-CT_rKjXz.js                     29.59 kB │ gzip:     7.46 kB
+[WebServer] ../server/ui-dist/assets/gitGraphDiagram-WWUBYQGX-BByfmMDI.js           29.62 kB │ gzip:     8.81 kB
+[WebServer] ../server/ui-dist/assets/Routines.production-B51WTwL-.js                30.29 kB │ gzip:     8.76 kB
+[WebServer] ../server/ui-dist/assets/CrossProjectPlanning-Bjrcl_Qq.js               30.79 kB │ gzip:     8.47 kB
+[WebServer] ../server/ui-dist/assets/dist-BX-OCtve.js                               30.98 kB │ gzip:    12.88 kB
+[WebServer] ../server/ui-dist/assets/erDiagram-RLTQ6QDP-CCIOBMKh.js                 31.54 kB │ gzip:    10.94 kB
+[WebServer] ../server/ui-dist/assets/timeline-definition-24CTP7MA-hWtcbGnG.js       31.56 kB │ gzip:    10.47 kB
+[WebServer] ../server/ui-dist/assets/requirementDiagram-BXWQKSXE-m9sxl9qh.js        31.72 kB │ gzip:    10.07 kB
+[WebServer] ../server/ui-dist/assets/dist-C2jegCUe.js                               33.11 kB │ gzip:    13.53 kB
+[WebServer] ../server/ui-dist/assets/BusinessForecasts-0RDe_yYb.js                  33.52 kB │ gzip:     8.83 kB
+[WebServer] ../server/ui-dist/assets/chunk-75Z2AOVW-BA295Cdh.js                     33.99 kB │ gzip:     9.38 kB
+[WebServer] ../server/ui-dist/assets/quadrantDiagram-AXDQQJYC-DkMKWZ-4.js           34.86 kB │ gzip:    10.15 kB
+[WebServer] ../server/ui-dist/assets/BusinessMetrics-C0xsb8ns.js                    36.33 kB │ gzip:     9.38 kB
+[WebServer] ../server/ui-dist/assets/chunk-OSK3NFVY-DHw0RlvX.js                     37.16 kB │ gzip:     8.18 kB
+[WebServer] ../server/ui-dist/assets/sql-C3kWxFGw.js                                37.23 kB │ gzip:    11.10 kB
+[WebServer] ../server/ui-dist/assets/ProcessIntelligence-_IznqiCy.js                38.12 kB │ gzip:     9.90 kB
+[WebServer] ../server/ui-dist/assets/chunk-IMKFNOWR-CowWgExC.js                     38.64 kB │ gzip:    12.73 kB
+[WebServer] ../server/ui-dist/assets/dist-xQwUswee.js                               40.84 kB │ gzip:    17.02 kB
+[WebServer] ../server/ui-dist/assets/dagre-nskkcaRw.js                              41.50 kB │ gzip:    15.41 kB
+[WebServer] ../server/ui-dist/assets/CausalClaims-Dhd6S9kx.js                       42.67 kB │ gzip:    11.51 kB
+[WebServer] ../server/ui-dist/assets/blockDiagram-I7D4REHJ-DALF23th.js              42.89 kB │ gzip:    13.90 kB
+[WebServer] ../server/ui-dist/assets/label-D6jsbveH.js                              43.15 kB │ gzip:    15.17 kB
+[WebServer] ../server/ui-dist/assets/vennDiagram-4TSXK5OY-CmQN7r5k.js               43.76 kB │ gzip:    16.52 kB
+[WebServer] ../server/ui-dist/assets/HireAgent-C-Ou1PnF.js                          44.58 kB │ gzip:    10.36 kB
+[WebServer] ../server/ui-dist/assets/dist-DyyIM2uF.js                               45.51 kB │ gzip:    19.64 kB
+[WebServer] ../server/ui-dist/assets/RoutineDetail.production-BlSYLAYX.js           45.51 kB │ gzip:    12.53 kB
+[WebServer] ../server/ui-dist/assets/Activation-BlHGejWS.js                         45.61 kB │ gzip:    11.13 kB
+[WebServer] ../server/ui-dist/assets/dist-D34s4cqQ.js                               45.80 kB │ gzip:    16.14 kB
+[WebServer] ../server/ui-dist/assets/xychartDiagram-S5SC5T6Z-Ccd1J5dD.js            46.13 kB │ gzip:    12.88 kB
+[WebServer] ../server/ui-dist/assets/BusinessExperiments-DKjZ90pm.js                48.65 kB │ gzip:    12.53 kB
+[WebServer] ../server/ui-dist/assets/chunk-TICWLB2K-BtMICtOX.js                     49.71 kB │ gzip:    16.12 kB
+[WebServer] ../server/ui-dist/assets/chunk-GMAD6QVW-DsqEZb6A.js                     53.50 kB │ gzip:    17.54 kB
+[WebServer] ../server/ui-dist/assets/AgentDraftReview-BaC0Hqlp.js                   53.52 kB │ gzip:    12.33 kB
+[WebServer] ../server/ui-dist/assets/chunk-SHT3W25Y-XnhBqXBc.js                     62.23 kB │ gzip:    20.28 kB
+[WebServer] ../server/ui-dist/assets/BusinessScenarios-D-O0rpj1.js                  63.25 kB │ gzip:    15.18 kB
+[WebServer] ../server/ui-dist/assets/c4Diagram-7LVT6UL2-DZ6Ks6na.js                 66.11 kB │ gzip:    19.13 kB
+[WebServer] ../server/ui-dist/assets/dist-DpmnjHX9.js                               70.94 kB │ gzip:    26.19 kB
+[WebServer] ../server/ui-dist/assets/zap-D2NwbaHj.js                                71.13 kB │ gzip:    25.77 kB
+[WebServer] ../server/ui-dist/assets/ganttDiagram-EL5Y4UJY-CdNijkcT.js              73.96 kB │ gzip:    24.95 kB
+[WebServer] ../server/ui-dist/assets/cose-bilkent-JH36ORCC-BBLOTP53.js              84.25 kB │ gzip:    23.24 kB
+[WebServer] ../server/ui-dist/assets/dist-DnGQm3hk.js                               85.29 kB │ gzip:    34.05 kB
+[WebServer] ../server/ui-dist/assets/router-D7nQ8VIX.js                             89.27 kB │ gzip:    30.79 kB
+[WebServer] ../server/ui-dist/assets/dist-BFg8nVHP.js                               98.47 kB │ gzip:    28.95 kB
+[WebServer] ../server/ui-dist/assets/mention-chips-JLxRgT1b.js                     102.56 kB │ gzip:    31.56 kB
+[WebServer] ../server/ui-dist/assets/dist-DsLYqWnM.js                              104.05 kB │ gzip:    34.85 kB
+[WebServer] ../server/ui-dist/assets/mermaid.core-ePwSW6wt.js                      107.65 kB │ gzip:    35.72 kB
+[WebServer] ../server/ui-dist/assets/chunk-4HAMMTFA-Bhp2NxDs.js                    108.75 kB │ gzip:    27.01 kB
+[WebServer] ../server/ui-dist/assets/sequenceDiagram-WJ2MYXX4-C0pg4ehH.js          117.84 kB │ gzip:    31.55 kB
+[WebServer] ../server/ui-dist/assets/swimlanes-42K2YHIH-5FSFuElF.js                121.01 kB │ gzip:    43.81 kB
+[WebServer] ../server/ui-dist/assets/architectureDiagram-5GKGNRK7-CRQCSZzI.js      155.17 kB │ gzip:    44.39 kB
+[WebServer] ../server/ui-dist/assets/AgentDetail-DAudEJB6.js                       212.72 kB │ gzip:    56.20 kB
+[WebServer] ../server/ui-dist/assets/chunk-DU6HZSFF-CKJ7GzTR.js                    243.21 kB │ gzip:    41.17 kB
+[WebServer] ../server/ui-dist/assets/katex-Du_FPwxl.js                             264.40 kB │ gzip:    79.45 kB
+[WebServer] ../server/ui-dist/assets/dist-DCJXgQu0.js                              329.12 kB │ gzip:   109.72 kB
+[WebServer] ../server/ui-dist/assets/cytoscape.esm-D2PgO6ED.js                     465.71 kB │ gzip:   149.65 kB
+[WebServer] ../server/ui-dist/assets/prod-urX1rBL9.js                              493.71 kB │ gzip:   166.56 kB
+[WebServer] ../server/ui-dist/assets/runtime-IAg0vdY9.js                           578.56 kB │ gzip:   151.24 kB
+[WebServer] ../server/ui-dist/assets/chunk-FOHPRMQF-7Ogwfo6e.js                    703.85 kB │ gzip:   154.33 kB
+[WebServer] ../server/ui-dist/assets/dist-B1cqYVKS.js                              772.70 kB │ gzip:   237.35 kB
+[WebServer] ../server/ui-dist/assets/MarkdownEditor-XSsJiwsD.js                    790.35 kB │ gzip:   259.16 kB
+[WebServer] ../server/ui-dist/assets/index-BYnSzxtk.js                           8,084.38 kB │ gzip: 2,150.69 kB
+[WebServer] 
+[WebServer] [plugin builtin:vite-reporter] 
+[WebServer] (!) Some chunks are larger than 500 kB after minification. Consider:
+[WebServer] - Using dynamic import() to code-split the application
+[WebServer] - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+[WebServer] - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+[WebServer] ✓ built in 6.27s
+[WebServer] (node:1087570) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] 
+[WebServer] ██████╗  █████╗ ██████╗ ███████╗██████╗  ██████╗██╗     ██╗██████╗ 
+[WebServer] ██╔══██╗██╔══██╗██╔══██╗██╔════╝██╔══██╗██╔════╝██║     ██║██╔══██╗
+[WebServer] ██████╔╝███████║██████╔╝█████╗  ██████╔╝██║     ██║     ██║██████╔╝
+[WebServer] ██╔═══╝ ██╔══██║██╔═══╝ ██╔══╝  ██╔══██╗██║     ██║     ██║██╔═══╝ 
+[WebServer] ██║     ██║  ██║██║     ███████╗██║  ██║╚██████╗███████╗██║██║     
+[WebServer] ╚═╝     ╚═╝  ╚═╝╚═╝     ╚══════╝╚═╝  ╚═╝ ╚═════╝╚══════╝╚═╝╚═╝     
+[WebServer]   ───────────────────────────────────────────────────────
+[WebServer]   The app people use to manage AI agents for work
+[WebServer] 
+[WebServer] ┌   paperclipai onboard 
+[WebServer] │
+[WebServer] │  Local home: /tmp/paperclip-e2e-home-PMqXUW | instance: playwright-e2e | config: /tmp/paperclip-e2e-home-PMqXUW/instances/playwright-e2e/config.json
+[WebServer] │
+[WebServer] │  `--yes` enabled: using Quickstart defaults.
+[WebServer] │
+[WebServer] ◇  Quickstart
+[WebServer] │
+[WebServer] │  Using quickstart defaults: local_trusted/private @ loopback (127.0.0.1):3199.
+[WebServer] │
+[WebServer] │  Environment-aware defaults active (1 env var(s) detected).
+[WebServer] │
+[WebServer] │  Ignored PAPERCLIP_DEPLOYMENT_MODE: Ignored because --yes quickstart forces trusted local loopback defaults
+[WebServer] │
+[WebServer] │  Ignored PAPERCLIP_DEPLOYMENT_EXPOSURE: Ignored because --yes quickstart forces trusted local loopback defaults
+[WebServer] │
+[WebServer] │  Ignored PAPERCLIP_BIND: Ignored because --yes quickstart forces trusted local loopback defaults
+[WebServer] │
+[WebServer] │  Ignored PAPERCLIP_DEPLOYMENT_EXPOSURE: Ignored because deployment mode local_trusted always forces private exposure
+[WebServer] │
+[WebServer] │  Ignored PAPERCLIP_BIND: Ignored because deployment mode local_trusted always uses loopback reachability
+[WebServer] │
+[WebServer] ●  Using existing PAPERCLIP_AGENT_JWT_SECRET from environment
+[WebServer] │
+[WebServer] ◆  Created local secrets key file at /tmp/paperclip-e2e-home-PMqXUW/instances/playwright-e2e/secrets/master.key
+[WebServer] │
+[WebServer] ◇  Configuration saved ──────────────────────────────────────────╮
+[WebServer] │                                                                │
+[WebServer] │  Database: embedded-postgres                                   │
+[WebServer] │  LLM: not configured                                           │
+[WebServer] │  Logging: file ->                                              │
+[WebServer] │  /tmp/paperclip-e2e-home-PMqXUW/instances/playwright-e2e/logs  │
+[WebServer] │  Server: local_trusted/private @ loopback (127.0.0.1):3199     │
+[WebServer] │  Allowed hosts: (loopback only)                                │
+[WebServer] │  Auth URL mode: auto                                           │
+[WebServer] │  Storage: local_disk                                           │
+[WebServer] │  Secrets: local_encrypted (strict mode off)                    │
+[WebServer] │  Agent auth: PAPERCLIP_AGENT_JWT_SECRET configured             │
+[WebServer] │                                                                │
+[WebServer] ├────────────────────────────────────────────────────────────────╯
+[WebServer] │
+[WebServer] ◇  Next commands ────────────────────────────╮
+[WebServer] │                                            │
+[WebServer] │  Run: paperclipai run                      │
+[WebServer] │  Reconfigure later: paperclipai configure  │
+[WebServer] │  Diagnose setup: paperclipai doctor        │
+[WebServer] │                                            │
+[WebServer] ├────────────────────────────────────────────╯
+[WebServer] │
+[WebServer] │  Background service not installed. Use `paperclipai onboard --install-service` or `paperclipai service install` to opt in.
+[WebServer] (node:1087581) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] ┌   paperclipai run 
+[WebServer] │
+[WebServer] │  Home: /tmp/paperclip-e2e-home-PMqXUW
+[WebServer] │
+[WebServer] │  Instance: playwright-e2e
+[WebServer] │
+[WebServer] │  Config: /tmp/paperclip-e2e-home-PMqXUW/instances/playwright-e2e/config.json
+[WebServer] │
+[WebServer] ◇  Running doctor checks...
+[WebServer] 
+[WebServer] ██████╗  █████╗ ██████╗ ███████╗██████╗  ██████╗██╗     ██╗██████╗ 
+[WebServer] ██╔══██╗██╔══██╗██╔══██╗██╔════╝██╔══██╗██╔════╝██║     ██║██╔══██╗
+[WebServer] ██████╔╝███████║██████╔╝█████╗  ██████╔╝██║     ██║     ██║██████╔╝
+[WebServer] ██╔═══╝ ██╔══██║██╔═══╝ ██╔══╝  ██╔══██╗██║     ██║     ██║██╔═══╝ 
+[WebServer] ██║     ██║  ██║██║     ███████╗██║  ██║╚██████╗███████╗██║██║     
+[WebServer] ╚═╝     ╚═╝  ╚═╝╚═╝     ╚══════╝╚═╝  ╚═╝ ╚═════╝╚══════╝╚═╝╚═╝     
+[WebServer]   ───────────────────────────────────────────────────────
+[WebServer]   The app people use to manage AI agents for work
+[WebServer] 
+[WebServer] ┌   paperclip doctor 
+[WebServer] │
+[WebServer] │  ✓ Config file: Valid config at /tmp/paperclip-e2e-home-PMqXUW/instances/playwright-e2e/config.json
+[WebServer] │
+[WebServer] │  ✓ Deployment/auth mode: local_trusted mode is configured for loopback-only access
+[WebServer] │
+[WebServer] │  ✓ Agent JWT secret: PAPERCLIP_AGENT_JWT_SECRET is set in environment
+[WebServer] │
+[WebServer] │  ✓ Secrets adapter: Local encrypted provider configured with key file /tmp/paperclip-e2e-home-PMqXUW/instances/playwright-e2e/secrets/master.key
+[WebServer] │
+[WebServer] │  ✓ Storage: Local disk storage is writable: /tmp/paperclip-e2e-home-PMqXUW/instances/playwright-e2e/data/storage
+[WebServer] │
+[WebServer] │  ✓ Database: Embedded PostgreSQL configured at /tmp/paperclip-e2e-home-PMqXUW/instances/playwright-e2e/db (port 54329)
+[WebServer] │
+[WebServer] │  ✓ LLM provider: No LLM provider configured (optional)
+[WebServer] │
+[WebServer] │  ✓ Log directory: Log directory is writable: /tmp/paperclip-e2e-home-PMqXUW/instances/playwright-e2e/logs
+[WebServer] │
+[WebServer] │  ✓ Server port: Port 3199 is available
+[WebServer] │
+[WebServer] │  ✓ Node.js runtime: Node.js 24.19.0
+[WebServer] │
+[WebServer] │  ✓ Managed install: Not present (optional for npx, global npm, and source-checkout usage)
+[WebServer] │
+[WebServer] │  ✓ Background service: No usable systemd user manager was detected (common in containers and WSL1). Use paperclipai run instead.
+[WebServer] │
+[WebServer] ◇  Summary ───╮
+[WebServer] │             │
+[WebServer] │  12 passed  │
+[WebServer] │             │
+[WebServer] ├─────────────╯
+[WebServer] │
+[WebServer] └  All checks passed!
+[WebServer] 
+[WebServer] │
+[WebServer] ◇  Starting Paperclip server...
+[WebServer] (node:1087581) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] [03:37:26] INFO: Using embedded PostgreSQL because no DATABASE_URL set (dataDir=/tmp/paperclip-e2e-home-PMqXUW/instances/playwright-e2e/db, port=54329)
+[WebServer] Failed to start embedded PostgreSQL on port 54329 Recent embedded Postgres logs: Success. You can now start the database server using: | '/workspace/v10-dep-qualification/node_modules/.pnpm/@embedded-postgres+linux-x64@18.1.0-beta.16/node_modules/@embedded-postgres/linux-x64/native/bin/pg_ctl' -D /tmp/paperclip-e2e-home-PMqXUW/instances/playwright-e2e/db -l logfile start | 2026-10-26 03:37:26.889 UTC [1087654] LOG:  starting PostgreSQL 18.1 on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 7.5.0-3ubuntu1~18.04) 7.5.0, 64-bit | 2026-10-26 03:37:26.890 UTC [1087654] LOG:  listening on IPv6 address "::1", port 54329 | 2026-10-26 03:37:26.890 UTC [1087654] LOG:  listening on IPv4 address "127.0.0.1", port 54329 | 2026-10-26 03:37:26.890 UTC [1087654] FATAL:  lock file "/tmp/.s.PGSQL.54329.lock" already exists | 2026-10-26 03:37:26.890 UTC [1087654] HINT:  Is another postmaster (PID 1086748) using socket file "/tmp/.s.PGSQL.54329"? | 2026-10-26 03:37:26.890 UTC [1087654] LOG:  database system is shut down
+[WebServer] [03:37:26] ERROR: Embedded PostgreSQL failed; showing buffered startup logs {"phase":"start","recentLogs":["The files belonging to this database system will be owned by user \"agent\".","This user must also own the server process.","The database cluster will be initialized with locale \"C\".","The default text search configuration will be set to \"english\".","Data page checksums are enabled.","fixing permissions on existing directory /tmp/paperclip-e2e-home-PMqXUW/instances/playwright-e2e/db ... ok","creating subdirectories ... ok","selecting dynamic shared memory implementation ... posix","selecting default \"max_connections\" ...","100","selecting default \"shared_buffers\" ...","128MB","selecting default time zone ...","Etc/UTC","creating configuration files ...","ok","running bootstrap script ...","ok","performing post-bootstrap initialization ...","ok","syncing data to disk ...","ok","Success. You can now start the database server using:","'/workspace/v10-dep-qualification/node_modules/.pnpm/@embedded-postgres+linux-x64@18.1.0-beta.16/node_modules/@embedded-postgres/linux-x64/native/bin/pg_ctl' -D /tmp/paperclip-e2e-home-PMqXUW/instances/playwright-e2e/db -l logfile start","2026-10-26 03:37:26.889 UTC [1087654] LOG:  starting PostgreSQL 18.1 on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 7.5.0-3ubuntu1~18.04) 7.5.0, 64-bit","2026-10-26 03:37:26.890 UTC [1087654] LOG:  listening on IPv6 address \"::1\", port 54329","2026-10-26 03:37:26.890 UTC [1087654] LOG:  listening on IPv4 address \"127.0.0.1\", port 54329","2026-10-26 03:37:26.890 UTC [1087654] FATAL:  lock file \"/tmp/.s.PGSQL.54329.lock\" already exists","2026-10-26 03:37:26.890 UTC [1087654] HINT:  Is another postmaster (PID 1086748) using socket file \"/tmp/.s.PGSQL.54329\"?","2026-10-26 03:37:26.890 UTC [1087654] LOG:  database system is shut down"]}
+Error: Process from config.webServer was not able to start. Exit code: 1
+

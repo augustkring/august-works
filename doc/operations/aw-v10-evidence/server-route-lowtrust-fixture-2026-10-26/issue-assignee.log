@@ -1,0 +1,153 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/issue-assignee-invokability-routes.test.ts (7 tests | 7 failed) 105ms
+     × refuses an agent assigning an issue to a paused agent 69ms
+     × refuses an agent creating a child issue assigned to a paused agent 9ms
+     × still allows an agent to assign to an invokable agent 6ms
+     × allows a board user to assign to a paused agent deliberately 6ms
+     × refuses an agent child assigned to the creator of an open ancestor 5ms
+     × allows the same child when no open ancestor was created by the assignee 4ms
+     × does not consult the guard for board actors 5ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/issue-assignee-invokability-routes.test.ts > issue assignee invokability guard > refuses an agent assigning an issue to a paused agent
+AssertionError: {"error":"Internal server error"}: expected 500 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 500
+
+ ❯ src/__tests__/issue-assignee-invokability-routes.test.ts:225:50
+    223|       .send({ assigneeAgentId: PAUSED_AGENT_ID });
+    224|
+    225|     expect(res.status, JSON.stringify(res.body)).toBe(409);
+       |                                                  ^
+    226|     expect(res.body.error).toContain("paused agent");
+    227|     expect(mockIssueService.update).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  src/__tests__/issue-assignee-invokability-routes.test.ts > issue assignee invokability guard > refuses an agent creating a child issue assigned to a paused agent
+AssertionError: {"error":"Internal server error"}: expected 500 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 500
+
+ ❯ src/__tests__/issue-assignee-invokability-routes.test.ts:242:50
+    240|       });
+    241|
+    242|     expect(res.status, JSON.stringify(res.body)).toBe(409);
+       |                                                  ^
+    243|     expect(res.body.error).toContain("paused agent");
+    244|     expect(mockIssueService.createChild).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  src/__tests__/issue-assignee-invokability-routes.test.ts > issue assignee invokability guard > still allows an agent to assign to an invokable agent
+AssertionError: {"error":"Internal server error"}: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-assignee-invokability-routes.test.ts:258:50
+    256|       .send({ assigneeAgentId: IDLE_AGENT_ID });
+    257|
+    258|     expect(res.status, JSON.stringify(res.body)).toBe(200);
+       |                                                  ^
+    259|     expect(mockIssueService.update).toHaveBeenCalled();
+    260|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+ FAIL  src/__tests__/issue-assignee-invokability-routes.test.ts > issue assignee invokability guard > allows a board user to assign to a paused agent deliberately
+AssertionError: {"error":"Issue not found"}: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ src/__tests__/issue-assignee-invokability-routes.test.ts:272:50
+    270|       .send({ assigneeAgentId: PAUSED_AGENT_ID });
+    271|
+    272|     expect(res.status, JSON.stringify(res.body)).toBe(200);
+       |                                                  ^
+    273|     expect(mockIssueService.update).toHaveBeenCalled();
+    274|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+ FAIL  src/__tests__/issue-assignee-invokability-routes.test.ts > agent delegation cycle guard > refuses an agent child assigned to the creator of an open ancestor
+AssertionError: {"error":"Internal server error"}: expected 500 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 500
+
+ ❯ src/__tests__/issue-assignee-invokability-routes.test.ts:305:50
+    303|       });
+    304|
+    305|     expect(res.status, JSON.stringify(res.body)).toBe(409);
+       |                                                  ^
+    306|     expect(res.body.error).toContain("Delegation cycle");
+    307|     expect(res.body.details).toMatchObject({ code: "delegation_cycle" …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/7]⎯
+
+ FAIL  src/__tests__/issue-assignee-invokability-routes.test.ts > agent delegation cycle guard > allows the same child when no open ancestor was created by the assignee
+AssertionError: {"error":"Internal server error"}: expected 500 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 500
+
+ ❯ src/__tests__/issue-assignee-invokability-routes.test.ts:328:50
+    326|       });
+    327|
+    328|     expect(res.status, JSON.stringify(res.body)).toBe(201);
+       |                                                  ^
+    329|     expect(mockIssueService.createChild).toHaveBeenCalled();
+    330|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/7]⎯
+
+ FAIL  src/__tests__/issue-assignee-invokability-routes.test.ts > agent delegation cycle guard > does not consult the guard for board actors
+AssertionError: {"error":"Issue not found"}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ src/__tests__/issue-assignee-invokability-routes.test.ts:348:50
+    346|       });
+    347|
+    348|     expect(res.status, JSON.stringify(res.body)).toBe(201);
+       |                                                  ^
+    349|     expect(mockIssueService.findOpenAncestorCreatedByAgent).not.toHave…
+    350|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/7]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  7 failed (7)
+   Start at  03:42:49
+   Duration  12.09s (transform 8.57s, setup 78ms, import 11.78s, tests 105ms, environment 0ms)
+

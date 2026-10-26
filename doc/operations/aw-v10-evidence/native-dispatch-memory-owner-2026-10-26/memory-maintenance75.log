@@ -1,0 +1,145 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification
+
+····[03:28:07] [33mWARN[39m: [36mMemory job failed[39m [90m{"jobId":"4e26a43a-8a86-48b0-9d94-e2eeb8fd17f5","operationType":"index_refresh"}[39m
+    err: {
+      "type": "HttpError",
+      "message": "Native Memory search index is unavailable",
+      "stack":
+          Error: Native Memory search index is unavailable
+              at conflict (/workspace/v10-dep-qualification/server/src/errors.ts:29:10)
+              at assertNativeMemoryIndex (/workspace/v10-dep-qualification/server/src/services/memory/memory-maintenance.ts:50:11)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at executeMemoryMaintenance (/workspace/v10-dep-qualification/server/src/services/memory/memory-maintenance.ts:65:5)
+              at /workspace/v10-dep-qualification/server/src/services/memory/memory-jobs.ts:789:124
+              at /workspace/v10-dep-qualification/packages/db/src/work-signals.ts:38:22
+              at async scope (file:///workspace/v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+              at async sql.begin (file:///workspace/v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+              at PostgresJsDatabase.connection.transaction (/workspace/v10-dep-qualification/packages/db/src/work-signals.ts:35:22)
+              at Object.executeClaimed (/workspace/v10-dep-qualification/server/src/services/memory/memory-jobs.ts:781:30)
+      "status": 409
+    }
+··[03:28:07] [33mWARN[39m: [36mMemory job failed[39m [90m{"jobId":"5ab2a4da-9940-4791-97e3-8aa26ef30ae8","operationType":"index_refresh"}[39m
+    err: {
+      "type": "HttpError",
+      "message": "Native Memory search index is unavailable",
+      "stack":
+          Error: Native Memory search index is unavailable
+              at conflict (/workspace/v10-dep-qualification/server/src/errors.ts:29:10)
+              at assertNativeMemoryIndex (/workspace/v10-dep-qualification/server/src/services/memory/memory-maintenance.ts:50:11)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at executeMemoryMaintenance (/workspace/v10-dep-qualification/server/src/services/memory/memory-maintenance.ts:65:5)
+              at /workspace/v10-dep-qualification/server/src/services/memory/memory-jobs.ts:789:124
+              at /workspace/v10-dep-qualification/packages/db/src/work-signals.ts:38:22
+              at async scope (file:///workspace/v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+              at async sql.begin (file:///workspace/v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+              at PostgresJsDatabase.connection.transaction (/workspace/v10-dep-qualification/packages/db/src/work-signals.ts:35:22)
+              at Object.executeClaimed (/workspace/v10-dep-qualification/server/src/services/memory/memory-jobs.ts:781:30)
+      "status": 409
+    }
+[03:28:07] [33mWARN[39m: [36mMemory job failed[39m [90m{"jobId":"8a6fd59c-337a-4bb4-b89a-6486a2089f95","operationType":"index_refresh"}[39m
+    err: {
+      "type": "HttpError",
+      "message": "Native Memory search index is unavailable",
+      "stack":
+          Error: Native Memory search index is unavailable
+              at conflict (/workspace/v10-dep-qualification/server/src/errors.ts:29:10)
+              at assertNativeMemoryIndex (/workspace/v10-dep-qualification/server/src/services/memory/memory-maintenance.ts:50:11)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at executeMemoryMaintenance (/workspace/v10-dep-qualification/server/src/services/memory/memory-maintenance.ts:65:5)
+              at /workspace/v10-dep-qualification/server/src/services/memory/memory-jobs.ts:789:124
+              at /workspace/v10-dep-qualification/packages/db/src/work-signals.ts:38:22
+              at async scope (file:///workspace/v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+              at async sql.begin (file:///workspace/v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+              at PostgresJsDatabase.connection.transaction (/workspace/v10-dep-qualification/packages/db/src/work-signals.ts:35:22)
+              at Object.executeClaimed (/workspace/v10-dep-qualification/server/src/services/memory/memory-jobs.ts:781:30)
+      "status": 409
+    }
+·[03:28:07] [33mWARN[39m: [36mMemory job failed[39m [90m{"jobId":"5733f483-d140-47ab-b591-134ed33c2aab","operationType":"index_refresh"}[39m
+    err: {
+      "type": "HttpError",
+      "message": "Memory job lease was lost",
+      "stack":
+          Error: Memory job lease was lost
+              at conflict (/workspace/v10-dep-qualification/server/src/errors.ts:29:10)
+              at /workspace/v10-dep-qualification/server/src/services/memory/memory-jobs.ts:787:83
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at /workspace/v10-dep-qualification/packages/db/src/work-signals.ts:38:22
+              at async scope (file:///workspace/v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+              at async sql.begin (file:///workspace/v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+              at PostgresJsDatabase.connection.transaction (/workspace/v10-dep-qualification/packages/db/src/work-signals.ts:35:22)
+              at Object.executeClaimed (/workspace/v10-dep-qualification/server/src/services/memory/memory-jobs.ts:781:30)
+              at /workspace/v10-dep-qualification/server/src/services/memory/memory-maintenance.test.ts:159:5
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+      "status": 409
+    }
+····[03:28:08] [33mWARN[39m: [36mMemory job failed[39m [90m{"jobId":"c9a45479-17f0-44ee-b4fd-0570107382a0","operationType":"index_refresh"}[39m
+    err: {
+      "type": "HttpError",
+      "message": "Memory maintenance requires a current owner or administrator",
+      "stack":
+          Error: Memory maintenance requires a current owner or administrator
+              at forbidden (/workspace/v10-dep-qualification/server/src/errors.ts:21:10)
+              at memoryMaintenanceSources (/workspace/v10-dep-qualification/server/src/services/memory/memory-maintenance.ts:22:88)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at executeMemoryMaintenance (/workspace/v10-dep-qualification/server/src/services/memory/memory-maintenance.ts:59:19)
+              at /workspace/v10-dep-qualification/server/src/services/memory/memory-jobs.ts:789:124
+              at /workspace/v10-dep-qualification/packages/db/src/work-signals.ts:38:22
+              at async scope (file:///workspace/v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+              at async sql.begin (file:///workspace/v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+              at PostgresJsDatabase.connection.transaction (/workspace/v10-dep-qualification/packages/db/src/work-signals.ts:35:22)
+              at Object.executeClaimed (/workspace/v10-dep-qualification/server/src/services/memory/memory-jobs.ts:781:30)
+      "status": 403
+    }
+[03:28:08] [33mWARN[39m: [36mMemory job failed[39m [90m{"jobId":"8f9584d5-e87d-48ca-a26f-63a4c11df630","operationType":"dedupe"}[39m
+    err: {
+      "type": "DrizzleQueryError",
+      "message": "Failed query: update \"memory_jobs\" set \"status\" = $1, \"execution_owner_id\" = $2, \"lease_expires_at\" = $3, \"finished_at\" = $4, \"result_summary\" = $5, \"result_json\" = $6, \"error_code\" = $7, \"error\" = $8, \"updated_at\" = $9 where (\"memory_jobs\".\"id\" = $10 and \"memory_jobs\".\"status\" = $11 and \"memory_jobs\".\"execution_owner_id\" = $12)\nparams: succeeded,,,2026-10-26T03:28:08.319Z,Native Memory maintenance completed.,{\"scannedRecordCount\":2,\"supersededCount\":1,\"canonicalRecordCount\":1},,,2026-10-26T03:28:08.319Z,8f9584d5-e87d-48ca-a26f-63a4c11df630,running,memory-job-worker:9b05e1f8-713b-4a4f-b548-043c0ab0f7de: injected receipt fault",
+      "stack":
+          Error: Failed query: update "memory_jobs" set "status" = $1, "execution_owner_id" = $2, "lease_expires_at" = $3, "finished_at" = $4, "result_summary" = $5, "result_json" = $6, "error_code" = $7, "error" = $8, "updated_at" = $9 where ("memory_jobs"."id" = $10 and "memory_jobs"."status" = $11 and "memory_jobs"."execution_owner_id" = $12)
+          params: succeeded,,,2026-10-26T03:28:08.319Z,Native Memory maintenance completed.,{"scannedRecordCount":2,"supersededCount":1,"canonicalRecordCount":1},,,2026-10-26T03:28:08.319Z,8f9584d5-e87d-48ca-a26f-63a4c11df630,running,memory-job-worker:9b05e1f8-713b-4a4f-b548-043c0ab0f7de
+              at PostgresJsPreparedQuery.queryWithCache (file:///workspace/v10-dep-qualification/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/drizzle-orm/pg-core/session.js:41:15)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at settle (/workspace/v10-dep-qualification/server/src/services/memory/memory-jobs.ts:555:5)
+              at /workspace/v10-dep-qualification/server/src/services/memory/memory-jobs.ts:791:11
+              at /workspace/v10-dep-qualification/packages/db/src/work-signals.ts:38:22
+              at async scope (file:///workspace/v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+              at async sql.begin (file:///workspace/v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+              at PostgresJsDatabase.connection.transaction (/workspace/v10-dep-qualification/packages/db/src/work-signals.ts:35:22)
+              at Object.executeClaimed (/workspace/v10-dep-qualification/server/src/services/memory/memory-jobs.ts:781:30)
+              at execute (/workspace/v10-dep-qualification/server/src/services/memory/memory-maintenance.test.ts:50:5)
+          caused by: PostgresError: injected receipt fault
+              at ErrorResponse (file:///workspace/v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30)
+              at handle (file:///workspace/v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6)
+              at Socket.data (file:///workspace/v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9)
+              at Socket.emit (node:events:509:28)
+              at addChunk (node:internal/streams/readable:563:12)
+              at readableAddChunkPushByteMode (node:internal/streams/readable:514:3)
+              at Readable.push (node:internal/streams/readable:394:5)
+              at TCP.onStreamRead (node:internal/stream_base_commons:189:23)
+      "query": "update \"memory_jobs\" set \"status\" = $1, \"execution_owner_id\" = $2, \"lease_expires_at\" = $3, \"finished_at\" = $4, \"result_summary\" = $5, \"result_json\" = $6, \"error_code\" = $7, \"error\" = $8, \"updated_at\" = $9 where (\"memory_jobs\".\"id\" = $10 and \"memory_jobs\".\"status\" = $11 and \"memory_jobs\".\"execution_owner_id\" = $12)",
+      "params": [
+        "succeeded",
+        null,
+        null,
+        "2026-10-26T03:28:08.319Z",
+        "Native Memory maintenance completed.",
+        "{\"scannedRecordCount\":2,\"supersededCount\":1,\"canonicalRecordCount\":1}",
+        null,
+        null,
+        "2026-10-26T03:28:08.319Z",
+        "8f9584d5-e87d-48ca-a26f-63a4c11df630",
+        "running",
+        "memory-job-worker:9b05e1f8-713b-4a4f-b548-043c0ab0f7de"
+      ]
+    }
+···
+
+ Test Files  1 passed (1)
+      Tests  14 passed (14)
+   Start at  03:27:50
+   Duration  17.69s (transform 8.34s, setup 73ms, import 12.00s, tests 5.50s, environment 0ms)
+
