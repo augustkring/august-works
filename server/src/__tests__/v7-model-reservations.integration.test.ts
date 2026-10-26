@@ -695,6 +695,7 @@ const support = await getEmbeddedPostgresTestSupport();
       const factsHolder: { value: ConversationFrameFacts | null } = { value: null };
       const purgeHolder: { value: Awaited<ReturnType<typeof purgeConversationCompany>> | null } = { value: null };
       let settledOnceBeforePurge = false;
+      let runtimeErasureBeforePurge: Record<string, unknown> | null = null;
       const usagePricedTariff: ModelTariffCeiling = { ...tariff(), provider: "anthropic", model: "fixture-managed-conversation-v1",
         inputMinorPerMillion: 1000, outputMinorPerMillion: 2000, fixedMinor: 0,
         qualificationHash: "b".repeat(64), expiresAt: new Date(Date.now() + 60 * 60_000).toISOString() };
@@ -705,6 +706,15 @@ const support = await getEmbeddedPostgresTestSupport();
             providerCallCount: facts.providerCallCount,
             providerHookInvoked: facts.providerHookInvoked,
             providerStubFailure: facts.providerStubFailure,
+            runStatus: facts.run?.status ?? null,
+            runErrorCode: facts.run?.errorCode ?? null,
+            runNativePhase: facts.run?.nativePhase ?? null,
+            runExecutionStage: facts.run?.executionStage ?? null,
+            runRuntimeMode: facts.run?.runtimeMode ?? null,
+            runSourceProtocol: facts.run?.nativeInputSourceProtocolVersion ?? null,
+            manifestPresent: facts.manifest !== null,
+            sourceReceiptPresent: facts.nativeInputSourceReceipt !== null && facts.nativeInputSourceReceipt !== undefined,
+            reservationStatus: facts.reservation?.status ?? null,
           })}`);
           const [capturedManifest] = await db.select({ id: agentExecutionManifests.id })
             .from(agentExecutionManifests).where(and(eq(agentExecutionManifests.companyId, providerFrame.companyId),
@@ -775,6 +785,12 @@ const support = await getEmbeddedPostgresTestSupport();
           settledOnceBeforePurge = true;
           const exactFrame = { ...facts, run, reservation };
           await assertConversationNativeStopBeforeErasure(exactFrame);
+          const [prePurgeJob] = await db.select().from(memoryJobs).where(and(
+            eq(memoryJobs.companyId, providerFrame.companyId), eq(memoryJobs.jobKey, `runtime-asset-erasure:v1:${run.id}`),
+          )).orderBy(sql`${memoryJobs.attemptNumber} desc`).limit(1);
+          const prePurgeRef = prePurgeJob?.sourceRefJson as Record<string, unknown> | undefined;
+          runtimeErasureBeforePurge = { status: prePurgeJob?.status ?? null, kind: prePurgeRef?.kind ?? null,
+            runId: prePurgeRef?.runId ?? null, companyPurgeOperationId: prePurgeRef?.companyPurgeOperationId ?? null };
           purgeHolder.value = await purgeConversationCompany(exactFrame, "conversation-known-cost-purge");
         });
       const facts = factsHolder.value;
@@ -801,6 +817,16 @@ const support = await getEmbeddedPostgresTestSupport();
         completed: "1", settledInputTokens: String(facts.usage.inputTokens), settledOutputTokens: String(facts.usage.outputTokens),
         settledCostEvents: "1", settledCostMinor: String(expectedMinor),
       });
+      const [runtimeErasureReceipt] = await db.select().from(memoryJobs).where(and(
+        eq(memoryJobs.companyId, facts.companyId), eq(memoryJobs.jobKey, `runtime-asset-erasure:v1:${facts.run.id}`),
+      )).orderBy(sql`${memoryJobs.attemptNumber} desc`).limit(1);
+      const runtimeErasureRef = runtimeErasureReceipt?.sourceRefJson as Record<string, unknown> | undefined;
+      const runtimeErasureAfterPurge = { status: runtimeErasureReceipt?.status ?? null, kind: runtimeErasureRef?.kind ?? null,
+        runId: runtimeErasureRef?.runId ?? null, companyPurgeOperationId: runtimeErasureRef?.companyPurgeOperationId ?? null };
+      if (runtimeErasureAfterPurge.status !== "succeeded" || runtimeErasureAfterPurge.kind !== "runtime_asset_erasure" ||
+        runtimeErasureAfterPurge.runId !== facts.run.id || runtimeErasureAfterPurge.companyPurgeOperationId !== operation.id)
+        throw new Error(`conversation_runtime_outbox_receipt_mismatch:${JSON.stringify({ beforePurge: runtimeErasureBeforePurge,
+          afterPurge: runtimeErasureAfterPurge, operationId: operation.id, runId: facts.run.id })}`);
       expect(await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.id, reservation.id))).toHaveLength(0);
       expect(await db.select().from(issues).where(eq(issues.id, result.issueId))).toHaveLength(0);
     }, conversationFrameTestTimeoutMs);

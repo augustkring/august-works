@@ -137,7 +137,8 @@ const support = await getEmbeddedPostgresTestSupport();
     await db.update(issues).set({ checkoutRunId: runId, executionRunId: runId }).where(eq(issues.id, taskId));
     const assembled = await contextEngineService(db).assemble({ companyId, agentId, runId, issueId: taskId, responsibleUserId: owner.userId,
       query: "customer onboarding", intent: "general_work", includeFoundation: false, totalDeadlineMs: 5_000 });
-    expect(await db.select().from(contextManifestMemoryRoots).where(eq(contextManifestMemoryRoots.manifestId, assembled.packet.manifest!.id))).toHaveLength(2);
+    expect(await db.select().from(contextManifestMemoryRoots).where(eq(contextManifestMemoryRoots.manifestId, assembled.packet.manifest!.id)),
+      JSON.stringify({ warnings: assembled.packet.warnings, selectedProviders: assembled.packet.sharedMemory.map(item => item.sourceProvider) })).toHaveLength(2);
     await db.transaction(async (tx) => { await purgeMemoryRecords(tx as unknown as typeof db, companyId, [first]); });
     const [erased] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, runId));
     expect(erased!.contextSnapshot).toEqual({}); expect(erased!.resultJson).toBeNull();

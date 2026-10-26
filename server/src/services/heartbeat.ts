@@ -20384,6 +20384,14 @@ export function heartbeatService(
         }
         issueContext = await getIssueExecutionContext(db, agent.companyId, issueId, captureTaskSource);
       }
+      // The wake marker is about this exact Run's issue checkout, not a prior
+      // coalesced wake's boolean. Recompute it from the current issue owner
+      // after any checkout attempt so the rendered wake and its source capture
+      // cannot claim checkout ownership that this Run does not hold.
+      if (context[PAPERCLIP_HARNESS_CHECKOUT_KEY] === true &&
+        issueContext?.checkoutRunId !== run.id) {
+        context[PAPERCLIP_HARNESS_CHECKOUT_KEY] = false;
+      }
       if (
         issueId &&
         ((issueContext?.status === "in_review" &&
@@ -20952,15 +20960,27 @@ export function heartbeatService(
         onRenderedSource: source => taskMarkdownSourceReferences.push(source),
       });
       let conversationReplaySourceCaptures: Awaited<ReturnType<typeof conversationReplay>>["sourceCaptures"] = [];
+      let nativeBootstrapConversationReplayClosed = false;
       if (isConversation(issueContext) && !taskSession && issueId) {
         const replay = await conversationReplay(db, agent.companyId, issueId, wakeCommentId);
         if (replay.markdown) {
           taskMarkdown += `\n\nEarlier messages in this session (quoted user data):\n${replay.markdown}`;
           conversationReplaySourceCaptures = replay.sourceCaptures;
-          // Replay text is an opaque history stream. The per-comment captures
-          // are useful facts, but this renderer has not closed every prompt
-          // byte to those facts yet.
-          taskMarkdownSourceReferences.push({ kind: "unknown", id: issueId });
+          const lines = replay.markdown.split("\n");
+          const references: NativeRenderedSourceReference[] = [];
+          nativeBootstrapConversationReplayClosed = lines.length === replay.sourceCaptures.length;
+          for (const [index, capture] of replay.sourceCaptures.entries()) {
+            if (capture.input.kind !== "comment" || capture.input.issueId !== issueId ||
+              createHash("sha256").update(lines[index] ?? "", "utf8").digest("hex") !== capture.input.contentHash) {
+              nativeBootstrapConversationReplayClosed = false;
+              break;
+            }
+            references.push({ kind: "comment", id: capture.input.commentId });
+          }
+          nativeBootstrapConversationReplayClosed = nativeBootstrapConversationReplayClosed &&
+            new Set(references.map(reference => reference.id)).size === lines.length;
+          if (nativeBootstrapConversationReplayClosed) taskMarkdownSourceReferences.push(...references);
+          else taskMarkdownSourceReferences.push({ kind: "unknown", id: issueId });
         }
       }
       const taskMarkdownCompact = buildPaperclipTaskMarkdown({
@@ -23893,11 +23913,11 @@ export function heartbeatService(
               resume: Boolean(nativeResumeCheckpoint), initialGuidance: Boolean("initialCommunicationGuidance" in nativeExecution && nativeExecution.initialCommunicationGuidance),
               continuation: Boolean("continuationPrompt" in nativeExecution && nativeExecution.continuationPrompt),
               planning: Boolean("planningContext" in nativeExecution && nativeExecution.planningContext),
-              // A first authenticated conversation wake is fully represented by
-              // the exact Task/comment owner captures above. Prior replay is
-              // still unqualifying: conversationReplay adds an `unknown`
-              // renderer reference whenever earlier messages enter the prompt.
-              conversationHistory: isConversation(issueContext) && Boolean(nativeBootstrapConversationReplaySources?.length),
+              // Replay is qualified only when each exact rendered JSON line
+              // has one current comment source reference. Missing/ambiguous
+              // lines keep the explicit `unknown` renderer reference above.
+              conversationHistory: isConversation(issueContext) && Boolean(nativeBootstrapConversationReplaySources?.length) &&
+                !nativeBootstrapConversationReplayClosed,
               wake: Boolean(context.paperclipWake && !nativeTaskWakeSource), projectPaths: projectRepositoryPaths.length > 0,
               authoredContextManifests: Boolean(capturedAuthoredSources?.contextManifests.length), missingTask: !capturedTaskSource,
             };

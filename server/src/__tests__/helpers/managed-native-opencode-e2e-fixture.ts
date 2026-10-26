@@ -1569,7 +1569,9 @@ export async function runManagedNativeOpenCodeFixture(input: {
       OPENCODE_DISABLE_DEFAULT_PLUGINS: "true", OPENCODE_DISABLE_MODELS_FETCH: "true",
       PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: String(profile.inputTokensUpperBound),
       PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: String(profile.maxOutputTokens),
-      PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: `https://127.0.0.1:${address.port}` };
+      PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: `https://127.0.0.1:${address.port}`,
+      ...(process.env.PAPERCLIP_MANAGED_OPENCODE_E2E_DIAGNOSTICS === "1"
+        ? { PAPERCLIP_MANAGED_OPENCODE_E2E_DIAGNOSTICS: "1" } : {}) };
     const qualifiedOpenCodeSha256 = createHash("sha256")
       .update(await readFile(opencodeBinary)).digest("hex");
     const diagnostics: string[] = [];

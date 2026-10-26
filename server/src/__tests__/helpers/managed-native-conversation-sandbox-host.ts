@@ -64,6 +64,7 @@ export async function configureManagedConversationSandboxHost(input: {
 }) {
   const { db, actor, companyId, agentId, providerBindingId } = input;
   const brokerOrigin = new URL(input.brokerOrigin).origin;
+  const taskWorkspaceNamespace = join(input.root, "chat-workspaces", companyId, agentId);
   const hostKeys = generateKeyPairSync("rsa", { modulusLength: 3072 });
   await instanceSettingsService(db).updateExperimental({
     sandbox_abstraction_v7: true, openshell_v7: true, runtime_host_agent_v6: true,
@@ -165,6 +166,11 @@ export async function configureManagedConversationSandboxHost(input: {
   const binding = await service.create(actor, companyId, { runtimeCellId: cell.id,
     expectedCellGeneration: cell.generation.toString(), backend: "openshell", profile: "development", boundaryPolicy: (() => {
       const boundary = policyFixture(); boundary.riskClass = "C3"; boundary.requiredControls = [...SANDBOX_CONTROLS];
+      // The durable maximum is confined to this company/Agent's server-owned
+      // chat workspace namespace. Per-run compilation below narrows it again
+      // to the exact canonical issue taskRoot before host admission.
+      boundary.filesystem.readPaths = [taskWorkspaceNamespace];
+      boundary.filesystem.writePaths = [taskWorkspaceNamespace];
       boundary.filesystem.deniedPaths = []; boundary.process.allowedBinaries = []; boundary.process.allowedSyscalls = [];
       boundary.network.destinations = []; return boundary;
     })() });
@@ -377,6 +383,8 @@ export async function configureManagedConversationSandboxHost(input: {
     if (!taskRoot) throw new Error("conversation_software_host_private_task_root_missing");
     expectedTaskRoot = taskRoot;
     const boundary = policyFixture(); boundary.riskClass = "C3"; boundary.requiredControls = [...SANDBOX_CONTROLS];
+    boundary.filesystem.readPaths = [taskWorkspaceNamespace];
+    boundary.filesystem.writePaths = [taskWorkspaceNamespace];
     boundary.filesystem.readPaths = [taskRoot]; boundary.filesystem.writePaths = [taskRoot]; boundary.filesystem.deniedPaths = [];
     boundary.process.allowedBinaries = []; boundary.process.allowedSyscalls = []; boundary.network.destinations = [];
     const candidate = structuredClone(boundary);
@@ -384,7 +392,18 @@ export async function configureManagedConversationSandboxHost(input: {
       port: Number(new URL(brokerOrigin).port || 443), methods: ["POST"], pathPrefixes: ["/runtime-tools/model/v1/messages"] }];
     const compiled = await service.compile(actor, companyId, binding.id, { expectedVersion: 2,
       executionManifestId: manifest.id, candidatePolicy: candidate });
-    if (compiled.status !== "qualified") throw new Error("conversation_software_host_policy_compile_failed");
+    if (compiled.status !== "qualified") {
+      const proof = compiled.compilation as { proverResult?: unknown; failedBoundaries?: unknown; unsupportedFeatures?: unknown } | null;
+      const safeNames = (value: unknown) => Array.isArray(value)
+        ? value.filter((entry): entry is string => typeof entry === "string" && /^[a-z0-9_:-]{1,80}$/.test(entry)).slice(0, 24)
+        : [];
+      throw new Error(`conversation_software_host_policy_compile_failed_${JSON.stringify({
+        status: compiled.status,
+        proverResult: proof && typeof proof.proverResult === "string" ? proof.proverResult : null,
+        failedBoundaries: safeNames(proof?.failedBoundaries),
+        unsupportedFeatures: safeNames(proof?.unsupportedFeatures),
+      })}`);
+    }
     const admittedPromise = service.admit(actor, companyId, binding.id, { expectedVersion: 3, policySnapshotId: compiled.id });
     const admitted = await driveHost(admittedPromise);
     if (admitted.binding.status !== "running") throw new Error("conversation_software_host_workload_not_running");

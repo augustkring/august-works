@@ -54,6 +54,7 @@ import { buildNativeModelEnvelope } from "../../vendor/paperclip-runner/index.js
 import { nativeRuntimeContextFixture } from "./runtime-context.test-fixture.js";
 import { getIssueExecutionContext, buildPaperclipTaskMarkdown } from "../heartbeat.js";
 import { ensureNativeCompletionContract } from "./completion-contracts.js";
+import { getNativeReviewAssignment } from "./native-review-participant.js";
 
 describe("PaperclipRunnerToolAuthority", () => {
   let temporary: Awaited<
@@ -119,6 +120,10 @@ describe("PaperclipRunnerToolAuthority", () => {
       taskEnvelopeDigest: string } | null = null;
     const prepareQualifiedDispatch = async () => {
       if (payloadSourceProtocolVersion !== 1 || qualifiedTurnInput) return;
+      // Exercise the same fail-closed prompt-closure path that a managed
+      // OpenCode run uses. This marker grants no prompt; recordNative... must
+      // bind every actual turn to the source set before it can persist one.
+      vi.stubEnv("PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS", "1");
       if (!fixture.human) throw new Error("dispatch_fixture_current_human_unavailable");
       const taskCaptureHolder: { value: NativeTaskSourceCapture | null } = { value: null };
       const task = await getIssueExecutionContext(db, fixture.companyId, fixture.issueId,
@@ -158,7 +163,8 @@ describe("PaperclipRunnerToolAuthority", () => {
             cwd: workspace.cwd, repoUrl: workspace.repoUrl, repoRef: workspace.repoRef, branchName: workspace.branchName,
           }), "utf8").digest("hex") }] });
       if (!sourceSet) throw new Error("dispatch_fixture_bootstrap_source_set_unavailable");
-      await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeExecutionInput: execution } })
+      await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeExecutionInput: execution,
+        nativeOpenCodeSourceAuthority: { authorizedPromptHashes: [], promptSourceBindings: [] } } })
         .where(eq(heartbeatRuns.id, fixture.runId));
       qualifiedTurnInput = { message: { role: "user", text: JSON.stringify(buildNativeModelEnvelope(execution)) },
         requestedCollaborationMode: "default" };
@@ -178,7 +184,8 @@ describe("PaperclipRunnerToolAuthority", () => {
       if (expectAssociation) expect(associationRecorded).toBe(true);
       return { tool, callId, turnId, dispatchId, eventSeq, attempt };
     };
-    return { ...fixture, bindCall, documentCaptureBinding: { db, runId: fixture.runId, companyId: fixture.companyId,
+    return { ...fixture, bindCall, prepareQualifiedDispatch, bootstrapSourceClosure: () => bootstrapSourceClosure,
+      documentCaptureBinding: { db, runId: fixture.runId, companyId: fixture.companyId,
       issueId: fixture.issueId, agentId: fixture.agentId, leaseOwner, attempt, controller, eventSeq } };
   }
 
@@ -536,6 +543,25 @@ describe("PaperclipRunnerToolAuthority", () => {
     await db.update(heartbeatRuns).set({ contextSnapshot: { issueId: fixture.issueId,
       nativeReviewInteractionId: interactionId, nativeReviewDecisionId: decisionId,
       sourceRunId, revisionId: decisionId } }).where(eq(heartbeatRuns.id, fixture.runId));
+    await fixture.prepareQualifiedDispatch();
+    const preparedClosure = fixture.bootstrapSourceClosure();
+    expect(preparedClosure?.sourceSet.inputs.filter(value => value.kind === "workspace_metadata"))
+      .toEqual([expect.objectContaining({ runId: fixture.runId, origin: "task_session",
+        executionWorkspaceId: fixture.runId, sourceVersion: `task-session:${fixture.runId}` })]);
+    const [reviewTaskOwner] = await db.select({ assigneeAgentId: issues.assigneeAgentId,
+      executionRunId: issues.executionRunId, projectId: issues.projectId,
+      executionWorkspaceId: issues.executionWorkspaceId, status: issues.status,
+      statusVersion: issues.statusVersion, lastStatusDecisionId: issues.lastStatusDecisionId })
+      .from(issues).where(and(eq(issues.companyId, fixture.companyId), eq(issues.id, fixture.issueId)));
+    expect(reviewTaskOwner).toMatchObject({ assigneeAgentId: sourceAgentId, executionRunId: fixture.runId,
+      projectId: null, executionWorkspaceId: null, status: "in_review", statusVersion: 1,
+      lastStatusDecisionId: decisionId });
+    await expect(getNativeReviewAssignment(db, { companyId: fixture.companyId, issueId: fixture.issueId,
+      agentId: fixture.agentId, contextSnapshot: { issueId: fixture.issueId,
+        nativeReviewInteractionId: interactionId, nativeReviewDecisionId: decisionId,
+        sourceRunId, revisionId: decisionId }, actingRunId: fixture.runId,
+      issueExecutionRunId: fixture.runId })).resolves.toMatchObject({ interaction: { id: interactionId },
+        sourceRun: { id: sourceRunId, agentId: sourceAgentId } });
     const nativeReview = { nativeReviewInteractionId: interactionId, nativeReviewDecisionId: decisionId };
     const authority = new PaperclipRunnerToolAuthority(db, { companyId: fixture.companyId, agentId: fixture.agentId,
       issueId: fixture.issueId, runId: fixture.runId, nativeReview });

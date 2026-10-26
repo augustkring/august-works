@@ -832,13 +832,21 @@ export function contextManifestService(db: Db) {
           });
         }
 
-        await assertScopePrivacy();
-        for (const id of selectedTaskIds)
-          if (!await canActorReadIssuePrivacy(sourceDb,sourceActor,{companyId:input.companyId,id}))
-            throw forbidden("Context source access is unavailable");
         for(const id of rootIds)
           if(!await canActorReadMemorySources(sourceDb,input.companyId,sourceActor,id))
             throw forbidden("Context Memory source access changed during assembly");
+        for (const id of selectedTaskIds) {
+          // `assertScopePrivacy` below rechecks this exact primary Task after
+          // all source ACL waits. Keep it on that final owner check; copied
+          // selected Tasks still receive their own current ACL check.
+          if (id === issueId) continue;
+          if (!await canActorReadIssuePrivacy(sourceDb,sourceActor,{companyId:input.companyId,id}))
+            throw forbidden("Context source access is unavailable");
+        }
+        // Recheck accountable Run, primary Task, Human authority and project
+        // after the source ACL work above; this is the last awaited owner proof
+        // before the manifest result escapes its transaction.
+        await assertScopePrivacy();
         assertActive();
 
         let nativeBootstrapWitness: NativeBootstrapContextWitness | undefined;

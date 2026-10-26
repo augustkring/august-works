@@ -642,7 +642,14 @@ describeEmbeddedPostgres("Context Engine integration", () => {
 
   it("binds actual approved Foundation and private Task Context to one native bootstrap witness and rechecks current Human authority", async () => {
     const seeded = await seed();
-    const human = await seedCurrentHumanSourceActor(db, [seeded.companyId], seeded.userId);
+    const seededHuman = await seedCurrentHumanSourceActor(db, [seeded.companyId], seeded.userId);
+    if (seededHuman.type !== "board" || seededHuman.source !== "session" || !seededHuman.sessionId)
+      throw new Error("Context mutation fixture did not retain its actual Human session");
+    const [humanSession] = await db.select({ expiresAt: authSessions.expiresAt }).from(authSessions)
+      .where(eq(authSessions.id, seededHuman.sessionId)).limit(1);
+    if (!humanSession || humanSession.expiresAt.getTime() <= Date.now())
+      throw new Error("Context mutation fixture Human session is unavailable or expired");
+    const human = { ...seededHuman, authenticatedCredentialExpiresAt: humanSession.expiresAt.getTime() };
     const task = await issueService(db).create(seeded.companyId, {
       title: "Prepare enterprise Context source", description: "Use only the current Task and approved guidance.",
       createdByUserId: seeded.userId, responsibleUserId: seeded.userId }, db, undefined,

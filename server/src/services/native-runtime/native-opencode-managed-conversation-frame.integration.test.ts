@@ -115,7 +115,7 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
     const binary = qualifiedOpenCodeBinary();
     if (!binary) throw new Error("qualified_opencode_binary_unavailable");
     vi.stubEnv("PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS", "1");
-    const result = await runManagedNativeConversationFrame({ db, root, opencodeBinary: binary,
+    const result = await runManagedNativeConversationFrame({ db, root, opencodeBinary: binary, sandboxRelay: true,
       configureHeartbeat: context => configureManagedConversationSandboxHost({ ...context, root }),
       beforeProviderResponse: async facts => {
         expect(facts.run.status).toBe("running");
@@ -287,7 +287,7 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
           ?facts.run.error:null;
         runDiagnostics={status:facts.run.status,errorCode:facts.run.errorCode??null,
           errorToken:runError,
-          sourceProtocol:facts.run.nativeInputSourceProtocolVersion??null,manifestStatus:facts.manifest?.status??null,
+          sourceProtocol:facts.run.nativeInputSourceProtocolVersion??null,manifestHash:facts.manifest?.hash??null,
           reservationStatus:facts.reservation?.status??null,eventTypes:runEvents.map(event=>event.eventType),
           matchingProjectCount:matchingProjects.length,
           relayAuthenticated:facts.sandboxRuntimeFacts?.relayAuthenticated??null,
@@ -376,6 +376,7 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
     const callId="conversation-task-create-c0";
     const taskTitle="Conversation-created private Task";
     let providerConsumedResult=false;
+    const taskRead:{current:{taskId:string;ownerStatus:number;foreignStatus:number}|null}={current:null};
     const result=await runManagedNativeConversationFrame({db,root,opencodeBinary:binary,conversationWorkMode:"standard",
       providerReply:({body,callIndex})=>{
         if(callIndex===1){
@@ -421,6 +422,38 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
         expect(created).toMatchObject({title:taskTitle,parentId:null,status:"todo",responsibleUserId:facts.actor.userId,
           createdByAgentId:facts.actor.agentId,payloadSourceProtocolVersion:1,payloadSourceSnapshotInvalidated:false});
         expect(created?.payloadSourceSnapshot).toMatchObject({owner:{kind:"issue",companyId:facts.companyId,id:taskId}});
+        const [ownerSession]=await db.select({id:authSessions.id,userId:authSessions.userId,token:authSessions.token})
+          .from(authSessions).where(and(eq(authSessions.id,facts.actor.sessionId!),eq(authSessions.userId,facts.actor.userId!)));
+        const foreignUserId=`conversation-task-foreign-${randomUUID()}`;
+        const now=new Date();
+        await db.insert(authUsers).values({id:foreignUserId,name:"Foreign Task reader",email:`${foreignUserId}@test.invalid`,
+          emailVerified:true,createdAt:now,updatedAt:now});
+        await db.insert(companyMemberships).values({companyId:facts.companyId,principalType:"user",principalId:foreignUserId,
+          membershipRole:"member",status:"active"});
+        const foreignSessionId=await seedNativePasskeySession(db,foreignUserId);
+        const [foreignSession]=await db.select({id:authSessions.id,userId:authSessions.userId,token:authSessions.token})
+          .from(authSessions).where(eq(authSessions.id,foreignSessionId)).limit(1);
+        if(!ownerSession||!foreignSession)throw new Error("conversation_task_human_sessions_missing");
+        const app=express();app.use(express.json());
+        app.use(actorMiddleware(db,{deploymentMode:"authenticated",resolveSession:async req=>{
+          const token=(req.header("cookie")??"").split(";").map(value=>value.trim())
+            .map(value=>value.slice(value.indexOf("=")+1)).map(decodeURIComponent).find(Boolean);
+          if(!token)return null;
+          const [session]=await db.select({id:authSessions.id,userId:authSessions.userId,expiresAt:authSessions.expiresAt})
+            .from(authSessions).where(and(eq(authSessions.token,token),sql`${authSessions.expiresAt}>now()`)).limit(1);
+          if(!session)return null;
+          const [user]=await db.select({id:authUsers.id,name:authUsers.name,email:authUsers.email})
+            .from(authUsers).where(eq(authUsers.id,session.userId)).limit(1);
+          if(!user)return null;
+          const value:BetterAuthSessionResult={session:{id:session.id,userId:session.userId,expiresAt:session.expiresAt},user};
+          return value;
+        }}));
+        app.use("/api",issueRoutes(db,{} as never));app.use(errorHandler);
+        const ownerResponse=await request(app).get(`/api/issues/${taskId}`)
+          .set("cookie",`session_token=${encodeURIComponent(ownerSession.token)}`);
+        const foreignResponse=await request(app).get(`/api/issues/${taskId}`)
+          .set("cookie",`session_token=${encodeURIComponent(foreignSession.token)}`);
+        taskRead.current={taskId,ownerStatus:ownerResponse.status,foreignStatus:foreignResponse.status};
       }});
     expect(result.success,JSON.stringify({status:result.runStatus,errorCode:result.run?.errorCode,
       calls:result.providerCallCount,providerStubFailure:result.providerStubFailure,broker:result.brokerRequestFacts,
@@ -431,6 +464,8 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
     expect(result.workerAttempts).toHaveLength(0);
     expect(result.foreignWriteDidNotMutate).toBe(true);
     expect(providerConsumedResult).toBe(true);
+    expect(taskRead.current).toMatchObject({ownerStatus:200});
+    expect(taskRead.current?.foreignStatus).toBeGreaterThanOrEqual(400);
   },240_000);
 
 });

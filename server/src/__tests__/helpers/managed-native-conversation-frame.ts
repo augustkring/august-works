@@ -1,12 +1,14 @@
 import { createHash, randomUUID } from "node:crypto";
-import { chmod, lstat, mkdtemp, readdir, rm } from "node:fs/promises";
+import { chmod, lstat, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { lookup } from "node:dns/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createServer as createHttpsServer } from "node:https";
 import { execFileSync } from "node:child_process";
 import express from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { agents, agentExecutionManifests, authSessions, authUsers, companies, companyMemberships, heartbeatRuns, issues, issueComments,
+import { activityLog, agents, agentExecutionManifests, authSessions, authUsers, companies, companyMemberships,
+  heartbeatRuns, issueAttachments, issueComments, issueDocuments, issuePrivacySources, issues,
   orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, createDb } from "@paperclipai/db";
 import { workerModelProfileSchema, type WorkerModelProfile } from "../../services/orchestration/worker-model-profiles.js";
 import { workerModelGateway } from "../../services/orchestration/worker-model-gateway.js";
@@ -46,6 +48,8 @@ export async function runManagedNativeConversationFrame(input: {
   db: ReturnType<typeof createDb>;
   root: string;
   opencodeBinary: string;
+  /** Use a policy-valid DNS name that resolves to loopback for the signed host relay case. */
+  sandboxRelay?: boolean;
   conversationWorkMode?: "standard" | "planning" | "ask";
   budgetMonthlyCents?: number;
   tariff?: WorkerModelProfile["tariff"];
@@ -121,13 +125,22 @@ export async function runManagedNativeConversationFrame(input: {
   const keyPath = join(runHome, "broker-key.pem"), certPath = join(runHome, "broker-cert.pem");
   const caKeyPath = join(runHome, "broker-ca-key.pem"), caCertPath = join(runHome, "broker-ca-cert.pem");
   const csrPath = join(runHome, "broker.csr"), extensionsPath = join(runHome, "broker-extensions.cnf");
+  const brokerHostname = input.sandboxRelay ? "127-0-0-1.sslip.io" : "broker.localhost";
+  // The signed sandbox policy requires a public-DNS-shaped hostname. Only that
+  // explicit relay case uses sslip; ordinary local broker fixtures retain the
+  // original reserved localhost name and its local routing semantics.
+  if (input.sandboxRelay) {
+    const brokerAddresses = await lookup(brokerHostname, { all: true });
+    if (brokerAddresses.length === 0 || brokerAddresses.some(value => value.address !== "127.0.0.1"))
+      throw new Error("conversation_fixture_broker_dns_not_loopback");
+  }
   execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", caKeyPath,
     "-out", caCertPath, "-days", "1", "-subj", "/CN=Managed conversation fixture CA", "-addext",
     "basicConstraints=critical,CA:TRUE", "-addext", "keyUsage=critical,keyCertSign,cRLSign"], { stdio: "ignore" });
   execFileSync("openssl", ["req", "-new", "-newkey", "rsa:2048", "-nodes", "-keyout", keyPath,
-    "-out", csrPath, "-subj", "/CN=broker.localhost"], { stdio: "ignore" });
-  const { writeFile, readFile } = await import("node:fs/promises");
-  await writeFile(extensionsPath, "basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectAltName=DNS:broker.localhost\n");
+    "-out", csrPath, "-subj", `/CN=${brokerHostname}`], { stdio: "ignore" });
+  const { readFile } = await import("node:fs/promises");
+  await writeFile(extensionsPath, `basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectAltName=DNS:${brokerHostname}\n`);
   execFileSync("openssl", ["x509", "-req", "-in", csrPath, "-CA", caCertPath, "-CAkey", caKeyPath,
     "-CAcreateserial", "-out", certPath, "-days", "1", "-sha256", "-extfile", extensionsPath], { stdio: "ignore" });
   await chmod(keyPath, 0o600);
@@ -294,16 +307,14 @@ export async function runManagedNativeConversationFrame(input: {
   });
   brokerApp.use(errorHandler);
   const broker = createHttpsServer({ key: await readFile(keyPath), cert: await readFile(certPath) }, brokerApp);
-  broker.listen(0, "::1");
+  broker.listen(0, "127.0.0.1");
   await new Promise<void>(resolve => broker.once("listening", resolve));
   const address = broker.address();
   if (!address || typeof address === "string") throw new Error("conversation_fixture_broker_listen_failed");
-  // The sandbox policy schema admits domain names, not IP literals. The
-  // special-use .localhost name resolves to loopback and keeps this fixture
-  // endpoint local while allowing the real managed policy to pin it exactly.
+  // The public wildcard DNS record resolves to the loopback HTTPS listener.
   // Durable PRP and the runner accept only an origin, with no trailing path
   // separator; a slash would make the managed environment tuple invalid.
-  const origin = new URL(`https://broker.localhost:${address.port}`).origin;
+  const origin = new URL(`https://${brokerHostname}:${address.port}`).origin;
   setupRunnerPrpWebSocketServer(broker, { apiUrl: origin });
   const prevBroker = process.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN;
   const prevJwt = process.env.PAPERCLIP_AGENT_JWT_SECRET;
@@ -405,7 +416,34 @@ export async function runManagedNativeConversationFrame(input: {
       const mode = await import("supertest").then(({ default: request }) => request(app)
         .patch(`/api/issues/${chat.body.id}`).set("cookie", humanCookie)
         .send({ workMode: input.conversationWorkMode }));
-      if (mode.status !== 200) throw new Error(`conversation_fixture_work_mode_update_failed_${mode.status}`);
+      if (mode.status !== 200) {
+        const error = typeof mode.body?.error === "string" && /^[A-Za-z ]{1,80}$/.test(mode.body.error)
+          ? mode.body.error.toLowerCase().replaceAll(" ", "_") : "unclassified";
+        const [opened] = await db.select({ id: activityLog.id }).from(activityLog).where(and(
+          eq(activityLog.companyId, companyId), eq(activityLog.actorType, "user"), eq(activityLog.actorId, userId),
+          eq(activityLog.action, "issue.conversation_opened"), eq(activityLog.entityType, "issue"),
+          eq(activityLog.entityId, chat.body.id as string), sql`${activityLog.details}->>'agentId'=${agentId}`,
+        )).limit(1);
+        const [priorComment] = await db.select({ id: issueComments.id }).from(issueComments).where(and(
+          eq(issueComments.companyId, companyId), eq(issueComments.issueId, chat.body.id as string),
+        )).limit(1);
+        const [linkedSource] = await db.select({ id: issuePrivacySources.id }).from(issuePrivacySources).where(and(
+          eq(issuePrivacySources.companyId, companyId), eq(issuePrivacySources.issueId, chat.body.id as string),
+        )).limit(1);
+        const [linkedDocument] = await db.select({ id: issueDocuments.id }).from(issueDocuments).where(and(
+          eq(issueDocuments.companyId, companyId), eq(issueDocuments.issueId, chat.body.id as string),
+        )).limit(1);
+        const [linkedAttachment] = await db.select({ id: issueAttachments.id }).from(issueAttachments).where(and(
+          eq(issueAttachments.companyId, companyId), eq(issueAttachments.issueId, chat.body.id as string),
+        )).limit(1);
+        const [membership] = await db.select({ principalId: companyMemberships.principalId }).from(companyMemberships).where(and(
+          eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+          eq(companyMemberships.principalId, userId), eq(companyMemberships.status, "active"),
+        )).limit(1);
+        const shellFacts = [Boolean(opened), !priorComment, !linkedSource, !linkedDocument, !linkedAttachment,
+          Boolean(membership)].map(value => value ? "1" : "0").join("");
+        throw new Error(`conversation_fixture_work_mode_update_failed_${mode.status}_${error}_${shellFacts}`);
+      }
     }
     const sent = await import("supertest").then(({ default: request }) => request(app)
       .post(`/api/issues/${chat.body.id}/comments`).set("cookie", humanCookie)

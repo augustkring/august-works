@@ -3597,18 +3597,17 @@ export function issueRoutes(
     }
     for (const id of sources) {
       const canReadCurrentPrivacy = await canActorReadIssuePrivacy(db, req.actor, { id, companyId });
-      const isNativeConversationCommentWrite = req.method === "POST" &&
-        req.originalUrl.split("?")[0]!.endsWith(`/issues/${id}/comments`);
-      if (!canReadCurrentPrivacy && !(isNativeConversationCommentWrite && req.actor.type === "board" &&
+      const requestPath = req.originalUrl.split("?")[0]!;
+      const isNativeConversationCommentWrite = req.method === "POST" && requestPath.endsWith(`/issues/${id}/comments`);
+      const isNativeConversationWorkModeWrite = req.method === "PATCH" && requestPath.endsWith(`/issues/${id}`) &&
+        req.body != null && typeof req.body === "object" && !Array.isArray(req.body) &&
+        Object.keys(req.body).length === 1 && Object.hasOwn(req.body, "workMode");
+      const isNativeConversationShellWrite = isNativeConversationCommentWrite || isNativeConversationWorkModeWrite;
+      if (!canReadCurrentPrivacy && !(isNativeConversationShellWrite && req.actor.type === "board" &&
           req.actor.source === "session" && req.actor.sessionId && req.actor.userId &&
           await db.transaction(tx => isCurrentUnsealedConversationShell(tx, req.actor, { id, companyId }, "issue:comment"))))
         throw notFound("Issue not found");
       let ownedNativeConversation = false;
-      const requestPath = req.originalUrl.split("?")[0]!;
-      const isNativeConversationWorkModeWrite = req.method === "PATCH" &&
-        requestPath.endsWith(`/issues/${id}`) &&
-        req.body != null && typeof req.body === "object" && !Array.isArray(req.body) &&
-        Object.keys(req.body).length === 1 && Object.hasOwn(req.body, "workMode");
       if ((isNativeConversationCommentWrite || isNativeConversationWorkModeWrite) &&
           req.actor.type === "board" && req.actor.source === "session" && req.actor.sessionId && req.actor.userId) {
         ownedNativeConversation = await db.transaction(async tx => {
@@ -13544,12 +13543,14 @@ export function issueRoutes(
     validateIssueMutationBody(updateIssueRouteSchema),
     async (req, res) => {
       const id = req.params.id as string;
-      const existing = await getAccessibleResource(
-        req,
-        res,
-        svc.getById(id),
-        "Issue not found",
-      );
+      const candidate = await svc.getById(id);
+      const isOwnedConversationWorkModeOnly = req.body != null && typeof req.body === "object" && !Array.isArray(req.body) &&
+        Object.keys(req.body).length === 1 && Object.hasOwn(req.body, "workMode");
+      const ownedConversationShell = candidate && isOwnedConversationWorkModeOnly && req.actor.type === "board" &&
+        req.actor.source === "session" && req.actor.sessionId && req.actor.userId &&
+        await db.transaction(tx => isCurrentUnsealedConversationShell(tx, req.actor, candidate, "issue:comment"));
+      const existing = ownedConversationShell ? candidate : await getAccessibleResource(
+        req, res, Promise.resolve(candidate), "Issue not found");
       if (!existing) return;
       assertNoAgentHostWorkspaceCommandMutation(
         req,
@@ -13571,12 +13572,18 @@ export function issueRoutes(
         );
         return;
       }
-      const issueMutationAccess = await assertAgentIssueMutationAllowed(
-        req,
-        res,
-        existing,
-        { allowVisibleIssueWrite: true },
-      );
+      // Selecting the mode on the creator's exact unsealed conversation shell
+      // is the one pre-source write available before the first Human comment.
+      // The normal read gate correctly hides that shell, so this branch carries
+      // only that already-pinned, workMode-only owner decision past it.
+      const issueMutationAccess = ownedConversationShell && isOwnedConversationWorkModeOnly
+        ? true
+        : await assertAgentIssueMutationAllowed(
+          req,
+          res,
+          existing,
+          { allowVisibleIssueWrite: true },
+        );
       if (!issueMutationAccess) return;
       if (req.body.comment && !(await assertBoardCommentNotPaused(req, res, existing))) return;
       const issueMutationAuthorizationReason =

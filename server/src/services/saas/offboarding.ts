@@ -425,6 +425,9 @@ export function saasOffboardingService(
               ...(databaseEvidence.platformModelFunding
                 ? { platformModelFunding: databaseEvidence.platformModelFunding }
                 : {}),
+              ...(databaseEvidence.nativeConversationModelFunding
+                ? { nativeConversationModelFunding: databaseEvidence.nativeConversationModelFunding }
+                : {}),
               completedAt: now.toISOString(),
             },
           })

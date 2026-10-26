@@ -294,38 +294,13 @@ export function runnerPrpCoordinator(
           }
         },
         onSemanticToolInput: async (call) => {
-          try {
-            const result = await semanticAuthority.dispatch({
-              callId: call.callId,
-              operationId: call.operationId,
-              correlation: call.correlation,
-              input: call.input,
-            });
-            return { result, isError: !result.ok };
-          } catch (error) {
-            if (process.env.PAPERCLIP_NATIVE_SEMANTIC_TOOL_DIAGNOSTICS === "1") {
-              const diagnostic = error && typeof error === "object"
-                ? error as Error & { code?: unknown; status?: unknown; statusCode?: unknown;
-                  details?: { code?: unknown }; cause?: { code?: unknown; details?: { code?: unknown } } }
-                : null;
-              const safeCode = (value: unknown) => typeof value === "string" && /^[A-Z0-9_:-]{1,100}$/i.test(value)
-                ? value : null;
-              const frames = diagnostic?.stack?.split("\n").slice(1).flatMap(frame => {
-                const match = /server\/src\/services\/([^\s():]+\.ts):(\d+):\d+/.exec(frame);
-                return match ? [`${match[1]}:${match[2]}`] : [];
-              }).slice(0, 5) ?? [];
-              console.info("native_semantic_tool_dispatch_rejected", JSON.stringify({
-                operation: call.operationId,
-                errorName: diagnostic?.name ?? "UnknownError",
-                code: safeCode(diagnostic?.code), causeCode: safeCode(diagnostic?.cause?.code),
-                detailsCode: safeCode(diagnostic?.details?.code), causeDetailsCode: safeCode(diagnostic?.cause?.details?.code),
-                status: typeof diagnostic?.status === "number" ? diagnostic.status :
-                  typeof diagnostic?.statusCode === "number" ? diagnostic.statusCode : null,
-                frames,
-              }));
-            }
-            throw error;
-          }
+          const result = await semanticAuthority.dispatch({
+            callId: call.callId,
+            operationId: call.operationId,
+            correlation: call.correlation,
+            input: call.input,
+          });
+          return { result, isError: !result.ok };
         },
       });
 

@@ -1,0 +1,24 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "18493d08327c207e557f5a811bdaa7b2dff77ad1",
+  "sourceCommitMeaning": "Archive checkout identity; scoped runs may predate it. Only separately recorded unchanged-source gates establish final tested source identity.",
+  "meaning": "Authenticated recovery attempt 080 failed its 60s idle assertion despite successful semantic tool calls; source diagnostic emitted no denial or raw exception.",
+  "logs": [
+    {
+      "name": "agent-chat-sessions-080-20261026-test",
+      "exitCode": 1,
+      "exitSidecar": "agent-chat-sessions-080-20261026-test.exit",
+      "rawSha256": "bb5876535e69972a53c92dda32a9101e434a9c1b679acc47cc584104173fa630",
+      "sanitizedSha256": "bb5876535e69972a53c92dda32a9101e434a9c1b679acc47cc584104173fa630",
+      "archiveSha256": "9051a2b80365003199e5c0a3cb42a344924f26f6c99e611ba734b491e21520c2",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    }
+  ]
+}

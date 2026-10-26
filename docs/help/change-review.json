@@ -901,10 +901,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "1a93fdc4b5f1bbb017faffdc30c19aa576a83aec04d013fe1e284add6ef2e8b1",
+      "sourceSha256": "a5120585510a95f103f37596289b5678c727e0ff63a1a847ff420ce2f7a993a0",
       "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "no_change",
-      "rationale": "Reviewed paired EN/DA Help and recovery guidance: the exact current session owner may select workMode on an empty conversation shell before the first message. The handler now uses the same narrow shell admission as the route gate; Ask/Plan execution policy and all other mutations retain their existing authority checks. Customer support and recovery instructions remain accurate."
+      "rationale": "Reviewed paired EN/DA Help and recovery guidance: every original route gate now admits only the exact current authenticated owner changing workMode alone on its empty conversation shell. Other mutations and source access retain their original guards. Existing customer recovery instructions remain accurate; integrated C0 creation acceptance is pending."
     },
     {
       "source": "server/src/routes/saas.ts",
@@ -1213,10 +1213,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "1a93fdc4b5f1bbb017faffdc30c19aa576a83aec04d013fe1e284add6ef2e8b1",
+      "sourceSha256": "a5120585510a95f103f37596289b5678c727e0ff63a1a847ff420ce2f7a993a0",
       "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "no_change",
-      "rationale": "Reviewed paired EN/DA Help and recovery guidance: the exact current session owner may select workMode on an empty conversation shell before the first message. The handler now uses the same narrow shell admission as the route gate; Ask/Plan execution policy and all other mutations retain their existing authority checks. Customer support and recovery instructions remain accurate."
+      "rationale": "Reviewed paired EN/DA Help and recovery guidance: every original route gate now admits only the exact current authenticated owner changing workMode alone on its empty conversation shell. Other mutations and source access retain their original guards. Existing customer recovery instructions remain accurate; integrated C0 creation acceptance is pending."
     },
     {
       "source": "server/src/routes/saas.ts",
@@ -1541,10 +1541,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "1a93fdc4b5f1bbb017faffdc30c19aa576a83aec04d013fe1e284add6ef2e8b1",
+      "sourceSha256": "a5120585510a95f103f37596289b5678c727e0ff63a1a847ff420ce2f7a993a0",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Reviewed paired EN/DA Help and recovery guidance: the exact current session owner may select workMode on an empty conversation shell before the first message. The handler now uses the same narrow shell admission as the route gate; Ask/Plan execution policy and all other mutations retain their existing authority checks. Customer support and recovery instructions remain accurate."
+      "rationale": "Reviewed paired EN/DA Help and recovery guidance: every original route gate now admits only the exact current authenticated owner changing workMode alone on its empty conversation shell. Other mutations and source access retain their original guards. Existing customer recovery instructions remain accurate; integrated C0 creation acceptance is pending."
     },
     {
       "source": "server/src/services/execution-workspaces.ts",
@@ -1565,10 +1565,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "8f25ef264a68f3ad87a766a5de24ee04d86787b40370ed628e15b74cecb6bdb1",
+      "sourceSha256": "8c46761d85f8f5dd8a808ddbccf2082c80c9d12f2f5cba7ac20eabcba4b72a7b",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Reviewed against both EN/DA linked articles: Native selection clears only its verified old controller lease, and the exact projectless conversation workspace uses its original private root. Stop confirmation, staged runtime erasure and checking the original Run before recovery remain the documented customer actions."
+      "rationale": "Reviewed paired EN/DA recovery and deletion guidance: checkout metadata now reflects this exact current Run, and earlier conversation lines qualify only through complete current per-comment source capture. Existing source-loss refusal, recovery, Stop and retention instructions remain accurate; full chat continuation acceptance is pending."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1645,10 +1645,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "1a93fdc4b5f1bbb017faffdc30c19aa576a83aec04d013fe1e284add6ef2e8b1",
+      "sourceSha256": "a5120585510a95f103f37596289b5678c727e0ff63a1a847ff420ce2f7a993a0",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Reviewed paired EN/DA Help and recovery guidance: the exact current session owner may select workMode on an empty conversation shell before the first message. The handler now uses the same narrow shell admission as the route gate; Ask/Plan execution policy and all other mutations retain their existing authority checks. Customer support and recovery instructions remain accurate."
+      "rationale": "Reviewed paired EN/DA Help and recovery guidance: every original route gate now admits only the exact current authenticated owner changing workMode alone on its empty conversation shell. Other mutations and source access retain their original guards. Existing customer recovery instructions remain accurate; integrated C0 creation acceptance is pending."
     },
     {
       "source": "server/src/services/execution-workspaces.ts",
@@ -1669,10 +1669,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "8f25ef264a68f3ad87a766a5de24ee04d86787b40370ed628e15b74cecb6bdb1",
+      "sourceSha256": "8c46761d85f8f5dd8a808ddbccf2082c80c9d12f2f5cba7ac20eabcba4b72a7b",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Reviewed against both EN/DA linked articles: Native selection clears only its verified old controller lease, and the exact projectless conversation workspace uses its original private root. Stop confirmation, staged runtime erasure and checking the original Run before recovery remain the documented customer actions."
+      "rationale": "Reviewed paired EN/DA recovery and deletion guidance: checkout metadata now reflects this exact current Run, and earlier conversation lines qualify only through complete current per-comment source capture. Existing source-loss refusal, recovery, Stop and retention instructions remain accurate; full chat continuation acceptance is pending."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -2053,18 +2053,18 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "8f25ef264a68f3ad87a766a5de24ee04d86787b40370ed628e15b74cecb6bdb1",
+      "sourceSha256": "8c46761d85f8f5dd8a808ddbccf2082c80c9d12f2f5cba7ac20eabcba4b72a7b",
       "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "no_change",
-      "rationale": "Reviewed against both EN/DA linked articles: Native selection clears only its verified old controller lease, and the exact projectless conversation workspace uses its original private root. Stop confirmation, staged runtime erasure and checking the original Run before recovery remain the documented customer actions."
+      "rationale": "Reviewed paired EN/DA recovery and deletion guidance: checkout metadata now reflects this exact current Run, and earlier conversation lines qualify only through complete current per-comment source capture. Existing source-loss refusal, recovery, Stop and retention instructions remain accurate; full chat continuation acceptance is pending."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "8f25ef264a68f3ad87a766a5de24ee04d86787b40370ed628e15b74cecb6bdb1",
+      "sourceSha256": "8c46761d85f8f5dd8a808ddbccf2082c80c9d12f2f5cba7ac20eabcba4b72a7b",
       "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "no_change",
-      "rationale": "Reviewed against both EN/DA linked articles: Native selection clears only its verified old controller lease, and the exact projectless conversation workspace uses its original private root. Stop confirmation, staged runtime erasure and checking the original Run before recovery remain the documented customer actions."
+      "rationale": "Reviewed paired EN/DA recovery and deletion guidance: checkout metadata now reflects this exact current Run, and earlier conversation lines qualify only through complete current per-comment source capture. Existing source-loss refusal, recovery, Stop and retention instructions remain accurate; full chat continuation acceptance is pending."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",

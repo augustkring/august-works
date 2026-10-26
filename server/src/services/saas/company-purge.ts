@@ -437,6 +437,8 @@ export async function purgeCompanyContent(
     await tx.execute(
       sql`update ${companies} set name='Deleted company',description=null,default_responsible_user_id=null,interaction_resolver_governance='{}'::jsonb,feedback_data_sharing_enabled=false,feedback_data_sharing_consent_at=null,feedback_data_sharing_consent_by_user_id=null,feedback_data_sharing_terms_version=null,status='archived',pause_reason='company_deleted',updated_at=now() where id=${companyId}::uuid`,
     );
-    return { tables: [...new Set(deleted)].sort(), companyTombstoneRetained: true, ...(platformModelFunding ? { platformModelFunding } : {}) };
+    return { tables: [...new Set(deleted)].sort(), companyTombstoneRetained: true,
+      ...(platformModelFunding ? { platformModelFunding } : {}),
+      ...(nativeConversationModelFunding ? { nativeConversationModelFunding } : {}) };
   });
 }
