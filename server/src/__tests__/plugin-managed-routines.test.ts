@@ -5,12 +5,16 @@ import {
   activityLog,
   agentConfigRevisions,
   agents,
+  authUsers,
+  authSessions,
   companies,
+  companyMemberships,
   createDb,
   documentRevisions,
   documents,
   issues,
   pluginManagedResources,
+  principalPermissionGrants,
   plugins,
   projects,
   routineDocuments,
@@ -25,6 +29,7 @@ import {
 } from "./helpers/embedded-postgres.js";
 import { buildHostServices } from "../services/plugin-host-services.js";
 import { routineService } from "../services/routines.js";
+import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -121,6 +126,10 @@ describeEmbeddedPostgres("plugin-managed routines", () => {
     await db.delete(agentConfigRevisions);
     await db.delete(activityLog);
     await db.delete(pluginManagedResources);
+    await db.delete(principalPermissionGrants);
+    await db.delete(authSessions);
+    await db.delete(companyMemberships);
+    await db.delete(authUsers);
     await db.delete(agents);
     await db.delete(projects);
     await db.delete(plugins);
@@ -134,12 +143,21 @@ describeEmbeddedPostgres("plugin-managed routines", () => {
   async function seedCompanyAndPlugin(pluginManifest = manifest()) {
     const companyId = randomUUID();
     const pluginId = randomUUID();
+    const now = new Date();
+    await db.insert(authUsers).values({
+      id: "responsible-user",
+      name: "Routine operator",
+      email: `routine-operator-${randomUUID()}@example.test`,
+      createdAt: now,
+      updatedAt: now,
+    });
     await db.insert(companies).values({
       id: companyId,
       name: "Paperclip",
       issuePrefix: issuePrefix(companyId),
       defaultResponsibleUserId: "responsible-user",
     });
+    const sourceActor = await seedCurrentHumanSourceActor(db, [companyId], "responsible-user");
     await db.insert(plugins).values({
       id: pluginId,
       pluginKey: pluginManifest.id,
@@ -154,7 +172,7 @@ describeEmbeddedPostgres("plugin-managed routines", () => {
     const services = buildHostServices(db, pluginId, pluginManifest.id, createEventBusStub(), undefined, {
       manifest: pluginManifest,
     });
-    return { companyId, pluginId, pluginManifest, services };
+    return { companyId, pluginId, pluginManifest, services, sourceActor };
   }
 
   it("resolves routine agent and project refs by stable managed keys", async () => {
@@ -235,15 +253,15 @@ describeEmbeddedPostgres("plugin-managed routines", () => {
   });
 
   it("creates routine operation issues with plugin visibility and managed project scoping", async () => {
-    const { companyId, services } = await seedCompanyAndPlugin();
+    const { companyId, services, sourceActor } = await seedCompanyAndPlugin();
     const agent = await services.agents.managedReconcile({ companyId, agentKey: "wiki-maintainer" });
     const project = await services.projects.reconcileManaged({ companyId, projectKey: "operations" });
     const routine = await services.routines.managedReconcile({ companyId, routineKey: "nightly-lint" });
     const wakeup = vi.fn(async () => ({ id: randomUUID() }));
-    const routinesSvc = routineService(db, { heartbeat: { wakeup } });
+    const routinesSvc = routineService(db, { heartbeat: { wakeup }, sourceActor });
 
-    const run = await routinesSvc.runRoutine(routine.routineId!, { source: "manual" }, { userId: "board-user" });
-
+    const run = await routinesSvc.runRoutine(routine.routineId!, { source: "manual" }, { userId: "responsible-user" });
+    if (run.status !== "issue_created") console.info("[plugin-managed-routine-test-run]", run);
     expect(run.status).toBe("issue_created");
     const [issue] = await db.select().from(issues).where(eq(issues.id, run.linkedIssueId!));
     expect(issue).toMatchObject({

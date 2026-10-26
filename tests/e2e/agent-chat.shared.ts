@@ -132,6 +132,23 @@ export async function setup(request: APIRequestContext, page?: Page) {
         const ledger = await json(
           await request.get(`/api/companies/${company.id}/heartbeat-runs`),
         );
+        const runDetails = await Promise.all(ledger.map(async (run: any) => {
+          const response = await request.get(`/api/heartbeat-runs/${run.id}`);
+          if (!response.ok()) return { id: run.id, detailStatus: response.status() };
+          const detail = await response.json();
+          return {
+            id: run.id,
+            status: detail.status,
+            errorCode: detail.errorCode ?? null,
+            exitCode: detail.exitCode ?? null,
+            signal: detail.signal ?? null,
+            nativePhase: detail.nativePhase ?? null,
+            issueMatchesChat: detail.issueId === history?.id,
+            nativeIssueMatchesChat: detail.nativeIssueId === history?.id,
+            humanMatchesChatOwner: detail.responsibleUserId === history?.responsibleUserId,
+            executionRunMatchesChat: history?.executionRunId === detail.id,
+          };
+        }));
         const documents = await Promise.all(
           [...(history ? [history] : []), ...tasks].map(async (task: any) => ({
             taskId: task.id,
@@ -149,6 +166,7 @@ export async function setup(request: APIRequestContext, page?: Page) {
                 tasks,
                 projects,
                 documents,
+                runDetails,
                 comments: history
                   ? await json(
                       await request.get(`/api/issues/${history.id}/comments`),

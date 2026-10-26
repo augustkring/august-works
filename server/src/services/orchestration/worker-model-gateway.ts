@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { assertAuthoredProceduresCurrent } from "../agents/authoring-procedures.js";
 import { assertAuthoredAgentManifestCurrent } from "../agents/authored-definition.js";
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, or, sql } from "drizzle-orm";
 import {
   agents,
   agentIdentities,
@@ -13,22 +13,26 @@ import {
   companySecrets,
   companySecretVersions,
   heartbeatRuns,
+  heartbeatRunEvents,
   issues,
   orchestrationPlans,
   orchestrationWorkers,
   orchestrationWorkerAttempts,
   orchestrationModelReservations,
+  costEvents,
   toolInvocations,
   type Db,
 } from "@paperclipai/db";
 import {
   workerModelBindingSchema,
+  conversationModelBindingSchema,
   workerModelCallSchema,
   workerModelResultSchema,
   nativeRunInputSourceReceiptSchema,
   nativePayloadSourceInputSchema,
   nativePayloadSourcePolicySchema,
   type WorkerModelBinding,
+  type ConversationModelBinding,
   type WorkerModelCall,
   type NativePayloadSourceInput,
   type NativeRunInputSourceReceipt,
@@ -46,7 +50,7 @@ import { agentProviderBindingService } from "../agent-provider-bindings.js";
 import { assertV7Authorization, assertV7Enabled } from "../v7-authorization.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
-import type { NativeConsumedSourceComponent } from "../native-runtime/native-execution-input.js";
+import type { NativeConsumedSourceComponent, NativeModelOutputCapture } from "../native-runtime/native-execution-input.js";
 import {
   lockMemoryPrivacy,
   heartbeatMemoryPayloadRetained,
@@ -58,6 +62,7 @@ import { resolvePaperclipRunnerProviderProfile } from "../native-runtime/provide
 import { hashContextPolicySnapshot } from "../context/context-manifest.js";
 import { assertNativeAnalyticalRunPayloadAccess } from "../analytical-context-authority.js";
 import { assertNativeManagedConsumedSourceSetCurrent } from "../native-direct-input.js";
+import { assertNativeManagedProjectCreateReceiptCurrent, type NativeProjectCreateReceipt } from "../native-project-output.js";
 import {
   anthropicReadOnlyCall,
   anthropicManagedMessagesCall,
@@ -75,10 +80,14 @@ import type { guardedRemoteHttpFetch } from "../remote-http-fetch.js";
 import { authoringTestRuntime } from "../agents/authoring-test-runtime.js";
 import { agentRuntimeCandidateService } from "../agents/authoring-runtime-candidates.js";
 import { agentRuntimeCandidateConformanceService } from "../agents/authoring-runtime-candidate-conformance.js";
+import { validatePrpEvent, validatePrpStructuredRunResult } from "../../vendor/paperclip-runner/index.js";
 
 type BoundClaims = RuntimeToolsTokenClaims & {
+  scope: "worker_model";
   worker_model: WorkerModelBinding;
 };
+type ConversationClaims = RuntimeToolsTokenClaims & { scope: "conversation_model"; conversation_model: ConversationModelBinding };
+type ManagedModelClaims = BoundClaims | ConversationClaims;
 type ManagedSourceComponent = NativeConsumedSourceComponent;
 
 function mergeManagedSourceComponents(components: ManagedSourceComponent[], bootstrap: { policy: unknown; inputs: unknown[] }) {
@@ -123,16 +132,111 @@ export function exactManagedAssistantHistoryPrefix(input: {
     policy: input.receipt.bootstrap.policy, inputs: input.receipt.bootstrap.inputs,
   });
   if (!isDeepStrictEqual(recomposed, { policy: policy.data, inputs: sources.data })) return null;
-  const marker = nativePayloadSourceInputSchema.safeParse({ kind: "worker_model_dispatch", runId: input.runId,
-    reservationId: input.intent.reservationId, callId: input.intent.callId, requestHash: input.intent.requestHash,
-    wireBodyHash: input.intent.wireBodyHash, responseHash: input.providerResponseHash });
-  if (!marker.success || marker.data.kind !== "worker_model_dispatch") return null;
+  const conversationBinding = conversationModelBindingSchema.safeParse(input.intent.conversationModelBinding);
+  const markerValue = input.intent.modelPurpose === "conversation_model"
+    ? conversationBinding.success ? { kind: "conversation_model_dispatch", runId: input.runId,
+      agentId: input.intent.agentId, issueId: conversationBinding.data.issueId,
+      conversationSessionGeneration: conversationBinding.data.conversationSessionGeneration,
+      executionManifestId: conversationBinding.data.executionManifestId,
+      executionManifestHash: conversationBinding.data.executionManifestHash,
+      reservationId: input.intent.reservationId, callId: input.intent.callId,
+      requestHash: input.intent.requestHash, wireBodyHash: input.intent.wireBodyHash,
+      responseHash: input.providerResponseHash } : null
+    : input.intent.modelPurpose === undefined || input.intent.modelPurpose === "worker_model"
+      ? { kind: "worker_model_dispatch", runId: input.runId, reservationId: input.intent.reservationId,
+        callId: input.intent.callId, requestHash: input.intent.requestHash,
+        wireBodyHash: input.intent.wireBodyHash, responseHash: input.providerResponseHash } : null;
+  const marker = markerValue ? nativePayloadSourceInputSchema.safeParse(markerValue) : null;
+  if (!marker?.success || !["worker_model_dispatch", "conversation_model_dispatch"].includes(marker.data.kind)) return null;
   const expectedInputs = nativePayloadSourceInputSchema.array().max(256).safeParse([...sources.data, marker.data]);
   if (!expectedInputs.success) return null;
   const matches = input.receipt.dispatches.filter(dispatch => dispatch.executionInputDigest === dispatchDigest &&
     dispatch.responsibleUserId === input.receipt.binding.responsibleUserId &&
     isDeepStrictEqual(dispatch.policy, policy.data) && isDeepStrictEqual(dispatch.inputs, expectedInputs.data));
   return matches.length === 1 ? matches[0]! : null;
+}
+
+/** The OpenCode completion tool returns a fixed server-authored acknowledgement.
+ * It is control-plane status, not model-readable workspace data. Admit it only
+ * when the exact provider call, acknowledged dispatch, accepted result proposal,
+ * and completed tool event are all present in the persisted Native event stream. */
+async function assertManagedPaperclipFinishResult(input: {
+  db: Db;
+  claims: ManagedModelClaims;
+  run: typeof heartbeatRuns.$inferSelect;
+  profile: Record<string, unknown>;
+  providerUse: { toolName: string; argumentsHash: string; intent: Record<string, unknown> };
+  callId: string;
+  content: string;
+  block: Record<string, unknown>;
+}): Promise<void> {
+  if (input.providerUse.toolName !== "paperclip_finish" || input.block.is_error === true)
+    throw forbidden("Managed OpenCode semantic completion result is not the exact server acknowledgement");
+  const responseUses = Array.isArray(input.providerUse.intent.responseToolUses)
+    ? input.providerUse.intent.responseToolUses.map(managedRecord) : [];
+  if (responseUses.length !== 1 || responseUses[0]!.id !== input.callId ||
+      managedToolName(String(responseUses[0]!.name ?? "")) !== "paperclip_finish" ||
+      responseUses[0]!.argumentsHash !== input.providerUse.argumentsHash)
+    throw forbidden("Managed OpenCode semantic completion was not the sole exact provider tool use");
+
+  const dispatchIntents = Array.isArray(input.profile.nativeModelInputDispatchIntents)
+    ? input.profile.nativeModelInputDispatchIntents.map(managedRecord).filter(intent =>
+        intent.turnInputDigest === input.providerUse.intent.sourceDispatchDigest &&
+        intent.responsibleUserId === input.claims.responsible_user_id && intent.continuation === false &&
+        typeof intent.dispatchId === "string" && typeof intent.turnId === "string" &&
+        Number.isInteger(intent.eventSeq) && Number.isInteger(intent.attempt)) : [];
+  if (dispatchIntents.length !== 1)
+    throw forbidden("Managed OpenCode semantic completion has no exact acknowledged Native input dispatch");
+
+  const rows = await input.db.select({ eventType: heartbeatRunEvents.eventType, sourceInstanceId: heartbeatRunEvents.sourceInstanceId,
+    sourceEventId: heartbeatRunEvents.sourceEventId, sourceSeq: heartbeatRunEvents.sourceSeq,
+    sourcePayloadSha256: heartbeatRunEvents.sourcePayloadSha256,
+    payload: heartbeatRunEvents.payload }).from(heartbeatRunEvents).where(and(
+      eq(heartbeatRunEvents.companyId, input.claims.company_id), eq(heartbeatRunEvents.runId, input.claims.run_id),
+      eq(heartbeatRunEvents.sourceInstanceId, input.run.runnerInstanceId!),
+      inArray(heartbeatRunEvents.eventType, ["item.started", "run.result.proposed", "item.completed"]))).limit(4096);
+  if (rows.length >= 4096) throw forbidden("Managed OpenCode semantic completion event history is ambiguous");
+  const events = rows.flatMap(row => {
+    const payload = managedRecord(row.payload);
+    const event = managedRecord(payload.prpEvent);
+    if (!validatePrpEvent(event).ok || event.eventType !== row.eventType || event.runId !== input.claims.run_id ||
+        event.sourceInstanceId !== row.sourceInstanceId || event.sourceSeq !== row.sourceSeq ||
+        event.normalizedSessionId !== input.run.nativeSessionId || typeof row.sourceEventId !== "string" ||
+        row.sourceEventId !== `${input.run.runnerInstanceId}:${input.run.id}:${String(event.sourceSeq)}` ||
+        row.sourcePayloadSha256 !== `sha256:${nativeSha256(event)}`) return [];
+    return [{ event, payload: managedRecord(event.payload) }];
+  });
+  const submitted = events.filter(({ event, payload }) => {
+    const item = managedRecord(payload.item);
+    return event.eventType === "item.started" && event.itemId === input.callId && item.type === "tool_call" &&
+      item.id === input.callId && item.name === "paperclip_finish" && nativeSha256(item.arguments) === input.providerUse.argumentsHash;
+  });
+  if (submitted.length !== 1) throw forbidden("Managed OpenCode semantic completion has no unique persisted provider call");
+  const start = submitted[0]!;
+  const validation = validatePrpStructuredRunResult(managedRecord(start.payload.item).arguments);
+  if (!validation.ok || start.event.turnId !== dispatchIntents[0]!.turnId)
+    throw forbidden("Managed OpenCode semantic completion input does not match the acknowledged provider turn");
+  const proposals = events.filter(({ event, payload }) => event.eventType === "run.result.proposed" &&
+    event.turnId === start.event.turnId && event.itemId === input.callId &&
+    validatePrpStructuredRunResult(payload).ok &&
+    isDeepStrictEqual(validatePrpStructuredRunResult(payload).result, validation.result));
+  const completions = events.filter(({ event, payload }) => {
+    const item = managedRecord(payload.item);
+    return event.eventType === "item.completed" && event.turnId === start.event.turnId && event.itemId === input.callId &&
+      item.type === "tool_result" && item.id === input.callId && item.tool_use_id === input.callId &&
+      item.result === "Semantic completion accepted." && payload.kind === "dynamicToolCall";
+  });
+  const startSeq = start.event.sourceSeq;
+  const proposalSeq = proposals[0]?.event.sourceSeq;
+  const completionSeq = completions[0]?.event.sourceSeq;
+  if (proposals.length !== 1 || completions.length !== 1 ||
+      typeof startSeq !== "number" || typeof proposalSeq !== "number" || typeof completionSeq !== "number" ||
+      !Number.isInteger(startSeq) || !Number.isInteger(proposalSeq) || !Number.isInteger(completionSeq) ||
+      !(startSeq < proposalSeq && proposalSeq < completionSeq))
+    throw forbidden("Managed OpenCode semantic completion has no exact server result and acknowledgement events");
+  const canonicalResult = { type: "text", text: managedRecord(completions[0]!.payload.item).result };
+  if (input.content !== JSON.stringify(canonicalResult) || canonicalResult.text !== "Semantic completion accepted.")
+    throw forbidden("Managed OpenCode semantic completion result digest does not match its accepted server result");
 }
 
 export type WorkerModelDispatchWireReceipt = ReadOnlyModelWireReceipt & {
@@ -194,7 +298,7 @@ function managedSqlFailureDetails(error: unknown): Record<string, string> {
   return {};
 }
 
-async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, request: Record<string, unknown>): Promise<{
+async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelClaims, request: Record<string, unknown>): Promise<{
   promptHash: string;
   sourceSetHash: string;
   consumedSourceSet: { policy: Record<string, string[]>; inputs: NativePayloadSourceInput[] };
@@ -248,7 +352,7 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
       input_schema: tool.input_schema };
   }).sort((a, b) => a.name.localeCompare(b.name));
   if (!isDeepStrictEqual(actualTools, expectedTools) ||
-    actualTools.some((tool) => !["read_document", "write_document", "create_task", "self_remember", "read_context", "call_api",
+    actualTools.some((tool) => !["read_document", "write_document", "create_task", "create_project", "self_remember", "read_context", "call_api",
       "get_task_context", "get_task_history", "read_chat_attachment", "paperclip_finish", "paperclip_block"].includes(tool.name)))
     throw forbidden("Managed OpenCode tool schemas do not match the exact current Native catalog");
 
@@ -271,13 +375,19 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
       const qualifiedIntents = [] as Array<{ intent: Record<string, unknown>; providerResponseHash: string }>;
       for (const intent of matchingIntents) {
         if (typeof intent.reservationId !== "string") continue;
-        const [reservation] = await db.select({ status: orchestrationModelReservations.status,
-          providerResponseHash: orchestrationModelReservations.providerResponseHash }).from(orchestrationModelReservations)
+        const expectedPurpose = claims.scope === "conversation_model" ? "conversation_model" : "worker_model";
+        const [reservation] = await db.select().from(orchestrationModelReservations)
           .where(and(eq(orchestrationModelReservations.companyId, claims.company_id),
             eq(orchestrationModelReservations.id, intent.reservationId),
-            eq(orchestrationModelReservations.purpose, "worker_model"),
+            eq(orchestrationModelReservations.purpose, expectedPurpose),
             eq(orchestrationModelReservations.status, "completed")));
-        if (reservation?.status === "completed" && typeof reservation.providerResponseHash === "string")
+        const conversationBinding = claims.scope === "conversation_model" ? claims.conversation_model : null;
+        const exactConversationReservation = !conversationBinding || (reservation?.conversationAgentId === claims.sub &&
+          reservation.conversationRunId === claims.run_id && reservation.conversationIssueId === conversationBinding.issueId &&
+          reservation.conversationSessionGeneration === conversationBinding.conversationSessionGeneration &&
+          reservation.executionManifestId === conversationBinding.executionManifestId &&
+          reservation.executionManifestHash === conversationBinding.executionManifestHash);
+        if (reservation?.status === "completed" && exactConversationReservation && typeof reservation.providerResponseHash === "string")
           qualifiedIntents.push({ intent, providerResponseHash: reservation.providerResponseHash });
       }
       // The content hash alone is not a dispatch identity: repeated identical
@@ -351,14 +461,22 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
           item.tool === toolName && typeof item.resultDigest === "string" && matchingAssociations.length === 1 &&
           item.turnId === matchingAssociations[0]!.turnId && item.eventSeq === matchingAssociations[0]!.eventSeq &&
           item.attempt === matchingAssociations[0]!.attempt);
+        const content = typeof block.content === "string" ? block.content : Array.isArray(block.content)
+          ? block.content.map((part) => typeof managedRecord(part).text === "string" ? managedRecord(part).text : "").join("") : "";
+        if (toolName === "paperclip_finish") {
+          await assertManagedPaperclipFinishResult({ db, claims, run, profile, providerUse,
+            callId: block.tool_use_id, content, block });
+          // The provider consumed a server-authored control acknowledgement.
+          // The same assistant frame above already contributes its full,
+          // acknowledged private-source prefix to the source union.
+          continue;
+        }
         if (matchingCaptures.length !== 1 || matchingAssociations.length !== 1 ||
-          !["read_document", "write_document", "create_task", "self_remember", "read_context", "call_api",
+          !["read_document", "write_document", "create_task", "create_project", "self_remember", "read_context", "call_api",
             "get_task_context", "get_task_history", "read_chat_attachment"].includes(toolName))
           throw forbidden("Managed OpenCode tool result has no original qualified invocation receipt");
         const capture = matchingCaptures[0]!;
         const source = managedRecord(capture.source);
-        const content = typeof block.content === "string" ? block.content : Array.isArray(block.content)
-          ? block.content.map((part) => typeof managedRecord(part).text === "string" ? managedRecord(part).text : "").join("") : "";
         let result: unknown;
         try { result = JSON.parse(content); } catch { throw forbidden("Managed OpenCode tool result is not its canonical source result"); }
         const contentHash = nativeSha256(result);
@@ -416,6 +534,87 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
           const projectSet = projectEntries[0]!;
           consumedSourceComponents.push({ kind: "additional_input", responsibleUserId: projectSet.responsibleUserId,
             policy: projectSet.policy, inputs: projectSet.inputs });
+          continue;
+        }
+        if (toolName === "create_project") {
+          const createCapture = managedRecord(capture.projectCreate);
+          const createReceipt = managedRecord(createCapture.receipt);
+          const outputCapture = managedRecord(createCapture.outputCapture);
+          const sourceSetValue = managedRecord(createCapture.sourceSet);
+          const projectSourceResult = nativePayloadSourceInputSchema.safeParse(createReceipt.projectSource);
+          const workspaceSourcesResult = nativePayloadSourceInputSchema.array().safeParse(createReceipt.workspaceSources);
+          const sourcePolicy = nativePayloadSourcePolicySchema.safeParse(sourceSetValue.policy);
+          const sourceInputs = nativePayloadSourceInputSchema.array().safeParse(sourceSetValue.inputs);
+          const receiptKey = createHash("sha256").update(block.tool_use_id, "utf8").digest("hex");
+          const createReceipts = managedRecord(managedRecord(run.resultJson).nativeProjectCreateReceipts);
+          const apiReceipt = managedRecord(createReceipts[receiptKey]);
+          const projectSource = projectSourceResult.success && projectSourceResult.data.kind === "project"
+            ? projectSourceResult.data : null;
+          const workspaceSources = workspaceSourcesResult.success && workspaceSourcesResult.data.every(value => value.kind === "project_workspace")
+            ? workspaceSourcesResult.data : null;
+          const projectDto = managedRecord(result);
+          const expectedPolicy = projectSource && sourcePolicy.success ? { ...sourcePolicy.data,
+            projectIds: [...new Set([...sourcePolicy.data.projectIds, projectSource.projectId])].sort() } : null;
+          const createEntries = expectedPolicy && sourceInputs.success && projectSource && workspaceSources
+            ? receipt.data.additionalInputs.filter(entry => entry.responsibleUserId === claims.responsible_user_id &&
+                isDeepStrictEqual(entry.policy, expectedPolicy) && isDeepStrictEqual(entry.inputs,
+                  [source, ...sourceInputs.data, projectSource, ...workspaceSources])) : [];
+          const exactProjectResultCopies = receipt.data.additionalInputs.reduce((count, entry) => count +
+            entry.inputs.filter(value => value.kind === "tool_result" && isDeepStrictEqual(value, source)).length, 0);
+          const conflictingProjectResults = receipt.data.additionalInputs.some(entry => entry.inputs.some(value =>
+            value.kind === "tool_result" && value.callId === source.callId && !isDeepStrictEqual(value, source)));
+          const createProjectChecks = {
+            managedOpenCode: capture.managedOpenCode === true,
+            projectSource: Boolean(projectSource),
+            workspaceSources: Boolean(workspaceSources),
+            sourcePolicy: sourcePolicy.success,
+            sourceInputs: sourceInputs.success,
+            toolResultIdentity: source.kind === "tool_result" && source.runId === claims.run_id &&
+              source.callId === block.tool_use_id && source.toolName === "create_project" && source.invocationId === null,
+            toolResultDigest: source.contentHash === sourceResultDigest,
+            receiptIdentity: createReceipt.callId === block.tool_use_id && createReceipt.tool === "create_project" &&
+              createReceipt.argumentsHash === providerUse.argumentsHash,
+            receiptResultDigest: createReceipt.resultDigest === sourceResultDigest,
+            receiptSourceSetHash: sourcePolicy.success && sourceInputs.success && createReceipt.sourceSetHash === nativeSha256({
+              policy: sourcePolicy.data, inputs: sourceInputs.data }),
+            responsibleHuman: createReceipt.responsibleUserId === claims.responsible_user_id,
+            projectIdentity: Boolean(projectSource && createReceipt.projectId === projectSource.projectId &&
+              projectDto.id === projectSource.projectId),
+            projectPrivate: projectDto.visibility === "private",
+            projectSourceVersion: Boolean(projectSource && projectDto.updatedAt === projectSource.sourceVersion),
+            projectSourceContentHash: Boolean(projectSource && /^[0-9a-f]{64}$/.test(projectSource.contentHash)),
+            snapshotDigest: /^[0-9a-f]{64}$/.test(String(createReceipt.sourceSnapshotDigest ?? "")),
+            durableReceiptIdentity: apiReceipt.callId === block.tool_use_id && apiReceipt.tool === "create_project" &&
+              apiReceipt.argumentsHash === providerUse.argumentsHash,
+            durableReceiptDigest: apiReceipt.resultDigest === sourceResultDigest,
+            durableProject: Boolean(projectSource && apiReceipt.projectId === projectSource.projectId),
+            durableResponsibleHuman: apiReceipt.responsibleUserId === claims.responsible_user_id,
+            durableSourceSetHash: apiReceipt.sourceSetHash === createReceipt.sourceSetHash,
+            durableProjectSource: Boolean(projectSource && isDeepStrictEqual(apiReceipt.projectSource, projectSource)),
+            durableWorkspaceSources: Boolean(workspaceSources && isDeepStrictEqual(apiReceipt.workspaceSources, workspaceSources)),
+            durableSnapshotDigest: apiReceipt.sourceSnapshotDigest === createReceipt.sourceSnapshotDigest,
+            exactReceiptPrefix: createEntries.length === 1,
+            singleResultCopy: exactProjectResultCopies === 1,
+            noConflictingResult: !conflictingProjectResults,
+            exactProviderVisibleJson: content === JSON.stringify(result),
+          };
+          const failedCreateChecks = Object.entries(createProjectChecks).filter(([, passed]) => !passed).map(([name]) => name);
+          if (failedCreateChecks.length) {
+            if (process.env.PAPERCLIP_MANAGED_PROJECT_CREATE_DIAGNOSTICS === "1")
+              process.stderr.write(`managed_project_create_diagnostic ${JSON.stringify({ stage: "gateway_receipt_rejected",
+                failedChecks: failedCreateChecks })}\n`);
+            throw forbidden("Managed OpenCode create_project result is not an exact private Project source receipt");
+          }
+          if (!sourcePolicy.success || !sourceInputs.success)
+            throw forbidden("Managed OpenCode create_project source set is malformed");
+          await assertNativeManagedProjectCreateReceiptCurrent(db, { companyId: claims.company_id,
+            issueId: run.nativeIssueId!, runId: claims.run_id, actor: sourceActor,
+            receipt: createReceipt as unknown as NativeProjectCreateReceipt,
+            sourceSet: { policy: sourcePolicy.data, inputs: sourceInputs.data },
+            outputCapture: outputCapture as unknown as NativeModelOutputCapture, result });
+          const createEntry = createEntries[0]!;
+          consumedSourceComponents.push({ kind: "additional_input", responsibleUserId: createEntry.responsibleUserId,
+            policy: createEntry.policy, inputs: createEntry.inputs });
           continue;
         }
         if (["get_task_context", "get_task_history", "read_chat_attachment"].includes(toolName)) {
@@ -970,6 +1169,128 @@ export function workerModelGateway(db: Db, options: Options) {
       credentialSha256: version.valueSha256,
     };
   }
+  async function currentConversation(tx: Db, claims: ConversationClaims, requireInputReceipt = true) {
+    const now = new Date(), binding = claims.conversation_model;
+    if (claims.scope !== "conversation_model" || claims.exp * 1000 <= now.getTime())
+      throw forbidden("Current Native conversation model capability required");
+    await assertV7Enabled(tx, "orchestration_v7");
+    const actor: AuthorizationActor = { type: "board", source: "session", userId: claims.responsible_user_id };
+    await assertV7Authorization(tx, actor, claims.company_id, "company_scope:read");
+    const [run] = await tx.select().from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, claims.company_id), eq(heartbeatRuns.agentId, claims.sub), eq(heartbeatRuns.id, claims.run_id)));
+    const [issue] = await tx.select().from(issues).where(and(
+      eq(issues.companyId, claims.company_id), eq(issues.id, binding.issueId)));
+    const [manifest] = await tx.select().from(agentExecutionManifests).where(and(
+      eq(agentExecutionManifests.companyId, claims.company_id), eq(agentExecutionManifests.id, binding.executionManifestId),
+      eq(agentExecutionManifests.agentId, claims.sub), eq(agentExecutionManifests.runId, claims.run_id)));
+    if (!run || run.status !== "running" || run.runtimeMode !== "native" || run.scopeKind !== "issue" ||
+      run.nativeIssueId !== binding.issueId || run.responsibleUserId !== claims.responsible_user_id ||
+      run.contextSnapshot?.conversationSessionGeneration !== binding.conversationSessionGeneration ||
+      !issue || issue.conversationAgentId !== claims.sub || issue.conversationUserId !== claims.responsible_user_id ||
+      issue.conversationSessionGeneration !== binding.conversationSessionGeneration || issue.conversationState !== "active" ||
+      issue.conversationRetiredAt || issue.assigneeAgentId !== claims.sub || issue.executionRunId !== claims.run_id ||
+      issue.status !== "in_review" || !manifest || manifest.hash !== binding.executionManifestHash ||
+      manifest.manifest.responsibleUserId !== claims.responsible_user_id ||
+      manifest.manifest.executionScope.delegatedScopes.some(scope => scope.companyId !== claims.company_id) ||
+      (requireInputReceipt && (run.nativeInputSourceProtocolVersion !== 1 ||
+        !nativeRunInputSourceReceiptSchema.safeParse(managedRecord(run.runnerProfileJson).nativeInputSourceReceipt).success)) ||
+      !(await heartbeatMemoryPayloadRetained(tx, claims.company_id, claims.run_id)))
+      throw forbidden("Current Native conversation Human, generation and manifest are required");
+    const issueScope = { type: "issue" as const, companyId: claims.company_id, issueId: issue.id,
+      projectId: issue.projectId, parentIssueId: issue.parentId, assigneeAgentId: issue.assigneeAgentId,
+      assigneeUserId: issue.assigneeUserId, status: issue.status };
+    await assertV7Authorization(tx, actor, claims.company_id, "issue:read", issueScope);
+    await assertV7Authorization(tx, { type: "agent", source: "agent_jwt", companyId: claims.company_id,
+      agentId: claims.sub, runId: claims.run_id, onBehalfOfUserId: claims.responsible_user_id },
+    claims.company_id, "issue:read", issueScope);
+    await assertAgentRunWriteAllowed(tx, claims.company_id, { agentId: claims.sub, runId: claims.run_id });
+    const [agent] = await tx.select().from(agents).where(and(eq(agents.companyId, claims.company_id), eq(agents.id, claims.sub)));
+    const [company] = await tx.select({ status: companies.status, budgetMonthlyCents: companies.budgetMonthlyCents })
+      .from(companies).where(eq(companies.id, claims.company_id));
+    const [identity] = agent?.agentIdentityId
+      ? await tx.select({ status: agentIdentities.status }).from(agentIdentities).where(eq(agentIdentities.id, agent.agentIdentityId)) : [];
+    if (!agent || agent.adapterType !== "paperclip_runner" || !["idle", "running"].includes(agent.status) ||
+      company?.status !== "active" || identity?.status !== "active")
+      throw forbidden("The current Native conversation Agent is unavailable");
+    const currentTime = new Date(), monthStart = new Date(Date.UTC(currentTime.getUTCFullYear(), currentTime.getUTCMonth(), 1));
+    const [companySpend] = await tx.select({ amount: sql<number>`coalesce(sum(${costEvents.costCents}), 0)` })
+      .from(costEvents).where(and(eq(costEvents.companyId, claims.company_id), gte(costEvents.occurredAt, monthStart)));
+    const [agentSpend] = await tx.select({ amount: sql<number>`coalesce(sum(${costEvents.costCents}), 0)` })
+      .from(costEvents).where(and(eq(costEvents.companyId, claims.company_id), eq(costEvents.agentId, claims.sub),
+        gte(costEvents.occurredAt, monthStart)));
+    const [companyReserved] = await tx.select({ amount: sql<number>`coalesce(sum(${orchestrationModelReservations.maximumMinor}), 0)` })
+      .from(orchestrationModelReservations).where(and(eq(orchestrationModelReservations.companyId, claims.company_id),
+        eq(orchestrationModelReservations.purpose, "conversation_model"),
+        inArray(orchestrationModelReservations.status, ["reserved", "dispatched", "unknown"])));
+    const [agentReserved] = await tx.select({ amount: sql<number>`coalesce(sum(${orchestrationModelReservations.maximumMinor}), 0)` })
+      .from(orchestrationModelReservations).where(and(eq(orchestrationModelReservations.companyId, claims.company_id),
+        eq(orchestrationModelReservations.conversationAgentId, claims.sub), eq(orchestrationModelReservations.purpose, "conversation_model"),
+        inArray(orchestrationModelReservations.status, ["reserved", "dispatched", "unknown"])));
+    if (company.budgetMonthlyCents <= 0 || agent.budgetMonthlyCents <= 0 ||
+      Number(companySpend?.amount ?? 0) + Number(companyReserved?.amount ?? 0) > company.budgetMonthlyCents ||
+      Number(agentSpend?.amount ?? 0) + Number(agentReserved?.amount ?? 0) > agent.budgetMonthlyCents)
+      throw forbidden("An explicit current company and Native Agent model budget is required");
+    const selected = resolvePaperclipRunnerProviderProfile(agent.adapterConfig);
+    if (selected?.provider !== "opencode") throw forbidden("Only the exact qualified managed OpenCode profile is supported");
+    const p = profile(claims.company_id, claims.sub, undefined,
+      hashContextPolicySnapshot({ adapterType: agent.adapterType, adapterConfig: agent.adapterConfig }));
+    if (p.transport !== "server-anthropic-messages-v1" || selected.model !== `anthropic/${p.tariff.model}`)
+      throw forbidden("The selected managed conversation model does not match its qualification");
+    await assertAuthoredAgentManifestCurrent(tx, agent, manifest.manifest.agentDefinitionVersion);
+    const procedures = await assertAuthoredProceduresCurrent(tx, agent, claims.responsible_user_id);
+    if (procedures && nativeSha256(manifest.manifest.skills.map(pin => `${pin.skillId}@${pin.versionId}`).sort()) !==
+        nativeSha256(procedures.skills.map(pin => `${pin.skillId}@${pin.versionId}`).sort()))
+      throw forbidden("The conversation manifest does not contain the exact identified procedures");
+    if (procedures && nativeSha256(manifest.manifest.playbooks.map(pin => `${pin.playbookId}@${pin.revisionId}`).sort()) !==
+        nativeSha256(procedures.playbooks.map(pin => `${pin.playbookId}@${pin.revisionId}`).sort()))
+      throw forbidden("The conversation manifest does not contain the exact identified Playbooks");
+    const provider = await agentProviderBindingService(tx).assertRuntime(claims.company_id, claims.sub);
+    const providerPin = manifest.manifest.providers.find(pin => pin.companyId === claims.company_id && pin.agentId === claims.sub);
+    if (!providerPin || provider.runtime.providerProfileRef !== p.providerProfileRef ||
+      provider.runtime.providerBindingId !== p.providerBindingId || provider.provider.capabilitySnapshotHash !== p.providerSnapshotHash ||
+      provider.runtime.conformanceSnapshotHash !== p.providerSnapshotHash ||
+      provider.runtime.qualifiedConfigurationHash !== p.qualifiedConfigurationHash ||
+      providerPin.providerBindingId !== p.providerBindingId || providerPin.snapshotHash !== p.providerSnapshotHash ||
+      providerPin.profileRef !== p.providerProfileRef)
+      throw forbidden("Conversation provider qualification or immutable manifest pin changed");
+    const selection = await aiConnectionService(tx).select({ companyId: claims.company_id,
+      userId: claims.responsible_user_id, agentId: claims.sub, adapterType: "claude_local", binding: p.binding, model: p.tariff.model });
+    if (selection.attribution.method !== "api_key") throw forbidden("Only a current installed API-key grant is supported");
+    const ref = selection.grant.credentialSecretRefs.find(value => value.configPath === "ai.credential");
+    const [secret] = ref ? await tx.select().from(companySecrets).where(and(
+      eq(companySecrets.companyId, claims.company_id), eq(companySecrets.id, ref.secretId))) : [];
+    const [version] = secret ? await tx.select().from(companySecretVersions).where(and(
+      eq(companySecretVersions.secretId, secret.id), eq(companySecretVersions.version, secret.latestVersion))) : [];
+    if (!secret || secret.status !== "active" || !version || version.revokedAt || ["disabled", "destroyed"].includes(version.status))
+      throw forbidden("Conversation provider credential is no longer current");
+    const memberships = await tx.select().from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, claims.company_id), eq(companyMemberships.principalId, claims.responsible_user_id),
+      eq(companyMemberships.principalType, "user"))).orderBy(companyMemberships.id);
+    const grants = await tx.select().from(principalPermissionGrants).where(and(
+      eq(principalPermissionGrants.companyId, claims.company_id), or(
+        and(eq(principalPermissionGrants.principalType, "user"), eq(principalPermissionGrants.principalId, claims.responsible_user_id)),
+        and(eq(principalPermissionGrants.principalType, "agent"), eq(principalPermissionGrants.principalId, claims.sub)),
+      ))).orderBy(principalPermissionGrants.id).limit(2001);
+    if (grants.length > 2000) throw forbidden("Conversation authority exceeds the bounded grant envelope");
+    const authorityHash = nativeSha256(JSON.parse(JSON.stringify({ profile: p, binding, companyId: claims.company_id,
+      companyBudgetMonthlyCents: company.budgetMonthlyCents,
+      run: { id: run.id, status: run.status, responsibleUserId: run.responsibleUserId, contextSnapshot: run.contextSnapshot },
+      issue: { id: issue.id, updatedAt: issue.updatedAt, conversationAgentId: issue.conversationAgentId,
+        conversationUserId: issue.conversationUserId, conversationSessionGeneration: issue.conversationSessionGeneration,
+        conversationState: issue.conversationState, conversationRetiredAt: issue.conversationRetiredAt,
+        title: issue.title, description: issue.description, status: issue.status, projectId: issue.projectId },
+      manifest: manifest.hash, manifestPolicy: manifest.policySnapshotHash,
+      agent: { identity: agent.agentIdentityId, permissions: agent.permissions, adapter: agent.adapterType,
+        config: agent.adapterConfig, runtime: agent.runtimeConfig, budgetMonthlyCents: agent.budgetMonthlyCents },
+      provider: { id: provider.provider.id, snapshot: provider.provider.capabilitySnapshotHash,
+        profile: provider.runtime.providerProfileRef, configuration: provider.runtime.qualifiedConfigurationHash },
+      memberships, grants, connection: { id: selection.connection.id, config: selection.connection.config,
+        updatedAt: selection.connection.updatedAt },
+      grant: { id: selection.grant.id, updatedAt: selection.grant.updatedAt, refs: selection.grant.credentialSecretRefs },
+      secret: { id: secret.id, scope: secret.scope, owner: secret.ownerUserId, versionId: version.id,
+        version: version.version, valueSha256: version.valueSha256 } })));
+    return { actor, profile: p, selection, authorityHash, credentialSha256: version.valueSha256, run, issue, manifest };
+  }
   async function fence(
     companyId: string,
     planId: string,
@@ -1170,6 +1491,35 @@ export function workerModelGateway(db: Db, options: Options) {
       const claims = minted && verifyRuntimeToolsToken(minted.token, "worker_model");
       if (!claims?.worker_model) throw forbidden("Worker capability signing is unavailable");
       const state = await current(db, claims as BoundClaims);
+      return { ...minted!, inputTokensUpperBound: state.profile.inputTokensUpperBound,
+        maxOutputTokens: state.profile.maxOutputTokens };
+    },
+    /** Private dispatch-time capability for an authenticated Native chat. It
+     * may be minted before the executor records its initial input receipt;
+     * every broker use still requires that receipt before reservation or IO. */
+    async issueForConversationRun(input: {
+      companyId: string; agentId: string; runId: string; responsibleUserId: string;
+    }) {
+      const [run] = await db.select().from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.id, input.runId)));
+      const [issue] = run?.nativeIssueId ? await db.select().from(issues).where(and(
+        eq(issues.companyId, input.companyId), eq(issues.id, run.nativeIssueId))) : [];
+      const [manifest] = await db.select().from(agentExecutionManifests).where(and(
+        eq(agentExecutionManifests.companyId, input.companyId), eq(agentExecutionManifests.agentId, input.agentId),
+        eq(agentExecutionManifests.runId, input.runId)));
+      if (!run || run.runtimeMode !== "native" || run.status !== "running" || run.scopeKind !== "issue" ||
+        run.responsibleUserId !== input.responsibleUserId || !issue || issue.conversationAgentId !== input.agentId ||
+        issue.conversationUserId !== input.responsibleUserId || issue.conversationState !== "active" ||
+        issue.conversationSessionGeneration === null || issue.executionRunId !== input.runId || issue.status !== "in_review" ||
+        !manifest || manifest.manifest.responsibleUserId !== input.responsibleUserId)
+        throw forbidden("One exact active authenticated Native conversation is required");
+      const binding: ConversationModelBinding = { issueId: issue.id,
+        conversationSessionGeneration: issue.conversationSessionGeneration,
+        executionManifestId: manifest.id, executionManifestHash: manifest.hash };
+      const minted = createRuntimeToolsToken({ ...input, conversationModelBinding: binding, scope: "conversation_model" });
+      const claims = minted && verifyRuntimeToolsToken(minted.token, "conversation_model");
+      if (!claims?.conversation_model) throw forbidden("Native conversation capability signing is unavailable");
+      const state = await currentConversation(db, claims as ConversationClaims, false);
       return { ...minted!, inputTokensUpperBound: state.profile.inputTokensUpperBound,
         maxOutputTokens: state.profile.maxOutputTokens };
     },
@@ -1380,10 +1730,11 @@ export function workerModelGateway(db: Db, options: Options) {
       internal?: { onWireDispatch?: (receipt: WorkerModelDispatchWireReceipt) => void },
     ) {
       callerSignal?.throwIfAborted();
-      if (!claims.worker_model || claims.scope !== "worker_model")
-        throw forbidden("Bound worker model capability required");
-      const bound = claims as BoundClaims;
-      const state = await current(db, bound);
+      const bound = claims.scope === "worker_model" && claims.worker_model ? claims as BoundClaims : null;
+      const conversation = claims.scope === "conversation_model" && claims.conversation_model ? claims as ConversationClaims : null;
+      if (!bound && !conversation) throw forbidden("Bound managed model capability required");
+      const modelClaims: ManagedModelClaims = bound ?? conversation!;
+      const state = bound ? await current(db, bound) : await currentConversation(db, conversation!);
       if (state.profile.transport !== "server-anthropic-messages-v1")
         throw forbidden("The selected worker profile is not the Messages broker profile");
       const qualifiedInput = validateAnthropicManagedMessagesRequest(raw, {
@@ -1391,19 +1742,30 @@ export function workerModelGateway(db: Db, options: Options) {
         maxOutputTokens: state.profile.maxOutputTokens,
         maximumEnvelopeBytes: state.profile.maximumEnvelopeBytes,
       });
-      const requestSourceBinding = await assertManagedOpenCodeRequestSources(db, bound,
+      const requestSourceBinding = await assertManagedOpenCodeRequestSources(db, modelClaims,
         qualifiedInput.providerRequest as unknown as Record<string, unknown>);
       const inputHash = nativeSha256(qualifiedInput.providerRequest);
       const callId = `messages:${inputHash}`;
       const reservations = modelReservationService(db, {
         sourceSha: options.sourceSha,
         qualifiedTariff: async (i) =>
-          i.purpose === "worker_model" && i.companyId === claims.company_id && i.planId === bound.worker_model.planId
+          Boolean(bound) && i.purpose === "worker_model" && i.companyId === claims.company_id && i.planId === bound!.worker_model.planId
             ? assertWorkerModelProfileCurrent(state.profile, options.sourceSha, options.protectedEvidenceOrigin).tariff
             : null,
-        currentAuthority: async (tx) => (await current(tx, bound)).authorityHash,
+        currentAuthority: async (tx) => bound ? (await current(tx, bound)).authorityHash : state.authorityHash,
+        qualifiedConversationTariff: async (i) => conversation && i.companyId === claims.company_id &&
+          i.agentId === claims.sub && i.runId === claims.run_id ? state.profile.tariff : null,
+        currentConversationAuthority: async (tx, actor, i) => {
+          if (!conversation || i.conversationAgentId !== claims.sub || i.conversationRunId !== claims.run_id ||
+            i.conversationIssueId !== conversation.conversation_model.issueId ||
+            i.conversationSessionGeneration !== conversation.conversation_model.conversationSessionGeneration ||
+            i.executionManifestId !== conversation.conversation_model.executionManifestId ||
+            i.executionManifestHash !== conversation.conversation_model.executionManifestHash)
+            throw forbidden("The Native conversation reservation binding changed");
+          return (await currentConversation(tx, conversation)).authorityHash;
+        },
       });
-      const reservation = await reservations.reserve(state.actor, {
+      const reservation = bound ? await reservations.reserve(state.actor, {
         companyId: claims.company_id,
         planId: bound.worker_model.planId,
         workerId: bound.worker_model.workerId,
@@ -1416,13 +1778,23 @@ export function workerModelGateway(db: Db, options: Options) {
         inputTokensUpperBound: state.profile.inputTokensUpperBound,
         maxOutputTokens: qualifiedInput.request.max_tokens,
       }).catch(async (error) => {
-        if (error instanceof Error && error.message === "Cumulative model reservation budget exhausted")
+        if (bound && error instanceof Error && error.message === "Cumulative model reservation budget exhausted")
           await fence(claims.company_id, bound.worker_model.planId, "worker_model_budget_exhausted");
         throw error;
+      }) : await reservations.reserveConversation(state.actor, {
+        companyId: claims.company_id, conversationAgentId: claims.sub, conversationRunId: claims.run_id,
+        conversationIssueId: conversation!.conversation_model.issueId,
+        conversationSessionGeneration: conversation!.conversation_model.conversationSessionGeneration,
+        executionManifestId: conversation!.conversation_model.executionManifestId,
+        executionManifestHash: conversation!.conversation_model.executionManifestHash,
+        idempotencyKey: `conversation-model-messages:${claims.run_id}:${inputHash}`, inputHash,
+        authorityHash: state.authorityHash, inputTokensUpperBound: state.profile.inputTokensUpperBound,
+        maxOutputTokens: qualifiedInput.request.max_tokens,
       });
       if (reservation.status !== "reserved")
-        throw conflict("Worker model request cannot be dispatched again");
-      await reservations.claimForDispatch(state.actor, claims.company_id, reservation.id);
+        throw conflict("Managed model request cannot be dispatched again");
+      if (bound) await reservations.claimForDispatch(state.actor, claims.company_id, reservation.id);
+      else await reservations.claimConversationForDispatch(state.actor, claims.company_id, reservation.id);
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), Math.min(
         30000, reservation.expiresAt.getTime() - Date.now(), claims.exp * 1000 - Date.now(),
@@ -1432,9 +1804,9 @@ export function workerModelGateway(db: Db, options: Options) {
       let checking = false;
       const assertCurrent = async () => {
         controller.signal.throwIfAborted();
-        const fresh = await current(db, bound);
+        const fresh = bound ? await current(db, bound) : await currentConversation(db, conversation!);
         if (fresh.authorityHash !== state.authorityHash)
-          throw forbidden("Worker source authority changed during dispatch");
+          throw forbidden("Managed source authority changed during dispatch");
         return fresh;
       };
       const watch = setInterval(() => {
@@ -1491,7 +1863,7 @@ export function workerModelGateway(db: Db, options: Options) {
               // same order before taking its Run row lock.
               await lockAnalyticalCompany(tx as unknown as Db, claims.company_id);
               await lockMemoryPrivacy(tx as unknown as Db, claims.company_id);
-              const fresh = await current(tx, bound);
+              const fresh = bound ? await current(tx, bound) : await currentConversation(tx, conversation!);
               if (fresh.authorityHash !== state.authorityHash)
                 throw forbidden("Worker source authority changed before wire dispatch");
               managedFailureStage = "wire_run_binding";
@@ -1534,7 +1906,9 @@ export function workerModelGateway(db: Db, options: Options) {
               const sourceDispatchDigest = matchingTurnDigests[0]!;
               managedFailureStage = "wire_intent_budget";
               const sourcePolicyHash = nativeSha256(sourceReceipt.data.bootstrap);
-              const intents = [...prior, { reservationId: receipt.reservationId, callId: receipt.callId,
+              const intents = [...prior, { modelPurpose: bound ? "worker_model" : "conversation_model",
+                ...(conversation ? { agentId: claims.sub, conversationModelBinding: conversation.conversation_model } : {}),
+                reservationId: receipt.reservationId, callId: receipt.callId,
                 requestHash: receipt.requestHash, wireBodyHash: receipt.bodySha256, endpoint: receipt.endpoint,
                 method: receipt.method, sourcePolicyHash, sourceDispatchDigest,
                 sourceSetHash: requestSourceBinding.sourceSetHash,
@@ -1575,7 +1949,7 @@ export function workerModelGateway(db: Db, options: Options) {
           const previous = profile?.nativeAwModelWireIntents;
           if (!run || !profile || !Array.isArray(previous)) throw forbidden("The managed model response has no original wire intent");
           managedFailureStage = "response_history_revalidation";
-          await assertManagedOpenCodeRequestSources(tx as unknown as Db, bound,
+          await assertManagedOpenCodeRequestSources(tx as unknown as Db, modelClaims,
             qualifiedInput.providerRequest as unknown as Record<string, unknown>);
           managedFailureStage = "response_receipt_binding";
           const sourceReceipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
@@ -1613,9 +1987,16 @@ export function workerModelGateway(db: Db, options: Options) {
           const intents = previous.map((value, index) => index === matches[0]!.index
             ? { ...existing, responseContentHash, responseBlockCount: result.responseContent.length, responseToolUses }
             : value);
-          const providerDispatch = nativePayloadSourceInputSchema.parse({ kind: "worker_model_dispatch",
+          const providerDispatch = nativePayloadSourceInputSchema.parse(bound ? { kind: "worker_model_dispatch",
             runId: claims.run_id, reservationId: reservation.id, callId: existing.callId,
-            requestHash: existing.requestHash, wireBodyHash: existing.wireBodyHash, responseHash: result.responseHash });
+            requestHash: existing.requestHash, wireBodyHash: existing.wireBodyHash, responseHash: result.responseHash }
+            : { kind: "conversation_model_dispatch", runId: claims.run_id, agentId: claims.sub,
+              issueId: conversation!.conversation_model.issueId,
+              conversationSessionGeneration: conversation!.conversation_model.conversationSessionGeneration,
+              executionManifestId: conversation!.conversation_model.executionManifestId,
+              executionManifestHash: conversation!.conversation_model.executionManifestHash,
+              reservationId: reservation.id, callId: existing.callId, requestHash: existing.requestHash,
+              wireBodyHash: existing.wireBodyHash, responseHash: result.responseHash });
           managedFailureStage = "response_source_union";
           const consumedRaw = managedRecord(existing.consumedSourceSet);
           const consumedPolicy = nativePayloadSourcePolicySchema.safeParse(consumedRaw.policy);
@@ -1667,8 +2048,10 @@ export function workerModelGateway(db: Db, options: Options) {
         }
         if (!financiallySettled)
           await reservations.recordOutcome(claims.company_id, reservation.id, { status: "unknown", providerResponseHash: null, usage: null }).catch(() => {});
-        const reasonCode = financiallySettled ? "worker_model_result_withheld" : "worker_model_unsettled";
-        await fence(claims.company_id, bound.worker_model.planId, reasonCode);
+        const reasonCode = conversation
+          ? financiallySettled ? "conversation_model_result_withheld" : "conversation_model_unsettled"
+          : financiallySettled ? "worker_model_result_withheld" : "worker_model_unsettled";
+        if (bound) await fence(claims.company_id, bound.worker_model.planId, reasonCode);
         throw conflict("Worker model result requires human resolution", {
           code: reasonCode,
           stage: managedFailureStage,

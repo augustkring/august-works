@@ -254,7 +254,7 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
       ? row.payloadSourceSnapshot as Record<string, unknown> : null;
     const rawInputs = Array.isArray(rawSnapshot?.inputs) ? rawSnapshot.inputs : [];
     const claimsModelOutput = rawInputs.some(value => value && typeof value === "object" && !Array.isArray(value) &&
-      (value as Record<string, unknown>).kind === "worker_model_dispatch");
+      ["worker_model_dispatch", "conversation_model_dispatch"].includes(String((value as Record<string, unknown>).kind)));
     if (row.payloadSourceProtocolVersion === 1 && claimsModelOutput && (!capturedSnapshot.success || row.payloadSourceSnapshotInvalidated ||
       capturedSnapshot.data.owner.kind !== "memory_record" || capturedSnapshot.data.owner.companyId !== companyId ||
       capturedSnapshot.data.owner.id !== row.id)) return false;
@@ -262,7 +262,7 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
       capturedSnapshot.data.owner.kind==="memory_record" && capturedSnapshot.data.owner.companyId===companyId &&
       capturedSnapshot.data.owner.id===row.id) {
       const dispatches = capturedSnapshot.data.inputs.flatMap((value, index) =>
-        value.kind === "worker_model_dispatch" ? [{ value, index }] : []);
+        value.kind === "worker_model_dispatch" || value.kind === "conversation_model_dispatch" ? [{ value, index }] : []);
       const dispatch = dispatches.at(-1)?.value;
       const expectedRunIds = dispatch
         ? [...new Set([...capturedSnapshot.data.policy.runIds, dispatch.runId])].sort()
@@ -654,7 +654,8 @@ export async function purgeMemoryRecords(db: Db, companyId: string, rootIds: str
       invocation.runId != null && binding.row.sourceRunIds.includes(invocation.runId) &&
       binding.row.sourceIssueIds.includes(invocation.issueId ?? "") && invocation.toolName === "paperclip-self:remember" &&
       invocation.argumentsHash === binding.argumentsHash &&
-      (!binding.snapshot || binding.snapshot.inputs.some(source => source.kind === "worker_model_dispatch" &&
+      (!binding.snapshot || binding.snapshot.inputs.some(source =>
+        (source.kind === "worker_model_dispatch" || source.kind === "conversation_model_dispatch") &&
         source.runId === invocation.runId)) &&
       invocation.idempotencyKey === `aw-native-tool:${invocation.runId}:${binding.callId}` ? [invocation.id] : [];
   });
@@ -881,7 +882,7 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
     select distinct r.id,r.document_id from document_revisions r
     where r.company_id=${companyId}::uuid and r.payload_source_snapshot is not null and (
       exists(select 1 from jsonb_array_elements(r.payload_source_snapshot->'inputs') source(value)
-        where source.value->>'kind'='worker_model_dispatch' and source.value->>'runId'=any(array[${sql.join(erasedRuns.map(id=>sql`${id}`),sql`, `)}]::text[]))
+        where source.value->>'kind' in ('worker_model_dispatch','conversation_model_dispatch') and source.value->>'runId'=any(array[${sql.join(erasedRuns.map(id=>sql`${id}`),sql`, `)}]::text[]))
       or r.payload_source_snapshot->'policy'->'runIds' ?| array[${sql.join(erasedRuns.map(id=>sql`${id}`),sql`, `)}]::text[]
     )
   `) : [];

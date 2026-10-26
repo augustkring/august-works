@@ -1,0 +1,12 @@
+src/services/native-runtime/native-opencode-managed-project-create.integration.test.ts(86,22): error TS18048: 'result.projectCreateResultConsumers' is possibly 'undefined'.
+src/services/native-runtime/native-opencode-managed-project-create.integration.test.ts(91,69): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Argument of type 'PgColumn<{ name: "company_id"; tableName: "projects"; dataType: "string"; columnType: "PgUUID"; data: string; driverParam: string; notNull: true; hasDefault: false; isPrimaryKey: false; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, {}>' is not assignable to parameter of type 'never'.
+src/services/native-runtime/native-opencode-managed-project-create.integration.test.ts(95,49): error TS2345: Argument of type '{ type: "board"; source: "session"; userId: string; companyIds: string[]; sessionId: `${string}-${string}-${string}-${string}-${string}`; memberships: { companyId: string; membershipRole: string | null; status: string; }[]; } | undefined' is not assignable to parameter of type 'AuthorizationActor'.
+  Type 'undefined' is not assignable to type 'AuthorizationActor'.
+src/services/native-runtime/native-opencode-managed-project-create.integration.test.ts(97,10): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Argument of type 'PgColumn<{ name: "company_id"; tableName: "project_workspaces"; dataType: "string"; columnType: "PgUUID"; data: string; driverParam: string; notNull: true; hasDefault: false; isPrimaryKey: false; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, {}>' is not assignable to parameter of type 'never'.
+src/services/native-runtime/native-opencode-managed-project-create.integration.test.ts(100,48): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/services/native-runtime/native-opencode-managed-project-create.integration.test.ts(104,20): error TS18048: 'result.documents' is possibly 'undefined'.

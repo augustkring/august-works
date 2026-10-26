@@ -25,6 +25,7 @@ const mockAccessService = vi.hoisted(() => ({
   canUser: vi.fn(),
   hasPermission: vi.fn(),
 }));
+const mockCanActorReadIssuePrivacy = vi.hoisted(() => vi.fn(async () => true));
 const mockAgentService = vi.hoisted(() => ({
   getById: vi.fn(),
 }));
@@ -73,6 +74,10 @@ const mockIssueReferenceService = vi.hoisted(() => ({
 }));
 
 function registerModuleMocks() {
+  vi.doMock("../services/authorization.js", async () => {
+    const actual = await vi.importActual<typeof import("../services/authorization.js")>("../services/authorization.js");
+    return { ...actual, canActorReadIssuePrivacy: mockCanActorReadIssuePrivacy };
+  });
   vi.doMock("@paperclipai/shared/telemetry", () => ({
     trackAgentTaskCompleted: vi.fn(),
     trackErrorHandlerCrash: vi.fn(),
@@ -160,10 +165,12 @@ describe("issue feedback trace routes", () => {
     vi.doUnmock("../services/execution-workspaces.js");
     vi.doUnmock("../services/feedback.js");
     vi.doUnmock("../services/instance-settings.js");
+    vi.doUnmock("../services/authorization.js");
     vi.doUnmock("../routes/issues.js");
     vi.doUnmock("../middleware/index.js");
     registerModuleMocks();
     vi.clearAllMocks();
+    mockCanActorReadIssuePrivacy.mockResolvedValue(true);
     mockFeedbackExportService.flushPendingFeedbackTraces.mockResolvedValue({
       attempted: 1,
       sent: 1,

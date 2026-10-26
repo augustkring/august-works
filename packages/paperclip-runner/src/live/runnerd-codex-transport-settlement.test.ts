@@ -243,11 +243,14 @@ it.each([
       await bundle.detachControllerForRestart();
       // The provider can exit when its runner dies. An already-gone process
       // group satisfies teardown; still fail on other signal errors and join below.
-      for (const pid of [runnerPid, providerPid]) {
+      // Let the original runner reap its provider before killing the runner;
+      // container init processes do not necessarily reap orphaned children.
+      for (const pid of [providerPid, runnerPid]) {
         try { process.kill(-pid, "SIGKILL"); }
         catch (error) {
           if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
         }
+        await vi.waitFor(() => expect(dead(pid)).toBe(true));
       }
       await vi.waitFor(() => {
         expect(dead(runnerPid)).toBe(true);
@@ -582,6 +585,10 @@ it.each([
         const stuckAuthorization = new Promise<void>((release) => {
           releaseAuthorization = release;
         });
+        let markAuthorizationStarted!: () => void;
+        const authorizationStarted = new Promise<void>((resolve) => {
+          markAuthorizationStarted = resolve;
+        });
         let drain: Promise<void> | undefined;
         if (interruption === "timeout")
           vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
@@ -589,9 +596,13 @@ it.each([
           const blocked = settleRetainedRunnerdSession({
             ...input,
             signal: abort.signal,
-            authorize: () => stuckAuthorization,
+            authorize: () => {
+              markAuthorizationStarted();
+              return stuckAuthorization;
+            },
           });
           const observed = blocked.catch((error: unknown) => error);
+          await authorizationStarted;
           if (interruption === "abort") abort.abort();
           else await vi.advanceTimersByTimeAsync(30_000);
           expect(await observed).toMatchObject({

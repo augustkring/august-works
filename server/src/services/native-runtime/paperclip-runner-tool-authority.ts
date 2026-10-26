@@ -10,6 +10,7 @@ import { authorizationService, canActorReadIssuePrivacy, issueReadSqlCondition, 
 import { handoffPlanContext } from "./handoff-plan-context.js";
 import { callCreateSkillTool } from "../skill-tools.js";
 import { callProjectTool } from "../project-tools.js";
+import { createManagedNativeProjectOutput, type NativeProjectCreateReceipt } from "../native-project-output.js";
 import { isConnectorTool, executeConnectorTool, type ConnectorAssignment } from "../connector-runtime.js";
 import { resolveNativeRuntimeMcpSnapshot } from "./runtime-context.js";
 import { nativeCommentProjectionHash, nativeSha256 } from "./canonical.js";
@@ -113,6 +114,13 @@ const MANAGED_NATIVE_REMEMBER_TOOL = "self_remember";
 const MANAGED_NATIVE_REMEMBER_GATEWAY_TOOL = "paperclip-self:remember";
 const MANAGED_NATIVE_CONTEXT_READ_TOOL = "read_context";
 
+export type NativeManagedProjectCreateCapture = {
+  project: Record<string, unknown>;
+  receipt: NativeProjectCreateReceipt;
+  sourceSet: NativePayloadSourceSet;
+  outputCapture: NativeModelOutputCapture;
+};
+
 const NATIVE_REVIEW_READ_TOOLS = new Set([
   "get_task_context", "get_task_history", "list_documents", "read_document", "list_document_revisions",
 ]);
@@ -124,6 +132,11 @@ type Binding = {
   awOutputCapture?: { readonly value: NativeModelOutputCapture | null };
   /** Exact provider-bound model output capture; never read from tool arguments. */
   nativeModelOutputCapture?: { readonly value: NativeModelOutputCapture | null };
+  /** Fixture-only wait probe at the original Project mutation owner. */
+  testBeforeManagedProjectCreate?: (capture: NativeModelOutputCapture) => Promise<void>;
+  /** Fixture-only post-commit probe for exact idempotent Project replay. */
+  testAfterManagedProjectCreate?: (input: { actor: AuthorizationActor; companyId: string; issueId: string; capture: NativeModelOutputCapture; callId: string;
+    arguments: Record<string, unknown>; result: Awaited<ReturnType<typeof createManagedNativeProjectOutput>> }) => Promise<void>;
   /** Managed-only ContextEngine read callback with a server-owned witness carrier. */
   managedNativeContextRead?: (query: string) => Promise<{ markdown: string }>;
   managedNativeContextReadCapture?: { value: NativeContextReadBinding | null };
@@ -341,6 +354,11 @@ function record(value: unknown): Record<string, unknown> {
     : {};
 }
 
+function managedProjectCreateDiagnostic(stage: string, facts: Record<string, unknown>): void {
+  if (process.env.PAPERCLIP_MANAGED_PROJECT_CREATE_DIAGNOSTICS === "1")
+    process.stderr.write(`managed_project_create_diagnostic ${JSON.stringify({ stage, ...facts })}\n`);
+}
+
 export function resolveNativeInputDispatchReceiptIdentity(
   runnerProfile: unknown,
   call: NativeBackendToolCallIdentity | null | undefined,
@@ -503,6 +521,7 @@ export class PaperclipRunnerToolAuthority {
     onDocumentRead?: (source: NativeDocumentToolResultSource) => Promise<void>;
     onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>;
     onNativeInputToolResult?: (source: NativeInputToolResultSource) => Promise<void>;
+    onManagedProjectCreateToolResult?: (capture: NativeManagedProjectCreateCapture) => Promise<void>;
     nativeToolCallIdentity?: NativeBackendToolCallIdentity;
   } = {}): Promise<unknown> {
     const nativeCall = options.nativeToolCallIdentity;
@@ -513,7 +532,7 @@ export class PaperclipRunnerToolAuthority {
     if (this.binding.nativeModelOutputCapture) {
       const capture = this.binding.nativeModelOutputCapture.value;
       const use = capture?.managedOpenCodeToolUse;
-      if (["write_document", "create_task", MANAGED_NATIVE_REMEMBER_TOOL].includes(call.tool) && !use)
+      if (["write_document", "create_task", "create_project", MANAGED_NATIVE_REMEMBER_TOOL].includes(call.tool) && !use)
         throw forbidden("Managed OpenCode output effect has no settled provider tool-use capture");
       const captureToolName = call.tool === MANAGED_NATIVE_REMEMBER_TOOL
         ? MANAGED_NATIVE_REMEMBER_GATEWAY_TOOL : call.tool;
@@ -526,9 +545,10 @@ export class PaperclipRunnerToolAuthority {
       const documentSource: { value: DocumentRevisionSourceCapture | null } = { value: null };
       const nativeInputSource: { value: { sourceSet: NativePayloadSourceSet | null;
         observedSourceInputs: NativePayloadSourceInput[] } | null } = { value: null };
+      const managedProjectCreateCapture: { value: NativeManagedProjectCreateCapture | null } = { value: null };
       const result = await withOrchestrationNativeTool(this.db, this.binding, call,
         () => this.#executeAdmitted(call, source => { documentSource.value = source; }, options.onProjectToolResult,
-          source => { nativeInputSource.value = source; }),
+          source => { nativeInputSource.value = source; }, capture => { managedProjectCreateCapture.value = capture; }),
         call.tool === MANAGED_NATIVE_REMEMBER_TOOL ||
           (call.tool !== "paperclip_search_assigned_tools" && (this.binding.assignedMcpTools?.has(call.tool) ?? false)));
       if (call.tool === "read_document") {
@@ -592,6 +612,8 @@ export class PaperclipRunnerToolAuthority {
           result, sourceSet: nativeInputSource.value.sourceSet,
           observedSourceInputs: nativeInputSource.value.observedSourceInputs });
       }
+      if (managedProjectCreateCapture.value && options.onManagedProjectCreateToolResult)
+        await options.onManagedProjectCreateToolResult(managedProjectCreateCapture.value);
       return result;
     });
   }
@@ -612,7 +634,8 @@ export class PaperclipRunnerToolAuthority {
     onDocumentReadSource?: (source: DocumentRevisionSourceCapture | null) => void,
     onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>,
     onNativeInputSource?: (source: { sourceSet: NativePayloadSourceSet | null;
-      observedSourceInputs: NativePayloadSourceInput[] }) => void): Promise<unknown> {
+      observedSourceInputs: NativePayloadSourceInput[] }) => void,
+    onManagedProjectCreateCapture?: (capture: NativeManagedProjectCreateCapture) => void): Promise<unknown> {
     if (this.binding.nativeReview) {
       if (call.tool === "resolve_review") return this.#resolveReview(call.arguments);
       if (!NATIVE_REVIEW_READ_TOOLS.has(call.tool)) {
@@ -776,6 +799,71 @@ export class PaperclipRunnerToolAuthority {
       case "create_project":
       case "list_project_repositories":
       case "list_projects": {
+        const projectCapture = this.binding.nativeModelOutputCapture?.value;
+        if (call.tool === "create_project") managedProjectCreateDiagnostic("authority_entry", {
+          captureRefPresent: Boolean(this.binding.nativeModelOutputCapture), capturePresent: Boolean(projectCapture),
+          managedUsePresent: Boolean(projectCapture?.managedOpenCodeToolUse),
+          managedUseTool: projectCapture?.managedOpenCodeToolUse?.toolName ?? null,
+          managedUseCallMatches: projectCapture?.managedOpenCodeToolUse?.callId === call.callId,
+        });
+        // Managed OpenCode advertises this operation only when the exact
+        // provider response capture is installed. Never silently fall back to
+        // the ordinary API route if that per-call capture was lost.
+        if (call.tool === "create_project" && this.binding.nativeModelOutputCapture &&
+          !this.binding.nativeModelOutputCapture.value?.managedOpenCodeToolUse)
+          throw forbidden("Managed Project creation has no exact provider tool-use capture");
+        if (call.tool === "create_project" && this.binding.nativeModelOutputCapture?.value?.managedOpenCodeToolUse) {
+          const managedCapture = this.binding.nativeModelOutputCapture.value;
+          if (Object.keys(input).some(key => !["name", "description", "workspace", "idempotencyKey"].includes(key)) ||
+            typeof input.name !== "string" || typeof input.idempotencyKey !== "string" ||
+            !input.workspace || typeof input.workspace !== "object" || Array.isArray(input.workspace) ||
+            (input.description !== undefined && typeof input.description !== "string") ||
+            typeof input.idempotencyKey !== "string" ||
+            Object.keys(record(input.workspace)).length !== 1 || typeof record(input.workspace).name !== "string")
+            throw forbidden("Managed Project creation arguments are invalid");
+          await this.binding.testBeforeManagedProjectCreate?.(managedCapture);
+          let created: Awaited<ReturnType<typeof createManagedNativeProjectOutput>>;
+          try {
+            created = await createManagedNativeProjectOutput({ db: this.db, actor: reader,
+            companyId: this.binding.companyId, issueId: this.binding.issueId, callId: call.callId,
+            arguments: { name: input.name, idempotencyKey: input.idempotencyKey,
+              ...(input.description === undefined ? {} : { description: input.description as string }),
+              ...(input.workspace === undefined ? {} : { workspace: { name: record(input.workspace).name as string } }) },
+              capture: managedCapture });
+          } catch (error) {
+            const allowedErrors = new Set([
+              "Managed Project creation requires the exact current provider tool use",
+              "Managed Project creation requires the current accountable Human", "Managed Project run authority changed",
+              "Managed Project result is unavailable", "Managed Project source closure is ambiguous",
+              "Managed Project workspace could not be created", "Managed Project source snapshot was not stored",
+              "Managed Project creation did not produce a qualified result",
+            ]);
+            const diagnosticError = error && typeof error === "object" ? error as {
+              name?: unknown; code?: unknown; status?: unknown; statusCode?: unknown; cause?: { code?: unknown }; stack?: unknown } : {};
+            const safeText = (value: unknown): string | null => typeof value === "string" && /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(value)
+              ? value : null;
+            const ownerFrames = typeof diagnosticError.stack === "string"
+              ? diagnosticError.stack.split("\n").slice(1).map(line => line.match(/(?:server\/src\/services\/)([^\s()]+\.ts:\d+:\d+)/)?.[1] ?? null)
+                .filter((value): value is string => value !== null).slice(0, 4)
+              : [];
+            managedProjectCreateDiagnostic("service_rejected", { error: error instanceof Error && allowedErrors.has(error.message)
+              ? error.message : "unclassified", name: safeText(diagnosticError.name), code: safeText(diagnosticError.code) ??
+                safeText(diagnosticError.cause?.code), status: Number.isInteger(diagnosticError.status) ? diagnosticError.status :
+                Number.isInteger(diagnosticError.statusCode) ? diagnosticError.statusCode : null, ownerFrames });
+            throw error;
+          }
+          managedProjectCreateDiagnostic("service_accepted", { projectIdPresent: typeof created.project.id === "string",
+            sourceInputs: created.sourceSet.inputs.length, workspacePins: created.receipt.workspaceSources.length });
+          await this.binding.testAfterManagedProjectCreate?.({ actor: reader, companyId: this.binding.companyId,
+            issueId: this.binding.issueId, capture: managedCapture, callId: call.callId,
+            arguments: { name: input.name, idempotencyKey: input.idempotencyKey,
+              ...(input.description === undefined ? {} : { description: input.description as string }),
+              ...(input.workspace === undefined ? {} : { workspace: { name: record(input.workspace).name as string } }) },
+            result: created });
+          onManagedProjectCreateCapture?.({ project: created.project, receipt: created.receipt,
+            sourceSet: created.sourceSet, outputCapture: managedCapture });
+          return created.project;
+        }
         const apiUrl = this.binding.apiUrl ?? process.env.PAPERCLIP_API_URL;
         const token = createLocalAgentJwt(this.binding.agentId, this.binding.companyId, context.actor.adapterType, this.binding.runId, context.run.responsibleUserId);
         if (!apiUrl || !token) throw new Error("Project tool authentication is unavailable");

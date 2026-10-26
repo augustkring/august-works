@@ -1,4 +1,5 @@
-import { pgTable, uuid, text, timestamp, integer, index } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, integer, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { companies } from "./companies.js";
 import { agents } from "./agents.js";
 import { issues } from "./issues.js";
@@ -50,5 +51,7 @@ export const costEvents = pgTable(
       table.companyId,
       table.heartbeatRunId,
     ),
+    nativeConversationReservationUq: uniqueIndex("cost_events_native_conversation_reservation_uq")
+      .on(table.companyId, table.billingCode).where(sql`${table.billingCode} like 'native-conversation-model:%'`),
   }),
 );

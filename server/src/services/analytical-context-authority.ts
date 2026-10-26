@@ -4,7 +4,7 @@ import { PgTransaction } from "drizzle-orm/pg-core";
 import {analyticalContextDependencies,analyticalContextRoots,contextManifestMemoryRoots,contextManifestItems,contextManifests,agentExecutionManifests,decisionContextVersions,decisionOutcomeReviewReceipts,processAnalysisVersions,issues,heartbeatRuns,workflowStepRuns,workflowRuns,companyMemberships,authUsers,agents,type Db} from "@paperclipai/db";
 import {analyticalContextAuthorityPinSchema,type AnalyticalContextAuthorityPin} from "@paperclipai/shared";
 import {z} from "zod";
-import {authorizationService,canActorReadHeartbeatRunPrivacy,canActorReadIssuePrivacy,type AuthorizationActor} from "./authorization.js";
+import {authorizationService,canActorReadHeartbeatRunPrivacy,canActorReadIssuePrivacy,issueReadSqlCondition,type AuthorizationActor} from "./authorization.js";
 import type {NativeReadScope} from "./analytical-reader.js";
 import {HttpError,conflict,forbidden,unprocessable} from "../errors.js";
 
@@ -127,6 +127,54 @@ export async function assertAnalyticalContextPayloadAccessBatch(db:Db,companyId:
  // discovery and row pins, avoiding an advisory-lock/row-lock inversion.
  const {lockAnalyticalCompany}=await import("./analytical-privacy.js"),{lockMemoryPrivacy}=await import("./memory/memory-privacy.js");
  await lockAnalyticalCompany(db,companyId);await lockMemoryPrivacy(db,companyId);
+ // Large imports commonly contain ordinary manual Tasks with no captured
+ // analytical inputs. Prove that the complete selected population has no
+ // retained Workflow/Routine/run/context edge in one query, then apply the
+ // same current Task privacy predicate and erasure check in bulk. This avoids
+ // repeating no-context discovery through several round trips per Task.
+ if(actor&&ids.length>1){
+  const selectedIds=sql.join(ids.map(id=>sql`${id}::uuid`),sql`, `);
+  const [candidate]=await db.execute<{complex:boolean}>(sql`
+   with selected(id) as (select unnest(array[${selectedIds}]::uuid[])),
+   chains as (
+    select selected.id,source.source_run_id,source.source_task_id,source.invalid
+    from selected cross join lateral aw_runner_task_source_chain(${companyId}::uuid,null::uuid,selected.id) source
+   )
+   select (
+    exists(select 1 from selected join issues i on i.company_id=${companyId}::uuid and i.id=selected.id
+      where i.origin_run_id is not null or i.execution_run_id is not null or
+        i.payload_source_protocol_version not in (0,1) or
+        (i.payload_source_protocol_version=1 and (i.payload_source_snapshot is null or i.payload_source_snapshot_invalidated
+          or jsonb_typeof(i.payload_source_snapshot->'inputs')<>'array' or jsonb_array_length(i.payload_source_snapshot->'inputs')>0
+          or jsonb_array_length(coalesce(i.payload_source_snapshot->'policy'->'issueIds','[]'::jsonb))>0
+          or jsonb_array_length(coalesce(i.payload_source_snapshot->'policy'->'projectIds','[]'::jsonb))>0
+          or jsonb_array_length(coalesce(i.payload_source_snapshot->'policy'->'runIds','[]'::jsonb))>0
+          or jsonb_array_length(coalesce(i.payload_source_snapshot->'policy'->'memoryIds','[]'::jsonb))>0
+          or jsonb_array_length(coalesce(i.payload_source_snapshot->'policy'->'foundationRevisionIds','[]'::jsonb))>0))
+        or i.origin_kind in ('workflow_task','routine_execution'))
+    or exists(select 1 from chains where source_run_id is not null or source_task_id is not null or invalid)
+    or exists(select 1 from selected join issue_privacy_sources s on s.company_id=${companyId}::uuid and s.issue_id=selected.id
+      where s.source_kind in ('run','run_copy','workflow_run','routine_run'))
+    or exists(select 1 from selected join context_manifests cm on cm.company_id=${companyId}::uuid and cm.issue_id=selected.id)
+    or exists(select 1 from selected join heartbeat_runs h on h.company_id=${companyId}::uuid
+      and coalesce(h.issue_id,h.native_issue_id)=selected.id
+      join context_manifests cm on cm.company_id=h.company_id and cm.run_id=h.id)
+    or exists(select 1 from selected join context_manifest_items item on item.company_id=${companyId}::uuid
+      and item.source_provider='august_works_tasks' and item.source_ref='issue://'||selected.id::text)
+   ) as complex
+  `);
+  if(candidate?.complex!==true){
+   const [erasure]=await db.execute<{erased:boolean}>(sql`
+    with selected(id) as (select unnest(array[${selectedIds}]::uuid[]))
+    select coalesce(bool_or(aw_workflow_memory_erased(${companyId}::uuid,null::uuid,selected.id)),false) as erased from selected
+   `);
+   if(erasure?.erased)throw new HttpError(403,"Analytical conversation source access is unavailable",{code:"analytical_source_access_lost"});
+   const readable=await db.select({id:issues.id}).from(issues).where(and(eq(issues.companyId,companyId),
+    inArray(issues.id,ids),await issueReadSqlCondition(db,actor)));
+   if(readable.length!==ids.length)throw new HttpError(403,"Native task source access is unavailable",{code:"analytical_source_access_lost"});
+   return;
+  }
+ }
  const worklist:AnalyticalPayloadWorklist={directSources:new Map(),sharedSources:new Map(),finalChecks:[],workflowRunIds:new Set()};
  for(const issueId of ids)
   await assertAnalyticalContextPayloadAccessInternal(db,companyId,actor,{issueId},readScope,worklist);
@@ -334,50 +382,5 @@ export async function assertNativeAnalyticalRunPayloadAccess(db:Db,companyId:str
  const [run]=await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.id,runId))).limit(1);
  if(!run)throw new HttpError(403,"Analytical conversation source access is unavailable",{code:"analytical_source_access_lost"});
  const actor:AuthorizationActor={type:"agent",source:"agent_jwt",companyId,agentId:run.agentId,runId:run.id,onBehalfOfUserId:run.responsibleUserId};
- try {
-  await assertAnalyticalContextPayloadAccess(db,companyId,actor,{runId:run.id},"task");
- } catch (error) {
-  // E2E-only, metadata-only observer for source-denial diagnosis. It does not
-  // inspect or log issue prose, snapshots, credentials, or provider content.
-  if(process.env.PAPERCLIP_E2E_SOURCE_DENIAL_OBSERVER==="1") {
-   try {
-    const candidateIds=[...new Set([run.nativeIssueId,run.issueId].filter((id):id is string=>Boolean(id)))];
-    const issueRows=candidateIds.length?await db.select({id:issues.id,status:issues.status,executionRunId:issues.executionRunId,
-      protocol:issues.payloadSourceProtocolVersion,invalidated:issues.payloadSourceSnapshotInvalidated,
-      bodyHashValid:sql<boolean>`issues.payload_source_snapshot->'owner'->>'contentHash'=public.aw_native_payload_body_hash('issue',to_jsonb(issues))`,
-      snapshotDigestValid:sql<boolean>`issues.payload_source_snapshot is not null and issues.payload_source_snapshot->>'digest'=encode(sha256(convert_to((issues.payload_source_snapshot-'digest')::text,'UTF8')),'hex')`
-     }).from(issues).where(and(eq(issues.companyId,companyId),inArray(issues.id,candidateIds))):[];
-    const [agent]=await db.select({status:agents.status}).from(agents).where(and(eq(agents.companyId,companyId),eq(agents.id,run.agentId))).limit(1);
-    const [humanAccounts,humanMemberships]=run.responsibleUserId?await Promise.all([
-      db.select({userId:authUsers.id}).from(authUsers).where(eq(authUsers.id,run.responsibleUserId)).limit(1),
-      db.select({status:companyMemberships.status}).from(companyMemberships).where(and(eq(companyMemberships.companyId,companyId),eq(companyMemberships.principalType,"user"),eq(companyMemberships.principalId,run.responsibleUserId))).limit(1),
-    ]):[[],[]];
-    const bound=run.nativeIssueId?issueRows.find(row=>row.id===run.nativeIssueId):undefined;
-    const boundRun=bound?.executionRunId?await db.select({status:heartbeatRuns.status,responsibleUserId:heartbeatRuns.responsibleUserId,
-      nativeIssueId:heartbeatRuns.nativeIssueId,issueId:heartbeatRuns.issueId}).from(heartbeatRuns)
-      .where(and(eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.id,bound.executionRunId))).limit(1):[];
-    const humanActor:AuthorizationActor={type:"board",source:"session",companyId,userId:run.responsibleUserId};
-    const readDecisions=await Promise.all(issueRows.map(async row=>({
-      asHuman:run.responsibleUserId?await canActorReadIssuePrivacy(db,humanActor,{companyId,id:row.id}):false,
-      asAgent:await canActorReadIssuePrivacy(db,actor,{companyId,id:row.id}),
-    })));
-    console.warn("[e2e-source-denial-observer]",JSON.stringify({
-      runStatus:run.status,runNativeInputProtocol:run.nativeInputSourceProtocolVersion,
-      runHasResponsibleHuman:Boolean(run.responsibleUserId),runIsBoundToNativeIssue:Boolean(run.nativeIssueId),
-      agentStatus:agent?.status??"missing",humanAccountExists:Boolean(humanAccounts.length),
-      humanMembershipStatus:humanMemberships[0]?.status??"missing",
-      issues:issueRows.map((row,index)=>({status:row.status,protocol:row.protocol,invalidated:row.invalidated,
-        snapshotBodyHashValid:row.bodyHashValid,snapshotDigestValid:row.snapshotDigestValid,
-        executionRunMatches:row.executionRunId===run.id,
-        boundRun:row.id===bound?.id?{status:boundRun[0]?.status??"missing",
-          humanMatches:boundRun[0]?.responsibleUserId===run.responsibleUserId,
-          nativeIssueMatches:boundRun[0]?.nativeIssueId===row.id&&boundRun[0]?.issueId===row.id}:null,
-        privacyRead:readDecisions[index]})),
-    }));
-   } catch (observerError) {
-    console.warn("[e2e-source-denial-observer] metadata capture failed",observerError instanceof Error?observerError.name:"unknown");
-   }
-  }
-  throw error;
- }
+ await assertAnalyticalContextPayloadAccess(db,companyId,actor,{runId:run.id},"task");
 }

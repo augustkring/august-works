@@ -60,7 +60,8 @@ const api = async (path, method = "GET", body) => {
 const describePages = (raw) => {
   let value = raw;
   if (typeof value === "string") { try { value = JSON.parse(value); } catch {} }
-  const content = typeof value === "string" ? value : typeof value?.content === "string" ? value.content : value?.data?.content?.filter(item => item.type === "text").map(item => item.text).join(" ") ?? "No pages returned.";
+  const contentItems = Array.isArray(value?.content) ? value.content : Array.isArray(value?.data?.content) ? value.data.content : [];
+  const content = typeof value === "string" ? value : typeof value?.content === "string" ? value.content : contentItems.filter(item => item?.type === "text" && typeof item.text === "string").map(item => item.text).join(" ") || "No pages returned.";
   return "I found these recent pages: " + content.replace(/^Pages: /, "") + ".";
 };
 const issueId = process.env.PAPERCLIP_TASK_ID ?? (await api("/heartbeat-runs/" + process.env.PAPERCLIP_RUN_ID)).contextSnapshot.issueId;

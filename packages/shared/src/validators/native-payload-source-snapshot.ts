@@ -76,6 +76,9 @@ export const nativePayloadSourceInputSchema = z.discriminatedUnion("kind", [
     origin: z.enum(["execution_workspace", "agent_home", "task_session"]), sourceVersion: text, contentHash: sha256 }).strict(),
   z.object({ kind: z.literal("worker_model_dispatch"), runId: id, reservationId: id, callId: text,
     requestHash: sha256, wireBodyHash: sha256, responseHash: sha256 }).strict(),
+  z.object({ kind: z.literal("conversation_model_dispatch"), runId: id, agentId: id, issueId: id,
+    conversationSessionGeneration: z.number().int().nonnegative(), executionManifestId: id, executionManifestHash: sha256,
+    reservationId: id, callId: text, requestHash: sha256, wireBodyHash: sha256, responseHash: sha256 }).strict(),
 ]);
 
 const sourceFields = {

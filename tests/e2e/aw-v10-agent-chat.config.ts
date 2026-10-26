@@ -14,10 +14,14 @@ const runnerBinary = process.env.PAPERCLIP_RUNNER_BINARY
   ?? path.join(runnerWorkspace, "target/release/paperclip-runnerd");
 if (!path.isAbsolute(runnerBinary) || !fs.existsSync(runnerBinary))
   throw new Error("Native agent chat requires the built paperclip-runnerd binary");
+const outputDir = process.env.PAPERCLIP_AGENT_CHAT_OUTPUT_DIR
+  ? path.resolve(process.env.PAPERCLIP_AGENT_CHAT_OUTPUT_DIR)
+  : path.resolve(import.meta.dirname, "../../test-results/v10-agent-chat-authenticated");
 const providerDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-chat-native-codex-"));
 const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
+const providerEventTrace = path.join(outputDir, "native-chat-provider-events.ndjson");
 fs.writeFileSync(path.join(providerDir, "codex"),
-  `#!/bin/sh\nexec node ${quote(path.resolve(import.meta.dirname, "fixtures/native-chat-codex.mjs"))} "$@"\n`,
+  `#!/bin/sh\nPAPERCLIP_AGENT_CHAT_EVENT_TRACE=${quote(providerEventTrace)} exec node ${quote(path.resolve(import.meta.dirname, "fixtures/native-chat-codex.mjs"))} "$@"\n`,
   { mode: 0o755 });
 
 const authenticatedServer = server;
@@ -47,10 +51,7 @@ export default defineConfig({
       PATH: `${providerDir}${path.delimiter}${process.env.PATH ?? ""}`,
       PAPERCLIP_E2E_AUTH_MODE: "authenticated",
       PAPERCLIP_AUTH_RATE_LIMIT_ENABLED: "false",
-      PAPERCLIP_E2E_SOURCE_DENIAL_OBSERVER: "1",
     },
   },
-  outputDir: process.env.PAPERCLIP_AGENT_CHAT_OUTPUT_DIR
-    ? path.resolve(process.env.PAPERCLIP_AGENT_CHAT_OUTPUT_DIR)
-    : path.resolve(import.meta.dirname, "../../test-results/v10-agent-chat-authenticated"),
+  outputDir,
 });

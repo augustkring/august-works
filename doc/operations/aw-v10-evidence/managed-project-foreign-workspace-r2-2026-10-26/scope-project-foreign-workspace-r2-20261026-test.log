@@ -1,0 +1,35 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts (46 tests | 1 failed | 45 skipped) 5149ms
+     × revalidates retained foreign Project workspace roots through their exact current parent 791ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > revalidates retained foreign Project workspace roots through their exact current parent
+Error: Failed query: update "projects" set "description" = $1 where ("projects"."company_id" = $2 and "projects"."id" = $3)
+params: Parent source withdrawn during output-owner wait,20f95dbf-5434-4979-8d06-82d9120ea288,e2926ec1-fb8c-4005-8977-f0cfd5836e03
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts:693:7
+    691|       }
+    692|       expect(observedLockWait, "the source reader must be waiting on t…
+    693|       await db.update(projects).set({ description: "Parent source with…
+       |       ^
+    694|         .where(and(eq(projects.companyId, companyId), eq(projects.id, …
+    695|     } finally {
+
+Caused by: PostgresError: Native payload source snapshot does not bind its owner and body
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_native_payload_source_binding() line 105 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "projects" set "description" = $1 where ("projects"."company_id" = $2 and "projects"."id" = $3)', parameters: [ 'Parent source withdrawn during output-owner wait', '20f95dbf-5434-4979-8d06-82d9120ea288', 'e2926ec1-fb8c-4005-8977-f0cfd5836e03' ], args: [ 'Parent source withdrawn during output-owner wait', '20f95dbf-5434-4979-8d06-82d9120ea288', 'e2926ec1-fb8c-4005-8977-f0cfd5836e03' ], types: [ 25, 2950, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 45 skipped (46)
+   Start at  09:12:13
+   Duration  20.08s (transform 10.65s, setup 83ms, import 14.71s, tests 5.15s, environment 0ms)
+

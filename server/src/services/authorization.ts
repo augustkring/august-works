@@ -31,6 +31,8 @@ import {
   routineRuns,
   routineRevisions,
   routines,
+  pluginManagedResources,
+  plugins,
   principalPermissionGrants,
   projects,
   projectAccessMembers,
@@ -39,7 +41,7 @@ import {
   memoryDeletionMarkers,
   contextManifests,
 } from "@paperclipai/db";
-import { agentExecutionScopeSchema, nativePayloadSourceSnapshotSchema, type AgentExecutionScope } from "@paperclipai/shared";
+import { agentExecutionScopeSchema, nativePayloadSourceSnapshotSchema, pluginOperationIssueOriginKind, type AgentExecutionScope } from "@paperclipai/shared";
 import type {
   AgentApiKeyScope,
   InboxAgentPolicyMode,
@@ -891,9 +893,9 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
       where captured_input->>'kind' not in ('context','task','project','memory','foundation_revision','comment','interaction',
         'document_revision','attachment','skill_version','runtime_skill','playbook_revision','role_pack_version',
         'authored_definition','runtime_instructions','retained_run','retained_workspace','tool_result',
-        'completion_contract','native_task_wake','workspace_metadata','worker_model_dispatch'))
+        'completion_contract','native_task_wake','workspace_metadata','worker_model_dispatch','conversation_model_dispatch'))
     and not exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_dispatch
-      where captured_dispatch->>'kind'='worker_model_dispatch' and (
+      where captured_dispatch->>'kind' in ('worker_model_dispatch','conversation_model_dispatch') and (
         captured_dispatch->>'runId' is distinct from temporal_owner.origin_run_id::text
         or not exists(select 1 from heartbeat_runs producer
           cross join lateral jsonb_array_elements(coalesce(producer.runner_profile_json->'nativeInputSourceReceipt'->'dispatches','[]'::jsonb)) prefix(value)
@@ -915,9 +917,17 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
         )
         or not exists(select 1 from orchestration_model_reservations reservation
           where reservation.company_id=temporal_owner.company_id and reservation.id::text=captured_dispatch->>'reservationId'
-            and reservation.purpose='worker_model' and reservation.status='completed'
+            and reservation.purpose=case when captured_dispatch->>'kind'='conversation_model_dispatch' then 'conversation_model' else 'worker_model' end
+            and reservation.status='completed'
             and reservation.input_hash=captured_dispatch->>'requestHash'
-            and reservation.provider_response_hash=captured_dispatch->>'responseHash')
+            and reservation.provider_response_hash=captured_dispatch->>'responseHash'
+            and (captured_dispatch->>'kind'<>'conversation_model_dispatch' or (
+              reservation.conversation_agent_id::text=captured_dispatch->>'agentId'
+              and reservation.conversation_run_id::text=captured_dispatch->>'runId'
+              and reservation.conversation_issue_id::text=captured_dispatch->>'issueId'
+              and reservation.conversation_session_generation::text=captured_dispatch->>'conversationSessionGeneration'
+              and reservation.execution_manifest_id::text=captured_dispatch->>'executionManifestId'
+              and reservation.execution_manifest_hash=captured_dispatch->>'executionManifestHash')))
         or not exists(select 1 from heartbeat_runs producer cross join lateral
             jsonb_array_elements(coalesce(producer.runner_profile_json->'nativeAwModelWireIntents','[]'::jsonb)) wire(value)
           where producer.company_id=temporal_owner.company_id and producer.id::text=captured_dispatch->>'runId'
@@ -925,12 +935,30 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
             and wire.value->>'callId'=captured_dispatch->>'callId'
             and wire.value->>'requestHash'=captured_dispatch->>'requestHash'
             and wire.value->>'wireBodyHash'=captured_dispatch->>'wireBodyHash'
+            and wire.value->>'modelPurpose'=case when captured_dispatch->>'kind'='conversation_model_dispatch' then 'conversation_model' else 'worker_model' end
             and wire.value->>'endpoint'='https://api.anthropic.com/v1/messages' and wire.value->>'method'='POST')
+        or (captured_dispatch->>'kind'='conversation_model_dispatch' and not exists(
+          select 1 from heartbeat_runs producer join issues conversation_issue on conversation_issue.company_id=producer.company_id
+            and conversation_issue.id::text=captured_dispatch->>'issueId'
+          join agent_execution_manifests conversation_manifest on conversation_manifest.company_id=producer.company_id
+            and conversation_manifest.id::text=captured_dispatch->>'executionManifestId'
+            and conversation_manifest.agent_id::text=captured_dispatch->>'agentId'
+            and conversation_manifest.run_id::text=captured_dispatch->>'runId'
+          where producer.company_id=temporal_owner.company_id and producer.id::text=captured_dispatch->>'runId'
+            and producer.agent_id::text=captured_dispatch->>'agentId'
+            and producer.responsible_user_id::text=conversation_issue.conversation_user_id::text
+            and producer.context_snapshot->>'conversationSessionGeneration'=captured_dispatch->>'conversationSessionGeneration'
+            and conversation_issue.conversation_agent_id::text=captured_dispatch->>'agentId'
+            and conversation_issue.conversation_session_generation::text=captured_dispatch->>'conversationSessionGeneration'
+            and conversation_issue.conversation_state='active' and conversation_issue.conversation_retired_at is null
+            and conversation_issue.execution_run_id::text=captured_dispatch->>'runId' and conversation_issue.status='in_review'
+            and conversation_manifest.hash=captured_dispatch->>'executionManifestHash'
+            and conversation_manifest.manifest->>'responsibleUserId'=producer.responsible_user_id::text))
       ))
     and (not exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_input
       where captured_input->>'kind' not in ('context','task')) or exists(
         select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_dispatch
-        where captured_dispatch->>'kind'='worker_model_dispatch'))
+        where captured_dispatch->>'kind' in ('worker_model_dispatch','conversation_model_dispatch')))
     and not exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_input
       where captured_input->>'kind'='context' and (
         not exists(select 1 from context_manifests captured_context
@@ -942,7 +970,7 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
               or captured_context.run_id=any(array(select case when dispatch.value->>'runId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
                   then (dispatch.value->>'runId')::uuid end
                 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') dispatch(value)
-                where dispatch.value->>'kind'='worker_model_dispatch'
+                where dispatch.value->>'kind' in ('worker_model_dispatch','conversation_model_dispatch')
                   and dispatch.value->>'runId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'))))
         or exists(select 1 from context_manifest_items captured_item where captured_item.company_id=temporal_owner.company_id
           and captured_item.manifest_id=(captured_input->>'manifestId')::uuid and captured_item.source_provider='august_works_tasks'
@@ -1221,6 +1249,19 @@ export async function canActorReadTypedTaskSourcePrivacy(db: Db | DbTransaction,
   }
   const sourceCondition = await taskSourcePrivacySqlCondition(db, source.sourceKind, sql`${table.id}`, sql`${table.companyId}`, actor);
   const rows = await db.select({ id: table.id }).from(table).where(and(eq(table.id, source.id), eq(table.companyId, source.companyId), sourceCondition)).limit(1);
+  if (!rows.length && source.sourceKind === "routine_run" && process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") {
+    const [detail] = await db.select({ originKind: routines.originKind, snapshot: routineRevisions.snapshot })
+      .from(routineRuns).innerJoin(routines, and(eq(routines.id, routineRuns.routineId), eq(routines.companyId, routineRuns.companyId)))
+      .innerJoin(routineRevisions, and(eq(routineRevisions.id, routineRuns.routineRevisionId),
+        eq(routineRevisions.routineId, routineRuns.routineId), eq(routineRevisions.companyId, routineRuns.companyId)))
+      .where(and(eq(routineRuns.id, source.id), eq(routineRuns.companyId, source.companyId)));
+    const baseline = await canActorReadTypedTaskSourcePrivacy(db, { type: "none" }, source);
+    console.info("[plugin-managed-routine-source-filter]", detail?.originKind ?? null,
+      detail?.snapshot?.version ?? null, detail?.snapshot?.routine?.id ?? null,
+      detail?.snapshot?.routine?.companyId ?? null, baseline,
+      nativeRoutineReadScopes.get(db as object)?.active ?? false,
+      nativeRoutineReadScopes.get(db as object)?.routineRunIds?.has(source.id) ?? false);
+  }
   return rows.length > 0;
 }
 export async function canActorReadProjectPrivacy(db: Db | DbTransaction, actor: AuthorizationActor, project: ProjectPrivacyRow) {
@@ -1323,8 +1364,9 @@ export async function withReadMemoryTemporalSources<T>(db: Db | DbTransaction, a
     isNull(memoryRecords.deletedAt), sql`not exists(select 1 from ${memoryDeletionMarkers} d
       where d.company_id=${companyId} and d.record_id=${recordId})`)).for("share");
   const snapshot = row && nativePayloadSourceSnapshotSchema.safeParse(row.payloadSourceSnapshot);
-  const dispatch = snapshot?.success ? snapshot.data.inputs.filter((input): input is Extract<typeof input, { kind: "worker_model_dispatch" }> =>
-    input.kind === "worker_model_dispatch").at(-1) : undefined;
+  const dispatch = snapshot?.success ? snapshot.data.inputs.filter((input): input is Extract<typeof input,
+    { kind: "worker_model_dispatch" | "conversation_model_dispatch" }> =>
+    input.kind === "worker_model_dispatch" || input.kind === "conversation_model_dispatch").at(-1) : undefined;
   const capturedRunIds = dispatch
     ? [...new Set([...(snapshot?.success ? snapshot.data.policy.runIds : []), dispatch.runId])].sort()
     : row?.sourceRunIds ?? [];
@@ -1613,6 +1655,8 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       const authorized = new Set<string>();
       context.routineAgentIds ??= new Set<string>();
       if (!company.allowed) {
+        if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1")
+          console.info("[plugin-managed-routine-scope-company-denied]", companyId, runIds.length, actor.type, actor.source ?? null);
         context.routineRunIds = authorized;
         context.routineActorKey = routineActorKey(actor);
         return [];
@@ -1630,6 +1674,8 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
           eq(routineRevisions.id, run.revisionId), eq(routineRevisions.routineId, routine.id),
           eq(routineRevisions.companyId, companyId))).for("share", { noWait: true });
         if (!revision) continue;
+        if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1")
+          console.info("[plugin-managed-routine-scope-candidate]", runId, routine.originKind, company.allowed);
         if (routine.originKind === "pipeline_automation") {
           const [source] = await db.execute<{ valid: boolean }>(sql`
             select ${pipelineAutomationRoutineSourceCondition(sql`${companyId}::uuid`)} as valid
@@ -1710,6 +1756,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
             enforceResponsibleUserIntersection: true });
           if (!agentDecision.allowed || !issueDecision.allowed) continue;
         }
+        if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") console.info("[plugin-managed-routine-source-check-start]", runId, routine.originKind);
         try {
           await assertRoutineSourceAccess(db, { id: routine.id, companyId: routine.companyId, originKind: routine.originKind,
             originId: routine.originId, createdByAgentId: routine.createdByAgentId, responsibleUserId: routine.responsibleUserId }, sourceActor!);
@@ -1717,12 +1764,41 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
           if (error instanceof HttpError && (error.status === 403 || error.status === 404)) continue;
           throw error;
         }
-        if (routine.originKind === "conversation_draft") authorized.add(runId);
+        if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") console.info("[plugin-managed-routine-source-check-done]", runId);
+        if (routine.originKind === "conversation_draft") {
+          authorized.add(runId);
+          continue;
+        }
+        // A plugin-managed manual Routine is an accountable operation source
+        // only for its current responsible Human. The active resource binding
+        // and its exact operation template establish the typed owner; arbitrary
+        // manual Routines do not enter this source scope.
+        if (routine.originKind === "manual" && sourceActor?.type === "board" && sourceActor.source === "session" &&
+          sourceActor.userId === routine.responsibleUserId && !sourceActor.keyId && !sourceActor.authenticatedKeyHash) {
+          if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") console.info("[plugin-managed-routine-binding-start]", runId);
+          const [binding] = await db.select({ pluginKey: pluginManagedResources.pluginKey,
+            defaultsJson: pluginManagedResources.defaultsJson })
+            .from(pluginManagedResources).innerJoin(plugins, and(eq(plugins.id, pluginManagedResources.pluginId),
+              eq(plugins.pluginKey, pluginManagedResources.pluginKey)))
+            .where(and(eq(pluginManagedResources.companyId, companyId), eq(pluginManagedResources.resourceKind, "routine"),
+              eq(pluginManagedResources.resourceId, routine.id))).for("share", { noWait: true });
+          if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") console.info("[plugin-managed-routine-binding-done]", runId, Boolean(binding));
+          const defaults = binding?.defaultsJson && typeof binding.defaultsJson === "object" && !Array.isArray(binding.defaultsJson)
+            ? binding.defaultsJson as Record<string, unknown> : null;
+          const template = defaults?.issueTemplate && typeof defaults.issueTemplate === "object" && !Array.isArray(defaults.issueTemplate)
+            ? defaults.issueTemplate as Record<string, unknown> : null;
+          const operationOriginKind = binding ? pluginOperationIssueOriginKind(binding.pluginKey) : null;
+          if (operationOriginKind && template?.surfaceVisibility === "plugin_operation" &&
+            typeof template.originId === "string" && template.originId.trim().length > 0) authorized.add(runId);
+          if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") console.info("[plugin-managed-routine-binding-validated]", runId,
+            Boolean(operationOriginKind), template?.surfaceVisibility ?? null, typeof template?.originId === "string");
+        }
       }
       context.routineRunIds = authorized;
       context.routineActorKey = routineActorKey(actor);
       context.routineActor = actor;
       await db.execute(sql`select set_config('paperclip.native_routine_source_ids', ${[...authorized].join(",")}, true)`);
+      if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") console.info("[plugin-managed-routine-scope-ready]", authorized.size);
       return [...authorized];
     };
     owner.readWorkflowSources = async (runIds, actor, mode = "strict") => {

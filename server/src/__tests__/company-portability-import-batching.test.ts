@@ -304,13 +304,22 @@ describeEmbeddedPostgres("company import batches inserts", () => {
   }
 
   it("imports many issues with a bounded number of issue-insert statements", async () => {
+    const profileStartedAt = performance.now();
+    const profile = (stage: string) => {
+      if (process.env.PORTABILITY_IMPORT_PROFILE === "1") {
+        console.info(`[portability-import-profile] ${stage} ${Math.round(performance.now() - profileStartedAt)}ms`);
+      }
+    };
     const issueCount = 50;
     const commentsPerIssue = 2;
     const documentsPerIssue = 1;
     const bundle = buildSyntheticBundle({ issueCount, commentsPerIssue, documentsPerIssue });
+    profile("bundle-built");
     const sourceCompanyId = await qualifyNativeBundle(bundle.files, "user-batching-regression");
+    profile("source-qualified");
     const portability = companyPortabilityService(db);
 
+    profile("import-enter");
     const result = await portability.importBundle(
       {
         source: { type: "inline", rootPath: bundle.rootPath, files: bundle.files },
@@ -320,6 +329,7 @@ describeEmbeddedPostgres("company import batches inserts", () => {
       },
       "user-batching-regression",
     );
+    profile("import-returned");
 
     const companyId = result.company.id;
     const issueInserts = counts.byTable.get("issues") ?? 0;

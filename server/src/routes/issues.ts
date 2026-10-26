@@ -1,5 +1,5 @@
 import { publicNativePayloadRow } from "../services/native-payload-public.js";
-import { experienceTaskReceiptSchema, v9FeatureEnabled } from "@paperclipai/shared";
+import { experienceTaskReceiptSchema, nativePayloadSourceSnapshotSchema, v9FeatureEnabled } from "@paperclipai/shared";
 import { queuedInteractionId, readQueuedInteractionResponse, hasQueuedInteractionResponse } from "../services/queued-interaction-response.js";
 import {assertAnalyticalContextPayloadAccess} from "../services/analytical-context-authority.js";
 import { deliverConversationComments, isConversation } from "../services/agent-conversations.js";
@@ -292,9 +292,11 @@ import {
   type IssuePostCommitAction,
 } from "../services/issues.js";
 import { authorizationDeniedDetails, authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, issueReadSqlCondition, projectReadSqlCondition, pinCurrentBoardActor } from "../services/authorization.js";
-import { assertDirectInputSessionCurrent, assertNativeDocumentRevisionCurrentSourceAccess } from "../services/native-direct-input.js";
+import { assertDirectInputSessionCurrent, assertNativeDocumentRevisionCurrentSourceAccess,
+  directHumanPayloadSnapshotSql, nativePayloadSnapshotSql } from "../services/native-direct-input.js";
 import { withCurrentTaskSourceRead } from "../services/task-source-read-scope.js";
 import { persistActivity } from "../services/activity-log.js";
+import { nativeCommentProjectionHash } from "../services/native-runtime/canonical.js";
 import { stalledReviewDecisionService } from "../services/stalled-review-decisions.js";
 import { environmentService } from "../services/environments.js";
 import { environmentRuntimeService } from "../services/environment-runtime.js";
@@ -10389,7 +10391,13 @@ export function issueRoutes(
       "Issue not found",
     );
     if (!issue) return;
-    if (!(await assertIssueReadAllowed(req, res, issue))) return;
+    // Check the Task boundary before looking up the selected document. Its
+    // frozen source receipt, checked below, governs a protocol-1 body; later
+    // Context on the Task must not retroactively restrict an earlier output.
+    if (!(await decideIssueAccess(req, issue, "issue:read")).allowed) {
+      res.status(404).json({ error: "Issue not found" });
+      return;
+    }
     const keyParsed = issueDocumentKeySchema.safeParse(
       String(req.params.key ?? "")
         .trim()
@@ -10403,21 +10411,42 @@ export function issueRoutes(
       return;
     }
     let revisionId: string | null = null;
+    let capturedSnapshot: unknown = null;
     const doc = await documentsSvc.getIssueDocumentByKey(issue.id, keyParsed.data, {
-      onSourceCapture: capture => { revisionId = capture?.input.revisionId ?? null; },
+      onSourceCapture: capture => {
+        revisionId = capture?.input.revisionId ?? null;
+        capturedSnapshot = capture?.payloadSourceSnapshot ?? null;
+      },
     });
     const selectedRevisionId = revisionId ?? doc?.latestRevisionId;
-    if (doc && selectedRevisionId) await assertNativeDocumentRevisionCurrentSourceAccess(db, {
+    const snapshot = nativePayloadSourceSnapshotSchema.safeParse(capturedSnapshot);
+    const sourceBoundBody = Boolean(doc && selectedRevisionId && snapshot.success &&
+      snapshot.data.owner.kind === "document_revision" && snapshot.data.owner.companyId === issue.companyId &&
+      snapshot.data.owner.id === selectedRevisionId && !shouldIncludeDocumentAnnotations(req));
+    async function assertSelectedDocumentReadAllowed(currentIssue: NonNullable<typeof issue>) {
+      if (!sourceBoundBody) return assertIssueReadAllowed(req, res, currentIssue);
+      if (!(await decideIssueAccess(req, currentIssue, "issue:read")).allowed) {
+        res.status(404).json({ error: "Issue not found" });
+        return false;
+      }
+      await assertNativeDocumentRevisionCurrentSourceAccess(db, {
+        companyId: currentIssue.companyId, issueId: currentIssue.id,
+        revisionId: selectedRevisionId!, actor: req.actor,
+      });
+      return true;
+    }
+    if (!(await assertSelectedDocumentReadAllowed(issue))) return;
+    if (doc && selectedRevisionId && !sourceBoundBody) await assertNativeDocumentRevisionCurrentSourceAccess(db, {
       companyId: issue.companyId, issueId: issue.id, revisionId: selectedRevisionId, actor: req.actor,
     });
     const currentIssue = await svc.getById(issue.id);
-    if (!currentIssue || !(await assertIssueReadAllowed(req, res, currentIssue))) return;
+    if (!currentIssue || !(await assertSelectedDocumentReadAllowed(currentIssue))) return;
     if (!doc) {
       res.status(404).json({ error: "Document not found" });
       return;
     }
     if (!shouldIncludeDocumentAnnotations(req)) {
-      if (selectedRevisionId) await assertNativeDocumentRevisionCurrentSourceAccess(db, {
+      if (selectedRevisionId && !sourceBoundBody) await assertNativeDocumentRevisionCurrentSourceAccess(db, {
         companyId: issue.companyId, issueId: issue.id, revisionId: selectedRevisionId, actor: req.actor,
       });
       res.json(doc);
@@ -17913,6 +17942,9 @@ export function issueRoutes(
         title: `Chat with ${agent.name}`, assigneeAgentId: agent.id,
         conversationAgentId: agent.id, conversationUserId: req.actor.userId,
         conversationState: "waiting", status: "in_review", createdByUserId: req.actor.userId, retireConversationId,
+        // The first authenticated Human message will seal this conversation
+        // Task to its exact captured comment inside the same guarded write.
+        payloadSourceProtocolVersion: 1,
       });
       await logActivity(db, { companyId, actorType: "user", actorId: req.actor.userId,
         action: "issue.conversation_opened", entityType: "issue", entityId: issue.id,
@@ -17968,7 +18000,42 @@ export function issueRoutes(
           ));
           const saved = await svc.addComment(issue.id, req.body.body, { userId }, {
             clientRequestId: req.body.clientRequestId, authorType: "user", attachmentIds: req.body.attachmentIds,
-          }, tx);
+          }, tx, 1);
+          const [savedCaptureState] = await tx.select({ protocolVersion: issueComments.payloadSourceProtocolVersion,
+            snapshot: issueComments.payloadSourceSnapshot }).from(issueComments).where(and(
+              eq(issueComments.companyId, issue.companyId), eq(issueComments.issueId, issue.id), eq(issueComments.id, saved.id)));
+          if (!existing && savedCaptureState?.protocolVersion === 1 && !savedCaptureState.snapshot) {
+            const [capturedComment] = await tx.update(issueComments)
+              .set({ payloadSourceSnapshot: directHumanPayloadSnapshotSql("comment") })
+              .where(and(eq(issueComments.id, saved.id), eq(issueComments.companyId, issue.companyId),
+                eq(issueComments.issueId, issue.id), eq(issueComments.authorUserId, userId),
+                eq(issueComments.payloadSourceProtocolVersion, 1), isNull(issueComments.payloadSourceSnapshot),
+                eq(issueComments.payloadSourceSnapshotInvalidated, false), isNull(issueComments.deletedAt)))
+              .returning({ payloadSourceSnapshot: issueComments.payloadSourceSnapshot });
+            if (!capturedComment?.payloadSourceSnapshot) throw conflict("Conversation Human input capture was not stored");
+            const source = { kind: "comment" as const, issueId: issue.id, commentId: saved.id,
+              sourceVersion: String((await tx.select({ sourceVersion: sql<string>`extract(epoch from ${issueComments.updatedAt})::text` })
+                .from(issueComments).where(and(eq(issueComments.companyId, issue.companyId),
+                  eq(issueComments.issueId, issue.id), eq(issueComments.id, saved.id), isNull(issueComments.deletedAt))))[0]?.sourceVersion ?? ""),
+              contentHash: nativeCommentProjectionHash({ body: saved.body, presentation: saved.presentation, metadata: saved.metadata }) };
+            if (!source.sourceVersion) throw conflict("Conversation Human input version is unavailable");
+            const sourcePolicy = { issueIds: [issue.id], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] };
+            const [capturedIssue] = await tx.update(issueRows)
+              .set({ payloadSourceSnapshot: nativePayloadSnapshotSql("issue", sourcePolicy, [source]) })
+              .where(and(eq(issueRows.id, issue.id), eq(issueRows.companyId, issue.companyId),
+                eq(issueRows.payloadSourceProtocolVersion, 1), isNull(issueRows.payloadSourceSnapshot),
+                eq(issueRows.payloadSourceSnapshotInvalidated, false)))
+              .returning({ payloadSourceSnapshot: issueRows.payloadSourceSnapshot });
+            if (!capturedIssue?.payloadSourceSnapshot) throw conflict("Conversation Task source capture was not stored");
+            const commentSnapshot = nativePayloadSourceSnapshotSchema.parse(capturedComment.payloadSourceSnapshot);
+            const taskSnapshot = nativePayloadSourceSnapshotSchema.parse(capturedIssue.payloadSourceSnapshot);
+            await logActivity(tx as unknown as Db, { companyId: issue.companyId,
+              actorType: "user", actorId: userId, action: "conversation.input_source_captured",
+              entityType: "issue", entityId: issue.id,
+              details: { producer: "direct_human_conversation_input", commentId: saved.id,
+                commentDigest: commentSnapshot.digest, taskDigest: taskSnapshot.digest },
+            }, publications);
+          }
           await assertDirectInputSessionCurrent(tx, pinned.actor, pinned.credentialExpiresAt,
             "The current conversation owner session is unavailable");
           if (!existing) await logActivity(tx as unknown as Db, {

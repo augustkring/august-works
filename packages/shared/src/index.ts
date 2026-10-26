@@ -10,7 +10,8 @@ export * from "./support-diagnostics.js";
 export { agentAdapterTypeSchema, optionalAgentAdapterTypeSchema } from "./adapter-type.js";
 export * from "./v9-feature-flags.js";
 export * from "./experience.js";
-export { workerModelBindingSchema, workerModelCallSchema, workerModelResultSchema, type WorkerModelBinding, type WorkerModelCall, type WorkerModelResult } from "./worker-model-gateway.js";
+export { workerModelBindingSchema, conversationModelBindingSchema, workerModelCallSchema, workerModelResultSchema,
+  type WorkerModelBinding, type ConversationModelBinding, type WorkerModelCall, type WorkerModelResult } from "./worker-model-gateway.js";
 export {
   RUNNER_GOAL_MAX_OBJECTIVE_CHARS,
   runnerGoalAvailabilitySchema,

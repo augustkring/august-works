@@ -8,6 +8,7 @@ import {
   orchestrationWorkers,
   orchestrationCompanyPurposeBudgets,
   orchestrationCompanyPurposeReservations,
+  costEvents,
   agentConfigurationTests,
   heartbeatRuns,
   type Db,
@@ -110,6 +111,15 @@ const requestSchema = z
   })
   .strict();
 type Request = z.input<typeof requestSchema>;
+const conversationRequestSchema = z.object({
+  companyId: z.string().uuid(), conversationAgentId: z.string().uuid(), conversationRunId: z.string().uuid(),
+  conversationIssueId: z.string().uuid(), conversationSessionGeneration: z.number().int().nonnegative(),
+  executionManifestId: z.string().uuid(), executionManifestHash: z.string().regex(/^[a-f0-9]{64}$/),
+  idempotencyKey: z.string().min(1).max(200), inputHash: z.string().regex(/^[a-f0-9]{64}$/),
+  authorityHash: z.string().regex(/^[a-f0-9]{64}$/), inputTokensUpperBound: z.number().int().min(1).max(2000000),
+  maxOutputTokens: z.number().int().min(1).max(65536),
+}).strict();
+type ConversationRequest = z.infer<typeof conversationRequestSchema>;
 type Reservation = typeof orchestrationModelReservations.$inferSelect;
 type CompanyPurposeRequest = z.infer<typeof companyPurposeReservationInputSchema>;
 type CompanyPurposeReservation = typeof orchestrationCompanyPurposeReservations.$inferSelect;
@@ -169,6 +179,15 @@ export function modelReservationService(
         workerId: string | null;
         workerAttemptId: string | null;
       },
+    ): Promise<string>;
+    qualifiedConversationTariff?(
+      input: { companyId: string; agentId: string; runId: string },
+      now: Date,
+    ): Promise<ModelTariffCeiling | null>;
+    currentConversationAuthority?(
+      tx: Db,
+      actor: AuthorizationActor,
+      input: ConversationRequest,
     ): Promise<string>;
     /** Private operator registry only. No customer-facing API supplies this
      * funding contract; a missing profile means taskless support inference is
@@ -319,6 +338,15 @@ export function modelReservationService(
       },
       now,
     );
+  }
+  async function freshConversationQuote(input: ConversationRequest, now: Date) {
+    if (!options.qualifiedConversationTariff) throw forbidden("Native conversation model pricing is not configured");
+    const tariff = await options.qualifiedConversationTariff({
+      companyId: input.companyId, agentId: input.conversationAgentId, runId: input.conversationRunId,
+    }, now);
+    if (!tariff) throw forbidden("No current Native conversation model price ceiling is qualified");
+    return { tariff, quote: quoteModelReservation({ tariff, sourceSha: options.sourceSha,
+      inputTokensUpperBound: input.inputTokensUpperBound, maxOutputTokens: input.maxOutputTokens }, now) };
   }
   function freshCompanyPurposeFunding(
     input: CompanyPurposeRequest,
@@ -754,6 +782,46 @@ export function modelReservationService(
         );
       });
     },
+    async reserveConversation(actor: AuthorizationActor, raw: ConversationRequest, now = new Date()): Promise<Reservation> {
+      const currentConversationAuthority = options.currentConversationAuthority;
+      if (!currentConversationAuthority) throw forbidden("Native conversation model authority is not configured");
+      const input = conversationRequestSchema.parse(raw), userId = v7HumanActorId(actor);
+      const { quote, tariff } = await freshConversationQuote(input, now);
+      return withV7ActivityTransaction(db, async (tx, publications) => {
+        await lockAnalyticalCompany(tx, input.companyId); await lockMemoryPrivacy(tx, input.companyId);
+        await assertV7Enabled(tx, "orchestration_v7");
+        await assertV7Authorization(tx, actor, input.companyId, "company_scope:read");
+        if (await currentConversationAuthority(tx, actor, input) !== input.authorityHash)
+          throw conflict("Native conversation source or Human authority changed before reservation");
+        const requestHash = nativeSha256({ ...input, principalUserId: userId, purpose: "conversation_model", quote });
+        const [existing] = await tx.select().from(orchestrationModelReservations).where(and(
+          eq(orchestrationModelReservations.companyId, input.companyId),
+          eq(orchestrationModelReservations.conversationRunId, input.conversationRunId),
+          eq(orchestrationModelReservations.idempotencyKey, input.idempotencyKey),
+        ));
+        if (existing) {
+          if (existing.requestHash !== requestHash) throw conflict("Conversation model reservation key belongs to different immutable inputs");
+          return existing;
+        }
+        const expiresAt = new Date(Math.min(Date.parse(quote.expiresAt), now.getTime() + 300_000));
+        if (expiresAt <= now) throw forbidden("The Native conversation model qualification has expired");
+        const [reservation] = await tx.insert(orchestrationModelReservations).values({
+          companyId: input.companyId, planId: null, workerId: null, workerAttemptId: null,
+          conversationAgentId: input.conversationAgentId, conversationRunId: input.conversationRunId,
+          conversationIssueId: input.conversationIssueId, conversationSessionGeneration: input.conversationSessionGeneration,
+          executionManifestId: input.executionManifestId, executionManifestHash: input.executionManifestHash,
+          conversationTariffSnapshot: tariff,
+          purpose: "conversation_model", principalUserId: userId, idempotencyKey: input.idempotencyKey,
+          requestHash, inputHash: input.inputHash, authorityHash: input.authorityHash, quote,
+          maximumMinor: quote.maximumMinor, expiresAt, createdAt: now,
+        }).returning();
+        await logActivity(tx, { companyId: input.companyId, actorType: "user", actorId: userId,
+          action: "orchestration.conversation_model_reserved", entityType: "issue", entityId: input.conversationIssueId,
+          details: { reservationId: reservation!.id, purpose: "conversation_model", maximumMinor: quote.maximumMinor,
+            currency: quote.currency, tariffHash: quote.tariffHash, executionManifestHash: input.executionManifestHash } }, publications);
+        return reservation!;
+      });
+    },
     async reserve(actor: AuthorizationActor, raw: Request, now = new Date()) {
       const input = requestSchema.parse(raw),
         quote = await freshQuote(input, now);
@@ -863,6 +931,44 @@ export function modelReservationService(
         return reservation!;
       });
     },
+    async claimConversationForDispatch(actor: AuthorizationActor, companyId: string, id: string, now = new Date()): Promise<Reservation> {
+      const currentConversationAuthority = options.currentConversationAuthority;
+      if (!currentConversationAuthority) throw forbidden("Native conversation model authority is not configured");
+      return withV7ActivityTransaction(db, async (tx, publications) => {
+        await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
+        const [initial] = await tx.select().from(orchestrationModelReservations).where(and(
+          eq(orchestrationModelReservations.companyId, companyId), eq(orchestrationModelReservations.id, id),
+          eq(orchestrationModelReservations.purpose, "conversation_model"),
+        ));
+        if (!initial || !initial.conversationAgentId || !initial.conversationRunId || !initial.conversationIssueId ||
+          initial.conversationSessionGeneration === null || !initial.executionManifestId || !initial.executionManifestHash)
+          throw notFound("Native conversation model reservation not found");
+        const input: ConversationRequest = {
+          companyId, conversationAgentId: initial.conversationAgentId, conversationRunId: initial.conversationRunId,
+          conversationIssueId: initial.conversationIssueId, conversationSessionGeneration: initial.conversationSessionGeneration,
+          executionManifestId: initial.executionManifestId, executionManifestHash: initial.executionManifestHash,
+          idempotencyKey: initial.idempotencyKey, inputHash: initial.inputHash, authorityHash: initial.authorityHash,
+          inputTokensUpperBound: initial.quote.inputTokensUpperBound, maxOutputTokens: initial.quote.maxOutputTokens,
+        };
+        const userId = v7HumanActorId(actor);
+        await assertV7Enabled(tx, "orchestration_v7");
+        await assertV7Authorization(tx, actor, companyId, "company_scope:read");
+        const { quote } = await freshConversationQuote(input, now);
+        if (initial.principalUserId !== userId || nativeSha256(quote) !== nativeSha256(initial.quote) ||
+          await currentConversationAuthority(tx, actor, input) !== initial.authorityHash)
+          throw conflict("Native conversation model authority or qualification changed before dispatch");
+        const [record] = await tx.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.id, id)).for("update");
+        if (!record || record.status !== "reserved" || record.expiresAt <= now || record.principalUserId !== userId ||
+          record.executionManifestHash !== input.executionManifestHash)
+          throw conflict("This Native conversation model reservation cannot dispatch again");
+        const [dispatched] = await tx.update(orchestrationModelReservations).set({ status: "dispatched", dispatchedAt: now })
+          .where(eq(orchestrationModelReservations.id, id)).returning();
+        await logActivity(tx, { companyId, actorType: "user", actorId: userId,
+          action: "orchestration.conversation_model_dispatch_claimed", entityType: "issue", entityId: input.conversationIssueId,
+          details: { reservationId: id, maximumMinor: record.maximumMinor, executionManifestHash: input.executionManifestHash } }, publications);
+        return dispatched!;
+      });
+    },
     async claimForDispatch(
       actor: AuthorizationActor,
       companyId: string,
@@ -880,7 +986,8 @@ export function modelReservationService(
               eq(orchestrationModelReservations.id, id),
             ),
           );
-        if (!initial) throw notFound("Model reservation not found");
+        if (!initial || initial.purpose === "conversation_model" || !initial.planId)
+          throw notFound("Worker model reservation not found");
         const { plan, userId } = await authority(
           tx,
           actor,
@@ -900,6 +1007,8 @@ export function modelReservationService(
           .for("update");
         if (
           !record ||
+          record.purpose === "conversation_model" ||
+          !record.planId ||
           record.status !== "reserved" ||
           record.expiresAt <= now ||
           record.principalUserId !== userId
@@ -990,24 +1099,52 @@ export function modelReservationService(
           input.usage &&
           (input.usage.inputTokens > record.quote.inputTokensUpperBound ||
             input.usage.outputTokens > record.quote.maxOutputTokens);
+        const tariffSnapshot = record.purpose === "conversation_model"
+          ? modelTariffCeilingSchema.safeParse(record.conversationTariffSnapshot) : null;
+        const pricingCurrent = tariffSnapshot?.success === true &&
+          nativeSha256(tariffSnapshot.data) === record.quote.tariffHash &&
+          tariffSnapshot.data.provider === record.quote.provider && tariffSnapshot.data.model === record.quote.model &&
+          tariffSnapshot.data.qualificationHash === record.quote.qualificationHash && tariffSnapshot.data.sourceSha === record.quote.sourceSha;
+        const estimatedCostMinor = pricingCurrent && input.usage
+          ? Number(BigInt(tariffSnapshot!.data.fixedMinor) +
+            (BigInt(input.usage.inputTokens) * BigInt(tariffSnapshot!.data.inputMinorPerMillion) +
+              BigInt(input.usage.outputTokens) * BigInt(tariffSnapshot!.data.outputMinorPerMillion) + 999_999n) / 1_000_000n)
+          : null;
+        const conversationUnsettled = record.purpose === "conversation_model" &&
+          (input.status !== "completed" || !input.providerResponseHash || !input.usage || !pricingCurrent ||
+            estimatedCostMinor === null || estimatedCostMinor > record.maximumMinor);
+        const outcomeStatus = exceedsQuote || conversationUnsettled ? "unknown" : input.status;
         const [updated] = await tx
           .update(orchestrationModelReservations)
           .set({
             ...input,
-            status: exceedsQuote ? "unknown" : input.status,
+            status: outcomeStatus,
             completedAt: now,
           })
           .where(eq(orchestrationModelReservations.id, id))
           .returning();
+        if (record.purpose === "conversation_model" && outcomeStatus === "completed") {
+          if (!record.conversationAgentId || !record.conversationRunId || !record.conversationIssueId || !input.usage || estimatedCostMinor === null)
+            throw conflict("The settled Native conversation reservation lost its owner binding");
+          await tx.insert(costEvents).values({
+            companyId, agentId: record.conversationAgentId, issueId: record.conversationIssueId,
+            heartbeatRunId: record.conversationRunId, provider: record.quote.provider, biller: "company_connection",
+            billingType: "metered_api", billingCode: `native-conversation-model:${record.id}`,
+            costStatus: "estimated", model: record.quote.model, inputTokens: input.usage.inputTokens,
+            cachedInputTokens: 0, outputTokens: input.usage.outputTokens, costCents: estimatedCostMinor,
+            occurredAt: now,
+          }).onConflictDoNothing();
+        }
         await logActivity(
           tx,
           {
             companyId,
             actorType: "system",
             actorId: "model-broker",
-            action: "orchestration.model_outcome_recorded",
-            entityType: "orchestration_plan",
-            entityId: record.planId,
+            action: record.purpose === "conversation_model"
+              ? "orchestration.conversation_model_outcome_recorded" : "orchestration.model_outcome_recorded",
+            entityType: record.planId ? "orchestration_plan" : "issue",
+            entityId: record.planId ?? record.conversationIssueId ?? companyId,
             details: {
               reservationId: id,
               status: updated!.status,
@@ -1041,7 +1178,8 @@ export async function expireModelReservations(db: Db, now = new Date(), limit = 
             .where(eq(orchestrationModelReservations.id, row.id));
           if (status === "cancelled") cancelled++; else unknown++;
           await logActivity(tx, { companyId: row.companyId, actorType: "system", actorId: "model-broker",
-            action: "orchestration.model_reservation_expired", entityType: "orchestration_plan", entityId: row.planId,
+            action: row.purpose === "conversation_model" ? "orchestration.conversation_model_outcome_recorded" : "orchestration.model_reservation_expired",
+            entityType: row.planId ? "orchestration_plan" : "issue", entityId: row.planId ?? row.conversationIssueId ?? row.companyId,
             details: { reservationId: row.id, status, maximumMinor: row.maximumMinor, debitRetained: true } }, publications);
         }
         const companyPurposeRows = await tx.select().from(orchestrationCompanyPurposeReservations).where(and(

@@ -25,14 +25,17 @@ import {
   EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
   heartbeatRunEvents,
   heartbeatRuns,
+  activityLog,
   issueComments,
   issues,
   issueThreadInteractions,
   nativeRunFinalizations,
   toolApplications,
   toolConnections,
+  projectWorkspaces,
+  projects,
 } from "@paperclipai/db";
-import type { ContextAuthorityDecision, NativePayloadSourceInput } from "@paperclipai/shared";
+import type { ContextAuthorityDecision, NativePayloadSourceInput, NativePayloadSourceSnapshot } from "@paperclipai/shared";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { PROCESS_START_REQUESTED } from "../native-local-process-stop.js";
 import { recordNativeModelInputDispatchIntent, recordNativeModelInputDispatchAcknowledgement, recordNativeToolCallDispatchAssociation,
@@ -63,7 +66,10 @@ import { contextEngineService } from "../context/context-engine.js";
 import { issueThreadInteractionService } from "../issue-thread-interactions.js";
 import { resolveDefaultAgentWorkspaceDir } from "../../home-paths.js";
 import { materializeNativeInteractionResponses } from "./native-interaction-bridge.js";
-import { assertNativePayloadSourceSetCurrent, assertNativeReadResultSourceSetOwnersCurrent } from "../native-direct-input.js";
+import { assertNativePayloadSourceSetCurrent, assertNativeReadResultSourceSetOwnersCurrent,
+  assertNativeProjectSourceCurrent } from "../native-direct-input.js";
+import { ensureProjectAccessMember, projectService } from "../projects.js";
+import { publicNativePayloadRow } from "../native-payload-public.js";
 import { configureSaasStorageService } from "../../storage/index.js";
 import { createLocalDiskStorageProvider } from "../../storage/local-disk-provider.js";
 import { createStorageService } from "../../storage/service.js";
@@ -72,6 +78,8 @@ import { executePaperclipNativeSession } from "./native-session-executor.js";
 import type { NativeSessionBackend } from "../../vendor/paperclip-runner/index.js";
 import { CONTROL_PLANE_CONFORMANCE_RESULT, CONTROL_PLANE_CONFORMANCE_TERMINAL } from "../../vendor/paperclip-runner/testing.js";
 import { renderNativeRunnerStagedAttachmentPrompt } from "./native-runner-file-handoff.js";
+import { createManagedNativeProjectOutput } from "../native-project-output.js";
+import type { NativeModelOutputCapture } from "./native-execution-input.js";
 
 describe("native model input dispatch intent", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
@@ -552,6 +560,143 @@ describe("native model input dispatch intent", () => {
     const [created] = await db.select({ id: issues.id }).from(issues).where(and(
       eq(issues.companyId, companyId), eq(issues.title, body.title)));
     expect(created).toBeUndefined();
+  });
+
+  it("creates no Project effects for malformed or foreign managed Project captures", async () => {
+    const seeded = await seed();
+    const callId = `project-capture-${randomUUID()}`;
+    const actor = { type: "agent" as const, source: "agent_jwt" as const, companyId, agentId,
+      runId: seeded.runId, onBehalfOfUserId: responsibleUserId };
+    const args = { name: "Should not exist", idempotencyKey: randomUUID() };
+    const sourceSet = { policy: { issueIds: [seeded.issueId], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] }, inputs: [] };
+    const countEffects = async () => ({
+      projects: await db.select({ id: projects.id }).from(projects).where(eq(projects.companyId, companyId)),
+      workspaces: await db.select({ id: projectWorkspaces.id }).from(projectWorkspaces).where(eq(projectWorkspaces.companyId, companyId)),
+      activities: await db.select({ id: activityLog.id }).from(activityLog).where(eq(activityLog.companyId, companyId)),
+      runs: await db.select({ id: heartbeatRuns.id, resultJson: heartbeatRuns.resultJson }).from(heartbeatRuns)
+        .where(eq(heartbeatRuns.id, seeded.runId)),
+    });
+    const before = await countEffects();
+    const malformed = {
+      runId: seeded.runId,
+      sourceSet,
+      dispatch: { kind: "worker_model_dispatch", runId: seeded.runId },
+      managedOpenCodeToolUse: { callId, toolName: "write_document", argumentsHash: nativeSha256(args),
+        responseContentHash: nativeSha256("settled") },
+    } as unknown as NativeModelOutputCapture;
+    const foreign = {
+      ...malformed,
+      managedOpenCodeToolUse: { ...malformed.managedOpenCodeToolUse!, callId: `foreign-${callId}`, toolName: "create_project" },
+    } as NativeModelOutputCapture;
+
+    for (const capture of [malformed, foreign]) {
+      await expect(createManagedNativeProjectOutput({ db, actor, companyId, issueId: seeded.issueId, callId,
+        arguments: args, capture })).rejects.toThrow();
+    }
+    await expect(createManagedNativeProjectOutput({ db, actor, companyId, issueId: seeded.issueId, callId,
+      arguments: { ...args, repoUrl: "https://example.invalid/unmanaged.git" } as never,
+      capture: malformed })).rejects.toThrow();
+    expect(await countEffects()).toEqual(before);
+  });
+
+  it("revalidates retained foreign Project workspace roots through their exact current parent", async () => {
+    const sessionId = randomUUID(), now = new Date();
+    await db.insert(authSessions).values({ id: sessionId, userId: responsibleUserId, token: randomUUID(), createdAt: now,
+      updatedAt: now, expiresAt: new Date(now.getTime() + 3_600_000) });
+    const humanActor = { type: "board" as const, source: "session" as const, userId: responsibleUserId, sessionId,
+      companyIds: [companyId], memberships: [{ companyId, membershipRole: "admin", status: "active" as const }] };
+    const sourceRun = await seed();
+    const nativeActor = { type: "agent" as const, source: "none" as const, companyId, agentId,
+      runId: sourceRun.runId, onBehalfOfUserId: responsibleUserId };
+
+    async function createProject(name: string, sourceProjectIds: string[] = [], withWorkspace = false) {
+      const project = await projectService(db).create(companyId, { name, status: "in_progress", visibility: "private",
+        privacyOwnerUserId: responsibleUserId, sourceProvenanceQualified: true, sourceIssueIds: [], sourceProjectIds,
+        payloadSourceProtocolVersion: 1, payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: false }, undefined, humanActor);
+      await ensureProjectAccessMember(db, { companyId, projectId: project.id, subjectType: "agent", subjectId: agentId });
+      if (withWorkspace) await projectService(db).createWorkspace(project.id, { name: `${name} local workspace`,
+        sourceType: "local_path", cwd: `/tmp/native-source-project-${project.id}`, isPrimary: true });
+      return project.id;
+    }
+    async function workspacePin(projectId: string) {
+      const [pin] = await db.select({ workspaceId: projectWorkspaces.id,
+        sourceVersion: sql<string>`${projectWorkspaces.updatedAt}::text`,
+        contentHash: sql<string>`encode(sha256(convert_to(to_jsonb(${projectWorkspaces})::text,'UTF8')),'hex')` })
+        .from(projectWorkspaces).where(and(eq(projectWorkspaces.companyId, companyId), eq(projectWorkspaces.projectId, projectId)));
+      if (!pin) throw new Error("workspace fixture row missing");
+      return { kind: "project_workspace" as const, projectId, ...pin };
+    }
+    async function projectSource(projectId: string) {
+      const project = await projectService(db).getById(projectId);
+      if (!project) throw new Error("project fixture row missing");
+      const dto = publicNativePayloadRow(project);
+      return { kind: "project" as const, projectId, sourceVersion: project.updatedAt.toISOString(),
+        contentHash: createHash("sha256").update(JSON.stringify(dto), "utf8").digest("hex") };
+    }
+    async function sealProject(projectId: string, policyProjectIds: string[], inputs: NativePayloadSourceInput[]) {
+      const content = JSON.stringify({ policy: { issueIds: [], projectIds: policyProjectIds, runIds: [], memoryIds: [],
+        foundationRevisionIds: [] }, inputs });
+      const [sealed] = await db.execute<{ snapshot: NativePayloadSourceSnapshot }>(sql`select
+        payload.value || jsonb_build_object('digest',encode(sha256(convert_to(payload.value::text,'UTF8')),'hex')) as snapshot
+        from (select jsonb_build_object('version',1,'owner',jsonb_build_object('kind','project',
+          'companyId',p.company_id::text,'id',p.id::text,
+          'contentHash',public.aw_native_payload_body_hash('project',to_jsonb(p))),
+          'policy',(${content}::jsonb)->'policy','inputs',(${content}::jsonb)->'inputs') as value
+          from projects p where p.company_id=${companyId}::uuid and p.id=${projectId}::uuid) payload`);
+      if (!sealed) throw new Error("project snapshot fixture could not be sealed");
+      await db.update(projects).set({ payloadSourceSnapshot: sealed.snapshot, payloadSourceSnapshotInvalidated: false })
+        .where(and(eq(projects.companyId, companyId), eq(projects.id, projectId)));
+    }
+
+    const parentId = await createProject("Foreign source parent", [], true);
+    const parentWorkspace = await workspacePin(parentId);
+    await sealProject(parentId, [], [parentWorkspace]);
+    const parentSource = await projectSource(parentId);
+
+    const makeOutput = async (name: string, inputs: NativePayloadSourceInput[]) => {
+      const outputId = await createProject(name, [parentId]);
+      await sealProject(outputId, [parentId], inputs);
+      return { id: outputId, source: await projectSource(outputId) };
+    };
+    const valid = await makeOutput("Qualified output Project", [parentSource, parentWorkspace]);
+    await expect(assertNativeProjectSourceCurrent(db, { companyId, actor: nativeActor, source: valid.source })).resolves.toBeUndefined();
+
+    const missingParent = await makeOutput("Missing foreign Project source", [parentWorkspace]);
+    await expect(assertNativeProjectSourceCurrent(db, { companyId, actor: nativeActor, source: missingParent.source })).rejects.toThrow();
+    const forgedWorkspace = { ...parentWorkspace, contentHash: "a".repeat(64) };
+    const forged = await makeOutput("Forged foreign workspace pin", [parentSource, forgedWorkspace]);
+    await expect(assertNativeProjectSourceCurrent(db, { companyId, actor: nativeActor, source: forged.source })).rejects.toThrow();
+
+    const waiting = await makeOutput("Parent mutation while reader waits", [parentSource, parentWorkspace]);
+    let unlock!: () => void;
+    let locked!: () => void;
+    const release = new Promise<void>(resolve => { unlock = resolve; });
+    const hasParentLock = new Promise<void>(resolve => { locked = resolve; });
+    const parentLock = db.transaction(async tx => {
+      await tx.select({ id: projects.id }).from(projects).where(and(eq(projects.companyId, companyId),
+        eq(projects.id, waiting.id))).for("update");
+      locked();
+      await release;
+    });
+    await hasParentLock;
+    const sourceCheck = assertNativeProjectSourceCurrent(db, { companyId, actor: nativeActor, source: waiting.source })
+      .then(() => false, () => true);
+    try {
+      let observedLockWait = false;
+      for (let attempt = 0; attempt < 200; attempt++) {
+        const [activity] = await db.execute<{ waiting: number }>(sql`select count(*)::int as waiting from pg_stat_activity
+          where datname=current_database() and state='active' and wait_event_type='Lock' and query ilike '%projects%'`);
+        if ((activity?.waiting ?? 0) > 0) { observedLockWait = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(observedLockWait, "the source reader must be waiting on the locked output Project row").toBe(true);
+      await projectService(db).updateWorkspace(parentId, parentWorkspace.workspaceId,
+        { name: "Parent workspace changed during output-owner wait" });
+    } finally {
+      unlock();
+      await parentLock;
+    }
+    expect(await sourceCheck, "the post-wait current-parent check must reject the withdrawn source").toBe(true);
   });
 
   it("binds an unknown Project tool result to its actual acknowledged dispatch without qualifying inputs", async () => {

@@ -146,8 +146,8 @@ export async function qualifyNativeDraftWorker(
   );
   if (
     !contract ||
-    orchestrationCompletionSchema.parse(contract.row.contractJson.v7)
-      .requiredOutputs.length !== 1
+    orchestrationCompletionSchema.parse(contract.row.contractJson.v7).requiredOutputs.length !== 1 ||
+    orchestrationCompletionSchema.parse(contract.row.contractJson.v7).requiredOutputs[0]?.kind !== "task_document"
   )
     throw forbidden(
       "The one-call draft requires one declared canonical output",

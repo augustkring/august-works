@@ -104,7 +104,7 @@ export type NativeModelOutputCapture = {
   sourceSet: NativePayloadSourceSet;
   /** Exact receipt components that compose the source set consumed by this request. */
   consumedSourceComponents?: NativeConsumedSourceComponent[];
-  dispatch: Extract<NativePayloadSourceInput, { kind: "worker_model_dispatch" }>;
+  dispatch: Extract<NativePayloadSourceInput, { kind: "worker_model_dispatch" | "conversation_model_dispatch" }>;
   /** Present only when the output came from the pinned managed OpenCode tool boundary. */
   managedOpenCodeToolUse?: { callId: string; toolName: string; argumentsHash: string; responseContentHash: string };
 };

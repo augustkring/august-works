@@ -3,7 +3,7 @@ import { isDeepStrictEqual } from "node:util";
 import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { documentRevisions, documents, issueDocuments, issues, heartbeatRuns, orchestrationModelReservations } from "@paperclipai/db";
-import { isSystemIssueDocumentKey, issueDocumentKeySchema, nativePayloadSourceInputSchema, nativePayloadSourceSnapshotSchema,
+import { conversationModelBindingSchema, isSystemIssueDocumentKey, issueDocumentKeySchema, nativePayloadSourceInputSchema, nativePayloadSourceSnapshotSchema,
   nativeRunInputSourceReceiptSchema, type NativePayloadSourceInput, type NativePayloadSourceSnapshot } from "@paperclipai/shared";
 import { conflict, forbidden, notFound, unprocessable } from "../errors.js";
 import { isUniqueViolation } from "../db-errors.js";
@@ -32,7 +32,7 @@ async function persistNativeAwDocumentCapture(tx: DocumentTx, input: {
 }) {
   const capture = input.capture;
   if (capture.runId !== input.runId || capture.dispatch.runId !== input.runId ||
-    capture.dispatch.kind !== "worker_model_dispatch" ||
+    (capture.dispatch.kind !== "worker_model_dispatch" && capture.dispatch.kind !== "conversation_model_dispatch") ||
     !nativePayloadSourceInputSchema.safeParse(capture.dispatch).success ||
     (!capture.managedOpenCodeToolUse && capture.dispatch.callId !== `aw-draft:${input.runId}`) ||
     (capture.managedOpenCodeToolUse && (capture.managedOpenCodeToolUse.toolName !== "write_document" ||
@@ -51,12 +51,15 @@ async function persistNativeAwDocumentCapture(tx: DocumentTx, input: {
   const intents = profile?.nativeAwModelWireIntents;
   const intent = Array.isArray(intents) ? intents.find((value) => value && typeof value === "object" && !Array.isArray(value) &&
     (value as Record<string, unknown>).reservationId === capture.dispatch.reservationId) as Record<string, unknown> | undefined : undefined;
+  const purpose = capture.dispatch.kind === "conversation_model_dispatch" ? "conversation_model" : "worker_model";
   const [reservation] = await tx.select().from(orchestrationModelReservations).where(and(
     eq(orchestrationModelReservations.companyId, input.companyId),
     eq(orchestrationModelReservations.id, capture.dispatch.reservationId),
-    eq(orchestrationModelReservations.purpose, "worker_model"),
+    eq(orchestrationModelReservations.purpose, purpose),
     eq(orchestrationModelReservations.status, "completed"),
   )).for("share");
+  const conversationBinding = capture.dispatch.kind === "conversation_model_dispatch"
+    ? conversationModelBindingSchema.safeParse(intent?.conversationModelBinding) : null;
   const bootstrap = receipt?.success ? receipt.data.bootstrap : null;
   const managed = capture.managedOpenCodeToolUse;
   let managedSourceProof = false;
@@ -64,16 +67,27 @@ async function persistNativeAwDocumentCapture(tx: DocumentTx, input: {
     await assertNativeModelOutputCaptureCurrent(tx as unknown as Db, input.companyId, input.issueId, capture, "write_document");
     managedSourceProof = true;
   }
-  const awSourceProof = !managed && !!bootstrap && !!intent &&
+  const awSourceProof = purpose === "worker_model" && !managed && !!bootstrap && !!intent &&
     isDeepStrictEqual(bootstrap.policy, capture.sourceSet.policy) &&
     isDeepStrictEqual(bootstrap.inputs, capture.sourceSet.inputs) &&
     intent.endpoint === "https://api.anthropic.com/v1/messages" && intent.method === "POST";
   const expectedReservationKey = managed
-    ? `worker-model-messages:${input.runId}:${capture.dispatch.requestHash}`
+    ? `${purpose === "conversation_model" ? "conversation-model" : "worker-model"}-messages:${input.runId}:${capture.dispatch.requestHash}`
     : `worker-model:${input.runId}:${capture.dispatch.callId}`;
   if (!run || !receipt?.success || !bootstrap || !intent || !reservation ||
     reservation.inputHash !== capture.dispatch.requestHash || reservation.providerResponseHash !== capture.dispatch.responseHash ||
     reservation.idempotencyKey !== expectedReservationKey ||
+    (capture.dispatch.kind === "conversation_model_dispatch" && (!conversationBinding?.success ||
+      reservation.conversationAgentId !== capture.dispatch.agentId || reservation.conversationRunId !== capture.dispatch.runId ||
+      reservation.conversationIssueId !== capture.dispatch.issueId ||
+      reservation.conversationSessionGeneration !== capture.dispatch.conversationSessionGeneration ||
+      reservation.executionManifestId !== capture.dispatch.executionManifestId ||
+      reservation.executionManifestHash !== capture.dispatch.executionManifestHash ||
+      intent.modelPurpose !== "conversation_model" || intent.agentId !== capture.dispatch.agentId ||
+      conversationBinding.data.issueId !== capture.dispatch.issueId ||
+      conversationBinding.data.conversationSessionGeneration !== capture.dispatch.conversationSessionGeneration ||
+      conversationBinding.data.executionManifestId !== capture.dispatch.executionManifestId ||
+      conversationBinding.data.executionManifestHash !== capture.dispatch.executionManifestHash)) ||
     intent.callId !== capture.dispatch.callId || intent.requestHash !== capture.dispatch.requestHash ||
     intent.wireBodyHash !== capture.dispatch.wireBodyHash || intent.endpoint !== "https://api.anthropic.com/v1/messages" ||
     intent.method !== "POST" || !(awSourceProof || managedSourceProof))

@@ -61,6 +61,7 @@ const reads = new Set([
 ]);
 const draftWrites = new Set([
   "write_document",
+  "create_project",
   "report_progress",
   "request_human_input",
 ]);
@@ -481,6 +482,14 @@ export async function withOrchestrationNativeTool(
           throw forbidden(
             "Native draft writes must use a declared completion output",
           );
+      }
+      if (call.tool === "create_project") {
+        if (bound.plan.actionClass !== "internal_draft" || bound.plan.riskClass !== "C0")
+          throw forbidden("Managed Project creation is limited to C0 internal draft plans");
+        const retained = await retainedOrchestrationContract(t, b.companyId, b.issueId);
+        const contract = orchestrationCompletionSchema.parse(retained!.row.contractJson.v7);
+        if (!contract.requiredOutputs.some((output) => output.kind === "private_project"))
+          throw forbidden("Managed Project creation requires a declared private Project output");
       }
     }
     const [existing] = await t

@@ -1,7 +1,7 @@
 import { logger } from "../middleware/logger.js";
 import { exportCompanyStateV7 } from "./enterprise/portability.js";
 import { assertCompanyCeoAgentOrBoard, authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, issueReadSqlCondition, pinCurrentBoardActor, projectReadSqlCondition, type AuthorizationActor } from "./authorization.js";
-import { assertAnalyticalContextPayloadAccess } from "./analytical-context-authority.js";
+import { assertAnalyticalContextPayloadAccess, assertAnalyticalContextPayloadAccessBatch } from "./analytical-context-authority.js";
 import { assertNativeDocumentRevisionCurrentSourceAccess } from "./native-direct-input.js";
 import { withCurrentTaskSourceRead } from "./task-source-read-scope.js";
 import { agentAppearanceSchema } from "@paperclipai/shared";
@@ -3716,9 +3716,30 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         || task.responsibleUserId === undefined || task.createdByUserId === undefined) {
         throw unprocessable("Task copy requires current native privacy provenance; legacy or foreign provenance cannot be assumed public");
       }
-      const [source] = await sourceDb.select().from(issueRows).where(and(eq(issueRows.id, task.sourceIssueId), eq(issueRows.companyId, companyId)));
+    }
+    const sourceIssueIds = [...new Set(tasks.map(task => task.sourceIssueId!))];
+    for (let offset = 0; offset < sourceIssueIds.length; offset += 256) {
+      await assertAnalyticalContextPayloadAccessBatch(sourceDb as Db, companyId, actor, sourceIssueIds.slice(offset, offset + 256));
+    }
+    const sourceIssueRows = sourceIssueIds.length
+      ? await sourceDb.select().from(issueRows).where(and(eq(issueRows.companyId, companyId), inArray(issueRows.id, sourceIssueIds)))
+      : [];
+    const sourceIssueById = new Map(sourceIssueRows.map(source => [source.id, source]));
+    const currentPrivacySources = sourceIssueIds.length
+      ? await sourceDb.select({ issueId: issuePrivacySources.issueId, sourceKind: issuePrivacySources.sourceKind,
+        sourceId: issuePrivacySources.sourceId }).from(issuePrivacySources)
+        .where(and(eq(issuePrivacySources.companyId, companyId), inArray(issuePrivacySources.issueId, sourceIssueIds)))
+      : [];
+    const currentPrivacySourcesByIssue = new Map<string, Array<(typeof currentPrivacySources)[number]>>();
+    for (const source of currentPrivacySources) {
+      const sources = currentPrivacySourcesByIssue.get(source.issueId) ?? [];
+      sources.push(source);
+      currentPrivacySourcesByIssue.set(source.issueId, sources);
+    }
+    for (const task of tasks) {
+      if (!task.sourceIssueId || !Array.isArray(task.privacySources)) throw unprocessable("Task copy requires current native privacy provenance");
+      const source = sourceIssueById.get(task.sourceIssueId);
       if (!source || !(await canActorReadIssuePrivacy(sourceDb, actor, source))) throw notFound("Task source is unavailable");
-      await assertAnalyticalContextPayloadAccess(sourceDb, companyId, actor, { issueId: source.id });
       if (source.visibility !== task.visibility || source.privacyRootIssueId !== task.privacyRootIssueId
         || source.privacyParentIssueId !== task.privacyParentIssueId || source.responsibleUserId !== task.responsibleUserId
         || source.createdByUserId !== task.createdByUserId) throw unprocessable("Task source ownership or privacy changed; export its current state");
@@ -3730,8 +3751,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       if (visibility === "private" && (!humanId || ![source.responsibleUserId, source.createdByUserId].includes(humanId))) {
         throw forbidden("The current task source owner must copy protected content");
       }
-      const currentSources = await sourceDb.select({ sourceKind: issuePrivacySources.sourceKind, sourceId: issuePrivacySources.sourceId })
-        .from(issuePrivacySources).where(and(eq(issuePrivacySources.companyId, companyId), eq(issuePrivacySources.issueId, source.id)));
+      const currentSources = currentPrivacySourcesByIssue.get(source.id) ?? [];
       const sources = [...task.privacySources, ...currentSources.map(entry => {
         if (entry.sourceKind !== "issue" && entry.sourceKind !== "project" && entry.sourceKind !== "run" && entry.sourceKind !== "run_copy" && entry.sourceKind !== "workflow_run" && entry.sourceKind !== "routine_run") {
           throw unprocessable("Task source provenance is invalid");
@@ -5559,15 +5579,22 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     actorUserId: string | null | undefined,
     options?: ImportBehaviorOptions,
   ): Promise<CompanyPortabilityImportResult> {
+    const importProfileStartedAt = performance.now();
+    const importProfile = (stage: string) => {
+      if (process.env.PORTABILITY_IMPORT_PROFILE === "1")
+        console.info(`[company-import-profile] ${stage} ${Math.round(performance.now() - importProfileStartedAt)}ms`);
+    };
     // Fail closed before any preview or write work when an inline body arrived
     // incomplete. A truncated or re-framed request can hand the parser a
     // structurally valid JSON object with fewer files than the client sent;
     // the declared count is the only signal that distinguishes it from a
     // deliberately small bundle. Reject the fragment rather than importing it.
     assertInlineSourceComplete(input.source);
+    importProfile("inline-source-validated");
     const mode = resolveImportMode(options);
     let effectsStarted = false;
     const plan = await buildPreview(input, options);
+    importProfile("preview-built");
     if (input.expectedSourceFingerprint && input.expectedSourceFingerprint !== plan.preview.sourceFingerprint)
       throw new ImportSourceChangedError();
     if (plan.preview.errors.length > 0) {
@@ -5628,6 +5655,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     try {
       copySources = await validateCopySources(sourceManifest, input.target, include, importActor, options?.privateWorkAdmission,
         sourceReleaseReviewed);
+      importProfile("copy-sources-validated");
     } catch (error) {
       // This source-admission owner only reads. No company, secret, Agent,
       // Project or Task effect has begun here. Later throws remain unknown.
@@ -5669,6 +5697,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         throw unprocessable(`Bundle blob ${filePath} does not match its declared sha256; the package is corrupted or was tampered with.`);
       }
     }
+    importProfile("bundle-blobs-verified");
 
     const nativeSourceCompanyIds = [...new Set([
       ...(include.issues ? sourceManifest.issues.map(item => item.sourceCompanyId).filter((id): id is string => Boolean(id)) : []),
@@ -5826,6 +5855,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     if (!targetCompany) throw notFound("Target company not found");
     const targetCompanyId = targetCompany.id;
     checkpointTargetCompanyId = targetCompanyId;
+    importProfile("target-company-ready");
 
     const importedAgentEnvSlugs = new Set(
       plan.preview.plan.agentPlans
@@ -5859,6 +5889,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         createdImportSecretIds,
         cancellationCheckpoint,
       );
+      importProfile("environment-values-materialized");
 
       if (include.company) {
         await cancellationCheckpoint();
@@ -6242,6 +6273,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           }
         }
       }
+      importProfile("agents-imported");
 
       if (include.projects) {
         await cancellationCheckpoint();
@@ -6390,6 +6422,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           }
         }
       }
+      importProfile("projects-imported");
 
       if (include.issues) {
         await cancellationCheckpoint();
@@ -6458,6 +6491,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         const documentRows: ImportIssueDocumentRow[] = [];
         const workProductRows: ImportIssueWorkProductRow[] = [];
         const attachmentRows: ImportIssueAttachmentRow[] = [];
+        importProfile("issue-buffers-ready");
 
         for (const manifestIssue of sourceManifest.issues) {
           const markdownRaw = readPortableTextFile(plan.source.files, manifestIssue.path);
@@ -6858,6 +6892,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             issueRows.push(...orderedRows);
           }
         }
+        importProfile("issue-row-buffers-prepared");
 
         // Flush the buffered rows in dependency order: issues first (parents of
         // every other row), then comments (attachments may reference them), then
@@ -6868,11 +6903,16 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         const publications: ActivityPublication[] = [];
         await cancellationCheckpoint();
         await db.transaction(async (tx) => {
-          await lockIssuePrivacyTree(tx, targetCompanyId);
           await validateCopySources(sourceManifest, input.target, include, importActor, options?.privateWorkAdmission,
             sourceReleaseReviewed, tx);
-          if (issueRows.length > 0) await issues.importIssues(targetCompanyId, issueRows, tx, { actor: importActor,
-            privateWorkAdmission: options?.privateWorkAdmission, postCommitActivityPublications: publications });
+          importProfile("write-source-admission-complete");
+          await lockIssuePrivacyTree(tx, targetCompanyId);
+          importProfile("write-transaction-locked");
+          if (issueRows.length > 0) {
+            await issues.importIssues(targetCompanyId, issueRows, tx, { actor: importActor,
+              privateWorkAdmission: options?.privateWorkAdmission, postCommitActivityPublications: publications });
+            importProfile("issues-imported");
+          }
           // Imported issues are historical work, not new inbox items. Seed a
           // per-user inbox archive for the importing board user so a large import
           // (a real 1,418-task company shipped every task to the inbox) does not

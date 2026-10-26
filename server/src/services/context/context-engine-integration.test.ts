@@ -61,7 +61,7 @@ import { errorHandler } from "../../middleware/index.js";
 import { issueRoutes } from "../../routes/issues.js";
 import { buildPaperclipTaskMarkdown, getIssueExecutionContext } from "../heartbeat.js";
 import { buildNativeBootstrapSourceSet } from "../native-runtime/native-execution-input.js";
-import { assembleNativeContextRead, assertNativeContextReadSourceSetCurrent } from "../native-direct-input.js";
+import { assembleNativeContextRead, assertNativeContextReadSourceSetCurrent, assertNativeTaskSourceOwnerCurrent } from "../native-direct-input.js";
 import { createLocalAgentJwt, verifyLocalAgentJwt } from "../../agent-auth-jwt.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { createToolGatewayService } from "../tool-gateway.js";
@@ -692,8 +692,19 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     ]));
     expect(sourceSet?.policy.foundationRevisionIds).toEqual([foundation.latestRevisionId]);
 
-    await instanceSettingsService(db).updateExperimental({ enableContextEngineV1: true, enableFoundationV1: true,
-      enableCollectiveMemoryV1:true });
+    if (!taskCapture) throw new Error("Native bootstrap did not retain its exact Task source capture");
+    const [capturedTask] = await db.select({ status: issues.status, title: issues.title }).from(issues)
+      .where(and(eq(issues.companyId, seeded.companyId), eq(issues.id, task.id)));
+    if (!capturedTask) throw new Error("Native Context captured Task owner is unavailable");
+    await db.update(issues).set({ status: capturedTask.status === "in_progress" ? "backlog" : "in_progress",
+      updatedAt: new Date() }).where(and(eq(issues.companyId, seeded.companyId), eq(issues.id, task.id)));
+    await expect(assertNativeTaskSourceOwnerCurrent(db, { companyId: seeded.companyId,
+      actor: assembleInput.authorizationActor, source: taskCapture.input })).resolves.toBeUndefined();
+    await issueService(db).update(task.id, { title: `${capturedTask.title} changed after Context capture`,
+      actorUserId: seeded.userId, privacyActor: human });
+    await expect(assertNativeTaskSourceOwnerCurrent(db, { companyId: seeded.companyId,
+      actor: assembleInput.authorizationActor, source: taskCapture.input })).rejects.toMatchObject({ status: 403 });
+
     const contextMemory=await seedMemory({companyId:seeded.companyId,agentId:seeded.agent.id,
       content:"Enterprise strategy context memory from a directly captured Human Task.",privateSourceTask:true});
     const memoryTaskId=contextMemory.sourceIssueIds[0];
@@ -727,7 +738,6 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     await expect(assertNativeContextReadSourceSetCurrent(db,{...contextReadInput,sourceSet:{...contextRead.sourceSet,
       inputs:contextRead.sourceSet.inputs.map(value=>value.kind==="task"?{...value,contentHash:"0".repeat(64)}:value)}}))
       .rejects.toMatchObject({status:403});
-
     const witnessInput = { witness: context.nativeBootstrapWitness!, companyId: seeded.companyId, runId: run!.id,
       agentId: seeded.agent.id, issueId: task.id, renderedMarkdown: context.markdown,
       manifestIds: [{ companyId: seeded.companyId, contextManifestId: context.packet.manifest!.id }] };

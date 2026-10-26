@@ -193,7 +193,7 @@ export function specialistCompletionContract(
   if (!scenario) throw new Error("Unknown specialist evaluation case");
   return {
     objective: scenario.objective,
-    requiredOutputs: [{ key: "review_draft", jsonSchema: null }],
+    requiredOutputs: [{ kind: "task_document", key: "review_draft", jsonSchema: null }],
     businessInvariants: [...scenario.invariants],
     evidenceRequirements: [
       "Draft claims cite authorized, current source versions and mark material uncertainty",

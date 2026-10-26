@@ -69,7 +69,8 @@ export function runtimeConnectionIntentRoutes(db: Db, workerModels?: ReturnType<
   const managedMessagesRoute = async (req: Request, res: import("express").Response) => {
     if (req.headers.origin || req.headers.cookie || req.headers["sec-fetch-site"])
       throw forbidden("Managed model calls require runtime authentication");
-    const claims = verifyRuntimeToolsToken(bearer(req), "worker_model");
+    const token = bearer(req);
+    const claims = verifyRuntimeToolsToken(token, "worker_model") ?? verifyRuntimeToolsToken(token, "conversation_model");
     if (!claims) throw unauthorized("Invalid managed model capability");
     if (!workerModels) throw forbidden("Worker model transport is not configured");
     const controller = new AbortController();

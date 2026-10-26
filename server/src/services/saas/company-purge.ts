@@ -41,6 +41,7 @@ export async function purgeCompanyContent(
     await lockMemoryPrivacy(tx as unknown as Db,companyId);
     await assertCompanyManagedOpenCodeRuntimeDataErased(tx as unknown as Db, companyId);
     let platformModelFunding: Record<string, string> | undefined;
+    let nativeConversationModelFunding: Record<string, string> | undefined;
     const [hasFunding] = await tx.select({ id: orchestrationCompanyPurposeBudgets.id })
       .from(orchestrationCompanyPurposeBudgets)
       .where(eq(orchestrationCompanyPurposeBudgets.companyId, companyId)).limit(1);
@@ -97,6 +98,45 @@ export async function purgeCompanyContent(
         evidence: sql`coalesce(${companyDeletionOperations.evidence}, '{}'::jsonb) || jsonb_build_object('platformModelFunding', ${JSON.stringify(platformModelFunding)}::jsonb)`,
       }).where(eq(companyDeletionOperations.id, operation.id));
     }
+    const [hasConversationFunding] = await tx.execute<{ id: string }>(sql`
+      select id from orchestration_model_reservations
+      where company_id=${companyId}::uuid and purpose='conversation_model' limit 1`);
+    if (hasConversationFunding) {
+      if (!options.operationId || options.restoreQuarantine)
+        throw conflict("Native conversation model receipts require the canonical company offboarding operation");
+      const [operation] = await tx.select({ id: companyDeletionOperations.id, stage: companyDeletionOperations.stage,
+        status: companyDeletionOperations.status }).from(companyDeletionOperations).where(and(
+          eq(companyDeletionOperations.id, options.operationId), eq(companyDeletionOperations.companyId, companyId),
+        )).for("update");
+      if (!operation || operation.stage !== "purge" || operation.status !== "processing")
+        throw conflict("The canonical company offboarding purge operation is required");
+      await tx.execute(sql`update orchestration_model_reservations set status='cancelled',completed_at=clock_timestamp()
+        where company_id=${companyId}::uuid and purpose='conversation_model' and status='reserved'`);
+      const [unresolved] = await tx.execute<{ id: string }>(sql`
+        select id from orchestration_model_reservations where company_id=${companyId}::uuid
+          and purpose='conversation_model' and status in ('dispatched','unknown') limit 1`);
+      if (unresolved) throw conflict("Company offboarding is blocked while Native conversation model outcomes are unresolved");
+      const [receipt] = await tx.execute<{ reservation_count: string; maximum_reserved_minor: string;
+        completed_count: string; failed_count: string; cancelled_count: string; input_tokens: string; output_tokens: string }>(sql`
+        select
+          count(*)::text as reservation_count,
+          coalesce(sum(maximum_minor),0)::text as maximum_reserved_minor,
+          count(*) filter (where status='completed')::text as completed_count,
+          count(*) filter (where status='failed')::text as failed_count,
+          count(*) filter (where status='cancelled')::text as cancelled_count,
+          coalesce(sum((usage->>'inputTokens')::bigint),0)::text as input_tokens,
+          coalesce(sum((usage->>'outputTokens')::bigint),0)::text as output_tokens
+        from orchestration_model_reservations where company_id=${companyId}::uuid and purpose='conversation_model'`);
+      nativeConversationModelFunding = {
+        reservations: receipt?.reservation_count ?? "0",
+        maximumReservedMinorExposure: receipt?.maximum_reserved_minor ?? "0",
+        completed: receipt?.completed_count ?? "0",
+        failed: receipt?.failed_count ?? "0",
+        cancelled: receipt?.cancelled_count ?? "0",
+        settledInputTokens: receipt?.input_tokens ?? "0",
+        settledOutputTokens: receipt?.output_tokens ?? "0",
+      };
+    }
     if (!options.restoreQuarantine) {
       const alive = await tx.execute<{ present: boolean }>(
         sql`select exists(select 1 from runtime_cells where company_id=${companyId}::uuid and deleted_at is null) as present`,
@@ -108,10 +148,18 @@ export async function purgeCompanyContent(
     }
     // Publish the minimal tombstone inside this same transaction. Any failed
     // purge rolls it back; normal archival never grants evidence deletion.
+    const deleted: string[] = [];
     await tx.execute(sql`update ${companies} set status='archived',pause_reason='company_deleted',content_erasure_transaction_id=pg_current_xact_id()::text,updated_at=now() where id=${companyId}::uuid`);
+    if (nativeConversationModelFunding && options.operationId) {
+      await tx.update(companyDeletionOperations).set({
+        evidence: sql`coalesce(${companyDeletionOperations.evidence}, '{}'::jsonb) || jsonb_build_object('nativeConversationModelFunding', ${JSON.stringify(nativeConversationModelFunding)}::jsonb)`,
+      }).where(and(eq(companyDeletionOperations.id, options.operationId), eq(companyDeletionOperations.companyId, companyId)));
+      const removed = await tx.execute(sql`delete from orchestration_model_reservations
+        where company_id=${companyId}::uuid and purpose='conversation_model' returning id`);
+      if (removed.length) deleted.push("orchestration_model_reservations");
+    }
     await enqueueSkillVersionFileErasure(tx as unknown as Db, companyId);
     await enqueueCompanyRuntimeAssetErasure(tx as unknown as Db, companyId);
-    const deleted: string[] = [];
     // Native conversation identity is one checked tuple. Clear it atomically
     // after this transaction's company-erasure receipt; per-FK unlinking would
     // otherwise leave an invalid half-conversation and roll back the purge.

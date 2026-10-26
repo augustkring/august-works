@@ -1,10 +1,21 @@
 #!/usr/bin/env node
 import readline from "node:readline";
+import fs from "node:fs";
+import path from "node:path";
 
 let threadId = `agent-chat-${process.pid}`;
 let turnNumber = 0;
 const pendingTools = new Map();
 const lineReader = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
+
+function note(event) {
+  const destination = process.env.PAPERCLIP_AGENT_CHAT_EVENT_TRACE;
+  if (!destination) return;
+  try {
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    fs.appendFileSync(destination, `${JSON.stringify(event)}\n`, { mode: 0o600 });
+  } catch { /* Fixture diagnostics never affect the provider protocol. */ }
+}
 
 function send(value) { process.stdout.write(`${JSON.stringify(value)}\n`); }
 
@@ -50,7 +61,8 @@ function decodeComment(comment) {
 
 function tool(turn, name, args, next) {
   const id = `agent-chat-tool-${turn.number}-${turn.step++}`;
-  pendingTools.set(id, { turn, next });
+  pendingTools.set(id, { turn, name, next });
+  note({ event: "tool_call", turn: turn.number, tool: name, workMode: turn.workMode ?? null });
   send({ id, method: "item/tool/call", params: {
     threadId, turnId: turn.turnId, callId: id, tool: name, arguments: args,
   } });
@@ -71,12 +83,14 @@ function progress(turn, body, next = () => finish(turn, body)) {
 
 function finish(turn, text) {
   const emitReply = () => {
-    const item = { id: `agent-chat-message-${turn.number}`, type: "agentMessage", phase: "final_answer", text };
+    const item = { id: `agent-chat-message-${turn.number}`, type: "agentMessage", phase: "final_answer", channel: "final", text };
     send({ method: "item/started", params: { threadId, turnId: turn.turnId, item } });
     send({ method: "item/completed", params: { threadId, turnId: turn.turnId, item: { ...item, status: "completed" } } });
+    note({ event: "final_item_emitted", turn: turn.number, processId: process.pid });
     if ([...pendingTools.values()].some((pending) => pending.turn === turn))
       throw new Error("fixture attempted to complete a turn with pending tool replies");
     send({ method: "turn/completed", params: { threadId, turn: { id: turn.turnId, status: "completed" } } });
+    note({ event: "turn_completed_emitted", turn: turn.number, processId: process.pid });
   };
   const reportYieldedReply = turn.workMode === "planning" ||
     (turn.workMode === "ask" && turn.command?.action !== "question");
@@ -114,6 +128,7 @@ function actionAfterHistory(turn, comments) {
   const humanComments = comments.filter(comment => comment?.authorUserId);
   const current = humanComments.at(-1);
   const command = decodeComment(current);
+  note({ event: "turn_context", turn: turn.number, workMode: turn.workMode ?? null, action: command.action });
   const needsContext = humanComments.length === 0 || command.action === "question" ||
     (command.action === "project" && command.direct === true) ||
     (command.action === "plan" && command.approval === true);
@@ -345,7 +360,14 @@ function handleToolResult(message) {
   const pending = pendingTools.get(message.id);
   if (!pending) return false;
   pendingTools.delete(message.id);
-  pending.next(toolValue(message));
+  const value = toolValue(message);
+  const details = value && typeof value === "object" ? value : {};
+  const rawCode = message.error?.code ?? details.errorCode ?? details.code;
+  const errorCode = typeof rawCode === "string" && /^[A-Z][A-Z0-9_]{1,63}$/.test(rawCode) ? rawCode : null;
+  note({ event: "tool_result", turn: pending.turn.number, tool: pending.name,
+    failed: Boolean(message.error || details.isError === true || details.ok === false || details.success === false || details.error),
+    errorCode });
+  pending.next(value);
   return true;
 }
 
@@ -365,13 +387,16 @@ lineReader.on("line", line => {
       break;
     }
     case "thread/read":
-      send({ id, result: { thread: { id: threadId, turns: [] } } });
+      send({ id, result: {
+        thread: { id: threadId, status: { type: "idle" }, turns: [] },
+      } });
       break;
     case "turn/start": {
       turnNumber += 1;
       const turnId = `agent-chat-turn-${process.pid}-${turnNumber}`;
       const turn = { turnId, number: turnNumber, step: 0,
         completionContract: completionContractFrom(message.params?.input ?? message.params) };
+      note({ event: "turn_start", turn: turnNumber });
       send({ id, result: { turn: { id: turnId, status: "inProgress" } } });
       send({ method: "turn/started", params: { threadId, turn: { id: turnId } } });
       tool(turn, "get_task_context", {}, context => {
@@ -379,6 +404,7 @@ lineReader.on("line", line => {
         turn.issueId = context?.activeTask?.id;
         turn.activeTask = context?.activeTask;
         turn.workMode = context?.activeTask?.workMode;
+        note({ event: "task_context", turn: turn.number, workMode: turn.workMode ?? null });
         tool(turn, "get_task_history", { limit: 100 }, history =>
           actionAfterHistory(turn, Array.isArray(history?.comments) ? history.comments : []));
       });

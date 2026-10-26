@@ -431,7 +431,7 @@ export async function assertScopedNativeMemoryReplayReceiptCurrent(db: Db, input
     expiresAt: memoryRecords.expiresAt,
     retentionState: memoryRecords.retentionState, reviewState: memoryRecords.reviewState,
     createdByActorType: memoryRecords.createdByActorType, createdByActorId: memoryRecords.createdByActorId,
-    sourceRunIds: memoryRecords.sourceRunIds, sourceIssueIds: memoryRecords.sourceIssueIds,
+    sourceRunIds: memoryRecords.sourceRunIds,
     sourceProvenanceQualified: memoryRecords.sourceProvenanceQualified,
     payloadSourceProtocolVersion: memoryRecords.payloadSourceProtocolVersion,
     payloadSourceSnapshot: memoryRecords.payloadSourceSnapshot,
@@ -452,11 +452,11 @@ export async function assertScopedNativeMemoryReplayReceiptCurrent(db: Db, input
     output.payloadSourceProtocolVersion !== 1 || output.payloadSourceSnapshotInvalidated ||
     metadata?.nativeManagedMemoryInvocationId !== input.invocationId ||
     metadata.nativeManagedMemoryCallId !== input.callId || metadata.nativeManagedMemoryArgumentsHash !== input.argumentsHash ||
-    !output.sourceRunIds.includes(input.runId) || !output.sourceIssueIds.includes(input.issueId) ||
-    !snapshot.success || snapshot.data.owner.kind !== "memory_record" ||
+    !output.sourceRunIds.includes(input.runId) ||
+    !snapshot.success || !snapshot.data.inputs.some(source => source.kind === "task" && source.issueId === input.issueId) ||
+    snapshot.data.owner.kind !== "memory_record" ||
     snapshot.data.owner.companyId !== input.companyId || snapshot.data.owner.id !== recordId)
-    throw new ToolGatewayHttpError(403, "Managed Memory output is no longer current",
-      "native_memory_capture_invalid");
+    throw new ToolGatewayHttpError(403, "Managed Memory output is no longer current", "native_memory_capture_invalid");
   const [owner] = await db.execute<{ valid: boolean }>(sql`select
     public.aw_native_payload_body_hash('memory_record',to_jsonb(m))=${snapshot.data.owner.contentHash}
       and encode(sha256(convert_to((m.payload_source_snapshot-'digest')::text,'UTF8')),'hex')=${snapshot.data.digest} as valid

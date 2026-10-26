@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, readlink, rm, stat, writeFile } from "node:fs/promises";
 import { createServer as createHttpsServer } from "node:https";
 import { createServer as createHttpServer } from "node:http";
@@ -239,7 +240,7 @@ export async function makeFixtureTreeWritable(target: string): Promise<void> {
 }
 
 export type ManagedNativeOpenCodeModelStep = {
-  tool: "write_document" | "create_task" | "self_remember" | "read_context" | "call_api" | "paperclip_finish";
+  tool: "write_document" | "create_task" | "create_project" | "self_remember" | "read_context" | "call_api" | "paperclip_finish";
   id?: string;
   input?: Record<string, unknown>;
 };
@@ -257,6 +258,7 @@ export type ManagedNativeMemoryReplayProbe = {
     callId: string;
     initialResult: unknown;
     replay: () => Promise<unknown>;
+    acceptOutput: (recordId: string) => Promise<void>;
     revokeOutput: (recordId: string) => Promise<void>;
     assertConsumedInputsCurrent: (recordId: string) => Promise<void>;
   }) => Promise<void>;
@@ -282,13 +284,24 @@ export async function runManagedNativeOpenCodeFixture(input: {
   expectProjectWorkspaceSourceDenial?: boolean;
   /** Test-only probe that repeats one actual, sealed Gateway Memory call with its original scoped invocation context. */
   nativeMemoryReplayProbe?: ManagedNativeMemoryReplayProbe;
+  /** Stop after the first real provider request to qualify the spawned OpenCode process in isolation. */
+  processProbeOnly?: boolean;
+  /** Test-only barrier after exact provider capture and before managed Project source validation/mutation. */
+  beforeManagedProjectCreate?: (capture: import("../../services/native-runtime/native-execution-input.js").NativeModelOutputCapture) => Promise<void>;
+  /** Test-only exact same-call Project replay probe after the original commit. */
+  afterManagedProjectCreate?: (input: { actor: AuthorizationActor; companyId: string; issueId: string;
+    capture: import("../../services/native-runtime/native-execution-input.js").NativeModelOutputCapture;
+    callId: string; arguments: Record<string, unknown>; result: { project: Record<string, unknown>; receipt: import("../../services/native-project-output.js").NativeProjectCreateReceipt;
+      sourceSet: import("../../services/native-runtime/native-execution-input.js").NativePayloadSourceSet } }) => Promise<void>;
   reuseIdentity?: { companyId: string; agentId: string; aliceUserId: string; bobUserId: string };
   onPreserveDebugArtifacts?: () => void;
 }) {
   const { db, root, instanceId } = input;
   const diagnosticsEnabled = process.env.PAPERCLIP_MANAGED_OPENCODE_E2E_DIAGNOSTICS === "1";
   const ownerFrameDiagnosticsEnabled = process.env.PAPERCLIP_MANAGED_OPENCODE_OWNER_FRAMES === "1";
-  const sourceMemoDiagnosticsEnabled = process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS === "1";
+  const sourceFirstRequestProbeEnabled = process.env.PAPERCLIP_NATIVE_SOURCE_FIRST_REQUEST_PROBE === "1";
+  const sourceMemoDiagnosticsEnabled = process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS === "1" ||
+    sourceFirstRequestProbeEnabled;
   let contextProbeCallId: string | null = null;
   let pendingContextProbeCallId: string | null = null;
   let pendingContextProbeStartedAt: number | null = null;
@@ -389,14 +402,17 @@ export async function runManagedNativeOpenCodeFixture(input: {
     { tool: "paperclip_finish", id: "managed-e2e-finish-1" },
   ];
   const modelSteps = input.steps ?? defaultSteps;
-  // The managed E2E performs one bounded real provider roundtrip per step;
-  // scale only this fixture's whole-turn allowance, never product deadlines.
-  const fixtureTurnTimeoutMs = Math.max(90_000, 30_000 * modelSteps.length);
+  // The managed E2E performs one bounded real provider roundtrip per configured
+  // tool step, followed by OpenCode's required final-text roundtrip after finish.
+  // Scale only this fixture's whole-turn allowance, never product deadlines.
+  const fixtureProviderResponses = modelSteps.length + 1;
+  const fixtureTurnTimeoutMs = input.processProbeOnly ? 20_000 : Math.max(90_000, 30_000 * fixtureProviderResponses);
   if (modelSteps.length < 2 || modelSteps.at(-1)?.tool !== "paperclip_finish" ||
     modelSteps.slice(0, -1).some(step => step.tool === "paperclip_finish") ||
     new Set(modelSteps.map((step, index) => step.id ?? `managed-e2e-${step.tool}-${index}`)).size !== modelSteps.length)
     throw new Error("managed_fixture_model_steps_invalid");
   const includesProjectApiRead = modelSteps.some(step => step.tool === "call_api");
+  const includesProjectCreate = modelSteps.some(step => step.tool === "create_project");
   for (const action of input.humanActions ?? []) {
     const target = modelSteps.find((step, index) =>
       (step.id ?? `managed-e2e-${step.tool}-${index}`) === action.afterModelToolCallId);
@@ -525,26 +541,38 @@ export async function runManagedNativeOpenCodeFixture(input: {
     const projectApiApp = express();
     projectApiApp.use(express.json());
     let fixtureProjectHumanCookie: string | null = null;
-    if (includesProjectApiRead) {
-      const [projectSession] = await db.select({ id: authSessions.id, userId: authSessions.userId,
+    let fixtureProjectBobCookie: string | null = null;
+    if (includesProjectApiRead || includesProjectCreate) {
+      const [projectSession, projectBobSession] = await Promise.all([
+        db.select({ id: authSessions.id, userId: authSessions.userId,
         token: authSessions.token, expiresAt: authSessions.expiresAt })
-        .from(authSessions).where(and(eq(authSessions.id, sessionId), eq(authSessions.userId, aliceUserId)));
-      if (!projectSession || projectSession.expiresAt.getTime() <= Date.now())
+          .from(authSessions).where(and(eq(authSessions.id, sessionId), eq(authSessions.userId, aliceUserId)))
+          .then(rows => rows[0]),
+        db.select({ id: authSessions.id, userId: authSessions.userId,
+          token: authSessions.token, expiresAt: authSessions.expiresAt })
+          .from(authSessions).where(and(eq(authSessions.id, bobSessionId), eq(authSessions.userId, bobUserId)))
+          .then(rows => rows[0]),
+      ]);
+      if (!projectSession || projectSession.expiresAt.getTime() <= Date.now() ||
+          !projectBobSession || projectBobSession.expiresAt.getTime() <= Date.now())
         throw new Error("managed_fixture_project_human_session_unavailable");
       fixtureProjectHumanCookie = `session_token=${encodeURIComponent(projectSession.token)}`;
+      fixtureProjectBobCookie = `session_token=${encodeURIComponent(projectBobSession.token)}`;
       projectApiApp.use(actorMiddleware(db, { deploymentMode: "authenticated", resolveSession: async req => {
         const cookieToken = (req.header("cookie") ?? "").split(";").map(value => value.trim())
-          .map(value => value.slice(value.indexOf("=") + 1)).map(value => decodeURIComponent(value))
-          .find(value => value === projectSession.token);
-        if (!cookieToken || projectSession.expiresAt.getTime() <= Date.now()) return null;
+          .map(value => value.slice(value.indexOf("=") + 1)).map(value => decodeURIComponent(value)).find(value =>
+            value === projectSession.token || value === projectBobSession.token);
+        const session = cookieToken === projectSession.token ? projectSession
+          : cookieToken === projectBobSession.token ? projectBobSession : null;
+        if (!session || session.expiresAt.getTime() <= Date.now()) return null;
         const [user] = await db.select({ id: authUsers.id, name: authUsers.name, email: authUsers.email })
-          .from(authUsers).where(eq(authUsers.id, projectSession.userId));
+          .from(authUsers).where(eq(authUsers.id, session.userId));
         if (!user) return null;
-        const session: BetterAuthSessionResult = {
-          session: { id: projectSession.id, userId: projectSession.userId, expiresAt: projectSession.expiresAt },
+        const result: BetterAuthSessionResult = {
+          session: { id: session.id, userId: session.userId, expiresAt: session.expiresAt },
           user,
         };
-        return session;
+        return result;
       } }));
       projectApiApp.use("/api", projectRoutes(db));
       projectApiApp.use(errorHandler);
@@ -654,10 +682,13 @@ export async function runManagedNativeOpenCodeFixture(input: {
       completionContract: { objective: "Complete the managed source-bound task", requiredOutputs: (() => {
         const keys = modelSteps.filter(step => step.tool === "write_document")
           .map(step => step.input?.key).filter((key): key is string => typeof key === "string");
-        return keys.map(key => ({ key }));
+        const documentOutputs = keys.map(key => ({ kind: "task_document" as const, key }));
+        const projectOutputs = modelSteps.filter(step => step.tool === "create_project")
+          .map((_step, index) => ({ kind: "private_project" as const, key: index === 0 ? "project" : `project_${index + 1}` }));
+        return [...documentOutputs, ...projectOutputs];
       })(),
         businessInvariants: ["Use only this task's private workspace"] },
-      budgets: { maxModelCostMinor: Math.max(10, modelSteps.length * 2), maxToolActions: modelSteps.length + 2 },
+      budgets: { maxModelCostMinor: Math.max(10, fixtureProviderResponses * 2), maxToolActions: modelSteps.length + 2 },
       workers: [{ key: "writer", issueId: task.id }],
     });
     await db.update(orchestrationPlans).set({ status: "running", startedAt: new Date(),
@@ -742,9 +773,12 @@ export async function runManagedNativeOpenCodeFixture(input: {
     let brokerPostCount = 0;
     const fakeFetchEntrances: Array<{ host: string; path: string; apiKeyHeader: boolean; bearerHeader: boolean }> = [];
     let qualifiedManagedProcessAtFirstProviderRequest = false;
+    let refreshOpenCodeProcessFacts: (() => Promise<void>) | null = null;
     const modelCalls: Array<Record<string, unknown>> = [];
     const contextResultConsumers: Array<{ callId: string; consumed: boolean }> = [];
     const projectApiResultConsumers: Array<{ callId: string; consumed: boolean; contentDigest: string | null }> = [];
+    const projectCreateResultConsumers: Array<{ callId: string; consumed: boolean; projectId: string | null;
+      privateProject: boolean; contentDigest: string | null }> = [];
     const brokerRequests: string[] = [];
     const brokerFailureFacts = () => brokerRequests
       .filter(value => !value.startsWith("managed-tool-schema-comparison ")).slice(-40);
@@ -753,6 +787,19 @@ export async function runManagedNativeOpenCodeFixture(input: {
     const assignedToolGateway = createToolGatewayService(db);
     let pendingNativeMemoryReplayProbe: { initialResult: unknown; replay: () => Promise<unknown> } | null = null;
     let nativeMemoryReplayProbeCompleted = false;
+    let nativeMemoryReplayProbeToolResultObserved = false;
+    let nativeMemoryReplayProbePhase = "not_started";
+    let nativeMemoryReplayProbeFailure: { phase: string; name: string; code?: string; message: string } | null = null;
+    const nativeReplayProbeSafeMessages = new Set([
+      "Managed Memory replay receipt is unavailable", "Managed Memory replay transaction is unavailable",
+      "Managed Memory replay receipt is no longer current", "Managed Memory output is no longer current",
+      "Managed Memory output changed during replay validation", "Managed Memory output destination is no longer readable",
+      "The Native output capture is unavailable", "The Native output capture is not bound to its settled provider tool use",
+      "The Native output capture lacks its consumed source components", "The Native consumed source set is unavailable",
+      "The Native consumed source receipt is unavailable", "The Native source component is malformed",
+      "A Native output Memory source is unavailable", "A Native Memory source is unavailable",
+      "A Native output Task source is unavailable", "A Native output Task source changed or was erased",
+    ]);
     if (input.nativeMemoryReplayProbe) {
       const probe = input.nativeMemoryReplayProbe;
       const probeStep = modelSteps.find(step => step.id === probe.callId && step.tool === "self_remember");
@@ -772,6 +819,59 @@ export async function runManagedNativeOpenCodeFixture(input: {
         return initialResult;
       };
     }
+    const runNativeMemoryReplayProbe = async () => {
+      const pending = pendingNativeMemoryReplayProbe;
+      if (!input.nativeMemoryReplayProbe || !pending || nativeMemoryReplayProbeCompleted) return;
+      const probe = input.nativeMemoryReplayProbe;
+      nativeMemoryReplayProbePhase = "bind_output_result";
+      const envelope = pending.initialResult && typeof pending.initialResult === "object" && !Array.isArray(pending.initialResult)
+        ? pending.initialResult as Record<string, unknown> : {};
+      const result = envelope.result && typeof envelope.result === "object" && !Array.isArray(envelope.result)
+        ? envelope.result as Record<string, unknown> : {};
+      const data = result.data && typeof result.data === "object" && !Array.isArray(result.data)
+        ? result.data as Record<string, unknown> : {};
+      const outputRecord = data.record && typeof data.record === "object" && !Array.isArray(data.record)
+        ? data.record as Record<string, unknown> : {};
+      const recordId = typeof outputRecord.id === "string" ? outputRecord.id : null;
+      if (!recordId || envelope.status !== "completed")
+        throw new Error("managed_fixture_memory_replay_initial_result_unavailable");
+      const [output] = await db.select({ payloadSourceSnapshot: memoryRecords.payloadSourceSnapshot }).from(memoryRecords)
+        .where(and(eq(memoryRecords.companyId, companyId), eq(memoryRecords.id, recordId)));
+      const snapshot = nativePayloadSourceSnapshotSchema.parse(output?.payloadSourceSnapshot);
+      const dispatchIndex = snapshot.inputs.findIndex(value => value.kind === "worker_model_dispatch");
+      if (dispatchIndex !== snapshot.inputs.length - 1 || dispatchIndex < 0)
+        throw new Error("managed_fixture_memory_replay_source_prefix_missing");
+      const actor: AuthorizationActor = { type: "agent", source: "none", companyId, agentId,
+        runId: run!.id, onBehalfOfUserId: aliceUserId };
+      let replayCount = 0;
+      let consumedInputCheckCount = 0;
+      await probe.run({ companyId, runId: run!.id, callId: probe.callId, initialResult: pending.initialResult,
+        replay: () => {
+          replayCount += 1;
+          nativeMemoryReplayProbePhase = replayCount === 1 ? "matching_replay" : "revoked_output_replay";
+          return pending.replay();
+        },
+        acceptOutput: async requestedRecordId => {
+          if (requestedRecordId !== recordId) throw new Error("managed_fixture_memory_replay_output_changed");
+          nativeMemoryReplayProbePhase = "accept_output";
+          await memoryService(db).reviewCandidate(companyId, recordId, { decision: "accept" }, aliceMemoryActor);
+        },
+        revokeOutput: async requestedRecordId => {
+          if (requestedRecordId !== recordId) throw new Error("managed_fixture_memory_replay_output_changed");
+          nativeMemoryReplayProbePhase = "revoke_output";
+          await memoryService(db).revoke(companyId, recordId,
+            { reason: "The Human revoked this output during its live Native replay test." }, aliceMemoryActor);
+        },
+        assertConsumedInputsCurrent: async requestedRecordId => {
+          if (requestedRecordId !== recordId) throw new Error("managed_fixture_memory_replay_output_changed");
+          consumedInputCheckCount += 1;
+          nativeMemoryReplayProbePhase = consumedInputCheckCount === 1 ? "source_prefix_before_replay" : "source_prefix_after_revoke";
+          await assertNativePayloadSourceSetCurrent(db, { companyId, issueId: task.id, runId: run!.id, actor,
+            policy: snapshot.policy, inputs: snapshot.inputs.slice(0, dispatchIndex) });
+        },
+      });
+      nativeMemoryReplayProbeCompleted = true;
+    };
     registerAssignedMcpGateway(db, assignedToolGateway, scopedDb => createToolGatewayService(scopedDb));
     expect(getAssignedMcpGateway(db)).toBe(assignedToolGateway);
     await db.insert(toolPolicies).values({ companyId,
@@ -787,12 +887,20 @@ export async function runManagedNativeOpenCodeFixture(input: {
         expect(String(url)).toBe("https://api.anthropic.com/v1/messages");
         expect(requestHeaders.get("x-api-key")).toBe(credential);
         if (responseCount === 0) {
+          if (!openCodeProcessFacts.length) await refreshOpenCodeProcessFacts?.();
+          if (observedRunnerPid !== null) runnerPidProcAliveAtFirstRequest = await readFile(`/proc/${observedRunnerPid}/stat`, "utf8")
+            .then(() => true).catch(error => { recordProcFailure("first_request_runner_stat", error); return false; });
           qualifiedManagedProcessAtFirstProviderRequest = openCodeProcessFacts.some(fact => fact.shaMatchesQualifiedBinary &&
             fact.managedEnvironment.dataHomeMatchesManagedRun);
         }
         const body = JSON.parse(String(init.body)) as Record<string, unknown>;
         modelCalls.push(body);
         responseCount += 1;
+        if (input.processProbeOnly) return new Response(JSON.stringify({
+          id: "msg_managed_process_probe", type: "message", role: "assistant", model,
+          stop_reason: "end_turn", content: [{ type: "text", text: "Process qualification probe complete." }],
+          usage: { input_tokens: 1, output_tokens: 1 },
+        }), { status: 200, headers: { "content-type": "application/json" } });
         if (sourceMemoDiagnosticsEnabled && responseCount === 5) sourceMemoLabelTransactions = true;
         if (responseCount > 1 && modelSteps[responseCount - 2]?.tool === "read_context") {
           const previousStep = modelSteps[responseCount - 2]!;
@@ -829,9 +937,40 @@ export async function runManagedNativeOpenCodeFixture(input: {
           projectApiResultConsumers.push({ callId, consumed: matching.length === 1 && matching[0]!.is_error !== true &&
             typeof content === "string", contentDigest });
         }
+        if (responseCount > 1 && modelSteps[responseCount - 2]?.tool === "create_project") {
+          const previousStep = modelSteps[responseCount - 2]!;
+          const callId = previousStep.id ?? `managed-e2e-${previousStep.tool}-${responseCount - 1}`;
+          const messages = Array.isArray(body.messages) ? body.messages : [];
+          const toolResults = messages.flatMap(message => {
+            if (!message || typeof message !== "object") return [];
+            const content = (message as Record<string, unknown>).content;
+            return Array.isArray(content) ? content : [];
+          }).filter(block => block && typeof block === "object") as Array<Record<string, unknown>>;
+          const matching = toolResults.filter(block => block.type === "tool_result" && block.tool_use_id === callId);
+          let projectId: string | null = null, privateProject = false, contentDigest: string | null = null;
+          const content = matching.length === 1 ? matching[0]!.content : null;
+          if (typeof content === "string") {
+            try {
+              const parsed = JSON.parse(content) as Record<string, unknown>;
+              projectId = typeof parsed.id === "string" ? parsed.id : null;
+              privateProject = parsed.visibility === "private";
+              contentDigest = canonicalHash(parsed);
+            } catch { /* Keep only bounded result identity facts. */ }
+          }
+          projectCreateResultConsumers.push({ callId,
+            consumed: matching.length === 1 && matching[0]!.is_error !== true && typeof content === "string",
+            projectId, privateProject, contentDigest });
+        }
         const tools = (body.tools as Array<Record<string, unknown>>) ?? [];
         const step = modelSteps[responseCount - 1];
-        if (!step) throw new Error("Managed fixture provider exhausted its configured model steps.");
+        if (!step) {
+          if (responseCount === fixtureProviderResponses && modelSteps.at(-1)?.tool === "paperclip_finish")
+            return new Response(JSON.stringify({ id: `msg_managed_e2e_final_${responseCount}`, type: "message", role: "assistant",
+              model, stop_reason: "end_turn", content: [{ type: "text", text: "The requested managed task is complete." }],
+              usage: { input_tokens: 80, output_tokens: 12 } }),
+            { status: 200, headers: { "content-type": "application/json" } });
+          throw new Error("Managed fixture provider exhausted its configured model steps.");
+        }
         if (step.tool === "read_context" && diagnosticsEnabled) {
           pendingContextProbeCallId = step.id ?? `managed-e2e-${step.tool}-${responseCount - 1}`;
           pendingContextProbeStartedAt = Date.now();
@@ -845,7 +984,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
           void watchContextInvocation();
         }
         const findTool = (name: ManagedNativeOpenCodeModelStep["tool"]) => tools.find(tool => {
-          if (name === "paperclip_finish") return tool.name === "paperclip_finish" || toolName(tool.name) === "finish";
+          if (name === "paperclip_finish") return tool.name === "paperclip_finish" || toolName(tool.name) === "paperclip_finish";
           return toolName(tool.name) === name;
         });
         if (step.tool === "call_api") {
@@ -856,6 +995,16 @@ export async function runManagedNativeOpenCodeFixture(input: {
               pathParams: { type: "object", additionalProperties: false,
                 properties: { id: { type: "string", format: "uuid" } }, required: ["id"] } },
             required: ["operationId", "pathParams"] });
+        }
+        if (step.tool === "create_project") {
+          const createTool = findTool("create_project");
+          expect(createTool?.input_schema).toEqual({ type: "object", additionalProperties: false,
+            properties: { name: { type: "string", minLength: 1, maxLength: 200 },
+              description: { type: "string", maxLength: 4000 },
+              workspace: { type: "object", additionalProperties: false,
+                properties: { name: { type: "string", minLength: 1, maxLength: 200 } }, required: ["name"] },
+              idempotencyKey: { type: "string", minLength: 1, maxLength: 255 } },
+            required: ["name", "workspace", "idempotencyKey"] });
         }
         if (step.tool === "paperclip_finish") {
           const finish = findTool(step.tool);
@@ -899,7 +1048,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
       brokerRequests.push(`${req.method} ${req.path}`);
       if (req.method === "POST" && req.path === "/runtime-tools/model/v1/messages") {
         brokerPostCount += 1;
-        if (sourceMemoDiagnosticsEnabled && brokerPostCount === 6) {
+        if (sourceMemoDiagnosticsEnabled && (brokerPostCount === 6 || sourceFirstRequestProbeEnabled && brokerPostCount === 1)) {
           sourceMemoLabelTransactions = true;
           if (!sourceLockSnapshotTimer) sourceLockSnapshotTimer = setTimeout(() => {
             void captureSourceLockSnapshot().catch(() => undefined);
@@ -946,6 +1095,19 @@ export async function runManagedNativeOpenCodeFixture(input: {
         return value.type === "tool_result" && value.is_error !== true && typeof value.tool_use_id === "string"
           ? [value.tool_use_id] : [];
       });
+      if (input.nativeMemoryReplayProbe && incomingToolResults.includes(input.nativeMemoryReplayProbe.callId)) {
+        nativeMemoryReplayProbeToolResultObserved = true;
+        try { await runNativeMemoryReplayProbe(); }
+        catch (error) {
+          const row = error && typeof error === "object" ? error as { name?: unknown; code?: unknown; reasonCode?: unknown; message?: unknown } : {};
+          nativeMemoryReplayProbeFailure = { phase: nativeMemoryReplayProbePhase,
+            name: safeCode(row.name) ?? "UnknownError", code: safeCode(row.code) ?? safeCode(row.reasonCode),
+            message: typeof row.message === "string" && nativeReplayProbeSafeMessages.has(row.message)
+              ? row.message : safeCode(row.message) ?? (row.name === "AssertionError" ? "assertion_failed" : "probe_failed") };
+          next(error);
+          return;
+        }
+      }
       for (const action of input.humanActions ?? []) {
         const callId = action.afterModelToolCallId;
         const actionKey = `${action.action}:${callId}`;
@@ -1272,7 +1434,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
     setupRunnerPrpWebSocketServer(broker, { apiUrl: `https://127.0.0.1:${address.port}` });
     let apiServer: ReturnType<typeof createHttpServer> | null = null;
     const originalPaperclipApiUrl = process.env.PAPERCLIP_API_URL;
-    if (includesProjectApiRead) {
+    if (includesProjectApiRead || includesProjectCreate) {
       apiServer = createHttpServer(projectApiApp);
       await new Promise<void>((resolveListen, reject) => {
         apiServer!.once("error", reject);
@@ -1291,6 +1453,25 @@ export async function runManagedNativeOpenCodeFixture(input: {
       .update(await readFile(opencodeBinary)).digest("hex");
     const diagnostics: string[] = [];
     const openCodeProcessFacts: Array<{ shaMatchesQualifiedBinary: boolean; managedEnvironment: Record<string, boolean> }> = [];
+    const processInspectionFailures: Record<string, number> = {};
+    let observedRunnerPid: number | null = null;
+    let runnerPidProcAliveAtSpawn = false;
+    let runnerPidProcAliveAtFirstRequest = false;
+    let procOpenCodeCommCandidates = 0;
+    let procHashReadSuccesses = 0;
+    let procHashMismatches = 0;
+    const recordProcFailure = (target: string, error: unknown) => {
+      const raw = error && typeof error === "object" ? (error as NodeJS.ErrnoException).code : undefined;
+      const code = raw === "EACCES" || raw === "EPERM" || raw === "ENOENT" ? raw : "other";
+      const key = target + ":" + code;
+      processInspectionFailures[key] = Math.min(1000, (processInspectionFailures[key] ?? 0) + 1);
+    };
+    let spawnExecutableKind: "opencode" | "runner" | "node" | "other" | "unavailable" = "unavailable";
+    let inspectedRunnerDescendants = 0;
+    let pinnedOpenCodeDescendants = 0;
+    let inspectedRunnerTaskEntries = 0;
+    let inspectedRunnerChildPidEntries = 0;
+    let processProbeExecutionFailure: { name: string; code: string | null } | null = null;
     const capabilityPayload = JSON.parse(Buffer.from(minted.token.split(".")[1]!, "base64url").toString("utf8")) as Record<string, unknown>;
     const workerModelClaims = capabilityPayload.worker_model && typeof capabilityPayload.worker_model === "object"
       ? capabilityPayload.worker_model as Record<string, unknown> : {};
@@ -1319,11 +1500,11 @@ export async function runManagedNativeOpenCodeFixture(input: {
     })}`);
     let runtimeDirectory = "";
     let configDirectory = "";
-    let completedNativeFinalization: {
+    type ManagedNativeFinalization = {
       result: Record<string, unknown>; terminal: PrpTerminalState; turnId: string | null;
       normalizedSessionId: string; sourceInstanceId: string;
-    } | null = null;
-    const processTreeTimers: ReturnType<typeof setInterval>[] = [];
+    };
+    let completedNativeFinalization: ManagedNativeFinalization | null = null;
     const observedOpenCodePids = new Set<number>();
     let managedProviderConfigReported = false;
     const pgMonitor = postgres(input.connectionString, { max: 1 });
@@ -1586,40 +1767,96 @@ export async function runManagedNativeOpenCodeFixture(input: {
     const onSpawn = async (meta: { pid: number; processGroupId: number | null; startedAt: string }) => {
       await persistHeartbeatRunProcessMetadata(db, run!.id, meta);
       const { pid } = meta;
+      observedRunnerPid = pid;
+      runnerPidProcAliveAtSpawn = await readFile(`/proc/${pid}/stat`, "utf8")
+        .then(() => true).catch(error => { recordProcFailure("spawn_stat", error); return false; });
       diagnostics.push(`runner process pid ${pid}`);
-      const observed = new Set<number>();
-      let timer: ReturnType<typeof setInterval> | undefined;
-      const inspect = async () => {
+      // OpenCodeServerDriver reports the spawned OpenCode PID itself here.
+      // Inspect that exact process before walking its descendants; the binary
+      // can finish quickly enough that a later /proc sweep would miss it.
+      const [spawnExecutablePath, spawnEnvironmentText] = await Promise.all([
+        readlink(`/proc/${pid}/exe`).catch(error => { recordProcFailure("spawn_exe", error); return ""; }),
+        readFile(`/proc/${pid}/environ`, "utf8").catch(error => { recordProcFailure("spawn_environment", error); return ""; }),
+      ]);
+      const spawnedExecutable = spawnExecutablePath.split("/").at(-1)?.toLowerCase() ?? "";
+      spawnExecutableKind = /opencode(?:[-.]|$)/i.test(spawnedExecutable) ? "opencode" :
+        /runnerd|paperclip-runner/i.test(spawnedExecutable) ? "runner" : /node/i.test(spawnedExecutable) ? "node" :
+          spawnExecutablePath ? "other" : "unavailable";
+      diagnostics.push(`spawn process inspection: executable=${spawnExecutableKind} environment=${spawnEnvironmentText ? "readable" : "unavailable"}`);
+      if (/(?:^|\/)opencode(?:[-.]|$)/i.test(spawnExecutablePath)) {
+        const [runningHash] = await Promise.all([
+          readFile(`/proc/${pid}/exe`).then(bytes => createHash("sha256").update(bytes).digest("hex")).catch(() => ""),
+        ]);
+        const spawnEnvironment = spawnEnvironmentText.split("\0");
+        observedOpenCodePids.add(pid);
+        openCodeProcessFacts.push({ shaMatchesQualifiedBinary: runningHash === qualifiedOpenCodeSha256,
+          managedEnvironment: {
+            brokerOrigin: spawnEnvironment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN=")),
+            inputCap: spawnEnvironment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND=")),
+            outputCap: spawnEnvironment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS=")),
+            placeholderKey: spawnEnvironment.includes("ANTHROPIC_API_KEY=paperclip-managed-model-broker"),
+            dataHomeMatchesManagedRun: spawnEnvironment.includes(`XDG_DATA_HOME=${expectedOpenCodeDataHome()}`),
+          } });
+      }
+      const inspect = async (includeGlobalProcessDiscovery = false) => {
         const descendants: Array<{ pid: number; parent: number }> = [];
         const pending = [pid];
         const parents = new Map<number, number>();
+        const maximumDescendants = 128;
         for (let depth = 0; pending.length > 0 && depth < 8; depth += 1) {
           const parentPid = pending.shift()!;
-          const children = await readFile(`/proc/${parentPid}/task/${parentPid}/children`, "utf8").catch(() => "");
-          for (const rawChildPid of children.trim().split(/\s+/)) {
-            const childPid = Number(rawChildPid);
-            if (!Number.isSafeInteger(childPid) || childPid <= 0 || parents.has(childPid)) continue;
-            parents.set(childPid, parentPid);
-            descendants.push({ pid: childPid, parent: parentPid });
-            pending.push(childPid);
+          // Runnerd may start OpenCode from a Tokio worker thread. Linux keeps
+          // each thread's child list separately, so inspect every task rather
+          // than only the process leader's `/children` file.
+          const taskEntries = await readdir(`/proc/${parentPid}/task`, { withFileTypes: true }).catch(error => {
+            recordProcFailure("runner_task_directory", error);
+            return [];
+          });
+          inspectedRunnerTaskEntries = Math.min(1000, inspectedRunnerTaskEntries + taskEntries.length);
+          for (const taskEntry of taskEntries) {
+            if (!taskEntry.isDirectory() || !/^\d+$/.test(taskEntry.name)) continue;
+            const children = await readFile(`/proc/${parentPid}/task/${taskEntry.name}/children`, "utf8").catch(error => {
+              recordProcFailure("runner_task_children", error);
+              return "";
+            });
+            for (const rawChildPid of children.trim().split(/\s+/)) {
+              const childPid = Number(rawChildPid);
+              if (!Number.isSafeInteger(childPid) || childPid <= 0 || parents.has(childPid)) continue;
+              inspectedRunnerChildPidEntries = Math.min(1000, inspectedRunnerChildPidEntries + 1);
+              parents.set(childPid, parentPid);
+              descendants.push({ pid: childPid, parent: parentPid });
+              if (descendants.length >= maximumDescendants) break;
+              pending.push(childPid);
+            }
+            if (descendants.length >= maximumDescendants) break;
           }
+          if (descendants.length >= maximumDescendants) break;
         }
         for (const { pid: childPid, parent: parentPid } of descendants) {
-          if (observed.has(childPid)) continue;
-          observed.add(childPid);
-          const [executablePath, comm, environmentText] = await Promise.all([
-            readlink(`/proc/${childPid}/exe`).catch(() => "unknown"),
+          inspectedRunnerDescendants = Math.min(1000, inspectedRunnerDescendants + 1);
+          const [executablePath, comm] = await Promise.all([
+            readlink(`/proc/${childPid}/exe`).catch(error => { recordProcFailure("descendant_exe", error); return "unknown"; }),
             readFile(`/proc/${childPid}/comm`, "utf8").catch(() => "unknown"),
-            readFile(`/proc/${childPid}/environ`, "utf8").catch(() => ""),
           ]);
-          const environment = environmentText.split("\0");
           const executable = executablePath.split("/").at(-1) || "unknown";
-          const isOpenCodeProcess = /opencode/i.test(executable);
+          // The qualified binary can run under a non-obvious executable name
+          // (for example a Bun/exec descriptor). Hash only this bounded tree,
+          // then inspect environment data only for the exact pinned binary.
+          const runningHash = await readFile(`/proc/${childPid}/exe`).then(bytes =>
+            createHash("sha256").update(bytes).digest("hex")).catch(error => {
+              recordProcFailure("descendant_hash", error);
+              return "";
+            });
+          const isOpenCodeProcess = runningHash === qualifiedOpenCodeSha256;
+          if (isOpenCodeProcess) pinnedOpenCodeDescendants = Math.min(1000, pinnedOpenCodeDescendants + 1);
           let openCodeShaMatches: boolean | null = null;
           let openCodeManagedEnvironment: Record<string, boolean> | null = null;
           if (isOpenCodeProcess) {
-            const runningHash = await readFile(`/proc/${childPid}/exe`).then(bytes =>
-              createHash("sha256").update(bytes).digest("hex")).catch(() => "");
+            const environmentText = await readFile(`/proc/${childPid}/environ`, "utf8").catch(error => {
+              recordProcFailure("descendant_environment", error);
+              return "";
+            });
+            const environment = environmentText.split("\0");
             openCodeShaMatches = runningHash === qualifiedOpenCodeSha256;
             openCodeManagedEnvironment = {
               brokerOrigin: environment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN=")),
@@ -1633,23 +1870,52 @@ export async function runManagedNativeOpenCodeFixture(input: {
               openCodeProcessFacts.push({ shaMatchesQualifiedBinary: openCodeShaMatches, managedEnvironment: openCodeManagedEnvironment });
             }
           }
-          diagnostics.push(`runner descendant pid=${childPid} parent=${parentPid} executable=${executable} comm=${comm.trim()} openCode=${isOpenCodeProcess ? "yes" : "no"} brokerOrigin=${environment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN=")) ? "present" : "missing"} inputCap=${environment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND=")) ? "present" : "missing"} outputCap=${environment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS=")) ? "present" : "missing"} placeholderKey=${environment.includes("ANTHROPIC_API_KEY=paperclip-managed-model-broker") ? "present" : "missing"} dataHomeMatchesManagedRun=${environment.includes(`XDG_DATA_HOME=${expectedOpenCodeDataHome()}`) ? "yes" : "no"}`);
+          diagnostics.push(`runner descendant pid=${childPid} parent=${parentPid} executable=${executable} comm=${comm.trim()} pinnedOpenCode=${isOpenCodeProcess ? "yes" : "no"}${openCodeManagedEnvironment ? ` managedEnvironment=${JSON.stringify(openCodeManagedEnvironment)}` : " environment=not-inspected"}`);
           if (isOpenCodeProcess)
             diagnostics.push(`OpenCode child qualification: ${JSON.stringify({ shaMatchesQualifiedBinary: openCodeShaMatches, managedEnvironment: openCodeManagedEnvironment })}`);
         }
-        // Runnerd may own the process boundary and omit the provider PID from
-        // its reported tree. Inspect live /proc entries for the exact pinned
-        // executable, then retain only booleans about its managed environment.
-        if (!observedOpenCodePids.size) for (const entry of await readdir("/proc", { withFileTypes: true }).catch(() => [])) {
+        if (!includeGlobalProcessDiscovery || openCodeProcessFacts.length > 0) return;
+        // Detached runnerd execution can reparent the OpenCode child before
+        // the provider request reaches the local broker. Make one bounded
+        // host `/proc` pass by `comm`, then hash only OpenCode-style names or
+        // the numeric comm used by the launcher's `/proc/self/fd/N` binding.
+        // Read environment data only after the pinned SHA matches, and qualify
+        // only a unique run-owned data home.
+        const procEntries = await readdir("/proc", { withFileTypes: true }).catch(error => {
+          recordProcFailure("proc_directory", error);
+          return [];
+        });
+        const runHomeMatches: Array<{ shaMatchesQualifiedBinary: boolean; managedEnvironment: Record<string, boolean> }> = [];
+        for (const entry of procEntries) {
           if (!entry.isDirectory() || !/^\d+$/.test(entry.name)) continue;
-          const childPid = Number(entry.name);
-          if (observedOpenCodePids.has(childPid)) continue;
-          const executablePath = await readlink(`/proc/${childPid}/exe`).catch(() => "");
-          if (!/(?:^|\/)opencode(?:[-.]|$)/i.test(executablePath)) continue;
-          const [runningHash, environmentText] = await Promise.all([
-            readFile(`/proc/${childPid}/exe`).then(bytes => createHash("sha256").update(bytes).digest("hex")).catch(() => ""),
-            readFile(`/proc/${childPid}/environ`, "utf8").catch(() => ""),
-          ]);
+          const candidatePid = Number(entry.name);
+          if (observedOpenCodePids.has(candidatePid)) continue;
+          const comm = await readFile(`/proc/${candidatePid}/comm`, "utf8").catch(error => {
+            recordProcFailure("proc_comm", error);
+            return "";
+          });
+          if (!/^(?:opencode(?:\.exe|[.-]|$)|[0-9]{1,3})$/i.test(comm.trim())) continue;
+          const statText = await readFile(`/proc/${candidatePid}/stat`, "utf8").catch(error => {
+            recordProcFailure("proc_stat", error);
+            return "";
+          });
+          const statClose = statText.lastIndexOf(")");
+          const processState = statClose >= 0 ? statText.slice(statClose + 2).trim().split(/\s+/)[0] : "";
+          if (processState === "Z" || processState === "X") continue;
+          procOpenCodeCommCandidates = Math.min(1000, procOpenCodeCommCandidates + 1);
+          const runningHash = await readFile(`/proc/${candidatePid}/exe`).then(bytes =>
+            createHash("sha256").update(bytes).digest("hex")).catch(error => {
+              recordProcFailure("proc_hash", error);
+              return "";
+            });
+          if (runningHash) procHashReadSuccesses = Math.min(1000, procHashReadSuccesses + 1);
+          if (runningHash && runningHash !== qualifiedOpenCodeSha256)
+            procHashMismatches = Math.min(1000, procHashMismatches + 1);
+          if (runningHash !== qualifiedOpenCodeSha256) continue;
+          const environmentText = await readFile(`/proc/${candidatePid}/environ`, "utf8").catch(error => {
+            recordProcFailure("proc_environment", error);
+            return "";
+          });
           const environment = environmentText.split("\0");
           const managedEnvironment = {
             brokerOrigin: environment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN=")),
@@ -1658,62 +1924,19 @@ export async function runManagedNativeOpenCodeFixture(input: {
             placeholderKey: environment.includes("ANTHROPIC_API_KEY=paperclip-managed-model-broker"),
             dataHomeMatchesManagedRun: environment.includes(`XDG_DATA_HOME=${expectedOpenCodeDataHome()}`),
           };
-          observedOpenCodePids.add(childPid);
-          openCodeProcessFacts.push({ shaMatchesQualifiedBinary: runningHash === qualifiedOpenCodeSha256, managedEnvironment });
-          diagnostics.push(`OpenCode process qualification: ${JSON.stringify({
-            shaMatchesQualifiedBinary: runningHash === qualifiedOpenCodeSha256, managedEnvironment,
-          })}`);
+          if (managedEnvironment.dataHomeMatchesManagedRun)
+            runHomeMatches.push({ shaMatchesQualifiedBinary: true, managedEnvironment });
         }
-        if (observedOpenCodePids.size && timer) clearInterval(timer);
+        if (runHomeMatches.length === 1) openCodeProcessFacts.push(runHomeMatches[0]!);
       };
-      timer = setInterval(() => { void inspect(); }, 250);
-      void inspect();
-      processTreeTimers.push(timer);
+      refreshOpenCodeProcessFacts = () => inspect(true);
+      await inspect();
     };
     try {
       const result = await executePaperclipNativeSession({ db, execution, bootstrapSourceClosure, useRunnerd: true, onSpawn,
         runnerInstanceId: prepared.runnerInstanceId, leaseOwner, turnTimeoutMs: fixtureTurnTimeoutMs, adapterType: "paperclip_runner",
-        runnerEnvironment,
-        ...(input.nativeMemoryReplayProbe ? { prepareTurnSourceClosure: async (turnInput, baseClosure) => {
-          const pending = pendingNativeMemoryReplayProbe;
-          if (pending && !nativeMemoryReplayProbeCompleted) {
-            nativeMemoryReplayProbeCompleted = true;
-            const probe = input.nativeMemoryReplayProbe!;
-            const envelope = pending.initialResult && typeof pending.initialResult === "object" && !Array.isArray(pending.initialResult)
-              ? pending.initialResult as Record<string, unknown> : {};
-            const result = envelope.result && typeof envelope.result === "object" && !Array.isArray(envelope.result)
-              ? envelope.result as Record<string, unknown> : {};
-            const data = result.data && typeof result.data === "object" && !Array.isArray(result.data)
-              ? result.data as Record<string, unknown> : {};
-            const outputRecord = data.record && typeof data.record === "object" && !Array.isArray(data.record)
-              ? data.record as Record<string, unknown> : {};
-            const recordId = typeof outputRecord.id === "string" ? outputRecord.id : null;
-            if (!recordId || envelope.status !== "completed")
-              throw new Error("managed_fixture_memory_replay_initial_result_unavailable");
-            const [output] = await db.select({ payloadSourceSnapshot: memoryRecords.payloadSourceSnapshot }).from(memoryRecords)
-              .where(and(eq(memoryRecords.companyId, companyId), eq(memoryRecords.id, recordId)));
-            const snapshot = nativePayloadSourceSnapshotSchema.parse(output?.payloadSourceSnapshot);
-            const dispatchIndex = snapshot.inputs.findIndex(value => value.kind === "worker_model_dispatch");
-            if (dispatchIndex !== snapshot.inputs.length - 1 || dispatchIndex < 0)
-              throw new Error("managed_fixture_memory_replay_source_prefix_missing");
-            const actor: AuthorizationActor = { type: "agent", source: "none", companyId, agentId,
-              runId: run!.id, onBehalfOfUserId: aliceUserId };
-            await probe.run({ companyId, runId: run!.id, callId: probe.callId, initialResult: pending.initialResult,
-              replay: pending.replay,
-              revokeOutput: async requestedRecordId => {
-                if (requestedRecordId !== recordId) throw new Error("managed_fixture_memory_replay_output_changed");
-                await memoryService(db).revoke(companyId, recordId,
-                  { reason: "The Human revoked this output during its live Native replay test." }, aliceMemoryActor);
-              },
-              assertConsumedInputsCurrent: async requestedRecordId => {
-                if (requestedRecordId !== recordId) throw new Error("managed_fixture_memory_replay_output_changed");
-                await assertNativePayloadSourceSetCurrent(db, { companyId, issueId: task.id, runId: run!.id, actor,
-                  policy: snapshot.policy, inputs: snapshot.inputs.slice(0, dispatchIndex) });
-              },
-            });
-          }
-          return { turnInput, sourceClosure: baseClosure ?? undefined };
-        } } : {}),
+        runnerEnvironment, testBeforeManagedProjectCreate: input.beforeManagedProjectCreate,
+        testAfterManagedProjectCreate: input.afterManagedProjectCreate,
         onLog: async (stream, chunk) => {
           for (const line of chunk.split(/\r?\n/)) {
             if (!line.trim()) continue;
@@ -1790,6 +2013,11 @@ export async function runManagedNativeOpenCodeFixture(input: {
         } }).catch(error => {
           input.onPreserveDebugArtifacts?.();
           const failure = error instanceof Error ? error as Error & { code?: unknown; cause?: { code?: unknown }; stage?: unknown } : null;
+          if (input.processProbeOnly) {
+            processProbeExecutionFailure = { name: safeCode(failure?.name) ?? "UnknownError",
+              code: safeCode(failure?.code) ?? safeCode(failure?.cause?.code) ?? null };
+            return { exitCode: 1 } as Awaited<ReturnType<typeof executePaperclipNativeSession>>;
+          }
           const frames = failure?.stack?.split("\n").slice(1)
             .filter(line => /^\s*at /.test(line)).slice(0, 6)
             .map(line => line.trim().replace(/\s+/g, " ").slice(0, 220)) ?? [];
@@ -1811,6 +2039,16 @@ export async function runManagedNativeOpenCodeFixture(input: {
           const safeMessage = safeCode(failure?.message) ?? "native_session_execution_failed";
           throw new Error(`${safeMessage}\n${diagnostics.join("\n")}\nBroker: ${JSON.stringify(brokerFailureFacts())}\nArtifacts: ${runRoot}`);
         });
+      if (input.processProbeOnly) {
+        input.onPreserveDebugArtifacts?.();
+        return { processProbeOnly: true as const, responseCount, modelCallCount: modelCalls.length,
+          exitCode: result.exitCode, executionFailure: processProbeExecutionFailure,
+          spawnExecutableKind, inspectedRunnerTaskEntries, inspectedRunnerChildPidEntries,
+          runnerPidProcAliveAtSpawn, runnerPidProcAliveAtFirstRequest, procOpenCodeCommCandidates,
+          procHashReadSuccesses, procHashMismatches,
+          inspectedRunnerDescendants, pinnedOpenCodeDescendants, processInspectionFailures,
+          processFacts: openCodeProcessFacts };
+      }
       if (result.exitCode !== 0) {
         input.onPreserveDebugArtifacts?.();
         const [failedRun] = await db.select({ runnerProfileJson: heartbeatRuns.runnerProfileJson })
@@ -2098,7 +2336,9 @@ export async function runManagedNativeOpenCodeFixture(input: {
           diagnostics.push(`managed source lock snapshot: ${JSON.stringify(sourceLockSnapshot)}`);
         if (input.nativeMemoryReplayProbe) {
           const denied = brokerRequests.some(value => value.includes("response POST /runtime-tools/model/v1/messages 403"));
-          expect(nativeMemoryReplayProbeCompleted, "the probe must run after the managed result owner persists the sealed receipt").toBe(true);
+          expect(nativeMemoryReplayProbeToolResultObserved, "the exact successful Gateway result must reach the next managed Messages request").toBe(true);
+          expect(nativeMemoryReplayProbeFailure, `the actual replay probe must not fail: ${JSON.stringify(nativeMemoryReplayProbeFailure)}`).toBeNull();
+          expect(nativeMemoryReplayProbeCompleted, "the probe must succeed after the managed result owner persists the sealed receipt").toBe(true);
           expect(denied, "revoked Memory output must stop the next managed source boundary").toBe(true);
           expect(responseCount).toBe(1);
           return { companyId, runId: run!.id,
@@ -2121,12 +2361,27 @@ export async function runManagedNativeOpenCodeFixture(input: {
             originalCaptureRetained: denialCaptures.some(value => value.managedOpenCode !== true),
             managedToolResultRetained: denialCaptures.some(value => value.managedOpenCode === true) } };
         }
-        throw new Error(`managed_opencode_runner_exit_${result.exitCode}; providerResponses=${responseCount}; fakeFetchEntrances=${JSON.stringify(fakeFetchEntrances)}\n${diagnostics.join("\n")}\nBroker: ${JSON.stringify(brokerFailureFacts())}\nArtifacts: ${runRoot}`);
+        throw new Error(`managed_opencode_runner_exit_${result.exitCode}; providerResponses=${responseCount}; fakeFetchEntrances=${JSON.stringify(fakeFetchEntrances)}\nprocessInspectionFailures=${JSON.stringify(processInspectionFailures)} spawnExecutableKind=${spawnExecutableKind}\n${diagnostics.join("\n")}\nBroker: ${JSON.stringify(brokerFailureFacts())}\nArtifacts: ${runRoot}`);
       }
-      completedNativeFinalization = (result as unknown as Record<string, unknown>).nativeFinalization as NonNullable<typeof completedNativeFinalization>;
+      completedNativeFinalization = (result as unknown as Record<string, unknown>).nativeFinalization as ManagedNativeFinalization;
+      if (input.nativeMemoryReplayProbe) {
+        expect(nativeMemoryReplayProbeToolResultObserved,
+          "the exact successful Gateway result must reach the next managed Messages request").toBe(true);
+        expect(nativeMemoryReplayProbeFailure, `the actual replay probe must not fail: ${JSON.stringify(nativeMemoryReplayProbeFailure)}`).toBeNull();
+        expect(nativeMemoryReplayProbeCompleted,
+          "the replay and canonical Human revoke probe must run before the next Messages route").toBe(true);
+        throw new Error("managed_fixture_revoked_memory_output_did_not_deny_next_messages_request");
+      }
       expect(responseCount).toBeGreaterThanOrEqual(2);
       expect(qualifiedManagedProcessAtFirstProviderRequest,
-        `qualified OpenCode process must use the run-owned data home before the first provider response; observed=${JSON.stringify(openCodeProcessFacts)}`)
+        `qualified OpenCode process must use the run-owned data home before the first provider response; observed=${JSON.stringify({
+          processFacts: openCodeProcessFacts, responseCount, modelCallCount: modelCalls.length, exitCode: result.exitCode,
+          spawnExecutableKind, inspectedRunnerTaskEntries, inspectedRunnerChildPidEntries,
+          runnerPidProcAliveAtSpawn, runnerPidProcAliveAtFirstRequest, procOpenCodeCommCandidates,
+          procHashReadSuccesses, procHashMismatches,
+          inspectedRunnerDescendants, pinnedOpenCodeDescendants, processInspectionFailures,
+          runner: diagnostics.filter(line => /runner process pid|runner descendant|OpenCode (?:child|process) qualification|runner stdout event: .*run\.(?:result|terminal)|runner turn failure/.test(line)).slice(-20),
+        })}`)
         .toBe(true);
       const assertManagedConfigCleanup = async () => {
         expect((await stat(configDirectory)).mode & 0o777).toBe(0o700);
@@ -2149,7 +2404,6 @@ export async function runManagedNativeOpenCodeFixture(input: {
       await warmSession.close({ reason: "managed E2E warm-start probe complete" });
       await assertManagedConfigCleanup();
     } finally {
-      for (const timer of processTreeTimers) clearInterval(timer);
       if (pgMonitorTimer) clearInterval(pgMonitorTimer);
       if (contextProbeTimer) clearInterval(contextProbeTimer);
       if (finalExchangeProbeTimer) clearInterval(finalExchangeProbeTimer);
@@ -2174,12 +2428,12 @@ export async function runManagedNativeOpenCodeFixture(input: {
     expect(sourceReceipt.nativeOpenCodeSourceAuthority).toMatchObject({ version: 1, toolSchemas: expect.any(Array) });
     expect(persistedRun!.nativeInputSourceProtocolVersion).toBe(1);
     expect(nativeRunInputSourceReceiptSchema.safeParse(sourceReceipt.nativeInputSourceReceipt).success).toBe(true);
-    const effectSteps = modelSteps.filter(step => ["write_document", "create_task", "self_remember", "read_context"]
+    const effectSteps = modelSteps.filter(step => ["write_document", "create_task", "create_project", "self_remember", "read_context"]
       .includes(step.tool));
     const capturedResults = Array.isArray(sourceReceipt.nativeToolResultSourceCaptures)
       ? sourceReceipt.nativeToolResultSourceCaptures as Array<Record<string, unknown>> : [];
     for (const [index, step] of effectSteps.entries()) {
-      const callId = step.id ?? `managed-e2e-${step.tool}-${modelSteps.indexOf(step)}`;
+      const callId = step.id ?? `managed-e2e-${step.tool}-${modelSteps.indexOf(step) + 1}`;
       expect(capturedResults, `missing managed output source capture for step ${index}:${step.tool}`)
         .toEqual(expect.arrayContaining([expect.objectContaining({ managedOpenCode: true, callId })]));
     }
@@ -2228,9 +2482,44 @@ export async function runManagedNativeOpenCodeFixture(input: {
         snapshot = snapshotRow?.payloadSourceSnapshot;
       }
       const aliceHttpDocument = await request(humanApp).get(`/api/issues/${task.id}/documents/${encodeURIComponent(key)}`);
-      expect(aliceHttpDocument.status).toBe(200);
+      const aliceReadError = typeof aliceHttpDocument.body?.error === "string" ? aliceHttpDocument.body.error : null;
+      const safeAliceReadError = new Set([
+        "A Native source Task changed", "A Native source Task changed or was erased",
+        "A Native source Context changed", "A Native source Document changed",
+        "The Native source prefix is not in its original receipt",
+        "The Native source Task is not current for this reader",
+      ]).has(aliceReadError ?? "") ? aliceReadError : null;
+      const aliceErrorBody = aliceHttpDocument.body && typeof aliceHttpDocument.body === "object"
+        ? aliceHttpDocument.body as Record<string, unknown> : {};
+      const aliceReadErrorCode = safeCode(aliceErrorBody.code) ?? safeCode(aliceErrorBody.reasonCode) ??
+        safeCode(aliceErrorBody.errorCode);
+      const aliceReadErrorBodyJson = JSON.stringify(aliceHttpDocument.body ?? null);
+      const aliceReadErrorBodySha256 = createHash("sha256").update(aliceReadErrorBodyJson, "utf8").digest("hex");
+      if (aliceHttpDocument.status !== 200) {
+        // This is a synthetic fixture error response, not source or document
+        // content. Preserve it only in the retained local run artifact so a
+        // later review can map an otherwise opaque 403 without printing it.
+        input.onPreserveDebugArtifacts?.();
+        await writeFile(join(runRoot, `alice-document-read-denial-${documentSteps.indexOf(step)}.json`),
+          `${JSON.stringify({ status: aliceHttpDocument.status, body: aliceHttpDocument.body ?? null }, null, 2)}\n`,
+          { mode: 0o600 });
+      }
+      expect(aliceHttpDocument.status,
+        `Alice document ${key} read failed: status=${aliceHttpDocument.status}, error=${safeAliceReadError ?? "unknown"}, ` +
+          `bodyKeys=${JSON.stringify(Object.keys(aliceErrorBody).sort())}, errorCode=${aliceReadErrorCode ?? "unknown"}, ` +
+          `bodyLength=${aliceReadErrorBodyJson.length}, bodySha256=${aliceReadErrorBodySha256}`)
+        .toBe(200);
       if (typeof expectedBody === "string") expect(aliceHttpDocument.body.body).toContain(expectedBody);
       const bobHttpDocument = await request(bobApp).get(`/api/issues/${task.id}/documents/${encodeURIComponent(key)}`);
+      if (key === "managed-source-a" && bobHttpDocument.status !== 200) {
+        // Document A predates the private Context source and is expected to
+        // remain readable by Bob. Keep only a synthetic denial response for
+        // local diagnosis if that temporal boundary regresses.
+        input.onPreserveDebugArtifacts?.();
+        await writeFile(join(runRoot, "bob-document-a-read-denial.json"),
+          `${JSON.stringify({ status: bobHttpDocument.status, body: bobHttpDocument.body ?? null }, null, 2)}\n`,
+          { mode: 0o600 });
+      }
       documents.push({ key, id: visibleDocument?.id ?? null, snapshot,
         aliceHttpStatus: aliceHttpDocument.status, bobHttpStatus: bobHttpDocument.status });
     }
@@ -2380,12 +2669,81 @@ export async function runManagedNativeOpenCodeFixture(input: {
         matchingAssociation: matchingAssociations.length === 1,
         exactAdditionalInputClosure: matchingSourceSets.length === 1 && consumedInputs.length === 2 };
     }
+    let managedProjectCreateEvidence: Record<string, unknown> | null = null;
+    let managedProjectPrivacyRead: { aliceStatus: number; bobStatus: number } | null = null;
+    const projectCreateStepIndex = modelSteps.findIndex(step => step.tool === "create_project");
+    if (projectCreateStepIndex >= 0) {
+      const createStep = modelSteps[projectCreateStepIndex]!;
+      const callId = createStep.id ?? `managed-e2e-create_project-${projectCreateStepIndex + 1}`;
+      const matchingCaptures = capturedResults.filter(value => value.callId === callId && value.tool === "create_project" &&
+        value.managedOpenCode === true);
+      if (matchingCaptures.length !== 1) throw new Error("managed_fixture_project_create_capture_missing");
+      const managedCapture = matchingCaptures[0]!;
+      const projectCreate = managedCapture.projectCreate && typeof managedCapture.projectCreate === "object"
+        ? managedCapture.projectCreate as Record<string, unknown> : {};
+      const createReceipt = projectCreate.receipt && typeof projectCreate.receipt === "object"
+        ? projectCreate.receipt as Record<string, unknown> : {};
+      const createdProjectSource = createReceipt.projectSource && typeof createReceipt.projectSource === "object"
+        ? createReceipt.projectSource as Record<string, unknown> : {};
+      const sourceSet = projectCreate.sourceSet && typeof projectCreate.sourceSet === "object"
+        ? projectCreate.sourceSet as Record<string, unknown> : {};
+      const sourceInputs = Array.isArray(sourceSet.inputs) ? sourceSet.inputs as Array<Record<string, unknown>> : [];
+      const sourcePolicy = sourceSet.policy && typeof sourceSet.policy === "object"
+        ? sourceSet.policy as Record<string, unknown> : {};
+      const resultSource = managedCapture.source && typeof managedCapture.source === "object"
+        ? managedCapture.source as Record<string, unknown> : {};
+      const persistedReceiptBody = sourceReceipt.nativeInputSourceReceipt && typeof sourceReceipt.nativeInputSourceReceipt === "object"
+        ? sourceReceipt.nativeInputSourceReceipt as Record<string, unknown> : {};
+      const additionalInputs = Array.isArray(persistedReceiptBody.additionalInputs)
+        ? persistedReceiptBody.additionalInputs as Array<Record<string, unknown>> : [];
+      const expectedPolicy = { ...sourcePolicy,
+        projectIds: [...new Set([...(Array.isArray(sourcePolicy.projectIds) ? sourcePolicy.projectIds as string[] : []),
+          String(createReceipt.projectId ?? "")])].filter(Boolean).sort() };
+      const expectedInputs = [resultSource, ...sourceInputs, createdProjectSource,
+        ...(Array.isArray(createReceipt.workspaceSources) ? createReceipt.workspaceSources as Array<Record<string, unknown>> : [])];
+      const matchingSourceSets = additionalInputs.filter(entry => entry.responsibleUserId === aliceUserId &&
+        isDeepStrictEqual(entry.policy, expectedPolicy) && isDeepStrictEqual(entry.inputs, expectedInputs));
+      const consumers = projectCreateResultConsumers.filter(value => value.callId === callId);
+      const resultDigest = typeof managedCapture.resultDigest === "string" ? managedCapture.resultDigest : null;
+      const sourceSnapshotDigest = typeof createReceipt.sourceSnapshotDigest === "string" ? createReceipt.sourceSnapshotDigest : null;
+      const createdProjectId = typeof createReceipt.projectId === "string" ? createReceipt.projectId : null;
+      if (!createdProjectId || !fixtureProjectHumanCookie || !fixtureProjectBobCookie)
+        throw new Error("managed_fixture_project_create_privacy_probe_unavailable");
+      const [aliceProjectRead, bobProjectRead] = await Promise.all([
+        request(projectApiApp).get(`/api/projects/${createdProjectId}`).set("cookie", fixtureProjectHumanCookie),
+        request(projectApiApp).get(`/api/projects/${createdProjectId}`).set("cookie", fixtureProjectBobCookie),
+      ]);
+      managedProjectPrivacyRead = { aliceStatus: aliceProjectRead.status, bobStatus: bobProjectRead.status };
+      expect(aliceProjectRead.status).toBe(200);
+      expect([403, 404]).toContain(bobProjectRead.status);
+      expect(managedCapture).toMatchObject({ callId, tool: "create_project", resultDigest,
+        argumentsHash: canonicalHash(createStep.input ?? {}) });
+      expect(managedCapture.source).toEqual({ kind: "tool_result", runId: run!.id, callId,
+        toolName: "create_project", invocationId: null, contentHash: resultDigest });
+      expect(createReceipt).toMatchObject({ callId, tool: "create_project", argumentsHash: canonicalHash(createStep.input ?? {}),
+        resultDigest, sourceSetHash: canonicalHash({ policy: sourcePolicy, inputs: sourceInputs }),
+        projectId: consumers[0]?.projectId, responsibleUserId: aliceUserId });
+      expect(createdProjectSource).toMatchObject({ kind: "project", projectId: consumers[0]?.projectId });
+      expect(resultSource).toEqual({ kind: "tool_result", runId: run!.id, callId,
+        toolName: "create_project", invocationId: null, contentHash: resultDigest });
+      expect(matchingSourceSets).toHaveLength(1);
+      expect(consumers).toHaveLength(1);
+      expect(consumers[0]).toMatchObject({ consumed: true, privateProject: true,
+        projectId: String(createReceipt.projectId), contentDigest: resultDigest });
+      managedProjectCreateEvidence = { providerContinued: responseCount >= 2,
+        toolSchemaPinned: true, providerConsumedExactNonErrorToolResult: consumers[0]!.consumed,
+        projectIsPrivate: consumers[0]!.privateProject, sourceSetBound: createReceipt.sourceSetHash === canonicalHash({ policy: sourcePolicy, inputs: sourceInputs }),
+        hasSnapshotDigest: typeof sourceSnapshotDigest === "string" && /^[0-9a-f]{64}$/.test(sourceSnapshotDigest),
+        aliceAuthenticatedRead: aliceProjectRead.status === 200, bobAuthenticatedReadDenied: [403, 404].includes(bobProjectRead.status),
+        matchingManagedCapture: matchingCaptures.length === 1, exactAdditionalInputClosure: matchingSourceSets.length === 1 };
+    }
     return {
       companyId,
       agentId,
       reuseIdentity: { companyId, agentId, aliceUserId, bobUserId },
       runId: run!.id,
       issueId: task.id,
+      planId: plan.id,
       aliceUserId,
       aliceActor: human,
       bobActor,
@@ -2404,6 +2762,9 @@ export async function runManagedNativeOpenCodeFixture(input: {
       contextResultConsumers,
       projectApiResultConsumers,
       projectApiReadEvidence,
+      projectCreateResultConsumers,
+      managedProjectCreateEvidence,
+      managedProjectPrivacyRead,
       childTasks,
       modelCalls: modelCalls.length,
       completedRun: terminalRun,

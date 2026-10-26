@@ -88,7 +88,6 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
     const sourceTimingsEnabled = diagnosticsEnabled || process.env.PAPERCLIP_MANAGED_OPENCODE_SOURCE_TIMINGS === "1";
     const sourceMemoDiagnosticsEnabled = process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS === "1";
     if (sourceMemoDiagnosticsEnabled) nativeDirectInput.resetNativeSourceMemoDiagnosticsForTest();
-    if (diagnosticsEnabled) vi.stubEnv("PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS", "1");
     database = await startEmbeddedPostgresTestDatabase("managed-opencode-source-e2e-");
     db = createDb(database.connectionString);
     await instanceSettingsService(db).getExperimental();
@@ -139,6 +138,25 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
       await rm(root, { recursive: true, force: true });
     }
   }, 30_000);
+
+  it("qualifies the actual Runnerd descendant process at the first managed provider request", async () => {
+    const result = await runManagedNativeOpenCodeFixture({ db, connectionString: database.connectionString,
+      root, instanceId, processProbeOnly: true, steps: [
+        { tool: "write_document", id: "managed-e2e-process-probe-write", input: {
+          idempotencyKey: randomUUID(), key: "managed-process-probe", title: "Process probe", body: "Not dispatched.",
+          baseRevisionId: null,
+        } },
+        { tool: "paperclip_finish", id: "managed-e2e-process-probe-finish" },
+      ] });
+    if (!("processProbeOnly" in result)) throw new Error("managed_opencode_process_probe_result_missing");
+    expect(result.responseCount).toBe(1);
+    expect(result.modelCallCount).toBe(1);
+    if (!("processFacts" in result) || !Array.isArray(result.processFacts))
+      throw new Error("managed_opencode_process_probe_facts_missing");
+    expect(result.processFacts.some(fact => fact.shaMatchesQualifiedBinary &&
+      fact.managedEnvironment.dataHomeMatchesManagedRun),
+    `actual OpenCode process was not qualified: ${JSON.stringify(result)}`).toBe(true);
+  }, 45_000);
 
   it("executes same-run Memory and Context outputs through the real managed OpenCode Messages route", async () => {
     const privateRootContent = `private_context_root_${randomUUID()}`;
@@ -257,12 +275,17 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
         { tool: "self_remember", id: callId, input: { scope: "company", memoryType: "outcome",
           title: "Scoped replay output", content: "A real managed Memory output used to test cached replay.",
           idempotencyKey: operationKey } },
+        { tool: "write_document", id: `${callId}-completion`, input: {
+          idempotencyKey: randomUUID(), key: "managed-replay-completion", title: "Replay test completion",
+          body: "This output is not reached after revocation denies the next provider request.", baseRevisionId: null,
+        } },
         { tool: "paperclip_finish", id: `${callId}-finish` },
       ],
       nativeMemoryReplayProbe: { callId, run: async probe => {
-        const initial = probe.initialResult as { status?: unknown; result?: { data?: { record?: { id?: unknown } } } };
+        const initial = probe.initialResult as { status?: unknown; result?: { data?: { status?: unknown; record?: { id?: unknown } } } };
         expect(initial.status).toBe("completed");
         const recordId = initial.result?.data?.record?.id;
+        expect(initial.result?.data?.status).toBe("pending");
         expect(recordId).toMatch(/^[0-9a-f-]{36}$/i);
         if (typeof recordId !== "string") throw new Error("managed_memory_replay_output_id_missing");
 
@@ -275,6 +298,7 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
           eq(toolInvocations.companyId, probe.companyId), eq(toolInvocations.idempotencyKey, invocationKey)));
         expect(beforeRevoke?.status).toBe("succeeded");
 
+        await probe.acceptOutput(recordId);
         await probe.revokeOutput(recordId);
         // The exact consumed Task/dispatch prefix remains current after the Human
         // revokes only the output Memory row.
