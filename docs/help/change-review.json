@@ -1565,10 +1565,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "4e990289fa1ba4987a866270fa9f80df51cae5849009f8a47fd13460315a6bc4",
+      "sourceSha256": "51f08a68459e643f652522266c6137003945a53369778d055045036ab070afdd",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Reviewed paired recovery and export/deletion articles against the run-bound managed-provider test environment seam and environment-gated bounded deadlock diagnostic. Neither changes customer Stop/retry actions, source restrictions, retention or deletion behavior; the existing guidance remains accurate."
+      "rationale": "Reviewed paired recovery/export articles against exact first-Human conversation source admission, the managed-provider test seam and bounded opt-in diagnostics. Prior conversation replay remains closed without a complete source set. Customer retry/Stop actions, retained source restrictions and deletion guidance remain accurate."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1669,10 +1669,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "4e990289fa1ba4987a866270fa9f80df51cae5849009f8a47fd13460315a6bc4",
+      "sourceSha256": "51f08a68459e643f652522266c6137003945a53369778d055045036ab070afdd",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Reviewed paired recovery and export/deletion articles against the run-bound managed-provider test environment seam and environment-gated bounded deadlock diagnostic. Neither changes customer Stop/retry actions, source restrictions, retention or deletion behavior; the existing guidance remains accurate."
+      "rationale": "Reviewed paired recovery/export articles against exact first-Human conversation source admission, the managed-provider test seam and bounded opt-in diagnostics. Prior conversation replay remains closed without a complete source set. Customer retry/Stop actions, retained source restrictions and deletion guidance remain accurate."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -2053,18 +2053,18 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "4e990289fa1ba4987a866270fa9f80df51cae5849009f8a47fd13460315a6bc4",
+      "sourceSha256": "51f08a68459e643f652522266c6137003945a53369778d055045036ab070afdd",
       "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "no_change",
-      "rationale": "Reviewed paired recovery and export/deletion articles against the run-bound managed-provider test environment seam and environment-gated bounded deadlock diagnostic. Neither changes customer Stop/retry actions, source restrictions, retention or deletion behavior; the existing guidance remains accurate."
+      "rationale": "Reviewed paired recovery/export articles against exact first-Human conversation source admission, the managed-provider test seam and bounded opt-in diagnostics. Prior conversation replay remains closed without a complete source set. Customer retry/Stop actions, retained source restrictions and deletion guidance remain accurate."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "4e990289fa1ba4987a866270fa9f80df51cae5849009f8a47fd13460315a6bc4",
+      "sourceSha256": "51f08a68459e643f652522266c6137003945a53369778d055045036ab070afdd",
       "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "no_change",
-      "rationale": "Reviewed paired recovery and export/deletion articles against the run-bound managed-provider test environment seam and environment-gated bounded deadlock diagnostic. Neither changes customer Stop/retry actions, source restrictions, retention or deletion behavior; the existing guidance remains accurate."
+      "rationale": "Reviewed paired recovery/export articles against exact first-Human conversation source admission, the managed-provider test seam and bounded opt-in diagnostics. Prior conversation replay remains closed without a complete source set. Customer retry/Stop actions, retained source restrictions and deletion guidance remain accurate."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",

@@ -36,6 +36,7 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
   it("uses the authenticated chat route and actual heartbeat to dispatch a pinned OpenCode turn under a conversation issuer token, without worker-plan rows", async () => {
     const binary = qualifiedOpenCodeBinary();
     if (!binary) throw new Error("qualified_opencode_binary_unavailable");
+    vi.stubEnv("PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS", "1");
     let liveBoundary: { runId: string; issueId: string; manifestId: string; reservationId: string;
       requestHash: string; wireBodyHash: string; sourceReceiptHash: string; inputTokens: number; outputTokens: number } | null = null;
     const result = await runManagedNativeConversationFrame({ db, root, opencodeBinary: binary,
@@ -60,7 +61,8 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
           inputTokens: facts.usage.inputTokens, outputTokens: facts.usage.outputTokens };
       } });
     expect(result.success, JSON.stringify({ runStatus: result.runStatus, runError: result.run?.error,
-      errorCode: result.run?.errorCode, providerCallCount: result.providerCallCount })).toBe(true);
+      errorCode: result.run?.errorCode, stdoutExcerpt: result.run?.stdoutExcerpt,
+      stderrExcerpt: result.run?.stderrExcerpt, providerCallCount: result.providerCallCount })).toBe(true);
     expect(result.providerCallCount).toBeGreaterThan(0);
     expect(result.providerKeyMatched).toBe(true);
     expect(liveBoundary).toMatchObject({ runId: result.run?.id, issueId: result.issueId,

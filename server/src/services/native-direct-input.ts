@@ -919,7 +919,7 @@ async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction
       (conversationState === "live"
         ? conversationIssue.conversationSessionGeneration !== capture.dispatch.conversationSessionGeneration ||
           conversationIssue.conversationState !== "active" || conversationIssue.executionRunId !== capture.dispatch.runId ||
-          conversationIssue.status !== "in_review"
+          !["in_review", "in_progress"].includes(conversationIssue.status ?? "")
         : conversationIssue.conversationSessionGeneration < capture.dispatch.conversationSessionGeneration ||
           !["active", "waiting"].includes(conversationIssue.conversationState ?? "")) ||
       conversationIssue.conversationRetiredAt !== null ||

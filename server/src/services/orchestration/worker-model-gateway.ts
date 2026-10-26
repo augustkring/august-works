@@ -1685,7 +1685,7 @@ export function workerModelGateway(db: Db, options: Options) {
             usage: result.usage,
           },
         );
-        financiallySettled = true;
+        financiallySettled = outcome.status === "completed";
         if (outcome.status !== "completed")
           throw conflict("Worker model charge could not be confirmed");
         await assertCurrent();
@@ -1927,7 +1927,7 @@ export function workerModelGateway(db: Db, options: Options) {
         const outcome = await reservations.recordOutcome(claims.company_id, reservation.id, {
           status: "completed", providerResponseHash: result.responseHash, usage: result.usage,
         });
-        financiallySettled = true;
+        financiallySettled = outcome.status === "completed";
         if (outcome.status !== "completed") throw conflict("Worker model charge could not be confirmed");
         const responseContentHash = nativeSha256(result.responseContent);
         managedFailureStage = "response_run_binding";

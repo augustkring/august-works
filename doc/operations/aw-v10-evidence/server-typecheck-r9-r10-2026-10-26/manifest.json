@@ -1,0 +1,42 @@
+[
+  {
+    "file": "current-server-tsc-r9-20261026-source-pins.json",
+    "rawSha256": "64a3d3eaa50c8ff7969356bda6b90a7922e2be1a0b5f52d69305965822ebecdb",
+    "rawBytes": 35729
+  },
+  {
+    "file": "current-server-tsc-r9-20261026-snapshot.log.gz",
+    "rawSha256": "63781390938fe93cee226bbf0bc55aed644f18d93e9caf9ed75b7672d8d93fd6",
+    "rawBytes": 37
+  },
+  {
+    "file": "current-server-tsc-r9-20261026.log.gz",
+    "rawSha256": "f56026e9001c197b53adc91fa436dd8066ee681df62ba9c2de0c1792ebf87269",
+    "rawBytes": 853
+  },
+  {
+    "file": "current-server-tsc-r9-20261026.exit",
+    "rawSha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+    "rawBytes": 2
+  },
+  {
+    "file": "current-server-tsc-r10-20261026-source-pins.json",
+    "rawSha256": "20eaabfdf50423b88b906b98dece1011c70753114c7682021571c220d77702ac",
+    "rawBytes": 36066
+  },
+  {
+    "file": "current-server-tsc-r10-20261026-snapshot.log.gz",
+    "rawSha256": "69db4fb9b9978ba816a3223bf86bdffab6c6eb937058bfa3971cdb187fd68bd3",
+    "rawBytes": 37
+  },
+  {
+    "file": "current-server-tsc-r10-20261026.log.gz",
+    "rawSha256": "abdad76cc1e91be642f13a4bb10e708b9e3603503a9be84fc658c1e11ec6195f",
+    "rawBytes": 886
+  },
+  {
+    "file": "current-server-tsc-r10-20261026.exit",
+    "rawSha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+    "rawBytes": 2
+  }
+]

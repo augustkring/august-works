@@ -94,7 +94,7 @@ BEGIN
        OR jsonb_typeof(r.runner_profile_json->'nativeInputSourceReceipt') IS DISTINCT FROM 'object'
        OR i.id IS NULL OR i.conversation_agent_id IS DISTINCT FROM NEW.conversation_agent_id OR i.conversation_user_id IS DISTINCT FROM NEW.principal_user_id
        OR i.conversation_session_generation IS DISTINCT FROM NEW.conversation_session_generation OR i.conversation_state IS DISTINCT FROM 'active'
-       OR i.conversation_retired_at IS NOT NULL OR i.execution_run_id IS DISTINCT FROM NEW.conversation_run_id OR i.status IS DISTINCT FROM 'in_review'
+       OR i.conversation_retired_at IS NOT NULL OR i.execution_run_id IS DISTINCT FROM NEW.conversation_run_id OR i.status IS NULL OR i.status NOT IN('in_review','in_progress')
        OR i.payload_source_protocol_version IS DISTINCT FROM 1 OR i.payload_source_snapshot IS NULL OR i.payload_source_snapshot_invalidated IS DISTINCT FROM false
        OR i.payload_source_snapshot->'owner'->>'contentHash' IS DISTINCT FROM public.aw_native_payload_body_hash('issue',to_jsonb(i))
        OR i.payload_source_snapshot->>'digest' IS DISTINCT FROM encode(sha256(convert_to((i.payload_source_snapshot-'digest')::text,'UTF8')),'hex')
@@ -145,7 +145,7 @@ BEGIN
      OR jsonb_typeof(r.runner_profile_json->'nativeInputSourceReceipt') IS DISTINCT FROM 'object'
      OR i.id IS NULL OR i.conversation_agent_id IS DISTINCT FROM NEW.conversation_agent_id OR i.conversation_user_id IS DISTINCT FROM NEW.principal_user_id
      OR i.conversation_session_generation IS DISTINCT FROM NEW.conversation_session_generation OR i.conversation_state IS DISTINCT FROM 'active'
-     OR i.conversation_retired_at IS NOT NULL OR i.execution_run_id IS DISTINCT FROM NEW.conversation_run_id OR i.status IS DISTINCT FROM 'in_review'
+     OR i.conversation_retired_at IS NOT NULL OR i.execution_run_id IS DISTINCT FROM NEW.conversation_run_id OR i.status IS NULL OR i.status NOT IN('in_review','in_progress')
      OR i.payload_source_protocol_version IS DISTINCT FROM 1 OR i.payload_source_snapshot IS NULL OR i.payload_source_snapshot_invalidated IS DISTINCT FROM false
      OR i.payload_source_snapshot->'owner'->>'contentHash' IS DISTINCT FROM public.aw_native_payload_body_hash('issue',to_jsonb(i))
      OR i.payload_source_snapshot->>'digest' IS DISTINCT FROM encode(sha256(convert_to((i.payload_source_snapshot-'digest')::text,'UTF8')),'hex')

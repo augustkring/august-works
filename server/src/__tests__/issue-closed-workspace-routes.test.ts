@@ -41,6 +41,14 @@ const mockHeartbeatService = vi.hoisted(() => ({
   getActiveRunForAgent: vi.fn(async () => null),
   cancelRun: vi.fn(async () => null),
 }));
+const mockEnvironmentRuntimeService = vi.hoisted(() => ({
+  destroyReusableSandboxLeases: vi.fn(async () => undefined),
+}));
+const mockExternalObjectService = vi.hoisted(() => ({
+  syncCommentSafely: vi.fn(async () => undefined),
+  syncIssueSafely: vi.fn(async () => undefined),
+  syncDocumentSafely: vi.fn(async () => undefined),
+}));
 
 const mockProjectService = vi.hoisted(() => ({
   getById: vi.fn(async () => null),
@@ -89,6 +97,14 @@ function registerServiceMocks() {
   vi.doMock("../services/execution-workspaces.js", () => ({
     executionWorkspaceService: () => mockExecutionWorkspaceService,
     STALE_REOPEN_PENDING_CONSUMPTION_GRACE_MS: 5 * 60 * 1000,
+  }));
+
+  vi.doMock("../services/environment-runtime.js", () => ({
+    environmentRuntimeService: () => mockEnvironmentRuntimeService,
+  }));
+
+  vi.doMock("../services/external-objects.js", () => ({
+    externalObjectService: () => mockExternalObjectService,
   }));
 
   vi.doMock("../services/heartbeat.js", () => ({
@@ -254,6 +270,7 @@ describe.sequential("closed isolated workspace issue routes", () => {
     vi.clearAllMocks();
     mockDb.transaction.mockImplementation(async (callback) => callback({}));
     mockIssueService.findMentionedAgents.mockResolvedValue([]);
+    mockEnvironmentRuntimeService.destroyReusableSandboxLeases.mockResolvedValue(undefined);
     mockAccessService.decide.mockResolvedValue({ allowed: true });
     mockIssueService.getById.mockResolvedValue(makeIssue());
     mockExecutionWorkspaceService.getById.mockResolvedValue(makeClosedWorkspace());

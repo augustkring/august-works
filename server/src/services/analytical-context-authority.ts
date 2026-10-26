@@ -297,21 +297,33 @@ async function assertAnalyticalContextPayloadAccessInternal(db:Db,companyId:stri
 
 async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,scope:{issueId:string}|{runId:string},readScope?:NativeReadScope,companyLocksHeld=false) {
  if(process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS==="1"){
-  const key=Symbol.for("paperclip.nativeAnalyticalEntryDiagnosticCount.v1");
   const global=globalThis as unknown as Record<PropertyKey,unknown>;
-  const count=typeof global[key]==="number"?global[key] as number:0;
-  if(count<32){
-   global[key]=count+1;
-   const ordinalMap=global[Symbol.for("paperclip.nativeSourceMemoDiagnosticTxOrdinals.v1")];
-   const txOrdinal=ordinalMap instanceof WeakMap?ordinalMap.get(db):undefined;
-   const frames=new Error().stack?.split("\n").flatMap(line=>{
-    const match=/server\/src\/services\/([A-Za-z0-9_./-]+\.ts):(\d+):\d+/.exec(line);
-    return match?[`${match[1]}:${match[2]}`]:[];
-   }).slice(0,6)??[];
-   console.error("native_analytical_source_entry",JSON.stringify({txOrdinal:typeof txOrdinal==="number"?txOrdinal:null,
-    scope:"issueId"in scope?"task":"run",actorType:actor?.type??"none",actorSource:actor?.source??"none",frames}));
+  const ordinalMap=global[Symbol.for("paperclip.nativeSourceMemoDiagnosticTxOrdinals.v1")];
+  const txOrdinal=ordinalMap instanceof WeakMap?ordinalMap.get(db):undefined;
+  const startedAt=performance.now();
+  const frames=new Error().stack?.split("\n").flatMap(line=>{
+   const match=/server\/src\/services\/([A-Za-z0-9_./-]+\.ts):(\d+):\d+/.exec(line);
+   return match&&match[1]!=="analytical-context-authority.ts"?[`${match[1]}:${match[2]}`]:[];
+  }).slice(0,6)??[];
+  let failed=false;
+  try{return await assertDirectAnalyticalContextPayloadAccessImpl(db,companyId,actor,scope,readScope,companyLocksHeld);}
+  catch(error){failed=true;throw error;}
+  finally{
+   if(typeof txOrdinal==="number"){
+    const key=Symbol.for("paperclip.nativeAnalyticalCallsiteStats.v1");
+    let all=global[key];if(!(all instanceof Map)){all=new Map<number,Map<string,{calls:number;totalMs:number;maxMs:number;failures:number;scope:string;actorType:string;actorSource:string;frames:string[]}>>();global[key]=all;}
+    const perTx=all.get(txOrdinal)??new Map();all.set(txOrdinal,perTx);
+    const callsite=frames.join("|");const prior=perTx.get(callsite)??{calls:0,totalMs:0,maxMs:0,failures:0,
+     scope:"issueId"in scope?"task":"run",actorType:actor?.type??"none",actorSource:actor?.source??"none",frames};
+    const elapsedMs=Math.max(0,performance.now()-startedAt);prior.calls++;prior.totalMs+=elapsedMs;
+    prior.maxMs=Math.max(prior.maxMs,elapsedMs);if(failed)prior.failures++;perTx.set(callsite,prior);
+   }
   }
  }
+ return assertDirectAnalyticalContextPayloadAccessImpl(db,companyId,actor,scope,readScope,companyLocksHeld);
+}
+
+async function assertDirectAnalyticalContextPayloadAccessImpl(db:Db,companyId:string,actor:AuthorizationActor|undefined,scope:{issueId:string}|{runId:string},readScope?:NativeReadScope,companyLocksHeld=false) {
  // Ordinary conversation prose has source privacy even without analytical
  // retention roots. Every actual ancestor goes through this same narrowing.
  if(!actor || !("issueId" in scope

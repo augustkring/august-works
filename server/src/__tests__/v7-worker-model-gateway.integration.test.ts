@@ -1854,11 +1854,16 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       inputTokens = profile.inputTokensUpperBound + 1;
       await expect(gateway().call(claims, input())).rejects.toMatchObject({
         status: 409,
+        details: { code: "worker_model_unsettled" },
       });
       expect((await ledger())[0]).toMatchObject({
         status: "unknown",
         maximumMinor: 3,
       });
+      const interventions = await db.select().from(supervisionInterventions)
+        .where(eq(supervisionInterventions.planId, plan.id));
+      expect(interventions[0]).toMatchObject({ reasonCode: "worker_model_unsettled" });
+      expect(calls).toBe(1);
     });
     it("binds company, run, attempt, manifest and current source instead of accepting caller prices or destinations", async () => {
       for (const altered of [

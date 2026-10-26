@@ -2088,6 +2088,19 @@ export async function runManagedNativeOpenCodeFixture(input: {
               heldMs: Math.max(0, performance.now() - tx.startedAt), frames: tx.frames,
             })).sort((a, b) => b.heldMs - a.heldMs).slice(0, 12),
           })}`);
+          if (sourceMemoDiagnosticsEnabled) {
+            const all = (globalThis as unknown as Record<PropertyKey, unknown>)[
+              Symbol.for("paperclip.nativeAnalyticalCallsiteStats.v1")];
+            const ordinals = new Set([...sourceMemoTransactionRecords.slice(0, 12).map(item => item.txOrdinal),
+              ...sourceMemoActiveTransactions.keys()]);
+            if (all instanceof Map) diagnostics.push(`managed analytical source callsite diagnostics: ${JSON.stringify(
+              [...ordinals].flatMap(txOrdinal => {
+                const calls = all.get(txOrdinal);
+                return calls instanceof Map ? [{ txOrdinal, calls: [...calls.values()]
+                  .sort((a, b) => Number((b as { totalMs?: unknown }).totalMs ?? 0) - Number((a as { totalMs?: unknown }).totalMs ?? 0))
+                  .slice(0, 12) }] : [];
+              }))}`);
+          }
           if (sourceMemoDiagnosticsEnabled && sourceLockSnapshot)
             diagnostics.push(`managed source lock snapshot: ${JSON.stringify(sourceLockSnapshot)}`);
           diagnostics.push(`execution failure metadata: ${JSON.stringify(metadata)}`);

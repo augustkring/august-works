@@ -51,6 +51,9 @@ export default defineConfig({
       PATH: `${providerDir}${path.delimiter}${process.env.PATH ?? ""}`,
       PAPERCLIP_E2E_AUTH_MODE: "authenticated",
       PAPERCLIP_AUTH_RATE_LIMIT_ENABLED: "false",
+      ...(process.env.PAPERCLIP_NATIVE_DEADLOCK_DIAGNOSTICS === "1"
+        ? { PAPERCLIP_NATIVE_DEADLOCK_DIAGNOSTICS: "1" }
+        : {}),
     },
   },
   outputDir,

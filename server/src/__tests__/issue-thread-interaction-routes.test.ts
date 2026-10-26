@@ -76,6 +76,13 @@ const mockAccessDecide = vi.hoisted(() => vi.fn(async (input: { action?: string 
   reason: "allow_explicit_grant",
   explanation: "Allowed by test grant.",
 })));
+const mockIssueVisibility = vi.hoisted(() => ({ value: "public" as string }));
+const mockCanActorReadIssuePrivacy = vi.hoisted(() => vi.fn(async (_db: unknown, actor: Record<string, unknown>) => {
+  if (mockIssueVisibility.value !== "private") return true;
+  if (actor.type === "board") return actor.userId === "local-board";
+  if (actor.type === "agent") return actor.agentId === ASSIGNEE_AGENT_ID;
+  return false;
+}));
 
 const mockLogActivity = vi.hoisted(() => vi.fn(async () => undefined));
 const mockAnalyticalPayloadAccess = vi.hoisted(() => vi.fn());
@@ -160,6 +167,13 @@ vi.mock("../services/trust-preset-resolver.js", () => ({
 }));
 
 function registerModuleMocks() {
+  vi.doMock("../services/authorization.js", async () => ({
+    ...await vi.importActual<typeof import("../services/authorization.js")>("../services/authorization.js"),
+    // The route fixture has no PostgreSQL privacy graph. Model its public Task
+    // fixtures and explicit private-owner case without replacing the route's
+    // analytical Source denial checks or write-admission behavior.
+    canActorReadIssuePrivacy: mockCanActorReadIssuePrivacy,
+  }));
   // This interaction route stub has no PostgreSQL analytical Source graph;
   // explicitly control its current Source boundary, including denial below.
   vi.doMock("../services/analytical-context-authority.js", () => ({
@@ -245,6 +259,7 @@ function registerModuleMocks() {
 }
 
 function createIssue(overrides: Record<string, unknown> = {}) {
+  mockIssueVisibility.value = String(overrides.visibility ?? "public");
   return {
     id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     companyId: "company-1",
@@ -257,6 +272,7 @@ function createIssue(overrides: Record<string, unknown> = {}) {
     assigneeAgentId: ASSIGNEE_AGENT_ID,
     assigneeUserId: null,
     createdByUserId: "local-board",
+    visibility: "public",
     identifier: "PAP-1714",
     title: "Persist interactions",
     executionPolicy: null,
@@ -653,6 +669,17 @@ describe.sequential("issue thread interaction routes", () => {
     expect(response.status).toBe(403);
     expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(mockDb, "company-1", expect.objectContaining({ type: "board", userId: "local-board" }), { issueId: ISSUE_ID });
     expect(mockInteractionService.listForIssue).not.toHaveBeenCalled();
+    expect(mockHeartbeatService.wakeup).not.toHaveBeenCalled();
+  });
+
+  it("does not resolve an interaction when a private Task is not public-write eligible", async () => {
+    mockIssueService.getById.mockResolvedValue(createIssue({ visibility: "private" }));
+    const response = await request(await createApp())
+      .post(`/api/issues/${ISSUE_ID}/interactions/interaction-2/cancel`)
+      .send({});
+    expect(response.status).toBe(422);
+    expect(response.body.error).toBe("Private tasks are not available");
+    expect(mockInteractionService.cancelQuestions).not.toHaveBeenCalled();
     expect(mockHeartbeatService.wakeup).not.toHaveBeenCalled();
   });
 

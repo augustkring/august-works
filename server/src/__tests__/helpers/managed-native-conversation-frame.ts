@@ -76,15 +76,28 @@ export async function runManagedNativeConversationFrame(input: {
     enableContextEngineV1: true, enableWorkflowsV1: true, readiness_engine_v7: true,
     enablePrivateAgentMemoryV1: true, orchestration_v7: true });
   const keyPath = join(runHome, "broker-key.pem"), certPath = join(runHome, "broker-cert.pem");
-  execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", keyPath,
-    "-out", certPath, "-days", "1", "-subj", "/CN=127.0.0.1", "-addext", "subjectAltName=IP:127.0.0.1"], { stdio: "ignore" });
+  const caKeyPath = join(runHome, "broker-ca-key.pem"), caCertPath = join(runHome, "broker-ca-cert.pem");
+  const csrPath = join(runHome, "broker.csr"), extensionsPath = join(runHome, "broker-extensions.cnf");
+  execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", caKeyPath,
+    "-out", caCertPath, "-days", "1", "-subj", "/CN=Managed conversation fixture CA", "-addext",
+    "basicConstraints=critical,CA:TRUE", "-addext", "keyUsage=critical,keyCertSign,cRLSign"], { stdio: "ignore" });
+  execFileSync("openssl", ["req", "-new", "-newkey", "rsa:2048", "-nodes", "-keyout", keyPath,
+    "-out", csrPath, "-subj", "/CN=127.0.0.1"], { stdio: "ignore" });
+  const { writeFile, readFile } = await import("node:fs/promises");
+  await writeFile(extensionsPath, "basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectAltName=IP:127.0.0.1,DNS:localhost\n");
+  execFileSync("openssl", ["x509", "-req", "-in", csrPath, "-CA", caCertPath, "-CAkey", caKeyPath,
+    "-CAcreateserial", "-out", certPath, "-days", "1", "-sha256", "-extfile", extensionsPath], { stdio: "ignore" });
   await chmod(keyPath, 0o600);
+  const certBundlePath = join(runHome, "broker-trust-bundle.pem");
+  await writeFile(certBundlePath, Buffer.concat([await readFile("/etc/ssl/certs/ca-certificates.crt"),
+    Buffer.from("\n"), await readFile(caCertPath)]), { mode: 0o600 });
   const f = await seedV5Presences(db);
   const userId = f.userId, companyId = f.home, agentId = f.presence.id;
   await db.update(companies).set({ budgetMonthlyCents: 2000 }).where(eq(companies.id, companyId));
   await db.update(agents).set({ budgetMonthlyCents: 2000 }).where(eq(agents.id, agentId));
   const sessionId = await seedNativePasskeySession(db, userId);
-  const human = { ...f.actor, sessionId };
+  const human = { type: "board", source: "session", userId, companyIds: [companyId],
+    sessionId, isInstanceAdmin: false } satisfies AuthorizationActor & Express.Request["actor"];
   const model = "fixture-managed-conversation-v1";
   const adapterConfig = { provider: "opencode", model: `anthropic/${model}`, lifecycleMode: "per_turn" };
   await db.update(agents).set({ adapterType: "paperclip_runner", adapterConfig, runtimeConfig: {}, status: "idle" })
@@ -181,8 +194,7 @@ export async function runManagedNativeConversationFrame(input: {
   });
   brokerApp.use(runtimeConnectionIntentRoutes(db, gateway));
   brokerApp.use(errorHandler);
-  const broker = createHttpsServer({ key: await import("node:fs/promises").then(fs => fs.readFile(keyPath)),
-    cert: await import("node:fs/promises").then(fs => fs.readFile(certPath)) }, brokerApp);
+  const broker = createHttpsServer({ key: await readFile(keyPath), cert: await readFile(certPath) }, brokerApp);
   broker.listen(0, "127.0.0.1");
   await new Promise<void>(resolve => broker.once("listening", resolve));
   const address = broker.address();
@@ -194,7 +206,7 @@ export async function runManagedNativeConversationFrame(input: {
   const prevCa = process.env.NODE_EXTRA_CA_CERTS;
   process.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN = origin;
   process.env.PAPERCLIP_AGENT_JWT_SECRET = `conversation-fixture-${randomUUID()}`;
-  process.env.NODE_EXTRA_CA_CERTS = certPath;
+  process.env.NODE_EXTRA_CA_CERTS = certBundlePath;
   const heartbeat = heartbeatService(db, { testNativeRunnerEnvironment: async ({ execution, runId, issueId,
     agentId: currentAgentId, responsibleUserId }) => {
     if (execution.provider.kind !== "opencode" || !responsibleUserId)
@@ -229,11 +241,12 @@ export async function runManagedNativeConversationFrame(input: {
       PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: String(minted.inputTokensUpperBound),
       PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: String(minted.maxOutputTokens),
       PATH: `${dirname(input.opencodeBinary)}:${process.env.PATH ?? ""}`,
-      NODE_EXTRA_CA_CERTS: certPath, SSL_CERT_FILE: certPath };
+      OPENCODE_DISABLE_DEFAULT_PLUGINS: "true", OPENCODE_DISABLE_MODELS_FETCH: "true",
+      NODE_EXTRA_CA_CERTS: certBundlePath, SSL_CERT_FILE: certBundlePath };
   } });
   const app = express();
   app.use(express.json());
-  app.use((req, _res, next) => { req.actor = { ...human, userId }; next(); });
+  app.use((req, _res, next) => { req.actor = human; next(); });
   app.use("/api", issueRoutes(db, {} as never, { heartbeat }));
   app.use(errorHandler);
   try {

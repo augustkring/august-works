@@ -4,4 +4,4 @@ Snapshots and journal entries 0547/0548 were generated with actual Drizzle Kit 0
 
 Migration numbering and safety checks both exited zero. Safety retains the repository baseline of 20 historical findings and one stale baseline entry. These are static checks and metadata evidence; successful database application, financial behavior, erasure and production qualification are separate checks.
 
-The later custom SQL guard review receipt records a correction to reservation INSERT versus dispatch UPDATE budget/count boundaries. It changes trigger logic, not the schema snapshot. Earlier publication hashes are retained as historical evidence. Fresh PostgreSQL boundary acceptance is still pending.
+The later custom SQL guard review receipts record the reservation INSERT versus dispatch UPDATE budget/count boundaries and the live conversation issue status accepted during dispatch. These are trigger-logic corrections, not schema changes; the generated snapshot and journal remain unchanged. Receipt r3 pins the current custom SQL SHA, while earlier publication/review hashes remain historical evidence. Fresh PostgreSQL and financial/source acceptance is still pending.

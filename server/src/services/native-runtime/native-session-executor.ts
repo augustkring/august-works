@@ -7326,8 +7326,8 @@ function nativeAttachmentStageAuthorityBinding(profile: Record<string, unknown>,
 async function nativeTurnFrameMatchesSourceClosure(tx: Parameters<Parameters<Db["transaction"]>[0]>[0],
   run: typeof heartbeatRuns.$inferSelect, turnInput: Parameters<NativeSession["startTurn"]>[0],
   closure: NativeBootstrapSourceClosure | null | undefined, rawNativeExecutionInput: unknown,
-  identity: { eventSeq: number; attempt: number }) {
-  const no = (_reason: string) => false;
+  identity: { eventSeq: number; attempt: number }, onMismatch?: (reason: string) => void) {
+  const no = (reason: string) => { onMismatch?.(reason); return false; };
   if (!closure || turnInput.continuation === true || turnInput.message.role !== "user") return no("frame_kind");
   let frame: Record<string, unknown>, parsedExecution: ReturnType<typeof parseNativeExecutionInput>, expected: unknown;
   try {
@@ -7499,6 +7499,18 @@ async function nativeTurnFrameMatchesSourceClosure(tx: Parameters<Parameters<Db[
   return isDeepStrictEqual(parsedExecution.completionContract.contract, projectedContract) || no("contract_projection");
 }
 
+const nativeTurnFrameSourceMismatchReasons = new Set([
+  "frame_kind", "frame_parse", "attachment_stage_binding", "staged_task_binding", "envelope_shape",
+  "turn_context_binding", "turn_context_unqualified", "envelope_schema", "envelope_task_digest",
+  "workspace_source_missing", "workspace_id_mismatch", "workspace_frame_missing", "workspace_frame_shape",
+  "workspace_digest", "workspace_agent_home_binding", "workspace_agent_home_row", "workspace_execution_identity",
+  "workspace_current_binding", "workspace_task_session_binding", "workspace_origin_unavailable", "workspace_task_binding",
+  "workspace_task_acl", "attachment_not_delivered", "attachment_source_changed", "attachment_comment_erased",
+  "envelope_planning_context", "interaction_sources", "envelope_company", "envelope_run", "envelope_agent",
+  "envelope_issue", "task_source", "wake_binding", "wake_version", "contract_binding", "contract_source",
+  "contract_digest", "contract_projection",
+]);
+
 async function postgresJsonbSha256(tx: Parameters<Parameters<Db["transaction"]>[0]>[0], value: unknown): Promise<string> {
   const [row] = await tx.execute<{ digest: string }>(sql`select encode(sha256(convert_to((${JSON.stringify(value)}::jsonb)::text,'UTF8')),'hex') as digest`);
   if (!row || !/^[0-9a-f]{64}$/.test(row.digest)) throw new Error("native_input_source_receipt_persistence_failed");
@@ -7572,11 +7584,19 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
       (!Array.isArray(profile.nativeToolResultSourceCaptures) || profile.nativeToolResultSourceCaptures.length === 0) &&
       (attachmentStage === undefined || attachmentStage !== null);
     let sourceClosureMatches: boolean | null | undefined;
+    let sourceClosureMismatchReason: string | null = null;
     sourceClosureMatches = sourceClosure && await nativeTurnFrameMatchesSourceClosure(tx, run, input.turnInput,
-      sourceClosure, profile.nativeExecutionInput, { eventSeq: input.eventSeq, attempt: input.attempt });
+      sourceClosure, profile.nativeExecutionInput, { eventSeq: input.eventSeq, attempt: input.attempt },
+      reason => { sourceClosureMismatchReason = reason; });
     const existingReceipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
-    if (profile.nativeOpenCodeSourceAuthority && !sourceClosureMatches)
-      throw new Error("managed_opencode_source_prompt_closure_unavailable");
+    if (profile.nativeOpenCodeSourceAuthority && !sourceClosureMatches) {
+      const reason = process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1" &&
+        sourceClosureMismatchReason && nativeTurnFrameSourceMismatchReasons.has(sourceClosureMismatchReason)
+        ? sourceClosureMismatchReason : null;
+      throw new Error(reason
+        ? `managed_opencode_source_prompt_closure_unavailable:${reason}`
+        : "managed_opencode_source_prompt_closure_unavailable");
+    }
     stage = "receipt_validation";
     if (sourceClosure && sourceClosureMatches === true && run.nativeInputSourceProtocolVersion === 0 && typeof run.responsibleUserId === "string" && run.responsibleUserId.length > 0 &&
       profile.nativeExecutionInput !== undefined && profile.nativeInputSourceReceipt === undefined && noPriorNativeEffects) {
@@ -7664,6 +7684,8 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
     // A driver's query/params can include the existing private run profile.
     // Keep only our finite control errors; never propagate raw DB diagnostics.
     const message = error instanceof Error ? error.message : "";
+    const sourceClosureDiagnostic = [...nativeTurnFrameSourceMismatchReasons]
+      .some(reason => message === `managed_opencode_source_prompt_closure_unavailable:${reason}`);
     throw new Error([
       "native_session_lease_lost", "native_session_lease_ttl_invalid",
       "native_model_input_run_binding_changed", "native_model_input_launch_binding_changed",
@@ -7679,7 +7701,8 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
       "native_model_input_turn_source_receipt_invalid",
       "managed_opencode_source_prompt_budget_exceeded",
       "managed_opencode_source_prompt_binding_ambiguous",
-    ].includes(message) ? message : stage === "intent_persist" &&
+    ].includes(message) || sourceClosureDiagnostic
+      ? message : stage === "intent_persist" &&
       input.bootstrapSourceClosure?.sourceSet.inputs.some(source => source.kind === "attachment")
       ? "native_model_input_attachment_stage_rejected"
       : stage === "intent_persist"

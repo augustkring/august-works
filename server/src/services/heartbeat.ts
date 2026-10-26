@@ -23736,7 +23736,12 @@ export function heartbeatService(
               resume: Boolean(nativeResumeCheckpoint), initialGuidance: Boolean("initialCommunicationGuidance" in nativeExecution && nativeExecution.initialCommunicationGuidance),
               continuation: Boolean("continuationPrompt" in nativeExecution && nativeExecution.continuationPrompt),
               planning: Boolean("planningContext" in nativeExecution && nativeExecution.planningContext),
-              conversation: isConversation(issueContext), wake: Boolean(context.paperclipWake && !nativeTaskWakeSource), projectPaths: projectRepositoryPaths.length > 0,
+              // A first authenticated conversation wake is fully represented by
+              // the exact Task/comment owner captures above. Prior replay is
+              // still unqualifying: conversationReplay adds an `unknown`
+              // renderer reference whenever earlier messages enter the prompt.
+              conversationHistory: isConversation(issueContext) && Boolean(nativeBootstrapConversationReplaySources?.length),
+              wake: Boolean(context.paperclipWake && !nativeTaskWakeSource), projectPaths: projectRepositoryPaths.length > 0,
               authoredContextManifests: Boolean(capturedAuthoredSources?.contextManifests.length), missingTask: !capturedTaskSource,
             };
             const attachmentClosureExecution = nativeExecution;
@@ -25831,7 +25836,11 @@ export function heartbeatService(
           }
           return null;
         })();
-        logger.error({ err, runId, ...(pgDeadlockDiagnostic ? { pgDeadlockDiagnostic } : {}) }, "heartbeat execution failed");
+        if (process.env.PAPERCLIP_NATIVE_DEADLOCK_DIAGNOSTICS === "1") {
+          logger.error({ runId, ...(pgDeadlockDiagnostic ? { pgDeadlockDiagnostic } : {}) }, "heartbeat execution failed");
+        } else {
+          logger.error({ err, runId }, "heartbeat execution failed");
+        }
 
         let logSummary: {
           bytes: number;
