@@ -30,14 +30,22 @@ import { captureNativeTaskWakeSource, type NativeConsumedSourceComponent, type N
 import type { NativeToolEffectClaim } from "../agent-auth-jwt.js";
 
 type Transaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
-interface NativeSourceReadScope { active: Set<string>; complete: Set<string>; work: number }
+interface NativeSourceReadScope { active: Set<string>; complete: Set<string>; work: number; privacyLockedCompanies: Set<string> }
 function nativeSourceReadWork(scope: NativeSourceReadScope) {
   if (++scope.work > 512) throw forbidden("The Native source graph exceeds its total-work bound");
 }
-function nativeSourceReadScope(): NativeSourceReadScope { return { active: new Set(), complete: new Set(), work: 0 }; }
+function nativeSourceReadScope(): NativeSourceReadScope { return { active: new Set(), complete: new Set(), work: 0, privacyLockedCompanies: new Set() }; }
 function inNativeSourceReadTransaction<T>(db: Db | Transaction, read: (tx: Db | Transaction) => Promise<T>): Promise<T> {
   if (is(db, PgTransaction)) return read(db);
   return db.transaction(tx => read(tx as unknown as Db));
+}
+async function lockNativeSourceReadPrivacy(db: Db | Transaction, companyId: string, scope: NativeSourceReadScope) {
+  if (scope.privacyLockedCompanies.has(companyId)) return;
+  const { lockAnalyticalCompany } = await import("./analytical-privacy.js");
+  const { lockMemoryPrivacy } = await import("./memory/memory-privacy.js");
+  await lockAnalyticalCompany(db as Db, companyId);
+  await lockMemoryPrivacy(db as Db, companyId);
+  scope.privacyLockedCompanies.add(companyId);
 }
 async function nativeSourceReaderHasCompanyAccess(db: Db | Transaction, companyId: string, actor: AuthorizationActor) {
   // Agent identities bind one company. Human readers use current memberships,
@@ -170,10 +178,12 @@ export interface NativeIssueEffectPrefix {
 export async function assertNativeModelOutputCaptureCurrent(db: Db | Transaction, companyId: string, issueId: string,
   capture: NativeModelOutputCapture, expectedToolName: string, currentReader?: AuthorizationActor): Promise<void> {
   return inNativeSourceReadTransaction(db, async tx => {
+    const scope = nativeSourceReadScope();
+    await lockNativeSourceReadPrivacy(tx, companyId, scope);
     if (currentReader && !await nativeSourceReaderHasCompanyAccess(tx, companyId, currentReader))
       throw forbidden("The Native output reader is unavailable");
     await assertNativeModelOutputCaptureCurrentInScope(tx, companyId, issueId, capture, expectedToolName,
-      nativeSourceReadScope(), 0, currentReader);
+      scope, 0, currentReader);
   });
 }
 
@@ -598,7 +608,11 @@ export async function assertNativePayloadSourceSetCurrent(db: Db | Transaction, 
   companyId: string; issueId: string; runId: string; actor: AuthorizationActor;
   policy: NativePayloadSourcePolicy; inputs: NativePayloadSourceInput[];
 }): Promise<void> {
-  return inNativeSourceReadTransaction(db, tx => assertNativePayloadSourceSetCurrentInScope(tx, input, nativeSourceReadScope()));
+  return inNativeSourceReadTransaction(db, async tx => {
+    const scope = nativeSourceReadScope();
+    await lockNativeSourceReadPrivacy(tx, input.companyId, scope);
+    return assertNativePayloadSourceSetCurrentInScope(tx, input, scope);
+  });
 }
 
 async function assertNativePayloadSourceSetCurrentInScope(db: Db | Transaction, input: {
@@ -1268,7 +1282,11 @@ export async function assertNativeManagedConsumedSourceSetCurrent(db: Db | Trans
   companyId: string; issueId: string; runId: string; actor: AuthorizationActor;
   components: NativeConsumedSourceComponent[]; sourceSet: NativePayloadSourceSet;
 }): Promise<void> {
-  return inNativeSourceReadTransaction(db, tx => assertNativeManagedConsumedSourceSetCurrentInScope(tx, input, nativeSourceReadScope()));
+  return inNativeSourceReadTransaction(db, async tx => {
+    const scope = nativeSourceReadScope();
+    await lockNativeSourceReadPrivacy(tx, input.companyId, scope);
+    return assertNativeManagedConsumedSourceSetCurrentInScope(tx, input, scope);
+  });
 }
 
 export interface NativeTemporalContextCapture {
@@ -1306,6 +1324,7 @@ async function assertNativeContextReadSourceSetCurrentInScope(db: Db | Transacti
 }, scope: NativeSourceReadScope): Promise<void> {
   if (!input.sourceSet || typeof input.sourceSet !== "object" || Array.isArray(input.sourceSet))
     throw forbidden("The Native Context read source binding is unavailable");
+  await lockNativeSourceReadPrivacy(db, input.companyId, scope);
   const parsedInputs = nativePayloadSourceInputSchema.array().safeParse(input.sourceSet.inputs);
   const parsedPolicy = nativePayloadSourcePolicySchema.safeParse(input.sourceSet.policy);
   const contextInputs = parsedInputs.success ? parsedInputs.data.filter((value): value is Extract<NativePayloadSourceInput, { kind: "context" }> =>
@@ -1576,8 +1595,11 @@ export async function assertNativeTemporalContextInputsCurrent(db: Db, companyId
 export async function assertNativeDocumentRevisionCurrentSourceAccess(db: Db, input: {
   companyId: string; issueId: string; revisionId: string; actor: AuthorizationActor; requireLatest?: boolean;
 }): Promise<void> {
-  return inNativeSourceReadTransaction(db, tx => assertNativeDocumentRevisionCurrentSourceAccessInScope(tx as Db, input,
-    nativeSourceReadScope(), 0));
+  return inNativeSourceReadTransaction(db, async tx => {
+    const scope = nativeSourceReadScope();
+    await lockNativeSourceReadPrivacy(tx, input.companyId, scope);
+    return assertNativeDocumentRevisionCurrentSourceAccessInScope(tx as Db, input, scope, 0);
+  });
 }
 
 async function assertNativeDocumentRevisionCurrentSourceAccessInScope(db: Db, input: {

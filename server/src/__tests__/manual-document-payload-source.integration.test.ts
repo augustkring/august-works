@@ -4,7 +4,7 @@ import request from "supertest";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { activityLog, authSessions, authUsers, companies, companyMemberships, createDb, documentRevisions,
-  documents, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, issueDocuments } from "@paperclipai/db";
+  documents, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, issueDocuments, issues } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { issueRoutes } from "../routes/issues.js";
 import { errorHandler } from "../middleware/error-handler.js";

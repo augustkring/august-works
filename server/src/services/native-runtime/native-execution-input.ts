@@ -68,7 +68,7 @@ export type NativeBootstrapSourceClosure = {
   turnContext?: { markdownDigest: string; manifestIds: string[] };
 };
 
-function exactInteractionSources(input: {
+export function exactNativeInteractionSourceInputs(input: {
   issueId: string;
   responses: readonly NativeInteractionResponseEnvelope[] | null | undefined;
   sources: readonly Extract<NativePayloadSourceInput, { kind: "interaction" }>[] | null | undefined;
@@ -247,7 +247,7 @@ export function buildNativeBootstrapSourceSet(input: {
   rolePackInputs: readonly NativePayloadSourceInput[] | null;
   unsupportedInputPresent: boolean;
 }): NativePayloadSourceSet | null {
-  const interactionSources = exactInteractionSources({ issueId: input.issueId,
+  const interactionSources = exactNativeInteractionSourceInputs({ issueId: input.issueId,
     responses: input.interactionResponses, sources: input.interactionSources });
   if (!interactionSources) return null;
   const contextMarkdown = input.contextWitnessMarkdown ?? input.governedContextMarkdown;

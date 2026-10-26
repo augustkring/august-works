@@ -57,6 +57,7 @@ import type {
 import { nativePayloadSourceInputSchema, nativePayloadSourcePolicySchema, nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema,
   type NativeFinalizationResult, type NativePayloadSourceInput, type NativeRunInputSourceReceipt } from "@paperclipai/shared";
 import type { NativeBootstrapSourceClosure, NativeConsumedSourceComponent, NativeModelOutputCapture, NativePayloadSourceSet } from "./native-execution-input.js";
+import { exactNativeInteractionSourceInputs } from "./native-execution-input.js";
 import type {
   HarnessRuntimeRequestResolution,
   NativeExecutionInput,
@@ -7304,7 +7305,10 @@ async function nativeTurnFrameMatchesSourceClosure(tx: Parameters<Parameters<Db[
   if (!await canActorReadIssuePrivacy(tx, sourceActor, currentTask)) return no("workspace_task_acl");
   await assertAnalyticalContextPayloadAccess(tx as unknown as Db, run.companyId, sourceActor, { issueId: run.nativeIssueId! });
   if (frame.planningContext !== null) return no("envelope_planning_context");
-  if (!Array.isArray(frame.interactionResponses) || frame.interactionResponses.length !== 0) return no("envelope_interactions");
+  const interactionSources = closure.sourceSet.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "interaction" }> =>
+    source.kind === "interaction");
+  if (!exactNativeInteractionSourceInputs({ issueId: run.nativeIssueId ?? "", responses: parsedExecution.interactionResponses,
+    sources: interactionSources })) return no("interaction_sources");
   if (parsedExecution.binding.companyId !== run.companyId) return no("envelope_company");
   if (parsedExecution.binding.runId !== run.id) return no("envelope_run");
   if (parsedExecution.binding.agentId !== run.agentId) return no("envelope_agent");

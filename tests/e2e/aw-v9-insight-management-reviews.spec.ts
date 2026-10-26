@@ -11,7 +11,9 @@ import { aiGovernanceService } from "../../server/src/services/ai-governance/gov
 import { analyticalPurpose } from "../../server/src/__tests__/helpers/business-metric-fixture.ts";
 import { lockMemoryPrivacy } from "../../server/src/services/memory/memory-privacy.ts";
 import { eraseAnalyticalSourcesUnderMemory } from "../../server/src/services/analytical-source-erasure.ts";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
+registerEnglishAccountLocaleIsolation(test);
 async function json(response: APIResponse) { expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(true); return response.json(); }
 
 // Actual Original snapshot/publication/current-source/privacy owners operate

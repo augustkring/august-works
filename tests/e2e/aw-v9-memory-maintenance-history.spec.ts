@@ -6,8 +6,10 @@ import path from "node:path";
 import { expect, test, type APIResponse } from "@playwright/test";
 import { eq } from "../../packages/db/node_modules/drizzle-orm/index.js";
 import { createDb, closeRegisteredClients, memoryBindings, memoryBindingTargets, memoryRecords, memoryJobs } from "../../packages/db/src/index.ts";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
 
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
+registerEnglishAccountLocaleIsolation(test);
 async function json(response: APIResponse) {
   expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(true);
   return response.json();

@@ -73,9 +73,14 @@ describe("SaaS origin ingress", () => {
     const server = createServer(target);
     let sessionLookups = 0;
     setupPublicOriginUpgradeGuard(server, [ORIGIN], trustLoopback);
-    const db = { select: (fields: Record<string, unknown>) => ({ from: () => ({ where: () =>
-      Promise.resolve("id" in fields ? [{ id: "instance-admin" }] : [{ companyId: "company-1" }]),
-    }) }) };
+    const db = { select: (fields: Record<string, unknown>) => ({ from: () => {
+      const rows = "sessionId" in fields
+        ? [{ sessionId: "s1", companyIds: ["company-1"], isInstanceAdmin: false }]
+        : "id" in fields ? [{ id: "instance-admin" }] : [{ companyId: "company-1" }];
+      const result = { limit: async () => rows,
+        then: (resolve: (value: typeof rows) => unknown, reject?: (reason: unknown) => unknown) => Promise.resolve(rows).then(resolve, reject) };
+      return { where: () => result, innerJoin: () => ({ where: () => result }) };
+    } }) };
     const wss = setupLiveEventsWebSocketServer(server, db as never, {
       deploymentMode: "authenticated",
       deploymentProfile: "saas",

@@ -13,9 +13,12 @@ import { memoryService } from "../memory/memory-service.js";
 import * as nativeDirectInput from "../native-direct-input.js";
 import * as analyticalContextAuthority from "../analytical-context-authority.js";
 import { nativePayloadSourceSnapshotSchema } from "@paperclipai/shared";
+import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
 
 const managedContextReadFailures: Array<{ name: string; code: string | null; causeCode: string | null; frames: string[] }> = [];
-const managedContextSourceCheckTimings: Array<{ phase: string; caller: string; elapsedMs: number; outcome: "ok" | "throw" }> = [];
+const managedMemoryToolFailures: Array<{ tool: string; callId: string; name: string; code: string | null; causeCode: string | null; frames: string[] }> = [];
+const managedContextSourceCheckTimings: Array<{ phase: string; caller: string; elapsedMs: number; outcome: "ok" | "throw";
+  failure?: { name: string; code: string | null; causeCode: string | null; frames: string[] } }> = [];
 const managedContextSourceCheckCounts: Record<string, number> = {};
 const managedContextSourceCheckCallerCounts: Record<string, number> = {};
 
@@ -29,11 +32,13 @@ function managedContextSourceCheckCaller(): string {
   return "unknown";
 }
 
-function recordManagedContextSourceCheckTiming(phase: string, caller: string, startedAt: number, outcome: "ok" | "throw") {
+function recordManagedContextSourceCheckTiming(phase: string, caller: string, startedAt: number, outcome: "ok" | "throw",
+  failure?: unknown) {
   managedContextSourceCheckCounts[phase] = (managedContextSourceCheckCounts[phase] ?? 0) + 1;
   managedContextSourceCheckCallerCounts[`${phase}@${caller}`] = (managedContextSourceCheckCallerCounts[`${phase}@${caller}`] ?? 0) + 1;
   if (managedContextSourceCheckTimings.length >= 64) managedContextSourceCheckTimings.shift();
-  managedContextSourceCheckTimings.push({ phase, caller, elapsedMs: Math.max(0, Date.now() - startedAt), outcome });
+  managedContextSourceCheckTimings.push({ phase, caller, elapsedMs: Math.max(0, Date.now() - startedAt), outcome,
+    ...(outcome === "throw" ? { failure: managedContextFailureFacts(failure) } : {}) });
 }
 
 async function timeManagedContextSourceCheck<T>(phase: string, check: () => Promise<T>): Promise<T> {
@@ -41,8 +46,8 @@ async function timeManagedContextSourceCheck<T>(phase: string, check: () => Prom
   const startedAt = Date.now();
   let outcome: "ok" | "throw" = "ok";
   try { return await check(); }
-  catch (error) { outcome = "throw"; throw error; }
-  finally { recordManagedContextSourceCheckTiming(phase, caller, startedAt, outcome); }
+  catch (error) { outcome = "throw"; recordManagedContextSourceCheckTiming(phase, caller, startedAt, outcome, error); throw error; }
+  finally { if (outcome === "ok") recordManagedContextSourceCheckTiming(phase, caller, startedAt, outcome); }
 }
 
 function safeErrorCode(value: unknown): string | null {
@@ -98,6 +103,18 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
     const assertAnalyticalContextPayloadAccess = analyticalContextAuthority.assertAnalyticalContextPayloadAccess;
     vi.spyOn(analyticalContextAuthority, "assertAnalyticalContextPayloadAccess").mockImplementation(async (...args) =>
       timeManagedContextSourceCheck("assertAnalyticalContextPayloadAccess", () => assertAnalyticalContextPayloadAccess(...args)));
+    const executeTool = PaperclipRunnerToolAuthority.prototype.execute;
+    vi.spyOn(PaperclipRunnerToolAuthority.prototype, "execute").mockImplementation(async function (
+      this: PaperclipRunnerToolAuthority, call, ...args) {
+      try { return await executeTool.call(this, call, ...args); }
+      catch (error) {
+        if (call.tool === "self_remember") {
+          const facts = managedContextFailureFacts(error);
+          managedMemoryToolFailures.push({ tool: call.tool, callId: call.callId, ...facts });
+        }
+        throw error;
+      }
+    });
   }, 60_000);
 
   afterAll(async () => {
@@ -150,6 +167,7 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
           throw new Error(`${message}\nmanaged Context read failure facts: ${JSON.stringify({
             failures: managedContextReadFailures, sourceCheckCounts: managedContextSourceCheckCounts,
             sourceCheckCallerCounts: managedContextSourceCheckCallerCounts,
+            managedMemoryToolFailures,
             recentSourceCheckTimings: managedContextSourceCheckTimings,
           })}`);
         }

@@ -11,9 +11,16 @@ const mockIssueService = vi.hoisted(() => ({
   tombstoneComment: vi.fn(),
 }));
 const mockCanActorReadIssuePrivacy = vi.hoisted(() => vi.fn(async () => true));
+const mockAnalyticalPayloadAccess = vi.hoisted(() => vi.fn(async () => undefined));
 
 const mockAccessService = vi.hoisted(() => ({
   canUser: vi.fn(),
+  decide: vi.fn(async (input: { action: string }) => ({
+    allowed: true,
+    action: input.action,
+    reason: "allow_test_fixture",
+    explanation: "The seeded public issue is within the fixture actor's boundary.",
+  })),
   hasPermission: vi.fn(),
 }));
 
@@ -103,6 +110,11 @@ function registerModuleMocks() {
   vi.doMock("../services/authorization.js", async () => {
     const actual = await vi.importActual<typeof import("../services/authorization.js")>("../services/authorization.js");
     return { ...actual, canActorReadIssuePrivacy: mockCanActorReadIssuePrivacy };
+  });
+
+  vi.doMock("../services/analytical-context-authority.js", async () => {
+    const actual = await vi.importActual<typeof import("../services/analytical-context-authority.js")>("../services/analytical-context-authority.js");
+    return { ...actual, assertAnalyticalContextPayloadAccess: mockAnalyticalPayloadAccess };
   });
 
   vi.doMock("../services/activity-log.js", () => ({
@@ -265,8 +277,17 @@ describe.sequential("issue comment cancel routes", () => {
       return deleted;
     });
     mockAccessService.canUser.mockResolvedValue(false);
+    mockAccessService.decide.mockImplementation(async (input) => ({
+      allowed: input.action === "issue:read",
+      action: input.action,
+      reason: input.action === "issue:read" ? "allow_test_fixture" : "deny_missing_grant",
+      explanation: input.action === "issue:read"
+        ? "The seeded public issue is within the fixture actor's boundary."
+        : "No unrelated permission is granted by this fixture.",
+    }));
     mockAccessService.hasPermission.mockResolvedValue(false);
     mockCanActorReadIssuePrivacy.mockResolvedValue(true);
+    mockAnalyticalPayloadAccess.mockResolvedValue(undefined);
     mockFeedbackService.listIssueVotesForUser.mockResolvedValue([]);
     mockFeedbackService.saveIssueVote.mockResolvedValue({
       vote: null,

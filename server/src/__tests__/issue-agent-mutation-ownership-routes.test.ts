@@ -161,6 +161,7 @@ const mockIssueTreeControlService = vi.hoisted(() => ({ getActivePauseHoldGate: 
 const mockLogActivity = vi.hoisted(() => vi.fn(async () => undefined));
 const mockObserveCrossIssueInfluence = vi.hoisted(() => vi.fn(async () => null));
 const mockAnalyticalPayloadAccess = vi.hoisted(() => vi.fn());
+let lastErrorContext: unknown;
 
 function registerRouteMocks() {
   // The legacy route stub models checkout/recovery ownership, not a real
@@ -186,9 +187,6 @@ function registerRouteMocks() {
     return { ...actual, canActorReadIssuePrivacy: mockCanActorReadIssuePrivacy };
   });
 
-  // This fixture uses a small query stub, not a native PgTransaction. Keep
-  // the route's company-scope decision real at its authorization boundary;
-  // task-source policy itself is covered by the source integration suites.
   vi.doMock("../services/task-source-read-scope.js", () => ({
     withCurrentTaskSourceRead: async (
       db: unknown,
@@ -475,7 +473,11 @@ describe("agent issue mutation checkout ownership", () => {
     );
     const app = express();
     app.use(express.json());
-    app.use((req, _res, next) => {
+    lastErrorContext = undefined;
+    app.use((req, res, next) => {
+      res.on("finish", () => {
+        lastErrorContext = (res as any).__errorContext ?? null;
+      });
       (req as any).actor = actor;
       next();
     });
@@ -830,7 +832,9 @@ describe("agent issue mutation checkout ownership", () => {
     expect(mockIssueService.list).not.toHaveBeenCalled();
   });
 
-  it("uses the company-scope fast path on the issue list route", async () => {
+  it("rechecks issue access for company-scope readers on the issue list route", async () => {
+    mockIssueService.list.mockResolvedValue([makeIssue()]);
+    mockCanActorReadIssuePrivacy.mockResolvedValue(true);
     mockAccessService.decide.mockImplementation(async (input: { action: string }) => {
       if (input.action === "company_scope:read") {
         return {
@@ -839,9 +843,6 @@ describe("agent issue mutation checkout ownership", () => {
           reason: "allow_explicit_grant",
           explanation: "Allowed by test company scope.",
         };
-      }
-      if (input.action === "issue:read") {
-        throw new Error("issue:read should not be evaluated for company-scope readers");
       }
       return {
         allowed: true,
@@ -854,14 +855,40 @@ describe("agent issue mutation checkout ownership", () => {
     const app = await createApp(boardActor());
     const res = await request(app).get(`/api/companies/${companyId}/issues`);
 
-    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.status, JSON.stringify({ body: res.body, errorContext: lastErrorContext })).toBe(200);
     expect(res.body).toEqual([expect.objectContaining({ id: issueId })]);
     expect(mockAccessService.decide).toHaveBeenCalledWith(expect.objectContaining({
       action: "company_scope:read",
       resource: { type: "company", companyId },
     }));
-    expect(mockAccessService.decide).not.toHaveBeenCalledWith(expect.objectContaining({
+    expect(mockAccessService.decide).toHaveBeenCalledWith(expect.objectContaining({
       action: "issue:read",
+    }));
+  });
+
+  it("does not let company-scope access override a denied issue-read decision", async () => {
+    mockIssueService.list.mockResolvedValue([makeIssue()]);
+    mockCanActorReadIssuePrivacy.mockResolvedValue(true);
+    mockAccessService.decide.mockImplementation(async (input: { action: string }) => ({
+      allowed: input.action === "company_scope:read",
+      action: input.action,
+      reason: input.action === "company_scope:read" ? "allow_explicit_grant" : "deny_missing_grant",
+      explanation: input.action === "company_scope:read"
+        ? "Allowed by test company scope."
+        : "Issue read remains separately denied.",
+    }));
+
+    const res = await request(await createApp(boardActor())).get(`/api/companies/${companyId}/issues`);
+
+    expect(res.status, JSON.stringify({ body: res.body, errorContext: lastErrorContext })).toBe(200);
+    expect(res.body).toEqual([]);
+    expect(mockAccessService.decide).toHaveBeenCalledWith(expect.objectContaining({
+      action: "company_scope:read",
+      resource: { type: "company", companyId },
+    }));
+    expect(mockAccessService.decide).toHaveBeenCalledWith(expect.objectContaining({
+      action: "issue:read",
+      resource: expect.objectContaining({ type: "issue", companyId, issueId }),
     }));
   });
 
@@ -913,12 +940,14 @@ describe("agent issue mutation checkout ownership", () => {
 
   it("allows mentioned peer agents to post comments without ownership of an active checkout", async () => {
     mockAccessService.decide.mockImplementation(async (input: { action: string }) => ({
-      allowed: input.action === "issue:comment",
+      allowed: input.action === "issue:comment" || input.action === "issue:read",
       action: input.action,
-      reason: input.action === "issue:comment" ? "allow_issue_mention_grant" : "deny_missing_grant",
+      reason: input.action === "issue:comment" ? "allow_issue_mention_grant" : input.action === "issue:read" ? "allow_visible_issue_read" : "deny_missing_grant",
       explanation:
         input.action === "issue:comment"
           ? "Allowed by a mention-scoped issue comment grant."
+          : input.action === "issue:read"
+            ? "Allowed to read this visible issue."
           : "Missing permission.",
     }));
 
@@ -996,8 +1025,8 @@ describe("agent issue mutation checkout ownership", () => {
     const res = await request(await createApp(peerActor()))
       .get(`/api/issues/${issueId}/comments`);
 
-    expect(res.status, JSON.stringify(res.body)).toBe(403);
-    expect(res.body.error).toBe("Issue is outside this actor's authorization boundary");
+    expect(res.status, JSON.stringify(res.body)).toBe(404);
+    expect(res.body.error).toBe("Issue not found");
     expect(mockAccessService.decide).toHaveBeenCalledWith(expect.objectContaining({ action: "issue:read" }));
   });
 
@@ -1012,8 +1041,8 @@ describe("agent issue mutation checkout ownership", () => {
     const res = await request(await createApp(peerActor()))
       .get(`/api/issues/${issueId}/interactions`);
 
-    expect(res.status, JSON.stringify(res.body)).toBe(403);
-    expect(res.body.error).toBe("Issue is outside this actor's authorization boundary");
+    expect(res.status, JSON.stringify(res.body)).toBe(404);
+    expect(res.body.error).toBe("Issue not found");
     expect(mockAccessService.decide).toHaveBeenCalledWith(expect.objectContaining({ action: "issue:read" }));
     expect(mockIssueThreadInteractionService.listForIssue).not.toHaveBeenCalled();
   });
@@ -1067,8 +1096,8 @@ describe("agent issue mutation checkout ownership", () => {
     const res = await request(await createApp(peerActor()))
       .get(`/api/issues/${issueId}/comments/comment-1`);
 
-    expect(res.status, JSON.stringify(res.body)).toBe(403);
-    expect(res.body.error).toBe("Issue is outside this actor's authorization boundary");
+    expect(res.status, JSON.stringify(res.body)).toBe(404);
+    expect(res.body.error).toBe("Issue not found");
     expect(mockAccessService.decide).toHaveBeenCalledWith(expect.objectContaining({ action: "issue:read" }));
     expect(mockIssueService.getComment).not.toHaveBeenCalled();
   });
@@ -1076,17 +1105,21 @@ describe("agent issue mutation checkout ownership", () => {
   it("allows visible issue field updates for peer agents", async () => {
     mockIssueService.getById.mockResolvedValue(makeIssue({ status: "todo", assigneeAgentId: ownerAgentId }));
     mockAccessService.decide.mockImplementation(async (input: { action: string }) => ({
-      allowed: input.action === "issue:comment" || input.action === "issue:mutate",
+      allowed: input.action === "issue:read" || input.action === "issue:comment" || input.action === "issue:mutate",
       action: input.action,
       reason:
         input.action === "issue:comment"
           ? "allow_issue_mention_grant"
+          : input.action === "issue:read"
+            ? "allow_visible_issue_read"
           : input.action === "issue:mutate"
             ? "allow_explicit_grant"
             : "deny_missing_grant",
       explanation:
         input.action === "issue:comment"
           ? "Allowed by a mention-scoped issue comment grant."
+          : input.action === "issue:read"
+            ? "Allowed to read this visible issue."
           : input.action === "issue:mutate"
             ? "Allowed by test boundary default."
             : "Missing permission.",
@@ -1675,15 +1708,17 @@ describe("agent issue mutation checkout ownership", () => {
 
   it("allows agents with the active-checkout management grant to mutate active checkouts", async () => {
     mockAccessService.decide.mockImplementation(async (input: { action: string }) => ({
-      allowed: input.action === "issue:mutate" || input.action === "tasks:manage_active_checkouts",
+      allowed: input.action === "issue:read" || input.action === "issue:mutate" || input.action === "tasks:manage_active_checkouts",
       action: input.action,
       reason:
-        input.action === "issue:mutate" || input.action === "tasks:manage_active_checkouts"
+        input.action === "issue:read" || input.action === "issue:mutate" || input.action === "tasks:manage_active_checkouts"
           ? "allow_explicit_grant"
           : "deny_missing_grant",
       explanation:
         input.action === "tasks:manage_active_checkouts"
           ? "Allowed by checkout management grant."
+          : input.action === "issue:read"
+            ? "Allowed to read this visible issue."
           : input.action === "issue:mutate"
             ? "Allowed by test boundary default."
             : "Missing permission.",
@@ -1694,6 +1729,19 @@ describe("agent issue mutation checkout ownership", () => {
     expect(res.status).toBe(200);
     expect(mockIssueService.assertCheckoutOwner).not.toHaveBeenCalled();
     expect(mockIssueService.update).toHaveBeenCalled();
+  });
+
+  it("keeps a private issue hidden before a peer mutation is evaluated", async () => {
+    mockIssueService.getById.mockResolvedValue(makeIssue({ status: "todo" }));
+    mockCanActorReadIssuePrivacy.mockResolvedValue(false);
+
+    const res = await request(await createApp(peerActor()))
+      .patch(`/api/issues/${issueId}`)
+      .send({ title: "Should not be written" });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe("Issue not found");
+    expect(mockIssueService.update).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -2580,7 +2628,7 @@ describe("agent issue mutation checkout ownership", () => {
       explanation: "Target agent requires approval before task assignment.",
     }));
     decide.mockImplementation(async (input: { action: string }) => ({
-      allowed: input.action === "issue:mutate",
+      allowed: input.action === "issue:read" || input.action === "issue:mutate",
       action: input.action,
       reason: input.action === "issue:mutate" ? "allow_self" : "deny_policy_restricted",
       explanation:

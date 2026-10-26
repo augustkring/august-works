@@ -19,3 +19,6 @@ All `.exit` files contain the numeric process exit code from the corresponding p
 
 
 `actual-e2e-caller-attribution-timeout-2026-10-26.log` is a bounded caller-attribution run on the batched-source snapshot. It still exited 1 before provider request 4, with successful `read_context` capture and no persistent PostgreSQL blocker. The failure-only stack allowlist attributes 163 of 184 analytical access checks to `native-direct-input.ts:1594`, the per-Task source loop in `assertNativeDocumentRevisionCurrentSourceAccessInScope`; the latest 63 timings from that caller had a 185 ms median (146–244 ms). This identifies a remaining repeated exact Task-lineage check in the document-revision source closure. It is a diagnostic failure, not baseline acceptance; source pins, binary hash, raw log, and exit are adjacent.
+
+
+`actual-temporal-owner-fixture-failure-2026-10-26.log` is a filtered attempt to use the temporal source integration file as an owner check. Its suite-level setup still ran the managed OpenCode fixture and failed before the selected assertion: after two provider responses, the next request was denied with `Managed OpenCode tool result has no original qualified invocation receipt`. No owner assertion passed; this failure receipt is not baseline or temporal acceptance evidence. Source pins and pinned-binary hash are adjacent.

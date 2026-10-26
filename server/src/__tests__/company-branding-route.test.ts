@@ -1,7 +1,6 @@
 import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { forbidden } from "../errors.ts";
 
 const mockCompanyService = vi.hoisted(() => ({
   list: vi.fn(),
@@ -44,6 +43,7 @@ const mockFeedbackService = vi.hoisted(() => ({
   saveIssueVote: vi.fn(),
 }));
 const mockAssertCompanyCeoAgentOrBoard = vi.hoisted(() => vi.fn());
+let lastErrorContext: unknown;
 
 vi.mock("../services/index.js", () => ({
   accessService: () => mockAccessService,
@@ -64,7 +64,8 @@ vi.mock("../services/authorization.js", async () => {
   return { ...actual, assertCompanyCeoAgentOrBoard: mockAssertCompanyCeoAgentOrBoard };
 });
 
-function resetAuthorizationFixture() {
+async function resetAuthorizationFixture() {
+  const { forbidden } = await vi.importActual<typeof import("../errors.js")>("../errors.js");
   mockAssertCompanyCeoAgentOrBoard.mockImplementation(async (
     _db: unknown,
     companyId: string,
@@ -105,7 +106,10 @@ async function createApp(actor: Record<string, unknown>) {
   ]);
   const app = express();
   app.use(express.json());
-  app.use((req, _res, next) => {
+  app.use((req, res, next) => {
+    res.on("finish", () => {
+      lastErrorContext = (res as any).__errorContext ?? null;
+    });
     (req as any).actor = actor;
     next();
   });
@@ -115,13 +119,14 @@ async function createApp(actor: Record<string, unknown>) {
 }
 
 describe("PATCH /api/companies/:companyId/branding", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules();
     vi.doUnmock("../routes/companies.js");
     vi.doUnmock("../routes/authz.js");
     vi.doUnmock("../middleware/index.js");
     vi.clearAllMocks();
-    resetAuthorizationFixture();
+    lastErrorContext = undefined;
+    await resetAuthorizationFixture();
   });
 
   it("rejects non-CEO agent callers", async () => {
@@ -142,7 +147,7 @@ describe("PATCH /api/companies/:companyId/branding", () => {
       .patch("/api/companies/company-1/branding")
       .send({ logoAssetId: "11111111-1111-4111-8111-111111111111" });
 
-    expect(res.status).toBe(403);
+    expect(res.status, JSON.stringify(lastErrorContext)).toBe(403);
     expect(res.body.error).toContain("Only CEO agents");
     expect(mockCompanyService.update).not.toHaveBeenCalled();
   });
@@ -165,7 +170,7 @@ describe("PATCH /api/companies/:companyId/branding", () => {
       .patch("/api/companies/company-1/branding")
       .send({ status: "archived" });
 
-    expect(res.status).toBe(403);
+    expect(res.status, JSON.stringify(lastErrorContext)).toBe(403);
     expect(res.body.error).toContain("Only CEO agents");
     expect(mockCompanyService.update).not.toHaveBeenCalled();
   });
@@ -274,13 +279,14 @@ describe("PATCH /api/companies/:companyId/branding", () => {
 });
 
 describe("PATCH /api/companies/:companyId", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules();
     vi.doUnmock("../routes/companies.js");
     vi.doUnmock("../routes/authz.js");
     vi.doUnmock("../middleware/index.js");
     vi.clearAllMocks();
-    resetAuthorizationFixture();
+    lastErrorContext = undefined;
+    await resetAuthorizationFixture();
   });
 
   it("rejects non-CEO agent callers before loading the company or validating settings body shape", async () => {
@@ -301,7 +307,7 @@ describe("PATCH /api/companies/:companyId", () => {
       .patch("/api/companies/company-1")
       .send({ status: "archived" });
 
-    expect(res.status).toBe(403);
+    expect(res.status, JSON.stringify(lastErrorContext)).toBe(403);
     expect(res.body.error).toContain("Only CEO agents");
     expect(mockCompanyService.getById).not.toHaveBeenCalled();
     expect(mockCompanyService.update).not.toHaveBeenCalled();

@@ -95,6 +95,9 @@ const support = await getEmbeddedPostgresTestSupport();
     await db.update(heartbeatRuns).set({ resultJson: { executionCancellation: { state: "requested" } } }).where(eq(heartbeatRuns.id, actor.runId));
     await expect(svc.submit(actor, companyId, run.id, { expectedVersion: 1, candidates: [candidate()] })).rejects.toMatchObject({ status: 403 });
     await db.update(heartbeatRuns).set({ resultJson: null }).where(eq(heartbeatRuns.id, actor.runId));
+    expect(run.responsibleUserId).toBe(userId);
+    expect(await db.select({ id: heartbeatRuns.id, agentId: heartbeatRuns.agentId, responsibleUserId: heartbeatRuns.responsibleUserId }).from(heartbeatRuns).where(eq(heartbeatRuns.id, actor.runId)))
+      .toEqual([{ id: actor.runId, agentId, responsibleUserId: userId }]);
     expect((await svc.submit(actor, companyId, run.id, { expectedVersion: 1, candidates: [candidate()] })).status).toBe("ready_for_review");
   });
   it("marks external assertions untrusted and cannot lower evidence sensitivity", async () => {

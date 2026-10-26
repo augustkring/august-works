@@ -1,7 +1,9 @@
 import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
 import { V5_FEATURE_KEYS } from "../../packages/shared/src/index.ts";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
+registerEnglishAccountLocaleIsolation(test);
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 async function json(response: APIResponse) { expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(true); return response.json(); }
 

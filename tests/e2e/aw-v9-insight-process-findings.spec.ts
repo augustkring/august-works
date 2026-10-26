@@ -10,7 +10,9 @@ import { businessEventService } from "../../server/src/services/business-events.
 import { processAnalysisService } from "../../server/src/services/process-analysis.ts";
 import { processFindingService } from "../../server/src/services/process-findings.ts";
 import { analyticalPurpose } from "../../server/src/__tests__/helpers/business-metric-fixture.ts";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
+registerEnglishAccountLocaleIsolation(test);
 async function json(response: APIResponse) { expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(true); return response.json(); }
 
 // Real Native owners and Source refusal with a synthetic approved governance,
