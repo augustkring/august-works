@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test, type APIResponse } from "@playwright/test";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
 import { createDb, closeRegisteredClients, issues, businessExperimentAnalyses } from "../../packages/db/src/index.ts";
 import { eq } from "../../packages/db/node_modules/drizzle-orm/index.js";
 import { businessMetricService } from "../../server/src/services/business-metrics/service.ts";
@@ -14,6 +15,7 @@ import { analyticalPurpose, metricDefinition } from "../../server/src/__tests__/
 import { experimentDefinition } from "../../server/src/__tests__/helpers/business-experiment-fixture.ts";
 import { ISSUE_STATUSES, insightExperimentSummarySchema, insightExperimentDetailSchema, insightExperimentPageSchema } from "../../packages/shared/src/index.ts";
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
+registerEnglishAccountLocaleIsolation(test);
 async function json(response: APIResponse) { expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(true); return response.json(); }
 
 // Actual Native recording/stop/analysis/Source owners; explicit synthetic
