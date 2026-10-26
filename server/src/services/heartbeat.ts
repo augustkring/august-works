@@ -25818,7 +25818,20 @@ export function heartbeatService(
           recordedResponsibleUserDenialCode ??
           nativeTerminalFailureCode ??
           "adapter_failed";
-        logger.error({ err, runId }, "heartbeat execution failed");
+        const pgDeadlockDiagnostic: { code: "40P01"; detail: string } | null = (() => {
+          if (process.env.PAPERCLIP_NATIVE_DEADLOCK_DIAGNOSTICS !== "1") return null;
+          const seen = new Set<object>();
+          let current: unknown = err;
+          for (let depth = 0; depth < 5 && current && typeof current === "object" && !seen.has(current); depth += 1) {
+            seen.add(current);
+            const candidate = current as { code?: unknown; detail?: unknown; cause?: unknown };
+            if (candidate.code === "40P01" && typeof candidate.detail === "string")
+              return { code: "40P01", detail: candidate.detail.slice(0, 1600) };
+            current = candidate.cause;
+          }
+          return null;
+        })();
+        logger.error({ err, runId, ...(pgDeadlockDiagnostic ? { pgDeadlockDiagnostic } : {}) }, "heartbeat execution failed");
 
         let logSummary: {
           bytes: number;

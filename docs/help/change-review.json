@@ -104,7 +104,7 @@
       "sourceSha256": "1a2b3d7becdbb50b9ff8c12dfc4cd7071795fa3474fd7cc22c879093cdb3e5aa",
       "articleSha256": "ce2b7703039362ccc1a7747cfb7b11bb189be5d72007cd6297e5ac49d200fe82",
       "decision": "updated",
-      "rationale": "The Access step discloses that Slack consent authorizes the signed-in person and that organization sharing shares that person’s connection; setup retains managed and advanced own-app choices."
+      "rationale": "The Access step discloses that Slack consent authorizes the signed-in person and that organization sharing shares that person\u2019s connection; setup retains managed and advanced own-app choices."
     },
     {
       "source": "ui/src/pages/apps/app-detail/PermissionsPanel.tsx",
@@ -120,7 +120,7 @@
       "sourceSha256": "2c5de01bbf0adc3eb74f4d8678055cf8b15a5fe69946453ffcb4bdc2f4746608",
       "articleSha256": "ce2b7703039362ccc1a7747cfb7b11bb189be5d72007cd6297e5ac49d200fe82",
       "decision": "updated",
-      "rationale": "The paired article directs administrators to inspect an app’s active connection and permissions before asking a Co-worker to use it."
+      "rationale": "The paired article directs administrators to inspect an app\u2019s active connection and permissions before asking a Co-worker to use it."
     },
     {
       "source": "ui/src/pages/apps/AppNotConnected.tsx",
@@ -128,7 +128,7 @@
       "sourceSha256": "218b58f14a1feb713347afaf7760ac3549ccf20bb0be5259073015376c0ecd3b",
       "articleSha256": "ce2b7703039362ccc1a7747cfb7b11bb189be5d72007cd6297e5ac49d200fe82",
       "decision": "updated",
-      "rationale": "The paired article covers this screen’s unavailable-connection recovery through the same provider sign-in and permission review, without promising reconnection is always available."
+      "rationale": "The paired article covers this screen\u2019s unavailable-connection recovery through the same provider sign-in and permission review, without promising reconnection is always available."
     },
     {
       "source": "ui/src/pages/apps/Connections.tsx",
@@ -192,7 +192,7 @@
       "sourceSha256": "1a2b3d7becdbb50b9ff8c12dfc4cd7071795fa3474fd7cc22c879093cdb3e5aa",
       "articleSha256": "0c498d8afe04b324bf1ef354b4a717e8952f6e8907d11ba37a9206a2ffe3c7f9",
       "decision": "updated",
-      "rationale": "Danish version checked against the current UI: The Access step discloses that Slack consent authorizes the signed-in person and that organization sharing shares that person’s connection; setup retains managed and advanced own-app choices."
+      "rationale": "Danish version checked against the current UI: The Access step discloses that Slack consent authorizes the signed-in person and that organization sharing shares that person\u2019s connection; setup retains managed and advanced own-app choices."
     },
     {
       "source": "ui/src/pages/apps/app-detail/PermissionsPanel.tsx",
@@ -208,7 +208,7 @@
       "sourceSha256": "2c5de01bbf0adc3eb74f4d8678055cf8b15a5fe69946453ffcb4bdc2f4746608",
       "articleSha256": "0c498d8afe04b324bf1ef354b4a717e8952f6e8907d11ba37a9206a2ffe3c7f9",
       "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: The paired article directs administrators to inspect an app’s active connection and permissions before asking a Co-worker to use it."
+      "rationale": "Danish version checked against the same current source behavior: The paired article directs administrators to inspect an app\u2019s active connection and permissions before asking a Co-worker to use it."
     },
     {
       "source": "ui/src/pages/apps/AppNotConnected.tsx",
@@ -216,7 +216,7 @@
       "sourceSha256": "218b58f14a1feb713347afaf7760ac3549ccf20bb0be5259073015376c0ecd3b",
       "articleSha256": "0c498d8afe04b324bf1ef354b4a717e8952f6e8907d11ba37a9206a2ffe3c7f9",
       "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: The paired article covers this screen’s unavailable-connection recovery through the same provider sign-in and permission review, without promising reconnection is always available."
+      "rationale": "Danish version checked against the same current source behavior: The paired article covers this screen\u2019s unavailable-connection recovery through the same provider sign-in and permission review, without promising reconnection is always available."
     },
     {
       "source": "ui/src/pages/apps/Connections.tsx",
@@ -885,10 +885,10 @@
     {
       "source": "server/src/app.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "b67ee66f75315578b2489754a72136a7a3937034c1b687d7b6fdf4a3d1346139",
+      "sourceSha256": "825459d00ed48c4cf298ec17245fcd6e32eb598a2aa1b85349d199f77482b27b",
       "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
-      "decision": "updated",
-      "rationale": "Application wiring mounts the assistant only with a server-owned profile and release; the article describes availability as optional and deployment-dependent."
+      "decision": "no_change",
+      "rationale": "Reviewed paired Help articles against injection of the already configured heartbeat into issue routes. Support intake, the optional independently funded Support Assistant and customer recovery actions retain the documented behavior."
     },
     {
       "source": "server/src/routes/customer-support.ts",
@@ -901,10 +901,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "0ad5175e5b20a66401ea894f535093a68d7cf7c13137aa58a39063f934ce38e7",
+      "sourceSha256": "03d1f0c142bc21a160a44b41e495f0c1b09275808ea06f47db6da97df0e332f2",
       "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "no_change",
-      "rationale": "Reviewed the English and Danish support/recovery articles against direct Human conversation capture, narrowly owned empty-shell admission and revision-bound document reads. Support navigation, retry/Stop actions and original-source recovery guidance remain unchanged."
+      "rationale": "Reviewed paired Help and recovery articles against exact owner-only empty conversation admission, current-source document/annotation reads and configured heartbeat reuse. No new customer retry, support, Stop or recovery action is introduced; current source restrictions and original-request recovery guidance remain accurate."
     },
     {
       "source": "server/src/routes/saas.ts",
@@ -1029,10 +1029,10 @@
     {
       "source": "server/src/services/orchestration/model-reservations.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "c15b28d68e8e2d45fa710bdf28a3e822c53a652ec4713c206a10c72ab9eebb20",
+      "sourceSha256": "da86eb9127167b380104f9e406fdcbdfbc73e7f92f04dea9d948ce77f789dd9c",
       "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "no_change",
-      "rationale": "Reviewed both Help/support articles against the separate conversation reservation purpose and worker-only authority narrowing. The Support Assistant remains independently funded and read-only; its availability, consent and unknown-outcome guidance is unchanged."
+      "rationale": "Reviewed paired Help articles against reserved Native conversation cost receipt ownership and strict atomic ledger settlement. The optional Support Assistant remains separately funded; its read-only scope and unknown-outcome guidance remain accurate."
     },
     {
       "source": "server/src/services/orchestration/read-only-model-transport.ts",
@@ -1096,7 +1096,7 @@
       "sourceSha256": "3f407de9eae33be8153e390c27b71ce81388ab807becfc8ecc2ce502cb747127",
       "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "updated",
-      "rationale": "Help utilities retain direct human support and the optional assistant route; the article keeps those paths independent and describes the assistant’s consent and read-only limits."
+      "rationale": "Help utilities retain direct human support and the optional assistant route; the article keeps those paths independent and describes the assistant\u2019s consent and read-only limits."
     },
     {
       "source": "ui/src/lib/help-navigation.ts",
@@ -1197,10 +1197,10 @@
     {
       "source": "server/src/app.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "b67ee66f75315578b2489754a72136a7a3937034c1b687d7b6fdf4a3d1346139",
+      "sourceSha256": "825459d00ed48c4cf298ec17245fcd6e32eb598a2aa1b85349d199f77482b27b",
       "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
-      "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: Application wiring mounts the assistant only with a server-owned profile and release; the article describes availability as optional and deployment-dependent."
+      "decision": "no_change",
+      "rationale": "Reviewed paired Help articles against injection of the already configured heartbeat into issue routes. Support intake, the optional independently funded Support Assistant and customer recovery actions retain the documented behavior."
     },
     {
       "source": "server/src/routes/customer-support.ts",
@@ -1213,10 +1213,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "0ad5175e5b20a66401ea894f535093a68d7cf7c13137aa58a39063f934ce38e7",
+      "sourceSha256": "03d1f0c142bc21a160a44b41e495f0c1b09275808ea06f47db6da97df0e332f2",
       "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "no_change",
-      "rationale": "Reviewed the English and Danish support/recovery articles against direct Human conversation capture, narrowly owned empty-shell admission and revision-bound document reads. Support navigation, retry/Stop actions and original-source recovery guidance remain unchanged."
+      "rationale": "Reviewed paired Help and recovery articles against exact owner-only empty conversation admission, current-source document/annotation reads and configured heartbeat reuse. No new customer retry, support, Stop or recovery action is introduced; current source restrictions and original-request recovery guidance remain accurate."
     },
     {
       "source": "server/src/routes/saas.ts",
@@ -1341,10 +1341,10 @@
     {
       "source": "server/src/services/orchestration/model-reservations.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "c15b28d68e8e2d45fa710bdf28a3e822c53a652ec4713c206a10c72ab9eebb20",
+      "sourceSha256": "da86eb9127167b380104f9e406fdcbdfbc73e7f92f04dea9d948ce77f789dd9c",
       "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "no_change",
-      "rationale": "Reviewed both Help/support articles against the separate conversation reservation purpose and worker-only authority narrowing. The Support Assistant remains independently funded and read-only; its availability, consent and unknown-outcome guidance is unchanged."
+      "rationale": "Reviewed paired Help articles against reserved Native conversation cost receipt ownership and strict atomic ledger settlement. The optional Support Assistant remains separately funded; its read-only scope and unknown-outcome guidance remain accurate."
     },
     {
       "source": "server/src/services/orchestration/read-only-model-transport.ts",
@@ -1408,7 +1408,7 @@
       "sourceSha256": "3f407de9eae33be8153e390c27b71ce81388ab807becfc8ecc2ce502cb747127",
       "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: Help utilities retain direct human support and the optional assistant route; the article keeps those paths independent and describes the assistant’s consent and read-only limits."
+      "rationale": "Danish version checked against the same current source behavior: Help utilities retain direct human support and the optional assistant route; the article keeps those paths independent and describes the assistant\u2019s consent and read-only limits."
     },
     {
       "source": "ui/src/lib/help-navigation.ts",
@@ -1541,10 +1541,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "0ad5175e5b20a66401ea894f535093a68d7cf7c13137aa58a39063f934ce38e7",
+      "sourceSha256": "03d1f0c142bc21a160a44b41e495f0c1b09275808ea06f47db6da97df0e332f2",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Reviewed the English and Danish support/recovery articles against direct Human conversation capture, narrowly owned empty-shell admission and revision-bound document reads. Support navigation, retry/Stop actions and original-source recovery guidance remain unchanged."
+      "rationale": "Reviewed paired Help and recovery articles against exact owner-only empty conversation admission, current-source document/annotation reads and configured heartbeat reuse. No new customer retry, support, Stop or recovery action is introduced; current source restrictions and original-request recovery guidance remain accurate."
     },
     {
       "source": "server/src/services/execution-workspaces.ts",
@@ -1565,10 +1565,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "3b08cf3ca670657805bce4bd45ee09f7a8ec22fc1fe8ac7722ff02f83670056c",
+      "sourceSha256": "4e990289fa1ba4987a866270fa9f80df51cae5849009f8a47fd13460315a6bc4",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "The canonical task-envelope digest change does not alter the customer-facing recovery choices or instructions; the current EN/DA guidance remains accurate."
+      "rationale": "Reviewed paired recovery and export/deletion articles against the run-bound managed-provider test environment seam and environment-gated bounded deadlock diagnostic. Neither changes customer Stop/retry actions, source restrictions, retention or deletion behavior; the existing guidance remains accurate."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1581,10 +1581,10 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "f026a718ada32b4fc2a0e896e0e5f67837313a76ecea55527c16fe77d818f9d9",
+      "sourceSha256": "5e76563dd529d59ad8d274ac42a8c35728241c8d09dc068006c4e4b2ed73cf48",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Reviewed both recovery articles against plugin Routine source classification and source-authority handling. Current Human/source checks remain required; the customer retry, Stop, preservation and refusal instructions remain accurate."
+      "rationale": "Reviewed paired recovery articles against removal of temporary profiling and equivalent final private-reader validation. The original Task and its current source restrictions remain preserved on refusal; customer recovery instructions remain accurate."
     },
     {
       "source": "server/src/services/managed-repository-checkout.ts",
@@ -1624,7 +1624,7 @@
       "sourceSha256": "90983e55a2fa9ea9a8abe2b33a5aab817e05a463a65bf5d5795335149d769fd2",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "updated",
-      "rationale": "The blocked-task notice is covered by the article’s instruction to read the displayed blocker and use only the next action shown for the original task."
+      "rationale": "The blocked-task notice is covered by the article\u2019s instruction to read the displayed blocker and use only the next action shown for the original task."
     },
     {
       "source": "ui/src/lib/wait-for-stopped-runs.ts",
@@ -1632,7 +1632,7 @@
       "sourceSha256": "ce5726db6b535d3dd592bfde111b94de36291c1fe7dd5a85198dd22799bbe8c2",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "updated",
-      "rationale": "The stop-waiting UI is covered by the article’s instruction to keep the task open, wait for status, and inspect the original run when an outcome is unknown."
+      "rationale": "The stop-waiting UI is covered by the article\u2019s instruction to keep the task open, wait for status, and inspect the original run when an outcome is unknown."
     },
     {
       "source": "ui/src/pages/IssueDetail.tsx",
@@ -1645,10 +1645,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "0ad5175e5b20a66401ea894f535093a68d7cf7c13137aa58a39063f934ce38e7",
+      "sourceSha256": "03d1f0c142bc21a160a44b41e495f0c1b09275808ea06f47db6da97df0e332f2",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Reviewed the English and Danish support/recovery articles against direct Human conversation capture, narrowly owned empty-shell admission and revision-bound document reads. Support navigation, retry/Stop actions and original-source recovery guidance remain unchanged."
+      "rationale": "Reviewed paired Help and recovery articles against exact owner-only empty conversation admission, current-source document/annotation reads and configured heartbeat reuse. No new customer retry, support, Stop or recovery action is introduced; current source restrictions and original-request recovery guidance remain accurate."
     },
     {
       "source": "server/src/services/execution-workspaces.ts",
@@ -1669,10 +1669,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "3b08cf3ca670657805bce4bd45ee09f7a8ec22fc1fe8ac7722ff02f83670056c",
+      "sourceSha256": "4e990289fa1ba4987a866270fa9f80df51cae5849009f8a47fd13460315a6bc4",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "The canonical task-envelope digest change does not alter the customer-facing recovery choices or instructions; the current EN/DA guidance remains accurate."
+      "rationale": "Reviewed paired recovery and export/deletion articles against the run-bound managed-provider test environment seam and environment-gated bounded deadlock diagnostic. Neither changes customer Stop/retry actions, source restrictions, retention or deletion behavior; the existing guidance remains accurate."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1685,10 +1685,10 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "f026a718ada32b4fc2a0e896e0e5f67837313a76ecea55527c16fe77d818f9d9",
+      "sourceSha256": "5e76563dd529d59ad8d274ac42a8c35728241c8d09dc068006c4e4b2ed73cf48",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Reviewed both recovery articles against plugin Routine source classification and source-authority handling. Current Human/source checks remain required; the customer retry, Stop, preservation and refusal instructions remain accurate."
+      "rationale": "Reviewed paired recovery articles against removal of temporary profiling and equivalent final private-reader validation. The original Task and its current source restrictions remain preserved on refusal; customer recovery instructions remain accurate."
     },
     {
       "source": "server/src/services/managed-repository-checkout.ts",
@@ -1728,7 +1728,7 @@
       "sourceSha256": "90983e55a2fa9ea9a8abe2b33a5aab817e05a463a65bf5d5795335149d769fd2",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: The blocked-task notice is covered by the article’s instruction to read the displayed blocker and use only the next action shown for the original task."
+      "rationale": "Danish version checked against the same current source behavior: The blocked-task notice is covered by the article\u2019s instruction to read the displayed blocker and use only the next action shown for the original task."
     },
     {
       "source": "ui/src/lib/wait-for-stopped-runs.ts",
@@ -1736,7 +1736,7 @@
       "sourceSha256": "ce5726db6b535d3dd592bfde111b94de36291c1fe7dd5a85198dd22799bbe8c2",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: The stop-waiting UI is covered by the article’s instruction to keep the task open, wait for status, and inspect the original run when an outcome is unknown."
+      "rationale": "Danish version checked against the same current source behavior: The stop-waiting UI is covered by the article\u2019s instruction to keep the task open, wait for status, and inspect the original run when an outcome is unknown."
     },
     {
       "source": "ui/src/pages/IssueDetail.tsx",
@@ -2053,18 +2053,18 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "3b08cf3ca670657805bce4bd45ee09f7a8ec22fc1fe8ac7722ff02f83670056c",
+      "sourceSha256": "4e990289fa1ba4987a866270fa9f80df51cae5849009f8a47fd13460315a6bc4",
       "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "no_change",
-      "rationale": "The canonical task-envelope digest change does not alter the customer-facing Memory evidence or managed-runtime erasure behavior; the current article remains accurate."
+      "rationale": "Reviewed paired recovery and export/deletion articles against the run-bound managed-provider test environment seam and environment-gated bounded deadlock diagnostic. Neither changes customer Stop/retry actions, source restrictions, retention or deletion behavior; the existing guidance remains accurate."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "3b08cf3ca670657805bce4bd45ee09f7a8ec22fc1fe8ac7722ff02f83670056c",
+      "sourceSha256": "4e990289fa1ba4987a866270fa9f80df51cae5849009f8a47fd13460315a6bc4",
       "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "no_change",
-      "rationale": "The canonical task-envelope digest change does not alter the customer-facing Memory evidence or managed-runtime erasure behavior; the current article remains accurate."
+      "rationale": "Reviewed paired recovery and export/deletion articles against the run-bound managed-provider test environment seam and environment-gated bounded deadlock diagnostic. Neither changes customer Stop/retry actions, source restrictions, retention or deletion behavior; the existing guidance remains accurate."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",

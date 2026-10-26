@@ -1,4 +1,4 @@
-import { agentAvatarUrl, resolveAgentAppearance } from "@paperclipai/shared";
+import { agentAvatarUrl, resolveAgentAppearance, NATIVE_CONVERSATION_MODEL_BILLING_PREFIX } from "@paperclipai/shared";
 import { and, desc, eq, gte, isNotNull, isNull, lt, lte, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "@paperclipai/db";
@@ -58,6 +58,9 @@ export function costService(db: Db, budgetHooks: BudgetServiceHooks = {}) {
   const budgets = budgetService(db, budgetHooks);
   return {
     createEvent: async (companyId: string, data: Omit<typeof costEvents.$inferInsert, "companyId">) => {
+      if (data.billingCode?.startsWith(NATIVE_CONVERSATION_MODEL_BILLING_PREFIX)) {
+        throw unprocessable("Native conversation billing codes are reserved for the model ledger");
+      }
       const agent = await db
         .select()
         .from(agents)

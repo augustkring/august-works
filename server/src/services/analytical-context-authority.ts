@@ -296,6 +296,22 @@ async function assertAnalyticalContextPayloadAccessInternal(db:Db,companyId:stri
 }
 
 async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,scope:{issueId:string}|{runId:string},readScope?:NativeReadScope,companyLocksHeld=false) {
+ if(process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS==="1"){
+  const key=Symbol.for("paperclip.nativeAnalyticalEntryDiagnosticCount.v1");
+  const global=globalThis as unknown as Record<PropertyKey,unknown>;
+  const count=typeof global[key]==="number"?global[key] as number:0;
+  if(count<32){
+   global[key]=count+1;
+   const ordinalMap=global[Symbol.for("paperclip.nativeSourceMemoDiagnosticTxOrdinals.v1")];
+   const txOrdinal=ordinalMap instanceof WeakMap?ordinalMap.get(db):undefined;
+   const frames=new Error().stack?.split("\n").flatMap(line=>{
+    const match=/server\/src\/services\/([A-Za-z0-9_./-]+\.ts):(\d+):\d+/.exec(line);
+    return match?[`${match[1]}:${match[2]}`]:[];
+   }).slice(0,6)??[];
+   console.error("native_analytical_source_entry",JSON.stringify({txOrdinal:typeof txOrdinal==="number"?txOrdinal:null,
+    scope:"issueId"in scope?"task":"run",actorType:actor?.type??"none",actorSource:actor?.source??"none",frames}));
+  }
+ }
  // Ordinary conversation prose has source privacy even without analytical
  // retention roots. Every actual ancestor goes through this same narrowing.
  if(!actor || !("issueId" in scope

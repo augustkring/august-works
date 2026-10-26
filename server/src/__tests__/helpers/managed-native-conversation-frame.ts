@@ -23,6 +23,7 @@ import { issueRoutes } from "../../routes/issues.js";
 import { runtimeConnectionIntentRoutes } from "../../routes/connection-intents.js";
 import { errorHandler } from "../../middleware/error-handler.js";
 import { verifyRuntimeToolsToken } from "../../runtime-tools-token.js";
+import { setupRunnerPrpWebSocketServer, runnerPrpWebSocketInternals } from "../../realtime/runner-prp-ws.js";
 import type { AuthorizationActor } from "../../services/authorization.js";
 
 const OPENCODE_SHA256 = "513f500a1a5ea1dc7d865547ac87b32a8936334e8d5abd5b3ff585c45a170080";
@@ -187,6 +188,7 @@ export async function runManagedNativeConversationFrame(input: {
   const address = broker.address();
   if (!address || typeof address === "string") throw new Error("conversation_fixture_broker_listen_failed");
   const origin = `https://127.0.0.1:${address.port}/`;
+  setupRunnerPrpWebSocketServer(broker, { apiUrl: origin });
   const prevBroker = process.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN;
   const prevJwt = process.env.PAPERCLIP_AGENT_JWT_SECRET;
   const prevCa = process.env.NODE_EXTRA_CA_CERTS;
@@ -231,7 +233,7 @@ export async function runManagedNativeConversationFrame(input: {
   } });
   const app = express();
   app.use(express.json());
-  app.use((req, _res, next) => { req.actor = human; next(); });
+  app.use((req, _res, next) => { req.actor = { ...human, userId }; next(); });
   app.use("/api", issueRoutes(db, {} as never, { heartbeat }));
   app.use(errorHandler);
   try {
@@ -264,6 +266,7 @@ export async function runManagedNativeConversationFrame(input: {
       runStatus: finalRun?.status ?? "not_started", success: finalRun?.status === "succeeded" };
   } finally {
     await heartbeat.drainActiveRunExecutions().catch(() => undefined);
+    runnerPrpWebSocketInternals.resetForTests();
     await new Promise<void>(resolve => broker.close(() => resolve()));
     if (prevBroker === undefined) delete process.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN; else process.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN = prevBroker;
     if (prevJwt === undefined) delete process.env.PAPERCLIP_AGENT_JWT_SECRET; else process.env.PAPERCLIP_AGENT_JWT_SECRET = prevJwt;

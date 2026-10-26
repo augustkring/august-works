@@ -14,6 +14,7 @@ import {
   type Db,
 } from "@paperclipai/db";
 import {
+  NATIVE_CONVERSATION_MODEL_BILLING_PREFIX,
   modelTariffCeilingSchema,
   modelReservationQuoteSchema,
   type ModelTariffCeiling,
@@ -1132,11 +1133,11 @@ export function modelReservationService(
           await tx.insert(costEvents).values({
             companyId, agentId: record.conversationAgentId, issueId: record.conversationIssueId,
             heartbeatRunId: record.conversationRunId, provider: record.quote.provider, biller: "company_connection",
-            billingType: "metered_api", billingCode: `native-conversation-model:${record.id}`,
+            billingType: "metered_api", billingCode: `${NATIVE_CONVERSATION_MODEL_BILLING_PREFIX}${record.id}`,
             costStatus: "estimated", model: record.quote.model, inputTokens: input.usage.inputTokens,
             cachedInputTokens: 0, outputTokens: input.usage.outputTokens, costCents: estimatedCostMinor,
             occurredAt: now,
-          }).onConflictDoNothing();
+          });
         }
         await logActivity(
           tx,

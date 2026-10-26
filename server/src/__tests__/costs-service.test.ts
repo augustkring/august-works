@@ -213,6 +213,29 @@ describe("cost routes", () => {
     mockBudgetService.upsertPolicy.mockResolvedValue(undefined);
   });
 
+  it("rejects forged Native conversation receipts at the public cost route", async () => {
+    const response = await request(createApp())
+      .post("/api/companies/company-1/cost-events")
+      .send({
+        agentId: randomUUID(), provider: "anthropic", model: "test-model", costCents: 0,
+        occurredAt: new Date().toISOString(), billingCode: `native-conversation-model:${randomUUID()}`,
+      });
+    expect(response.status).toBe(400);
+    expect(mockCostService.createEvent).not.toHaveBeenCalled();
+  });
+
+  it("continues accepting ordinary adapter cost reports", async () => {
+    mockCostService.createEvent.mockResolvedValueOnce({ id: "cost-1", costCents: 10, model: "test-model" });
+    const response = await request(createApp())
+      .post("/api/companies/company-1/cost-events")
+      .send({
+        agentId: randomUUID(), provider: "anthropic", model: "test-model", costCents: 10,
+        occurredAt: new Date().toISOString(), billingCode: "adapter:normal-report",
+      });
+    expect(response.status).toBe(201);
+    expect(mockCostService.createEvent).toHaveBeenCalledOnce();
+  });
+
   it("accepts valid ISO date strings", async () => {
     const { parseCostDateRange } = loadCostParsers();
     expect(parseCostDateRange({
@@ -405,6 +428,18 @@ describe("cost routes", () => {
 });
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
+describe("cost receipt ownership", () => {
+  it("rejects reserved ledger codes before any service database access", async () => {
+    const database = makeDb();
+    await expect(costService(database as any).createEvent("company-1", {
+      agentId: randomUUID(), provider: "anthropic", model: "test-model", costCents: 0,
+      occurredAt: new Date(), billingCode: `native-conversation-model:${randomUUID()}`,
+    })).rejects.toThrow("reserved for the model ledger");
+    expect(database.select).not.toHaveBeenCalled();
+    expect(database.insert).not.toHaveBeenCalled();
+  });
+});
+
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
 
 describeEmbeddedPostgres("cost and finance aggregate overflow handling", () => {

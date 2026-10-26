@@ -18,6 +18,7 @@ const mockIssueService = vi.hoisted(() => ({
   update: vi.fn(),
   checkout: vi.fn(),
   addComment: vi.fn(),
+  findMentionedAgents: vi.fn(async () => []),
 }));
 
 const mockExecutionWorkspaceService = vi.hoisted(() => ({
@@ -50,6 +51,12 @@ const mockRunnerGoalService = vi.hoisted(() => ({
 }));
 
 const mockLogActivity = vi.hoisted(() => vi.fn(async () => undefined));
+const mockDb = vi.hoisted(() => ({
+  // The local-implicit route fixture has no database-backed conversation
+  // shell. It still needs the route's transaction boundary to execute, where
+  // the shell guard returns false before issuing any SQL.
+  transaction: vi.fn(async (callback: (tx: unknown) => unknown) => callback({})),
+}));
 
 function registerServiceMocks() {
   vi.doMock("../routes/authz.js", async () => vi.importActual("../routes/authz.js"));
@@ -238,13 +245,15 @@ describe.sequential("closed isolated workspace issue routes", () => {
       };
       next();
     });
-    app.use("/api", issueRoutes({} as any, {} as any));
+    app.use("/api", issueRoutes(mockDb as any, {} as any));
     app.use(errorHandler);
     return app;
   }
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockDb.transaction.mockImplementation(async (callback) => callback({}));
+    mockIssueService.findMentionedAgents.mockResolvedValue([]);
     mockAccessService.decide.mockResolvedValue({ allowed: true });
     mockIssueService.getById.mockResolvedValue(makeIssue());
     mockExecutionWorkspaceService.getById.mockResolvedValue(makeClosedWorkspace());
