@@ -41,7 +41,8 @@ import {
   memoryDeletionMarkers,
   contextManifests,
 } from "@paperclipai/db";
-import { agentExecutionScopeSchema, nativePayloadSourceSnapshotSchema, pluginOperationIssueOriginKind, type AgentExecutionScope } from "@paperclipai/shared";
+import { agentExecutionScopeSchema, nativePayloadSourceSnapshotSchema, pluginOperationIssueOriginKind,
+  routineRevisionSnapshotV1Schema, type AgentExecutionScope } from "@paperclipai/shared";
 import type {
   AgentApiKeyScope,
   InboxAgentPolicyMode,
@@ -836,8 +837,12 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
   const workflowScope = nativeWorkflowReadScopes.get(db as object);
   const workflowCapabilityActive = !!workflowScope?.active && !!workflowScope.companyId &&
     workflowScope.workflowActorKey === workflowActorKey(actor);
-  const conversationRoutine = routineCapabilityActive
-    ? sql`(p.origin_kind='manual' or (p.origin_kind='conversation_draft'
+  const conversationRoutine = routineScope?.active
+    ? routineCapabilityActive
+      ? sql`((p.origin_kind='manual'
+      and current_setting('paperclip.native_routine_actor_hash',true)=${routineActorHash(actor)}
+      and current_setting('paperclip.native_routine_scope_token',true)=${routineScope.routineScopeToken ?? ""}
+      and rr.id=any(string_to_array(nullif(current_setting('paperclip.native_routine_source_ids',true),''),',')::uuid[])) or (p.origin_kind='conversation_draft'
       and current_setting('paperclip.native_routine_actor_hash',true)=${routineActorHash(actor)}
       and current_setting('paperclip.native_routine_scope_token',true)=${routineScope.routineScopeToken ?? ""}
       and rr.id=any(string_to_array(nullif(current_setting('paperclip.native_routine_source_ids',true),''),',')::uuid[])) or
@@ -845,6 +850,7 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
         and current_setting('paperclip.native_routine_actor_hash',true)=${routineActorHash(actor)}
         and current_setting('paperclip.native_routine_scope_token',true)=${routineScope.routineScopeToken ?? ""}
         and rr.id=any(string_to_array(nullif(current_setting('paperclip.native_routine_source_ids',true),''),',')::uuid[])))`
+      : sql`false`
     : sql`(p.origin_kind='manual' or (p.origin_kind='pipeline_automation'
       and ${pipelineAutomationRoutineSourceCondition(company)}))`;
   const contextRoots = sql`
@@ -935,7 +941,9 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
             and wire.value->>'callId'=captured_dispatch->>'callId'
             and wire.value->>'requestHash'=captured_dispatch->>'requestHash'
             and wire.value->>'wireBodyHash'=captured_dispatch->>'wireBodyHash'
-            and wire.value->>'modelPurpose'=case when captured_dispatch->>'kind'='conversation_model_dispatch' then 'conversation_model' else 'worker_model' end
+            and ((captured_dispatch->>'kind'='conversation_model_dispatch' and wire.value->>'modelPurpose'='conversation_model')
+              or (captured_dispatch->>'kind'='worker_model_dispatch' and
+                ((not (wire.value ? 'modelPurpose')) or wire.value->>'modelPurpose'='worker_model')))
             and wire.value->>'endpoint'='https://api.anthropic.com/v1/messages' and wire.value->>'method'='POST')
         or (captured_dispatch->>'kind'='conversation_model_dispatch' and not exists(
           select 1 from heartbeat_runs producer join issues conversation_issue on conversation_issue.company_id=producer.company_id
@@ -949,9 +957,11 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
             and producer.responsible_user_id::text=conversation_issue.conversation_user_id::text
             and producer.context_snapshot->>'conversationSessionGeneration'=captured_dispatch->>'conversationSessionGeneration'
             and conversation_issue.conversation_agent_id::text=captured_dispatch->>'agentId'
-            and conversation_issue.conversation_session_generation::text=captured_dispatch->>'conversationSessionGeneration'
-            and conversation_issue.conversation_state='active' and conversation_issue.conversation_retired_at is null
-            and conversation_issue.execution_run_id::text=captured_dispatch->>'runId' and conversation_issue.status='in_review'
+            and coalesce(captured_dispatch->>'conversationSessionGeneration' ~ '^(0|[1-9][0-9]*)$',false)
+            and conversation_issue.conversation_session_generation >= coalesce(
+              case when captured_dispatch->>'conversationSessionGeneration' ~ '^(0|[1-9][0-9]*)$'
+                then (captured_dispatch->>'conversationSessionGeneration')::integer end,2147483647)
+            and conversation_issue.conversation_state in ('active','waiting') and conversation_issue.conversation_retired_at is null
             and conversation_manifest.hash=captured_dispatch->>'executionManifestHash'
             and conversation_manifest.manifest->>'responsibleUserId'=producer.responsible_user_id::text))
       ))
@@ -1227,6 +1237,19 @@ export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: Au
 export async function canActorReadTypedTaskSourcePrivacy(db: Db | DbTransaction, actor: AuthorizationActor,
   source: { sourceKind: "workflow_run" | "routine_run"; id: string; companyId: string }): Promise<boolean> {
   const table = source.sourceKind === "workflow_run" ? workflowRuns : routineRuns;
+  const routineScope = nativeRoutineReadScopes.get(db as object);
+  if (source.sourceKind === "routine_run" && actor.type === "board" && routineScope?.active &&
+    routineScope.companyId === source.companyId && routineScope.routineActorKey === routineActorKey(actor) &&
+    routineScope.routinePluginOperationRunIds?.has(source.id)) {
+    const [current] = await db.execute<{ allowed: boolean }>(sql`
+      select exists(select 1 from routine_runs rr join routines p on p.id=rr.routine_id and p.company_id=rr.company_id
+        where rr.id=${source.id}::uuid and rr.company_id=${source.companyId}::uuid and rr.source='manual'
+          and rr.responsible_user_id=${actor.userId ?? null} and p.origin_kind='manual'
+          and p.responsible_user_id=${actor.userId ?? null}
+          and not aw_conversation_routine_source_erased(p.company_id,p.id)) as allowed
+    `);
+    return current?.allowed === true;
+  }
   if (source.sourceKind === "workflow_run" && !nativeWorkflowReadScopes.get(db as object)?.active
     && actor.type !== "none" && actor.source !== "local_implicit") {
     if (is(db, PgTransaction)) return authorizationService(db).withReadWorkflowSources(source.companyId, actor, [source.id], async () =>
@@ -1444,6 +1467,7 @@ type ReadSourceRows = {
   credentialUserId: string | null;
   purpose: ReadScopePurpose;
   routineRunIds?: Set<string>;
+  routinePluginOperationRunIds?: Set<string>;
   routineActorKey?: string;
   routineActor?: AuthorizationActor;
   routineAgentIds?: Set<string>;
@@ -1789,7 +1813,68 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
             ? defaults.issueTemplate as Record<string, unknown> : null;
           const operationOriginKind = binding ? pluginOperationIssueOriginKind(binding.pluginKey) : null;
           if (operationOriginKind && template?.surfaceVisibility === "plugin_operation" &&
-            typeof template.originId === "string" && template.originId.trim().length > 0) authorized.add(runId);
+            typeof template.originId === "string" && template.originId.trim().length > 0) {
+            // For this exact manual operation, the generic Routine privacy
+            // closure contains only the pinned revision's Project and parent
+            // Task. Prove both through their ordinary current read predicates
+            // before caching the scoped run. Any automation payload or invalid
+            // snapshot remains on the complete generic closure path.
+            const [sourceRun] = await db.select({ source: routineRuns.source, responsibleUserId: routineRuns.responsibleUserId,
+              triggerPayload: routineRuns.triggerPayload }).from(routineRuns).where(and(
+                eq(routineRuns.companyId, companyId), eq(routineRuns.id, runId))).for("share", { noWait: true });
+            const [currentRevision] = await db.select({ snapshot: routineRevisions.snapshot }).from(routineRevisions).where(and(
+              eq(routineRevisions.companyId, companyId), eq(routineRevisions.id, run.revisionId),
+              eq(routineRevisions.routineId, routine.id))).for("share", { noWait: true });
+            const snapshot = routineRevisionSnapshotV1Schema.safeParse(currentRevision?.snapshot);
+            const triggerPayload = sourceRun?.triggerPayload && typeof sourceRun.triggerPayload === "object" && !Array.isArray(sourceRun.triggerPayload)
+              ? sourceRun.triggerPayload as Record<string, unknown> : null;
+            const automation = triggerPayload?.automation && typeof triggerPayload.automation === "object" && !Array.isArray(triggerPayload.automation)
+              ? triggerPayload.automation as Record<string, unknown> : null;
+            if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") console.info("[plugin-managed-routine-source-proof]",
+              sourceRun?.source === "manual", sourceRun?.responsibleUserId === sourceActor.userId,
+              routine.responsibleUserId === sourceActor.userId, Boolean(snapshot?.success),
+              snapshot?.success ? snapshot.data.routine.id.toLowerCase() === routine.id.toLowerCase() : false,
+              snapshot?.success ? snapshot.data.routine.companyId.toLowerCase() === companyId.toLowerCase() : false,
+              !automation?.automationExecutionId);
+            let refsReadable = Boolean(sourceRun && sourceRun.source === "manual" &&
+              sourceRun.responsibleUserId === sourceActor.userId && routine.responsibleUserId === sourceActor.userId &&
+              snapshot?.success && snapshot.data.routine.id.toLowerCase() === routine.id.toLowerCase() &&
+              snapshot.data.routine.companyId.toLowerCase() === companyId.toLowerCase() &&
+              !automation?.automationExecutionId);
+            const projectId = snapshot?.success ? snapshot.data.routine.projectId : null;
+            const parentIssueId = snapshot?.success ? snapshot.data.routine.parentIssueId : null;
+            if (refsReadable && projectId) {
+              if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") console.info("[plugin-managed-routine-project-start]");
+              const [project] = await db.select({ ...projectReadColumns,
+                sourceProvenanceQualified: projects.sourceProvenanceQualified }).from(projects).where(and(
+                eq(projects.companyId, companyId), eq(projects.id, projectId))).for("share", { noWait: true });
+              refsReadable = Boolean(project && (await db.select({ id: projects.id }).from(projects).where(and(
+                eq(projects.companyId, companyId), eq(projects.id, projectId), await projectReadSqlCondition(db, sourceActor))).limit(1)).length);
+              if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") console.info("[plugin-managed-routine-project-done]",
+                Boolean(project), project?.sourceProvenanceQualified ?? null, project?.visibility ?? null, refsReadable);
+            }
+            if (refsReadable && parentIssueId) {
+              if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") console.info("[plugin-managed-routine-parent-start]");
+              const [parent] = await db.select(issueReadColumns).from(issues).where(and(
+                eq(issues.companyId, companyId), eq(issues.id, parentIssueId))).for("share", { noWait: true });
+              refsReadable = Boolean(parent && (await db.select({ id: issues.id }).from(issues).where(and(
+                eq(issues.companyId, companyId), eq(issues.id, parentIssueId), await issueReadSqlCondition(db, sourceActor))).limit(1)).length);
+              if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") console.info("[plugin-managed-routine-parent-done]", Boolean(parent), refsReadable);
+            }
+            if (refsReadable) {
+              if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") console.info("[plugin-managed-routine-erasure-start]");
+              const [sourceCurrent] = await db.execute<{ erased: boolean }>(sql`
+                select aw_conversation_routine_source_erased(${companyId}::uuid,${routine.id}::uuid) as erased
+              `);
+              refsReadable = sourceCurrent?.erased === false;
+              if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") console.info("[plugin-managed-routine-erasure-done]", sourceCurrent?.erased ?? null);
+            }
+            if (refsReadable) {
+              authorized.add(runId);
+              context.routinePluginOperationRunIds ??= new Set<string>();
+              context.routinePluginOperationRunIds.add(runId);
+            }
+          }
           if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") console.info("[plugin-managed-routine-binding-validated]", runId,
             Boolean(operationOriginKind), template?.surfaceVisibility ?? null, typeof template?.originId === "string");
         }

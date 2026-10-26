@@ -2195,7 +2195,11 @@ async function resolveIssuePrivacy(
 async function assertIssuePrivacySourcesReadable(tx: DbTransaction, actor: AuthorizationActor,
   companyId: string, sources: Array<{ sourceKind: "issue" | "project" | "run" | "run_copy" | "workflow_run" | "routine_run"; sourceId: string }>) {
   for (const source of sources) {
-    if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") console.info("[plugin-managed-routine-source-read-start]", source.sourceKind);
+    if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") {
+      console.info("[plugin-managed-routine-source-read-start]", source.sourceKind);
+      if (source.sourceKind === "routine_run") console.info("[plugin-managed-routine-source-read-stack]",
+        new Error().stack?.split("\n").slice(1, 10).map(frame => frame.trim()).join(" <- "));
+    }
     const readable = source.sourceKind === "run_copy"
       ? await isNativeOutputRunCopyCurrent(tx, companyId, source.sourceId)
       : source.sourceKind === "run"

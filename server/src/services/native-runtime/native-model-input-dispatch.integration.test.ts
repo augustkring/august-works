@@ -567,7 +567,7 @@ describe("native model input dispatch intent", () => {
     const callId = `project-capture-${randomUUID()}`;
     const actor = { type: "agent" as const, source: "agent_jwt" as const, companyId, agentId,
       runId: seeded.runId, onBehalfOfUserId: responsibleUserId };
-    const args = { name: "Should not exist", idempotencyKey: randomUUID() };
+    const args = { name: "Should not exist", workspace: { name: "Local workspace" }, idempotencyKey: randomUUID() };
     const sourceSet = { policy: { issueIds: [seeded.issueId], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] }, inputs: [] };
     const countEffects = async () => ({
       projects: await db.select({ id: projects.id }).from(projects).where(eq(projects.companyId, companyId)),

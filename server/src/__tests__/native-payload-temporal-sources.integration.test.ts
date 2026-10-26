@@ -302,6 +302,22 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
     expect(await memories.get(first.companyId, memoryBId, first.bobMemoryActor)).toBeNull();
     expect(await memories.get(first.companyId, memoryCId, first.aliceMemoryActor)).toBeNull();
     expect(await memories.get(first.companyId, memoryCId, first.bobMemoryActor)).toBeNull();
+    const erasedOutputCalls = [
+      { producer: first, callId: first.toolResults.find(value => value.memoryId === memoryBId)?.callId },
+      { producer: second, callId: second.toolResults.find(value => value.memoryId === memoryCId)?.callId },
+    ];
+    for (const call of erasedOutputCalls) {
+      if (!call.callId) throw new Error("An erased Native Memory output lost its original call identity");
+      const [invocation] = await db.select({ argumentsHash: toolInvocations.argumentsHash,
+        argumentsSummary: toolInvocations.argumentsSummary, resultHash: toolInvocations.resultHash,
+        resultSummary: toolInvocations.resultSummary, resultSizeBytes: toolInvocations.resultSizeBytes,
+        workflowResultJson: toolInvocations.workflowResultJson }).from(toolInvocations).where(and(
+        eq(toolInvocations.companyId, first.companyId), eq(toolInvocations.runId, call.producer.runId),
+        eq(toolInvocations.idempotencyKey, `aw-native-tool:${call.producer.runId}:${call.callId}`),
+        eq(toolInvocations.toolName, "paperclip-self:remember")));
+      expect(invocation).toMatchObject({ argumentsHash: null, argumentsSummary: null, resultHash: null,
+        resultSummary: null, resultSizeBytes: null, workflowResultJson: null });
+    }
 
     const [retainedTaskA] = await db.select().from(issues).where(and(eq(issues.companyId, first.companyId), eq(issues.id, taskAId)));
     const [erasedTaskB] = await db.select().from(issues).where(and(eq(issues.companyId, first.companyId), eq(issues.id, taskBId)));

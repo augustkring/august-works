@@ -5,14 +5,20 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, gt, sql } from "drizzle-orm";
 import {
+  agentExecutionManifests,
+  agents,
+  authSessions,
   activityLog,
   companyMemberships,
   companyDeletionOperations,
   companies,
+  contextManifests,
+  costEvents,
   createDb,
   issues,
+  issueComments,
   heartbeatRuns,
   orchestrationPlans,
   orchestrationModelReservations,
@@ -22,7 +28,7 @@ import {
   orchestrationCompanyPurposeReservations,
   nativeRunFinalizations,
 } from "@paperclipai/db";
-import type { CompanyPurposeFunding, ModelTariffCeiling } from "@paperclipai/shared";
+import { agentExecutionManifestSchema, nativeRunInputSourceReceiptSchema, type CompanyPurposeFunding, type ModelTariffCeiling } from "@paperclipai/shared";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
 import {
   getEmbeddedPostgresTestSupport,
@@ -36,6 +42,9 @@ import {
   quoteModelReservation,
 } from "../services/orchestration/model-reservations.js";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
+import { nativeCommentProjectionHash } from "../services/native-runtime/canonical.js";
+import { directHumanPayloadSnapshotSql, nativePayloadSnapshotSql } from "../services/native-direct-input.js";
+import { issueService } from "../services/issues.js";
 import { purgeCompanyContent } from "../services/saas/company-purge.js";
 import { saasOffboardingService } from "../services/saas/offboarding.js";
 import { agentPackageService } from "../services/agent-packages/package-service.js";
@@ -311,6 +320,122 @@ const support = await getEmbeddedPostgresTestSupport();
           usage: { inputTokens: 1, outputTokens: 1 },
         }) : null,
       });
+    async function conversationReservationFixture() {
+      await db.update(companies).set({ budgetMonthlyCents: 2000 }).where(eq(companies.id, f.home));
+      await db.update(agents).set({ budgetMonthlyCents: 2000 }).where(eq(agents.id, f.presence.id));
+      const [conversation] = await db.insert(issues).values({
+        companyId: f.home, title: "Private native conversation reservation fixture",
+        assigneeAgentId: f.presence.id, conversationAgentId: f.presence.id,
+        conversationUserId: f.userId, conversationState: "active", status: "in_review",
+        createdByUserId: f.userId, payloadSourceProtocolVersion: 1,
+      }).returning();
+      const [run] = await db.insert(heartbeatRuns).values({
+        companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId,
+        status: "running", runtimeMode: "native", nativeIssueId: conversation!.id,
+        contextSnapshot: { issueId: conversation!.id, conversationSessionGeneration: conversation!.conversationSessionGeneration },
+      }).returning();
+      await db.update(issues).set({ executionRunId: run!.id }).where(eq(issues.id, conversation!.id));
+      const comment = await db.transaction(tx => issueService(db).addComment(conversation!.id,
+        "The authenticated Human's conversation input.", { userId: f.userId },
+        { authorType: "user", clientRequestId: `conversation-source-${randomUUID()}` }, tx, 1));
+      const [capturedComment] = await db.update(issueComments).set({ payloadSourceSnapshot: directHumanPayloadSnapshotSql("comment") })
+        .where(eq(issueComments.id, comment.id)).returning({ updatedAt: issueComments.updatedAt });
+      const sourceVersion = (await db.execute<{ source_version: string }>(sql`select extract(epoch from ${capturedComment!.updatedAt})::text as source_version`))[0]!.source_version;
+      const sourceSet = { policy: { issueIds: [conversation!.id], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] },
+        inputs: [{ kind: "comment" as const, issueId: conversation!.id, commentId: comment.id, sourceVersion,
+          contentHash: nativeCommentProjectionHash({ body: comment.body, presentation: comment.presentation, metadata: comment.metadata }) }] };
+      await db.update(issues).set({ payloadSourceSnapshot: nativePayloadSnapshotSql("issue", sourceSet.policy, sourceSet.inputs) })
+        .where(eq(issues.id, conversation!.id));
+      const [context] = await db.insert(contextManifests).values({
+        companyId: f.home, runId: run!.id, agentId: f.presence.id, issueId: conversation!.id,
+        queryHash: "1".repeat(64), policySnapshotHash: "2".repeat(64),
+      }).returning();
+      const executionManifest = agentExecutionManifestSchema.parse({
+        schemaVersion: 5, runId: run!.id, companyId: f.home, agentId: f.presence.id, agentIdentityId: f.identity.id,
+        homeCompanyId: f.home, responsibleUserId: f.userId,
+        executionScope: { primaryCompanyId: f.home, primaryAgentPresenceId: f.presence.id, delegatedScopes: [] },
+        rolePack: null, contextManifests: [{ companyId: f.home, contextManifestId: context!.id }],
+        skills: [], playbooks: [], capabilities: [],
+        providers: [{ companyId: f.home, agentId: f.presence.id, providerBindingId: randomUUID(),
+          profileRef: "software-reservation-ledger-fixture", snapshotHash: "fixture", isolationMode: "isolated_per_presence" }],
+        executionPolicy: { deterministicPreference: true, policies: [], approvalRefs: [], restrictions: [],
+          policySnapshotHash: "4".repeat(64) },
+        inventoryEstimatedTokens: 1, warnings: [],
+      });
+      const manifestHash = nativeSha256(executionManifest);
+      const [manifest] = await db.insert(agentExecutionManifests).values({
+        companyId: f.home, runId: run!.id, agentId: f.presence.id, agentIdentityId: f.identity.id,
+        contextManifestId: context!.id, manifest: executionManifest,
+        policySnapshotHash: executionManifest.executionPolicy.policySnapshotHash, hash: manifestHash,
+      }).returning();
+      const nativeExecutionInput = { companyId: f.home, issueId: conversation!.id, runId: run!.id,
+        agentId: f.presence.id, responsibleUserId: f.userId,
+        conversationSessionGeneration: conversation!.conversationSessionGeneration };
+      const receiptBody = {
+        version: 1 as const,
+        binding: { companyId: f.home, runId: run!.id, agentId: f.presence.id,
+          responsibleUserId: f.userId, issueId: conversation!.id },
+        bootstrap: { executionInputDigest: (await db.execute<{ digest: string }>(sql`
+          select encode(sha256(convert_to(${JSON.stringify(nativeExecutionInput)}::jsonb::text,'UTF8')),'hex') as digest`))[0]!.digest,
+          ...sourceSet },
+        dispatches: [], additionalInputs: [],
+      };
+      const receipt = nativeRunInputSourceReceiptSchema.parse({ ...receiptBody,
+        digest: (await db.execute<{ digest: string }>(sql`
+          select encode(sha256(convert_to(${JSON.stringify(receiptBody)}::jsonb::text,'UTF8')),'hex') as digest`))[0]!.digest });
+      await db.update(heartbeatRuns).set({ nativeInputSourceProtocolVersion: 1,
+        runnerProfileJson: { nativeExecutionInput, nativeInputSourceReceipt: receipt } }).where(eq(heartbeatRuns.id, run!.id));
+      const authorityFor = (input: {
+        companyId: string; conversationAgentId: string; conversationRunId: string; conversationIssueId: string;
+        conversationSessionGeneration: number; executionManifestId: string; executionManifestHash: string;
+      }, sessionId: string) => nativeSha256({
+        ...input, responsibleUserId: f.userId, humanSessionId: sessionId,
+      });
+      const input = {
+        companyId: f.home, conversationAgentId: f.presence.id, conversationRunId: run!.id,
+        conversationIssueId: conversation!.id, conversationSessionGeneration: conversation!.conversationSessionGeneration,
+        executionManifestId: manifest!.id, executionManifestHash: manifestHash,
+        idempotencyKey: "conversation-model-" + randomUUID(), inputHash: "5".repeat(64),
+        inputTokensUpperBound: 1, maxOutputTokens: 1,
+      };
+      const request = { ...input, authorityHash: authorityFor(input, f.actor.sessionId!) };
+      const broker = () => modelReservationService(db, {
+        sourceSha, qualifiedTariff: async () => null, currentAuthority: async () => currentHash,
+        qualifiedConversationTariff: async binding => binding.companyId === f.home &&
+          binding.agentId === f.presence.id && binding.runId === run!.id ? price : null,
+        currentConversationAuthority: async (tx, actor, binding) => {
+          if (actor.type !== "board" || actor.userId !== f.userId || !actor.sessionId)
+            throw new Error("Current authenticated Human is required for conversation model use");
+          const [session] = await tx.select({ id: authSessions.id }).from(authSessions).where(and(
+            eq(authSessions.id, actor.sessionId), eq(authSessions.userId, f.userId), gt(authSessions.expiresAt, new Date())));
+          const [currentIssue] = await tx.select().from(issues).where(and(
+            eq(issues.companyId, f.home), eq(issues.id, conversation!.id)));
+          const [currentRun] = await tx.select().from(heartbeatRuns).where(and(
+            eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.id, run!.id)));
+          const [currentManifest] = await tx.select().from(agentExecutionManifests).where(and(
+            eq(agentExecutionManifests.companyId, f.home), eq(agentExecutionManifests.id, manifest!.id)));
+          if (!session || !currentIssue || !currentRun || !currentManifest ||
+            currentIssue.conversationState !== "active" || currentIssue.conversationRetiredAt !== null ||
+            currentIssue.status !== "in_review" || currentIssue.conversationAgentId !== f.presence.id ||
+            currentIssue.conversationUserId !== f.userId || currentIssue.executionRunId !== run!.id ||
+            currentRun.status !== "running" || currentRun.runtimeMode !== "native" ||
+            currentRun.agentId !== f.presence.id || currentRun.nativeIssueId !== conversation!.id ||
+            currentRun.responsibleUserId !== f.userId ||
+            binding.companyId !== currentIssue.companyId || binding.conversationAgentId !== currentIssue.conversationAgentId ||
+            binding.conversationRunId !== currentRun.id || binding.conversationIssueId !== currentIssue.id ||
+            binding.conversationSessionGeneration !== currentIssue.conversationSessionGeneration ||
+            binding.executionManifestId !== currentManifest.id || binding.executionManifestHash !== currentManifest.hash)
+            throw new Error("Current conversation owner, generation, manifest, or Human credential changed");
+          return authorityFor({
+            companyId: currentIssue.companyId, conversationAgentId: currentIssue.conversationAgentId!,
+            conversationRunId: currentRun.id, conversationIssueId: currentIssue.id,
+            conversationSessionGeneration: currentIssue.conversationSessionGeneration,
+            executionManifestId: currentManifest.id, executionManifestHash: currentManifest.hash,
+          }, actor.sessionId);
+        },
+      });
+      return { conversation: conversation!, run: run!, request, broker };
+    }
     const supportGateway = (
       profiles: FirstPartySupportModelProfile[],
       fetch: typeof import("../services/remote-http-fetch.js").guardedRemoteHttpFetch,
@@ -388,6 +513,124 @@ const support = await getEmbeddedPostgresTestSupport();
       authorityHash,
       inputTokensUpperBound: 1,
       maxOutputTokens: 1,
+    });
+    it("binds Native conversation dispatch to the current Human session and exact generation", async () => {
+      const fixture = await conversationReservationFixture(), broker = fixture.broker();
+      const first = await broker.reserveConversation(f.actor, fixture.request);
+      expect(first).toMatchObject({ purpose: "conversation_model", status: "reserved",
+        conversationIssueId: fixture.conversation.id, conversationRunId: fixture.run.id,
+        conversationSessionGeneration: fixture.conversation.conversationSessionGeneration,
+        principalUserId: f.userId });
+      expect((await broker.reserveConversation(f.actor, fixture.request)).id).toBe(first.id);
+      await db.update(issues).set({ conversationSessionGeneration: fixture.conversation.conversationSessionGeneration + 1 })
+        .where(eq(issues.id, fixture.conversation.id));
+      await expect(broker.claimConversationForDispatch(f.actor, f.home, first.id)).rejects.toThrow();
+      expect((await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.id, first.id)))[0]?.status)
+        .toBe("reserved");
+
+      await db.update(issues).set({ conversationSessionGeneration: fixture.conversation.conversationSessionGeneration })
+        .where(eq(issues.id, fixture.conversation.id));
+      const second = await broker.reserveConversation(f.actor, { ...fixture.request, idempotencyKey: fixture.request.idempotencyKey + "-revoked" });
+      await db.delete(authSessions).where(eq(authSessions.id, f.actor.sessionId!));
+      await expect(broker.claimConversationForDispatch(f.actor, f.home, second.id)).rejects.toThrow();
+      expect((await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.id, second.id)))[0]?.status)
+        .toBe("reserved");
+    });
+    it("settles a qualified conversation quote at its known cost exactly once", async () => {
+      const fixture = await conversationReservationFixture(), broker = fixture.broker();
+      const reservation = await broker.reserveConversation(f.actor, fixture.request);
+      await broker.claimConversationForDispatch(f.actor, f.home, reservation.id);
+      await expect(broker.recordOutcome(f.home, reservation.id, {
+        status: "completed", providerResponseHash: "7".repeat(64), usage: { inputTokens: 1, outputTokens: 1 },
+      })).resolves.toMatchObject({ status: "completed" });
+      const billingCode = `native-conversation-model:${reservation.id}`;
+      const settled = await db.select().from(costEvents).where(eq(costEvents.billingCode, billingCode));
+      expect(settled).toHaveLength(1);
+      expect(settled[0]).toMatchObject({ companyId: f.home, agentId: f.presence.id,
+        issueId: fixture.conversation.id, heartbeatRunId: fixture.run.id, costCents: 30,
+        inputTokens: 1, outputTokens: 1, costStatus: "estimated" });
+      await expect(broker.recordOutcome(f.home, reservation.id, {
+        status: "completed", providerResponseHash: "7".repeat(64), usage: { inputTokens: 1, outputTokens: 1 },
+      })).rejects.toThrow();
+      expect(await db.select().from(costEvents).where(eq(costEvents.billingCode, billingCode))).toHaveLength(1);
+      const [company] = await db.select({ name: companies.name }).from(companies).where(eq(companies.id, f.home));
+      const offboarding = saasOffboardingService(db, {} as never, {} as never, {
+        targets: () => ({ fixture: true }), erase: async () => ({ fixtureErased: true }),
+      } as never);
+      await offboarding.request(f.home, f.userId, { confirmation: company!.name,
+        acknowledgeExport: true, idempotencyKey: "conversation-known-cost-purge" });
+      await db.update(companyDeletionOperations).set({ stage: "purge", status: "processing",
+        notBefore: new Date(0), evidence: sql`coalesce(${companyDeletionOperations.evidence},'{}'::jsonb) || jsonb_build_object('runtimesErasedAt',now()::text)` })
+        .where(eq(companyDeletionOperations.companyId, f.home));
+      const [operation] = await db.select().from(companyDeletionOperations).where(eq(companyDeletionOperations.companyId, f.home));
+      await purgeCompanyContent(db, f.home, { operationId: operation!.id });
+      const [erasureReceipt] = await db.select().from(companyDeletionOperations).where(eq(companyDeletionOperations.id, operation!.id));
+      expect((erasureReceipt?.evidence as Record<string, unknown>)?.nativeConversationModelFunding).toMatchObject({
+        completed: "1", settledInputTokens: "1", settledOutputTokens: "1", settledCostEvents: "1", settledCostMinor: "30",
+      });
+      expect(await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.id, reservation.id))).toHaveLength(0);
+      expect(await db.select().from(issues).where(eq(issues.id, fixture.conversation.id))).toHaveLength(0);
+    });
+    it("admits the exact final funded reservation and dispatch, then denies the next reservation without a row", async () => {
+      const fixture = await conversationReservationFixture(), broker = fixture.broker();
+      await db.update(companies).set({ budgetMonthlyCents: 60 }).where(eq(companies.id, f.home));
+      await db.update(agents).set({ budgetMonthlyCents: 60 }).where(eq(agents.id, f.presence.id));
+      const first = await broker.reserveConversation(f.actor, fixture.request);
+      const finalIdempotencyKey = fixture.request.idempotencyKey + "-last-funded";
+      const finalReservation = await broker.reserveConversation(f.actor, { ...fixture.request, idempotencyKey: finalIdempotencyKey });
+      expect(first.maximumMinor + finalReservation.maximumMinor).toBe(60);
+      await expect(broker.claimConversationForDispatch(f.actor, f.home, finalReservation.id))
+        .resolves.toMatchObject({ status: "dispatched" });
+      const deniedKey = fixture.request.idempotencyKey + "-over-budget";
+      await expect(broker.reserveConversation(f.actor, { ...fixture.request, idempotencyKey: deniedKey })).rejects.toThrow();
+      expect(await db.select().from(orchestrationModelReservations).where(and(
+        eq(orchestrationModelReservations.companyId, f.home), eq(orchestrationModelReservations.idempotencyKey, deniedKey),
+      ))).toHaveLength(0);
+    });
+    it("allows the 64th funded call to dispatch and denies the 65th without inserting it", async () => {
+      const fixture = await conversationReservationFixture(), broker = fixture.broker();
+      let sixtyFourth: Awaited<ReturnType<typeof broker.reserveConversation>> | null = null;
+      for (let index = 1; index <= 64; index += 1) {
+        const reservation = await broker.reserveConversation(f.actor, { ...fixture.request,
+          idempotencyKey: `${fixture.request.idempotencyKey}-${index}` });
+        if (index === 64) sixtyFourth = reservation;
+      }
+      expect(sixtyFourth).not.toBeNull();
+      await expect(broker.claimConversationForDispatch(f.actor, f.home, sixtyFourth!.id))
+        .resolves.toMatchObject({ status: "dispatched" });
+      const deniedKey = fixture.request.idempotencyKey + "-65";
+      await expect(broker.reserveConversation(f.actor, { ...fixture.request, idempotencyKey: deniedKey })).rejects.toThrow();
+      expect(await db.select().from(orchestrationModelReservations).where(and(
+        eq(orchestrationModelReservations.companyId, f.home), eq(orchestrationModelReservations.idempotencyKey, deniedKey),
+      ))).toHaveLength(0);
+    });
+    it("retains unknown conversation spend and blocks canonical company purge", async () => {
+      const fixture = await conversationReservationFixture(), broker = fixture.broker();
+      const reservation = await broker.reserveConversation(f.actor, fixture.request);
+      await broker.claimConversationForDispatch(f.actor, f.home, reservation.id);
+      await broker.recordOutcome(f.home, reservation.id, {
+        status: "completed", providerResponseHash: "6".repeat(64), usage: { inputTokens: 2, outputTokens: 1 },
+      });
+      const [stored] = await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.id, reservation.id));
+      expect(stored).toMatchObject({ purpose: "conversation_model", status: "unknown", maximumMinor: reservation.maximumMinor });
+      expect(stored?.usage).toEqual({ inputTokens: 2, outputTokens: 1 });
+      expect(await db.select().from(costEvents).where(eq(costEvents.billingCode, `native-conversation-model:${reservation.id}`))).toHaveLength(0);
+      const [company] = await db.select({ name: companies.name }).from(companies).where(eq(companies.id, f.home));
+      const offboarding = saasOffboardingService(db, {} as never, {} as never, {
+        targets: () => ({ fixture: true }), erase: async () => ({ fixtureErased: true }),
+      } as never);
+      await offboarding.request(f.home, f.userId, { confirmation: company!.name,
+        acknowledgeExport: true, idempotencyKey: "conversation-unknown-purge" });
+      await db.update(companyDeletionOperations).set({ stage: "purge", status: "processing",
+        notBefore: new Date(0), evidence: sql`coalesce(${companyDeletionOperations.evidence},'{}'::jsonb) || jsonb_build_object('runtimesErasedAt',now()::text)` })
+        .where(eq(companyDeletionOperations.companyId, f.home));
+      const [operation] = await db.select().from(companyDeletionOperations).where(eq(companyDeletionOperations.companyId, f.home));
+      await expect(purgeCompanyContent(db, f.home, { operationId: operation!.id })).rejects.toMatchObject({ status: 409 });
+      expect((await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.id, reservation.id)))[0]?.status)
+        .toBe("unknown");
+      expect(await db.select().from(issues).where(eq(issues.id, fixture.conversation.id))).toHaveLength(1);
+      expect((await db.select().from(companyDeletionOperations).where(eq(companyDeletionOperations.id, operation!.id)))[0]?.evidence)
+        .not.toHaveProperty("nativeConversationModelFunding");
     });
     const request = (idempotencyKey = "fixture-reservation") => ({
       companyId: f.home,

@@ -115,10 +115,10 @@ BEGIN
      SELECT coalesce(sum(maximum_minor),0),count(*) INTO existing_total,existing_calls
        FROM orchestration_model_reservations WHERE company_id=NEW.company_id AND conversation_run_id=NEW.conversation_run_id;
      IF company_spend+(SELECT coalesce(sum(maximum_minor),0) FROM orchestration_model_reservations
-           WHERE company_id=NEW.company_id AND purpose='conversation_model' AND status IN('reserved','dispatched','unknown'))+NEW.maximum_minor>c.budget_monthly_cents
+           WHERE company_id=NEW.company_id AND purpose='conversation_model' AND status IN('reserved','dispatched','unknown'))>c.budget_monthly_cents
        OR agent_spend+(SELECT coalesce(sum(maximum_minor),0) FROM orchestration_model_reservations
-           WHERE company_id=NEW.company_id AND conversation_agent_id=NEW.conversation_agent_id AND purpose='conversation_model' AND status IN('reserved','dispatched','unknown'))+NEW.maximum_minor>a.budget_monthly_cents
-       OR existing_calls>=64 THEN
+           WHERE company_id=NEW.company_id AND conversation_agent_id=NEW.conversation_agent_id AND purpose='conversation_model' AND status IN('reserved','dispatched','unknown'))>a.budget_monthly_cents
+       OR existing_calls>64 THEN
        RAISE EXCEPTION 'conversation_model_budget_exhausted' USING ERRCODE='23514';
      END IF;
    ELSIF NEW.status='dispatched' THEN
@@ -175,11 +175,11 @@ BEGIN
      WHERE company_id=NEW.company_id AND agent_id=NEW.conversation_agent_id AND occurred_at>=month_start;
    SELECT count(*) INTO existing_calls FROM orchestration_model_reservations
      WHERE company_id=NEW.company_id AND conversation_run_id=NEW.conversation_run_id;
-   IF existing_calls>64
+   IF existing_calls>=64
      OR company_spend+(SELECT coalesce(sum(maximum_minor),0) FROM orchestration_model_reservations
-          WHERE company_id=NEW.company_id AND purpose='conversation_model' AND status IN('reserved','dispatched','unknown'))>c.budget_monthly_cents
+          WHERE company_id=NEW.company_id AND purpose='conversation_model' AND status IN('reserved','dispatched','unknown'))+NEW.maximum_minor>c.budget_monthly_cents
      OR agent_spend+(SELECT coalesce(sum(maximum_minor),0) FROM orchestration_model_reservations
-          WHERE company_id=NEW.company_id AND conversation_agent_id=NEW.conversation_agent_id AND purpose='conversation_model' AND status IN('reserved','dispatched','unknown'))>a.budget_monthly_cents
+          WHERE company_id=NEW.company_id AND conversation_agent_id=NEW.conversation_agent_id AND purpose='conversation_model' AND status IN('reserved','dispatched','unknown'))+NEW.maximum_minor>a.budget_monthly_cents
    THEN RAISE EXCEPTION 'conversation_model_budget_exhausted' USING ERRCODE='23514'; END IF;
    RETURN NEW;
  END IF;

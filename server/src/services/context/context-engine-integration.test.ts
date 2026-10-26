@@ -669,15 +669,17 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     expect(context.packet.foundation).toHaveLength(1);
     expect(context.packet.taskContext).toEqual(expect.arrayContaining([expect.objectContaining({ sourceRef: `issue://${task.id}` })]));
 
-    let taskCapture: NativeTaskSourceCapture | null = null;
-    const renderedTask = await getIssueExecutionContext(db, seeded.companyId, task.id, capture => { taskCapture = capture; });
+    const taskCaptureHolder: { value: NativeTaskSourceCapture | null } = { value: null };
+    const renderedTask = await getIssueExecutionContext(db, seeded.companyId, task.id,
+      capture => { taskCaptureHolder.value = capture; });
+    const taskCapture = taskCaptureHolder.value;
     expect(renderedTask).not.toBeNull();
     expect(taskCapture).not.toBeNull();
     const references: Array<{ kind: "task" | "comment" | "document_revision" | "attachment" | "unknown"; id: string }> = [];
     const renderedMarkdown = buildPaperclipTaskMarkdown({ issue: { id: task.id, identifier: renderedTask!.identifier,
       title: renderedTask!.title, description: renderedTask!.description, workMode: renderedTask!.workMode } },
       { onRenderedSource: reference => references.push(reference) });
-    if(!renderedMarkdown)throw new Error("Native bootstrap fixture could not render its exact Task Markdown");
+    if (!renderedMarkdown) throw new Error("Native bootstrap fixture could not render its exact Task Markdown");
     const sourceSet = buildNativeBootstrapSourceSet({ companyId: seeded.companyId, runId: run!.id,
       agentId: seeded.agent.id, issueId: task.id, renderedMarkdown,
       renderedMarkdownDigest: createHash("sha256").update(renderedMarkdown, "utf8").digest("hex"), references,
@@ -700,8 +702,12 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       updatedAt: new Date() }).where(and(eq(issues.companyId, seeded.companyId), eq(issues.id, task.id)));
     await expect(assertNativeTaskSourceOwnerCurrent(db, { companyId: seeded.companyId,
       actor: assembleInput.authorizationActor, source: taskCapture.input })).resolves.toBeUndefined();
-    await issueService(db).update(task.id, { title: `${capturedTask.title} changed after Context capture`,
-      actorUserId: seeded.userId, privacyActor: human });
+    const changedTitle = `${capturedTask.title} changed after Context capture`;
+    await issueService(db).update(task.id, { title: changedTitle, actorUserId: seeded.userId, privacyActor: human });
+    const [changedTask] = await db.select({ title: issues.title, snapshot: issues.payloadSourceSnapshot,
+      invalidated: issues.payloadSourceSnapshotInvalidated }).from(issues)
+      .where(and(eq(issues.companyId, seeded.companyId), eq(issues.id, task.id)));
+    expect(changedTask).toMatchObject({ title: changedTitle, snapshot: null, invalidated: true });
     await expect(assertNativeTaskSourceOwnerCurrent(db, { companyId: seeded.companyId,
       actor: assembleInput.authorizationActor, source: taskCapture.input })).rejects.toMatchObject({ status: 403 });
 

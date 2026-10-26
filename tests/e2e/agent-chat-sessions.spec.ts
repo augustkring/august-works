@@ -6,7 +6,7 @@ import {createDb,issues,memoryBindings,memoryRecords,analyticalContextRoots,anal
 import {contextManifestService} from "../../server/src/services/context/context-manifest.ts";
 import {memoryDeletionKey} from "../../server/src/services/memory/memory-privacy.ts";
 import {analyticalPurpose,metricDefinition} from "../../server/src/__tests__/helpers/business-metric-fixture.ts";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { createLocalAgentJwt } from "../../server/src/agent-auth-jwt";
 
@@ -64,16 +64,6 @@ test("chat first open is read-only; concurrent first sends and retries share one
 }) => {
   const f = await setup(request, page);
   request = f.request;
-  const chatCommentFailures: Promise<{ status: number; error?: string; code?: string } | null>[] = [];
-  page.on("response", (response) => {
-    if (response.request().method() !== "POST" || !response.url().includes("/api/issues/")
-      || !response.url().endsWith("/comments") || response.status() < 400) return;
-    chatCommentFailures.push(response.json().then((body) => ({
-      status: response.status(),
-      error: typeof body.error === "string" ? body.error : undefined,
-      code: typeof body.code === "string" ? body.code : undefined,
-    })).catch(() => null));
-  });
   try {
     await page.goto(f.route);
     await expect(page.getByTestId("task-chat-composer-input")).toBeVisible();
@@ -85,9 +75,18 @@ test("chat first open is read-only; concurrent first sends and retries share one
     ).toHaveLength(0);
     const other = await context.newPage();
     await other.goto(f.route);
+    const waitForInitialComment = (target: Page) => target.waitForResponse((response) =>
+      response.request().method() === "POST" &&
+      /\/api\/issues\/[^/]+\/comments$/.test(new URL(response.url()).pathname),
+      { timeout: 15_000 },
+    );
+    const initialCommentResponses = Promise.all([
+      waitForInitialComment(page),
+      waitForInitialComment(other),
+    ]);
     await Promise.all([send(page, "Same first message"), send(other, "Same first message")]);
-    const rejectedComments = (await Promise.all(chatCommentFailures)).filter(Boolean);
-    if (rejectedComments.length) console.log("[test-only chat comment rejection]", JSON.stringify(rejectedComments));
+    for (const response of await initialCommentResponses)
+      expect(response.status(), `Initial chat comment failed: ${await response.text()}`).toBe(201);
     const issue = await idle(request, f.chatPath, 2);
     const initialComments = await json(await request.get(`/api/issues/${issue.id}/comments`));
     expect(initialComments.filter((comment: any) => !comment.authorAgentId && comment.body === "Same first message")).toHaveLength(2);

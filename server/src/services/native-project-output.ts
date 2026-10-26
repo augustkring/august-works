@@ -26,7 +26,10 @@ const managedProjectArgumentsSchema = z.object({
   name: z.string().trim().min(1).max(200),
   description: z.string().max(4_000).nullable().optional(),
   idempotencyKey: z.string().trim().min(1).max(255),
-  workspace: z.object({ name: z.string().trim().min(1).max(200) }).strict().optional(),
+  // Every managed Project result carries an exact Workspace owner pin. Keep
+  // this required at the original constructor too, so malformed/internal
+  // callers cannot create a Project that has no qualifiable result closure.
+  workspace: z.object({ name: z.string().trim().min(1).max(200) }).strict(),
 }).strict();
 
 export type NativeProjectCreateReceipt = {
@@ -150,12 +153,10 @@ export async function createManagedNativeProjectOutput(input: {
       subjectType: "agent", subjectId: actor.agentId });
     if (!(await canActorReadProjectPrivacy(tx, actor, project))) throw forbidden("Managed Project result is unavailable");
 
-    if (args.workspace) {
-      const cwd = resolveManagedProjectWorkspaceDir({ companyId, projectId: project.id });
-      const workspace = await service.createWorkspace(project.id, { name: args.workspace.name,
-        sourceType: "local_path", cwd, isPrimary: true });
-      if (!workspace) throw forbidden("Managed Project workspace could not be created");
-    }
+    const cwd = resolveManagedProjectWorkspaceDir({ companyId, projectId: project.id });
+    const workspace = await service.createWorkspace(project.id, { name: args.workspace.name,
+      sourceType: "local_path", cwd, isPrimary: true });
+    if (!workspace) throw forbidden("Managed Project workspace could not be created");
 
     // Workspace insertion uses a nested owner lock. Recheck the full consumed
     // graph after that wait while the original owner privacy locks remain held.
@@ -260,7 +261,8 @@ export async function assertNativeManagedProjectCreateReceiptCurrentInTransactio
     outputCapture.managedOpenCodeToolUse?.toolName !== "create_project")
     throw forbidden("Managed Project result receipt is malformed");
 
-  await assertNativeModelOutputCaptureCurrent(tx as unknown as Db, companyId, issueId, outputCapture, "create_project", actor);
+  await assertNativeModelOutputCaptureCurrent(tx as unknown as Db, companyId, issueId, outputCapture, "create_project", actor,
+    input.allowSucceededRun ? "settled" : "live");
   const [run] = await tx.select().from(heartbeatRuns).where(and(
       eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, runId),
       eq(heartbeatRuns.nativeIssueId, issueId), inArray(heartbeatRuns.status,

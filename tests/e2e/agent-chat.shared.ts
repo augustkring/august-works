@@ -119,21 +119,30 @@ export async function setup(request: APIRequestContext, page?: Page) {
     chatPath,
     route,
     restore: async (options?: { collectState?: boolean }) => {
+      const safeCleanup = async (action: () => Promise<unknown>) => {
+        try { await action(); }
+        catch (error) {
+          await test.info().attach("chat-cleanup-warning", {
+            contentType: "application/json",
+            body: Buffer.from(JSON.stringify({ errorName: error instanceof Error ? error.name : "unknown" })),
+          }).catch(() => undefined);
+        }
+      };
       try {
         if (options?.collectState === false) return;
-        const chat = await request.get(chatPath);
+        const chat = await request.get(chatPath, { timeout: 5_000 });
         const history = chat.ok() ? await chat.json() : null;
         const tasks = await json(
-          await request.get(`/api/companies/${company.id}/issues`),
+          await request.get(`/api/companies/${company.id}/issues`, { timeout: 5_000 }),
         );
         const projects = await json(
-          await request.get(`/api/companies/${company.id}/projects`),
+          await request.get(`/api/companies/${company.id}/projects`, { timeout: 5_000 }),
         );
         const ledger = await json(
-          await request.get(`/api/companies/${company.id}/heartbeat-runs`),
+          await request.get(`/api/companies/${company.id}/heartbeat-runs`, { timeout: 5_000 }),
         );
         const runDetails = await Promise.all(ledger.map(async (run: any) => {
-          const response = await request.get(`/api/heartbeat-runs/${run.id}`);
+          const response = await request.get(`/api/heartbeat-runs/${run.id}`, { timeout: 5_000 });
           if (!response.ok()) return { id: run.id, detailStatus: response.status() };
           const detail = await response.json();
           return {
@@ -153,7 +162,7 @@ export async function setup(request: APIRequestContext, page?: Page) {
           [...(history ? [history] : []), ...tasks].map(async (task: any) => ({
             taskId: task.id,
             documents: await json(
-              await request.get(`/api/issues/${task.id}/documents`),
+              await request.get(`/api/issues/${task.id}/documents`, { timeout: 5_000 }),
             ),
           })),
         );
@@ -169,7 +178,7 @@ export async function setup(request: APIRequestContext, page?: Page) {
                 runDetails,
                 comments: history
                   ? await json(
-                      await request.get(`/api/issues/${history.id}/comments`),
+                      await request.get(`/api/issues/${history.id}/comments`, { timeout: 5_000 }),
                     )
                   : [],
                 runs: ledger.map((run: any) => ({
@@ -190,26 +199,32 @@ export async function setup(request: APIRequestContext, page?: Page) {
             ),
           ),
         });
+      } catch (error) {
+        await test.info().attach("chat-state-capture-warning", {
+          contentType: "application/json",
+          body: Buffer.from(JSON.stringify({ errorName: error instanceof Error ? error.name : "unknown" })),
+        }).catch(() => undefined);
       } finally {
-        const runs = await json(
-          await request.get(`/api/companies/${company.id}/live-runs`),
-        );
-        for (const run of runs)
-          await json(
-            await request.post(`/api/heartbeat-runs/${run.id}/cancel`),
-          );
-        await json(
+        await safeCleanup(async () => {
+          const response = await request.get(`/api/companies/${company.id}/live-runs`, { timeout: 5_000 });
+          const runs = await json(response);
+          await Promise.all(runs.map((run: any) => safeCleanup(async () => json(
+            await request.post(`/api/heartbeat-runs/${run.id}/cancel`, { timeout: 5_000 }),
+          ))));
+        });
+        await safeCleanup(async () => json(
           await instanceControlRequest.patch("/api/instance/settings/experimental", {
             data: {
               enableAgentChat: original.enableAgentChat,
               enableClassicTaskInterface: original.enableClassicTaskInterface,
               ...(nativeChat ? { enableNativeRunner: original.enableNativeRunner } : {}),
             },
+            timeout: 5_000,
           }),
-        );
-        if (apiKeyId) await request.delete(`/api/board-api-keys/${apiKeyId}`);
+        ));
+        if (apiKeyId) await safeCleanup(async () => request.delete(`/api/board-api-keys/${apiKeyId}`, { timeout: 5_000 }));
         if (pageContext) await pageContext.unroute("**/api/**");
-        if (ownsApiRequest) await request.dispose();
+        if (ownsApiRequest) await safeCleanup(() => request.dispose());
       }
     },
     request,

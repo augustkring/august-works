@@ -67,31 +67,35 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode conversation Task
       ],
     });
 
+    const companyId = result.companyId, runId = result.runId, agentId = result.agentId,
+      issueId = result.issueId, aliceActor = result.aliceActor;
+    const childTasks = result.childTasks;
+    if (!companyId || !runId || !agentId || !issueId || !aliceActor || !Array.isArray(childTasks))
+      throw new Error("The actual conversation fixture did not return its owner and Task evidence");
     expect(result.completedRun?.status).toBe("succeeded");
-    expect(result.childTasks).toHaveLength(1);
-    const child = result.childTasks[0]!;
+    expect(childTasks).toHaveLength(1);
+    const child = childTasks[0]!;
     const snapshot = nativePayloadSourceSnapshotSchema.parse(child.payloadSourceSnapshot);
     const dispatches = snapshot.inputs.filter(source => source.kind === "conversation_model_dispatch");
     expect(dispatches).toHaveLength(1);
-    expect(dispatches[0]).toMatchObject({ kind: "conversation_model_dispatch", runId: result.runId,
-      agentId: result.agentId, issueId: result.issueId });
-    expect(snapshot.owner).toMatchObject({ kind: "issue", id: child.id, companyId: result.companyId });
+    expect(dispatches[0]).toMatchObject({ kind: "conversation_model_dispatch", runId, agentId, issueId });
+    expect(snapshot.owner).toMatchObject({ kind: "issue", id: child.id, companyId });
     const edges = await db.select({ sourceKind: issuePrivacySources.sourceKind, sourceId: issuePrivacySources.sourceId })
-      .from(issuePrivacySources).where(and(eq(issuePrivacySources.companyId, result.companyId), eq(issuePrivacySources.issueId, child.id)));
-    expect(edges).toContainEqual({ sourceKind: "run_copy", sourceId: result.runId });
-    expect(edges).not.toContainEqual({ sourceKind: "run", sourceId: result.runId });
-    expect(await canActorReadIssuePrivacy(db, result.aliceActor!, { id: child.id, companyId: result.companyId })).toBe(true);
+      .from(issuePrivacySources).where(and(eq(issuePrivacySources.companyId, companyId), eq(issuePrivacySources.issueId, child.id)));
+    expect(edges).toContainEqual({ sourceKind: "run_copy", sourceId: runId });
+    expect(edges).not.toContainEqual({ sourceKind: "run", sourceId: runId });
+    expect(await canActorReadIssuePrivacy(db, aliceActor, { id: child.id, companyId })).toBe(true);
 
     await db.transaction(async tx => {
-      await lockAnalyticalCompany(tx as unknown as typeof db, result.companyId);
-      await lockMemoryPrivacy(tx as unknown as typeof db, result.companyId);
-      await purgeDerivedWorkflowMemory(tx as unknown as typeof db, result.companyId, [], new Date(), {
-        workflowRevisionIds: [], artifactVersionIds: [], runIds: [result.runId],
+      await lockAnalyticalCompany(tx as unknown as typeof db, companyId);
+      await lockMemoryPrivacy(tx as unknown as typeof db, companyId);
+      await purgeDerivedWorkflowMemory(tx as unknown as typeof db, companyId, [], new Date(), {
+        workflowRevisionIds: [], artifactVersionIds: [], runIds: [runId],
       });
     });
-    const [erasedTask] = await db.select().from(issues).where(and(eq(issues.companyId, result.companyId), eq(issues.id, child.id)));
+    const [erasedTask] = await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, child.id)));
     expect(erasedTask).toMatchObject({ title: "Erased workflow task", description: null,
       payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: true });
-    expect(await canActorReadIssuePrivacy(db, result.aliceActor!, { id: child.id, companyId: result.companyId })).toBe(false);
+    expect(await canActorReadIssuePrivacy(db, aliceActor, { id: child.id, companyId })).toBe(false);
   }, 240_000);
 });

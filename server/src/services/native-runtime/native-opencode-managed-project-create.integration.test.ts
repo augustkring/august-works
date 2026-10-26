@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { chmod, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import { activityLog, completionContracts, createDb, orchestrationPlans, projectWorkspaces, projects } from "@paperclipai/db";
@@ -12,7 +13,7 @@ import { makeFixtureTreeWritable, runManagedNativeOpenCodeFixture } from "../../
 import { instanceSettingsService } from "../instance-settings.js";
 import { canActorReadProjectPrivacy } from "../authorization.js";
 import { resolveManagedProjectWorkspaceDir } from "../../home-paths.js";
-import { createManagedNativeProjectOutput } from "../native-project-output.js";
+import { assertNativeManagedProjectCreateReceiptCurrent, createManagedNativeProjectOutput } from "../native-project-output.js";
 import { nativePayloadSourceSnapshotSchema, orchestrationCompletionSchema } from "@paperclipai/shared";
 
 const QUALIFIED_OPENCODE_SHA256 = "513f500a1a5ea1dc7d865547ac87b32a8936334e8d5abd5b3ff585c45a170080";
@@ -69,6 +70,7 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode private Project c
           workspace: { name: workspaceName }, idempotencyKey: randomUUID() } },
         { tool: "paperclip_finish", id: `managed-project-finish-${suffix}` },
       ],
+      nativeProjectCreatePrefixProbe: { callId: createCallId },
       afterManagedProjectCreate: async ({ actor, companyId, issueId, capture, callId, arguments: args, result: created }) => {
         const [projectsBefore] = await db.select({ count: sql<number>`count(*)::int` }).from(projects).where(and(
           eq(projects.companyId, companyId), eq(projects.id, created.receipt.projectId)));
@@ -79,6 +81,27 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode private Project c
           eq(activityLog.entityId, created.receipt.projectId), eq(activityLog.action, "project.created")));
         const replay = await createManagedNativeProjectOutput({ db, actor, companyId, issueId, callId,
           arguments: args as Parameters<typeof createManagedNativeProjectOutput>[0]["arguments"], capture });
+        const currentnessInput = { companyId, issueId, runId: capture.runId, actor,
+          receipt: created.receipt, sourceSet: created.sourceSet, outputCapture: capture, result: created.project };
+        const tamperedSourceReceipt = structuredClone(created.receipt);
+        tamperedSourceReceipt.projectSource.contentHash = "0".repeat(64);
+        const tamperedProjectReceipt = structuredClone(created.receipt);
+        tamperedProjectReceipt.sourceSnapshotDigest = "0".repeat(64);
+        const tamperedResult = { ...created.project, description: "forged Project DTO" };
+        const tamperedSourceSet = { ...created.sourceSet,
+          policy: { ...created.sourceSet.policy, projectIds: [...created.sourceSet.policy.projectIds, randomUUID()] } };
+        const tamperedWorkspaceReceipt = structuredClone(created.receipt);
+        tamperedWorkspaceReceipt.workspaceSources[0]!.contentHash = "0".repeat(64);
+        const forgedCapture = structuredClone(capture);
+        forgedCapture.managedOpenCodeToolUse!.callId = `forged-${callId}`;
+        for (const invalid of [
+          { ...currentnessInput, receipt: tamperedSourceReceipt },
+          { ...currentnessInput, receipt: tamperedProjectReceipt },
+          { ...currentnessInput, result: tamperedResult },
+          { ...currentnessInput, sourceSet: tamperedSourceSet },
+          { ...currentnessInput, receipt: tamperedWorkspaceReceipt },
+          { ...currentnessInput, outputCapture: forgedCapture },
+        ]) await expect(assertNativeManagedProjectCreateReceiptCurrent(db, invalid)).rejects.toThrow();
         const [projectsAfter] = await db.select({ count: sql<number>`count(*)::int` }).from(projects).where(and(
           eq(projects.companyId, companyId), eq(projects.id, created.receipt.projectId)));
         const [workspacesAfter] = await db.select({ count: sql<number>`count(*)::int` }).from(projectWorkspaces).where(and(
@@ -92,13 +115,16 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode private Project c
         expect([workspacesBefore?.count, workspacesAfter?.count]).toEqual([1, 1]);
         expect([activitiesBefore?.count, activitiesAfter?.count]).toEqual([1, 1]);
         projectCreateReplayEvidence = { sameProject: replay.project.id === created.project.id,
-          sameReceipt: JSON.stringify(replay.receipt) === JSON.stringify(created.receipt),
+          sameReceipt: isDeepStrictEqual(replay.receipt, created.receipt),
           noAdditionalProjectWorkspaceActivity: projectsAfter?.count === projectsBefore?.count &&
             workspacesAfter?.count === workspacesBefore?.count && activitiesAfter?.count === activitiesBefore?.count };
       },
     });
 
     expect(result.completedRun?.status).toBe("succeeded");
+    expect(result.nativeProjectCreatePrefixProbe).toMatchObject({ toolResultObserved: true, completed: true,
+      evidence: { exactPersistedPrefixAccepted: true, changedProjectHashRejected: true,
+        forgedToolResultAssociationRejected: true } });
     const finalization = result.nativeFinalization as { result?: { completionClaim?: { criteria?: Array<{ criterionId: string }> } } } | null;
     expect(finalization?.result?.completionClaim?.criteria).toEqual(expect.arrayContaining([
       expect.objectContaining({ criterionId: "output_project" }),

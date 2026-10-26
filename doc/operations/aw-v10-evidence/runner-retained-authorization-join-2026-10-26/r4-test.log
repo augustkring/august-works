@@ -1,0 +1,33 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/packages/paperclip-runner
+
+ ❯ src/live/runnerd-codex-transport-settlement.test.ts (19 tests | 1 failed | 18 skipped) 793ms
+   × settles only retained control authority without starting another provider turn (true/false/undefined/undefined/undefined/undefined/undefined/undefined/undefined) startup-failure-proof=undefined completed-ack='completed' retired-revocation=undefined 791ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/live/runnerd-codex-transport-settlement.test.ts > settles only retained control authority without starting another provider turn (true/false/undefined/undefined/undefined/undefined/undefined/undefined/undefined) startup-failure-proof=undefined completed-ack='completed' retired-revocation=undefined
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/live/runnerd-codex-transport-settlement.test.ts:607:58
+    605|             message: "native_cleanup_maintenance_unproven",
+    606|           });
+    607|           expect(retainedRunnerdMaintenanceIsIdle(copy)).toBe(false);
+       |                                                          ^
+    608|           await expect(settleRetainedRunnerdSession(input)).rejects.to…
+    609|             "native_cleanup_maintenance_unproven",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 18 skipped (19)
+   Start at  10:11:07
+   Duration  1.85s (transform 776ms, setup 0ms, import 925ms, tests 793ms, environment 0ms)
+

@@ -1,3 +1,4 @@
+import { writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -18,6 +19,7 @@ import {
   plugins,
   projects,
   routineDocuments,
+  routineRevisions,
   routineRuns,
   routineTriggers,
   routines,
@@ -29,7 +31,8 @@ import {
 } from "./helpers/embedded-postgres.js";
 import { buildHostServices } from "../services/plugin-host-services.js";
 import { routineService } from "../services/routines.js";
-import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
+import { authorizationService, canActorReadTypedTaskSourcePrivacy } from "../services/authorization.js";
+import { createCanonicalHumanProject, seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -112,7 +115,11 @@ describeEmbeddedPostgres("plugin-managed routines", () => {
 
   beforeAll(async () => {
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-plugin-managed-routines-");
-    db = createDb(tempDb.connectionString);
+    if (process.env.PLUGIN_MANAGED_ROUTINE_PROFILE === "1") {
+      const portFile = process.env.PLUGIN_MANAGED_ROUTINE_PORT_FILE ?? "/workspace/v10-preparation/depfix-plugin-managed-routine-port";
+      writeFileSync(portFile, new URL(tempDb.connectionString).port);
+      db = createDb(tempDb.connectionString, { applicationName: "plugin-managed-routine-source-test" });
+    } else db = createDb(tempDb.connectionString);
   }, 20_000);
 
   afterEach(async () => {
@@ -253,9 +260,13 @@ describeEmbeddedPostgres("plugin-managed routines", () => {
   });
 
   it("creates routine operation issues with plugin visibility and managed project scoping", async () => {
-    const { companyId, services, sourceActor } = await seedCompanyAndPlugin();
+    const { companyId, pluginId, services, sourceActor } = await seedCompanyAndPlugin();
     const agent = await services.agents.managedReconcile({ companyId, agentKey: "wiki-maintainer" });
-    const project = await services.projects.reconcileManaged({ companyId, projectKey: "operations" });
+    const project = await createCanonicalHumanProject(db, companyId, sourceActor, "Plugin Operations");
+    await db.insert(pluginManagedResources).values({ companyId, pluginId, pluginKey: manifest().id,
+      resourceKind: "project", resourceKey: "operations", resourceId: project.id, defaultsJson: {} });
+    const managedProject = await services.projects.reconcileManaged({ companyId, projectKey: "operations" });
+    expect(managedProject.projectId).toBe(project.id);
     const routine = await services.routines.managedReconcile({ companyId, routineKey: "nightly-lint" });
     const wakeup = vi.fn(async () => ({ id: randomUUID() }));
     const routinesSvc = routineService(db, { heartbeat: { wakeup }, sourceActor });
@@ -268,11 +279,45 @@ describeEmbeddedPostgres("plugin-managed routines", () => {
       originKind: "plugin:paperclip.managed-routines-test:operation",
       originId: "operation:nightly-lint",
       billingCode: "plugin-test:nightly-lint",
-      projectId: project.projectId,
+      projectId: project.id,
       assigneeAgentId: agent.agentId,
     });
     expect(wakeup).toHaveBeenCalledWith(agent.agentId, expect.objectContaining({
       reason: "issue_assigned",
     }));
+
+    const [managedRoutine] = await db.select().from(routines).where(eq(routines.id, routine.routineId!));
+    const [revision] = await db.select().from(routineRevisions).where(eq(routineRevisions.id, managedRoutine!.latestRevisionId!));
+    const foreignRoutineId = randomUUID();
+    const [foreignRoutine] = await db.insert(routines).values({
+      ...managedRoutine!, id: foreignRoutineId, originKind: "manual", originId: null,
+      latestRevisionId: null, latestRevisionNumber: 1,
+    }).returning();
+    const foreignRevisionSnapshot = {
+      ...revision!.snapshot,
+      routine: { ...revision!.snapshot.routine, id: foreignRoutineId },
+    };
+    const [foreignRevision] = await db.insert(routineRevisions).values({
+      companyId, routineId: foreignRoutineId, revisionNumber: 1, title: foreignRoutine!.title,
+      description: foreignRoutine!.description, snapshot: foreignRevisionSnapshot,
+      createdByUserId: sourceActor.userId, responsibleUserId: sourceActor.userId,
+    }).returning();
+    await db.update(routines).set({ latestRevisionId: foreignRevision!.id })
+      .where(eq(routines.id, foreignRoutineId));
+    const [foreignRun] = await db.insert(routineRuns).values({ companyId, routineId: foreignRoutineId,
+      routineRevisionId: foreignRevision!.id, responsibleUserId: sourceActor.userId,
+      source: "manual", status: "received" }).returning();
+
+    await db.transaction(async rawTx => {
+      const tx = rawTx as unknown as typeof db;
+      await authorizationService(tx).withReadRoutineSources(companyId, sourceActor, [run.id], async () => {
+        expect(await canActorReadTypedTaskSourcePrivacy(tx, sourceActor, {
+          sourceKind: "routine_run", id: run.id, companyId,
+        })).toBe(true);
+        expect(await canActorReadTypedTaskSourcePrivacy(tx, sourceActor, {
+          sourceKind: "routine_run", id: foreignRun!.id, companyId,
+        })).toBe(false);
+      });
+    });
   });
 });

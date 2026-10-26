@@ -1026,7 +1026,10 @@ export function modelReservationService(
         );
         if (
           nativeSha256(quote) !== nativeSha256(record.quote) ||
-          (await options.currentAuthority(tx, actor, record)) !==
+          (await options.currentAuthority(tx, actor, {
+            companyId: record.companyId, planId: record.planId, purpose: record.purpose,
+            workerId: record.workerId, workerAttemptId: record.workerAttemptId,
+          })) !==
             record.authorityHash
         )
           throw conflict(

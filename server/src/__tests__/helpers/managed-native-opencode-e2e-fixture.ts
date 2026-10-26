@@ -293,6 +293,8 @@ export async function runManagedNativeOpenCodeFixture(input: {
     capture: import("../../services/native-runtime/native-execution-input.js").NativeModelOutputCapture;
     callId: string; arguments: Record<string, unknown>; result: { project: Record<string, unknown>; receipt: import("../../services/native-project-output.js").NativeProjectCreateReceipt;
       sourceSet: import("../../services/native-runtime/native-execution-input.js").NativePayloadSourceSet } }) => Promise<void>;
+  /** Validate the exact persisted Project source prefix when its actual tool_result reaches the next provider request. */
+  nativeProjectCreatePrefixProbe?: { callId: string };
   reuseIdentity?: { companyId: string; agentId: string; aliceUserId: string; bobUserId: string };
   onPreserveDebugArtifacts?: () => void;
 }) {
@@ -790,6 +792,9 @@ export async function runManagedNativeOpenCodeFixture(input: {
     let nativeMemoryReplayProbeToolResultObserved = false;
     let nativeMemoryReplayProbePhase = "not_started";
     let nativeMemoryReplayProbeFailure: { phase: string; name: string; code?: string; message: string } | null = null;
+    let nativeProjectCreatePrefixProbeCompleted = false;
+    let nativeProjectCreatePrefixProbeToolResultObserved = false;
+    let nativeProjectCreatePrefixProbeEvidence: Record<string, unknown> | null = null;
     const nativeReplayProbeSafeMessages = new Set([
       "Managed Memory replay receipt is unavailable", "Managed Memory replay transaction is unavailable",
       "Managed Memory replay receipt is no longer current", "Managed Memory output is no longer current",
@@ -871,6 +876,48 @@ export async function runManagedNativeOpenCodeFixture(input: {
         },
       });
       nativeMemoryReplayProbeCompleted = true;
+    };
+    const runNativeProjectCreatePrefixProbe = async () => {
+      const probe = input.nativeProjectCreatePrefixProbe;
+      if (!probe || nativeProjectCreatePrefixProbeCompleted) return;
+      const [currentRun] = await db.select({ runnerProfileJson: heartbeatRuns.runnerProfileJson })
+        .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, run!.id)));
+      const profile = currentRun?.runnerProfileJson && typeof currentRun.runnerProfileJson === "object" &&
+        !Array.isArray(currentRun.runnerProfileJson) ? currentRun.runnerProfileJson as Record<string, unknown> : {};
+      const parsedReceipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+      if (!parsedReceipt.success) throw new Error("managed_fixture_project_prefix_receipt_unavailable");
+      const matchingInputs = parsedReceipt.data.additionalInputs.filter(entry =>
+        entry.inputs.some(source => source.kind === "tool_result" && source.callId === probe.callId &&
+          source.toolName === "create_project"));
+      if (matchingInputs.length !== 1) throw new Error("managed_fixture_project_prefix_not_unique");
+      const exact = matchingInputs[0]!;
+      const actor: AuthorizationActor = { type: "agent", source: "none", companyId, agentId,
+        runId: run!.id, onBehalfOfUserId: aliceUserId };
+      const sourceSet = { policy: exact.policy, inputs: exact.inputs };
+      await assertNativePayloadSourceSetCurrent(db, { companyId, issueId: task.id, runId: run!.id,
+        actor, policy: sourceSet.policy, inputs: sourceSet.inputs });
+      const tamperedProjectInputs = structuredClone(sourceSet.inputs);
+      const projectSource = tamperedProjectInputs.find(source => source.kind === "project");
+      if (!projectSource || projectSource.kind !== "project") throw new Error("managed_fixture_project_prefix_project_missing");
+      projectSource.contentHash = "0".repeat(64);
+      let tamperedSourceRejected = false;
+      try {
+        await assertNativePayloadSourceSetCurrent(db, { companyId, issueId: task.id, runId: run!.id,
+          actor, policy: sourceSet.policy, inputs: tamperedProjectInputs });
+      } catch { tamperedSourceRejected = true; }
+      const tamperedToolResultInputs = structuredClone(sourceSet.inputs);
+      const toolResultSource = tamperedToolResultInputs.find(source => source.kind === "tool_result");
+      if (!toolResultSource || toolResultSource.kind !== "tool_result") throw new Error("managed_fixture_project_prefix_result_missing");
+      toolResultSource.invocationId = `forged-${probe.callId}`;
+      let forgedAssociationRejected = false;
+      try {
+        await assertNativePayloadSourceSetCurrent(db, { companyId, issueId: task.id, runId: run!.id,
+          actor, policy: sourceSet.policy, inputs: tamperedToolResultInputs });
+      } catch { forgedAssociationRejected = true; }
+      nativeProjectCreatePrefixProbeEvidence = { exactPersistedPrefixAccepted: true,
+        changedProjectHashRejected: tamperedSourceRejected, forgedToolResultAssociationRejected: forgedAssociationRejected,
+        receiptInputCount: exact.inputs.length };
+      nativeProjectCreatePrefixProbeCompleted = true;
     };
     registerAssignedMcpGateway(db, assignedToolGateway, scopedDb => createToolGatewayService(scopedDb));
     expect(getAssignedMcpGateway(db)).toBe(assignedToolGateway);
@@ -954,7 +1001,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
               const parsed = JSON.parse(content) as Record<string, unknown>;
               projectId = typeof parsed.id === "string" ? parsed.id : null;
               privateProject = parsed.visibility === "private";
-              contentDigest = canonicalHash(parsed);
+              contentDigest = nativeSha256(parsed);
             } catch { /* Keep only bounded result identity facts. */ }
           }
           projectCreateResultConsumers.push({ callId,
@@ -1104,6 +1151,14 @@ export async function runManagedNativeOpenCodeFixture(input: {
             name: safeCode(row.name) ?? "UnknownError", code: safeCode(row.code) ?? safeCode(row.reasonCode),
             message: typeof row.message === "string" && nativeReplayProbeSafeMessages.has(row.message)
               ? row.message : safeCode(row.message) ?? (row.name === "AssertionError" ? "assertion_failed" : "probe_failed") };
+          next(error);
+          return;
+        }
+      }
+      if (input.nativeProjectCreatePrefixProbe && incomingToolResults.includes(input.nativeProjectCreatePrefixProbe.callId)) {
+        nativeProjectCreatePrefixProbeToolResultObserved = true;
+        try { await runNativeProjectCreatePrefixProbe(); }
+        catch (error) {
           next(error);
           return;
         }
@@ -2763,6 +2818,11 @@ export async function runManagedNativeOpenCodeFixture(input: {
       projectApiResultConsumers,
       projectApiReadEvidence,
       projectCreateResultConsumers,
+      nativeProjectCreatePrefixProbe: input.nativeProjectCreatePrefixProbe ? {
+        toolResultObserved: nativeProjectCreatePrefixProbeToolResultObserved,
+        completed: nativeProjectCreatePrefixProbeCompleted,
+        evidence: nativeProjectCreatePrefixProbeEvidence,
+      } : null,
       managedProjectCreateEvidence,
       managedProjectPrivacyRead,
       childTasks,

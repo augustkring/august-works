@@ -44,6 +44,7 @@ interface NativeSourceReadContext { db: object; txOrdinal?: number; scopes: Map<
     sets: Map<string, { runId: string; policy: NativePayloadSourcePolicy; inputs: NativePayloadSourceInput[] }> }>;
   pendingReaderChecks: Set<string>; activeReaderChecks: Set<string> }
 interface NativeSourceReadScope { context: NativeSourceReadContext; actorKey: string; active: Set<string>; complete: Set<string>;
+  frozenTaskSnapshots: Set<string>;
   deferredReaderSets: Map<string, { companyId: string; runId: string; policy: NativePayloadSourcePolicy;
     inputs: NativePayloadSourceInput[] }> }
 const nativeSourceReadScopes = new AsyncLocalStorage<NativeSourceReadContext>();
@@ -114,7 +115,7 @@ function nativeSourceReadScope(db: Db | Transaction, actor: AuthorizationActor):
     pendingReaderChecks: new Set(), activeReaderChecks: new Set(),
     privacyLockedCompanies: new Set(), active: true };
   const scope: NativeSourceReadScope = { context, actorKey: nativeSha256(actor), active: new Set(), complete: new Set(),
-    deferredReaderSets: new Map() };
+    frozenTaskSnapshots: new Set(), deferredReaderSets: new Map() };
   context.scopes.set(scope.actorKey, scope);
   return scope;
 }
@@ -186,7 +187,8 @@ function withNativeSourceReadScope<T>(db: Db | Transaction, actor: Authorization
   if (current?.active && current.db === (db as object)) {
     let scope = current.scopes.get(actorKey);
     if (!scope) {
-      scope = { context: current, actorKey, active: new Set(), complete: new Set(), deferredReaderSets: new Map() };
+      scope = { context: current, actorKey, active: new Set(), complete: new Set(), frozenTaskSnapshots: new Set(),
+        deferredReaderSets: new Map() };
       current.scopes.set(actorKey, scope);
       nativeSourceMemoCount("scopes", actor);
     } else nativeSourceMemoCount("reuses", actor);
@@ -323,6 +325,13 @@ function nativeToolResultReceiptCopies(receipt: NativeRunInputSourceReceipt, sou
 
 function nativeSourceRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function nativeWirePurposeMatches(value: unknown, kind: "worker_model_dispatch" | "conversation_model_dispatch") {
+  const purpose = nativeSourceRecord(value).modelPurpose;
+  return kind === "conversation_model_dispatch"
+    ? purpose === "conversation_model"
+    : purpose === undefined || purpose === "worker_model";
 }
 
 async function assertNativeProjectSourceCurrentInScope(db: Db | Transaction, input: {
@@ -679,20 +688,21 @@ export interface NativeIssueEffectPrefix {
  * Messages response, recorded tool-use block, dispatch association, and exact
  * run receipt source set. The caller never supplies this object. */
 export async function assertNativeModelOutputCaptureCurrent(db: Db | Transaction, companyId: string, issueId: string,
-  capture: NativeModelOutputCapture, expectedToolName: string, currentReader?: AuthorizationActor): Promise<void> {
+  capture: NativeModelOutputCapture, expectedToolName: string, currentReader?: AuthorizationActor,
+  conversationState: "live" | "settled" = "live"): Promise<void> {
   const actor = currentReader ?? { type: "none", source: "none" } as AuthorizationActor;
   return inNativeSourceReadTransaction(db, tx => withNativeSourceReadScope(tx, actor, async scope => {
     await lockNativeSourceReadPrivacy(tx, companyId, scope);
     if (currentReader && !await nativeSourceReaderHasCompanyAccess(tx, companyId, currentReader))
       throw forbidden("The Native output reader is unavailable");
     await assertNativeModelOutputCaptureCurrentInScope(tx, companyId, issueId, capture, expectedToolName,
-      scope, 0, currentReader);
+      scope, 0, currentReader, conversationState);
   }));
 }
 
 async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction, companyId: string, issueId: string,
   capture: NativeModelOutputCapture, expectedToolName: string, scope: NativeSourceReadScope, depth: number,
-  currentReader?: AuthorizationActor): Promise<void> {
+  currentReader?: AuthorizationActor, conversationState: "live" | "settled" = "live"): Promise<void> {
   if (depth > 8 || scope.context.work > 512) throw forbidden("The Native output source chain exceeds its bound");
   nativeSourceReadWork(scope);
   const use = capture.managedOpenCodeToolUse;
@@ -709,7 +719,7 @@ async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction
   const intents = profile?.nativeAwModelWireIntents;
   const intent = Array.isArray(intents) ? intents.filter(value => value && typeof value === "object" && !Array.isArray(value) &&
     (value as Record<string, unknown>).reservationId === capture.dispatch.reservationId &&
-    (value as Record<string, unknown>).modelPurpose === (capture.dispatch.kind === "conversation_model_dispatch" ? "conversation_model" : "worker_model")) as Record<string, unknown>[] : [];
+    nativeWirePurposeMatches(value, capture.dispatch.kind)) as Record<string, unknown>[] : [];
   const associations = Array.isArray(profile?.nativeToolCallDispatchAssociations)
     ? profile.nativeToolCallDispatchAssociations.filter(value => value && typeof value === "object" && !Array.isArray(value) &&
       (value as Record<string, unknown>).callId === use.callId && typeof (value as Record<string, unknown>).tool === "string" &&
@@ -761,9 +771,13 @@ async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction
       run.contextSnapshot?.conversationSessionGeneration !== capture.dispatch.conversationSessionGeneration ||
       !conversationIssue || conversationIssue.conversationAgentId !== capture.dispatch.agentId ||
       conversationIssue.conversationUserId !== run.responsibleUserId ||
-      conversationIssue.conversationSessionGeneration !== capture.dispatch.conversationSessionGeneration ||
-      conversationIssue.conversationState !== "active" || conversationIssue.conversationRetiredAt !== null ||
-      conversationIssue.executionRunId !== capture.dispatch.runId || conversationIssue.status !== "in_review" ||
+      (conversationState === "live"
+        ? conversationIssue.conversationSessionGeneration !== capture.dispatch.conversationSessionGeneration ||
+          conversationIssue.conversationState !== "active" || conversationIssue.executionRunId !== capture.dispatch.runId ||
+          conversationIssue.status !== "in_review"
+        : conversationIssue.conversationSessionGeneration < capture.dispatch.conversationSessionGeneration ||
+          !["active", "waiting"].includes(conversationIssue.conversationState ?? "")) ||
+      conversationIssue.conversationRetiredAt !== null ||
       !conversationManifest || conversationManifest.hash !== capture.dispatch.executionManifestHash ||
       conversationManifest.manifest.responsibleUserId !== run.responsibleUserId)) ||
     wire.callId !== capture.dispatch.callId || wire.requestHash !== capture.dispatch.requestHash ||
@@ -1009,6 +1023,7 @@ async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction
         const sourceIntents = Array.isArray(profile?.nativeAwModelWireIntents) ? profile.nativeAwModelWireIntents : [];
         const sourceIntentMatches = sourceIntents.filter(value => value && typeof value === "object" && !Array.isArray(value) &&
           (value as Record<string, unknown>).reservationId === source.reservationId &&
+          nativeWirePurposeMatches(value, "worker_model_dispatch") &&
           (value as Record<string, unknown>).callId === source.callId &&
           (value as Record<string, unknown>).requestHash === source.requestHash &&
           (value as Record<string, unknown>).wireBodyHash === source.wireBodyHash &&
@@ -1271,7 +1286,7 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
       outputCapture.sourceSet = consumed.sourceSet;
       outputCapture.consumedSourceComponents = consumed.components;
       await assertNativeModelOutputCaptureCurrentInScope(db, input.companyId, input.issueId, outputCapture,
-        capture.tool, scope, 0, input.actor);
+        capture.tool, scope, 0, input.actor, "settled");
       checked = true;
     }
   }
@@ -1458,12 +1473,13 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
         const binding = nativeSourceRecord(intent?.conversationModelBinding);
         if (source.runId !== input.runId || source.agentId !== run.agentId ||
           source.issueId !== input.issueId || run.responsibleUserId !== receipt.data.binding.responsibleUserId ||
+          run.contextSnapshot?.conversationSessionGeneration !== source.conversationSessionGeneration ||
           !manifest || manifest.hash !== source.executionManifestHash || manifest.manifest.responsibleUserId !== run.responsibleUserId ||
           !conversationIssue || conversationIssue.conversationAgentId !== source.agentId ||
           conversationIssue.conversationUserId !== run.responsibleUserId ||
-          conversationIssue.conversationSessionGeneration !== source.conversationSessionGeneration ||
-          conversationIssue.conversationState !== "active" || conversationIssue.conversationRetiredAt !== null ||
-          conversationIssue.executionRunId !== source.runId || conversationIssue.status !== "in_review" ||
+          conversationIssue.conversationSessionGeneration < source.conversationSessionGeneration ||
+          !["active", "waiting"].includes(conversationIssue.conversationState ?? "") ||
+          conversationIssue.conversationRetiredAt !== null ||
           intents.length !== 1 || !exactSourceDispatchPrefix ||
           conflictingCopies || !reservation || reservation.purpose !== "conversation_model" || reservation.status !== "completed" ||
           reservation.inputHash !== source.requestHash || reservation.providerResponseHash !== source.responseHash ||
@@ -1547,6 +1563,8 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
         const argumentsHash = typeof capture.argumentsHash === "string" ? capture.argumentsHash : "";
         const eventSeq = capture.eventSeq;
         const attempt = capture.attempt;
+        if (!sourceSetValue || !sourcePolicy.success || !sourceInputs.success)
+          throw forbidden("A Native managed Project source set is unavailable");
         const createdProjectPolicy = sourcePolicy.success && projectSource.success && projectSource.data.kind === "project"
           ? { ...sourcePolicy.data,
               projectIds: [...new Set([...sourcePolicy.data.projectIds, projectSource.data.projectId])].sort() }
@@ -1570,6 +1588,7 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
             (value as Record<string, unknown>).attempt === attempt) as Record<string, unknown>[] : [];
         const managedUse = nativeSourceRecord(outputCapture.managedOpenCodeToolUse);
         const outputDispatch = nativeSourceRecord(outputCapture.dispatch);
+        const turnInputDigest = turns[0]?.turnInputDigest;
         const exactWireIntents = Array.isArray(profile?.nativeAwModelWireIntents)
           ? profile.nativeAwModelWireIntents.filter(value => {
               if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -1581,7 +1600,10 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
                     nativeProviderToolName((use as Record<string, unknown>).name as string) === "create_project" &&
                     (use as Record<string, unknown>).argumentsHash === argumentsHash)
                 : [];
-              return intent.turnId === turnId && intent.reservationId === outputDispatch.reservationId && uses.length === 1;
+              return typeof turnInputDigest === "string" && /^[0-9a-f]{64}$/.test(turnInputDigest) &&
+                typeof intent.sourceDispatchDigest === "string" && /^[0-9a-f]{64}$/.test(intent.sourceDispatchDigest) &&
+                intent.sourceDispatchDigest === turnInputDigest &&
+                intent.reservationId === outputDispatch.reservationId && uses.length === 1;
             }) as Record<string, unknown>[] : [];
         const exactAssociation = turnAssociations.length === 1 && turns.length === 1 &&
           (turnAssociations[0] as Record<string, unknown>).dispatchId === turns[0]!.dispatchId &&
@@ -1593,7 +1615,6 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
           capture.resultDigest !== source.contentHash || projectReceipt.callId !== source.callId ||
           projectReceipt.tool !== "create_project" || projectReceipt.argumentsHash !== argumentsHash ||
           projectReceipt.resultDigest !== source.contentHash || projectReceipt.responsibleUserId !== run.responsibleUserId ||
-          sourceSetValue && !sourcePolicy.success || sourceSetValue && !sourceInputs.success ||
           !projectSource.success || projectSource.data.kind !== "project" ||
           typeof projectReceipt.projectId !== "string" ||
           !workspaceSources.success || workspaceSources.data.some(value => value.kind !== "project_workspace") ||
@@ -1836,7 +1857,8 @@ async function assertNativeMemoryToolInvocationCurrentInScope(db: Db | Transacti
     input.actor.agentId == null || input.actor.runId !== input.capture.runId ||
     use?.toolName !== "paperclip-self:remember") throw forbidden("Native Memory output binding is unavailable");
   await assertNativeModelOutputCaptureCurrent(db, input.companyId, input.issueId, input.capture,
-    "paperclip-self:remember", input.currentReader ?? input.actor);
+    "paperclip-self:remember", input.currentReader ?? input.actor,
+    input.status === "succeeded" ? "settled" : "live");
   const [erased] = await db.select({ key: memoryDeletionMarkers.key }).from(memoryDeletionMarkers).where(and(
     eq(memoryDeletionMarkers.companyId, input.companyId), eq(memoryDeletionMarkers.kind, "source"),
     eq(memoryDeletionMarkers.key, `memory-run-source-erasure:v1:${input.capture.runId}`),
@@ -1906,7 +1928,7 @@ async function assertNativeMemoryOutputSnapshotCurrentInScope(db: Db | Transacti
   const intentMatches = Array.isArray(profile?.nativeAwModelWireIntents)
     ? profile.nativeAwModelWireIntents.filter(value => value && typeof value === "object" && !Array.isArray(value) &&
       (value as Record<string, unknown>).reservationId === dispatch.reservationId &&
-      (value as Record<string, unknown>).modelPurpose === (dispatch.kind === "conversation_model_dispatch" ? "conversation_model" : "worker_model")) as Record<string, unknown>[] : [];
+      nativeWirePurposeMatches(value, dispatch.kind)) as Record<string, unknown>[] : [];
   const uses = intentMatches.flatMap(intent => Array.isArray(intent.responseToolUses)
     ? (intent.responseToolUses as unknown[]).filter(value => value && typeof value === "object" && !Array.isArray(value) &&
       typeof (value as Record<string, unknown>).id === "string" && typeof (value as Record<string, unknown>).name === "string" &&
@@ -2014,7 +2036,7 @@ async function assertNativeManagedConsumedSourceSetCurrentUncached(db: Db | Tran
       // digest and are validated as preceding sources below.
       const marker = markers.at(-1);
       const markerIntents = marker ? wireIntents.filter(intent => intent.reservationId === marker.reservationId &&
-        intent.modelPurpose === (marker.kind === "conversation_model_dispatch" ? "conversation_model" : "worker_model") &&
+        nativeWirePurposeMatches(intent, marker.kind) &&
         intent.sourceDispatchDigest === component.executionInputDigest && intent.callId === marker.callId &&
         intent.requestHash === marker.requestHash && intent.wireBodyHash === marker.wireBodyHash) : [];
       const reservation = marker ? await nativeSourceReadReservation(db, input.companyId, marker.reservationId, scope) : null;
@@ -2038,9 +2060,9 @@ async function assertNativeManagedConsumedSourceSetCurrentUncached(db: Db | Tran
         conversationBinding?.executionManifestId === marker.executionManifestId &&
         conversationBinding?.executionManifestHash === marker.executionManifestHash &&
         conversationIssue?.conversationAgentId === marker.agentId && conversationIssue.conversationUserId === run.responsibleUserId &&
-        conversationIssue.conversationSessionGeneration === marker.conversationSessionGeneration &&
-        conversationIssue.conversationState === "active" && conversationIssue.conversationRetiredAt === null &&
-        conversationIssue.executionRunId === marker.runId && conversationIssue.status === "in_review" &&
+        run.contextSnapshot?.conversationSessionGeneration === marker.conversationSessionGeneration &&
+        conversationIssue.conversationSessionGeneration >= marker.conversationSessionGeneration &&
+        ["active", "waiting"].includes(conversationIssue.conversationState ?? "") && conversationIssue.conversationRetiredAt === null &&
         conversationManifest?.hash === marker.executionManifestHash &&
         conversationManifest.manifest.responsibleUserId === run.responsibleUserId);
       if (matches.length !== 1 || !marker || marker.runId !== input.runId ||
@@ -2300,9 +2322,26 @@ async function assertNativeFrozenTaskSnapshotCurrent(db: Db | Transaction, compa
   scope.active.add(visitKey);
   try {
     nativeSourceReadWork(scope);
+    // A Task snapshot can be reached through several later cumulative source
+    // prefixes in one read-only transaction. Reuse its structural dispatch
+    // proof only when every nested owner family is supported by the ordinary
+    // exact source-set validator. The final reader pass is still queued on a
+    // hit, so current source ACLs, runtime bundle retention, and actor/company
+    // authority are re-evaluated after all source-row waits.
+    const reusableKinds = new Set<NativePayloadSourceInput["kind"]>(["task", "project", "project_workspace", "memory",
+      "context", "document_revision", "completion_contract", "runtime_instructions",
+      "worker_model_dispatch", "conversation_model_dispatch", "tool_result", "foundation_revision"]);
+    const reusable = snapshot.inputs.every(source => reusableKinds.has(source.kind));
+    const completeKey = `frozen-task-snapshot:${nativeSha256({ companyId, issueId, snapshot })}`;
+    if (reusable && scope.frozenTaskSnapshots.has(completeKey)) {
+      deferNativeSourceReaderCheck(scope, { companyId, runId: last.source.runId, actor,
+        policy: snapshot.policy, inputs: snapshot.inputs });
+      return;
+    }
     const [producer] = await db.select({ issueId: heartbeatRuns.nativeIssueId,
       profile: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns).where(and(
-      eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, last.source.runId), eq(heartbeatRuns.runtimeMode, "native")));
+      eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, last.source.runId), eq(heartbeatRuns.runtimeMode, "native")))
+      .for("share");
     if (!producer?.issueId) throw forbidden("The frozen Native Task source producer is unavailable");
     const profile = nativeSourceRecord(producer.profile);
     const receipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
@@ -2316,6 +2355,7 @@ async function assertNativeFrozenTaskSnapshotCurrent(db: Db | Transaction, compa
     await assertNativeManagedConsumedSourceSetCurrentInScope(db, { companyId, issueId: producer.issueId,
       runId: last.source.runId, actor, components: [component],
       sourceSet: { policy: snapshot.policy, inputs: snapshot.inputs } }, scope);
+    if (reusable) scope.frozenTaskSnapshots.add(completeKey);
   } finally {
     scope.active.delete(visitKey);
   }
@@ -2810,7 +2850,7 @@ async function assertNativeDocumentRevisionCurrentSourceAccessInScope(db: Db, in
       intent.sourcePolicyHash !== nativeSha256(receipt.data.bootstrap) || intent.endpoint !== "https://api.anthropic.com/v1/messages" || intent.method !== "POST"))
       throw forbidden("The Native document managed provider receipt is unavailable");
     if (managed && managedCapture) await assertNativeModelOutputCaptureCurrentInScope(db, input.companyId, input.issueId,
-      managedCapture, "write_document", scope, depth + 1, input.actor);
+      managedCapture, "write_document", scope, depth + 1, input.actor, "settled");
   } else if (snapshot.inputs.length > 0) {
     throw forbidden("A Native document source is missing its original model dispatch");
   }

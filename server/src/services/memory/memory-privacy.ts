@@ -650,9 +650,21 @@ export async function purgeMemoryRecords(db: Db, companyId: string, rootIds: str
     eq(toolInvocations.companyId, companyId), inArray(toolInvocations.id, verifiedOutputBindings.map(binding => binding.invocationId)))) : [];
   const outputInvocationIds = verifiedOutputBindings.flatMap(binding => {
     const invocation = outputInvocationRows.find(value => value.id === binding.invocationId);
+    const invocationIssueId = invocation?.issueId ?? null;
+    const exactTaskRoots = invocationIssueId && binding.snapshot
+      ? binding.snapshot.inputs.filter(source => source.kind === "task" && source.issueId === invocationIssueId)
+      : [];
+    // A Native bootstrap's producer Task is an exact consumed source input,
+    // but is intentionally absent from the policy-only issueIds/sourceIssueIds
+    // union. Keep those policy roots authoritative and also accept only the
+    // unique sealed Task tuple that binds this invocation's own issue.
+    const invocationIssueBound = invocationIssueId !== null &&
+      (binding.row.sourceIssueIds.includes(invocationIssueId) ||
+        binding.snapshot?.policy.issueIds.includes(invocationIssueId) === true ||
+        exactTaskRoots.length === 1);
     return invocation && invocation.agentId === binding.row.createdByActorId &&
       invocation.runId != null && binding.row.sourceRunIds.includes(invocation.runId) &&
-      binding.row.sourceIssueIds.includes(invocation.issueId ?? "") && invocation.toolName === "paperclip-self:remember" &&
+      invocationIssueBound && invocation.toolName === "paperclip-self:remember" &&
       invocation.argumentsHash === binding.argumentsHash &&
       (!binding.snapshot || binding.snapshot.inputs.some(source =>
         (source.kind === "worker_model_dispatch" || source.kind === "conversation_model_dispatch") &&

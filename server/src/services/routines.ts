@@ -2532,7 +2532,7 @@ export function routineService(
           }, taskTx, workflowPublications, input.privacyActor
             ? { sourceAccessActor: input.privacyActor }
             : deps.sourceActor?.type === "board" && deps.sourceActor.userId === manualRunnerUserId
-              ? { privacyActor: deps.sourceActor }
+              ? { sourceAccessActor: deps.sourceActor }
               : {}));
         } catch (error) {
           workflowPublications.length = issuePublicationStart;

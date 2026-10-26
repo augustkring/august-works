@@ -405,10 +405,10 @@
     {
       "source": "server/src/services/company-portability.ts",
       "articleId": "company-import-export",
-      "sourceSha256": "0604556a017893c98325e5619e95a3b715864a517f29532126f2cd6d5309b2cf",
+      "sourceSha256": "8477572905f2f538fa1740b62db30c87929bf0493401c1fb7eb394d7162cb4b5",
       "articleSha256": "878dcc436da18fdd2423e5e8285173e8d03f9d0869b3aeab4a428079e612945c",
-      "decision": "updated",
-      "rationale": "The original portability owner rechecks exact native source-release evidence, target authority and current Task/Project source access while building selected package entries; the guide states exports are subject to current access and describes package scope and reconciliation behavior."
+      "decision": "no_change",
+      "rationale": "Reviewed the English and Danish import/export articles against batched current-source authorization, canonical Human source snapshots and retained destination checks. The package, receipt, cancellation and unknown-outcome instructions remain accurate."
     },
     {
       "source": "server/src/services/github-fetch.ts",
@@ -541,10 +541,10 @@
     {
       "source": "server/src/services/company-portability.ts",
       "articleId": "company-import-export-da",
-      "sourceSha256": "0604556a017893c98325e5619e95a3b715864a517f29532126f2cd6d5309b2cf",
+      "sourceSha256": "8477572905f2f538fa1740b62db30c87929bf0493401c1fb7eb394d7162cb4b5",
       "articleSha256": "46050e4274e4162eba35e42e4a130c91d6d32da232fe142ca661448b94fb8116",
-      "decision": "updated",
-      "rationale": "The original portability owner rechecks exact native source-release evidence, target authority and current Task/Project source access while building selected package entries; the Danish guide states exports are subject to current access and describes package scope and reconciliation behavior."
+      "decision": "no_change",
+      "rationale": "Reviewed the English and Danish import/export articles against batched current-source authorization, canonical Human source snapshots and retained destination checks. The package, receipt, cancellation and unknown-outcome instructions remain accurate."
     },
     {
       "source": "server/src/services/github-fetch.ts",
@@ -669,10 +669,10 @@
     {
       "source": "server/src/services/memory/memory-privacy.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "aeb7b7f4820fcb3cca626e0a68ac1200dc26b3773be56accabc7caacf26a9546",
+      "sourceSha256": "bf5e5cb4b23e3746fc5dafc352c0f0c95d531ebd726f5df51c1a68e896aa1e8f",
       "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "no_change",
-      "rationale": "Reviewed grouped validation of each immutable Memory output and all its original Task/Run sources. Current source access, expiry, revocation and deletion still apply; the implementation avoids repeating the same proof within that transaction. Existing EN/DA source-restriction and erasure guidance remains accurate."
+      "rationale": "Reviewed both export/deletion articles against the additional conversation dispatch source family and original source-erasure visitors. The existing current-source restrictions, derived-copy erasure and managed-runtime cleanup caveats remain accurate."
     },
     {
       "source": "server/src/services/memory/memory-service.ts",
@@ -693,10 +693,10 @@
     {
       "source": "server/src/services/saas/company-purge.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "81768c059d473abf1cd6ff328770cac9e78b5756cba5efe3b950f66e59bc5f2d",
+      "sourceSha256": "b9b44b0a7bb996eef8f85584953dfbc768aec34a862142b22d062d59bd59f8ad",
       "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "no_change",
-      "rationale": "Reviewed the current purge barrier: company content purge waits for company-authorized managed runtime erasure jobs to succeed; the paired article keeps final erasure distinct from request submission."
+      "rationale": "Reviewed both export/deletion articles against conversation reservation offboarding: unresolved outcomes block purge and a content-free aggregate retains actual settled cost and token totals. Existing financial/minimal-receipt retention and pending-erasure wording remains accurate."
     },
     {
       "source": "server/src/services/saas/offboarding.ts",
@@ -749,10 +749,10 @@
     {
       "source": "server/src/services/memory/memory-privacy.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "aeb7b7f4820fcb3cca626e0a68ac1200dc26b3773be56accabc7caacf26a9546",
+      "sourceSha256": "bf5e5cb4b23e3746fc5dafc352c0f0c95d531ebd726f5df51c1a68e896aa1e8f",
       "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "no_change",
-      "rationale": "Reviewed grouped validation of each immutable Memory output and all its original Task/Run sources. Current source access, expiry, revocation and deletion still apply; the implementation avoids repeating the same proof within that transaction. Existing EN/DA source-restriction and erasure guidance remains accurate. This Danish article preserves the same customer scope as its English pair."
+      "rationale": "Reviewed both export/deletion articles against the additional conversation dispatch source family and original source-erasure visitors. The existing current-source restrictions, derived-copy erasure and managed-runtime cleanup caveats remain accurate."
     },
     {
       "source": "server/src/services/memory/memory-service.ts",
@@ -773,10 +773,10 @@
     {
       "source": "server/src/services/saas/company-purge.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "81768c059d473abf1cd6ff328770cac9e78b5756cba5efe3b950f66e59bc5f2d",
+      "sourceSha256": "b9b44b0a7bb996eef8f85584953dfbc768aec34a862142b22d062d59bd59f8ad",
       "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "no_change",
-      "rationale": "Danish version checked against the same current source behavior: reviewed the current purge barrier: company content purge waits for company-authorized managed runtime erasure jobs to succeed; the paired article keeps final erasure distinct from request submission."
+      "rationale": "Reviewed both export/deletion articles against conversation reservation offboarding: unresolved outcomes block purge and a content-free aggregate retains actual settled cost and token totals. Existing financial/minimal-receipt retention and pending-erasure wording remains accurate."
     },
     {
       "source": "server/src/services/saas/offboarding.ts",
@@ -901,10 +901,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "8b210312bfe4795b6e62aebf118e798830889ffdb2b5d869802e189bfb35103d",
+      "sourceSha256": "0ad5175e5b20a66401ea894f535093a68d7cf7c13137aa58a39063f934ce38e7",
       "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "no_change",
-      "rationale": "Reviewed the exact current-session owner-only conversation workMode update and the retained denial for content, extra fields, stale sessions and other Humans. It adds no support-case access or recovery/Stop action; the existing paired EN/DA guidance to retain the original work and resolve access before retrying remains accurate."
+      "rationale": "Reviewed the English and Danish support/recovery articles against direct Human conversation capture, narrowly owned empty-shell admission and revision-bound document reads. Support navigation, retry/Stop actions and original-source recovery guidance remain unchanged."
     },
     {
       "source": "server/src/routes/saas.ts",
@@ -1029,10 +1029,10 @@
     {
       "source": "server/src/services/orchestration/model-reservations.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "bd802644684b65d3edf8bba676315d0773b44f8ea5e0d864dd365b100e4137ea",
+      "sourceSha256": "c15b28d68e8e2d45fa710bdf28a3e822c53a652ec4713c206a10c72ab9eebb20",
       "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
-      "decision": "updated",
-      "rationale": "An unclear assistant result is not resent automatically, and direct human support remains available; calls are bounded by the operator-qualified funding profile."
+      "decision": "no_change",
+      "rationale": "Reviewed both Help/support articles against the separate conversation reservation purpose and worker-only authority narrowing. The Support Assistant remains independently funded and read-only; its availability, consent and unknown-outcome guidance is unchanged."
     },
     {
       "source": "server/src/services/orchestration/read-only-model-transport.ts",
@@ -1213,10 +1213,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "8b210312bfe4795b6e62aebf118e798830889ffdb2b5d869802e189bfb35103d",
+      "sourceSha256": "0ad5175e5b20a66401ea894f535093a68d7cf7c13137aa58a39063f934ce38e7",
       "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "no_change",
-      "rationale": "Reviewed the exact current-session owner-only conversation workMode update and the retained denial for content, extra fields, stale sessions and other Humans. It adds no support-case access or recovery/Stop action; the existing paired EN/DA guidance to retain the original work and resolve access before retrying remains accurate."
+      "rationale": "Reviewed the English and Danish support/recovery articles against direct Human conversation capture, narrowly owned empty-shell admission and revision-bound document reads. Support navigation, retry/Stop actions and original-source recovery guidance remain unchanged."
     },
     {
       "source": "server/src/routes/saas.ts",
@@ -1341,10 +1341,10 @@
     {
       "source": "server/src/services/orchestration/model-reservations.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "bd802644684b65d3edf8bba676315d0773b44f8ea5e0d864dd365b100e4137ea",
+      "sourceSha256": "c15b28d68e8e2d45fa710bdf28a3e822c53a652ec4713c206a10c72ab9eebb20",
       "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
-      "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: An unclear assistant result is not resent automatically, and direct human support remains available; calls are bounded by the operator-qualified funding profile."
+      "decision": "no_change",
+      "rationale": "Reviewed both Help/support articles against the separate conversation reservation purpose and worker-only authority narrowing. The Support Assistant remains independently funded and read-only; its availability, consent and unknown-outcome guidance is unchanged."
     },
     {
       "source": "server/src/services/orchestration/read-only-model-transport.ts",
@@ -1541,10 +1541,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "8b210312bfe4795b6e62aebf118e798830889ffdb2b5d869802e189bfb35103d",
+      "sourceSha256": "0ad5175e5b20a66401ea894f535093a68d7cf7c13137aa58a39063f934ce38e7",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Reviewed the exact current-session owner-only conversation workMode update and the retained denial for content, extra fields, stale sessions and other Humans. It adds no support-case access or recovery/Stop action; the existing paired EN/DA guidance to retain the original work and resolve access before retrying remains accurate."
+      "rationale": "Reviewed the English and Danish support/recovery articles against direct Human conversation capture, narrowly owned empty-shell admission and revision-bound document reads. Support navigation, retry/Stop actions and original-source recovery guidance remain unchanged."
     },
     {
       "source": "server/src/services/execution-workspaces.ts",
@@ -1581,10 +1581,10 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "bea6eb6584825c1bc4f5df525321394b2b48a6a0767fadc1e984a11aea59346f",
+      "sourceSha256": "f026a718ada32b4fc2a0e896e0e5f67837313a76ecea55527c16fe77d818f9d9",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Reviewed the exact current-session owner-only conversation workMode update and the retained denial for content, extra fields, stale sessions and other Humans. It adds no support-case access or recovery/Stop action; the existing paired EN/DA guidance to retain the original work and resolve access before retrying remains accurate."
+      "rationale": "Reviewed both recovery articles against plugin Routine source classification and source-authority handling. Current Human/source checks remain required; the customer retry, Stop, preservation and refusal instructions remain accurate."
     },
     {
       "source": "server/src/services/managed-repository-checkout.ts",
@@ -1597,10 +1597,10 @@
     {
       "source": "server/src/services/routines.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "09615773b9ecf49d696a29ca4244f6a8f3a59c163d664b9297efb26f28023abe",
+      "sourceSha256": "80c29bcbe4344f07d5f9336e07c296af0960215c01adc9e2d597b9e30d84589c",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
-      "decision": "updated",
-      "rationale": "Routine scheduling suppresses automatic runs when access to saved sources is withdrawn; the article tells users to ask the source owner to review access before retrying."
+      "decision": "no_change",
+      "rationale": "Reviewed the English and Danish access/recovery articles against the manual Routine owner fix: the already-authorized current Human is carried as sourceAccessActor into private Task creation. Company roles, current source requirements, schedule defaults and customer recovery instructions remain unchanged."
     },
     {
       "source": "server/src/services/scheduled-work.ts",
@@ -1645,10 +1645,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "8b210312bfe4795b6e62aebf118e798830889ffdb2b5d869802e189bfb35103d",
+      "sourceSha256": "0ad5175e5b20a66401ea894f535093a68d7cf7c13137aa58a39063f934ce38e7",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Reviewed the exact current-session owner-only conversation workMode update and the retained denial for content, extra fields, stale sessions and other Humans. It adds no support-case access or recovery/Stop action; the existing paired EN/DA guidance to retain the original work and resolve access before retrying remains accurate."
+      "rationale": "Reviewed the English and Danish support/recovery articles against direct Human conversation capture, narrowly owned empty-shell admission and revision-bound document reads. Support navigation, retry/Stop actions and original-source recovery guidance remain unchanged."
     },
     {
       "source": "server/src/services/execution-workspaces.ts",
@@ -1685,10 +1685,10 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "bea6eb6584825c1bc4f5df525321394b2b48a6a0767fadc1e984a11aea59346f",
+      "sourceSha256": "f026a718ada32b4fc2a0e896e0e5f67837313a76ecea55527c16fe77d818f9d9",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Reviewed the exact current-session owner-only conversation workMode update and the retained denial for content, extra fields, stale sessions and other Humans. It adds no support-case access or recovery/Stop action; the existing paired EN/DA guidance to retain the original work and resolve access before retrying remains accurate."
+      "rationale": "Reviewed both recovery articles against plugin Routine source classification and source-authority handling. Current Human/source checks remain required; the customer retry, Stop, preservation and refusal instructions remain accurate."
     },
     {
       "source": "server/src/services/managed-repository-checkout.ts",
@@ -1701,10 +1701,10 @@
     {
       "source": "server/src/services/routines.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "09615773b9ecf49d696a29ca4244f6a8f3a59c163d664b9297efb26f28023abe",
+      "sourceSha256": "80c29bcbe4344f07d5f9336e07c296af0960215c01adc9e2d597b9e30d84589c",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
-      "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: Routine scheduling suppresses automatic runs when access to saved sources is withdrawn; the article tells users to ask the source owner to review access before retrying."
+      "decision": "no_change",
+      "rationale": "Reviewed the English and Danish access/recovery articles against the manual Routine owner fix: the already-authorized current Human is carried as sourceAccessActor into private Task creation. Company roles, current source requirements, schedule defaults and customer recovery instructions remain unchanged."
     },
     {
       "source": "server/src/services/scheduled-work.ts",
@@ -2109,10 +2109,10 @@
     {
       "source": "server/src/services/routines.ts",
       "articleId": "people-and-company-access",
-      "sourceSha256": "09615773b9ecf49d696a29ca4244f6a8f3a59c163d664b9297efb26f28023abe",
+      "sourceSha256": "80c29bcbe4344f07d5f9336e07c296af0960215c01adc9e2d597b9e30d84589c",
       "articleSha256": "1d34534ded3a06d051a286e6714e44007065e458a0715e862d6707384b875ab2",
-      "decision": "updated",
-      "rationale": "The paired article now covers the personal-language precedence, timezone fallback only for new schedules, current operating-fact entry and separate identity qualification; existing membership controls remain accurate."
+      "decision": "no_change",
+      "rationale": "Reviewed the English and Danish access/recovery articles against the manual Routine owner fix: the already-authorized current Human is carried as sourceAccessActor into private Task creation. Company roles, current source requirements, schedule defaults and customer recovery instructions remain unchanged."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",
@@ -2157,10 +2157,10 @@
     {
       "source": "server/src/services/routines.ts",
       "articleId": "people-and-company-access-da",
-      "sourceSha256": "09615773b9ecf49d696a29ca4244f6a8f3a59c163d664b9297efb26f28023abe",
+      "sourceSha256": "80c29bcbe4344f07d5f9336e07c296af0960215c01adc9e2d597b9e30d84589c",
       "articleSha256": "dc70eb5048340883d961ff245928a6d992178a9cdad86bb79d870ecf3b140392",
-      "decision": "updated",
-      "rationale": "Danish guidance now covers the actual company language fallback, new-schedule timezone fallback, current operating-fact entry and distinct identity qualification; existing membership controls remain accurate."
+      "decision": "no_change",
+      "rationale": "Reviewed the English and Danish access/recovery articles against the manual Routine owner fix: the already-authorized current Human is carried as sourceAccessActor into private Task creation. Company roles, current source requirements, schedule defaults and customer recovery instructions remain unchanged."
     }
   ]
 }

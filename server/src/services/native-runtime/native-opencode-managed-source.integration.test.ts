@@ -1,16 +1,24 @@
 import { randomUUID } from "node:crypto";
+import express from "express";
+import request from "supertest";
 import { chmod, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { and, eq } from "drizzle-orm";
-import { createDb, memoryRecords, toolInvocations } from "@paperclipai/db";
+import { and, eq, inArray } from "drizzle-orm";
+import { authSessions, authUsers, createDb, documentRevisions, memoryRecords, toolInvocations } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { enableV5ForTest } from "../../__tests__/helpers/v5-fixtures.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { makeFixtureTreeWritable, runManagedNativeOpenCodeFixture } from "../../__tests__/helpers/managed-native-opencode-e2e-fixture.js";
 import { memoryService } from "../memory/memory-service.js";
+import { issueRoutes } from "../../routes/issues.js";
+import { errorHandler } from "../../middleware/error-handler.js";
+import { actorMiddleware } from "../../middleware/auth.js";
+import type { BetterAuthSessionResult } from "../../auth/better-auth.js";
+import { documentService } from "../documents.js";
+import { issueService } from "../issues.js";
 import * as nativeDirectInput from "../native-direct-input.js";
 import * as analyticalContextAuthority from "../analytical-context-authority.js";
 import { nativePayloadSourceSnapshotSchema } from "@paperclipai/shared";
@@ -212,14 +220,97 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
     expect(result.contextResultConsumers).toContainEqual({ callId: contextReadId, consumed: true });
     expect(result.documents).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: "managed-source-a", aliceHttpStatus: 200, bobHttpStatus: 200,
-        snapshot: expect.objectContaining({ schema: "paperclip.native_payload_source_snapshot.v1" }) }),
+        snapshot: expect.objectContaining({ version: 1, digest: expect.stringMatching(/^[0-9a-f]{64}$/) }) }),
       expect.objectContaining({ key: "managed-source-b", aliceHttpStatus: 200, bobHttpStatus: 403,
-        snapshot: expect.objectContaining({ schema: "paperclip.native_payload_source_snapshot.v1" }) }),
+        snapshot: expect.objectContaining({ version: 1, digest: expect.stringMatching(/^[0-9a-f]{64}$/) }) }),
     ]));
+    const sourceSnapshotA = nativePayloadSourceSnapshotSchema.parse(result.documents.find(value => value.key === "managed-source-a")?.snapshot);
+    const sourceSnapshotB = nativePayloadSourceSnapshotSchema.parse(result.documents.find(value => value.key === "managed-source-b")?.snapshot);
+    expect(sourceSnapshotA.policy.memoryIds).not.toContain(result.privateRoot.memoryId);
+    expect(sourceSnapshotA.inputs.some(source => source.kind === "context")).toBe(false);
+    expect(sourceSnapshotB.policy.memoryIds).toContain(result.privateRoot.memoryId);
+    expect(sourceSnapshotB.inputs.some(source => source.kind === "context")).toBe(true);
     if (!("runId" in result) || !("toolResults" in result) || !Array.isArray(result.toolResults) ||
       !("contextReadCaptures" in result) || !Array.isArray(result.contextReadCaptures) ||
       !("memoryOutputs" in result) || !Array.isArray(result.memoryOutputs) || !result.privateRoot)
       throw new Error("managed_opencode_success_result_shape_invalid");
+    const sessionIds = [result.aliceActor.sessionId, result.bobActor.sessionId];
+    if (!sessionIds[0] || !sessionIds[1]) throw new Error("Managed A/R/B authenticated sessions are unavailable");
+    const sessions = await db.select({ id: authSessions.id, userId: authSessions.userId, token: authSessions.token,
+      expiresAt: authSessions.expiresAt }).from(authSessions).where(inArray(authSessions.id, sessionIds));
+    if (sessions.length !== 2 || sessions.some(session => session.expiresAt.getTime() <= Date.now()))
+      throw new Error("Managed A/R/B authenticated sessions expired or changed");
+    const aliceSession = sessions.find(session => session.id === result.aliceActor.sessionId);
+    const bobSession = sessions.find(session => session.id === result.bobActor.sessionId);
+    if (!aliceSession || !bobSession) throw new Error("Managed A/R/B session binding changed");
+    const routeApp = () => {
+      const app = express();
+      app.use(express.json());
+      app.use(actorMiddleware(db, { deploymentMode: "authenticated", resolveSession: async req => {
+        const cookieTokens = (req.header("cookie") ?? "").split(";").map(value => value.trim())
+          .map(value => value.slice(value.indexOf("=") + 1)).map(value => decodeURIComponent(value));
+        const session = sessions.find(value => cookieTokens.includes(value.token));
+        if (!session || session.expiresAt.getTime() <= Date.now()) return null;
+        const [user] = await db.select({ id: authUsers.id, name: authUsers.name, email: authUsers.email })
+          .from(authUsers).where(eq(authUsers.id, session.userId));
+        if (!user) return null;
+        const result: BetterAuthSessionResult = { session: { id: session.id, userId: session.userId,
+          expiresAt: session.expiresAt }, user };
+        return result;
+      } }));
+      app.use("/api", issueRoutes(db, {} as never));
+      app.use(errorHandler);
+      return request(app);
+    };
+    const bobHttp = routeApp(), aliceHttp = routeApp();
+    const bobCookie = `session_token=${encodeURIComponent(bobSession.token)}`;
+    const aliceCookie = `session_token=${encodeURIComponent(aliceSession.token)}`;
+    const documentA = await bobHttp.get(`/api/issues/${result.issueId}/documents/managed-source-a`).set("cookie", bobCookie).expect(200);
+    expect(documentA.body.body).toBe("Document A was produced before private Context was selected.");
+    const documentB = await bobHttp.get(`/api/issues/${result.issueId}/documents/managed-source-b`).set("cookie", bobCookie);
+    expect([403, 404]).toContain(documentB.status);
+    expect(JSON.stringify(documentB.body)).not.toContain("Document B was produced after private Context was selected.");
+
+    const selectedA = await documentService(db).getIssueDocumentByKey(result.issueId, "managed-source-a");
+    if (!selectedA?.latestRevisionId) throw new Error("Managed Document A current revision is unavailable");
+    const exact = "private Context";
+    const documentABody = "Document A was produced before private Context was selected.";
+    const start = documentABody.indexOf(exact);
+    const thread = await aliceHttp.post(`/api/issues/${result.issueId}/documents/managed-source-a/annotations`).set("cookie", aliceCookie)
+      .send({ baseRevisionId: selectedA.latestRevisionId, baseRevisionNumber: selectedA.latestRevisionNumber,
+        selector: { quote: { exact, prefix: documentABody.slice(0, start), suffix: documentABody.slice(start + exact.length) },
+          position: { normalizedStart: start, normalizedEnd: start + exact.length,
+            markdownStart: start, markdownEnd: start + exact.length } },
+        body: `Private R annotation title ${randomUUID()}` }).expect(201);
+    const privateAnnotation = `Private R annotation body ${randomUUID()}`;
+    await aliceHttp.post(`/api/issues/${result.issueId}/documents/managed-source-a/annotations/${thread.body.id}/comments`).set("cookie", aliceCookie)
+      .send({ body: privateAnnotation }).expect(201);
+    const annotatedA = await bobHttp.get(`/api/issues/${result.issueId}/documents/managed-source-a?includeAnnotations=true&includeAnnotationComments=true`).set("cookie", bobCookie);
+    expect([403, 404]).toContain(annotatedA.status);
+    expect(JSON.stringify(annotatedA.body)).not.toContain(privateAnnotation);
+    expect(JSON.stringify(annotatedA.body)).not.toContain("Private R annotation title");
+    expect(JSON.stringify(annotatedA.body)).not.toContain(documentABody);
+
+    const legacyBody = `Legacy source-free document body ${randomUUID()}`;
+    const legacy = await documentService(db).upsertIssueDocument({ issueId: result.issueId, key: "legacy-context-gated",
+      title: "Legacy private-context title", format: "markdown", body: legacyBody,
+      createdByUserId: result.aliceUserId });
+    const [legacyRevision] = await db.select({ protocol: documentRevisions.payloadSourceProtocolVersion,
+      snapshot: documentRevisions.payloadSourceSnapshot }).from(documentRevisions)
+      .where(eq(documentRevisions.id, legacy.document.latestRevisionId!));
+    expect(legacyRevision).toEqual({ protocol: 0, snapshot: null });
+    const legacyRead = await bobHttp.get(`/api/issues/${result.issueId}/documents/legacy-context-gated`).set("cookie", bobCookie);
+    expect([403, 404]).toContain(legacyRead.status);
+    expect(JSON.stringify(legacyRead.body)).not.toContain(legacyBody);
+    expect(JSON.stringify(legacyRead.body)).not.toContain("Legacy private-context title");
+    expect(legacy.document.latestRevisionId).toBeTruthy();
+
+    await issueService(db).update(result.issueId, { visibility: "private",
+      actorUserId: result.aliceUserId, privacyActor: result.aliceActor });
+    const withdrawnBaseTask = await bobHttp.get(`/api/issues/${result.issueId}/documents/managed-source-a`).set("cookie", bobCookie);
+    expect([403, 404]).toContain(withdrawnBaseTask.status);
+    expect(JSON.stringify(withdrawnBaseTask.body)).not.toContain(documentABody);
+
     const toolResults = result.toolResults;
     const contextReadCaptures = result.contextReadCaptures;
     const memoryOutputs = result.memoryOutputs;

@@ -127,6 +127,11 @@ export async function purgeCompanyContent(
           coalesce(sum((usage->>'inputTokens')::bigint),0)::text as input_tokens,
           coalesce(sum((usage->>'outputTokens')::bigint),0)::text as output_tokens
         from orchestration_model_reservations where company_id=${companyId}::uuid and purpose='conversation_model'`);
+      const [settledCosts] = await tx.execute<{ cost_event_count: string; cost_minor: string }>(sql`
+        select count(*)::text as cost_event_count,coalesce(sum(c.cost_cents),0)::text as cost_minor
+        from cost_events c inner join orchestration_model_reservations r
+          on r.company_id=c.company_id and c.billing_code='native-conversation-model:' || r.id::text
+        where r.company_id=${companyId}::uuid and r.purpose='conversation_model'`);
       nativeConversationModelFunding = {
         reservations: receipt?.reservation_count ?? "0",
         maximumReservedMinorExposure: receipt?.maximum_reserved_minor ?? "0",
@@ -135,6 +140,8 @@ export async function purgeCompanyContent(
         cancelled: receipt?.cancelled_count ?? "0",
         settledInputTokens: receipt?.input_tokens ?? "0",
         settledOutputTokens: receipt?.output_tokens ?? "0",
+        settledCostEvents: settledCosts?.cost_event_count ?? "0",
+        settledCostMinor: settledCosts?.cost_minor ?? "0",
       };
     }
     if (!options.restoreQuarantine) {

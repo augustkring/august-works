@@ -29,6 +29,7 @@ import {
   desc,
   eq,
   inArray,
+  isNotNull,
   isNull,
   notInArray,
   sql,
@@ -5244,6 +5245,52 @@ export function issueRoutes(
       .status(404)
       .json({ error: "Issue not found" });
     return false;
+  }
+
+  /**
+   * The first Human turn starts with an owner-only conversation shell. It is
+   * intentionally not a readable native payload until the first comment is
+   * captured; this exception permits only the owner to reopen that empty shell
+   * and submit that first comment. It does not authorize model/source reads.
+   */
+  type IssueRouteTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
+  async function isCurrentUnsealedConversationShell(
+    tx: IssueRouteTransaction,
+    actor: Parameters<typeof pinCurrentBoardActor>[1],
+    issue: { id: string; companyId: string },
+    action: "issue:read" | "issue:comment",
+  ) {
+    const ownerUserId = actor.userId;
+    if (actor.type !== "board" || typeof ownerUserId !== "string" || actor.source === "local_implicit") return false;
+    const pinned = await pinCurrentBoardActor(tx, actor);
+    if (!pinned || pinned.credentialExpiresAt === null) return false;
+    await assertDirectInputSessionCurrent(tx, pinned.actor, pinned.credentialExpiresAt,
+      "The current conversation owner session is unavailable");
+    const [current] = await tx.select().from(issueRows).where(and(
+      eq(issueRows.id, issue.id), eq(issueRows.companyId, issue.companyId),
+      eq(issueRows.payloadSourceProtocolVersion, 1), isNull(issueRows.payloadSourceSnapshot),
+      eq(issueRows.payloadSourceSnapshotInvalidated, false),
+      eq(issueRows.createdByUserId, ownerUserId),
+      eq(issueRows.conversationUserId, ownerUserId),
+      isNotNull(issueRows.conversationAgentId), eq(issueRows.conversationState, "waiting"),
+      eq(issueRows.conversationSessionGeneration, 0), isNull(issueRows.conversationBoundaryCommentId),
+      isNull(issueRows.conversationRetiredAt),
+      isNull(issueRows.executionRunId), eq(issueRows.status, "in_review"),
+    )).for("share", { noWait: true });
+    if (!current) return false;
+    const [priorComment] = await tx.select({ id: issueComments.id }).from(issueComments).where(and(
+      eq(issueComments.companyId, issue.companyId), eq(issueComments.issueId, issue.id),
+    )).limit(1);
+    if (priorComment) return false;
+    const decision = await accessService(tx).decide({ actor: pinned.actor, action,
+      resource: { type: "issue", companyId: current.companyId, issueId: current.id,
+        projectId: current.projectId, parentIssueId: current.parentId,
+        assigneeAgentId: current.assigneeAgentId, assigneeUserId: current.assigneeUserId,
+        status: current.status },
+      scope: { issueId: current.id, projectId: current.projectId, parentIssueId: current.parentId,
+        assigneeAgentId: current.assigneeAgentId, assigneeUserId: current.assigneeUserId },
+    });
+    return decision.allowed;
   }
 
   async function assertIssueWriteInfluenceAllowed(
@@ -17928,7 +17975,9 @@ export function issueRoutes(
       const existing = await svc.getConversation(companyId, agent.id, req.actor.userId);
       let retireConversationId: string | undefined;
       if (existing) {
-        try { if (!(await assertIssueReadAllowed(req,res,existing))) return; }
+        const ownerShell = await db.transaction((tx) => isCurrentUnsealedConversationShell(tx,
+          { ...req.actor, userId: req.actor.userId ?? undefined }, existing, "issue:read"));
+        try { if (!ownerShell && !(await assertIssueReadAllowed(req,res,existing))) return; }
         catch (error) {
           if (!(error instanceof HttpError) || (error.details as {code?:unknown}|undefined)?.code !== "analytical_source_access_lost") throw error;
           if (method === "post" && input.replaceInaccessibleIssueId === existing.id) retireConversationId=existing.id;
@@ -17970,7 +18019,6 @@ export function issueRoutes(
         if (!req.actor.userId) throw forbidden("Board user access required");
         if (req.actor.userId !== issue.conversationUserId) throw forbidden("Only the conversation owner can send messages or start a new session");
         if (!req.body.clientRequestId) throw unprocessable("Chat messages require a clientRequestId for safe retries");
-        if (!(await assertAgentIssueCommentAllowed(req, res, issue))) return;
         if (req.body.body.trim() !== "/new" && !(await assertBoardCommentNotPaused(req, res, issue))) return;
         const actor = getActorInfo(req);
         const userId = req.actor.userId;
@@ -17992,7 +18040,8 @@ export function issueRoutes(
               projectId: lockedIssue.projectId, parentIssueId: lockedIssue.parentId,
               assigneeAgentId: lockedIssue.assigneeAgentId, assigneeUserId: lockedIssue.assigneeUserId,
               status: lockedIssue.status }, enforceResponsibleUserIntersection: true });
-          if (!issueCommentDecision.allowed || !await canActorReadIssuePrivacy(tx, pinned.actor, lockedIssue))
+          const ownerShell = await isCurrentUnsealedConversationShell(tx, { ...pinned.actor, userId }, lockedIssue, "issue:comment");
+          if (!issueCommentDecision.allowed || (!ownerShell && !await canActorReadIssuePrivacy(tx, pinned.actor, lockedIssue)))
             throw notFound("Conversation not found");
           const [existing] = await tx.select({ id: issueComments.id }).from(issueComments).where(and(
             eq(issueComments.issueId, issue.id), eq(issueComments.authorUserId, userId),
@@ -18019,21 +18068,24 @@ export function issueRoutes(
                   eq(issueComments.issueId, issue.id), eq(issueComments.id, saved.id), isNull(issueComments.deletedAt))))[0]?.sourceVersion ?? ""),
               contentHash: nativeCommentProjectionHash({ body: saved.body, presentation: saved.presentation, metadata: saved.metadata }) };
             if (!source.sourceVersion) throw conflict("Conversation Human input version is unavailable");
-            const sourcePolicy = { issueIds: [issue.id], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] };
-            const [capturedIssue] = await tx.update(issueRows)
-              .set({ payloadSourceSnapshot: nativePayloadSnapshotSql("issue", sourcePolicy, [source]) })
-              .where(and(eq(issueRows.id, issue.id), eq(issueRows.companyId, issue.companyId),
-                eq(issueRows.payloadSourceProtocolVersion, 1), isNull(issueRows.payloadSourceSnapshot),
-                eq(issueRows.payloadSourceSnapshotInvalidated, false)))
-              .returning({ payloadSourceSnapshot: issueRows.payloadSourceSnapshot });
-            if (!capturedIssue?.payloadSourceSnapshot) throw conflict("Conversation Task source capture was not stored");
             const commentSnapshot = nativePayloadSourceSnapshotSchema.parse(capturedComment.payloadSourceSnapshot);
-            const taskSnapshot = nativePayloadSourceSnapshotSchema.parse(capturedIssue.payloadSourceSnapshot);
+            let taskDigest: string | null = null;
+            if (ownerShell) {
+              const sourcePolicy = { issueIds: [issue.id], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] };
+              const [capturedIssue] = await tx.update(issueRows)
+                .set({ payloadSourceSnapshot: nativePayloadSnapshotSql("issue", sourcePolicy, [source]) })
+                .where(and(eq(issueRows.id, issue.id), eq(issueRows.companyId, issue.companyId),
+                  eq(issueRows.payloadSourceProtocolVersion, 1), isNull(issueRows.payloadSourceSnapshot),
+                  eq(issueRows.payloadSourceSnapshotInvalidated, false)))
+                .returning({ payloadSourceSnapshot: issueRows.payloadSourceSnapshot });
+              if (!capturedIssue?.payloadSourceSnapshot) throw conflict("Conversation Task source capture was not stored");
+              taskDigest = nativePayloadSourceSnapshotSchema.parse(capturedIssue.payloadSourceSnapshot).digest;
+            }
             await logActivity(tx as unknown as Db, { companyId: issue.companyId,
               actorType: "user", actorId: userId, action: "conversation.input_source_captured",
               entityType: "issue", entityId: issue.id,
               details: { producer: "direct_human_conversation_input", commentId: saved.id,
-                commentDigest: commentSnapshot.digest, taskDigest: taskSnapshot.digest },
+                commentDigest: commentSnapshot.digest, ...(taskDigest ? { taskDigest } : {}) },
             }, publications);
           }
           await assertDirectInputSessionCurrent(tx, pinned.actor, pinned.credentialExpiresAt,

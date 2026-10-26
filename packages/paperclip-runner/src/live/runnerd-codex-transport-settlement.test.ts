@@ -243,14 +243,11 @@ it.each([
       await bundle.detachControllerForRestart();
       // The provider can exit when its runner dies. An already-gone process
       // group satisfies teardown; still fail on other signal errors and join below.
-      // Let the original runner reap its provider before killing the runner;
-      // container init processes do not necessarily reap orphaned children.
-      for (const pid of [providerPid, runnerPid]) {
+      for (const pid of [runnerPid, providerPid]) {
         try { process.kill(-pid, "SIGKILL"); }
         catch (error) {
           if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
         }
-        await vi.waitFor(() => expect(dead(pid)).toBe(true));
       }
       await vi.waitFor(() => {
         expect(dead(runnerPid)).toBe(true);
@@ -602,7 +599,10 @@ it.each([
             },
           });
           const observed = blocked.catch((error: unknown) => error);
-          await authorizationStarted;
+          await Promise.race([
+            authorizationStarted,
+            observed.then((error) => { throw error; }),
+          ]);
           if (interruption === "abort") abort.abort();
           else await vi.advanceTimersByTimeAsync(30_000);
           expect(await observed).toMatchObject({

@@ -821,15 +821,15 @@ export class PaperclipRunnerToolAuthority {
             typeof input.idempotencyKey !== "string" ||
             Object.keys(record(input.workspace)).length !== 1 || typeof record(input.workspace).name !== "string")
             throw forbidden("Managed Project creation arguments are invalid");
+          const managedArguments = { name: input.name, idempotencyKey: input.idempotencyKey,
+            ...(input.description === undefined ? {} : { description: input.description as string }),
+            workspace: { name: record(input.workspace).name as string } };
           await this.binding.testBeforeManagedProjectCreate?.(managedCapture);
           let created: Awaited<ReturnType<typeof createManagedNativeProjectOutput>>;
           try {
             created = await createManagedNativeProjectOutput({ db: this.db, actor: reader,
             companyId: this.binding.companyId, issueId: this.binding.issueId, callId: call.callId,
-            arguments: { name: input.name, idempotencyKey: input.idempotencyKey,
-              ...(input.description === undefined ? {} : { description: input.description as string }),
-              ...(input.workspace === undefined ? {} : { workspace: { name: record(input.workspace).name as string } }) },
-              capture: managedCapture });
+            arguments: managedArguments, capture: managedCapture });
           } catch (error) {
             const allowedErrors = new Set([
               "Managed Project creation requires the exact current provider tool use",
@@ -856,9 +856,7 @@ export class PaperclipRunnerToolAuthority {
             sourceInputs: created.sourceSet.inputs.length, workspacePins: created.receipt.workspaceSources.length });
           await this.binding.testAfterManagedProjectCreate?.({ actor: reader, companyId: this.binding.companyId,
             issueId: this.binding.issueId, capture: managedCapture, callId: call.callId,
-            arguments: { name: input.name, idempotencyKey: input.idempotencyKey,
-              ...(input.description === undefined ? {} : { description: input.description as string }),
-              ...(input.workspace === undefined ? {} : { workspace: { name: record(input.workspace).name as string } }) },
+            arguments: managedArguments,
             result: created });
           onManagedProjectCreateCapture?.({ project: created.project, receipt: created.receipt,
             sourceSet: created.sourceSet, outputCapture: managedCapture });
