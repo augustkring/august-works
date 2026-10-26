@@ -259,7 +259,7 @@ import {
   type IssueAssignmentWakeupDeps,
 } from "./issue-assignment-wakeup.js";
 import { issueService, lockIssuePrivacyTree } from "./issues.js";
-import { canActorReadIssuePrivacy } from "./authorization.js";
+import { canActorReadIssuePrivacy, type AuthorizationActor } from "./authorization.js";
 import {
   authorizeNativeChatReviewPresentation,
   NativeChatReviewPresentationContentionError,
@@ -30561,6 +30561,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
     clientIdempotencyKey: string,
     userId: string,
     attachmentIds: string[] = [],
+    manualInputActor?: AuthorizationActor,
   ) {
     const emailBoundary = await endpointRecord(endpointId);
     if (emailBoundary?.endpoint.publicationMode === "explicit")
@@ -30623,6 +30624,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
         if (!existing && !rejected) await runtimeFor(record.endpoint);
       }
     }
+    let manualInputSourcePublication: ActivityPublication | null = null;
     const publication = await db.transaction(async (tx) => {
       const conversation = await tx
         .select()
@@ -30706,11 +30708,16 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
         // addComment inserts before binding attachments. Roll back that insert
         // in a savepoint, then commit only the exact terminal rejection below.
         comment = await tx.transaction((inner) =>
-          issueService(inner as unknown as Db).addComment(
+          issueService(db).addComment(
             conversation.issueId,
             body,
             { userId },
-            { authorType: "user", attachmentIds },
+            { authorType: "user", attachmentIds,
+              ...(manualInputActor?.type === "board" && manualInputActor.source === "session" &&
+                manualInputActor.userId === userId ? {
+                  manualInputActor,
+                  onManualInputSourcePublication: (activity) => { manualInputSourcePublication = activity; },
+                } : {}) },
             inner,
           ),
         );
@@ -30854,6 +30861,10 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
       });
       return terminalPublication;
     });
+    if (manualInputSourcePublication) {
+      try { publishActivity(manualInputSourcePublication); }
+      catch (err) { logger.warn({ err }, "Failed to publish committed Board comment source activity"); }
+    }
     if ("rejection" in publication) {
       throw conflict(
         "Selected attachments are already bound to another comment",

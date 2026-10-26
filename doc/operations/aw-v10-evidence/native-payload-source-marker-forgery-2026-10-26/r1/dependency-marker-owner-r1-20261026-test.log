@@ -1,0 +1,39 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/native-payload-source-binding.integration.test.ts (29 tests | 1 failed | 28 skipped) 4891ms
+     × latches invalidation and rejects marker edits and rebinding for every payload owner 227ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/native-payload-source-binding.integration.test.ts > Native payload source snapshot binds its original payload owner > latches invalidation and rejects marker edits and rebinding for every payload owner
+AssertionError: promise resolved "[ { id: 'd59e48a7-f570-45a3-9b39-8…' } ]" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+[
+  {
+    "id": "d59e48a7-f570-45a3-9b39-846047564514",
+  },
+]
+
+ ❯ src/__tests__/native-payload-source-binding.integration.test.ts:629:132
+    627|         select (jsonb_populate_record(null::public.${sql.identifier(ow…
+    628|           to_jsonb(source) || jsonb_build_object('id',${forgedId}::uui…
+    629|         from public.${sql.identifier(owner.table)} source where source…
+       |                                                                                                                                    ^
+    630|         .rejects.toMatchObject({ cause: { code: "23514", message: expe…
+    631|       await expect(db.execute(sql`update ${sql.identifier(owner.table)…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 28 skipped (29)
+   Start at  15:55:55
+   Duration  21.08s (transform 11.62s, setup 99ms, import 15.93s, tests 4.89s, environment 0ms)
+

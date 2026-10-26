@@ -190,16 +190,15 @@ export function businessMetricService(db: Db) {
     const rows = selected[0].sources;
     // Never aggregate an actor-filtered subset while calling it the defined
     // population. Every contributing object's current authority is required.
-    await accessService(tx).withReadSources(companyId, population.entity === "issue" ? rows.map(row => row.id) : [],
-      population.entity === "project" ? rows.map(row => row.id) : [], async sourceAccess => {
-        const issueIds = population.entity === "issue" ? rows.map(row => row.id) : [];
-        const projectIds = [...new Set([
-          ...(population.entity === "project" ? rows.map(row => row.id) : []),
-          ...rows.map(row => row.projectId).filter((id): id is string => id !== null),
-          ...(population.entity === "issue" && population.projectId ? [population.projectId] : []),
-        ])];
-        await sourceAccess.assertTaskPrivacyBatch(actor, issueIds, projectIds);
-      });
+    const issueIds = population.entity === "issue" ? rows.map(row => row.id) : [];
+    const projectIds = [...new Set([
+      ...(population.entity === "project" ? rows.map(row => row.id) : []),
+      ...rows.map(row => row.projectId).filter((id): id is string => id !== null),
+      ...(population.entity === "issue" && population.projectId ? [population.projectId] : []),
+    ])];
+    await accessService(tx).withReadSources(companyId, issueIds, projectIds, async sourceAccess => {
+      await sourceAccess.assertTaskPrivacyBatch(actor, issueIds, projectIds);
+    });
     queryTimeBudget(deadline);
     await assertAnalyticalSourcesNotErased(tx, companyId,
       population.entity === "issue" ? rows.map(row => row.id) : [],

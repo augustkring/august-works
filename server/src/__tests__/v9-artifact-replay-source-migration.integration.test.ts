@@ -38,8 +38,8 @@ it("upgrades actual historical replay relationships and quarantines missing lega
       await legacy.insert(principalPermissionGrants).values(["workflows:read", "workflows:edit"].map(permissionKey =>
         ({ companyId, principalType: "user", principalId: userId, permissionKey }))).onConflictDoNothing();
       await legacy.execute(sql`insert into issues(id,company_id,title,status,priority,assignee_agent_id,created_by_user_id,
-        conversation_agent_id,conversation_user_id) values(${sourceIssueId}::uuid,${companyId}::uuid,
-        'Owned historical private Source','in_review','medium',${agentId}::uuid,${userId},${agentId}::uuid,${userId})`);
+        conversation_agent_id,conversation_user_id,conversation_state) values(${sourceIssueId}::uuid,${companyId}::uuid,
+        'Owned historical private Source','in_review','medium',${agentId}::uuid,${userId},${agentId}::uuid,${userId},'waiting')`);
       await legacy.execute(sql`insert into heartbeat_runs(id,company_id,agent_id,invocation_source,status,responsible_user_id,
         native_issue_id,context_snapshot,finished_at) values(${originRunId}::uuid,${companyId}::uuid,${agentId}::uuid,
         'api','succeeded',${userId},${sourceIssueId}::uuid,${JSON.stringify({ issueId: sourceIssueId })}::jsonb,now())`);

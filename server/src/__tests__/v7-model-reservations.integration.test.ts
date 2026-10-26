@@ -378,13 +378,105 @@ const support = await getEmbeddedPostgresTestSupport();
         leaseOwner: nativeRunFinalizations.leaseOwner, leaseExpiresAt: nativeRunFinalizations.leaseExpiresAt })
         .from(nativeRunFinalizations).where(and(eq(nativeRunFinalizations.companyId, facts.companyId),
           eq(nativeRunFinalizations.runId, run.id))).limit(1);
-      return { runPresent: true, runStatus: run.status, processPidPresent: run.processPid !== null,
+      return { runPresent: true, runStatus: run.status, runtimeMode: run.runtimeMode,
+        processPidPresent: run.processPid !== null,
         processGroupPresent: run.processGroupId !== null, controllerLeasePresent: run.controllerLeaseExpiresAt !== null,
+        controllerBootIdPresent: run.controllerBootId !== null,
         finalizationPhase: finalization?.phase ?? null, finalizationLeaseHeld: !!finalization?.leaseOwner || !!finalization?.leaseExpiresAt,
         nativeLocalStopReceipt: await hasNativeLocalProcessStop(db, facts.companyId, run.id),
         leases: leases.map(lease => ({ provider: lease.provider, status: lease.status,
           cleanupStatus: lease.cleanupStatus, released: lease.releasedAt !== null,
           remoteTerminationReceipt: hasRemoteTerminationReceipt(lease) })) };
+    }
+    async function offboardingRuntimeFacts(companyId: string) {
+      const [operation] = await db.select({ stage: companyDeletionOperations.stage,
+        status: companyDeletionOperations.status, errorCode: companyDeletionOperations.errorCode })
+        .from(companyDeletionOperations).where(eq(companyDeletionOperations.companyId, companyId)).limit(1);
+      const jobs = await db.select({ jobKey: memoryJobs.jobKey, status: memoryJobs.status,
+        errorCode: memoryJobs.errorCode, attemptNumber: memoryJobs.attemptNumber })
+        .from(memoryJobs).where(and(eq(memoryJobs.companyId, companyId), eq(memoryJobs.operationType, "retention")))
+        .orderBy(memoryJobs.jobKey, memoryJobs.attemptNumber);
+      return { operation: operation ?? null, jobs };
+    }
+    function safeFailureFacts(error: unknown) {
+      const value = error && typeof error === "object" ? error as Record<string, unknown> : {};
+      const details = value.details && typeof value.details === "object" && !Array.isArray(value.details)
+        ? value.details as Record<string, unknown> : {};
+      const cause = value.cause && typeof value.cause === "object" ? value.cause as Record<string, unknown> : {};
+      const token = (candidate: unknown, pattern: RegExp) => typeof candidate === "string" && pattern.test(candidate) ? candidate : null;
+      const pgMessage = typeof cause.message === "string" ? cause.message : "";
+      const checkConstraint = /^new row for relation "([a-z0-9_]{1,80})" violates check constraint "([a-z0-9_]{1,120})"$/.exec(pgMessage);
+      return { name: token(value.name, /^[A-Za-z][A-Za-z0-9_]{0,63}$/),
+        status: typeof value.status === "number" && Number.isSafeInteger(value.status) ? value.status : null,
+        code: token(value.code, /^[a-z0-9_]{1,80}$/), detailsCode: token(details.code, /^[a-z0-9_]{1,80}$/),
+        sqlState: token(cause.code, /^[0-9A-Z]{5}$/),
+        databaseRule: token(pgMessage, /^[a-z0-9_]{1,80}$/),
+        constraint: token(cause.constraint_name, /^[A-Za-z0-9_]{1,120}$/) ??
+          token(cause.constraint, /^[A-Za-z0-9_]{1,120}$/) ?? checkConstraint?.[2] ?? null,
+        table: checkConstraint?.[1] ?? null };
+    }
+    async function probePurgeFailure(companyId: string, operationId: string) {
+      let result: Record<string, unknown> = { outcome: "rolled_back" };
+      try {
+        await db.transaction(async rawTx => {
+          // Instrument only this rollback-only probe with the same production
+          // acceptance predicate. If it denies a cascade, capture finite
+          // booleans in a temp table and continue solely inside this transaction
+          // so the outer rollback can return them without leaking SQL details.
+          await rawTx.execute(sql.raw(`CREATE TEMP TABLE aw_manifest_purge_diagnostic (
+            operation_kind text NOT NULL, trigger_depth integer NOT NULL, company_marker_matches boolean NOT NULL,
+            context_run_matches boolean NOT NULL, context_task_present boolean NOT NULL,
+            source_erased boolean NOT NULL) ON COMMIT DROP`));
+          await rawTx.execute(sql.raw(`CREATE OR REPLACE FUNCTION aw_v5_execution_manifest_immutable() RETURNS trigger LANGUAGE plpgsql AS $$
+          DECLARE company_match boolean; context_match boolean; context_task_present boolean; source_erased boolean;
+          BEGIN
+            IF TG_OP='UPDATE' AND NEW.manifest='{"payloadDeleted":true}'::jsonb
+              AND (to_jsonb(NEW)-'manifest')=(to_jsonb(OLD)-'manifest')
+              AND aw_execution_manifest_payload_erased(NEW.company_id,NEW.run_id,NEW.context_manifest_id) THEN RETURN NEW; END IF;
+            SELECT EXISTS(SELECT 1 FROM companies c WHERE c.id=OLD.company_id AND c.status='archived'
+              AND c.pause_reason='company_deleted' AND c.content_erasure_transaction_id=pg_current_xact_id()::text)
+              INTO company_match;
+            SELECT EXISTS(SELECT 1 FROM context_manifests c WHERE c.company_id=OLD.company_id
+              AND c.id=OLD.context_manifest_id AND c.run_id=OLD.run_id) INTO context_match;
+            SELECT EXISTS(SELECT 1 FROM context_manifests c WHERE c.company_id=OLD.company_id
+              AND c.id=OLD.context_manifest_id AND c.issue_id IS NOT NULL) INTO context_task_present;
+            source_erased:=aw_execution_manifest_payload_erased(OLD.company_id,OLD.run_id,OLD.context_manifest_id);
+            IF TG_OP='DELETE' AND pg_trigger_depth()>1 AND company_match AND context_match AND source_erased THEN RETURN OLD; END IF;
+            INSERT INTO pg_temp.aw_manifest_purge_diagnostic VALUES(TG_OP,pg_trigger_depth(),company_match,context_match,context_task_present,source_erased);
+            IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+            RETURN NEW;
+          END $$`));
+          try {
+            await purgeCompanyContent(rawTx as unknown as typeof db, companyId, { operationId });
+            result = { outcome: "allowed_in_probe" };
+          } catch (error) {
+            result = { outcome: "denied_in_probe", failure: safeFailureFacts(error) };
+          }
+          const diagnosticRows = await rawTx.execute<{ operation_kind: string; trigger_depth: number; company_marker_matches: boolean;
+            context_run_matches: boolean; context_task_present: boolean; source_erased: boolean }>(sql`select * from pg_temp.aw_manifest_purge_diagnostic`);
+          if (diagnosticRows.length) result = { ...result, purgePredicate: diagnosticRows.map(row => ({
+            operation: row.operation_kind, triggerDepth: row.trigger_depth, companyMarkerMatches: row.company_marker_matches,
+            contextRunMatches: row.context_run_matches, contextTaskPresent: row.context_task_present, sourceErased: row.source_erased,
+          })) };
+          // This diagnostic executes the exact canonical purge inside an outer
+          // transaction and always rolls it back, so it cannot partially erase
+          // the fixture or manufacture a completed offboarding receipt.
+          throw new Error("purge_probe_rollback");
+        });
+      } catch (error) {
+        if (!(error instanceof Error) || error.message !== "purge_probe_rollback")
+          result = { outcome: "probe_failed", failure: safeFailureFacts(error) };
+      }
+      return result;
+    }
+    async function assertConversationNativeStopBeforeErasure(facts: ConversationOffboardingFacts) {
+      const stop = await nativeStopFacts(facts);
+      if (!stop.runPresent || stop.runtimeMode !== "native" ||
+          !["succeeded", "failed", "timed_out", "cancelled", "interrupted"].includes(stop.runStatus) ||
+          stop.processPidPresent || stop.processGroupPresent || stop.controllerLeasePresent || stop.controllerBootIdPresent ||
+          stop.finalizationLeaseHeld ||
+          !["committed", "terminal_failure"].includes(stop.finalizationPhase ?? "") || !stop.nativeLocalStopReceipt)
+        throw new Error(`conversation_native_stop_not_confirmed:${JSON.stringify(stop)}`);
     }
     function conversationReservationService(facts: ConversationFrameFacts) {
       const service = modelReservationService(db, {
@@ -453,12 +545,20 @@ const support = await getEmbeddedPostgresTestSupport();
       } as never);
       await offboarding.request(companyId, userId, { confirmation: company!.name,
         acknowledgeExport: true, idempotencyKey });
-      for (let index = 0; index < 4; index += 1)
-        expect(await offboarding.processOne(new Date(Date.now() + 1_000))).toBe(true);
+      const transitions: Array<{ before: string | null; after: string | null; processed: boolean }> = [];
+      for (let index = 0; index < 8; index += 1) {
+        const before = await offboarding.get(companyId);
+        if (before?.stage === "purge" && before.status === "processing") break;
+        const processed = await offboarding.processOne(new Date(Date.now() + 1_000));
+        const after = await offboarding.get(companyId);
+        transitions.push({ before: before?.stage ?? null, after: after?.stage ?? null, processed });
+        if (!processed) break;
+      }
       const operation = await offboarding.get(companyId);
       if (!operation || operation.stage !== "purge" || operation.status !== "processing")
         throw new Error(`conversation_offboarding_not_ready:${JSON.stringify({ stage: operation?.stage ?? null,
-          status: operation?.status ?? null, nativeStop: await nativeStopFacts(facts) })}`);
+          status: operation?.status ?? null, transitions, runtime: await offboardingRuntimeFacts(companyId),
+          nativeStop: await nativeStopFacts(facts) })}`);
       return { offboarding, operation: operation! };
     }
     async function purgeConversationCompany(facts: ConversationOffboardingFacts, idempotencyKey: string) {
@@ -467,7 +567,9 @@ const support = await getEmbeddedPostgresTestSupport();
       const completed = await offboarding.get(facts.companyId);
       if (!completed || completed.id !== operation.id || completed.stage !== "completed" || completed.status !== "completed")
         throw new Error(`conversation_offboarding_purge_incomplete:${JSON.stringify({ stage: completed?.stage ?? null,
-          status: completed?.status ?? null, nativeStop: await nativeStopFacts(facts) })}`);
+          status: completed?.status ?? null, runtime: await offboardingRuntimeFacts(facts.companyId),
+          purgeProbe: await probePurgeFailure(facts.companyId, operation.id),
+          nativeStop: await nativeStopFacts(facts) })}`);
       return completed!;
     }
     const supportGateway = (
@@ -580,6 +682,7 @@ const support = await getEmbeddedPostgresTestSupport();
       const result = await conversationReservationFixture(async facts => { factsHolder.value = facts; }, 2000, usagePricedTariff,
         async facts => {
           if (!facts.run || !facts.reservation) throw new Error("conversation_settled_frame_missing_for_purge");
+          await assertConversationNativeStopBeforeErasure(facts);
           purgeHolder.value = await purgeConversationCompany(facts, "conversation-known-cost-purge");
         });
       const facts = factsHolder.value;
@@ -683,6 +786,7 @@ const support = await getEmbeddedPostgresTestSupport();
         throw new Error("fixture_transport_lost_after_actual_dispatch");
       }, 2000, undefined, async facts => {
         if (!facts.run || !facts.reservation) throw new Error("conversation_unknown_frame_missing_for_purge");
+        await assertConversationNativeStopBeforeErasure(facts);
         const { operation } = await startConversationOffboarding(facts, "conversation-unknown-purge");
         const runIds = await enqueueCompanyManagedOpenCodeRuntimeErasure(db, facts.companyId, operation.id);
         expect(runIds).toContain(facts.run.id);

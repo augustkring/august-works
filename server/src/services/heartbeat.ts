@@ -65,7 +65,10 @@ import {
   unadmittedChatWakeupCondition,
   type DurableChatWakeupRequest,
 } from "./durable-chat-wakeup.js";
-import { prepareHeartbeatGitHubLaunchers } from "./heartbeat-github-launchers.js";
+import {
+  prepareHeartbeatGitHubLaunchers,
+  prepareHeartbeatProjectlessNativeEnvironment,
+} from "./heartbeat-github-launchers.js";
 import {
   cleanupGitHubOperationLaunchers,
   prepareGitHubExecutionEnvironment,
@@ -21193,6 +21196,12 @@ export function heartbeatService(
         companyId: agent.companyId,
         agentId: agent.id,
         issueId,
+        runId: run.id,
+        responsibleUserId: run.responsibleUserId,
+        conversationSessionGeneration:
+          typeof run.contextSnapshot?.conversationSessionGeneration === "number"
+            ? run.contextSnapshot.conversationSessionGeneration
+            : null,
       });
       const nativeChatExpectedCwd = nativeChatWorkspaceScope
         ? nativeChatWorkspaceCwd(
@@ -22233,6 +22242,13 @@ export function heartbeatService(
       >;
       try {
         await controllerLease.assertOwned();
+        // The sandbox provider must attest a bounded lease expiry. Use the same
+        // timeout already admitted for Native execution; do not turn a provider
+        // response without an expiry into a valid active lease.
+        const configuredRunTimeoutSec = asNumber(parseObject(agent.runtimeConfig).timeoutSec, 0);
+        const requestedLeaseExpiresAt = Number.isFinite(configuredRunTimeoutSec) && configuredRunTimeoutSec > 0
+          ? new Date(Date.now() + configuredRunTimeoutSec * 1_000)
+          : undefined;
         acquiredEnvironment = await envOrchestrator.acquireForRun({
           companyId: agent.companyId,
           selectedEnvironmentId,
@@ -22245,6 +22261,7 @@ export function heartbeatService(
           agentId: agent.id,
           persistedExecutionWorkspace,
           executionWorkspaceSettings: environmentExecutionWorkspaceSettings,
+          requestedExpiresAt: requestedLeaseExpiresAt,
         });
         await controllerLease.assertOwned();
         nativeRunnerPreparationSpans.push({
@@ -22540,25 +22557,49 @@ export function heartbeatService(
       } else {
         delete context.paperclipScratch;
       }
-      const gitExecutionEnv = await prepareGitHubExecutionEnvironment({
-        target: executionTarget,
-        cwd: executionWorkspace.cwd,
-        env: Object.fromEntries(
-          Object.entries(parseObject(runtimeConfig.env)).filter(
-            (entry): entry is [string, string] => typeof entry[1] === "string",
-          ),
-        ),
-        hostCredentials: useHostGitHub,
-        // Networking is a controller-owned trust decision, independent of
-        // whether GitHub is configured or a credential can be acquired.
-        networkAccess:
-          trustPreset.kind === "standard" &&
-          process.env.PAPERCLIP_RUNNER_NETWORK_ACCESS !== "disabled",
-      });
+      const currentRuntimeEnv = parseObject(runtimeConfig.env);
+      // A route-created private conversation with the original empty Task
+      // workspace has no repository to inspect. The owner checks above prove
+      // its exact server-owned root after realization, including that no
+      // Project/workspace/repository/additional tree is attached. Avoid a
+      // pre-selection remote `git rev-parse` probe for this one case and record
+      // the truthful empty Git metadata set. Host credentials still use
+      // ordinary discovery; managed credentials remain owned by the Native
+      // provider session and are never copied into this environment.
+      const projectlessNativeConversation = Boolean(
+        agent.adapterType === "paperclip_runner" &&
+        !useHostGitHub &&
+        qualifiedPrivateConversationSandbox &&
+        executionWorkspace.source === "task_session" &&
+        executionWorkspace.projectId === null &&
+        executionWorkspace.workspaceId === null &&
+        executionWorkspace.repoUrl === null &&
+        executionWorkspace.repoRef === null &&
+        Array.isArray(executionWorkspace.additionalWorkspaces) &&
+        executionWorkspace.additionalWorkspaces.length === 0,
+      );
+      const networkAccess =
+        trustPreset.kind === "standard" &&
+        process.env.PAPERCLIP_RUNNER_NETWORK_ACCESS !== "disabled";
+      const gitExecutionEnv = projectlessNativeConversation
+        ? prepareHeartbeatProjectlessNativeEnvironment(currentRuntimeEnv, networkAccess)
+        : await prepareGitHubExecutionEnvironment({
+            target: executionTarget,
+            cwd: executionWorkspace.cwd,
+            env: Object.fromEntries(
+              Object.entries(currentRuntimeEnv).filter(
+                (entry): entry is [string, string] => typeof entry[1] === "string",
+              ),
+            ),
+            hostCredentials: useHostGitHub,
+            // Networking is a controller-owned trust decision, independent of
+            // whether GitHub is configured or a credential can be acquired.
+            networkAccess,
+          });
       runtimeConfig = { ...runtimeConfig, env: gitExecutionEnv };
       for (const key of MANAGED_GITHUB_TOKEN_KEYS) secretKeys.add(key);
       context.githubAuthenticationMode = useHostGitHub ? "host" : "managed";
-      if (!useHostGitHub) {
+      if (!useHostGitHub && !projectlessNativeConversation) {
         const githubLaunchers = await prepareHeartbeatGitHubLaunchers({
           native: agent.adapterType === "paperclip_runner",
           githubConfigured: githubSelection.configured,
@@ -24001,6 +24042,11 @@ export function heartbeatService(
               nativeOwnershipHeld = true;
               return false;
             }
+            if (lockedRun.runtimeMode === "legacy" && !lockedRun.controllerBootId &&
+                lockedRun.controllerLeaseExpiresAt !== null) {
+              nativeOwnershipHeld = true;
+              return false;
+            }
             if (
               lockedRun.runtimeModeResolvedAt &&
               lockedRun.runtimeMode !== "native"
@@ -24008,6 +24054,18 @@ export function heartbeatService(
               throw new Error("native_runtime_mode_conflict");
             }
             const lockedProfile = parseObject(lockedRun.runnerProfileJson);
+            const transferLegacyController = lockedRun.runtimeMode === "legacy";
+            const legacyControllerBinding = lockedRun.runtimeMode === "legacy" && lockedRun.controllerBootId
+              ? and(eq(heartbeatRuns.controllerBootId, legacyControllerBootId),
+                  gt(heartbeatRuns.controllerLeaseExpiresAt, sql`clock_timestamp()`))
+              : and(
+                  lockedRun.controllerBootId
+                    ? eq(heartbeatRuns.controllerBootId, lockedRun.controllerBootId)
+                    : isNull(heartbeatRuns.controllerBootId),
+                  lockedRun.controllerLeaseExpiresAt
+                    ? eq(heartbeatRuns.controllerLeaseExpiresAt, lockedRun.controllerLeaseExpiresAt)
+                    : isNull(heartbeatRuns.controllerLeaseExpiresAt),
+                );
             const persistedNativeSessionId =
               await prepareNativeSessionBootstrapPersistence(tx, {
                 run: lockedRun,
@@ -24015,7 +24073,7 @@ export function heartbeatService(
                 execution: nativeExecution!,
                 restoringCheckpoint: nativeResumeCheckpoint !== null,
               });
-            await tx
+            const [selected] = await tx
               .update(heartbeatRuns)
               .set({
                 runtimeMode: "native",
@@ -24026,6 +24084,11 @@ export function heartbeatService(
                   lockedRun.runtimeModeReason ?? nativeRuntimeResolution.reason,
                 runtimeModeResolvedAt:
                   lockedRun.runtimeModeResolvedAt ?? new Date(),
+                // This locked Native selection is the ownership handoff from
+                // the legacy controller. Its renewal loop stops immediately
+                // below, so do not leave a live legacy lease attached to the
+                // Native Run or block its eventual Stop-qualified erasure.
+                ...(transferLegacyController ? { controllerBootId: null, controllerLeaseExpiresAt: null } : {}),
                 runnerProfileJson: {
                   ...nativeRuntimeResolution.profile,
                   ...lockedProfile,
@@ -24113,7 +24176,10 @@ export function heartbeatService(
                   lockedRun.nativePhaseUpdatedAt ?? new Date(),
                 updatedAt: new Date(),
               })
-              .where(eq(heartbeatRuns.id, run.id));
+              .where(and(eq(heartbeatRuns.id, run.id), eq(heartbeatRuns.status, "running"),
+                eq(heartbeatRuns.runtimeMode, lockedRun.runtimeMode), legacyControllerBinding))
+              .returning({ id: heartbeatRuns.id });
+            if (!selected) return false;
             await tx
               .insert(nativeRunFinalizations)
               .values({

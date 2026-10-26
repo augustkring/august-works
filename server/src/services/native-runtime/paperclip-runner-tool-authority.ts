@@ -2298,6 +2298,8 @@ export class PaperclipRunnerToolAuthority {
       } catch (error) {
         if (process.env.PAPERCLIP_NATIVE_ISSUE_PRIVACY_DIAGNOSTICS === "1") {
           const errorRecord = error && typeof error === "object" ? error as Record<string, unknown> : {};
+          const causeRecord = errorRecord.cause && typeof errorRecord.cause === "object"
+            ? errorRecord.cause as Record<string, unknown> : {};
           const message = error instanceof Error ? error.message : "";
           const code = typeof errorRecord.code === "string" && /^[a-z][a-z0-9_]{1,95}$/.test(errorRecord.code)
             ? errorRecord.code
@@ -2305,6 +2307,8 @@ export class PaperclipRunnerToolAuthority {
           const status = typeof errorRecord.status === "number" && Number.isInteger(errorRecord.status)
             ? errorRecord.status : typeof errorRecord.statusCode === "number" && Number.isInteger(errorRecord.statusCode)
               ? errorRecord.statusCode : null;
+          const sqlState = typeof causeRecord.code === "string" && /^[0-9A-Z]{5}$/.test(causeRecord.code)
+            ? causeRecord.code : null;
           const sourceFrames = error instanceof Error && typeof error.stack === "string"
             ? error.stack.split("\n").slice(1).flatMap(frame => {
               const match = /(?:^|\/)([^/]+\.ts):(\d+):(\d+)\)?$/.exec(frame.trim());
@@ -2316,6 +2320,7 @@ export class PaperclipRunnerToolAuthority {
             errorClass: error instanceof Error ? error.constructor.name : "NonError",
             code,
             status,
+            sqlState,
             sourceFrames,
           }));
         }

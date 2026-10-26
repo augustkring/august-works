@@ -1,21 +1,19 @@
 import { mockedCodexAdapterConfig } from "./helpers/mocked-codex-config.js";
 import { randomUUID } from "node:crypto";
-import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import {
   agents,
+  authUsers,
   companies,
+  companyMemberships,
   completionContracts,
   createDb,
   heartbeatRuns,
   nativeRunFinalizations,
   nativeRunResults,
-  projectWorkspaces,
-  projects,
   statusDecisions,
   workAssessments,
-  issues,
 } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { drainHeartbeatRunsToQuiescence } from "./helpers/drain-heartbeat-runs.js";
@@ -53,14 +51,13 @@ describe("P6-32 legacy finalization regression", () => {
   let db: ReturnType<typeof createDb>;
   const companyId = randomUUID();
   const agentId = randomUUID();
-  const projectId = randomUUID();
-  const projectWorkspaceId = randomUUID();
-  const issueId = randomUUID();
 
   beforeAll(async () => {
     temporary = await startEmbeddedPostgresTestDatabase("paperclip-native-legacy-");
     db = createDb(temporary.connectionString);
     await instanceSettingsService(db).updateExperimental({ enableNativeRunner: false });
+    await db.insert(authUsers).values({ id: "responsible-user", name: "Legacy accountable Human",
+      email: "responsible-user@example.test", emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
     await db.insert(companies).values({
       id: companyId,
       name: "Legacy snapshot",
@@ -68,15 +65,8 @@ describe("P6-32 legacy finalization regression", () => {
       status: "active",
       defaultResponsibleUserId: "responsible-user",
     });
-    await db.insert(projects).values({ id: projectId, companyId, name: "Legacy project", status: "active" });
-    await db.insert(projectWorkspaces).values({
-      id: projectWorkspaceId,
-      companyId,
-      projectId,
-      name: "Primary",
-      cwd: fileURLToPath(new URL("../../../", import.meta.url)),
-      isPrimary: true,
-    });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: "responsible-user",
+      status: "active", membershipRole: "admin" });
     await db.insert(agents).values({
       id: agentId,
       companyId,
@@ -85,16 +75,6 @@ describe("P6-32 legacy finalization regression", () => {
       adapterConfig: mockedCodexAdapterConfig,
       status: "idle",
       runtimeConfig: { heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 } },
-    });
-    await db.insert(issues).values({
-      id: issueId,
-      companyId,
-      projectId,
-      projectWorkspaceId,
-      title: "Complete through the legacy adapter",
-      status: "in_progress",
-      workMode: "standard",
-      assigneeAgentId: agentId,
     });
   }, 30_000);
 
@@ -106,32 +86,26 @@ describe("P6-32 legacy finalization regression", () => {
   });
 
   it("executes a flag-off heartbeat through the legacy adapter with byte-stable reads and zero native rows", async () => {
-    const execute = adapterExecute.getMockImplementation()!;
-    adapterExecute.mockImplementationOnce(async () => {
-      await db.update(issues).set({ status: "done" }).where(eq(issues.id, issueId));
-      return execute();
-    });
     const heartbeat = heartbeatService(db);
     const queued = await heartbeat.wakeup(agentId, {
-      source: "automation",
+      source: "on_demand",
       triggerDetail: "system",
-      reason: "issue_commented",
-      payload: { issueId },
-      contextSnapshot: { issueId, taskId: issueId, skipIssueComment: true },
+      contextSnapshot: { skipIssueComment: true },
     });
     expect(queued).not.toBeNull();
     await drainHeartbeatRunsToQuiescence(db, heartbeat);
     const runId = queued!.id;
     const publicBefore = await heartbeat.getRun(runId);
 
-    expect(adapterExecute).toHaveBeenCalledOnce();
     expect(publicBefore).toMatchObject({
       id: runId,
       status: "succeeded",
       runtimeMode: "legacy",
       runtimeModeReason: "direct_adapter",
+      error: null,
       resultJson: { summary: "Legacy bytes", nested: { count: 1, ok: true } },
     });
+    expect(adapterExecute).toHaveBeenCalledOnce();
     await expect(reconcileNativeFinalizations(db, [runId])).resolves.toEqual([]);
     expect(JSON.stringify(await heartbeat.getRun(runId))).toBe(JSON.stringify(publicBefore));
 

@@ -3,7 +3,7 @@ import { enqueueSkillVersionFileErasure } from "../learning/skill-file-erasure.j
 import { and, eq, inArray, is, sql, type SQL } from "drizzle-orm";
 import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
 import * as schema from "@paperclipai/db";
-import { customerFeedback, supportCases, projectRoadmapProposals, causalClaims, businessScenarios, forecastSpecs, businessMetrics, businessMetricTargets, strategyExecutionLinks, processAnalysisDefinitions, decisionContexts, automationArtifacts, automationArtifactVersions, companySkills, companySkillVersions, companies, companyDeletionOperations, orchestrationCompanyPurposeBudgets, orchestrationCompanyPurposeReservations, issues, memoryRecords, type Db } from "@paperclipai/db";
+import { customerFeedback, supportCases, projectRoadmapProposals, causalClaims, businessScenarios, forecastSpecs, businessMetrics, businessMetricTargets, strategyExecutionLinks, processAnalysisDefinitions, decisionContexts, automationArtifacts, automationArtifactVersions, companySkills, companySkillVersions, companies, companyDeletionOperations, orchestrationCompanyPurposeBudgets, orchestrationCompanyPurposeReservations, agentExecutionManifests, heartbeatRuns, issues, memoryRecords, type Db } from "@paperclipai/db";
 import { conflict } from "../../errors.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
@@ -30,6 +30,11 @@ const retained = new Set([
   "platform_admin_audit",
   "support_sessions",
 ]);
+// The immutable V5 execution manifest is deleted by the original Run's
+// ON DELETE CASCADE after its child scope receipts have been removed. A direct
+// company-scoped DELETE fires the immutable-manifest trigger while the Run is
+// still present and cannot be treated as a company erasure proof.
+const cascadeOnly = new Set(["agent_execution_manifests"]);
 export async function purgeCompanyContent(
   db: Db,
   companyId: string,
@@ -167,10 +172,15 @@ export async function purgeCompanyContent(
     }
     await enqueueSkillVersionFileErasure(tx as unknown as Db, companyId);
     await enqueueCompanyRuntimeAssetErasure(tx as unknown as Db, companyId);
-    // Native conversation identity is one checked tuple. Clear it atomically
-    // after this transaction's company-erasure receipt; per-FK unlinking would
-    // otherwise leave an invalid half-conversation and roll back the purge.
-    await tx.update(issues).set({conversationAgentId:null,conversationUserId:null,conversationState:null}).where(eq(issues.companyId,companyId));
+    // Retire the source Task before its Run-owned immutable manifest is removed
+    // by the FK cascade below. The retirement marker is the canonical proof
+    // consumed by aw_workflow_memory_erased; clearing only the identity tuple
+    // would erase the predicate's original conversation owner.
+    const conversationRetiredAt = new Date();
+    await tx.update(issues).set({ conversationAgentId: null, conversationUserId: null, conversationState: null,
+      conversationRetiredAt, status: "cancelled", cancelledAt: conversationRetiredAt, hiddenAt: conversationRetiredAt,
+      assigneeAgentId: null, assigneeUserId: null, executionRunId: null, checkoutRunId: null, updatedAt: conversationRetiredAt,
+    }).where(and(eq(issues.companyId, companyId), sql`${issues.conversationAgentId} is not null`));
     // These purpose-ledger rows have a native DELETE guard and a retained
     // aggregate finance receipt above. Delete them through their owner in
     // child-before-parent order before generic company-content cleanup.
@@ -217,7 +227,7 @@ export async function purgeCompanyContent(
     for (const table of tables) {
       const config = getTableConfig(table);
       const column = config.columns.find((v) => v.name === "company_id");
-      if (column && !retained.has(config.name))
+      if (column && !retained.has(config.name) && !cascadeOnly.has(config.name))
         scopes.set(table, config.name==="memory_jobs"
           ? sql`${column}=${companyId}::uuid and not (operation_type='retention' and coalesce(source_ref_json->>'kind','') in ('provider_trace_erasure','run_log_erasure','learning_analytical_erasure','skill_version_file_erasure','runtime_asset_erasure','runtime_skill_source_erasure','runtime_playbook_source_erasure','artifact_workspace_erasure','workflow_artifact_source_erasure'))`
           : sql`${column} = ${companyId}::uuid`);
@@ -279,11 +289,22 @@ export async function purgeCompanyContent(
       if (!found[0]?.present) scopes.delete(table);
     }
     const pending = new Set(scopes.keys());
+    const [cascadeManifestRows] = await tx.execute<{ present: boolean }>(sql`
+      select exists(select 1 from ${agentExecutionManifests} e where e.company_id=${companyId}::uuid) as present`);
     const edges = new Map<PgTable, Set<PgTable>>();
     for (const table of pending) {
       const parents = new Set<PgTable>();
       for (const fk of getTableConfig(table).foreignKeys) {
         const ref = fk.reference();
+        // A scoped child that normally points at the cascade-only manifest
+        // must be removed before its owning Run. Model that omitted node as
+        // the actual company-scoped Run owner, while retaining all its other
+        // FK dependencies (notably runtime-policy evidence).
+        if (ref.foreignTable === agentExecutionManifests && cascadeManifestRows?.present &&
+            pending.has(heartbeatRuns)) {
+          parents.add(heartbeatRuns);
+          continue;
+        }
         if (!pending.has(ref.foreignTable) || ref.foreignTable === table)
           continue;
         // Private Memory's owner is part of its checked scope tuple. Keep the
@@ -314,6 +335,17 @@ export async function purgeCompanyContent(
           continue;
         }
         parents.add(ref.foreignTable);
+      }
+      // The immutable execution manifest is deliberately excluded from the
+      // direct company-delete graph: its original Run owns deletion through
+      // the composite ON DELETE CASCADE. Keep the manifest's restricted
+      // Context and Agent parents alive until that Run is removed so its
+      // nested cascade can satisfy the immutable source-erasure gate.
+      if (table === heartbeatRuns && cascadeManifestRows?.present) {
+        for (const fk of getTableConfig(agentExecutionManifests).foreignKeys) {
+          const parent = fk.reference().foreignTable;
+          if (pending.has(parent) && parent !== heartbeatRuns) parents.add(parent);
+        }
       }
       edges.set(table, parents);
     }

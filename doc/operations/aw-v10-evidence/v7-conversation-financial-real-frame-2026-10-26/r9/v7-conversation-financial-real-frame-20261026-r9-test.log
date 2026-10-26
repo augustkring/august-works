@@ -1,0 +1,47 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts (31 tests | 2 failed | 29 skipped) 112847ms
+     × settles the actual qualified conversation usage once and preserves the exact debit in canonical purge 17851ms
+     × retains an actual unknown conversation hold and blocks canonical company purge 90196ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > settles the actual qualified conversation usage once and preserves the exact debit in canonical purge
+Error: conversation_offboarding_purge_incomplete:{"stage":"purge","status":"processing","runtime":{"operation":{"stage":"purge","status":"processing","errorCode":"offboarding_reconciliation_pending"},"jobs":[{"jobKey":"runtime-asset-erasure:v1:c8437085-dca0-4161-9891-758e1a1797cb","status":"succeeded","errorCode":null,"attemptNumber":1}]},"nativeStop":{"runPresent":true,"runStatus":"succeeded","runtimeMode":"native","processPidPresent":false,"processGroupPresent":false,"controllerLeasePresent":false,"controllerBootIdPresent":false,"finalizationPhase":"committed","finalizationLeaseHeld":false,"nativeLocalStopReceipt":true,"leases":[{"provider":"local","status":"released","cleanupStatus":null,"released":true,"remoteTerminationReceipt":false}]}}
+ ❯ purgeConversationCompany src/__tests__/v7-model-reservations.integration.test.ts:491:15
+    489|       const completed = await offboarding.get(facts.companyId);
+    490|       if (!completed || completed.id !== operation.id || completed.sta…
+    491|         throw new Error(`conversation_offboarding_purge_incomplete:${J…
+       |               ^
+    492|           status: completed?.status ?? null, runtime: await offboardin…
+    493|           nativeStop: await nativeStopFacts(facts) })}`);
+ ❯ Object.afterRunSettledBeforeTeardown src/__tests__/v7-model-reservations.integration.test.ts:607:31
+ ❯ runManagedNativeConversationFrame src/__tests__/helpers/managed-native-conversation-frame.ts:438:7
+ ❯ conversationReservationFixture src/__tests__/v7-model-reservations.integration.test.ts:346:22
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:603:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > retains an actual unknown conversation hold and blocks canonical company purge
+Error: conversation_offboarding_not_ready:{"stage":"retention","status":"processing","runtime":{"operation":{"stage":"retention","status":"processing","errorCode":null},"jobs":[]},"nativeStop":{"runPresent":true,"runStatus":"failed","runtimeMode":"native","processPidPresent":false,"processGroupPresent":false,"controllerLeasePresent":false,"controllerBootIdPresent":false,"finalizationPhase":"committed","finalizationLeaseHeld":false,"nativeLocalStopReceipt":true,"leases":[{"provider":"local","status":"failed","cleanupStatus":null,"released":true,"remoteTerminationReceipt":false}]}}
+ ❯ startConversationOffboarding src/__tests__/v7-model-reservations.integration.test.ts:481:15
+    479|       const operation = await offboarding.get(companyId);
+    480|       if (!operation || operation.stage !== "purge" || operation.statu…
+    481|         throw new Error(`conversation_offboarding_not_ready:${JSON.str…
+       |               ^
+    482|           status: operation?.status ?? null, runtime: await offboardin…
+    483|           nativeStop: await nativeStopFacts(facts) })}`);
+ ❯ Object.afterRunSettledBeforeTeardown src/__tests__/v7-model-reservations.integration.test.ts:711:31
+ ❯ runManagedNativeConversationFrame src/__tests__/helpers/managed-native-conversation-frame.ts:438:7
+ ❯ conversationReservationFixture src/__tests__/v7-model-reservations.integration.test.ts:346:22
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:706:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 29 skipped (31)
+   Start at  15:34:49
+   Duration  129.16s (transform 11.26s, setup 146ms, import 15.89s, tests 112.85s, environment 0ms)
+

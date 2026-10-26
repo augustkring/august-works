@@ -58,6 +58,7 @@ import { conversationModelBindingSchema, nativePayloadSourceInputSchema, nativeP
   type NativeFinalizationResult, type NativePayloadSourceInput, type NativeRunInputSourceReceipt } from "@paperclipai/shared";
 import type { NativeBootstrapSourceClosure, NativeConsumedSourceComponent, NativeModelOutputCapture, NativePayloadSourceSet } from "./native-execution-input.js";
 import { exactNativeInteractionSourceInputs } from "./native-execution-input.js";
+import { isCurrentWorkerConversationRoot } from "./worker-conversation-root.js";
 import type {
   HarnessRuntimeRequestResolution,
   NativeExecutionInput,
@@ -1499,6 +1500,20 @@ class SessionToolAuthorityEpoch {
     const execute = async () => {
       this.#assertCurrent();
       const toolResultDiagnostics = process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1";
+      const reportContextToolFailure = (event: string, error: unknown) => {
+        if (process.env.PAPERCLIP_MANAGED_OPENCODE_E2E_DIAGNOSTICS !== "1" || call.tool !== "get_task_context") return;
+        const diagnostic = error && typeof error === "object"
+          ? error as Error & { code?: unknown; status?: unknown; statusCode?: unknown; cause?: { code?: unknown } } : null;
+        const safeCode = (value: unknown) => typeof value === "string" && /^[A-Z0-9_:-]{1,100}$/i.test(value) ? value : null;
+        const frames = diagnostic?.stack?.split("\n").slice(1).flatMap(frame => {
+          const match = /server\/src\/services\/([^\s():]+\.ts):(\d+):\d+/.exec(frame);
+          return match ? [`${match[1]}:${match[2]}`] : [];
+        }).slice(0, 5) ?? [];
+        console.error(event, JSON.stringify({ name: diagnostic?.name ?? "UnknownError",
+          code: safeCode(diagnostic?.code), causeCode: safeCode(diagnostic?.cause?.code),
+          status: typeof diagnostic?.status === "number" ? diagnostic.status :
+            typeof diagnostic?.statusCode === "number" ? diagnostic.statusCode : null, frames }));
+      };
       const reportCreateTaskFailure = (event: string, error: unknown) => {
         if (!toolResultDiagnostics || call.tool !== "create_task") return;
         const diagnostic = error && typeof error === "object"
@@ -1548,6 +1563,7 @@ class SessionToolAuthorityEpoch {
           ...(call.turnId ? { nativeToolCallIdentity: { tool: call.tool, callId: call.callId, turnId: call.turnId } } : {}),
         });
       } catch (error) {
+        reportContextToolFailure("managed_get_task_context_authority_failure_test_facts", error);
         reportCreateTaskFailure("managed_create_task_authority_failure_test_facts", error);
         throw error;
       }
@@ -1560,6 +1576,7 @@ class SessionToolAuthorityEpoch {
           await this.onManagedOpenCodeToolResult?.({ tool: call.tool, callId: call.callId, turnId: call.turnId, argumentsHash, result,
             ...(call.tool === "read_context" && this.managedContextReadCapture?.value ? { contextRead: this.managedContextReadCapture.value } : {}) });
         } catch (error) {
+          reportContextToolFailure("managed_get_task_context_result_capture_failure_test_facts", error);
           reportCreateTaskFailure("managed_create_task_result_callback_failure_test_facts", error);
           throw error;
         }
@@ -8267,24 +8284,56 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
           payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated,
         }).from(issues).where(and(eq(issues.companyId, input.companyId), eq(issues.id, input.issueId)))
           .for("share") : [];
-        const workerContext = record(run.contextSnapshot);
-        const workerConversationSnapshot = nativePayloadSourceSnapshotSchema.safeParse(workerConversationRoot?.payloadSourceSnapshot);
-        const workerConversationInputs = workerConversationSnapshot.success ? workerConversationSnapshot.data.inputs : [];
-        const workerConversationRootCurrent = workerConversationRootCall && workerConversationRoot?.conversationAgentId === input.agentId &&
-          workerConversationRoot.conversationUserId === run.responsibleUserId && workerConversationRoot.conversationState === "waiting" &&
-          workerConversationRoot.conversationRetiredAt === null && workerConversationRoot.parentId === null &&
-          workerConversationRoot.assigneeAgentId === input.agentId && workerConversationRoot.executionRunId === input.runId &&
-          workerConversationRoot.payloadSourceProtocolVersion === 1 && !workerConversationRoot.payloadSourceSnapshotInvalidated &&
-          typeof workerContext.conversationSessionGeneration === "number" &&
-          workerConversationRoot.conversationSessionGeneration === workerContext.conversationSessionGeneration &&
-          workerConversationSnapshot.success && workerConversationSnapshot.data.owner.kind === "issue" &&
-          workerConversationSnapshot.data.owner.companyId === input.companyId &&
-          workerConversationSnapshot.data.owner.id === input.issueId && workerConversationInputs.length === 1 &&
-          workerConversationInputs[0]?.kind === "comment" && workerConversationInputs[0].issueId === input.issueId &&
-          Object.values(workerConversationSnapshot.data.policy).every(values => values.length === 0);
+        // Human-authored conversation roots remain current in either live
+        // state; this Worker path still requires every exact owner/run/snapshot
+        // binding below and does not grant ordinary conversation-model use.
+        const workerConversationRootCurrent = workerConversationRootCall && isCurrentWorkerConversationRoot({
+          scope: "worker_model", root: workerConversationRoot, contextSnapshot: run.contextSnapshot,
+          companyId: input.companyId, issueId: input.issueId, agentId: input.agentId,
+          responsibleUserId: run.responsibleUserId, runId: input.runId,
+        });
         const unparentedConversationTask = resultTask.parentId === null && (conversationTask || workerConversationRootCurrent);
-        if (typeof resultTask.id !== "string" || (typeof resultTask.parentId !== "string" && resultTask.parentId !== null) ||
-          (resultTask.parentId !== input.issueId && !unparentedConversationTask))
+        const managedTaskParentBindingValid = typeof resultTask.id === "string" &&
+          (typeof resultTask.parentId === "string" || resultTask.parentId === null) &&
+          (resultTask.parentId === input.issueId || unparentedConversationTask);
+        if (!managedTaskParentBindingValid && process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1") {
+          const workerConversationSnapshot = nativePayloadSourceSnapshotSchema.safeParse(workerConversationRoot?.payloadSourceSnapshot);
+          const workerConversationInputs = workerConversationSnapshot.success ? workerConversationSnapshot.data.inputs : [];
+          const workerContext = record(run.contextSnapshot);
+          const workerSnapshotOwner = workerConversationSnapshot.success ? workerConversationSnapshot.data.owner : null;
+          console.info("managed-create-task-output-binding-miss", JSON.stringify({
+            resultIdPresent: typeof resultTask.id === "string",
+            resultParentIdNull: resultTask.parentId === null,
+            resultParentIsCurrentIssue: resultTask.parentId === input.issueId,
+            workerConversationRootCall,
+            conversationTask,
+            conversationBindingValid: conversationBinding.success,
+            conversationBindingIssueCurrent: conversationBinding.success && conversationBinding.data.issueId === input.issueId,
+            conversationBindingGenerationCurrent: conversationBinding.success && conversationBinding.data.conversationSessionGeneration === run.contextSnapshot?.conversationSessionGeneration,
+            workerConversationRootPresent: workerConversationRoot !== undefined,
+            rootAgentCurrent: workerConversationRoot?.conversationAgentId === input.agentId,
+            rootHumanCurrent: workerConversationRoot?.conversationUserId === run.responsibleUserId,
+            rootStateActive: workerConversationRoot?.conversationState === "active",
+            rootStateWaiting: workerConversationRoot?.conversationState === "waiting",
+            rootNotRetired: workerConversationRoot?.conversationRetiredAt === null,
+            rootHasNoParent: workerConversationRoot?.parentId === null,
+            rootAssigneeCurrent: workerConversationRoot?.assigneeAgentId === input.agentId,
+            rootExecutionRunCurrent: workerConversationRoot?.executionRunId === input.runId,
+            rootProtocolCurrent: workerConversationRoot?.payloadSourceProtocolVersion === 1,
+            rootSnapshotNotInvalidated: workerConversationRoot?.payloadSourceSnapshotInvalidated === false,
+            rootGenerationCurrent: typeof workerContext.conversationSessionGeneration === "number" &&
+              workerConversationRoot?.conversationSessionGeneration === workerContext.conversationSessionGeneration,
+            rootSnapshotValid: workerConversationSnapshot.success,
+            rootSnapshotOwnerCurrent: workerSnapshotOwner?.kind === "issue" && workerSnapshotOwner.companyId === input.companyId &&
+              workerSnapshotOwner.id === input.issueId,
+            rootSnapshotHasSingleComment: workerConversationInputs.length === 1 && workerConversationInputs[0]?.kind === "comment" &&
+              workerConversationInputs[0].issueId === input.issueId,
+            rootSnapshotPolicyEmpty: workerConversationSnapshot.success &&
+              Object.values(workerConversationSnapshot.data.policy).every(values => values.length === 0),
+            unparentedConversationTask,
+          }));
+        }
+        if (!managedTaskParentBindingValid)
           throw new Error("managed_opencode_tool_result_binding_invalid");
         const [child] = await tx.select({ id: issues.id, identifier: issues.identifier, title: issues.title,
           description: issues.description, status: issues.status, priority: issues.priority, parentId: issues.parentId,
@@ -10299,12 +10348,30 @@ async function executePaperclipNativeSessionWithinScope(
                   eq(issues.companyId, input.execution.binding.companyId),
                 ))
                 .limit(1);
-              return nativeConversationReplyResult({
+              const replyResult = nativeConversationReplyResult({
                 conversation: conversation?.agentId === input.execution.binding.agentId,
                 terminalEvent,
                 replyEvent: completedConversationReply,
                 completionContract: input.execution.completionContract.contract,
               });
+              if (!replyResult && process.env.PAPERCLIP_MANAGED_OPENCODE_E2E_DIAGNOSTICS === "1") {
+                const reply = completedConversationReply;
+                const payload = record(reply?.payload);
+                const replyText = typeof payload.text === "string" ? payload.text.trim() : "";
+                await input.onLog?.("stderr", `[paperclip-runner] conversation reply result predicates: ${JSON.stringify({
+                  conversationAgentMatches: conversation?.agentId === input.execution.binding.agentId,
+                  terminalIsCompleted: terminalEvent.eventType === "turn.completed",
+                  replyExists: reply !== null,
+                  replyIsCompletedItem: reply?.eventType === "item.completed",
+                  replyIsAgentMessage: payload.kind === "agentMessage",
+                  replyIsFinalChannel: payload.channel === "final",
+                  replyHasText: replyText.length > 0,
+                  replyRunMatches: reply?.runId === terminalEvent.runId,
+                  replyTurnMatches: reply?.turnId === terminalEvent.turnId,
+                  replySessionMatches: reply?.normalizedSessionId === terminalEvent.normalizedSessionId,
+                })}\n`);
+              }
+              return replyResult;
             },
             existingSession: existingWarmSession,
             persistedSession: persistedWarmSession,

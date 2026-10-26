@@ -41,6 +41,9 @@ describe("native external chat workspace boundary", () => {
   const issueB = "01000000-0000-4000-8000-000000000004";
   const boardIssue = "01000000-0000-4000-8000-000000000005";
   const runB = "01000000-0000-4000-8000-000000000006";
+  const conversationIssue = "01000000-0000-4000-8000-000000000007";
+  const conversationRun = "01000000-0000-4000-8000-000000000008";
+  const conversationUserId = "user-native-chat-owner";
   const scopeInput = (issueId: string) => ({
     adapterType: "paperclip_runner",
     environmentDriver: "local",
@@ -100,6 +103,33 @@ describe("native external chat workspace boundary", () => {
       .update(issues)
       .set({ executionRunId: runB })
       .where(eq(issues.id, issueB));
+    await db.insert(issues).values({
+      id: conversationIssue,
+      companyId,
+      issueNumber: 4,
+      identifier: "NCW-4",
+      title: "Authenticated native conversation",
+      status: "in_progress",
+      assigneeAgentId: agentId,
+      conversationAgentId: agentId,
+      conversationUserId,
+      conversationState: "active",
+      conversationSessionGeneration: 3,
+      originKind: "manual",
+    });
+    await db.insert(heartbeatRuns).values({
+      id: conversationRun,
+      companyId,
+      agentId,
+      nativeIssueId: conversationIssue,
+      responsibleUserId: conversationUserId,
+      runtimeMode: "native",
+      status: "running",
+      invocationSource: "assignment",
+      triggerDetail: "system",
+      contextSnapshot: { issueId: conversationIssue, conversationSessionGeneration: 3 },
+    });
+    await db.update(issues).set({ executionRunId: conversationRun }).where(eq(issues.id, conversationIssue));
     scopeA = (await findNativeChatWorkspaceScope(db, scopeInput(issueA)))!;
     scopeB = (await findNativeChatWorkspaceScope(db, scopeInput(issueB)))!;
   });
@@ -168,6 +198,21 @@ describe("native external chat workspace boundary", () => {
         companyId: "01000000-0000-4000-8000-000000000099",
       }),
     ).rejects.toThrow("native_chat_workspace_issue_unavailable");
+  });
+
+  it("selects a canonical projectless conversation only for its exact current Human, generation, and Run", async () => {
+    const input = {
+      ...scopeInput(conversationIssue),
+      runId: conversationRun,
+      responsibleUserId: conversationUserId,
+      conversationSessionGeneration: 3,
+    };
+    const scope = await findNativeChatWorkspaceScope(db, input);
+    expect(scope).toMatchObject({ companyId, agentId, issueId: conversationIssue, projectId: null });
+    expect(await findNativeChatWorkspaceScope(db, { ...input, responsibleUserId: "foreign-human" })).toBeNull();
+    expect(await findNativeChatWorkspaceScope(db, { ...input, conversationSessionGeneration: 4 })).toBeNull();
+    expect(await findNativeChatWorkspaceScope(db, { ...input, runId: runB })).toBeNull();
+    expect(await findNativeChatWorkspaceScope(db, scopeInput(conversationIssue))).toBeNull();
   });
 
   it("does not expose another active task's staged inbound files or register its generated file", async () => {

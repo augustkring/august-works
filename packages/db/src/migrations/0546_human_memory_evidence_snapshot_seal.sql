@@ -7,6 +7,12 @@ CREATE OR REPLACE FUNCTION public.aw_native_payload_source_binding() RETURNS tri
 LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
 DECLARE snapshot jsonb; row_data jsonb; owner_kind text := TG_ARGV[0];
 BEGIN
+  -- Invalidation is a server-owned monotonic lifecycle marker. This guard
+  -- applies even when the forged row omits its snapshot; a NULL proof must
+  -- not make an already-invalidated owner insertable.
+  IF TG_OP='INSERT' AND NEW.payload_source_snapshot_invalidated IS DISTINCT FROM false THEN
+    RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Native payload source invalidation marker is server-owned';
+  END IF;
   IF NEW.payload_source_protocol_version NOT IN (0,1) THEN
     RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Unknown native payload source protocol';
   END IF;

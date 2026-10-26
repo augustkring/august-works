@@ -21,6 +21,7 @@ import {memoryJobService} from "../services/memory/memory-jobs.js";
 import express from "express";
 import request from "supertest";
 import {issueService} from "../services/issues.js";
+import {heartbeatService} from "../services/heartbeat.js";
 import {issueRoutes} from "../routes/issues.js";
 import {projectRoutes} from "../routes/projects.js";
 import {errorHandler} from "../middleware/index.js";
@@ -274,7 +275,9 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
  it("retains all eight actual SDK proposal Sources and rejects an oversized source set before adding a root",async()=>{
   const f=await fixture(),tools=toolAuthority(),sources=[];
   for(let index=0;index<8;index++){
+   const started=performance.now();
    const result=await tools.execute({tool:"query_business_metric",callId:randomUUID(),arguments:{...f.query,from:new Date(Date.parse(f.query.from)+index).toISOString()}}) as {result:{observation:BusinessMetricResult}};
+   expect(performance.now()-started).toBeLessThan(30000);
    const value=result.result.observation;sources.push({type:"metric_observation" as const,id:value.id,metricId:value.metricId,metricVersionId:value.versionId});
   }
   const argumentsValue={action:"prepare_decision",rationale:"Human must separately prepare a Decision from these eight exact Sources",sources};
@@ -286,7 +289,9 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
   await copied();await db.delete(businessMetricObservations).where(eq(businessMetricObservations.id,sources[7]!.id));
   expect(await db.select().from(businessMetricObservations).where(eq(businessMetricObservations.companyId,companyId))).toHaveLength(7);
   expect(await heartbeatMemoryPayloadRetained(db,companyId,runId)).toBe(false);await reapplyMemoryDeletionMarkers(db,companyId);await erased();await memoryJobService(db).tick({limit:10});
- });
+ // Eight separately bounded reads plus proposal/erasure are a multi-call
+ // harness journey; every original tool deadline remains 30 seconds.
+ },120_000);
  it.each([5000,10000])("qualifies the complete %s-Task SDK population and rejects oversized lineage without partial retention",async(populationSize)=>{
   const f=await fixture(true,true),at=new Date(Date.now()-1000),rows=Array.from({length:populationSize-1},(_,index)=>({id:randomUUID(),companyId,title:`Synthetic SDK volume Task ${index}`,status:"done" as const,responsibleUserId:userId,createdAt:at,updatedAt:at}));
   // Explicit native software population prerequisites, not performed Task
@@ -710,7 +715,7 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
   await instanceSettingsService(db).updateExperimental({enableAgentChat:true});
   const f=await fixture(),result=await f.capture();await copied();
   await db.delete(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,result.lineageManifestId));
-  const app=express();app.use(express.json());app.use((req,_res,next)=>{req.actor=reader;next();});app.use("/api",issueRoutes(db));app.use(errorHandler);
+  const app=express();app.use(express.json());app.use((req,_res,next)=>{req.actor=reader;next();});app.use("/api",issueRoutes(db,{} as never,{heartbeat:{...heartbeatService(db),wakeup:async()=>null}}));app.use(errorHandler);
   const path=`/api/companies/${companyId}/chats/${agentId}`;
   const unused=await request(app).get(path);expect(unused.status).toBe(200);expect(unused.body).toBeNull();
   expect((await db.select().from(issues).where(eq(issues.id,issueId)))[0]!.conversationAgentId).toBe(agentId);
@@ -724,6 +729,11 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
   await expect(issueService(db).update(issueId,{status:"done"})).rejects.toMatchObject({status:409});
   await expect(db.update(issues).set({conversationRetiredAt:null}).where(eq(issues.id,issueId))).rejects.toMatchObject({cause:{code:"23514"}});
   await expect(toolAuthority().execute({tool:"query_business_metric",callId:randomUUID(),arguments:f.query})).rejects.toThrow();
+  // The recovered shell must receive its first actual Human input through
+  // the original route before Context can inspect its sealed source owner.
+  const freshInput=await request(app).post(`/api/issues/${freshId}/comments`)
+   .send({body:"Independent Human input after source erasure",clientRequestId:randomUUID()});
+  expect(freshInput.status).toBe(201);
   const freshRun=randomUUID();await db.insert(heartbeatRuns).values({id:freshRun,companyId,agentId,nativeIssueId:freshId,runtimeMode:"native",status:"running",responsibleUserId:userId,contextSnapshot:{issueId:freshId}});await db.update(issues).set({executionRunId:freshRun,conversationState:"active"}).where(eq(issues.id,freshId));
   await contextManifestService(db).create({companyId,agentId,issueId:freshId,runId:freshRun,query:"A fresh source read",policySnapshot:{fixture:true},selected:[]});
   const tools=new PaperclipRunnerToolAuthority(db,{companyId,agentId,issueId:freshId,runId:freshRun,managementToolsEnabled:true});

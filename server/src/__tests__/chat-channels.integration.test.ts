@@ -125,6 +125,8 @@ import type {
 } from "../services/chat-sdk-runtime.js";
 import { createChatSdkEndpointRuntime } from "../services/chat-sdk-runtime.js";
 import type { TelegramDraftControl } from "../services/chat-telegram-draft-stop.js";
+import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
+import type { AuthorizationActor } from "../services/authorization.js";
 
 // Opt-in private physical candidate; normal CI uses the staged pinned package.
 vi.mock("@chat-adapter/telegram", async (importOriginal) => {
@@ -989,11 +991,14 @@ function routesApp(
   companyId: string,
   service: ChatChannelService,
   userId = "owner-user",
+  actorOverride?: AuthorizationActor,
 ) {
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
-    req.actor = boardActor(companyId, userId);
+    req.actor = actorOverride
+      ? { ...actorOverride, companyIds: [companyId], memberships: [{ companyId, status: "active", membershipRole: "owner" }] }
+      : boardActor(companyId, userId);
     next();
   });
   app.use(
@@ -1654,6 +1659,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
 
   async function acceptedUnknownSlackFileReceipt(label: string) {
     const fixture = await seedCompany();
+    const manualInputActor = await seedCurrentHumanSourceActor(db, [fixture.companyId], "owner-user");
     const storage = createStorageService();
     const configured = await configuredSlackEndpoint(fixture, {
       storage: storage.storage,
@@ -1683,13 +1689,15 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       conversation.issueId,
       "Accepted Slack authorization fixture",
       { userId: "owner-user" },
+      { manualInputActor },
     );
+    const attachmentBytes = Buffer.from(`accepted ${label}`, "utf8");
     const stored = await storage.storage.putFile({
       companyId: fixture.companyId,
       namespace: `issues/${conversation.issueId}`,
       originalFilename: `${label}.txt`,
       contentType: "text/plain",
-      body: Buffer.from(`accepted ${label}`, "utf8"),
+      body: attachmentBytes,
     });
     const attachment = await issueService(db).createAttachment({
       issueId: conversation.issueId,
@@ -1701,7 +1709,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       sha256: stored.sha256,
       originalFilename: stored.originalFilename,
       createdByUserId: "owner-user",
-    });
+    }, { actor: manualInputActor, bytes: attachmentBytes });
     const [publication] = await db
       .insert(chatPublications)
       .values({
@@ -4282,6 +4290,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
   it.each(["cancelled", "paused", "blocked", "closed-workspace"] as const)("does not bypass %s task guards from the Slack Board composer or its outbox", async (guard) => {
     const { issueTreeHolds, issueRelations, executionWorkspaces, projects } = await import("@paperclipai/db");
     const fixture = await seedCompany();
+    const manualInputActor = await seedCurrentHumanSourceActor(db, [fixture.companyId], "owner-user");
     const { callbacks, endpoint, service, wakeup, runtime } = await configuredSlackEndpoint(fixture, { linkedBoardUser: true });
     const channel = makeThread({ channelId: "CGUARD", id: "slack:CGUARD:8100.1", name: "guard" });
     await deliverMessage({ callbacks, endpointId: endpoint.id, thread: channel.thread,
@@ -4291,8 +4300,21 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     runtime.endpoints.get(endpoint.id)!.posts.length = 0;
     wakeup.mockClear();
     wakeup.mockRejectedValueOnce(new Error("scheduler unavailable"));
-    await service.publishBoardMessage(endpoint.id, conversation.id, "Queued work", randomUUID(), "owner-user");
-    expect(wakeup).toHaveBeenCalledTimes(1);
+    await request(routesApp(db, fixture.companyId, service, "owner-user", manualInputActor))
+      .post(`/api/chat-endpoints/${endpoint.id}/conversations/${conversation.id}/publications`)
+      .send({ body: "Queued work", idempotencyKey: randomUUID() })
+      .expect(201);
+    const wakeFacts = {
+      actions: await db.select({ status: chatActions.status,
+        code: sql<string | null>`${chatActions.result}->>'code'` }).from(chatActions)
+        .where(and(eq(chatActions.endpointId, endpoint.id), eq(chatActions.kind, "slack_board_message"))),
+      publications: await db.select({ state: chatPublications.state }).from(chatPublications)
+        .where(eq(chatPublications.endpointId, endpoint.id)),
+      source: await db.select({ protocol: issueComments.payloadSourceProtocolVersion,
+        captured: sql<boolean>`${issueComments.payloadSourceSnapshot} is not null` }).from(issueComments)
+        .where(eq(issueComments.issueId, conversation.issueId)),
+    };
+    expect(wakeup, JSON.stringify(wakeFacts)).toHaveBeenCalledTimes(1);
     expect(runtime.endpoints.get(endpoint.id)!.posts).toEqual([]);
     if (guard === "cancelled") await db.update(issues).set({ status: "cancelled" }).where(eq(issues.id, conversation.issueId));
     if (guard === "paused") await db.insert(issueTreeHolds).values({ companyId: fixture.companyId, rootIssueId: conversation.issueId, mode: "pause", status: "active" });
@@ -4360,6 +4382,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
 
   it("dispatches and publishes a queued Slack Board send with a one-connection database pool", async () => {
     const fixture = await seedCompany();
+    const manualInputActor = await seedCurrentHumanSourceActor(db, [fixture.companyId], "owner-user");
     const { callbacks, endpoint, service, wakeup, runtime } = await configuredSlackEndpoint(fixture, { linkedBoardUser: true });
     const channel = makeThread({ channelId: "CPOOL", id: "slack:CPOOL:8300.1", name: "pool" });
     await deliverMessage({ callbacks, endpointId: endpoint.id, thread: channel.thread,
@@ -4368,7 +4391,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     const [conversation] = await service.listConversations(endpoint.id);
     runtime.endpoints.get(endpoint.id)!.posts.length = 0;
     wakeup.mockRejectedValueOnce(new Error("scheduler unavailable"));
-    await service.publishBoardMessage(endpoint.id, conversation.id, "Small pool work", randomUUID(), "owner-user");
+    await service.publishBoardMessage(endpoint.id, conversation.id, "Small pool work", randomUUID(), "owner-user", [], manualInputActor);
     const smallDb = createDb(externalTestDatabaseUrl ?? tempDb!.connectionString, { maxConnections: 1 });
     const smallWake = vi.fn(async () => ({ accepted: true }));
     const worker = chatChannelService(smallDb, {
@@ -42148,6 +42171,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
 
   it("publishes only explicitly selected board attachments and stays idempotent across retries", async () => {
     const fixture = await seedCompany();
+    const manualInputActor = await seedCurrentHumanSourceActor(db, [fixture.companyId], "owner-user");
     const storage = createStorageService();
     const { callbacks, endpoint, runtime, service } =
       await configuredSlackEndpoint(fixture, {
@@ -42177,12 +42201,13 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       .select()
       .from(chatConversations)
       .where(eq(chatConversations.endpointId, endpoint.id));
+    const attachmentBytes = Buffer.from("selected result", "utf8");
     const stored = await storage.storage.putFile({
       companyId: fixture.companyId,
       namespace: `issues/${conversation.issueId}`,
       originalFilename: "selected-result.txt",
       contentType: "text/plain",
-      body: Buffer.from("selected result", "utf8"),
+      body: attachmentBytes,
     });
     const attachment = await issueService(db).createAttachment({
       issueId: conversation.issueId,
@@ -42193,7 +42218,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       sha256: stored.sha256,
       originalFilename: stored.originalFilename,
       createdByUserId: "owner-user",
-    });
+    }, { actor: manualInputActor, bytes: attachmentBytes });
 
     const first = await service.publishBoardMessage(
       endpoint.id,
@@ -42202,6 +42227,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       "same-browser-request-1234",
       "owner-user",
       [attachment.id],
+      manualInputActor,
     );
     const second = await service.publishBoardMessage(
       endpoint.id,
@@ -42210,6 +42236,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       "same-browser-request-1234",
       "owner-user",
       [attachment.id],
+      manualInputActor,
     );
 
     expect(second.id).toBe(first.id);
@@ -60247,6 +60274,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
 
   it("rechecks the outbound link when publication commits between reaction preflight reads", async () => {
     const fixture = await seedCompany();
+    const manualInputActor = await seedCurrentHumanSourceActor(db, [fixture.companyId], "owner-user");
     let releasePreflight!: () => void;
     const preflightRelease = new Promise<void>((resolve) => {
       releasePreflight = resolve;
@@ -60326,6 +60354,8 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       "The preflight race reply",
       "reaction-preflight-link-commit",
       "owner-user",
+      [],
+      manualInputActor,
     );
     providerRuntime.postHook = undefined;
     releasePreflight();
@@ -61065,6 +61095,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
 
   it("does not deadlock reaction replay against publication link settlement", async () => {
     const fixture = await seedCompany();
+    const manualInputActor = await seedCurrentHumanSourceActor(db, [fixture.companyId], "owner-user");
     let beginContention!: () => void;
     const contention = new Promise<void>((resolve) => {
       beginContention = resolve;
@@ -61121,6 +61152,8 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       "The link-lock race reply",
       "reaction-link-lock-settlement",
       "owner-user",
+      [],
+      manualInputActor,
     );
     const [link] = await db
       .select()
@@ -61450,6 +61483,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
 
   it("filters a staged reaction when destination reach is revoked before replay", async () => {
     const fixture = await seedCompany();
+    const manualInputActor = await seedCurrentHumanSourceActor(db, [fixture.companyId], "owner-user");
     const { callbacks, endpoint, runtime, service, wakeup } =
       await configuredSlackEndpoint(fixture, { linkedBoardUser: true });
     const channel = makeThread({
@@ -61522,6 +61556,8 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       "A reply whose reach will be revoked",
       "revoked-reaction-before-link",
       "owner-user",
+      [],
+      manualInputActor,
     );
     providerRuntime.postHook = undefined;
     if (!stagedId) throw new Error("Expected a staged reaction delivery");
@@ -70953,6 +70989,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       provider: "slack" | "github" | "microsoft-teams",
     ) {
       const fixture = await seedCompany();
+      const manualInputActor = await seedCurrentHumanSourceActor(db, [fixture.companyId], "owner-user");
       const context =
         provider === "slack"
           ? await configuredSlackEndpoint(fixture)
@@ -71013,7 +71050,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
           throw new Error("Expected long publication conversation");
         const transport = context.runtime.endpoints.get(context.endpoint.id)!;
         transport.posts.length = 0;
-        return { ...context, fixture, conversation, transport, channel };
+        return { ...context, fixture, conversation, transport, channel, manualInputActor };
       } catch (error) {
         await retirePublicationFixture(context.service, context.endpoint.id);
         throw error;
@@ -71039,7 +71076,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     ] as const)(
       "preserves all 100000 characters for %s %s-comment publication",
       async (provider, source) => {
-        const { service, endpoint, conversation, transport } =
+        const { service, endpoint, conversation, transport, manualInputActor } =
           await longFixture(provider);
         try {
           const marker = "END-OF-100000-CHARACTER-BOARD-SEND";
@@ -71048,7 +71085,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
             source === "existing"
               ? await issueService(db).addComment(conversation.issueId, body, {
                   userId: "owner-user",
-                })
+                }, { manualInputActor })
               : null;
           const publication = comment
             ? await service.publishComment(
@@ -71062,6 +71099,8 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
                 body,
                 "lossless-long-board-send",
                 "owner-user",
+                [],
+                manualInputActor,
               );
           for (let drain = 0; drain < 20; drain++)
             await service.processPendingPublications();
@@ -71095,6 +71134,8 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
               body,
               "lossless-long-board-send",
               "owner-user",
+              [],
+              manualInputActor,
             );
           expect(transport.posts).toHaveLength(before);
         } finally {
@@ -71106,7 +71147,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     it.each(["slack", "github", "microsoft-teams"] as const)(
       "preserves %s code, Unicode and sanitization expansion through actual durable parts",
       async (provider) => {
-        const { service, endpoint, conversation, transport } =
+        const { service, endpoint, conversation, transport, manualInputActor } =
           await longFixture(provider);
         try {
           const body =
@@ -71123,6 +71164,8 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
             body,
             "long-rich-board-send",
             "owner-user",
+            [],
+            manualInputActor,
           );
           for (let drain = 0; drain < 20; drain++)
             await service.processPendingPublications();

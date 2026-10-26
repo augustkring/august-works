@@ -1,0 +1,33 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/v7-portability.integration.test.ts (3 tests | 1 failed) 108204ms
+     × retains portability with rollout off and excludes source-erased payloads 34862ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-portability.integration.test.ts > native owner V7 portability > retains portability with rollout off and excludes source-erased payloads
+Error: Memory record not found
+ ❯ notFound src/errors.ts:25:10
+     23|
+     24| export function notFound(message = "Not found", details?: unknown) {
+     25|   return new HttpError(404, message, details);
+       |          ^
+     26| }
+     27|
+ ❯ src/services/memory/memory-service.ts:1276:28
+ ❯ ../packages/db/src/work-signals.ts:38:22
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ PostgresJsDatabase.connection.transaction ../packages/db/src/work-signals.ts:35:22
+ ❯ Object.forget src/services/memory/memory-service.ts:1271:22
+ ❯ src/__tests__/v7-portability.integration.test.ts:179:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed (3)
+   Start at  16:05:26
+   Duration  127.64s (transform 13.39s, setup 126ms, import 19.16s, tests 108.20s, environment 0ms)
+

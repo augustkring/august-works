@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
+  activityLog,
   agents,
   authUsers,
   authSessions,
@@ -16,6 +17,8 @@ import {
   projectWorkspaces,
   principalPermissionGrants,
   projects,
+  pluginManagedResources,
+  plugins,
   routineDocuments,
   routineRuns,
   routines,
@@ -44,10 +47,33 @@ vi.mock("@paperclipai/shared/telemetry", async () => {
 });
 
 import { routineService } from "../services/routines.ts";
-import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
+import { createCanonicalHumanProject, seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
+import { buildHostServices } from "../services/plugin-host-services.js";
+import type { PaperclipPluginManifestV1 } from "@paperclipai/shared";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
+
+const routineTelemetryManifest: PaperclipPluginManifestV1 = {
+  id: "paperclip.routine-telemetry-test", apiVersion: 1, version: "0.1.0", displayName: "Routine telemetry test",
+  description: "Exercises telemetry through the qualified managed Routine owner", author: "Paperclip",
+  categories: ["automation"], capabilities: ["agents.managed", "projects.managed", "routines.managed"],
+  entrypoints: { worker: "./dist/worker.js" },
+  agents: [{ agentKey: "telemetry-worker", displayName: "Telemetry worker", role: "engineer", adapterType: "process",
+    adapterConfig: { command: "pnpm telemetry:noop" } }],
+  projects: [{ projectKey: "operations", displayName: "Routine telemetry operations", description: "Routine telemetry scope",
+    status: "in_progress" }],
+  routines: [{ routineKey: "telemetry", title: "Run telemetry test", description: "Routine body",
+    assigneeRef: { resourceKind: "agent", resourceKey: "telemetry-worker" },
+    projectRef: { resourceKind: "project", resourceKey: "operations" }, status: "active", priority: "medium",
+    concurrencyPolicy: "coalesce_if_active", catchUpPolicy: "skip_missed", activityGatePolicy: "always",
+    activityGateScope: "company", triggers: [{ kind: "schedule", label: "Telemetry", cronExpression: "0 3 * * *", timezone: "UTC" }],
+    issueTemplate: { surfaceVisibility: "plugin_operation", originId: "operation:telemetry", billingCode: "test:telemetry" } }],
+};
+
+function createEventBusStub() {
+  return { forPlugin: () => ({ emit: async () => {}, subscribe: () => {} }) } as any;
+}
 
 describeEmbeddedPostgres("routine run telemetry", () => {
   let db!: ReturnType<typeof createDb>;
@@ -71,6 +97,9 @@ describeEmbeddedPostgres("routine run telemetry", () => {
     await db.delete(executionWorkspaces);
     await db.delete(projectWorkspaces);
     await db.delete(projects);
+    await db.delete(pluginManagedResources);
+    await db.delete(activityLog);
+    await db.delete(plugins);
     await db.delete(agents);
     await db.delete(principalPermissionGrants);
     await db.delete(companyMemberships);
@@ -85,8 +114,7 @@ describeEmbeddedPostgres("routine run telemetry", () => {
 
   async function seedFixture() {
     const companyId = randomUUID();
-    const agentId = randomUUID();
-    const projectId = randomUUID();
+    const pluginId = randomUUID();
 
     await db.insert(companies).values({
       id: companyId,
@@ -96,25 +124,20 @@ describeEmbeddedPostgres("routine run telemetry", () => {
       defaultResponsibleUserId: "responsible-user",
     });
     const sourceActor = await seedCurrentHumanSourceActor(db, [companyId], "responsible-user");
-
-    await db.insert(agents).values({
-      id: agentId,
-      companyId,
-      name: "CodexCoder",
-      role: "engineer",
-      status: "active",
-      adapterType: "codex_local",
-      adapterConfig: {},
-      runtimeConfig: {},
-      permissions: {},
-    });
-
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
-      name: "Routines",
-      status: "in_progress",
-    });
+    await db.insert(plugins).values({ id: pluginId, pluginKey: routineTelemetryManifest.id,
+      packageName: "@paperclipai/plugin-routine-telemetry-test", version: routineTelemetryManifest.version,
+      apiVersion: routineTelemetryManifest.apiVersion, categories: routineTelemetryManifest.categories,
+      manifestJson: routineTelemetryManifest, status: "ready", installOrder: 1 });
+    const host = buildHostServices(db, pluginId, routineTelemetryManifest.id, createEventBusStub(), undefined,
+      { manifest: routineTelemetryManifest });
+    await host.agents.managedReconcile({ companyId, agentKey: "telemetry-worker" });
+    const project = await createCanonicalHumanProject(db, companyId, sourceActor, "Routines");
+    const projectId = project.id;
+    await db.insert(pluginManagedResources).values({ companyId, pluginId, pluginKey: routineTelemetryManifest.id,
+      resourceKind: "project", resourceKey: "operations", resourceId: projectId, defaultsJson: {} });
+    await host.projects.reconcileManaged({ companyId, projectKey: "operations" });
+    const managedRoutine = await host.routines.managedReconcile({ companyId, routineKey: "telemetry" });
+    if (!managedRoutine.routineId) throw new Error("Managed telemetry Routine was not created");
 
     const svc = routineService(db, {
       sourceActor,
@@ -147,24 +170,7 @@ describeEmbeddedPostgres("routine run telemetry", () => {
       },
     });
 
-    const routine = await svc.create(
-      companyId,
-      {
-        projectId,
-        goalId: null,
-        parentIssueId: null,
-        title: "Run telemetry test",
-        description: "Routine body",
-        assigneeAgentId: agentId,
-        priority: "medium",
-        status: "active",
-        concurrencyPolicy: "coalesce_if_active",
-        catchUpPolicy: "skip_missed",
-      },
-      {},
-    );
-
-    return { routine, svc, sourceActor };
+    return { routine: { id: managedRoutine.routineId }, svc, sourceActor };
   }
 
   it("emits telemetry for routine runs from the service layer", async () => {

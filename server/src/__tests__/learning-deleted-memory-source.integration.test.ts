@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { authUsers, companies, companyMemberships, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
-  issues, learningCycles, learningEvidence, memoryBindings, memoryRecords, memoryObservations, memoryObservationEvidence, memoryModels, memoryModelVersions, memoryModelEvidence, type Db } from "@paperclipai/db";
+  issues, learningCycles, learningEvidence, memoryBindings, memoryRecords, memoryEvidence, memoryObservations, memoryObservationEvidence, memoryModels, memoryModelVersions, memoryModelEvidence, type Db } from "@paperclipai/db";
 import { assertLearningAnalyticalSources } from "../services/learning/learning-analytical-sources.js";
 import { observationLineage, modelLineage } from "../services/memory/derived-memory.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
@@ -24,6 +24,11 @@ describe("Learning keeps the identity of a physically deleted private Memory sou
     const roots=await db.insert(memoryRecords).values([true,false].map(privateSource=>({companyId,bindingId:binding!.id,providerKey:"local",memoryType:"outcome",scopeType:"company",
       content:privateSource?"PRIVATE source payload":"Independent public source",observedAt:new Date(),createdByActorType:"user",createdByActorId:ownerId,
       reviewState:"accepted",verificationState:"human_verified",sourceProvenanceQualified:true,sourceIssueIds:privateSource?[issueId]:[]}))).returning();
+    const [sourceTask]=await db.select({updatedAt:issues.updatedAt,title:issues.title}).from(issues).where(and(eq(issues.companyId,companyId),eq(issues.id,issueId)));
+    if(!sourceTask)throw new Error("The retained private Memory source Task is missing");
+    await db.insert(memoryEvidence).values({companyId,memoryRecordId:roots[0]!.id,sourceClass:"task",sourceProvider:"august_works_tasks",
+      sourceType:"issue",sourceRef:`issue://${issueId}`,sourceVersion:sourceTask!.updatedAt.toISOString(),sourceUpdatedAt:sourceTask!.updatedAt,
+      observedAt:new Date(),excerptHash:"a".repeat(64),citationJson:{label:sourceTask!.title},trustLevel:"high",supportsOrContradicts:"supports"});
     const [cycle]=await db.insert(learningCycles).values({companyId,scopeType:"company",purpose:"native_task_execution",trigger:"Two actual source outcomes",maxHypotheses:2,maxEvaluations:2,outcomeVersions:{},createdBy:ownerId}).returning();
     await db.insert(learningEvidence).values(roots.map(root=>({companyId,cycleId:cycle!.id,memoryRecordId:root.id,sourceVersion:root.updatedAt.toISOString()})));
     const [observation]=await db.insert(memoryObservations).values({companyId,observationKey:randomUUID(),scopeType:"company",purpose:"native_task_execution",

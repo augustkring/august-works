@@ -10848,6 +10848,21 @@ export function issueService(db: Db) {
                 issueAgentPrincipal: boolean;
                 issueHumanPrincipal: boolean;
                 snapshotOwnerCurrent: boolean;
+                snapshotOwnerKindCurrent: boolean;
+                snapshotOwnerIdCurrent: boolean;
+                snapshotOwnerCompanyCurrent: boolean;
+                snapshotBodyHashCurrent: boolean;
+                snapshotDigestCurrent: boolean;
+                allTaskInputSourceVersionsCurrent: boolean;
+                allCommentInputSourceVersionsCurrent: boolean;
+                policyIssueEdgesExact: boolean;
+                allTaskInputsCurrent: boolean;
+                allDispatchesMatchOriginRun: boolean;
+                allDispatchesMatchReceiptPrefix: boolean;
+                allDispatchesMatchAnyPrefix: boolean;
+                workerDispatchInputCount: number;
+                allRunCopySourcesCurrent: boolean;
+                conversationBindingCurrent: boolean;
                 snapshotPolicyIssueCount: number;
                 issueSourceEdgeCount: number;
                 sourceKinds: string[];
@@ -10882,7 +10897,107 @@ export function issueService(db: Db) {
                     and i.payload_source_snapshot->'owner'->>'contentHash'=public.aw_native_payload_body_hash('issue',to_jsonb(i))
                     and i.payload_source_snapshot->>'digest'=encode(sha256(convert_to((i.payload_source_snapshot-'digest')::text,'UTF8')),'hex'))
                     as "snapshotOwnerCurrent",
-                  jsonb_array_length(coalesce(${issue.payloadSourceSnapshot}::jsonb->'policy'->'issueIds','[]'::jsonb))::int
+                  (${issue.payloadSourceSnapshot && typeof issue.payloadSourceSnapshot === "object"
+                    ? (issue.payloadSourceSnapshot as Record<string, unknown>).owner &&
+                      typeof (issue.payloadSourceSnapshot as Record<string, unknown>).owner === "object" &&
+                      ((issue.payloadSourceSnapshot as Record<string, unknown>).owner as Record<string, unknown>).kind === "issue"
+                    : false}) as "snapshotOwnerKindCurrent",
+                  (${issue.payloadSourceSnapshot && typeof issue.payloadSourceSnapshot === "object"
+                    ? (issue.payloadSourceSnapshot as Record<string, unknown>).owner &&
+                      typeof (issue.payloadSourceSnapshot as Record<string, unknown>).owner === "object" &&
+                      ((issue.payloadSourceSnapshot as Record<string, unknown>).owner as Record<string, unknown>).id === issue.id
+                    : false}) as "snapshotOwnerIdCurrent",
+                  (${issue.payloadSourceSnapshot && typeof issue.payloadSourceSnapshot === "object"
+                    ? (issue.payloadSourceSnapshot as Record<string, unknown>).owner &&
+                      typeof (issue.payloadSourceSnapshot as Record<string, unknown>).owner === "object" &&
+                      ((issue.payloadSourceSnapshot as Record<string, unknown>).owner as Record<string, unknown>).companyId === companyId
+                    : false}) as "snapshotOwnerCompanyCurrent",
+                  exists(select 1 from issues i where i.company_id=${companyId} and i.id=${issue.id}
+                    and i.payload_source_snapshot->'owner'->>'contentHash'=public.aw_native_payload_body_hash('issue',to_jsonb(i)))
+                    as "snapshotBodyHashCurrent",
+                  exists(select 1 from issues i where i.company_id=${companyId} and i.id=${issue.id}
+                    and i.payload_source_snapshot->>'digest'=encode(sha256(convert_to((i.payload_source_snapshot-'digest')::text,'UTF8')),'hex'))
+                    as "snapshotDigestCurrent",
+                  not exists(select 1 from jsonb_array_elements(coalesce(${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'inputs','[]'::jsonb)) captured
+                    where captured->>'kind'='task' and not exists(select 1 from issues source
+                      where source.company_id=${companyId}
+                        and source.id=case when captured->>'issueId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+                          then (captured->>'issueId')::uuid end
+                        and extract(epoch from source.updated_at)::text=captured->>'sourceVersion'))
+                    as "allTaskInputSourceVersionsCurrent",
+                  not exists(select 1 from jsonb_array_elements(coalesce(${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'inputs','[]'::jsonb)) captured
+                    where captured->>'kind'='comment' and not exists(select 1 from issue_comments source
+                      where source.company_id=${companyId}
+                        and source.id=case when captured->>'commentId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+                          then (captured->>'commentId')::uuid end
+                        and extract(epoch from source.updated_at)::text=captured->>'sourceVersion'))
+                    as "allCommentInputSourceVersionsCurrent",
+                  ${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'policy'->'issueIds' = coalesce((
+                    select jsonb_agg(source_id::text order by source_id::text) from (
+                      select distinct source_id from issue_privacy_sources where company_id=${companyId}
+                        and issue_id=${issue.id} and source_kind='issue') source_ids), '[]'::jsonb)
+                    as "policyIssueEdgesExact",
+                  not exists(select 1 from jsonb_array_elements(coalesce(${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'inputs','[]'::jsonb)) captured
+                    where captured->>'kind'='task' and (
+                      captured->>'issueId' !~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+                      or not exists(select 1 from issues source join issue_privacy_sources edge
+                        on edge.company_id=source.company_id and edge.issue_id=${issue.id}
+                          and edge.source_kind='issue' and edge.context_manifest_id is null and edge.source_id=source.id
+                        where source.company_id=${companyId} and source.id=(captured->>'issueId')::uuid
+                          and source.payload_source_protocol_version=1 and source.payload_source_snapshot is not null
+                          and source.payload_source_snapshot_invalidated=false
+                          and source.payload_source_snapshot->'owner'->>'kind'='issue'
+                          and source.payload_source_snapshot->'owner'->>'id'=source.id::text
+                          and source.payload_source_snapshot->'owner'->>'companyId'=source.company_id::text
+                          and source.payload_source_snapshot->'owner'->>'contentHash'=public.aw_native_payload_body_hash('issue',to_jsonb(source))
+                          and source.payload_source_snapshot->>'digest'=encode(sha256(convert_to((source.payload_source_snapshot-'digest')::text,'UTF8')),'hex'))))
+                    as "allTaskInputsCurrent",
+                  not exists(select 1 from jsonb_array_elements(coalesce(${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'inputs','[]'::jsonb)) captured
+                    where captured->>'kind' in ('worker_model_dispatch','conversation_model_dispatch')
+                      and captured->>'runId' is distinct from ${issue.originRunId}) as "allDispatchesMatchOriginRun",
+                  not exists(select 1 from jsonb_array_elements(coalesce(${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'inputs','[]'::jsonb)) captured_dispatch
+                    where captured_dispatch->>'kind' in ('worker_model_dispatch','conversation_model_dispatch') and not exists(
+                      select 1 from heartbeat_runs producer
+                      cross join lateral jsonb_array_elements(coalesce(producer.runner_profile_json->'nativeInputSourceReceipt'->'dispatches','[]'::jsonb)) prefix(value)
+                      where producer.company_id=${companyId} and producer.id::text=captured_dispatch->>'runId'
+                        and producer.native_input_source_protocol_version=1
+                        and prefix.value->'policy'=${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'policy'
+                        and prefix.value->'inputs'=(select coalesce(jsonb_agg(captured_input.value order by captured_input.ordinality),'[]'::jsonb)
+                          from jsonb_array_elements(${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'inputs') with ordinality captured_input(value,ordinality)
+                          where captured_input.value is distinct from captured_dispatch)))
+                    as "allDispatchesMatchReceiptPrefix",
+                  not exists(select 1 from jsonb_array_elements(coalesce(${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'inputs','[]'::jsonb)) captured_dispatch
+                    where captured_dispatch->>'kind' in ('worker_model_dispatch','conversation_model_dispatch') and not (
+                      exists(select 1 from heartbeat_runs producer
+                        cross join lateral jsonb_array_elements(coalesce(producer.runner_profile_json->'nativeInputSourceReceipt'->'dispatches','[]'::jsonb)) prefix(value)
+                        where producer.company_id=${companyId} and producer.id::text=captured_dispatch->>'runId'
+                          and producer.native_input_source_protocol_version=1
+                          and prefix.value->'policy'=${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'policy'
+                          and prefix.value->'inputs'=(select coalesce(jsonb_agg(captured_input.value order by captured_input.ordinality),'[]'::jsonb)
+                            from jsonb_array_elements(${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'inputs') with ordinality captured_input(value,ordinality)
+                            where captured_input.value is distinct from captured_dispatch))
+                      or exists(select 1 from heartbeat_runs producer
+                        where producer.company_id=${companyId} and producer.id::text=captured_dispatch->>'runId'
+                          and producer.native_input_source_protocol_version=1
+                          and producer.runner_profile_json->'nativeInputSourceReceipt'->'bootstrap'->'policy'=${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'policy'
+                          and producer.runner_profile_json->'nativeInputSourceReceipt'->'bootstrap'->'inputs'=(select coalesce(jsonb_agg(captured_input.value order by captured_input.ordinality),'[]'::jsonb)
+                            from jsonb_array_elements(${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'inputs') with ordinality captured_input(value,ordinality)
+                            where captured_input.value is distinct from captured_dispatch))))
+                    as "allDispatchesMatchAnyPrefix",
+                  (select count(*)::int from jsonb_array_elements(coalesce(${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'inputs','[]'::jsonb)) captured_dispatch
+                    where captured_dispatch->>'kind' in ('worker_model_dispatch','conversation_model_dispatch')) as "workerDispatchInputCount",
+                  not exists(select 1 from issue_privacy_sources edge where edge.company_id=${companyId}
+                    and edge.issue_id=${issue.id} and edge.source_kind='run_copy' and (
+                      not exists(select 1 from heartbeat_runs copy_run where copy_run.company_id=edge.company_id and copy_run.id=edge.source_id)
+                      or exists(select 1 from memory_deletion_markers marker where marker.company_id=edge.company_id
+                        and marker.kind='source' and marker.key='memory-run-source-erasure:v1:'||edge.source_id::text)))
+                    as "allRunCopySourcesCurrent",
+                  (${issue.conversationRetiredAt === null}) and
+                    (${issue.conversationAgentId === null && issue.conversationUserId === null
+                      || issue.conversationAgentId === (finalPrivacyReader.type === "agent" ? finalPrivacyReader.agentId : null)
+                        && issue.conversationUserId === (finalPrivacyReader.type === "board" ? finalPrivacyReader.userId : finalPrivacyReader.onBehalfOfUserId)})
+                    as "conversationBindingCurrent",
+                  jsonb_array_length(coalesce(${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'policy'->'issueIds','[]'::jsonb))::int
                     as "snapshotPolicyIssueCount",
                   (select count(*)::int from issue_privacy_sources s where s.company_id=${companyId} and s.issue_id=${issue.id}
                     and s.source_kind='issue') as "issueSourceEdgeCount",
@@ -10890,12 +11005,44 @@ export function issueService(db: Db) {
                     from issue_privacy_sources s where s.company_id=${companyId} and s.issue_id=${issue.id}),array[]::text[])
                     as "sourceKinds",
                   coalesce((select array_agg(distinct input->>'kind' order by input->>'kind')
-                    from jsonb_array_elements(coalesce(${issue.payloadSourceSnapshot}::jsonb->'inputs','[]'::jsonb)) input),array[]::text[])
+                    from jsonb_array_elements(coalesce(${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'inputs','[]'::jsonb)) input),array[]::text[])
                     as "inputKinds"
                 `);
                 facts = row;
-              } catch {
+              } catch (diagnosticError) {
                 // Diagnostics must never replace the original privacy denial.
+                const candidate = diagnosticError as {
+                  name?: unknown;
+                  code?: unknown;
+                  status?: unknown;
+                  stack?: unknown;
+                  cause?: { code?: unknown; stack?: unknown };
+                };
+                const safeLiteral = (value: unknown) =>
+                  typeof value === "string" && /^[A-Za-z0-9_.-]{1,64}$/.test(value)
+                    ? value
+                    : null;
+                const stack = typeof candidate.stack === "string" ? candidate.stack : "";
+                const sourceFrames = [...stack.matchAll(/(?:^|\n)\s*at\s+(?:[^\n(]*\s+\()?([^()\n]*\.ts):(\d+):(\d+)\)?/g)]
+                  .slice(0, 4)
+                  .map((match) => ({
+                    file: match[1]?.split(/[\\/]/).at(-1) ?? "unknown.ts",
+                    line: Number(match[2]),
+                    column: Number(match[3]),
+                  }));
+                console.info("native-private-task-reader-diagnostic-failure", JSON.stringify({
+                  errorClass: safeLiteral(candidate.name) ?? "Error",
+                  code: safeLiteral(candidate.code),
+                  status: typeof candidate.status === "number" && Number.isInteger(candidate.status)
+                    ? candidate.status
+                    : null,
+                  sqlState: typeof candidate.code === "string" && /^[0-9A-Z]{5}$/.test(candidate.code)
+                    ? candidate.code
+                    : typeof candidate.cause?.code === "string" && /^[0-9A-Z]{5}$/.test(candidate.cause.code)
+                      ? candidate.cause.code
+                      : null,
+                  sourceFrames,
+                }));
               }
               console.info("native-private-task-reader-denied", JSON.stringify({
                 diagnosticAvailable: facts !== undefined,
@@ -10906,6 +11053,21 @@ export function issueService(db: Db) {
                 issueAgentPrincipal: facts?.issueAgentPrincipal === true,
                 issueHumanPrincipal: facts?.issueHumanPrincipal === true,
                 snapshotOwnerCurrent: facts?.snapshotOwnerCurrent === true,
+                snapshotOwnerKindCurrent: facts?.snapshotOwnerKindCurrent === true,
+                snapshotOwnerIdCurrent: facts?.snapshotOwnerIdCurrent === true,
+                snapshotOwnerCompanyCurrent: facts?.snapshotOwnerCompanyCurrent === true,
+                snapshotBodyHashCurrent: facts?.snapshotBodyHashCurrent === true,
+                snapshotDigestCurrent: facts?.snapshotDigestCurrent === true,
+                allTaskInputSourceVersionsCurrent: facts?.allTaskInputSourceVersionsCurrent === true,
+                allCommentInputSourceVersionsCurrent: facts?.allCommentInputSourceVersionsCurrent === true,
+                policyIssueEdgesExact: facts?.policyIssueEdgesExact === true,
+                allTaskInputsCurrent: facts?.allTaskInputsCurrent === true,
+                allDispatchesMatchOriginRun: facts?.allDispatchesMatchOriginRun === true,
+                allDispatchesMatchReceiptPrefix: facts?.allDispatchesMatchReceiptPrefix === true,
+                allDispatchesMatchAnyPrefix: facts?.allDispatchesMatchAnyPrefix === true,
+                workerDispatchInputCount: facts?.workerDispatchInputCount ?? -1,
+                allRunCopySourcesCurrent: facts?.allRunCopySourcesCurrent === true,
+                conversationBindingCurrent: facts?.conversationBindingCurrent === true,
                 snapshotPolicyIssueCount: facts?.snapshotPolicyIssueCount ?? -1,
                 issueSourceEdgeCount: facts?.issueSourceEdgeCount ?? -1,
                 sourceKinds: facts?.sourceKinds ?? [],
@@ -13173,91 +13335,109 @@ export function issueService(db: Db) {
         mirrorToSlack?: boolean;
         /** Actual HTTP actor, never inferred from author attribution. */
         manualInputActor?: AuthorizationActor;
+        /**
+         * Caller-owned transactions must publish source activity only after
+         * their outer transaction commits. The callback must retain this value
+         * and publish it after commit; it must not publish inline.
+         */
+        onManualInputSourcePublication?: (publication: ActivityPublication) => void;
       },
       dbOrTx: any = db,
       manualInputProtocol?: 1,
     ): Promise<IssueComment> {
-      if (dbOrTx === db && (actor.runId || actor.userId)) {
-        const candidate = options?.manualInputActor;
-        const directActor = candidate?.type === "board" && candidate.source === "session" &&
-          candidate.userId === actor.userId && candidate.sessionId && !candidate.runId && !actor.agentId && !actor.runId &&
-          (!options?.authorType || options.authorType === "user") && !options?.presentation && !options?.metadata &&
-          !options?.createdAt && (!options?.authorizationReason || options.authorizationReason === "allow_board_actor") &&
-          !options?.attachmentIds?.length ? { ...candidate } : null;
+      const candidate = options?.manualInputActor;
+      const directActor = candidate?.type === "board" && candidate.source === "session" &&
+        candidate.userId === actor.userId && candidate.sessionId && !candidate.runId && !actor.agentId && !actor.runId &&
+        (!options?.authorType || options.authorType === "user") && !options?.presentation && !options?.metadata &&
+        !options?.createdAt && (!options?.authorizationReason || options.authorizationReason === "allow_board_actor") &&
+        !options?.attachmentIds?.length ? { ...candidate } : null;
+      const appendWithManualInput = async (tx: any) => {
+        let sourcePublication: ActivityPublication | null = null;
+        let expiresAt: number | null = null;
+        let operator = false;
+        let companyId: string | null = null;
+        if (directActor) {
+          const pinned = await pinCurrentBoardActor(tx, directActor);
+          if (!pinned || pinned.credentialExpiresAt === null || !Number.isFinite(pinned.credentialExpiresAt))
+            throw forbidden("The current manual input session is unavailable");
+          expiresAt = pinned.credentialExpiresAt;
+          const [target] = await tx.select({ companyId: issues.companyId }).from(issues).where(eq(issues.id, issueId));
+          if (!target) throw notFound("Issue not found");
+          companyId = target.companyId;
+          operator = await pinIssueMutationHuman(tx, directActor, companyId, true) === "instance_admin";
+          if (operator) await assertHumanAuthentication(tx, directActor, { requireRecent: true, phishingResistant: true });
+          await assertManualInputCredentialCurrent(tx, directActor, expiresAt);
+          await lockIssuePrivacyTree(tx, companyId);
+        }
+        // Serialize user and run-authored comments on the issue row. The same
+        // transaction also carries the current Human ACL check and source seal.
+        const [lockedIssue] = await tx
+          .select({ id: issues.id, companyId: issues.companyId, status: issues.status,
+            assigneeAgentId: issues.assigneeAgentId, assigneeUserId: issues.assigneeUserId })
+          .from(issues)
+          .where(eq(issues.id, issueId))
+          .for("update");
+        let freshInput = false;
+        if (directActor) {
+          if (!lockedIssue || lockedIssue.companyId !== companyId) throw notFound("Issue not found");
+          const currentActor = { ...directActor, isInstanceAdmin: false, ignoreInstanceAdmin: !operator };
+          const decision = await authorizationService(tx).decide({ actor: currentActor, action: "issue:comment",
+            resource: { type: "issue", companyId: lockedIssue.companyId, issueId,
+              status: lockedIssue.status, assigneeAgentId: lockedIssue.assigneeAgentId,
+              assigneeUserId: lockedIssue.assigneeUserId }, enforceResponsibleUserIntersection: true });
+          if (!decision.allowed || !await canActorReadIssuePrivacy(tx, currentActor, lockedIssue))
+            throw forbidden("Current task comment authority is required");
+          const existing = options?.clientRequestId ? await tx.select({ id: issueComments.id }).from(issueComments)
+            .where(and(eq(issueComments.issueId, issueId), eq(issueComments.authorUserId, directActor.userId!),
+              eq(issueComments.clientRequestId, options.clientRequestId))).limit(1) : [];
+          freshInput = existing.length === 0;
+        }
+        const insertOptions = directActor ? { ...options, manualInputActor: undefined,
+          onManualInputSourcePublication: undefined } : options;
+        const comment = await addComment(issueId, body, actor, insertOptions, tx, freshInput ? 1 : undefined);
+        if (directActor && expiresAt !== null && companyId) {
+          if (freshInput) {
+            const [captured] = await tx.update(issueComments)
+              .set({ payloadSourceSnapshot: directHumanPayloadSnapshotSql("comment") })
+              .where(and(eq(issueComments.id, comment.id), eq(issueComments.companyId, companyId),
+                eq(issueComments.issueId, issueId), eq(issueComments.authorUserId, directActor.userId!),
+                eq(issueComments.payloadSourceProtocolVersion, 1), isNull(issueComments.payloadSourceSnapshot),
+                eq(issueComments.payloadSourceSnapshotInvalidated, false), isNull(issueComments.deletedAt))).returning();
+            if (!captured?.payloadSourceSnapshot) throw conflict("Manual comment source capture was not stored");
+            const snapshot = nativePayloadSourceSnapshotSchema.parse(captured.payloadSourceSnapshot);
+            const activity = await persistActivity(tx as unknown as Db, { companyId, actorType: "user",
+              actorId: directActor.userId!, action: "comment.payload_source_captured", entityType: "issue",
+              entityId: issueId, details: { commentId: comment.id, producer: "direct_manual_input",
+                contentHash: snapshot.owner.contentHash, digest: snapshot.digest } });
+            sourcePublication = activity.publication;
+          }
+          if (operator) await assertHumanAuthentication(tx, directActor, { requireRecent: true, phishingResistant: true });
+          await assertManualInputCredentialCurrent(tx, directActor, expiresAt);
+        }
+        return { comment, sourcePublication };
+      };
+      if ((actor.runId || actor.userId) && dbOrTx === db) {
         const append = async () => {
           let sourcePublication: ActivityPublication | null = null;
-          const result = await db.transaction(async (tx) => {
-            let expiresAt: number | null = null, operator = false, companyId: string | null = null;
-            if (directActor) {
-              const pinned = await pinCurrentBoardActor(tx, directActor);
-              if (!pinned || pinned.credentialExpiresAt === null || !Number.isFinite(pinned.credentialExpiresAt))
-                throw forbidden("The current manual input session is unavailable");
-              expiresAt = pinned.credentialExpiresAt;
-              const [target] = await tx.select({ companyId: issues.companyId }).from(issues).where(eq(issues.id, issueId));
-              if (!target) throw notFound("Issue not found");
-              companyId = target.companyId;
-              operator = await pinIssueMutationHuman(tx, directActor, companyId, true) === "instance_admin";
-              if (operator) await assertHumanAuthentication(tx, directActor, { requireRecent: true, phishingResistant: true });
-              await assertManualInputCredentialCurrent(tx, directActor, expiresAt);
-              await lockIssuePrivacyTree(tx, companyId);
-            }
-            // Serialize run-authored comments on the issue so a provider retry
-            // cannot publish the same visible result twice. This needs no schema
-            // change: the issue row is the transaction fence, and the recursive
-            // call below performs the lookup and insert while holding it.
-            const [lockedIssue] = await tx
-              .select({ id: issues.id, companyId: issues.companyId, status: issues.status,
-                assigneeAgentId: issues.assigneeAgentId, assigneeUserId: issues.assigneeUserId })
-              .from(issues)
-              .where(eq(issues.id, issueId))
-              .for("update");
-            let freshInput = false;
-            if (directActor) {
-              if (!lockedIssue || lockedIssue.companyId !== companyId) throw notFound("Issue not found");
-              const currentActor = { ...directActor, isInstanceAdmin: false, ignoreInstanceAdmin: !operator };
-              const decision = await authorizationService(tx).decide({ actor: currentActor, action: "issue:comment",
-                resource: { type: "issue", companyId: lockedIssue.companyId, issueId,
-                  status: lockedIssue.status, assigneeAgentId: lockedIssue.assigneeAgentId,
-                  assigneeUserId: lockedIssue.assigneeUserId }, enforceResponsibleUserIntersection: true });
-              if (!decision.allowed || !await canActorReadIssuePrivacy(tx, currentActor, lockedIssue))
-                throw forbidden("Current task comment authority is required");
-              const existing = options?.clientRequestId ? await tx.select({ id: issueComments.id }).from(issueComments)
-                .where(and(eq(issueComments.issueId, issueId), eq(issueComments.authorUserId, directActor.userId!),
-                  eq(issueComments.clientRequestId, options.clientRequestId))).limit(1) : [];
-              freshInput = existing.length === 0;
-            }
-            const comment = await addComment(issueId, body, actor, options, tx, freshInput ? 1 : undefined);
-            if (directActor && expiresAt !== null && companyId) {
-              if (freshInput) {
-                const [captured] = await tx.update(issueComments)
-                  .set({ payloadSourceSnapshot: directHumanPayloadSnapshotSql("comment") })
-                  .where(and(eq(issueComments.id, comment.id), eq(issueComments.companyId, companyId),
-                    eq(issueComments.issueId, issueId), eq(issueComments.authorUserId, directActor.userId!),
-                    eq(issueComments.payloadSourceProtocolVersion, 1), isNull(issueComments.payloadSourceSnapshot),
-                    eq(issueComments.payloadSourceSnapshotInvalidated, false), isNull(issueComments.deletedAt))).returning();
-                if (!captured?.payloadSourceSnapshot) throw conflict("Manual comment source capture was not stored");
-                const snapshot = nativePayloadSourceSnapshotSchema.parse(captured.payloadSourceSnapshot);
-                const activity = await persistActivity(tx as unknown as Db, { companyId, actorType: "user",
-                  actorId: directActor.userId!, action: "comment.payload_source_captured", entityType: "issue",
-                  entityId: issueId, details: { commentId: comment.id, producer: "direct_manual_input",
-                    contentHash: snapshot.owner.contentHash, digest: snapshot.digest } });
-                sourcePublication = activity.publication;
-              }
-              if (operator) await assertHumanAuthentication(tx, directActor, { requireRecent: true, phishingResistant: true });
-              await assertManualInputCredentialCurrent(tx, directActor, expiresAt);
-            }
-            return comment;
+          const comment = await db.transaction(async (tx) => {
+            const result = await appendWithManualInput(tx);
+            sourcePublication = result.sourcePublication;
+            return result.comment;
           });
           if (sourcePublication) {
             try { publishActivity(sourcePublication); }
             catch (err) { logger.warn({ err }, "Failed to publish committed comment source activity"); }
           }
-          return result;
+          return comment;
         };
-        return options?.authorizationReason ===
-          CHAT_RUN_PRESENTATION_AUTHORIZATION_REASON
+        return options?.authorizationReason === CHAT_RUN_PRESENTATION_AUTHORIZATION_REASON
           ? retryNativeChatReviewPresentation(append)
           : append();
+      }
+      if (directActor && actor.userId && dbOrTx !== db) {
+        const result = await appendWithManualInput(dbOrTx);
+        if (result.sourcePublication) options?.onManualInputSourcePublication?.(result.sourcePublication);
+        return result.comment;
       }
       // Callers supplying a transaction still share the settlement fence.
       if (actor.userId && dbOrTx !== db) {

@@ -6,7 +6,7 @@ import { createServer as createHttpsServer } from "node:https";
 import { execFileSync } from "node:child_process";
 import express from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { agents, agentExecutionManifests, authSessions, authUsers, companies, heartbeatRuns, issues, issueComments,
+import { agents, agentExecutionManifests, authSessions, authUsers, companies, companyMemberships, heartbeatRuns, issues, issueComments,
   orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, createDb } from "@paperclipai/db";
 import { workerModelProfileSchema, type WorkerModelProfile } from "../../services/orchestration/worker-model-profiles.js";
 import { workerModelGateway } from "../../services/orchestration/worker-model-gateway.js";
@@ -48,6 +48,9 @@ export async function runManagedNativeConversationFrame(input: {
   opencodeBinary: string;
   budgetMonthlyCents?: number;
   tariff?: WorkerModelProfile["tariff"];
+  providerReply?: (facts:{body:Record<string,unknown>;callIndex:number}) => {
+    stop_reason:"tool_use"|"end_turn";content:Array<Record<string,unknown>>;
+  } | undefined;
   configureHeartbeat?: (context: {
     db: ReturnType<typeof createDb>;
     actor: AuthorizationActor;
@@ -139,7 +142,8 @@ export async function runManagedNativeConversationFrame(input: {
     sessionId, isInstanceAdmin: false } satisfies AuthorizationActor & Express.Request["actor"];
   const model = "fixture-managed-conversation-v1";
   const adapterConfig = { provider: "opencode", model: `anthropic/${model}`, lifecycleMode: "per_turn" };
-  await db.update(agents).set({ adapterType: "paperclip_runner", adapterConfig, runtimeConfig: {}, status: "idle" })
+  await db.update(agents).set({ adapterType: "paperclip_runner", adapterConfig,
+    runtimeConfig: { timeoutSec: 180 }, status: "idle" })
     .where(eq(agents.id, agentId));
   const providerService = agentProviderBindingService(db);
   const providerBinding = await providerService.create(human, companyId, agentId, {
@@ -202,8 +206,10 @@ export async function runManagedNativeConversationFrame(input: {
       // and yields to the next Human message; it does not need a Worker
       // paperclip_finish result.
       const usage = { input_tokens: 100, output_tokens: 32 };
+      const reply=input.providerReply?.({body,callIndex:providerCalls.length})??{
+        stop_reason:"end_turn",content:[{type:"text",text:"I’ve received your message and am ready to continue."}]};
       const responseBody = JSON.stringify({ id: `msg_conversation_${providerCalls.length}`, type: "message", role: "assistant", model,
-        stop_reason: "end_turn", content: [{ type: "text", text: "I’ve received your message and am ready to continue." }], usage });
+        ...reply, usage });
       const response = new Response(responseBody,
       { status: 200, headers: { "content-type": "application/json" } });
       if (input.beforeProviderResponse && activeRunId && activeIssueId) {
@@ -353,6 +359,10 @@ export async function runManagedNativeConversationFrame(input: {
   const now = new Date();
   await db.insert(authUsers).values({ id: foreignUserId, name: "Foreign conversation Human",
     email: `${foreignUserId}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now });
+  // A valid colleague with company access still cannot inherit this
+  // person's conversation through its Task or route identity.
+  await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:foreignUserId,
+    membershipRole:"admin",status:"active"});
   const foreignSessionId = await seedNativePasskeySession(db, foreignUserId);
   const [foreignSession] = await db.select({ token: authSessions.token, expiresAt: authSessions.expiresAt })
     .from(authSessions).where(eq(authSessions.id, foreignSessionId)).limit(1);

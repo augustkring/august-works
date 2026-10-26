@@ -5,7 +5,7 @@ import fs from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { parse as parseEnvContents } from "dotenv";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -74,6 +74,8 @@ import { resolvePaperclipConfigPath } from "../paths.ts";
 import type { WorkspaceOperation } from "@paperclipai/shared";
 import type { WorkspaceOperationRecorder } from "../services/workspace-operations.ts";
 import { deriveWorktreeInstanceId } from "../services/workspace-instance-cleanup.ts";
+import { createGitWorkspaceCleanupProof, inspectGitCacheRecipe } from "../services/git-workspace-restoration.js";
+import { resolveManagedProjectWorkspaceDir } from "../home-paths.ts";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -139,6 +141,11 @@ async function runGit(cwd: string, args: string[]) {
   await execFileAsync("git", args, { cwd });
 }
 
+async function commitFixtureGit(cwd: string, message: string) {
+  await execFileAsync("git", ["-c", "user.email=paperclip@example.com", "-c", "user.name=Paperclip Test",
+    "commit", "-m", message], { cwd });
+}
+
 async function readGit(cwd: string, args: string[]) {
   return (await execFileAsync("git", args, { cwd })).stdout.trim();
 }
@@ -168,6 +175,65 @@ async function createTempRepo(defaultBranch = "main") {
   await runGit(repoRoot, ["commit", "-m", "Initial commit"]);
   await runGit(repoRoot, ["checkout", "-B", defaultBranch]);
   return repoRoot;
+}
+
+async function createManagedCleanupWorkspace(input: { identifier: string; title: string; instanceHome?: string }) {
+  const companyId = randomUUID();
+  const projectId = randomUUID();
+  const projectWorkspaceId = randomUUID();
+  const issueId = randomUUID();
+  const repoName = `cleanup-${randomUUID()}`;
+  const repoRoot = resolveManagedProjectWorkspaceDir({ companyId, projectId, repoName });
+  await fs.mkdir(repoRoot, { recursive: true });
+  await runGit(repoRoot, ["init", "-b", "main"]);
+  await fs.writeFile(path.join(repoRoot, "README.md"), "managed cleanup fixture\n", "utf8");
+  const branchName = `${input.identifier}-${input.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+  const expectedWorktreePath = path.join(repoRoot, ".paperclip", "worktrees", branchName);
+  const instanceId = input.instanceHome ? deriveWorktreeInstanceId(expectedWorktreePath) : null;
+  if (input.instanceHome && instanceId) {
+    await fs.mkdir(path.join(repoRoot, ".paperclip"), { recursive: true });
+    await fs.writeFile(path.join(repoRoot, ".paperclip", ".env"),
+      `PAPERCLIP_HOME=${JSON.stringify(input.instanceHome)}\nPAPERCLIP_INSTANCE_ID=${JSON.stringify(instanceId)}\n`, "utf8");
+  }
+  await runGit(repoRoot, ["add", "README.md"]);
+  if (input.instanceHome) await runGit(repoRoot, ["add", "-f", ".paperclip/.env"]);
+  await commitFixtureGit(repoRoot, "Initial managed cleanup fixture");
+  const repoUrl = pathToFileURL(repoRoot).href;
+  await runGit(repoRoot, ["remote", "add", "origin", repoUrl]);
+  const realized = await realizeExecutionWorkspace({
+    base: { baseCwd: repoRoot, source: "project_primary", projectId, workspaceId: projectWorkspaceId, repoUrl, repoRef: "main" },
+    config: { workspaceStrategy: { type: "git_worktree", branchTemplate: "{{issue.identifier}}-{{slug}}" } },
+    issue: { id: issueId, identifier: input.identifier, title: input.title },
+    agent: { id: randomUUID(), name: "Codex Coder", companyId },
+  });
+  const workspace = {
+    id: "execution-workspace-proof-fixture",
+    companyId,
+    projectId,
+    projectWorkspaceId,
+    sourceIssueId: issueId,
+    repoUrl,
+    baseRef: "main",
+    sourceRepoRef: "main",
+    sourceCwd: null,
+    sourceType: "remote_managed",
+    sourceVisibility: "default",
+    mode: "isolated_workspace",
+    strategyType: "git_worktree",
+    branchName: realized.branchName,
+    cwd: realized.cwd,
+    providerRef: realized.worktreePath,
+    metadata: RUNTIME_OWNED_GIT_BRANCH_METADATA,
+  };
+  const mintProof = async () => {
+    const recipe = await inspectGitCacheRecipe(workspace, async () => null);
+    return createGitWorkspaceCleanupProof(recipe, async () => {
+      const tip = await readGit(repoRoot, ["rev-parse", `refs/heads/${realized.branchName}`]);
+      if (tip !== recipe.commit) throw new Error("branch_tip_changed_after_inspection");
+    });
+  };
+  if (realized.branchName !== branchName) throw new Error("Cleanup proof fixture branch name was not reproducible");
+  return { repoRoot, repoUrl, realized, workspace, mintProof, instanceId };
 }
 
 async function expectPersistedBranchMismatchRejected(input: {
@@ -3899,65 +3965,45 @@ describe("realizeExecutionWorkspace", () => {
   });
 
   it("keeps a runtime-created branch when its tip changes after guarded worktree removal", async () => {
-    const repoRoot = await createTempRepo();
-    const workspace = await realizeExecutionWorkspace({
-      base: {
-        baseCwd: repoRoot,
-        source: "project_primary",
-        projectId: "project-1",
-        workspaceId: "workspace-1",
-        repoUrl: null,
-        repoRef: "HEAD",
-      },
-      config: {
-        workspaceStrategy: {
-          type: "git_worktree",
-          branchTemplate: "{{issue.identifier}}-{{slug}}",
-        },
-      },
-      issue: {
-        id: "issue-1",
-        identifier: "PAP-450",
-        title: "Race branch cleanup",
-      },
-      agent: {
-        id: "agent-1",
-        name: "Codex Coder",
-        companyId: "company-1",
-      },
-    });
+    const fixture = await createManagedCleanupWorkspace({ identifier: "PAP-450", title: "Race branch cleanup" });
+    const { repoRoot, realized: workspace, workspace: workspaceRow, mintProof } = fixture;
     const expectedHeadSha = await readGit(workspace.cwd, ["rev-parse", "HEAD"]);
+    let beforeBranchDeleteCalled = false;
     await fs.writeFile(path.join(repoRoot, "raced.txt"), "new work\n", "utf8");
     await runGit(repoRoot, ["add", "raced.txt"]);
-    await runGit(repoRoot, ["commit", "-m", "Raced branch update"]);
+    await commitFixtureGit(repoRoot, "Raced branch update");
     const racedHeadSha = await readGit(repoRoot, ["rev-parse", "HEAD"]);
-
+    const proof = await mintProof();
     const cleanup = await cleanupExecutionWorkspaceArtifacts({
       workspace: {
-        id: "execution-workspace-1",
-        cwd: workspace.cwd,
+        id: workspaceRow.id,
+        cwd: workspaceRow.cwd,
         providerType: "git_worktree",
-        providerRef: workspace.worktreePath,
+        providerRef: workspaceRow.providerRef,
         branchName: workspace.branchName,
-        repoUrl: workspace.repoUrl,
-        baseRef: workspace.repoRef,
+        repoUrl: workspaceRow.repoUrl,
+        baseRef: workspaceRow.baseRef,
         projectId: workspace.projectId,
-        projectWorkspaceId: workspace.workspaceId,
-        sourceIssueId: "issue-1",
-        metadata: RUNTIME_OWNED_GIT_BRANCH_METADATA,
+        projectWorkspaceId: workspaceRow.projectWorkspaceId,
+        sourceIssueId: workspaceRow.sourceIssueId,
+        metadata: workspaceRow.metadata,
       },
       projectWorkspace: {
         cwd: repoRoot,
         cleanupCommand: null,
       },
+      gitRestorationProof: proof,
       expectedBranchHeadSha: expectedHeadSha,
       beforeBranchDelete: async () => {
-        await runGit(repoRoot, ["update-ref", `refs/heads/${workspace.branchName}`, racedHeadSha]);
+        beforeBranchDeleteCalled = true;
+        await runGit(repoRoot, ["update-ref", `refs/heads/${workspace.branchName!}`, racedHeadSha]);
       },
     });
 
-    expect(cleanup.cleaned).toBe(false);
-    expect(cleanup.warnings[0]).toContain("Exact workspace restoration was not verified");
+    expect(cleanup.cleaned).toBe(true);
+    expect(beforeBranchDeleteCalled).toBe(true);
+    expect(cleanup.warnings[0]).toContain(`Skipped deleting branch "${workspace.branchName}"`);
+    await expect(fs.stat(workspace.cwd)).rejects.toMatchObject({ code: "ENOENT" });
     expect(await readGit(repoRoot, ["rev-parse", `refs/heads/${workspace.branchName}`])).toBe(racedHeadSha);
   });
 
@@ -4026,73 +4072,39 @@ describe("realizeExecutionWorkspace", () => {
     });
   }, 10_000);
 
-  it("records teardown and cleanup operations when a recorder is provided", async () => {
-    const repoRoot = await createTempRepo();
+  it("records teardown and cleanup operations with an inspection-minted restoration proof", async () => {
+    const worktreesDir = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-cleanup-instances-"));
+    process.env.PAPERCLIP_WORKTREES_DIR = worktreesDir;
+    const fixture = await createManagedCleanupWorkspace({ identifier: "PAP-541", title: "Cleanup recorder", instanceHome: worktreesDir });
+    const { repoRoot, realized: workspace, workspace: workspaceRow, mintProof } = fixture;
     const { recorder, operations } = createWorkspaceOperationRecorderDouble();
 
-    const workspace = await realizeExecutionWorkspace({
-      base: {
-        baseCwd: repoRoot,
-        source: "project_primary",
-        projectId: "project-1",
-        workspaceId: "workspace-1",
-        repoUrl: null,
-        repoRef: "HEAD",
-      },
-      config: {
-        workspaceStrategy: {
-          type: "git_worktree",
-          branchTemplate: "{{issue.identifier}}-{{slug}}",
-        },
-      },
-      issue: {
-        id: "issue-1",
-        identifier: "PAP-541",
-        title: "Cleanup recorder",
-      },
-      agent: {
-        id: "agent-1",
-        name: "Codex Coder",
-        companyId: "company-1",
-      },
-    });
-
-    const worktreesDir = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-cleanup-instances-"));
-    const instanceId = deriveWorktreeInstanceId(workspace.cwd);
+    const instanceId = fixture.instanceId!;
     const instanceRoot = path.join(worktreesDir, "instances", instanceId);
     await fs.mkdir(path.join(instanceRoot, "db"), { recursive: true });
-    await fs.mkdir(path.join(workspace.cwd, ".paperclip"), { recursive: true });
-    await fs.writeFile(
-      path.join(workspace.cwd, ".paperclip", ".env"),
-      `PAPERCLIP_HOME=${JSON.stringify(worktreesDir)}\nPAPERCLIP_INSTANCE_ID=${JSON.stringify(instanceId)}\n`,
-      "utf8",
-    );
-    process.env.PAPERCLIP_WORKTREES_DIR = worktreesDir;
 
-    await cleanupExecutionWorkspaceArtifacts({
+    const proof = await mintProof();
+    const cleanup = await cleanupExecutionWorkspaceArtifacts({
       workspace: {
-        id: "execution-workspace-1",
-        cwd: workspace.cwd,
+        id: workspaceRow.id,
+        cwd: workspaceRow.cwd,
         providerType: "git_worktree",
-        providerRef: workspace.worktreePath,
+        providerRef: workspaceRow.providerRef,
         branchName: workspace.branchName,
-        repoUrl: workspace.repoUrl,
-        baseRef: workspace.repoRef,
+        repoUrl: workspaceRow.repoUrl,
+        baseRef: workspaceRow.baseRef,
         projectId: workspace.projectId,
-        projectWorkspaceId: workspace.workspaceId,
-        sourceIssueId: "issue-1",
-        metadata: {
-          ...RUNTIME_OWNED_GIT_BRANCH_METADATA,
-          worktreeInstanceRoot: instanceRoot,
-        },
+        projectWorkspaceId: workspaceRow.projectWorkspaceId,
+        sourceIssueId: workspaceRow.sourceIssueId,
+        metadata: { ...workspaceRow.metadata, worktreeInstanceRoot: instanceRoot },
       },
-      projectWorkspace: {
-        cwd: repoRoot,
-        cleanupCommand: "printf 'cleanup ok\\n'",
-      },
+      projectWorkspace: { cwd: repoRoot, cleanupCommand: "printf 'cleanup ok\\n'" },
       recorder,
+      gitRestorationProof: proof,
+      expectedBranchHeadSha: proof.branchHeadSha,
     });
-
+    expect(cleanup.cleaned).toBe(true);
+    expect(cleanup.warnings).toEqual([]);
     expect(operations.map((operation) => operation.phase)).toEqual([
       "workspace_teardown",
       "workspace_teardown",
@@ -4100,17 +4112,11 @@ describe("realizeExecutionWorkspace", () => {
       "worktree_cleanup",
     ]);
     expect(operations[0]?.command).toBe("printf 'cleanup ok\\n'");
-    expect(operations[1]?.metadata).toMatchObject({
-      cleanupAction: "remove_worktree_instance",
-      instanceRoot,
-    });
-    expect(operations[2]?.metadata).toMatchObject({
-      cleanupAction: "worktree_remove",
-    });
-    expect(operations[3]?.metadata).toMatchObject({
-      cleanupAction: "branch_delete",
-    });
+    expect(operations[1]?.metadata).toMatchObject({ cleanupAction: "remove_worktree_instance", instanceRoot });
+    expect(operations[2]?.metadata).toMatchObject({ cleanupAction: "worktree_remove" });
+    expect(operations[3]?.metadata).toMatchObject({ cleanupAction: "branch_delete" });
     await expect(fs.stat(instanceRoot)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(fs.stat(workspace.cwd)).rejects.toMatchObject({ code: "ENOENT" });
     await fs.rm(worktreesDir, { recursive: true, force: true });
   });
 });

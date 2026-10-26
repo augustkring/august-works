@@ -8,7 +8,7 @@ import { WebSocket } from "ws";
 import { and, eq } from "drizzle-orm";
 import {
   agentProviderBindings, billingAccounts, billingAccountCompanies, billingSubscriptions, createDb,
-  agents, agentExecutionManifests, environmentLeases, runtimeCapacityProfiles, runtimeCells, runtimeHosts, runtimeHostRequestNonces,
+  agents, agentExecutionManifests, environmentLeases, heartbeatRuns, issues, runtimeCapacityProfiles, runtimeCells, runtimeHosts, runtimeHostRequestNonces,
   runtimeVersionCatalog, sandboxQualificationRuns,
 } from "@paperclipai/db";
 import { SANDBOX_CONTROLS, runtimeRequestSigningInput } from "@paperclipai/shared";
@@ -122,6 +122,8 @@ export async function configureManagedConversationSandboxHost(input: {
   const transport = nativeSandboxHostTransport(db, { operatorUserIds: [actor.userId!] });
   const state = new Map<string, "stopped" | "ready" | "running">();
   const policies = new Map<string, string>();
+  const capabilityTestedAt = new Date(Date.now() - 1000).toISOString();
+  const capabilityExpiresAt = new Date(Date.now() + 86_400_000).toISOString();
   const capabilities = () => ({ ...Object.fromEntries(SANDBOX_CONTROLS.map(control => [control, true])),
     backend: "openshell", backendVersion: "0.1.2", hostKernelVersion: "controlled-software-host",
     sandboxImageDigest: imageDigest, filesystemEnforcementMode: "hard_requirement", staticPolicyRequiresRecreate: true,
@@ -129,7 +131,7 @@ export async function configureManagedConversationSandboxHost(input: {
     credentialBindingDimensions: ["company", "presence", "host", "port", "method", "path", "binary", "expiry", "revocation"],
     credentialBrokerProviderProfile: { id: "conversation-broker", hash: "d".repeat(64) },
     modelBrokerProviderProfile: { id: "conversation-model-broker", hash: "e".repeat(64) },
-    testedAt: new Date(Date.now() - 1000).toISOString(), expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+    testedAt: capabilityTestedAt, expiresAt: capabilityExpiresAt,
     qualificationHash: "f".repeat(64), evidenceKind: "protected_host_report" });
   const service = executionSandboxService(db, { operatorUserIds: [actor.userId!], credentialBrokerOrigin: brokerOrigin,
     backendFor: (_binding: unknown, currentActor: AuthorizationActor) => {
@@ -224,7 +226,54 @@ export async function configureManagedConversationSandboxHost(input: {
   }
   const runtime = runtimeControlService(db, { runtime: { suspectSeconds: 90, unreachableSeconds: 600, relayPort: 3102 } } as SaasPlatformConfig,
     undefined, { credentialBrokerOrigin: brokerOrigin, workerModels: input.gateway as any });
-  const environmentRuntime = environmentRuntimeService(db, { executeSandboxTask: runtime.executeSandboxTask });
+  let expectedRunId: string | null = null;
+  const sandboxExecutionChecks: Array<Record<string, boolean | string | null>> = [];
+  const executeSandboxTask: typeof runtime.executeSandboxTask = async execInput => {
+    if (execInput.runId && sandboxExecutionChecks.length < 8) {
+      const [run] = await db.select({ status: heartbeatRuns.status, startedAt: heartbeatRuns.startedAt,
+        agentId: heartbeatRuns.agentId, nativeIssueId: heartbeatRuns.nativeIssueId,
+        responsibleUserId: heartbeatRuns.responsibleUserId, runtimeMode: heartbeatRuns.runtimeMode,
+        contextSnapshot: heartbeatRuns.contextSnapshot, resultJson: heartbeatRuns.resultJson })
+        .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, execInput.runId))).limit(1);
+      const runContext = run?.contextSnapshot && typeof run.contextSnapshot === "object"
+        ? run.contextSnapshot as Record<string, unknown> : {};
+      const contextIssueId = typeof runContext.issueId === "string" ? runContext.issueId : null;
+      const [contextIssue] = contextIssueId ? await db.select({ conversationAgentId: issues.conversationAgentId,
+        conversationUserId: issues.conversationUserId, executionRunId: issues.executionRunId,
+        conversationSessionGeneration: issues.conversationSessionGeneration }).from(issues)
+        .where(and(eq(issues.companyId, companyId), eq(issues.id, contextIssueId))).limit(1) : [];
+      const [lease] = await db.select({ status: environmentLeases.status, expiresAt: environmentLeases.expiresAt,
+        heartbeatRunId: environmentLeases.heartbeatRunId }).from(environmentLeases)
+        .where(and(eq(environmentLeases.companyId, companyId), eq(environmentLeases.id, execInput.leaseId))).limit(1);
+      const cancellation = run?.resultJson?.executionCancellation;
+      const cancellationRequested = Boolean(cancellation && typeof cancellation === "object" &&
+        "state" in cancellation && cancellation.state === "requested");
+      const commandName = execInput.command.toLowerCase().split("/").at(-1) ?? "";
+      const commandKind = commandName.includes("opencode") ? "opencode" : commandName.includes("runner") ? "runner" :
+        commandName.includes("rsync") ? "rsync" : commandName === "git" ? "git" :
+          commandName === "bash" ? "bash" : commandName === "sh" ? "shell" :
+            commandName === "tar" ? "tar" : commandName === "node" ? "node" : "other";
+      const args = execInput.args ?? [];
+      const managedGitContextProbe = commandName === "sh" && args[0] === "-c" && args[2] === "paperclip-git-context" &&
+        (args[3] === "managed" || args[3] === "host");
+      const unstartedSessionClaimProbe = commandName === "sh" && args[0] === "-c" && args[2] === "paperclip-runner-claim-unstarted-session";
+      sandboxExecutionChecks.push({ expectedRun: execInput.runId === expectedRunId,
+        commandKind, cwdAbsolute: Boolean(execInput.cwd?.startsWith("/")), argumentCount: (execInput.args ?? []).length,
+        managedGitContextProbe, unstartedSessionClaimProbe,
+        runtimeMode: run?.runtimeMode ?? null, runStatus: run?.status ?? null, runStatusRunning: run?.status === "running",
+        startedAtPresent: Boolean(run?.startedAt), agentIdPresent: Boolean(run?.agentId),
+        nativeIssueIdPresent: Boolean(run?.nativeIssueId), responsibleUserIdPresent: Boolean(run?.responsibleUserId),
+        cancellationRequested, leaseActiveForRun: lease?.status === "active" && lease.heartbeatRunId === execInput.runId,
+        leaseExpiryPresent: Boolean(lease?.expiresAt), leaseUnexpired: Boolean(lease?.expiresAt && lease.expiresAt > new Date()),
+        contextIssuePresent: Boolean(contextIssueId), contextWakeCommentPresent: typeof runContext.wakeCommentId === "string",
+        contextConversationOwnerMatches: contextIssue?.conversationAgentId === agentId && contextIssue?.conversationUserId === actor.userId,
+        contextIssueGenerationPresent: contextIssue?.conversationSessionGeneration !== null && contextIssue?.conversationSessionGeneration !== undefined,
+        contextIssueExecutionRunMatches: contextIssue?.executionRunId === execInput.runId,
+        nativeIssueMatchesContext: Boolean(run?.nativeIssueId && contextIssueId && run.nativeIssueId === contextIssueId) });
+    }
+    return await runtime.executeSandboxTask(execInput);
+  };
+  const environmentRuntime = environmentRuntimeService(db, { executeSandboxTask });
   const relayServer = createServer(); runtime.relay.attach(relayServer);
   relayServer.listen(0, "127.0.0.1"); await once(relayServer, "listening");
   await runtime.relay.listen(0);
@@ -242,6 +291,7 @@ export async function configureManagedConversationSandboxHost(input: {
   }
   if (!authenticated) throw new Error("conversation_software_host_relay_auth_failed");
   let expectedTaskRoot: string | null = null;
+  let acquiredLeaseExpiresAt: string | null = null;
   const execFacts: Array<{ executable: string; cwdExact: boolean; modelCredentialPresent: boolean }> = [];
   relayHost.on("message", raw => {
     let message: Record<string, any>;
@@ -272,11 +322,20 @@ export async function configureManagedConversationSandboxHost(input: {
   });
 
   const beforeNativeExecution = async ({ runId, issueId }: { runId: string; issueId: string | null }) => {
+    expectedRunId = runId;
     if (!issueId) throw new Error("conversation_software_host_issue_missing");
     const [manifest] = await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId, runId)).limit(1);
     if (!manifest) throw new Error("conversation_software_host_manifest_missing");
+    const [run] = await db.select({ responsibleUserId: heartbeatRuns.responsibleUserId,
+      contextSnapshot: heartbeatRuns.contextSnapshot }).from(heartbeatRuns)
+      .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, runId))).limit(1);
+    const conversationGeneration = run?.contextSnapshot && typeof run.contextSnapshot === "object" &&
+      "conversationSessionGeneration" in run.contextSnapshot &&
+      typeof run.contextSnapshot.conversationSessionGeneration === "number"
+        ? run.contextSnapshot.conversationSessionGeneration : null;
     const scope = await findNativeChatWorkspaceScope(db, { adapterType: "paperclip_runner", environmentDriver: "sandbox",
-      companyId, agentId, issueId, instanceRoot: input.root });
+      companyId, agentId, issueId, runId, responsibleUserId: run?.responsibleUserId,
+      conversationSessionGeneration: conversationGeneration, instanceRoot: input.root });
     const taskRoot = scope && scope.projectId === null ? nativeChatWorkspaceCwd(scope, null, false) : null;
     if (!taskRoot) throw new Error("conversation_software_host_private_task_root_missing");
     expectedTaskRoot = taskRoot;
@@ -295,6 +354,9 @@ export async function configureManagedConversationSandboxHost(input: {
     const [lease] = await db.select().from(environmentLeases).where(and(eq(environmentLeases.heartbeatRunId, runId),
       eq(environmentLeases.status, "active"))).limit(1);
     if (!lease || lease.environmentId !== environment.id) throw new Error("conversation_software_host_run_lease_missing");
+    if (!lease.expiresAt || lease.expiresAt <= new Date())
+      throw new Error("conversation_software_host_provider_lease_expiry_missing");
+    acquiredLeaseExpiresAt = lease.expiresAt.toISOString();
     const expectDenied = async (work: Promise<unknown>) => {
       try { await work; return false; } catch { return true; }
     };
@@ -322,6 +384,8 @@ export async function configureManagedConversationSandboxHost(input: {
     beforeNativeExecution,
     facts: () => ({ mode: "controlled_signed_host_relay", hostId: host.id, cellId: cell.id,
       bindingId: binding.id, environmentId: environment.id, relayAuthenticated: relayHost.readyState === WebSocket.OPEN,
+      providerAttestedLeaseExpiresAt: acquiredLeaseExpiresAt,
+      sandboxExecutionChecks,
       execCount: execFacts.length, exactPrivateCwdCount: execFacts.filter(fact => fact.cwdExact).length,
       managedModelCredentialCount: execFacts.filter(fact => fact.modelCredentialPresent).length,
       negativeControls: { wrongRunDenied: true, wrongLeaseDenied: true, wrongCwdDenied: true, wrongPolicyDenied: true },

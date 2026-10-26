@@ -903,24 +903,12 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
     and not exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_dispatch
       where captured_dispatch->>'kind' in ('worker_model_dispatch','conversation_model_dispatch') and (
         captured_dispatch->>'runId' is distinct from temporal_owner.origin_run_id::text
-        or not exists(select 1 from heartbeat_runs producer
+        or (select count(*) from heartbeat_runs producer
           cross join lateral jsonb_array_elements(coalesce(producer.runner_profile_json->'nativeInputSourceReceipt'->'dispatches','[]'::jsonb)) prefix(value)
           where producer.company_id=temporal_owner.company_id and producer.id::text=captured_dispatch->>'runId'
             and producer.native_input_source_protocol_version=1
-            and prefix.value->'policy'=temporal_owner.payload_source_snapshot->'policy'
-            and prefix.value->'inputs'=(select coalesce(jsonb_agg(captured_input order by captured_input.ordinality),'[]'::jsonb)
-              from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') with ordinality captured_input(value,ordinality)
-              where captured_input.value is distinct from captured_dispatch)
-          union all
-          select 1 from heartbeat_runs producer
-          where producer.company_id=temporal_owner.company_id and producer.id::text=captured_dispatch->>'runId'
-            and producer.native_input_source_protocol_version=1
-            and producer.runner_profile_json->'nativeInputSourceReceipt'->'bootstrap'->'policy'=temporal_owner.payload_source_snapshot->'policy'
-            and producer.runner_profile_json->'nativeInputSourceReceipt'->'bootstrap'->'inputs'=(
-              select coalesce(jsonb_agg(captured_input order by captured_input.ordinality),'[]'::jsonb)
-              from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') with ordinality captured_input(value,ordinality)
-              where captured_input.value is distinct from captured_dispatch)
-        )
+            and case when jsonb_typeof(prefix.value->'inputs')='array' then case when jsonb_array_length(prefix.value->'inputs')>0
+              then prefix.value->'inputs'->(jsonb_array_length(prefix.value->'inputs')-1)=captured_dispatch else false end else false end)<>1
         or not exists(select 1 from orchestration_model_reservations reservation
           where reservation.company_id=temporal_owner.company_id and reservation.id::text=captured_dispatch->>'reservationId'
             and reservation.purpose=case when captured_dispatch->>'kind'='conversation_model_dispatch' then 'conversation_model' else 'worker_model' end
@@ -965,6 +953,21 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
             and conversation_manifest.hash=captured_dispatch->>'executionManifestHash'
             and conversation_manifest.manifest->>'responsibleUserId'=producer.responsible_user_id::text))
       ))
+    and (not exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_dispatch
+      where captured_dispatch->>'kind' in ('worker_model_dispatch','conversation_model_dispatch')) or exists(
+        select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') with ordinality current_dispatch(value,ordinality)
+        where current_dispatch.value->>'kind' in ('worker_model_dispatch','conversation_model_dispatch')
+          and current_dispatch.ordinality=(select max(candidate.ordinality)
+            from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') with ordinality candidate(value,ordinality)
+            where candidate.value->>'kind' in ('worker_model_dispatch','conversation_model_dispatch'))
+          and (select count(*) from heartbeat_runs producer
+            cross join lateral jsonb_array_elements(coalesce(producer.runner_profile_json->'nativeInputSourceReceipt'->'dispatches','[]'::jsonb)) current_prefix(value)
+            where producer.company_id=temporal_owner.company_id and producer.id::text=current_dispatch.value->>'runId'
+              and producer.native_input_source_protocol_version=1
+              and current_prefix.value->'policy'=temporal_owner.payload_source_snapshot->'policy'
+              and current_prefix.value->'inputs'=temporal_owner.payload_source_snapshot->'inputs'
+              and case when jsonb_typeof(current_prefix.value->'inputs')='array' then case when jsonb_array_length(current_prefix.value->'inputs')>0
+                then current_prefix.value->'inputs'->(jsonb_array_length(current_prefix.value->'inputs')-1)=current_dispatch.value else false end else false end)=1))
     and (not exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_input
       where captured_input->>'kind' not in ('context','task')) or exists(
         select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_dispatch

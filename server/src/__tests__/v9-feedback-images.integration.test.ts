@@ -11,7 +11,9 @@ import request from "supertest";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { companies, companyMemberships, authUsers, createDb, closeRegisteredClients, customerFeedback,
   customerFeedbackImages, feedbackImageDeletions, customerFeedbackRetention, customerFeedbackRetentionChanges,
-  customerFeedbackAccess, authAccounts, authSessions, accountDeletionOperations, activityLog, authRateLimits, companyDeletionOperations } from "@paperclipai/db";
+  customerFeedbackAccess, authAccounts, authSessions, accountDeletionOperations, activityLog, authRateLimits,
+  billingAccounts, billingAccountCompanies,
+  companyDeletionOperations } from "@paperclipai/db";
 import { customerFeedbackService } from "../services/customer-feedback.js";
 import { companyService } from "../services/companies.js";
 import { customerFeedbackImageService, processFeedbackImageDeletion } from "../services/customer-feedback-images.js";
@@ -20,9 +22,10 @@ import { createStorageService } from "../storage/service.js";
 import { createLocalDiskStorageProvider } from "../storage/local-disk-provider.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { saasOffboardingService } from "../services/saas/offboarding.js";
+import { runtimeControlService } from "../services/runtime/control.js";
 import type { companyObjectErasure } from "../services/saas/object-erasure.js";
-import type { billingService } from "../services/billing/billing.js";
-import type { runtimeControlService } from "../services/runtime/control.js";
+import { billingService } from "../services/billing/billing.js";
+import { paddleProvider } from "../services/billing/paddle-provider.js";
 import { customerFeedbackRetentionService } from "../services/customer-feedback-retention.js";
 import { accountDeletionService, eraseAccountAccess } from "../services/saas/account-deletion.js";
 import { customerFeedbackRoutes } from "../routes/customer-feedback.js";
@@ -51,6 +54,8 @@ describe("native selected feedback images with owned scanner-wire and filesystem
         createdAt: new Date(), updatedAt: new Date() });
       await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: id, status: "active", membershipRole: "viewer" });
     }
+    const [billingAccount] = await db.insert(billingAccounts).values({ displayName: "Owned image fixture", payerUserId: userId }).returning({ id: billingAccounts.id });
+    await db.insert(billingAccountCompanies).values({ billingAccountId: billingAccount!.id, companyId });
     otherUserSessionId = await seedNativePasskeySession(db, otherUser);
     await instanceSettingsService(db).updateExperimental({ customer_feedback_v9: true });
     const receipt = await customerFeedbackService(db).create(actor(), companyId, { idempotencyKey: randomUUID(), category: "BUG",
@@ -358,12 +363,19 @@ describe("native selected feedback images with owned scanner-wire and filesystem
     let bulkCalls = 0;
     const objects = { targets: () => ({ application: { bucket: "owned-transport-fixture", prefix: companyId + "/" } }),
       erase: async () => { bulkCalls++; return {}; } } as unknown as ReturnType<typeof companyObjectErasure>;
-    const owner = saasOffboardingService(db, {} as ReturnType<typeof billingService>, {} as ReturnType<typeof runtimeControlService>, objects);
-    const operation = await owner.request(companyId, userId, { confirmation: "Owned image fixture", acknowledgeExport: true, idempotencyKey: randomUUID() });
-    // The owned fixture has no runtime/billing effects; select the original
-    // purge stage after its actual native C3 owner request, not a fake grant.
-    await db.update(companyDeletionOperations).set({ stage: "purge", status: "processing", notBefore: new Date(0) }).where(eq(companyDeletionOperations.id, operation.id));
-    await owner.processOne(new Date(Date.now() + 1000));
+    const billing = billingService(db, { environment: "sandbox", payloadKey: "a".repeat(64), payloadKeyId: "fixture",
+      previousKeys: {}, graceDays: 7 }, paddleProvider({ environment: "sandbox", apiKey: "not-used" }, async () => {
+      throw new Error("billing provider must not be contacted without subscriptions");
+    }));
+    const owner = saasOffboardingService(db, billing, runtimeControlService(db), objects);
+    await owner.request(companyId, userId, { confirmation: "Owned image fixture", acknowledgeExport: true, idempotencyKey: randomUUID() });
+    const now = Date.now();
+    // Drive the original revoke/runtime/billing/retention stages. The legal
+    // hold is checked only when real purge reaches source-authorized admission.
+    for (const seconds of [1, 2, 3, 4, 5]) await owner.processOne(new Date(now + seconds * 1000));
+    const admittedOperation = await db.select({ stage: companyDeletionOperations.stage, status: companyDeletionOperations.status,
+      errorCode: companyDeletionOperations.errorCode }).from(companyDeletionOperations).where(eq(companyDeletionOperations.companyId, companyId));
+    expect(admittedOperation).toMatchObject([{ stage: "purge", status: "processing", errorCode: "offboarding_reconciliation_pending" }]);
     expect(bulkCalls).toBe(0); expect((await storage.headObject(companyId, row!.objectKey!)).exists).toBe(true);
     expect(await owner.get(companyId)).toMatchObject({ status: "processing", completedAt: null });
     await controls.change(actor(otherUser), companyId, feedbackId, { requestKey: randomUUID(), expectedVersion: held.version,
@@ -372,8 +384,10 @@ describe("native selected feedback images with owned scanner-wire and filesystem
       confirmRetentionChange: true, legalHold: { active: true, releaseAt: null, reason: "Too late to undo approved erasure" }, extensionUntil: null, extensionReason: "" }))
       .rejects.toMatchObject({ status: 409 });
     await owner.processOne(new Date(Date.now() + 120000));
+    const retryState = await owner.get(companyId);
+    expect(retryState).toMatchObject({ status: "processing", errorCode: null });
     expect(bulkCalls).toBe(1); expect(await rows()).toEqual([]);
-    expect(await owner.get(companyId)).toMatchObject({ status: "processing", completedAt: null });
+    expect(retryState).toMatchObject({ status: "processing", completedAt: null });
     const pending = await db.select().from(feedbackImageDeletions).where(eq(feedbackImageDeletions.companyId, companyId));
     expect(pending).toHaveLength(1); expect(pending[0]!.imageId).toBe(image.id); expect(pending[0]!.deletedAt).toBeNull();
     expect(await processFeedbackImageDeletion(db, storage, undefined, companyId)).toBe(true);

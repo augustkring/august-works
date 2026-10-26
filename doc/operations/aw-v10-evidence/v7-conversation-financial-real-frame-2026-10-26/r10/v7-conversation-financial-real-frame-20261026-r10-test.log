@@ -1,0 +1,30 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts (31 tests | 1 failed | 29 skipped) 116291ms
+     × settles the actual qualified conversation usage once and preserves the exact debit in canonical purge 18750ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > settles the actual qualified conversation usage once and preserves the exact debit in canonical purge
+Error: conversation_offboarding_purge_incomplete:{"stage":"purge","status":"processing","runtime":{"operation":{"stage":"purge","status":"processing","errorCode":"offboarding_reconciliation_pending"},"jobs":[{"jobKey":"runtime-asset-erasure:v1:ae80cf69-2620-4d7c-a167-7796a0b554c8","status":"succeeded","errorCode":null,"attemptNumber":1}]},"purgeProbe":{"outcome":"denied_in_probe","failure":{"name":"Error","status":null,"code":null,"detailsCode":null,"sqlState":"23514","constraint":null}},"nativeStop":{"runPresent":true,"runStatus":"succeeded","runtimeMode":"native","processPidPresent":false,"processGroupPresent":false,"controllerLeasePresent":false,"controllerBootIdPresent":false,"finalizationPhase":"committed","finalizationLeaseHeld":false,"nativeLocalStopReceipt":true,"leases":[{"provider":"local","status":"released","cleanupStatus":null,"released":true,"remoteTerminationReceipt":false}]}}
+ ❯ purgeConversationCompany src/__tests__/v7-model-reservations.integration.test.ts:530:15
+    528|       const completed = await offboarding.get(facts.companyId);
+    529|       if (!completed || completed.id !== operation.id || completed.sta…
+    530|         throw new Error(`conversation_offboarding_purge_incomplete:${J…
+       |               ^
+    531|           status: completed?.status ?? null, runtime: await offboardin…
+    532|           purgeProbe: await probePurgeFailure(facts.companyId, operati…
+ ❯ Object.afterRunSettledBeforeTeardown src/__tests__/v7-model-reservations.integration.test.ts:647:31
+ ❯ runManagedNativeConversationFrame src/__tests__/helpers/managed-native-conversation-frame.ts:438:7
+ ❯ conversationReservationFixture src/__tests__/v7-model-reservations.integration.test.ts:346:22
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:643:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed | 29 skipped (31)
+   Start at  15:40:53
+   Duration  133.11s (transform 11.76s, setup 89ms, import 16.59s, tests 116.29s, environment 0ms)
+

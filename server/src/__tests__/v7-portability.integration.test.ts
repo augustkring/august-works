@@ -30,7 +30,8 @@ const support = await getEmbeddedPostgresTestSupport();
       db: Db,
       f: Awaited<ReturnType<typeof seedV5Presences>>,
       first: string,
-      second: string;
+      second: string,
+      firstMemoryRecordId: string;
     beforeAll(async () => {
       database = await startEmbeddedPostgresTestDatabase("aw-v7-portability-");
       db = createDb(database.connectionString);
@@ -67,11 +68,11 @@ const support = await getEmbeddedPostgresTestSupport();
           providerKey: "local",
         })
         .returning();
-      const roots = [first, second];
+      const roots: string[] = [];
       await db.insert(memoryBindingTargets).values({ companyId: f.home, bindingId: binding!.id,
         targetType: "company", targetId: f.home });
       const memoryActor = { principal: { type: "user" as const, userId: f.userId }, authorizationActor: sourceActor };
-      for (const [index, id] of roots.entries()) {
+      for (const [index, id] of [first, second].entries()) {
         const observedAt = new Date();
         const sourceVersion = taskSources.get(id)!.toISOString();
         const candidate = await memoryService(db).createCandidate(f.home, {
@@ -107,9 +108,11 @@ const support = await getEmbeddedPostgresTestSupport();
             relation: "supports",
           }],
         }, memoryActor);
+        roots.push(candidate.record.id);
         await memoryService(db).reviewCandidate(f.home, candidate.record.id,
           { decision: "accept", reason: "The current Human reviewed this portable Task outcome" }, memoryActor);
       }
+      firstMemoryRecordId = roots[0]!;
       await db
         .insert(memoryRecords)
         .values({
@@ -137,7 +140,10 @@ const support = await getEmbeddedPostgresTestSupport();
             relation: "supports" as const,
           })),
         });
-    }, 30000);
+    // This setup deliberately builds 101 independently observed lifecycle
+    // rows through the original service path; keep its fixture budget separate
+    // from the normal per-hook default.
+    }, 120000);
     afterAll(async () => {
       await db?.$client.end();
       await database?.cleanup();
@@ -158,7 +164,7 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(state.files["role-packs/roles.json"]).toBeDefined();
       expect(state.files["workflows/definitions.json"]).toBeDefined();
       expect(state.files["governance/use-cases.json"]).toBeDefined();
-    });
+    }, 120000);
     it("retains portability with rollout off and excludes source-erased payloads", async () => {
       await instanceSettingsService(db).updateExperimental({
         memory_observations_v7: false,
@@ -174,15 +180,16 @@ const support = await getEmbeddedPostgresTestSupport();
       ).toHaveLength(101);
       await memoryService(db).forget(
         f.home,
-        first,
+        firstMemoryRecordId,
         cognitiveMemoryActor(f.actor),
       );
       const state = await exportCompanyStateV7(db, f.actor, f.home);
-      expect(state.files["memory/records.json"]).not.toContain(first);
+      const exportedRecords = JSON.parse(state.files["memory/records.json"]!).records as Array<{ id: string }>;
+      expect(exportedRecords.some(record => record.id === firstMemoryRecordId)).toBe(false);
       expect(state.files["memory/observations.json"]).not.toContain(
         "Portable observation",
       );
-    });
+    }, 120000);
     it("requires fresh actual company owner membership even with a previously authorized actor", async () => {
       await db
         .update(companyMemberships)

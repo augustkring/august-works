@@ -626,7 +626,7 @@ describe("Native payload source snapshot binds its original payload owner", () =
       await expect(db.execute(sql`insert into public.${sql.identifier(owner.table)}
         select (jsonb_populate_record(null::public.${sql.identifier(owner.table)},
           to_jsonb(source) || jsonb_build_object('id',${forgedId}::uuid,'payload_source_snapshot_invalidated',true))).*
-        from public.${sql.identifier(owner.table)} source where source.id=${owner.id}::uuid`))
+        from public.${sql.identifier(owner.table)} source where source.id=${owner.id}::uuid returning id`), `owner=${owner.table}`)
         .rejects.toMatchObject({ cause: { code: "23514", message: expect.stringContaining("server-owned") } });
       await expect(db.execute(sql`update ${sql.identifier(owner.table)} set payload_source_snapshot_invalidated=false where id=${owner.id}::uuid`))
         .rejects.toMatchObject({ cause: { code: "23514" } });

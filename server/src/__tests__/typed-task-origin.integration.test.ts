@@ -2,13 +2,14 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
-  agents, authUsers, companies, companyMemberships, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
+  agents, companies, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, pluginManagedResources, plugins,
   heartbeatRuns, issues, routineRevisions, routineRuns, routines, workflowRevisions, workflowRuns, workflows,
 } from "@paperclipai/db";
 import { routineRevisionSnapshotV1Schema } from "@paperclipai/shared";
-import { canActorReadIssuePrivacy } from "../services/authorization.js";
+import { canActorReadIssuePrivacy, type AuthorizationActor } from "../services/authorization.js";
 import { issueService } from "../services/issues.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
+import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 
 describe("typed workflow and routine Task origins", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
@@ -24,11 +25,8 @@ describe("typed workflow and routine Task origins", () => {
   async function seedCompany(name: string) {
     const companyId = randomUUID(), userId = randomUUID();
     await db.insert(companies).values({ id: companyId, name, issuePrefix: `TO${companyId.slice(0, 6)}` });
-    await db.insert(authUsers).values({ id: userId, name: "Typed origin reader", email: `${userId}@example.test`,
-      createdAt: new Date(), updatedAt: new Date() });
-    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId,
-      status: "active", membershipRole: "admin" });
-    return { companyId, userId, actor: { type: "board" as const, source: "session" as const, userId } };
+    const actor = await seedCurrentHumanSourceActor(db, [companyId], userId);
+    return { companyId, userId, actor };
   }
 
   async function seedWorkflow(companyId: string, userId: string, ids: { workflowId?: string; runId?: string } = {}) {
@@ -51,10 +49,11 @@ describe("typed workflow and routine Task origins", () => {
     originKind: "workflow_task" | "routine_execution";
     originId: string;
     originRunId: string;
-  }) {
+  }, actor: AuthorizationActor) {
     return issueService(db).create(companyId, { title: "Typed-origin Task", visibility: "open",
       createdByUserId: userId, responsibleUserId: userId, actorResponsibleUserId: userId,
-      originKind: fields.originKind, originId: fields.originId, originRunId: fields.originRunId });
+      originKind: fields.originKind, originId: fields.originId, originRunId: fields.originRunId }, db, undefined,
+    { manualInputActor: actor, privacyActor: actor, sourceAccessActor: actor });
   }
 
   async function seedHistoricalTask(companyId: string, fields: {
@@ -72,7 +71,7 @@ describe("typed workflow and routine Task origins", () => {
     const home = await seedCompany("Workflow origin home");
     const valid = await seedWorkflow(home.companyId, home.userId);
     const validTask = await createTask(home.companyId, home.userId, { originKind: "workflow_task", originId: valid.workflow.id,
-      originRunId: valid.run.id });
+      originRunId: valid.run.id }, home.actor);
     // The actual issueService.create path records the Task. The source owner
     // is the typed WorkflowRun, with no heartbeat row sharing its identifier.
     expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, valid.run.id)))).toHaveLength(0);
@@ -83,7 +82,7 @@ describe("typed workflow and routine Task origins", () => {
     const home = await seedCompany("Workflow wrong parent");
     const valid = await seedWorkflow(home.companyId, home.userId);
     const wrongParent = { originKind: "workflow_task" as const, originId: randomUUID(), originRunId: valid.run.id };
-    await expect(createTask(home.companyId, home.userId, wrongParent)).rejects.toBeDefined();
+    await expect(createTask(home.companyId, home.userId, wrongParent, home.actor)).rejects.toBeDefined();
     const wrongParentTask = await seedHistoricalTask(home.companyId, wrongParent);
     expect(await canActorReadIssuePrivacy(db, home.actor, wrongParentTask)).toBe(false);
   });
@@ -93,7 +92,7 @@ describe("typed workflow and routine Task origins", () => {
     const foreignOwner = await seedWorkflow(foreign.companyId, foreign.userId);
     const crossCompany = { originKind: "workflow_task" as const, originId: foreignOwner.workflow.id,
       originRunId: foreignOwner.run.id };
-    await expect(createTask(home.companyId, home.userId, crossCompany)).rejects.toBeDefined();
+    await expect(createTask(home.companyId, home.userId, crossCompany, home.actor)).rejects.toBeDefined();
     const crossCompanyTask = await seedHistoricalTask(home.companyId, crossCompany);
     expect(await canActorReadIssuePrivacy(db, home.actor, crossCompanyTask)).toBe(false);
   });
@@ -109,7 +108,7 @@ describe("typed workflow and routine Task origins", () => {
       agentId: agent!.id, scopeKind: "company", status: "running" });
     const absentTypedOwner = { originKind: "workflow_task" as const, originId: fallbackWorkflow.workflow.id,
       originRunId: absentTypedRunId };
-    await expect(createTask(home.companyId, home.userId, absentTypedOwner)).rejects.toBeDefined();
+    await expect(createTask(home.companyId, home.userId, absentTypedOwner, home.actor)).rejects.toBeDefined();
     const fallbackTask = await seedHistoricalTask(home.companyId, absentTypedOwner);
     expect(await canActorReadIssuePrivacy(db, home.actor, fallbackTask)).toBe(false);
   });
@@ -119,7 +118,7 @@ describe("typed workflow and routine Task origins", () => {
     const { routineId, revisionId, runId } = await seedRoutineRun(home.companyId, home.userId);
     expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, runId))).toHaveLength(0);
     const task = await createTask(home.companyId, home.userId, { originKind: "routine_execution", originId: routineId,
-      originRunId: runId });
+      originRunId: runId }, home.actor);
     expect(await canActorReadIssuePrivacy(db, home.actor, task)).toBe(true);
     const [storedRun] = await db.select().from(routineRuns).where(eq(routineRuns.id, runId));
     expect(storedRun?.routineRevisionId).toBe(revisionId);
@@ -129,7 +128,7 @@ describe("typed workflow and routine Task origins", () => {
     const home = await seedCompany("Routine wrong parent");
     const { runId } = await seedRoutineRun(home.companyId, home.userId);
     const wrongRoutine = { originKind: "routine_execution" as const, originId: randomUUID(), originRunId: runId };
-    await expect(createTask(home.companyId, home.userId, wrongRoutine)).rejects.toBeDefined();
+    await expect(createTask(home.companyId, home.userId, wrongRoutine, home.actor)).rejects.toBeDefined();
     const wrongRoutineTask = await seedHistoricalTask(home.companyId, wrongRoutine);
     expect(await canActorReadIssuePrivacy(db, home.actor, wrongRoutineTask)).toBe(false);
   });
@@ -142,15 +141,25 @@ describe("typed workflow and routine Task origins", () => {
       routineId, routineRevisionId: null, source: "manual", status: "succeeded", responsibleUserId: home.userId });
     const missingRevision = { originKind: "routine_execution" as const, originId: routineId,
       originRunId: missingRevisionRunId };
-    await expect(createTask(home.companyId, home.userId, missingRevision)).rejects.toBeDefined();
+    await expect(createTask(home.companyId, home.userId, missingRevision, home.actor)).rejects.toBeDefined();
     const missingRevisionTask = await seedHistoricalTask(home.companyId, missingRevision);
     expect(await canActorReadIssuePrivacy(db, home.actor, missingRevisionTask)).toBe(false);
   });
 
   async function seedRoutineRun(companyId: string, userId: string) {
     const routineId = randomUUID(), runId = randomUUID(), revisionId = randomUUID();
+    const pluginId = randomUUID();
+    const pluginKey = `paperclip.typed-routine-${randomUUID()}`;
+    await db.insert(plugins).values({ id: pluginId, pluginKey, packageName: "@paperclipai/test-typed-routine",
+      version: "0.1.0", apiVersion: 1, categories: [], status: "ready", installOrder: 1,
+      manifestJson: { id: pluginKey, apiVersion: 1, version: "0.1.0", displayName: "Typed Task origin test",
+        description: "Canonical managed Routine source for typed Task owner checks", author: "Paperclip",
+        categories: ["automation"], capabilities: ["routines.managed"], entrypoints: { worker: "./worker.js" } } as any });
     const [routine] = await db.insert(routines).values({ id: routineId, companyId,
       title: "Manually authored routine", createdByUserId: userId, responsibleUserId: userId }).returning();
+    await db.insert(pluginManagedResources).values({ companyId, pluginId, pluginKey, resourceKind: "routine",
+      resourceKey: "typed-origin", resourceId: routineId,
+      defaultsJson: { issueTemplate: { surfaceVisibility: "plugin_operation", originId: routineId } } });
     const snapshot = routineRevisionSnapshotV1Schema.parse({ version: 1, routine: {
       id: routineId, companyId, projectId: null, folderId: null, goalId: null, parentIssueId: null,
       title: routine!.title, description: null, assigneeAgentId: null, priority: "medium", status: "active",

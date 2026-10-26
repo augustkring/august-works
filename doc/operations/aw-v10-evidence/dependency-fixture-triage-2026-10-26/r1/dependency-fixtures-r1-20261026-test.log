@@ -1,0 +1,41 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/v7-portability.integration.test.ts (3 tests | 2 failed) 113573ms
+     × exports every eligible observation and shared lifecycle without private Memory or credentials 30006ms
+     × retains portability with rollout off and excludes source-erased payloads 30001ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-portability.integration.test.ts > native owner V7 portability > exports every eligible observation and shared lifecycle without private Memory or credentials
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/__tests__/v7-portability.integration.test.ts:149:5
+    147|       await database?.cleanup();
+    148|     }, 60000);
+    149|     it("exports every eligible observation and shared lifecycle withou…
+       |     ^
+    150|       const state = await exportCompanyStateV7(db, f.actor, f.home);
+    151|       expect(state.schema).toBe("aw.company-state.v7");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/__tests__/v7-portability.integration.test.ts > native owner V7 portability > retains portability with rollout off and excludes source-erased payloads
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/__tests__/v7-portability.integration.test.ts:166:5
+    164|       expect(state.files["governance/use-cases.json"]).toBeDefined();
+    165|     });
+    166|     it("retains portability with rollout off and excludes source-erase…
+       |     ^
+    167|       await instanceSettingsService(db).updateExperimental({
+    168|         memory_observations_v7: false,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 3 passed (4)
+      Tests  2 failed | 38 passed (40)
+   Start at  15:59:03
+   Duration  176.96s (transform 12.63s, setup 280ms, import 29.66s, tests 146.49s, environment 0ms)
+

@@ -2536,12 +2536,23 @@ export function runtimeControlService(
     if (!initialSource) return null;
     const conversationTask = initialSource.source.task;
     if (conversationTask.conversationAgentId !== null || conversationTask.conversationUserId !== null) {
+      const contextSnapshot = initialSource.run.contextSnapshot &&
+        typeof initialSource.run.contextSnapshot === "object"
+        ? initialSource.run.contextSnapshot as Record<string, unknown>
+        : {};
+      const conversationSessionGeneration =
+        typeof contextSnapshot.conversationSessionGeneration === "number"
+          ? contextSnapshot.conversationSessionGeneration
+          : null;
       const workspaceScope = await findNativeChatWorkspaceScope(db, {
         adapterType: initialSource.source.agent.adapterType,
         environmentDriver: "sandbox",
         companyId: input.companyId,
         agentId: initialSource.run.agentId!,
         issueId: conversationTask.id,
+        runId: initialSource.run.id,
+        responsibleUserId: initialSource.run.responsibleUserId,
+        conversationSessionGeneration,
       });
       const expectedTaskRoot = workspaceScope && workspaceScope.projectId === null
         ? nativeChatWorkspaceCwd(workspaceScope, null, false)

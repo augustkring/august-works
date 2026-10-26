@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { agents, authUsers, companies, companyMemberships, createDb, heartbeatRuns, memoryBindingTargets, memoryBindings,
-  memoryEvidence, memoryRecords } from "@paperclipai/db";
+  memoryEvidence, memoryRecords, principalPermissionGrants } from "@paperclipai/db";
 import { EMBEDDED_POSTGRES_TEST_TIMEOUT_MS } from "@paperclipai/db";
 import type { ContextAuthorityDecision, MemoryCandidateInputParsed } from "@paperclipai/shared";
 import { contextManifestService } from "../services/context/context-manifest.js";
@@ -45,6 +45,8 @@ describe("Memory revocation preserves only a still-valid body snapshot", () => {
       status: "idle", adapterType: "paperclip_runner" });
     await db.insert(companyMemberships).values({ companyId, principalType: "agent", principalId: agentId,
       status: "active", membershipRole: "member" });
+    await db.insert(principalPermissionGrants).values({ companyId, principalType: "agent", principalId: agentId,
+      permissionKey: "company_scope:read" });
     await db.insert(heartbeatRuns).values({ id: runId, companyId, agentId, responsibleUserId: userId,
       status: "running", runtimeMode: "native" });
     const [binding] = await db.insert(memoryBindings).values({ companyId, key: randomUUID(), name: "Native binding", providerKey: "local" }).returning();

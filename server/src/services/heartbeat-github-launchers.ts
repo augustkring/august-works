@@ -4,6 +4,35 @@ import { cleanupGitHubOperationLaunchers, prepareGitHubOperationLaunchers } from
 
 type LauncherInput = Parameters<typeof prepareGitHubOperationLaunchers>[0];
 
+/**
+ * Native chat sandboxes that are proven to be projectless have no repository
+ * metadata to discover and no GitHub capability to broker. Keep this path
+ * side-effect free: the workspace owner has already pinned the exact private
+ * Task root, and an empty metadata root set is the truthful no-repository
+ * result. Leave network roots unset so the runner's existing local policy
+ * resolves its standard DNS/CA roots inside the selected execution runtime;
+ * do not issue a pre-selection command to discover them.
+ */
+export function prepareHeartbeatProjectlessNativeEnvironment(
+  env: Record<string, unknown>,
+  networkAccess: boolean,
+): Record<string, string> {
+  const result = {
+    ...githubBrokerEnvironment(env, { url: "", token: "" }),
+    // Without staged wrappers, prevent the provider image's gh config and
+    // shell startup files from restoring ambient credentials/configuration.
+    GH_CONFIG_DIR: "/dev/null",
+    ZDOTDIR: "/dev/null",
+    BASH_ENV: "/dev/null",
+    PAPERCLIP_GITHUB_LAUNCHER_DIR: "",
+    PAPERCLIP_GIT_METADATA_ROOTS: "[]",
+    PAPERCLIP_GITHUB_AUTH_MODE: "managed",
+    PAPERCLIP_RUNNER_NETWORK_ACCESS: networkAccess ? "enabled" : "disabled",
+  };
+  delete result.PAPERCLIP_RUNNER_NETWORK_ROOTS;
+  return result;
+}
+
 export async function prepareHeartbeatGitHubLaunchers(
   input: LauncherInput & {
     native: boolean;

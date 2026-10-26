@@ -50,6 +50,7 @@ import { agentProviderBindingService } from "../agent-provider-bindings.js";
 import { assertV7Authorization, assertV7Enabled } from "../v7-authorization.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
+import { isCurrentWorkerConversationRoot } from "../native-runtime/worker-conversation-root.js";
 import type { NativeConsumedSourceComponent, NativeModelOutputCapture } from "../native-runtime/native-execution-input.js";
 import {
   lockMemoryPrivacy,
@@ -474,7 +475,24 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
         if (matchingCaptures.length !== 1 || matchingAssociations.length !== 1 ||
           !["read_document", "write_document", "create_task", "create_project", "self_remember", "read_context", "call_api",
             "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric"].includes(toolName))
+        {
+          if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1") {
+            console.info("managed-native-result-receipt-miss", JSON.stringify({
+              toolName,
+              nativeDispatchCount: nativeDispatches.length,
+              matchingAssociationCount: matchingAssociations.length,
+              matchingCaptureCount: matchingCaptures.length,
+              sameCallToolCaptureCount: captures.filter(item => item.callId === block.tool_use_id && item.tool === toolName &&
+                item.managedOpenCode === true).length,
+              sameCallAssociationCount: associations.filter(item => item.callId === block.tool_use_id && item.tool === toolName).length,
+              wireIntentCount: intents.length,
+              sourceCaptureArrayPresent: Array.isArray(profile.nativeToolResultSourceCaptures),
+              associationArrayPresent: Array.isArray(profile.nativeToolCallDispatchAssociations),
+              dispatchIntentArrayPresent: Array.isArray(profile.nativeModelInputDispatchIntents),
+            }));
+          }
           throw forbidden("Managed OpenCode tool result has no original qualified invocation receipt");
+        }
         const capture = matchingCaptures[0]!;
         const source = managedRecord(capture.source);
         let result: unknown;
@@ -669,11 +687,27 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
             projectId: issues.projectId, parentId: issues.parentId, assigneeAgentId: issues.assigneeAgentId,
             sourceVersion: sql<string>`extract(epoch from ${issues.updatedAt})::text`, hiddenAt: issues.hiddenAt,
             payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated,
-          }).from(issues).where(and(eq(issues.companyId, claims.company_id), eq(issues.id, taskId), eq(issues.parentId, run.nativeIssueId!))) : [];
+          }).from(issues).where(and(eq(issues.companyId, claims.company_id), eq(issues.id, taskId))) : [];
           const currentTaskSourceHash = task && createHash("sha256").update(JSON.stringify({ id: task.id,
             identifier: task.identifier ?? null, title: task.title, status: task.status, priority: task.priority }), "utf8").digest("hex");
+          const [workerConversationRoot] = task?.parentId === null && claims.scope === "worker_model" && run.nativeIssueId
+            ? await db.select({ conversationAgentId: issues.conversationAgentId,
+              conversationUserId: issues.conversationUserId, conversationState: issues.conversationState,
+              conversationSessionGeneration: issues.conversationSessionGeneration,
+              conversationRetiredAt: issues.conversationRetiredAt, parentId: issues.parentId,
+              assigneeAgentId: issues.assigneeAgentId, executionRunId: issues.executionRunId,
+              payloadSourceProtocolVersion: issues.payloadSourceProtocolVersion,
+              payloadSourceSnapshot: issues.payloadSourceSnapshot,
+              payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated,
+            }).from(issues).where(and(eq(issues.companyId, claims.company_id), eq(issues.id, run.nativeIssueId))) : [];
+          const workerConversationRootCurrent = !!run.nativeIssueId && isCurrentWorkerConversationRoot({
+            scope: claims.scope, root: workerConversationRoot, contextSnapshot: run.contextSnapshot,
+            companyId: claims.company_id, issueId: run.nativeIssueId, agentId: claims.sub,
+            responsibleUserId: run.responsibleUserId, runId: claims.run_id,
+          });
+          const taskParentCurrent = task?.parentId === run.nativeIssueId || task?.parentId === null && workerConversationRootCurrent;
           if (!task || !taskSource || taskSource.sourceVersion !== task.sourceVersion ||
-            taskSource.contentHash !== currentTaskSourceHash || task.payloadSourceSnapshotInvalidated)
+            taskSource.contentHash !== currentTaskSourceHash || task.payloadSourceSnapshotInvalidated || !taskParentCurrent)
             throw forbidden("Managed OpenCode created Task source is no longer current");
           await assertV7Authorization(db, {
             type: "agent", source: "agent_jwt", companyId: claims.company_id, agentId: claims.sub,
@@ -824,41 +858,40 @@ export function workerModelGateway(db: Db, options: Options) {
           eq(agentExecutionManifests.runId, claims.run_id),
         ),
       );
-    if (
-      !plan ||
-      plan.erasedAt ||
-      plan.status !== "running" ||
-      !plan.startedAt ||
-      plan.version !== b.expectedPlanVersion ||
-      plan.executionPrincipal?.type !== "user" ||
-      plan.executionPrincipal.userId !== claims.responsible_user_id ||
-      plan.budgets.maxModelCostMinor === null ||
-      plan.actionClass !== "internal_draft" ||
-      !["C0", "C1"].includes(plan.riskClass) ||
-      now.getTime() >=
-        plan.startedAt.getTime() + plan.budgets.maxWallClockSeconds * 1000 ||
-      !worker ||
-      worker.status !== "running" ||
-      worker.agentId !== claims.sub ||
-      !attempt ||
-      attempt.status !== "running" ||
-      attempt.agentId !== claims.sub ||
-      attempt.runId !== claims.run_id ||
-      attempt.executionManifestId !== b.executionManifestId ||
-      !run ||
-      run.status !== "running" ||
-      run.runtimeMode !== "native" ||
-      run.nativeIssueId !== worker.issueId ||
-      run.responsibleUserId !== claims.responsible_user_id ||
-      !manifest ||
-      manifest.manifest.responsibleUserId !== claims.responsible_user_id ||
-      manifest.manifest.executionScope.delegatedScopes.some(
-        (s) => s.companyId !== claims.company_id,
-      )
-    )
+    const currentFacts = {
+      planPresent: !!plan,
+      planNotErased: !!plan && !plan.erasedAt,
+      planRunning: plan?.status === "running",
+      planStarted: !!plan?.startedAt,
+      planVersionMatches: plan?.version === b.expectedPlanVersion,
+      planHumanMatches: plan?.executionPrincipal?.type === "user" &&
+        plan.executionPrincipal.userId === claims.responsible_user_id,
+      planCostBudgetConfigured: plan?.budgets.maxModelCostMinor !== null && plan?.budgets.maxModelCostMinor !== undefined,
+      planActionAllowed: plan?.actionClass === "internal_draft",
+      planRiskAllowed: !!plan && ["C0", "C1"].includes(plan.riskClass),
+      planDeadlineCurrent: !!plan?.startedAt &&
+        now.getTime() < plan.startedAt.getTime() + plan.budgets.maxWallClockSeconds * 1000,
+      workerRunning: worker?.status === "running",
+      workerAgentMatches: worker?.agentId === claims.sub,
+      attemptRunning: attempt?.status === "running",
+      attemptAgentMatches: attempt?.agentId === claims.sub,
+      attemptRunMatches: attempt?.runId === claims.run_id,
+      attemptManifestMatches: attempt?.executionManifestId === b.executionManifestId,
+      runRunning: run?.status === "running",
+      runNative: run?.runtimeMode === "native",
+      runTaskMatches: !!worker && run?.nativeIssueId === worker.issueId,
+      runHumanMatches: run?.responsibleUserId === claims.responsible_user_id,
+      manifestHumanMatches: manifest?.manifest.responsibleUserId === claims.responsible_user_id,
+      manifestScopesCompanyScoped: !!manifest &&
+        manifest.manifest.executionScope.delegatedScopes.every(s => s.companyId === claims.company_id),
+    };
+    if (Object.values(currentFacts).some(valid => !valid)) {
+      if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1")
+        console.info("managed-worker-current-predicate-miss", JSON.stringify(currentFacts));
       throw forbidden(
         "Current Native human, internal draft Task, worker attempt and manifest required",
       );
+    }
     const [task] = await tx
       .select()
       .from(issues)

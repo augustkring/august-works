@@ -18,7 +18,8 @@ import { canActorReadIssuePrivacy, pinCurrentBoardActor } from "./authorization.
 import { authorizeSlackChannel } from "./connectors/slack-access.js";
 import { slackClient } from "./connectors/slack-client.js";
 
-type Reader = Pick<Db, "select">;
+type DbTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
+type Reader = Pick<Db | DbTransaction, "select" | "transaction">;
 type Endpoint = typeof chatEndpoints.$inferSelect;
 
 export async function slackBoardAuthor(db: Reader, endpoint: Endpoint, userId: string) {
@@ -143,8 +144,12 @@ export async function authorizeSlackBoardPublication(
       companyIds: [endpoint.companyId], chatLink: {
         companyId: endpoint.companyId, endpointId: endpoint.id, principalId: principal.id, provider: "slack" as const,
       } };
-    const pinned = await pinCurrentBoardActor(db as Db, linkedActor);
-    if (!pinned || !(await canActorReadIssuePrivacy(db as Db, pinned.actor, task))) return false;
+    const readableByLinkedHuman = await db.transaction(async (rawTx) => {
+      const tx = rawTx as unknown as DbTransaction;
+      const pinned = await pinCurrentBoardActor(tx as unknown as Db, linkedActor);
+      return Boolean(pinned && await canActorReadIssuePrivacy(tx as unknown as Db, pinned.actor, task));
+    });
+    if (!readableByLinkedHuman) return false;
   }
   if (!receipt) return true;
   if (!principal || !botToken) return false;

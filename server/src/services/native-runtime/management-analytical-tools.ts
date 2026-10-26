@@ -22,7 +22,7 @@ const descriptions:Record<ManagementChatToolName,string>={
  get_experiment_result:"Read the complete exact human-interpreted native Experiment evidence, including primary and guardrail results. Never turn a proxy into verified Task impact.",
  propose_management_action:"Prepare an advisory action preview citing current native evidence for explicit human review. This neither publishes nor executes a Decision, Experiment, Task or project change.",
 };
-export const MANAGEMENT_ANALYTICAL_TOOL_DEFINITIONS=Object.entries(managementChatToolSchemas).map(([name,schema])=>({name,description:descriptions[name as ManagementChatToolName],inputSchema:z.toJSONSchema(schema,{target:"draft-7"})}));
+export const MANAGEMENT_ANALYTICAL_TOOL_DEFINITIONS=Object.entries(managementChatToolSchemas).map(([name,schema])=>({name,description:descriptions[name as ManagementChatToolName],inputSchema:z.toJSONSchema(schema)}));
 export function isManagementAnalyticalTool(name:string):name is ManagementChatToolName{return Object.hasOwn(managementChatToolSchemas,name);}
 
 /** Catalog availability is server-derived. Execution independently repeats the
