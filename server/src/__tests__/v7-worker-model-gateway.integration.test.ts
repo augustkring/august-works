@@ -1641,6 +1641,98 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       ).rejects.toMatchObject({ status: 403 });
       expect(effects).toBe(1);
     });
+    it("limits plan-created Tasks to C0 backlog drafts without delegation", async () => {
+      let effects = 0;
+      const call = {
+        tool: "create_task",
+        callId: "bounded-backlog-task",
+        arguments: { idempotencyKey: "bounded-backlog-task", title: "Private draft", status: "backlog" },
+      };
+      await expect(withOrchestrationNativeTool(db, nativeBinding(), call,
+        async () => { effects++; return { task: { id: randomUUID() } }; })).resolves.toMatchObject({
+        task: { id: expect.any(String) },
+      });
+      await expect(withOrchestrationNativeTool(db, nativeBinding(), call,
+        async () => { effects++; return {}; })).rejects.toMatchObject({ status: 409 });
+      await expect(withOrchestrationNativeTool(db, nativeBinding(), {
+        tool: "create_task",
+        callId: "unqualified-todo-task",
+        arguments: { idempotencyKey: "unqualified-todo-task", title: "Would start work", status: "todo" },
+      }, async () => { effects++; return { task: { id: randomUUID() } }; })).rejects.toMatchObject({ status: 403 });
+      const [c1Task] = await db.insert(issues).values({ companyId: f.home, title: "C1 Task plan fixture",
+        status: "todo", assigneeAgentId: f.presence.id }).returning();
+      const [c1Run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id,
+        responsibleUserId: f.userId, status: "running", runtimeMode: "native", nativeIssueId: c1Task!.id,
+        contextSnapshot: { issueId: c1Task!.id } }).returning();
+      const c1Prepared = await agentRuntimeFabricService(db).prepare({ companyId: f.home, agentId: f.presence.id,
+        runId: c1Run!.id, responsibleUserId: f.userId, issueId: c1Task!.id, query: c1Task!.title });
+      const c1Plan = await orchestrationService(db).create(f.actor, f.home, {
+        issueId: c1Task!.id, expectedIssueUpdatedAt: c1Task!.updatedAt.toISOString(), workload: "semantic", riskClass: "C1",
+        completionContract: { objective: "Save one internal C1 draft", requiredOutputs: [{ key: "result" }],
+          businessInvariants: ["Use authorized sources only"] },
+        budgets: { maxModelCostMinor: 6, maxToolActions: 2 }, workers: [{ key: "writer", issueId: c1Task!.id }],
+      });
+      await db.update(orchestrationPlans).set({ status: "running", startedAt: new Date(),
+        executionPrincipal: { type: "user", userId: f.userId } }).where(eq(orchestrationPlans.id, c1Plan.id));
+      const [c1Worker] = await db.update(orchestrationWorkers).set({ status: "running", attemptCount: 1 })
+        .where(eq(orchestrationWorkers.planId, c1Plan.id)).returning();
+      await db.insert(orchestrationWorkerAttempts).values({ companyId: f.home, planId: c1Plan.id,
+        workerId: c1Worker!.id, agentId: f.presence.id, runId: c1Run!.id,
+        executionManifestId: c1Prepared!.record.id, attempt: 1 });
+      await db.update(issues).set({ executionRunId: c1Run!.id }).where(eq(issues.id, c1Task!.id));
+      await expect(withOrchestrationNativeTool(db, { companyId: f.home, issueId: c1Task!.id,
+        agentId: f.presence.id, runId: c1Run!.id }, {
+        tool: "create_task",
+        callId: "unqualified-c1-task",
+        arguments: { idempotencyKey: "unqualified-c1-task", title: "Material plan", status: "backlog" },
+      }, async () => { effects++; return {}; })).rejects.toMatchObject({ status: 403 });
+      for (const [callId, extra] of [
+        ["unqualified-assignment-task", { assigneeActorId: randomUUID() }],
+        ["unqualified-placement-task", { projectId: randomUUID() }],
+        ["unqualified-plan-task", { initialPlan: "PRIVATE execution plan" }],
+        ["unqualified-dependency-task", { blockedByTaskIds: [randomUUID()] }],
+        ["unqualified-repository-task", { repositoryId: randomUUID() }],
+        ["unqualified-workspace-task", { workspaceId: randomUUID() }],
+        ["unqualified-approval-task", { approvalId: randomUUID() }],
+      ] as const) {
+        await expect(withOrchestrationNativeTool(db, nativeBinding(), {
+          tool: "create_task",
+          callId,
+          arguments: { idempotencyKey: callId, title: "Unqualified material field", status: "backlog", ...extra },
+        }, async () => { effects++; return {}; })).rejects.toMatchObject({ status: 403 });
+      }
+      const [materialTask] = await db.insert(issues).values({ companyId: f.home, title: "Material Task plan fixture",
+        status: "todo", assigneeAgentId: f.presence.id }).returning();
+      const [materialRun] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id,
+        responsibleUserId: f.userId, status: "running", runtimeMode: "native", nativeIssueId: materialTask!.id,
+        contextSnapshot: { issueId: materialTask!.id } }).returning();
+      const materialPrepared = await agentRuntimeFabricService(db).prepare({ companyId: f.home, agentId: f.presence.id,
+        runId: materialRun!.id, responsibleUserId: f.userId, issueId: materialTask!.id, query: materialTask!.title });
+      const materialPlan = await orchestrationService(db).create(f.actor, f.home, {
+        issueId: materialTask!.id, expectedIssueUpdatedAt: materialTask!.updatedAt.toISOString(), workload: "semantic",
+        actionClass: "data_mutation", riskClass: "C2",
+        completionContract: { objective: "Save one internal material Task", requiredOutputs: [{ key: "result" }],
+          businessInvariants: ["Use authorized sources only"],
+          requiredPostconditions: [{ kind: "tool_receipt", toolName: "create_task", argumentsHash: "a".repeat(64) }] },
+        budgets: { maxModelCostMinor: 6, maxToolActions: 2 }, workers: [{ key: "writer", issueId: materialTask!.id }],
+      });
+      await db.update(orchestrationPlans).set({ status: "running", startedAt: new Date(),
+        executionPrincipal: { type: "user", userId: f.userId } }).where(eq(orchestrationPlans.id, materialPlan.id));
+      const [materialWorker] = await db.update(orchestrationWorkers).set({ status: "running", attemptCount: 1 })
+        .where(eq(orchestrationWorkers.planId, materialPlan.id)).returning();
+      await db.insert(orchestrationWorkerAttempts).values({ companyId: f.home, planId: materialPlan.id,
+        workerId: materialWorker!.id, agentId: f.presence.id, runId: materialRun!.id,
+        executionManifestId: materialPrepared!.record.id, attempt: 1 });
+      await db.update(issues).set({ executionRunId: materialRun!.id }).where(eq(issues.id, materialTask!.id));
+      await expect(withOrchestrationNativeTool(db, { companyId: f.home, issueId: materialTask!.id,
+        agentId: f.presence.id, runId: materialRun!.id }, {
+        tool: "create_task",
+        callId: "unqualified-material-plan-task",
+        arguments: { idempotencyKey: "unqualified-material-plan-task", title: "Material plan", status: "backlog" },
+      }, async () => { effects++; return {}; })).rejects.toMatchObject({ status: 403 });
+      expect(effects).toBe(1);
+      expect(await db.select().from(toolInvocations).where(eq(toolInvocations.runId, run.id))).toHaveLength(1);
+    });
     it("withholds Native read output after membership changes during dispatch without retaining source bodies", async () => {
       await expect(
         withOrchestrationNativeTool(

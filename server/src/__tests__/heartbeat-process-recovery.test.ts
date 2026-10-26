@@ -105,6 +105,7 @@ import {
   readChatControlRecoveryStop,
 } from "../services/chat-control-recovery-stop.js";
 import { prepareNativeHeartbeatRun } from "../services/native-runtime/prepare-native-run.js";
+import { lockNativeRuntimeSelectionRows } from "../services/native-runtime-selection-lock.js";
 import {
   hasCommittedNativeBoardResponseWait,
   readNativeBoardResponseWaitOrigin,
@@ -2747,6 +2748,61 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       const [task] = await db.select().from(issues).where(eq(issues.id, issueId));
       expect(task.executionRunId).toBeNull();
     });
+  });
+
+  it("locks the issue before the run during native runtime selection", async () => {
+    const { companyId, issueId, runId } = await seedQueuedIssueRunFixture();
+    let holderPid = 0;
+    let selectionPid = 0;
+    let issueHeld!: () => void;
+    let releaseIssue!: () => void;
+    const acquired = new Promise<void>(resolve => { issueHeld = resolve; });
+    const release = new Promise<void>(resolve => { releaseIssue = resolve; });
+    const issueHolder = db.transaction(async tx => {
+      const [backend] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+      holderPid = backend!.pid;
+      await tx.select({ id: issues.id }).from(issues).where(eq(issues.id, issueId)).for("update");
+      issueHeld();
+      await release;
+    });
+    await acquired;
+
+    let selectionStarted!: () => void;
+    const started = new Promise<void>(resolve => { selectionStarted = resolve; });
+    const selection = db.transaction(async tx => {
+      const [backend] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+      selectionPid = backend!.pid;
+      selectionStarted();
+      return lockNativeRuntimeSelectionRows(tx as unknown as typeof db, { companyId, runId, issueId });
+    });
+    await started;
+    try {
+      await expect.poll(async () => {
+        const [waiting] = await db.execute<{ blocked: boolean }>(sql`select exists(
+          select 1 from pg_stat_activity
+          where pid = ${selectionPid}
+            and ${holderPid} = any(pg_blocking_pids(pid))
+            and wait_event_type = 'Lock'
+        ) as blocked`);
+        return waiting?.blocked ?? false;
+      }, { timeout: 5000 }).toBe(true);
+
+      // If native selection had already locked heartbeat_runs before waiting
+      // on issues, this NOWAIT read would fail. It proves the selection's
+      // first held row is the issue and catches the original inversion
+      // deterministically without relying on a production deadlock timeout.
+      await db.transaction(async tx => {
+        await tx.execute(sql`set local lock_timeout = '1s'`);
+        const [run] = await tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns)
+          .where(eq(heartbeatRuns.id, runId)).for("update").limit(1);
+        expect(run?.id).toBe(runId);
+      });
+    } finally {
+      releaseIssue();
+      await issueHolder;
+      await selection.catch(() => undefined);
+    }
+    await expect(selection).resolves.toMatchObject({ id: runId, companyId, nativeIssueId: null });
   });
 
   it("does not dispatch when cancellation wins after native selection", async () => {

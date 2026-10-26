@@ -901,10 +901,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "03d1f0c142bc21a160a44b41e495f0c1b09275808ea06f47db6da97df0e332f2",
+      "sourceSha256": "035fd82dbb02ca678622cac0cfa1e0b95ea998eca194806b430ccc7799640127",
       "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "no_change",
-      "rationale": "Reviewed paired Help and recovery articles against exact owner-only empty conversation admission, current-source document/annotation reads and configured heartbeat reuse. No new customer retry, support, Stop or recovery action is introduced; current source restrictions and original-request recovery guidance remain accurate."
+      "rationale": "Reviewed paired Help/recovery articles against exact conversation-owner admission and same-transaction issue-list hydration. Source permissions and customer retry/Stop/support actions remain as documented; the cache fix changes internal connection use without introducing a new action."
     },
     {
       "source": "server/src/routes/saas.ts",
@@ -1213,10 +1213,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "03d1f0c142bc21a160a44b41e495f0c1b09275808ea06f47db6da97df0e332f2",
+      "sourceSha256": "035fd82dbb02ca678622cac0cfa1e0b95ea998eca194806b430ccc7799640127",
       "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "no_change",
-      "rationale": "Reviewed paired Help and recovery articles against exact owner-only empty conversation admission, current-source document/annotation reads and configured heartbeat reuse. No new customer retry, support, Stop or recovery action is introduced; current source restrictions and original-request recovery guidance remain accurate."
+      "rationale": "Reviewed paired Help/recovery articles against exact conversation-owner admission and same-transaction issue-list hydration. Source permissions and customer retry/Stop/support actions remain as documented; the cache fix changes internal connection use without introducing a new action."
     },
     {
       "source": "server/src/routes/saas.ts",
@@ -1541,10 +1541,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "03d1f0c142bc21a160a44b41e495f0c1b09275808ea06f47db6da97df0e332f2",
+      "sourceSha256": "035fd82dbb02ca678622cac0cfa1e0b95ea998eca194806b430ccc7799640127",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Reviewed paired Help and recovery articles against exact owner-only empty conversation admission, current-source document/annotation reads and configured heartbeat reuse. No new customer retry, support, Stop or recovery action is introduced; current source restrictions and original-request recovery guidance remain accurate."
+      "rationale": "Reviewed paired Help/recovery articles against exact conversation-owner admission and same-transaction issue-list hydration. Source permissions and customer retry/Stop/support actions remain as documented; the cache fix changes internal connection use without introducing a new action."
     },
     {
       "source": "server/src/services/execution-workspaces.ts",
@@ -1565,10 +1565,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "51f08a68459e643f652522266c6137003945a53369778d055045036ab070afdd",
+      "sourceSha256": "bb55357bce20f82fc717e034a333e0fff5b5ba90810ed51a96c0b085cd60367a",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Reviewed paired recovery/export articles against exact first-Human conversation source admission, the managed-provider test seam and bounded opt-in diagnostics. Prior conversation replay remains closed without a complete source set. Customer retry/Stop actions, retained source restrictions and deletion guidance remain accurate."
+      "rationale": "Reviewed paired recovery/export articles against issue-before-Run selection locking, current source/wake capture and bounded failure logging. Stop still waits for original run settlement; source access and erasure remain mandatory. No customer procedure or retention promise changes."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1645,10 +1645,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "03d1f0c142bc21a160a44b41e495f0c1b09275808ea06f47db6da97df0e332f2",
+      "sourceSha256": "035fd82dbb02ca678622cac0cfa1e0b95ea998eca194806b430ccc7799640127",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Reviewed paired Help and recovery articles against exact owner-only empty conversation admission, current-source document/annotation reads and configured heartbeat reuse. No new customer retry, support, Stop or recovery action is introduced; current source restrictions and original-request recovery guidance remain accurate."
+      "rationale": "Reviewed paired Help/recovery articles against exact conversation-owner admission and same-transaction issue-list hydration. Source permissions and customer retry/Stop/support actions remain as documented; the cache fix changes internal connection use without introducing a new action."
     },
     {
       "source": "server/src/services/execution-workspaces.ts",
@@ -1669,10 +1669,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "51f08a68459e643f652522266c6137003945a53369778d055045036ab070afdd",
+      "sourceSha256": "bb55357bce20f82fc717e034a333e0fff5b5ba90810ed51a96c0b085cd60367a",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Reviewed paired recovery/export articles against exact first-Human conversation source admission, the managed-provider test seam and bounded opt-in diagnostics. Prior conversation replay remains closed without a complete source set. Customer retry/Stop actions, retained source restrictions and deletion guidance remain accurate."
+      "rationale": "Reviewed paired recovery/export articles against issue-before-Run selection locking, current source/wake capture and bounded failure logging. Stop still waits for original run settlement; source access and erasure remain mandatory. No customer procedure or retention promise changes."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -2053,18 +2053,18 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "51f08a68459e643f652522266c6137003945a53369778d055045036ab070afdd",
+      "sourceSha256": "bb55357bce20f82fc717e034a333e0fff5b5ba90810ed51a96c0b085cd60367a",
       "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "no_change",
-      "rationale": "Reviewed paired recovery/export articles against exact first-Human conversation source admission, the managed-provider test seam and bounded opt-in diagnostics. Prior conversation replay remains closed without a complete source set. Customer retry/Stop actions, retained source restrictions and deletion guidance remain accurate."
+      "rationale": "Reviewed paired recovery/export articles against issue-before-Run selection locking, current source/wake capture and bounded failure logging. Stop still waits for original run settlement; source access and erasure remain mandatory. No customer procedure or retention promise changes."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "51f08a68459e643f652522266c6137003945a53369778d055045036ab070afdd",
+      "sourceSha256": "bb55357bce20f82fc717e034a333e0fff5b5ba90810ed51a96c0b085cd60367a",
       "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "no_change",
-      "rationale": "Reviewed paired recovery/export articles against exact first-Human conversation source admission, the managed-provider test seam and bounded opt-in diagnostics. Prior conversation replay remains closed without a complete source set. Customer retry/Stop actions, retained source restrictions and deletion guidance remain accurate."
+      "rationale": "Reviewed paired recovery/export articles against issue-before-Run selection locking, current source/wake capture and bounded failure logging. Stop still waits for original run settlement; source access and erasure remain mandatory. No customer procedure or retention promise changes."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",

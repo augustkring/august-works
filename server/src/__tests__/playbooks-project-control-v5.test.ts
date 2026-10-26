@@ -11,6 +11,8 @@ import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
 import { playbookService } from "../services/playbooks.js";
 import { projectControlService, roadmapHealth } from "../services/project-control.js";
 import { budgetService } from "../services/budgets.js";
+import { createCanonicalHumanProject, seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
+import { issueService } from "../services/issues.js";
 
 it("health reports unknown when there is no committed schedule", () => { expect(roadmapHealth([], new Date("2026-10-03T00:00:00Z")).status).toBe("unknown"); });
 const support = await getEmbeddedPostgresTestSupport();
@@ -132,39 +134,33 @@ describe.skipIf(!support.supported)("V5 canonical procedures and schedule", () =
   });
   it("requires reviewed commitment changes, keeps forecasts separate, and pins an explicit baseline", async () => {
     const f = await seedV5Presences(db), svc = projectControlService(db);
-    // New Human project fixture uses the original Board-create source stamp;
-    // no historical Project or payload is upgraded here.
-    const [project] = await db.insert(projects).values({ companyId: f.home, name: "Launch", sourceProvenanceQualified: true }).returning();
+    const sourceActor = await seedCurrentHumanSourceActor(db, [f.home], f.userId);
+    const project = await createCanonicalHumanProject(db, f.home, sourceActor, "Launch");
     const actualStart = new Date("2026-10-01T00:00:00Z");
     const originalReason = "Initial delivery forecast explanation";
-    const [issue] = await db.insert(issues).values({ companyId: f.home, projectId: project!.id, title: "Ship", status: "in_progress", startedAt: actualStart,
-      createdByUserId: f.userId, responsibleUserId: f.userId, forecastReason: originalReason, payloadSourceProtocolVersion: 1 }).returning();
-    // Structural body binding only; this is not an authenticated source
-    // producer or complete-input qualification fixture.
-    const [captured] = await db.execute<{ snapshot: unknown }>(sql`update issues target set payload_source_snapshot=(
-      select content || jsonb_build_object('digest',encode(sha256(convert_to(content::text,'UTF8')),'hex')) from (
-        select jsonb_build_object('version',1,'owner',jsonb_build_object('kind','issue','companyId',target.company_id,
-          'id',target.id,'contentHash',public.aw_native_payload_body_hash('issue',to_jsonb(target))),
-          'policy',jsonb_build_object('issueIds','[]'::jsonb,'projectIds','[]'::jsonb,'runIds','[]'::jsonb,
-            'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb) as content
-      ) actual_body) where target.company_id=${f.home}::uuid and target.id=${issue!.id}::uuid
-      returning payload_source_snapshot as snapshot`);
-    const view = await svc.get(f.actor, f.home, project!.id);
-    const proposal = await svc.propose(f.actor, f.home, project!.id, roadmapProposalSchema.parse({ expectedProjectUpdatedAt: view.projectUpdatedAt, reason: "Commit the agreed launch schedule after human review", changes: [{ issueId: issue!.id, expectedUpdatedAt: issue!.updatedAt.toISOString(), patch: { plannedStartAt: "2026-10-03T00:00:00Z", plannedEndAt: "2026-10-10T00:00:00Z" } }] }));
-    expect(proposal.status).toBe("pending"); expect((await db.select().from(issues).where(eq(issues.id, issue!.id)))[0]!.plannedEndAt).toBeNull();
-    expect((await svc.review(f.actor, f.home, project!.id, proposal.id, true, "Approved agreed dates")).status).toBe("accepted");
-    const baseline = await svc.baseline(f.actor, f.home, project!.id, "Original plan");
-    const after = (await db.select().from(issues).where(eq(issues.id, issue!.id)))[0]!;
-    expect(after.payloadSourceSnapshot).toEqual(captured!.snapshot);
-    await svc.forecast(f.actor, f.home, project!.id, issue!.id, { expectedUpdatedAt: after.updatedAt.toISOString(), forecastStartAt: "2026-10-03T00:00:00Z", forecastEndAt: "2026-10-12T00:00:00Z", forecastConfidence: 0.6, forecastReason: originalReason });
-    const unchanged = (await db.select().from(issues).where(eq(issues.id, issue!.id)))[0]!;
-    expect(unchanged.payloadSourceSnapshot).toEqual(captured!.snapshot);
+    const issue = await issueService(db).create(f.home, { projectId: project.id, title: "Ship", status: "in_progress", assigneeAgentId: f.presence.id, startedAt: actualStart,
+      createdByUserId: f.userId, responsibleUserId: f.userId, forecastReason: originalReason }, db, undefined,
+      { manualInputActor: sourceActor, privacyActor: sourceActor, sourceAccessActor: sourceActor });
+    // Project-linked in-progress tasks with a forecast reason are not direct
+    // root manual-input sources; the Human remains the authenticated creator,
+    // but this fixture must not manufacture source qualification for them.
+    expect(issue.payloadSourceSnapshot).toBeNull();
+    const view = await svc.get(f.actor, f.home, project.id);
+    const proposal = await svc.propose(f.actor, f.home, project.id, roadmapProposalSchema.parse({ expectedProjectUpdatedAt: view.projectUpdatedAt, reason: "Commit the agreed launch schedule after human review", changes: [{ issueId: issue.id, expectedUpdatedAt: issue.updatedAt.toISOString(), patch: { plannedStartAt: "2026-10-03T00:00:00Z", plannedEndAt: "2026-10-10T00:00:00Z" } }] }));
+    expect(proposal.status).toBe("pending"); expect((await db.select().from(issues).where(eq(issues.id, issue.id)))[0]!.plannedEndAt).toBeNull();
+    expect((await svc.review(f.actor, f.home, project.id, proposal.id, true, "Approved agreed dates")).status).toBe("accepted");
+    const baseline = await svc.baseline(f.actor, f.home, project.id, "Original plan");
+    const after = (await db.select().from(issues).where(eq(issues.id, issue.id)))[0]!;
+    expect(after.payloadSourceSnapshot).toBeNull();
+    await svc.forecast(f.actor, f.home, project.id, issue.id, { expectedUpdatedAt: after.updatedAt.toISOString(), forecastStartAt: "2026-10-03T00:00:00Z", forecastEndAt: "2026-10-12T00:00:00Z", forecastConfidence: 0.6, forecastReason: originalReason });
+    const unchanged = (await db.select().from(issues).where(eq(issues.id, issue.id)))[0]!;
+    expect(unchanged.payloadSourceSnapshot).toBeNull();
     expect(unchanged.payloadSourceSnapshotInvalidated).toBe(false);
-    await svc.forecast(f.actor, f.home, project!.id, issue!.id, { expectedUpdatedAt: unchanged.updatedAt.toISOString(), forecastStartAt: "2026-10-03T00:00:00Z", forecastEndAt: "2026-10-12T00:00:00Z", forecastConfidence: 0.6, forecastReason: "Dependency testing extends the likely completion date" });
-    const stored = (await db.select().from(issues).where(eq(issues.id, issue!.id)))[0]!;
+    await svc.forecast(f.actor, f.home, project.id, issue.id, { expectedUpdatedAt: unchanged.updatedAt.toISOString(), forecastStartAt: "2026-10-03T00:00:00Z", forecastEndAt: "2026-10-12T00:00:00Z", forecastConfidence: 0.6, forecastReason: "Dependency testing extends the likely completion date" });
+    const stored = (await db.select().from(issues).where(eq(issues.id, issue.id)))[0]!;
     expect(stored.payloadSourceSnapshot).toBeNull(); expect(stored.payloadSourceSnapshotInvalidated).toBe(true);
     expect(stored.startedAt).toEqual(actualStart); expect(stored.completedAt).toBeNull(); expect(stored.plannedEndAt?.toISOString()).toBe("2026-10-10T00:00:00.000Z");
-    expect((await svc.get(f.actor, f.home, project!.id)).health.status).toBe("at_risk");
+    expect((await svc.get(f.actor, f.home, project.id)).health.status).toBe("at_risk");
     await expect(db.update(projectScheduleBaselines).set({ name: "Change original" }).where(eq(projectScheduleBaselines.id, baseline.id))).rejects.toThrow();
   });
   it.each(["reject", "accept_stale", "reject_stale"] as const)("keeps a viewer from deciding a roadmap proposal: %s", async (decision) => {

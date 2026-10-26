@@ -61,6 +61,7 @@ const reads = new Set([
 ]);
 const draftWrites = new Set([
   "write_document",
+  "create_task",
   "create_project",
   "report_progress",
   "request_human_input",
@@ -465,6 +466,24 @@ export async function withOrchestrationNativeTool(
         throw forbidden(
           "Native draft writes cannot bypass a material action contract",
         );
+      if (call.tool === "create_task") {
+        const args = call.arguments && typeof call.arguments === "object"
+          ? call.arguments as Record<string, unknown>
+          : {};
+        const allowedDraftKeys = new Set(["idempotencyKey", "title", "description", "status"]);
+        // A plan may create only a backlog draft without caller-selected
+        // assignment under its own C0 internal-draft authority. Todo work, delegation, project
+        // placement, dependencies, and initial plans require their own
+        // qualified workflow/action path.
+        if (
+          bound.plan.riskClass !== "C0" ||
+          args.status !== "backlog" ||
+          Object.keys(args).some((key) => !allowedDraftKeys.has(key))
+        )
+          throw forbidden(
+            "Native plan Task creation is limited to C0 backlog drafts without caller-selected assignment",
+          );
+      }
       if (call.tool === "write_document") {
         const retained = await retainedOrchestrationContract(
           t,

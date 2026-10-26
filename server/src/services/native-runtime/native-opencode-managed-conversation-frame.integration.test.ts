@@ -62,7 +62,10 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
       } });
     expect(result.success, JSON.stringify({ runStatus: result.runStatus, runError: result.run?.error,
       errorCode: result.run?.errorCode, stdoutExcerpt: result.run?.stdoutExcerpt,
-      stderrExcerpt: result.run?.stderrExcerpt, providerCallCount: result.providerCallCount })).toBe(true);
+      stderrExcerpt: result.run?.stderrExcerpt, providerCallCount: result.providerCallCount,
+      providerHookInvoked: result.providerHookInvoked, providerHookFailure: result.providerHookFailure,
+      providerStubFailure: result.providerStubFailure, providerToolNames: result.providerToolNames,
+      issuerFacts: result.issuerFacts, liveBoundary, brokerRequestFacts: result.brokerRequestFacts })).toBe(true);
     expect(result.providerCallCount).toBeGreaterThan(0);
     expect(result.providerKeyMatched).toBe(true);
     expect(liveBoundary).toMatchObject({ runId: result.run?.id, issueId: result.issueId,

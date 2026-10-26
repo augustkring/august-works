@@ -148,9 +148,10 @@ function isClosedEmptyTaskContinuation(value: unknown, input: {
     coverageRecord.kind === "full_task_history" && coverageRecord.throughCommentId === null && coverageRecord.summaryThroughCommentId === null;
 }
 
-/** Capture only the closed no-comment Task wake profile. Any additional wake
- * source, annotation, interaction, continuation or unclassified key stays
- * unknown and prevents the bootstrap source set from closing. */
+/** Capture only the closed Task wake profile. Inline comments are admitted only
+ * when their exact bounded renditions match unique owner captures. Any other
+ * wake source, attachment, annotation, interaction, continuation or unknown
+ * key stays unknown and prevents the bootstrap source set from closing. */
 export function captureNativeTaskWakeSource(input: {
   companyId: string;
   runId: string;
@@ -161,12 +162,23 @@ export function captureNativeTaskWakeSource(input: {
   /** Read from the persisted heartbeat run, independently of the rendered
    * wake payload. */
   persistedWakeReason: string | null;
+  /** Current issue checkout owner; a true harness flag must be bound to this Run. */
+  checkoutRunId?: string | null;
+  /** Exact server captures for comments included by the bounded wake payload. */
+  commentSources?: readonly Extract<NativePayloadSourceInput, { kind: "comment" }>[];
+  onDiagnostic?: (reason: "identity_invalid" | "payload_shape" | "payload_keys" | "task_projection" |
+    "wake_fields_invalid" | "comment_count_invalid" | "comment_shape_invalid" | "comment_source_invalid" |
+    "comment_hash_mismatch" | "comment_window_invalid", fields?: readonly string[]) => void;
   payload: unknown;
 }): Extract<NativePayloadSourceInput, { kind: "native_task_wake" }> | null {
+  const reject = (reason: Parameters<NonNullable<typeof input.onDiagnostic>>[0], fields?: readonly string[]) => {
+    input.onDiagnostic?.(reason, fields);
+    return null;
+  };
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   if (!uuid.test(input.runId) || !uuid.test(input.issueId) || !/^\d+(?:\.\d+)?$/.test(input.sourceVersion) ||
-    input.task.id !== input.issueId || !input.payload || typeof input.payload !== "object" || Array.isArray(input.payload))
-    return null;
+    input.task.id !== input.issueId) return reject("identity_invalid");
+  if (!input.payload || typeof input.payload !== "object" || Array.isArray(input.payload)) return reject("payload_shape");
   const payload = input.payload as Record<string, unknown>;
   const keys = ["reason", "executionContinuation", "attachmentOmissions", "externalChatProvider", "recovery", "issue",
     "agentMessage", "childIssueSummaries", "childIssueSummaryTruncated", "dispositionRepair", "livenessContinuation",
@@ -178,7 +190,7 @@ export function captureNativeTaskWakeSource(input: {
     "documentReviewContext", "commentWindow", "truncated", "fallbackFetchNeeded"].sort();
   const actualKeys = Object.keys(payload).sort();
   const expectedKeys = payload.connectorSkillInstructions === undefined ? keys : [...keys, "connectorSkillInstructions"].sort();
-  if (JSON.stringify(actualKeys) !== JSON.stringify(expectedKeys)) return null;
+  if (JSON.stringify(actualKeys) !== JSON.stringify(expectedKeys)) return reject("payload_keys");
   const issue = payload.issue;
   if (!issue || typeof issue !== "object" || Array.isArray(issue)) return null;
   const wakeIssue = issue as Record<string, unknown>;
@@ -186,7 +198,7 @@ export function captureNativeTaskWakeSource(input: {
   if (JSON.stringify(Object.keys(wakeIssue).sort()) !== JSON.stringify(issueKeys) ||
     JSON.stringify({ id: wakeIssue.id, identifier: wakeIssue.identifier, title: wakeIssue.title,
       description: wakeIssue.description, status: wakeIssue.status, priority: wakeIssue.priority, workMode: wakeIssue.workMode }) !==
-    JSON.stringify(input.task) || wakeIssue.descriptionTruncated !== false) return null;
+    JSON.stringify(input.task) || wakeIssue.descriptionTruncated !== false) return reject("task_projection");
   const emptyObject = (value: unknown) => value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0;
   const checks: Record<string, boolean> = {
     reason: payload.reason === input.persistedWakeReason,
@@ -202,7 +214,8 @@ export function captureNativeTaskWakeSource(input: {
     interactionId: payload.interactionId === null, sourceRunId: payload.sourceRunId === null,
     externalChatQuestionResponse: payload.externalChatQuestionResponse === null,
     externalInteractionContinuation: payload.externalInteractionContinuation === false, checkboxSelection: payload.checkboxSelection === null,
-    checkedOutByHarness: payload.checkedOutByHarness === false, externalChatExecutionBound: payload.externalChatExecutionBound === false,
+    checkedOutByHarness: payload.checkedOutByHarness === (input.checkoutRunId === input.runId),
+    externalChatExecutionBound: payload.externalChatExecutionBound === false,
     simplifiedEnglishInteractions: payload.simplifiedEnglishInteractions === false, dependencyBlockedInteraction: payload.dependencyBlockedInteraction === false,
     treeHoldInteraction: payload.treeHoldInteraction === false, activeTreeHold: Boolean(emptyObject(payload.activeTreeHold)),
     unresolvedBlockerIssueIds: Array.isArray(payload.unresolvedBlockerIssueIds) && payload.unresolvedBlockerIssueIds.length === 0,
@@ -210,17 +223,44 @@ export function captureNativeTaskWakeSource(input: {
     executionStage: payload.executionStage === null, taskWatchdog: payload.taskWatchdog === null, skillTest: payload.skillTest === null,
     continuationSummary: payload.continuationSummary === null,
     connectorSkillInstructions: payload.connectorSkillInstructions === undefined || payload.connectorSkillInstructions === null || payload.connectorSkillInstructions === "",
-    commentIds: Array.isArray(payload.commentIds) && payload.commentIds.length === 0, latestCommentId: payload.latestCommentId === null,
-    comments: Array.isArray(payload.comments) && payload.comments.length === 0,
+    commentIds: Array.isArray(payload.commentIds) && payload.commentIds.every(value => typeof value === "string"),
+    latestCommentId: Array.isArray(payload.commentIds) && payload.commentIds.length > 0
+      ? payload.latestCommentId === payload.commentIds[payload.commentIds.length - 1]
+      : payload.latestCommentId === null,
+    comments: Array.isArray(payload.comments),
     annotationDeltas: Array.isArray(payload.annotationDeltas) && payload.annotationDeltas.length === 0,
     planReviewContext: payload.planReviewContext === null, documentReviewContext: payload.documentReviewContext === null,
     truncated: payload.truncated === false, fallbackFetchNeeded: payload.fallbackFetchNeeded === false,
   };
   const failedChecks = Object.keys(checks).filter(key => !checks[key]);
-  if (failedChecks.length) return null;
+  if (failedChecks.length) return reject("wake_fields_invalid", failedChecks);
+  const commentIds = payload.commentIds as string[];
+  const comments = payload.comments as unknown[];
+  if (commentIds.length === 0) {
+    if (comments.length !== 0) return reject("comment_count_invalid");
+  } else {
+    if (comments.length !== commentIds.length || payload.truncated !== false || payload.fallbackFetchNeeded !== false)
+      return reject("comment_count_invalid");
+    for (const [index, commentId] of commentIds.entries()) {
+      const comment = comments[index];
+      if (!comment || typeof comment !== "object" || Array.isArray(comment)) return reject("comment_shape_invalid");
+      const item = comment as Record<string, unknown>;
+      const sources = (input.commentSources ?? []).filter(source => source.commentId === commentId);
+      if (sources.length !== 1 || sources[0]!.issueId !== input.issueId || item.id !== commentId ||
+        item.issueId !== input.issueId)
+        return reject("comment_source_invalid");
+      if (item.bodyTruncated !== false || item.deletedAt !== null || item.attachments !== undefined || typeof item.body !== "string")
+        return reject("comment_shape_invalid");
+      if (
+        createHash("sha256").update(JSON.stringify({ body: item.body, presentation: item.presentation ?? null,
+          metadata: item.metadata ?? null }), "utf8").digest("hex") !== sources[0]!.contentHash) return reject("comment_hash_mismatch");
+    }
+  }
   const commentWindow = payload.commentWindow;
-  if (!commentWindow || typeof commentWindow !== "object" || Array.isArray(commentWindow) ||
-    JSON.stringify(commentWindow) !== JSON.stringify({ requestedCount: 0, includedCount: 0, missingCount: 0 })) return null;
+  if (!commentWindow || typeof commentWindow !== "object" || Array.isArray(commentWindow)) return reject("comment_window_invalid");
+  const commentWindowRecord = commentWindow as Record<string, unknown>;
+  if (commentWindowRecord.requestedCount !== commentIds.length || commentWindowRecord.includedCount !== commentIds.length ||
+    commentWindowRecord.missingCount !== 0) return reject("comment_window_invalid");
   return { kind: "native_task_wake", runId: input.runId, issueId: input.issueId,
     sourceVersion: input.sourceVersion, contentHash: createHash("sha256").update(JSON.stringify(payload), "utf8").digest("hex") };
 }
@@ -246,10 +286,16 @@ export function buildNativeBootstrapSourceSet(input: {
   contextWitness?: NativeBootstrapContextWitness | null;
   rolePackInputs: readonly NativePayloadSourceInput[] | null;
   unsupportedInputPresent: boolean;
+  onDiagnostic?: (reason: "interaction_sources" | "unsupported_or_missing_witness" | "ambiguous_reference" |
+    "reference_source_mismatch" | "source_snapshot_invalid" | "additional_inputs_unknown" | "source_budget_exceeded") => void;
 }): NativePayloadSourceSet | null {
+  const reject = (reason: Parameters<NonNullable<typeof input.onDiagnostic>>[0]) => {
+    input.onDiagnostic?.(reason);
+    return null;
+  };
   const interactionSources = exactNativeInteractionSourceInputs({ issueId: input.issueId,
     responses: input.interactionResponses, sources: input.interactionSources });
-  if (!interactionSources) return null;
+  if (!interactionSources) return reject("interaction_sources");
   const contextMarkdown = input.contextWitnessMarkdown ?? input.governedContextMarkdown;
   const context = input.contextWitness && contextMarkdown
     ? readNativeBootstrapContextWitness(input.contextWitness, { companyId: input.companyId, runId: input.runId,
@@ -261,7 +307,7 @@ export function buildNativeBootstrapSourceSet(input: {
     !input.runtimeInputs || !input.contextManifestIds || input.contextManifestIds.length > 0 && !context ||
     input.governedContextMarkdown?.trim() && !context ||
     !input.rolePackInputs || input.rolePackInputs.length !== 0 ||
-    input.references.some(reference => reference.kind === "unknown")) return null;
+    input.references.some(reference => reference.kind === "unknown")) return reject("unsupported_or_missing_witness");
   const policy: NativePayloadSourcePolicy = { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] };
   const inputs: NativePayloadSourceInput[] = [];
   const append = (source: NativePayloadSourceInput) => {
@@ -287,7 +333,7 @@ export function buildNativeBootstrapSourceSet(input: {
   for (const reference of input.references) {
     const matches = input.candidates.filter(candidate => candidate.kind === reference.kind && candidate.id === reference.id);
     const uniqueMatches = [...new Map(matches.map(candidate => [JSON.stringify(candidate), candidate])).values()];
-    if (uniqueMatches.length !== 1) return null;
+    if (uniqueMatches.length !== 1) return reject("ambiguous_reference");
     const candidate = uniqueMatches[0]!;
     const expectedOwner = reference.kind === "task" ? "issue" : reference.kind;
     const sourceMatchesReference = reference.kind === "task"
@@ -303,12 +349,13 @@ export function buildNativeBootstrapSourceSet(input: {
               candidate.input.commentId === reference.commentId && candidate.input.byteSize === reference.byteSize &&
               candidate.input.disposition === "delivered" && candidate.input.assetId !== null && candidate.input.sha256 !== null
             : false;
-    if (!sourceMatchesReference) return null;
-    if (!addSnapshotPolicy(candidate.payloadSourceSnapshot, { kind: expectedOwner, id: reference.id })) return null;
+    if (!sourceMatchesReference) return reject("reference_source_mismatch");
+    if (!addSnapshotPolicy(candidate.payloadSourceSnapshot, { kind: expectedOwner, id: reference.id }))
+      return reject("source_snapshot_invalid");
     append(candidate.input);
   }
   for (const source of input.runtimeInputs) append(source);
-  if (input.additionalInputs === null) return null;
+  if (input.additionalInputs === null) return reject("additional_inputs_unknown");
   for (const source of input.additionalInputs ?? []) append(source);
   for (const source of interactionSources) append(source);
   if (context) {
@@ -318,7 +365,7 @@ export function buildNativeBootstrapSourceSet(input: {
   }
   for (const source of input.rolePackInputs) append(source);
   const references = inputs.length + Object.values(policy).reduce((sum, values) => sum + values.length, 0);
-  if (references > 256) return null;
+  if (references > 256) return reject("source_budget_exceeded");
   return { policy, inputs };
 }
 

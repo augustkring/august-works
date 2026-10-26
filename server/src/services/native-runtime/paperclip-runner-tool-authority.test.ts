@@ -21,6 +21,7 @@ import {
   nativeRunResults,
   issueApprovals,
   issueComments,
+  issueDocuments,
   issueThreadInteractions,
   issues,
   issuePrivacySources,
@@ -59,7 +60,7 @@ describe("PaperclipRunnerToolAuthority", () => {
   const runId = "00000000-0000-4000-8000-000000000104";
   const userId = randomUUID();
 
-  async function seedDocumentReader() {
+  async function seedDocumentReader(payloadSourceProtocolVersion = 0) {
     const companyId = randomUUID(), agentId = randomUUID(), issueId = randomUUID(), runId = randomUUID();
     const issuePrefix = `RDR${companyId.slice(0, 4).toUpperCase()}`;
     await db.insert(companies).values({ id: companyId, name: "Document source reader", issuePrefix });
@@ -68,7 +69,8 @@ describe("PaperclipRunnerToolAuthority", () => {
     await db.insert(agents).values({ id: agentId, companyId, name: "Document source reader", adapterType: "paperclip_runner", status: "active" });
     await db.insert(issues).values({ id: issueId, companyId, issueNumber: 1, identifier: `${issuePrefix}-1`,
       title: "Read document source", status: "in_progress", workMode: "standard", assigneeAgentId: agentId,
-      responsibleUserId: userId, visibility: "private" });
+      responsibleUserId: userId, visibility: "private", payloadSourceProtocolVersion,
+      payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: false });
     await db.insert(heartbeatRuns).values({ id: runId, companyId, agentId, status: "running", runtimeMode: "native",
       nativeIssueId: issueId, responsibleUserId: userId, invocationSource: "assignment", triggerDetail: "system", contextSnapshot: { issueId } });
     await db.insert(contextManifests).values({ id: randomUUID(), companyId, runId, agentId, issueId,
@@ -524,6 +526,64 @@ describe("PaperclipRunnerToolAuthority", () => {
       companyId: fixture.companyId, issueId: fixture.issueId, revisionId: created.document.latestRevisionId,
       actor: { type: "none", source: "none" },
     })).rejects.toThrow();
+  });
+
+  it("rechecks a protocol-v1 document parent reader after its revision row wait", async () => {
+    const fixture = await seedDocumentReader(1);
+    await db.update(companyMemberships).set({ membershipRole: "member" }).where(and(
+      eq(companyMemberships.companyId, fixture.companyId), eq(companyMemberships.principalId, userId)));
+    const documentId = randomUUID(), revisionId = randomUUID(), documentKey = `v1-parent-acl-${randomUUID()}`;
+    await db.insert(documents).values({ id: documentId, companyId: fixture.companyId, title: "Frozen document source",
+      format: "markdown", latestBody: "Exact body", latestRevisionId: null, latestRevisionNumber: 1,
+      createdByUserId: userId, updatedByUserId: userId });
+    await db.insert(documentRevisions).values({ id: revisionId, companyId: fixture.companyId, documentId,
+      revisionNumber: 1, payloadSourceProtocolVersion: 1, payloadSourceSnapshot: null, body: "Exact body",
+      title: "Frozen document source", format: "markdown", createdByUserId: userId });
+    await db.insert(issueDocuments).values({ companyId: fixture.companyId, issueId: fixture.issueId,
+      documentId, key: documentKey });
+    await db.update(documents).set({ latestRevisionId: revisionId }).where(eq(documents.id, documentId));
+    await db.update(documentRevisions).set({ payloadSourceSnapshot: directHumanPayloadSnapshotSql("document_revision") })
+      .where(eq(documentRevisions.id, revisionId));
+    await db.update(issues).set({ payloadSourceProtocolVersion: 1,
+      payloadSourceSnapshot: directHumanPayloadSnapshotSql("issue"), payloadSourceSnapshotInvalidated: false })
+      .where(eq(issues.id, fixture.issueId));
+    const actor = { type: "board" as const, source: "session" as const, userId };
+    const read = () => assertNativeDocumentRevisionCurrentSourceAccess(db, { companyId: fixture.companyId,
+      issueId: fixture.issueId, revisionId, actor });
+    await expect(read()).resolves.toBeUndefined();
+
+    let releaseLock!: () => void;
+    let announceLock!: (pid: number) => void;
+    const release = new Promise<void>(resolve => { releaseLock = resolve; });
+    const locked = new Promise<number>(resolve => { announceLock = resolve; });
+    const lockHolder = db.transaction(async tx => {
+      const [backend] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+      await tx.execute(sql`select id from document_revisions where company_id=${fixture.companyId}::uuid
+        and id=${revisionId}::uuid for update`);
+      announceLock(backend!.pid);
+      await release;
+    });
+    const holderPid = await locked;
+    const pendingRead = read();
+    let observedWait = false;
+    for (let attempt = 0; attempt < 100 && !observedWait; attempt++) {
+      const [row] = await db.execute<{ waiting: boolean }>(sql`select exists(
+        select 1 from pg_stat_activity a where ${holderPid}=any(pg_blocking_pids(a.pid))
+          and a.wait_event_type='Lock') as waiting`);
+      observedWait = row?.waiting === true;
+      if (!observedWait) await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    try {
+      expect(observedWait, "the exact document source reader must wait on the pinned revision row").toBe(true);
+      const otherUserId = randomUUID();
+      await db.insert(authUsers).values({ id: otherUserId, name: "Other owner", email: `${otherUserId}@test.invalid`,
+        createdAt: new Date(), updatedAt: new Date() });
+      await db.update(issues).set({ responsibleUserId: otherUserId }).where(eq(issues.id, fixture.issueId));
+    } finally {
+      releaseLock();
+      await lockHolder;
+    }
+    await expect(pendingRead).rejects.toThrow();
   });
 
   it("binds a returned document to its authenticated dispatch and never to model arguments", async () => {

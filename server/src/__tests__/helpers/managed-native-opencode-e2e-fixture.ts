@@ -30,6 +30,7 @@ import {
   contextManifestMemoryRoots,
   agentExecutionManifests,
   issueDocuments,
+  issueComments,
   issues,
   orchestrationModelReservations,
   orchestrationPlans,
@@ -280,6 +281,8 @@ export async function runManagedNativeOpenCodeFixture(input: {
   humanActions?: ManagedNativeOpenCodeHumanAction[];
   /** Prepare a private Task source; create its Human-reviewed Memory root after the configured model step. */
   privateContextContent?: string;
+  /** Use an authenticated, Human-sealed conversation as the admitted worker-plan root. */
+  conversationRoot?: boolean;
   /** Return early after a Human workspace change is rejected as a stale Project source. */
   expectProjectWorkspaceSourceDenial?: boolean;
   /** Test-only probe that repeats one actual, sealed Gateway Memory call with its original scoped invocation context. */
@@ -395,7 +398,8 @@ export async function runManagedNativeOpenCodeFixture(input: {
   await enableV5ForTest(db);
   await instanceSettingsService(db).updateExperimental({ enableWorkflowsV1: true,
     role_packs_v5: false, skill_resolver_v5: false, readiness_engine_v7: true, orchestration_v7: true,
-    enableContextEngineV1: true, enableCollectiveMemoryV1: true, enablePrivateAgentMemoryV1: true });
+    enableContextEngineV1: true, enableCollectiveMemoryV1: true, enablePrivateAgentMemoryV1: true,
+    ...(input.conversationRoot ? { enableAgentChat: true } : {}) });
   const defaultSteps: ManagedNativeOpenCodeModelStep[] = [
     { tool: "write_document", id: "managed-e2e-write-1", input: {
       idempotencyKey: "managed-opencode-source-document-v1", key: "managed-source-e2e", title: "Private E2E note",
@@ -540,6 +544,34 @@ export async function runManagedNativeOpenCodeFixture(input: {
     humanApp.use((req, _res, next) => { req.actor = human as typeof req.actor; next(); });
     humanApp.use("/api", issueRoutes(db, {} as never));
     humanApp.use(errorHandler);
+    let conversationApp: express.Express | null = null;
+    let conversationHumanCookie: string | null = null;
+    if (input.conversationRoot) {
+      const [session] = await db.select({ id: authSessions.id, userId: authSessions.userId,
+        token: authSessions.token, expiresAt: authSessions.expiresAt }).from(authSessions)
+        .where(and(eq(authSessions.id, sessionId), eq(authSessions.userId, aliceUserId)));
+      if (!session || session.expiresAt.getTime() <= Date.now())
+        throw new Error("managed_fixture_conversation_human_session_unavailable");
+      conversationHumanCookie = `session_token=${encodeURIComponent(session.token)}`;
+      conversationApp = express();
+      conversationApp.use(express.json());
+      conversationApp.use(actorMiddleware(db, { deploymentMode: "authenticated", resolveSession: async req => {
+        const token = (req.header("cookie") ?? "").split(";").map(value => value.trim())
+          .map(value => value.slice(value.indexOf("=") + 1)).map(value => decodeURIComponent(value))
+          .find(value => value === session.token);
+        if (!token || session.expiresAt.getTime() <= Date.now()) return null;
+        const [user] = await db.select({ id: authUsers.id, name: authUsers.name, email: authUsers.email })
+          .from(authUsers).where(eq(authUsers.id, session.userId));
+        if (!user) return null;
+        const result: BetterAuthSessionResult = { session: { id: session.id, userId: session.userId, expiresAt: session.expiresAt }, user };
+        return result;
+      } }));
+      // The fixture explicitly starts the admitted Worker plan below. Keep the
+      // chat route's notification from creating a second conversation-model
+      // run, while exercising its real authenticated open/comment owners.
+      conversationApp.use("/api", issueRoutes(db, {} as never, { heartbeat: { wakeup: async () => null } as never }));
+      conversationApp.use(errorHandler);
+    }
     const projectApiApp = express();
     projectApiApp.use(express.json());
     let fixtureProjectHumanCookie: string | null = null;
@@ -624,17 +656,53 @@ export async function runManagedNativeOpenCodeFixture(input: {
       privateRootTask = privateTask as typeof issues.$inferSelect;
       privateRootMemoryActor = sourceActor;
     }
-    const createTaskResponse = await request(humanApp).post(`/api/companies/${companyId}/issues`)
-      .send({ title: "Save a private source-bound note", description: "Create a short internal note and finish the task.",
-        responsibleUserId: aliceUserId });
-    expect(createTaskResponse.status, JSON.stringify(createTaskResponse.body)).toBe(201);
-    const createdTask = createTaskResponse.body as { id: string };
-    await db.update(issues).set({ status: "todo", assigneeAgentId: agentId,
-      ...(fixtureProjectId ? { projectId: fixtureProjectId } : {}) })
-      .where(and(eq(issues.companyId, companyId), eq(issues.id, createdTask.id)));
-    const task = (await db.select().from(issues).where(eq(issues.id, createdTask.id)))[0]!;
+    let task: typeof issues.$inferSelect;
+    if (input.conversationRoot) {
+      if (!conversationApp || !conversationHumanCookie)
+        throw new Error("managed_fixture_conversation_routes_unavailable");
+      const opened = await request(conversationApp).post(`/api/companies/${companyId}/chats/${agentId}`)
+        .set("cookie", conversationHumanCookie).send({});
+      expect(opened.status, JSON.stringify(opened.body)).toBe(200);
+      if (typeof opened.body.id !== "string") throw new Error("managed_fixture_conversation_issue_missing");
+      const privateIssue = await request(conversationApp).patch(`/api/issues/${opened.body.id}`)
+        .set("cookie", conversationHumanCookie).send({ visibility: "private" });
+      expect(privateIssue.status, JSON.stringify(privateIssue.body)).toBe(200);
+      const shared = await request(conversationApp).post(`/api/issues/${opened.body.id}/access-grants`)
+        .set("cookie", conversationHumanCookie).send({ subjectType: "user", subjectId: bobUserId });
+      expect(shared.status, JSON.stringify(shared.body)).toBe(201);
+      const commentRequestId = randomUUID();
+      const comment = await request(conversationApp).post(`/api/issues/${opened.body.id}/comments`)
+        .set("cookie", conversationHumanCookie).send({ body: "Start the admitted source-bound Worker plan.",
+          clientRequestId: commentRequestId });
+      expect(comment.status, JSON.stringify(comment.body)).toBe(201);
+      const [openedTask] = await db.select().from(issues)
+        .where(and(eq(issues.companyId, companyId), eq(issues.id, opened.body.id)));
+      const [humanComment] = await db.select({ authorUserId: issueComments.authorUserId,
+        protocolVersion: issueComments.payloadSourceProtocolVersion, snapshot: issueComments.payloadSourceSnapshot,
+        invalidated: issueComments.payloadSourceSnapshotInvalidated }).from(issueComments).where(and(
+        eq(issueComments.companyId, companyId), eq(issueComments.issueId, opened.body.id),
+        eq(issueComments.clientRequestId, commentRequestId)));
+      if (!openedTask?.payloadSourceSnapshot || openedTask.payloadSourceSnapshotInvalidated ||
+        openedTask.conversationAgentId !== agentId || openedTask.conversationUserId !== aliceUserId ||
+        humanComment?.authorUserId !== aliceUserId || humanComment.protocolVersion !== 1 ||
+        !humanComment.snapshot || humanComment.invalidated)
+        throw new Error("managed_fixture_conversation_task_was_not_human_sealed");
+      task = openedTask;
+    } else {
+      const createTaskResponse = await request(humanApp).post(`/api/companies/${companyId}/issues`)
+        .send({ title: "Save a private source-bound note", description: "Create a short internal note and finish the task.",
+          responsibleUserId: aliceUserId });
+      expect(createTaskResponse.status, JSON.stringify(createTaskResponse.body)).toBe(201);
+      const createdTask = createTaskResponse.body as { id: string };
+      await db.update(issues).set({ status: "todo", assigneeAgentId: agentId,
+        ...(fixtureProjectId ? { projectId: fixtureProjectId } : {}) })
+        .where(and(eq(issues.companyId, companyId), eq(issues.id, createdTask.id)));
+      task = (await db.select().from(issues).where(eq(issues.id, createdTask.id)))[0]!;
+    }
     const [run] = await db.insert(heartbeatRuns).values({ companyId, agentId, responsibleUserId: aliceUserId,
-      status: "running", runtimeMode: "native", nativeIssueId: task.id, contextSnapshot: { issueId: task.id } }).returning();
+      status: "running", runtimeMode: "native", nativeIssueId: task.id,
+      contextSnapshot: { issueId: task.id, ...(task.conversationSessionGeneration !== null
+        ? { conversationSessionGeneration: task.conversationSessionGeneration } : {}) } }).returning();
     const localEnvironment = await environmentService(db).ensureLocalEnvironment();
     const runtimeEnvironment = environmentRuntimeService(db);
     const acquiredEnvironment = await runtimeEnvironment.acquireRunLease({ companyId, environment: localEnvironment,
@@ -681,7 +749,9 @@ export async function runManagedNativeOpenCodeFixture(input: {
     }
     const plan = await orchestrationService(db).create(human, companyId, {
       issueId: task.id, expectedIssueUpdatedAt: task.updatedAt.toISOString(), workload: "semantic", actionClass: "internal_draft", riskClass: "C0",
-      completionContract: { objective: "Complete the managed source-bound task", requiredOutputs: (() => {
+      completionContract: { objective: input.conversationRoot
+        ? "Complete the admitted Worker plan from the Human-sealed conversation root"
+        : "Complete the managed source-bound task", requiredOutputs: (() => {
         const keys = modelSteps.filter(step => step.tool === "write_document")
           .map(step => step.input?.key).filter((key): key is string => typeof key === "string");
         const documentOutputs = keys.map(key => ({ kind: "task_document" as const, key }));
@@ -689,7 +759,9 @@ export async function runManagedNativeOpenCodeFixture(input: {
           .map((_step, index) => ({ kind: "private_project" as const, key: index === 0 ? "project" : `project_${index + 1}` }));
         return [...documentOutputs, ...projectOutputs];
       })(),
-        businessInvariants: ["Use only this task's private workspace"] },
+        businessInvariants: [input.conversationRoot
+          ? "Use only the Human-sealed conversation and current authorized sources; create only backlog drafts"
+          : "Use only this task's private workspace"] },
       budgets: { maxModelCostMinor: Math.max(10, fixtureProviderResponses * 2), maxToolActions: modelSteps.length + 2 },
       workers: [{ key: "writer", issueId: task.id }],
     });
@@ -2088,19 +2160,6 @@ export async function runManagedNativeOpenCodeFixture(input: {
               heldMs: Math.max(0, performance.now() - tx.startedAt), frames: tx.frames,
             })).sort((a, b) => b.heldMs - a.heldMs).slice(0, 12),
           })}`);
-          if (sourceMemoDiagnosticsEnabled) {
-            const all = (globalThis as unknown as Record<PropertyKey, unknown>)[
-              Symbol.for("paperclip.nativeAnalyticalCallsiteStats.v1")];
-            const ordinals = new Set([...sourceMemoTransactionRecords.slice(0, 12).map(item => item.txOrdinal),
-              ...sourceMemoActiveTransactions.keys()]);
-            if (all instanceof Map) diagnostics.push(`managed analytical source callsite diagnostics: ${JSON.stringify(
-              [...ordinals].flatMap(txOrdinal => {
-                const calls = all.get(txOrdinal);
-                return calls instanceof Map ? [{ txOrdinal, calls: [...calls.values()]
-                  .sort((a, b) => Number((b as { totalMs?: unknown }).totalMs ?? 0) - Number((a as { totalMs?: unknown }).totalMs ?? 0))
-                  .slice(0, 12) }] : [];
-              }))}`);
-          }
           if (sourceMemoDiagnosticsEnabled && sourceLockSnapshot)
             diagnostics.push(`managed source lock snapshot: ${JSON.stringify(sourceLockSnapshot)}`);
           diagnostics.push(`execution failure metadata: ${JSON.stringify(metadata)}`);

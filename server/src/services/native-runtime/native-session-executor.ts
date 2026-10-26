@@ -1498,29 +1498,72 @@ class SessionToolAuthorityEpoch {
     this.#assertCurrent();
     const execute = async () => {
       this.#assertCurrent();
+      const toolResultDiagnostics = process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1";
+      const reportCreateTaskFailure = (event: string, error: unknown) => {
+        if (!toolResultDiagnostics || call.tool !== "create_task") return;
+        const diagnostic = error && typeof error === "object"
+          ? error as Error & { code?: unknown; status?: unknown; statusCode?: unknown; cause?: { code?: unknown; constraint_name?: unknown } } : null;
+        const safeCode = (value: unknown) => typeof value === "string" && /^[A-Z0-9_:-]{1,100}$/i.test(value) ? value : null;
+        const frames = diagnostic?.stack?.split("\n").slice(1).flatMap(frame => {
+          const match = /server\/src\/services\/([^\s():]+\.ts):(\d+):\d+/.exec(frame);
+          return match ? [`${match[1]}:${match[2]}`] : [];
+        }).slice(0, 5) ?? [];
+        console.error(event, JSON.stringify({ name: diagnostic?.name ?? "UnknownError",
+          code: safeCode(diagnostic?.code), causeCode: safeCode(diagnostic?.cause?.code),
+          causeConstraint: safeCode(diagnostic?.cause?.constraint_name),
+          status: typeof diagnostic?.status === "number" ? diagnostic.status :
+            typeof diagnostic?.statusCode === "number" ? diagnostic.statusCode : null, frames }));
+      };
+      if (toolResultDiagnostics && call.tool === "create_task")
+        console.error("managed_create_task_callback_test_facts", JSON.stringify({
+          turnIdPresent: typeof call.turnId === "string" && call.turnId.length > 0,
+          nativeToolCallCallbackPresent: typeof this.onNativeToolCall === "function",
+          managedResultCallbackPresent: typeof this.onManagedOpenCodeToolResult === "function",
+        }));
       const argumentsHash = nativeSha256(call.arguments);
       if (this.onManagedOpenCodeToolResult && (call.tool === "call_api" || call.tool === "create_project" || call.tool === "get_task_context" ||
         call.tool === "get_task_history" || call.tool === "read_chat_attachment") && !call.turnId)
         throw new Error("managed_opencode_tool_call_source_binding_invalid");
-      if (call.turnId) await this.onNativeToolCall?.({ tool: call.tool, callId: call.callId,
-        turnId: call.turnId, argumentsHash, arguments: call.arguments });
+      if (call.turnId) {
+        try {
+          await this.onNativeToolCall?.({ tool: call.tool, callId: call.callId,
+            turnId: call.turnId, argumentsHash, arguments: call.arguments });
+        } catch (error) {
+          reportCreateTaskFailure("managed_create_task_dispatch_failure_test_facts", error);
+          throw error;
+        }
+      }
       const projectReadCapture: { value: NativeProjectToolResultSource | null } = { value: null };
       const projectCreateCapture: { value: NativeManagedProjectCreateCapture | null } = { value: null };
-      const result = await this.#authority.execute(call, {
-        onDocumentRead: this.onDocumentRead,
-        onProjectToolResult: async source => {
-          projectReadCapture.value = source;
-          await this.onProjectToolResult?.(source);
-        },
-        onNativeInputToolResult: this.onNativeInputToolResult,
-        onManagedProjectCreateToolResult: async capture => { projectCreateCapture.value = capture; },
-        ...(call.turnId ? { nativeToolCallIdentity: { tool: call.tool, callId: call.callId, turnId: call.turnId } } : {}),
-      });
+      let result: unknown;
+      try {
+        result = await this.#authority.execute(call, {
+          onDocumentRead: this.onDocumentRead,
+          onProjectToolResult: async source => {
+            projectReadCapture.value = source;
+            await this.onProjectToolResult?.(source);
+          },
+          onNativeInputToolResult: this.onNativeInputToolResult,
+          onManagedProjectCreateToolResult: async capture => { projectCreateCapture.value = capture; },
+          ...(call.turnId ? { nativeToolCallIdentity: { tool: call.tool, callId: call.callId, turnId: call.turnId } } : {}),
+        });
+      } catch (error) {
+        reportCreateTaskFailure("managed_create_task_authority_failure_test_facts", error);
+        throw error;
+      }
       if (call.turnId && (call.tool === "read_document" || call.tool === "write_document" ||
         call.tool === "create_task" || call.tool === "self_remember" || call.tool === "read_context" ||
-        call.tool === "get_task_context" || call.tool === "get_task_history" || call.tool === "read_chat_attachment"))
-        await this.onManagedOpenCodeToolResult?.({ tool: call.tool, callId: call.callId, turnId: call.turnId, argumentsHash, result,
-          ...(call.tool === "read_context" && this.managedContextReadCapture?.value ? { contextRead: this.managedContextReadCapture.value } : {}) });
+        call.tool === "get_task_context" || call.tool === "get_task_history" || call.tool === "read_chat_attachment")) {
+        if (toolResultDiagnostics && call.tool === "create_task")
+          console.error("managed_create_task_result_callback_invoked", JSON.stringify({ turnIdPresent: true }));
+        try {
+          await this.onManagedOpenCodeToolResult?.({ tool: call.tool, callId: call.callId, turnId: call.turnId, argumentsHash, result,
+            ...(call.tool === "read_context" && this.managedContextReadCapture?.value ? { contextRead: this.managedContextReadCapture.value } : {}) });
+        } catch (error) {
+          reportCreateTaskFailure("managed_create_task_result_callback_failure_test_facts", error);
+          throw error;
+        }
+      }
       if (call.turnId && call.tool === "call_api" && projectReadCapture.value?.source)
         await this.onManagedOpenCodeToolResult?.({ tool: "call_api", callId: call.callId, turnId: call.turnId,
           argumentsHash, result, projectRead: projectReadCapture.value });
@@ -7511,6 +7554,67 @@ const nativeTurnFrameSourceMismatchReasons = new Set([
   "contract_digest", "contract_projection",
 ]);
 
+// Test-only attribution for the final first-dispatch source-owner check. Keep
+// this as an exact message -> enum map: never include SQL, identifiers, or
+// source values in a run error.
+const nativeDispatchSourceOwnerDiagnosticReasons = new Map<string, string>([
+  ["The Native source prefix is unavailable", "prefix_unavailable"],
+  ["The Native source prefix owner is unavailable", "prefix_owner_unavailable"],
+  ["The Native source prefix is not in its original receipt", "receipt_membership"],
+  ["The Native source completion contract changed", "completion_contract_changed"],
+  ["The Native source workspace tuple changed", "workspace_tuple_changed"],
+  ["The Native source agent workspace changed", "agent_workspace_changed"],
+  ["The Native source task-session workspace changed", "task_session_workspace_changed"],
+  ["The Native source execution workspace changed", "execution_workspace_changed"],
+  ["A Native source Foundation revision changed", "foundation_revision_changed"],
+  ["A Native task wake source changed", "task_wake_changed"],
+  ["A Native source Task changed", "task_changed"],
+  ["A Native source Task is unavailable", "task_unavailable"],
+  ["A Native Task source changed or was erased", "task_snapshot_changed_or_erased"],
+  ["A Native Task source snapshot is unavailable", "task_snapshot_unavailable"],
+  ["A Native Task source protocol is unsupported", "task_protocol_unsupported"],
+  ["A Native source Comment changed or was erased", "comment_changed_or_erased"],
+  ["A Native Task source changed or was erased", "task_source_changed_or_erased"],
+  ["The Native conversation source witness is unavailable", "conversation_witness_unavailable"],
+  ["A Native conversation source witness is unavailable", "conversation_witness_unavailable"],
+  ["A Native Context Task source changed or was erased", "context_task_source_changed_or_erased"],
+  ["The Native source Task is unavailable", "task_owner_unavailable"],
+  ["A Native source Task is unavailable", "task_reader_unavailable"],
+  ["A Native source Comment is unavailable", "comment_unavailable"],
+  ["The Native Task source snapshot is unavailable", "task_snapshot_unavailable"],
+  ["The frozen Native Task source closure has no retained dispatch receipt", "frozen_task_dispatch_missing"],
+  ["The frozen Native Task source producer is unavailable", "frozen_task_producer_unavailable"],
+  ["The frozen Native Task dispatch prefix is unavailable", "frozen_task_prefix_unavailable"],
+  ["The frozen Native Task source closure exceeds its bound", "frozen_task_bound"],
+  ["The frozen Native Task source graph contains a cycle", "frozen_task_cycle"],
+  ["The Native source Run is unavailable", "source_run_unavailable"],
+  ["The Native source reader recheck exceeds its work bound", "reader_recheck_bound"],
+  ["The Native source issue reader recheck exceeds its work bound", "issue_reader_recheck_bound"],
+  ["A Native source Comment is no longer readable", "comment_reader_unavailable"],
+  ["The Native source Interaction changed or was erased", "interaction_changed_or_erased"],
+  ["A Native source Attachment changed or was erased", "attachment_changed_or_erased"],
+]);
+
+function nativeDispatchSourceOwnerDiagnostic(error: unknown): string {
+  const message = error instanceof Error ? error.message : "";
+  const commentDiagnostic = /^native_source_comment_owner_diagnostic:(owner_version|snapshot_owner|projection_hash|reader_acl)$/.exec(message);
+  if (commentDiagnostic) return `comment_${commentDiagnostic[1]}`;
+  const known = nativeDispatchSourceOwnerDiagnosticReasons.get(message);
+  if (known) return known;
+  const value = error && typeof error === "object"
+    ? error as Error & { code?: unknown; status?: unknown; cause?: { code?: unknown } } : null;
+  const errorKind = value?.name === "HttpError" ? "http" : value?.name === "Error" ? "error" : "other";
+  const status = typeof value?.status === "number" && Number.isInteger(value.status) && value.status >= 400 && value.status < 600
+    ? String(value.status) : "none";
+  const codeValue = value?.code ?? value?.cause?.code;
+  const code = typeof codeValue === "string" && /^[A-Z0-9_:-]{1,32}$/.test(codeValue) ? codeValue : "none";
+  const frames = value?.stack?.split("\n").slice(1).flatMap(frame => {
+    const match = /server\/src\/services\/([^\s():]+\.ts):(\d+):\d+/.exec(frame);
+    return match ? [`${match[1]}_${match[2]}`] : [];
+  }).slice(0, 4) ?? [];
+  return `unclassified_${errorKind}_${status}_${code}${frames.length ? `_${frames.join("_")}` : ""}`;
+}
+
 async function postgresJsonbSha256(tx: Parameters<Parameters<Db["transaction"]>[0]>[0], value: unknown): Promise<string> {
   const [row] = await tx.execute<{ digest: string }>(sql`select encode(sha256(convert_to((${JSON.stringify(value)}::jsonb)::text,'UTF8')),'hex') as digest`);
   if (!row || !/^[0-9a-f]{64}$/.test(row.digest)) throw new Error("native_input_source_receipt_persistence_failed");
@@ -7686,6 +7790,9 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
     const message = error instanceof Error ? error.message : "";
     const sourceClosureDiagnostic = [...nativeTurnFrameSourceMismatchReasons]
       .some(reason => message === `managed_opencode_source_prompt_closure_unavailable:${reason}`);
+    const sourceOwnerDiagnostic = stage === "source_owner_recheck" &&
+      process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1"
+      ? nativeDispatchSourceOwnerDiagnostic(error) : undefined;
     throw new Error([
       "native_session_lease_lost", "native_session_lease_ttl_invalid",
       "native_model_input_run_binding_changed", "native_model_input_launch_binding_changed",
@@ -7707,6 +7814,8 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
       ? "native_model_input_attachment_stage_rejected"
       : stage === "intent_persist"
       ? "native_model_input_dispatch_persistence_failed"
+      : sourceOwnerDiagnostic
+      ? `native_model_input_dispatch_source_owner_recheck_failed:${sourceOwnerDiagnostic}`
       : `native_model_input_dispatch_${stage}_failed`);
   });
   return dispatchId;
@@ -8145,13 +8254,43 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         const conversationTask = matchingModelCalls[0]!.modelPurpose === "conversation_model" && conversationBinding.success &&
           conversationBinding.data.issueId === input.issueId &&
           conversationBinding.data.conversationSessionGeneration === run.contextSnapshot?.conversationSessionGeneration;
+        // A Worker plan may use a Human-sealed conversation as its source root,
+        // but its C0 draft Tasks stay detached because conversations cannot gain child edges.
+        const workerConversationRootCall = matchingModelCalls[0]!.modelPurpose === "worker_model";
+        const [workerConversationRoot] = workerConversationRootCall ? await tx.select({
+          conversationAgentId: issues.conversationAgentId, conversationUserId: issues.conversationUserId,
+          conversationState: issues.conversationState, conversationSessionGeneration: issues.conversationSessionGeneration,
+          conversationRetiredAt: issues.conversationRetiredAt, parentId: issues.parentId,
+          assigneeAgentId: issues.assigneeAgentId, executionRunId: issues.executionRunId,
+          payloadSourceProtocolVersion: issues.payloadSourceProtocolVersion,
+          payloadSourceSnapshot: issues.payloadSourceSnapshot,
+          payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated,
+        }).from(issues).where(and(eq(issues.companyId, input.companyId), eq(issues.id, input.issueId)))
+          .for("share") : [];
+        const workerContext = record(run.contextSnapshot);
+        const workerConversationSnapshot = nativePayloadSourceSnapshotSchema.safeParse(workerConversationRoot?.payloadSourceSnapshot);
+        const workerConversationInputs = workerConversationSnapshot.success ? workerConversationSnapshot.data.inputs : [];
+        const workerConversationRootCurrent = workerConversationRootCall && workerConversationRoot?.conversationAgentId === input.agentId &&
+          workerConversationRoot.conversationUserId === run.responsibleUserId && workerConversationRoot.conversationState === "waiting" &&
+          workerConversationRoot.conversationRetiredAt === null && workerConversationRoot.parentId === null &&
+          workerConversationRoot.assigneeAgentId === input.agentId && workerConversationRoot.executionRunId === input.runId &&
+          workerConversationRoot.payloadSourceProtocolVersion === 1 && !workerConversationRoot.payloadSourceSnapshotInvalidated &&
+          typeof workerContext.conversationSessionGeneration === "number" &&
+          workerConversationRoot.conversationSessionGeneration === workerContext.conversationSessionGeneration &&
+          workerConversationSnapshot.success && workerConversationSnapshot.data.owner.kind === "issue" &&
+          workerConversationSnapshot.data.owner.companyId === input.companyId &&
+          workerConversationSnapshot.data.owner.id === input.issueId && workerConversationInputs.length === 1 &&
+          workerConversationInputs[0]?.kind === "comment" && workerConversationInputs[0].issueId === input.issueId &&
+          Object.values(workerConversationSnapshot.data.policy).every(values => values.length === 0);
+        const unparentedConversationTask = resultTask.parentId === null && (conversationTask || workerConversationRootCurrent);
         if (typeof resultTask.id !== "string" || (typeof resultTask.parentId !== "string" && resultTask.parentId !== null) ||
-          (resultTask.parentId !== input.issueId && !(conversationTask && resultTask.parentId === null)))
+          (resultTask.parentId !== input.issueId && !unparentedConversationTask))
           throw new Error("managed_opencode_tool_result_binding_invalid");
         const [child] = await tx.select({ id: issues.id, identifier: issues.identifier, title: issues.title,
           description: issues.description, status: issues.status, priority: issues.priority, parentId: issues.parentId,
           sourceVersion: sql<string>`extract(epoch from ${issues.updatedAt})::text`,
-        }).from(issues).where(and(eq(issues.companyId, input.companyId), eq(issues.id, resultTask.id), eq(issues.parentId, input.issueId)));
+        }).from(issues).where(and(eq(issues.companyId, input.companyId), eq(issues.id, resultTask.id),
+          unparentedConversationTask ? isNull(issues.parentId) : eq(issues.parentId, input.issueId)));
         if (!child) throw new Error("managed_opencode_tool_result_binding_invalid");
         const taskInput = nativePayloadSourceInputSchema.parse({ kind: "task", issueId: child.id,
           sourceVersion: child.sourceVersion, contentHash: createHash("sha256").update(JSON.stringify({ id: child.id,

@@ -3173,6 +3173,7 @@ type IssueListInflightEntry = {
 const issueListResponseCache = new Map<string, IssueListCacheEntry>();
 const issueListInflight = new Map<string, IssueListInflightEntry>();
 const issueListActorClientInflight = new Map<string, number>();
+let issueListResponseCacheMaxEntries = ISSUE_LIST_SERVER_CACHE_MAX_ENTRIES;
 
 export function __getIssueListResponseCacheSizeForTests() {
   return issueListResponseCache.size;
@@ -3180,6 +3181,14 @@ export function __getIssueListResponseCacheSizeForTests() {
 
 export function __clearIssueListResponseCacheForTests() {
   issueListResponseCache.clear();
+  issueListResponseCacheMaxEntries = ISSUE_LIST_SERVER_CACHE_MAX_ENTRIES;
+}
+
+export function __setIssueListResponseCacheMaxEntriesForTests(maxEntries: number) {
+  if (!Number.isSafeInteger(maxEntries) || maxEntries < 1) {
+    throw new Error("Issue list cache test limit must be a positive integer");
+  }
+  issueListResponseCacheMaxEntries = maxEntries;
 }
 
 function shortHash(value: string): string {
@@ -3325,7 +3334,7 @@ function touchIssueListResponseCacheEntry(
 }
 
 function trimIssueListResponseCache() {
-  while (issueListResponseCache.size > ISSUE_LIST_SERVER_CACHE_MAX_ENTRIES) {
+  while (issueListResponseCache.size > issueListResponseCacheMaxEntries) {
     const oldestKey = issueListResponseCache.keys().next().value as
       string | undefined;
     if (oldestKey === undefined) return;
@@ -8509,10 +8518,16 @@ export function issueRoutes(
         const rawResult = await queryService.list(companyId, scopedListFilters);
         const result = await filterIssuesForActor(req, rawResult, queryDb);
         const issueIds = result.map((issue) => issue.id);
+        // Keep every leader-compute query on the read transaction already
+        // held by withCurrentTaskSourceRead. Coalesced waiters retain their
+        // own read transactions while awaiting this result; reaching back to
+        // the outer pool here can exhaust its connections and deadlock the
+        // leader behind those waiters.
+        const scopedRecoveryActions = issueRecoveryActionService(queryDb);
         if (compactView) {
           const [handoffStates, recoveryActionByIssue] = await Promise.all([
-            listSuccessfulRunHandoffStates(db, companyId, issueIds),
-            recoveryActionsSvc.listActiveForIssues(companyId, issueIds),
+            listSuccessfulRunHandoffStates(queryDb, companyId, issueIds),
+            scopedRecoveryActions.listActiveForIssues(companyId, issueIds),
           ]);
           const actor = getActorInfo(req);
           await Promise.all(
@@ -8545,8 +8560,8 @@ export function issueRoutes(
           };
         }
         const [handoffStates, recoveryActionByIssue] = await Promise.all([
-          listSuccessfulRunHandoffStates(db, companyId, issueIds),
-          recoveryActionsSvc.listActiveForIssues(companyId, issueIds),
+          listSuccessfulRunHandoffStates(queryDb, companyId, issueIds),
+          scopedRecoveryActions.listActiveForIssues(companyId, issueIds),
         ]);
         const actor = getActorInfo(req);
         await Promise.all(

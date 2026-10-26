@@ -31,6 +31,7 @@ import { connectionIntentService } from "./connection-intents.js";
 import { managedAiSessionFingerprintConfig, prepareManagedAiRuntime, assertManagedAiProjectAuth, stripAiAuthBindings, isAiConnectionBusy, AI_AUTH_ENV_KEYS } from "./ai-connection-runtime.js";
 import { aiConnectionBindingSchema } from "@paperclipai/shared";
 import { executionBlockerPredicate, getExecutionBlocker, hasPendingRunCleanup } from "./execution-blocker.js";
+import { lockNativeRuntimeSelectionRows } from "./native-runtime-selection-lock.js";
 import { CONVERSATION_CONTINUATION_POLICY, claimedAdapterType, runUsedConversationAdapter, hasConversationContinuationPolicy, isConversationAdapter } from "./conversation-continuation.js";
 import { recordExecutionWait } from "./execution-wait.js";
 import { getNativeReviewAssignment, readNativeReviewAssignmentContext } from "./native-runtime/native-review-participant.js";
@@ -867,6 +868,66 @@ function nonRetryablePreflightFailureCode(error: unknown): string | null {
   if (!(error instanceof HttpError) || error.status !== 422) return null;
   const code = readNonEmptyString(parseObject(error.details).code);
   return code && NON_RETRYABLE_PREFLIGHT_FAILURE_CODES.has(code) ? code : null;
+}
+
+const POSTGRES_DEADLOCK_WAIT_EDGE = /^Process (\d{1,10}) waits for (AccessShare|RowShare|RowExclusive|ShareUpdateExclusive|Share|ShareRowExclusive|Exclusive|AccessExclusive)Lock on transaction (\d{1,20}); blocked by process (\d{1,10})\.$/;
+
+export function nativeExecutionFailureLogFields(input: {
+  error: unknown;
+  runId: string;
+  failureCode: string;
+  includeDeadlockLockGraph?: boolean;
+}): Record<string, unknown> {
+  const failureCode = /^[a-z][a-z0-9_]{0,63}$/.test(input.failureCode) ? input.failureCode : "adapter_failed";
+  const fields: Record<string, unknown> = { runId: input.runId, failureCode };
+  if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1" && input.error instanceof Error) {
+    const match = /^native_bootstrap_source_closure_unavailable:([a-zA-Z,]+);builder:([a-z_]+);wake:([A-Za-z_:+]+)$/.exec(input.error.message);
+    const unsupportedKeys = new Set(["review", "directPrompt", "previousRun", "persistedInput", "resume",
+      "initialGuidance", "continuation", "planning", "conversationHistory", "wake", "projectPaths",
+      "authoredContextManifests", "missingTask"]);
+    const builderReasons = new Set(["interaction_sources", "unsupported_or_missing_witness", "ambiguous_reference",
+      "reference_source_mismatch", "source_snapshot_invalid", "additional_inputs_unknown", "source_budget_exceeded", "unknown"]);
+    const wakeReasons = new Set(["identity_invalid", "payload_shape", "payload_keys", "task_projection", "wake_fields_invalid",
+      "comment_count_invalid", "comment_shape_invalid", "comment_source_invalid", "comment_hash_mismatch",
+      "comment_window_invalid", "ok"]);
+    if (match) {
+      const unsupported = match[1] === "none" ? [] : match[1]!.split(",");
+      const [wakeReason, wakeFieldsText] = match[3]!.split(":");
+      const wakeFieldKeys = new Set(["reason", "continuation", "attachmentOmissions", "externalChatProvider", "recovery",
+        "childIssueSummaries", "childIssueSummaryTruncated", "dispositionRepair", "livenessContinuation", "interactionKind",
+        "interactionStatus", "interactionId", "sourceRunId", "externalChatQuestionResponse", "externalInteractionContinuation",
+        "checkboxSelection", "checkedOutByHarness", "externalChatExecutionBound", "simplifiedEnglishInteractions",
+        "connectorSkillInstructions", "dependencyBlockedInteraction", "treeHoldInteraction", "activeTreeHold",
+        "unresolvedBlockerIssueIds", "unresolvedBlockerSummaries", "executionStage", "taskWatchdog", "skillTest",
+        "commentIds", "latestCommentId", "comments", "annotationDeltas", "planReviewContext", "documentReviewContext",
+        "truncated", "fallbackFetchNeeded"]);
+      const wakeFields = wakeFieldsText ? wakeFieldsText.split("+") : [];
+      if (unsupported.every(key => unsupportedKeys.has(key)) && builderReasons.has(match[2]!) && wakeReasons.has(wakeReason!) &&
+        wakeFields.every(key => wakeFieldKeys.has(key)))
+        fields.nativeBootstrapSourceClosureDiagnostic = { unsupported, builder: match[2], wake: wakeReason, wakeFields };
+    }
+  }
+  const seen = new Set<object>();
+  let current: unknown = input.error;
+  let sqlState: string | null = null;
+  let deadlockDetail: string | null = null;
+  for (let depth = 0; depth < 5 && current && typeof current === "object" && !seen.has(current); depth += 1) {
+    seen.add(current);
+    const candidate = current as { code?: unknown; detail?: unknown; cause?: unknown };
+    if (!sqlState && typeof candidate.code === "string" && /^[0-9A-Z]{5}$/.test(candidate.code))
+      sqlState = candidate.code;
+    if (!deadlockDetail && typeof candidate.detail === "string") deadlockDetail = candidate.detail;
+    current = candidate.cause;
+  }
+  if (sqlState) fields.sqlState = sqlState;
+  if (input.includeDeadlockLockGraph && sqlState === "40P01" && deadlockDetail) {
+    const waitEdges = deadlockDetail.split(/\r?\n/).flatMap((line) => {
+      const match = POSTGRES_DEADLOCK_WAIT_EDGE.exec(line);
+      return match ? [{ waitingProcess: match[1], lockMode: match[2], transactionId: match[3], blockedByProcess: match[4] }] : [];
+    }).slice(0, 8);
+    if (waitEdges.length) fields.deadlockWaitEdges = waitEdges;
+  }
+  return fields;
 }
 class ChatControlRecoveryUnresolvedError extends Error {
   constructor() {
@@ -8429,6 +8490,7 @@ export async function getIssueExecutionContext(db: Db, companyId: string, issueI
       executionWorkspaceId: issues.executionWorkspaceId,
       executionWorkspacePreference: issues.executionWorkspacePreference,
       assigneeAgentId: issues.assigneeAgentId,
+      checkoutRunId: issues.checkoutRunId,
       assigneeAdapterOverrides: issues.assigneeAdapterOverrides,
       executionPolicy: issues.executionPolicy,
       executionState: issues.executionState,
@@ -23704,13 +23766,20 @@ export function heartbeatService(
             const nativeSourceCandidates: NativePreparedSourceCandidate[] = [];
             const capturedTaskSource = taskSourceCapture.value;
             const capturedAuthoredSources = nativeBootstrapAuthoredSources.value;
+            const nativeBootstrapWakeDiagnostics: string[] = [];
             const nativeTaskWakeSource = capturedTaskSource?.input.kind === "task" && issueRef
               ? captureNativeTaskWakeSource({ companyId: agent.companyId, runId: run.id, issueId: issueRef.id,
                 sourceVersion: capturedTaskSource.input.sourceVersion,
                 persistedWakeReason: readNonEmptyString(parseObject(run.contextSnapshot).wakeReason),
+                checkoutRunId: issueContext?.checkoutRunId ?? null,
                 task: { id: issueRef.id, identifier: issueRef.identifier, title: issueRef.title,
                   description: issueContext?.description ?? null, status: issueRef.status,
-                  priority: issueRef.priority, workMode: issueRef.workMode }, payload: context.paperclipWake })
+                  priority: issueRef.priority, workMode: issueRef.workMode },
+                commentSources: inlineWakeCommentSourceCaptures.map(capture => capture.input), payload: context.paperclipWake,
+                ...(process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1"
+                  ? { onDiagnostic: (reason, fields) => {
+                    nativeBootstrapWakeDiagnostics.push(fields?.length ? `${reason}:${fields.join("+")}` : reason);
+                  } } : {}) })
               : null;
             if (capturedTaskSource?.input.kind === "task") nativeSourceCandidates.push({ kind: "task", id: capturedTaskSource.input.issueId,
               input: capturedTaskSource.input, payloadSourceSnapshot: capturedTaskSource.payloadSourceSnapshot });
@@ -23746,6 +23815,7 @@ export function heartbeatService(
             };
             const attachmentClosureExecution = nativeExecution;
             if (!attachmentClosureExecution) throw new Error("native_bootstrap_execution_input_unavailable");
+            const nativeBootstrapSourceSetDiagnostics: string[] = [];
             const buildNativeBootstrapSet = (attachmentCandidates: NativePreparedSourceCandidate[] = []) =>
               buildNativeBootstrapSourceSet({
                 companyId: agent.companyId,
@@ -23781,8 +23851,14 @@ export function heartbeatService(
                 contextWitness: v5Fabric?.inputContextSourceWitness ?? freshGovernedContext?.sourceWitness ?? null,
                 rolePackInputs: v5Fabric ? v5Fabric.inputRolePackSources : [],
                 unsupportedInputPresent: Object.values(nativeBootstrapUnsupported).some(Boolean),
+                ...(process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1"
+                  ? { onDiagnostic: reason => { nativeBootstrapSourceSetDiagnostics.push(reason); } } : {}),
               });
             const nativeBootstrapSourceSet = buildNativeBootstrapSet();
+            if (!nativeBootstrapSourceSet && process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1") {
+              const unsupported = Object.entries(nativeBootstrapUnsupported).filter(([, value]) => value).map(([key]) => key);
+              throw new Error(`native_bootstrap_source_closure_unavailable:${unsupported.length ? unsupported.join(",") : "none"};builder:${nativeBootstrapSourceSetDiagnostics[0] ?? "unknown"};wake:${nativeBootstrapWakeDiagnostics[0] ?? "ok"}`);
+            }
             const renderedAttachmentReferences = nativeBootstrapTaskMarkdownSourceMap?.references
               ?.filter(reference => reference.kind === "attachment") ?? [];
             if (renderedAttachmentReferences.length) {
@@ -23865,14 +23941,11 @@ export function heartbeatService(
                   : undefined;
           await options.beforeNativeRuntimeSelection?.(run.id);
           const nativeSelected = await db.transaction(async (tx) => {
-            const lockedRun = await tx
-              .select()
-              .from(heartbeatRuns)
-              .where(eq(heartbeatRuns.id, run.id))
-              .for("update")
-              .limit(1)
-              .then((rows) => rows[0] ?? null);
-            if (!lockedRun) throw new Error("native_runtime_run_missing");
+            const lockedRun = await lockNativeRuntimeSelectionRows(tx as unknown as Db, {
+              companyId: run.companyId,
+              runId: run.id,
+              issueId: issueRef?.id ?? run.nativeIssueId ?? run.issueId ?? null,
+            });
             // Cancellation and runtime selection serialize on this row. A
             // stopped preparation must never create a new native coordinator.
             if (lockedRun.status !== "running" || lockedRun.resultJson?.startupCancellation) return false;
@@ -25823,24 +25896,12 @@ export function heartbeatService(
           recordedResponsibleUserDenialCode ??
           nativeTerminalFailureCode ??
           "adapter_failed";
-        const pgDeadlockDiagnostic: { code: "40P01"; detail: string } | null = (() => {
-          if (process.env.PAPERCLIP_NATIVE_DEADLOCK_DIAGNOSTICS !== "1") return null;
-          const seen = new Set<object>();
-          let current: unknown = err;
-          for (let depth = 0; depth < 5 && current && typeof current === "object" && !seen.has(current); depth += 1) {
-            seen.add(current);
-            const candidate = current as { code?: unknown; detail?: unknown; cause?: unknown };
-            if (candidate.code === "40P01" && typeof candidate.detail === "string")
-              return { code: "40P01", detail: candidate.detail.slice(0, 1600) };
-            current = candidate.cause;
-          }
-          return null;
-        })();
-        if (process.env.PAPERCLIP_NATIVE_DEADLOCK_DIAGNOSTICS === "1") {
-          logger.error({ runId, ...(pgDeadlockDiagnostic ? { pgDeadlockDiagnostic } : {}) }, "heartbeat execution failed");
-        } else {
-          logger.error({ err, runId }, "heartbeat execution failed");
-        }
+        logger.error(nativeExecutionFailureLogFields({
+          error: err,
+          runId,
+          failureCode: failureErrorCode,
+          includeDeadlockLockGraph: process.env.PAPERCLIP_NATIVE_DEADLOCK_DIAGNOSTICS === "1",
+        }), "heartbeat execution failed");
 
         let logSummary: {
           bytes: number;

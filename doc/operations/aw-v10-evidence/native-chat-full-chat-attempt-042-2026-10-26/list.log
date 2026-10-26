@@ -1,0 +1,26 @@
+Listing tests:
+  [chromium] › agent-chat-projects.spec.ts:15:3 › project card through dedicated tool persists and deduplicates retries
+  [chromium] › agent-chat-projects.spec.ts:15:3 › project card through direct API persists and deduplicates retries
+  [chromium] › agent-chat-projects.spec.ts:83:1 › split handoff commits relevant plans before execution and never creates chat children
+  [chromium] › agent-chat-projects.spec.ts:168:3 › failed project creation has no success card or partial state: {"ids":["987654321"]}
+  [chromium] › agent-chat-projects.spec.ts:168:3 › failed project creation has no success card or partial state: {"urls":["https://user:password@github.com/org/repo"]}
+  [chromium] › agent-chat-projects.spec.ts:168:3 › failed project creation has no success card or partial state: {"urls":["https://github.com/org/repo"],"workspace":{"name":"Conflicting","repoUrl":"https://github.com/org/repo"}}
+  [chromium] › agent-chat-projects.spec.ts:195:1 › first upload creates the chat without invoking its agent; shared attachments persist
+  [chromium] › agent-chat-projects.spec.ts:256:3 › Ask denies project mutations; Plan can draft and revise without execution
+  [chromium] › agent-chat-projects.spec.ts:256:3 › Plan denies project mutations; Plan can draft and revise without execution
+  [chromium] › agent-chat-projects.spec.ts:321:3 › authorized repository discovery and selection: {"ids":["101"]}
+  [chromium] › agent-chat-projects.spec.ts:321:3 › authorized repository discovery and selection: {"ids":["101","102"]}
+  [chromium] › agent-chat-projects.spec.ts:321:3 › authorized repository discovery and selection: {"ids":["101"],"urls":["https://github.com/chat-fixture/frontend","https://github.com/octocat/Hello-World"]}
+  [chromium] › agent-chat-projects.spec.ts:399:1 › plan approval hands the preserved revision to an assigned project task
+  [chromium] › agent-chat-projects.spec.ts:468:1 › shared questions resume and existing project reuse creates no project card
+  [chromium] › agent-chat-projects.spec.ts:536:1 › shared history loads older messages without replacing the latest turn
+  [chromium] › agent-chat-projects.spec.ts:574:1 › disabling the experiment lets an active turn settle and keeps idle history
+  [chromium] › agent-chat-sessions.spec.ts:24:1 › built chat initializes after service worker takeover and reload with a slow CPU
+  [chromium] › agent-chat-sessions.spec.ts:60:1 › chat first open is read-only; concurrent first sends and retries share one task
+  [chromium] › agent-chat-sessions.spec.ts:154:1 › source loss refreshes the read-only chat identity and drops cached history before another send
+  [chromium] › agent-chat-sessions.spec.ts:191:1 › live source denial removes cached chat history without a reload or implicit replacement
+  [chromium] › agent-chat-sessions.spec.ts:214:1 › an owner can explicitly recover after source visibility is lost while original metric facts survive
+  [chromium] › agent-chat-sessions.spec.ts:253:1 › feature flag blocks new sends and resets while preserving existing history
+  [chromium] › agent-chat-sessions.spec.ts:289:1 › Stop then queued /new resets unpause the conversation without losing history
+  [chromium] › agent-chat-sessions.spec.ts:382:1 › sidebar discovery, stars, recent agents, configuration links, and drafts survive switching
+Total: 24 tests in 2 files

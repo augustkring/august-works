@@ -5,8 +5,8 @@ import { dirname, join } from "node:path";
 import { createServer as createHttpsServer } from "node:https";
 import { execFileSync } from "node:child_process";
 import express from "express";
-import { eq } from "drizzle-orm";
-import { agents, agentExecutionManifests, companies, heartbeatRuns, issues,
+import { and, desc, eq, sql } from "drizzle-orm";
+import { agents, agentExecutionManifests, authSessions, authUsers, companies, heartbeatRuns, issues,
   orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, createDb } from "@paperclipai/db";
 import { workerModelProfileSchema, type WorkerModelProfile } from "../../services/orchestration/worker-model-profiles.js";
 import { workerModelGateway } from "../../services/orchestration/worker-model-gateway.js";
@@ -22,6 +22,8 @@ import { heartbeatService } from "../../services/heartbeat.js";
 import { issueRoutes } from "../../routes/issues.js";
 import { runtimeConnectionIntentRoutes } from "../../routes/connection-intents.js";
 import { errorHandler } from "../../middleware/error-handler.js";
+import { actorMiddleware } from "../../middleware/auth.js";
+import type { BetterAuthSessionResult } from "../../auth/better-auth.js";
 import { verifyRuntimeToolsToken } from "../../runtime-tools-token.js";
 import { setupRunnerPrpWebSocketServer, runnerPrpWebSocketInternals } from "../../realtime/runner-prp-ws.js";
 import type { AuthorizationActor } from "../../services/authorization.js";
@@ -44,6 +46,8 @@ export async function runManagedNativeConversationFrame(input: {
   db: ReturnType<typeof createDb>;
   root: string;
   opencodeBinary: string;
+  budgetMonthlyCents?: number;
+  tariff?: WorkerModelProfile["tariff"];
   beforeProviderResponse?: (facts: {
     db: ReturnType<typeof createDb>;
     actor: AuthorizationActor;
@@ -93,8 +97,11 @@ export async function runManagedNativeConversationFrame(input: {
     Buffer.from("\n"), await readFile(caCertPath)]), { mode: 0o600 });
   const f = await seedV5Presences(db);
   const userId = f.userId, companyId = f.home, agentId = f.presence.id;
-  await db.update(companies).set({ budgetMonthlyCents: 2000 }).where(eq(companies.id, companyId));
-  await db.update(agents).set({ budgetMonthlyCents: 2000 }).where(eq(agents.id, agentId));
+  const budgetMonthlyCents = input.budgetMonthlyCents ?? 2000;
+  if (!Number.isSafeInteger(budgetMonthlyCents) || budgetMonthlyCents < 1)
+    throw new Error("conversation_fixture_budget_must_be_positive_integer");
+  await db.update(companies).set({ budgetMonthlyCents }).where(eq(companies.id, companyId));
+  await db.update(agents).set({ budgetMonthlyCents }).where(eq(agents.id, agentId));
   const sessionId = await seedNativePasskeySession(db, userId);
   const human = { type: "board", source: "session", userId, companyIds: [companyId],
     sessionId, isInstanceAdmin: false } satisfies AuthorizationActor & Express.Request["actor"];
@@ -122,7 +129,7 @@ export async function runManagedNativeConversationFrame(input: {
     binding: { provider: "anthropic", method: "api_key", mode: "shared", ...issued },
     transport: "server-anthropic-messages-v1", contract: "anthropic-messages-tools-2023-06-01",
     maximumEnvelopeBytes: 64000, inputTokensUpperBound: 100000, maxOutputTokens: 1024,
-    tariff: { provider: "anthropic", model, currency: "USD", inputMinorPerMillion: 0,
+    tariff: input.tariff ?? { provider: "anthropic", model, currency: "USD", inputMinorPerMillion: 0,
       outputMinorPerMillion: 0, fixedMinor: 1, qualificationHash: "b".repeat(64), sourceSha,
       testedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 60 * 60_000).toISOString() },
     qualificationEvidenceRef: "https://protected.test.invalid/qualification/managed-conversation-fixture.json",
@@ -132,20 +139,43 @@ export async function runManagedNativeConversationFrame(input: {
   let activeExecution: import("../../vendor/paperclip-runner/index.js").NativeExecutionInput | null = null;
   let activeRunId: string | null = null;
   let activeIssueId: string | null = null;
+  let providerHookInvoked = false;
+  let providerHookFailure: { name: string; message: string } | null = null;
+  let providerStubFailure: { stage: string; code: string } | null = null;
+  let providerToolNames: string[] = [];
+  const brokerRequestFacts: Array<{ requestHash: string; status: number; code?: string; stage?: string;
+    sqlState?: string; constraint?: string }> = [];
   const providerCalls: Array<{ body: Record<string, unknown>; keyMatches: boolean }> = [];
   const gateway = workerModelGateway(db, { profiles: [profile], sourceSha,
     protectedEvidenceOrigin: "https://protected.test.invalid", fetch: async (url, init) => {
-      if (String(url) !== "https://api.anthropic.com/v1/messages") throw new Error("conversation_fixture_provider_url_invalid");
+      if (String(url) !== "https://api.anthropic.com/v1/messages") {
+        providerStubFailure ??= { stage: "provider_url", code: "unexpected_provider_url" };
+        throw new Error("conversation_fixture_provider_url_invalid");
+      }
       const headers = new Headers(init.headers);
       const wireBody = String(init.body);
       const body = JSON.parse(wireBody) as Record<string, unknown>;
       providerCalls.push({ body, keyMatches: headers.get("x-api-key") === apiKey });
       const execution = activeExecution;
       const contract = execution?.completionContract.contract;
-      if (!execution || !contract) throw new Error("conversation_fixture_completion_contract_missing");
+      if (!execution || !contract) {
+        providerStubFailure ??= { stage: "execution_contract", code: "completion_contract_missing" };
+        throw new Error("conversation_fixture_completion_contract_missing");
+      }
       const tools = Array.isArray(body.tools) ? body.tools as Array<Record<string, unknown>> : [];
-      const finish = tools.find(tool => tool.name === "paperclip_finish");
-      if (!finish || typeof finish.name !== "string") throw new Error("conversation_fixture_finish_tool_missing");
+      providerToolNames = tools.map(tool => tool.name).filter((name): name is string =>
+        typeof name === "string" && /^[A-Za-z0-9_.-]{1,128}$/.test(name));
+      const finish = tools.find(tool => {
+        if (tool.name === "paperclip_finish") return true;
+        if (typeof tool.name !== "string") return false;
+        for (const prefix of ["paperclip__", "paperclip_", "paperclip."])
+          if (tool.name.startsWith(prefix)) return tool.name.slice(prefix.length) === "paperclip_finish";
+        return false;
+      });
+      if (!finish || typeof finish.name !== "string") {
+        providerStubFailure ??= { stage: "terminal_tool_lookup", code: "paperclip_finish_not_in_provider_tools" };
+        throw new Error("conversation_fixture_finish_tool_missing");
+      }
       const result = { schema: "paperclip.run_result.v1", reportedWorkDisposition: "done", summary: "Conversation Native turn completed.",
         completionClaim: { contractRevision: String(contract.revision), objectiveSatisfied: true,
           criteria: contract.criteria.map(criterion => ({ criterionId: criterion.id, status: "satisfied", evidenceRefs: [] })), remainingWork: [] },
@@ -157,6 +187,7 @@ export async function runManagedNativeConversationFrame(input: {
       const response = new Response(responseBody,
       { status: 200, headers: { "content-type": "application/json" } });
       if (input.beforeProviderResponse && activeRunId && activeIssueId) {
+        providerHookInvoked = true;
         const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, activeRunId)).limit(1);
         const [manifest] = await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId, activeRunId)).limit(1);
         const [reservation] = await db.select().from(orchestrationModelReservations)
@@ -168,7 +199,7 @@ export async function runManagedNativeConversationFrame(input: {
         const profileValue = run.runnerProfileJson && typeof run.runnerProfileJson === "object"
           ? run.runnerProfileJson as Record<string, unknown> : {};
         const sourceReceipt = profileValue.nativeInputSourceReceipt ?? null;
-        await input.beforeProviderResponse({ db, actor: human, companyId, agentId, issueId: activeIssueId,
+        try { await input.beforeProviderResponse({ db, actor: human, companyId, agentId, issueId: activeIssueId,
           run, manifest, reservation, sourceReceipt,
           request: { body, bodySha256: createHash("sha256").update(JSON.stringify(body)).digest("hex"),
             wireBodySha256: createHash("sha256").update(wireBody).digest("hex"), byteLength: Buffer.byteLength(wireBody),
@@ -180,26 +211,67 @@ export async function runManagedNativeConversationFrame(input: {
           profileBinding: { id: profile.id, providerBindingId: profile.providerBindingId,
             providerSnapshotHash: profile.providerSnapshotHash, qualifiedConfigurationHash: profile.qualifiedConfigurationHash,
             model: profile.tariff.model },
-          usage: { inputTokens: usage.input_tokens, outputTokens: usage.output_tokens } });
+          usage: { inputTokens: usage.input_tokens, outputTokens: usage.output_tokens } }); }
+        catch (error) {
+          providerHookFailure = { name: error instanceof Error ? error.name : "UnknownError",
+            message: error instanceof Error ? error.message.slice(0, 400) : "non_error_throwable" };
+          throw error;
+        }
       }
+      else if (input.beforeProviderResponse) providerStubFailure ??= {
+        stage: "provider_callback_binding", code: "active_run_or_issue_missing",
+      };
       return response;
     } });
   const issuerFacts: Array<{ scope: string | null; runId: string; issueId: string; generation: number; manifestId: string; manifestHash: string }> = [];
   const brokerApp = express();
   brokerApp.use(express.json({ limit: "2mb" }));
+  const brokerRequestByObject = new WeakMap<object, (typeof brokerRequestFacts)[number]>();
+  brokerApp.use((req, res, next) => {
+    if (req.method === "POST" && req.path === "/runtime-tools/model/v1/messages") {
+      const requestHash = createHash("sha256").update(JSON.stringify(req.body ?? null)).digest("hex");
+      const fact: (typeof brokerRequestFacts)[number] = { requestHash, status: 0 };
+      brokerRequestByObject.set(req, fact);
+      const sendJson = res.json.bind(res);
+      res.json = ((body: unknown) => {
+        if (body && typeof body === "object" && !Array.isArray(body) &&
+          typeof (body as Record<string, unknown>).code === "string")
+          fact.code = (body as Record<string, unknown>).code as string;
+        return sendJson(body as never);
+      }) as typeof res.json;
+      res.once("finish", () => { fact.status = res.statusCode; brokerRequestFacts.push(fact); });
+    }
+    next();
+  });
   brokerApp.use((req, _res, next) => {
     if (req.headers["x-api-key"] === "paperclip-managed-model-broker" && activeToken)
       req.headers.authorization = `Bearer ${activeToken}`;
     next();
   });
   brokerApp.use(runtimeConnectionIntentRoutes(db, gateway));
+  brokerApp.use((error: unknown, req: express.Request, _res: express.Response, next: express.NextFunction) => {
+    const fact = brokerRequestByObject.get(req);
+    const details = error && typeof error === "object" &&
+      (error as Record<string, unknown>).details && typeof (error as Record<string, unknown>).details === "object"
+      ? (error as Record<string, unknown>).details as Record<string, unknown> : null;
+    if (fact && details) {
+      if (typeof details.code === "string" && /^[a-z0-9_]{1,80}$/.test(details.code)) fact.code = details.code;
+      if (typeof details.stage === "string" && /^[a-z0-9_]{1,80}$/.test(details.stage)) fact.stage = details.stage;
+      if (typeof details.sqlState === "string" && /^[0-9A-Z]{5}$/.test(details.sqlState)) fact.sqlState = details.sqlState;
+      if (typeof details.constraint === "string" && /^[A-Za-z0-9_]{1,96}$/.test(details.constraint)) fact.constraint = details.constraint;
+    }
+    next(error);
+  });
   brokerApp.use(errorHandler);
   const broker = createHttpsServer({ key: await readFile(keyPath), cert: await readFile(certPath) }, brokerApp);
   broker.listen(0, "127.0.0.1");
   await new Promise<void>(resolve => broker.once("listening", resolve));
   const address = broker.address();
   if (!address || typeof address === "string") throw new Error("conversation_fixture_broker_listen_failed");
-  const origin = `https://127.0.0.1:${address.port}/`;
+  // Durable PRP and the runner accept only an origin, with no trailing path
+  // separator. A slash here makes the managed environment tuple invalid and
+  // causes the runner to drop it before OpenCode starts.
+  const origin = new URL(`https://127.0.0.1:${address.port}`).origin;
   setupRunnerPrpWebSocketServer(broker, { apiUrl: origin });
   const prevBroker = process.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN;
   const prevJwt = process.env.PAPERCLIP_AGENT_JWT_SECRET;
@@ -244,27 +316,57 @@ export async function runManagedNativeConversationFrame(input: {
       OPENCODE_DISABLE_DEFAULT_PLUGINS: "true", OPENCODE_DISABLE_MODELS_FETCH: "true",
       NODE_EXTRA_CA_CERTS: certBundlePath, SSL_CERT_FILE: certBundlePath };
   } });
+  const [humanSession] = await db.select({ id: authSessions.id, userId: authSessions.userId,
+    token: authSessions.token, expiresAt: authSessions.expiresAt }).from(authSessions)
+    .where(and(eq(authSessions.id, sessionId), eq(authSessions.userId, userId))).limit(1);
+  if (!humanSession || humanSession.expiresAt.getTime() <= Date.now())
+    throw new Error("conversation_fixture_human_session_unavailable");
+  const humanCookie = `session_token=${encodeURIComponent(humanSession.token)}`;
   const app = express();
   app.use(express.json());
-  app.use((req, _res, next) => { req.actor = human; next(); });
+  app.use(actorMiddleware(db, { deploymentMode: "authenticated", resolveSession: async req => {
+    const token = (req.header("cookie") ?? "").split(";").map(value => value.trim())
+      .map(value => value.slice(value.indexOf("=") + 1)).map(decodeURIComponent)
+      .find(value => value === humanSession.token);
+    if (!token || humanSession.expiresAt.getTime() <= Date.now()) return null;
+    const [user] = await db.select({ id: authUsers.id, name: authUsers.name, email: authUsers.email })
+      .from(authUsers).where(eq(authUsers.id, humanSession.userId)).limit(1);
+    if (!user) return null;
+    const result: BetterAuthSessionResult = {
+      session: { id: humanSession.id, userId: humanSession.userId, expiresAt: humanSession.expiresAt }, user,
+    };
+    return result;
+  } }));
   app.use("/api", issueRoutes(db, {} as never, { heartbeat }));
   app.use(errorHandler);
   try {
     const chat = await import("supertest").then(({ default: request }) => request(app)
-      .post(`/api/companies/${companyId}/chats/${agentId}`));
+      .post(`/api/companies/${companyId}/chats/${agentId}`).set("cookie", humanCookie));
     if (chat.status !== 200 || typeof chat.body.id !== "string") throw new Error(`conversation_fixture_chat_open_failed_${chat.status}`);
     const sent = await import("supertest").then(({ default: request }) => request(app)
-      .post(`/api/issues/${chat.body.id}/comments`).send({ body: "Please respond briefly and complete this conversation turn.", clientRequestId: randomUUID() }));
+      .post(`/api/issues/${chat.body.id}/comments`).set("cookie", humanCookie)
+      .send({ body: "Please respond briefly and complete this conversation turn.", clientRequestId: randomUUID() }));
     if (sent.status !== 201) throw new Error(`conversation_fixture_first_comment_failed_${sent.status}`);
     const deadline = Date.now() + 180_000;
     let run: typeof heartbeatRuns.$inferSelect | null = null;
     while (Date.now() < deadline) {
-      const [candidate] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.nativeIssueId, chat.body.id)).limit(1);
-      if (candidate && ["succeeded", "failed", "timed_out"].includes(candidate.status)) { run = candidate; break; }
+      const [candidate] = await db.select().from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, agentId),
+        sql`${heartbeatRuns.contextSnapshot}->>'issueId' = ${chat.body.id}`,
+        sql`${heartbeatRuns.contextSnapshot}->>'wakeCommentId' = ${sent.body.id}`,
+      )).orderBy(desc(heartbeatRuns.startedAt)).limit(1);
+      if (candidate && ["succeeded", "failed", "timed_out", "cancelled", "superseded"].includes(candidate.status)) {
+        run = candidate;
+        break;
+      }
       await new Promise(resolve => setTimeout(resolve, 100));
     }
     await heartbeat.drainActiveRunExecutions();
-    const [finalRun] = run ? [run] : await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.nativeIssueId, chat.body.id)).limit(1);
+    const [finalRun] = run ? [run] : await db.select().from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, agentId),
+      sql`${heartbeatRuns.contextSnapshot}->>'issueId' = ${chat.body.id}`,
+      sql`${heartbeatRuns.contextSnapshot}->>'wakeCommentId' = ${sent.body.id}`,
+    )).orderBy(desc(heartbeatRuns.startedAt)).limit(1);
     const [manifest] = finalRun ? await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId, finalRun.id)).limit(1) : [];
     const [reservation] = finalRun ? await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.conversationRunId, finalRun.id)).limit(1) : [];
     const [plan] = finalRun ? await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.issueId, chat.body.id)).limit(1) : [];
@@ -274,6 +376,7 @@ export async function runManagedNativeConversationFrame(input: {
     return { issueId: chat.body.id as string, firstCommentId: sent.body.id as string, run: finalRun ?? null,
       manifest: manifest ?? null, reservation: reservation ?? null, workerPlan: plan ?? null,
       workerAttempts: attempts, providerCallCount: providerCalls.length,
+      providerHookInvoked, providerHookFailure, providerStubFailure, providerToolNames, brokerRequestFacts,
       providerKeyMatched: providerCalls.length > 0 && providerCalls.every(call => call.keyMatches),
       issuerFacts, nativeInputSourceReceipt: profileValue.nativeInputSourceReceipt ?? null,
       runStatus: finalRun?.status ?? "not_started", success: finalRun?.status === "succeeded" };

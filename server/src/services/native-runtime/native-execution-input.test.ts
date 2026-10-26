@@ -9,6 +9,7 @@ import { buildNativeBootstrapSourceSet, buildNativeExecutionInput, captureNative
 import type { NativeInteractionResponseEnvelope } from "../../vendor/paperclip-runner/index.js";
 import { nativeRuntimeContextFixture } from "./runtime-context.test-fixture.js";
 import { captureNativeBootstrapContextWitness } from "../context/native-bootstrap-context-witness.js";
+import { nativeSha256 } from "./canonical.js";
 
 describe("native bootstrap rendered-source closure", () => {
   const companyId = randomUUID(), issueId = randomUUID(), runId = randomUUID(), agentId = randomUUID(), renderedMarkdown = "Task body rendered by the native task renderer.";
@@ -62,7 +63,7 @@ describe("native bootstrap rendered-source closure", () => {
     const interactionId = randomUUID();
     const response = { interactionId, kind: "ask_user_questions", response: { status: "pending", result: null } } satisfies NativeInteractionResponseEnvelope;
     const source = { kind: "interaction" as const, issueId, interactionId, sourceVersion: "1",
-      contentHash: createHash("sha256").update(JSON.stringify(response), "utf8").digest("hex") };
+      contentHash: nativeSha256(response) };
     expect(input({ interactionResponses: [response], interactionSources: [source] })?.inputs).toContainEqual(source);
     expect(input({ interactionResponses: [response], interactionSources: [] })).toBeNull();
     expect(input({ interactionResponses: [], interactionSources: [source] })).toBeNull();
@@ -70,7 +71,7 @@ describe("native bootstrap rendered-source closure", () => {
     expect(input({ interactionResponses: [response, response], interactionSources: [source] })).toBeNull();
   });
 
-  it("closes only the exact Task-only wake payload and rejects comment or interaction additions", () => {
+  it("closes a Task-only wake or comments whose exact rendered bodies have owner captures", () => {
     const task = { id: issueId, identifier: "NATIVE-1", title: "Draft", description: "Internal draft",
       status: "todo", priority: "medium", workMode: "standard" };
     const payload = {
@@ -96,6 +97,24 @@ describe("native bootstrap rendered-source closure", () => {
       kind: "native_task_wake", runId, issueId, sourceVersion: "1", contentHash: expect.stringMatching(/^[0-9a-f]{64}$/),
     });
     expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand", task, payload })).toMatchObject({ kind: "native_task_wake" });
+    const commentId = randomUUID();
+    const commentSource = { kind: "comment" as const, issueId, commentId, sourceVersion: "2",
+      contentHash: createHash("sha256").update(JSON.stringify({ body: "Please finish this task.",
+        presentation: null, metadata: null }), "utf8").digest("hex") };
+    const comment = { id: commentId, issueId, authorType: "user", body: "Please finish this task.", bodyTruncated: false,
+      presentation: null, metadata: null, deletedAt: null };
+    const commentWake = { ...payload, commentIds: [commentId], latestCommentId: commentId, comments: [comment],
+      commentWindow: { requestedCount: 1, includedCount: 1, missingCount: 0 } };
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand",
+      task, payload: commentWake, commentSources: [commentSource] })).toMatchObject({ kind: "native_task_wake", runId, issueId });
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand",
+      task, payload: commentWake })).toBeNull();
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand",
+      task, payload: { ...commentWake, comments: [{ ...comment, body: "changed" }] }, commentSources: [commentSource] })).toBeNull();
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand",
+      checkoutRunId: runId, task, payload: { ...payload, checkedOutByHarness: true } })).toMatchObject({ kind: "native_task_wake" });
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand",
+      checkoutRunId: randomUUID(), task, payload: { ...payload, checkedOutByHarness: true } })).toBeNull();
     expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand", task,
       payload: { ...payload, executionContinuation: emptyContinuation } })).toMatchObject({ kind: "native_task_wake" });
     expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: null, task,
@@ -136,14 +155,15 @@ describe("native bootstrap rendered-source closure", () => {
     const manifestId = randomUUID();
     const manifest = { id: manifestId, companyId, runId, agentId, issueId, projectId: null, queryHash: hash,
       policySnapshotHash: "b".repeat(64), createdAt: new Date() };
+    const contextItems = [
+      { id: randomUUID(), manifestId, companyId, rank: 0, sourceProvider: "august_works_tasks", sourceRef: `issue://${issueId}`,
+        sourceVersion: new Date().toISOString(), contentHash: hash, payloadSourceSnapshot: snapshot() },
+      { id: randomUUID(), manifestId, companyId, rank: 1, sourceProvider: "august_works_foundation",
+        sourceRef: `foundation://${foundationDocumentId}/${foundationRevisionId}/1`, sourceVersion: foundationRevisionId,
+        contentHash: "c".repeat(64), payloadSourceSnapshot: null },
+    ];
     const exactWitness = captureNativeBootstrapContextWitness({ companyId, runId, agentId, issueId, actor: sourceActor, renderedMarkdown: contextMarkdown,
-      manifest, items: [
-        { id: randomUUID(), manifestId, companyId, rank: 0, sourceProvider: "august_works_tasks", sourceRef: `issue://${issueId}`,
-          sourceVersion: new Date().toISOString(), contentHash: hash, payloadSourceSnapshot: snapshot() },
-        { id: randomUUID(), manifestId, companyId, rank: 1, sourceProvider: "august_works_foundation",
-          sourceRef: `foundation://${foundationDocumentId}/${foundationRevisionId}/1`, sourceVersion: foundationRevisionId,
-          contentHash: "c".repeat(64), payloadSourceSnapshot: null },
-      ], roots: [] });
+      manifest, items: contextItems, roots: [] });
     expect(witness).toBeNull();
     const sourceSet = buildNativeBootstrapSourceSet({ companyId, runId, agentId, issueId, renderedMarkdown,
       renderedMarkdownDigest: createHash("sha256").update(renderedMarkdown, "utf8").digest("hex"),
@@ -155,6 +175,15 @@ describe("native bootstrap rendered-source closure", () => {
       expect.objectContaining({ kind: "context", manifestId }),
       expect.objectContaining({ kind: "task", issueId }),
     ]));
+    const contextOwnerFingerprint = createHash("sha256").update(JSON.stringify({
+      manifest: { id: manifest.id, companyId: manifest.companyId, runId: manifest.runId, agentId: manifest.agentId,
+        issueId: manifest.issueId, projectId: manifest.projectId, queryHash: manifest.queryHash,
+        policySnapshotHash: manifest.policySnapshotHash, createdAt: manifest.createdAt.toISOString() },
+      items: contextItems.map(item => ({ id: item.id, provider: item.sourceProvider, ref: item.sourceRef,
+        version: item.sourceVersion, contentHash: item.contentHash, snapshot: item.payloadSourceSnapshot })), roots: [],
+    }), "utf8").digest("hex");
+    expect(sourceSet?.inputs.find(value => value.kind === "context" && value.manifestId === manifestId)?.contentHash)
+      .toBe(contextOwnerFingerprint);
     expect(sourceSet?.policy.foundationRevisionIds).toEqual([foundationRevisionId]);
     const combinedFabricContext = `## Pinned execution inventory\nPolicies: budget_hard_stop\n\n${contextMarkdown}`;
     const combinedContextSourceSet = buildNativeBootstrapSourceSet({ companyId, runId, agentId, issueId, renderedMarkdown,

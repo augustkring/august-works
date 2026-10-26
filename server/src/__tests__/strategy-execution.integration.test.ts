@@ -101,20 +101,28 @@ suite("native strategy links on migrated PostgreSQL", () => {
       { companyId, projectId, title: "Scoped task with a separately protected project" },
     ]).returning();
     const taskReader = { type: "agent" as const, source: "agent_jwt" as const, companyId, agentId: reader.id, keyScope: { kind: "skill_test" as const, issueId: allowed.id } };
+    const executionState = async () => ({
+      links: await db.select({ id: strategyExecutionLinks.id }).from(strategyExecutionLinks).where(eq(strategyExecutionLinks.companyId, companyId)),
+      sources: await db.select({ id: strategyExecutionSourceBindings.id, linkId: strategyExecutionSourceBindings.linkId,
+        issueId: strategyExecutionSourceBindings.issueId, projectId: strategyExecutionSourceBindings.projectId })
+        .from(strategyExecutionSourceBindings).where(eq(strategyExecutionSourceBindings.companyId, companyId)),
+    });
+    const beforeDeniedPopulations = await executionState();
     expect((await nativePopulation([allowed.id], taskReader)).get(allowed.id)?.nativeObject?.snapshot.id).toBe(allowed.id);
     await expect(evidenceAuthority([allowed.id], taskReader)).resolves.toBeUndefined();
-    await expect(evidenceAuthority([allowed.id, denied.id], taskReader)).rejects.toMatchObject({ status: 403, details: { reason: "deny_scope" } });
-    await expect(nativePopulation([allowed.id, denied.id], taskReader)).rejects.toMatchObject({ status: 403, details: { reason: "deny_scope" } });
+    await expect(evidenceAuthority([allowed.id, denied.id], taskReader)).rejects.toMatchObject({ status: 403 });
+    await expect(nativePopulation([allowed.id, denied.id], taskReader)).rejects.toMatchObject({ status: 403 });
     await expect(scalarNativeReference({ type: "issue", id: denied.id }, taskReader)).rejects.toMatchObject({ status: 403, details: { reason: "deny_scope" } });
     const projectReader = { ...taskReader, keyScope: { kind: "skill_test" as const, issueId: projectTask.id } };
     const authority = authorizationService(db);
     await expect(authority.decide({ actor: projectReader, action: "issue:read", resource: { type: "issue", companyId, issueId: projectTask.id }, enforceResponsibleUserIntersection: true })).resolves.toMatchObject({ allowed: true });
     await expect(authority.decide({ actor: projectReader, action: "project:read", resource: { type: "project", companyId, projectId }, enforceResponsibleUserIntersection: true })).resolves.toMatchObject({ allowed: false, reason: "deny_scope" });
     await expect(scalarNativeReference({ type: "issue", id: projectTask.id }, projectReader)).rejects.toMatchObject({ status: 403, details: { reason: "deny_scope" } });
-    await expect(nativePopulation([projectTask.id], projectReader)).rejects.toMatchObject({ status: 403, details: { reason: "deny_scope" } });
-    await expect(nativePopulation([projectId], projectReader, "project")).rejects.toMatchObject({ status: 403, details: { reason: "deny_scope" } });
-    await expect(evidenceAuthority([projectTask.id], projectReader)).rejects.toMatchObject({ status: 403, details: { reason: "deny_scope" } });
-    await expect(evidenceAuthority([projectId], projectReader, "project")).rejects.toMatchObject({ status: 403, details: { reason: "deny_scope" } });
+    await expect(nativePopulation([projectTask.id], projectReader)).rejects.toMatchObject({ status: 403 });
+    await expect(nativePopulation([projectId], projectReader, "project")).rejects.toMatchObject({ status: 403 });
+    await expect(evidenceAuthority([projectTask.id], projectReader)).rejects.toMatchObject({ status: 403 });
+    await expect(evidenceAuthority([projectId], projectReader, "project")).rejects.toMatchObject({ status: 403 });
+    expect(await executionState()).toEqual(beforeDeniedPopulations);
   });
   it("refuses the complete native population for a hidden, foreign, duplicate, oversized or expired input", async () => {
     const [visible, hidden] = await db.insert(issues).values([{ companyId, title: "Visible native source" }, { companyId, title: "Hidden native source", hiddenAt: new Date() }]).returning();

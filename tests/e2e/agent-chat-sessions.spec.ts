@@ -1,10 +1,8 @@
-import {randomUUID,createHash} from "node:crypto";
+import {randomUUID} from "node:crypto";
 import {readFile} from "node:fs/promises";
 import path from "node:path";
 import {eq} from "../../server/node_modules/drizzle-orm/index.js";
-import {createDb,issues,memoryBindings,memoryRecords,analyticalContextRoots,analyticalContextDependencies,contextManifestMemoryRoots,businessMetricObservations,businessMetricVersions} from "../../packages/db/src/index.ts";
-import {contextManifestService} from "../../server/src/services/context/context-manifest.ts";
-import {memoryDeletionKey} from "../../server/src/services/memory/memory-privacy.ts";
+import {createDb,memoryRecords,analyticalContextRoots,analyticalContextDependencies,contextManifestMemoryRoots,contextManifests,businessMetricObservations,businessMetricVersions} from "../../packages/db/src/index.ts";
 import {analyticalPurpose,metricDefinition} from "../../server/src/__tests__/helpers/business-metric-fixture.ts";
 import { expect, test, type Page } from "@playwright/test";
 
@@ -89,6 +87,10 @@ test("chat first open is read-only; concurrent first sends and retries share one
       (error) => ({ waitError: error instanceof Error ? error.name : "unknown" }),
     )));
     expect(initialCommentOutcomes).toEqual([{ status: 201 }, { status: 201 }]);
+    // The second tab only exists to race the initial POST. Close it once both
+    // responses are captured so its application polling cannot add background
+    // load while the two Native runs finish.
+    await other.close();
     const issue = await idle(request, f.chatPath, 2);
     const initialComments = await json(await request.get(`/api/issues/${issue.id}/comments`));
     expect(initialComments.filter((comment: any) => !comment.authorAgentId && comment.body === "Same first message")).toHaveLength(2);
@@ -140,7 +142,6 @@ test("chat first open is read-only; concurrent first sends and retries share one
         await request.get(`/api/companies/${f.company.id}/heartbeat-runs`),
       ),
     ).toHaveLength(count);
-    await other.close();
   } finally {
     await f.restore();
   }
@@ -216,22 +217,30 @@ test("an owner can explicitly recover after source visibility is lost while orig
   try{
     await json(await request.patch("/api/instance/settings/experimental",{data:{analytical_lineage_v8:true,business_metrics_v8:true,management_reviews_v8:true,management_chat_tools_v8:true,enableContextEngineV1:true,ai_use_cases_v7:true,governance_evidence_v7:true}}));
     const original=await json(await request.post(f.chatPath,{data:{}}));
-    await json(await request.post(`/api/issues/${original.id}/comments`,{data:{body:"Private analytical history before source visibility changes",clientRequestId:randomUUID()}}));await idle(request,f.chatPath,1);
-    const source=await json(await request.post(`/api/companies/${f.company.id}/issues`,{data:{title:"Synthetic original canonical metric population",status:"done"}}));
+    await json(await request.post(`/api/issues/${original.id}/comments`,{data:{body:"Private analytical history before source visibility changes",clientRequestId:randomUUID()}}));
+    await idle(request,f.chatPath,1);
+    const priorRuns=await json(await request.get(`/api/companies/${f.company.id}/heartbeat-runs`));
+    const priorRunIds=new Set(priorRuns.map((run:any)=>run.id));
+    const source=await json(await request.post(`/api/companies/${f.company.id}/issues`,{data:{title:"Canonical metric population for chat retention",status:"done"}}));
     const policy=await json(await request.post(`/api/companies/${f.company.id}/governance-obligations`,{data:analyticalPurpose()}));
-    const definition=metricDefinition(policy.id),metric=await json(await request.post(`/api/companies/${f.company.id}/business-metrics`,{data:{key:"browser_source_recovery",definition}}));
+    const session=await json(await request.get("/api/auth/get-session"));
+    const definition=metricDefinition(policy.id);definition.ownerUserId=session.user.id;
+    const metric=await json(await request.post(`/api/companies/${f.company.id}/business-metrics`,{data:{key:"browser_source_recovery",definition}}));
     await json(await request.post(`/api/companies/${f.company.id}/business-metrics/${metric.metric.id}/publish`,{data:{expectedRevision:1,versionId:metric.version.id}}));
-    const now=new Date(),observation=await json(await request.post(`/api/companies/${f.company.id}/business-metrics/query`,{data:{metricId:metric.metric.id,versionId:metric.version.id,from:new Date(now.getTime()-86400000).toISOString(),until:new Date(now.getTime()+1000).toISOString(),dimensions:[],maxRows:100}}));
-    const runs=await json(await request.get(`/api/companies/${f.company.id}/heartbeat-runs`)),run=runs.find((r:any)=>r.contextSnapshot?.issueId===original.id);expect(run).toBeTruthy();
-    const context=await contextManifestService(db).create({companyId:f.company.id,agentId:f.agent.id,issueId:original.id,runId:run.id,query:"Historical source-retention software fixture",policySnapshot:{softwareFixture:true},selected:[]});
-    const recordId=randomUUID(),bindingId=randomUUID(),expiresAt=new Date(observation.expiresAt),hash=createHash("sha256").update(JSON.stringify(observation)).digest("hex");
-    await db.transaction(async tx=>{
-      await tx.insert(memoryBindings).values({id:bindingId,companyId:f.company.id,key:"browser_retention_fixture",name:"Browser private retention fixture",providerKey:"local"});
-      await tx.insert(memoryRecords).values({id:recordId,companyId:f.company.id,bindingId,providerKey:"local",memoryType:"observation",scopeType:"agent",scopeId:f.agent.id,ownerAgentId:f.agent.id,content:"Private analytical retention root; not verified Task evidence",reviewState:"rejected",verificationState:"unverified",sensitivityLabel:"restricted",confidenceScore:0,importance:0,observedAt:now,expiresAt,createdByActorType:"system",createdByActorId:"browser-retention-fixture"});
-      await tx.insert(analyticalContextRoots).values({companyId:f.company.id,memoryRecordId:recordId,sourceCount:1,contentHash:hash,deletionKey:memoryDeletionKey(f.company.id,"record",recordId),createdAt:now,expiresAt,authorityPins:[{kind:"analytical_evidence",source:{type:"metric_observation",id:observation.id,metricId:observation.metricId,metricVersionId:observation.versionId}}]});
-      await tx.insert(analyticalContextDependencies).values({companyId:f.company.id,memoryRecordId:recordId,sourceManifestId:observation.lineageManifestId});
-      await tx.insert(contextManifestMemoryRoots).values({companyId:f.company.id,manifestId:context.manifest.id,memoryRecordId:recordId,sourceVersion:hash});
-    });
+    const now=new Date(),command={action:"metric",metricId:metric.metric.id,versionId:metric.version.id,from:new Date(now.getTime()-86400000).toISOString(),until:new Date(now.getTime()+1000).toISOString()};
+    const firstMessage=`fixture:${Buffer.from(JSON.stringify(command)).toString("base64url")}`;
+    await json(await request.post(`/api/issues/${original.id}/comments`,{data:{body:firstMessage,clientRequestId:randomUUID()}}));
+    await idle(request,f.chatPath,2);
+    await page.goto(f.route);await expect(page.getByText("Private analytical history before source visibility changes",{exact:true})).toBeVisible();
+    await expect(page.getByText(firstMessage,{exact:true})).toBeVisible();
+    const runs=await json(await request.get(`/api/companies/${f.company.id}/heartbeat-runs`)),run=runs.find((r:any)=>!priorRunIds.has(r.id)&&r.contextSnapshot?.issueId===original.id);expect(run).toBeTruthy();
+    const [observation]=await db.select().from(businessMetricObservations).where(eq(businessMetricObservations.metricId,metric.metric.id));expect(observation).toBeTruthy();
+    const context=await db.select().from(contextManifests).where(eq(contextManifests.runId,run.id)).then(rows=>rows[0]);expect(context).toBeTruthy();
+    const retention=await db.select().from(memoryRecords).where(eq(memoryRecords.createdByActorId,"native_analytical_retention")).then(rows=>rows.find(row=>row.companyId===f.company.id&&row.ownerAgentId===f.agent.id));expect(retention).toBeTruthy();
+    const retainedContext=await db.select().from(contextManifestMemoryRoots).where(eq(contextManifestMemoryRoots.manifestId,context!.id));expect(retainedContext.some(row=>row.memoryRecordId===retention!.id)).toBe(true);
+    const authority=await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.memoryRecordId,retention!.id)).then(rows=>rows[0]);
+    expect(authority?.authorityPins).toContainEqual({kind:"analytical_evidence",source:{type:"metric_observation",id:observation!.id,metricId:metric.metric.id,metricVersionId:metric.version.id}});
+    expect((await db.select().from(analyticalContextDependencies).where(eq(analyticalContextDependencies.memoryRecordId,retention!.id))).map(row=>row.sourceManifestId)).toContain(observation!.lineageManifestId);
     await page.goto(f.route);await expect(page.getByText("Private analytical history before source visibility changes",{exact:true})).toBeVisible();
     await json(await request.patch(`/api/issues/${source.id}`,{data:{hiddenAt:new Date().toISOString()}}));
     const denied=await request.get(f.chatPath);expect(denied.status()).toBe(403);expect((await denied.json()).details.conversationIssueId).toBe(original.id);
@@ -240,8 +249,8 @@ test("an owner can explicitly recover after source visibility is lost while orig
     await page.screenshot({path:test.info().outputPath("source-visibility-lost.png"),fullPage:true});
     await page.getByRole("button",{name:"Start a new conversation"}).click();await expect(page.getByTestId("task-chat-composer-input")).toBeVisible();
     const fresh=await json(await request.get(f.chatPath));expect(fresh.id).not.toBe(original.id);expect((await request.get(`/api/issues/${original.id}/comments`)).status()).toBe(403);
-    expect((await db.select().from(memoryRecords).where(eq(memoryRecords.id,recordId)))[0]!.deletedAt).not.toBeNull();
-    expect((await db.select().from(businessMetricObservations).where(eq(businessMetricObservations.id,observation.id)))[0]!.id).toBe(observation.id);
+    expect((await db.select().from(memoryRecords).where(eq(memoryRecords.id,retention!.id)))[0]!.deletedAt).not.toBeNull();
+    expect((await db.select().from(businessMetricObservations).where(eq(businessMetricObservations.id,observation!.id)))[0]!.id).toBe(observation!.id);
     expect((await db.select().from(businessMetricVersions).where(eq(businessMetricVersions.id,metric.version.id)))[0]!.id).toBe(metric.version.id);
     await page.screenshot({path:test.info().outputPath("source-visibility-fresh-native-chat.png"),fullPage:true});
   }finally{await db.$client.end({timeout:0});await f.restore({collectState:false});}
@@ -389,10 +398,15 @@ test("sidebar discovery, stars, recent agents, configuration links, and drafts s
     await expect(chatLinks).toHaveText(["Alpha"]);
     const compose = nav.getByRole("button", { name: "Chat with an agent", exact: true });
     await compose.click();
-    const picker = page.getByRole("dialog", { name: "Chat with an agent", exact: true });
-    await expect(picker.getByRole("option")).toHaveCount(6);
-    await picker.getByRole("combobox").fill("Beta");
-    await picker.getByRole("combobox").press("Enter");
+    const picker = page.getByRole("dialog", { name: "Choose a Co-worker to ask", exact: true });
+    await expect(
+      picker.getByRole("listbox", { name: "Suggestions" }).getByRole("option"),
+    ).toHaveCount(6);
+    const search = picker.getByRole("combobox", {
+      name: "Search Co-workers by name or role",
+    });
+    await search.fill("Beta");
+    await search.press("Enter");
     await expect(picker).not.toBeVisible();
     await expect(page.getByRole("link", { name: "Configure Beta", exact: true })).toBeVisible();
     expect(await json(await request.get(`/api/companies/${f.company.id}/chats/${f.agents[1].id}`))).toBeNull();
@@ -456,9 +470,12 @@ test("sidebar discovery, stars, recent agents, configuration links, and drafts s
       ),
     ).toEqual(recent);
     await compose.click();
-    await expect(picker.getByRole("combobox")).toHaveValue("");
-    await picker.getByRole("combobox").fill("Beta");
-    await picker.getByRole("combobox").press("Enter");
+    const searchAgain = picker.getByRole("combobox", {
+      name: "Search Co-workers by name or role",
+    });
+    await expect(searchAgain).toHaveValue("");
+    await searchAgain.fill("Beta");
+    await searchAgain.press("Enter");
     await expect(picker).not.toBeVisible();
     await expect(page.getByRole("link", { name: "Configure Beta", exact: true })).toBeVisible();
     await expect(page.getByText("Background activity", { exact: true })).toBeVisible();

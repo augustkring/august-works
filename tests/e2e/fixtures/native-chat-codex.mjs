@@ -157,6 +157,21 @@ function actionAfterHistory(turn, comments) {
     return append();
   }
 
+  if (command.action === "metric") {
+    return tool(turn, "query_business_metric", {
+      metricId: command.metricId,
+      versionId: command.versionId,
+      from: command.from,
+      until: command.until,
+      dimensions: [],
+      maxRows: 100,
+    }, value => {
+      if (value?.isError === true || value?.ok === false || value?.error)
+        return finish(turn, "The current native metric observation was unavailable.");
+      finish(turn, "Observed a current native business metric.");
+    });
+  }
+
   if (command.action === "question") {
     return tool(turn, "call_api", {
       operationId: "GET /api/issues/{id}/interactions", pathParams: { id: turn.issueId },

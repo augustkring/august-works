@@ -12,6 +12,7 @@ import { errorHandler } from "../middleware/index.js";
 import {
   __clearIssueListResponseCacheForTests,
   __getIssueListResponseCacheSizeForTests,
+  __setIssueListResponseCacheMaxEntriesForTests,
   ISSUE_LIST_SERVER_CACHE_MAX_ENTRIES,
   issueRoutes,
 } from "../routes/issues.js";
@@ -34,7 +35,9 @@ describeEmbeddedPostgres("issue list routes assigneeAgentId filter", () => {
 
   beforeAll(async () => {
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-issue-list-routes-");
-    db = createDb(tempDb.connectionString);
+    // Match the production driver default explicitly so the request-storm
+    // regression exercises the actual bounded-pool starvation boundary.
+    db = createDb(tempDb.connectionString, { maxConnections: 10 });
   }, 20_000);
 
   afterEach(async () => {
@@ -593,6 +596,9 @@ describeEmbeddedPostgres("issue list routes assigneeAgentId filter", () => {
         },
       },
     });
+    // Ten simultaneous requests occupy every connection while they hold
+    // current-reader transactions. The leader must compute solely through
+    // its transaction; a query through the outer pool deadlocks here.
     const responses = await Promise.all(Array.from({ length: 10 }, () =>
       request(app)
         .get(`/api/companies/${companyId}/issues`)
@@ -715,14 +721,21 @@ describeEmbeddedPostgres("issue list routes assigneeAgentId filter", () => {
     });
 
     const app = createApp(companyId);
-    for (let index = 0; index < ISSUE_LIST_SERVER_CACHE_MAX_ENTRIES + 5; index += 1) {
-      const res = await request(app)
-        .get(`/api/companies/${companyId}/issues`)
-        .query({ view: "compact", limit: "20", q: `cache-key-${index}` });
-      expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(ISSUE_LIST_SERVER_CACHE_MAX_ENTRIES).toBe(256);
+    const cacheLimit = 8;
+    __setIssueListResponseCacheMaxEntriesForTests(cacheLimit);
+    const responses = [];
+    for (let start = 0; start < cacheLimit + 5; start += 8) {
+      responses.push(...await Promise.all(Array.from(
+        { length: Math.min(8, cacheLimit + 5 - start) },
+        (_, offset) => request(app)
+          .get(`/api/companies/${companyId}/issues`)
+          .query({ view: "compact", limit: "20", q: `cache-key-${start + offset}` }),
+      )));
     }
+    expect(responses.every((res) => res.status === 200), JSON.stringify(responses.map((res) => res.body))).toBe(true);
 
-    expect(__getIssueListResponseCacheSizeForTests()).toBe(ISSUE_LIST_SERVER_CACHE_MAX_ENTRIES);
+    expect(__getIssueListResponseCacheSizeForTests()).toBe(cacheLimit);
   });
 
   it.each([
@@ -1027,7 +1040,7 @@ describeEmbeddedPostgres("issue list routes assigneeAgentId filter", () => {
     });
   });
 
-  it("does not recurse forever when live descendant summaries encounter a parent cycle", async () => {
+  it("fails closed on a cyclic parent graph in live descendant summary requests", async () => {
     const companyId = randomUUID();
     const agentId = randomUUID();
     const parentIssueId = randomUUID();
@@ -1087,10 +1100,8 @@ describeEmbeddedPostgres("issue list routes assigneeAgentId filter", () => {
       .query({ status: "blocked", includeLiveDescendantSummary: "true", limit: "20" });
 
     expect(res.status, JSON.stringify(res.body)).toBe(200);
-    expect(res.body).toHaveLength(1);
-    expect(res.body[0]).toMatchObject({
-      id: parentIssueId,
-      liveDescendantCount: 1,
-    });
+    // Current Task privacy validation rejects malformed ancestry before any
+    // descendant summary can expose a projection from this cyclic graph.
+    expect(res.body).toEqual([]);
   });
 });

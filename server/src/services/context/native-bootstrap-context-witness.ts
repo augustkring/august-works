@@ -79,16 +79,21 @@ export function captureNativeBootstrapContextWitness(input: { companyId: string;
     throw new Error("Native bootstrap Context source set exceeds its bound");
 
   const renderedMarkdownDigest = sha256(input.renderedMarkdown);
+  // `contentHash` is the retained Context owner fingerprint. The rendered
+  // markdown has a separate private witness (`renderedMarkdownDigest`) and is
+  // re-bound to the exact turn context when the source closure is consumed.
+  // Keep this projection byte-for-byte aligned with
+  // `temporalContextContentHash` in native-direct-input.ts so currentness
+  // checks can reconstruct it from the pinned owner rows alone.
   const contentHash = sha256(JSON.stringify({
     manifest: { id: manifest.id, companyId: manifest.companyId, runId: manifest.runId, agentId: manifest.agentId,
       issueId: manifest.issueId, projectId: manifest.projectId, queryHash: manifest.queryHash,
       policySnapshotHash: manifest.policySnapshotHash, createdAt: manifest.createdAt.toISOString() },
     items: [...input.items].sort((a, b) => a.rank - b.rank || a.id.localeCompare(b.id)).map(item => ({ id: item.id,
-      rank: item.rank, provider: item.sourceProvider, ref: item.sourceRef, version: item.sourceVersion,
-      contentHash: item.contentHash, payloadSourceSnapshot: item.payloadSourceSnapshot })),
+      provider: item.sourceProvider, ref: item.sourceRef, version: item.sourceVersion,
+      contentHash: item.contentHash, snapshot: item.payloadSourceSnapshot })),
     roots: [...input.roots].sort((a, b) => a.memoryRecordId.localeCompare(b.memoryRecordId)).map(root => ({
-      memoryRecordId: root.memoryRecordId, sourceVersion: root.sourceVersion, payloadSourceSnapshot: root.payloadSourceSnapshot })),
-    renderedMarkdownDigest, policy, inputs,
+      id: root.memoryRecordId, version: root.sourceVersion, snapshot: root.payloadSourceSnapshot })),
   }));
   const witness = Object.freeze({});
   witnesses.set(witness, { companyId: input.companyId, runId: input.runId, agentId: input.agentId, issueId: input.issueId,

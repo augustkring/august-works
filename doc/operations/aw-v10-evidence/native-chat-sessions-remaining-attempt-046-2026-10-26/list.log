@@ -1,0 +1,5 @@
+Listing tests:
+  [chromium] › agent-chat-sessions.spec.ts:256:1 › feature flag blocks new sends and resets while preserving existing history
+  [chromium] › agent-chat-sessions.spec.ts:292:1 › Stop then queued /new resets unpause the conversation without losing history
+  [chromium] › agent-chat-sessions.spec.ts:385:1 › sidebar discovery, stars, recent agents, configuration links, and drafts survive switching
+Total: 3 tests in 1 file

@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { companyMemberships, contextManifestItems, createDb, documents, documentRevisions, issueDocuments, issues, memoryJobs, memoryRecords, toolInvocations } from "@paperclipai/db";
+import { companyMemberships, contextManifestItems, createDb, documents, documentRevisions, heartbeatRuns, issueDocuments, issues, memoryJobs, memoryRecords, toolInvocations } from "@paperclipai/db";
 import { nativePayloadSourceSnapshotSchema } from "@paperclipai/shared";
 import { canActorReadIssuePrivacy } from "../services/authorization.js";
 import { issueService } from "../services/issues.js";
@@ -53,18 +53,19 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
     };
     const first = await runManagedNativeOpenCodeFixture({ db, connectionString: database.connectionString,
       root, instanceId, onPreserveDebugArtifacts: () => { preserveDebugArtifacts = true; },
+      conversationRoot: true,
       steps: [
         { tool: "write_document", id: ids.documentA, input: { idempotencyKey: randomUUID(), key: documentKey,
           title: "Independent document A", body: "A predates the private Context read.", baseRevisionId: null } },
         { tool: "create_task", id: ids.taskA, input: { idempotencyKey: randomUUID(), title: taskATitle,
-          description: "Independent model-created Task A before the private Context read." } },
+          description: "Independent model-created Task A before the private Context read.", status: "backlog" } },
         { tool: "self_remember", id: ids.memoryA, input: { scope: "company", memoryType: "outcome",
           title: "Earlier shared Memory A", content: "Memory A predates the private Context read.", idempotencyKey: randomUUID() } },
         { tool: "read_context", id: ids.contextR, input: { query: privateRootContent } },
         { tool: "write_document", id: ids.documentB, input: { idempotencyKey: randomUUID(), key: documentKeyB,
           title: "Private-context document B", body: "B follows the private Context read.", baseRevisionId: null } },
         { tool: "create_task", id: ids.taskB, input: { idempotencyKey: randomUUID(), title: taskBTitle,
-          description: `Copied body after governed Context read: ${randomUUID()}.` } },
+          description: `Copied body after governed Context read: ${randomUUID()}.`, status: "backlog" } },
         { tool: "self_remember", id: ids.memoryB, input: { scope: "company", memoryType: "outcome",
           title: "Later shared Memory B", content: "Memory B was produced after private Context selection.",
           idempotencyKey: randomUUID() } },
@@ -188,10 +189,20 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
 
   it("keeps earlier Task A readable while later Task B retains the private source", async () => {
     const { first, taskAId, taskBId, assignedTaskB } = temporal;
+    const [run] = await db.select({ runnerProfileJson: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns)
+      .where(and(eq(heartbeatRuns.companyId, first.companyId), eq(heartbeatRuns.id, first.runId)));
+    const profile = run?.runnerProfileJson && typeof run.runnerProfileJson === "object"
+      ? run.runnerProfileJson as Record<string, unknown> : {};
+    const modelCalls = Array.isArray(profile.nativeAwModelWireIntents)
+      ? profile.nativeAwModelWireIntents.filter(value => value && typeof value === "object") as Array<Record<string, unknown>> : [];
+    expect(modelCalls.length).toBeGreaterThan(0);
+    expect(modelCalls.every(value => value.modelPurpose === "worker_model")).toBe(true);
     const [taskA] = await db.select().from(issues).where(and(eq(issues.companyId, first.companyId), eq(issues.id, taskAId)));
     const [taskB] = await db.select().from(issues).where(and(eq(issues.companyId, first.companyId), eq(issues.id, taskBId)));
     expect(taskA).toBeDefined();
     expect(taskB).toBeDefined();
+    expect(taskA).toMatchObject({ status: "backlog", parentId: null });
+    expect(taskB).toMatchObject({ status: "backlog", parentId: null });
     expect(await canActorReadIssuePrivacy(db, first.bobActor, taskA!)).toBe(true);
     expect(await canActorReadIssuePrivacy(db, first.aliceActor, taskB!)).toBe(true);
     expect(assignedTaskB.assigneeUserId).toBe(first.bobUserId);

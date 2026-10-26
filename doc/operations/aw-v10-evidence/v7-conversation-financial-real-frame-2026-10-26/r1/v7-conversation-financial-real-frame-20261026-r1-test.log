@@ -1,0 +1,96 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts (31 tests | 6 failed | 25 skipped) 156617ms
+     × binds live reservations to the actual Human session and current conversation generation 30527ms
+     × settles the actual qualified conversation usage once and preserves the exact debit in canonical purge 276ms
+     × allows the last exact-budget dispatch and rejects the next reservation 30306ms
+     × dispatches the 64th actual funded call and refuses the 65th 30301ms
+     × rolls back settlement if an actual reservation receipt is preempted, then settles once 30263ms
+     × retains an actual unknown conversation hold and blocks canonical company purge 30302ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > binds live reservations to the actual Human session and current conversation generation
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:493:5
+    491|       maxOutputTokens: 1,
+    492|     });
+    493|     itNativeConversation("binds live reservations to the actual Human …
+       |     ^
+    494|       let exercised = false;
+    495|       const result = await conversationReservationFixture(async facts …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > settles the actual qualified conversation usage once and preserves the exact debit in canonical purge
+ReferenceError: Cannot access 'tariff' before initialization
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:518:53
+    516|     itNativeConversation("settles the actual qualified conversation us…
+    517|       const factsHolder: { value: ConversationFrameFacts | null } = { …
+    518|       const usagePricedTariff: ModelTariffCeiling = { ...tariff(), pro…
+       |                                                     ^
+    519|         inputMinorPerMillion: 1000, outputMinorPerMillion: 2000, fixed…
+    520|         qualificationHash: "b".repeat(64), expiresAt: new Date(Date.no…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > allows the last exact-budget dispatch and rejects the next reservation
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:555:5
+    553|       expect(await db.select().from(issues).where(eq(issues.id, result…
+    554|     });
+    555|     itNativeConversation("allows the last exact-budget dispatch and re…
+       |     ^
+    556|       let denied = false;
+    557|       const result = await conversationReservationFixture(async facts …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > dispatches the 64th actual funded call and refuses the 65th
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:570:5
+    568|       expect(result.reservation).toMatchObject({ status: "completed", …
+    569|     });
+    570|     itNativeConversation("dispatches the 64th actual funded call and r…
+       |     ^
+    571|       let boundaryPassed = false;
+    572|       const result = await conversationReservationFixture(async facts …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > rolls back settlement if an actual reservation receipt is preempted, then settles once
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:592:5
+    590|       expect(result.providerCallCount).toBeGreaterThan(0);
+    591|     });
+    592|     itNativeConversation("rolls back settlement if an actual reservati…
+       |     ^
+    593|       let conflictRolledBack = false;
+    594|       const result = await conversationReservationFixture(async facts …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > retains an actual unknown conversation hold and blocks canonical company purge
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:616:5
+    614|       expect(receipt).toMatchObject({ costCents: 1, costStatus: "estim…
+    615|     });
+    616|     itNativeConversation("retains an actual unknown conversation hold …
+       |     ^
+    617|       const dispatchedFacts: { value: ConversationFrameFacts | null } …
+    618|       const result = await conversationReservationFixture(async facts …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 failed | 25 skipped (31)
+   Start at  13:49:21
+   Duration  174.16s (transform 12.31s, setup 96ms, import 17.29s, tests 156.62s, environment 0ms)
+

@@ -256,12 +256,14 @@ export async function idle(
       async () => {
         issue = await json(await request.get(chatPath));
         if (!issue) return false;
-        const replies = await json(
-          await request.get(`/api/issues/${issue.id}/comments`),
-        );
-        const live = await json(
-          await request.get(`/api/issues/${issue.id}/live-runs`),
-        );
+        const [replies, live] = await Promise.all([
+          request
+            .get(`/api/issues/${issue.id}/comments`)
+            .then(json),
+          request
+            .get(`/api/issues/${issue.id}/live-runs`)
+            .then(json),
+        ]);
         lastDiagnostic = JSON.stringify({
           issueId: issue.id,
           status: issue.status,
