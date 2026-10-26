@@ -9,7 +9,7 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: en
-last_verified_at: 2026-10-25
+last_verified_at: 2026-10-26
 review_trigger: Export scope, deletion, retention, or private Memory sharing and source access changes
 security_or_privacy_sensitive: true
 linked_source_files: [ui/src/pages/CompanyExport.tsx, ui/src/pages/SaasDeletion.tsx, ui/src/pages/SaasAccount.tsx, server/src/services/saas/account-deletion.ts, server/src/services/saas/offboarding.ts, server/src/services/saas/company-purge.ts, ui/src/pages/Memory.tsx, server/src/routes/memory.ts, server/src/services/memory/memory-service.ts, server/src/services/memory/memory-privacy.ts, server/src/services/memory/memory-jobs.ts, server/src/services/native-runtime/runtime-asset-retention.ts, server/src/services/native-local-process-stop.ts, server/src/services/heartbeat.ts]
@@ -39,5 +39,7 @@ If an earlier request has an unknown result, use the recovery shown on the accou
 Where Memory is enabled, a proposed private share shows the exact content and destination. Review both before choosing **Approve and share**. Only the original owner can approve the share from their current account. Ordinary Memory review does not expand access to private sources.
 
 The private original stays private. Recipients still need current access to the destination and retained sources; sharing Memory does not publish an underlying private Task. A shared copy can become unavailable if its source changes, expires, is withdrawn, or is deleted. A saved result may also lose text it copied from a source when that source is deleted. This does not delete an independent task or document written by a person just because the result is linked to it. Deleting the shared copy does not delete the private original.
+
+When you add evidence to an existing Human-created Memory item, Blentera checks your current account and every original and new Task source again. If any source is no longer current or accessible, the update is blocked and the existing source restrictions remain in place.
 
 Choosing **Forget permanently** deletes the selected Memory content and its derived correction or sharing records. If that Memory came from a managed OpenCode run, Blentera also queues erasure of the run's app-managed runtime files. That file cleanup waits until Native confirms the run has stopped; provider-held data outside Blentera's managed runtime storage is not covered by this action.

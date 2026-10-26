@@ -336,6 +336,27 @@ describePg("Memory routes", () => {
         sealedSnapshot.policy,sealedSnapshot.inputs),payloadSourceSnapshotInvalidated:false})
         .where(sql`${memoryRecords.id}=${candidate.body.record.id}::uuid`);
     })).rejects.toThrow();
+    await expect(db.transaction(async rawTx=>{
+      const tx=rawTx as unknown as ReturnType<typeof createDb>;
+      await tx.insert(memoryEvidence).values({companyId:seeded.companyId,memoryRecordId:candidate.body.record.id,
+        sourceClass:"task",sourceProvider:"august_works_tasks",sourceType:"issue",
+        sourceRef:`issue://${seeded.contradictionSourceIssue.id}`,sourceVersion:seeded.contradictionSourceIssue.updatedAt.toISOString(),
+        sourceUpdatedAt:seeded.contradictionSourceIssue.updatedAt,observedAt:new Date(),
+        excerptHash:createHash("sha256").update("Reseal must preserve body.").digest("hex"),citationJson:{label:"Task evidence"},
+        trustLevel:"high",supportsOrContradicts:"supports"});
+      const changedTitle="Forged title during reseal";
+      const changedContent="Forged content during reseal";
+      const changedBody=sql`jsonb_set(jsonb_set(to_jsonb(${memoryRecords}),'{title}',to_jsonb(${changedTitle})),
+        '{content}',to_jsonb(${changedContent}))`;
+      const forgedSnapshot=sql`(with payload as (select jsonb_build_object('version',1,'owner',jsonb_build_object(
+        'kind','memory_record','companyId',${seeded.companyId}::text,'id',${candidate.body.record.id}::text,
+        'contentHash',public.aw_native_payload_body_hash('memory_record',${changedBody})),
+        'policy',${JSON.stringify(sealedSnapshot.policy)}::jsonb,'inputs',${JSON.stringify(sealedSnapshot.inputs)}::jsonb) value)
+        select value||jsonb_build_object('digest',encode(sha256(convert_to(value::text,'UTF8')),'hex')) from payload)`;
+      await tx.update(memoryRecords).set({title:changedTitle,content:changedContent,
+        payloadSourceSnapshot:forgedSnapshot,payloadSourceSnapshotInvalidated:false})
+        .where(sql`${memoryRecords.id}=${candidate.body.record.id}::uuid`);
+    })).rejects.toThrow();
 
     const pending = await http
       .get(`/api/companies/${seeded.companyId}/memory/records?reviewState=pending`)

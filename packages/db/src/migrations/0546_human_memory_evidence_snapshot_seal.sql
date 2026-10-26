@@ -18,7 +18,7 @@ BEGIN
       IF owner_kind='memory_record' THEN
         -- The evidence invalidation trigger may retain a stale snapshot as an
         -- inaccessible monotonicity witness. It cannot change any other field.
-        IF OLD.created_by_actor_type='user' AND OLD.payload_source_protocol_version=1
+        IF to_jsonb(OLD)->>'created_by_actor_type'='user' AND OLD.payload_source_protocol_version=1
           AND OLD.payload_source_snapshot IS NOT NULL AND OLD.payload_source_snapshot_invalidated=false
           AND NEW.payload_source_snapshot_invalidated=true
           AND NEW.payload_source_snapshot IS NOT DISTINCT FROM OLD.payload_source_snapshot
@@ -26,10 +26,34 @@ BEGIN
           AND (to_jsonb(NEW)-'payload_source_snapshot_invalidated')=(to_jsonb(OLD)-'payload_source_snapshot_invalidated') THEN
           RETURN NEW;
         END IF;
-        IF OLD.created_by_actor_type='user' AND OLD.payload_source_protocol_version=1
+        IF to_jsonb(OLD)->>'created_by_actor_type'='user' AND OLD.payload_source_protocol_version=1
           AND OLD.payload_source_snapshot IS NOT NULL AND OLD.payload_source_snapshot_invalidated=true
           AND NEW.payload_source_snapshot_invalidated=false AND NEW.payload_source_snapshot IS NOT NULL THEN
           snapshot := NEW.payload_source_snapshot;
+          -- Source fields are merged in the preceding invalidated state. The
+          -- final reseal itself may only replace the snapshot and clear its
+          -- marker; it cannot change the already-bound body or owner fields.
+          IF (to_jsonb(NEW)-ARRAY['payload_source_snapshot','payload_source_snapshot_invalidated','updated_at'])
+              IS DISTINCT FROM
+             (to_jsonb(OLD)-ARRAY['payload_source_snapshot','payload_source_snapshot_invalidated','updated_at']) THEN
+            RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Human Memory evidence seal cannot change its body or owner';
+          END IF;
+          IF jsonb_typeof(OLD.payload_source_snapshot->'inputs') IS DISTINCT FROM 'array'
+            OR jsonb_typeof(snapshot->'inputs') IS DISTINCT FROM 'array' THEN
+            RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Human Memory evidence seal requires Task source history';
+          END IF;
+          IF (CASE WHEN jsonb_typeof(OLD.payload_source_snapshot->'inputs')='array'
+              THEN jsonb_array_length(OLD.payload_source_snapshot->'inputs')>0 ELSE false END) IS NOT TRUE
+            OR (CASE WHEN jsonb_typeof(snapshot->'inputs')='array'
+              THEN jsonb_array_length(snapshot->'inputs')>0 ELSE false END) IS NOT TRUE THEN
+            RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Human Memory evidence seal requires Task source history';
+          END IF;
+          IF EXISTS (SELECT 1 FROM jsonb_array_elements(OLD.payload_source_snapshot->'inputs') AS e(item)
+              WHERE e.item->>'kind' IS DISTINCT FROM 'task')
+            OR EXISTS (SELECT 1 FROM jsonb_array_elements(snapshot->'inputs') AS e(item)
+              WHERE e.item->>'kind' IS DISTINCT FROM 'task') THEN
+            RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Human Memory evidence seal accepts only Task sources';
+          END IF;
           row_data := to_jsonb(NEW);
           IF jsonb_typeof(snapshot) IS DISTINCT FROM 'object'
             OR snapshot->'version' IS DISTINCT FROM '1'::jsonb
@@ -53,7 +77,7 @@ BEGIN
       RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Native payload source invalidation marker is server-owned';
     END IF;
     IF OLD.payload_source_snapshot_invalidated THEN
-      IF owner_kind='memory_record' AND OLD.created_by_actor_type='user'
+      IF owner_kind='memory_record' AND to_jsonb(OLD)->>'created_by_actor_type'='user'
         AND OLD.payload_source_protocol_version=1 AND OLD.payload_source_snapshot IS NOT NULL
         AND NEW.payload_source_snapshot_invalidated=true
         AND NEW.payload_source_snapshot IS NOT DISTINCT FROM OLD.payload_source_snapshot

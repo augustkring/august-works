@@ -1,0 +1,12 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+[01:54:03] [34mDEBUG[39m: [36msafe authenticated GET observed[39m [90m{"event":"safe_get_request_observed","route":"GET /api/companies/:companyId/issues","companyId":"22222222-2222-4222-8222-222222222222","actorType":"board","actorIdentityHash":"XN4PTXATtrJGeunk","clientHash":"tyW0XNaQNMuB9rot","cacheKeyHash":"1Cq3EVLDn-1ZCSn3","queryKeys":["excludeRoutineExecutions","includeBlockedBy","includeBlockedInboxAttention","includeLiveDescendantSummary","includePluginOperations","includeRoutineExecutions","limit","offset"],"requestCount":1,"durationMs":10,"statusCode":200,"responseBytes":509,"compressedBytes":null,"contentEncoding":null,"cacheStatus":"miss","etagOutcome":"none","referer":null,"visibilityHint":null}[39m
+[01:54:03] [34mDEBUG[39m: [36msafe authenticated GET observed[39m [90m{"event":"safe_get_request_observed","route":"GET /api/companies/:companyId/issues","companyId":"22222222-2222-4222-8222-222222222222","actorType":"board","actorIdentityHash":"XN4PTXATtrJGeunk","clientHash":"tyW0XNaQNMuB9rot","cacheKeyHash":"1Cq3EVLDn-1ZCSn3","queryKeys":["excludeRoutineExecutions","includeBlockedBy","includeBlockedInboxAttention","includeLiveDescendantSummary","includePluginOperations","includeRoutineExecutions","limit","offset"],"requestCount":1,"durationMs":3,"statusCode":200,"responseBytes":2,"compressedBytes":null,"contentEncoding":null,"cacheStatus":"miss","etagOutcome":"none","referer":null,"visibilityHint":null}[39m
+-··-------------------------------------------------------------------------------------------------------------------------
+
+ Test Files  1 passed (1)
+      Tests  2 passed | 122 skipped (124)
+   Start at  01:53:50
+   Duration  13.51s (transform 11.04s, setup 77ms, import 13.21s, tests 89ms, environment 0ms)
+

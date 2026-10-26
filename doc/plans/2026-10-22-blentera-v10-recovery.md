@@ -1970,3 +1970,10 @@ Seven targeted built-UI browser cases pass on system Chromium: AgentMail, all fo
 The actual managed runtime now passes the former Context timing obstruction and reaches provider response4. The subsequent second Memory tool call has no original qualified invocation receipt; it fails before the authority executes. Its original error and temporal parent-Task source relation are being traced. This is not a passing A/R/B or erasure journey. Private-work admission and the remaining constructor/delivery matrix remain open.
 
 Temporary overlay exhaustion interrupted several checks. Only unused Docker build cache was reclaimed; existing images/container, source, Git objects, dependencies and logs were preserved. One interrupted test-file write was restored from the complete pushed2483b506a body and its small fixture hunk reapplied. Current source snapshotting was rerun and hash-verified before checks resumed. Interrupted/no-sidecar attempts are not represented as test passes.
+
+
+### 2026-10-26 — Remote preservation and current qualification limits
+
+Checkpoint `2d55a01a9` is pushed to draft PR #42, preserving the current source, forward migration SQL and generated metadata, plus focused success and failure evidence. The full workspace typecheck passed on its retained source pins before subsequent source edits; its raw output and the original migration metadata generation attempts are archived under `current-typecheck-and-migration-metadata-2026-10-26`. These are scoped historical results, not a final unchanged-head pass.
+
+Company-scope routes pass2/2 and the low-trust route suite passes9/9 on their retained current-source fixture pins. Human Project source ownership passes15/15 and manual Human Memory evidence routes pass6/6. Actual managed runtime B tool completion, the four temporal/source-erasure cases, final whole-workspace checks and remaining CI failures are still open. No merge readiness or completed full brief is claimed.

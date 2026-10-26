@@ -127,6 +127,9 @@ import {
   heartbeatRuns,
   completionContracts,
   executionWorkspaces,
+  assets,
+  issueAttachments,
+  issueComments,
   issueDocuments,
   issueThreadInteractions,
   issues,
@@ -7319,6 +7322,28 @@ async function nativeTurnFrameMatchesSourceClosure(tx: Parameters<Parameters<Db[
     return no("workspace_task_binding");
   if (!await canActorReadIssuePrivacy(tx, sourceActor, currentTask)) return no("workspace_task_acl");
   await assertAnalyticalContextPayloadAccess(tx as unknown as Db, run.companyId, sourceActor, { issueId: run.nativeIssueId! });
+  if (attachmentStage) {
+    for (const capture of attachmentStage.sourceCaptures) {
+      const source = capture.input;
+      if (source.disposition !== "delivered" || !source.assetId || !source.sha256 || source.byteSize === null)
+        return no("attachment_not_delivered");
+      const [owner] = await tx.select({ attachment: issueAttachments, asset: assets }).from(issueAttachments)
+        .innerJoin(assets, and(eq(assets.companyId, issueAttachments.companyId), eq(assets.id, issueAttachments.assetId)))
+        .where(and(eq(issueAttachments.companyId, run.companyId), eq(issueAttachments.issueId, source.issueId),
+          eq(issueAttachments.id, source.attachmentId)));
+      if (!owner || owner.attachment.payloadSourceSnapshotInvalidated ||
+        !isDeepStrictEqual(owner.attachment.payloadSourceSnapshot, capture.payloadSourceSnapshot) ||
+        owner.attachment.issueCommentId !== source.commentId || owner.asset.id !== source.assetId ||
+        owner.asset.sha256 !== source.sha256 || owner.asset.byteSize !== source.byteSize)
+        return no("attachment_source_changed");
+      if (source.commentId) {
+        const [comment] = await tx.select({ id: issueComments.id }).from(issueComments).where(and(
+          eq(issueComments.companyId, run.companyId), eq(issueComments.issueId, source.issueId),
+          eq(issueComments.id, source.commentId), isNull(issueComments.deletedAt)));
+        if (!comment) return no("attachment_comment_erased");
+      }
+    }
+  }
   if (frame.planningContext !== null) return no("envelope_planning_context");
   const interactionSources = closure.sourceSet.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "interaction" }> =>
     source.kind === "interaction");
@@ -7452,7 +7477,7 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
     if (profile.nativeOpenCodeSourceAuthority && !sourceClosureMatches)
       throw new Error("managed_opencode_source_prompt_closure_unavailable");
     stage = "receipt_validation";
-    if (sourceClosureMatches && run.nativeInputSourceProtocolVersion === 0 && typeof run.responsibleUserId === "string" && run.responsibleUserId.length > 0 &&
+    if (sourceClosure && sourceClosureMatches === true && run.nativeInputSourceProtocolVersion === 0 && typeof run.responsibleUserId === "string" && run.responsibleUserId.length > 0 &&
       profile.nativeExecutionInput !== undefined && profile.nativeInputSourceReceipt === undefined && noPriorNativeEffects) {
       const bootstrap = {
         executionInputDigest: await postgresJsonbSha256(tx, profile.nativeExecutionInput),
@@ -7469,7 +7494,7 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
       const candidate = { ...unsigned, digest: await postgresJsonbSha256(tx, unsigned) };
       const parsed = nativeRunInputSourceReceiptSchema.safeParse(candidate);
       if (parsed.success) receipt = parsed.data;
-    } else if (sourceClosureMatches && existingReceipt.success && typeof run.responsibleUserId === "string" &&
+    } else if (sourceClosure && sourceClosureMatches === true && existingReceipt.success && typeof run.responsibleUserId === "string" &&
       existingReceipt.data.binding.responsibleUserId === run.responsibleUserId) {
       const bootstrapSetHash = nativeSha256({ policy: existingReceipt.data.bootstrap.policy, inputs: existingReceipt.data.bootstrap.inputs });
       const preparedSetHash = nativeSha256(sourceClosure.sourceSet);
@@ -7492,7 +7517,7 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
       const priorPrompts = sourceAuthority.authorizedPromptHashes;
       const promptHash = nativeSha256(input.turnInput.message.text);
       const priorBindings = sourceAuthority.promptSourceBindings;
-      if (!sourceClosureMatches || !receipt || !Array.isArray(priorPrompts) || priorPrompts.length >= 64 ||
+      if (!sourceClosure || sourceClosureMatches !== true || !receipt || !Array.isArray(priorPrompts) || priorPrompts.length >= 64 ||
         priorPrompts.some(hash => typeof hash !== "string" || !/^[0-9a-f]{64}$/.test(hash)) ||
         !Array.isArray(priorBindings) || priorBindings.length >= 64 ||
         priorBindings.some(value => !value || typeof value !== "object" || typeof record(value).promptHash !== "string" ||
@@ -7510,44 +7535,6 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
     const nextProfile = { ...profile, nativeModelInputDispatchIntents: intents,
       ...(nativeOpenCodeSourceAuthority ? { nativeOpenCodeSourceAuthority } : {}),
       ...(receipt ? { nativeInputSourceReceipt: receipt } : {}) };
-    if (input.bootstrapSourceClosure?.sourceSet.inputs.some(source => source.kind === "attachment")) {
-      const authorityDiagnostic = record(nextProfile.nativeOpenCodeSourceAuthority);
-      await tx.execute(sql`savepoint native_protocol_gate_diagnostic`);
-      let storedBootstrapPredicate: boolean | null = null;
-      try {
-        const [row] = await tx.execute<{ matches: boolean }>(sql`
-          select public.aw_native_current_attachment_stage_matches(${JSON.stringify(nextProfile)}::jsonb,
-            ${run.companyId}::uuid,${run.id}::uuid,${run.agentId}::uuid,${run.nativeIssueId}::uuid,
-            ${run.responsibleUserId},${JSON.stringify(receipt?.bootstrap.inputs ?? [])}::jsonb,
-            ${JSON.stringify(intents[0])}::jsonb) as matches`);
-        storedBootstrapPredicate = row?.matches === true;
-        await tx.execute(sql`release savepoint native_protocol_gate_diagnostic`);
-      } catch {
-        await tx.execute(sql`rollback to savepoint native_protocol_gate_diagnostic`);
-      }
-      console.error("native input protocol gate diagnostics", {
-        oldProtocolZero: run.nativeInputSourceProtocolVersion === 0,
-        newProtocolOne: run.nativeInputSourceProtocolVersion === 0,
-        nativeRuntime: run.runtimeMode === "native", running: run.status === "running",
-        oldExecutionInput: Object.hasOwn(profile, "nativeExecutionInput"),
-        executionInputEqual: isDeepStrictEqual(profile.nativeExecutionInput, nextProfile.nativeExecutionInput),
-        oldDispatchIntentsAbsent: !Object.hasOwn(profile, "nativeModelInputDispatchIntents"),
-        oldToolAssociationsAbsent: !Object.hasOwn(profile, "nativeToolCallDispatchAssociations"),
-        oldToolResultsAbsent: !Object.hasOwn(profile, "nativeToolResultSourceCaptures"),
-        stagePresent: Object.hasOwn(profile, "nativeAttachmentStageSources"), receiptPresent: Object.hasOwn(nextProfile, "nativeInputSourceReceipt"),
-        intentsArray: Array.isArray(nextProfile.nativeModelInputDispatchIntents),
-        oneIntent: Array.isArray(nextProfile.nativeModelInputDispatchIntents) && nextProfile.nativeModelInputDispatchIntents.length === 1,
-        triggerNotSynthetic: run.triggerDetail !== "provider_conformance" && run.triggerDetail !== "agent_safe_test",
-        storedBootstrapPredicate,
-        receiptInputMatchesClosure: isDeepStrictEqual(receipt?.bootstrap.inputs, input.bootstrapSourceClosure.sourceSet.inputs),
-        stageEventSeq: attachmentStage?.eventSeq ?? null, dispatchEventSeq: input.eventSeq,
-        stageAttempt: attachmentStage?.attempt ?? null, dispatchAttempt: input.attempt,
-        stageCurrentIdentity: attachmentStage?.eventSeq === input.eventSeq && attachmentStage?.attempt === input.attempt,
-        authorityActive: authorityDiagnostic.version === 1,
-        authorityInputHashMatches: authorityDiagnostic.executionInputHash === nativeSha256(profile.nativeExecutionInput),
-        authorityStageHashMatches: authorityDiagnostic.attachmentStageHash === attachmentStage?.stageHash,
-      });
-    }
     stage = "intent_persist";
     const [stored] = await tx.update(heartbeatRuns).set({
       runnerProfileJson: nextProfile,
@@ -7575,34 +7562,6 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
   }).catch((error: unknown) => {
     // A driver's query/params can include the existing private run profile.
     // Keep only our finite control errors; never propagate raw DB diagnostics.
-    const safeCause = record(record(error).cause);
-    const safeConstraint = safeCause.constraint;
-    const safeMessages = ["Erased native run inputs cannot be restored", "Native run erasure marker conflict",
-      "Native run input receipt cannot be removed", "Native run input receipt requires a native protocol writer and input",
-      "Malformed native run input receipt", "Native run input receipt bounds or digest mismatch",
-      "Native run input receipt owner mismatch", "Native run bootstrap input digest mismatch",
-      "Native run receipt must accompany its first input capture",
-      "Native first receipt requires one unacknowledged actual input intent",
-      "Native run bootstrap capture is immutable", "Native run input captures are append-only",
-      "Malformed native run input capture", "Native run input captures are append-only",
-      "Native run input capture Human mismatch", "Malformed native input digest",
-      "Native dispatch source capture requires one exact acknowledged input", "Malformed native input policy vectors",
-      "Malformed native input policy vector", "Duplicate native input policy identity", "Malformed native input policy identity",
-      "Native input capture exceeds source bounds", "Duplicate native captured input", "Malformed native captured input",
-      "Native run receipt exceeds distinct source bounds", "Native input source protocol requires the first actual native frame receipt",
-      "Native input source protocol requires an unacknowledged current Human intent",
-      "Synthetic probes cannot claim native input source protocol"];
-    const safeMessageIndices: number[] = [];
-    let causeCursor: unknown = error;
-    for (let depth = 0; depth < 6 && causeCursor; depth++) {
-      const messageIndex = safeMessages.indexOf(String(record(causeCursor).message));
-      if (messageIndex >= 0) safeMessageIndices.push(messageIndex);
-      causeCursor = record(causeCursor).cause;
-    }
-    console.error("native dispatch persistence diagnostic", { stage,
-      pgCode: typeof safeCause.code === "string" && /^[0-9A-Z]{5}$/.test(safeCause.code) ? safeCause.code : null,
-      constraint: typeof safeConstraint === "string" && /^[a-z0-9_]{1,120}$/.test(safeConstraint) ? safeConstraint : null,
-      safeMessageIndices });
     const message = error instanceof Error ? error.message : "";
     throw new Error([
       "native_session_lease_lost", "native_session_lease_ttl_invalid",

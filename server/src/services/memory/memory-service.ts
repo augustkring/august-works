@@ -1035,9 +1035,13 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
             &&targetMetadata.nativeManagedMemoryArgumentsHash===undefined;
           const priorTaskEvidence=humanManualTaskTarget?await txDb.select({sourceClass:memoryEvidence.sourceClass,
             sourceProvider:memoryEvidence.sourceProvider,sourceType:memoryEvidence.sourceType,sourceRef:memoryEvidence.sourceRef,
-            sourceVersion:memoryEvidence.sourceVersion,sourceUpdatedAt:memoryEvidence.sourceUpdatedAt})
+            sourceVersion:memoryEvidence.sourceVersion,sourceUpdatedAt:memoryEvidence.sourceUpdatedAt,
+            observedAt:memoryEvidence.observedAt,excerptHash:memoryEvidence.excerptHash,
+            citation:memoryEvidence.citationJson,trustLevel:memoryEvidence.trustLevel,
+            relation:memoryEvidence.supportsOrContradicts})
             .from(memoryEvidence).where(and(eq(memoryEvidence.companyId,companyId),eq(memoryEvidence.memoryRecordId,target.id))):[];
-          const allTaskEvidence=[...priorTaskEvidence.map(item=>({...item,sourceUpdatedAt:item.sourceUpdatedAt?.toISOString()??null})),
+          const allTaskEvidence=[...priorTaskEvidence.map(item=>({...item,sourceUpdatedAt:item.sourceUpdatedAt?.toISOString()??null,
+            observedAt:item.observedAt.toISOString()})),
             ...resolution.novelEvidence];
           const provenance=await captureMemorySources(txDb,companyId,memorySourceActor(companyId,actor),parsed.data.scope,
             [...sourceMemoryIds,...(humanManualTaskTarget?target.sourceMemoryIds:[])],humanManualTaskTarget?allTaskEvidence:[]);

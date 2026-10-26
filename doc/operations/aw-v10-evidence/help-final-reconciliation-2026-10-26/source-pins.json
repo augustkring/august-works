@@ -1,0 +1,14 @@
+{
+  "checkedOutCommit": "d61ce8aed8ecc9da7e3c6c56f12b171e0e5aee61",
+  "pins": {
+    "docs/help/export-and-delete.md": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
+    "docs/da/help/export-and-delete.md": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
+    "docs/help/change-review.json": "656b201146adf31405c4d11ca4a1a152d82f645cb771e6934bf3a2dbfce81041",
+    "server/src/services/company-search-help.generated.ts": "503f2c88be437c40753b9e5886832ce623fc469f21cd75244f446ef821ff6cce",
+    "server/src/services/memory/memory-service.ts": "eb37819c41c0fc32b8a0717c993bcb77583b6e62dea7882d55e394c8e649de21",
+    "server/src/services/memory/memory-jobs.ts": "67e1040ab671e47e72a67253cdc15cb056eaa112d72065a8c29f7c2011b91ecc",
+    "server/src/services/heartbeat.ts": "3b08cf3ca670657805bce4bd45ee09f7a8ec22fc1fe8ac7722ff02f83670056c",
+    "server/src/routes/projects.ts": "5638d81454f9f7bee6789803ee06eb2c6968a5fde2e0e4dd30771382b580e28b",
+    "server/src/services/projects.ts": "ca343d047070351c1795b37f4899c3044548f8cca223bd804ed1c1874066fb9a"
+  }
+}

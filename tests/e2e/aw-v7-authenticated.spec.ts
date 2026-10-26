@@ -111,8 +111,8 @@ test("V7 discovery answers, readiness and governance remain human reviewed and c
       ["Foreseeable misuse (one per line)", "Unreviewed drafts could be mistaken for approved business facts"],
       ["Who makes the system available?", "August Works"],
       ["Whose name or trademark is used?", "Browser fixture company"],
-      ["Who defines intended purpose?", "The company owner"],
-      ["Who integrates or customizes it?", "The company administrator"],
+      ["Who defines the intended purpose?", "The company owner"],
+      ["Who integrates or customizes the system?", "The company administrator"],
       ["Retention purpose", "Retain reviewed business drafts and their audit evidence"],
     ]) await page.getByLabel(label, { exact: true }).fill(value);
     const registered = page.waitForResponse((r) => r.url().includes(`${api}/ai-use-cases`) && r.request().method() === "POST");

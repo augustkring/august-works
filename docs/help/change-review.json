@@ -104,7 +104,7 @@
       "sourceSha256": "1a2b3d7becdbb50b9ff8c12dfc4cd7071795fa3474fd7cc22c879093cdb3e5aa",
       "articleSha256": "ce2b7703039362ccc1a7747cfb7b11bb189be5d72007cd6297e5ac49d200fe82",
       "decision": "updated",
-      "rationale": "The Access step discloses that Slack consent authorizes the signed-in person and that organization sharing shares that person\u2019s connection; setup retains managed and advanced own-app choices."
+      "rationale": "The Access step discloses that Slack consent authorizes the signed-in person and that organization sharing shares that person’s connection; setup retains managed and advanced own-app choices."
     },
     {
       "source": "ui/src/pages/apps/app-detail/PermissionsPanel.tsx",
@@ -120,7 +120,7 @@
       "sourceSha256": "2c5de01bbf0adc3eb74f4d8678055cf8b15a5fe69946453ffcb4bdc2f4746608",
       "articleSha256": "ce2b7703039362ccc1a7747cfb7b11bb189be5d72007cd6297e5ac49d200fe82",
       "decision": "updated",
-      "rationale": "The paired article directs administrators to inspect an app\u2019s active connection and permissions before asking a Co-worker to use it."
+      "rationale": "The paired article directs administrators to inspect an app’s active connection and permissions before asking a Co-worker to use it."
     },
     {
       "source": "ui/src/pages/apps/AppNotConnected.tsx",
@@ -128,7 +128,7 @@
       "sourceSha256": "218b58f14a1feb713347afaf7760ac3549ccf20bb0be5259073015376c0ecd3b",
       "articleSha256": "ce2b7703039362ccc1a7747cfb7b11bb189be5d72007cd6297e5ac49d200fe82",
       "decision": "updated",
-      "rationale": "The paired article covers this screen\u2019s unavailable-connection recovery through the same provider sign-in and permission review, without promising reconnection is always available."
+      "rationale": "The paired article covers this screen’s unavailable-connection recovery through the same provider sign-in and permission review, without promising reconnection is always available."
     },
     {
       "source": "ui/src/pages/apps/Connections.tsx",
@@ -192,7 +192,7 @@
       "sourceSha256": "1a2b3d7becdbb50b9ff8c12dfc4cd7071795fa3474fd7cc22c879093cdb3e5aa",
       "articleSha256": "0c498d8afe04b324bf1ef354b4a717e8952f6e8907d11ba37a9206a2ffe3c7f9",
       "decision": "updated",
-      "rationale": "Danish version checked against the current UI: The Access step discloses that Slack consent authorizes the signed-in person and that organization sharing shares that person\u2019s connection; setup retains managed and advanced own-app choices."
+      "rationale": "Danish version checked against the current UI: The Access step discloses that Slack consent authorizes the signed-in person and that organization sharing shares that person’s connection; setup retains managed and advanced own-app choices."
     },
     {
       "source": "ui/src/pages/apps/app-detail/PermissionsPanel.tsx",
@@ -208,7 +208,7 @@
       "sourceSha256": "2c5de01bbf0adc3eb74f4d8678055cf8b15a5fe69946453ffcb4bdc2f4746608",
       "articleSha256": "0c498d8afe04b324bf1ef354b4a717e8952f6e8907d11ba37a9206a2ffe3c7f9",
       "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: The paired article directs administrators to inspect an app\u2019s active connection and permissions before asking a Co-worker to use it."
+      "rationale": "Danish version checked against the same current source behavior: The paired article directs administrators to inspect an app’s active connection and permissions before asking a Co-worker to use it."
     },
     {
       "source": "ui/src/pages/apps/AppNotConnected.tsx",
@@ -216,7 +216,7 @@
       "sourceSha256": "218b58f14a1feb713347afaf7760ac3549ccf20bb0be5259073015376c0ecd3b",
       "articleSha256": "0c498d8afe04b324bf1ef354b4a717e8952f6e8907d11ba37a9206a2ffe3c7f9",
       "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: The paired article covers this screen\u2019s unavailable-connection recovery through the same provider sign-in and permission review, without promising reconnection is always available."
+      "rationale": "Danish version checked against the same current source behavior: The paired article covers this screen’s unavailable-connection recovery through the same provider sign-in and permission review, without promising reconnection is always available."
     },
     {
       "source": "ui/src/pages/apps/Connections.tsx",
@@ -662,7 +662,7 @@
       "source": "server/src/routes/memory.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "1fae08e6465ba1c6ea49efcafed34f650d4c0b5cf10a4f197a81ef9c297c3356",
-      "articleSha256": "c57b16d980152c5a04c123634599ba10e1989b4a501bd754b371064ac6e44ec4",
+      "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "updated",
       "rationale": "Memory routes now filter private records by current source access and return sanitized payloads; the paired article explains current access and that sharing never publishes an underlying private Task."
     },
@@ -670,23 +670,23 @@
       "source": "server/src/services/memory/memory-privacy.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "898e2a76fc8bc0e80c9ecb9121f3355d8da153ed17bd026cfa8e31d5a0d4201f",
-      "articleSha256": "c57b16d980152c5a04c123634599ba10e1989b4a501bd754b371064ac6e44ec4",
+      "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "no_change",
       "rationale": "Reviewed both EN/DA export/deletion articles: exact current Task evidence, source withdrawal and private-owner checks strengthen the documented retained-source restriction. Existing copy already says a share does not publish its private Task and source deletion can remove copied text; no additional customer action changed."
     },
     {
       "source": "server/src/services/memory/memory-service.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "953891d11ad5715fac5b28c85950a107cbef5ca6b0935e053129ab08624606cd",
-      "articleSha256": "c57b16d980152c5a04c123634599ba10e1989b4a501bd754b371064ac6e44ec4",
-      "decision": "no_change",
-      "rationale": "Reviewed both EN/DA export/deletion articles: canonical Human Task evidence and transaction-bound revoke responses preserve the documented original-owner and retained-source rules. Forget continues to queue managed runtime erasure after confirmed Stop; the customer steps remain correct."
+      "sourceSha256": "0f31b6075f3d040d7704f79b61c4181343a84ed08a7199b563aaa1f10bc255e6",
+      "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
+      "decision": "updated",
+      "rationale": "Updated EN/DA guidance for Human evidence attachment: current account and all existing/new Task sources are rechecked in the transaction; if a source is unavailable, the update rolls back and the earlier restrictions remain. The evidence query also retains the existing persisted citation, timestamps and trust fields when revalidating that complete source set; the customer steps are unchanged."
     },
     {
       "source": "server/src/services/saas/account-deletion.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "7214bed4add42ad5778c1b8bc6e235e968c4bc2c9ae6bc3107c1b11e633c8911",
-      "articleSha256": "c57b16d980152c5a04c123634599ba10e1989b4a501bd754b371064ac6e44ec4",
+      "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "updated",
       "rationale": "Account deletion requires a current session and, for accounts with an additional-factor requirement, recent authentication; the paired article now includes that condition and retains the existing password and export acknowledgements."
     },
@@ -694,7 +694,7 @@
       "source": "server/src/services/saas/company-purge.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "81768c059d473abf1cd6ff328770cac9e78b5756cba5efe3b950f66e59bc5f2d",
-      "articleSha256": "c57b16d980152c5a04c123634599ba10e1989b4a501bd754b371064ac6e44ec4",
+      "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "no_change",
       "rationale": "Reviewed the current purge barrier: company content purge waits for company-authorized managed runtime erasure jobs to succeed; the paired article keeps final erasure distinct from request submission."
     },
@@ -702,7 +702,7 @@
       "source": "server/src/services/saas/offboarding.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "ebe6c8e74df9c112c766ce2ab0ddfee4251033e05aab1d180854eba81105e225",
-      "articleSha256": "c57b16d980152c5a04c123634599ba10e1989b4a501bd754b371064ac6e44ec4",
+      "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "no_change",
       "rationale": "Reviewed current staged offboarding: the displayed process remains pending until managed erasure and unresolved outcomes are reconciled, matching the article status guidance."
     },
@@ -710,7 +710,7 @@
       "source": "ui/src/pages/CompanyExport.tsx",
       "articleId": "export-and-delete",
       "sourceSha256": "bcb095fa5cce076e515485f318daefcc5940251ef917affd62eadb6c72f64dca",
-      "articleSha256": "c57b16d980152c5a04c123634599ba10e1989b4a501bd754b371064ac6e44ec4",
+      "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "updated",
       "rationale": "The export screen adds an optional support-case archive limited to cases the current Human can view; the article now states it contains customer-visible history only and cannot restore live cases."
     },
@@ -718,7 +718,7 @@
       "source": "ui/src/pages/Memory.tsx",
       "articleId": "export-and-delete",
       "sourceSha256": "868990402f0308c8cf6640b7d2ff2d89265a29af3b4343dd7482a476ce675f74",
-      "articleSha256": "c57b16d980152c5a04c123634599ba10e1989b4a501bd754b371064ac6e44ec4",
+      "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "updated",
       "rationale": "The Memory screen now distinguishes ordinary acceptance from the explicit owner-only Approve and share action and shows the destination; the article describes that exact review and the retained-source boundary."
     },
@@ -726,7 +726,7 @@
       "source": "ui/src/pages/SaasAccount.tsx",
       "articleId": "export-and-delete",
       "sourceSha256": "4ea9ace52188ed50a115c403b27341bdd50454245260e13d49d1e678e1832fe3",
-      "articleSha256": "c57b16d980152c5a04c123634599ba10e1989b4a501bd754b371064ac6e44ec4",
+      "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "updated",
       "rationale": "The account screen adds current authentication settings and retains password confirmation for deletion; the article now notes a recent-factor confirmation when the account requires it."
     },
@@ -734,7 +734,7 @@
       "source": "ui/src/pages/SaasDeletion.tsx",
       "articleId": "export-and-delete",
       "sourceSha256": "c10303000adfea5317b7cf3c75dd420eb1beee5771a749de17cec32d82a8161f",
-      "articleSha256": "c57b16d980152c5a04c123634599ba10e1989b4a501bd754b371064ac6e44ec4",
+      "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "no_change",
       "rationale": "The deletion screen still asks the operator to export, confirm the organization name and follow the displayed stage; this article preserves those steps and does not promise final erasure on submission."
     },
@@ -742,7 +742,7 @@
       "source": "server/src/routes/memory.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "1fae08e6465ba1c6ea49efcafed34f650d4c0b5cf10a4f197a81ef9c297c3356",
-      "articleSha256": "8e0134f5d6252ebe1d322edf7114b58b737e4be412d77ff3655c37a0d82d2d46",
+      "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "updated",
       "rationale": "Danish version checked against the same current behavior: Memory routes now filter private records by current source access and return sanitized payloads; the paired article explains current access and that sharing never publishes an underlying private Task."
     },
@@ -750,23 +750,23 @@
       "source": "server/src/services/memory/memory-privacy.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "898e2a76fc8bc0e80c9ecb9121f3355d8da153ed17bd026cfa8e31d5a0d4201f",
-      "articleSha256": "8e0134f5d6252ebe1d322edf7114b58b737e4be412d77ff3655c37a0d82d2d46",
+      "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "no_change",
       "rationale": "Reviewed both EN/DA export/deletion articles: exact current Task evidence, source withdrawal and private-owner checks strengthen the documented retained-source restriction. Existing copy already says a share does not publish its private Task and source deletion can remove copied text; no additional customer action changed."
     },
     {
       "source": "server/src/services/memory/memory-service.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "953891d11ad5715fac5b28c85950a107cbef5ca6b0935e053129ab08624606cd",
-      "articleSha256": "8e0134f5d6252ebe1d322edf7114b58b737e4be412d77ff3655c37a0d82d2d46",
-      "decision": "no_change",
-      "rationale": "Reviewed both EN/DA export/deletion articles: canonical Human Task evidence and transaction-bound revoke responses preserve the documented original-owner and retained-source rules. Forget continues to queue managed runtime erasure after confirmed Stop; the customer steps remain correct."
+      "sourceSha256": "0f31b6075f3d040d7704f79b61c4181343a84ed08a7199b563aaa1f10bc255e6",
+      "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
+      "decision": "updated",
+      "rationale": "Danish article now states the same reviewed current-source behavior: Updated EN/DA guidance for Human evidence attachment: current account and all existing/new Task sources are rechecked in the transaction; if a source is unavailable, the update rolls back and the earlier restrictions remain. The evidence query also retains the existing persisted citation, timestamps and trust fields when revalidating that complete source set; the customer steps are unchanged."
     },
     {
       "source": "server/src/services/saas/account-deletion.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "7214bed4add42ad5778c1b8bc6e235e968c4bc2c9ae6bc3107c1b11e633c8911",
-      "articleSha256": "8e0134f5d6252ebe1d322edf7114b58b737e4be412d77ff3655c37a0d82d2d46",
+      "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "updated",
       "rationale": "Danish version checked against the same current behavior: Account deletion requires a current session and, for accounts with an additional-factor requirement, recent authentication; the paired article now includes that condition and retains the existing password and export acknowledgements."
     },
@@ -774,7 +774,7 @@
       "source": "server/src/services/saas/company-purge.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "81768c059d473abf1cd6ff328770cac9e78b5756cba5efe3b950f66e59bc5f2d",
-      "articleSha256": "8e0134f5d6252ebe1d322edf7114b58b737e4be412d77ff3655c37a0d82d2d46",
+      "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "no_change",
       "rationale": "Danish version checked against the same current source behavior: reviewed the current purge barrier: company content purge waits for company-authorized managed runtime erasure jobs to succeed; the paired article keeps final erasure distinct from request submission."
     },
@@ -782,7 +782,7 @@
       "source": "server/src/services/saas/offboarding.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "ebe6c8e74df9c112c766ce2ab0ddfee4251033e05aab1d180854eba81105e225",
-      "articleSha256": "8e0134f5d6252ebe1d322edf7114b58b737e4be412d77ff3655c37a0d82d2d46",
+      "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "no_change",
       "rationale": "Danish version checked against the same current source behavior: reviewed current staged offboarding: the displayed process remains pending until managed erasure and unresolved outcomes are reconciled, matching the article status guidance."
     },
@@ -790,7 +790,7 @@
       "source": "ui/src/pages/CompanyExport.tsx",
       "articleId": "export-and-delete-da",
       "sourceSha256": "bcb095fa5cce076e515485f318daefcc5940251ef917affd62eadb6c72f64dca",
-      "articleSha256": "8e0134f5d6252ebe1d322edf7114b58b737e4be412d77ff3655c37a0d82d2d46",
+      "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "updated",
       "rationale": "Danish version checked against the same current behavior: The export screen adds an optional support-case archive limited to cases the current Human can view; the article now states it contains customer-visible history only and cannot restore live cases."
     },
@@ -798,7 +798,7 @@
       "source": "ui/src/pages/Memory.tsx",
       "articleId": "export-and-delete-da",
       "sourceSha256": "868990402f0308c8cf6640b7d2ff2d89265a29af3b4343dd7482a476ce675f74",
-      "articleSha256": "8e0134f5d6252ebe1d322edf7114b58b737e4be412d77ff3655c37a0d82d2d46",
+      "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "updated",
       "rationale": "Danish version checked against the same current behavior: The Memory screen now distinguishes ordinary acceptance from the explicit owner-only Approve and share action and shows the destination; the article describes that exact review and the retained-source boundary."
     },
@@ -806,7 +806,7 @@
       "source": "ui/src/pages/SaasAccount.tsx",
       "articleId": "export-and-delete-da",
       "sourceSha256": "4ea9ace52188ed50a115c403b27341bdd50454245260e13d49d1e678e1832fe3",
-      "articleSha256": "8e0134f5d6252ebe1d322edf7114b58b737e4be412d77ff3655c37a0d82d2d46",
+      "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "updated",
       "rationale": "Danish version checked against the same current behavior: The account screen adds current authentication settings and retains password confirmation for deletion; the article now notes a recent-factor confirmation when the account requires it."
     },
@@ -814,7 +814,7 @@
       "source": "ui/src/pages/SaasDeletion.tsx",
       "articleId": "export-and-delete-da",
       "sourceSha256": "c10303000adfea5317b7cf3c75dd420eb1beee5771a749de17cec32d82a8161f",
-      "articleSha256": "8e0134f5d6252ebe1d322edf7114b58b737e4be412d77ff3655c37a0d82d2d46",
+      "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "no_change",
       "rationale": "Danish version checked against the same current behavior: The deletion screen still asks the operator to export, confirm the organization name and follow the displayed stage; this article preserves those steps and does not promise final erasure on submission."
     },
@@ -949,10 +949,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "0169b13b5591b735a185b9fb82ac30f443d7660a7854c645050288652ecab75e",
+      "sourceSha256": "503f2c88be437c40753b9e5886832ce623fc469f21cd75244f446ef821ff6cce",
       "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "no_change",
-      "rationale": "Rechecked the generated Help article excerpts against the current bilingual articles. The Assistant still selects only approved linked article excerpts; no wording change is needed."
+      "rationale": "The regenerated catalog includes the updated English Memory guidance, while the Help and human support article itself remains accurate. The assistant still selects only approved linked Help excerpts."
     },
     {
       "source": "server/src/services/company-search.ts",
@@ -1096,7 +1096,7 @@
       "sourceSha256": "3f407de9eae33be8153e390c27b71ce81388ab807becfc8ecc2ce502cb747127",
       "articleSha256": "46ee0bb6834819d48386ac31482c81fe565da78daa6676bfdf3e7f93d63b6029",
       "decision": "updated",
-      "rationale": "Help utilities retain direct human support and the optional assistant route; the article keeps those paths independent and describes the assistant\u2019s consent and read-only limits."
+      "rationale": "Help utilities retain direct human support and the optional assistant route; the article keeps those paths independent and describes the assistant’s consent and read-only limits."
     },
     {
       "source": "ui/src/lib/help-navigation.ts",
@@ -1261,10 +1261,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "0169b13b5591b735a185b9fb82ac30f443d7660a7854c645050288652ecab75e",
+      "sourceSha256": "503f2c88be437c40753b9e5886832ce623fc469f21cd75244f446ef821ff6cce",
       "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "no_change",
-      "rationale": "Danish review: rechecked the generated Help article excerpts against the current bilingual articles. The Assistant still selects only approved linked article excerpts; no wording change is needed."
+      "rationale": "The regenerated catalog includes the updated Danish Memory guidance, while the Help and human support article itself remains accurate. The assistant still selects only approved linked Help excerpts."
     },
     {
       "source": "server/src/services/company-search.ts",
@@ -1408,7 +1408,7 @@
       "sourceSha256": "3f407de9eae33be8153e390c27b71ce81388ab807becfc8ecc2ce502cb747127",
       "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: Help utilities retain direct human support and the optional assistant route; the article keeps those paths independent and describes the assistant\u2019s consent and read-only limits."
+      "rationale": "Danish version checked against the same current source behavior: Help utilities retain direct human support and the optional assistant route; the article keeps those paths independent and describes the assistant’s consent and read-only limits."
     },
     {
       "source": "ui/src/lib/help-navigation.ts",
@@ -1565,10 +1565,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "9ea3cd43f0aab314aea4d0f463987445a9002e0935b529894284a9d2bb7f908f",
+      "sourceSha256": "3b08cf3ca670657805bce4bd45ee09f7a8ec22fc1fe8ac7722ff02f83670056c",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Reviewed EN/DA recovery and deletion guidance: actual interaction/attachment handoff and exact run receipts preserve the original Task, current sources and pending/unknown Stop behavior already described. Existing managed-file cleanup wording remains conditional on confirmed Stop; no unverified complete erasure claim was added."
+      "rationale": "The canonical task-envelope digest change does not alter the customer-facing recovery choices or instructions; the current EN/DA guidance remains accurate."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1624,7 +1624,7 @@
       "sourceSha256": "90983e55a2fa9ea9a8abe2b33a5aab817e05a463a65bf5d5795335149d769fd2",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "updated",
-      "rationale": "The blocked-task notice is covered by the article\u2019s instruction to read the displayed blocker and use only the next action shown for the original task."
+      "rationale": "The blocked-task notice is covered by the article’s instruction to read the displayed blocker and use only the next action shown for the original task."
     },
     {
       "source": "ui/src/lib/wait-for-stopped-runs.ts",
@@ -1632,7 +1632,7 @@
       "sourceSha256": "ce5726db6b535d3dd592bfde111b94de36291c1fe7dd5a85198dd22799bbe8c2",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "updated",
-      "rationale": "The stop-waiting UI is covered by the article\u2019s instruction to keep the task open, wait for status, and inspect the original run when an outcome is unknown."
+      "rationale": "The stop-waiting UI is covered by the article’s instruction to keep the task open, wait for status, and inspect the original run when an outcome is unknown."
     },
     {
       "source": "ui/src/pages/IssueDetail.tsx",
@@ -1669,10 +1669,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "9ea3cd43f0aab314aea4d0f463987445a9002e0935b529894284a9d2bb7f908f",
+      "sourceSha256": "3b08cf3ca670657805bce4bd45ee09f7a8ec22fc1fe8ac7722ff02f83670056c",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Reviewed EN/DA recovery and deletion guidance: actual interaction/attachment handoff and exact run receipts preserve the original Task, current sources and pending/unknown Stop behavior already described. Existing managed-file cleanup wording remains conditional on confirmed Stop; no unverified complete erasure claim was added."
+      "rationale": "The canonical task-envelope digest change does not alter the customer-facing recovery choices or instructions; the current EN/DA guidance remains accurate."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1728,7 +1728,7 @@
       "sourceSha256": "90983e55a2fa9ea9a8abe2b33a5aab817e05a463a65bf5d5795335149d769fd2",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: The blocked-task notice is covered by the article\u2019s instruction to read the displayed blocker and use only the next action shown for the original task."
+      "rationale": "Danish version checked against the same current source behavior: The blocked-task notice is covered by the article’s instruction to read the displayed blocker and use only the next action shown for the original task."
     },
     {
       "source": "ui/src/lib/wait-for-stopped-runs.ts",
@@ -1736,7 +1736,7 @@
       "sourceSha256": "ce5726db6b535d3dd592bfde111b94de36291c1fe7dd5a85198dd22799bbe8c2",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: The stop-waiting UI is covered by the article\u2019s instruction to keep the task open, wait for status, and inspect the original run when an outcome is unknown."
+      "rationale": "Danish version checked against the same current source behavior: The stop-waiting UI is covered by the article’s instruction to keep the task open, wait for status, and inspect the original run when an outcome is unknown."
     },
     {
       "source": "ui/src/pages/IssueDetail.tsx",
@@ -2005,16 +2005,16 @@
     {
       "source": "server/src/services/memory/memory-jobs.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "5f42224b4a284a018f09d5618fc138eaebc1e606184a52ce99df3f8881d180e0",
-      "articleSha256": "c57b16d980152c5a04c123634599ba10e1989b4a501bd754b371064ac6e44ec4",
-      "decision": "updated",
-      "rationale": "Reviewed the durable Memory worker path: managed runtime erasure waits for a successful Native Stop and uses the existing source/offboarding authorization; the paired article describes only managed files and the deferred cleanup boundary."
+      "sourceSha256": "67e1040ab671e47e72a67253cdc15cb056eaa112d72065a8c29f7c2011b91ecc",
+      "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
+      "decision": "no_change",
+      "rationale": "The current index-history receipt remains bound to the requesting Human and current source access. Rechecking that reader change confirms it does not alter the Help article’s conditional, managed-runtime erasure guidance."
     },
     {
       "source": "server/src/services/native-runtime/runtime-asset-retention.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "48e4ed1bf1f1cbc89c9fe213edf9ff60ab6a4f3b85b576b931e967b24f72c49a",
-      "articleSha256": "c57b16d980152c5a04c123634599ba10e1989b4a501bd754b371064ac6e44ec4",
+      "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "updated",
       "rationale": "Reviewed the run-scoped managed OpenCode storage owner: deletion is path-bound and waits for Native Stop plus Source or canonical offboarding proof; the article does not claim external provider erasure."
     },
@@ -2022,23 +2022,23 @@
       "source": "server/src/services/native-local-process-stop.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "980d8bc976885c20e8c1236f46bd726b7dbd7281a83d5099c0b7373755060f2e",
-      "articleSha256": "c57b16d980152c5a04c123634599ba10e1989b4a501bd754b371064ac6e44ec4",
+      "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "updated",
       "rationale": "Normal Heartbeat cleanup now records the same server-authored Stop receipt as stale-process recovery, but only after a terminal local process identity is confirmed absent; the article scopes its claim to managed runtime files and deferred cleanup."
     },
     {
       "source": "server/src/services/memory/memory-jobs.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "5f42224b4a284a018f09d5618fc138eaebc1e606184a52ce99df3f8881d180e0",
-      "articleSha256": "8e0134f5d6252ebe1d322edf7114b58b737e4be412d77ff3655c37a0d82d2d46",
-      "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: reviewed the durable Memory worker path: managed runtime erasure waits for a successful Native Stop and uses the existing source/offboarding authorization; the paired article describes only managed files and the deferred cleanup boundary."
+      "sourceSha256": "67e1040ab671e47e72a67253cdc15cb056eaa112d72065a8c29f7c2011b91ecc",
+      "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
+      "decision": "no_change",
+      "rationale": "The current index-history receipt remains bound to the requesting Human and current source access. Rechecking that reader change confirms it does not alter the Help article’s conditional, managed-runtime erasure guidance."
     },
     {
       "source": "server/src/services/native-runtime/runtime-asset-retention.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "48e4ed1bf1f1cbc89c9fe213edf9ff60ab6a4f3b85b576b931e967b24f72c49a",
-      "articleSha256": "8e0134f5d6252ebe1d322edf7114b58b737e4be412d77ff3655c37a0d82d2d46",
+      "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "updated",
       "rationale": "Danish version checked against the same current source behavior: reviewed the run-scoped managed OpenCode storage owner: deletion is path-bound and waits for Native Stop plus Source or canonical offboarding proof; the article does not claim external provider erasure."
     },
@@ -2046,25 +2046,25 @@
       "source": "server/src/services/native-local-process-stop.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "980d8bc976885c20e8c1236f46bd726b7dbd7281a83d5099c0b7373755060f2e",
-      "articleSha256": "8e0134f5d6252ebe1d322edf7114b58b737e4be412d77ff3655c37a0d82d2d46",
+      "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "updated",
       "rationale": "Danish version checked against the same current source behavior: Normal Heartbeat cleanup now records the same server-authored Stop receipt as stale-process recovery, but only after a terminal local process identity is confirmed absent; the article scopes its claim to managed runtime files and deferred cleanup."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "9ea3cd43f0aab314aea4d0f463987445a9002e0935b529894284a9d2bb7f908f",
-      "articleSha256": "c57b16d980152c5a04c123634599ba10e1989b4a501bd754b371064ac6e44ec4",
+      "sourceSha256": "3b08cf3ca670657805bce4bd45ee09f7a8ec22fc1fe8ac7722ff02f83670056c",
+      "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "no_change",
-      "rationale": "Reviewed EN/DA recovery and deletion guidance: actual interaction/attachment handoff and exact run receipts preserve the original Task, current sources and pending/unknown Stop behavior already described. Existing managed-file cleanup wording remains conditional on confirmed Stop; no unverified complete erasure claim was added."
+      "rationale": "The canonical task-envelope digest change does not alter the customer-facing Memory evidence or managed-runtime erasure behavior; the current article remains accurate."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "9ea3cd43f0aab314aea4d0f463987445a9002e0935b529894284a9d2bb7f908f",
-      "articleSha256": "8e0134f5d6252ebe1d322edf7114b58b737e4be412d77ff3655c37a0d82d2d46",
+      "sourceSha256": "3b08cf3ca670657805bce4bd45ee09f7a8ec22fc1fe8ac7722ff02f83670056c",
+      "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "no_change",
-      "rationale": "Reviewed EN/DA recovery and deletion guidance: actual interaction/attachment handoff and exact run receipts preserve the original Task, current sources and pending/unknown Stop behavior already described. Existing managed-file cleanup wording remains conditional on confirmed Stop; no unverified complete erasure claim was added."
+      "rationale": "The canonical task-envelope digest change does not alter the customer-facing Memory evidence or managed-runtime erasure behavior; the current article remains accurate."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",

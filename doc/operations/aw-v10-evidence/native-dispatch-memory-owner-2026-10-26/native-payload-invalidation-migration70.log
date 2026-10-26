@@ -1,0 +1,39 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification
+
+x···
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/db| src/native-payload-invalidation-migration.test.ts > Native payload source invalidation preserves unknown history across migration > withholds both kinds of historical protocol1 NULL rather than inventing their lost history
+AssertionError: expected PostgresError: record "old" has no field … { …(10) } to match object { code: '23514' }
+(7 matching properties omitted from actual)
+
+- Expected
++ Received
+
+- {
+-   "code": "23514",
++ PostgresError {
++   "code": "42703",
+  }
+
+ ❯ src/native-payload-invalidation-migration.test.ts:74:33
+     72|       expect(row!.payload_source_snapshot).toBeNull();
+     73|       expect(row!.payload_source_snapshot_invalidated).toBe(true);
+     74|       await expect(bind(db, id)).rejects.toMatchObject({ code: "23514"…
+       |                                 ^
+     75|       await expect(db`update issues set payload_source_snapshot_invali…
+     76|         .rejects.toMatchObject({ code: "23514" });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 3 passed (4)
+   Start at  03:15:17
+   Duration  7.54s (transform 2.05s, setup 0ms, import 3.24s, tests 4.19s, environment 0ms)
+
