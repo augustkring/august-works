@@ -18,6 +18,7 @@ import {
   createDb,
   issues,
   heartbeatRuns,
+  memoryJobs,
   orchestrationPlans,
   orchestrationModelReservations,
   orchestrationWorkers,
@@ -47,7 +48,8 @@ import { seedNativePasskeySession } from "./helpers/native-authentication-fixtur
 import { runManagedNativeConversationFrame } from "./helpers/managed-native-conversation-frame.js";
 import { COMPANY_SEARCH_HELP_ARTICLES } from "../services/company-search-help.generated.js";
 import { supportGuideKnowledgePin } from "../services/experience/support-assistant-grounding.js";
-import { managedOpenCodeRuntimeDirectory } from "../services/native-runtime/runtime-asset-retention.js";
+import { enqueueCompanyManagedOpenCodeRuntimeErasure, managedOpenCodeRuntimeDirectory } from "../services/native-runtime/runtime-asset-retention.js";
+import { memoryJobService } from "../services/memory/memory-jobs.js";
 import { PROCESS_IDENTITY_RECORDED, recordNativeLocalProcessStop } from "../services/native-local-process-stop.js";
 import { appendHeartbeatRunEvent } from "../services/heartbeat-run-events.js";
 import { firstPartySupportModelGateway, supportAssistantPolicyRevision } from "../services/orchestration/first-party-support-model-gateway.js";
@@ -318,6 +320,8 @@ const support = await getEmbeddedPostgresTestSupport();
         }) : null,
       });
     type ConversationFrameFacts = Parameters<NonNullable<Parameters<typeof runManagedNativeConversationFrame>[0]["beforeProviderResponse"]>>[0];
+    type ConversationAfterRunFacts = Parameters<NonNullable<Parameters<typeof runManagedNativeConversationFrame>[0]["afterRunSettledBeforeTeardown"]>>[0];
+    type ConversationOffboardingFacts = Pick<ConversationAfterRunFacts, "actor" | "companyId" | "agentId">;
     const conversationBinary = () => {
       const configured = process.env.PAPERCLIP_QUALIFIED_OPENCODE_BINARY?.trim();
       if (configured) return configured;
@@ -333,11 +337,13 @@ const support = await getEmbeddedPostgresTestSupport();
       beforeProviderResponse?: (facts: ConversationFrameFacts) => Promise<void>,
       budgetMonthlyCents = 2000,
       conversationTariff?: ModelTariffCeiling,
+      afterRunSettledBeforeTeardown?: (facts: ConversationAfterRunFacts) => Promise<void>,
     ) {
       const opencodeBinary = conversationBinary();
       if (!opencodeBinary) throw new Error("qualified_opencode_binary_unavailable");
       const result = await runManagedNativeConversationFrame({ db, root: os.tmpdir(), opencodeBinary,
-        budgetMonthlyCents, ...(conversationTariff ? { tariff: conversationTariff } : {}), beforeProviderResponse });
+        budgetMonthlyCents, ...(conversationTariff ? { tariff: conversationTariff } : {}), beforeProviderResponse,
+        afterRunSettledBeforeTeardown });
       expect(result.providerCallCount).toBeGreaterThan(0);
       expect(result.providerKeyMatched).toBe(true);
       expect(result.issuerFacts).toHaveLength(1);
@@ -345,6 +351,20 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(result.workerAttempts).toHaveLength(0);
       expect(nativeRunInputSourceReceiptSchema.safeParse(result.nativeInputSourceReceipt).success).toBe(true);
       return result;
+    }
+    async function rehomeConversationIdentityForOffboarding(facts: ConversationOffboardingFacts) {
+      const [presence] = await db.select({ agentIdentityId: agents.agentIdentityId }).from(agents)
+        .where(and(eq(agents.companyId, facts.companyId), eq(agents.id, facts.agentId)));
+      if (!presence?.agentIdentityId) throw new Error("conversation_fixture_agent_identity_missing");
+      const memberships = await db.select({ companyId: companyMemberships.companyId }).from(companyMemberships)
+        .where(and(eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, facts.actor.userId!),
+          eq(companyMemberships.status, "active")));
+      const targetCompanyId = memberships.find(({ companyId }) => companyId !== facts.companyId)?.companyId;
+      if (!targetCompanyId) throw new Error("conversation_fixture_identity_rehome_membership_missing");
+      const rehomeActor = { ...facts.actor, companyIds: memberships.map(({ companyId }) => companyId) };
+      const identity = await agentIdentityService(db).rehome(rehomeActor, facts.companyId, presence.agentIdentityId, targetCompanyId);
+      expect(identity.homeCompanyId).toBe(targetCompanyId);
+      return targetCompanyId;
     }
     function conversationReservationService(facts: ConversationFrameFacts) {
       const service = modelReservationService(db, {
@@ -402,19 +422,29 @@ const support = await getEmbeddedPostgresTestSupport();
       });
       return { service, request };
     }
-    async function purgeConversationCompany(companyId: string, userId: string, idempotencyKey: string) {
+    async function startConversationOffboarding(facts: ConversationOffboardingFacts, idempotencyKey: string) {
+      await rehomeConversationIdentityForOffboarding(facts);
+      const { companyId } = facts;
+      const userId = facts.actor.userId!;
       const [company] = await db.select({ name: companies.name }).from(companies).where(eq(companies.id, companyId));
-      const offboarding = saasOffboardingService(db, {} as never, {} as never, {
+      const offboarding = saasOffboardingService(db, { offboardCompany: async () => ({ fixtureReconciled: true }) } as never,
+        { cancelUnplacedForDeletion: async () => undefined, list: async () => [] } as never, {
         targets: () => ({ fixture: true }), erase: async () => ({ fixtureErased: true }),
       } as never);
       await offboarding.request(companyId, userId, { confirmation: company!.name,
         acknowledgeExport: true, idempotencyKey });
-      await db.update(companyDeletionOperations).set({ stage: "purge", status: "processing",
-        notBefore: new Date(0), evidence: sql`coalesce(${companyDeletionOperations.evidence},'{}'::jsonb) || jsonb_build_object('runtimesErasedAt',now()::text)` })
-        .where(eq(companyDeletionOperations.companyId, companyId));
-      const [operation] = await db.select().from(companyDeletionOperations).where(eq(companyDeletionOperations.companyId, companyId));
-      await purgeCompanyContent(db, companyId, { operationId: operation!.id });
-      return operation!;
+      for (let index = 0; index < 4; index += 1)
+        expect(await offboarding.processOne(new Date(Date.now() + 1_000))).toBe(true);
+      const operation = await offboarding.get(companyId);
+      expect(operation).toMatchObject({ stage: "purge", status: "processing" });
+      return { offboarding, operation: operation! };
+    }
+    async function purgeConversationCompany(facts: ConversationOffboardingFacts, idempotencyKey: string) {
+      const { offboarding, operation } = await startConversationOffboarding(facts, idempotencyKey);
+      expect(await offboarding.processOne(new Date(Date.now() + 1_000))).toBe(true);
+      const completed = await offboarding.get(facts.companyId);
+      expect(completed).toMatchObject({ id: operation.id, stage: "completed", status: "completed" });
+      return completed!;
     }
     const supportGateway = (
       profiles: FirstPartySupportModelProfile[],
@@ -519,10 +549,15 @@ const support = await getEmbeddedPostgresTestSupport();
     }, conversationFrameTestTimeoutMs);
     itNativeConversation("settles the actual qualified conversation usage once and preserves the exact debit in canonical purge", async () => {
       const factsHolder: { value: ConversationFrameFacts | null } = { value: null };
+      const purgeHolder: { value: Awaited<ReturnType<typeof purgeConversationCompany>> | null } = { value: null };
       const usagePricedTariff: ModelTariffCeiling = { ...tariff(), provider: "anthropic", model: "fixture-managed-conversation-v1",
         inputMinorPerMillion: 1000, outputMinorPerMillion: 2000, fixedMinor: 0,
         qualificationHash: "b".repeat(64), expiresAt: new Date(Date.now() + 60 * 60_000).toISOString() };
-      const result = await conversationReservationFixture(async facts => { factsHolder.value = facts; }, 2000, usagePricedTariff);
+      const result = await conversationReservationFixture(async facts => { factsHolder.value = facts; }, 2000, usagePricedTariff,
+        async facts => {
+          if (!facts.run || !facts.reservation) throw new Error("conversation_settled_frame_missing_for_purge");
+          purgeHolder.value = await purgeConversationCompany(facts, "conversation-known-cost-purge");
+        });
       const facts = factsHolder.value;
       if (!facts) throw new Error("conversation_frame_facts_missing");
       expect(result.success).toBe(true);
@@ -547,7 +582,8 @@ const support = await getEmbeddedPostgresTestSupport();
         status: "completed", providerResponseHash: facts.providerResponseSha256, usage: facts.usage,
       })).rejects.toThrow();
       expect(await db.select().from(costEvents).where(eq(costEvents.billingCode, billingCode))).toHaveLength(1);
-      const operation = await purgeConversationCompany(facts.companyId, facts.actor.userId!, "conversation-known-cost-purge");
+      const operation = purgeHolder.value;
+      if (!operation) throw new Error("conversation_known_cost_purge_missing");
       const [erasureReceipt] = await db.select().from(companyDeletionOperations).where(eq(companyDeletionOperations.id, operation.id));
       expect((erasureReceipt?.evidence as Record<string, unknown>)?.nativeConversationModelFunding).toMatchObject({
         completed: "1", settledInputTokens: String(facts.usage.inputTokens), settledOutputTokens: String(facts.usage.outputTokens),
@@ -618,34 +654,32 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(receipt).toMatchObject({ costCents: 1, costStatus: "estimated" });
     }, conversationFrameTestTimeoutMs);
     itNativeConversation("retains an actual unknown conversation hold and blocks canonical company purge", async () => {
-      const dispatchedFacts: { value: ConversationFrameFacts | null } = { value: null };
-      const result = await conversationReservationFixture(async facts => {
-        dispatchedFacts.value = facts;
+      let purgeWasBlockedAfterRuntimeErasure = false;
+      const result = await conversationReservationFixture(async () => {
         throw new Error("fixture_transport_lost_after_actual_dispatch");
+      }, 2000, undefined, async facts => {
+        if (!facts.run || !facts.reservation) throw new Error("conversation_unknown_frame_missing_for_purge");
+        const { operation } = await startConversationOffboarding(facts, "conversation-unknown-purge");
+        const runIds = await enqueueCompanyManagedOpenCodeRuntimeErasure(db, facts.companyId, operation.id);
+        expect(runIds).toContain(facts.run.id);
+        await memoryJobService(db).tick({ limit: 32, companyId: facts.companyId });
+        const [runtimeJob] = await db.select().from(memoryJobs).where(and(eq(memoryJobs.companyId, facts.companyId),
+          eq(memoryJobs.jobKey, `runtime-asset-erasure:v1:${facts.run.id}`))).orderBy(sql`${memoryJobs.attemptNumber} desc`).limit(1);
+        expect(runtimeJob?.status).toBe("succeeded");
+        await expect(purgeCompanyContent(db, facts.companyId, { operationId: operation.id })).rejects.toMatchObject({ status: 409 });
+        expect((await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.id, facts.reservation!.id)))[0]?.status)
+          .toBe("unknown");
+        expect(await db.select().from(issues).where(eq(issues.id, facts.issueId))).toHaveLength(1);
+        expect((await db.select().from(companyDeletionOperations).where(eq(companyDeletionOperations.id, operation.id)))[0]?.evidence)
+          .not.toHaveProperty("nativeConversationModelFunding");
+        purgeWasBlockedAfterRuntimeErasure = true;
       });
-      const facts = dispatchedFacts.value;
-      if (!facts) throw new Error("conversation_dispatched_facts_missing");
+      expect(purgeWasBlockedAfterRuntimeErasure).toBe(true);
       expect(result.success).toBe(false);
       expect(result.providerCallCount).toBeGreaterThan(0);
       const reservation = result.reservation!;
       expect(reservation).toMatchObject({ purpose: "conversation_model", status: "unknown" });
       expect(await db.select().from(costEvents).where(eq(costEvents.billingCode, `native-conversation-model:${reservation.id}`))).toHaveLength(0);
-      const [company] = await db.select({ name: companies.name }).from(companies).where(eq(companies.id, facts.companyId));
-      const offboarding = saasOffboardingService(db, {} as never, {} as never, {
-        targets: () => ({ fixture: true }), erase: async () => ({ fixtureErased: true }),
-      } as never);
-      await offboarding.request(facts.companyId, facts.actor.userId!, { confirmation: company!.name,
-        acknowledgeExport: true, idempotencyKey: "conversation-unknown-purge" });
-      await db.update(companyDeletionOperations).set({ stage: "purge", status: "processing",
-        notBefore: new Date(0), evidence: sql`coalesce(${companyDeletionOperations.evidence},'{}'::jsonb) || jsonb_build_object('runtimesErasedAt',now()::text)` })
-        .where(eq(companyDeletionOperations.companyId, facts.companyId));
-      const [operation] = await db.select().from(companyDeletionOperations).where(eq(companyDeletionOperations.companyId, facts.companyId));
-      await expect(purgeCompanyContent(db, facts.companyId, { operationId: operation!.id })).rejects.toMatchObject({ status: 409 });
-      expect((await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.id, reservation.id)))[0]?.status)
-        .toBe("unknown");
-      expect(await db.select().from(issues).where(eq(issues.id, facts.issueId))).toHaveLength(1);
-      expect((await db.select().from(companyDeletionOperations).where(eq(companyDeletionOperations.id, operation!.id)))[0]?.evidence)
-        .not.toHaveProperty("nativeConversationModelFunding");
     }, conversationFrameTestTimeoutMs);
     const request = (idempotencyKey = "fixture-reservation") => ({
       companyId: f.home,

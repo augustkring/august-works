@@ -382,9 +382,59 @@ function handleToolResult(message) {
   const details = value && typeof value === "object" ? value : {};
   const rawCode = message.error?.code ?? details.errorCode ?? details.code;
   const errorCode = typeof rawCode === "string" && /^[A-Z][A-Z0-9_]{1,63}$/.test(rawCode) ? rawCode : null;
+  const firstContentItem = message.result?.contentItems?.[0];
+  const firstContentText = typeof firstContentItem?.text === "string" ? firstContentItem.text : null;
+  let parsedContentText;
+  if (firstContentText !== null) {
+    try { parsedContentText = JSON.parse(firstContentText); } catch { parsedContentText = undefined; }
+  }
+  const nestedItem = Array.isArray(parsedContentText?.contentItems) ? parsedContentText.contentItems[0] : null;
+  const nestedText = typeof nestedItem?.text === "string" ? nestedItem.text : null;
+  let parsedNestedText;
+  if (nestedText !== null) {
+    try { parsedNestedText = JSON.parse(nestedText); } catch { parsedNestedText = undefined; }
+  }
+  const diagnosticCode = value => typeof value?.code === "string" && /^[a-z][a-z0-9_]{1,63}$/.test(value.code)
+    ? value.code : null;
+  const contextResultShape = pending.name === "get_task_context" ? {
+    errorType: message.error === undefined || message.error === null ? null : typeof message.error,
+    errorKeys: message.error && typeof message.error === "object" && !Array.isArray(message.error)
+      ? Object.keys(message.error).sort().slice(0, 12) : [],
+    envelopeKeys: message.result && typeof message.result === "object" && !Array.isArray(message.result)
+      ? Object.keys(message.result).sort().slice(0, 12) : [],
+    valueType: value === null ? "null" : Array.isArray(value) ? "array" : typeof value,
+    valueKeys: value && typeof value === "object" && !Array.isArray(value)
+      ? Object.keys(value).sort().slice(0, 16) : [],
+    success: typeof message.result?.success === "boolean" ? message.result.success : null,
+    contentItemCount: Array.isArray(message.result?.contentItems) ? message.result.contentItems.length : null,
+    firstContentItem: firstContentItem && typeof firstContentItem === "object" ? {
+      type: typeof firstContentItem.type === "string" ? firstContentItem.type : null,
+      keys: Object.keys(firstContentItem).sort().slice(0, 12),
+      textType: typeof firstContentItem.text,
+      textLength: firstContentText?.length ?? null,
+      parsedTextType: parsedContentText === null ? "null" : Array.isArray(parsedContentText)
+        ? "array" : typeof parsedContentText,
+      parsedTextKeys: parsedContentText && typeof parsedContentText === "object" && !Array.isArray(parsedContentText)
+        ? Object.keys(parsedContentText).sort().slice(0, 16) : [],
+      parsedSuccess: typeof parsedContentText?.success === "boolean" ? parsedContentText.success : null,
+      parsedErrorCode: typeof parsedContentText?.errorCode === "string" ? parsedContentText.errorCode : null,
+      parsedCode: diagnosticCode(parsedContentText),
+      nestedContentItem: nestedItem && typeof nestedItem === "object" ? {
+        type: typeof nestedItem.type === "string" ? nestedItem.type : null,
+        keys: Object.keys(nestedItem).sort().slice(0, 12),
+        textType: typeof nestedItem.text,
+        parsedTextType: parsedNestedText === null ? "null" : Array.isArray(parsedNestedText)
+          ? "array" : typeof parsedNestedText,
+        parsedTextKeys: parsedNestedText && typeof parsedNestedText === "object" && !Array.isArray(parsedNestedText)
+          ? Object.keys(parsedNestedText).sort().slice(0, 16) : [],
+        parsedCode: diagnosticCode(parsedNestedText),
+      } : null,
+    } : null,
+    activeTaskPresent: Boolean(details.activeTask),
+  } : undefined;
   note({ event: "tool_result", turn: pending.turn.number, tool: pending.name,
     failed: Boolean(message.error || details.isError === true || details.ok === false || details.success === false || details.error),
-    errorCode });
+    errorCode, ...(contextResultShape ? { contextResultShape } : {}) });
   pending.next(value);
   return true;
 }

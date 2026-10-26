@@ -182,8 +182,9 @@ describe("native bootstrap rendered-source closure", () => {
       items: contextItems.map(item => ({ id: item.id, provider: item.sourceProvider, ref: item.sourceRef,
         version: item.sourceVersion, contentHash: item.contentHash, snapshot: item.payloadSourceSnapshot })), roots: [],
     }), "utf8").digest("hex");
-    expect(sourceSet?.inputs.find(value => value.kind === "context" && value.manifestId === manifestId)?.contentHash)
-      .toBe(contextOwnerFingerprint);
+    const contextSource = sourceSet?.inputs.find(value => value.kind === "context" && value.manifestId === manifestId);
+    if (!contextSource || contextSource.kind !== "context") throw new Error("expected exact context source");
+    expect(contextSource.contentHash).toBe(contextOwnerFingerprint);
     expect(sourceSet?.policy.foundationRevisionIds).toEqual([foundationRevisionId]);
     const combinedFabricContext = `## Pinned execution inventory\nPolicies: budget_hard_stop\n\n${contextMarkdown}`;
     const combinedContextSourceSet = buildNativeBootstrapSourceSet({ companyId, runId, agentId, issueId, renderedMarkdown,

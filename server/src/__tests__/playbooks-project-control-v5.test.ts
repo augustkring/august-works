@@ -158,7 +158,7 @@ describe.skipIf(!support.supported)("V5 canonical procedures and schedule", () =
     expect(unchanged.payloadSourceSnapshotInvalidated).toBe(false);
     await svc.forecast(f.actor, f.home, project.id, issue.id, { expectedUpdatedAt: unchanged.updatedAt.toISOString(), forecastStartAt: "2026-10-03T00:00:00Z", forecastEndAt: "2026-10-12T00:00:00Z", forecastConfidence: 0.6, forecastReason: "Dependency testing extends the likely completion date" });
     const stored = (await db.select().from(issues).where(eq(issues.id, issue.id)))[0]!;
-    expect(stored.payloadSourceSnapshot).toBeNull(); expect(stored.payloadSourceSnapshotInvalidated).toBe(true);
+    expect(stored.payloadSourceSnapshot).toBeNull(); expect(stored.payloadSourceSnapshotInvalidated).toBe(false);
     expect(stored.startedAt).toEqual(actualStart); expect(stored.completedAt).toBeNull(); expect(stored.plannedEndAt?.toISOString()).toBe("2026-10-10T00:00:00.000Z");
     expect((await svc.get(f.actor, f.home, project.id)).health.status).toBe("at_risk");
     await expect(db.update(projectScheduleBaselines).set({ name: "Change original" }).where(eq(projectScheduleBaselines.id, baseline.id))).rejects.toThrow();

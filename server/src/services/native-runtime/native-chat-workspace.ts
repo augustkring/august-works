@@ -34,7 +34,7 @@ export async function findNativeChatWorkspaceScope(
 ): Promise<NativeChatWorkspaceScope | null> {
   if (
     input.adapterType !== "paperclip_runner" ||
-    input.environmentDriver !== "local" ||
+    !["local", "sandbox"].includes(input.environmentDriver ?? "") ||
     !input.issueId
   )
     return null;

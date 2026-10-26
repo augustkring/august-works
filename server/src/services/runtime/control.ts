@@ -2,6 +2,7 @@ import { hostVersionMeetsMinimum } from "./catalog.js";
 import { runtimeCommercialReason } from "./commercial.js";
 import type { NotifyCompany } from "../notifications/notifications.js";
 import { randomUUID } from "node:crypto";
+import path from "node:path";
 import {
   and,
   eq,
@@ -42,6 +43,7 @@ import {
 } from "@paperclipai/db";
 import {
   SANDBOX_HOST_COMMAND,
+  nativeRunInputSourceReceiptSchema,
   runtimeModelProviderSchema,
   runtimeCellCreateSchema,
   runtimeCommandResultSchema,
@@ -73,6 +75,8 @@ import { REDACTED_EVENT_VALUE } from "../../redaction.js";
 import { resolvePaperclipRunnerProviderProfile } from "../native-runtime/provider-profile.js";
 import type { workerModelGateway } from "../orchestration/worker-model-gateway.js";
 import { verifyRuntimeToolsToken } from "../../runtime-tools-token.js";
+import { findNativeChatWorkspaceScope, nativeChatWorkspaceCwd } from "../native-runtime/native-chat-workspace.js";
+import { assertNativePayloadSourceSetCurrent } from "../native-direct-input.js";
 
 type IssuedWorkerModelCredential = Awaited<
   ReturnType<ReturnType<typeof workerModelGateway>["issueForRun"]>
@@ -113,6 +117,7 @@ export function runtimeControlService(
   options: { credentialBrokerOrigin?: string; workerModels?: ReturnType<typeof workerModelGateway> } = {},
 ) {
   const credentialBrokerOrigin = configuredPaperclipEndpointOrigin(options.credentialBrokerOrigin);
+  const managedModelBrokerOrigin = credentialBrokerOrigin ? new URL(credentialBrokerOrigin).origin : null;
   const auth = runtimeHostAuth(db);
   const backups = runtimeBackupService(db, config);
   const relay = runtimeGatewayRelay({
@@ -2346,7 +2351,10 @@ export function runtimeControlService(
       }
       const modelCredential = request.modelBrokerCredential;
       const modelClaims = modelCredential ? verifyRuntimeToolsToken(modelCredential.capabilityToken, "worker_model") : null;
+      const conversationModelClaims = modelCredential
+        ? verifyRuntimeToolsToken(modelCredential.capabilityToken, "conversation_model") : null;
       const modelBinding = modelClaims?.worker_model;
+      const conversationBinding = conversationModelClaims?.conversation_model;
       const [modelAttempt] = modelBinding ? await tx.select().from(orchestrationWorkerAttempts).where(and(
         eq(orchestrationWorkerAttempts.companyId, claims.company_id),
         eq(orchestrationWorkerAttempts.id, modelBinding.workerAttemptId),
@@ -2367,21 +2375,68 @@ export function runtimeControlService(
         ? resolvePaperclipRunnerProviderProfile(source.source.agent.adapterConfig)
         : null;
       if (nativeProvider?.provider === "opencode") {
-        if (!modelCredential || !modelClaims?.worker_model || !source.capability.modelBrokerProviderProfile ||
-          modelCredential.profileId !== source.capability.modelBrokerProviderProfile.id ||
-          modelCredential.profileHash !== source.capability.modelBrokerProviderProfile.hash ||
-          request.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN !== credentialBrokerOrigin ||
-          !Number.isSafeInteger(modelCredential.inputTokensUpperBound) || modelCredential.inputTokensUpperBound < 1 ||
-          modelCredential.inputTokensUpperBound > 2_000_000 ||
-          !Number.isSafeInteger(modelCredential.maxOutputTokens) || modelCredential.maxOutputTokens < 256 ||
-          modelCredential.maxOutputTokens > 8192 ||
-          request.env.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND !== String(modelCredential.inputTokensUpperBound) ||
-          request.env.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS !== String(modelCredential.maxOutputTokens) ||
-          modelClaims.company_id !== claims.company_id || modelClaims.sub !== source.run.agentId ||
-          modelClaims.run_id !== source.run.id || modelClaims.responsible_user_id !== source.run.responsibleUserId ||
-          modelClaims.exp * 1000 < Date.now() || Date.parse(modelCredential.expiresAt) > Date.parse(request.deadlineAt) ||
-          !modelAttempt || !modelPlan || modelPlan.issueId !== source.run.nativeIssueId ||
-          Date.parse(modelCredential.expiresAt) > modelClaims.exp * 1000)
+        const exactProfileAndEnvironment = !!modelCredential && !!source.capability.modelBrokerProviderProfile &&
+          modelCredential.profileId === source.capability.modelBrokerProviderProfile.id &&
+          modelCredential.profileHash === source.capability.modelBrokerProviderProfile.hash &&
+          request.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === managedModelBrokerOrigin &&
+          !!managedModelBrokerOrigin;
+        const inputAndExpiryValid = !!modelCredential && !!source.capability.modelBrokerProviderProfile &&
+          Number.isSafeInteger(modelCredential.inputTokensUpperBound) && modelCredential.inputTokensUpperBound >= 1 &&
+          modelCredential.inputTokensUpperBound <= 2_000_000 &&
+          Number.isSafeInteger(modelCredential.maxOutputTokens) && modelCredential.maxOutputTokens >= 256 &&
+          modelCredential.maxOutputTokens <= 8192 &&
+          request.env.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND === String(modelCredential.inputTokensUpperBound) &&
+          request.env.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS === String(modelCredential.maxOutputTokens) &&
+          Date.parse(modelCredential.expiresAt) <= Date.parse(request.deadlineAt);
+        const workerCredentialValid = !!modelCredential && !!modelClaims?.worker_model && !!modelBinding &&
+          modelClaims.company_id === claims.company_id && modelClaims.sub === source.run.agentId &&
+          modelClaims.run_id === source.run.id && modelClaims.responsible_user_id === source.run.responsibleUserId &&
+          modelClaims.exp * 1000 >= Date.now() && Date.parse(modelCredential.expiresAt) <= modelClaims.exp * 1000 &&
+          !!modelAttempt && !!modelPlan && modelPlan.issueId === source.run.nativeIssueId;
+        let conversationCredentialValid = false;
+        if (conversationModelClaims?.conversation_model && conversationBinding && modelCredential &&
+          source.capability.modelBrokerProviderProfile && exactProfileAndEnvironment && inputAndExpiryValid) {
+          const task = source.source.task;
+          const profile = source.run.runnerProfileJson && typeof source.run.runnerProfileJson === "object" &&
+            !Array.isArray(source.run.runnerProfileJson) ? source.run.runnerProfileJson as Record<string, unknown> : {};
+          const receipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+          const receiptBody = receipt.success ? (({ digest: _digest, ...body }) => body)(receipt.data) : null;
+          const [receiptDigest] = receiptBody ? await tx.execute<{ digest: string }>(sql`
+            select encode(sha256(convert_to((${JSON.stringify(receiptBody)}::jsonb)::text,'UTF8')),'hex') as digest
+          `) : [];
+          if (receipt.success && receiptBody && receiptDigest?.digest === receipt.data.digest &&
+            source.run.nativeInputSourceProtocolVersion === 1 &&
+            receipt.data.binding.companyId === claims.company_id && receipt.data.binding.runId === source.run.id &&
+            receipt.data.binding.agentId === source.run.agentId && receipt.data.binding.responsibleUserId === source.run.responsibleUserId &&
+            receipt.data.binding.issueId === task.id &&
+            conversationModelClaims.scope === "conversation_model" &&
+            conversationModelClaims.company_id === claims.company_id && conversationModelClaims.sub === source.run.agentId &&
+            conversationModelClaims.run_id === source.run.id &&
+            conversationModelClaims.responsible_user_id === source.run.responsibleUserId &&
+            conversationModelClaims.exp * 1000 >= Date.now() &&
+            Date.parse(modelCredential.expiresAt) <= conversationModelClaims.exp * 1000 &&
+            conversationBinding.issueId === task.id &&
+            conversationBinding.conversationSessionGeneration === task.conversationSessionGeneration &&
+            conversationBinding.executionManifestId === source.manifest.id &&
+            conversationBinding.executionManifestHash === source.manifest.hash &&
+            source.run.status === "running" && source.run.runtimeMode === "native" && source.run.scopeKind === "issue" &&
+            source.run.nativeIssueId === task.id && source.run.responsibleUserId === task.conversationUserId &&
+            source.run.contextSnapshot?.conversationSessionGeneration === task.conversationSessionGeneration &&
+            task.conversationAgentId === source.run.agentId && task.conversationUserId === source.run.responsibleUserId &&
+            task.assigneeAgentId === source.run.agentId &&
+            task.conversationState === "active" && task.conversationRetiredAt === null &&
+            task.executionRunId === source.run.id && ["in_review", "in_progress"].includes(task.status) &&
+            source.manifest.runId === source.run.id && source.manifest.agentId === source.run.agentId &&
+            source.manifest.hash === conversationBinding.executionManifestHash &&
+            source.manifest.manifest.responsibleUserId === source.run.responsibleUserId) {
+            await assertNativePayloadSourceSetCurrent(tx, { companyId: claims.company_id, issueId: task.id,
+              runId: source.run.id, actor: { type: "board", source: "session", userId: claims.responsible_user_id },
+              policy: receipt.data.bootstrap.policy, inputs: receipt.data.bootstrap.inputs });
+            conversationCredentialValid = true;
+          }
+        }
+        if (!modelCredential || !source.capability.modelBrokerProviderProfile || !exactProfileAndEnvironment ||
+          !inputAndExpiryValid || (!workerCredentialValid && !conversationCredentialValid))
           throw forbidden("Managed OpenCode model broker capability is missing or outside its exact run scope");
       } else if (modelCredential !== undefined) {
         throw forbidden("Sandbox execution contains an unauthorized managed model capability");
@@ -2478,6 +2533,26 @@ export function runtimeControlService(
       });
     });
     if (!initialSource) return null;
+    const conversationTask = initialSource.source.task;
+    if (conversationTask.conversationAgentId !== null || conversationTask.conversationUserId !== null) {
+      const workspaceScope = await findNativeChatWorkspaceScope(db, {
+        adapterType: initialSource.source.agent.adapterType,
+        environmentDriver: "sandbox",
+        companyId: input.companyId,
+        agentId: initialSource.run.agentId!,
+        issueId: conversationTask.id,
+      });
+      const expectedTaskRoot = workspaceScope && workspaceScope.projectId === null
+        ? nativeChatWorkspaceCwd(workspaceScope, null, false)
+        : null;
+      const filesystem = initialSource.policy.compilation.compiledPolicy.filesystem;
+      const readRoots = Array.isArray(filesystem?.readPaths) ? filesystem.readPaths : [];
+      const writeRoots = Array.isArray(filesystem?.writePaths) ? filesystem.writePaths : [];
+      if (!expectedTaskRoot || path.resolve(cwd) !== expectedTaskRoot ||
+        !readRoots.some(root => typeof root === "string" && path.resolve(root) === expectedTaskRoot) ||
+        !writeRoots.some(root => typeof root === "string" && path.resolve(root) === expectedTaskRoot))
+        throw conflict("Sandbox conversation execution requires the exact private Task workspace in its current read/write policy");
+    }
     const deadlineAt = new Date(Math.min(
       initialSource.deadlineAt.getTime(),
       input.timeoutMs && input.timeoutMs > 0 ? now.getTime() + input.timeoutMs : Number.POSITIVE_INFINITY,
@@ -2496,7 +2571,7 @@ export function runtimeControlService(
       : null;
     if (runnerProfile?.provider === "opencode") {
       const profile = initialSource.capability.modelBrokerProviderProfile;
-      if (!options.workerModels || !profile || !credentialBrokerOrigin)
+      if (!options.workerModels || !profile || !credentialBrokerOrigin || !managedModelBrokerOrigin)
         throw conflict("Qualified managed model broker is unavailable");
       const conversationTask = initialSource.source.task;
       const hasConversationIdentity = conversationTask.conversationAgentId !== null || conversationTask.conversationUserId !== null;
@@ -2524,7 +2599,7 @@ export function runtimeControlService(
         expiresAt: expiresAt.toISOString(), inputTokensUpperBound: minted.inputTokensUpperBound,
         maxOutputTokens: minted.maxOutputTokens };
       await createRunSecretRedactionRegistry(db).register(input.companyId, initialSource.run.id, minted.token);
-      env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN = credentialBrokerOrigin;
+      env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN = managedModelBrokerOrigin;
       env.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND = String(minted.inputTokensUpperBound);
       env.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS = String(minted.maxOutputTokens);
     }

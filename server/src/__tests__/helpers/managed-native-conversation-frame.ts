@@ -6,7 +6,7 @@ import { createServer as createHttpsServer } from "node:https";
 import { execFileSync } from "node:child_process";
 import express from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { agents, agentExecutionManifests, authSessions, authUsers, companies, heartbeatRuns, issues,
+import { agents, agentExecutionManifests, authSessions, authUsers, companies, heartbeatRuns, issues, issueComments,
   orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, createDb } from "@paperclipai/db";
 import { workerModelProfileSchema, type WorkerModelProfile } from "../../services/orchestration/worker-model-profiles.js";
 import { workerModelGateway } from "../../services/orchestration/worker-model-gateway.js";
@@ -48,6 +48,26 @@ export async function runManagedNativeConversationFrame(input: {
   opencodeBinary: string;
   budgetMonthlyCents?: number;
   tariff?: WorkerModelProfile["tariff"];
+  configureHeartbeat?: (context: {
+    db: ReturnType<typeof createDb>;
+    actor: AuthorizationActor;
+    companyId: string;
+    agentId: string;
+    providerBindingId: string;
+    gateway: ReturnType<typeof workerModelGateway>;
+    profile: WorkerModelProfile;
+    runHome: string;
+    opencodeBinary: string;
+    brokerOrigin: string;
+    certBundlePath: string;
+    setBrokerToken: (token: string) => void;
+  }) => Promise<{
+    sandboxExec?: NonNullable<Parameters<typeof heartbeatService>[1]>["sandboxExec"];
+    environmentRuntime?: NonNullable<Parameters<typeof heartbeatService>[1]>["environmentRuntime"];
+    beforeNativeExecution?: (args: Parameters<NonNullable<Parameters<typeof heartbeatService>[1]>["testNativeRunnerEnvironment"]>[0]) => Promise<Record<string, string>>;
+    close?: () => Promise<void>;
+    facts?: () => Record<string, unknown>;
+  }>;
   beforeProviderResponse?: (facts: {
     db: ReturnType<typeof createDb>;
     actor: AuthorizationActor;
@@ -66,6 +86,18 @@ export async function runManagedNativeConversationFrame(input: {
     budget: { companyMonthlyCents: number; agentMonthlyCents: number };
     profileBinding: { id: string; providerBindingId: string; providerSnapshotHash: string; qualifiedConfigurationHash: string; model: string };
     usage: { inputTokens: number; outputTokens: number };
+  }) => Promise<void>;
+  afterRunSettledBeforeTeardown?: (facts: {
+    db: ReturnType<typeof createDb>;
+    actor: AuthorizationActor;
+    companyId: string;
+    agentId: string;
+    issueId: string;
+    run: typeof heartbeatRuns.$inferSelect | null;
+    manifest: typeof agentExecutionManifests.$inferSelect | null;
+    reservation: typeof orchestrationModelReservations.$inferSelect | null;
+    nativeInputSourceReceipt: unknown;
+    sandboxRuntimeFacts: Record<string, unknown> | null;
   }) => Promise<void>;
 }) {
   const { db } = input;
@@ -165,25 +197,13 @@ export async function runManagedNativeConversationFrame(input: {
       const tools = Array.isArray(body.tools) ? body.tools as Array<Record<string, unknown>> : [];
       providerToolNames = tools.map(tool => tool.name).filter((name): name is string =>
         typeof name === "string" && /^[A-Za-z0-9_.-]{1,128}$/.test(name));
-      const finish = tools.find(tool => {
-        if (tool.name === "paperclip_finish") return true;
-        if (typeof tool.name !== "string") return false;
-        for (const prefix of ["paperclip__", "paperclip_", "paperclip."])
-          if (tool.name.startsWith(prefix)) return tool.name.slice(prefix.length) === "paperclip_finish";
-        return false;
-      });
-      if (!finish || typeof finish.name !== "string") {
-        providerStubFailure ??= { stage: "terminal_tool_lookup", code: "paperclip_finish_not_in_provider_tools" };
-        throw new Error("conversation_fixture_finish_tool_missing");
-      }
-      const result = { schema: "paperclip.run_result.v1", reportedWorkDisposition: "done", summary: "Conversation Native turn completed.",
-        completionClaim: { contractRevision: String(contract.revision), objectiveSatisfied: true,
-          criteria: contract.criteria.map(criterion => ({ criterionId: criterion.id, status: "satisfied", evidenceRefs: [] })), remainingWork: [] },
-        evidence: [], verification: [], attentionRequests: [], artifacts: [] };
+      // A conversation turn completes with an ordinary assistant reply. The
+      // Native executor binds that text to the real final agentMessage event
+      // and yields to the next Human message; it does not need a Worker
+      // paperclip_finish result.
       const usage = { input_tokens: 100, output_tokens: 32 };
       const responseBody = JSON.stringify({ id: `msg_conversation_${providerCalls.length}`, type: "message", role: "assistant", model,
-        stop_reason: "tool_use", content: [{ type: "tool_use", id: `conversation-finish-${providerCalls.length}`,
-          name: finish.name, input: result }], usage });
+        stop_reason: "end_turn", content: [{ type: "text", text: "I’ve received your message and am ready to continue." }], usage });
       const response = new Response(responseBody,
       { status: 200, headers: { "content-type": "application/json" } });
       if (input.beforeProviderResponse && activeRunId && activeIssueId) {
@@ -279,13 +299,21 @@ export async function runManagedNativeConversationFrame(input: {
   process.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN = origin;
   process.env.PAPERCLIP_AGENT_JWT_SECRET = `conversation-fixture-${randomUUID()}`;
   process.env.NODE_EXTRA_CA_CERTS = certBundlePath;
-  const heartbeat = heartbeatService(db, { testNativeRunnerEnvironment: async ({ execution, runId, issueId,
+  const sandboxHeartbeat = await input.configureHeartbeat?.({ db, actor: human, companyId, agentId,
+    providerBindingId: provider.provider.id, gateway, profile, runHome, opencodeBinary: input.opencodeBinary,
+    brokerOrigin: origin, certBundlePath, setBrokerToken: token => { activeToken = token; } });
+  const heartbeat = heartbeatService(db, { sandboxExec: sandboxHeartbeat?.sandboxExec,
+    environmentRuntime: sandboxHeartbeat?.environmentRuntime,
+    testNativeRunnerEnvironment: async ({ execution, runId, issueId,
     agentId: currentAgentId, responsibleUserId }) => {
     if (execution.provider.kind !== "opencode" || !responsibleUserId)
       throw new Error("conversation_fixture_provider_or_human_missing");
     activeExecution = execution;
     activeRunId = runId;
     activeIssueId = issueId;
+    if (sandboxHeartbeat?.beforeNativeExecution)
+      return await sandboxHeartbeat.beforeNativeExecution({ execution, runId, issueId, agentId: currentAgentId,
+        responsibleUserId });
     let minted: Awaited<ReturnType<typeof gateway.issueForConversationRun>>;
     try { minted = await gateway.issueForConversationRun({ companyId, agentId: currentAgentId, runId, responsibleUserId }); }
     catch (error) {
@@ -321,19 +349,33 @@ export async function runManagedNativeConversationFrame(input: {
     .where(and(eq(authSessions.id, sessionId), eq(authSessions.userId, userId))).limit(1);
   if (!humanSession || humanSession.expiresAt.getTime() <= Date.now())
     throw new Error("conversation_fixture_human_session_unavailable");
+  const foreignUserId = `conversation-foreign-${randomUUID()}`;
+  const now = new Date();
+  await db.insert(authUsers).values({ id: foreignUserId, name: "Foreign conversation Human",
+    email: `${foreignUserId}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now });
+  const foreignSessionId = await seedNativePasskeySession(db, foreignUserId);
+  const [foreignSession] = await db.select({ token: authSessions.token, expiresAt: authSessions.expiresAt })
+    .from(authSessions).where(eq(authSessions.id, foreignSessionId)).limit(1);
+  if (!foreignSession || foreignSession.expiresAt.getTime() <= Date.now())
+    throw new Error("conversation_fixture_foreign_session_unavailable");
   const humanCookie = `session_token=${encodeURIComponent(humanSession.token)}`;
+  const foreignCookie = `session_token=${encodeURIComponent(foreignSession.token)}`;
   const app = express();
   app.use(express.json());
   app.use(actorMiddleware(db, { deploymentMode: "authenticated", resolveSession: async req => {
     const token = (req.header("cookie") ?? "").split(";").map(value => value.trim())
       .map(value => value.slice(value.indexOf("=") + 1)).map(decodeURIComponent)
-      .find(value => value === humanSession.token);
-    if (!token || humanSession.expiresAt.getTime() <= Date.now()) return null;
+      .find(Boolean);
+    if (!token) return null;
+    const [session] = await db.select({ id: authSessions.id, userId: authSessions.userId,
+      expiresAt: authSessions.expiresAt }).from(authSessions)
+      .where(and(eq(authSessions.token, token), sql`${authSessions.expiresAt} > now()`)).limit(1);
+    if (!session) return null;
     const [user] = await db.select({ id: authUsers.id, name: authUsers.name, email: authUsers.email })
-      .from(authUsers).where(eq(authUsers.id, humanSession.userId)).limit(1);
+      .from(authUsers).where(eq(authUsers.id, session.userId)).limit(1);
     if (!user) return null;
     const result: BetterAuthSessionResult = {
-      session: { id: humanSession.id, userId: humanSession.userId, expiresAt: humanSession.expiresAt }, user,
+      session: { id: session.id, userId: session.userId, expiresAt: session.expiresAt }, user,
     };
     return result;
   } }));
@@ -373,15 +415,34 @@ export async function runManagedNativeConversationFrame(input: {
     const attempts = finalRun ? await db.select().from(orchestrationWorkerAttempts).where(eq(orchestrationWorkerAttempts.runId, finalRun.id)) : [];
     const profileValue = finalRun?.runnerProfileJson && typeof finalRun.runnerProfileJson === "object"
       ? finalRun.runnerProfileJson as Record<string, unknown> : {};
+    const comments = await db.select().from(issueComments).where(eq(issueComments.issueId, chat.body.id as string));
+    const agentReply = comments.find(comment => comment.authorAgentId === agentId && comment.createdByRunId === finalRun?.id) ?? null;
+    const [conversationIssue] = await db.select({ status: issues.status, conversationState: issues.conversationState,
+      executionRunId: issues.executionRunId }).from(issues).where(eq(issues.id, chat.body.id as string)).limit(1);
+    const countBeforeForeignWrite = comments.length;
+    const foreignWrite = await import("supertest").then(({ default: request }) => request(app)
+      .post(`/api/issues/${chat.body.id}/comments`).set("cookie", foreignCookie)
+      .send({ body: "This foreign session must not write to the conversation.", clientRequestId: randomUUID() }));
+    const commentsAfterForeignWrite = await db.select().from(issueComments).where(eq(issueComments.issueId, chat.body.id as string));
+    const sandboxRuntimeFacts = sandboxHeartbeat?.facts?.() ?? null;
+    const nativeInputSourceReceipt = profileValue.nativeInputSourceReceipt ?? null;
+    if (finalRun && ["succeeded", "failed", "timed_out", "cancelled", "superseded"].includes(finalRun.status))
+      await input.afterRunSettledBeforeTeardown?.({ db, actor: human, companyId, agentId,
+        issueId: chat.body.id as string, run: finalRun, manifest: manifest ?? null, reservation: reservation ?? null,
+        nativeInputSourceReceipt, sandboxRuntimeFacts });
     return { issueId: chat.body.id as string, firstCommentId: sent.body.id as string, run: finalRun ?? null,
       manifest: manifest ?? null, reservation: reservation ?? null, workerPlan: plan ?? null,
       workerAttempts: attempts, providerCallCount: providerCalls.length,
       providerHookInvoked, providerHookFailure, providerStubFailure, providerToolNames, brokerRequestFacts,
       providerKeyMatched: providerCalls.length > 0 && providerCalls.every(call => call.keyMatches),
-      issuerFacts, nativeInputSourceReceipt: profileValue.nativeInputSourceReceipt ?? null,
+      issuerFacts, nativeInputSourceReceipt,
+      agentReply, conversationIssue: conversationIssue ?? null, foreignWriteStatus: foreignWrite.status,
+      foreignWriteDidNotMutate: commentsAfterForeignWrite.length === countBeforeForeignWrite,
+      sandboxRuntimeFacts,
       runStatus: finalRun?.status ?? "not_started", success: finalRun?.status === "succeeded" };
   } finally {
     await heartbeat.drainActiveRunExecutions().catch(() => undefined);
+    await sandboxHeartbeat?.close?.().catch(() => undefined);
     runnerPrpWebSocketInternals.resetForTests();
     await new Promise<void>(resolve => broker.close(() => resolve()));
     if (prevBroker === undefined) delete process.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN; else process.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN = prevBroker;

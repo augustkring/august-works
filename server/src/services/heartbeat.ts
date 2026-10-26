@@ -22315,6 +22315,37 @@ export function heartbeatService(
         },
       );
       const environmentRealizeStartedAtMs = Date.now();
+      if (
+        selectedEnvironmentForConfig?.driver === "sandbox" &&
+        nativeChatWorkspaceScope &&
+        nativeChatWorkspaceScope.projectId === null &&
+        nativeChatExpectedCwd &&
+        path.resolve(executionWorkspace.cwd) === nativeChatExpectedCwd &&
+        executionWorkspace.source === "task_session" &&
+        executionWorkspace.projectId === null &&
+        executionWorkspace.workspaceId === null &&
+        executionWorkspace.additionalWorkspaces.length === 0 &&
+        executionWorkspace.repoUrl === null &&
+        executionWorkspace.repoRef === null
+      ) {
+        // A remote private conversation uses the exact same server-owned empty
+        // Task root as the local path. This pins the sandbox's working directory
+        // before realization/staging; the RuntimeControl exec owner checks that
+        // the current qualified policy names this exact root for read and write.
+        const leaseMetadata = parseObject(activeEnvironmentLease.lease.metadata);
+        const existingRemoteCwd = typeof leaseMetadata.remoteCwd === "string"
+          ? path.resolve(leaseMetadata.remoteCwd)
+          : null;
+        if (existingRemoteCwd && existingRemoteCwd !== nativeChatExpectedCwd)
+          throw new NativeRunnerOwnershipUnverifiedError("native_chat_sandbox_workspace_root_mismatch");
+        activeEnvironmentLease = {
+          ...activeEnvironmentLease,
+          lease: {
+            ...activeEnvironmentLease.lease,
+            metadata: { ...leaseMetadata, remoteCwd: nativeChatExpectedCwd },
+          },
+        };
+      }
       let realizationResult: Awaited<
         ReturnType<typeof envOrchestrator.realizeForRun>
       >;
@@ -22368,9 +22399,22 @@ export function heartbeatService(
         catch { throw new ConfigurationIncompleteFailure("Project authentication conflicts with this agent’s managed AI connection", { configurationIncomplete: { reason: "ai_connection_incompatible", actionUrl: `/agents/${agent.id}/runtime` } }); }
       }
       const remoteExecution = realizationResult.remoteExecution;
+      const realizedLocalWorkspacePath = parseObject(workspaceRealization.local).path;
+      const realizedRemoteWorkspacePath = parseObject(workspaceRealization.remote).path;
+      const qualifiedPrivateConversationSandbox =
+        executionTarget?.kind === "remote" &&
+        executionTarget.transport === "sandbox" &&
+        nativeChatWorkspaceScope?.projectId === null &&
+        nativeChatExpectedCwd !== null &&
+        path.resolve(executionWorkspace.cwd) === nativeChatExpectedCwd &&
+        executionTarget.remoteCwd !== undefined &&
+        path.resolve(executionTarget.remoteCwd) === nativeChatExpectedCwd &&
+        typeof realizedLocalWorkspacePath === "string" && path.resolve(realizedLocalWorkspacePath) === nativeChatExpectedCwd &&
+        typeof realizedRemoteWorkspacePath === "string" && path.resolve(realizedRemoteWorkspacePath) === nativeChatExpectedCwd &&
+        Array.isArray(workspaceRealization.additional) && workspaceRealization.additional.length === 0;
       if (
         nativeChatWorkspaceScope &&
-        (executionTarget?.kind === "remote" ||
+        ((executionTarget?.kind === "remote" && !qualifiedPrivateConversationSandbox) ||
           path.resolve(executionWorkspace.cwd) !== nativeChatExpectedCwd)
       ) {
         throw new ConfigurationIncompleteFailure(
@@ -26160,10 +26204,12 @@ export function heartbeatService(
           recordedResponsibleUserDenialCode ??
           nonRetryablePreflightCode ??
           "setup_failed";
-        logger.error(
-          { err: outerErr, runId },
-          "heartbeat execution setup failed",
-        );
+        logger.error(nativeExecutionFailureLogFields({
+          error: outerErr,
+          runId,
+          failureCode: setupFailureErrorCode,
+          includeDeadlockLockGraph: process.env.PAPERCLIP_NATIVE_DEADLOCK_DIAGNOSTICS === "1",
+        }), "heartbeat execution setup failed");
         const setupFailureAgent = await getAgent(run.agentId).catch(() => null);
         // The structured failure payload drives the recovery notice and next
         // action, so it is persisted even when the agent lookup failed and the

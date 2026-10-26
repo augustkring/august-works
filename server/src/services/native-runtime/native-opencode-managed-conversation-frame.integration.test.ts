@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createDb } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { makeConversationFixtureTreeWritable, runManagedNativeConversationFrame } from "../../__tests__/helpers/managed-native-conversation-frame.js";
+import { configureManagedConversationSandboxHost } from "../../__tests__/helpers/managed-native-conversation-sandbox-host.js";
 
 function qualifiedOpenCodeBinary(): string | null {
   if (process.platform !== "linux") return null;
@@ -79,6 +80,12 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
     expect(result.run).toMatchObject({ runtimeMode: "native", scopeKind: "issue", nativeIssueId: result.issueId,
       responsibleUserId: expect.any(String), status: "succeeded" });
     expect(result.manifest).toMatchObject({ runId: result.run?.id, agentId: result.run?.agentId });
+    expect(result.agentReply).toMatchObject({ authorAgentId: result.run?.agentId, createdByRunId: result.run?.id,
+      body: "I’ve received your message and am ready to continue." });
+    expect(result.conversationIssue).toMatchObject({ status: "in_review", conversationState: "waiting",
+      executionRunId: result.run?.id });
+    expect([403, 404]).toContain(result.foreignWriteStatus);
+    expect(result.foreignWriteDidNotMutate).toBe(true);
     expect(result.reservation).toMatchObject({ purpose: "conversation_model", conversationRunId: result.run?.id,
       conversationIssueId: result.issueId, status: "completed" });
     expect(result.workerPlan).toBeNull();
@@ -87,4 +94,40 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
     expect(sourceReceipt).toMatchObject({ version: 1, binding: { runId: result.run?.id,
       issueId: result.issueId, responsibleUserId: result.run?.responsibleUserId } });
   }, 240_000);
+
+  it("runs the route-created conversation through RuntimeControl and its signed qualified sandbox relay", async () => {
+    const binary = qualifiedOpenCodeBinary();
+    if (!binary) throw new Error("qualified_opencode_binary_unavailable");
+    const result = await runManagedNativeConversationFrame({ db, root, opencodeBinary: binary,
+      configureHeartbeat: context => configureManagedConversationSandboxHost({ ...context, root }),
+      beforeProviderResponse: async facts => {
+        expect(facts.run.status).toBe("running");
+        expect(facts.run.nativeIssueId).toBe(facts.issueId);
+        expect(facts.reservation).toMatchObject({ purpose: "conversation_model", status: "dispatched",
+          conversationRunId: facts.run.id, conversationIssueId: facts.issueId, executionManifestId: facts.manifest.id });
+      } });
+    expect(result.success, JSON.stringify({ runStatus: result.runStatus, runError: result.run?.error,
+      errorCode: result.run?.errorCode, providerCallCount: result.providerCallCount,
+      providerHookInvoked: result.providerHookInvoked, providerHookFailure: result.providerHookFailure,
+      providerStubFailure: result.providerStubFailure, brokerRequestFacts: result.brokerRequestFacts,
+      sandboxRuntimeFacts: result.sandboxRuntimeFacts })).toBe(true);
+    expect(result.providerHookInvoked).toBe(true);
+    expect(result.providerKeyMatched).toBe(true);
+    expect(result.run).toMatchObject({ runtimeMode: "native", scopeKind: "issue", nativeIssueId: result.issueId,
+      responsibleUserId: expect.any(String), status: "succeeded" });
+    expect(result.workerPlan).toBeNull();
+    expect(result.workerAttempts).toHaveLength(0);
+    expect(result.agentReply).toMatchObject({ authorAgentId: result.run?.agentId, createdByRunId: result.run?.id,
+      body: "I’ve received your message and am ready to continue." });
+    expect(result.conversationIssue).toMatchObject({ status: "in_review", conversationState: "waiting",
+      executionRunId: result.run?.id });
+    expect(result.sandboxRuntimeFacts).toMatchObject({ mode: "controlled_signed_host_relay", relayAuthenticated: true });
+    const runtimeFacts = result.sandboxRuntimeFacts as Record<string, unknown> | null;
+    expect(runtimeFacts?.execCount).toEqual(expect.any(Number));
+    expect(Number(runtimeFacts?.execCount)).toBeGreaterThan(0);
+    expect(Number(runtimeFacts?.exactPrivateCwdCount)).toBeGreaterThan(0);
+    expect(Number(runtimeFacts?.managedModelCredentialCount)).toBeGreaterThan(0);
+    expect(runtimeFacts?.negativeControls).toEqual({ wrongRunDenied: true, wrongLeaseDenied: true,
+      wrongCwdDenied: true, wrongPolicyDenied: true });
+  }, 300_000);
 });

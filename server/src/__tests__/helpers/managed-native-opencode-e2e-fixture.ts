@@ -664,12 +664,6 @@ export async function runManagedNativeOpenCodeFixture(input: {
         .set("cookie", conversationHumanCookie).send({});
       expect(opened.status, JSON.stringify(opened.body)).toBe(200);
       if (typeof opened.body.id !== "string") throw new Error("managed_fixture_conversation_issue_missing");
-      const privateIssue = await request(conversationApp).patch(`/api/issues/${opened.body.id}`)
-        .set("cookie", conversationHumanCookie).send({ visibility: "private" });
-      expect(privateIssue.status, JSON.stringify(privateIssue.body)).toBe(200);
-      const shared = await request(conversationApp).post(`/api/issues/${opened.body.id}/access-grants`)
-        .set("cookie", conversationHumanCookie).send({ subjectType: "user", subjectId: bobUserId });
-      expect(shared.status, JSON.stringify(shared.body)).toBe(201);
       const commentRequestId = randomUUID();
       const comment = await request(conversationApp).post(`/api/issues/${opened.body.id}/comments`)
         .set("cookie", conversationHumanCookie).send({ body: "Start the admitted source-bound Worker plan.",

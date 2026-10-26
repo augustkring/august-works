@@ -52,6 +52,7 @@ interface NativeSourceReadContext { db: object; txOrdinal?: number; scopes: Map<
   pendingReaderChecks: Set<string>; activeReaderChecks: Set<string> }
 interface NativeSourceReadScope { context: NativeSourceReadContext; actorKey: string; active: Set<string>; complete: Set<string>;
   frozenTaskSnapshots: Set<string>;
+  conversationRootComments: Set<string>;
   deferredReaderSets: Map<string, { companyId: string; runId: string; policy: NativePayloadSourcePolicy;
     inputs: NativePayloadSourceInput[] }> }
 const nativeSourceReadScopes = new AsyncLocalStorage<NativeSourceReadContext>();
@@ -143,7 +144,7 @@ function nativeSourceReadScope(db: Db | Transaction, actor: AuthorizationActor):
     pendingReaderChecks: new Set(), activeReaderChecks: new Set(),
     privacyLockedCompanies: new Set(), active: true };
   const scope: NativeSourceReadScope = { context, actorKey: nativeSha256(actor), active: new Set(), complete: new Set(),
-    frozenTaskSnapshots: new Set(), deferredReaderSets: new Map() };
+    frozenTaskSnapshots: new Set(), conversationRootComments: new Set(), deferredReaderSets: new Map() };
   context.scopes.set(scope.actorKey, scope);
   return scope;
 }
@@ -299,7 +300,7 @@ function withNativeSourceReadScope<T>(db: Db | Transaction, actor: Authorization
     let scope = current.scopes.get(actorKey);
     if (!scope) {
       scope = { context: current, actorKey, active: new Set(), complete: new Set(), frozenTaskSnapshots: new Set(),
-        deferredReaderSets: new Map() };
+        conversationRootComments: new Set(), deferredReaderSets: new Map() };
       current.scopes.set(actorKey, scope);
       nativeSourceMemoCount("scopes", actor);
     } else nativeSourceMemoCount("reuses", actor);
@@ -1098,16 +1099,13 @@ async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction
   for (const source of capture.sourceSet.inputs) {
     nativeSourceReadWork(scope);
     if (source.kind === "comment") {
-      const [comment] = await db.select({ sourceVersion: sql<string>`extract(epoch from ${issueComments.updatedAt})::text`, issueId: issueComments.issueId })
-        .from(issueComments).where(and(eq(issueComments.companyId, companyId), eq(issueComments.issueId, source.issueId),
-          eq(issueComments.id, source.commentId), isNull(issueComments.deletedAt)));
-      const { issueService } = await import("./issues.js");
-      const view = comment ? await issueService(db as Db).getComment(source.commentId) : null;
-      const projection = view && typeof view === "object" ? view as Record<string, unknown> : null;
-      if (!comment || comment.sourceVersion !== source.sourceVersion || !projection ||
-        nativeSha256({ body: projection.body, presentation: projection.presentation, metadata: projection.metadata }) !== source.contentHash ||
-        !await canActorReadIssuePrivacy(db, actor, { id: source.issueId, companyId }))
-        throw forbidden("A Native output comment source changed or was erased");
+      const rootTaskInputs = capture.sourceSet.inputs.filter((candidate): candidate is Extract<NativePayloadSourceInput, { kind: "task" }> =>
+        candidate.kind === "task" && candidate.issueId === source.issueId);
+      const selfOwnedConversationTaskId = rootTaskInputs.some(task => scope.conversationRootComments.has(
+        nativeSha256({ companyId, task, source }))) ? source.issueId : undefined;
+      await assertConversationCommentSourceCurrent(db, { companyId, actor, source,
+        policy: capture.sourceSet.policy, inputs: capture.sourceSet.inputs,
+        ...(selfOwnedConversationTaskId ? { selfOwnedConversationTaskId } : {}) }, scope);
     }
     if (source.kind === "interaction") {
       const { materializeNativeInteractionResponses } = await import("./native-runtime/native-interaction-bridge.js");
@@ -1180,7 +1178,7 @@ async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction
     }
   }
   for (const source of capture.sourceSet.inputs) {
-    if (["task", "project", "memory", "context", "document_revision", "completion_contract", "runtime_instructions", "runtime_skill", "workspace_metadata", "worker_model_dispatch", "conversation_model_dispatch", "tool_result"].includes(source.kind)) {
+    if (["task", "project", "memory", "context", "document_revision", "completion_contract", "runtime_instructions", "runtime_skill", "workspace_metadata", "worker_model_dispatch", "conversation_model_dispatch", "tool_result", "comment"].includes(source.kind)) {
       if (source.kind === "memory") {
         if (!capture.sourceSet.policy.memoryIds.includes(source.memoryId)) throw forbidden("A Native Memory source is unavailable");
         const evidence = receipt?.success ? nativeMemoryReviewEvidence(receipt.data, source) : undefined;
@@ -1953,6 +1951,17 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
       continue;
     }
     if (source.kind === "comment") {
+      const rootTaskInputs = inputs.data.filter((candidate): candidate is Extract<NativePayloadSourceInput, { kind: "task" }> =>
+        candidate.kind === "task" && candidate.issueId === source.issueId);
+      // A protocol-1 conversation Task snapshot may own this exact Human
+      // comment as its sole retained root. The Task owner walk above validates
+      // that root, its author binding, and the comment snapshot with the
+      // narrowly scoped self-owned issue allowance. Do not revalidate the same
+      // comment as an unrelated root with the broader standalone policy. Tie
+      // this reuse to the exact Task source present in this component, so a
+      // different cumulative prefix cannot inherit the allowance.
+      if (rootTaskInputs.some(task => scope.conversationRootComments.has(
+        nativeSha256({ companyId: input.companyId, task, source })))) continue;
       await assertConversationCommentSourceCurrent(db, { companyId: input.companyId, actor: input.actor, source,
         policy: input.policy, inputs: input.inputs }, scope);
       continue;
@@ -2575,7 +2584,7 @@ async function assertNativeTaskSourceInputCurrentInScope(db: Db | Transaction, c
     identifier: task.identifier ?? null, title: task.title, status: task.status, priority: task.priority }), "utf8").digest("hex") : null;
   if (!task || (bodyHash !== source.contentHash && ancestorHash !== source.contentHash))
     throw forbidden("A Native source Task changed");
-  await assertNativeTaskSnapshotOwnerCurrentInScope(db, companyId, actor, source.issueId, scope);
+  await assertNativeTaskSnapshotOwnerCurrentInScope(db, companyId, actor, source.issueId, scope, undefined, source);
 }
 
 async function assertConversationCommentSourceCurrent(db: Db | Transaction, input: {
@@ -2604,7 +2613,7 @@ async function assertConversationCommentSourceCurrent(db: Db | Transaction, inpu
       throw new Error(`native_source_comment_owner_diagnostic:${reason}`);
     throw forbidden("A Native source Comment changed or was erased");
   };
-  if (!comment || comment.sourceVersion !== input.source.sourceVersion || !projection) reject("owner_version");
+  if (!comment || comment.sourceVersion !== input.source.sourceVersion || projection === null) return reject("owner_version");
   const snapshotRootsRetained = snapshot.success && snapshot.data.inputs.every(root =>
     input.inputs.some(candidate => isDeepStrictEqual(candidate, root))) &&
     (Object.keys(input.policy) as (keyof NativePayloadSourcePolicy)[]).every(key =>
@@ -2638,7 +2647,8 @@ async function assertConversationCommentSourceCurrent(db: Db | Transaction, inpu
 }
 
 async function assertNativeTaskSnapshotOwnerCurrentInScope(db: Db | Transaction, companyId: string, actor: AuthorizationActor,
-  issueId: string, scope: NativeSourceReadScope, expected?: { snapshot: unknown }): Promise<void> {
+  issueId: string, scope: NativeSourceReadScope, expected?: { snapshot: unknown },
+  validatedTaskSource?: Extract<NativePayloadSourceInput, { kind: "task" }>): Promise<void> {
   const [owner] = await db.select({ id: issues.id, companyId: issues.companyId,
     conversationAgentId: issues.conversationAgentId, conversationUserId: issues.conversationUserId,
     payloadSourceProtocolVersion: issues.payloadSourceProtocolVersion, payloadSourceSnapshot: issues.payloadSourceSnapshot,
@@ -2667,6 +2677,8 @@ async function assertNativeTaskSnapshotOwnerCurrentInScope(db: Db | Transaction,
         throw forbidden("The Native conversation source witness is unavailable");
       await assertConversationCommentSourceCurrent(db, { companyId, actor, source, policy: snapshot.data.policy,
         inputs: snapshot.data.inputs, selfOwnedConversationTaskId: issueId }, scope);
+      if (validatedTaskSource?.issueId === issueId)
+        scope.conversationRootComments.add(nativeSha256({ companyId, task: validatedTaskSource, source }));
     } else await assertNativeFrozenTaskSnapshotCurrent(db, companyId, actor, issueId, snapshot.data, scope);
   } else if (owner.payloadSourceProtocolVersion === 0 || owner.payloadSourceProtocolVersion === null) {
     deferNativeAnalyticalTaskChecks(scope, companyId, actor, [issueId]);
@@ -3169,20 +3181,13 @@ async function assertNativeDocumentRevisionCurrentSourceAccessInScope(db: Db, in
       continue;
     }
     if (source.kind === "comment") {
-      const [comment] = await db.select({ comment: issueComments, sourceVersion: sql<string>`extract(epoch from ${issueComments.updatedAt})::text` })
-        .from(issueComments).where(and(eq(issueComments.companyId, input.companyId), eq(issueComments.issueId, source.issueId),
-          eq(issueComments.id, source.commentId), isNull(issueComments.deletedAt)));
-      const { issueService } = await import("./issues.js");
-      const view = comment ? await issueService(db as Db).getComment(source.commentId) : null;
-      const projection = view && typeof view === "object" ? view as Record<string, unknown> : null;
-      if (!comment || comment.sourceVersion !== source.sourceVersion || !projection ||
-        createHash("sha256").update(JSON.stringify({ body: projection.body, presentation: projection.presentation,
-          metadata: projection.metadata }), "utf8").digest("hex") !== source.contentHash)
-        throw forbidden("A Native document comment source changed or was erased");
-      const [task] = await db.select({ id: issues.id, companyId: issues.companyId }).from(issues).where(and(
-        eq(issues.companyId, input.companyId), eq(issues.id, source.issueId)));
-      if (!task || !await canActorReadIssuePrivacy(db, input.actor, task))
-        throw forbidden("A Native document comment source is no longer readable");
+      const rootTaskInputs = snapshot.inputs.filter((candidate): candidate is Extract<NativePayloadSourceInput, { kind: "task" }> =>
+        candidate.kind === "task" && candidate.issueId === source.issueId);
+      const selfOwnedConversationTaskId = rootTaskInputs.some(task => scope.conversationRootComments.has(
+        nativeSha256({ companyId: input.companyId, task, source }))) ? source.issueId : undefined;
+      await assertConversationCommentSourceCurrent(db, { companyId: input.companyId, actor: input.actor, source,
+        policy: snapshot.policy, inputs: snapshot.inputs,
+        ...(selfOwnedConversationTaskId ? { selfOwnedConversationTaskId } : {}) }, scope);
       continue;
     }
     if (source.kind === "interaction") {
