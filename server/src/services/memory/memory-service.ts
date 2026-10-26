@@ -147,8 +147,7 @@ async function captureHumanManualTaskMemorySources(db:Db,companyId:string,princi
     for(const key of Object.keys(policy) as (keyof NativePayloadSourcePolicy)[])
       policy[key]=[...new Set([...policy[key],...snapshot.data.policy[key]])];
     const input:NativePayloadSourceInput={kind:"task",issueId,sourceVersion:item.sourceVersion,
-      contentHash:createHash("sha256").update(JSON.stringify({id:issueId,identifier:source.identifier,title:source.title,
-        description:source.description,workMode:source.workMode}),"utf8").digest("hex")};
+      contentHash:bodyHash.hash};
     if(!inputs.some(existing=>JSON.stringify(existing)===JSON.stringify(input)))inputs.push(input);
   }
   if(inputs.length+Object.values(policy).reduce((sum,ids)=>sum+ids.length,0)>256)return null;

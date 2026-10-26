@@ -67369,7 +67369,16 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
         "Your follow-up is queued.",
         "Answer to the surviving second message",
       ]);
-      expect(runtime.edits).toEqual([
+      const wakeFacts = {
+        editAttempts: runtime.editAttempts.map(({ messageId }) => ({ hasMessageId: Boolean(messageId) })),
+        wakePublications: (await db.select({ idempotencyKey: chatPublications.idempotencyKey,
+          state: chatPublications.state, attempts: chatPublications.attempts,
+          hasProviderMessageId: sql<boolean>`${chatPublications.providerMessageId} is not null` })
+          .from(chatPublications).where(and(eq(chatPublications.endpointId, context.endpoint.id),
+            like(chatPublications.idempotencyKey, "wake:%"))))
+          .map(({ idempotencyKey, ...row }) => ({ state: idempotencyKey.split(":")[2], ...row })),
+      };
+      expect(runtime.edits, JSON.stringify(wakeFacts)).toEqual([
         {
           threadId: context.thread.thread.id,
           messageId: queued.providerMessageId,

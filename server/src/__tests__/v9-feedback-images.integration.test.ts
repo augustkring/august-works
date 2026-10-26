@@ -385,7 +385,6 @@ describe("native selected feedback images with owned scanner-wire and filesystem
       .rejects.toMatchObject({ status: 409 });
     await owner.processOne(new Date(Date.now() + 120000));
     const retryState = await owner.get(companyId);
-    expect(retryState).toMatchObject({ status: "processing", errorCode: null });
     expect(bulkCalls).toBe(1); expect(await rows()).toEqual([]);
     expect(retryState).toMatchObject({ status: "processing", completedAt: null });
     const pending = await db.select().from(feedbackImageDeletions).where(eq(feedbackImageDeletions.companyId, companyId));

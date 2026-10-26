@@ -887,7 +887,21 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
           where captured_task_edge.company_id=temporal_owner.company_id and captured_task_edge.issue_id=temporal_owner.id
             and captured_task_edge.source_kind='issue' and captured_task_edge.context_manifest_id is null
             and captured_task_edge.source_id=(captured_input->>'issueId')::uuid
-            and extract(epoch from captured_task.updated_at)::text=captured_input->>'sourceVersion'
+            -- New Task captures bind to the immutable payload-only owner
+            -- hash. Legacy captures used two closed JSON projections; compare
+            -- those against the current row too. This keeps operational row
+            -- timestamps out of source identity without accepting an unbound
+            -- hash or a stale Task body.
+            and captured_input->>'contentHash' ~ '^[0-9a-f]{64}$'
+            and (captured_input->>'contentHash'=public.aw_native_payload_body_hash('issue',to_jsonb(captured_task))
+              or captured_input->>'contentHash'=encode(sha256(convert_to(
+                '{"id":'||to_json(captured_task.id::text)::text||',"identifier":'||to_json(captured_task.identifier)::text||
+                ',"title":'||to_json(captured_task.title)::text||',"description":'||to_json(captured_task.description)::text||
+                ',"workMode":'||to_json(captured_task.work_mode)::text||'}','UTF8')),'hex')
+              or captured_input->>'contentHash'=encode(sha256(convert_to(
+                '{"id":'||to_json(captured_task.id::text)::text||',"identifier":'||to_json(captured_task.identifier)::text||
+                ',"title":'||to_json(captured_task.title)::text||',"status":'||to_json(captured_task.status)::text||
+                ',"priority":'||to_json(captured_task.priority)::text||'}','UTF8')),'hex'))
             and captured_task.payload_source_protocol_version=1 and captured_task.payload_source_snapshot is not null
             and captured_task.payload_source_snapshot_invalidated=false
             and captured_task.payload_source_snapshot->'owner'->>'kind'='issue'

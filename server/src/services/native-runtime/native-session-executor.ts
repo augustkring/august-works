@@ -138,6 +138,7 @@ import {
   nativeRunResults,
   memoryRecords,
   orchestrationModelReservations,
+  orchestrationWorkerAttempts,
   toolInvocations,
 } from "@paperclipai/db";
 import { PaperclipControlPlanePort } from "./paperclip-control-plane-port.js";
@@ -8335,15 +8336,18 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         }
         if (!managedTaskParentBindingValid)
           throw new Error("managed_opencode_tool_result_binding_invalid");
+        // The predicate above is a composite boolean, so retain its exact
+        // validation while making the proven ID type explicit to Drizzle.
+        const createdTaskId = resultTask.id as string;
         const [child] = await tx.select({ id: issues.id, identifier: issues.identifier, title: issues.title,
           description: issues.description, status: issues.status, priority: issues.priority, parentId: issues.parentId,
           sourceVersion: sql<string>`extract(epoch from ${issues.updatedAt})::text`,
-        }).from(issues).where(and(eq(issues.companyId, input.companyId), eq(issues.id, resultTask.id),
+          ownerBodyHash: sql<string>`public.aw_native_payload_body_hash('issue',to_jsonb(${issues}))`,
+        }).from(issues).where(and(eq(issues.companyId, input.companyId), eq(issues.id, createdTaskId),
           unparentedConversationTask ? isNull(issues.parentId) : eq(issues.parentId, input.issueId)));
         if (!child) throw new Error("managed_opencode_tool_result_binding_invalid");
         const taskInput = nativePayloadSourceInputSchema.parse({ kind: "task", issueId: child.id,
-          sourceVersion: child.sourceVersion, contentHash: createHash("sha256").update(JSON.stringify({ id: child.id,
-            identifier: child.identifier ?? null, title: child.title, status: child.status, priority: child.priority }), "utf8").digest("hex") });
+          sourceVersion: child.sourceVersion, contentHash: child.ownerBodyHash });
         if (taskInput.kind !== "task") throw new Error("managed_opencode_tool_result_binding_invalid");
         createdTask = { id: child.id, source: taskInput };
       }
@@ -10348,8 +10352,35 @@ async function executePaperclipNativeSessionWithinScope(
                   eq(issues.companyId, input.execution.binding.companyId),
                 ))
                 .limit(1);
+              const [activeWorkerAttempt] = await input.db
+                .select({ id: orchestrationWorkerAttempts.id })
+                .from(orchestrationWorkerAttempts)
+                .where(and(
+                  eq(orchestrationWorkerAttempts.companyId, input.execution.binding.companyId),
+                  eq(orchestrationWorkerAttempts.agentId, input.execution.binding.agentId),
+                  eq(orchestrationWorkerAttempts.runId, runId),
+                  eq(orchestrationWorkerAttempts.status, "running"),
+                ))
+                .limit(1);
+              const [currentRunProfile] = await input.db
+                .select({ runnerProfileJson: heartbeatRuns.runnerProfileJson })
+                .from(heartbeatRuns)
+                .where(and(
+                  eq(heartbeatRuns.companyId, input.execution.binding.companyId),
+                  eq(heartbeatRuns.agentId, input.execution.binding.agentId),
+                  eq(heartbeatRuns.id, runId),
+                ))
+                .limit(1);
+              const modelWireIntents = record(currentRunProfile?.runnerProfileJson).nativeAwModelWireIntents;
+              const workerModelPurposeWasUsed = Array.isArray(modelWireIntents) &&
+                modelWireIntents.some(value => record(value).modelPurpose === "worker_model");
               const replyResult = nativeConversationReplyResult({
-                conversation: conversation?.agentId === input.execution.binding.agentId,
+                // A Worker plan may run against a sealed conversation root,
+                // but it still needs its ordinary semantic finish. Only a
+                // conversation turn without an active Worker attempt may use
+                // the plain-reply completion path.
+                conversation: conversation?.agentId === input.execution.binding.agentId &&
+                  !activeWorkerAttempt && !workerModelPurposeWasUsed,
                 terminalEvent,
                 replyEvent: completedConversationReply,
                 completionContract: input.execution.completionContract.contract,

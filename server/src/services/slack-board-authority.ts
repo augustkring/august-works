@@ -22,7 +22,7 @@ type DbTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
 type Reader = Pick<Db | DbTransaction, "select" | "transaction">;
 type Endpoint = typeof chatEndpoints.$inferSelect;
 
-export async function slackBoardAuthor(db: Reader, endpoint: Endpoint, userId: string) {
+export async function slackBoardAuthor(db: Pick<Db | DbTransaction, "select">, endpoint: Endpoint, userId: string) {
   const links = await db
     .select({ principal: chatExternalPrincipals })
     .from(chatIdentityLinks)
@@ -60,6 +60,7 @@ export async function authorizeSlackBoardPublication(
   publication: typeof chatPublications.$inferSelect,
   botToken: string,
   fetchImpl: typeof fetch,
+  options: { allowDeletedSource?: boolean } = {},
 ) {
   if (!publication.commentId) return true;
   const [source] = await db
@@ -124,7 +125,7 @@ export async function authorizeSlackBoardPublication(
       .orderBy(desc(chatActions.createdAt))
       .limit(1);
   }
-  if (receipt?.status === "cancelled" || source.comment.deletedAt) return false;
+  if (receipt?.status === "cancelled" || (source.comment.deletedAt && !options.allowDeletedSource)) return false;
   const [task] = await db
     .select({ id: issues.id, companyId: issues.companyId })
     .from(issues)

@@ -17,7 +17,7 @@ export function prepareHeartbeatProjectlessNativeEnvironment(
   env: Record<string, unknown>,
   networkAccess: boolean,
 ): Record<string, string> {
-  const result = {
+  const result: Record<string, string> = {
     ...githubBrokerEnvironment(env, { url: "", token: "" }),
     // Without staged wrappers, prevent the provider image's gh config and
     // shell startup files from restoring ambient credentials/configuration.

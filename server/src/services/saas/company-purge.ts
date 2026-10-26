@@ -3,10 +3,10 @@ import { enqueueSkillVersionFileErasure } from "../learning/skill-file-erasure.j
 import { and, eq, inArray, is, sql, type SQL } from "drizzle-orm";
 import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
 import * as schema from "@paperclipai/db";
-import { customerFeedback, supportCases, projectRoadmapProposals, causalClaims, businessScenarios, forecastSpecs, businessMetrics, businessMetricTargets, strategyExecutionLinks, processAnalysisDefinitions, decisionContexts, automationArtifacts, automationArtifactVersions, companySkills, companySkillVersions, companies, companyDeletionOperations, orchestrationCompanyPurposeBudgets, orchestrationCompanyPurposeReservations, agentExecutionManifests, heartbeatRuns, issues, memoryRecords, type Db } from "@paperclipai/db";
+import { customerFeedback, supportCases, projectRoadmapProposals, causalClaims, businessScenarios, forecastSpecs, businessMetrics, businessMetricTargets, strategyExecutionLinks, processAnalysisDefinitions, decisionContexts, automationArtifacts, automationArtifactVersions, companySkills, companySkillVersions, companies, companyDeletionOperations, orchestrationCompanyPurposeBudgets, orchestrationCompanyPurposeReservations, agentExecutionManifests, heartbeatRuns, issues, memoryDeletionMarkers, memoryRecords, type Db } from "@paperclipai/db";
 import { conflict } from "../../errors.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
-import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
+import { lockMemoryPrivacy, purgeDerivedWorkflowMemory } from "../memory/memory-privacy.js";
 
 // Minimal ownership/billing/erasure receipts survive content deletion. Never physically drop the company tombstone.
 const retained = new Set([
@@ -30,11 +30,14 @@ const retained = new Set([
   "platform_admin_audit",
   "support_sessions",
 ]);
-// The immutable V5 execution manifest is deleted by the original Run's
-// ON DELETE CASCADE after its child scope receipts have been removed. A direct
-// company-scoped DELETE fires the immutable-manifest trigger while the Run is
-// still present and cannot be treated as a company erasure proof.
-const cascadeOnly = new Set(["agent_execution_manifests"]);
+// The immutable V5 execution manifest and its immutable authorization/item
+// rows are deleted by the original Run's ON DELETE CASCADE. Direct child
+// deletion would encounter their owner-presence guards before the Run cascade.
+const cascadeOnly = new Set([
+  "agent_execution_manifests",
+  "agent_execution_manifest_items",
+  "agent_execution_authorizations",
+]);
 export async function purgeCompanyContent(
   db: Db,
   companyId: string,
@@ -181,6 +184,23 @@ export async function purgeCompanyContent(
       conversationRetiredAt, status: "cancelled", cancelledAt: conversationRetiredAt, hiddenAt: conversationRetiredAt,
       assigneeAgentId: null, assigneeUserId: null, executionRunId: null, checkoutRunId: null, updatedAt: conversationRetiredAt,
     }).where(and(eq(issues.companyId, companyId), sql`${issues.conversationAgentId} is not null`));
+    // Persist the canonical Run source-erasure receipt while the original
+    // Native Task and its binding still exist. The immutable manifest's
+    // Context may be an earlier general Context with no conversation Task;
+    // relying on that Context FK after deleting the issue loses the source
+    // proof. The existing erasure owner performs the full descendant scrub
+    // and writes only its content-free run marker in this transaction.
+    const retiredConversationRuns = await tx.execute<{ id: string }>(sql`
+      select h.id::text as id from heartbeat_runs h
+      join issues i on i.company_id=h.company_id and i.id=h.native_issue_id
+      where h.company_id=${companyId}::uuid and h.runtime_mode='native'
+        and i.conversation_retired_at=${conversationRetiredAt}
+    `);
+    if (retiredConversationRuns.length) {
+      await purgeDerivedWorkflowMemory(tx as unknown as Db, companyId, [], conversationRetiredAt, {
+        workflowRevisionIds: [], artifactVersionIds: [], runIds: retiredConversationRuns.map(row => row.id),
+      });
+    }
     // These purpose-ledger rows have a native DELETE guard and a retained
     // aggregate finance receipt above. Delete them through their owner in
     // child-before-parent order before generic company-content cleanup.
@@ -346,6 +366,18 @@ export async function purgeCompanyContent(
           const parent = fk.reference().foreignTable;
           if (pending.has(parent) && parent !== heartbeatRuns) parents.add(parent);
         }
+      }
+      // The canonical erasure marker is required while the original Run
+      // cascade removes immutable manifests. It is itself content-free and
+      // can be deleted only after that exact marked Run has cascaded.
+      if (table === heartbeatRuns && pending.has(memoryDeletionMarkers)) {
+        const marker = await tx.execute<{ present: boolean }>(sql`
+          select exists(select 1 from ${heartbeatRuns}
+            where ${scopes.get(heartbeatRuns)!} and exists(select 1 from ${memoryDeletionMarkers} m
+              where m.company_id=${heartbeatRuns.companyId} and m.kind='source'
+                and m.key='memory-run-source-erasure:v1:'||${heartbeatRuns.id}::text)) as present
+        `);
+        if (marker[0]?.present) parents.add(memoryDeletionMarkers);
       }
       edges.set(table, parents);
     }

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { isDeepStrictEqual } from "node:util";
-import { and, eq, inArray, isNull, lte, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, isNull, lte, notInArray, or, sql, type SQL } from "drizzle-orm";
 import { agentExecutionManifests, providerTraceRecords,
   memoryDeletionMarkers, memoryEvidence, memoryJobs, memoryRecords, memoryPrivateSharePublications, memoryRetentionPolicies,
   contextManifests, contextManifestItems, contextManifestMemoryRoots, saasRunLogs, saasRunLogChunks, activityLog, issueThreadInteractions, toolAccessAuditEvents, toolActionRequests, toolCallEvents, toolInvocations,
@@ -620,6 +620,86 @@ export async function purgeMemoryRecords(db: Db, companyId: string, rootIds: str
   }
   if (!ids.size) return { deletedRecordIds: [] as string[], deletedRecordCount: 0 };
   const rows = await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, companyId), inArray(memoryRecords.id, [...ids]))).for("update");
+  // Resolution metadata is a retained derived copy of record identities, even
+  // when the survivor's authored body is independent. Remove only links to the
+  // erased records; preserve the surviving record and all unrelated metadata.
+  // Metadata participates in the native payload body hash. Preserve a frozen
+  // snapshot only when its original owner binding is valid and its exact source
+  // graph is independent of the erased IDs; otherwise let the DB owner trigger
+  // irreversibly invalidate it when the metadata edit clears the snapshot.
+  const erasedIds = new Set(ids);
+  const erasedIdList = [...ids];
+  const relatedIdArray = sql`ARRAY[${sql.join(erasedIdList.map((id) => sql`${id}`), sql`, `)}]::text[]`;
+  const referencesErasedId = or(
+    inArray(sql<string>`${memoryRecords.metadata}->'memoryResolution'->>'targetRecordId'`, erasedIdList),
+    sql`${memoryRecords.metadata}->'memoryResolution'->'relatedRecordIds' ?| ${relatedIdArray}`,
+  );
+  const survivingRows = await db.select({ id: memoryRecords.id, metadata: memoryRecords.metadata,
+    payloadSourceSnapshot: memoryRecords.payloadSourceSnapshot,
+    payloadSourceProtocolVersion: memoryRecords.payloadSourceProtocolVersion,
+    payloadSourceSnapshotInvalidated: memoryRecords.payloadSourceSnapshotInvalidated,
+  }).from(memoryRecords).where(and(
+    eq(memoryRecords.companyId, companyId), notInArray(memoryRecords.id, erasedIdList), referencesErasedId,
+  )).for("update");
+  for (const survivor of survivingRows) {
+    if (!survivor.metadata || typeof survivor.metadata !== "object" || Array.isArray(survivor.metadata)) continue;
+    const metadata = survivor.metadata as Record<string, unknown>;
+    const resolution = metadata.memoryResolution;
+    if (!resolution || typeof resolution !== "object" || Array.isArray(resolution)) continue;
+    const existing = resolution as Record<string, unknown>;
+    const targetErased = typeof existing.targetRecordId === "string" && erasedIds.has(existing.targetRecordId);
+    const related = Array.isArray(existing.relatedRecordIds) ? existing.relatedRecordIds : null;
+    const keptRelated = related?.filter((id) => typeof id !== "string" || !erasedIds.has(id));
+    const relatedChanged = related !== null && keptRelated!.length !== related.length;
+    if (!targetErased && !relatedChanged) continue;
+    const nextResolution = { ...existing };
+    if (targetErased) delete nextResolution.targetRecordId;
+    if (relatedChanged) nextResolution.relatedRecordIds = keptRelated;
+    const nextMetadata = { ...metadata, memoryResolution: nextResolution };
+    let payloadSourceSnapshotUpdate: SQL | undefined;
+    if (survivor.payloadSourceSnapshot !== null) {
+      const snapshot = nativePayloadSourceSnapshotSchema.safeParse(survivor.payloadSourceSnapshot);
+      const [binding] = snapshot.success ? await db.execute<{ valid: boolean }>(sql`select
+        ${memoryRecords.payloadSourceSnapshot}->'owner'->>'kind'='memory_record'
+          and ${memoryRecords.payloadSourceSnapshot}->'owner'->>'companyId'=${companyId}
+          and ${memoryRecords.payloadSourceSnapshot}->'owner'->>'id'=${survivor.id}
+          and ${memoryRecords.payloadSourceSnapshot}->'owner'->>'contentHash'=
+            public.aw_native_payload_body_hash('memory_record',to_jsonb(${memoryRecords}))
+          and ${memoryRecords.payloadSourceSnapshot}->>'digest'=
+            encode(sha256(convert_to((${memoryRecords.payloadSourceSnapshot}-'digest')::text,'UTF8')),'hex')
+          as valid from ${memoryRecords} where ${memoryRecords.companyId}=${companyId}::uuid
+            and ${memoryRecords.id}=${survivor.id}::uuid`) : [];
+      const sourceGraphIndependent = snapshot.success &&
+        survivor.payloadSourceProtocolVersion === 1 && !survivor.payloadSourceSnapshotInvalidated &&
+        snapshot.data.policy.memoryIds.every((id) => !erasedIds.has(id)) &&
+        snapshot.data.inputs.every((input) => input.kind !== "memory" || !erasedIds.has(input.memoryId));
+      if (binding?.valid && sourceGraphIndependent) {
+        // The metadata edit removes a resolver pointer, not a payload source.
+        // Preserve the exact frozen policy/input graph while recomputing only
+        // the owner body hash and digest; reads still revalidate that graph.
+        const policyJson = JSON.stringify(snapshot.data.policy);
+        const inputsJson = JSON.stringify(snapshot.data.inputs);
+        const metadataJson = JSON.stringify(nextMetadata);
+        payloadSourceSnapshotUpdate = sql`(
+          with payload as (select jsonb_build_object('version',1,'owner',jsonb_build_object(
+            'kind','memory_record','companyId',${companyId}::text,'id',${survivor.id}::text,
+            'contentHash',public.aw_native_payload_body_hash('memory_record',
+              to_jsonb(${memoryRecords}) || jsonb_build_object('metadata',${metadataJson}::jsonb))),
+            'policy',${policyJson}::jsonb,'inputs',${inputsJson}::jsonb) as value)
+          select value || jsonb_build_object('digest',encode(sha256(convert_to(value::text,'UTF8')),'hex')) from payload
+        )`;
+      } else {
+        // Corrupt or source-dependent snapshots fail closed. Clearing the old
+        // snapshot lets the DB trigger set the irreversible invalidation bit.
+        payloadSourceSnapshotUpdate = sql`null`;
+      }
+    }
+    await db.update(memoryRecords).set({
+      metadata: nextMetadata,
+      ...(payloadSourceSnapshotUpdate ? { payloadSourceSnapshot: payloadSourceSnapshotUpdate } : {}),
+      updatedAt: now,
+    }).where(and(eq(memoryRecords.companyId, companyId), eq(memoryRecords.id, survivor.id)));
+  }
   const outputBindings = rows.flatMap(row => {
     const metadata = row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
       ? row.metadata as Record<string, unknown> : null;

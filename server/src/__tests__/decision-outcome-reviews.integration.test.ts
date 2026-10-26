@@ -31,20 +31,23 @@ let actor:AuthorizationActor;
 const flags={analytical_lineage_v8:true,business_metrics_v8:true,decision_intelligence_v8:true,enableDecisions:true,ai_use_cases_v7:true,governance_evidence_v7:true};
 suite("Native decision outcome reviews on migrated PostgreSQL",()=>{
   let database:Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>,db:ReturnType<typeof createDb>;
-  let companyId:string,foreignId:string,originId:string,targetId:string,projectId:string,agentId:string,runId:string,policyId:string;
+  let companyId:string,foreignId:string,originId:string,targetId:string,projectId:string,agentId:string,runId:string,policyId:string,humanId:string;
   beforeAll(async()=>{database=await startEmbeddedPostgresTestDatabase("aw-v8-outcome-review-");db=createDb(database.connectionString);
     process.env.PAPERCLIP_DECISION_SIGNING_SECRET="0123456789abcdef0123456789abcdef";});
   afterAll(async()=>database?.cleanup());
   beforeEach(async()=>{
     await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental(flags);
-    companyId=randomUUID();foreignId=randomUUID();originId=randomUUID();targetId=randomUUID();agentId=randomUUID();runId=randomUUID();
+    companyId=randomUUID();foreignId=randomUUID();originId=randomUUID();targetId=randomUUID();agentId=randomUUID();runId=randomUUID();humanId=`decision-review-${randomUUID()}`;
     await db.insert(companies).values([{id:companyId,name:"Native decision context",issuePrefix:randomUUID()},{id:foreignId,name:"Other context tenant",issuePrefix:randomUUID()}]);
-    actor=await seedCurrentHumanSourceActor(db,[companyId,foreignId]);
+    // This suite may overlap another integration suite using its own embedded
+    // database but the same structural Human ID. Keep authenticator NOWAIT
+    // fixture rows unique so an unrelated session/passkey setup cannot collide.
+    actor=await seedCurrentHumanSourceActor(db,[companyId,foreignId],humanId);
     const project=await createCanonicalHumanProject(db,companyId,actor,"Controlled native project");projectId=project.id;
     await db.insert(agents).values({id:agentId,companyId,name:"Proposer",role:"engineer",status:"active",adapterType:"codex_local"});
-    await db.insert(issues).values([{id:originId,companyId,projectId,title:"Private origin title",status:"done",responsibleUserId:"local-board",createdAt:new Date("2026-01-01T12:00:00Z")},
-      {id:targetId,companyId,projectId,title:"Private target title",status:"todo",responsibleUserId:"local-board",createdAt:new Date("2026-01-01T12:00:00Z")}]);
-    await db.insert(heartbeatRuns).values({id:runId,companyId,agentId,status:"running",responsibleUserId:"local-board",contextSnapshot:{issueId:originId}});
+    await db.insert(issues).values([{id:originId,companyId,projectId,title:"Private origin title",status:"done",responsibleUserId:humanId,createdAt:new Date("2026-01-01T12:00:00Z")},
+      {id:targetId,companyId,projectId,title:"Private target title",status:"todo",responsibleUserId:humanId,createdAt:new Date("2026-01-01T12:00:00Z")}]);
+    await db.insert(heartbeatRuns).values({id:runId,companyId,agentId,status:"running",responsibleUserId:humanId,contextSnapshot:{issueId:originId}});
     const policy=analyticalPurpose();policy.analyticalPurpose!.capabilities=["metrics","decision"];
     policyId=(await aiGovernanceService(db).obligation(actor,companyId,policy)).id;
   });
@@ -52,7 +55,7 @@ suite("Native decision outcome reviews on migrated PostgreSQL",()=>{
   const create=()=>native().create({companyId,actor,agentId,runId,title:"Proceed with the option?",body:"Native choice remains authoritative",options:[
     {id:"proceed",label:"Proceed",effects:[{type:"comment_on_issue",targetIssueId:targetId,staleness:"lenient",bodyMarkdown:"Native chosen effect"}]},
     {id:"defer",label:"Defer",effects:[]}]});
-  const definition=():DecisionContextDefinition=>decisionContextDefinitionSchema.parse({question:"Should we proceed with this option?",objective:"Deliver useful business outcomes",ownerUserId:"local-board",scope:{type:"project",id:projectId},
+  const definition=():DecisionContextDefinition=>decisionContextDefinitionSchema.parse({question:"Should we proceed with this option?",objective:"Deliver useful business outcomes",ownerUserId:humanId,scope:{type:"project",id:projectId},
     timeHorizon:{from:"2026-10-07T00:00:00Z",until:"2027-01-01T00:00:00Z"},uncertaintySummary:"External conditions and delivery capacity may change",revisitAt:null,
     purpose:"management_intelligence",sensitivity:"internal",governanceObligationRefs:[policyId],retentionDays:30,evidence:[],
     assumptions:[{key:"capacity",statement:"Current capacity remains available during delivery",type:"delivery",confidence:{kind:"human_judgment",level:"medium"},materiality:"high",status:"unverified"}],
@@ -62,7 +65,7 @@ suite("Native decision outcome reviews on migrated PostgreSQL",()=>{
     const proposed=await service().propose(companyId,actor,id,{expectedRevision:0,definition:input});
     return service().prepare(companyId,actor,id,{expectedRevision:proposed.revision,versionId:proposed.versions[0].id,rationale:"Explicit human review of this exact native context"});
   }
-  const choose=(id:string,optionId="proceed")=>native().decide({id,optionId,decidedByUserId:"local-board",userActor:actor});
+  const choose=(id:string,optionId="proceed")=>native().decide({id,optionId,decidedByUserId:humanId,userActor:actor});
   const reviews=()=>decisionOutcomeReviewService(db);
   async function observation() {
     const metrics=businessMetricService(db),created=await metrics.create(companyId,actor,{key:"baseline",definition:metricDefinition(policyId)});
@@ -84,11 +87,11 @@ suite("Native decision outcome reviews on migrated PostgreSQL",()=>{
   const begin=(id:string)=>reviews().transition(companyId,actor,id,{expectedRevision:1,action:"begin",rationale:"A human begins the separate outcome assessment"});
   async function verifiedLearningRoot(tenant=companyId) {
     await instanceSettingsService(db).updateExperimental({enableFoundationV1:true,enableCollectiveMemoryV1:true,enableContextEngineV1:true,agent_identities_v5:true,agent_provider_bindings_v5:true,agent_runtime_fabric_v5:true,role_packs_v5:true,cognitive_memory_v7:true,memory_observations_v7:true,skill_lifecycle_v5:true,playbooks_v5:true,learning_engine_v7:true});
-    const [task]=await db.insert(issues).values({companyId:tenant,title:"Independent verified outcome",status:"done",completedAt:new Date(),responsibleUserId:"local-board"}).returning();
+    const [task]=await db.insert(issues).values({companyId:tenant,title:"Independent verified outcome",status:"done",completedAt:new Date(),responsibleUserId:humanId}).returning();
     const [binding]=await db.insert(memoryBindings).values({companyId:tenant,key:randomUUID(),name:"Independent verified outcomes",providerKey:"local"}).returning();
     await db.insert(memoryBindingTargets).values({companyId:tenant,bindingId:binding!.id,targetType:"company",targetId:tenant});
     const observedAt=new Date(),sourceVersion=task!.updatedAt.toISOString(),content="An independently reviewed completed Task outcome";
-    const memoryActor={principal:{type:"user" as const,userId:"local-board"},authorizationActor:actor};
+    const memoryActor={principal:{type:"user" as const,userId:humanId},authorizationActor:actor};
     const candidate=await memoryService(db).createCandidate(tenant,{bindingId:binding!.id,memoryType:"outcome",scope:{type:"company",id:null},subject:null,ownerAgentId:null,
       title:"Independent verified outcome",content,summary:"A completed native Task outcome reviewed by the current Human",sensitivity:"internal",importance:50,confidenceScore:0.8,
       validFrom:null,validUntil:null,observedAt:observedAt.toISOString(),retentionPolicy:"standard",expiresAt:null,createdByOperationId:null,metadata:{},evidence:[{
@@ -120,7 +123,7 @@ suite("Native decision outcome reviews on migrated PostgreSQL",()=>{
     expect(new Set(results.map(result=>result.cycleId)).size).toBe(1);
     expect(results[0]!.review).toMatchObject({id:review.id,revision:3,status:"inconclusive",learningCycleId:results[0]!.cycleId});
     const cycles=await db.select().from(learningCycles).where(eq(learningCycles.companyId,companyId));expect(cycles).toHaveLength(1);
-    expect(cycles[0]).toMatchObject({scopeType:"company",scopeId:null,status:"hypothesizing",createdBy:"local-board",analyticalSourcePins:[{kind:"outcome_review",decisionId:d.id,revision:3}]});
+    expect(cycles[0]).toMatchObject({scopeType:"company",scopeId:null,status:"hypothesizing",createdBy:humanId,analyticalSourcePins:[{kind:"outcome_review",decisionId:d.id,revision:3}]});
     const receipts=await db.select().from(decisionOutcomeReviewReceipts).where(eq(decisionOutcomeReviewReceipts.reviewId,review.id));
     expect((await db.select().from(learningAnalyticalDependencies).where(eq(learningAnalyticalDependencies.cycleId,cycles[0]!.id))).map(edge=>edge.sourceManifestId).sort()).toEqual(receipts.map(receipt=>receipt.lineageManifestId).sort());
     expect(await db.select().from(learningEvidence).where(eq(learningEvidence.cycleId,cycles[0]!.id))).toHaveLength(1);
@@ -173,7 +176,7 @@ suite("Native decision outcome reviews on migrated PostgreSQL",()=>{
   });
   it("retains a signed management packet after an authorized outcome revision changes and requires a fresh exact pin for publication",async()=>{
     await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({management_reviews_v8:true});const purpose=analyticalPurpose();purpose.citation+=" retained outcome review";purpose.analyticalPurpose!.capabilities=["reviews"];const destination=(await aiGovernanceService(db).obligation(actor,companyId,purpose)).id;
-    const {d,review}=await scheduled(),management=managementReviewService(db),now=new Date(),definition={name:"Original scheduled native outcome review",reviewType:"ad_hoc" as const,period:{from:new Date(now.getTime()-86400000).toISOString(),until:now.toISOString()},purpose:"management_intelligence" as const,sensitivity:"internal" as const,retentionDays:1,governanceObligationRefs:[destination],sources:[{key:"outcome",source:{kind:"decision_outcome" as const,decisionId:d.id,reviewId:review.id,revision:review.revision}}],agenda:[{key:"inspect",category:"INVESTIGATE" as const,ownerUserId:"local-board",dueAt:new Date(now.getTime()+86400000).toISOString(),sourceKeys:["outcome"],nextAction:"Human inspects the exact originally scheduled review before publication",hypothesis:null}]};
+    const {d,review}=await scheduled(),management=managementReviewService(db),now=new Date(),definition={name:"Original scheduled native outcome review",reviewType:"ad_hoc" as const,period:{from:new Date(now.getTime()-86400000).toISOString(),until:now.toISOString()},purpose:"management_intelligence" as const,sensitivity:"internal" as const,retentionDays:1,governanceObligationRefs:[destination],sources:[{key:"outcome",source:{kind:"decision_outcome" as const,decisionId:d.id,reviewId:review.id,revision:review.revision}}],agenda:[{key:"inspect",category:"INVESTIGATE" as const,ownerUserId:humanId,dueAt:new Date(now.getTime()+86400000).toISOString(),sourceKeys:["outcome"],nextAction:"Human inspects the exact originally scheduled review before publication",hypothesis:null}]};
     const created=await management.create(companyId,actor,definition),original=await management.detail(companyId,actor,created.id);await begin(d.id);await reviews().finish(companyId,actor,d.id,final());const retained=await management.detail(companyId,actor,created.id);
     expect(retained.currentQualification).toBe("needs_revalidation");expect(retained.sources).toEqual(original.sources);expect(retained.packet).toEqual(original.packet);expect(retained.sources[0].facts.reviewStatus).toBe("scheduled");
     await expect(management.publish(companyId,actor,created.id,{expectedContentHash:created.contentHash,rationale:"Attempt to rely on the old scheduled outcome after a newer human review",evidenceAndUncertaintyAcknowledged:true,supersedesId:null})).rejects.toMatchObject({status:409});await expect(management.create(companyId,actor,definition)).rejects.toMatchObject({status:409});
@@ -182,7 +185,7 @@ suite("Native decision outcome reviews on migrated PostgreSQL",()=>{
     await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({management_reviews_v8:true}); const purpose=analyticalPurpose();purpose.citation+=" management review";purpose.analyticalPurpose!.capabilities=["reviews"];
     const destination=(await aiGovernanceService(db).obligation(actor,companyId,purpose)).id;
     const {d}=await scheduled();await begin(d.id);const original=await reviews().finish(companyId,actor,d.id,final()),chosen=await native().get(d.id);
-    const management=managementReviewService(db),now=new Date(),created=await management.create(companyId,actor,{name:"Cited independent native outcome judgments",reviewType:"weekly_leadership",period:{from:new Date(now.getTime()-86400000).toISOString(),until:now.toISOString()},purpose:"management_intelligence",sensitivity:"internal",retentionDays:1,governanceObligationRefs:[destination],sources:[{key:"outcome",source:{kind:"decision_outcome",decisionId:d.id,reviewId:original.id,revision:original.revision}}],agenda:[{key:"inspect",category:"INVESTIGATE",ownerUserId:"local-board",dueAt:new Date(now.getTime()+86400000).toISOString(),sourceKeys:["outcome"],nextAction:"Human reviews original independent judgments before proposing another decision",hypothesis:null}]});
+    const management=managementReviewService(db),now=new Date(),created=await management.create(companyId,actor,{name:"Cited independent native outcome judgments",reviewType:"weekly_leadership",period:{from:new Date(now.getTime()-86400000).toISOString(),until:now.toISOString()},purpose:"management_intelligence",sensitivity:"internal",retentionDays:1,governanceObligationRefs:[destination],sources:[{key:"outcome",source:{kind:"decision_outcome",decisionId:d.id,reviewId:original.id,revision:original.revision}}],agenda:[{key:"inspect",category:"INVESTIGATE",ownerUserId:humanId,dueAt:new Date(now.getTime()+86400000).toISOString(),sourceKeys:["outcome"],nextAction:"Human reviews original independent judgments before proposing another decision",hypothesis:null}]});
     const view=await management.detail(companyId,actor,created.id),facts=view.packet.claims[0].facts;
     expect(facts).toMatchObject({decisionProcessQuality:"supported",assumptionAccuracy:"unknown",executionFidelity:"unknown",externalChange:"unknown",observedOutcome:"unknown",causalConfidence:"not_assessed",lessonSummary:final().lessonSummary});
     const {authorizationCheckedAt,...retained}=original;expect(view.sources[0].outcome).toEqual(retained);expect(view.currentQualification).toBe("current");
@@ -204,7 +207,7 @@ suite("Native decision outcome reviews on migrated PostgreSQL",()=>{
   it("records six independent judgments without treating a bad outcome as a bad choice or causing canonical changes",async()=>{
     const {d,context}=await scheduled();await begin(d.id);
     const before=await native().get(d.id),result=await reviews().finish(companyId,actor,d.id,final());
-    expect(result).toMatchObject({revision:3,status:"inconclusive",reviewedByUserId:"local-board"});
+    expect(result).toMatchObject({revision:3,status:"inconclusive",reviewedByUserId:humanId});
     expect(result.receipts[0]).toMatchObject({action:"finish",assessment:{assessments:{decisionProcessQuality:{assessment:"supported"},observedOutcome:{assessment:"unknown"},causalConfidence:{assessment:"not_assessed"}}},nativeExecution:{status:"succeeded"}});
     expect((await service().detail(companyId,actor,d.id)).versions[0].contentHash).toBe(context.versions[0].contentHash);
     expect((await native().get(d.id))!.chosenOptionId).toBe(before!.chosenOptionId);
@@ -249,7 +252,7 @@ suite("Native decision outcome reviews on migrated PostgreSQL",()=>{
     expect((await service().detail(companyId,actor,d.id)).versions[0].contentHash).toBe(context.versions[0].contentHash);
     expect((await service().detail(companyId,actor,d.id)).versions[0].evidence[0].facts.value).toBe(0.5);
     await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({management_reviews_v8:true}); const purpose=analyticalPurpose();purpose.citation+=" completed outcome review";purpose.analyticalPurpose!.capabilities=["reviews"]; const destination=(await aiGovernanceService(db).obligation(actor,companyId,purpose)).id;
-    const management=managementReviewService(db),now=new Date(),copied=await management.create(companyId,actor,{name:"Cited native baseline and post-choice actual",reviewType:"monthly_business",period:{from:new Date(now.getTime()-86400000).toISOString(),until:now.toISOString()},purpose:"management_intelligence",sensitivity:"internal",retentionDays:1,governanceObligationRefs:[destination],sources:[{key:"outcome",source:{kind:"decision_outcome",decisionId:d.id,reviewId:completed.id,revision:completed.revision}}],agenda:[{key:"inspect",category:"INVESTIGATE",ownerUserId:"local-board",dueAt:new Date(now.getTime()+86400000).toISOString(),sourceKeys:["outcome"],nextAction:"Human reviews the complete original baseline and actual measurement",hypothesis:null}]});
+    const management=managementReviewService(db),now=new Date(),copied=await management.create(companyId,actor,{name:"Cited native baseline and post-choice actual",reviewType:"monthly_business",period:{from:new Date(now.getTime()-86400000).toISOString(),until:now.toISOString()},purpose:"management_intelligence",sensitivity:"internal",retentionDays:1,governanceObligationRefs:[destination],sources:[{key:"outcome",source:{kind:"decision_outcome",decisionId:d.id,reviewId:completed.id,revision:completed.revision}}],agenda:[{key:"inspect",category:"INVESTIGATE",ownerUserId:humanId,dueAt:new Date(now.getTime()+86400000).toISOString(),sourceKeys:["outcome"],nextAction:"Human reviews the complete original baseline and actual measurement",hypothesis:null}]});
     const retained=await management.detail(companyId,actor,copied.id);expect(retained.sources[0].outcome!.receipts[0].comparisons).toEqual(completed.receipts[0].comparisons);expect(retained.sources[0].outcome!.receipts[0].actualEvidence).toEqual(completed.receipts[0].actualEvidence);expect(retained.currentQualification).toBe("current");
     await management.publish(companyId,actor,copied.id,{expectedContentHash:copied.contentHash,rationale:"Human acknowledges original actuals without causal attribution",evidenceAndUncertaintyAcknowledged:true,supersedesId:null});
     await disableV8Rollout(db);await db.delete(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,actual.lineageManifestId));expect(await db.select().from(managementReviewSnapshots).where(eq(managementReviewSnapshots.id,copied.id))).toHaveLength(0);expect((await native().get(d.id))!.chosenOptionId).toBe("proceed");
@@ -273,7 +276,7 @@ suite("Native decision outcome reviews on migrated PostgreSQL",()=>{
   it("runs retention while paused and flags off and preserves another company on purge",async()=>{
     const {d,review}=await scheduled();await begin(d.id);await reviews().finish(companyId,actor,d.id,final());
     const otherCompany=companyId;companyId=foreignId;
-    await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:"local-board",membershipRole:"member",status:"active"}).onConflictDoNothing();
+    await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:humanId,membershipRole:"member",status:"active"}).onConflictDoNothing();
     await db.insert(projects).values({id:randomUUID(),companyId,name:"Unrelated surviving project"});
     companyId=otherCompany;await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));await disableV8Rollout(db);
     await eraseExpiredAnalyticalLineage(db,new Date(Date.now()+31*86400000));
@@ -284,7 +287,7 @@ suite("Native decision outcome reviews on migrated PostgreSQL",()=>{
   });
   it("erases an entire reviewed aggregate when a later-only measurement source is forgotten, without erasing the prospective choice",async()=>{
     const baseline=await observation(),{d,context,review}=await scheduled();await begin(d.id);
-    const laterId=randomUUID();await db.insert(issues).values({id:laterId,companyId,title:"Later source with private details",status:"done",responsibleUserId:"local-board"});
+    const laterId=randomUUID();await db.insert(issues).values({id:laterId,companyId,title:"Later source with private details",status:"done",responsibleUserId:humanId});
     const actual=await businessMetricService(db).query(companyId,actor,{metricId:baseline.metricId,versionId:baseline.versionId,from:"2026-01-01T00:00:00Z",until:new Date(Date.now()+1000).toISOString(),dimensions:[],maxRows:100});
     const input=final();input.actualMetrics=[{key:"later",source:{type:"metric_observation",id:actual.id,metricId:actual.metricId,metricVersionId:actual.versionId}}];input.assessments.observedOutcome.evidenceKeys=["actual:later"];
     await reviews().finish(companyId,actor,d.id,input);await disableV8Rollout(db);

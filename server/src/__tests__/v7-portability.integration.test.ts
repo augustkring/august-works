@@ -31,7 +31,8 @@ const support = await getEmbeddedPostgresTestSupport();
       f: Awaited<ReturnType<typeof seedV5Presences>>,
       first: string,
       second: string,
-      firstMemoryRecordId: string;
+      firstMemoryRecordId: string,
+      secondMemoryRecordId: string;
     beforeAll(async () => {
       database = await startEmbeddedPostgresTestDatabase("aw-v7-portability-");
       db = createDb(database.connectionString);
@@ -93,7 +94,7 @@ const support = await getEmbeddedPostgresTestSupport();
           observedAt: observedAt.toISOString(),
           retentionPolicy: "standard",
           createdByOperationId: randomUUID(),
-          metadata: {},
+          metadata: index === 1 ? { fixtureLabel: "retain-independent-human-record-metadata" } : {},
           evidence: [{
             sourceClass: "task",
             sourceProvider: "august_works_tasks",
@@ -113,6 +114,7 @@ const support = await getEmbeddedPostgresTestSupport();
           { decision: "accept", reason: "The current Human reviewed this portable Task outcome" }, memoryActor);
       }
       firstMemoryRecordId = roots[0]!;
+      secondMemoryRecordId = roots[1]!;
       await db
         .insert(memoryRecords)
         .values({
@@ -186,6 +188,18 @@ const support = await getEmbeddedPostgresTestSupport();
       const state = await exportCompanyStateV7(db, f.actor, f.home);
       const exportedRecords = JSON.parse(state.files["memory/records.json"]!).records as Array<{ id: string }>;
       expect(exportedRecords.some(record => record.id === firstMemoryRecordId)).toBe(false);
+      expect(JSON.stringify(state)).not.toContain(firstMemoryRecordId);
+      const independentRecord = exportedRecords.find((record) => record.id === secondMemoryRecordId) as
+        | { id: string; content: string; metadata: Record<string, unknown> }
+        | undefined;
+      expect(independentRecord).toBeDefined();
+      expect(independentRecord?.content).toBe("Portable shared reviewed outcome 2");
+      expect(independentRecord?.metadata.fixtureLabel).toBe("retain-independent-human-record-metadata");
+      const memoryResolution = independentRecord?.metadata.memoryResolution as
+        | { relatedRecordIds?: string[]; targetRecordId?: string | null }
+        | undefined;
+      expect(memoryResolution?.relatedRecordIds ?? []).not.toContain(firstMemoryRecordId);
+      expect(memoryResolution?.targetRecordId).not.toBe(firstMemoryRecordId);
       expect(state.files["memory/observations.json"]).not.toContain(
         "Portable observation",
       );

@@ -689,6 +689,7 @@ async function prepareRuntime(input: {
   mode: WorkspaceInboundMode;
   baseline?: DirectorySnapshot;
   gitSnapshot?: GitWorkspaceSnapshot | null;
+  workspaceRepositoryMode?: "discover" | "server_verified_none";
   durableSeed?: WorkspaceDurableSeedPaths;
 }): Promise<PreparedAdapterExecutionTargetRuntime> {
   return prepareAdapterExecutionTargetRuntime({
@@ -701,6 +702,7 @@ async function prepareRuntime(input: {
     workspaceDurableSeed: input.durableSeed,
     workspaceBaseline: input.baseline,
     workspaceGitSnapshot: input.gitSnapshot,
+    workspaceRepositoryMode: input.workspaceRepositoryMode,
   });
 }
 
@@ -752,6 +754,8 @@ export async function prepareNativeWorkspaceSync(input: {
   restartRecovery?: NativeRestartRecoveryClaim;
   sameRunRecovery?: boolean;
   resourceDisposition?: NativeWorkspaceResourceDisposition;
+  /** Set only by heartbeat after exact private projectless task-root verification. */
+  workspaceRepositoryMode?: "discover" | "server_verified_none";
 }): Promise<PreparedNativeWorkspaceSync | null> {
   if (input.target?.kind !== "remote" || input.target.transport !== "sandbox") {
     return null;
@@ -823,6 +827,7 @@ export async function prepareNativeWorkspaceSync(input: {
       mode,
       baseline: existing.baseline,
       gitSnapshot: existing.descriptor.gitSnapshot,
+      workspaceRepositoryMode: input.workspaceRepositoryMode,
       durableSeed,
     });
     descriptor = {
@@ -855,6 +860,7 @@ export async function prepareNativeWorkspaceSync(input: {
         workspaceArchivePath: seedPaths.workspaceArchivePath,
         gitArchivePath: seedPaths.gitArchivePath,
       },
+      workspaceRepositoryMode: input.workspaceRepositoryMode,
     });
     const currentSnapshot = runtime.workspaceSyncSnapshot;
     if (!currentSnapshot) {
@@ -878,6 +884,7 @@ export async function prepareNativeWorkspaceSync(input: {
           mode,
           baseline: currentSnapshot.baseline,
           gitSnapshot: currentSnapshot.gitSnapshot,
+          workspaceRepositoryMode: input.workspaceRepositoryMode,
           durableSeed: {
             workspaceArchivePath: seedPaths.workspaceArchivePath,
             gitArchivePath: seedPaths.gitArchivePath,

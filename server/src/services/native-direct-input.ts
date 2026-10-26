@@ -2586,19 +2586,20 @@ async function assertNativeTaskSourceInputCurrentInScope(db: Db | Transaction, c
   source: Extract<NativePayloadSourceInput, { kind: "task" }>, scope: NativeSourceReadScope): Promise<void> {
   nativeSourceReadWork(scope);
   const [task] = await db.select({ id: issues.id, companyId: issues.companyId, identifier: issues.identifier,
-    title: issues.title, description: issues.description, workMode: issues.workMode, status: issues.status, priority: issues.priority })
+    title: issues.title, description: issues.description, workMode: issues.workMode, status: issues.status,
+    priority: issues.priority,
+    ownerBodyHash: sql<string>`public.aw_native_payload_body_hash('issue',to_jsonb(${issues}))` })
     .from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, source.issueId))).for("share");
-  // Task sourceVersion is a row timestamp, so ordinary status/responsibility
-  // transitions can advance it while the captured Task payload stays exact.
-  // The source constructors have two closed Task projections: the full Task
-  // body and the compact ancestor summary. Validate either exact projection,
-  // then always validate the owner's current snapshot/dispatch and reader ACL.
+  // New Task sources bind to the canonical payload-only owner hash, which is
+  // stable across operational status/assignment changes. Keep exact current
+  // projection-hash compatibility for already stored captures.
   const bodyHash = task ? createHash("sha256").update(JSON.stringify({ id: source.issueId,
     identifier: task.identifier ?? null, title: task.title, description: task.description ?? null,
     workMode: task.workMode }), "utf8").digest("hex") : null;
   const ancestorHash = task ? createHash("sha256").update(JSON.stringify({ id: source.issueId,
     identifier: task.identifier ?? null, title: task.title, status: task.status, priority: task.priority }), "utf8").digest("hex") : null;
-  if (!task || (bodyHash !== source.contentHash && ancestorHash !== source.contentHash))
+  if (!task || (task.ownerBodyHash !== source.contentHash &&
+      bodyHash !== source.contentHash && ancestorHash !== source.contentHash))
     throw forbidden("A Native source Task changed");
   await assertNativeTaskSnapshotOwnerCurrentInScope(db, companyId, actor, source.issueId, scope, undefined, source);
 }

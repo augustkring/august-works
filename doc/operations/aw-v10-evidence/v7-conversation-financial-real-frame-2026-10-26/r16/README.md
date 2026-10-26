@@ -1,0 +1,3 @@
+# Conversation reservation purge predicate R16
+
+Fresh snapshot passed; the actual known-cost conversation purge test executed and still failed. The rollback-only trigger probe confirms the manifest deletion is a real nested Run cascade (`triggerDepth=2`), the canonical company transaction marker matches, the exact Context row belongs to the Run, and the Context has a Task ID. Yet `aw_execution_manifest_payload_erased` returned false. R17 adds only finite checks for whether that Context Task is retired and whether it is the Run's Native task. The other five real-frame financial cases passed in R13. No production predicate was loosened.

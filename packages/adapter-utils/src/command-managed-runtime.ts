@@ -543,6 +543,7 @@ export async function prepareCommandManagedRuntime(input: {
   workspaceDurableSeed?: WorkspaceDurableSeedPaths;
   workspaceBaseline?: DirectorySnapshot;
   workspaceGitSnapshot?: GitWorkspaceSnapshot | null;
+  workspaceRepositoryMode?: "discover" | "server_verified_none";
   workspaceExclude?: string[];
   preserveAbsentOnRestore?: string[];
   assets?: CommandManagedRuntimeAsset[];
@@ -562,10 +563,14 @@ export async function prepareCommandManagedRuntime(input: {
 }): Promise<PreparedSandboxManagedRuntime> {
   const timeoutMs = input.spec.timeoutMs && input.spec.timeoutMs > 0 ? input.spec.timeoutMs : 300_000;
   const workspaceRemoteDir = input.workspaceRemoteDir ?? input.spec.remoteCwd;
-  // Managed-runtime sync/restore scripts use absolute paths throughout, so
-  // run them from a stable cwd. The target workspace itself may be removed or
-  // recreated during a run, which breaks shell startup if we chdir into it.
-  const commandCwd = "/";
+  // Managed-runtime sync/restore scripts use absolute paths throughout. Keep
+  // the usual stable cwd because a target workspace may be recreated during
+  // preparation. A server-verified projectless conversation is different:
+  // RuntimeControl binds every command to that exact private Task root, so its
+  // staging commands must execute with that same cwd instead of `/`.
+  const commandCwd = input.workspaceRepositoryMode === "server_verified_none"
+    ? workspaceRemoteDir
+    : "/";
   const runtimeSpec: SandboxRemoteExecutionSpec = {
     transport: "sandbox",
     provider: input.spec.providerKey ?? "sandbox",
@@ -608,6 +613,7 @@ export async function prepareCommandManagedRuntime(input: {
           workspaceDurableSeed: input.workspaceDurableSeed,
           workspaceBaseline: input.workspaceBaseline,
           workspaceGitSnapshot: input.workspaceGitSnapshot,
+          workspaceRepositoryMode: input.workspaceRepositoryMode,
           workspaceExclude: mergeRuntimeExcludes(input.workspaceExclude),
           preserveAbsentOnRestore: input.preserveAbsentOnRestore,
           assets: input.assets,
@@ -651,6 +657,7 @@ export async function prepareCommandManagedRuntime(input: {
     workspaceDurableSeed: input.workspaceDurableSeed,
     workspaceBaseline: input.workspaceBaseline,
     workspaceGitSnapshot: input.workspaceGitSnapshot,
+    workspaceRepositoryMode: input.workspaceRepositoryMode,
     workspaceExclude: mergeRuntimeExcludes(input.workspaceExclude),
     preserveAbsentOnRestore: input.preserveAbsentOnRestore,
     assets: input.assets,

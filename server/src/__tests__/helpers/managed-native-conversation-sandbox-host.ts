@@ -227,8 +227,19 @@ export async function configureManagedConversationSandboxHost(input: {
   const runtime = runtimeControlService(db, { runtime: { suspectSeconds: 90, unreachableSeconds: 600, relayPort: 3102 } } as SaasPlatformConfig,
     undefined, { credentialBrokerOrigin: brokerOrigin, workerModels: input.gateway as any });
   let expectedRunId: string | null = null;
-  const sandboxExecutionChecks: Array<Record<string, boolean | string | null>> = [];
+  let expectedIssueId: string | null = null;
+  let expectedTaskRoot: string | null = null;
+  let acquiredLeaseExpiresAt: string | null = null;
+  let prepareHostForRun: ((runId: string, leaseId: string) => Promise<void>) | null = null;
+  const hostAdmissionByRun = new Map<string, { leaseId: string; promise: Promise<void> }>();
+  const sandboxExecutionChecks: Array<Record<string, boolean | number | string | null>> = [];
   const executeSandboxTask: typeof runtime.executeSandboxTask = async execInput => {
+    if (!execInput.runId || !execInput.leaseId || !prepareHostForRun)
+      throw new Error("conversation_software_host_run_binding_unavailable");
+    // The first runtime command is workspace preparation, before the Native
+    // provider callback. Admit the same real manifest-bound host here, at the
+    // original RuntimeControl execution seam, before delegating its signed exec.
+    await prepareHostForRun(execInput.runId, execInput.leaseId);
     if (execInput.runId && sandboxExecutionChecks.length < 8) {
       const [run] = await db.select({ status: heartbeatRuns.status, startedAt: heartbeatRuns.startedAt,
         agentId: heartbeatRuns.agentId, nativeIssueId: heartbeatRuns.nativeIssueId,
@@ -290,8 +301,6 @@ export async function configureManagedConversationSandboxHost(input: {
     await new Promise(resolve => setTimeout(resolve, 10));
   }
   if (!authenticated) throw new Error("conversation_software_host_relay_auth_failed");
-  let expectedTaskRoot: string | null = null;
-  let acquiredLeaseExpiresAt: string | null = null;
   const execFacts: Array<{ executable: string; cwdExact: boolean; modelCredentialPresent: boolean }> = [];
   relayHost.on("message", raw => {
     let message: Record<string, any>;
@@ -322,13 +331,41 @@ export async function configureManagedConversationSandboxHost(input: {
   });
 
   const beforeNativeExecution = async ({ runId, issueId }: { runId: string; issueId: string | null }) => {
-    expectedRunId = runId;
     if (!issueId) throw new Error("conversation_software_host_issue_missing");
-    const [manifest] = await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId, runId)).limit(1);
-    if (!manifest) throw new Error("conversation_software_host_manifest_missing");
-    const [run] = await db.select({ responsibleUserId: heartbeatRuns.responsibleUserId,
+    if (!prepareHostForRun) throw new Error("conversation_software_host_admission_unavailable");
+    const [lease] = await db.select({ id: environmentLeases.id }).from(environmentLeases)
+      .where(and(eq(environmentLeases.companyId, companyId), eq(environmentLeases.heartbeatRunId, runId),
+        eq(environmentLeases.status, "active"), eq(environmentLeases.environmentId, environment.id))).limit(1);
+    if (!lease) throw new Error("conversation_software_host_run_lease_missing");
+    await prepareHostForRun(runId, lease.id);
+    if (expectedIssueId !== issueId) throw new Error("conversation_software_host_issue_binding_changed");
+    return { PATH: `${input.opencodeBinary.slice(0, input.opencodeBinary.lastIndexOf("/"))}:${process.env.PATH ?? ""}`,
+      OPENCODE_DISABLE_DEFAULT_PLUGINS: "true", OPENCODE_DISABLE_MODELS_FETCH: "true",
+      NODE_EXTRA_CA_CERTS: input.certBundlePath, SSL_CERT_FILE: input.certBundlePath };
+  };
+
+  const prepareHostForRunOnce = async (runId: string, expectedLeaseId: string) => {
+    if (expectedRunId === runId && expectedTaskRoot && acquiredLeaseExpiresAt) return;
+    if (expectedRunId !== null && expectedRunId !== runId)
+      throw new Error("conversation_software_host_run_changed");
+    expectedRunId = runId;
+    const [run] = await db.select({ status: heartbeatRuns.status, runtimeMode: heartbeatRuns.runtimeMode,
+      nativeIssueId: heartbeatRuns.nativeIssueId, responsibleUserId: heartbeatRuns.responsibleUserId,
       contextSnapshot: heartbeatRuns.contextSnapshot }).from(heartbeatRuns)
       .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, runId))).limit(1);
+    if (!run || run.status !== "running" || run.runtimeMode !== "native" ||
+      run.responsibleUserId !== actor.userId || !run.nativeIssueId)
+      throw new Error("conversation_software_host_native_run_binding_invalid");
+    const runContext = run.contextSnapshot && typeof run.contextSnapshot === "object"
+      ? run.contextSnapshot as Record<string, unknown> : {};
+    const issueId = typeof runContext.issueId === "string" ? runContext.issueId : null;
+    if (!issueId || issueId !== run.nativeIssueId)
+      throw new Error("conversation_software_host_issue_binding_invalid");
+    if (expectedIssueId !== null && expectedIssueId !== issueId)
+      throw new Error("conversation_software_host_issue_changed");
+    expectedIssueId = issueId;
+    const [manifest] = await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId, runId)).limit(1);
+    if (!manifest) throw new Error("conversation_software_host_manifest_missing");
     const conversationGeneration = run?.contextSnapshot && typeof run.contextSnapshot === "object" &&
       "conversationSessionGeneration" in run.contextSnapshot &&
       typeof run.contextSnapshot.conversationSessionGeneration === "number"
@@ -351,9 +388,10 @@ export async function configureManagedConversationSandboxHost(input: {
     const admittedPromise = service.admit(actor, companyId, binding.id, { expectedVersion: 3, policySnapshotId: compiled.id });
     const admitted = await driveHost(admittedPromise);
     if (admitted.binding.status !== "running") throw new Error("conversation_software_host_workload_not_running");
-    const [lease] = await db.select().from(environmentLeases).where(and(eq(environmentLeases.heartbeatRunId, runId),
-      eq(environmentLeases.status, "active"))).limit(1);
-    if (!lease || lease.environmentId !== environment.id) throw new Error("conversation_software_host_run_lease_missing");
+    const [lease] = await db.select().from(environmentLeases).where(and(eq(environmentLeases.companyId, companyId),
+      eq(environmentLeases.id, expectedLeaseId), eq(environmentLeases.heartbeatRunId, runId),
+      eq(environmentLeases.environmentId, environment.id), eq(environmentLeases.status, "active"))).limit(1);
+    if (!lease) throw new Error("conversation_software_host_run_lease_missing");
     if (!lease.expiresAt || lease.expiresAt <= new Date())
       throw new Error("conversation_software_host_provider_lease_expiry_missing");
     acquiredLeaseExpiresAt = lease.expiresAt.toISOString();
@@ -373,9 +411,21 @@ export async function configureManagedConversationSandboxHost(input: {
     const wrongPolicyDenied = wrongPolicy.failedBoundaries.includes("filesystem_write_expansion");
     if (!wrongRunDenied || !wrongLeaseDenied || !wrongCwdDenied || !wrongPolicyDenied)
       throw new Error("conversation_software_host_negative_admission_control_failed");
-    return { PATH: `${input.opencodeBinary.slice(0, input.opencodeBinary.lastIndexOf("/"))}:${process.env.PATH ?? ""}`,
-      OPENCODE_DISABLE_DEFAULT_PLUGINS: "true", OPENCODE_DISABLE_MODELS_FETCH: "true",
-      NODE_EXTRA_CA_CERTS: input.certBundlePath, SSL_CERT_FILE: input.certBundlePath };
+  };
+  prepareHostForRun = async (runId, leaseId) => {
+    const existing = hostAdmissionByRun.get(runId);
+    if (existing) {
+      if (existing.leaseId !== leaseId) throw new Error("conversation_software_host_lease_binding_changed");
+      return await existing.promise;
+    }
+    const promise = prepareHostForRunOnce(runId, leaseId);
+    hostAdmissionByRun.set(runId, { leaseId, promise });
+    try {
+      await promise;
+    } catch (error) {
+      hostAdmissionByRun.delete(runId);
+      throw error;
+    }
   };
 
   return {

@@ -2878,7 +2878,10 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
           reachedDispatch = true;
           const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, id));
           const [task] = await db.select().from(issues).where(eq(issues.id, issueId));
-          const [version] = await db.execute<{ version: string }>(sql`select extract(epoch from updated_at)::text as version from issues where id=${issueId}::uuid`);
+          const [version] = await db.execute<{ version: string; ownerHash: string }>(sql`select
+            extract(epoch from i.updated_at)::text as version,
+            public.aw_native_payload_body_hash('issue',to_jsonb(i)) as "ownerHash"
+            from issues i where i.id=${issueId}::uuid`);
           const profile = run!.runnerProfileJson!;
           const selectedInput = paperclipRunner.parseNativeExecutionInput(profile.nativeExecutionInput);
           expect(profile.nativeBootstrapAuthoredSources).toEqual({ inputs: [{ kind: "runtime_instructions", agentId,
@@ -2886,8 +2889,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
             manifestDigest: selectedInput.runtimeContext.instructions.bundle.manifestDigest }], contextManifests: [] });
           expect(profile.nativeBootstrapRolePackSources).toEqual([]);
           expect(profile.nativeBootstrapTaskSource).toEqual({ input: { kind: "task", issueId, sourceVersion: version!.version,
-            contentHash: createHash("sha256").update(JSON.stringify({ id: task!.id, identifier: task!.identifier,
-              title: task!.title, description: task!.description, workMode: task!.workMode })).digest("hex") }, payloadSourceSnapshot: null });
+            contentHash: version!.ownerHash }, payloadSourceSnapshot: null });
           expect(profile.nativeBootstrapTaskPlanSources).toEqual([{ input: { kind: "document_revision", documentId: plan.document.id,
             revisionId: plan.document.latestRevisionId, issueId,
             contentHash: createHash("sha256").update("Original native bootstrap plan").digest("hex") }, payloadSourceSnapshot: null }]);

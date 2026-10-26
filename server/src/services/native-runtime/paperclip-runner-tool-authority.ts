@@ -866,7 +866,8 @@ export class PaperclipRunnerToolAuthority {
       }
       case "get_task_context": {
         const childTasks = await this.db.select({ ...getTableColumns(issues),
-          sourceVersion: sql<string>`extract(epoch from ${issues.updatedAt})::text` })
+          sourceVersion: sql<string>`extract(epoch from ${issues.updatedAt})::text`,
+          ownerBodyHash: sql<string>`public.aw_native_payload_body_hash('issue',to_jsonb(${issues}))` })
           .from(issues)
           .where(and(
             eq(issues.companyId, this.binding.companyId),
@@ -882,12 +883,12 @@ export class PaperclipRunnerToolAuthority {
           payloadSourceSnapshot: issues.payloadSourceSnapshot,
           payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated,
           sourceVersion: sql<string>`extract(epoch from ${issues.updatedAt})::text`,
+          ownerBodyHash: sql<string>`public.aw_native_payload_body_hash('issue',to_jsonb(${issues}))`,
         }).from(issues).where(and(eq(issues.companyId, this.binding.companyId), eq(issues.id, this.binding.issueId)));
         const taskRows = [activeSourceRow, ...childTasks.slice(0, 100)].filter((row): row is NonNullable<typeof activeSourceRow> => Boolean(row));
         const taskOwners: NativeObservedOwnerSource[] = taskRows.map(row => ({ companyId: row.companyId,
           input: { kind: "task", issueId: row.id, sourceVersion: row.sourceVersion,
-            contentHash: createHash("sha256").update(JSON.stringify({ id: row.id, identifier: row.identifier ?? null,
-              title: row.title, description: row.description ?? null, workMode: row.workMode }), "utf8").digest("hex") },
+            contentHash: row.ownerBodyHash },
           payloadSourceSnapshot: row.payloadSourceSnapshot,
           invalidated: row.payloadSourceSnapshotInvalidated }));
         const acceptedPlan = await this.#acceptedPlan(context.run.contextSnapshot);

@@ -459,6 +459,31 @@ describe("command managed runtime", () => {
     await expect(readFile(path.join(remoteWorkspaceDir, "README.md"), "utf8")).resolves.toBe("local workspace\n");
   });
 
+  it("keeps verified projectless task staging commands inside the exact workspace root", async () => {
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-command-runtime-private-task-cwd-"));
+    cleanupDirs.push(rootDir);
+    const localWorkspaceDir = path.join(rootDir, "local-workspace");
+    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    await mkdir(localWorkspaceDir, { recursive: true });
+    await mkdir(remoteWorkspaceDir, { recursive: true });
+    await writeFile(path.join(localWorkspaceDir, "README.md"), "private task workspace\n", "utf8");
+
+    const { runner, calls } = makeSpawnRunner();
+    const prepared = await prepareCommandManagedRuntime({
+      runner,
+      spec: { remoteCwd: remoteWorkspaceDir, timeoutMs: 30_000 },
+      adapterKey: "paperclip-runner",
+      workspaceLocalDir: localWorkspaceDir,
+      workspaceRepositoryMode: "server_verified_none",
+    });
+
+    expect(prepared.workspaceRemoteDir).toBe(remoteWorkspaceDir);
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls.every((call) => call.cwd === remoteWorkspaceDir)).toBe(true);
+    await expect(readFile(path.join(remoteWorkspaceDir, "README.md"), "utf8"))
+      .resolves.toBe("private task workspace\n");
+  });
+
   it("uploads a multi-MB payload in a single process and preserves exact bytes", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-command-write-"));
     cleanupDirs.push(rootDir);

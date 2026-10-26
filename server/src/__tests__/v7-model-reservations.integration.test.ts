@@ -426,9 +426,11 @@ const support = await getEmbeddedPostgresTestSupport();
           await rawTx.execute(sql.raw(`CREATE TEMP TABLE aw_manifest_purge_diagnostic (
             operation_kind text NOT NULL, trigger_depth integer NOT NULL, company_marker_matches boolean NOT NULL,
             context_run_matches boolean NOT NULL, context_task_present boolean NOT NULL,
+            context_task_retired boolean NOT NULL, context_task_matches_native_run boolean NOT NULL,
             source_erased boolean NOT NULL) ON COMMIT DROP`));
           await rawTx.execute(sql.raw(`CREATE OR REPLACE FUNCTION aw_v5_execution_manifest_immutable() RETURNS trigger LANGUAGE plpgsql AS $$
-          DECLARE company_match boolean; context_match boolean; context_task_present boolean; source_erased boolean;
+          DECLARE company_match boolean; context_match boolean; context_task_present boolean; context_task_retired boolean;
+            context_task_matches_native_run boolean; source_erased boolean;
           BEGIN
             IF TG_OP='UPDATE' AND NEW.manifest='{"payloadDeleted":true}'::jsonb
               AND (to_jsonb(NEW)-'manifest')=(to_jsonb(OLD)-'manifest')
@@ -440,9 +442,16 @@ const support = await getEmbeddedPostgresTestSupport();
               AND c.id=OLD.context_manifest_id AND c.run_id=OLD.run_id) INTO context_match;
             SELECT EXISTS(SELECT 1 FROM context_manifests c WHERE c.company_id=OLD.company_id
               AND c.id=OLD.context_manifest_id AND c.issue_id IS NOT NULL) INTO context_task_present;
+            SELECT EXISTS(SELECT 1 FROM context_manifests c JOIN issues i ON i.company_id=c.company_id AND i.id=c.issue_id
+              WHERE c.company_id=OLD.company_id AND c.id=OLD.context_manifest_id AND i.conversation_retired_at IS NOT NULL)
+              INTO context_task_retired;
+            SELECT EXISTS(SELECT 1 FROM context_manifests c JOIN heartbeat_runs h
+              ON h.company_id=c.company_id AND h.id=OLD.run_id AND h.native_issue_id=c.issue_id
+              WHERE c.company_id=OLD.company_id AND c.id=OLD.context_manifest_id) INTO context_task_matches_native_run;
             source_erased:=aw_execution_manifest_payload_erased(OLD.company_id,OLD.run_id,OLD.context_manifest_id);
             IF TG_OP='DELETE' AND pg_trigger_depth()>1 AND company_match AND context_match AND source_erased THEN RETURN OLD; END IF;
-            INSERT INTO pg_temp.aw_manifest_purge_diagnostic VALUES(TG_OP,pg_trigger_depth(),company_match,context_match,context_task_present,source_erased);
+            INSERT INTO pg_temp.aw_manifest_purge_diagnostic VALUES(TG_OP,pg_trigger_depth(),company_match,context_match,
+              context_task_present,context_task_retired,context_task_matches_native_run,source_erased);
             IF TG_OP='DELETE' THEN RETURN OLD; END IF;
             RETURN NEW;
           END $$`));
@@ -453,10 +462,13 @@ const support = await getEmbeddedPostgresTestSupport();
             result = { outcome: "denied_in_probe", failure: safeFailureFacts(error) };
           }
           const diagnosticRows = await rawTx.execute<{ operation_kind: string; trigger_depth: number; company_marker_matches: boolean;
-            context_run_matches: boolean; context_task_present: boolean; source_erased: boolean }>(sql`select * from pg_temp.aw_manifest_purge_diagnostic`);
+            context_run_matches: boolean; context_task_present: boolean; context_task_retired: boolean;
+            context_task_matches_native_run: boolean; source_erased: boolean }>(sql`select * from pg_temp.aw_manifest_purge_diagnostic`);
           if (diagnosticRows.length) result = { ...result, purgePredicate: diagnosticRows.map(row => ({
             operation: row.operation_kind, triggerDepth: row.trigger_depth, companyMarkerMatches: row.company_marker_matches,
-            contextRunMatches: row.context_run_matches, contextTaskPresent: row.context_task_present, sourceErased: row.source_erased,
+            contextRunMatches: row.context_run_matches, contextTaskPresent: row.context_task_present,
+            contextTaskRetired: row.context_task_retired, contextTaskMatchesNativeRun: row.context_task_matches_native_run,
+            sourceErased: row.source_erased,
           })) };
           // This diagnostic executes the exact canonical purge inside an outer
           // transaction and always rolls it back, so it cannot partially erase

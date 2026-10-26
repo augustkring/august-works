@@ -13358,16 +13358,18 @@ export function issueService(db: Db) {
         let companyId: string | null = null;
         if (directActor) {
           const pinned = await pinCurrentBoardActor(tx, directActor);
-          if (!pinned || pinned.credentialExpiresAt === null || !Number.isFinite(pinned.credentialExpiresAt))
+          if (!pinned || typeof pinned.credentialExpiresAt !== "number" || !Number.isFinite(pinned.credentialExpiresAt))
             throw forbidden("The current manual input session is unavailable");
-          expiresAt = pinned.credentialExpiresAt;
+          const credentialExpiresAt = pinned.credentialExpiresAt;
+          expiresAt = credentialExpiresAt;
           const [target] = await tx.select({ companyId: issues.companyId }).from(issues).where(eq(issues.id, issueId));
-          if (!target) throw notFound("Issue not found");
-          companyId = target.companyId;
-          operator = await pinIssueMutationHuman(tx, directActor, companyId, true) === "instance_admin";
+          if (!target?.companyId) throw notFound("Issue not found");
+          const targetCompanyId = target.companyId;
+          companyId = targetCompanyId;
+          operator = await pinIssueMutationHuman(tx, directActor, targetCompanyId, true) === "instance_admin";
           if (operator) await assertHumanAuthentication(tx, directActor, { requireRecent: true, phishingResistant: true });
-          await assertManualInputCredentialCurrent(tx, directActor, expiresAt);
-          await lockIssuePrivacyTree(tx, companyId);
+          await assertManualInputCredentialCurrent(tx, directActor, credentialExpiresAt);
+          await lockIssuePrivacyTree(tx, targetCompanyId);
         }
         // Serialize user and run-authored comments on the issue row. The same
         // transaction also carries the current Human ACL check and source seal.
@@ -14529,6 +14531,7 @@ export function issueService(db: Db) {
             parentId: issues.parentId,
             ...(captureSource ? {
               sourceVersion: sql<string>`extract(epoch from ${issues.updatedAt})::text`,
+              ownerBodyHash: sql<string>`public.aw_native_payload_body_hash('issue',to_jsonb(${issues}))`,
               payloadSourceSnapshot: issues.payloadSourceSnapshot,
             } : {}),
           })
@@ -14549,11 +14552,12 @@ export function issueService(db: Db) {
         });
         if (captureSource) {
           const sourceVersion = parent.sourceVersion;
-          if (typeof sourceVersion !== "string") throw new Error("Selected ancestor source version is unavailable");
+          const ownerBodyHash = parent.ownerBodyHash;
+          if (typeof sourceVersion !== "string" || typeof ownerBodyHash !== "string")
+            throw new Error("Selected ancestor source version is unavailable");
           onSourceCapture?.({
             input: { kind: "task", issueId: parent.id, sourceVersion,
-              contentHash: createHash("sha256").update(JSON.stringify({ id: parent.id, identifier: parent.identifier ?? null,
-                title: parent.title, status: parent.status, priority: parent.priority }), "utf8").digest("hex") },
+              contentHash: ownerBodyHash },
             // An absent historical closure remains unknown, never source-free.
             payloadSourceSnapshot: parent.payloadSourceSnapshot ?? null,
           });

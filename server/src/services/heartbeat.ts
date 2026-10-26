@@ -8509,6 +8509,7 @@ export async function getIssueExecutionContext(db: Db, companyId: string, issueI
       updatedAt: issues.updatedAt,
       payloadSourceSnapshot: issues.payloadSourceSnapshot,
       sourceVersion: sql<string>`extract(epoch from ${issues.updatedAt})::text`,
+      ownerBodyHash: sql<string>`public.aw_native_payload_body_hash('issue',to_jsonb(${issues}))`,
     })
     .from(issues)
     .leftJoin(chatConversations, and(
@@ -8526,12 +8527,11 @@ export async function getIssueExecutionContext(db: Db, companyId: string, issueI
     onSourceCapture?.(null);
     return null;
   }
-  const { payloadSourceSnapshot, sourceVersion, ...context } = row;
+  const { payloadSourceSnapshot, sourceVersion, ownerBodyHash, ...context } = row;
   onSourceCapture?.({ input: { kind: "task", issueId: context.id, sourceVersion,
-    // Selected Task rendition; final transformed provider bytes are bound
-    // separately. This source capture is not completeness or permission.
-    contentHash: createHash("sha256").update(JSON.stringify({ id: context.id, identifier: context.identifier,
-      title: context.title, description: context.description, workMode: context.workMode }), "utf8").digest("hex") },
+    // Bind the closed canonical Task payload; final transformed provider bytes
+    // are bound separately. This source capture is not completeness or permission.
+    contentHash: ownerBodyHash },
     payloadSourceSnapshot });
   return context;
 }
@@ -24204,6 +24204,9 @@ export function heartbeatService(
             restartRecovery: runOptions.nativeRestartRecovery,
             sameRunRecovery: Boolean(runOptions.nativeLeaseOwner),
             resourceDisposition: providerResourceDispositionForRun,
+            workspaceRepositoryMode: projectlessNativeConversation
+              ? "server_verified_none"
+              : "discover",
           });
         } else {
           const legacyWarmLifecycle =

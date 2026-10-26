@@ -34034,15 +34034,33 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
         return null;
       }
       let authorizationActionId: string | null = null;
+      const inboundWakeKey = input.publication.idempotencyKey.startsWith("wake:")
+        ? parseInboundWakePublicationKey(input.publication.idempotencyKey)
+        : null;
+      const isInboundWakePublication = input.publication.idempotencyKey.startsWith("wake:");
+      const isRemovedWakeNotice = inboundWakeKey?.state === "removed";
+      let authorizedInboundWake = false;
+      if (isRemovedWakeNotice) {
+        // Validate the exact removal receipt and visible prior queue notice
+        // before allowing the deleted source through the linked-author check.
+        authorizedInboundWake = await authorizeInboundWakePublication(tx, input.publication);
+        if (!authorizedInboundWake) return null;
+      }
       if (endpoint.provider === "slack") {
         const credentials = await resolveCredentials(endpoint, tx);
-        if (!await authorizeSlackBoardPublication(tx, endpoint, conversation, input.publication, credentials.botToken ?? "", fetchImpl)) return null;
+        if (!await authorizeSlackBoardPublication(tx, endpoint, conversation, input.publication,
+          credentials.botToken ?? "", fetchImpl, {
+            // A removed wake notice edits the already-published queue notice.
+            // Its exact wake receipt, current destination, owner and visible
+            // prior notice were validated above; tolerate only that source's
+            // soft deletion while rechecking the linked author below.
+            allowDeletedSource: Boolean(authorizedInboundWake && isRemovedWakeNotice),
+          })) return null;
       }
-      if (
-        input.publication.idempotencyKey.startsWith("wake:") &&
-        !(await authorizeInboundWakePublication(tx, input.publication))
-      )
-        return null;
+      if (isInboundWakePublication && !authorizedInboundWake) {
+        authorizedInboundWake = await authorizeInboundWakePublication(tx, input.publication);
+        if (!authorizedInboundWake) return null;
+      }
       // A native response alongside an older completion review has its own
       // narrow authorization. Recheck that exact proof, review and original
       // requester at the transport claim, including file publications whose

@@ -123,20 +123,20 @@ describeEmbeddedPostgres("issueService native ancestor source capture",()=>{
       returning payload_source_snapshot as snapshot`);
     return {rows,selected:rows[7]!,target:rows[8]!,snapshot:sealed!.snapshot};
   }
-  function scalarHash(row:Pick<typeof issues.$inferSelect,"id"|"identifier"|"title"|"status"|"priority">){
-    return createHash("sha256").update(JSON.stringify({id:row.id,identifier:row.identifier,title:row.title,status:row.status,priority:row.priority}),"utf8").digest("hex");
-  }
   it("captures only the six rendered ancestors with selected snapshots and exact microsecond versions without public metadata",async()=>{
     const seeded=await chain(),svc=issueService(db),captures:NativeTaskSourceCapture[]=[];
     const original=await svc.getAncestors(seeded.target.id);
     const result=await svc.getAncestors(seeded.target.id,{onSourceCapture:capture=>captures.push(capture)});
     expect(result).toEqual(original);
     expect(result).toHaveLength(8);
-    const versions=await db.execute<{id:string;version:string}>(sql`select id,extract(epoch from updated_at)::text as version
-      from issues where company_id=${seeded.target.companyId}::uuid`);
+    const versions=await db.execute<{id:string;version:string;ownerHash:string}>(sql`select id,
+      extract(epoch from i.updated_at)::text as version,
+      public.aw_native_payload_body_hash('issue',to_jsonb(i)) as "ownerHash"
+      from issues i where i.company_id=${seeded.target.companyId}::uuid`);
     const versionMap=new Map(versions.map(row=>[row.id,row.version]));
+    const hashMap=new Map(versions.map(row=>[row.id,row.ownerHash]));
     expect(captures).toEqual(result.slice(0,6).map((row,index)=>({input:{kind:"task",issueId:row.id,
-      sourceVersion:versionMap.get(row.id),contentHash:scalarHash(row)},payloadSourceSnapshot:index===0?seeded.snapshot:null})));
+      sourceVersion:versionMap.get(row.id),contentHash:hashMap.get(row.id)},payloadSourceSnapshot:index===0?seeded.snapshot:null})));
     expect(captures[0]!.input.sourceVersion).toMatch(/123456$/);
     expect(captures.map(capture=>capture.input.issueId)).toEqual(seeded.rows.slice(2,8).reverse().map(row=>row.id));
     for(const row of result){
@@ -145,19 +145,21 @@ describeEmbeddedPostgres("issueService native ancestor source capture",()=>{
       expect(row).not.toHaveProperty("sourceCapture");
     }
   });
-  it("retains the original captured row after mutation and hashes only the selected Markdown scalar projection",async()=>{
+  it("retains the original captured row across operational status changes",async()=>{
     const seeded=await chain(),svc=issueService(db),captured:NativeTaskSourceCapture[]=[];
-    const original=await svc.getAncestors(seeded.target.id,{onSourceCapture:capture=>captured.push(capture)});
+    await svc.getAncestors(seeded.target.id,{onSourceCapture:capture=>captured.push(capture)});
     expect(captured[0]?.payloadSourceSnapshot).toEqual(seeded.snapshot);
-    await db.update(issues).set({description:"Later unrelated private description",payloadSourceSnapshot:null,updatedAt:new Date()})
+    await db.update(issues).set({status:"in_progress",updatedAt:new Date()})
       .where(eq(issues.id,seeded.selected.id));
     const later:NativeTaskSourceCapture[]=[];
     await svc.getAncestors(seeded.target.id,{onSourceCapture:capture=>later.push(capture)});
     expect(later[0]!.input.contentHash).toBe(captured[0]!.input.contentHash);
     expect(later[0]!.input.sourceVersion).not.toBe(captured[0]!.input.sourceVersion);
-    expect(later[0]!.payloadSourceSnapshot).toBeNull();
+    expect(later[0]!.payloadSourceSnapshot).toEqual(seeded.snapshot);
     expect(captured[0]!.payloadSourceSnapshot).toEqual(seeded.snapshot);
-    expect(captured[0]!.input.contentHash).toBe(scalarHash(original[0]!));
+    const [currentHash]=await db.execute<{hash:string}>(sql`select public.aw_native_payload_body_hash('issue',to_jsonb(i)) as hash
+      from issues i where i.id=${seeded.selected.id}::uuid`);
+    expect(captured[0]!.input.contentHash).toBe(currentHash!.hash);
     const empty:NativeTaskSourceCapture[]=[];
     expect(await svc.getAncestors(seeded.rows[0]!.id,{onSourceCapture:capture=>empty.push(capture)})).toEqual([]);
     expect(empty).toEqual([]);
@@ -166,12 +168,13 @@ describeEmbeddedPostgres("issueService native ancestor source capture",()=>{
     const seeded=await chain(),captures:Array<NativeTaskSourceCapture|null>=[];
     const context=await getIssueExecutionContext(db,seeded.target.companyId,seeded.selected.id,capture=>captures.push(capture));
     expect(context!.id).toBe(seeded.selected.id);
-    const [version]=await db.execute<{version:string}>(sql`select extract(epoch from updated_at)::text as version from issues
-      where id=${seeded.selected.id}::uuid`);
+    const [version]=await db.execute<{version:string;ownerHash:string}>(sql`select
+      extract(epoch from i.updated_at)::text as version,
+      public.aw_native_payload_body_hash('issue',to_jsonb(i)) as "ownerHash"
+      from issues i where i.id=${seeded.selected.id}::uuid`);
     expect(version!.version).toMatch(/123456$/);
     expect(captures[0]).toEqual({input:{kind:"task",issueId:context!.id,sourceVersion:version!.version,
-      contentHash:createHash("sha256").update(JSON.stringify({id:context!.id,identifier:context!.identifier,title:context!.title,
-        description:context!.description,workMode:context!.workMode}),"utf8").digest("hex")},payloadSourceSnapshot:seeded.snapshot});
+      contentHash:version!.ownerHash},payloadSourceSnapshot:seeded.snapshot});
     expect(context).not.toHaveProperty("sourceVersion");
     expect(context).not.toHaveProperty("payloadSourceSnapshot");
     const unknown:Array<NativeTaskSourceCapture|null>=[];

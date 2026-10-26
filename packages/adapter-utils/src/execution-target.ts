@@ -1424,6 +1424,7 @@ export async function prepareAdapterExecutionTargetRuntime(input: {
   workspaceDurableSeed?: WorkspaceDurableSeedPaths;
   workspaceBaseline?: DirectorySnapshot;
   workspaceGitSnapshot?: GitWorkspaceSnapshot | null;
+  workspaceRepositoryMode?: "discover" | "server_verified_none";
   workspaceExclude?: string[];
   preserveAbsentOnRestore?: string[];
   assets?: AdapterManagedRuntimeAsset[];
@@ -1504,6 +1505,7 @@ export async function prepareAdapterExecutionTargetRuntime(input: {
     workspaceDurableSeed: input.workspaceDurableSeed,
     workspaceBaseline: input.workspaceBaseline,
     workspaceGitSnapshot: input.workspaceGitSnapshot,
+    workspaceRepositoryMode: input.workspaceRepositoryMode,
     workspaceExclude: input.workspaceExclude,
     preserveAbsentOnRestore: input.preserveAbsentOnRestore,
     assets: input.assets,
