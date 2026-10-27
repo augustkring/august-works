@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { createHash } from "node:crypto";
 import { JEV_DECISION_MODEL, type JevDecisionRequest } from "@paperclipai/shared";
 import { runJevDecision } from "./jev-decision-provider.js";
 
@@ -13,12 +14,20 @@ const response = { id: "decision-fixture", model: JEV_DECISION_MODEL, usage: { i
 describe("optional Jev Decisions provider seam", () => {
   it("pins the OpenRouter alpha Decisions route and keeps the answer in memory", async () => {
     const transport = vi.fn<typeof fetch>().mockResolvedValue(Response.json(response));
-    const result = await runJevDecision({ model: JEV_DECISION_MODEL, apiKey: "selected-connection-key", request, signal: new AbortController().signal }, { fetch: transport });
+    let wireReceipt: { method: "POST"; endpoint: string; bodySha256: string } | null = null;
+    let receiptPrecededFetch = false;
+    const result = await runJevDecision({ model: JEV_DECISION_MODEL, apiKey: "selected-connection-key", request, signal: new AbortController().signal }, {
+      fetch: async (...args) => { receiptPrecededFetch = wireReceipt !== null; return transport(...args); },
+      onWireDispatch: receipt => { wireReceipt = receipt; },
+    });
     expect(transport).toHaveBeenCalledTimes(1);
     const [url, options] = transport.mock.calls[0]!;
     expect(String(url)).toBe("https://openrouter.ai/api/alpha/decisions");
     expect(new Headers(options?.headers).get("authorization")).toBe("Bearer selected-connection-key");
     expect(JSON.parse(String(options?.body)).model).toBe(JEV_DECISION_MODEL);
+    expect(receiptPrecededFetch).toBe(true);
+    expect(wireReceipt).toEqual({ method: "POST", endpoint: "https://openrouter.ai/api/alpha/decisions",
+      bodySha256: createHash("sha256").update(String(options?.body), "utf8").digest("hex") });
     expect(result.answers?.skill).toMatchObject({ type: "choice", choice: "skill:review", confidence: 0.85 });
     expect(result.receipt).toMatchObject({ costStatus: "reported", costAmount: "0.0000052", inputTokens: 123 });
   });

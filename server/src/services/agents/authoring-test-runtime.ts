@@ -153,7 +153,7 @@ export function authoringTestRuntime(db: Db, options: Options, profile: (company
       if (createHash("sha256").update(credential).digest("hex") !== fresh.credentialSha256) throw forbidden("Model credential changed before dispatch");
       await qualify(db, input); controller.signal.throwIfAborted();
       const result = await anthropicReadOnlyCall(state.request, credential, controller.signal, {
-        onWireDispatch: wire => broker.recordWireDispatch(state.actor, test.companyId, reservation.id, wire),
+        onWireDispatch: async wire => { await broker.recordWireDispatch(state.actor, test.companyId, reservation.id, wire); },
         fetch: async (...args) => {
           await qualify(db, input); controller.signal.throwIfAborted();
           await logActivity(db, { companyId: test.companyId, actorType: "user", actorId: test.createdByUserId, agentId: test.agentId, runId: test.runId,

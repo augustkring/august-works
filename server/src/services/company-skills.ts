@@ -6225,7 +6225,7 @@ export function companySkillService(db: Db) {
     const version = await getVersion(companyId, skill.id, skill.activeVersionId, actor, "task");
     if (!version || version.releaseId !== release.id || version.state !== "active" || version.visibility !== "company" || buildInventoryContentHash(version.fileInventory.map(entry => ({ path: entry.path, sha256: sha256Buffer(entry.content) }))) !== identity.contentDigest) throw conflict("The required platform Skill snapshot failed integrity validation", { code: "platform_skill_integrity_failed" });
     return {
-      pin: { skillId: skill.id, versionId: version.id, key: BLENTERA_PLATFORM_SKILL_KEY, name: skill.name, selection: "required" as const, loadPoint: "on_demand" as const, estimatedDescriptorTokens: Math.ceil(Buffer.byteLength(skill.name + (skill.description ?? "")) / 4) },
+      pin: { skillId: skill.id, versionId: version.id, key: BLENTERA_PLATFORM_SKILL_KEY, name: skill.name, selection: "required" as const, loadPoint: "task_relevant" as const, estimatedDescriptorTokens: Math.ceil(Buffer.byteLength(skill.name + (skill.description ?? "")) / 4) },
       identity: { key: BLENTERA_PLATFORM_SKILL_KEY as "blentera-platform", version: release.id, digest: identity.contentDigest, sourceSha: identity.sourceSha },
     };
   }

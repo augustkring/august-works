@@ -16,6 +16,8 @@ export const PRODUCT_IDENTITY = {
   emailCatchAllEnabled: false,
   supportEmail: "support@blentera.com",
   securityEmail: "security@blentera.com",
+  // RFC 9116 publication expiry; renew through the accountable release owner.
+  securityContactExpiresAt: "2027-04-27T00:00:00.000Z",
   privacyEmail: "privacy@blentera.com",
   transactionalSenderName: "Blentera",
   transactionalSenderEmail: "notifications@blentera.com",

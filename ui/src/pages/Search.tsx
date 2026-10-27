@@ -100,6 +100,7 @@ const FEDERATED_DOMAIN_LABELS: Record<CompanySearchFederatedDomain, string> = {
   packages: "Agent packages",
   knowledge: "Company knowledge",
   people: "People",
+  notices: "Release and deprecation notices",
   insights: "Decisions and insights",
   apps: "Apps and connections",
   settings: "Settings",
@@ -471,8 +472,9 @@ export function Search() {
 
   const counts = data?.countsByType ?? { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0, help: 0 };
   const universalResults = data?.federation?.results ?? [];
+  const federatedMatchCount = Object.values(data?.federation?.countsByDomain ?? {}).reduce((sum, count) => sum + (count ?? 0), 0);
   const totalResults = (data?.results.length ?? 0) + universalResults.length;
-  const allMatchTotal = data ? totalMatchCount(counts) + Object.values(data.federation?.countsByDomain ?? {}).reduce((sum, count) => sum + (count ?? 0), 0) : 0;
+  const allMatchTotal = data ? totalMatchCount(counts) + federatedMatchCount : 0;
   const previewTotal = previewData ? totalMatchCount(previewData.countsByType) : null;
 
   const tabItems = useMemo<PageTabItem[]>(() => {
@@ -494,7 +496,8 @@ export function Search() {
           + (counts.artifact ?? 0)
           + (counts.agent ?? 0)
           + (counts.project ?? 0)
-          + (counts.help ?? 0);
+          + (counts.help ?? 0)
+          + federatedMatchCount;
       } else if (value === "issues") count = issuesTotal;
       else if (value === "comments") count = counts.comment ?? 0;
       else if (value === "documents") count = counts.document ?? 0;
@@ -519,7 +522,7 @@ export function Search() {
         ),
       } satisfies PageTabItem;
     });
-  }, [counts, data, filtersActive]);
+  }, [counts, data, federatedMatchCount, filtersActive]);
 
   const operatorPills = useMemo(() => searchFilterPills(draftFilters, parserContext), [draftFilters, parserContext]);
   const operatorSuggestions = useMemo(
@@ -593,7 +596,7 @@ export function Search() {
                 }
               }
             }}
-            placeholder="Search tasks, comments, documents, artifacts, agents, projects…"
+            placeholder="Search tasks, routines, workflows, apps, knowledge, people, and Help…"
             aria-label="Search query"
             className="h-10 pl-9 pr-20 text-sm"
           />

@@ -10,7 +10,7 @@ export type AgentNativeOperationMode =
 
 export interface AgentNativeOperationManifestEntry {
   operationId: string;
-  domain: "Tasks" | "Projects" | "Work" | "Agents" | "Apps" | "Insights" | "Decisions" | "Support" | "Workflows" | "Foundation" | "Memory" | "Notifications" | "Co-workers" | "Routines";
+  domain: "Tasks" | "Projects" | "Work" | "Agents" | "Apps" | "Insights" | "Decisions" | "Support" | "Skills" | "Workflows" | "Foundation" | "Memory" | "Notifications" | "Co-workers" | "Routines";
   customerJob: string;
   canonicalService: string;
   webSurface: string;
@@ -36,11 +36,22 @@ export interface AgentNativeOperationManifestEntry {
 }
 
 /**
- * First-party operations currently projected by Tool Gateway. The manifest
- * records the existing owner and authority boundary; it does not grant access
- * or claim that an unqualified runtime is supported.
+ * Agent-native operation coverage across the existing Tool Gateway and the
+ * managed Native Runner. The manifest records existing owners and authority
+ * boundaries; it does not grant access or claim that an unqualified runtime
+ * is supported.
  */
-export const AGENT_NATIVE_OPERATION_MANIFEST: readonly AgentNativeOperationManifestEntry[] = Object.freeze([
+const AGENT_NATIVE_OPERATION_BASE_MANIFEST: readonly AgentNativeOperationManifestEntry[] = Object.freeze([
+  {
+    operationId: "blentera.support.intake.status", domain: "Support", customerJob: "Read whether Support intake is currently available.",
+    canonicalService: "customerSupportCaseService.intakePolicyFromNative", webSurface: "Help and Support", apiOperation: "Tool Gateway operation",
+    toolId: "blentera.support.intake.status", legacyAliases: ["paperclip-self:get_support_intake_status"], principalTypes: ["agent"],
+    experienceProfiles: ["agent_tool_gateway"], mode: "DIRECT_AGENT", criticality: "ordinary",
+    requiredPermissions: ["current Native Agent run", "current represented Human company membership"],
+    resourceScope: "Only the published Support intake availability and disclosure policy for the current company.", approvalPolicy: "Read-only; no case content or service incident status is returned.", idempotency: "Not applicable to reads.",
+    expectedVersionOrPrecondition: "Current running Native run and active represented-Human membership.", postcondition: "Current intake availability and approved disclosure terms, or unavailable.", recovery: "Use direct Human Support when Agent intake is unavailable.",
+    channelProjection: [], mcpExposed: true, openclawQualified: false, tests: ["server/src/__tests__/tool-gateway-service.test.ts"], owner: "server/src/services/experience/support-cases.ts",
+  },
   {
     operationId: "blentera.task.list_assigned", domain: "Tasks", customerJob: "List Tasks assigned to the current Co-worker.",
     canonicalService: "issueService.list", webSurface: "Issue detail and company Task list", apiOperation: "GET /api/companies/{companyId}/issues",
@@ -87,13 +98,22 @@ export const AGENT_NATIVE_OPERATION_MANIFEST: readonly AgentNativeOperationManif
     channelProjection: [], mcpExposed: true, openclawQualified: false, tests: ["server/src/__tests__/tool-gateway-service.test.ts"], owner: "server/src/services/agents.ts",
   },
   {
-    operationId: "blentera.apps.list_authorized_tools", domain: "Apps", customerJob: "Discover the Apps and tools currently authorized in this session.",
-    canonicalService: "Tool Gateway session tool resolution", webSurface: "Apps and task tool picker", apiOperation: "MCP tools/list",
-    toolId: "MCP tools/list", legacyAliases: [], principalTypes: ["agent"], experienceProfiles: ["agent_tool_gateway"], mode: "DIRECT_AGENT", criticality: "ordinary",
+    operationId: "blentera.work.get_current_task", domain: "Work", customerJob: "Read the Task attached to the current run.",
+    canonicalService: "issueService.getById", webSurface: "Current work", apiOperation: "GET /api/issues/{issueId}",
+    toolId: "blentera.work.get_current_task", legacyAliases: ["paperclip-self:get_my_current_work"], principalTypes: ["agent"],
+    experienceProfiles: ["agent_tool_gateway"], mode: "DIRECT_AGENT", criticality: "ordinary", requiredPermissions: ["current Agent credential", "current represented Human", "current Task ACL"],
+    resourceScope: "Only the Task bound to the current verified run.", approvalPolicy: "Read-only; current Task source access is rechecked.", idempotency: "Not applicable to reads.",
+    expectedVersionOrPrecondition: "Current run, Task assignment, and privacy source binding.", postcondition: "Current Task status and bounded work identity.", recovery: "Refresh the current run and Task; stop on an access change.",
+    channelProjection: [], mcpExposed: true, openclawQualified: false, tests: ["server/src/__tests__/tool-gateway-service.test.ts"], owner: "server/src/services/issues.ts",
+  },
+  {
+    operationId: "blentera.apps.list_authorized_tools", domain: "Apps", customerJob: "Discover Apps and connections currently authorized in this session.",
+    canonicalService: "Tool Gateway session tool resolution + current connection metadata", webSurface: "Apps and task tool picker", apiOperation: "MCP tools/list",
+    toolId: "blentera.apps.list_authorized_tools", legacyAliases: ["paperclip-self:list_authorized_apps"], principalTypes: ["agent"], experienceProfiles: ["agent_tool_gateway"], mode: "DIRECT_AGENT", criticality: "ordinary",
     requiredPermissions: ["current Agent credential", "current session profile and tool policy", "current connection/grant eligibility"],
     resourceScope: "Only descriptors resolved for this exact session; no connection secrets or unrelated company catalog.", approvalPolicy: "Discovery only; execution rechecks grants, policy, and approval on every call.", idempotency: "Not applicable to reads.",
     expectedVersionOrPrecondition: "Current session tool profile and active connection state.", postcondition: "A bounded catalog of tools available in this session.", recovery: "Refresh tool discovery; a missing tool is not evidence that an external account is disconnected.",
-    channelProjection: ["MCP tools/list"], mcpExposed: true, openclawQualified: false, tests: ["server/src/__tests__/tool-gateway-service.test.ts"], owner: "server/src/services/tool-gateway.ts",
+    channelProjection: [], mcpExposed: true, openclawQualified: false, tests: ["server/src/__tests__/tool-gateway-service.test.ts"], owner: "server/src/services/tool-gateway.ts",
   },
   {
     operationId: "blentera.insight.findings.search", domain: "Insights", customerJob: "Search current, authorized process findings.",
@@ -114,11 +134,23 @@ export const AGENT_NATIVE_OPERATION_MANIFEST: readonly AgentNativeOperationManif
     channelProjection: [], mcpExposed: true, openclawQualified: false, tests: ["server/src/__tests__/tool-gateway-service.test.ts"], owner: "server/src/services/decisions.ts",
   },
   {
-    operationId: "blentera.support.case.manage", domain: "Support", customerJob: "Open, reply to, or close a customer Support case.",
+    operationId: "blentera.support.case.request", domain: "Support", customerJob: "Create a local Support request with bounded safe context for the current Human.",
+    canonicalService: "customerSupportCaseService.createFromNative", webSurface: "Help and Support cases", apiOperation: "Tool Gateway operation",
+    toolId: "blentera.support.case.request", legacyAliases: ["paperclip-self:create_support_request"], principalTypes: ["agent"],
+    experienceProfiles: ["agent_tool_gateway"], mode: "PROPOSAL_ONLY", criticality: "ordinary",
+    requiredPermissions: ["current verified Native Agent run", "current represented Human and company membership", "current Task source ACL", "configured Support intake policy"],
+    resourceScope: "One local Support case owned by the current represented Human; only submitted description and schema-whitelisted safe context are stored.",
+    approvalPolicy: "Normal Tool Gateway policy applies; external delivery remains separate and is not implied by local case creation.", idempotency: "Required request key and exact content hash.",
+    expectedVersionOrPrecondition: "Current running Native run, current Human membership, current Task access, unchanged Support policy revision.",
+    postcondition: "Durable local Support case receipt with Agent activity attribution; no external delivery claim.", recovery: "Reconcile the same request key before retrying; use Help as the Human if unavailable.",
+    channelProjection: [], mcpExposed: true, openclawQualified: false, tests: ["server/src/__tests__/tool-gateway-service.test.ts"], owner: "server/src/services/experience/support-cases.ts",
+  },
+  {
+    operationId: "blentera.support.case.manage", domain: "Support", customerJob: "Read, reply to, or close an existing Support case.",
     canonicalService: "customerSupportCaseService", webSurface: "Help and Support cases", apiOperation: "Authenticated Human Support API",
     toolId: "Human Support API only", legacyAliases: [], principalTypes: ["human"], experienceProfiles: ["authenticated_human"], mode: "HUMAN_ONLY", criticality: "material",
     requiredPermissions: ["current authenticated Human account", "current company membership", "case ownership or support administration"],
-    resourceScope: "The current Human's own cases, or cases within explicit support administration authority.", approvalPolicy: "Human account action is required; an Agent cannot create or mutate customer Support cases.", idempotency: "Canonical case API request identity.",
+    resourceScope: "The current Human's own cases, or cases within explicit support administration authority.", approvalPolicy: "Human account action is required; Agents cannot read replies or change case state.", idempotency: "Canonical case API request identity.",
     expectedVersionOrPrecondition: "Current Human credential and current case state.", postcondition: "Canonical Support case transition with durable event history.", recovery: "Use Help/Support as the authenticated Human; do not route through an Agent identity.",
     channelProjection: ["Human web/API"], mcpExposed: false, openclawQualified: false, tests: ["server/src/services/experience/support-cases.ts"], owner: "server/src/services/experience/support-cases.ts",
   },
@@ -275,6 +307,226 @@ export const AGENT_NATIVE_OPERATION_MANIFEST: readonly AgentNativeOperationManif
     expectedVersionOrPrecondition: "Exact tested draft revision and current permission.", postcondition: "Human review request is prepared; no publication occurs.", recovery: "Refresh/retest if the draft changes.",
     channelProjection: [], mcpExposed: true, openclawQualified: false, tests: ["server/src/__tests__/tool-gateway-service.test.ts"], owner: "server/src/services/workflows/workflow-authoring-tools.ts",
   },
+]);
+
+/**
+ * Existing typed operations in the Native Runner control-plane contract. These
+ * entries describe only the managed Native profile; they do not advertise MCP
+ * or OpenClaw support. Raw API fallbacks are deliberately omitted.
+ */
+const NATIVE_RUNNER_OPERATION_ENTRIES: readonly AgentNativeOperationManifestEntry[] = [
+  {
+    operationId: "blentera.native.task.read_context", domain: "Tasks", customerJob: "Read the active Task and its approved plan.",
+    canonicalService: "PaperclipRunnerToolAuthority.get_task_context", webSurface: "Task detail", apiOperation: "Native Runner semantic tool",
+    toolId: "paperclip-runner:get_task_context", legacyAliases: [], principalTypes: ["agent"], experienceProfiles: ["blentera_managed_native"],
+    mode: "DIRECT_AGENT", criticality: "ordinary", requiredPermissions: ["current Native run", "current Task/source authorization"],
+    resourceScope: "The active Task and its currently authorized plan revision.", approvalPolicy: "Read-only; Task and retained-source ACLs are rechecked.", idempotency: "Not applicable to reads.",
+    expectedVersionOrPrecondition: "Current bound Task and source closure.", postcondition: "A bounded current Task context.", recovery: "Refresh current Task context; stop if access changed.",
+    channelProjection: [], mcpExposed: false, openclawQualified: false, tests: ["server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts"], owner: "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+  },
+  {
+    operationId: "blentera.native.task.read_history", domain: "Tasks", customerJob: "Read bounded comments on the active Task.",
+    canonicalService: "PaperclipRunnerToolAuthority.get_task_history", webSurface: "Task activity", apiOperation: "Native Runner semantic tool",
+    toolId: "paperclip-runner:get_task_history", legacyAliases: [], principalTypes: ["agent"], experienceProfiles: ["blentera_managed_native"],
+    mode: "DIRECT_AGENT", criticality: "ordinary", requiredPermissions: ["current Native run", "current Task/comment source authorization"],
+    resourceScope: "Only bounded current comments on the active Task.", approvalPolicy: "Read-only; each returned comment source is revalidated.", idempotency: "Not applicable to reads.",
+    expectedVersionOrPrecondition: "Current bound Task and exact comment owner snapshots.", postcondition: "A bounded readable history projection.", recovery: "Stop if a returned comment or Task source is unavailable.",
+    channelProjection: [], mcpExposed: false, openclawQualified: false, tests: ["server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts"], owner: "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+  },
+  {
+    operationId: "blentera.native.task.search", domain: "Tasks", customerJob: "Find Tasks by text and status in the current company.",
+    canonicalService: "issueService.list + issueReadSqlCondition", webSurface: "Task list", apiOperation: "Native Runner semantic tool",
+    toolId: "paperclip-runner:search_tasks", legacyAliases: [], principalTypes: ["agent"], experienceProfiles: ["blentera_managed_native"],
+    mode: "DIRECT_AGENT", criticality: "ordinary", requiredPermissions: ["current Native run", "current Task read authorization"],
+    resourceScope: "Tasks in the current company satisfying current reader predicates.", approvalPolicy: "Read-only; unauthorized Tasks are excluded before projection.", idempotency: "Not applicable to reads.",
+    expectedVersionOrPrecondition: "Current company identity and reader ACL.", postcondition: "A bounded list of readable Task summaries.", recovery: "Refresh the query; do not infer inaccessible Tasks.",
+    channelProjection: [], mcpExposed: false, openclawQualified: false, tests: ["server/src/services/native-runtime/paperclip-runner-tool-authority.ts"], owner: "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+  },
+  {
+    operationId: "blentera.native.task.progress", domain: "Work", customerJob: "Record progress on the active Task.",
+    canonicalService: "PaperclipRunnerToolAuthority.report_progress", webSurface: "Task activity", apiOperation: "Native Runner semantic tool",
+    toolId: "paperclip-runner:report_progress", legacyAliases: [], principalTypes: ["agent"], experienceProfiles: ["blentera_managed_native"],
+    mode: "DIRECT_AGENT", criticality: "ordinary", requiredPermissions: ["current Native run", "current Task write authorization"],
+    resourceScope: "One progress comment on the active Task.", approvalPolicy: "Canonical Task policy and source-write checks apply.", idempotency: "Native mutation receipt and stable request identity.",
+    expectedVersionOrPrecondition: "Current Task and active run ownership.", postcondition: "One durable progress entry.", recovery: "Inspect the original mutation receipt before retrying.",
+    channelProjection: [], mcpExposed: false, openclawQualified: false, tests: ["server/src/services/native-runtime/paperclip-runner-tool-authority.ts"], owner: "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+  },
+  {
+    operationId: "blentera.native.task.create", domain: "Tasks", customerJob: "Create a governed Task for the requested work.",
+    canonicalService: "issueService.create + nativeTaskCreationAdmission", webSurface: "Task creation", apiOperation: "Native Runner semantic tool",
+    toolId: "paperclip-runner:create_task", legacyAliases: [], principalTypes: ["agent"], experienceProfiles: ["blentera_managed_native"],
+    mode: "DIRECT_AGENT", criticality: "ordinary", requiredPermissions: ["current Native run", "current company Task creation policy", "source closure when required"],
+    resourceScope: "One current-company Task with canonical project/parent and assignment constraints.", approvalPolicy: "The original Task admission and source-capture owners decide whether creation is allowed.", idempotency: "Required mutation receipt and stable idempotency key.",
+    expectedVersionOrPrecondition: "Current run, project/parent policy, and exact output/source capture where required.", postcondition: "A durable Task with its canonical initial plan/source evidence.", recovery: "Reconcile the original receipt before retrying; never create a duplicate Task.",
+    channelProjection: [], mcpExposed: false, openclawQualified: false, tests: ["server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts"], owner: "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+  },
+  {
+    operationId: "blentera.native.task.reassign", domain: "Tasks", customerJob: "Reassign an eligible Task with its current version.",
+    canonicalService: "issueService.update + run-dispatch handoff", webSurface: "Task assignment", apiOperation: "Native Runner semantic tool",
+    toolId: "paperclip-runner:reassign_task", legacyAliases: [], principalTypes: ["agent"], experienceProfiles: ["blentera_managed_native"],
+    mode: "DIRECT_AGENT", criticality: "material", requiredPermissions: ["current Task write authority", "assignable target Agent", "current status/version"],
+    resourceScope: "One eligible current-company Task and one independently assignable Agent.", approvalPolicy: "Canonical reassignment, lease handoff, and any matching approval policy remain authoritative.", idempotency: "Required mutation receipt and stable idempotency key.",
+    expectedVersionOrPrecondition: "Current assignee and status version; the caller cannot reassign its own active Task.", postcondition: "Durable assignment handoff with original Task/evidence retained.", recovery: "Reconcile the handoff receipt; do not restart work under stale ownership.",
+    channelProjection: [], mcpExposed: false, openclawQualified: false, tests: ["server/src/services/native-runtime/paperclip-runner-tool-authority.ts"], owner: "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+  },
+  {
+    operationId: "blentera.native.task.dependencies.replace", domain: "Tasks", customerJob: "Replace the active Task's blocker set.",
+    canonicalService: "issueService dependency owner", webSurface: "Task dependencies", apiOperation: "Native Runner semantic tool",
+    toolId: "paperclip-runner:set_dependencies", legacyAliases: [], principalTypes: ["agent"], experienceProfiles: ["blentera_managed_native"],
+    mode: "DIRECT_AGENT", criticality: "ordinary", requiredPermissions: ["current Task write authority", "readable dependency targets"],
+    resourceScope: "The active Task and explicitly named current-company blocker Tasks.", approvalPolicy: "Canonical dependency validation and Task policy apply.", idempotency: "Mutation receipt bound to the requested blocker set.",
+    expectedVersionOrPrecondition: "Current Task and all dependency targets remain valid.", postcondition: "The exact requested dependency set is durable.", recovery: "Re-read blockers and retry only with current targets.",
+    channelProjection: [], mcpExposed: false, openclawQualified: false, tests: ["server/src/services/native-runtime/paperclip-runner-tool-authority.ts"], owner: "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+  },
+  {
+    operationId: "blentera.native.task.question", domain: "Work", customerJob: "Ask for information or a governed approval on the current Task.",
+    canonicalService: "issueThreadInteractionService", webSurface: "Task questions and approvals", apiOperation: "Native Runner semantic tool",
+    toolId: "paperclip-runner:request_human_input", legacyAliases: [], principalTypes: ["agent"], experienceProfiles: ["blentera_managed_native"],
+    mode: "PROPOSAL_ONLY", criticality: "ordinary", requiredPermissions: ["current Task", "current interaction policy"],
+    resourceScope: "One durable interaction bound to the current Task and run.", approvalPolicy: "Question is not approval; resolution uses the original authorized Human/approver contract.", idempotency: "Required interaction idempotency key.",
+    expectedVersionOrPrecondition: "Current Task and run identity.", postcondition: "One durable pending interaction visible in the Task/channel surfaces.", recovery: "Reuse the same key and inspect the stored interaction before retrying.",
+    channelProjection: [], mcpExposed: false, openclawQualified: false, tests: ["server/src/services/native-runtime/paperclip-runner-tool-authority.ts"], owner: "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+  },
+  {
+    operationId: "blentera.native.work_product.register", domain: "Work", customerJob: "Register a verified Task work product for handoff.",
+    canonicalService: "PaperclipRunnerToolAuthority.register_deliverable", webSurface: "Task deliverables", apiOperation: "Native Runner semantic tool",
+    toolId: "paperclip-runner:register_deliverable", legacyAliases: [], principalTypes: ["agent"], experienceProfiles: ["blentera_managed_native"],
+    mode: "DIRECT_AGENT", criticality: "ordinary", requiredPermissions: ["current Task write authority", "verified workspace file access"],
+    resourceScope: "One bounded current-run artifact and its Task attachment metadata.", approvalPolicy: "Path, size, and workspace checks apply; registering is not proof of external delivery.", idempotency: "Artifact identity and current-run binding.",
+    expectedVersionOrPrecondition: "Verified file bytes from the active workspace and current Task.", postcondition: "Durable work product and attachment metadata.", recovery: "Re-read the same artifact before retry; report uncertain delivery separately.",
+    channelProjection: [], mcpExposed: false, openclawQualified: false, tests: ["server/src/services/native-runtime/paperclip-runner-tool-authority.ts"], owner: "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+  },
+  {
+    operationId: "blentera.native.project.create", domain: "Projects", customerJob: "Create an eligible Project from the current Task or conversation.",
+    canonicalService: "createManagedNativeProjectOutput", webSurface: "Project creation", apiOperation: "Native Runner semantic tool",
+    toolId: "paperclip-runner:create_project", legacyAliases: [], principalTypes: ["agent"], experienceProfiles: ["blentera_managed_native"],
+    mode: "DIRECT_AGENT", criticality: "ordinary", requiredPermissions: ["current accountable Human", "current Task/source graph", "Project creation policy"],
+    resourceScope: "One private current-company Project and its server-derived local workspace, when requested.", approvalPolicy: "Exact provider tool-use, dispatch, source graph, idempotency, and current Human checks are mandatory.", idempotency: "Required call identity and durable create receipt.",
+    expectedVersionOrPrecondition: "Settled managed output capture; unchanged source graph and current Human membership.", postcondition: "One Project/workspace with exact source and public projection pins.", recovery: "Reconcile the durable create receipt before retrying.",
+    channelProjection: [], mcpExposed: false, openclawQualified: false, tests: ["server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts"], owner: "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+  },
+  {
+    operationId: "blentera.native.project.list", domain: "Projects", customerJob: "Inspect current Projects in the company before choosing a destination.",
+    canonicalService: "projectService.list", webSurface: "Projects", apiOperation: "Native Runner semantic tool",
+    toolId: "paperclip-runner:list_projects", legacyAliases: [], principalTypes: ["agent"], experienceProfiles: ["blentera_managed_native"],
+    mode: "DIRECT_AGENT", criticality: "ordinary", requiredPermissions: ["current company/project read policy"],
+    resourceScope: "Current company Projects only.", approvalPolicy: "Read-only canonical Project visibility.", idempotency: "Not applicable to reads.",
+    expectedVersionOrPrecondition: "Current company and Project membership/privacy.", postcondition: "Bounded Project list.", recovery: "Refresh before selecting; inaccessible Projects are not inferred.",
+    channelProjection: [], mcpExposed: false, openclawQualified: false, tests: ["server/src/services/native-runtime/paperclip-runner-tool-authority.ts"], owner: "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+  },
+  {
+    operationId: "blentera.native.project.repositories.list", domain: "Projects", customerJob: "List repositories authorized for Project selection.",
+    canonicalService: "Project repository owner", webSurface: "Project repository selector", apiOperation: "Native Runner semantic tool",
+    toolId: "paperclip-runner:list_project_repositories", legacyAliases: [], principalTypes: ["agent"], experienceProfiles: ["blentera_managed_native"],
+    mode: "DIRECT_AGENT", criticality: "ordinary", requiredPermissions: ["current company and repository read policy"],
+    resourceScope: "Only repositories authorized for the current company and run.", approvalPolicy: "Read-only; listing does not grant repository access.", idempotency: "Not applicable to reads.",
+    expectedVersionOrPrecondition: "Current repository catalog and grants.", postcondition: "Bounded authorized repository choices.", recovery: "Stop if a repository is not currently selectable.",
+    channelProjection: [], mcpExposed: false, openclawQualified: false, tests: ["server/src/services/native-runtime/paperclip-runner-tool-authority.ts"], owner: "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+  },
+  {
+    operationId: "blentera.native.document.list", domain: "Work", customerJob: "List revisioned documents on the active Task.",
+    canonicalService: "documentService.listIssueDocuments", webSurface: "Task documents", apiOperation: "Native Runner semantic tool",
+    toolId: "paperclip-runner:list_documents", legacyAliases: [], principalTypes: ["agent"], experienceProfiles: ["blentera_managed_native"],
+    mode: "DIRECT_AGENT", criticality: "ordinary", requiredPermissions: ["current Task/document source authorization"],
+    resourceScope: "Documents attached to the active Task.", approvalPolicy: "Read-only; each current revision is revalidated.", idempotency: "Not applicable to reads.",
+    expectedVersionOrPrecondition: "Current document and retained revision source.", postcondition: "Bounded document metadata.", recovery: "Refresh document state; stop if its revision source is unavailable.",
+    channelProjection: [], mcpExposed: false, openclawQualified: false, tests: ["server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts"], owner: "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+  },
+  {
+    operationId: "blentera.native.document.read", domain: "Work", customerJob: "Read one current revisioned Task document.",
+    canonicalService: "documentService.getIssueDocumentByKey", webSurface: "Task documents", apiOperation: "Native Runner semantic tool",
+    toolId: "paperclip-runner:read_document", legacyAliases: [], principalTypes: ["agent"], experienceProfiles: ["blentera_managed_native"],
+    mode: "DIRECT_AGENT", criticality: "ordinary", requiredPermissions: ["current Task/document/revision source authorization"],
+    resourceScope: "One exact document on the active Task.", approvalPolicy: "Read-only; source is captured and revalidated before use.", idempotency: "Not applicable to reads.",
+    expectedVersionOrPrecondition: "Current document revision and complete retained source closure.", postcondition: "Current document body and bounded metadata.", recovery: "Stop on source change or access withdrawal.",
+    channelProjection: [], mcpExposed: false, openclawQualified: false, tests: ["server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts"], owner: "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+  },
+  {
+    operationId: "blentera.native.document.revisions.list", domain: "Work", customerJob: "Read bounded revision history for one Task document.",
+    canonicalService: "documentService.listIssueDocumentRevisions", webSurface: "Task document history", apiOperation: "Native Runner semantic tool",
+    toolId: "paperclip-runner:list_document_revisions", legacyAliases: [], principalTypes: ["agent"], experienceProfiles: ["blentera_managed_native"],
+    mode: "DIRECT_AGENT", criticality: "ordinary", requiredPermissions: ["current Task/document/revision source authorization"],
+    resourceScope: "Revision history for one exact active-Task document.", approvalPolicy: "Read-only; each revision source is revalidated.", idempotency: "Not applicable to reads.",
+    expectedVersionOrPrecondition: "Current document and readable revision set.", postcondition: "Bounded revision metadata.", recovery: "Stop if a returned revision is no longer readable.",
+    channelProjection: [], mcpExposed: false, openclawQualified: false, tests: ["server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts"], owner: "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+  },
+  {
+    operationId: "blentera.native.document.write", domain: "Work", customerJob: "Create or update a Task document safely.",
+    canonicalService: "documentService revision owner", webSurface: "Task documents", apiOperation: "Native Runner semantic tool",
+    toolId: "paperclip-runner:write_document", legacyAliases: [], principalTypes: ["agent"], experienceProfiles: ["blentera_managed_native"],
+    mode: "DIRECT_AGENT", criticality: "ordinary", requiredPermissions: ["current Task/document write authorization"],
+    resourceScope: "One document on the active Task.", approvalPolicy: "Optimistic revision safety and canonical Task policy apply.", idempotency: "Required mutation receipt and expected revision.",
+    expectedVersionOrPrecondition: "Current document revision and active Task/run.", postcondition: "One durable document revision.", recovery: "Re-read the latest revision and reconcile before retrying.",
+    channelProjection: [], mcpExposed: false, openclawQualified: false, tests: ["server/src/services/native-runtime/paperclip-runner-tool-authority.ts"], owner: "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+  },
+  {
+    operationId: "blentera.native.agent.list", domain: "Agents", customerJob: "List redacted Agent profiles in the company.",
+    canonicalService: "agentService.list", webSurface: "Co-workers", apiOperation: "Native Runner semantic tool",
+    toolId: "paperclip-runner:list_agents", legacyAliases: [], principalTypes: ["agent"], experienceProfiles: ["blentera_managed_native"],
+    mode: "DIRECT_AGENT", criticality: "ordinary", requiredPermissions: ["current company Agent directory policy"],
+    resourceScope: "Redacted Agent profiles in the current company.", approvalPolicy: "Read-only; credentials/configuration are omitted.", idempotency: "Not applicable to reads.",
+    expectedVersionOrPrecondition: "Current company and directory policy.", postcondition: "Bounded Agent profile list.", recovery: "Refresh directory; do not infer hidden profiles.",
+    channelProjection: [], mcpExposed: false, openclawQualified: false, tests: ["server/src/services/native-runtime/paperclip-runner-tool-authority.ts"], owner: "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+  },
+  {
+    operationId: "blentera.native.agent.get", domain: "Agents", customerJob: "Read one redacted Agent profile in the company.",
+    canonicalService: "agentService.getById", webSurface: "Co-worker detail", apiOperation: "Native Runner semantic tool",
+    toolId: "paperclip-runner:get_agent", legacyAliases: [], principalTypes: ["agent"], experienceProfiles: ["blentera_managed_native"],
+    mode: "DIRECT_AGENT", criticality: "ordinary", requiredPermissions: ["current company Agent directory policy"],
+    resourceScope: "One current-company Agent.", approvalPolicy: "Read-only; credentials/configuration are omitted.", idempotency: "Not applicable to reads.",
+    expectedVersionOrPrecondition: "Current company and Agent membership.", postcondition: "Bounded redacted Agent profile.", recovery: "Stop on missing/hidden Agent.",
+    channelProjection: [], mcpExposed: false, openclawQualified: false, tests: ["server/src/services/native-runtime/paperclip-runner-tool-authority.ts"], owner: "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+  },
+  {
+    operationId: "blentera.native.agent.hire", domain: "Agents", customerJob: "Request a persistent Native Runner teammate for delegated work.",
+    canonicalService: "native Runner hire operation", webSurface: "Co-worker setup", apiOperation: "Native Runner semantic tool",
+    toolId: "paperclip-runner:hire_agent", legacyAliases: [], principalTypes: ["agent"], experienceProfiles: ["blentera_managed_native"],
+    mode: "PROPOSAL_ONLY", criticality: "material", requiredPermissions: ["current company Agent administration policy", "current hiring approval policy"],
+    resourceScope: "One new teammate reporting to the current Agent; runtime/credentials are server-selected.", approvalPolicy: "Canonical hiring/approval policy; caller cannot choose provider, adapter, environment, or credentials.", idempotency: "Canonical Agent creation identity.",
+    expectedVersionOrPrecondition: "Current company and hiring policy.", postcondition: "A persistent teammate or explicit pending approval.", recovery: "Reconcile the Agent or approval receipt before retrying.",
+    channelProjection: [], mcpExposed: false, openclawQualified: false, tests: ["server/src/services/native-runtime/paperclip-runner-tool-authority.ts"], owner: "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+  },
+  {
+    operationId: "blentera.native.skill.create", domain: "Skills", customerJob: "Create a reusable Skill draft for the company library.",
+    canonicalService: "callCreateSkillTool", webSurface: "Skills", apiOperation: "Native Runner semantic tool",
+    toolId: "paperclip-runner:create_skill", legacyAliases: [], principalTypes: ["agent"], experienceProfiles: ["blentera_managed_native"],
+    mode: "PROPOSAL_ONLY", criticality: "ordinary", requiredPermissions: ["current company Skill authoring policy"],
+    resourceScope: "One single-file company Skill candidate.", approvalPolicy: "Creation does not assign or authorize the Skill; canonical lifecycle/review remains in force.", idempotency: "Required mutation receipt.",
+    expectedVersionOrPrecondition: "Valid Skill name/content and current company library policy.", postcondition: "A durable Skill candidate/card.", recovery: "Reconcile the original Skill receipt before retrying.",
+    channelProjection: [], mcpExposed: false, openclawQualified: false, tests: ["server/src/services/native-runtime/paperclip-runner-tool-authority.ts"], owner: "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+  },
+  {
+    operationId: "blentera.native.approval.list", domain: "Decisions", customerJob: "List approvals visible in the current company.",
+    canonicalService: "approvalService.list", webSurface: "Approvals", apiOperation: "Native Runner semantic tool",
+    toolId: "paperclip-runner:list_approvals", legacyAliases: [], principalTypes: ["agent"], experienceProfiles: ["blentera_managed_native"],
+    mode: "DIRECT_AGENT", criticality: "ordinary", requiredPermissions: ["current company approval-read policy"],
+    resourceScope: "Approvals visible to the current company Agent.", approvalPolicy: "Read-only; visible approval state does not grant decision authority.", idempotency: "Not applicable to reads.",
+    expectedVersionOrPrecondition: "Current company and approval visibility.", postcondition: "Bounded approval list.", recovery: "Refresh before acting; decision authority is checked separately.",
+    channelProjection: [], mcpExposed: false, openclawQualified: false, tests: ["server/src/services/native-runtime/paperclip-runner-tool-authority.ts"], owner: "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+  },
+  {
+    operationId: "blentera.native.approval.get", domain: "Decisions", customerJob: "Read one approval without protected data.",
+    canonicalService: "approvalService.get", webSurface: "Approval detail", apiOperation: "Native Runner semantic tool",
+    toolId: "paperclip-runner:get_approval", legacyAliases: [], principalTypes: ["agent"], experienceProfiles: ["blentera_managed_native"],
+    mode: "DIRECT_AGENT", criticality: "ordinary", requiredPermissions: ["current approval-read policy"],
+    resourceScope: "One currently visible approval.", approvalPolicy: "Read-only; decision/approval authority is not implied.", idempotency: "Not applicable to reads.",
+    expectedVersionOrPrecondition: "Current approval visibility.", postcondition: "Bounded approval summary.", recovery: "Stop on missing or revoked approval access.",
+    channelProjection: [], mcpExposed: false, openclawQualified: false, tests: ["server/src/services/native-runtime/paperclip-runner-tool-authority.ts"], owner: "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+  },
+  {
+    operationId: "blentera.native.approval.get_context", domain: "Decisions", customerJob: "Read an approval and its currently readable Task context.",
+    canonicalService: "approvalService + issueReadSqlCondition", webSurface: "Approval context", apiOperation: "Native Runner semantic tool",
+    toolId: "paperclip-runner:get_approval_context", legacyAliases: [], principalTypes: ["agent"], experienceProfiles: ["blentera_managed_native"],
+    mode: "DIRECT_AGENT", criticality: "ordinary", requiredPermissions: ["current approval-read policy", "current ACL for linked Tasks"],
+    resourceScope: "One approval and only currently readable linked Tasks.", approvalPolicy: "Read-only; context does not approve or resolve the item.", idempotency: "Not applicable to reads.",
+    expectedVersionOrPrecondition: "Current approval and linked Task access.", postcondition: "Bounded approval plus authorized Task summaries.", recovery: "Stop if a linked Task is no longer readable.",
+    channelProjection: [], mcpExposed: false, openclawQualified: false, tests: ["server/src/services/native-runtime/paperclip-runner-tool-authority.ts"], owner: "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+  },
+];
+
+export const AGENT_NATIVE_OPERATION_MANIFEST: readonly AgentNativeOperationManifestEntry[] = Object.freeze([
+  ...AGENT_NATIVE_OPERATION_BASE_MANIFEST,
+  ...NATIVE_RUNNER_OPERATION_ENTRIES,
 ]);
 
 const byLegacyToolName = new Map<string, AgentNativeOperationManifestEntry>();

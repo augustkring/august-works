@@ -243,7 +243,7 @@ export function nativeDraftConformanceService(db: Db, options: Options) {
           if (createHash("sha256").update(credential).digest("hex") !== fresh.credentialHash) throw forbidden("Draft credential changed before dispatch");
           if ((await entry.current(db, run.id)).authorityHash !== authorityHash) throw forbidden("Draft authority changed during credential resolution");
           const result = await anthropicReadOnlyCall(request, credential, controller.signal, {
-            onWireDispatch: wire => broker.recordWireDispatch(actor, entry.cid, reservation.id, wire),
+            onWireDispatch: async wire => { await broker.recordWireDispatch(actor, entry.cid, reservation.id, wire); },
             fetch: async (...args) => {
               controller.signal.throwIfAborted();
               await logActivity(db, { companyId: entry.cid, actorType: "user", actorId: userId, runId: run.id, agentId: entry.aid,

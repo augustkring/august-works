@@ -299,6 +299,7 @@ import { authorizationDeniedDetails, authorizationService, canActorReadHeartbeat
 import { assertDirectInputSessionCurrent, assertNativeDocumentRevisionCurrentSourceAccess,
   directHumanPayloadSnapshotSql, nativePayloadSnapshotSql } from "../services/native-direct-input.js";
 import { withCurrentTaskSourceRead } from "../services/task-source-read-scope.js";
+import type { AnnouncementSearchProjection } from "../services/announcement-feed.js";
 import { persistActivity } from "../services/activity-log.js";
 import { nativeCommentProjectionHash } from "../services/native-runtime/canonical.js";
 import { stalledReviewDecisionService } from "../services/stalled-review-decisions.js";
@@ -493,7 +494,7 @@ type CompanySearchService = {
   search(
     companyId: string,
     query: CompanySearchQuery,
-    options?: { issueReadCondition?: SQL<boolean>; projectReadCondition?: SQL<boolean>; actor?: AuthorizationActor },
+    options?: { issueReadCondition?: SQL<boolean>; projectReadCondition?: SQL<boolean>; actor?: AuthorizationActor; noticeProjection?: AnnouncementSearchProjection },
   ): Promise<CompanySearchResponse>;
 };
 type CompanySearchServiceFactory = (queryDb: Db) => CompanySearchService;
@@ -3539,6 +3540,7 @@ export function issueRoutes(
       }): Promise<unknown>;
     };
     searchService?: CompanySearchService | CompanySearchServiceFactory;
+    announcementSearch?: () => Promise<AnnouncementSearchProjection>;
     searchRateLimiter?: CompanySearchRateLimiter;
     pluginWorkerManager?: PluginWorkerManager;
     /** The application heartbeat owner, including its configured native sandbox executor. */
@@ -8181,10 +8183,17 @@ export function issueRoutes(
       return;
     }
     const needsTaskSources = query.scope !== "help" && query.scope !== "agents";
+    const hasIssueOnlyFilters = Boolean(query.status?.length || query.priority?.length || query.assigneeAgentId
+      || query.assigneeUserId || query.projectId || query.labelId || query.updatedWithin || query.updatedAfter);
+    const noticeProjection = query.scope === "all" && !hasIssueOnlyFilters
+      && req.actor.type === "board" && req.actor.source === "session"
+      ? await opts.announcementSearch?.()
+      : undefined;
     const result = await runCompanySearchRead(req, companyId, async (queryDb, search) => search.search(companyId, query, {
       issueReadCondition: await issueReadSqlCondition(queryDb, req.actor),
       projectReadCondition: await projectReadSqlCondition(queryDb, req.actor),
       actor: req.actor,
+      noticeProjection,
     }), needsTaskSources);
     res.json(result);
   });

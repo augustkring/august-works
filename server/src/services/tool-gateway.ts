@@ -15,6 +15,7 @@ import {
   type AuthorizationActor,
 } from "./authorization.js";
 import { projectService } from "./projects.js";
+import { agentService } from "./agents.js";
 import { withCurrentTaskSourceRead } from "./task-source-read-scope.js";
 import { decisionSearchService } from "./decisions.js";
 import { processFindingService } from "./process-findings.js";
@@ -223,6 +224,8 @@ import { notificationPreferenceProposalService } from "./notification-preference
 import { notificationPreferenceProposalInputJsonSchema } from "@paperclipai/shared";
 import { routineAuthoringToolsService } from "./routine-authoring-tools.js";
 import { agentSetupAuthoringToolsService } from "./agent-setup-authoring-tools.js";
+import { customerSupportCaseService } from "./experience/support-cases.js";
+import { readSupportCaseDataPolicy } from "./experience/support-case-configuration.js";
 import { agentSetupAuthoringInputJsonSchema, agentSetupCatalogInputJsonSchema } from "@paperclipai/shared";
 import { routineAuthoringCreateInputJsonSchema, v9FeatureEnabled } from "@paperclipai/shared";
 
@@ -1320,6 +1323,13 @@ const BUILTIN_TOOLS: ToolGatewayDescriptor[] = [
     pluginId: "paperclip-self", providerType: "paperclip_self", risk: "read",
   },
   {
+    name: "paperclip-self:get_my_current_work",
+    displayName: "Read my current Task",
+    description: "Read the Task bound to this current run after current Task and source authorization checks.",
+    parametersSchema: { type: "object", properties: {}, additionalProperties: false },
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "read",
+  },
+  {
     name: "paperclip-self:search_decisions",
     displayName: "Search readable Decisions",
     description: "Search Decisions only when the current Co-worker and represented Human can read the origin and every referenced Task. Search does not decide or execute a Decision.",
@@ -1337,6 +1347,42 @@ const BUILTIN_TOOLS: ToolGatewayDescriptor[] = [
       type: "object", properties: { query: { type: "string", maxLength: 500 }, limit: { type: "integer", minimum: 1, maximum: 20 } },
       additionalProperties: false,
     },
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "read",
+  },
+  {
+    name: "paperclip-self:create_support_request",
+    displayName: "Create a Support request",
+    description: "Create a local Support case for the current represented Human using a bounded description and optional schema-whitelisted safe context. External delivery is separate and is not implied.",
+    parametersSchema: {
+      type: "object",
+      properties: {
+        idempotencyKey: { type: "string", format: "uuid" },
+        expectedPolicyRevision: { type: "string", pattern: "^[a-f0-9]{64}$" },
+        description: { type: "string", minLength: 1, maxLength: 10000 },
+        category: { type: "string", enum: ["not_working", "access", "apps_connections", "account_billing", "using_blentera", "other"] },
+        subject: { type: "string", minLength: 1, maxLength: 200 },
+        impact: { type: ["string", "null"], enum: ["blocked", "limited", "question", null] },
+        safeContext: { type: "object", properties: {
+          surface: { type: "string", enum: ["home", "needs_you", "work", "agents", "apps", "company", "account", "onboarding", "workflow", "support", "other"] },
+          operationId: { type: "string", format: "uuid" }, occurredAt: { type: "string", format: "date-time" },
+          errorCode: { type: "string", enum: ["NETWORK_UNAVAILABLE", "REQUEST_TIMEOUT", "ACCESS_CHANGED", "DEPENDENCY_UNAVAILABLE"] },
+        }, additionalProperties: false },
+      }, required: ["idempotencyKey", "expectedPolicyRevision", "description"], additionalProperties: false,
+    },
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "write",
+  },
+  {
+    name: "paperclip-self:get_support_intake_status",
+    displayName: "Check Support intake",
+    description: "Check whether configured Support case intake is currently available and read its approved disclosure terms. This does not report external service incidents.",
+    parametersSchema: { type: "object", properties: {}, additionalProperties: false },
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "read",
+  },
+  {
+    name: "paperclip-self:list_authorized_apps",
+    displayName: "Check authorized Apps",
+    description: "List only active Apps and connections whose tools are currently discoverable under this session's profile and policy. Reports bounded health state, never credentials or connection configuration.",
+    parametersSchema: { type: "object", properties: {}, additionalProperties: false },
     pluginId: "paperclip-self", providerType: "paperclip_self", risk: "read",
   },
   {
@@ -1416,7 +1462,7 @@ const VIRTUAL_RUN_TOOL: ToolGatewayDescriptor = {
 const VIRTUAL_TOOLS = [VIRTUAL_SEARCH_TOOLS, VIRTUAL_RUN_TOOL];
 
 function blenteraSelfToolContractCatalog() {
-  const catalog = AGENT_NATIVE_OPERATION_MANIFEST.map((operation) => {
+  const catalog = AGENT_NATIVE_OPERATION_MANIFEST.filter((operation) => operation.legacyAliases.length > 0).map((operation) => {
     const legacyName = operation.legacyAliases[0];
     const tool = BUILTIN_TOOLS.find((candidate) => candidate.name === legacyName && candidate.providerType === "paperclip_self");
     if (!tool) throw new Error("agent_native_operation_tool_binding_missing");
@@ -1495,6 +1541,7 @@ function isWorkflowAuthoringSelfToolName(name: string): boolean {
 export function createToolGatewayService(
   db: Db,
   options: {
+    supportCaseDataPolicy?: ReturnType<typeof readSupportCaseDataPolicy>;
     pluginToolDispatcher?: PluginToolDispatcher;
     deploymentMode?: DeploymentMode;
     deploymentExposure?: DeploymentExposure;
@@ -1536,6 +1583,7 @@ export function createToolGatewayService(
     now?: () => number;
   } = {},
 ) {
+  const supportCaseDataPolicy = options.supportCaseDataPolicy ?? readSupportCaseDataPolicy(process.env);
   // Tool Gateway sessions persist only their token hash and execution IDs.
   // Retain the original verified Agent actor in process memory so Memory
   // writers can recheck its current credential, key revocation, run, and
@@ -1741,6 +1789,7 @@ export function createToolGatewayService(
       notificationAuthoring: v9FeatureEnabled(experimental,"ambient_commands_v9") && v9FeatureEnabled(experimental,"notification_policy_v9"),
       routineAuthoring: v9FeatureEnabled(experimental, "ambient_commands_v9"),
       agentSetupAuthoring: v9FeatureEnabled(experimental, "ambient_commands_v9") && v9FeatureEnabled(experimental, "hire_agent_v9"),
+      supportRequests: supportCaseDataPolicy !== null,
       foundationAuthoring: experimental.enableFoundationV1 === true && v9FeatureEnabled(experimental, "ambient_commands_v9"),
       workflowAuthoring:
         experimental.enableWorkflowsV1 === true &&
@@ -1763,6 +1812,7 @@ export function createToolGatewayService(
       if (tool.name === "paperclip-self:create_routine_draft") return flags.routineAuthoring;
       if (tool.name === "paperclip-self:create_agent_setup_draft") return flags.agentSetupAuthoring;
       if (tool.name === "paperclip-self:list_agent_setup_capabilities") return flags.agentSetupAuthoring;
+      if (tool.name === "paperclip-self:create_support_request") return flags.supportRequests;
       if (tool.name === "paperclip-self:propose_foundation_change") return flags.foundationAuthoring;
       if (isMemorySelfToolName(tool.name)) {
         if (tool.name === "paperclip-self:share_memory") {
@@ -3737,11 +3787,12 @@ export function createToolGatewayService(
       if (!actor) throw new ToolGatewayHttpError(403,
         "Co-worker status requires the original verified Agent credential and represented Human", "agent_reader_authority_unavailable");
       const data = await withCurrentTaskSourceRead(db, session.companyId, actor, async (queryDb) => {
-        const [agent] = await queryDb.select({ id: agents.id, name: agents.name, title: agents.title,
-          role: agents.role, status: agents.status, reportsTo: agents.reportsTo, lastHeartbeatAt: agents.lastHeartbeatAt,
-          updatedAt: agents.updatedAt }).from(agents).where(and(
-          eq(agents.companyId, session.companyId), eq(agents.id, session.agentId!),
-        )).limit(1).for("share");
+        const currentAgent = await agentService(queryDb).getById(session.agentId!);
+        const agent = currentAgent?.companyId === session.companyId ? {
+          id: currentAgent.id, name: currentAgent.name, title: currentAgent.title, role: currentAgent.role,
+          status: currentAgent.status, reportsTo: currentAgent.reportsTo,
+          lastHeartbeatAt: currentAgent.lastHeartbeatAt, updatedAt: currentAgent.updatedAt,
+        } : null;
         const [run] = await queryDb.select({ id: heartbeatRuns.id, status: heartbeatRuns.status,
           startedAt: heartbeatRuns.startedAt, finishedAt: heartbeatRuns.finishedAt }).from(heartbeatRuns).where(and(
           eq(heartbeatRuns.companyId, session.companyId), eq(heartbeatRuns.id, session.runId!),
@@ -3754,6 +3805,33 @@ export function createToolGatewayService(
       return { content: JSON.stringify(data), data };
     }
 
+    if (tool.name === "paperclip-self:get_my_current_work") {
+      if (!session.agentId || !session.runId || !session.issueId) throw new ToolGatewayHttpError(403,
+        "Current work requires an issue-scoped Agent run", "agent_context_required");
+      const actor = currentSessionMemoryActor(session);
+      if (!actor) throw new ToolGatewayHttpError(403,
+        "Current work requires the original verified Agent credential and represented Human", "task_reader_authority_unavailable");
+      const data = await withCurrentTaskSourceRead(db, session.companyId, actor, async (queryDb) => {
+        const readCondition = await issueReadSqlCondition(queryDb, actor);
+        const [issue] = await queryDb.select({ id: issues.id, identifier: issues.identifier, title: issues.title,
+          status: issues.status, priority: issues.priority, updatedAt: issues.updatedAt })
+          .from(issues).where(and(eq(issues.companyId, session.companyId), eq(issues.id, session.issueId!), readCondition))
+          .limit(1).for("share");
+        const [run] = await queryDb.select({ id: heartbeatRuns.id, status: heartbeatRuns.status,
+          startedAt: heartbeatRuns.startedAt }).from(heartbeatRuns).where(and(
+          eq(heartbeatRuns.companyId, session.companyId), eq(heartbeatRuns.id, session.runId!),
+          eq(heartbeatRuns.agentId, session.agentId!), or(
+            eq(heartbeatRuns.issueId, session.issueId!), eq(heartbeatRuns.nativeIssueId, session.issueId!),
+            sql`${heartbeatRuns.contextSnapshot}->>'issueId'=${session.issueId}`,
+          ),
+          eq(heartbeatRuns.responsibleUserId, actor.onBehalfOfUserId!), eq(heartbeatRuns.status, "running"),
+        )).limit(1).for("share");
+        return issue && run ? { issue, run } : null;
+      }, true, true);
+      if (!data) throw new ToolGatewayHttpError(404, "Current Task not found", "issue_not_found");
+      return { content: JSON.stringify(data), data };
+    }
+
     if (tool.name === "paperclip-self:search_decisions") {
       if (!session.agentId || !session.runId) throw new ToolGatewayHttpError(403,
         "Decision search requires an Agent-scoped current run", "agent_context_required");
@@ -3762,8 +3840,9 @@ export function createToolGatewayService(
         "Decision search requires the original verified Agent credential and represented Human", "decision_reader_authority_unavailable");
       const query = typeof params.query === "string" ? params.query.trim() : "";
       if (!query || query.length > 500) throw new ToolGatewayHttpError(400, "A search query of 1 to 500 characters is required", "invalid_parameters");
-      const data = await decisionSearchService(db).search(session.companyId, actor, query,
-        typeof params.limit === "number" ? params.limit : 20);
+      const limit = typeof params.limit === "number" ? Math.max(1, Math.min(20, Math.floor(params.limit))) : 20;
+      const result = await decisionSearchService(db).search(session.companyId, actor, query, limit);
+      const data = { items: result.items, limitReached: result.items.length >= limit };
       return { content: JSON.stringify(data), data };
     }
 
@@ -3775,9 +3854,75 @@ export function createToolGatewayService(
         "Insight search requires the original verified Agent credential and represented Human", "insight_reader_authority_unavailable");
       const query = typeof params.query === "string" ? params.query.trim() : "";
       if (query.length > 500) throw new ToolGatewayHttpError(400, "Search query is too long", "invalid_parameters");
-      const data = await withNativeAnalyticalReader(db, session.companyId, actor,
-        () => processFindingService(db).search(session.companyId, actor, query,
-          typeof params.limit === "number" ? params.limit : 20), "task");
+      const limit = typeof params.limit === "number" ? Math.max(1, Math.min(20, Math.floor(params.limit))) : 20;
+      const result = await withNativeAnalyticalReader(db, session.companyId, actor,
+        () => processFindingService(db).search(session.companyId, actor, query, limit), "task");
+      const data = { items: result.items, limitReached: result.items.length >= limit };
+      return { content: JSON.stringify(data), data };
+    }
+
+    if (tool.name === "paperclip-self:create_support_request") {
+      if (!session.agentId || !session.runId || !supportCaseDataPolicy) throw new ToolGatewayHttpError(403,
+        "Support requests require a configured intake policy and an Agent-scoped run", "support_request_unavailable");
+      const actor = currentSessionMemoryActor(session);
+      if (!actor) throw new ToolGatewayHttpError(403,
+        "Support requests require the original verified Agent credential and represented Human", "support_request_authority_unavailable");
+      const data = await customerSupportCaseService(db, { dataPolicy: supportCaseDataPolicy })
+        .createFromNative(actor, session.companyId, params);
+      return { content: JSON.stringify(data), data };
+    }
+
+    if (tool.name === "paperclip-self:get_support_intake_status") {
+      if (!session.agentId || !session.runId) throw new ToolGatewayHttpError(403,
+        "Support intake status requires an Agent-scoped run", "agent_context_required");
+      const actor = currentSessionMemoryActor(session);
+      if (!actor) throw new ToolGatewayHttpError(403,
+        "Support intake status requires the original verified Agent credential and represented Human", "support_reader_authority_unavailable");
+      const data = await customerSupportCaseService(db, { dataPolicy: supportCaseDataPolicy })
+        .intakePolicyFromNative(actor, session.companyId);
+      return { content: JSON.stringify(data), data };
+    }
+
+    if (tool.name === "paperclip-self:list_authorized_apps") {
+      if (!session.agentId) throw new ToolGatewayHttpError(403, "App discovery requires an Agent-scoped gateway session", "agent_context_required");
+      const actor = currentSessionMemoryActor(session);
+      if (!actor) throw new ToolGatewayHttpError(403,
+        "App discovery requires the original verified Agent credential and represented Human", "app_reader_authority_unavailable");
+      const connectionTools = (await listToolsForContext(session)).filter((candidate) =>
+        candidate.providerType !== "paperclip_self" && typeof candidate.connectionId === "string" &&
+        typeof candidate.applicationId === "string");
+      const connectionIds = [...new Set(connectionTools.map(candidate => candidate.connectionId!))];
+      const apps = await withCurrentTaskSourceRead(db, session.companyId, actor, async (queryDb) => {
+        if (connectionIds.length === 0) return [];
+        const decisions = await Promise.all(connectionTools.map(async candidate => ({ candidate,
+          decision: await toolAccessPolicyService(queryDb).decide(policyInputForTool({ session, tool: candidate })) })));
+        const allowedNames = new Map<string, Set<string>>();
+        for (const { candidate, decision } of decisions) {
+          if (!decision.allowed && decision.decision !== "require_approval") continue;
+          const names = allowedNames.get(candidate.connectionId!) ?? new Set<string>();
+          names.add(candidate.name);
+          allowedNames.set(candidate.connectionId!, names);
+        }
+        const rows = await queryDb.select({ connectionId: toolConnections.id, connectionName: toolConnections.name,
+          applicationName: toolApplications.name, applicationType: toolApplications.type,
+          status: toolConnections.status, enabled: toolConnections.enabled, credentialPolicy: toolConnections.credentialPolicy,
+          healthStatus: toolConnections.healthStatus, lastHealthAt: toolConnections.lastHealthAt,
+        }).from(toolConnections).innerJoin(toolApplications, eq(toolApplications.id, toolConnections.applicationId)).where(and(
+          eq(toolConnections.companyId, session.companyId), inArray(toolConnections.id, connectionIds),
+          eq(toolApplications.companyId, session.companyId), eq(toolApplications.status, "active"),
+          eq(toolConnections.status, "active"), eq(toolConnections.enabled, true),
+        )).orderBy(asc(toolApplications.name), asc(toolConnections.name)).for("share");
+        return rows.flatMap(row => {
+          const toolNames = [...(allowedNames.get(row.connectionId) ?? [])].sort();
+          if (toolNames.length === 0) return [];
+          return [{ application: row.applicationName, type: row.applicationType,
+            connection: row.connectionName, status: row.status, enabled: row.enabled,
+            health: row.credentialPolicy === "per_user" ? "unknown" : row.healthStatus,
+            lastHealthAt: row.credentialPolicy === "per_user" ? null : row.lastHealthAt?.toISOString() ?? null,
+            availableOperations: toolNames }];
+        });
+      }, true, true);
+      const data = { applications: apps };
       return { content: JSON.stringify(data), data };
     }
 

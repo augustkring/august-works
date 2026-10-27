@@ -78,22 +78,33 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
     });
     expect(first.contextResultConsumers).toContainEqual({ callId: ids.contextR, consumed: true });
     const firstToolResult = (callId: string) => first.toolResults.find(value => value.callId === callId);
-    const taskAId = firstToolResult(ids.taskA)?.taskId;
+    const capturedTaskId = (callId: string) => {
+      const captures = Array.isArray(first.toolResultSourceCaptures)
+        ? first.toolResultSourceCaptures as Array<Record<string, unknown>> : [];
+      const matching = captures.filter(value => value.callId === callId && value.tool === "create_task" &&
+        value.managedOpenCode === true);
+      const taskRef = matching.length === 1 && matching[0]!.taskRef && typeof matching[0]!.taskRef === "object"
+        ? matching[0]!.taskRef as Record<string, unknown> : null;
+      return typeof taskRef?.issueId === "string" ? taskRef.issueId : undefined;
+    };
+    const taskAId = capturedTaskId(ids.taskA);
     const memoryAId = firstToolResult(ids.memoryA)?.memoryId;
     const privateRootId = first.privateRoot?.memoryId;
-    const taskBId = firstToolResult(ids.taskB)?.taskId;
+    const taskBId = capturedTaskId(ids.taskB);
     const memoryBId = firstToolResult(ids.memoryB)?.memoryId;
+    const missingOutputs = { taskA: !taskAId, memoryA: !memoryAId, privateRoot: !privateRootId,
+      taskB: !taskBId, memoryB: !memoryBId };
     for (const id of [taskAId, memoryAId, privateRootId, taskBId, memoryBId])
-      expect(id).toMatch(/^[0-9a-f-]{36}$/i);
-    if (!taskAId || !memoryAId || !privateRootId || !taskBId || !memoryBId)
-      throw new Error("The managed Native producer omitted a real output ID");
+      if (id !== undefined) expect(id).toMatch(/^[0-9a-f-]{36}$/i);
+    if (Object.values(missingOutputs).some(Boolean))
+      throw new Error(`The managed Native producer omitted an output ID: ${JSON.stringify(missingOutputs)}`);
 
     const memories = memoryService(db);
     await memories.reviewCandidate(first.companyId, memoryBId, { decision: "accept" }, first.aliceMemoryActor);
     const [taskA] = await db.select().from(issues).where(and(eq(issues.companyId, first.companyId), eq(issues.id, taskAId)));
     const [taskB] = await db.select().from(issues).where(and(eq(issues.companyId, first.companyId), eq(issues.id, taskBId)));
     if (!taskA || !taskB) throw new Error("The managed Native Task outputs disappeared");
-    await issueService(db).update(taskBId, { assigneeUserId: first.bobUserId,
+    await issueService(db).update(taskBId, { assigneeAgentId: null, assigneeUserId: first.bobUserId,
       actorUserId: first.aliceUserId, privacyActor: first.aliceActor });
     const [assignedTaskB] = await db.select().from(issues).where(and(eq(issues.companyId, first.companyId), eq(issues.id, taskBId)));
     if (!assignedTaskB) throw new Error("The assigned Native Task B disappeared");

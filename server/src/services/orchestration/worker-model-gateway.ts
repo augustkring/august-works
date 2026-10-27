@@ -767,6 +767,8 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
           const [task] = typeof taskId === "string" ? await db.select({ id: issues.id, companyId: issues.companyId,
             identifier: issues.identifier, title: issues.title, status: issues.status, priority: issues.priority,
             projectId: issues.projectId, parentId: issues.parentId, assigneeAgentId: issues.assigneeAgentId,
+            responsibleUserId: issues.responsibleUserId, createdByAgentId: issues.createdByAgentId,
+            originRunId: issues.originRunId, originKind: issues.originKind, originId: issues.originId,
             contentHash: sql<string>`public.aw_native_payload_body_hash('issue',to_jsonb(${issues}))`, hiddenAt: issues.hiddenAt,
             payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated,
           }).from(issues).where(and(eq(issues.companyId, claims.company_id), eq(issues.id, taskId))) : [];
@@ -990,7 +992,13 @@ export function workerModelGateway(db: Db, options: Options) {
     };
     if (Object.values(currentFacts).some(valid => !valid)) {
       if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1")
-        console.info("managed-worker-current-predicate-miss", JSON.stringify(currentFacts));
+        console.info("managed-worker-current-predicate-miss", JSON.stringify({ ...currentFacts,
+          planStatus: plan && ["draft", "ready", "running", "paused", "verifying", "completed", "cancelled", "failed"].includes(plan.status)
+            ? plan.status : "unknown",
+          planVersion: Number.isSafeInteger(plan?.version) ? plan.version : null,
+          expectedPlanVersion: Number.isSafeInteger(b.expectedPlanVersion) ? b.expectedPlanVersion : null,
+          planModelCostReserved: Number.isSafeInteger(plan?.modelCostReserved) ? plan.modelCostReserved : null,
+        }));
       throw forbidden(
         "Current Native human, internal draft Task, worker attempt and manifest required",
       );
@@ -1807,7 +1815,7 @@ export function workerModelGateway(db: Db, options: Options) {
               await tx.update(heartbeatRuns).set({ runnerProfileJson: { ...profile, nativeAwModelWireIntents: intents }, updatedAt: new Date() })
                 .where(and(eq(heartbeatRuns.companyId, run.companyId), eq(heartbeatRuns.id, run.id), eq(heartbeatRuns.status, "running")));
             });
-            await reservations.recordWireDispatch(actor, claims.company_id, reservation.id, {
+            await reservations.recordWireDispatch(state.actor, claims.company_id, reservation.id, {
               method: receipt.method, endpoint: receipt.endpoint, bodySha256: receipt.bodySha256, callId: receipt.callId,
             });
             internal?.onWireDispatch?.(receipt);
@@ -2058,7 +2066,7 @@ export function workerModelGateway(db: Db, options: Options) {
               await tx.update(heartbeatRuns).set({ runnerProfileJson: { ...profile, nativeAwModelWireIntents: intents }, updatedAt: new Date() })
                 .where(and(eq(heartbeatRuns.companyId, run.companyId), eq(heartbeatRuns.id, run.id), eq(heartbeatRuns.status, "running")));
             });
-            await reservations.recordWireDispatch(actor, claims.company_id, reservation.id, {
+            await reservations.recordWireDispatch(state.actor, claims.company_id, reservation.id, {
               method: receipt.method, endpoint: receipt.endpoint, bodySha256: receipt.bodySha256, callId: receipt.callId,
             });
             internal?.onWireDispatch?.(receipt);

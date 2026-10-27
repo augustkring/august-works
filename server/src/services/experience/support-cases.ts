@@ -3,10 +3,11 @@ import { isDeepStrictEqual } from "node:util";
 import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import {
   accountDeletionOperations, authRateLimits, authUsers, companies, companyDeletionOperations, companyMemberships,
-  supportCases, supportCaseEvents, supportCaseDeletionMarkers, type Db,
+  agents, heartbeatRuns, issues, supportCases, supportCaseEvents, supportCaseDeletionMarkers, type Db,
 } from "@paperclipai/db";
 import {
   createSupportCaseSchema, replySupportCaseSchema, closeSupportCaseSchema, deriveSupportCaseSubject,
+  nativeSupportCaseRequestSchema,
   supportCaseReadQuerySchema, supportCaseDetailSchema, supportCaseListSchema, supportCaseDataPolicySchema, supportCaseIntakePolicySchema,
   SUPPORT_CASE_LIMITS, type SupportCaseDataPolicy, type SupportCaseDetail,
 } from "@paperclipai/shared";
@@ -14,6 +15,7 @@ import { conflict, forbidden, notFound, tooManyRequests, unprocessable } from ".
 import { pinCurrentBoardActor, type AuthorizationActor } from "../authorization.js";
 import { assertV5Authorization } from "../v5-authorization.js";
 import { logActivity, publishActivity, type ActivityPublication } from "../activity-log.js";
+import { withCurrentTaskSourceRead } from "../task-source-read-scope.js";
 
 type Case = typeof supportCases.$inferSelect;
 type Event = typeof supportCaseEvents.$inferSelect;
@@ -214,6 +216,31 @@ export function customerSupportCaseService(db: Db, options: { dataPolicy: Readon
             retentionDays: configuredPolicy.retentionDays, retentionTrigger: configuredPolicy.retentionTrigger }
         : { available: false }));
     },
+    async intakePolicyFromNative(actor: AuthorizationActor, companyId: string) {
+      if (actor.type !== "agent" || actor.source !== "agent_jwt" || actor.companyId !== companyId ||
+        !actor.agentId || !actor.runId || !actor.onBehalfOfUserId || actor.keyId || actor.keyScope ||
+        (actor.authenticatedCredentialExpiresAt != null && actor.authenticatedCredentialExpiresAt <= Date.now()))
+        throw forbidden("A current Native Agent run is required to read Support intake status");
+      return withCurrentTaskSourceRead(db, companyId, actor, async (tx) => {
+        const [run] = await tx.select({ id: heartbeatRuns.id, status: heartbeatRuns.status,
+          responsibleUserId: heartbeatRuns.responsibleUserId, runtimeModeResolvedAt: heartbeatRuns.runtimeModeResolvedAt })
+          .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, actor.runId!),
+            eq(heartbeatRuns.agentId, actor.agentId!), eq(heartbeatRuns.responsibleUserId, actor.onBehalfOfUserId!),
+            eq(heartbeatRuns.status, "running"), eq(heartbeatRuns.runtimeMode, "native"))).limit(1).for("share");
+        if (!run || run.runtimeModeResolvedAt !== null) throw forbidden("The accountable Native run is no longer current");
+        const [membership] = await tx.select({ principalId: companyMemberships.principalId }).from(companyMemberships)
+          .where(and(eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+            eq(companyMemberships.principalId, actor.onBehalfOfUserId!), eq(companyMemberships.status, "active")))
+          .limit(1).for("share", { noWait: true });
+        if (!membership) throw forbidden("Current Human company membership is required");
+        await assertV5Authorization(tx, actor, companyId, "company_scope:read");
+        return supportCaseIntakePolicySchema.parse(configuredPolicy
+          ? { available: true, revision: digest(configuredPolicy), recipientName: configuredPolicy.recipientName,
+              privacyNoticeUrl: configuredPolicy.privacyNoticeUrl, retentionDays: configuredPolicy.retentionDays,
+              retentionTrigger: configuredPolicy.retentionTrigger }
+          : { available: false });
+      }, false, true);
+    },
     async list(actor: AuthorizationActor, companyId: string, raw: unknown) {
       const query = supportCaseReadQuerySchema.parse(raw);
       return within(actor, companyId, query.expectedUserId, false, async (tx, userId, administrator) => {
@@ -262,6 +289,74 @@ export function customerSupportCaseService(db: Db, options: { dataPolicy: Readon
         await record(tx, publications, row!, userId, "support.case_created");
         return detail(tx, row!, userId, administrator);
       });
+    },
+    /** A narrow Native request path. It attributes the durable case to the
+     * run's current Human while keeping the Agent as the activity actor. It
+     * creates only a local case receipt; delivery remains separately governed. */
+    async createFromNative(actor: AuthorizationActor, companyId: string, raw: unknown) {
+      const input = nativeSupportCaseRequestSchema.parse(raw);
+      if (actor.type !== "agent" || actor.source !== "agent_jwt" || actor.companyId !== companyId ||
+        !actor.agentId || !actor.runId || !actor.onBehalfOfUserId || actor.keyId || actor.keyScope ||
+        (actor.authenticatedCredentialExpiresAt != null && actor.authenticatedCredentialExpiresAt <= Date.now()))
+        throw forbidden("A current Native Agent run is required to request Support");
+      const userId = actor.onBehalfOfUserId;
+      await budget(companyId, userId);
+      const result = await withCurrentTaskSourceRead(db, companyId, actor, async (tx) => {
+        await tx.execute(sql`set local statement_timeout='5s'`);
+        const [company] = await tx.select().from(companies).where(eq(companies.id, companyId)).for("share");
+        if (!company || company.status === "archived" || company.contentErasureTransactionId || company.pauseReason === "company_deleted")
+          throw notFound("Company is unavailable");
+        const [deleting] = await tx.select({ id: companyDeletionOperations.id }).from(companyDeletionOperations)
+          .where(eq(companyDeletionOperations.companyId, companyId)).limit(1);
+        const [erasing] = await tx.select({ id: accountDeletionOperations.id }).from(accountDeletionOperations)
+          .where(eq(accountDeletionOperations.userId, userId)).limit(1);
+        if (deleting || erasing) throw forbidden("Support access is no longer available");
+        const [run] = await tx.select().from(heartbeatRuns).where(and(
+          eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, actor.runId!), eq(heartbeatRuns.agentId, actor.agentId!),
+          eq(heartbeatRuns.responsibleUserId, userId), eq(heartbeatRuns.status, "running"), eq(heartbeatRuns.runtimeMode, "native"),
+        )).limit(1).for("share");
+        if (!run || run.runtimeModeResolvedAt !== null) throw forbidden("The accountable Native run is no longer current");
+        const [agent] = await tx.select({ id: agents.id, status: agents.status }).from(agents).where(and(
+          eq(agents.companyId, companyId), eq(agents.id, actor.agentId!),
+        )).limit(1).for("share");
+        if (!agent || ["paused", "terminated", "pending_approval", "error"].includes(agent.status))
+          throw forbidden("The current Co-worker is unavailable");
+        const [human] = await tx.select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, userId)).limit(1).for("share");
+        const [membership] = await tx.select().from(companyMemberships).where(and(
+          eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+          eq(companyMemberships.principalId, userId), eq(companyMemberships.status, "active"),
+        )).limit(1).for("share", { noWait: true });
+        if (!human || !membership) throw forbidden("Current Human company membership is required");
+        await assertV5Authorization(tx, actor, companyId, "company_scope:read");
+        if (!run.nativeIssueId) throw forbidden("A current Task is required to request Support");
+        const [currentIssue] = await tx.select({ id: issues.id }).from(issues).where(and(
+          eq(issues.companyId, companyId), eq(issues.id, run.nativeIssueId), eq(issues.assigneeAgentId, actor.agentId!),
+        )).limit(1).for("share");
+        if (!currentIssue) throw forbidden("The current Task is unavailable");
+        await assertV5Authorization(tx, actor, companyId, "issue:read", { type: "issue", companyId, issueId: currentIssue.id });
+        const hash = digest(["create", companyId, userId, input]);
+        const prior = await existing(tx, companyId, userId, input.idempotencyKey);
+        if (prior) {
+          if (prior.requestHash !== hash) throw conflict("This request key was already used for different content");
+          return detail(tx, await currentCase(tx, companyId, userId, ["owner", "admin"].includes(membership.membershipRole ?? ""), prior.caseId), userId,
+            ["owner", "admin"].includes(membership.membershipRole ?? ""));
+        }
+        const eventId = await requestIdentity(tx, companyId, userId, input.idempotencyKey);
+        const dataPolicy = observedPolicy(input.expectedPolicyRevision), at = await now(tx);
+        const [row] = await tx.insert(supportCases).values({ companyId, openedByUserId: userId, category: input.category,
+          subject: input.subject ?? deriveSupportCaseSubject(input.description), description: input.description,
+          impact: input.impact, safeContext: input.safeContext ?? null, dataPolicy,
+          createdAt: at, updatedAt: at, lastMessageAt: at, expiresAt: new Date(at.getTime() + dataPolicy.retentionDays * 86400000) }).returning();
+        await tx.insert(supportCaseEvents).values({ id: eventId, companyId, caseId: row!.id, authorUserId: userId,
+          kind: "request", body: input.description, customerStatus: "RECEIVED", safeContext: input.safeContext ?? null,
+          requestKey: input.idempotencyKey, requestHash: hash, createdAt: at });
+        await logActivity(tx, { companyId, actorType: "agent", actorId: actor.agentId!, agentId: actor.agentId!, runId: actor.runId!,
+          action: "support.case_requested", entityType: "support_case", entityId: row!.id,
+          details: { supportCaseId: row!.id, representedUserId: userId, requestKey: input.idempotencyKey } });
+        const administrator = ["owner", "admin"].includes(membership.membershipRole ?? "");
+        return detail(tx, row!, userId, administrator);
+      }, true, true);
+      return result;
     },
     async reply(actor: AuthorizationActor, companyId: string, id: string, raw: unknown) {
       const input = replySupportCaseSchema.parse(raw);

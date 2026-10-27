@@ -28,6 +28,32 @@ for (const classic of [false, true]) {
       const editor = (classic ? page.getByTestId("issue-chat-composer") : page).getByRole("textbox", { name: "editable markdown" });
       await editor.fill("Keep this draft until I resume.");
       const moreActions = page.getByRole("button", { name: "More task actions", exact: true });
+      await page.evaluate(() => {
+        const trace = {
+          button: document.querySelector<HTMLButtonElement>('button[aria-label="More task actions"]'),
+          events: [] as Array<{ type: string; target: string; reachedTrigger: boolean }>,
+          mutations: [] as Array<{ type: string; triggerConnected: boolean; currentTriggerPresent: boolean }>,
+        };
+        (window as Window & { __pausedMenuTrace?: typeof trace }).__pausedMenuTrace = trace;
+        new MutationObserver((records) => {
+          if (!records.some((record) => record.type === "childList")) return;
+          const current = document.querySelector<HTMLButtonElement>('button[aria-label="More task actions"]');
+          if (current !== trace.button || !trace.button?.isConnected) {
+            trace.mutations.push({
+              type: "task-title-actions-replaced",
+              triggerConnected: trace.button?.isConnected ?? false,
+              currentTriggerPresent: !!current,
+            });
+          }
+        }).observe(document.documentElement, { childList: true, subtree: true });
+        for (const type of ["pointerdown", "mousedown", "mouseup", "click"] as const) {
+          document.addEventListener(type, (event) => {
+            const target = event.target instanceof Element ? event.target : null;
+            const trigger = target?.closest<HTMLButtonElement>('button[aria-label="More task actions"]') ?? null;
+            trace.events.push({ type, target: target?.tagName ?? "unknown", reachedTrigger: trigger === trace.button });
+          }, true);
+        }
+      });
       await moreActions.evaluate((element) => {
         element.addEventListener("pointerdown", () => element.setAttribute("data-e2e-pointerdown", "1"), { once: true });
         element.addEventListener("click", () => element.setAttribute("data-e2e-click", "1"), { once: true });
@@ -36,7 +62,25 @@ for (const classic of [false, true]) {
       const stateImmediatelyAfterClick = await moreActions.evaluate((element) => ({
         expanded: element.getAttribute("aria-expanded"),
         state: element.getAttribute("data-state"),
+        pointerdown: element.getAttribute("data-e2e-pointerdown"),
+        click: element.getAttribute("data-e2e-click"),
       }));
+      const clickTrace = await page.evaluate(() => {
+        const trace = (window as Window & { __pausedMenuTrace?: {
+          button: HTMLButtonElement | null;
+          events: Array<{ type: string; target: string; reachedTrigger: boolean }>;
+          mutations: Array<{ type: string; triggerConnected: boolean; currentTriggerPresent: boolean }>;
+        } }).__pausedMenuTrace;
+        const current = document.querySelector<HTMLButtonElement>('button[aria-label="More task actions"]');
+        return trace ? {
+          events: trace.events,
+          mutations: trace.mutations,
+          originalConnected: trace.button?.isConnected ?? false,
+          sameTriggerNode: trace.button === current,
+          originalExpanded: trace.button?.getAttribute("aria-expanded") ?? null,
+          currentExpanded: current?.getAttribute("aria-expanded") ?? null,
+        } : null;
+      });
       const pauseAction = page.getByRole("button", { name: "Pause work", exact: true });
       try {
         await expect(pauseAction).toBeVisible({ timeout: 5_000 });
@@ -62,6 +106,7 @@ for (const classic of [false, true]) {
         throw new Error(`Pause work action was not rendered; status=${JSON.stringify({
           popover,
           stateImmediatelyAfterClick,
+          clickTrace,
           pointerdown: await moreActions.getAttribute("data-e2e-pointerdown"),
           click: await moreActions.getAttribute("data-e2e-click"),
           runWorkflowVisible: await page.getByRole("button", { name: "Run workflow", exact: true }).isVisible().catch(() => false),

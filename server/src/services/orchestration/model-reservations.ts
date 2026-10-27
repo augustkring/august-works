@@ -647,11 +647,9 @@ export function modelReservationService(
         const budget = await ensureCompanyPurposeBudget(tx, funding);
         if (budget.id !== initial.budgetId || nativeSha256(quote) !== nativeSha256(initial.quote))
           throw conflict("The company-purpose funding or quote changed before provider dispatch");
-        const expectedEndpoint = initial.quote.provider === "anthropic"
-          ? "https://api.anthropic.com/v1/messages"
-          : initial.quote.provider === "openrouter"
-            ? "https://openrouter.ai/api/v1/chat/completions"
-            : null;
+        const expectedEndpoint = initial.purpose === "decision_skill_suggestion"
+          ? initial.quote.provider === "openrouter" ? "https://openrouter.ai/api/alpha/decisions" : null
+          : initial.quote.provider === "anthropic" ? "https://api.anthropic.com/v1/messages" : null;
         if (!expectedEndpoint || observed.endpoint !== expectedEndpoint)
           throw forbidden("The provider wire endpoint does not match the company-purpose funding provider");
         const receipt = modelProviderWireReceiptSchema.parse({
@@ -1180,11 +1178,9 @@ export function modelReservationService(
         } else if (observed.callId !== undefined && observed.callId !== null) {
           throw forbidden("Non-tool model dispatch cannot attach a provider tool call ID");
         }
-        const expectedEndpoint = initial.quote.provider === "anthropic"
-          ? "https://api.anthropic.com/v1/messages"
-          : initial.quote.provider === "openrouter"
-            ? "https://openrouter.ai/api/v1/chat/completions"
-            : null;
+        const expectedEndpoint = initial.purpose === "decision_shadow"
+          ? initial.quote.provider === "openrouter" ? "https://openrouter.ai/api/alpha/decisions" : null
+          : initial.quote.provider === "anthropic" ? "https://api.anthropic.com/v1/messages" : null;
         if (!expectedEndpoint || observed.endpoint !== expectedEndpoint)
           throw forbidden("The provider wire endpoint does not match the qualified reservation provider");
         const receipt = modelProviderWireReceiptSchema.parse({

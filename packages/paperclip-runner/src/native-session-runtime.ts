@@ -886,33 +886,48 @@ async function consumeTurn(
   let diagnosticStage = "not_started";
   let diagnosticEventType: string | null = null;
   let diagnosticSourceSeq: number | null = null;
+  let diagnosticLastEventAt: number | null = null;
   let diagnosticEventCount = 0;
+  let diagnosticReceivedEventCount = 0;
+  let diagnosticLastTerminalEventType: string | null = null;
+  let diagnosticLastSignificantEventType: string | null = null;
+  const diagnosticEventTypeCounts: Record<string, number> = {};
+  let diagnosticOverflowEventTypeCount = 0;
+  let diagnosticReportCount = 0;
+  const diagnosticStartedAt = Date.now();
   let diagnosticStageStartedAt = Date.now();
   let diagnosticTimer: ReturnType<typeof setTimeout> | undefined;
-  const markDiagnosticStage = (
-    stage: string,
-    eventType: string | null = null,
-    sourceSeq: number | null = null,
-  ) => {
-    if (!concurrentChatDiagnostics) return;
-    if (diagnosticTimer !== undefined) clearTimeout(diagnosticTimer);
+  const markDiagnosticStage = (stage: string) => {
     diagnosticStage = stage;
-    diagnosticEventType = eventType;
-    diagnosticSourceSeq = sourceSeq;
     diagnosticStageStartedAt = Date.now();
-    diagnosticTimer = setTimeout(() => {
-      console.warn(JSON.stringify({
-        diagnostic: "native_concurrent_chat_consume_turn_pending",
+  };
+  if (concurrentChatDiagnostics) {
+    diagnosticTimer = setInterval(() => {
+      diagnosticReportCount += 1;
+      if (diagnosticReportCount > 12) {
+        if (diagnosticTimer !== undefined) clearInterval(diagnosticTimer);
+        diagnosticTimer = undefined;
+        return;
+      }
+      process.stderr.write(`${JSON.stringify({
+        diagnostic: "native_concurrent_chat_consume_turn_progress",
         runId: input.binding.runId,
         stage: diagnosticStage,
         eventType: diagnosticEventType,
         sourceSeq: diagnosticSourceSeq,
-        eventCount: diagnosticEventCount,
-        elapsedMs: Date.now() - diagnosticStageStartedAt,
-      }));
+        receivedEventCount: diagnosticReceivedEventCount,
+        committedEventCount: diagnosticEventCount,
+        eventTypeCounts: diagnosticEventTypeCounts,
+        overflowEventTypeCount: diagnosticOverflowEventTypeCount,
+        lastTerminalEventType: diagnosticLastTerminalEventType,
+        lastSignificantEventType: diagnosticLastSignificantEventType,
+        idleMs: diagnosticLastEventAt === null ? null : Date.now() - diagnosticLastEventAt,
+        stageElapsedMs: Date.now() - diagnosticStageStartedAt,
+        elapsedMs: Date.now() - diagnosticStartedAt,
+      })}\n`);
     }, 5_000);
     diagnosticTimer.unref?.();
-  };
+  }
   let stopConsumer = false;
   let rejectHandoff: ((error: unknown) => void) | null = null;
   const handoffFailure = new Promise<never>((_resolve, reject) => {
@@ -992,7 +1007,25 @@ async function consumeTurn(
         );
       }
       const event = next.value;
-      markDiagnosticStage("append_event", event.eventType, event.sourceSeq);
+      diagnosticEventType = event.eventType;
+      diagnosticSourceSeq = event.sourceSeq;
+      diagnosticLastEventAt = Date.now();
+      diagnosticReceivedEventCount += 1;
+      if (diagnosticEventTypeCounts[event.eventType] !== undefined ||
+        Object.keys(diagnosticEventTypeCounts).length < 32) {
+        diagnosticEventTypeCounts[event.eventType] =
+          (diagnosticEventTypeCounts[event.eventType] ?? 0) + 1;
+      } else {
+        diagnosticOverflowEventTypeCount += 1;
+      }
+      if (isTurnTerminal(event)) diagnosticLastTerminalEventType = event.eventType;
+      if (isTurnTerminal(event) || [
+        "turn.submitted", "turn.started", "turn.accepted", "run.result.proposed",
+        "run.result.accepted", "item.started", "item.completed", "session.failed",
+      ].includes(event.eventType)) {
+        diagnosticLastSignificantEventType = event.eventType;
+      }
+      markDiagnosticStage("append_event");
       const payload = event.payload as Record<string, unknown>;
       const settlingRequestId =
         [
@@ -1013,7 +1046,7 @@ async function consumeTurn(
       if (stopConsumer) throw new Error("native event consumer stopped");
       eventCount += receipt.disposition === "committed" ? 1 : 0;
       diagnosticEventCount = eventCount;
-      markDiagnosticStage("process_event", event.eventType, event.sourceSeq);
+      markDiagnosticStage("process_event");
       highestContiguousSourceSeq = Math.max(
         highestContiguousSourceSeq,
         receipt.highestContiguousSourceSeq,
@@ -1203,7 +1236,7 @@ async function consumeTurn(
             };
           }
           if (!session.goal) throw new Error("native_session_goal_unavailable");
-          markDiagnosticStage("session_goal_get", event.eventType);
+          markDiagnosticStage("session_goal_get");
           const authoritativeGoal = await session.goal({ action: "get" });
           // `goal(get)` emits an authoritative goal snapshot. Keep consuming
           // until that snapshot is durably appended so the server projection
@@ -1282,7 +1315,7 @@ async function consumeTurn(
     }
     throw error;
   } finally {
-    if (diagnosticTimer !== undefined) clearTimeout(diagnosticTimer);
+    if (diagnosticTimer !== undefined) clearInterval(diagnosticTimer);
     stopConsumer = true;
     for (const inputTimer of inputTimers.values()) clearTimeout(inputTimer);
     inputTimers.clear();

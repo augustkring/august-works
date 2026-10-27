@@ -135,6 +135,26 @@ describe("announcement feed", () => {
     expect(await service.current()).toBeNull();
     expect(await announcementFeedService({ ...ownedFeed, version: "1.0.0", fetch: async () => json({ ...item, minimumPaperclipVersion: "2.0.0" }) }).current()).toBeNull();
   });
+  it("projects current and historical release notices without reviving expired current content", async () => {
+    const history = [
+      { ...item, id: "release-2026-10", kind: "release", publishedAt: "2026-10-01T00:00:00Z", expiresAt: "2026-10-02T00:00:00Z" },
+      { ...item, id: "future-release", kind: "release", minimumPaperclipVersion: "2.0.0" },
+    ];
+    const fetch = async () => new Response(JSON.stringify({ schemaVersion: 1, announcement: item, history }), { headers: { "Content-Type": "application/json" } });
+    const service = announcementFeedService({ ...ownedFeed, version: "1.0.0", now: () => Date.parse("2026-10-27T00:00:00Z"), fetch });
+    await expect(service.searchable()).resolves.toMatchObject({
+      state: "available",
+      items: [
+        { announcement: { id: "new-projects" }, historical: false },
+        { announcement: { id: "release-2026-10", kind: "release" }, historical: true },
+      ],
+    });
+  });
+  it("distinguishes an unconfigured feed from a configured but unavailable notice source", async () => {
+    await expect(announcementFeedService({ version: "1.0.0" }).searchable()).resolves.toEqual({ state: "unconfigured", items: [] });
+    const service = announcementFeedService({ ...ownedFeed, version: "1.0.0", fetch: async () => { throw new Error("offline"); } });
+    await expect(service.searchable()).resolves.toEqual({ state: "unavailable", items: [] });
+  });
   it("proxies only the current content-addressed image and caches bytes", async () => {
     const bytes = Buffer.from("test-image");
     const path = `assets/${createHash("sha256").update(bytes).digest("hex")}.png`;

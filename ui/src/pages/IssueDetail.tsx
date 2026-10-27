@@ -7264,6 +7264,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
             <Popover open={moreOpen} onOpenChange={setMoreOpen}>
               <PopoverTrigger asChild>
                 <Button
+                  type="button"
                   variant="ghost"
                   size="icon-xs"
                   className="shrink-0"

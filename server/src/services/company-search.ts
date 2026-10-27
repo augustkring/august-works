@@ -61,6 +61,7 @@ import { businessExperimentService } from "./business-experiments/service.js";
 import { managementReviewService } from "./management-reviews/service.js";
 import { aiConnectionService } from "./ai-connections.js";
 import { instanceSettingsService } from "./instance-settings.js";
+import type { AnnouncementSearchProjection } from "./announcement-feed.js";
 import { v7FeatureEnabled, v8FeatureEnabled } from "@paperclipai/shared";
 import { visibleIssueCondition } from "./issue-visibility.js";
 import { parseTaskSearch, taskSearchCtes, taskSearchScore, taskSearchFieldMatch, taskSearchTermMatch } from "./task-search.js";
@@ -582,7 +583,7 @@ export function companySearchBranchFetchLimit(limit: number, offset = 0) {
 
 const FEDERATED_RESULT_LIMIT = 8;
 const FEDERATED_DOMAIN_ORDER: readonly CompanySearchFederatedDomain[] = [
-  "routines", "workflows", "skills", "packages", "knowledge", "people", "apps", "insights", "settings", "navigation",
+  "routines", "workflows", "skills", "packages", "knowledge", "people", "notices", "apps", "insights", "settings", "navigation",
 ];
 
 function federatedMatch(query: string, title: string, summary: string | null | undefined) {
@@ -649,6 +650,17 @@ function errorStatus(error: unknown): number | null {
   return Number.isInteger(value) ? value : null;
 }
 
+function safeAnnouncementCopy(value: string) {
+  return value.replace(/\bhttps?:\/\/[^\s<>()]+/gi, (candidate) => {
+    try {
+      const url = new URL(candidate);
+      return `${url.origin}${url.pathname}`;
+    } catch {
+      return "[link]";
+    }
+  });
+}
+
 async function collectFederatedOwnerPages<T>(
   load: (cursor?: string) => Promise<{ items: T[]; nextCursor?: string | null }>,
   project: (item: T) => CompanySearchFederatedResult | null,
@@ -670,15 +682,15 @@ async function collectFederatedOwnerPages<T>(
   return { results: results.slice(0, FEDERATED_RESULT_LIMIT), partial };
 }
 
-async function federatedCompanySearch(db: Db, companyId: string, query: string, actor: AuthorizationActor): Promise<CompanySearchFederation> {
+async function federatedCompanySearch(db: Db, companyId: string, query: string, actor: AuthorizationActor, noticeProjection?: AnnouncementSearchProjection): Promise<CompanySearchFederation> {
   const results: CompanySearchFederatedResult[] = [];
   const coverage: CompanySearchFederation["coverage"] = [];
   const countsByDomain: CompanySearchFederation["countsByDomain"] = {};
   const queryTokenCapped = query.trim().split(/\s+/).filter(Boolean).length > 8;
   type ExperimentalFlags = Awaited<ReturnType<ReturnType<typeof instanceSettingsService>["getExperimental"]>>;
-  let flags: ExperimentalFlags | null = null;
+  const flagState: { current: ExperimentalFlags | null } = { current: null };
   const flagsPromise = instanceSettingsService(db).getExperimental().then((value) => {
-    flags = value;
+    flagState.current = value;
   }).catch(() => {
     // Feature availability is part of search coverage. Keep other owners
     // searchable when settings itself is temporarily unavailable.
@@ -727,11 +739,11 @@ async function federatedCompanySearch(db: Db, companyId: string, query: string, 
   // Start independent owner searches while instance feature settings load.
   // Feature-gated adapters are appended after the settings result is known.
   await flagsPromise;
-  const featureFlags = flags;
+  const featureFlags = flagState.current;
   tasks.push(
     adapter("workflows", async () => {
       if (!featureFlags) throw new Error("workflow feature settings unavailable");
-      const pages = await Promise.all([
+      const pages = await Promise.allSettled([
         featureFlags.enableWorkflowsV1 && featureFlags.enableWorkflowBuilderV1
           ? workflowService(db).search(companyId, actor, query, FEDERATED_RESULT_LIMIT + 1)
           : Promise.resolve({ items: [], partial: false }),
@@ -739,14 +751,17 @@ async function federatedCompanySearch(db: Db, companyId: string, query: string, 
           ? pipelineService(db).search(companyId, actor, query, FEDERATED_RESULT_LIMIT + 1)
           : Promise.resolve({ items: [], partial: false }),
       ]);
-      const [workflowPage, pipelinePage] = pages;
-      return { partial: workflowPage.partial || pipelinePage.partial, results: [
-        ...workflowPage.items.map((item) => makeFederatedResult({
+      const fulfilled = pages.flatMap((page) => page.status === "fulfilled" ? [page.value] : []);
+      const operationalFailure = pages.some((page) => page.status === "rejected" && ![401, 403, 404].includes(errorStatus(page.reason) ?? 0));
+      if (!fulfilled.length && operationalFailure) throw new Error("workflow search failed");
+      const [workflowPage, pipelinePage] = fulfilled;
+      return { partial: operationalFailure || fulfilled.some((page) => page.partial), results: [
+        ...(workflowPage?.items ?? []).map((item) => makeFederatedResult({
           companyId, domain: "workflows", type: "workflow", id: item.id, title: item.name,
           summary: item.description, breadcrumb: "Workflows", href: `/workflows/${encodeURIComponent(item.id)}`,
           updatedAt: item.updatedAt, query,
         })),
-        ...pipelinePage.items.map((item) => makeFederatedResult({
+        ...(pipelinePage?.items ?? []).map((item) => makeFederatedResult({
           companyId, domain: "workflows", type: "pipeline", id: item.id, title: item.name,
           summary: item.description, breadcrumb: "Pipelines", href: `/pipelines/${encodeURIComponent(item.id)}`,
           updatedAt: item.updatedAt, query,
@@ -776,7 +791,7 @@ async function federatedCompanySearch(db: Db, companyId: string, query: string, 
         title: item.name, summary: item.description, breadcrumb: "Agent packages",
         href: "/agents/packages", updatedAt: null, query,
       })).filter((item): item is CompanySearchFederatedResult => item !== null);
-      return { partial: matches.length > FEDERATED_RESULT_LIMIT, results: matches.slice(0, FEDERATED_RESULT_LIMIT + 1) };
+      return { partial: items.length >= 200 || matches.length > FEDERATED_RESULT_LIMIT, results: matches.slice(0, FEDERATED_RESULT_LIMIT + 1) };
     }));
     tasks.push(adapter("people", async () => {
       const page = await accessService(db).searchMembers(companyId, actor, query, FEDERATED_RESULT_LIMIT + 1);
@@ -847,11 +862,13 @@ async function federatedCompanySearch(db: Db, companyId: string, query: string, 
       const decision = await auth.decide({ actor, action: "tools:use", resource: { type: "company", companyId } });
       if (!decision.allowed) throw Object.assign(new Error("Apps are unavailable"), { status: 403 });
       if (!featureFlags) throw new Error("app catalog feature settings unavailable");
-      const [items, connections] = await Promise.all([
-        Promise.resolve(APP_STORE_DEFINITIONS.filter((app) => featureFlags.enableMemoryConnectors || !isMemoryConnectorId(app.slug))),
-        aiConnectionService(db).list(companyId, actor.userId!),
-      ]);
-      return { results: [
+      const items = APP_STORE_DEFINITIONS.filter((app) => featureFlags.enableMemoryConnectors || !isMemoryConnectorId(app.slug));
+      const connectionResult = await Promise.allSettled([aiConnectionService(db).list(companyId, actor.userId!)]);
+      const connectionPage = connectionResult[0];
+      const connectionFailure = connectionPage?.status === "rejected" ? connectionPage.reason : null;
+      const connectionUnavailable = connectionFailure !== null && ![401, 403, 404].includes(errorStatus(connectionFailure) ?? 0);
+      const connections = connectionPage?.status === "fulfilled" ? connectionPage.value : [];
+      return { partial: connectionUnavailable, results: [
         ...items.map((item) => makeFederatedResult({
           companyId, domain: "apps", type: "app", id: item.slug, title: item.name,
           summary: item.description, breadcrumb: "App directory", href: "/apps", query,
@@ -862,11 +879,44 @@ async function federatedCompanySearch(db: Db, companyId: string, query: string, 
         })),
       ] };
     }));
+    tasks.push(adapter("notices", async () => {
+      if (!noticeProjection || noticeProjection.state === "unconfigured") {
+        throw Object.assign(new Error("Product notices are not configured"), { status: 503 });
+      }
+      if (noticeProjection.state === "unavailable") throw new Error("Product notice feed unavailable");
+      const results = await Promise.all(noticeProjection.items.map(async ({ announcement, historical }) => {
+        const kind = announcement.kind ?? "announcement";
+        const kindLabel = kind === "announcement" ? "Product announcement" : `${kind[0]!.toUpperCase()}${kind.slice(1)} notice`;
+        if (announcement.primaryAction.kind === "route" && announcement.primaryAction.path === "/apps") {
+          // The company-relative destination remains permission-gated even
+          // though the feed itself is board-visible.
+          const decision = await auth.decide({ actor, action: "tools:use", resource: { type: "company", companyId } });
+          if (!decision.allowed) return null;
+        }
+        const primaryAction = announcement.primaryAction.kind === "route"
+          ? { kind: "navigate" as const, href: announcement.primaryAction.path }
+          : { kind: "open_external" as const, href: announcement.primaryAction.url };
+        const result = makeFederatedResult({
+          companyId,
+          domain: "notices",
+          type: kind === "announcement" ? "announcement" : `${kind}-notice`,
+          id: announcement.id,
+          title: safeAnnouncementCopy(announcement.title),
+          summary: safeAnnouncementCopy(`${historical ? "Historical · " : ""}${kindLabel} · ${announcement.eyebrow} · ${announcement.description}`),
+          breadcrumb: historical ? `${kindLabel} history` : kindLabel,
+          href: primaryAction.href,
+          updatedAt: announcement.publishedAt ?? null,
+          query,
+        });
+        return result ? { ...result, action: primaryAction } : null;
+      }));
+      return { results };
+    }));
   }
 
-  const navigation: Array<{ domain: "settings" | "navigation"; type: string; id: string; title: string; href: string; action: Parameters<typeof auth.decide>[0]["action"]; flag?: boolean }> = [
+  const navigation: Array<{ domain: "settings" | "navigation"; type: string; id: string; title: string; summary?: string | null; href: string; action: Parameters<typeof auth.decide>[0]["action"]; flag?: boolean }> = [
     { domain: "settings", type: "setting", id: "company-settings", title: "Company settings", href: "/company/settings/general", action: "company_scope:read" },
-    { domain: "settings", type: "setting", id: "people-access", title: "People and access", href: "/company/settings/members", action: "users:manage_permissions" },
+    { domain: "settings", type: "setting", id: "people-access", title: "People and access", summary: "Company members, users, roles and permissions", href: "/company/settings/members", action: "users:manage_permissions" },
     { domain: "navigation", type: "navigation", id: "apps", title: "Apps and connections", href: "/apps", action: "tools:use" },
     { domain: "navigation", type: "navigation", id: "workflows", title: "Workflows and pipelines", href: "/workflows", action: "workflows:read", flag: Boolean(featureFlags?.enableWorkflowsV1 && featureFlags.enableWorkflowBuilderV1) },
     { domain: "navigation", type: "navigation", id: "decisions", title: "Decisions", href: "/decisions", action: "decision_queue:read" },
@@ -881,6 +931,7 @@ async function federatedCompanySearch(db: Db, companyId: string, query: string, 
         const decision = await auth.decide({ actor, action: item.action, resource: { type: "company", companyId } });
         return decision.allowed ? makeFederatedResult({
           companyId, domain: item.domain, type: item.type, id: item.id, title: item.title,
+          summary: item.summary,
           breadcrumb: item.domain === "settings" ? "Settings" : "Navigation", href: item.href, query,
         }) : null;
       }));
@@ -899,7 +950,7 @@ export function companySearchService(db: Db) {
   return {
     extract: extractService.extract,
     search: async (companyId: string, query: CompanySearchQuery,
-      options: { issueReadCondition?: SQL<boolean>; projectReadCondition?: SQL<boolean>; actor?: AuthorizationActor } = {},
+      options: { issueReadCondition?: SQL<boolean>; projectReadCondition?: SQL<boolean>; actor?: AuthorizationActor; noticeProjection?: AnnouncementSearchProjection } = {},
     ): Promise<CompanySearchResponse> => {
       const issueReadCondition = options.issueReadCondition ?? await issueReadSqlCondition(db, { type: "none" });
       const projectReadCondition = options.projectReadCondition ?? await projectReadSqlCondition(db, { type: "none" });
@@ -1536,7 +1587,7 @@ export function companySearchService(db: Db) {
         }
       }
       const federation = options.actor && scope === "all" && !hasIssueOnlyFilters
-        ? await federatedCompanySearch(db, companyId, normalizedQuery, options.actor)
+        ? await federatedCompanySearch(db, companyId, normalizedQuery, options.actor, options.noticeProjection)
         : undefined;
       return {
         query: query.q,

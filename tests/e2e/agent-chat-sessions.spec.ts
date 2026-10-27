@@ -131,6 +131,9 @@ test("chat first open is read-only; concurrent first sends and retries share one
             candidate.nativeSessionId === run.nativeSessionId && candidate.createdAt < run.createdAt)
             .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())[0];
           return {
+            runId: run.id,
+            nativeSessionId: run.nativeSessionId,
+            runnerProcessPid: run.processPid,
             status: run.status,
             runtimeMode: run.runtimeMode,
             sourceProtocolVersion: run.nativeInputSourceProtocolVersion,
@@ -308,20 +311,42 @@ test("chat first open is read-only; concurrent first sends and retries share one
           blockingEdges: pgBlockingEdges,
           matchedAdvisoryOwners: [...advisoryKeyMatches],
         };
-        let providerTraceFacts = { eventCount: 0, turnCompletionCount: 0, providerProcessCount: 0, providerProcessesAlive: 0 };
+        let providerTraceFacts: Record<string, unknown> = {
+          eventCount: 0,
+          turnCompletionCount: 0,
+          providerProcessCount: 0,
+          providerProcessesAlive: 0,
+          providerRuns: [],
+        };
         try {
           const tracePath = path.join(process.env.PAPERCLIP_AGENT_CHAT_OUTPUT_DIR!, "native-chat-provider-events.ndjson");
           const trace = (await readFile(tracePath, "utf8")).split("\n").filter(Boolean).map(line => JSON.parse(line));
-          const providerPids = [...new Set(trace.filter(event =>
-            event.event === "turn_completed_emitted" && Number.isInteger(event.processId),
-          ).map(event => event.processId as number))];
+          const providerPids = [...new Set(trace.filter(event => Number.isInteger(event.processId))
+            .map(event => event.processId as number))];
+          const providerRuns = providerPids.map(processId => {
+            const events = trace.filter(event => event.processId === processId);
+            const parentProcessId = events.find(event => Number.isInteger(event.parentProcessId))?.parentProcessId ?? null;
+            const matchedRuns = sanitized.filter(run => run.runnerProcessPid === parentProcessId).map(run => ({
+              runId: run.runId,
+              nativeSessionId: run.nativeSessionId,
+              status: run.status,
+            }));
+            return {
+              processId,
+              parentProcessId,
+              matchedRuns,
+              turnStartCount: events.filter(event => event.event === "turn_start").length,
+              finalItemCount: events.filter(event => event.event === "final_item_emitted").length,
+              turnCompletionCount: events.filter(event => event.event === "turn_completed_emitted").length,
+              alive: (() => { try { process.kill(processId, 0); return true; } catch { return false; } })(),
+            };
+          });
           providerTraceFacts = {
             eventCount: trace.length,
             turnCompletionCount: trace.filter(event => event.event === "turn_completed_emitted").length,
             providerProcessCount: providerPids.length,
-            providerProcessesAlive: providerPids.filter(pid => {
-              try { process.kill(pid, 0); return true; } catch { return false; }
-            }).length,
+            providerProcessesAlive: providerRuns.filter(run => run.alive).length,
+            providerRuns,
           };
         } catch { /* Failure-only diagnostics must not mask the test failure. */ }
         console.info("native-resume-witness-facts", JSON.stringify({ issueAvailable: Boolean(failedIssueId), rows: sanitized, lifecycleFacts, providerTraceFacts, pgWaitFacts }));

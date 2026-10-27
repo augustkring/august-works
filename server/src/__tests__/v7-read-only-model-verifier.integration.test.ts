@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,7 +11,7 @@ import {
   it,
   vi,
 } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import {
   createDb,
   agents,
@@ -236,6 +236,13 @@ const support = await getEmbeddedPostgresTestSupport();
       const wire = JSON.parse(observedBody),
         envelope = JSON.parse(wire.messages[0].content[0].text),
         packet = envelope.packet;
+      const [reservation] = await db.select().from(orchestrationModelReservations).where(and(
+        eq(orchestrationModelReservations.companyId, f.home), eq(orchestrationModelReservations.planId, plan.id),
+        eq(orchestrationModelReservations.status, "dispatched"),
+      )).orderBy(desc(orchestrationModelReservations.createdAt), desc(orchestrationModelReservations.id)).limit(1);
+      expect(reservation?.providerWireReceipt).toEqual({ version: 1, reservationId: reservation?.id,
+        requestHash: reservation?.requestHash, method: "POST", endpoint: "https://api.anthropic.com/v1/messages",
+        bodySha256: createHash("sha256").update(observedBody, "utf8").digest("hex"), callId: null });
       await duringCall?.();
       const assessment =
         trajectoryVerdict && envelope.reviewSchema.verdict

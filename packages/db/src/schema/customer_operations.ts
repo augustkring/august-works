@@ -68,3 +68,4 @@ export const customerOperations = pgTable("customer_operations", {
     WHEN length(coalesce(${t.sourceReleaseReview}->>'reviewedAt','')) NOT BETWEEN 1 AND 64 THEN false
     ELSE true END`),
 ]);
+

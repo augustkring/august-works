@@ -296,7 +296,7 @@ export function firstPartySupportModelGateway(db: Db, options: GatewayOptions) {
           providerCallStarted = true;
           return (options.fetch ?? guardedRemoteHttpFetch)(...args);
         },
-        onWireDispatch: wire => reservations.recordCompanyPurposeWireDispatch(actor, companyId, reservation.id, wire),
+        onWireDispatch: async wire => { await reservations.recordCompanyPurposeWireDispatch(actor, companyId, reservation.id, wire); },
       });
       const outcome = await reservations.recordCompanyPurposeOutcome(companyId, reservation.id, {
         status: "completed",

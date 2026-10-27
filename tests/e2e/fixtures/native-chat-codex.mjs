@@ -13,7 +13,11 @@ function note(event) {
   if (!destination) return;
   try {
     fs.mkdirSync(path.dirname(destination), { recursive: true });
-    fs.appendFileSync(destination, `${JSON.stringify(event)}\n`, { mode: 0o600 });
+    fs.appendFileSync(destination, `${JSON.stringify({
+      ...event,
+      processId: process.pid,
+      parentProcessId: process.ppid,
+    })}\n`, { mode: 0o600 });
   } catch { /* Fixture diagnostics never affect the provider protocol. */ }
 }
 

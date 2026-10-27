@@ -8,9 +8,8 @@ import { assertAuthenticated, assertBoard, hasCompanyAccess } from "./authz.js";
 import { announcementService } from "../services/announcements.js";
 import { announcementFeedService, type AnnouncementFeedOptions } from "../services/announcement-feed.js";
 
-export function announcementRoutes(db: Db, options: AnnouncementFeedOptions) {
+export function announcementRoutes(db: Db, options: AnnouncementFeedOptions, feed = announcementFeedService(options)) {
   const router = Router();
-  const feed = announcementFeedService(options);
   const service = announcementService(db);
   router.use("/announcements", (req, res, next) => {
     assertAuthenticated(req);

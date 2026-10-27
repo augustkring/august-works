@@ -26,6 +26,14 @@ export interface AnnouncementFeedOptions {
   now?: () => number;
   fetch?: (url: URL, init: RequestInit) => Promise<Response>;
 }
+export interface SearchableAnnouncement {
+  announcement: Announcement;
+  historical: boolean;
+}
+export interface AnnouncementSearchProjection {
+  state: "unconfigured" | "unavailable" | "available";
+  items: SearchableAnnouncement[];
+}
 
 export async function readAnnouncementBytes(response: Response, maximum: number): Promise<Buffer> {
   if (Number(response.headers.get("content-length")) > maximum) {
@@ -132,15 +140,41 @@ export function announcementFeedService(options: AnnouncementFeedOptions) {
     }
   }
 
-  async function current() {
-    if (options.enabled !== true || !options.feedUrl?.trim()) return null;
+  async function ensureLoaded() {
+    if (options.enabled !== true || !options.feedUrl?.trim()) return false;
     if (pending) await pending;
     else if (now() >= nextCheck) {
       pending = refresh().finally(() => { pending = null; });
       await pending;
     }
+    return available;
+  }
+
+  async function current() {
+    if (!await ensureLoaded()) return null;
     const announcement = available ? manifest?.announcement : null;
     return announcement && isAnnouncementEligible(announcement, options.version, now()) ? announcement : null;
+  }
+
+  async function searchable(): Promise<AnnouncementSearchProjection> {
+    const configured = options.enabled === true && Boolean(options.feedUrl?.trim());
+    if (!configured) return { state: "unconfigured", items: [] };
+    if (!await ensureLoaded()) return { state: "unavailable", items: [] };
+    const items: SearchableAnnouncement[] = [];
+    const currentAnnouncement = manifest?.announcement;
+    if (currentAnnouncement && isAnnouncementEligible(currentAnnouncement, options.version, now())) {
+      items.push({ announcement: currentAnnouncement, historical: false });
+    }
+    for (const announcement of manifest?.history ?? []) {
+      // Historical items may have expired as current notices. Keep them
+      // searchable as history, but never show them to versions below their
+      // declared minimum.
+      const { expiresAt: _expiresAt, ...versionedAnnouncement } = announcement;
+      if (isAnnouncementEligible(versionedAnnouncement, options.version, now())) {
+        items.push({ announcement, historical: true });
+      }
+    }
+    return { state: "available", items };
   }
 
   async function asset(id: string, kind: "image" | "animation") {
@@ -180,5 +214,5 @@ export function announcementFeedService(options: AnnouncementFeedOptions) {
     finally { if (slot.pending === entry) slot.pending = null; }
   }
 
-  return { current, image: (id: string) => asset(id, "image"), animation: (id: string) => asset(id, "animation") };
+  return { current, searchable, image: (id: string) => asset(id, "image"), animation: (id: string) => asset(id, "animation") };
 }

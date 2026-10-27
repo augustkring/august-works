@@ -271,14 +271,8 @@ export function FederatedSearchResultRow({ result, isActive, className }: {
   isActive?: boolean;
   className?: string;
 }) {
-  return (
-    <Link
-      to={result.action.href}
-      className={cn(ROW_BASE, "py-3", isActive && "bg-muted/40", className)}
-      data-result-type={result.type}
-      data-result-domain={result.domain}
-      aria-label={`${result.title}, ${result.breadcrumb ?? result.domain}`}
-    >
+  const content = (
+    <>
       <Hexagon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 flex-wrap items-center gap-x-2">
@@ -288,6 +282,33 @@ export function FederatedSearchResultRow({ result, isActive, className }: {
         </div>
         {result.summary ? <SnippetLine text={result.summary} field={result.type} fallbackLabel={result.breadcrumb ?? result.domain} /> : null}
       </div>
+    </>
+  );
+  const classNames = cn(ROW_BASE, "py-3", isActive && "bg-muted/40", className);
+  if (result.action.kind === "open_external") {
+    return (
+      <a
+        href={result.action.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={classNames}
+        data-result-type={result.type}
+        data-result-domain={result.domain}
+        aria-label={`${result.title}, ${result.breadcrumb ?? result.domain}, opens external link`}
+      >
+        {content}
+      </a>
+    );
+  }
+  return (
+    <Link
+      to={result.action.href}
+      className={classNames}
+      data-result-type={result.type}
+      data-result-domain={result.domain}
+      aria-label={`${result.title}, ${result.breadcrumb ?? result.domain}`}
+    >
+      {content}
     </Link>
   );
 }

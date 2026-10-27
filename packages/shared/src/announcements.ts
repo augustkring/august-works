@@ -19,7 +19,7 @@ const label = z.string().trim().min(1).max(48);
 const httpsUrl = z.string().max(2048).url().refine((value) => {
   try {
     const url = new URL(value);
-    return url.protocol === "https:" && !url.username && !url.password;
+    return url.protocol === "https:" && !url.username && !url.password && !url.search && !url.hash;
   } catch { return false; }
 }, "Use an HTTPS URL without credentials");
 
@@ -30,9 +30,12 @@ export const announcementActionSchema = z.discriminatedUnion("kind", [
 
 export const announcementSchema = z.object({
   id: announcementIdSchema,
+  /** Optional classification for search/history; legacy feeds remain general announcements. */
+  kind: z.enum(["announcement", "release", "deprecation"]).optional(),
   eyebrow: z.string().trim().min(1).max(48),
   title: z.string().trim().min(1).max(100),
   description: z.string().trim().min(1).max(400),
+  publishedAt: z.string().datetime({ offset: true }).optional(),
   image: z.object({
     // Immutable, content-addressed raster assets beneath the feed directory.
     path: z.string().regex(/^assets\/[a-f0-9]{64}\.(png|jpg|webp)$/),
@@ -53,7 +56,16 @@ export const announcementSchema = z.object({
 export const announcementManifestSchema = z.object({
   schemaVersion: z.literal(1),
   announcement: announcementSchema.nullable(),
-}).strict();
+  /** Bounded operator-published history; older current-only feeds stay valid. */
+  history: z.array(announcementSchema).max(32).optional(),
+}).strict().superRefine((manifest, context) => {
+  const ids = new Set<string>();
+  for (const item of [manifest.announcement, ...(manifest.history ?? [])]) {
+    if (!item) continue;
+    if (ids.has(item.id)) context.addIssue({ code: "custom", message: "Announcement IDs must be unique within a manifest", path: ["history"] });
+    ids.add(item.id);
+  }
+});
 export const dismissAnnouncementSchema = z.object({ companyId: z.string().uuid() }).strict();
 export type AnnouncementAction = z.infer<typeof announcementActionSchema>;
 export type Announcement = z.infer<typeof announcementSchema>;

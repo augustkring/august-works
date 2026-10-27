@@ -20,6 +20,7 @@ export type CompanySearchFederatedDomain =
   | "packages"
   | "knowledge"
   | "people"
+  | "notices"
   | "insights"
   | "apps"
   | "settings"
@@ -37,7 +38,7 @@ export interface CompanySearchFederatedResult {
   updatedAt: string | null;
   score: number;
   whyMatched: string[];
-  action: { kind: "navigate"; href: string };
+  action: { kind: "navigate"; href: string } | { kind: "open_external"; href: string };
 }
 
 export interface CompanySearchFederatedDomainCoverage {

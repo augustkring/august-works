@@ -300,8 +300,14 @@ describe("Search page", () => {
           summary: "A current company routine", breadcrumb: "Routines", canonicalRef: "routines:company-1:routine-1",
           href: "/routines/routine-1", updatedAt: "2026-10-27T00:00:00.000Z", score: 100,
           whyMatched: ["title"], action: { kind: "navigate", href: "/routines/routine-1" },
+        }, {
+          id: "release-1", domain: "notices", type: "release-notice", title: "Release 1.2",
+          summary: "Release notice · New search destinations", breadcrumb: "Release notice",
+          canonicalRef: "notices:company-1:release-notice:release-1", href: "https://docs.example.test/releases/1.2",
+          updatedAt: "2026-10-27T00:00:00.000Z", score: 100, whyMatched: ["title"],
+          action: { kind: "open_external", href: "https://docs.example.test/releases/1.2" },
         }],
-        countsByDomain: { routines: 1 },
+        countsByDomain: { routines: 1, notices: 1 },
         coverage: [{ domain: "routines", status: "partial", message: "Some routines may be outside this bounded search page." },
           { domain: "apps", status: "unavailable", message: "Apps search is temporarily unavailable." }],
         complete: false,
@@ -314,6 +320,10 @@ describe("Search page", () => {
         const result = container.querySelector<HTMLAnchorElement>('a[data-result-domain="routines"]');
         expect(result?.getAttribute("href")).toBe("/routines/routine-1");
         expect(result?.textContent).toContain("Review pipeline");
+        const notice = container.querySelector<HTMLAnchorElement>('a[data-result-domain="notices"]');
+        expect(notice?.getAttribute("href")).toBe("https://docs.example.test/releases/1.2");
+        expect(notice?.getAttribute("target")).toBe("_blank");
+        expect(notice?.getAttribute("rel")).toContain("noopener");
         expect(container.textContent).toContain("Apps search is temporarily unavailable.");
         expect(container.textContent).toContain("Some routines may be outside this bounded search page.");
       });

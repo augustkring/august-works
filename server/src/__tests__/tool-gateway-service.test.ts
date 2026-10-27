@@ -40,6 +40,8 @@ import {
   workflowRuns,
   workflowStepRuns,
   workflowWaits,
+  supportCases,
+  supportCaseEvents,
 } from "@paperclipai/db";
 import type { PluginToolDispatcher } from "../services/plugin-tool-dispatcher.js";
 import type { VercelConnectClient } from "../services/vercel-connect.js";
@@ -60,7 +62,7 @@ import {
   ToolGatewayHttpError,
   type ScopedToolGatewayContext,
 } from "../services/tool-gateway.js";
-import { blenteraToolCatalogContractHash } from "../services/agent-native-operation-manifest.js";
+import { AGENT_NATIVE_OPERATION_MANIFEST, blenteraToolCatalogContractHash } from "../services/agent-native-operation-manifest.js";
 import { canonicalToolArguments, signToolArguments } from "../services/tool-content-guards.js";
 import {
   getEmbeddedPostgresTestSupport,
@@ -91,6 +93,18 @@ describe("Blentera platform contract hashes", () => {
     expect(blenteraToolCatalogContractHash([contract])).not.toBe(
       blenteraToolCatalogContractHash([{ ...contract, displayName: "Changed display contract" }]),
     );
+  });
+
+  it("classifies the required least-authority domain projections without claiming unqualified channels", () => {
+    const domains = new Set(AGENT_NATIVE_OPERATION_MANIFEST.map(operation => operation.domain));
+    for (const domain of ["Tasks", "Projects", "Work", "Agents", "Apps", "Insights", "Decisions", "Support"])
+      expect([...domains]).toContain(domain);
+    expect(AGENT_NATIVE_OPERATION_MANIFEST.find(operation => operation.operationId === "blentera.apps.list_authorized_tools"))
+      .toMatchObject({ apiOperation: "MCP tools/list", openclawQualified: false, mcpExposed: true });
+    expect(AGENT_NATIVE_OPERATION_MANIFEST.find(operation => operation.operationId === "blentera.support.case.request"))
+      .toMatchObject({ mode: "PROPOSAL_ONLY", openclawQualified: false });
+    expect(AGENT_NATIVE_OPERATION_MANIFEST.find(operation => operation.operationId === "blentera.support.case.manage"))
+      .toMatchObject({ mode: "HUMAN_ONLY", mcpExposed: false });
   });
 });
 
@@ -540,7 +554,7 @@ describeEmbeddedPostgres("tool gateway service", () => {
       pluginCalls += 1;
       return { pluginId: "fixture-plugin", toolName: "workflow.draft.create", result: { created: true } };
     };
-    const gateway = createTestToolGatewayService(db, { pluginToolDispatcher });
+    const gateway = createTestToolGatewayService(db, { pluginToolDispatcher: pluginDispatcher });
     const session = await gateway.createSession({ companyId: company.id, agentId: agent.id, runId: run.id });
 
     await expect(gateway.executeTool({
@@ -578,19 +592,24 @@ describeEmbeddedPostgres("tool gateway service", () => {
     const visible = await createCanonicalHumanProject(db, company.id, humanActor, "Gateway-visible project", {
       description: "Current company project summary.",
     });
-    const bobId = `gateway-project-bob-${randomUUID()}`;
-    const bobActor = await seedCurrentHumanSourceActor(db, [company.id], bobId);
-    const hidden = await projectService(db).create(company.id, {
-      name: "Gateway-private project",
-      visibility: "private",
-      privacyOwnerUserId: bobId,
-      status: "backlog",
-    }, undefined, bobActor);
+    await createRemoteMcpToolFixture(db, company.id);
+    const otherCompany = await db.insert(companies).values({
+      name: `Gateway other ${randomUUID()}`,
+      issuePrefix: `GO${randomUUID().slice(0, 6).toUpperCase()}`,
+    }).returning().then(rows => rows[0]!);
+    const otherOwner = await seedCurrentHumanSourceActor(db, [otherCompany.id], `gateway-project-other-${randomUUID()}`);
+    const outsideTenant = await createCanonicalHumanProject(db, otherCompany.id, otherOwner, "Other company project");
     await db.insert(toolPolicies).values([
       { companyId: company.id, name: "Allow Project list for fixture", policyType: "allow",
         selectors: { toolName: "paperclip-self:list_projects" } },
       { companyId: company.id, name: "Allow Project context for fixture", policyType: "allow",
         selectors: { toolName: "paperclip-self:get_project_context" } },
+      { companyId: company.id, name: "Allow Agent context for fixture", policyType: "allow",
+        selectors: { toolName: "paperclip-self:get_my_agent_context" } },
+      { companyId: company.id, name: "Allow current Work for fixture", policyType: "allow",
+        selectors: { toolName: "paperclip-self:get_my_current_work" } },
+      { companyId: company.id, name: "Allow available App tools for fixture", policyType: "allow",
+        selectors: { riskLevel: "read" } },
     ]);
     const gateway = createTestToolGatewayService(db);
     const session = await gateway.createSession({
@@ -607,7 +626,7 @@ describeEmbeddedPostgres("tool gateway service", () => {
     });
     expect(listed.status).toBe("completed");
     expect(listed.result).toMatchObject({ data: { projects: [expect.objectContaining({ id: visible.id, name: "Gateway-visible project" })] } });
-    expect(JSON.stringify(listed.result)).not.toContain(hidden.id);
+    expect(JSON.stringify(listed.result)).not.toContain(outsideTenant.id);
 
     const detail = await gateway.executeTool({
       sessionToken: session.token,
@@ -618,8 +637,75 @@ describeEmbeddedPostgres("tool gateway service", () => {
     await expect(gateway.executeTool({
       sessionToken: session.token,
       tool: "blentera.project.get_context",
-      parameters: { projectId: hidden.id },
+      parameters: { projectId: outsideTenant.id },
     })).rejects.toMatchObject({ status: 404, reasonCode: "project_not_found" });
+
+    const self = await gateway.executeTool({
+      sessionToken: session.token,
+      tool: "blentera.agent.get_self_context",
+      parameters: {},
+    });
+    expect(self.result).toMatchObject({ data: { agent: { id: agent.id }, run: { id: run.id, status: "running" } } });
+    expect(JSON.stringify(self.result)).not.toContain("adapterConfig");
+    const work = await gateway.executeTool({
+      sessionToken: session.token,
+      tool: "blentera.work.get_current_task",
+      parameters: {},
+    });
+    expect(work.result).toMatchObject({ data: { issue: { id: session.issueId }, run: { id: run.id, status: "running" } } });
+    const apps = await gateway.executeTool({ sessionToken: session.token, tool: "blentera.apps.list_authorized_tools", parameters: {} });
+    expect(apps.result).toMatchObject({ data: { applications: [expect.objectContaining({
+      application: "Remote MCP", connection: "Remote connection", status: "active", enabled: true,
+      availableOperations: [expect.any(String)],
+    })] } });
+    expect(JSON.stringify(apps.result)).not.toMatch(/credentialSecretRefs|transportConfig|authToken|password/i);
+  });
+
+  it("creates an idempotent local Support request under the current Native Human and approved safe context", async () => {
+    const { company, agent, issue, run } = await createRunFixture(db);
+    const userId = `gateway-support-human-${randomUUID()}`;
+    await seedCurrentHumanSourceActor(db, [company.id], userId);
+    await db.insert(companyMemberships).values({ companyId: company.id, principalType: "agent", principalId: agent.id,
+      status: "active", membershipRole: "member" });
+    await db.update(heartbeatRuns).set({ responsibleUserId: userId, runtimeMode: "native", nativeIssueId: issue.id })
+      .where(eq(heartbeatRuns.id, run.id));
+    const humanMembership = await db.select().from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, userId), eq(companyMemberships.status, "active"),
+    )).then(rows => rows[0]!);
+    const actor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: company.id, agentId: agent.id,
+      runId: run.id, onBehalfOfUserId: userId, authenticatedCredentialExpiresAt: Date.now() + 60_000,
+      keyScope: { kind: "standard" }, companyIds: [company.id],
+      memberships: [{ companyId: company.id, membershipRole: "member", status: "active" }],
+      onBehalfOfMemberships: [{ companyId: humanMembership.companyId, membershipRole: humanMembership.membershipRole, status: humanMembership.status }] };
+    const supportCaseDataPolicy = { schemaVersion: 1 as const, policyVersion: "gateway.support.v1", recipientName: "Blentera Support",
+      privacyNoticeUrl: "https://support.example.test/privacy", processingRegion: "test", retentionTrigger: "after_last_customer_or_support_message" as const,
+      retentionDays: 30, backupMaxDays: 7, restoreLagDays: 2, deletionMarkerDays: 10, legalHoldPolicyId: "gateway.support.hold.v1" };
+    await db.insert(toolPolicies).values({ companyId: company.id, name: "Allow Support request fixture", policyType: "allow",
+      selectors: { toolName: "paperclip-self:create_support_request" } });
+    await db.insert(toolPolicies).values({ companyId: company.id, name: "Allow Support intake status fixture", policyType: "allow",
+      selectors: { toolName: "paperclip-self:get_support_intake_status" } });
+    const gateway = createTestToolGatewayService(db, { supportCaseDataPolicy });
+    const session = await gateway.createSession({ companyId: company.id, agentId: agent.id, runId: run.id, authorizationActor: actor });
+    expect((await gateway.listToolsForSession(session.token)).map(tool => tool.name)).toEqual(expect.arrayContaining([
+      "blentera.support.intake.status", "blentera.support.case.request",
+    ]));
+    const intake = await gateway.executeTool({ sessionToken: session.token, tool: "blentera.support.intake.status", parameters: {} });
+    expect(intake.result).toMatchObject({ data: { available: true, recipientName: "Blentera Support", retentionDays: 30 } });
+    const requestKey = randomUUID();
+    const parameters = { idempotencyKey: requestKey, expectedPolicyRevision: (intake.result as { data: { revision: string } }).data.revision,
+      description: "I could not open the current Task.", category: "access", safeContext: { surface: "work", errorCode: "ACCESS_CHANGED" } };
+    const first = await gateway.executeTool({ sessionToken: session.token, tool: "blentera.support.case.request", parameters });
+    expect(first.status).toBe("completed");
+    expect(first.result).toMatchObject({ data: { openedByUserId: userId, status: "RECEIVED", delivery: "unknown" } });
+    const replay = await gateway.executeTool({ sessionToken: session.token, tool: "blentera.support.case.request", parameters });
+    expect(replay.status).toBe("replayed");
+    await expect(gateway.executeTool({ sessionToken: session.token, tool: "blentera.support.case.request",
+      parameters: { ...parameters, description: "Different text under the same request key." } })).rejects.toMatchObject({ status: 409 });
+    expect(await db.select().from(supportCases)).toHaveLength(1);
+    expect(await db.select().from(supportCaseEvents)).toHaveLength(1);
+    const [activity] = await db.select().from(activityLog).where(eq(activityLog.action, "support.case_requested"));
+    expect(activity).toMatchObject({ actorType: "agent", actorId: agent.id, agentId: agent.id, runId: run.id });
   });
 
   it("executes create_workflow through the governed gateway without publishing", async () => {
@@ -687,7 +773,7 @@ describeEmbeddedPostgres("tool gateway service", () => {
         idempotencyKey: "gateway-create-v1",
       },
     });
-    expect(replay.status).toBe("completed");
+    expect(replay.status).toBe("replayed");
     const workflowId = (value: unknown) => {
       expect(value).toMatchObject({ data: { workflow: { id: expect.any(String) } } });
       return (value as { data: { workflow: { id: string } } }).data.workflow.id;

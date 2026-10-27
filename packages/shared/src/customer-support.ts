@@ -167,6 +167,19 @@ export const replySupportCaseSchema = z.strictObject({
   safeContext: supportCaseSafeContextSchema.optional(),
 });
 export type CreateSupportCase = z.infer<typeof createSupportCaseSchema>;
+/** Agent-originated requests omit the Human identity. The original support
+ * service derives it from a current accountable Native run and records the
+ * Agent as the activity actor. */
+export const nativeSupportCaseRequestSchema = z.strictObject({
+  idempotencyKey: z.uuid().toLowerCase(),
+  expectedPolicyRevision: supportPolicyRevision,
+  description: supportText(SUPPORT_CASE_LIMITS.description),
+  category: supportCaseCategorySchema.default("other"),
+  subject: supportText(SUPPORT_CASE_LIMITS.subject).optional(),
+  impact: supportCaseImpactSchema.nullable().default(null),
+  safeContext: supportCaseSafeContextSchema.optional(),
+});
+export type NativeSupportCaseRequest = z.infer<typeof nativeSupportCaseRequestSchema>;
 export type ReplySupportCase = z.infer<typeof replySupportCaseSchema>;
 
 /** The server derives a subject when the customer did not edit the preview. */

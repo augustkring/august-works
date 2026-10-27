@@ -45,14 +45,14 @@ export async function runJevDecision(input: {
   model: string; apiKey: string; request: JevDecisionRequest; signal: AbortSignal;
 }, options: {
   fetch?: typeof fetch;
-  onWireDispatch?: (receipt: { method: "POST"; endpoint: "https://openrouter.ai/api/v1/chat/completions"; bodySha256: string }) => void | Promise<void>;
+  onWireDispatch?: (receipt: { method: "POST"; endpoint: "https://openrouter.ai/api/alpha/decisions"; bodySha256: string }) => void | Promise<void>;
 } = {}): Promise<JevDecisionOutcome> {
   const upstreamFetch = options.fetch ?? fetch;
   const observedFetch: typeof fetch = async (requestInput, init) => {
     const request = requestInput instanceof Request ? requestInput : null;
     const url = new URL(request?.url ?? String(requestInput));
     const method = (init?.method ?? request?.method ?? "GET").toUpperCase();
-    if (method !== "POST" || url.origin !== "https://openrouter.ai" || url.pathname !== "/api/v1/chat/completions" || url.search || url.hash)
+    if (method !== "POST" || url.origin !== "https://openrouter.ai" || url.pathname !== "/api/alpha/decisions" || url.search || url.hash)
       throw new Error("provider_wire_endpoint_unqualified");
     const body = init?.body ?? (request ? await request.clone().arrayBuffer() : null);
     let bodyBytes: Uint8Array;
@@ -61,7 +61,7 @@ export async function runJevDecision(input: {
     else if (body instanceof ArrayBuffer) bodyBytes = new Uint8Array(body);
     else if (body instanceof Blob) bodyBytes = new Uint8Array(await body.arrayBuffer());
     else throw new Error("provider_wire_body_unavailable");
-    await options.onWireDispatch?.({ method: "POST", endpoint: "https://openrouter.ai/api/v1/chat/completions",
+    await options.onWireDispatch?.({ method: "POST", endpoint: "https://openrouter.ai/api/alpha/decisions",
       bodySha256: createHash("sha256").update(bodyBytes).digest("hex") });
     return upstreamFetch(requestInput, init);
   };

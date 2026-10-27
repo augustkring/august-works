@@ -1,7 +1,7 @@
 import { seedApprovedAuthoringPreference } from "./helpers/authoring-memory.js";
 import { memoryService } from "../services/memory/memory-service.js";
 import { grantAuthoringKnowledgeReadFixture } from "./helpers/authoring-procedures.js";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -69,6 +69,9 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
       .orderBy(desc(agentConfigurationTests.createdAt), desc(agentConfigurationTests.id)).limit(1);
     const [debit] = await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, test!.planId));
     expect(debit).toMatchObject({ purpose: "agent_safe_test", status: "dispatched", maximumMinor: 3, workerId: null, workerAttemptId: null });
+    expect(debit?.providerWireReceipt).toEqual({ version: 1, reservationId: debit?.id,
+      requestHash: debit?.requestHash, method: "POST", endpoint: "https://api.anthropic.com/v1/messages",
+      bodySha256: createHash("sha256").update(String(init.body), "utf8").digest("hex"), callId: null });
     if (duringCall) await duringCall();
     if (lostResponse) throw new Error("private transport response was lost");
     return new Response(JSON.stringify({ type: "message", role: "assistant", model: body.model, stop_reason: "end_turn",

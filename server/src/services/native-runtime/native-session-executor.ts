@@ -9769,15 +9769,19 @@ async function executePaperclipNativeSessionWithinScope(
         : {}),
     },
     {
-      onCommittedEvent: async (event) => {
+      onCommittedEvent: async (event, markAppendDiagnosticStage) => {
+        markAppendDiagnosticStage?.("callback_tool_trace_observe");
         await toolTrace.observe(event);
         if (event.eventType === "item.completed" &&
             record(event.payload).kind === "agentMessage" &&
             record(event.payload).channel === "final") {
           completedConversationReply = event;
         }
+        markAppendDiagnosticStage?.("callback_live_questions_observe");
         await liveQuestions.observe(event);
+        markAppendDiagnosticStage?.("callback_runner_goal_projection");
         await projectSessionGoalEvent(event);
+        markAppendDiagnosticStage?.("callback_event_accounting");
         providerUsageLimitObserved ||= nativeProviderUsageLimitFromEvent(event);
         const eventAtMs = Date.parse(event.emittedAt);
         const milestoneAtMs = Number.isFinite(eventAtMs)

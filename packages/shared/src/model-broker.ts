@@ -9,7 +9,7 @@ export const modelProviderWireReceiptSchema = z.object({
   method: z.literal("POST"),
   endpoint: z.enum([
     "https://api.anthropic.com/v1/messages",
-    "https://openrouter.ai/api/v1/chat/completions",
+    "https://openrouter.ai/api/alpha/decisions",
   ]),
   bodySha256: hash,
   callId: z.string().min(1).max(200).nullable(),

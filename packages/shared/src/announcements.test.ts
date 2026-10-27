@@ -8,10 +8,16 @@ describe("announcement contract", () => {
     expect(announcementSchema.parse(announcement).id).toBe("new-projects");
     expect(announcementSchema.parse({ ...announcement, title: "<script>alert(1)</script>" }).title).toContain("<script>");
   });
+  it("accepts bounded classified notice history while preserving current-only manifests", () => {
+    const release = { ...announcement, id: "release-2026-10", kind: "release", publishedAt: "2026-10-27T00:00:00Z" };
+    expect(announcementManifestSchema.parse({ schemaVersion: 1, announcement, history: [release] }).history).toEqual([release]);
+    expect(announcementManifestSchema.safeParse({ schemaVersion: 1, announcement, history: [announcement] }).success).toBe(false);
+    expect(announcementManifestSchema.safeParse({ schemaVersion: 1, announcement: null, history: Array.from({ length: 33 }, (_, index) => ({ ...announcement, id: `notice-${index}` })) }).success).toBe(false);
+  });
   it.each(["/api/companies", "//evil.test", "/projects/../auth", "/company/settings?danger=yes", "/unknown", "javascript:alert(1)"])("rejects unsupported route %s", (path) => {
     expect(announcementSchema.safeParse({ ...announcement, primaryAction: { kind: "route", label: "Open", path } }).success).toBe(false);
   });
-  it.each(["not a URL", "http://example.com", "javascript:alert(1)", "https://user:password@example.com"])("rejects unsafe external URL %s", (url) => {
+  it.each(["not a URL", "http://example.com", "javascript:alert(1)", "https://user:password@example.com", "https://example.com/release?token=secret", "https://example.com/release#fragment"])("rejects unsafe external URL %s", (url) => {
     expect(announcementSchema.safeParse({ ...announcement, primaryAction: { kind: "external", label: "Open", url } }).success).toBe(false);
   });
   it.each(["../secret.png", "https://example.com/a.png", "/assets/a.png", `assets/${"0".repeat(64)}.svg`])("rejects unsafe image path %s", (path) => {

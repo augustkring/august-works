@@ -61,6 +61,7 @@ import { PROCESS_IDENTITY_RECORDED, hasNativeLocalProcessStop, recordNativeLocal
 import { hasRemoteTerminationReceipt } from "../services/remote-execution-termination.js";
 import { appendHeartbeatRunEvent } from "../services/heartbeat-run-events.js";
 import { firstPartySupportModelGateway, supportAssistantPolicyRevision } from "../services/orchestration/first-party-support-model-gateway.js";
+import { anthropicReadOnlyCall } from "../services/orchestration/read-only-model-transport.js";
 import { searchAuthorizedSupportHelp } from "../services/experience/support-assistant-help.js";
 import type { FirstPartySupportModelProfile } from "../services/orchestration/first-party-support-model-profiles.js";
 const sourceSha = "a".repeat(40),
@@ -866,6 +867,12 @@ const support = await getEmbeddedPostgresTestSupport();
           await assertConversationNativeStopBeforeErasure(exactFrame);
           const runnerProfile = run.runnerProfileJson && typeof run.runnerProfileJson === "object"
             ? run.runnerProfileJson as Record<string, unknown> : {};
+          const sourceWireIntents = Array.isArray(runnerProfile.nativeAwModelWireIntents)
+            ? runnerProfile.nativeAwModelWireIntents : [];
+          expect(sourceWireIntents).toContainEqual(expect.objectContaining({
+            reservationId: reservation.id, requestHash: reservation.requestHash, callId: retainedWire?.callId,
+            endpoint: retainedWire?.endpoint, method: retainedWire?.method, wireBodyHash: retainedWire?.bodySha256,
+          }));
           const nativeInput = runnerProfile.nativeExecutionInput && typeof runnerProfile.nativeExecutionInput === "object"
             ? runnerProfile.nativeExecutionInput as Record<string, unknown> : {};
           const runtimeContext = nativeInput.runtimeContext && typeof nativeInput.runtimeContext === "object"
@@ -1523,6 +1530,9 @@ const support = await getEmbeddedPostgresTestSupport();
         bodySha256: createHash("sha256").update(transmitted!, "utf8").digest("hex"),
         callId: null,
       });
+      await expect(db.update(orchestrationCompanyPurposeReservations).set({
+        providerWireReceipt: { ...reservation!.providerWireReceipt!, bodySha256: "f".repeat(64) },
+      }).where(eq(orchestrationCompanyPurposeReservations.id, reservation!.id))).rejects.toThrow();
       const replay = await gateway.answer(f.actor, f.home, request);
       expect(replay).toEqual({ requestId: request.requestId, kind: "already_processed", citations: [] });
       expect(fetch).toHaveBeenCalledTimes(1);
@@ -1686,6 +1696,21 @@ const support = await getEmbeddedPostgresTestSupport();
         .rejects.toMatchObject({ status: 409 });
       expect(stored).not.toHaveProperty("response");
     });
+    it("database-rejects forged company-purpose wire receipts and completion without a receipt", async () => {
+      const broker = service();
+      const reservation = await broker.reserveCompanyPurpose(f.actor, supportRequest("wire-guard-negative"));
+      await broker.claimCompanyPurposeForDispatch(f.actor, f.home, reservation.id);
+      await expect(db.update(orchestrationCompanyPurposeReservations).set({ providerWireReceipt: {
+        version: 1, reservationId: reservation.id, requestHash: reservation.requestHash, method: "POST",
+        endpoint: "https://openrouter.ai/api/alpha/decisions", bodySha256: "a".repeat(64), callId: null,
+      } }).where(eq(orchestrationCompanyPurposeReservations.id, reservation.id))).rejects.toThrow();
+      await expect(db.update(orchestrationCompanyPurposeReservations).set({ status: "completed", completedAt: new Date(),
+        providerResponseHash: "b".repeat(64), usage: { inputTokens: 1, outputTokens: 1 },
+      }).where(eq(orchestrationCompanyPurposeReservations.id, reservation.id))).rejects.toThrow();
+      const [stored] = await db.select().from(orchestrationCompanyPurposeReservations)
+        .where(eq(orchestrationCompanyPurposeReservations.id, reservation.id));
+      expect(stored).toMatchObject({ status: "dispatched", providerWireReceipt: null });
+    });
     it("does not claim a provider charge when principal revocation blocks the wire receipt before fetch", async () => {
       const broker = service();
       const reservation = await broker.reserveCompanyPurpose(f.actor, supportRequest());
@@ -1728,6 +1753,12 @@ const support = await getEmbeddedPostgresTestSupport();
       const dispatched = await broker.reserveCompanyPurpose(f.actor, supportRequest("purge-dispatched"));
       const pending = await broker.reserveCompanyPurpose(f.actor, supportRequest("purge-pending"));
       await broker.claimCompanyPurposeForDispatch(f.actor, f.home, dispatched.id);
+      await anthropicReadOnlyCall({ model: "claude-fixture", system: "Bounded software transport receipt.",
+        evidence: "No private evidence is used in this dispatch-owner test.", maxOutputTokens: 16 }, supportApiKey,
+      new AbortController().signal, {
+        fetch: mockSupportTransport() as unknown as typeof import("../services/remote-http-fetch.js").guardedRemoteHttpFetch,
+        onWireDispatch: wire => broker.recordCompanyPurposeWireDispatch(f.actor, f.home, dispatched.id, wire),
+      });
       await agentIdentityService(db).rehome(f.actor, f.home, f.identity.id, f.guest);
       const [company] = await db.select({ name: companies.name }).from(companies).where(eq(companies.id, f.home));
       const providerRunId = randomUUID();

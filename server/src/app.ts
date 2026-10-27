@@ -1,6 +1,8 @@
+import { productIdentityRoutes } from "./routes/product-identity.js";
 import { companyImportJobService } from "./services/company-import-jobs.js";
 import { purgeExpiredNotificationChannelCommands } from "./services/notifications/channel-retention.js";
 import { customerSupportRoutes } from "./routes/customer-support.js";
+import { readSupportCaseDataPolicy } from "./services/experience/support-case-configuration.js";
 import { firstPartySupportModelGateway } from "./services/orchestration/first-party-support-model-gateway.js";
 import { searchAuthorizedSupportHelp } from "./services/experience/support-assistant-help.js";
 import { maintenanceHistoryRoutes } from "./routes/maintenance-history.js";
@@ -159,6 +161,7 @@ import { userProfileRoutes } from "./routes/user-profiles.js";
 import { sidebarBadgeRoutes } from "./routes/sidebar-badges.js";
 import { sidebarPreferenceRoutes } from "./routes/sidebar-preferences.js";
 import { announcementRoutes } from "./routes/announcements.js";
+import { announcementFeedService } from "./services/announcement-feed.js";
 import { serverVersion } from "./version.js";
 import { resourceMembershipRoutes } from "./routes/resource-memberships.js";
 import { inboxDismissalRoutes } from "./routes/inbox-dismissals.js";
@@ -640,6 +643,9 @@ export async function createApp(
       bindHost: opts.bindHost,
     }),
   );
+  // Public contact discovery stays behind the configured origin/Host guards,
+  // and is available before sign-in without exposing tenant information.
+  app.use(productIdentityRoutes());
   if (opts.deploymentProfile !== "saas") app.use(cloudRuntimeIdentityMiddleware(db));
   // Connection-intent tools carry their own short-lived, run-bound bearer and
   // must be reachable by remote adapters that intentionally do not receive an
@@ -979,7 +985,9 @@ export async function createApp(
   api.use(userProfileRoutes(db));
   api.use(sidebarBadgeRoutes(db));
   api.use(sidebarPreferenceRoutes(db));
-  api.use(announcementRoutes(db, { ...opts.announcements, version: opts.hostVersion ?? serverVersion }));
+  const announcementOptions = { ...opts.announcements, version: opts.hostVersion ?? serverVersion };
+  const announcementFeed = announcementFeedService(announcementOptions);
+  api.use(announcementRoutes(db, announcementOptions, announcementFeed));
   api.use(resourceMembershipRoutes(db));
   api.use(inboxDismissalRoutes(db));
   api.use(instanceSettingsRoutes(db, {
@@ -1021,6 +1029,7 @@ export async function createApp(
     decisionShadow: opts.decisionShadow,
   }));
   const toolGateway = createToolGatewayService(db, {
+    supportCaseDataPolicy: readSupportCaseDataPolicy(process.env),
     onToolActionSettled: (id) => toolActionDeliveries.deliver(id),
     pluginToolDispatcher: toolDispatcher,
     deploymentMode: opts.deploymentMode,
@@ -1041,6 +1050,7 @@ export async function createApp(
     chatRunRetries: chatChannels,
     heartbeat: connectionIntentHeartbeat,
     feedbackExportService: opts.feedbackExportService,
+    announcementSearch: () => announcementFeed.searchable(),
     pluginWorkerManager: workerManager,
     approveToolActionRequest: (input) => toolGateway.approveActionRequest(input),
     declineToolActionRequest: (input) => toolGateway.declineActionRequest(input),
