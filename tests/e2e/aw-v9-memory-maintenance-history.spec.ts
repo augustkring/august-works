@@ -7,7 +7,6 @@ import { expect, test, type APIResponse } from "@playwright/test";
 import { eq } from "../../packages/db/node_modules/drizzle-orm/index.js";
 import { createDb, closeRegisteredClients, memoryJobs } from "../../packages/db/src/index.ts";
 import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
-import { seedCurrentHumanSourceActor } from "../../server/src/__tests__/helpers/current-human-source-fixture.ts";
 import { issueService } from "../../server/src/services/issues.ts";
 import { memoryService } from "../../server/src/services/memory/memory-service.ts";
 import { nativeSha256 } from "../../server/src/services/native-runtime/canonical.ts";
@@ -24,6 +23,9 @@ test("Memory history follows an actual native index receipt, language changes an
   test.setTimeout(120000);
   const original = await json(await request.get("/api/instance/settings/experimental"));
   const company = await json(await request.post("/api/companies", { data: { name: "Disposable native Memory history fixture" } }));
+  const session = await json(await request.get("/api/auth/get-session"));
+  const currentUserId = session.user.id as string;
+  const expectedUserId = encodeURIComponent(currentUserId);
   const configPath = process.env.PAPERCLIP_E2E_SERVER_CONFIG!;
   const configParts = path.relative(tmpdir(), configPath).split(path.sep);
   expect(configParts).toHaveLength(4);
@@ -44,14 +46,15 @@ test("Memory history follows an actual native index receipt, language changes an
       governance_evidence_v7: true, readiness_engine_v7: true, core_stewards_v7: true,
       experience_projection_v9: true, progressive_shell_v9: true, maintenance_autopilot_v9: true,
     } }));
-    const human = await seedCurrentHumanSourceActor(db, [company.id]);
-    const actor = { principal: { type: "user" as const, userId: "local-board" }, authorizationActor: human };
+    const human = { type: "board" as const, source: "session" as const, userId: currentUserId,
+      sessionId: session.session.id as string, companyIds: [company.id] };
+    const actor = { principal: { type: "user" as const, userId: currentUserId }, authorizationActor: human };
     const memories = memoryService(db);
     const binding = await memories.createCompanyBinding(company.id, { key: `history-${randomUUID()}`,
       name: "Software shared source", providerKey: "local", enabled: true, config: {} }, actor);
     const content = "Explicit software-only source for a native search-index check.";
     const task = await issueService(db).create(company.id, { title: "Human-provided index source", description: content,
-      createdByUserId: "local-board", responsibleUserId: "local-board" }, db, undefined, { manualInputActor: human });
+      createdByUserId: currentUserId, responsibleUserId: currentUserId }, db, undefined, { manualInputActor: human });
     const observedAt = new Date().toISOString();
     const excerpt = `Status: ${task.status}\nPriority: ${task.priority}\nDescription: ${content}`;
     const candidate = await memories.createCandidate(company.id, { bindingId: binding.id, memoryType: "observation",
@@ -65,7 +68,7 @@ test("Memory history follows an actual native index receipt, language changes an
     const recordId = candidate.record.id;
     await memories.reviewCandidate(company.id, recordId, { decision: "accept" }, actor);
     const base = `/api/companies/${company.id}/memory/experience/maintenance`;
-    const initial = await json(await request.get(`${base}?expectedUserId=local-board`));
+    const initial = await json(await request.get(`${base}?expectedUserId=${expectedUserId}`));
     expect(initial.entries).toEqual([]);
     const queued = await json(await request.post(`/api/companies/${company.id}/memory/jobs`, {
       headers: { "Idempotency-Key": `browser-index-history-${recordId}` },
@@ -73,10 +76,10 @@ test("Memory history follows an actual native index receipt, language changes an
     }));
     // The original 15-second reconciliation tick executes the real index job.
     await expect.poll(async () => {
-      const view = await json(await request.get(`${base}?expectedUserId=local-board`));
+      const view = await json(await request.get(`${base}?expectedUserId=${expectedUserId}`));
       return view.entries.find((entry: { jobId: string }) => entry.jobId === queued.id)?.outcome;
     }, { timeout: 45000 }).toBe("verified_index_check");
-    const response = await request.get(`${base}?expectedUserId=local-board`);
+    const response = await request.get(`${base}?expectedUserId=${expectedUserId}`);
     expect(response.headers()["cache-control"]).toBe("private, no-store");
     const view = await json(response);
     expect(view.entries[0]).toMatchObject({ jobId: queued.id, maintenanceClass: "M1", indexedRecordCount: 1 });
@@ -108,10 +111,10 @@ test("Memory history follows an actual native index receipt, language changes an
     await expect(page.getByRole("heading", { name: "Source unavailable", exact: true })).toBeVisible();
     await expect(page.getByText("1 shared record checked", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Index check recorded", exact: true })).toHaveCount(0);
-    const erased = await json(await request.get(`${base}?expectedUserId=local-board`));
+    const erased = await json(await request.get(`${base}?expectedUserId=${expectedUserId}`));
     expect(erased.entries[0]).toMatchObject({ outcome: "source_unavailable", receiptId: null, indexedRecordCount: null });
     await json(await request.patch("/api/instance/settings/experimental", { data: { maintenance_autopilot_v9: false } }));
-    expect((await request.get(`${base}?expectedUserId=local-board`)).status()).toBe(404);
+    expect((await request.get(`${base}?expectedUserId=${expectedUserId}`)).status()).toBe(404);
     await page.reload(); await expect(heading).toHaveCount(0);
   } finally {
     await json(await request.patch("/api/instance/settings/experimental", { data: original }));

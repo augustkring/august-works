@@ -22,11 +22,13 @@ async function json(response: APIResponse) { expect(response.ok(), `${response.s
 test("Insights reads a signed historical review and withdraws agenda after source change and erasure", async ({ page, request }, info) => {
   const flags = await json(await request.get("/api/instance/settings/experimental"));
   const company = await json(await request.post("/api/companies", { data: { name: "Disposable management review" } }));
+  const session = await json(await request.get("/api/auth/get-session"));
   const configPath = process.env.PAPERCLIP_E2E_SERVER_CONFIG!;
   expect(configPath.startsWith(path.join(tmpdir(), "paperclip-e2e-home-"))).toBe(true);
   const config = JSON.parse(await readFile(configPath, "utf8")); expect(path.resolve(config.database.embeddedPostgresDataDir)).toBe(path.join(path.dirname(configPath), "db"));
   const pid = await readFile(path.join(config.database.embeddedPostgresDataDir, "postmaster.pid"), "utf8"), databaseUrl = `postgres://paperclip:paperclip@127.0.0.1:${pid.split("\n")[3]}/paperclip`, db = createDb(databaseUrl);
-  const actor = { type: "board" as const, source: "local_implicit" as const };
+  const actor = { type: "board" as const, source: "session" as const, userId: session.user.id,
+    sessionId: session.session.id, companyIds: [company.id] };
   let writes = 0; page.on("request", req => { if (req.method() !== "GET" && /\/management-reviews/.test(req.url())) writes++; });
   try {
     await json(await request.patch("/api/instance/settings/experimental", { data: { experience_projection_v9: true, progressive_shell_v9: true, enableFoundationV1: true, project_roadmap_v5: true,
@@ -36,7 +38,7 @@ test("Insights reads a signed historical review and withdraws agenda after sourc
     const now = Date.now(), nextAction = "Review the cited Native goal before requesting a decision", hypothesis = "Human suspects a constraint; no cause has been established";
     const definition = managementReviewDefinitionSchema.parse({ name: "Recorded leadership review", reviewType: "weekly_leadership", period: { from: new Date(now - 86400000).toISOString(), until: new Date(now).toISOString() },
       purpose: "management_intelligence", sensitivity: "internal", retentionDays: 1, governanceObligationRefs: [policy.id], sources: [{ key: "goal", source: { kind: "canonical", reference: { type: "goal", id: goal.id } } }],
-      agenda: [{ key: "review", category: "DECISION_REQUIRED", ownerUserId: "local-board", dueAt: new Date(now + 86400000).toISOString(), sourceKeys: ["goal"], nextAction, hypothesis }] });
+      agenda: [{ key: "review", category: "DECISION_REQUIRED", ownerUserId: session.user.id, dueAt: new Date(now + 86400000).toISOString(), sourceKeys: ["goal"], nextAction, hypothesis }] });
     const owner = managementReviewService(db), created = await owner.create(company.id, actor, definition);
     await owner.publish(company.id, actor, created.id, { expectedContentHash: created.contentHash, rationale: "Synthetic Human publication of the exact cited review", evidenceAndUncertaintyAcknowledged: true, supersedesId: null });
     const endpoint = `/api/companies/${company.id}/management-reviews/${created.id}/summary`, summary = await json(await request.get(endpoint));

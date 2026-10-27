@@ -171,6 +171,9 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
       fact.modelCredentialPresent === false && fact.managedModelBrokerOriginPresent === false &&
       fact.credentialEnvironmentAbsent === true && fact.assignedMcpEnvironmentAbsent === true &&
       fact.cwdExact === true)).toBe(true);
+    expect(relayExecFacts.some(fact => fact.nativePreparationPurpose === "provider_artifact" &&
+      fact.providerPackImageProbe === true && fact.modelCredentialPresent === false &&
+      fact.credentialEnvironmentAbsent === true && fact.cwdExact === true)).toBe(true);
     const sandboxExecutionChecks = Array.isArray(runtimeFacts?.sandboxExecutionChecks)
       ? runtimeFacts.sandboxExecutionChecks as Array<Record<string, unknown>>
       : [];

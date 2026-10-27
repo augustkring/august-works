@@ -11,6 +11,7 @@ import { businessExperimentService } from "../../server/src/services/business-ex
 import { businessExperimentRecordingService } from "../../server/src/services/business-experiments/recording.ts";
 import { businessExperimentAnalysisService } from "../../server/src/services/business-experiments/analysis.ts";
 import { aiGovernanceService } from "../../server/src/services/ai-governance/governance-service.ts";
+import { analyticalPrincipalId } from "../../server/src/services/analytical-reader.ts";
 import { analyticalPurpose, metricDefinition } from "../../server/src/__tests__/helpers/business-metric-fixture.ts";
 import { experimentDefinition } from "../../server/src/__tests__/helpers/business-experiment-fixture.ts";
 import { ISSUE_STATUSES, insightExperimentSummarySchema, insightExperimentDetailSchema, insightExperimentPageSchema } from "../../packages/shared/src/index.ts";
@@ -30,7 +31,10 @@ test("Insights reads a stopped experiment without inventing an effect or exposin
   expect(path.resolve(config.database.embeddedPostgresDataDir)).toBe(path.join(path.dirname(configPath), "db"));
   const pid = await readFile(path.join(config.database.embeddedPostgresDataDir, "postmaster.pid"), "utf8");
   const databaseUrl = `postgres://paperclip:paperclip@127.0.0.1:${pid.split("\n")[3]}/paperclip`, db = createDb(databaseUrl);
-  const actor = { type: "board" as const, source: "local_implicit" as const }, rationale = "Synthetic Human review for Native software verification only";
+  const session = await json(await request.get("/api/auth/get-session"));
+  const actor = { type: "board" as const, source: "session" as const, userId: session.user.id,
+    sessionId: session.session.id, companyIds: [company.id] }, rationale = "Synthetic Human review for Native software verification only";
+  const ownerUserId = analyticalPrincipalId(actor);
   let writes = 0; const responsePaths: string[] = [];
   page.on("request", req => { if (req.method() !== "GET" && /\/experiments/.test(req.url())) writes++; });
   page.on("response", response => { if (/\/experiments/.test(response.url())) responsePaths.push(new URL(response.url()).pathname); });
@@ -41,10 +45,11 @@ test("Insights reads a stopped experiment without inventing an effect or exposin
     const policy = await aiGovernanceService(db).obligation(actor, company.id, purpose);
     const metrics = [], metricOwner = businessMetricService(db);
     for (const [index, status] of ["done", "cancelled", "in_progress"].entries()) {
-      const created = await metricOwner.create(company.id, actor, { key: `trial_outcome_${index}`, definition: { ...metricDefinition(policy.id), calculation: { kind: "native_ratio", numerator: { entity: "issue", statuses: [status], projectId: null }, denominator: { entity: "issue", statuses: [...ISSUE_STATUSES], projectId: null } } } });
+      const metric = metricDefinition(policy.id); metric.ownerUserId = ownerUserId;
+      const created = await metricOwner.create(company.id, actor, { key: `trial_outcome_${index}`, definition: { ...metric, calculation: { kind: "native_ratio", numerator: { entity: "issue", statuses: [status], projectId: null }, denominator: { entity: "issue", statuses: [...ISSUE_STATUSES], projectId: null } } } });
       await metricOwner.publish(company.id, actor, created.metric.id, { expectedRevision: 1, versionId: created.version.id }); metrics.push({ id: created.metric.id, versionId: created.version.id });
     }
-    const definition = experimentDefinition(policy.id, metrics);
+    const definition = experimentDefinition(policy.id, metrics); definition.ownerUserId = ownerUserId;
     definition.sampleOrDurationPlan.from = new Date(Date.now() + 1200).toISOString();
     definition.sampleOrDurationPlan.until = new Date(Date.parse(definition.sampleOrDurationPlan.from) + 60000).toISOString();
     definition.sampleOrDurationPlan.minimumAssignedUnits = 4;

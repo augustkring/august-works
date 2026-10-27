@@ -1,0 +1,129 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > qualifies only the explicit private Native draft selector without decrypting or spending
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > rejects native draft qualification after current configuration drift
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > rejects native draft qualification after current runtime_binding drift
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > rejects native draft qualification after current membership drift
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > rejects native draft qualification after current grant drift
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > rejects native draft qualification after current price drift
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > refuses plan start when the actual one-call draft cannot fit remaining budgets: {"maxModelCostMinor":2,"maxToolActions":2}
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > refuses plan start when the actual one-call draft cannot fit remaining budgets: {"maxModelCostMinor":6,"maxToolActions":1}
+stdout | src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > forces the real heartbeat through native admission and the budget gateway, saves one draft and retains human review
+Native conversation workspace scope {"nativeAdapter":true,"supportedEnvironment":true,"issuePresent":true,"conversationChannelOrigin":false,"chatConversationRowPresent":false,"canonicalConversationAgentMatches":false,"canonicalConversationHumanMatches":false,"canonicalConversationStateActive":false,"canonicalConversationGenerationMatches":false,"canonicalConversationRunMatches":true,"selectedCanonicalConversationScope":false}
+
+stdout | src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > forces the real heartbeat through native admission and the budget gateway, saves one draft and retains human review
+Native draft source closure qualification {"closurePresent":true,"taskFound":true,"taskSourceMatchesCurrentOwner":true,"taskEnvelopeMatches":true,"completionContractMatches":true,"runtimeInstructionsMatch":true,"runtimeSkillCount":0,"runtimeSkillSourceCount":0,"runtimeSkillsMatch":true,"closureComplete":true}
+
+stderr | src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > forces the real heartbeat through native admission and the budget gateway, saves one draft and retains human review
+native_model_input_dispatch_closure_diagnostic {
+  closurePresent: true,
+  closureMatches: true,
+  mismatch: 'unclassified',
+  sourceProtocolVersion: 0,
+  responsibleUserPresent: true,
+  existingReceiptValid: false,
+  noPriorNativeEffects: true,
+  priorIntentCount: 0,
+  priorAssociationCount: 0,
+  priorResultCaptureCount: 0,
+  attachmentStagePresent: false
+}
+
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > forces the real heartbeat through native admission and the budget gateway, saves one draft and retains human review 16425ms
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > rejects actual Native admission after a private grant is revoked, before a worker attempt or model dispatch
+stdout | src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > withholds draft publication after human Pause during the actual heartbeat model call and retains its reservation
+Native conversation workspace scope {"nativeAdapter":true,"supportedEnvironment":true,"issuePresent":true,"conversationChannelOrigin":false,"chatConversationRowPresent":false,"canonicalConversationAgentMatches":false,"canonicalConversationHumanMatches":false,"canonicalConversationStateActive":false,"canonicalConversationGenerationMatches":false,"canonicalConversationRunMatches":true,"selectedCanonicalConversationScope":false}
+
+stdout | src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > withholds draft publication after human Pause during the actual heartbeat model call and retains its reservation
+Native draft source closure qualification {"closurePresent":true,"taskFound":true,"taskSourceMatchesCurrentOwner":true,"taskEnvelopeMatches":true,"completionContractMatches":true,"runtimeInstructionsMatch":true,"runtimeSkillCount":0,"runtimeSkillSourceCount":0,"runtimeSkillsMatch":true,"closureComplete":true}
+
+stderr | src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > withholds draft publication after human Pause during the actual heartbeat model call and retains its reservation
+native_model_input_dispatch_closure_diagnostic {
+  closurePresent: true,
+  closureMatches: true,
+  mismatch: 'unclassified',
+  sourceProtocolVersion: 0,
+  responsibleUserPresent: true,
+  existingReceiptValid: false,
+  noPriorNativeEffects: true,
+  priorIntentCount: 0,
+  priorAssociationCount: 0,
+  priorResultCaptureCount: 0,
+  attachmentStagePresent: false
+}
+
+[23:14:10] [33mWARN[39m: [36mnative result could not be marked workspace_failed; the reconciliation loop will retry persisted results[39m [90m{"runId":"f510c4fe-ea41-4e76-82ea-f67a511d91b0","nativeFinalizeDiagnostic":{"runId":"f510c4fe-ea41-4e76-82ea-f67a511d91b0","failureCode":"adapter_failed","serviceFrames":["heartbeat.ts:25162:15"]}}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 204,
+        "column": 39
+      }
+    }
+[23:14:10] [31mERROR[39m: [36mheartbeat execution failed[39m [90m{"runId":"f510c4fe-ea41-4e76-82ea-f67a511d91b0","failureCode":"native_provider_terminal_failed"}[39m
+stdout | src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > withholds draft publication after human Pause during the actual heartbeat model call and retains its reservation
+Worker heartbeat failure receipt {"status":"failed","errorCode":"native_provider_terminal_failed","error":"The bounded draft requires human resolution; no automatic resend is permitted.","finalizationCode":"native_continuation_requires_reconciliation","finalizationMessage":"The bounded draft requires human resolution; no automatic resend is permitted.","originalFailureCode":"aw_text_draft_unsettled","recoveryMode":"ambiguous_state","providerSessionEstablished":true,"providerEventsExist":true,"checkpointExists":true}
+
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > withholds draft publication after human Pause during the actual heartbeat model call and retains its reservation 13688ms
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > reviewed proposal: saves bounded data and requests Human approval before any backlog task exists
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > reviewed proposal: explicit absence saves a draft without requesting task approval
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > reviewed proposal: erased run Source prevents Human task creation and rolls back the verdict
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > reviewed proposal: current Human membership withdrawal prevents separate task creation
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > reviewed proposal: an unverified Human cannot approve a separate task
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > reviewed proposal: refuses an insufficient retained tool budget before any model dispatch
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > reviewed proposal: refuses model-selected assignees before saving output or an interaction
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > reviewed proposal: withdraws publication when the Original Agent version changes during inference
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > runs the real one-call Native draft backend, saves its declared Task output and proposes only review
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > rejects changed draft session and undeclared output bindings before a tool or model dispatch
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > cannot resume, replace, open another session or silently repeat a completed draft model call
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > refuses continuation and plan turns before spending for a draft
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > withholds draft output on ambiguous provider failure and emits only a fixed Native error
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > fences an empty provider draft while retaining the completed financial receipt
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > revokes a pending Native draft synchronously, settles iterators and retains the ambiguous debit without writing output
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > retains the model debit and fences if authority changes before a canonical draft can be returned
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > charges assigned-tool catalog search and keeps actual MCP invocation charging at its existing gateway
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > shares one tool ceiling across both Native protocol authority paths
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > charges actual Native Task read/write dispatch before effect and stops at the shared tool ceiling
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > deduplicates concurrent Native protocol calls and refuses changed or completed dispatch identities
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > keeps unknown/material Native API paths and undeclared document keys outside the draft qualification
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > fences Native Task tools before dispatch after pause changes
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > fences Native Task tools before dispatch after membership changes
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > fences Native Task tools before dispatch after stop changes
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > fences Native Task tools before dispatch after flag changes
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > fences Native Task tools before dispatch after identity changes
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > fences Native Task tools before dispatch after company changes
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > fences Native Task tools before dispatch after attempt changes
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > retains a Native tool debit and does not resend an ambiguous side effect
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > limits plan-created Tasks to C0 backlog drafts without delegation
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > withholds Native read output after membership changes during dispatch without retaining source bodies
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > reserves before actual transport, keeps the encrypted key private and leaves completion to Native verification
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > permits one durable dispatch winner under concurrent duplicate calls
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > refuses cost overrun before any further model request
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > blocks membership changes before spend
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > blocks grant changes before spend
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > blocks assignment changes before spend
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > blocks Stop changes before spend
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > blocks flag changes before spend
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > blocks plan version changes before spend
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > blocks identity changes before spend
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > blocks company changes before spend
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > settles known usage without disclosure and requests Native Stop on membership during inference
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > settles known usage without disclosure and requests Native Stop on grant during inference
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > settles known usage without disclosure and requests Native Stop on assignment during inference
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > settles known usage without disclosure and requests Native Stop on Stop during inference
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > settles known usage without disclosure and requests Native Stop on flag during inference
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > settles known usage without disclosure and requests Native Stop on identity during inference
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > settles known usage without disclosure and requests Native Stop on company during inference
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > settles known usage without disclosure and requests Native Stop on Task source during inference
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > rejects qualified token overflow and keeps the full conservative charge
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > binds company, run, attempt, manifest and current source instead of accepting caller prices or destinations
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > uses a distinct five-minute capability and cannot widen another runtime scope
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > scrubs admitted source material during dispatch without releasing its financial debit or replaying the model call
+ ↓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > mounts only the scoped runtime transport, rejects browser and ordinary credentials, and returns no provider key
+
+ Test Files  1 passed (1)
+      Tests  2 passed | 64 skipped (66)
+   Start at  23:13:21
+   Duration  49.21s (transform 10.72s, setup 80ms, import 15.07s, tests 33.94s, environment 0ms)
+

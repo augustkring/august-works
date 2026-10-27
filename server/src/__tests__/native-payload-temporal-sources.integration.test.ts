@@ -53,7 +53,6 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
     };
     const first = await runManagedNativeOpenCodeFixture({ db, connectionString: database.connectionString,
       root, instanceId, onPreserveDebugArtifacts: () => { preserveDebugArtifacts = true; },
-      conversationRoot: true,
       steps: [
         { tool: "write_document", id: ids.documentA, input: { idempotencyKey: randomUUID(), key: documentKey,
           title: "Independent document A", body: "A predates the private Context read.", baseRevisionId: null } },

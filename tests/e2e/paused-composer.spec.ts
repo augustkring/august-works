@@ -1,4 +1,7 @@
 import { test, expect, type APIResponse } from "@playwright/test";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+
+registerEnglishAccountLocaleIsolation(test);
 
 async function json(response: APIResponse) {
   const body = await response.json();

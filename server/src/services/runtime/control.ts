@@ -221,6 +221,43 @@ function exactNativeWorkspacePrepareCommand(input: {
   if (append && script === append && validChunk) return true;
   return false;
 }
+
+function exactNativeProviderArtifactChunkCommand(input: {
+  request: import("@paperclipai/shared").RuntimeSandboxExecRelayRequest;
+  taskRoot: string;
+}): boolean {
+  if (input.request.cwd !== input.taskRoot || input.request.argv.length !== 3 ||
+    input.request.argv[0] !== "sh" || input.request.argv[1] !== "-c") return false;
+  const runtimeRoot = path.posix.join(input.taskRoot, ".paperclip-runtime", "paperclip-runner");
+  const target = path.posix.join(runtimeRoot, "bin", "paperclip-runnerd");
+  const script = input.request.argv[2]!;
+  const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
+  const suffix = `${target}.paperclip-upload.`;
+  const at = script.indexOf(suffix);
+  if (at < 0) return false;
+  const remainder = script.slice(at + suffix.length);
+  const match = /^([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})/i.exec(remainder);
+  if (!match) return false;
+  const temp = `${suffix}${match[1]}`;
+  if (!script.includes(quote(temp))) return false;
+  const parent = path.posix.dirname(target);
+  const init = `umask 077; mkdir -p ${quote(parent)} && rm -f ${quote(temp)} && : > ${quote(temp)}`;
+  const fileCommit = `chmod 700 ${quote(temp)} && mv -f ${quote(temp)} ${quote(target)}`;
+  const { stdinBase64, argv } = input.request;
+  if (argv[2] === init || argv[2] === fileCommit)
+    return stdinBase64 === "";
+  if (stdinBase64.length === 0 || stdinBase64.length > 512 * 1024 ||
+    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(stdinBase64) ||
+    Buffer.from(stdinBase64, "base64").toString("base64") !== stdinBase64) return false;
+  const inner = Buffer.from(stdinBase64, "base64").toString("utf8");
+  if (inner.length === 0 || inner.length > 350_000 ||
+    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(inner) ||
+    Buffer.from(inner, "base64").toString("base64") !== inner) return false;
+  const chunkLength = Buffer.from(inner, "base64").length;
+  if (chunkLength === 0 || chunkLength > 256 * 1024) return false;
+  const append = `current=$(wc -c < ${quote(temp)}); test "$current" -le 67108864 && test $((current + ${chunkLength})) -le 67108864 && base64 -d >> ${quote(temp)}`;
+  return argv[2] === append;
+}
 export function runtimeControlService(
   db: Db,
   config: SaasPlatformConfig,
@@ -2489,6 +2526,10 @@ export function runtimeControlService(
           actor: { type: "board", source: "session", userId: claims.responsible_user_id },
           source: { kind: "task", issueId: task.id, sourceVersion: taskOwnerVersion.sourceVersion,
             contentHash: taskSnapshot.data.owner.contentHash } });
+        const shellScript = request.argv[0] === "sh" && request.argv[1] === "-c" ? request.argv[2] ?? "" : "";
+        if ((request.stdinBase64.length > 0 || shellScript.includes(".paperclip-upload.")) &&
+          !exactNativeProviderArtifactChunkCommand({ request, taskRoot: expectedTaskRoot }))
+          throw forbidden("Provider artifact relay chunk is outside its exact private Task target");
       }
       if (nativeSessionStart || nativeHarnessState || nativeWorkspacePrepare) {
         const task = source.source.task;

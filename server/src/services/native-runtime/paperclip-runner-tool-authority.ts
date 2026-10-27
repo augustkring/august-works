@@ -58,6 +58,7 @@ import {
   issues,
   issueThreadInteractions,
   nativeRunFinalizations,
+  orchestrationPlans,
   toolInvocations,
 } from "@paperclipai/db";
 import {
@@ -1643,11 +1644,30 @@ export class PaperclipRunnerToolAuthority {
         agentId: this.binding.agentId, runId: this.binding.runId,
         onBehalfOfUserId: context.run.responsibleUserId,
       };
-      const child = conversation
-        ? await issueService(tx).create(this.binding.companyId, createInput, tx, undefined,
-            { privacyActor, nativeModelOutputCapture, nativeModelOutputToolName: "create_task" })
-        : (await issueService(tx).createChild(this.binding.issueId, createInput,
-            { privacyActor, nativeModelOutputCapture, nativeModelOutputToolName: "create_task" })).issue;
+      let child: typeof issues.$inferSelect;
+      if (context.plan) {
+        const allowedDraftKeys = new Set(["idempotencyKey", "title", "description", "status"]);
+        if (context.plan.issueId !== this.binding.issueId || context.plan.status !== "running" ||
+            context.plan.actionClass !== "internal_draft" || context.plan.riskClass !== "C0" ||
+            input.status !== "backlog" || Object.keys(input).some(key => !allowedDraftKeys.has(key)) ||
+            !nativeModelOutputCapture)
+          throw forbidden("Native plan Task creation requires an exact source-bound C0 backlog draft");
+        // Active plans cannot create ordinary child work. The C0 lane creates
+        // one standalone backlog draft, still bound to this exact native
+        // output capture; issueService derives privacy and seals its source
+        // prefix before commit. The database parent/active-plan guard remains
+        // in force for every child-task path.
+        const { actorAgentId: _actorAgentId, blockParentUntilDone: _blockParentUntilDone,
+          ...standaloneDraft } = createInput;
+        child = await issueService(tx).create(this.binding.companyId, standaloneDraft, tx, undefined,
+          { privacyActor, nativeModelOutputCapture, nativeModelOutputToolName: "create_task" });
+      } else {
+        child = conversation
+          ? await issueService(tx).create(this.binding.companyId, createInput, tx, undefined,
+              { privacyActor, nativeModelOutputCapture, nativeModelOutputToolName: "create_task" })
+          : (await issueService(tx).createChild(this.binding.issueId, createInput,
+              { privacyActor, nativeModelOutputCapture, nativeModelOutputToolName: "create_task" })).issue;
+      }
       if (deduplicated && child.originFingerprint !== inputFingerprint) {
         throw new Error("paperclip_runner_tool_idempotency_conflict");
       }
@@ -2185,6 +2205,7 @@ export class PaperclipRunnerToolAuthority {
         run: typeof heartbeatRuns.$inferSelect;
         issue: typeof issues.$inferSelect;
         actor: typeof agents.$inferSelect;
+        plan: typeof orchestrationPlans.$inferSelect | null;
       },
     ) => Promise<unknown>,
     options: {
@@ -2195,6 +2216,7 @@ export class PaperclipRunnerToolAuthority {
           run: typeof heartbeatRuns.$inferSelect;
           issue: typeof issues.$inferSelect;
           actor: typeof agents.$inferSelect;
+          plan: typeof orchestrationPlans.$inferSelect | null;
         },
       ) => Promise<void>;
     } = {},
@@ -2351,6 +2373,7 @@ export class PaperclipRunnerToolAuthority {
     run: typeof heartbeatRuns.$inferSelect;
     issue: typeof issues.$inferSelect;
     actor: typeof agents.$inferSelect;
+      plan: typeof orchestrationPlans.$inferSelect | null;
   }> {
     this.binding.authoritySignal?.throwIfAborted();
     // Current analytical source review must acquire its company boundary
@@ -2405,7 +2428,7 @@ export class PaperclipRunnerToolAuthority {
     this.binding.authoritySignal?.throwIfAborted();
     this.#assertConversationGeneration(context);
     await this.#assertMutationSourceCurrent(tx, context);
-    return context;
+    return { ...context, plan: bounded?.plan ?? null };
   }
 
   async #requestHumanInput(input: Record<string, unknown>, identityContextId: string | null): Promise<unknown> {

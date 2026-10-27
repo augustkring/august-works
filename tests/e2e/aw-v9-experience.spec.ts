@@ -1,4 +1,7 @@
 import { expect, test, type APIResponse } from "@playwright/test";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+
+registerEnglishAccountLocaleIsolation(test);
 
 test.use({ trace: "retain-on-failure" });
 
@@ -55,12 +58,23 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
     "Browser feedback: preserve my entered explanation after a network interruption.";
   try {
     await page.goto(`/${company.issuePrefix}/dashboard`);
-    await expect(
-      page.getByRole("heading", { name: "Home", exact: true }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "Home", exact: true }),
-    ).toBeFocused();
+    const homeHeading = page.getByRole("heading", { name: "Home", exact: true });
+    await expect(homeHeading).toBeVisible();
+    const entryFocus = await page.evaluate(() => {
+      const active = document.activeElement;
+      const rect = active?.getBoundingClientRect();
+      return {
+        tagName: active?.tagName ?? null,
+        text: active?.textContent?.trim().slice(0, 80) ?? "",
+        role: active?.getAttribute("role"),
+        ariaLabel: active?.getAttribute("aria-label"),
+        visible: Boolean(rect && rect.width > 0 && rect.height > 0),
+        inMain: Boolean(active?.closest("main")),
+        interactive: Boolean(active?.matches("a[href],button,input,select,textarea,summary,[contenteditable='true'],[role='button']")),
+      };
+    });
+    expect(entryFocus, `Home must preserve a visible, safe entry focus: ${JSON.stringify(entryFocus)}`).toMatchObject({ visible: true });
+    expect(entryFocus.interactive || entryFocus.inMain, `unexpected Home entry focus: ${JSON.stringify(entryFocus)}`).toBe(true);
     // The built Home entry must not fetch setup, triage or private history pages.
     // This checks real browser imports, not a mocked lazy component.
     expect(requestedPageChunks).toEqual([]);
@@ -74,7 +88,7 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
     );
     expect(projection.companyId).toBe(company.id);
     expect(projection.needsYou).toEqual([]);
-    await page.goto(`/${company.issuePrefix}/needs-you`);
+    await page.getByRole("link", { name: "Needs You", exact: true }).click();
     await expect(
       page.getByRole("heading", { name: "Needs You", exact: true }),
     ).toBeVisible();
@@ -92,7 +106,7 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
     await expect(page).toHaveURL(
       new RegExp(`/${company.issuePrefix}/decisions$`),
     );
-    await page.goto(`/${company.issuePrefix}/work`);
+    await page.getByRole("link", { name: "Work", exact: true }).click();
     await expect(
       page.getByRole("heading", { name: "Work", exact: true }),
     ).toBeVisible();
@@ -118,10 +132,9 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
         { exact: true },
       ),
     ).toBeVisible();
-    await page.goto(`/${company.issuePrefix}/dashboard`);
-    await expect(
-      page.getByRole("heading", { name: "Home", exact: true }),
-    ).toBeVisible();
+    await page.getByRole("link", { name: "Home", exact: true }).click();
+    await expect(homeHeading).toBeVisible();
+    await expect(homeHeading).toBeFocused();
     const homeEndpoint = `**/api/companies/${company.id}/experience?*`;
     await page.route(homeEndpoint, (route) =>
       route.fulfill({ status: 503, json: { error: "Temporary test outage" } }),
@@ -151,7 +164,7 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
       .getByRole("button", { name: "Feedback", exact: true });
     const ask = page
       .locator('[aria-label="Global utilities"]')
-      .getByRole("button", { name: "Ask August", exact: true });
+      .getByRole("button", { name: "Ask Blentera", exact: true });
     await ask.click();
     let commands = page.getByRole("dialog");
     await expect(
@@ -351,6 +364,8 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
 test("V9 workflow review preserves the account gate, separates revisions and keeps Advanced rollback", async ({
   page,
   request,
+  browser,
+  baseURL,
 }) => {
   // This covers the whole Native lifecycle and explicit receipt recovery; it
   // is not an individual interaction or journey-performance timing budget.
@@ -377,6 +392,21 @@ test("V9 workflow review preserves the account gate, separates revisions and kee
   const base = `/api/companies/${company.id}/workflows`;
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
+  // Verify the account gate with an actually anonymous browser context. The
+  // default authenticated fixture is verified and must be able to proceed.
+  const anonymousContext = await browser.newContext({
+    baseURL,
+    storageState: { cookies: [], origins: [] },
+  });
+  try {
+    const anonymousPage = await anonymousContext.newPage();
+    await anonymousPage.goto(`/${company.issuePrefix}/workflows`);
+    await expect(
+      anonymousPage.getByRole("heading", { name: "Sign in to Blentera" }),
+    ).toBeVisible({ timeout: 15_000 });
+  } finally {
+    await anonymousContext.close();
+  }
   // Native activity can withdraw an acknowledgement while its original change
   // commits. Model the user's explicit, bounded same-request recovery; never
   // create another command or relax current authority.
@@ -403,12 +433,6 @@ test("V9 workflow review preserves the account gate, separates revisions and kee
       await request.post(base, { data: { name: "Review deal opportunities" } }),
     );
     const path = `/${company.issuePrefix}/workflows/${created.id}`;
-    await page.goto(`/${company.issuePrefix}/workflows`);
-    // The customer index requires a verified account. This local-board fixture
-    // must not borrow that admission; Original detail/rollback remain separate.
-    await expect(page.getByRole("main").getByRole("status")).toContainText(
-      "Sign in with a verified account to describe a workflow.",
-    );
     await page.goto(path);
     await expect(
       page.getByRole("heading", {

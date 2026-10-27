@@ -2,7 +2,7 @@ import { nativeManagementSdkFixture } from "./helpers/native-management-sdk-fixt
 import {disableV8Rollout} from "./helpers/v8-rollout.js";
 import {createHash,randomUUID} from "node:crypto";
 import {afterAll,beforeAll,beforeEach,describe,expect,it} from "vitest";
-import {and,eq,sql} from "drizzle-orm";
+import {and,eq} from "drizzle-orm";
 import {agents,companies,companyMemberships,createDb,decisions,heartbeatRuns,issues,projects,issueComments,type Db,
   decisionContexts,decisionContextVersions,decisionContextBindings,decisionContextPreparations,decisionCriteria,decisionAssumptions,decisionExpectedOutcomes,
   decisionEvidenceLinks,analyticalLineageManifests,analyticalLineageEdges,decisionOutcomeReviews,decisionOutcomeReviewReceipts,managementReviewSnapshots,memoryBindings,memoryBindingTargets,memoryRecords,learningCycles,learningAnalyticalDependencies,learningEvidence,learningHypotheses,learningDomainCandidates,activityLog} from "@paperclipai/db";
@@ -68,7 +68,7 @@ suite("Native decision outcome reviews on migrated PostgreSQL",()=>{
   const choose=(id:string,optionId="proceed")=>native().decide({id,optionId,decidedByUserId:humanId,userActor:actor});
   const reviews=()=>decisionOutcomeReviewService(db);
   async function observation() {
-    const metrics=businessMetricService(db),created=await metrics.create(companyId,actor,{key:"baseline",definition:metricDefinition(policyId)});
+    const metrics=businessMetricService(db),created=await metrics.create(companyId,actor,{key:"baseline",definition:{...metricDefinition(policyId),ownerUserId:humanId}});
     await metrics.publish(companyId,actor,created.metric.id,{expectedRevision:1,versionId:created.version.id});
     return metrics.query(companyId,actor,{metricId:created.metric.id,versionId:created.version.id,from:"2026-01-01T00:00:00Z",until:"2026-01-02T00:00:00Z",dimensions:[],maxRows:100});
   }
@@ -119,31 +119,10 @@ suite("Native decision outcome reviews on migrated PostgreSQL",()=>{
   it("atomically links one native Learning cycle under concurrent human review conversion without promoting authority",async()=>{
     const {d,review}=await scheduled();await begin(d.id);await reviews().finish(companyId,actor,d.id,final());
     const root=await verifiedLearningRoot(),input=startInput([root.id]);
-    const before=await native().get(d.id),started=performance.now();
-    let sample:Promise<unknown>|undefined;
-    const sampler=process.env.PAPERCLIP_OUTCOME_FIXTURE_STAGES==="1"?setTimeout(()=>{
-      sample=db.execute(sql`select pid,state,wait_event_type,wait_event,pg_blocking_pids(pid) as blockers,
-        round(extract(epoch from clock_timestamp()-query_start)::numeric,2) as seconds,
-        case when query ilike 'select pg_advisory_xact_lock%' then 'advisory_lock'
-          when query ilike 'select %' then 'read' when query ilike 'insert %' then 'insert'
-          when query ilike 'update %' then 'update' else 'other' end as query_kind
-        from pg_stat_activity where datname=current_database() and pid<>pg_backend_pid() and state<>'idle' order by pid`)
-        .then(rows=>console.info("outcome-conversion-fixture-waits",JSON.stringify(rows)))
-        .catch(()=>console.info("outcome-conversion-fixture-waits","unavailable"));
-    },1000):undefined;
+    const before=await native().get(d.id);
     // Drain every concurrent request even if one rejects, so a failing
     // assertion cannot leave work holding source locks in the next fixture.
-    const settled=await Promise.allSettled(Array.from({length:6},async(_,index)=>{
-      try{const result=await reviews().startLearning(companyId,actor,d.id,input);
-        if(process.env.PAPERCLIP_OUTCOME_FIXTURE_STAGES==="1")console.info("outcome-conversion-fixture-stage",JSON.stringify({index,success:true,elapsedMs:Math.round(performance.now()-started)}));
-        return result;
-      }catch(error){
-        if(process.env.PAPERCLIP_OUTCOME_FIXTURE_STAGES==="1")console.info("outcome-conversion-fixture-stage",JSON.stringify({index,success:false,elapsedMs:Math.round(performance.now()-started)}));
-        throw error;
-      }
-    }));
-    if(sampler)clearTimeout(sampler);
-    await sample;
+    const settled=await Promise.allSettled(Array.from({length:6},()=>reviews().startLearning(companyId,actor,d.id,input)));
     const results=settled.map(result=>{if(result.status==="rejected")throw result.reason;return result.value;});
     expect(new Set(results.map(result=>result.cycleId)).size).toBe(1);
     expect(results[0]!.review).toMatchObject({id:review.id,revision:3,status:"inconclusive",learningCycleId:results[0]!.cycleId});

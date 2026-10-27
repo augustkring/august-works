@@ -1,9 +1,11 @@
 import { constants, generateKeyPairSync, privateDecrypt, randomBytes, randomUUID, sign } from "node:crypto";
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
+import { lstatSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
 import { createServer } from "node:http";
 import { once } from "node:events";
 import { realpath } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import express from "express";
 import { WebSocket } from "ws";
@@ -264,6 +266,7 @@ export async function configureManagedConversationSandboxHost(input: {
   let preAdmissionObservation: { state: string; generationMatches: boolean; imageDigestMatches: boolean; controlsHealthy: boolean } | null = null;
   let prepareHostForRun: ((runId: string, leaseId: string) => Promise<void>) | null = null;
   let activeNativePreparationPurpose: string | null = null;
+  let providerImageHome: string | null = null;
   const hostAdmissionByRun = new Map<string, { leaseId: string; promise: Promise<void> }>();
   const sandboxExecutionChecks: Array<Record<string, boolean | number | string | null>> = [];
   let negativeNativeSessionStartControls: { wrongCommandDenied: boolean; wrongRootDenied: boolean; noExecution: boolean } | null = null;
@@ -368,7 +371,7 @@ export async function configureManagedConversationSandboxHost(input: {
   const execFacts: Array<{ executable: string; cwdExact: boolean; modelCredentialPresent: boolean;
     managedModelBrokerOriginPresent: boolean;
     assignedMcpEnvironmentAbsent: boolean; credentialEnvironmentAbsent: boolean;
-    nativePreparationPurpose: string | null }> = [];
+    nativePreparationPurpose: string | null; providerPackImageProbe: boolean }> = [];
   relayHost.on("message", raw => {
     let message: Record<string, any>;
     try { message = JSON.parse(raw.toString()) as Record<string, any>; } catch { return; }
@@ -394,11 +397,14 @@ export async function configureManagedConversationSandboxHost(input: {
     const cwd = typeof request.cwd === "string" && request.cwd.startsWith("/") ? request.cwd : input.root;
     const assignedMcpEnvironmentAbsent = !requestEnv.PAPERCLIP_NATIVE_MCP_NAME &&
       !requestEnv.PAPERCLIP_NATIVE_MCP_URL && !requestEnv.PAPERCLIP_NATIVE_MCP_TOKEN;
+    const providerPackImageProbe = activeNativePreparationPurpose === "provider_artifact" && argv[0] === "sh" &&
+      typeof argv[2] === "string" && argv[2].includes("$HOME/.local/share/paperclip-runner/provider-pack");
     execFacts.push({ executable: argv[0] ?? "", cwdExact: cwd === expectedTaskRoot, modelCredentialPresent,
       managedModelBrokerOriginPresent: requestEnv.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === brokerOrigin,
       assignedMcpEnvironmentAbsent, credentialEnvironmentAbsent: noCredentialEnvironment,
-      nativePreparationPurpose: activeNativePreparationPurpose });
+      nativePreparationPurpose: activeNativePreparationPurpose, providerPackImageProbe });
     const env = { ...process.env, ...requestEnv,
+      ...(activeNativePreparationPurpose === "provider_artifact" && providerImageHome ? { HOME: providerImageHome } : {}),
       ...(request.modelBrokerCredential ? { ANTHROPIC_API_KEY: "paperclip-managed-model-broker" } : {}) } as NodeJS.ProcessEnv;
     if (credentialFreePreparation) {
       for (const name of ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN",
@@ -546,6 +552,14 @@ export async function configureManagedConversationSandboxHost(input: {
     }
   };
 
+  const providerPackRoot = process.env.PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_PATH?.trim();
+  if (!providerPackRoot || !lstatSync(providerPackRoot).isDirectory())
+    throw new Error("conversation_software_host_provider_pack_image_missing");
+  providerImageHome = mkdtempSync(join(tmpdir(), "paperclip-managed-provider-image-"));
+  const preinstalledPack = join(providerImageHome, ".local", "share", "paperclip-runner", "provider-pack");
+  mkdirSync(join(providerImageHome, ".local", "share", "paperclip-runner"), { recursive: true, mode: 0o700 });
+  symlinkSync(providerPackRoot, preinstalledPack, "dir");
+
   return {
     sandboxExec: runtime.executeSandboxTask,
     environmentRuntime,
@@ -563,6 +577,7 @@ export async function configureManagedConversationSandboxHost(input: {
       negativeNativeSessionStartControls,
       nativeSessionStartCredentialNegativeControls,
       executableNames: [...new Set(execFacts.map(fact => fact.executable.split("/").pop() ?? ""))] }),
-    close: async () => { relayHost.close(); await new Promise<void>(resolve => relayServer.close(() => resolve())); await runtime.relay.stop(); },
+    close: async () => { relayHost.close(); await new Promise<void>(resolve => relayServer.close(() => resolve())); await runtime.relay.stop();
+      if (providerImageHome) rmSync(providerImageHome, { recursive: true, force: true }); },
   };
 }

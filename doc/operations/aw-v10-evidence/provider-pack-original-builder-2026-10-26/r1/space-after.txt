@@ -1,0 +1,3 @@
+Filesystem       1B-blocks        Used  Available Use% Mounted on
+overlay        33770192896 31866466304  168964096 100% /
+none            9441337344  7474376704 1966960640  80% /tmp

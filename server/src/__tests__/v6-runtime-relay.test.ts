@@ -66,6 +66,17 @@ it("accepts only the exact nonsecret managed-model bounds tied to the typed brok
   }).success).toBe(false);
 });
 
+it("rejects oversized relay stdin before running the base64 validator", () => {
+  expect(() => runtimeSandboxExecRelayRequestSchema.safeParse({
+    ...execRequest(),
+    stdinBase64: "A".repeat(5 * 1024 * 1024),
+  })).not.toThrow();
+  expect(runtimeSandboxExecRelayRequestSchema.safeParse({
+    ...execRequest(),
+    stdinBase64: "A".repeat(5 * 1024 * 1024),
+  }).success).toBe(false);
+});
+
 const resources: {
   relay: ReturnType<typeof runtimeGatewayRelay>;
   server: Server;

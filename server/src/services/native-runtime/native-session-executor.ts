@@ -11749,8 +11749,20 @@ async function stageRemoteRunnerFile(input: {
   targetPath: string;
   mode: number;
   nativePreparationPurpose?: "provider_artifact";
+  forceRelayChunking?: boolean;
 }): Promise<void> {
   const runner = input.runner;
+  if (input.forceRelayChunking && input.nativePreparationPurpose === "provider_artifact") {
+    const bytes = readFileSync(input.sourcePath);
+    await stageRemoteArtifactBytesInChunks({
+      runner,
+      cwd: input.target.remoteCwd,
+      targetPath: input.targetPath,
+      mode: input.mode,
+      bytes,
+    });
+    return;
+  }
   if (runner.syncIn) {
     await runner.syncIn([
       {
@@ -11870,6 +11882,49 @@ export async function stageRemoteRunnerDirectory(input: {
   if (result.exitCode !== 0 || result.timedOut) {
     throw new Error("runner_remote_directory_staging_failed");
   }
+}
+
+/**
+ * Transfer trusted, build-owned artifacts through the existing bounded signed
+ * exec relay. Each stdin is small enough for the relay's nested base64 request
+ * envelope; the target and temporary path remain inside the task's private
+ * runtime directory and RuntimeControl checks the exact command forms.
+ */
+async function stageRemoteArtifactBytesInChunks(input: {
+  runner: CommandManagedRuntimeRunner;
+  cwd: string;
+  targetPath: string;
+  mode: number;
+  bytes: Buffer;
+}): Promise<void> {
+  const MAX_ARTIFACT_BYTES = 64 * 1024 * 1024;
+  const CHUNK_BYTES = 256 * 1024;
+  if (input.bytes.length === 0 || input.bytes.length > MAX_ARTIFACT_BYTES) {
+    throw new Error("runner_remote_provider_artifact_incompatible: artifact size is outside the bounded relay transfer");
+  }
+  const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
+  const parent = posix.dirname(input.targetPath);
+  const tempPath = `${input.targetPath}.paperclip-upload.${randomUUID()}`;
+  const run = async (script: string, stdin = "") => {
+    const result = await input.runner.execute({
+      command: "sh",
+      args: ["-c", script],
+      cwd: input.cwd,
+      stdin,
+      bypassSession: true,
+      nativePreparationPurpose: "provider_artifact",
+    });
+    if (result.exitCode !== 0 || result.timedOut) {
+      throw new Error("runner_remote_provider_artifact_incompatible: bounded relay staging failed");
+    }
+  };
+  await run(`umask 077; mkdir -p ${quote(parent)} && rm -f ${quote(tempPath)} && : > ${quote(tempPath)}`);
+  for (let offset = 0; offset < input.bytes.length; offset += CHUNK_BYTES) {
+    const chunk = input.bytes.subarray(offset, Math.min(input.bytes.length, offset + CHUNK_BYTES));
+    const append = `current=$(wc -c < ${quote(tempPath)}); test "$current" -le ${MAX_ARTIFACT_BYTES} && test $((current + ${chunk.length})) -le ${MAX_ARTIFACT_BYTES} && base64 -d >> ${quote(tempPath)}`;
+    await run(append, chunk.toString("base64"));
+  }
+  await run(`chmod ${input.mode.toString(8)} ${quote(tempPath)} && mv -f ${quote(tempPath)} ${quote(input.targetPath)}`);
 }
 
 async function remoteRunnerPathExists(input: {
@@ -13599,6 +13654,7 @@ async function createRunnerdBackendWithinSessionClaim(
         targetPath: remoteBinary,
         mode: 0o700,
         nativePreparationPurpose: "provider_artifact",
+        forceRelayChunking: nativeConversationHarnessState,
       });
     }
     await measureNativeRunnerSpan(input.trace, "runner.artifact.verify", () =>
@@ -13615,6 +13671,7 @@ async function createRunnerdBackendWithinSessionClaim(
         targetPath: remoteCodexBinary,
         mode: 0o700,
         nativePreparationPurpose: "provider_artifact",
+        forceRelayChunking: nativeConversationHarnessState,
       });
       await verifyRemoteCodex();
     }

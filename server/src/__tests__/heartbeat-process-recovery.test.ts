@@ -133,6 +133,7 @@ const mockExecutePaperclipNativeSession = vi.hoisted(() =>
     typeof import("../services/native-runtime/native-session-executor.js").executePaperclipNativeSession
   >(),
 );
+const mockPrepareNativeWorkspaceSync = vi.hoisted(() => vi.fn());
 const mockAdapterExecute = vi.hoisted(() =>
   vi.fn(async (_input?: unknown) => ({
     exitCode: 0,
@@ -177,6 +178,14 @@ vi.mock("../services/native-runtime/native-session-executor.js", async () => {
     detachNativeSessionsForRestart: mockDetachNativeSessionsForRestart,
     closeIdleWarmNativeSessionsForRestart: mockCloseIdleWarmNativeSessionsForRestart,
   };
+});
+
+vi.mock("../services/native-runtime/native-workspace-sync.js", async () => {
+  const actual = await vi.importActual<
+    typeof import("../services/native-runtime/native-workspace-sync.js")
+  >("../services/native-runtime/native-workspace-sync.js");
+  mockPrepareNativeWorkspaceSync.mockImplementation(actual.prepareNativeWorkspaceSync);
+  return { ...actual, prepareNativeWorkspaceSync: mockPrepareNativeWorkspaceSync };
 });
 
 vi.mock("../services/local-service-supervisor.js", async () => {
@@ -495,6 +504,15 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     mockRetainedNativeCleanup
       .mockReset()
       .mockImplementation(nativeExecutor.reconcileRetainedNativeSessionCleanup);
+    mockExecutePaperclipNativeSession
+      .mockReset()
+      .mockImplementation(nativeExecutor.executePaperclipNativeSession);
+    const workspaceSync = await vi.importActual<
+      typeof import("../services/native-runtime/native-workspace-sync.js")
+    >("../services/native-runtime/native-workspace-sync.js");
+    mockPrepareNativeWorkspaceSync
+      .mockReset()
+      .mockImplementation(workspaceSync.prepareNativeWorkspaceSync);
     const localServiceSupervisor = await vi.importActual<
       typeof import("../services/local-service-supervisor.js")
     >("../services/local-service-supervisor.js");
@@ -3004,6 +3022,106 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       expect(mockAdapterExecute).not.toHaveBeenCalled();
     });
   });
+
+  it("keeps an accepted Native result open while workspace copy-back is pending", async () => {
+    await withTempPaperclipHome(async () => {
+      const { companyId, agentId, issueId, runId } = await seedQueuedIssueRunFixture();
+      await db.update(agents).set({ adapterType: "paperclip_runner",
+        adapterConfig: { ...mockedCodexAdapterConfig, provider: "codex", model: "gpt-5.6-luna" },
+      }).where(eq(agents.id, agentId));
+      await db.update(heartbeatRuns).set({ invocationSource: "automation" })
+        .where(eq(heartbeatRuns.id, runId));
+
+      // The controlled provider exercises the real Native session executor and
+      // control-plane result owner. Only the remote workspace restore boundary
+      // is held/rejected; no real provider or sandbox is launched by this test.
+      const nativeSessionBackendFactory = vi.fn(() => ({
+        async descriptor() {
+          return { kind: "mock", name: "copyback-gated-provider", version: "1",
+            capabilities: { resume: false, typedEvents: true, steering: false, interruption: true, structuredResult: true },
+            runtimeContextCapabilities: { instructions: "native", skills: "native", mcp: "native" } };
+        },
+        async openSession(openInput) {
+          return {
+            identity: () => openInput.identity,
+            async capabilities() { return { resume: false, typedEvents: true, steering: false, interruption: true, structuredResult: true }; },
+            async *events() {
+              const [selectedRun] = await db.select({ runnerInstanceId: heartbeatRuns.runnerInstanceId })
+                .from(heartbeatRuns).where(eq(heartbeatRuns.id, runId));
+              if (!selectedRun?.runnerInstanceId) throw new Error("native runner identity was not bound");
+              const common = { schema: "paperclip.prp.event.v1" as const, sourceKind: "runner" as const,
+                runId, normalizedSessionId: openInput.identity.sessionId, turnId: "copyback-provider-turn",
+                schemaVersion: 1 as const, priority: 0 as const, emittedAt: new Date().toISOString(),
+                sourceInstanceId: selectedRun.runnerInstanceId };
+              yield { ...common, sourceEventId: `copyback:${runId}:1`, sourceSeq: 1,
+                eventType: "run.result.proposed" as const, payload: CONTROL_PLANE_CONFORMANCE_RESULT };
+              yield { ...common, sourceEventId: `copyback:${runId}:2`, sourceSeq: 2,
+                eventType: "turn.completed" as const, payload: {} };
+            },
+            async startTurn() { return { turnId: "copyback-provider-turn" }; },
+            cancel() { return Promise.resolve(); },
+            async result() { return { result: CONTROL_PLANE_CONFORMANCE_RESULT,
+              terminal: CONTROL_PLANE_CONFORMANCE_TERMINAL, turnId: "copyback-provider-turn" }; },
+            async snapshot() { return { backendKind: "mock", sessionId: openInput.identity.sessionId,
+              identity: openInput.identity, providerSessionId: "copyback-provider-session" }; },
+            async close() {},
+          };
+        },
+      } satisfies import("../vendor/paperclip-runner/index.js").NativeSessionBackend));
+
+      let signalRestoreStarted!: () => void;
+      const restoreStarted = new Promise<void>((resolve) => { signalRestoreStarted = resolve; });
+      let rejectRestore!: (error: Error) => void;
+      const restoreResult = new Promise<void>((_resolve, reject) => { rejectRestore = reject; });
+      mockPrepareNativeWorkspaceSync.mockImplementationOnce(async () => ({
+        mode: "host_current",
+        reference: {
+          schema: "paperclip.native-workspace-sync/v1", state: "prepared",
+          descriptorSha256: "a".repeat(64), baselineSha256: "b".repeat(64), finalHostSha256: null,
+          workspaceId: randomUUID(), leaseId: randomUUID(), providerLeaseId: "controlled-provider-lease",
+          remoteCwd: "/workspace/task", resourceDisposition: "keep_running",
+        },
+        restoreWorkspace: async () => { signalRestoreStarted(); return restoreResult; },
+        cleanup: vi.fn(),
+      }));
+
+      const heartbeat = heartbeatService(db, { nativeSessionBackendFactory });
+      await heartbeat.resumeQueuedRuns();
+      const runningNativeRun = await waitForValue(async () => (await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns)
+        .where(and(eq(heartbeatRuns.id, runId), eq(heartbeatRuns.status, "running"))))[0] ?? null, 20_000);
+      expect(runningNativeRun?.id).toBe(runId);
+      await Promise.race([restoreStarted, new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("workspace copy-back was not attempted")), 20_000))]);
+      expect(nativeSessionBackendFactory).toHaveBeenCalledTimes(1);
+      expect(mockExecutePaperclipNativeSession).toHaveBeenCalledTimes(1);
+      expect(await db.select().from(nativeRunResults).where(eq(nativeRunResults.runId, runId)))
+        .toEqual([expect.objectContaining({ schemaStatus: "accepted" })]);
+      expect((await db.select().from(issues).where(eq(issues.id, issueId)))[0])
+        .toMatchObject({ status: "in_progress", executionRunId: runId, checkoutRunId: runId });
+      expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, companyId)))
+        .toHaveLength(1);
+      const [pendingCoordinator] = await db.select().from(nativeRunFinalizations)
+        .where(eq(nativeRunFinalizations.runId, runId));
+      expect(pendingCoordinator)
+        .toMatchObject({ resultId: expect.any(String), phase: expect.not.stringMatching(/^committed$/) });
+
+      rejectRestore(new Error("controlled workspace copy-back interrupted"));
+      await heartbeat.drainActiveRunExecutions();
+      const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, runId));
+      const [coordinator] = await db.select().from(nativeRunFinalizations).where(eq(nativeRunFinalizations.runId, runId));
+      const [workspaceOperation] = await db.select().from(workspaceOperations)
+        .where(and(eq(workspaceOperations.heartbeatRunId, runId), eq(workspaceOperations.phase, "workspace_finalize")));
+      expect(run?.status).toBe("running");
+      expect(run?.nativePhase).toBe("retryable_failure");
+      expect(coordinator).toMatchObject({ phase: "retryable_failure", failureCode: "native_workspace_sync_out_failed",
+        resultId: expect.any(String) });
+      expect(workspaceOperation?.status).toBe("failed");
+      expect((await db.select().from(issues).where(eq(issues.id, issueId)))[0])
+        .toMatchObject({ status: "in_progress", executionRunId: runId, checkoutRunId: runId });
+      expect(mockExecutePaperclipNativeSession).toHaveBeenCalledTimes(1);
+      expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.retryOfRunId, runId))).toHaveLength(0);
+    });
+  }, 60_000);
 
   it("holds admitted native chat with a legacy shared cwd without replacing input or releasing ownership", async () => {
     await withTempPaperclipHome(async () => {
@@ -10025,6 +10143,68 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       eq(issueComments.body, "Accepted message delivered once"),
     ))).toHaveLength(1);
   }, 90_000);
+
+  it("lets a Task Stop win while an accepted interaction continuation is recovering", async () => {
+    const { companyId, agentId, issueId, runId, wakeupRequestId } =
+      await seedQueuedIssueRunFixture();
+    const interactionId = randomUUID();
+    const stoppedAt = new Date();
+    await db.update(heartbeatRuns).set({ status: "succeeded", startedAt: new Date(Date.now() - 60_000),
+      finishedAt: new Date(Date.now() - 30_000), updatedAt: new Date(Date.now() - 30_000) })
+      .where(eq(heartbeatRuns.id, runId));
+    await db.update(agentWakeupRequests).set({ status: "completed", finishedAt: new Date(Date.now() - 30_000),
+      updatedAt: new Date(Date.now() - 30_000) }).where(eq(agentWakeupRequests.id, wakeupRequestId));
+    await db.update(issues).set({ status: "in_review", executionRunId: null, checkoutRunId: null })
+      .where(eq(issues.id, issueId));
+    await db.insert(issueThreadInteractions).values({
+      id: interactionId, companyId, issueId, kind: "request_confirmation", status: "accepted",
+      continuationPolicy: "wake_assignee_on_accept", createdByAgentId: agentId,
+      resolvedByUserId: "responsible-user", resolvedAt: stoppedAt, updatedAt: stoppedAt,
+      payload: { version: 1, prompt: "Approve the plan?" }, result: { outcome: "accepted" },
+    });
+
+    let stopCommitted = false;
+    const heartbeat = heartbeatService(db, {
+      beforeChatControlRecoveryCheck: async ({ stage, runId: successorRunId }) => {
+        if (stage !== "dispatch" || stopCommitted) return;
+        // Commit Task Stop through the canonical issue owner at the existing
+        // automation recovery fence, before it grants the provider handoff.
+        expect(await heartbeat.getRun(successorRunId)).toMatchObject({ status: "running" });
+        const stopped = await issueService(db).update(issueId, { status: "cancelled" });
+        expect(stopped?.status).toBe("cancelled");
+        const stoppedRun = await heartbeat.cancelRun(successorRunId);
+        expect(stoppedRun?.status).toBe("cancelled");
+        stopCommitted = true;
+      },
+    });
+    const recovered = await heartbeat.reconcileStrandedAssignedIssues();
+    expect(recovered.continuationRequeued).toBe(1);
+    await heartbeat.resumeQueuedRuns();
+    await heartbeat.drainActiveRunExecutions();
+
+    expect(stopCommitted).toBe(true);
+    const runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, agentId));
+    expect(runs).toHaveLength(2);
+    const successor = runs.find((candidate) => candidate.id !== runId)!;
+    expect(successor).toMatchObject({ status: "cancelled", contextSnapshot: {
+      issueId, interactionId, interactionStatus: "accepted",
+      source: "issue.interaction_continuation_recovery",
+    } });
+    expect((await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.id, interactionId)))[0])
+      .toMatchObject({ status: "accepted", result: { outcome: "accepted" } });
+    expect(await db.select().from(issueComments).where(eq(issueComments.issueId, issueId))).toHaveLength(0);
+    expect(mockAdapterExecute).not.toHaveBeenCalled();
+    expect(mockExecutePaperclipNativeSession).not.toHaveBeenCalled();
+    expect((await db.select().from(issues).where(eq(issues.id, issueId)))[0])
+      .toMatchObject({ status: "cancelled" });
+    expect((await heartbeat.reconcileStrandedAssignedIssues()).continuationRequeued).toBe(0);
+    await heartbeat.resumeQueuedRuns();
+    await heartbeat.drainActiveRunExecutions();
+    expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, agentId))).toHaveLength(2);
+    expect(await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.agentId, agentId)))
+      .toHaveLength(2);
+    expect(mockAdapterExecute).not.toHaveBeenCalled();
+  });
 
   it("recovers an answered question with its interaction-specific continuation context", async () => {
     const companyId = randomUUID();

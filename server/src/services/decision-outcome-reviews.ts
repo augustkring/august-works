@@ -1,6 +1,6 @@
 import {randomUUID} from "node:crypto";
 import {and,desc,eq,inArray,sql} from "drizzle-orm";
-import {analyticalLineageEdges,analyticalLineageManifests,businessMetricObservations,businessMetricVersions,decisionContextVersions,decisionOutcomeReviews,decisionOutcomeReviewReceipts,learningCycles,learningEvidence,type Db} from "@paperclipai/db";
+import {analyticalLineageEdges,analyticalLineageManifests,businessMetricObservations,businessMetricVersions,decisionContextVersions,decisionOutcomeReviews,decisionOutcomeReviewReceipts,learningCycles,type Db} from "@paperclipai/db";
 import {scheduleDecisionOutcomeReviewSchema,transitionDecisionOutcomeReviewSchema,finishDecisionOutcomeReviewSchema,startDecisionReviewLearningSchema,type StartDecisionReviewLearning,type ScheduleDecisionOutcomeReview,type TransitionDecisionOutcomeReview,type FinishDecisionOutcomeReview,type DecisionOutcomeReviewReceipt,type DecisionOutcomeReviewView,type CapturedDecisionEvidence,type DecisionMetricComparison} from "@paperclipai/shared";
 import {conflict,forbidden,notFound,unprocessable} from "../errors.js";
 import {pinCurrentBoardActor,type AuthorizationActor} from "./authorization.js";
@@ -62,6 +62,7 @@ function mergeEdges(groups:Edge[][]) {
   }
   return [...edges.values()].sort((a,b)=>`${a.inputType}:${a.inputRef}`.localeCompare(`${b.inputType}:${b.inputRef}`));
 }
+function sourceEdgeKey(edge:Edge) {return JSON.stringify([edge.inputType,edge.inputRef,edge.inputHash,edge.relationship]);}
 async function actualEvidence(tx:Db,companyId:string,actor:AuthorizationActor,bound:Bound,input:FinishDecisionOutcomeReview) {
   const deadline=performance.now()+30_000,actual:CapturedDecisionEvidence[]=[],groups:Edge[][]=[];
   let expiresAt=bound.version.expiresAt;
@@ -135,7 +136,14 @@ async function inspect(tx:Db,row:Root,actor:AuthorizationActor,bound:Bound,learn
     receiptPins.push({revision:item.revision,manifestId:item.lineageManifestId,contentHash:receipt.contentHash,expiresAt:receipt.expiresAt});
   }
   if(sourceManifestIds.length) await assertMemorySourcesRetained(tx,row.companyId,[...new Set(sourceManifestIds)].map(id=>({sourceProvider:"august_works_analytical",sourceRef:`manifest://${id}`})));
-  const sourceEdges=mergeEdges(sourceGroups);await inspectDecisionSourceAuthority(tx,row.companyId,actor,sourceEdges,deadline);
+  const sourceEdges=mergeEdges(sourceGroups);
+  // inspectBoundDecisionContext just revalidated this exact frozen context
+  // lineage and returned its transaction-local source facts. Review receipts
+  // inherit those edges; only receipt-specific additions need another generic
+  // owner walk. Hash/relationship mismatches remain in the pending set.
+  const baselineEdges=new Set(mergeEdges([bound.sourceEdges]).map(sourceEdgeKey));
+  const receiptOnlyEdges=sourceEdges.filter(edge=>!baselineEdges.has(sourceEdgeKey(edge)));
+  if(receiptOnlyEdges.length)await inspectDecisionSourceAuthority(tx,row.companyId,actor,receiptOnlyEdges,deadline);
   if(learningScope){
     if(!Number.isFinite(sourceExpiresAt)||sourceExpiresAt<=Date.now())throw conflict("Outcome review source retention is unavailable");
     const {actorKey,key}=learningBundleKey(actor,row.companyId,row.decisionId,row.revision,learningScope.cycleId,learningScope.purpose);
@@ -190,19 +198,16 @@ export function decisionOutcomeReviewService(db:Db) {
       v7HumanActorId(actor);const input=startDecisionReviewLearningSchema.parse(raw);
       return withV7ActivityTransaction(db,async(tx,publications)=>{
         let bundleScope:LearningReviewBundleScope|undefined;
-        const started=performance.now();
-        const mark=(stage:string)=>{if(process.env.PAPERCLIP_OUTCOME_FIXTURE_STAGES==="1")console.info("outcome-conversion-source-stage",JSON.stringify({stage,elapsedMs:Math.round(performance.now()-started)}));};
         try {
-        mark("before_bound");const bound=await inspectBoundDecisionContext(tx,companyId,actor,decisionId,true);mark("bound");const prior=await root(tx,companyId,decisionId);
+        const bound=await inspectBoundDecisionContext(tx,companyId,actor,decisionId,true),prior=await root(tx,companyId,decisionId);
         if(!prior||prior.revision!==input.expectedRevision||!["completed","inconclusive"].includes(prior.status))throw conflict("Complete the current outcome review before starting Learning");
         bundleScope={cycleId:prior.learningCycleId??null,purpose:input.purpose};
-        const inspected=await inspect(tx,prior,actor,bound,bundleScope);mark("review_inspected");
+        const inspected=await inspect(tx,prior,actor,bound,bundleScope);
         const learning=learningService(tx);
         if(prior.learningCycleId){
-          const cycle=await learning.getOutcomeReviewReplay(actor,companyId,prior.learningCycleId);mark("cycle_read");
-          const edges=await tx.select({id:learningEvidence.memoryRecordId}).from(learningEvidence).where(and(eq(learningEvidence.companyId,companyId),eq(learningEvidence.cycleId,cycle.id)));
-          if(cycle.purpose!==input.purpose||cycle.trigger!==input.trigger||cycle.maxHypotheses!==input.maxHypotheses||cycle.maxEvaluations!==input.maxEvaluations||JSON.stringify(edges.map(edge=>edge.id).sort())!==JSON.stringify([...input.memoryRecordIds].sort()))throw conflict("This review already started a Learning cycle with different inputs");
-          await pinCurrentHumanCredential(tx,actor);mark("replay_done");return {review:{...inspected,learningCycleId:prior.learningCycleId},cycleId:cycle.id};
+          const cycle=await learning.getOutcomeReviewReplay(actor,companyId,prior.learningCycleId);
+          if(cycle.purpose!==input.purpose||cycle.trigger!==input.trigger||cycle.maxHypotheses!==input.maxHypotheses||cycle.maxEvaluations!==input.maxEvaluations||JSON.stringify(cycle.memoryRecordIds)!==JSON.stringify([...input.memoryRecordIds].sort()))throw conflict("This review already started a Learning cycle with different inputs");
+          await pinCurrentHumanCredential(tx,actor);return {review:{...inspected,learningCycleId:prior.learningCycleId},cycleId:cycle.id};
         }
         const {expectedRevision,...cycleInput}=input;
         const cycle=await learning.createInTransaction(actor,companyId,{...cycleInput,scope:{type:"company",id:null},analyticalSources:[{kind:"outcome_review",decisionId,revision:expectedRevision}]},publications,bundleScope);

@@ -41,9 +41,9 @@ export async function makeConversationFixtureTreeWritable(path: string): Promise
 }
 
 /** Actual route→heartbeat→Native executor→pinned OpenCode→conversation broker proof.
- * The local HTTPS proxy supplies the token returned by the original issuer because
- * this focused fixture does not include a V7 runtime host; it proves the genuine
- * conversation frame/ledger path, not RuntimeControl host-token injection. */
+ * The default focused mode supplies the original issuer token through a local
+ * HTTPS proxy. With sandboxRelay enabled, the configured V7 software host runs
+ * the actual signed RuntimeControl relay and uses that same PRP endpoint. */
 export async function runManagedNativeConversationFrame(input: {
   db: ReturnType<typeof createDb>;
   root: string;
@@ -349,9 +349,15 @@ export async function runManagedNativeConversationFrame(input: {
   const prevBroker = process.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN;
   const prevJwt = process.env.PAPERCLIP_AGENT_JWT_SECRET;
   const prevCa = process.env.NODE_EXTRA_CA_CERTS;
+  const prevRunnerPublicUrl = process.env.PAPERCLIP_RUNNER_PUBLIC_URL;
   process.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN = origin;
   process.env.PAPERCLIP_AGENT_JWT_SECRET = `conversation-fixture-${randomUUID()}`;
   process.env.NODE_EXTRA_CA_CERTS = certBundlePath;
+  if (input.sandboxRelay) {
+    const runnerPublicUrl = new URL(origin);
+    runnerPublicUrl.protocol = "wss:";
+    process.env.PAPERCLIP_RUNNER_PUBLIC_URL = runnerPublicUrl.origin;
+  }
   const sandboxHeartbeat = await input.configureHeartbeat?.({ db, actor: human, companyId, agentId,
     providerBindingId: provider.provider.id, gateway, profile, runHome, opencodeBinary: input.opencodeBinary,
     brokerOrigin: origin, certBundlePath, setBrokerToken: token => { activeToken = token; } });
@@ -517,6 +523,7 @@ export async function runManagedNativeConversationFrame(input: {
     if (prevBroker === undefined) delete process.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN; else process.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN = prevBroker;
     if (prevJwt === undefined) delete process.env.PAPERCLIP_AGENT_JWT_SECRET; else process.env.PAPERCLIP_AGENT_JWT_SECRET = prevJwt;
     if (prevCa === undefined) delete process.env.NODE_EXTRA_CA_CERTS; else process.env.NODE_EXTRA_CA_CERTS = prevCa;
+    if (prevRunnerPublicUrl === undefined) delete process.env.PAPERCLIP_RUNNER_PUBLIC_URL; else process.env.PAPERCLIP_RUNNER_PUBLIC_URL = prevRunnerPublicUrl;
     await makeConversationFixtureTreeWritable(runHome);
     await rm(runHome, { recursive: true, force: true });
   }

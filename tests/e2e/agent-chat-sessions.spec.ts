@@ -1,8 +1,8 @@
 import {randomUUID} from "node:crypto";
 import {readFile} from "node:fs/promises";
 import path from "node:path";
-import {eq} from "../../server/node_modules/drizzle-orm/index.js";
-import {createDb,memoryRecords,analyticalContextRoots,analyticalContextDependencies,contextManifestMemoryRoots,contextManifests,heartbeatRuns,businessMetricObservations,businessMetricVersions} from "../../packages/db/src/index.ts";
+import {eq,sql} from "../../server/node_modules/drizzle-orm/index.js";
+import {createDb,memoryRecords,analyticalContextRoots,analyticalContextDependencies,contextManifestMemoryRoots,contextManifests,heartbeatRuns,heartbeatRunEvents,nativeRunFinalizations,nativeRunResults,workspaceOperations,businessMetricObservations,businessMetricVersions} from "../../packages/db/src/index.ts";
 import {nativeRunInputSourceReceiptSchema} from "../../packages/shared/src/validators/native-payload-source-snapshot.ts";
 import {analyticalPurpose,metricDefinition} from "../../server/src/__tests__/helpers/business-metric-fixture.ts";
 import { expect, test, type Page } from "@playwright/test";
@@ -168,7 +168,79 @@ test("chat first open is read-only; concurrent first sends and retries share one
             wireIntentCount: wireIntents.length,
           };
         });
-        console.info("native-resume-witness-facts", JSON.stringify({ issueAvailable: Boolean(failedIssueId), rows: sanitized }));
+        const lifecycleFacts = await Promise.all(rows.map(async (run) => {
+          const [current] = await db.select({
+            status: heartbeatRuns.status,
+            nativePhase: heartbeatRuns.nativePhase,
+            errorCode: heartbeatRuns.errorCode,
+            executionStage: heartbeatRuns.executionStage,
+            lastOutputSeq: heartbeatRuns.lastOutputSeq,
+          }).from(heartbeatRuns).where(eq(heartbeatRuns.id, run.id));
+          const [finalization] = await db.select({
+            phase: nativeRunFinalizations.phase,
+            failureCode: nativeRunFinalizations.failureCode,
+            resultPresent: nativeRunFinalizations.resultId,
+          }).from(nativeRunFinalizations).where(eq(nativeRunFinalizations.runId, run.id));
+          const results = await db.select({ schemaStatus: nativeRunResults.schemaStatus,
+            rejectionCode: nativeRunResults.rejectionCode }).from(nativeRunResults)
+            .where(eq(nativeRunResults.runId, run.id));
+          const events = await db.select({ eventType: heartbeatRunEvents.eventType })
+            .from(heartbeatRunEvents).where(eq(heartbeatRunEvents.runId, run.id));
+          const operations = await db.select({ phase: workspaceOperations.phase,
+            status: workspaceOperations.status }).from(workspaceOperations)
+            .where(eq(workspaceOperations.heartbeatRunId, run.id));
+          const eventCounts: Record<string, number> = {};
+          for (const event of events) eventCounts[event.eventType] = (eventCounts[event.eventType] ?? 0) + 1;
+          return {
+            status: current?.status ?? null,
+            nativePhase: current?.nativePhase ?? null,
+            errorCode: current?.errorCode ?? null,
+            executionStage: current?.executionStage ?? null,
+            lastOutputSeq: current?.lastOutputSeq ?? null,
+            finalization: finalization ? {
+              phase: finalization.phase,
+              failureCode: finalization.failureCode,
+              resultPresent: Boolean(finalization.resultPresent),
+            } : null,
+            results: results.map(({ schemaStatus, rejectionCode }) => ({ schemaStatus, rejectionCode })),
+            eventCounts,
+            workspaceOperations: operations.map(({ phase, status }) => ({ phase, status })),
+          };
+        }));
+        const waitGroups = await db.execute<{
+          waitEventType: string | null;
+          waitEvent: string | null;
+          state: string;
+          count: number;
+        }>(sql`select wait_event_type as "waitEventType", wait_event as "waitEvent", state, count(*)::int as count
+          from pg_stat_activity where datname=current_database() and pid<>pg_backend_pid()
+          group by wait_event_type, wait_event, state`);
+        const [blocked] = await db.execute<{ count: number }>(sql`select count(*)::int as count
+          from pg_stat_activity where datname=current_database() and pid<>pg_backend_pid()
+          and cardinality(pg_blocking_pids(pid)) > 0`);
+        const pgWaitFacts = {
+          groups: waitGroups.map(({ waitEventType, waitEvent, state, count }) => ({
+            waitEventType, waitEvent, state, count,
+          })),
+          blockedBackendCount: blocked?.count ?? 0,
+        };
+        let providerTraceFacts = { eventCount: 0, turnCompletionCount: 0, providerProcessCount: 0, providerProcessesAlive: 0 };
+        try {
+          const tracePath = path.join(process.env.PAPERCLIP_AGENT_CHAT_OUTPUT_DIR!, "native-chat-provider-events.ndjson");
+          const trace = (await readFile(tracePath, "utf8")).split("\n").filter(Boolean).map(line => JSON.parse(line));
+          const providerPids = [...new Set(trace.filter(event =>
+            event.event === "turn_completed_emitted" && Number.isInteger(event.processId),
+          ).map(event => event.processId as number))];
+          providerTraceFacts = {
+            eventCount: trace.length,
+            turnCompletionCount: trace.filter(event => event.event === "turn_completed_emitted").length,
+            providerProcessCount: providerPids.length,
+            providerProcessesAlive: providerPids.filter(pid => {
+              try { process.kill(pid, 0); return true; } catch { return false; }
+            }).length,
+          };
+        } catch { /* Failure-only diagnostics must not mask the test failure. */ }
+        console.info("native-resume-witness-facts", JSON.stringify({ issueAvailable: Boolean(failedIssueId), rows: sanitized, lifecycleFacts, providerTraceFacts, pgWaitFacts }));
       } finally {
         await db.$client.end();
       }
@@ -217,6 +289,19 @@ test("chat first open is read-only; concurrent first sends and retries share one
         await request.get(`/api/companies/${f.company.id}/heartbeat-runs`),
       )
     ).length;
+    const settledRuns = await json(
+      await request.get(`/api/companies/${f.company.id}/heartbeat-runs`),
+    );
+    const settledRunDetails = await Promise.all(
+      settledRuns.map((run: { id: string }) =>
+        request.get(`/api/heartbeat-runs/${run.id}`).then(json),
+      ),
+    );
+    // A buffered provider log callback may arrive after its Native result is
+    // terminal. It must not rewrite that settled result as a failed run or
+    // prevent the idempotent follow-up send from creating its own run.
+    expect(settledRunDetails.length).toBeGreaterThan(0);
+    expect(settledRunDetails.every((run: { status: string }) => run.status === "succeeded")).toBe(true);
     await page.goto(`/${f.company.issuePrefix}/issues/${issue.identifier}`);
     await page.goto(f.route);
     expect(

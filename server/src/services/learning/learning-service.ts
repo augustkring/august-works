@@ -32,7 +32,8 @@ async function learningMaterial(db:Db,actor:AuthorizationActor,cycle:Cycle) {
   const analyticalSensitivity=await assertLearningAnalyticalSources(db,actor,cycle);
   const edges = await db.select().from(learningEvidence).where(and(eq(learningEvidence.companyId, cycle.companyId), eq(learningEvidence.cycleId, cycle.id)));
   const roots = await derivedRoots(db, actor, cycle.companyId, scope(cycle), cycle.purpose, edges.map((edge) => edge.memoryRecordId), new Map(edges.map((edge) => [edge.memoryRecordId, edge.sourceVersion])));
-  await outcomes(db, actor, cycle, Object.keys(cycle.outcomeVersions), cycle.outcomeVersions); return {roots,analyticalSensitivity};
+  await outcomes(db, actor, cycle, Object.keys(cycle.outcomeVersions), cycle.outcomeVersions);
+  return {roots,analyticalSensitivity,memoryRecordIds:edges.map(edge=>edge.memoryRecordId).sort()};
 }
 export async function learningRoots(db:Db,actor:AuthorizationActor,cycle:Cycle){return (await learningMaterial(db,actor,cycle)).roots;}
 async function outcomes(db: Db, actor: AuthorizationActor, cycle: Cycle, ids: string[], expected?: Record<string, string>) {
@@ -181,8 +182,8 @@ export function learningService(db: Db) {
      * idempotent caller does not consume. */
     getOutcomeReviewReplay: async (actor: AuthorizationActor, companyId: string, id: string) => {
       const row = await cycle(actor, companyId, id);
-      await learningRoots(db, actor, row);
-      return row;
+      const material=await learningMaterial(db,actor,row);
+      return {...row,memoryRecordIds:material.memoryRecordIds};
     },
     createInTransaction,
     create: async (actor: AuthorizationActor, companyId: string, raw: z.input<typeof learningCycleSchema>) => {

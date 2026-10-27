@@ -685,14 +685,17 @@ export async function runManagedNativeOpenCodeFixture(input: {
       task = openedTask;
     } else {
       const createTaskResponse = await request(humanApp).post(`/api/companies/${companyId}/issues`)
-        .send({ title: "Save a private source-bound note", description: "Create a short internal note and finish the task.",
-          responsibleUserId: aliceUserId });
+        .send({ title: "Save a source-bound note", description: "Create a short internal note and finish the task.",
+          responsibleUserId: aliceUserId, visibility: "open" });
       expect(createTaskResponse.status, JSON.stringify(createTaskResponse.body)).toBe(201);
       const createdTask = createTaskResponse.body as { id: string };
       await db.update(issues).set({ status: "todo", assigneeAgentId: agentId,
         ...(fixtureProjectId ? { projectId: fixtureProjectId } : {}) })
         .where(and(eq(issues.companyId, companyId), eq(issues.id, createdTask.id)));
       task = (await db.select().from(issues).where(eq(issues.id, createdTask.id)))[0]!;
+      if (task.payloadSourceProtocolVersion !== 1 || !task.payloadSourceSnapshot ||
+          task.payloadSourceSnapshotInvalidated || task.visibility !== "open")
+        throw new Error("managed_fixture_human_task_source_was_not_sealed");
     }
     const [run] = await db.insert(heartbeatRuns).values({ companyId, agentId, responsibleUserId: aliceUserId,
       status: "running", runtimeMode: "native", nativeIssueId: task.id,
@@ -756,7 +759,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
       })(),
         businessInvariants: [input.conversationRoot
           ? "Use only the Human-sealed conversation and current authorized sources; create only backlog drafts"
-          : "Use only this task's private workspace"] },
+          : "Use only this task's supplied workspace"] },
       budgets: { maxModelCostMinor: Math.max(10, fixtureProviderResponses * 2), maxToolActions: modelSteps.length + 2 },
       workers: [{ key: "writer", issueId: task.id }],
     });

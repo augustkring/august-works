@@ -41,7 +41,7 @@ type AnalyticalPayloadWorklist={
 export async function inspectAnalyticalContextPins(tx:Db,companyId:string,actor:AuthorizationActor,raw:AnalyticalContextAuthorityPin[],deadline=performance.now()+30000,historicalQualification=true,learningCycleScope?:{cycleId:string|null;purpose:string}) {
  let sourceSensitivity:"internal"|"confidential"="internal";
  const retainSensitivity=(value:string)=>{if(value==="confidential")sourceSensitivity="confidential";};
- const pins=pinsSchema.parse(raw),manifestIds=new Set<string>();let expiresAt=Infinity;
+ const pins=pinsSchema.parse(raw),manifestIds=new Set<string>(),retentionAlreadyVerified=new Set<string>();let expiresAt=Infinity;
  for(const pin of pins){
   let pinStage="budget";
   try {
@@ -68,7 +68,7 @@ export async function inspectAnalyticalContextPins(tx:Db,companyId:string,actor:
    const {consumeLearningOutcomeReviewBundle,decisionOutcomeReviewService}=await import("./decision-outcome-reviews.js");
    const owned=learningCycleScope?await consumeLearningOutcomeReviewBundle(tx,companyId,actor,pin.decisionId,pin.revision,learningCycleScope.cycleId,learningCycleScope.purpose):null;
    if(owned){
-    retainSensitivity(owned.sourceSensitivity);owned.manifestIds.forEach(id=>manifestIds.add(id));expiresAt=Math.min(expiresAt,owned.expiresAt.getTime());
+    retainSensitivity(owned.sourceSensitivity);owned.manifestIds.forEach(id=>{manifestIds.add(id);retentionAlreadyVerified.add(id);});expiresAt=Math.min(expiresAt,owned.expiresAt.getTime());
    }else{
     const view=await decisionOutcomeReviewService(tx).detail(companyId,actor,pin.decisionId);
     if(!view||view.revision!==pin.revision)throw conflict("The retained native outcome review changed");
@@ -101,7 +101,8 @@ export async function inspectAnalyticalContextPins(tx:Db,companyId:string,actor:
  if(performance.now()>deadline)throw unprocessable("The complete analytical source review exceeded its time budget");
  if(manifestIds.size>26200||!Number.isFinite(expiresAt)||expiresAt<=Date.now())throw conflict("Native analytical source retention is unavailable");
  const {assertMemorySourcesRetained}=await import("./memory/memory-privacy.js");
- await assertMemorySourcesRetained(tx,companyId,[...manifestIds].map(id=>({sourceProvider:"august_works_analytical",sourceRef:`manifest://${id}`})));
+ const unverifiedRetention=[...manifestIds].filter(id=>!retentionAlreadyVerified.has(id));
+ if(unverifiedRetention.length)await assertMemorySourcesRetained(tx,companyId,unverifiedRetention.map(id=>({sourceProvider:"august_works_analytical",sourceRef:`manifest://${id}`})));
  return {sourceSensitivity:sourceSensitivity as "internal"|"confidential",pins,manifestIds:[...manifestIds].sort(),expiresAt:new Date(expiresAt)};
 }
 
@@ -376,7 +377,18 @@ async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string
    const canRead="issueId" in scope
     ? await canActorReadIssuePrivacy(tx,currentActor,{companyId,id:scope.issueId})
     : await canActorReadHeartbeatRunPrivacy(tx,currentActor,{companyId,id:scope.runId});
-   if(!canRead)throw new HttpError(403,"Native task source access is unavailable",{code:"analytical_source_access_lost"});
+   if(!canRead){
+    const denied=new HttpError(403,"Native task source access is unavailable",{code:"analytical_source_access_lost"});
+    if(process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS==="1"){
+     const frames=(typeof denied.stack==="string"?denied.stack:"").split("\n").flatMap(line=>{
+      const match=/server\/src\/(?:services|routes)\/[A-Za-z0-9_./-]+\.ts:\d+:\d+/.exec(line);
+      return match?[match[0]]:[];
+     }).slice(0,8);
+     console.info("native-analytical-source-denial-callsite",JSON.stringify({scope:"issueId"in scope?"issue":"run",
+      actorType:currentActor.type,frames}));
+    }
+    throw denied;
+   }
   }
   diagnosticStage="retained_context_lookup";
   const retainedContexts=await tx.select({id:contextManifests.id}).from(contextManifests)

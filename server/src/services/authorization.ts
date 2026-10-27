@@ -758,10 +758,14 @@ async function nativeIssuePrivacyDiagnosticQuery<T>(db: Db | DbTransaction, acto
   }
 }
 
-async function issueReadSqlConditionInMemoryScope(db: Db | DbTransaction, actor: AuthorizationActor, issueId: string) {
+type NativeIssueSnapshotDiagnostic = { valid?: SQL<boolean>; corrupt?: SQL<boolean>; graphDenials?: SQL<string[]>;
+  projectFacts?: SQL<string> };
+async function issueReadSqlConditionInMemoryScope(db: Db | DbTransaction, actor: AuthorizationActor, issueId: string,
+  diagnostic?: NativeIssueSnapshotDiagnostic, ignoreCorruptForDiagnostic = false) {
   const capturedContextManifestIds=activeMemoryTemporalContexts(db,actor,"issue",issueId);
-  return capturedContextManifestIds === undefined ? issueReadSqlCondition(db,actor)
-    : taskSourcePrivacySqlCondition(db,"issue",sql`${issues.id}`,sql`${issues.companyId}`,actor,capturedContextManifestIds);
+  return capturedContextManifestIds === undefined && !diagnostic ? issueReadSqlCondition(db,actor)
+    : taskSourcePrivacySqlCondition(db,"issue",sql`${issues.id}`,sql`${issues.companyId}`,actor,capturedContextManifestIds,
+      diagnostic, ignoreCorruptForDiagnostic);
 }
 
 /** Same retained-source SQL for the exact typed Workflow Run. A predicate
@@ -942,7 +946,8 @@ function pipelineAutomationRoutineSourceCondition(company: SQL): SQL<boolean> {
  * Empty stored arrays are relational facts only,
  * never complete-input receipts or publication authority. */
 function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "project" | "run" | "workflow_run" | "routine_run", id: SQL, company: SQL, actor: AuthorizationActor,
-  capturedContextManifestIds?: readonly string[]): SQL<boolean> {
+  capturedContextManifestIds?: readonly string[], diagnostic?: NativeIssueSnapshotDiagnostic,
+  ignoreCorruptForDiagnostic = false): SQL<boolean> {
   const contextUuidArray = (ids: readonly string[]) => sql`array[${sql.join(ids.map(value => sql`${value}::uuid`), sql`, `)}]::uuid[]`;
   const routineScope = nativeRoutineReadScopes.get(db as object);
   const routineCapabilityActive = routineScope?.active && routineScope.companyId && routineScope.routineActorKey === routineActorKey(actor);
@@ -973,7 +978,7 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
       then substring(item.source_ref from 9)::uuid end
       from context_manifest_items item where item.company_id=c.company_id and item.manifest_id=c.id
         and item.source_provider='august_works_tasks'`;
-  const issueSnapshotValid = kind === "issue" ? sql`exists(select 1 from issues temporal_owner where temporal_owner.id=${id}
+  const issueSnapshotValid: SQL<boolean> = kind === "issue" ? sql<boolean>`exists(select 1 from issues temporal_owner where temporal_owner.id=${id}
     and temporal_owner.company_id=${company} and temporal_owner.payload_source_protocol_version=1
     and temporal_owner.payload_source_snapshot is not null and temporal_owner.payload_source_snapshot_invalidated=false
     and temporal_owner.payload_source_snapshot->'owner'->>'kind'='issue'
@@ -1158,7 +1163,7 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
           and not exists(select 1 from issue_privacy_sources captured_edge where captured_edge.company_id=temporal_owner.company_id
             and captured_edge.issue_id=temporal_owner.id and captured_edge.source_kind='issue'
             and captured_edge.source_id=case when captured_item.source_ref ~* '^issue://[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
-              then substring(captured_item.source_ref from 9)::uuid end and captured_edge.context_manifest_id=(captured_input->>'manifestId')::uuid)))))` : sql`false`;
+              then substring(captured_item.source_ref from 9)::uuid end and captured_edge.context_manifest_id=(captured_input->>'manifestId')::uuid)))))` : sql<boolean>`false`;
   const capturedContextIds = capturedContextManifestIds !== undefined ? contextUuidArray(capturedContextManifestIds)
     : kind === "issue" ? sql`array(select (captured_input->>'manifestId')::uuid
     from issues temporal_owner cross join lateral jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_input
@@ -1168,13 +1173,17 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
       and temporal_owner.payload_source_snapshot->'owner'->>'id'=temporal_owner.id::text
       and captured_input->>'kind'='context')`
     : null;
-  const issueSnapshotCorrupt = kind === "issue" ? sql`exists(select 1 from issues temporal_owner where temporal_owner.id=${id}
+  const issueSnapshotCorrupt: SQL<boolean> = kind === "issue" ? sql<boolean>`exists(select 1 from issues temporal_owner where temporal_owner.id=${id}
     and temporal_owner.company_id=${company} and temporal_owner.payload_source_protocol_version=1
     and temporal_owner.payload_source_snapshot_invalidated=false
     and (temporal_owner.payload_source_snapshot is null or (
     temporal_owner.payload_source_snapshot->'owner'->>'kind'='issue'
     and temporal_owner.payload_source_snapshot->'owner'->>'id'=temporal_owner.id::text
-    and not ${issueSnapshotValid})))` : sql`false`;
+    and not ${issueSnapshotValid})))` : sql<boolean>`false`;
+  if (kind === "issue" && diagnostic) {
+    diagnostic.valid = issueSnapshotValid;
+    diagnostic.corrupt = issueSnapshotCorrupt;
+  }
   const currentContextAllowed = (manifestId: SQL) => kind === "issue" && capturedContextManifestIds === undefined
     ? sql`(not ${issueSnapshotValid} or ${manifestId}=any(${capturedContextIds!}))`
     : capturedContextManifestIds === undefined ? sql`true` : sql`${manifestId}=any(${capturedContextIds!})`;
@@ -1290,13 +1299,133 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
               and (root.id is null or root.kind<>'issue' or root.id<>n.id)))
 `;
   const enumeratedEdges = sql`select * from (${edges}) native_edges limit 257`;
-  return sql<boolean>`(
-    with recursive privacy_nodes(kind,id) as (
+  const privacyNodesCte = sql`with recursive privacy_nodes(kind,id) as (
       select ${kind}::text,${id}
       union
       select edge.kind,edge.id from privacy_nodes n cross join lateral (${enumeratedEdges}) edge
-    ), bounded as materialized (select * from privacy_nodes limit 257)
-    select case when (select count(*) from bounded)>256 or ${issueSnapshotCorrupt} then false else not exists (
+    ), bounded as materialized (select * from privacy_nodes limit 257)`;
+  const issueNodeReadable = sql`exists(
+    with exact_issue as materialized (
+      select source.id,source.company_id,source.conversation_retired_at,source.conversation_agent_id,
+        source.conversation_user_id,source.visibility,source.privacy_parent_issue_id,source.responsible_user_id,
+        source.created_by_user_id,source.assignee_user_id,source.assignee_agent_id,source.project_id
+      from issues source where source.id=n.id and source.company_id=${company}
+    )
+    select 1 from exact_issue i where i.conversation_retired_at is null
+      and ((i.conversation_agent_id is null and i.conversation_user_id is null) or ${conversationIdentity})
+      and (i.visibility='open' or ${issuePrincipalAccess(actor, sql`i.id`, sql`${company}`)}))`;
+  const sourceIssueConversationIdentity = sql`(${privatePrincipalCurrent(actor, company)}
+    and source.conversation_user_id=${humanId ?? null}
+    and ${actor.type === "board" ? sql`true` : actor.type === "agent" && actor.agentId
+      ? sql`source.conversation_agent_id=${actor.agentId}` : sql`false`})`;
+  const projectExists = sql`exists(select 1 from projects p where p.id=n.id and p.company_id=${company})`;
+  const projectQualified = sql`exists(select 1 from projects p where p.id=n.id and p.company_id=${company}
+    and p.source_provenance_qualified)`;
+  const projectPrivateReadable = sql`exists(select 1 from projects p where p.id=n.id and p.company_id=${company}
+    and p.source_provenance_qualified and (p.visibility='open' or ${projectPrincipalAccess(actor, sql`p.id`, sql`${company}`)}))`;
+  const runBindingExists = sql`exists(select 1 from ${heartbeatRuns} r where r.id=n.id and r.company_id=${company}
+    and ${heartbeatRunTaskBindingCondition(sql`r`)})`;
+  const runCopyExists = sql`exists(select 1 from ${heartbeatRuns} copy_run where copy_run.id=n.id and copy_run.company_id=${company})`;
+  const runCopyErased = sql`exists(select 1 from ${memoryDeletionMarkers} marker where marker.company_id=${company}
+    and marker.kind='source' and marker.key='memory-run-source-erasure:v1:'||n.id::text)`;
+  const runPrivateMemoryFailure = sql`exists(select 1 from context_manifests c
+    join context_manifest_memory_roots root on root.company_id=c.company_id and root.manifest_id=c.id
+    left join memory_records m on m.company_id=root.company_id and m.id=root.memory_record_id
+    where c.company_id=${company} and c.run_id=n.id and ${currentContextAllowed(sql`c.id`)} and (m.id is null
+      or (m.scope_type='agent' and m.private_owner_user_id is null)
+      or (m.private_owner_user_id is not null and
+        (m.private_owner_user_id is distinct from ${humanId ?? null} or not ${privatePrincipalCurrent(actor, company)}))
+      or (m.scope_type='agent' and ${actor.type === "agent"
+        ? sql`(m.owner_agent_id::text is distinct from ${actor.agentId ?? null} or m.scope_id is distinct from ${actor.agentId ?? null})`
+        : sql`false`})))`;
+  const workflowRunReadable = sql`exists(select 1 from workflow_runs wr
+    join workflows w on w.id=wr.workflow_id and w.company_id=wr.company_id
+    join workflow_revisions v on v.id=wr.workflow_revision_id and v.workflow_id=wr.workflow_id and v.company_id=wr.company_id
+    where wr.id=n.id and wr.company_id=${company}
+      and ((w.authoring_source_run_ids='[]'::jsonb and wr.authoring_source_workflow_ids='[]'::jsonb
+        and wr.memory_record_ids='[]'::jsonb and not exists(select 1 from workflow_step_runs step
+          where step.company_id=wr.company_id and step.workflow_run_id=wr.id and step.memory_record_ids is distinct from '[]'::jsonb)
+        and not exists(select 1 from learning_retained_assets lra
+          join learning_domain_candidates ldc on ldc.company_id=lra.company_id and ldc.id=lra.candidate_link_id
+          join learning_hypotheses lh on lh.company_id=ldc.company_id and lh.id=ldc.hypothesis_id
+          join learning_cycles lc on lc.company_id=lh.company_id and lc.id=lh.cycle_id
+          where lra.company_id=wr.company_id and lra.asset_type='workflow_revision' and lra.asset_id=wr.workflow_revision_id)
+        and not exists(select 1 from workflow_step_runs source_step
+          join learning_retained_assets lra on lra.company_id=source_step.company_id
+            and lra.asset_type='automation_artifact_version' and lra.asset_id=source_step.automation_artifact_version_id
+          join learning_domain_candidates ldc on ldc.company_id=lra.company_id and ldc.id=lra.candidate_link_id
+          join learning_hypotheses lh on lh.company_id=ldc.company_id and lh.id=ldc.hypothesis_id
+          join learning_cycles lc on lc.company_id=lh.company_id and lc.id=lh.cycle_id
+          where source_step.company_id=wr.company_id and source_step.workflow_run_id=wr.id)) or ${workflowRunScope})
+      and not aw_workflow_authoring_source_erased(w.company_id,w.id)
+      and not aw_workflow_run_authoring_source_erased(wr.company_id,wr.id))`;
+  const routineRunReadable = sql`exists(select 1 from routine_runs rr
+    join routines p on p.id=rr.routine_id and p.company_id=rr.company_id
+    join routine_revisions v on v.id=rr.routine_revision_id and v.routine_id=rr.routine_id and v.company_id=rr.company_id
+    where rr.id=n.id and rr.company_id=${company} and ${conversationRoutine}
+      and v.snapshot->'version'='1'::jsonb and lower(v.snapshot->'routine'->>'id')=rr.routine_id::text
+      and lower(v.snapshot->'routine'->>'companyId')=rr.company_id::text
+      and v.snapshot->'routine' ? 'projectId' and v.snapshot->'routine' ? 'parentIssueId'
+      and not aw_conversation_routine_source_erased(p.company_id,p.id))`;
+  const graphViolationRows = sql`with recursive source_edges as materialized (
+      select n.kind,n.id,edge.kind as source_kind,edge.id as source_id
+      from bounded n cross join lateral (${enumeratedEdges}) edge
+    ), reachable(kind,id,source_kind,source_id) as (
+      select kind,id,source_kind,source_id from source_edges
+      union
+      select r.kind,r.id,e.source_kind,e.source_id from reachable r
+        join source_edges e on e.kind=r.source_kind and e.id=r.source_id
+    )
+    select 'edge_limit'::text as reason from source_edges group by kind,id having count(*)>256
+    union all select 'cycle' from reachable where kind=source_kind and id=source_id
+    union all select 'unknown_kind' from bounded n
+      where n.kind not in ('issue','project','run','run_copy','workflow_run','routine_run')
+    union all select 'issue_missing_or_retired' from bounded n where n.kind='issue' and not exists(
+      select 1 from issues source where source.id=n.id and source.company_id=${company}
+        and source.conversation_retired_at is null)
+    union all select 'issue_conversation_identity' from bounded n where n.kind='issue' and exists(
+      select 1 from issues source where source.id=n.id and source.company_id=${company}
+        and not ((source.conversation_agent_id is null and source.conversation_user_id is null)
+          or ${sourceIssueConversationIdentity}))
+    union all select 'issue_private_unreadable' from bounded n where n.kind='issue' and exists(
+      select 1 from issues source where source.id=n.id and source.company_id=${company}
+        and source.visibility<>'open' and not ${issuePrincipalAccess(actor, sql`source.id`, sql`${company}`)})
+    union all select 'project_missing' from bounded n where n.kind='project' and not ${projectExists}
+    union all select 'project_unqualified' from bounded n where n.kind='project' and ${projectExists} and not ${projectQualified}
+    union all select 'project_private_unreadable' from bounded n where n.kind='project' and ${projectQualified}
+      and not ${projectPrivateReadable}
+    union all select 'run_missing_or_task_binding' from bounded n where n.kind='run' and not ${runBindingExists}
+    union all select 'run_copy_missing' from bounded n where n.kind='run_copy' and not ${runCopyExists}
+    union all select 'run_copy_erased' from bounded n where n.kind='run_copy' and ${runCopyErased}
+    union all select 'run_private_memory_root' from bounded n where n.kind='run' and ${runPrivateMemoryFailure}
+    union all select 'workflow_run_invalid' from bounded n where n.kind='workflow_run' and not ${workflowRunReadable}
+    union all select 'routine_run_invalid' from bounded n where n.kind='routine_run' and not ${routineRunReadable}`;
+  if (diagnostic && kind === "issue") diagnostic.graphDenials = sql`(
+    ${privacyNodesCte}
+    select coalesce(array_agg(reason order by reason),'{}'::text[]) from (
+      select 'node_limit'::text as reason where (select count(*) from bounded)>256
+      union all select 'snapshot_corrupt' where ${ignoreCorruptForDiagnostic ? sql`false` : issueSnapshotCorrupt}
+      union all select reason from (${graphViolationRows}) graph_violations
+    ) reasons)`;
+  if (diagnostic && kind === "issue") diagnostic.projectFacts = sql`(
+    ${privacyNodesCte}
+    select jsonb_build_object(
+      'nodeCount',count(*)::integer,
+      'boundRowCount',count(p.id)::integer,
+      'qualifiedCount',count(*) filter(where p.source_provenance_qualified)::integer,
+      'openCount',count(*) filter(where p.visibility='open')::integer,
+      'privateReadableCount',count(*) filter(where p.id is not null and p.visibility='private'
+        and ${projectPrincipalAccess(actor, sql`p.id`, sql`${company}`)})::integer,
+      'principalCurrent',${privatePrincipalCurrent(actor, company)},
+      'statusCounts',coalesce((select jsonb_object_agg(status,status_count) from (
+        select p2.status,count(*)::integer as status_count from bounded n2
+          join projects p2 on p2.id=n2.id and p2.company_id=${company}
+          where n2.kind='project' group by p2.status) statuses),'{}'::jsonb)
+    )::text from bounded n left join projects p on p.id=n.id and p.company_id=${company}
+      where n.kind='project')`;
+  return sql<boolean>`(
+    ${privacyNodesCte}
+    select case when (select count(*) from bounded)>256 or ${ignoreCorruptForDiagnostic ? sql`false` : issueSnapshotCorrupt} then false else not exists (
       with recursive source_edges as materialized (
         select n.kind,n.id,edge.kind as source_kind,edge.id as source_id
         from bounded n cross join lateral (${enumeratedEdges}) edge
@@ -1312,75 +1441,19 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
       union all
       select 1 from bounded n where
         n.kind not in ('issue','project','run','run_copy','workflow_run','routine_run')
-        or (n.kind='issue' and not exists(
-          -- Resolve the exact company/id row first. Folding these privacy
-          -- predicates into the base lookup makes PostgreSQL choose the
-          -- conversation-identity index for common NULL identities, scanning
-          -- every such Task for each root instead of using the unique id key.
-          with exact_issue as materialized (
-            select source.id,source.company_id,source.conversation_retired_at,source.conversation_agent_id,
-              source.conversation_user_id,source.visibility,source.privacy_parent_issue_id,source.responsible_user_id,
-              source.created_by_user_id,source.assignee_user_id,source.assignee_agent_id,source.project_id
-            from issues source where source.id=n.id and source.company_id=${company}
-          )
-          select 1 from exact_issue i where i.conversation_retired_at is null
-            and ((i.conversation_agent_id is null and i.conversation_user_id is null) or ${conversationIdentity})
-            and (i.visibility='open' or ${issuePrincipalAccess(actor, sql`i.id`, sql`${company}`)})))
-        or (n.kind='project' and not exists(select 1 from projects p where p.id=n.id and p.company_id=${company}
-          and p.source_provenance_qualified and (p.visibility='open' or ${projectPrincipalAccess(actor, sql`p.id`, sql`${company}`)})))
-          or (n.kind='run' and not exists(select 1 from ${heartbeatRuns} r where r.id=n.id and r.company_id=${company}
-          and ${heartbeatRunTaskBindingCondition(sql`r`)}))
+        or (n.kind='issue' and not ${issueNodeReadable})
+        or (n.kind='project' and not ${projectPrivateReadable})
+        or (n.kind='run' and not ${runBindingExists})
         -- A Native model-output owner retains its producing Run only so the
         -- output can be suppressed on Run erasure. That provenance edge does
         -- not authorize reading the Run or inherit later Run Context roots.
-        or (n.kind='run_copy' and (not exists(select 1 from ${heartbeatRuns} copy_run
-              where copy_run.id=n.id and copy_run.company_id=${company})
-          or exists(select 1 from ${memoryDeletionMarkers} marker where marker.company_id=${company}
-            and marker.kind='source' and marker.key='memory-run-source-erasure:v1:'||n.id::text)))
+        or (n.kind='run_copy' and (not ${runCopyExists} or ${runCopyErased}))
         -- Selected private Memory can narrow a derivative's audience, even when
         -- the producer's original Task is public. This is a necessary denial,
         -- not a complete Memory provenance receipt or a positive access grant.
-        or (n.kind='run' and exists(select 1 from context_manifests c
-          join context_manifest_memory_roots root on root.company_id=c.company_id and root.manifest_id=c.id
-          left join memory_records m on m.company_id=root.company_id and m.id=root.memory_record_id
-          where c.company_id=${company} and c.run_id=n.id and ${currentContextAllowed(sql`c.id`)} and (m.id is null
-            or (m.scope_type='agent' and m.private_owner_user_id is null)
-            or (m.private_owner_user_id is not null and
-              (m.private_owner_user_id is distinct from ${humanId ?? null} or not ${privatePrincipalCurrent(actor, company)}))
-            or (m.scope_type='agent' and ${actor.type === "agent"
-              ? sql`(m.owner_agent_id::text is distinct from ${actor.agentId ?? null} or m.scope_id is distinct from ${actor.agentId ?? null})`
-              : sql`false`}))))
-        or (n.kind='workflow_run' and not exists(select 1 from workflow_runs wr
-          join workflows w on w.id=wr.workflow_id and w.company_id=wr.company_id
-          join workflow_revisions v on v.id=wr.workflow_revision_id and v.workflow_id=wr.workflow_id and v.company_id=wr.company_id
-          where wr.id=n.id and wr.company_id=${company}
-            and ((w.authoring_source_run_ids='[]'::jsonb and wr.authoring_source_workflow_ids='[]'::jsonb
-              and wr.memory_record_ids='[]'::jsonb and not exists(select 1 from workflow_step_runs step
-                where step.company_id=wr.company_id and step.workflow_run_id=wr.id and step.memory_record_ids is distinct from '[]'::jsonb)
-              and not exists(select 1 from learning_retained_assets lra
-                join learning_domain_candidates ldc on ldc.company_id=lra.company_id and ldc.id=lra.candidate_link_id
-                join learning_hypotheses lh on lh.company_id=ldc.company_id and lh.id=ldc.hypothesis_id
-                join learning_cycles lc on lc.company_id=lh.company_id and lc.id=lh.cycle_id
-                where lra.company_id=wr.company_id and lra.asset_type='workflow_revision' and lra.asset_id=wr.workflow_revision_id)
-              and not exists(select 1 from workflow_step_runs source_step
-                join learning_retained_assets lra on lra.company_id=source_step.company_id
-                  and lra.asset_type='automation_artifact_version' and lra.asset_id=source_step.automation_artifact_version_id
-                join learning_domain_candidates ldc on ldc.company_id=lra.company_id and ldc.id=lra.candidate_link_id
-                join learning_hypotheses lh on lh.company_id=ldc.company_id and lh.id=ldc.hypothesis_id
-                join learning_cycles lc on lc.company_id=lh.company_id and lc.id=lh.cycle_id
-                where source_step.company_id=wr.company_id and source_step.workflow_run_id=wr.id))
-              or ${workflowRunScope})
-            and not aw_workflow_authoring_source_erased(w.company_id,w.id)
-            and not aw_workflow_run_authoring_source_erased(wr.company_id,wr.id)))
-        or (n.kind='routine_run' and not exists(select 1 from routine_runs rr
-          join routines p on p.id=rr.routine_id and p.company_id=rr.company_id
-          join routine_revisions v on v.id=rr.routine_revision_id and v.routine_id=rr.routine_id and v.company_id=rr.company_id
-          where rr.id=n.id and rr.company_id=${company} and ${conversationRoutine}
-            and v.snapshot->'version'='1'::jsonb
-            and lower(v.snapshot->'routine'->>'id')=rr.routine_id::text
-            and lower(v.snapshot->'routine'->>'companyId')=rr.company_id::text
-            and v.snapshot->'routine' ? 'projectId' and v.snapshot->'routine' ? 'parentIssueId'
-            and not aw_conversation_routine_source_erased(p.company_id,p.id)))
+        or (n.kind='run' and ${runPrivateMemoryFailure})
+        or (n.kind='workflow_run' and not ${workflowRunReadable})
+        or (n.kind='routine_run' and not ${routineRunReadable})
     ) end
   )`;
 }
@@ -1430,11 +1503,12 @@ export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: Au
       });
     }
   }
+  const temporalScope = memoryTemporalReadScopes.getStore();
+  const readCondition = await issueReadSqlConditionInMemoryScope(db, actor, issue.id);
   const readQuery = db.select({ id: issues.id }).from(issues).where(and(eq(issues.id, issue.id), eq(issues.companyId, issue.companyId),
-    await issueReadSqlConditionInMemoryScope(db, actor, issue.id))).limit(1);
+    readCondition)).limit(1);
   const readable = (await nativeIssuePrivacyDiagnosticQuery(db, actor, "effective_acl", readQuery,
     () => readQuery)).length > 0;
-  const temporalScope = memoryTemporalReadScopes.getStore();
   if (!readable && process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1" &&
       temporalScope?.active && temporalScope.companyId === issue.companyId &&
       nativeTaskReaderScopeDiagnostics < 16) {
@@ -1442,6 +1516,12 @@ export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: Au
     const company = sql`${issue.companyId}::uuid`;
     const rowId = sql`${issue.id}::uuid`;
     const ownerRead = issuePrincipalAccess(actor, rowId, company);
+    const diagnosticContextIds = activeMemoryTemporalContexts(db, actor, "issue", issue.id);
+    const captureSnapshotDiagnostic: NativeIssueSnapshotDiagnostic = {};
+    taskSourcePrivacySqlCondition(db, "issue", rowId, company, actor, diagnosticContextIds, captureSnapshotDiagnostic);
+    const graphOnlyDiagnostic: NativeIssueSnapshotDiagnostic = {};
+    const graphOnlyCondition = taskSourcePrivacySqlCondition(db, "issue", rowId, company, actor, diagnosticContextIds,
+      graphOnlyDiagnostic, true);
     const humanId = actor.type === "board" ? actor.userId : actor.onBehalfOfUserId;
     const actorRunCurrent = actor.type === "agent" && actor.agentId && actor.runId
       ? sql`exists(select 1 from heartbeat_runs r where r.id=${actor.runId} and r.company_id=${company}
@@ -1455,6 +1535,8 @@ export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: Au
       principalCurrent: boolean; conversationIdentity: boolean; protocolOne: boolean; snapshotPresent: boolean;
       snapshotInvalidated: boolean; snapshotOwnerHashValid: boolean; snapshotDigestValid: boolean;
       actorRunStatusRunning: boolean;
+      actualSnapshotValid: boolean; actualSnapshotCorrupt: boolean; graphOnlyReadable: boolean;
+      graphDenials: string[]; projectFacts: string;
       issuePolicyEdgesValid: boolean; projectPolicyEdgesValid: boolean; runPolicyEdgesValid: boolean;
       recognizedInputKinds: boolean; taskInputOwnersValid: boolean; contextInputOwnersValid: boolean;
       finalDispatchPrefixValid: boolean; sourceEdgeKinds: string[]; unreadableDirectIssueSources: number;
@@ -1464,6 +1546,11 @@ export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: Au
         ${ownerRead} as "ownerAcl", ${privatePrincipalCurrent(actor, company)} as "principalCurrent",
         ${actorRunCurrent} as "actorRunStatusRunning",
         ${conversationRead} as "conversationIdentity",
+        ${captureSnapshotDiagnostic?.valid ?? sql`false`} as "actualSnapshotValid",
+        ${captureSnapshotDiagnostic?.corrupt ?? sql`false`} as "actualSnapshotCorrupt",
+        ${graphOnlyCondition} as "graphOnlyReadable",
+        ${graphOnlyDiagnostic.graphDenials ?? sql`'{}'::text[]`} as "graphDenials",
+        ${graphOnlyDiagnostic.projectFacts ?? sql`'{}'::text`} as "projectFacts",
         coalesce((select i.payload_source_protocol_version=1 from issues i where i.id=${rowId} and i.company_id=${company}),false) as "protocolOne",
         coalesce((select i.payload_source_snapshot is not null from issues i where i.id=${rowId} and i.company_id=${company}),false) as "snapshotPresent",
         coalesce((select i.payload_source_snapshot_invalidated from issues i where i.id=${rowId} and i.company_id=${company}),true) as "snapshotInvalidated",
@@ -1539,6 +1626,7 @@ export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: Au
       actorSource: actor.source ?? "unknown", scopeDbMatches: temporalScope.db === (db as object),
       scopeActorMatches: temporalScope.actorKey === routineActorKey(actor), scopeIssueMember: temporalScope.issueIds.has(issue.id),
       scopeRunMember: actor.type === "agent" && actor.runId ? temporalScope.runIds.has(actor.runId) : false,
+      snapshotPredicateCaptured: Boolean(captureSnapshotDiagnostic?.valid && captureSnapshotDiagnostic.corrupt),
       facts: facts ?? null }));
   }
   return readable;
@@ -1601,11 +1689,49 @@ export async function canActorReadProjectPrivacy(db: Db | DbTransaction, actor: 
  * This narrows payload visibility; company/action and V8 copy checks still apply. */
 export async function canActorReadHeartbeatRunPrivacy(db: Db | DbTransaction, actor: AuthorizationActor, source: { id: string; companyId: string },
 ): Promise<boolean> {
-  return (await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+  const readable = (await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
     eq(heartbeatRuns.id, source.id), eq(heartbeatRuns.companyId, source.companyId),
     await heartbeatRunReadSqlConditionInMemoryScope(db, actor, source.id),
   )).limit(1)).length > 0;
+  if (!readable && process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1" && nativeRunReaderDiagnostics < 16) {
+    nativeRunReaderDiagnostics += 1;
+    const scope = memoryTemporalReadScopes.getStore();
+    const scopeMatches = scope?.active && scope.companyId === source.companyId &&
+      scope.actorKey === routineActorKey(actor) && scope.runIds.has(source.id);
+    const company = sql`${source.companyId}::uuid`;
+    const runId = sql`${source.id}::uuid`;
+    const actorRunId = actor.type === "agent" && actor.runId && privacyUuid.test(actor.runId) ? actor.runId : null;
+    // This counterfactual is read-only diagnostic evidence. It never supplies
+    // authorization or transports a temporal capability into another DB/tx.
+    const scopedGraph = scopeMatches
+      ? taskSourcePrivacySqlCondition(db, "run", runId, company, actor, scope.contextIds)
+      : sql`null::boolean`;
+    const [facts] = await db.execute<{
+      principalCurrent: boolean; sourceExists: boolean; sourceBindingValid: boolean;
+      sourceStatus: string | null; actorRunStatus: string | null; actorOwnsSource: boolean;
+      retainedContextCount: number; diagnosticScopedGraph: boolean | null;
+    }>(sql`select ${privatePrincipalCurrent(actor, company)} as "principalCurrent",
+      exists(select 1 from heartbeat_runs r where r.id=${runId} and r.company_id=${company}) as "sourceExists",
+      coalesce((select ${heartbeatRunTaskBindingCondition(sql`r`)} from heartbeat_runs r
+        where r.id=${runId} and r.company_id=${company}),false) as "sourceBindingValid",
+      (select r.status from heartbeat_runs r where r.id=${runId} and r.company_id=${company}) as "sourceStatus",
+      (select r.status from heartbeat_runs r where r.id=${actorRunId}::uuid and r.company_id=${company}) as "actorRunStatus",
+      coalesce((select r.agent_id::text=${actor.type === "agent" ? actor.agentId ?? null : null}
+        and r.responsible_user_id=${actor.type === "agent" ? actor.onBehalfOfUserId ?? null : null}
+        from heartbeat_runs r where r.id=${runId} and r.company_id=${company}),false) as "actorOwnsSource",
+      (select count(*)::integer from context_manifests c where c.company_id=${company} and c.run_id=${runId}) as "retainedContextCount",
+      ${scopedGraph} as "diagnosticScopedGraph"`);
+    console.error("native_run_reader_scope_denial", JSON.stringify({
+      actorType: actor.type, actorSource: actor.source ?? "unknown", actorIsSourceRun: actorRunId === source.id,
+      dbIsTransaction: is(db, PgTransaction), scopePresent: Boolean(scope?.active),
+      scopeDbMatches: scope?.db === (db as object), scopeActorAndRunMatch: Boolean(scopeMatches),
+      scopeContextCount: scope?.contextIds.length ?? null,
+      facts: facts ?? null,
+    }));
+  }
+  return readable;
 }
+let nativeRunReaderDiagnostics = 0;
 
 /** Same persisted native run closure for pre-limit projections and direct reads. */
 export async function heartbeatRunReadSqlCondition(_db: Db | DbTransaction, actor: AuthorizationActor): Promise<SQL<boolean>> {

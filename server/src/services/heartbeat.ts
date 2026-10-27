@@ -23066,6 +23066,55 @@ export function heartbeatService(
           try {
             await assertNativeAnalyticalRunPayloadAccess(db, run.companyId, run.id);
           } catch (error) {
+            if (
+              error instanceof HttpError &&
+              (error.details as { code?: unknown } | undefined)?.code ===
+                "analytical_source_access_lost"
+            ) {
+              // A provider can settle its canonical result before the adapter
+              // drains a final buffered stdout/stderr callback. The terminal
+              // result is already authoritative; drop that late chunk without
+              // changing its run state or publishing additional output.
+              // While the run is still active, source loss remains fail-closed
+              // and follows the existing cancellation path below.
+              let latestRun:
+                | {
+                    id: string;
+                    companyId: string;
+                    agentId: string;
+                    status: string;
+                  }
+                | undefined;
+              try {
+                [latestRun] = await db
+                  .select({
+                    id: heartbeatRuns.id,
+                    companyId: heartbeatRuns.companyId,
+                    agentId: heartbeatRuns.agentId,
+                    status: heartbeatRuns.status,
+                  })
+                  .from(heartbeatRuns)
+                  .where(
+                    and(
+                      eq(heartbeatRuns.id, run.id),
+                      eq(heartbeatRuns.companyId, run.companyId),
+                      eq(heartbeatRuns.agentId, run.agentId),
+                    ),
+                  )
+                  .limit(1);
+              } catch {
+                // An uncertain reread cannot turn a source denial into an
+                // allowed output write; keep the active-run fail-closed path.
+              }
+              if (
+                latestRun?.id === run.id &&
+                latestRun.companyId === run.companyId &&
+                latestRun.agentId === run.agentId &&
+                isHeartbeatRunTerminalStatus(latestRun.status)
+              ) {
+                return;
+              }
+            }
             clearHeartbeatRunRuntimeStatus(run.id);
             if (error instanceof HttpError && (error.details as {code?:unknown}|undefined)?.code === "analytical_source_access_lost") {
               // Do not await the existing stop owner inside its output callback:

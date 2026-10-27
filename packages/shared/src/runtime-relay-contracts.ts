@@ -37,7 +37,9 @@ const sandboxExecRequest = z.object({
     inputTokensUpperBound: z.number().int().min(1).max(2_000_000),
     maxOutputTokens: z.number().int().min(256).max(8192),
   }).strict().optional(),
-  stdinBase64: z.string().max(512 * 1024).regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/),
+  // Pipe the bounded string schema into the regex validator so Zod never
+  // evaluates the expression against an over-limit attacker-controlled body.
+  stdinBase64: z.string().max(512 * 1024).pipe(z.string().regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/)),
 }).strict().superRefine((value, ctx) => {
   const commandBytes = new TextEncoder().encode(JSON.stringify(value.argv)).byteLength + new TextEncoder().encode(JSON.stringify(value.env)).byteLength + (value.brokerCredential?.capabilityToken.length ?? 0) + (value.modelBrokerCredential?.capabilityToken.length ?? 0) + value.stdinBase64.length;
   if (commandBytes > 768 * 1024) ctx.addIssue({ code: "custom", message: "exec_request_too_large" });

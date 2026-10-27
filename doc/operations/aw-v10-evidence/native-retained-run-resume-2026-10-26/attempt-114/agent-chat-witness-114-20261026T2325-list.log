@@ -1,0 +1,3 @@
+Listing tests:
+  [chromium] › agent-chat-sessions.spec.ts:59:1 › chat first open is read-only; concurrent first sends and retries share one task
+Total: 1 test in 1 file
