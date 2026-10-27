@@ -143,8 +143,6 @@ describeEmbeddedPostgres("pipeline routes", () => {
     await db.insert(principalPermissionGrants).values(grantsForHumanRole("owner").map(grant => ({
       companyId, principalType: "user" as const, principalId: userId, ...grant,
     })));
-    await db.insert(principalPermissionGrants).values({ companyId, principalType: "user", principalId: userId,
-      permissionKey: "pipelines:write", scope: null });
     const actor: Express.Request["actor"] = { type: "board", source: "session", userId, sessionId,
       companyIds: [companyId], memberships: [{ companyId, membershipRole: "owner", status: "active" }] };
     return { userId, sessionId, actor };
@@ -244,6 +242,28 @@ describeEmbeddedPostgres("pipeline routes", () => {
     source: "local_implicit",
     isInstanceAdmin: true,
   };
+
+  it("allows company owners to create pipelines by role default and denies after current grant revocation", async () => {
+    const company = await seedCompany("Pipeline owner role default");
+    const owner = await seedHumanMember(company.id, "Pipeline owner");
+    const http = request(app(owner.actor));
+    await http.post(`/api/companies/${company.id}/pipelines`).send({
+      key: "owner-default",
+      name: "Owner default pipeline",
+    }).expect(201);
+
+    await db.delete(principalPermissionGrants).where(and(
+      eq(principalPermissionGrants.companyId, company.id),
+      eq(principalPermissionGrants.principalType, "user"),
+      eq(principalPermissionGrants.principalId, owner.userId),
+      eq(principalPermissionGrants.permissionKey, "pipelines:write"),
+    ));
+    const revoked = await http.post(`/api/companies/${company.id}/pipelines`).send({
+      key: "owner-after-revocation",
+      name: "Owner after revocation",
+    }).expect(403);
+    expect(revoked.body).toMatchObject({ code: "pipeline_write_forbidden" });
+  });
 
   it("exposes the pipeline and case route surface", async () => {
     const company = await seedCompany();
@@ -1072,6 +1092,38 @@ describeEmbeddedPostgres("pipeline routes", () => {
     const agentSearch = await secondHttp.get(`/api/pipelines/${pipeline.body.id}/cases?q=PRIVATE%20AGENT`).expect(200);
     expect(agentSearch.body.map((row: { case: { id: string } }) => row.case.id)).not.toContain(agentCase.case.id);
   });
+
+  it("retries a live case-body proof after session-row contention and rechecks the revoked session", async () => {
+    const company = await seedCompany("Pipeline session contention");
+    const owner = await seedHumanMember(company.id, "Contended pipeline reader");
+    const http = request(app(owner.actor));
+    const pipeline = await request(app(boardActor)).post(`/api/companies/${company.id}/pipelines`)
+      .send({ key: "session-contention", name: "Session contention" }).expect(201);
+    const manualCase = await pipelineService(db).ingestCase({ companyId: company.id, pipelineId: pipeline.body.id,
+      caseKey: "session-contention", title: "Current session owns this body", actor: { type: "user", userId: owner.userId } });
+    await http.get(`/api/cases/${manualCase.case.id}`).expect(200);
+
+    let signalLockAcquired!: () => void;
+    let releaseRowLock!: () => void;
+    const lockAcquired = new Promise<void>(resolve => { signalLockAcquired = resolve; });
+    const releaseGate = new Promise<void>(resolve => { releaseRowLock = resolve; });
+    const holdSession = db.transaction(async tx => {
+      await tx.select({ id: authSessions.id }).from(authSessions)
+        .where(eq(authSessions.id, owner.sessionId)).for("update");
+      signalLockAcquired();
+      await releaseGate;
+    });
+    await lockAcquired;
+
+    const pendingRead = http.get(`/api/cases/${manualCase.case.id}`);
+    await new Promise(resolve => setTimeout(resolve, 50));
+    releaseRowLock();
+    await holdSession;
+    await db.delete(authSessions).where(eq(authSessions.id, owner.sessionId));
+
+    const denied = await pendingRead.expect(404);
+    expect(JSON.stringify(denied.body)).not.toContain("Current session owns this body");
+  }, 90_000);
 
   it("returns 404 for cross-company pipeline route classes", async () => {
     const company = await seedCompany();

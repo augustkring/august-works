@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import {
   ANNOUNCEMENT_IMAGE_MAX_BYTES, ANNOUNCEMENT_MANIFEST_MAX_BYTES, ANNOUNCEMENT_ANIMATION_MAX_BYTES,
   announcementManifestSchema, isAnnouncementEligible,
-  type AnnouncementManifest,
+  type Announcement, type AnnouncementManifest,
 } from "@paperclipai/shared";
 import { guardedRemoteHttpFetch } from "./remote-http-fetch.js";
 import { validateAnnouncementAnimation } from "./announcement-animation.js";

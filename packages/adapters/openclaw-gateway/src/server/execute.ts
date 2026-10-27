@@ -1,4 +1,5 @@
 import { adapterWebSocketOptions } from "@paperclipai/adapter-utils/network-policy";
+import { createTarballFromDirectory } from "@paperclipai/adapter-utils/sandbox-managed-runtime";
 import type {
   AdapterExecutionContext,
   AdapterExecutionResult,
@@ -17,11 +18,138 @@ import {
   selectInitialCommunicationGuidance,
   joinPromptSections,
   stringifyPaperclipWakePayload,
+  readPaperclipRuntimeSkillEntries,
+  readRequiredPlatformSkillFiles,
+  type PlatformSkillFile,
 } from "@paperclipai/adapter-utils/server-utils";
 import crypto, { randomUUID } from "node:crypto";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { WebSocket } from "ws";
 
 type SessionKeyStrategy = "fixed" | "issue" | "run";
+const __moduleDir = path.dirname(fileURLToPath(import.meta.url));
+
+const REQUIRED_SKILL_GATEWAY_METHODS = [
+  "skills.upload.begin",
+  "skills.upload.chunk",
+  "skills.upload.commit",
+  "skills.install",
+  "skills.status",
+  "skills.files.get",
+] as const;
+
+async function createSkillArchive(files: PlatformSkillFile[]): Promise<{ directory: string; archive: string; cleanup: () => Promise<void> }> {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-openclaw-skill-"));
+  const archive = path.join(directory, "skill.tar");
+  const staged = path.join(directory, "source");
+  await fs.mkdir(staged, { mode: 0o700 });
+  for (const file of files) {
+    const target = path.join(staged, ...file.path.split("/"));
+    await fs.mkdir(path.dirname(target), { recursive: true, mode: 0o700 });
+    await fs.writeFile(target, file.bytes, { mode: 0o400, flag: "wx" });
+  }
+  try {
+    await createTarballFromDirectory({ localDir: staged, archivePath: archive });
+    return { directory, archive, cleanup: () => fs.rm(directory, { recursive: true, force: true }) };
+  } catch (error) {
+    await fs.rm(directory, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+async function deliverRequiredPlatformSkill(params: {
+  client: GatewayWsClient;
+  methods: Set<string>;
+  ctx: AdapterExecutionContext;
+  agentId: string | null;
+}): Promise<void> {
+  const pin = params.ctx.platformSkillAdmission;
+  if (!pin) return;
+  for (const method of REQUIRED_SKILL_GATEWAY_METHODS) {
+    if (!params.methods.has(method)) throw new Error("OpenClaw Gateway cannot deliver the required Blentera Skill: advertised method " + method + " is unavailable");
+  }
+  if (pin.key !== "blentera-platform" || !/^sha256:[a-f0-9]{64}$/.test(pin.digest) || !pin.version || !/^[a-f0-9]{40}$/.test(pin.sourceSha)) {
+    throw new Error("OpenClaw Gateway cannot deliver the required Blentera Skill: current immutable release pin is invalid");
+  }
+  const entries = await readPaperclipRuntimeSkillEntries(params.ctx.config, __moduleDir);
+  const matchingEntries = entries.filter((entry) => entry.key === pin.key);
+  if (matchingEntries.length !== 1 || matchingEntries[0]?.sourceStatus === "missing" || !matchingEntries[0]?.versionId) {
+    throw new Error("OpenClaw Gateway cannot deliver the required Blentera Skill: its exact run-pinned source is unavailable");
+  }
+  const files = await readRequiredPlatformSkillFiles(matchingEntries[0].source, pin);
+  const packed = await createSkillArchive(files);
+  try {
+    const archiveBytes = await fs.readFile(packed.archive);
+    if (!archiveBytes.byteLength || archiveBytes.byteLength > 4 * 1024 * 1024) throw new Error("Required Paperclip Skill archive exceeds the Gateway 4 MiB upload limit");
+    const archiveSha256 = crypto.createHash("sha256").update(archiveBytes).digest("hex");
+    const slug = "blentera-platform";
+    const statusBefore = await params.client.request<Record<string, unknown>>("skills.status", {
+      ...(params.agentId ? { agentId: params.agentId } : {}),
+    }, { timeoutMs: 15_000 });
+    const statusSkills = asRecord(statusBefore)?.skills;
+    const currentMatches = Array.isArray(statusSkills) ? statusSkills.filter((item) => asRecord(item)?.skillKey === slug) : [];
+    const managedSkillsDir = nonEmpty(asRecord(statusBefore)?.managedSkillsDir);
+    if (!managedSkillsDir || currentMatches.length > 1) throw new Error("OpenClaw Gateway cannot prove the required Skill's effective workspace source");
+    const current = asRecord(currentMatches[0]);
+    if (current) {
+      const currentPath = nonEmpty(current.filePath);
+      const expectedTarget = path.resolve(managedSkillsDir, slug, "SKILL.md");
+      if (!currentPath || path.resolve(currentPath) !== expectedTarget) throw new Error("OpenClaw Gateway has a shadowing Skill that cannot be safely replaced");
+      const currentFile = await params.client.request<Record<string, unknown>>("skills.files.get", {
+        ...(params.agentId ? { agentId: params.agentId } : {}), path: currentPath,
+      }, { timeoutMs: 15_000 });
+      if (asRecord(currentFile)?.content !== files[0]?.bytes.toString("utf8")) throw new Error("OpenClaw Gateway has an unverified Skill at the managed target; refusing to overwrite it");
+    }
+
+    const begin = asRecord(await params.client.request("skills.upload.begin", {
+      kind: "skill-archive", slug, sizeBytes: archiveBytes.byteLength, sha256: archiveSha256,
+      force: current !== null, idempotencyKey: "paperclip:" + params.ctx.runId + ":" + pin.version + ":" + archiveSha256,
+    }, { timeoutMs: 15_000 }));
+    const uploadId = nonEmpty(begin?.uploadId);
+    if (!uploadId || typeof begin?.receivedBytes !== "number" || !Number.isSafeInteger(begin.receivedBytes) ||
+        begin.receivedBytes < 0 || begin.receivedBytes > archiveBytes.byteLength) {
+      throw new Error("OpenClaw Gateway did not start or resume the exact required Skill upload");
+    }
+    const maxChunkBytes = 1024 * 1024;
+    for (let offset = begin.receivedBytes; offset < archiveBytes.byteLength;) {
+      const chunk = archiveBytes.subarray(offset, Math.min(offset + maxChunkBytes, archiveBytes.byteLength));
+      const uploaded = asRecord(await params.client.request("skills.upload.chunk", {
+        uploadId, offset, dataBase64: chunk.toString("base64"),
+      }, { timeoutMs: 30_000 }));
+      const nextOffset = uploaded?.receivedBytes;
+      if (typeof nextOffset !== "number" || nextOffset !== offset + chunk.byteLength) throw new Error("OpenClaw Gateway did not acknowledge the exact Skill upload offset");
+      offset = nextOffset;
+    }
+    const committed = asRecord(await params.client.request("skills.upload.commit", { uploadId, sha256: archiveSha256 }, { timeoutMs: 30_000 }));
+    if (committed?.sha256 !== archiveSha256) throw new Error("OpenClaw Gateway committed a different Skill archive digest");
+    const installed = asRecord(await params.client.request("skills.install", {
+      source: "upload", ...(params.agentId ? { agentId: params.agentId } : {}), uploadId, slug,
+      force: current !== null, sha256: archiveSha256,
+    }, { timeoutMs: 60_000 }));
+    if (installed?.ok !== true || installed.sha256 !== archiveSha256) throw new Error("OpenClaw Gateway did not verify installation of the exact required Skill archive");
+
+    const statusAfter = asRecord(await params.client.request<Record<string, unknown>>("skills.status", {
+      ...(params.agentId ? { agentId: params.agentId } : {}), refresh: true,
+    }, { timeoutMs: 20_000 }));
+    const afterMatches = Array.isArray(statusAfter?.skills) ? statusAfter.skills.filter((item) => asRecord(item)?.skillKey === slug) : [];
+    const after = asRecord(afterMatches[0]);
+    const afterPath = nonEmpty(after?.filePath);
+    const afterManagedDir = nonEmpty(statusAfter?.managedSkillsDir);
+    const expectedTarget = afterManagedDir ? path.resolve(afterManagedDir, slug, "SKILL.md") : "";
+    if (afterMatches.length !== 1 || !afterPath || path.resolve(afterPath) !== expectedTarget || after?.eligible !== true || after?.blockedByAgentFilter === true) {
+      throw new Error("OpenClaw Gateway did not expose the delivered Blentera Skill as the unique effective workspace version");
+    }
+    const verifiedFile = await params.client.request<Record<string, unknown>>("skills.files.get", {
+      ...(params.agentId ? { agentId: params.agentId } : {}), path: afterPath,
+    }, { timeoutMs: 15_000 });
+    if (asRecord(verifiedFile)?.content !== files[0]?.bytes.toString("utf8")) throw new Error("OpenClaw Gateway effective Blentera Skill content failed readback verification");
+  } finally {
+    await packed.cleanup();
+  }
+}
 
 type WakePayload = {
   runId: string;
@@ -862,12 +990,13 @@ export const discoverCapabilities: NonNullable<ServerAdapterModule["discoverCapa
     const advertised = asRecord(hello?.features)?.methods;
     if (!Array.isArray(advertised) || advertised.length > 500 || advertised.some((method) => typeof method !== "string")) throw new Error("Gateway method discovery is unavailable");
     const methods = new Set(advertised), skillDiscovery = methods.has("skills.status"), toolDiscovery = methods.has("tools.catalog");
+    const skillsSync = REQUIRED_SKILL_GATEWAY_METHODS.every((method) => methods.has(method));
     const agentId = nonEmpty(ctx.config.agentId);
     const skills = skillDiscovery ? inventory(asRecord(await client.request("skills.status", agentId ? { agentId } : {}, { timeoutMs: 10_000 }))?.skills) : [];
     const tools = toolDiscovery ? inventory(asRecord(await client.request("tools.catalog", agentId ? { agentId } : {}, { timeoutMs: 10_000 }))?.tools) : [];
     const version = nonEmpty(asRecord(hello?.server)?.version);
     if (version && version.length > 200) throw new Error("Invalid gateway version");
-    return { provider: "openclaw", version, features: { sessions: methods.has("agent") && methods.has("agent.wait"), cancellation: methods.has("chat.abort"), steering: false, structuredOutput: false, skillsDiscovery: skillDiscovery, skillsSync: false, toolDiscovery, memoryScoping: false }, skills, tools, discoveredAt: new Date().toISOString() };
+    return { provider: "openclaw", version, features: { sessions: methods.has("agent") && methods.has("agent.wait"), cancellation: methods.has("chat.abort"), steering: false, structuredOutput: false, skillsDiscovery: skillDiscovery, skillsSync, toolDiscovery, memoryScoping: false }, skills, tools, discoveredAt: new Date().toISOString() };
   } finally { client.close(); }
 };
 
@@ -1366,13 +1495,25 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       );
 
       // Keep any server-side continuation lock through retryable websocket
-      // setup and backoff. The first agent request is the remote-work boundary:
-      // once it is sent, retrying would be unsafe because the gateway may have
-      // accepted work even if the response is lost.
+      // setup and backoff. Required Skill delivery is performed and verified
+      // before the task request; once agent is sent, retrying is unsafe because
+      // the Gateway may have accepted work even if the response is lost.
       if (ctx.signal?.aborted) return { exitCode: null, signal: null, timedOut: false, errorCode: "cancelled", errorMessage: "Execution cancelled before provider dispatch" };
       const gatewayMethods = asRecord(hello?.features)?.methods;
-      const supportsCancellation = Array.isArray(gatewayMethods) && gatewayMethods.includes("chat.abort");
-      if (supportsCancellation) await ctx.onCancellationReady?.();
+      const methodSet = new Set(Array.isArray(gatewayMethods) ? gatewayMethods.filter((method): method is string => typeof method === "string") : []);
+      const supportsCancellation = methodSet.has("chat.abort");
+      if (ctx.platformSkillAdmission) {
+        await ctx.onCancellationReady?.();
+        if (ctx.signal?.aborted) return { exitCode: null, signal: null, timedOut: false, errorCode: "cancelled", errorMessage: "Execution cancelled before required Skill delivery" };
+        await deliverRequiredPlatformSkill({
+          client,
+          methods: methodSet,
+          ctx,
+          agentId: configuredAgentId,
+        });
+      } else if (supportsCancellation) {
+        await ctx.onCancellationReady?.();
+      }
       reportDispatch();
       const acceptedPayload = await client.request<Record<string, unknown>>("agent", agentParams, {
         timeoutMs: connectTimeoutMs,

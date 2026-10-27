@@ -1,0 +1,1 @@
+packages/paperclip-runner/src/catalog/semantic-action-catalog.ts(208,30): error TS2353: Object literal may only specify known properties, and 'const' does not exist in type 'PaperclipJsonSchema'.

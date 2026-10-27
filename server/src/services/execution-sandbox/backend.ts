@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { SandboxCapabilitySnapshot, SandboxPolicyCompilation } from "@paperclipai/shared";
+import { SANDBOX_CONTROLS, type SandboxCapabilitySnapshot, type SandboxPolicyCompilation } from "@paperclipai/shared";
 
 export interface SandboxIdentity { companyId: string; bindingId: string; cellId: string; cellGeneration: string; sandboxRef: string }
 export interface PreparedSandbox extends SandboxIdentity { backendVersion: string; imageDigest: string }
@@ -37,7 +37,8 @@ const PROBE_DEFINITIONS = [
 /** The controller selects probes from the immutable binding policy and binds
  * every host result to that policy. The host cannot substitute its own suite. */
 export function sandboxProbeCases(policyHash: string, requiredControls: readonly string[]): SandboxProbeCase[] {
-  return PROBE_DEFINITIONS.filter(test => requiredControls.includes(test.control)).map(test => ({
+  const controls = requiredControls.length ? requiredControls : SANDBOX_CONTROLS;
+  return PROBE_DEFINITIONS.filter(test => controls.includes(test.control)).map(test => ({
     ...test,
     contractHash: createHash("sha256").update(JSON.stringify({ suiteVersion: "aw-v7-boundary-2", policyHash, ...test })).digest("hex"),
   }));

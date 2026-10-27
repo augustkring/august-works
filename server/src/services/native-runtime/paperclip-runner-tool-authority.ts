@@ -36,7 +36,7 @@ import { getStorageService } from "../../storage/index.js";
 import type { StorageService } from "../../storage/types.js";
 import { assetService } from "../assets.js";
 import { workspaceFileResourceService } from "../workspace-file-resources.js";
-import { badRequest, forbidden } from "../../errors.js";
+import { badRequest, conflict, forbidden } from "../../errors.js";
 import { searchRunnerApi } from "./runner-api-catalog.js";
 import type { NativeModelOutputCapture, NativePayloadSourceSet } from "./native-execution-input.js";
 import { assembleNativeContextRead, type NativeContextReadBinding } from "../native-direct-input.js";
@@ -69,7 +69,7 @@ import {
   managedNativeRememberToolDescriptor,
   type ScopedToolGatewayContext,
 } from "../tool-gateway.js";
-import { CAPABILITY_SEMANTIC_TOOL_CATALOG, runnerCodexDynamicToolsFit } from "../../vendor/paperclip-runner/index.js";
+import { CAPABILITY_SEMANTIC_TOOL_CATALOG, paperclipSemanticAction, runnerCodexDynamicToolsFit } from "../../vendor/paperclip-runner/index.js";
 import { agentService } from "../agents.js";
 import { approvalService } from "../approvals.js";
 import { documentService } from "../documents.js";
@@ -108,7 +108,7 @@ import {
 
 const IMPLEMENTED_OPERATIONS = new Set([
   "search_api", "call_api", "hire_agent",
-  "get_task_context", "get_task_history", "search_tasks", "report_progress",
+  "get_task_context", "get_task_history", "search_tasks", "report_progress", "update_task", "propose_completion",
   "request_human_input",
   "create_skill", "create_task", "reassign_task", "set_dependencies", "create_project", "list_project_repositories", "list_projects", "register_deliverable",
   "list_documents", "read_document", "list_document_revisions", "write_document",
@@ -499,6 +499,12 @@ export class PaperclipRunnerToolAuthority {
               }
             : descriptor.inputSchema,
       }));
+    for (const operationId of ["update_task", "propose_completion"] as const) {
+      if (!IMPLEMENTED_OPERATIONS.has(operationId)) continue;
+      const descriptor = paperclipSemanticAction(operationId);
+      if (!descriptor || !descriptor.allowedModes.includes(workMode)) continue;
+      definitions.push({ name: operationId, description: descriptor.description, inputSchema: descriptor.inputSchema });
+    }
     // Keep the provider session's direct tool catalog stable across ordinary
     // and truncated external-chat turns. Execution still fails closed unless
     // this exact run carries a server-verified current-wake binding.
@@ -1102,6 +1108,9 @@ export class PaperclipRunnerToolAuthority {
         return { approval, tasks: tasks.map((row) => row.issue) };
       }
       case "report_progress": return this.#reportProgress(input);
+      case "update_task": return this.#updateTask(input);
+      case "propose_completion": return this.#proposeCompletion(input,
+        (await captureRunIdentity(this.db, this.binding)).context?.id ?? null);
       case "request_human_input": return this.#requestHumanInput(input,
         (await captureRunIdentity(this.db, this.binding)).context?.id ?? null);
       case "create_task": return this.#createTask(input,
@@ -1524,6 +1533,129 @@ export class PaperclipRunnerToolAuthority {
         return result;
       },
     );
+    if (publication) publishActivity(publication);
+    return result;
+  }
+
+  async #updateTask(input: Record<string, unknown>): Promise<unknown> {
+    const idempotencyKey = requiredString(input.idempotencyKey);
+    const expectedUpdatedAt = requiredString(input.expectedUpdatedAt);
+    if (!Number.isFinite(Date.parse(expectedUpdatedAt)) || new Date(expectedUpdatedAt).toISOString() !== expectedUpdatedAt)
+      throw new Error("paperclip_runner_tool_input_invalid");
+    const editableFields = ["title", "description", "priority"] as const;
+    if (idempotencyKey.length > 240 || !editableFields.some((key) => Object.hasOwn(input, key)) ||
+      Object.keys(input).some((key) => !["idempotencyKey", "expectedUpdatedAt", ...editableFields].includes(key))) {
+      throw new Error("paperclip_runner_tool_input_invalid");
+    }
+    if (input.title !== undefined && (typeof input.title !== "string" || !input.title.trim() || input.title.length > 500))
+      throw new Error("paperclip_runner_tool_input_invalid");
+    if (input.description !== undefined && input.description !== null &&
+      (typeof input.description !== "string" || input.description.length > 50_000))
+      throw new Error("paperclip_runner_tool_input_invalid");
+    if (input.priority !== undefined && !["critical", "high", "medium", "low"].includes(String(input.priority)))
+      throw new Error("paperclip_runner_tool_input_invalid");
+
+    let publication: Awaited<ReturnType<typeof persistActivity>>["publication"] | null = null;
+    const result = await this.#withMutationReceipt("update_task", idempotencyKey, input, async (tx, context) => {
+      if (context.issue.updatedAt.toISOString() !== expectedUpdatedAt)
+        throw conflict("Task changed since it was read; refresh the Task before updating", { code: "task_version_conflict" });
+      const actor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: this.binding.companyId,
+        agentId: this.binding.agentId, runId: this.binding.runId, onBehalfOfUserId: context.run.responsibleUserId };
+      const decision = await authorizationService(tx).decide({ actor, action: "issue:mutate", resource: {
+        type: "issue", companyId: this.binding.companyId, issueId: this.binding.issueId,
+        projectId: context.issue.projectId, parentIssueId: context.issue.parentId,
+        assigneeAgentId: context.issue.assigneeAgentId, assigneeUserId: context.issue.assigneeUserId,
+        status: context.issue.status,
+      } });
+      if (!decision.allowed) throw forbidden(decision.explanation);
+      const updated = await issueService(tx).update(this.binding.issueId, {
+        companyGuard: this.binding.companyId,
+        ...(input.title !== undefined ? { title: (input.title as string).trim() } : {}),
+        ...(input.description !== undefined ? { description: input.description as string | null } : {}),
+        ...(input.priority !== undefined ? { priority: input.priority as typeof issues.$inferSelect.priority } : {}),
+        actorAgentId: this.binding.agentId,
+        actorRunId: this.binding.runId,
+      }, tx);
+      if (!updated) throw new Error("paperclip_runner_task_not_found");
+      const activity = await persistActivity(tx, {
+        companyId: this.binding.companyId, actorType: "agent", actorId: this.binding.agentId,
+        agentId: this.binding.agentId, runId: this.binding.runId, issueId: this.binding.issueId,
+        action: "issue.updated", entityType: "issue", entityId: this.binding.issueId,
+        details: { identifier: updated.identifier, changedFields: editableFields.filter(key => input[key] !== undefined),
+          status: updated.status, statusVersion: updated.statusVersion, ...this.#transportDetails() },
+      });
+      publication = activity.publication;
+      return { commandId: `update-task:${updated.id}:${updated.statusVersion}`, disposition: "applied",
+        stateRevision: updated.statusVersion, entityRefs: [updated.id], scheduledWakeIds: [],
+        task: { id: updated.id, title: updated.title, description: updated.description, priority: updated.priority,
+          status: updated.status, statusVersion: updated.statusVersion } };
+    });
+    if (publication) publishActivity(publication);
+    return result;
+  }
+
+  async #proposeCompletion(input: Record<string, unknown>, identityContextId: string | null): Promise<unknown> {
+    const idempotencyKey = requiredString(input.idempotencyKey);
+    const expectedUpdatedAt = requiredString(input.expectedUpdatedAt);
+    const summary = requiredString(input.summary);
+    if (!Number.isFinite(Date.parse(expectedUpdatedAt)) || new Date(expectedUpdatedAt).toISOString() !== expectedUpdatedAt ||
+      idempotencyKey.length > 240 || summary.length > 900 ||
+      Object.keys(input).some((key) => !["idempotencyKey", "expectedUpdatedAt", "summary"].includes(key))) {
+      throw new Error("paperclip_runner_tool_input_invalid");
+    }
+
+    let publication: Awaited<ReturnType<typeof persistActivity>>["publication"] | null = null;
+    const result = await this.#withMutationReceipt("propose_completion", idempotencyKey, input, async (tx, context) => {
+      if (context.issue.updatedAt.toISOString() !== expectedUpdatedAt || context.issue.status !== "in_progress")
+        throw conflict("Task changed or is no longer active; refresh it before requesting completion review", { code: "task_version_conflict" });
+      const actor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: this.binding.companyId,
+        agentId: this.binding.agentId, runId: this.binding.runId, onBehalfOfUserId: context.run.responsibleUserId };
+      const decision = await authorizationService(tx).decide({ actor, action: "issue:mutate", resource: {
+        type: "issue", companyId: this.binding.companyId, issueId: this.binding.issueId,
+        projectId: context.issue.projectId, parentIssueId: context.issue.parentId,
+        assigneeAgentId: context.issue.assigneeAgentId, assigneeUserId: context.issue.assigneeUserId,
+        status: context.issue.status,
+      } });
+      if (!decision.allowed) throw forbidden(decision.explanation);
+      const interaction = await issueThreadInteractionService(tx).create(context.issue, {
+        kind: "request_confirmation",
+        idempotencyKey,
+        sourceRunId: this.binding.runId,
+        resolverPolicy: "human_only",
+        title: "Review task completion proposal",
+        summary,
+        continuationPolicy: "wake_assignee",
+        payload: {
+          version: 1,
+          prompt: `The Co-worker says this Task may be ready for completion review: ${summary}`,
+          detailsMarkdown: "Accepting this request records a Human review response. It does not mark the Task complete. The Native finalizer must still assess the current completion contract, durable work evidence, and policy.",
+          acceptLabel: "Review complete",
+          rejectLabel: "Request changes",
+          rejectRequiresReason: true,
+          supersedeOnUserComment: true,
+        },
+      } as never, { agentId: this.binding.agentId, userId: null, identityContextId });
+      const activity = await persistActivity(tx, {
+        companyId: this.binding.companyId, actorType: "agent", actorId: this.binding.agentId,
+        agentId: this.binding.agentId, runId: this.binding.runId, issueId: this.binding.issueId,
+        action: "issue.completion_proposed", entityType: "issue", entityId: this.binding.issueId,
+        details: { interactionId: interaction.id, interactionStatus: interaction.status,
+          currentTaskStatus: context.issue.status, statusCommitted: false,
+          summarySha256: nativeSha256(summary), ...this.#transportDetails() },
+      });
+      publication = activity.publication;
+      return {
+        commandId: `completion-proposal:${interaction.id}`,
+        disposition: "applied",
+        stateRevision: Number(context.issue.statusVersion),
+        entityRefs: [context.issue.id, interaction.id],
+        scheduledWakeIds: [],
+        proposalStatus: "pending_human_review",
+        currentTaskStatus: context.issue.status,
+        taskStatusCommitted: false,
+        evidenceRequirement: "The current Native finalizer must independently assess current completion evidence and policy before changing Task disposition.",
+      };
+    });
     if (publication) publishActivity(publication);
     return result;
   }

@@ -412,7 +412,8 @@ export async function configureManagedConversationSandboxHost(input: {
   const execFacts: Array<{ executable: string; cwdExact: boolean; modelCredentialPresent: boolean;
     managedModelBrokerOriginPresent: boolean;
     assignedMcpEnvironmentAbsent: boolean; credentialEnvironmentAbsent: boolean;
-    nativePreparationPurpose: string | null; providerPackImageProbe: boolean }> = [];
+    nativePreparationPurpose: string | null; providerPackImageProbe: boolean;
+    exitCode: number | null; timedOut: boolean }> = [];
   relayHost.on("message", raw => {
     let message: Record<string, any>;
     try { message = JSON.parse(raw.toString()) as Record<string, any>; } catch { return; }
@@ -440,10 +441,12 @@ export async function configureManagedConversationSandboxHost(input: {
       !requestEnv.PAPERCLIP_NATIVE_MCP_URL && !requestEnv.PAPERCLIP_NATIVE_MCP_TOKEN;
     const providerPackImageProbe = activeNativePreparationPurpose === "provider_artifact" && argv[0] === "sh" &&
       typeof argv[2] === "string" && argv[2].includes("$HOME/.local/share/paperclip-runner/provider-pack");
-    execFacts.push({ executable: argv[0] ?? "", cwdExact: cwd === expectedTaskRoot, modelCredentialPresent,
+    const fact = { executable: argv[0] ?? "", cwdExact: cwd === expectedTaskRoot, modelCredentialPresent,
       managedModelBrokerOriginPresent: requestEnv.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === brokerOrigin,
       assignedMcpEnvironmentAbsent, credentialEnvironmentAbsent: noCredentialEnvironment,
-      nativePreparationPurpose: activeNativePreparationPurpose, providerPackImageProbe });
+      nativePreparationPurpose: activeNativePreparationPurpose, providerPackImageProbe,
+      exitCode: null as number | null, timedOut: false };
+    execFacts.push(fact);
     const env = { ...process.env, ...requestEnv,
       ...(activeNativePreparationPurpose === "provider_artifact" && providerImageHome ? { HOME: providerImageHome } : {}),
       ...(request.modelBrokerCredential ? { ANTHROPIC_API_KEY: "paperclip-managed-model-broker" } : {}) } as NodeJS.ProcessEnv;
@@ -458,9 +461,9 @@ export async function configureManagedConversationSandboxHost(input: {
     for (const [stream, output] of [["stdout", child.stdout], ["stderr", child.stderr]] as const)
       output.on("data", (chunk: Buffer) => relayHost.send(JSON.stringify({ type: "exec_output", channelId: message.channelId,
         stream, base64: chunk.toString("base64") })));
-    child.on("error", () => relayHost.send(JSON.stringify({ type: "exec_exit", channelId: message.channelId, exitCode: 127, timedOut: false })));
-    child.on("close", (code, signal) => relayHost.send(JSON.stringify({ type: "exec_exit", channelId: message.channelId,
-      exitCode: code ?? (signal ? 128 : 1), timedOut: false })));
+    child.on("error", () => { fact.exitCode = 127; relayHost.send(JSON.stringify({ type: "exec_exit", channelId: message.channelId, exitCode: 127, timedOut: false })); });
+    child.on("close", (code, signal) => { fact.exitCode = code ?? (signal ? 128 : 1); relayHost.send(JSON.stringify({ type: "exec_exit", channelId: message.channelId,
+      exitCode: fact.exitCode, timedOut: false })); });
   });
 
   const beforeNativeExecution = async ({ runId, issueId }: { runId: string; issueId: string | null }) => {

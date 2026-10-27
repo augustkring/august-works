@@ -1,4 +1,7 @@
 import type { AdapterExecutionContext } from "@paperclipai/adapter-utils";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const websocketState = vi.hoisted(() => ({
@@ -14,6 +17,9 @@ const websocketState = vi.hoisted(() => ({
   cancelled: false,
   waitReplies: [] as Array<() => void>,
   connections: [] as Record<string, unknown>[],
+  skillInstalled: false,
+  skillText: "",
+  skillUploadOffset: 0,
 }));
 
 vi.mock("ws", async () => {
@@ -43,7 +49,7 @@ vi.mock("ws", async () => {
     }
 
     send(payload: string) {
-      const request = JSON.parse(payload) as { id: string; method: string; params?: { message?: string } };
+      const request = JSON.parse(payload) as { id: string; method: string; params?: Record<string, unknown> & { message?: string } };
       if (request.method === "agent") websocketState.messages.push(request.params?.message ?? "");
       if (request.method === "agent") websocketState.agentRequests.push(request.params ?? {});
       if (request.method === "connect") websocketState.connections.push(request.params ?? {});
@@ -66,8 +72,14 @@ vi.mock("ws", async () => {
       if (request.method === "chat.abort") { websocketState.cancelled = true; websocketState.waitReplies.forEach((reply) => reply()); }
       const responsePayload = request.method === "connect"
         ? { protocol: 4, server: { version: "fixture-1" }, ...(websocketState.methods ? { features: { methods: websocketState.methods } } : {}) }
-        : request.method === "skills.status" ? { skills: [{ name: "fixture-skill", description: "Advertised fixture" }] }
+        : request.method === "skills.status" && websocketState.skillInstalled ? { managedSkillsDir: "/remote/agent/skills", skills: [{ name: "Blentera platform", skillKey: "blentera-platform", filePath: "/remote/agent/skills/blentera-platform/SKILL.md", eligible: true, blockedByAgentFilter: false }] }
+        : request.method === "skills.status" ? { managedSkillsDir: "/remote/agent/skills", skills: [{ name: "fixture-skill", description: "Advertised fixture" }] }
         : request.method === "tools.catalog" ? { tools: [{ id: "fixture-tool", name: "Fixture tool" }] }
+        : request.method === "skills.upload.begin" ? { uploadId: "11111111-1111-4111-8111-111111111111", receivedBytes: 0 }
+        : request.method === "skills.upload.chunk" ? { uploadId: request.params?.uploadId, receivedBytes: Number(request.params?.offset ?? 0) + Buffer.from(String(request.params?.dataBase64 ?? ""), "base64").byteLength }
+        : request.method === "skills.upload.commit" ? { uploadId: request.params?.uploadId, sha256: request.params?.sha256 }
+        : request.method === "skills.files.get" ? { path: request.params?.path, name: "Blentera platform", content: websocketState.skillText }
+        : request.method === "skills.install" ? (websocketState.skillInstalled = true, { ok: true, slug: "blentera-platform", sha256: request.params?.sha256, targetDir: "/remote/agent/skills/blentera-platform" })
         : request.method === "agent" && websocketState.holdRun ? { status: "accepted", runId: "remote-run-1" }
         : request.method === "agent.wait" && websocketState.cancelled ? { status: "cancelled" }
         : { status: "ok", runId: "remote-run-1", summary: "done" };
@@ -137,6 +149,9 @@ describe("openclaw_gateway execute dispatch boundary", () => {
     websocketState.cancelled = false;
     websocketState.waitReplies = [];
     websocketState.connections = [];
+    websocketState.skillInstalled = false;
+    websocketState.skillText = "";
+    websocketState.skillUploadOffset = 0;
   });
 
   afterEach(() => {
@@ -155,10 +170,51 @@ describe("openclaw_gateway execute dispatch boundary", () => {
   it("discovers read-only method and inventory advertisements without issuing provider work or claiming isolation", async () => {
     websocketState.methods = ["agent", "agent.wait", "chat.abort", "skills.status", "tools.catalog"];
     const ctx = createContext(), result = await discoverCapabilities({ companyId: ctx.agent.companyId, adapterType: "openclaw_gateway", config: ctx.config });
-    expect(result).toMatchObject({ provider: "openclaw", version: "fixture-1", features: { sessions: true, cancellation: true, skillsDiscovery: true, toolDiscovery: true, memoryScoping: false, steering: false }, skills: [{ id: "fixture-skill" }], tools: [{ id: "fixture-tool" }] });
+    expect(result).toMatchObject({ provider: "openclaw", version: "fixture-1", features: { sessions: true, cancellation: true, skillsDiscovery: true, skillsSync: false, toolDiscovery: true, memoryScoping: false, steering: false }, skills: [{ id: "fixture-skill" }], tools: [{ id: "fixture-tool" }] });
     expect(websocketState.connections[0]?.scopes).toEqual(["operator.read"]);
     expect(websocketState.agentRequests).toHaveLength(0);
+    websocketState.methods.push("skills.upload.begin", "skills.upload.chunk", "skills.upload.commit", "skills.install", "skills.files.get");
+    const syncCapable = await discoverCapabilities({ companyId: ctx.agent.companyId, adapterType: "openclaw_gateway", config: ctx.config });
+    expect(syncCapable.features.skillsSync).toBe(true);
     await expect(discoverCapabilities({ companyId: ctx.agent.companyId, adapterType: "openclaw_gateway", config: { ...ctx.config, url: "ws://provider.test" } })).rejects.toThrow("secure gateway");
+  });
+
+  it("refuses a pinned task before dispatch when the Gateway does not advertise real Skill delivery methods", async () => {
+    websocketState.methods = ["agent", "agent.wait"];
+    const ctx = createContext();
+    ctx.platformSkillAdmission = {
+      key: "blentera-platform",
+      version: "v1",
+      digest: "sha256:25598388d69d9a7f5dd561a03fadfea63ad62aedff6bac12acf9e4cd7844e4b4",
+      sourceSha: "0fcea368aa1ed3e4c7a20aaaf53be81c7dde5910",
+    };
+    const result = await execute(ctx);
+    expect(result).toMatchObject({ exitCode: 1, errorCode: "openclaw_gateway_request_failed" });
+    expect(result.errorMessage).toContain("skills.upload.begin is unavailable");
+    expect(websocketState.agentRequests).toHaveLength(0);
+    expect(websocketState.events).not.toContain("send:agent");
+  });
+
+  it("delivers the exact immutable platform Skill over advertised upload/install methods before agent dispatch", async () => {
+    websocketState.methods = ["agent", "agent.wait", "chat.abort", "skills.status", "skills.files.get", "skills.upload.begin", "skills.upload.chunk", "skills.upload.commit", "skills.install"];
+    const skillRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../../skills-releases/blentera-platform/v1");
+    websocketState.skillText = await fs.readFile(path.join(skillRoot, "SKILL.md"), "utf8");
+    const ctx = createContext();
+    ctx.platformSkillAdmission = {
+      key: "blentera-platform",
+      version: "v1",
+      digest: "sha256:25598388d69d9a7f5dd561a03fadfea63ad62aedff6bac12acf9e4cd7844e4b4",
+      sourceSha: "0fcea368aa1ed3e4c7a20aaaf53be81c7dde5910",
+    };
+    ctx.config.paperclipRuntimeSkills = [{
+      key: "blentera-platform", runtimeName: "blentera-platform", source: skillRoot,
+      versionId: "db-pinned-version", sourceStatus: "available",
+    }];
+    const result = await execute(ctx);
+    expect(result.exitCode).toBe(0);
+    expect(websocketState.events.indexOf("send:skills.install")).toBeGreaterThan(-1);
+    expect(websocketState.events.indexOf("send:skills.install")).toBeLessThan(websocketState.events.indexOf("send:agent"));
+    expect(websocketState.agentRequests).toHaveLength(1);
   });
 
   it("confirms a dispatched provider cancellation through its terminal wait result", async () => {

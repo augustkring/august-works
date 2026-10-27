@@ -35,7 +35,6 @@ function validateSourceReleaseReview(receipt: SourceReleaseReview, actor: Author
 }
 
 type JobTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
-const IMPORT_LEASE_MS = 2 * 60_000;
 
 type AcceptedPlan = NonNullable<CompanyImportJob["acceptedPlan"]>;
 type ImportEffectCheckpoint = NonNullable<CompanyImportJob["effectCheckpoint"]>;
@@ -172,6 +171,7 @@ export function companyImportJobService(db: Db) {
         if (job.status !== "running") return job;
         if (job.progressStage === "admitted") {
           const [cancelled] = await tx.update(customerOperations).set({ status: "cancelled", progressStage: "cancelled",
+            leaseOwnerId: null, leaseExpiresAt: null,
             cancelRequestedAt: sql`coalesce(${customerOperations.cancelRequestedAt}, clock_timestamp())`,
             completedAt: sql`clock_timestamp()`, updatedAt: sql`clock_timestamp()`, progressAt: sql`clock_timestamp()` })
             .where(and(eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),
@@ -231,6 +231,7 @@ export function companyImportJobService(db: Db) {
         }
         const [current] = await tx.select().from(customerOperations).where(and(
           eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),
+          eq(customerOperations.leaseOwnerId, job.attemptId), sql`${customerOperations.leaseExpiresAt} > clock_timestamp()`,
           eq(customerOperations.status, "running"), isNull(customerOperations.cancelRequestedAt),
         )).for("update");
         if (!current) throw conflict("The import attempt is no longer active", { code: "import_attempt_changed" });
@@ -252,6 +253,7 @@ export function companyImportJobService(db: Db) {
           .set({ sourceReleaseReview: receipt, leaseExpiresAt: sql`clock_timestamp() + interval '2 minutes'`,
             updatedAt: sql`clock_timestamp()`, progressAt: sql`clock_timestamp()` })
           .where(and(eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),
+            eq(customerOperations.leaseOwnerId, job.attemptId), sql`${customerOperations.leaseExpiresAt} > clock_timestamp()`,
             eq(customerOperations.status, "running"), isNull(customerOperations.cancelRequestedAt),
             isNull(customerOperations.sourceReleaseReview))).returning();
         await finishImportCredential(tx, pinned);
@@ -267,6 +269,7 @@ export function companyImportJobService(db: Db) {
         if (actor.type !== "board" || actor.userId !== job.requestedByUserId) throw forbidden("The current import requester is required");
         const [current] = await tx.select().from(customerOperations).where(and(
           eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),
+          eq(customerOperations.leaseOwnerId, job.attemptId), sql`${customerOperations.leaseExpiresAt} > clock_timestamp()`,
           eq(customerOperations.status, "running"), isNull(customerOperations.cancelRequestedAt),
         )).for("update");
         const review = current?.sourceReleaseReview;
@@ -282,6 +285,7 @@ export function companyImportJobService(db: Db) {
           leaseExpiresAt: sql`clock_timestamp() + interval '2 minutes'`,
           updatedAt: sql`clock_timestamp()`, progressAt: sql`clock_timestamp()`,
         }).where(and(eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),
+          eq(customerOperations.leaseOwnerId, job.attemptId), sql`${customerOperations.leaseExpiresAt} > clock_timestamp()`,
           eq(customerOperations.status, "running"), isNull(customerOperations.cancelRequestedAt))).returning();
         await finishImportCredential(tx, pinned);
         if (!updated) throw conflict("The import attempt changed while binding its target", { code: "import_attempt_changed" });
@@ -352,6 +356,7 @@ export function companyImportJobService(db: Db) {
           progressAt: sql`clock_timestamp()`, updatedAt: sql`clock_timestamp()` }).where(and(
           eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),
           eq(customerOperations.status, "running"), eq(customerOperations.progressStage, "admitted"),
+          eq(customerOperations.leaseOwnerId, job.attemptId), sql`${customerOperations.leaseExpiresAt} > clock_timestamp()`,
           isNull(customerOperations.cancelRequestedAt),
         )).returning({ id: customerOperations.id });
         await finishImportCredential(tx, pinned);
@@ -365,14 +370,15 @@ export function companyImportJobService(db: Db) {
       const [settled] = await db.update(customerOperations).set({ status: "succeeded", progressStage: "settled",
         leaseOwnerId: null, leaseExpiresAt: null,
         effectCheckpoint: sql`case when ${customerOperations.effectCheckpoint} is null then null
-          else jsonb_set(${customerOperations.effectCheckpoint}, '{state}', '"complete"'::jsonb, true)
-            #- '{activeEffect}' end`,
+          else jsonb_set(jsonb_set(${customerOperations.effectCheckpoint}, '{state}', '"complete"'::jsonb, true),
+            '{activeEffect}', 'null'::jsonb, true) end`,
         companyId: result.company.id, resultRef: { companyId: result.company.id, agentCount: result.agents.length,
           warningCount: result.warnings.length, companyAction: result.company.action }, errorCode: null,
         completedAt: sql`clock_timestamp()`, updatedAt: sql`clock_timestamp()`, progressAt: sql`clock_timestamp()`,
         expiresAt: sql`clock_timestamp() + interval '1 hour'`,
       }).where(and(eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),
         eq(customerOperations.leaseOwnerId, job.attemptId), eq(customerOperations.status, "running"),
+        or(isNull(customerOperations.effectCheckpoint), sql`${customerOperations.effectCheckpoint}->>'state'='idle'`),
         sql`${customerOperations.leaseExpiresAt} > clock_timestamp()`)).returning();
       return settled ?? null;
     },
@@ -426,8 +432,13 @@ export function companyImportJobService(db: Db) {
       mappings?: Array<{ sourceId?: string | null; sourceSlug?: string | null; targetIds: string[] }> }, executor?: JobTransaction) {
       if (!/^[a-z0-9:_-]{1,160}$/i.test(event.key) || !/^[a-z0-9_-]{1,40}$/i.test(event.kind)
         || (event.sourceSlug != null && (event.sourceSlug.length < 1 || event.sourceSlug.length > 128))
-        || (event.targetIds?.length ?? 0) > 1024 || (event.mappings?.length ?? 0) > 5000
-        || event.mappings?.some(mapping => mapping.targetIds.length > 1024 || (mapping.sourceSlug != null && mapping.sourceSlug.length > 128)))
+        || (event.sourceId != null && (event.sourceId.length < 1 || event.sourceId.length > 2048))
+        || (event.targetIds?.length ?? 0) > 1024 || event.targetIds?.some(id => !id || id.length > 2048)
+        || (event.mappings?.length ?? 0) > 5000
+        || event.mappings?.some(mapping => mapping.targetIds.length > 1024
+          || mapping.targetIds.some(id => !id || id.length > 2048)
+          || (mapping.sourceId != null && (mapping.sourceId.length < 1 || mapping.sourceId.length > 2048))
+          || (mapping.sourceSlug != null && mapping.sourceSlug.length > 128)))
         throw conflict("Import effect checkpoint is invalid", { code: "import_effect_checkpoint_invalid" });
       const write = async (tx: JobTransaction) => {
         const [current] = await tx.select().from(customerOperations).where(and(

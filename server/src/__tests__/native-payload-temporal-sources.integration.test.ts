@@ -110,12 +110,12 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
       root, instanceId, reuseIdentity: first.reuseIdentity,
       taskTitle: `Temporal follow-up ${randomUUID()}`,
       steps: [
-        { tool: "write_document", id: `temporal-document-c-${randomUUID()}`, input: { idempotencyKey: randomUUID(),
-          key: `temporal-c-${randomUUID()}`, title: "Fresh-context follow-up", body: "A valid completed output after fresh Context.", baseRevisionId: null } },
         { tool: "read_context", id: `temporal-context-b-${randomUUID()}`, input: { query: `${taskBTitle} ${taskB.description ?? ""}` } },
         { tool: "self_remember", id: `temporal-memory-c-${randomUUID()}`, input: { scope: "company", memoryType: "outcome",
           title: "Memory C inherited from Task B", content: "Memory C consumed the fresh Context selected from Task B.",
           idempotencyKey: randomUUID() } },
+        { tool: "write_document", id: `temporal-document-c-${randomUUID()}`, input: { idempotencyKey: randomUUID(),
+          key: `temporal-c-${randomUUID()}`, title: "Fresh-context follow-up", body: "A valid completed output after fresh Context.", baseRevisionId: null } },
         { tool: "paperclip_finish", id: `temporal-finish-second-${randomUUID()}` },
       ] });
     const firstContextCapture = first.contextReadCaptures.find(value => value.callId === ids.contextR)?.contextRead as {

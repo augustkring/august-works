@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, inArray, ne, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNull, ne, notInArray, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   companyMemberships,
@@ -522,10 +522,11 @@ export function accessService(db: Db) {
     grants: GrantInput[],
     grantedByUserId: string | null,
   ) {
-    const member = await getMemberById(companyId, memberId);
-    if (!member) return null;
-
-    await db.transaction(async (tx) => {
+    return db.transaction(async (tx) => {
+      const [member] = await tx.select().from(companyMemberships).where(and(
+        eq(companyMemberships.companyId, companyId), eq(companyMemberships.id, memberId),
+      )).for("update");
+      if (!member) return null;
       await tx
         .delete(principalPermissionGrants)
         .where(
@@ -549,9 +550,10 @@ export function accessService(db: Db) {
           })),
         );
       }
+      await tx.update(companyMemberships).set({ permissionsInitializedAt: new Date(), updatedAt: new Date() })
+        .where(eq(companyMemberships.id, member.id));
+      return member;
     });
-
-    return member;
   }
 
   async function updateMemberAndPermissions(
@@ -620,6 +622,7 @@ export function accessService(db: Db) {
         .set({
           membershipRole: nextMembershipRole,
           status: nextStatus,
+          permissionsInitializedAt: now,
           updatedAt: now,
         })
         .where(eq(companyMemberships.id, existing.id))
@@ -1093,6 +1096,15 @@ export function accessService(db: Db) {
     grantedByUserId: string | null,
   ) {
     await db.transaction(async (tx) => {
+      const now = new Date();
+      if (principalType === "user") {
+        const [membership] = await tx.select({ id: companyMemberships.id })
+          .from(companyMemberships).where(and(eq(companyMemberships.companyId, companyId),
+            eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, principalId)))
+          .for("update");
+        if (membership) await tx.update(companyMemberships)
+          .set({ permissionsInitializedAt: now, updatedAt: now }).where(eq(companyMemberships.id, membership.id));
+      }
       await tx
         .delete(principalPermissionGrants)
         .where(
@@ -1111,8 +1123,8 @@ export function accessService(db: Db) {
           permissionKey: grant.permissionKey,
           scope: grant.scope ?? null,
           grantedByUserId,
-          createdAt: new Date(),
-          updatedAt: new Date(),
+          createdAt: now,
+          updatedAt: now,
         })),
       );
     });
@@ -1180,16 +1192,25 @@ export function accessService(db: Db) {
     scope: Record<string, unknown> | null = null,
   ) {
     if (!enabled) {
-      await db
-        .delete(principalPermissionGrants)
-        .where(
-          and(
-            eq(principalPermissionGrants.companyId, companyId),
-            eq(principalPermissionGrants.principalType, principalType),
-            eq(principalPermissionGrants.principalId, principalId),
-            eq(principalPermissionGrants.permissionKey, permissionKey),
-          ),
-        );
+      if (principalType === "user") {
+        const membership = await getMembership(companyId, "user", principalId);
+        if (membership) await ensureHumanRoleDefaultGrants(db, { companyId, principalId,
+          membershipRole: membership.membershipRole, grantedByUserId: null });
+      }
+      await db.transaction(async tx => {
+        const [membership] = principalType === "user" ? await tx.select({ id: companyMemberships.id })
+          .from(companyMemberships).where(and(eq(companyMemberships.companyId, companyId),
+            eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, principalId)))
+          .for("update") : [];
+        await tx.delete(principalPermissionGrants).where(and(
+          eq(principalPermissionGrants.companyId, companyId),
+          eq(principalPermissionGrants.principalType, principalType),
+          eq(principalPermissionGrants.principalId, principalId),
+          eq(principalPermissionGrants.permissionKey, permissionKey),
+        ));
+        if (membership) await tx.update(companyMemberships).set({ permissionsInitializedAt: new Date() })
+          .where(and(eq(companyMemberships.id, membership.id), isNull(companyMemberships.permissionsInitializedAt)));
+      });
       return;
     }
 
@@ -1199,6 +1220,12 @@ export function accessService(db: Db) {
       .onConflictDoUpdate({ target: [companyMemberships.companyId, companyMemberships.principalType, companyMemberships.principalId],
         set: { status: "active", membershipRole: "member", updatedAt: new Date() },
         setWhere: ne(companyMemberships.status, "active") });
+
+    if (principalType === "user") {
+      const membership = await getMembership(companyId, "user", principalId);
+      if (membership) await ensureHumanRoleDefaultGrants(db, { companyId, principalId,
+        membershipRole: membership.membershipRole, grantedByUserId });
+    }
 
     const existing = await db
       .select()

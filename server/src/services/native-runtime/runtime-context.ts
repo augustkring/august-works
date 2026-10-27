@@ -18,6 +18,7 @@ import { isToolConnectionAttentionHealth } from "@paperclipai/shared";
 import {
   PAPERCLIP_OPERATIONAL_SKILL_KEY,
   resolvePaperclipDesiredSkillNames,
+  writePaperclipSkillSyncPreference,
 } from "@paperclipai/adapter-utils/server-utils";
 import {
   NATIVE_RUNTIME_ASSET_SCHEMA,
@@ -358,18 +359,32 @@ export async function buildNativeRuntimeContext(input: { db: Db; agent: RuntimeA
       throw new Error("The identified Agent's procedures changed; test and publish a fresh version");
   }
   if (authored && resolvePaperclipDesiredSkillNames(input.runtimeConfig, input.runtimeSkillEntries).some(key =>
-    key !== PAPERCLIP_OPERATIONAL_SKILL_KEY && !procedures?.skills.some(pin => pin.key === key)))
+    key !== PAPERCLIP_OPERATIONAL_SKILL_KEY && key !== "blentera-platform" && !procedures?.skills.some(pin => pin.key === key)))
     throw new Error("Authored Agent version has no additional Skill authority");
   const [instructions, skills, mcp] = await Promise.all([
     materializeInstructionBundle(input.db, input.agent, { companyId: input.agent.companyId, runId: input.runId }, procedures?.playbooks, procedures?.knowledge, procedures?.memory),
-    procedures ? Promise.all(procedures.skills.map(async pin => ({ key: pin.key,
-      runtimeName: safeRelativePath(pin.key, "required procedure runtime name"), versionId: pin.versionId,
-      bundle: await materializeAsset([{ path: "SKILL.md", content: Buffer.from(pin.body, "utf8"), mode: 0o444 }],
-        { companyId: input.agent.companyId, runId: input.runId }) })))
-      : materializeSelectedSkills(input.runtimeConfig, input.runtimeSkillEntries, input.agent.adapterType === "paperclip_runner", { companyId: input.agent.companyId, runId: input.runId }),
+    (async () => {
+      const owner = { companyId: input.agent.companyId, runId: input.runId };
+      if (!authored) return materializeSelectedSkills(input.runtimeConfig, input.runtimeSkillEntries,
+        input.agent.adapterType === "paperclip_runner", owner);
+      // The immutable platform substrate accompanies an authored definition;
+      // it grants no tools or customer procedure authority. Preserve the full
+      // reference bundle rather than replacing it with an authored root body.
+      const platformEntries = input.runtimeSkillEntries.filter(entry => entry.key === "blentera-platform")
+        .map(entry => ({ ...entry, versionId: entry.versionId ?? null }));
+      if (platformEntries.some(entry => !entry.versionId)) throw new Error("required_platform_skill_version_missing");
+      const platform = platformEntries.length ? await materializeSelectedSkills(
+        writePaperclipSkillSyncPreference(input.runtimeConfig, platformEntries.map(entry => ({ key: entry.key, versionId: entry.versionId ?? null }))),
+        platformEntries, true, owner) : [];
+      const customer = await Promise.all((procedures?.skills ?? []).filter(pin => pin.key !== "blentera-platform").map(async pin => ({
+        key: pin.key, runtimeName: safeRelativePath(pin.key, "required procedure runtime name"), versionId: pin.versionId,
+        bundle: await materializeAsset([{ path: "SKILL.md", content: Buffer.from(pin.body, "utf8"), mode: 0o444 }], owner),
+      })));
+      return [...platform, ...customer];
+    })(),
     resolveNativeRuntimeMcpSnapshot({ db: input.db, agent: input.agent, runId: input.runId }),
   ]);
-  if (authored && ((!procedures && skills.length) || mcp.bindingId !== null))
+  if (authored && ((!procedures && skills.some(skill => skill.key !== "blentera-platform")) || mcp.bindingId !== null))
     throw new Error("Authored Agent version has no executable Skill or MCP authority");
   const snapshot = { prompt: { revision: PAPERCLIP_EXECUTION_PROMPT_REVISION, text: PAPERCLIP_EXECUTION_PROMPT, digest: nativeRuntimePromptDigest() }, instructions, skills, mcp };
   const parsed = parseNativeRuntimeContext({ ...snapshot, aggregateDigest: canonicalNativeRuntimeContextDigest(snapshot) });

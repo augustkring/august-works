@@ -490,7 +490,7 @@ function generateReadmeFromSelection(
   lines.push("## Getting Started");
   lines.push("");
   lines.push("```bash");
-  lines.push("npx paperclipai company import this-github-url-or-folder");
+  lines.push("blentera company import this-github-url-or-folder");
   lines.push("```");
   lines.push("");
   lines.push(`See [${PRODUCT_IDENTITY.productName}](${PRODUCT_IDENTITY.primaryWebsiteUrl}) for more information.`);

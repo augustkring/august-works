@@ -77,6 +77,7 @@ describe("sandbox qualification under compound host/probe faults (local fixtures
     expect(first.map(({ caseId }) => caseId)).toEqual(["filesystem_allow", "filesystem_deny", "filesystem_escape"]);
     expect(first).toEqual(sandboxProbeCases("a".repeat(64), ["filesystemPolicy"]));
     expect(first[0]?.contractHash).not.toBe(sandboxProbeCases("b".repeat(64), ["filesystemPolicy"])[0]?.contractHash);
+    expect(sandboxProbeCases("a".repeat(64), [])).toHaveLength(18);
   });
   it("keeps the original expiry despite all eighteen passing observations", async () => {
     const f = fixture();

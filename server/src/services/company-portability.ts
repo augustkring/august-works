@@ -3801,11 +3801,13 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     agentId: string,
     permissionGrants: PortableAgentPermissionGrant[],
     grantedByUserId: string | null,
+    executor?: Db,
   ) {
     if (permissionGrants.length === 0) return;
-    await access.ensureMembership(companyId, "agent", agentId, "member", "active");
+    const accessWriter = executor ? accessService(executor) : access;
+    await accessWriter.ensureMembership(companyId, "agent", agentId, "member", "active");
     for (const grant of permissionGrants) {
-      await access.setPrincipalPermission(
+      await accessWriter.setPrincipalPermission(
         companyId,
         "agent",
         agentId,
@@ -3909,8 +3911,8 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     envInputs: CompanyPortabilityEnvInput[],
     secretValues: Record<string, string> | null | undefined,
     actorUserId: string | null | undefined,
-    createdSecretIds: string[] = [],
     checkCancellation?: () => Promise<void>,
+    checkpoint?: ImportBehaviorOptions["onEffectCheckpoint"],
   ) {
     if (envInputs.length === 0) return;
     const missingRequired = envInputs.filter((input) => {
@@ -3922,7 +3924,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       throw unprocessable(`Required environment values are missing: ${missingRequired.map(envInputScopedKey).join(", ")}`);
     }
 
-    for (const input of envInputs) {
+    for (const [inputIndex, input] of envInputs.entries()) {
       await checkCancellation?.();
       const value = envInputValue(input, secretValues);
       if (value === null || value.trim().length === 0) continue;
@@ -3937,6 +3939,9 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
 
       const suffix = randomUUID().slice(0, 8);
       const label = importSecretLabel(input);
+      const effectKey = `environment:secret:${inputIndex}`;
+      const sourceId = createHash("sha256").update(canonicalJson({ key: envInputScopedKey(input), kind: input.kind })).digest("hex");
+      await checkpoint?.({ phase: "started", key: effectKey, kind: "environment_secret", sourceId });
       const secret = await secrets.create(
         companyId,
         {
@@ -3948,7 +3953,8 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         },
         { userId: actorUserId ?? null, agentId: null },
       );
-      createdSecretIds.push(secret.id);
+      await checkpoint?.({ phase: "completed", key: effectKey, kind: "environment_secret", sourceId,
+        targetIds: [secret.id] });
       writeManifestEnvBinding(manifest, input, {
         type: "secret_ref",
         secretId: secret.id,
@@ -5729,7 +5735,9 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       ...(include.skills ? sourceManifest.skills.map(item => ({ kind: "skill" as const, slug: item.slug, action: "import" })) : []),
       ...plan.preview.plan.projectPlans.map(item => ({ kind: "project" as const, slug: item.slug, action: item.action })),
       ...plan.preview.plan.issuePlans.map(item => ({ kind: "issue" as const, slug: item.slug, action: item.action })),
-      ...(include.routines ? sourceManifest.routines.map(item => ({ kind: "routine" as const, slug: item.slug, action: "import" })) : []),
+      ...(include.issues ? sourceManifest.issues.filter(item => item.recurring)
+        .map(item => ({ kind: "routine" as const, slug: item.slug,
+          action: plan.preview.plan.issuePlans.find(issue => issue.slug === item.slug)?.action ?? "create" })) : []),
     ];
     const selectedPayloadFingerprint = createHash("sha256").update(canonicalJson({
       previewFingerprint: plan.preview.sourceFingerprint, include,
@@ -5922,22 +5930,18 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       }
       return true;
     });
-    const createdImportSecretIds: string[] = [];
     try {
       await cancellationCheckpoint();
       effectsStarted = true;
-      await checkpointEffect({ phase: "started", key: "environment:values", kind: "environment_values" });
       await materializeImportEnvInputValues(
         targetCompany.id,
         sourceManifest,
         importEnvInputs,
         input.secretValues,
         actorUserId,
-        createdImportSecretIds,
         cancellationCheckpoint,
+        checkpointEffect,
       );
-      await checkpointEffect({ phase: "completed", key: "environment:values", kind: "environment_values",
-        targetIds: createdImportSecretIds });
       importProfile("environment-values-materialized");
 
       if (include.company) {
@@ -5961,7 +5965,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
               warnings.push(`Skipped company logo import for ${logoPath} because the file type is unsupported.`);
             } else {
               await checkpointEffect({ phase: "started", key: "company:logo", kind: "company_asset",
-                sourceSlug: path.posix.basename(logoPath) });
+                sourceSlug: path.posix.basename(logoPath).slice(0, 128) });
               try {
                 const body = portableFileToBuffer(logoFile, logoPath);
                 await cancellationCheckpoint();
@@ -5989,7 +5993,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
                 });
                 targetCompany = updated ?? targetCompany;
                 await checkpointEffect({ phase: "completed", key: "company:logo", kind: "company_asset",
-                  sourceSlug: path.posix.basename(logoPath), targetIds: [createdAsset.id] });
+                  sourceSlug: path.posix.basename(logoPath).slice(0, 128), targetIds: [createdAsset.id] });
               } catch (err) {
                 throw err;
               }
@@ -6021,9 +6025,10 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             // The pre-apply loop above already verified that every blobs/*
             // entry hashes to its path, which this entry's sha256 derives.
             const body = portableFileToBuffer(blobFile, blobPath);
-            const embeddedEffectKey = `embedded_asset:${embeddedAsset.assetId}`;
+            const embeddedEffectKey = `embedded_asset:${createHash("sha256").update(embeddedAsset.assetId).digest("hex").slice(0, 32)}`;
+            const embeddedSourceLabel = embeddedAssetLabel.slice(0, 128);
             await checkpointEffect({ phase: "started", key: embeddedEffectKey, kind: "embedded_asset",
-              sourceId: embeddedAsset.assetId, sourceSlug: embeddedAssetLabel });
+              sourceId: embeddedAsset.assetId, sourceSlug: embeddedSourceLabel });
             try {
               await cancellationCheckpoint();
               const stored = await storage.putFile({
@@ -6046,7 +6051,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
               });
               embeddedAssetIdMap.set(embeddedAsset.assetId, createdAsset.id);
               await checkpointEffect({ phase: "completed", key: embeddedEffectKey, kind: "embedded_asset",
-                sourceId: embeddedAsset.assetId, sourceSlug: embeddedAssetLabel, targetIds: [createdAsset.id] });
+                sourceId: embeddedAsset.assetId, sourceSlug: embeddedSourceLabel, targetIds: [createdAsset.id] });
             } catch (error) {
               throw error;
             }
@@ -6072,6 +6077,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       }
       const importedSlugToProjectId = new Map<string, string>();
       const importedProjectWorkspaceIdByProjectSlug = new Map<string, Map<string, string>>();
+      const importTargetCompanyId = targetCompany.id;
       const existingProjectSlugToId = new Map<string, string>();
       const existingProjects = await projects.list(targetCompany.id);
       for (const existing of existingProjects) {
@@ -6199,11 +6205,19 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
 
           if (planAgent.action === "update" && planAgent.existingAgentId) {
             await cancellationCheckpoint();
-            let updated = await agents.update(planAgent.existingAgentId, {
-              ...patch,
-              ...automationPausePatch,
+            const updatedRow = await db.transaction(async tx => {
+              const updated = await agents.update(planAgent.existingAgentId!, {
+                ...patch,
+                ...automationPausePatch,
+              }, { transaction: tx });
+              if (updated) await checkpointEffect({ phase: "completed", key: effectKey, kind: "agent",
+                sourceSlug: manifestAgent.slug, targetIds: [updated.id] }, tx);
+              return updated;
             });
+            let updated = updatedRow;
             if (!updated) {
+              await checkpointEffect({ phase: "completed", key: effectKey, kind: "agent",
+                sourceSlug: manifestAgent.slug, targetIds: [] });
               warnings.push(`Skipped update for missing agent ${planAgent.existingAgentId}.`);
               resultAgents.push({
                 slug: planAgent.slug,
@@ -6214,6 +6228,9 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
               });
               continue;
             }
+            const instructionEffectKey = `${effectKey}:instructions`;
+            await checkpointEffect({ phase: "started", key: instructionEffectKey, kind: "agent_instructions",
+              sourceSlug: manifestAgent.slug });
             try {
               await cancellationCheckpoint();
               const materialized = await instructions.materializeManagedBundle(updated, bundleFiles, {
@@ -6221,24 +6238,44 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
                 replaceExisting: true,
               });
               await cancellationCheckpoint();
-              updated = await agents.update(updated.id, { adapterConfig: materialized.adapterConfig }) ?? updated;
+              const agentToUpdate = updated;
+              updated = await db.transaction(async tx => {
+                const saved = await agents.update(agentToUpdate.id, { adapterConfig: materialized.adapterConfig }, { transaction: tx });
+                if (!saved) throw notFound("Imported agent disappeared during instruction materialization", { code: "import_target_changed" });
+                await checkpointEffect({ phase: "completed", key: instructionEffectKey, kind: "agent_instructions",
+                  sourceSlug: manifestAgent.slug, targetIds: [saved.id] }, tx);
+                return saved;
+              });
             } catch (err) {
-              warnings.push(`Failed to materialize instructions bundle for ${manifestAgent.slug}: ${err instanceof Error ? err.message : String(err)}`);
+              throw err;
             }
             await cancellationCheckpoint();
-            await applyImportedAgentPermissionGrants(
-              targetCompany.id,
-              updated.id,
-              manifestAgent.permissionGrants ?? [],
-              actorUserId ?? null,
-            );
+            const permissionEffectKey = `${effectKey}:permissions`;
+            await checkpointEffect({ phase: "started", key: permissionEffectKey, kind: "agent_permissions",
+              sourceSlug: manifestAgent.slug });
+            await db.transaction(async tx => {
+              await applyImportedAgentPermissionGrants(
+                importTargetCompanyId,
+                updated.id,
+                manifestAgent.permissionGrants ?? [],
+                actorUserId ?? null,
+                tx as unknown as Db,
+              );
+              await checkpointEffect({ phase: "completed", key: permissionEffectKey, kind: "agent_permissions",
+                sourceSlug: manifestAgent.slug, targetIds: [updated.id] }, tx);
+            });
             agentStatusById.set(updated.id, updated.status ?? agentStatusById.get(updated.id) ?? null);
             await cancellationCheckpoint();
+            const envEffectKey = `${effectKey}:env`;
+            await checkpointEffect({ phase: "started", key: envEffectKey, kind: "agent_env",
+              sourceSlug: manifestAgent.slug });
             await secrets.syncEnvBindingsForTarget?.(
               targetCompany.id,
               { targetType: "agent", targetId: updated.id },
               isPlainRecord(updated.adapterConfig) ? updated.adapterConfig.env : undefined,
             );
+            await checkpointEffect({ phase: "completed", key: envEffectKey, kind: "agent_env",
+              sourceSlug: manifestAgent.slug, targetIds: [updated.id] });
             importedSlugToAgentId.set(planAgent.slug, updated.id);
             existingSlugToAgentId.set(normalizeAgentUrlKey(updated.name) ?? updated.id, updated.id);
             resultAgents.push({
@@ -6248,28 +6285,31 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
               name: updated.name,
               reason: planAgent.reason,
             });
-            await checkpointEffect({ phase: "completed", key: effectKey, kind: "agent",
-              sourceSlug: manifestAgent.slug, targetIds: [updated.id] });
             continue;
           }
 
           await cancellationCheckpoint();
-          let created = await agents.create(targetCompany.id, {
-            ...patch,
-            ...automationPausePatch,
-            status: pauseAutomations ? "paused" : "idle",
+          let created = await db.transaction(async tx => {
+            const txDb = tx as unknown as Db;
+            const agent = await agents.create(importTargetCompanyId, {
+              ...patch,
+              ...automationPausePatch,
+              status: pauseAutomations ? "paused" : "idle",
+            }, { transaction: tx });
+            const accessWriter = accessService(txDb);
+            await accessWriter.ensureMembership(importTargetCompanyId, "agent", agent.id, "member", "active");
+            await accessWriter.setPrincipalPermission(importTargetCompanyId, "agent", agent.id, "tasks:assign", true,
+              actorUserId ?? null);
+            await applyImportedAgentPermissionGrants(importTargetCompanyId, agent.id, manifestAgent.permissionGrants ?? [],
+              actorUserId ?? null, txDb);
+            await checkpointEffect({ phase: "completed", key: effectKey, kind: "agent",
+              sourceSlug: manifestAgent.slug, targetIds: [agent.id] }, tx);
+            return agent;
           });
           await cancellationCheckpoint();
-          await access.ensureMembership(targetCompany.id, "agent", created.id, "member", "active");
-          await cancellationCheckpoint();
-          await access.setPrincipalPermission(
-            targetCompany.id,
-            "agent",
-            created.id,
-            "tasks:assign",
-            true,
-            actorUserId ?? null,
-          );
+          const instructionEffectKey = `${effectKey}:instructions`;
+          await checkpointEffect({ phase: "started", key: instructionEffectKey, kind: "agent_instructions",
+            sourceSlug: manifestAgent.slug });
           try {
             await cancellationCheckpoint();
             const materialized = await instructions.materializeManagedBundle(created, bundleFiles, {
@@ -6277,24 +6317,29 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
               replaceExisting: true,
             });
             await cancellationCheckpoint();
-            created = await agents.update(created.id, { adapterConfig: materialized.adapterConfig }) ?? created;
+            const agentToUpdate = created;
+            created = await db.transaction(async tx => {
+              const saved = await agents.update(agentToUpdate.id, { adapterConfig: materialized.adapterConfig }, { transaction: tx });
+              if (!saved) throw notFound("Imported agent disappeared during instruction materialization", { code: "import_target_changed" });
+              await checkpointEffect({ phase: "completed", key: instructionEffectKey, kind: "agent_instructions",
+                sourceSlug: manifestAgent.slug, targetIds: [saved.id] }, tx);
+              return saved;
+            });
           } catch (err) {
-            warnings.push(`Failed to materialize instructions bundle for ${manifestAgent.slug}: ${err instanceof Error ? err.message : String(err)}`);
+            throw err;
           }
-          await cancellationCheckpoint();
-          await applyImportedAgentPermissionGrants(
-            targetCompany.id,
-            created.id,
-            manifestAgent.permissionGrants ?? [],
-            actorUserId ?? null,
-          );
           agentStatusById.set(created.id, created.status ?? (pauseAutomations ? "paused" : "idle"));
           await cancellationCheckpoint();
+          const envEffectKey = `${effectKey}:env`;
+          await checkpointEffect({ phase: "started", key: envEffectKey, kind: "agent_env",
+            sourceSlug: manifestAgent.slug });
           await secrets.syncEnvBindingsForTarget?.(
             targetCompany.id,
             { targetType: "agent", targetId: created.id },
             isPlainRecord(created.adapterConfig) ? created.adapterConfig.env : undefined,
           );
+          await checkpointEffect({ phase: "completed", key: envEffectKey, kind: "agent_env",
+            sourceSlug: manifestAgent.slug, targetIds: [created.id] });
           importedSlugToAgentId.set(planAgent.slug, created.id);
           existingSlugToAgentId.set(normalizeAgentUrlKey(created.name) ?? created.id, created.id);
           resultAgents.push({
@@ -6304,8 +6349,6 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             name: created.name,
             reason: planAgent.reason,
           });
-          await checkpointEffect({ phase: "completed", key: effectKey, kind: "agent",
-            sourceSlug: manifestAgent.slug, targetIds: [created.id] });
         }
         // Apply reporting links once all imported agent ids are available.
         for (const manifestAgent of plan.selectedAgents) {
@@ -6330,15 +6373,18 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
               ? importedSlugToAgentId.get(managerSlug) ?? existingSlugToAgentId.get(managerSlug) ?? null
               : null);
           if (!managerId || managerId === agentId) continue;
+          const reportingEffectKey = `agent_reporting:${agentId}`;
+          await checkpointEffect({ phase: "started", key: reportingEffectKey, kind: "agent_reporting",
+            sourceSlug: manifestAgent.slug });
           try {
             await cancellationCheckpoint();
-            await agents.update(agentId, { reportsTo: managerId });
-          } catch {
-            const managerRef =
-              managerSlug
-              ?? manifestAgent.reportsToExistingAgentSlug
-              ?? manifestAgent.reportsToExistingAgentId;
-            warnings.push(`Could not assign manager ${managerRef} for imported agent ${manifestAgent.slug}.`);
+            await db.transaction(async tx => {
+              await agents.update(agentId, { reportsTo: managerId }, { transaction: tx });
+              await checkpointEffect({ phase: "completed", key: reportingEffectKey, kind: "agent_reporting",
+                sourceSlug: manifestAgent.slug, targetIds: [agentId, managerId] }, tx);
+            });
+          } catch (error) {
+            throw error;
           }
         }
       }
@@ -6417,6 +6463,8 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
               return result;
             });
             if (!updated) {
+              await checkpointEffect({ phase: "completed", key: effectKey, kind: "project",
+                sourceId: manifestProject.sourceProjectId ?? null, sourceSlug: manifestProject.slug, targetIds: [] });
               warnings.push(`Skipped update for missing project ${planProject.existingProjectId}.`);
               resultProjects.push({
                 slug: planProject.slug,
@@ -6841,7 +6889,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             }
             unarmedMonitorCount += 1;
           }
-          for (const attachmentEntry of manifestIssue.attachments ?? []) {
+          for (const [attachmentIndex, attachmentEntry] of (manifestIssue.attachments ?? []).entries()) {
             await cancellationCheckpoint();
             const attachmentLabel = attachmentEntry.originalFilename ?? attachmentEntry.sha256;
             if (!storage) {
@@ -6871,7 +6919,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
                 warnings.push(`Task ${manifestIssue.slug} attachment ${attachmentLabel} was imported at task scope because its comment reference could not be resolved.`);
               }
             }
-            const attachmentEffectKey = `task_attachment:${manifestIssue.slug}:${attachmentEntry.sha256.slice(0, 32)}`;
+            const attachmentEffectKey = `task_attachment:${manifestIssue.slug}:${attachmentIndex}`;
             await checkpointEffect({ phase: "started", key: attachmentEffectKey, kind: "task_attachment",
               sourceId: attachmentEntry.sha256, sourceSlug: manifestIssue.slug });
             try {
@@ -6896,7 +6944,8 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
                 createdByUserId: actorUserId ?? null,
               });
               await checkpointEffect({ phase: "completed", key: attachmentEffectKey, kind: "task_attachment",
-                sourceId: attachmentEntry.sha256, sourceSlug: manifestIssue.slug });
+                sourceId: attachmentEntry.sha256, sourceSlug: manifestIssue.slug,
+                targetIds: [`${stored.provider}:${stored.objectKey}`] });
             } catch (error) {
               throw error;
             }
@@ -7133,9 +7182,6 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         warnings,
       };
     } catch (error) {
-      for (const secretId of createdImportSecretIds) {
-        await secrets.remove(secretId).catch(() => undefined);
-      }
       throw error;
     }
   }

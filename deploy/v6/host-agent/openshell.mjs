@@ -8,6 +8,26 @@ import { atomicJson } from "./journal.mjs";
 const runFile = promisify(execFile);
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const hash = (value) => createHash("sha256").update(value).digest("hex");
+const probeContracts = Object.freeze({
+  filesystem_allow: ["filesystemPolicy", "allow"],
+  filesystem_deny: ["filesystemPolicy", "deny"],
+  filesystem_escape: ["filesystemPolicy", "deny"],
+  process_nonprivileged: ["processPrivilegePolicy", "observe"],
+  process_privilege_denied: ["processPrivilegePolicy", "deny"],
+  syscall_allow: ["syscallPolicy", "allow"],
+  syscall_deny: ["syscallPolicy", "deny"],
+  network_allow: ["networkDestinationPolicy", "allow"],
+  network_host_port_deny: ["networkDestinationPolicy", "deny"],
+  network_dns_redirect_deny: ["networkDestinationPolicy", "deny"],
+  network_l7_allow: ["networkLayer7Policy", "allow"],
+  network_l7_deny: ["networkLayer7Policy", "deny"],
+  credential_allow: ["credentialBrokering", "allow"],
+  credential_raw_read_deny: ["credentialBrokering", "deny"],
+  credential_wrong_destination_deny: ["credentialBrokering", "deny"],
+  credential_revoke_deny: ["credentialBrokering", "deny"],
+  resource_exhaustion_contained: ["resourceLimits", "deny"],
+  force_stop: ["forceStop", "observe"],
+});
 const actions = new Set([
   "capabilities",
   "prepare",
@@ -232,6 +252,116 @@ export function openShellHostEngine({
     });
     return json ? JSON.parse(stdout) : stdout;
   }
+  async function sandboxExec(scope, argv, deadlineAt) {
+    const remaining = Date.parse(deadlineAt) - Date.now();
+    if (!Number.isFinite(remaining) || remaining < 1500) throw new Error("exec_timeout");
+    const privateConfig = await privateConfiguration();
+    try {
+      const { stdout } = await run(
+        privateConfig.executable,
+        ["--gateway", config.gateway, "--workspace", config.workspace, "sandbox", "exec", "--name", scope.sandboxRef, "--no-login-shell", "--timeout", String(Math.min(3, Math.floor(remaining / 1000))), "--", ...argv],
+        { env: privateConfig.env, timeout: Math.min(4500, remaining), maxBuffer: 8192, windowsHide: true, killSignal: "SIGKILL" },
+      );
+      return { exitCode: 0, stdout: String(stdout).slice(0, 256) };
+    } catch (error) {
+      const status = Number.isInteger(error?.code) ? error.code : Number.isInteger(error?.status) ? error.status : null;
+      return { exitCode: status, stdout: "" };
+    }
+  }
+  async function hostCapabilities(request, scope, deadlineAt) {
+    const version = await cli(["--version"], deadlineAt, false);
+    if (version.trim() !== "openshell 0.1.2") return null;
+    const detail = await observed(scope, deadlineAt);
+    const currentPolicy = await policy(scope, deadlineAt);
+    const workload = await container(scope, detail, request.imageDigest, deadlineAt);
+    if (!workload || !currentPolicy.policy || !currentPolicy.policy.filesystem_policy || !currentPolicy.policy.landlock || !currentPolicy.policy.process) return null;
+    const fs = currentPolicy.policy.filesystem_policy;
+    const process = currentPolicy.policy.process;
+    const network = currentPolicy.policy.network_policies;
+    const testedAt = new Date().toISOString();
+    const evidence = {
+      backend: "openshell", backendVersion: "0.1.2", sandboxId: detail.id,
+      containerId: workload.Id, imageDigest: request.imageDigest,
+      policyHash: currentPolicy.hash, policyVersion: currentPolicy.version,
+      configRevision: currentPolicy.config_revision, phase: detail.phase,
+    };
+    const qualificationHash = hash(JSON.stringify(canonical(evidence)));
+    return {
+      filesystemPolicy: fs.include_workdir === false && currentPolicy.policy.landlock.compatibility === "hard_requirement",
+      processPrivilegePolicy: typeof process.run_as_user === "string" && typeof process.run_as_group === "string" && process.run_as_user !== "0",
+      syscallPolicy: false,
+      networkDestinationPolicy: Boolean(network && typeof network === "object" && Object.values(network).every(value => Array.isArray(value?.endpoints))),
+      networkLayer7Policy: Boolean(network && typeof network === "object" && Object.values(network).every(value => (value?.endpoints ?? []).every(endpoint => endpoint?.protocol === "rest" && endpoint?.enforcement === "enforce" && Array.isArray(endpoint.rules)))),
+      credentialBrokering: false,
+      resourceLimits: false,
+      forceStop: detail.phase === "Stopped" && workload.State.Running === false,
+      backend: "openshell", backendVersion: "0.1.2", hostKernelVersion: null,
+      sandboxImageDigest: request.imageDigest,
+      filesystemEnforcementMode: currentPolicy.policy.landlock.compatibility === "hard_requirement" ? "hard_requirement" : "unknown",
+      staticPolicyRequiresRecreate: true,
+      dynamicNetworkPolicy: true,
+      policyProverBoundaryCheck: false,
+      policyProverCoverage: [], credentialBindingDimensions: [],
+      testedAt, expiresAt: new Date(Date.now() + 120_000).toISOString(),
+      qualificationHash, evidenceKind: "protected_host_report",
+    };
+  }
+  async function probeBoundary(request, deadlineAt) {
+    const probe = request.probe;
+    const expected = probeContracts[probe.caseId];
+    if (!expected || expected[0] !== probe.control || expected[1] !== probe.expected || !/^[a-f0-9]{64}$/.test(probe.contractHash ?? ""))
+      throw new Error("sandbox_scope_changed");
+    const detail = await observed(request.scope, deadlineAt);
+    const effective = await policy(request.scope, deadlineAt);
+    if (detail.phase !== "Ready")
+      return { action: "probe", verdict: "unsupported", observationHash: null, contractHash: probe.contractHash };
+    const policyDeniedFor = async (needle) => {
+      try {
+        const logs = await cli(["logs", request.scope.sandboxRef, "--since", "1m", "--source", "sandbox"], deadlineAt, false, {}, 4500);
+        return logs.includes("policy_denied") && logs.includes(needle);
+      } catch { return false; }
+    };
+    let observation;
+    if (probe.caseId === "process_nonprivileged") {
+      const user = effective.policy?.process?.run_as_user;
+      if (!/^[1-9][0-9]{0,8}$/.test(user ?? ""))
+        return { action: "probe", verdict: "unsupported", observationHash: null, contractHash: probe.contractHash };
+      const result = await sandboxExec(request.scope, ["/usr/bin/id", "-u"], deadlineAt);
+      if (result.exitCode === 127 || result.exitCode === 124 || result.exitCode === null)
+        return { action: "probe", verdict: "unsupported", observationHash: null, contractHash: probe.contractHash };
+      if (result.exitCode !== 0 || result.stdout.trim() !== user)
+        return { action: "probe", verdict: "fail", observationHash: null, contractHash: probe.contractHash };
+      observation = { caseId: probe.caseId, contractHash: probe.contractHash, sandboxId: detail.id, policyHash: effective.hash, policyVersion: effective.version, configRevision: effective.config_revision, observedUid: Number(user) };
+    } else if (probe.caseId === "filesystem_allow") {
+      const allowed = effective.policy?.filesystem_policy?.read_only ?? [];
+      if (!allowed.some(value => value === "/etc" || value === "/" || value.startsWith("/etc/")))
+        return { action: "probe", verdict: "unsupported", observationHash: null, contractHash: probe.contractHash };
+      const result = await sandboxExec(request.scope, ["/bin/sh", "-c", "test -r /etc/os-release"], deadlineAt);
+      if (result.exitCode === 127 || result.exitCode === 124 || result.exitCode === null)
+        return { action: "probe", verdict: "unsupported", observationHash: null, contractHash: probe.contractHash };
+      if (result.exitCode !== 0)
+        return { action: "probe", verdict: "fail", observationHash: null, contractHash: probe.contractHash };
+      observation = { caseId: probe.caseId, contractHash: probe.contractHash, sandboxId: detail.id, policyHash: effective.hash, policyVersion: effective.version, configRevision: effective.config_revision, operation: "read_os_release" };
+    } else if (probe.caseId === "filesystem_deny") {
+      const allowed = [...(effective.policy?.filesystem_policy?.read_only ?? []), ...(effective.policy?.filesystem_policy?.read_write ?? [])];
+      const target = "/etc/os-release";
+      if (allowed.some(value => value === "/" || target === value || target.startsWith(value.endsWith("/") ? value : `${value}/`)))
+        return { action: "probe", verdict: "unsupported", observationHash: null, contractHash: probe.contractHash };
+      // test(1) reads metadata only. A pass requires OpenShell's own denial
+      // event for this exact path, so DAC errors or a missing file cannot pass.
+      const result = await sandboxExec(request.scope, ["/bin/sh", "-c", "test -r /etc/os-release"], deadlineAt);
+      if (result.exitCode === 0)
+        return { action: "probe", verdict: "fail", observationHash: null, contractHash: probe.contractHash };
+      if (result.exitCode === null || !(await policyDeniedFor("/etc/os-release")))
+        return { action: "probe", verdict: "unsupported", observationHash: null, contractHash: probe.contractHash };
+      observation = { caseId: probe.caseId, contractHash: probe.contractHash, sandboxId: detail.id, policyHash: effective.hash, policyVersion: effective.version, configRevision: effective.config_revision, denial: "policy_denied:/etc/os-release" };
+    } else {
+      // No other v0.1.2 probe is reported as passing without its dedicated
+      // runtime assertion (including a policy_denied observation for denies).
+      return { action: "probe", verdict: "unsupported", observationHash: null, contractHash: probe.contractHash };
+    }
+    return { action: "probe", verdict: "pass", observationHash: hash(JSON.stringify(canonical(observation))), contractHash: probe.contractHash };
+  }
   async function observed(scope, deadlineAt) {
     const detail = await cli(
       ["sandbox", "get", scope.sandboxRef, "--output", "json"],
@@ -426,16 +556,19 @@ export function openShellHostEngine({
         Date.parse(deadlineAt) > Date.parse(sourceExpiry))) {
       throw new Error("sandbox_scope_changed");
     }
-    // Neither a private JSON file nor CLI version/kernel output is physical
-    // qualification of credentials, syscalls, resource limits or forced Stop.
-    if (request.action === "capabilities")
-      return { action: "capabilities", capabilities: null };
-    if (request.action === "probe")
-      return { action: "probe", verdict: "unsupported", observationHash: null, contractHash: request.probe.contractHash };
+    // Capabilities come from live CLI, gateway, policy and container
+    // observations. Probes execute inside that observed sandbox; unavailable
+    // runtimes never inherit a fixture or request-body success.
+    if (!config && request.action === "capabilities") return { action: "capabilities", capabilities: null };
+    if (!config && request.action === "probe") return { action: "probe", verdict: "unsupported", observationHash: null, contractHash: request.probe.contractHash };
     if (!config) throw new Error("sandbox_host_unavailable");
     const version = await cli(["--version"], deadlineAt, false);
-    if (version.trim() !== "openshell 0.1.2")
-      throw new Error("sandbox_host_unavailable");
+    if (version.trim() !== "openshell 0.1.2") throw new Error("sandbox_host_unavailable");
+    if (request.action === "capabilities") {
+      try { return { action: "capabilities", capabilities: await hostCapabilities(request, scope, deadlineAt) }; }
+      catch { return { action: "capabilities", capabilities: null }; }
+    }
+    if (request.action === "probe") return probeBoundary(request, deadlineAt);
     const detail = await observed(scope, deadlineAt);
     if (request.action === "inspect") {
       try {

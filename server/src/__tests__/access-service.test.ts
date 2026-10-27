@@ -33,7 +33,7 @@ import {
 import { accessService } from "../services/access.js";
 import { issueService } from "../services/issues.js";
 import { grantsForHumanRole } from "../services/company-member-roles.js";
-import { backfillPrincipalAccessCompatibility } from "../services/principal-access-compatibility.js";
+import { backfillPrincipalAccessCompatibility, ensureHumanRoleDefaultGrants } from "../services/principal-access-compatibility.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -109,6 +109,8 @@ describeEmbeddedPostgres("access service", () => {
     expect(await service.getMembership(company.id,"user",owner.principalId)).toMatchObject({ status: "active", membershipRole: role });
     await service.setPrincipalPermission(company.id, "user", owner.principalId, "foundation:read", false, owner.principalId);
     expect(await service.getMembership(company.id,"user",owner.principalId)).toMatchObject({ status: "active", membershipRole: role });
+    await backfillPrincipalAccessCompatibility(db);
+    await expect(service.canUser(company.id, owner.principalId, "foundation:read")).resolves.toBe(false);
   });
 
   it("rejects combined access updates that would demote the last active owner", async () => {
@@ -1120,7 +1122,7 @@ describeEmbeddedPostgres("access service", () => {
     await expect(access.canUser(company.id, viewer.principalId, "environments:manage")).resolves.toBe(false);
   });
 
-  it("backfills pre-upgrade human memberships with missing role grants without replacing custom grants", async () => {
+  it("initializes uninitialized human memberships without replacing custom grants", async () => {
     const { company, owner } = await createCompanyWithOwner(db);
     const scopedEnvironmentGrant = { environmentId: "env-1" };
     const humanRows = await db
@@ -1193,6 +1195,68 @@ describeEmbeddedPostgres("access service", () => {
     expect(ownerEnvironmentGrants).toHaveLength(1);
     expect(ownerEnvironmentGrants[0]?.scope).toEqual(scopedEnvironmentGrant);
     expect(ownerEnvironmentGrants[0]?.grantedByUserId).toBe("custom-author");
+    const initializedRows = await db.select({ initializedAt: companyMemberships.permissionsInitializedAt })
+      .from(companyMemberships).where(eq(companyMemberships.companyId, company.id));
+    expect(initializedRows.length).toBeGreaterThan(0);
+    expect(initializedRows.every(row => row.initializedAt instanceof Date)).toBe(true);
+  });
+
+  it("does not restore explicitly revoked role defaults on compatibility backfill", async () => {
+    const { company, owner } = await createCompanyWithOwner(db);
+    const access = accessService(db);
+    await ensureHumanRoleDefaultGrants(db, { companyId: company.id, principalId: owner.principalId,
+      membershipRole: "owner", grantedByUserId: null });
+    await expect(access.canUser(company.id, owner.principalId, "pipelines:write")).resolves.toBe(true);
+
+    await access.setMemberPermissions(company.id, owner.id, [], "permission-manager");
+    const backfill = await backfillPrincipalAccessCompatibility(db);
+    expect(backfill.humanGrantsInserted).toBe(0);
+    await expect(access.canUser(company.id, owner.principalId, "pipelines:write")).resolves.toBe(false);
+    const [membership] = await db.select().from(companyMemberships).where(eq(companyMemberships.id, owner.id));
+    expect(membership?.permissionsInitializedAt).toBeInstanceOf(Date);
+  });
+
+  it("preserves migrated historical owner grants without adding the new pipeline default", async () => {
+    const { company } = await createCompanyWithOwner(db);
+    const principalId = `historical-owner-${randomUUID()}`;
+    await db.insert(companyMemberships).values({ companyId: company.id, principalType: "user", principalId,
+      status: "active", membershipRole: "owner", permissionsInitializedAt: new Date() });
+
+    await backfillPrincipalAccessCompatibility(db);
+    await expect(accessService(db).canUser(company.id, principalId, "pipelines:write")).resolves.toBe(false);
+    const grants = await db.select().from(principalPermissionGrants).where(and(
+      eq(principalPermissionGrants.companyId, company.id), eq(principalPermissionGrants.principalId, principalId),
+    ));
+    expect(grants).toHaveLength(0);
+  });
+
+  it("marks combined role and permission replacements initialized even when the grant set is empty", async () => {
+    const { company, owner } = await createCompanyWithOwner(db);
+    const [member] = await db.insert(companyMemberships).values({ companyId: company.id,
+      principalType: "user", principalId: `operator-${randomUUID()}`, status: "active", membershipRole: "operator" })
+      .returning();
+    await ensureHumanRoleDefaultGrants(db, { companyId: company.id, principalId: member!.principalId,
+      membershipRole: "operator", grantedByUserId: null });
+
+    await accessService(db).updateMemberAndPermissions(company.id, member!.id,
+      { membershipRole: "operator", grants: [] }, owner.principalId);
+    const backfill = await backfillPrincipalAccessCompatibility(db);
+    expect(backfill.humanGrantsInserted).toBe(0);
+    await expect(accessService(db).canUser(company.id, member!.principalId, "tasks:assign")).resolves.toBe(false);
+    const [updated] = await db.select().from(companyMemberships).where(eq(companyMemberships.id, member!.id));
+    expect(updated?.permissionsInitializedAt).toBeInstanceOf(Date);
+  });
+
+  it("keeps explicit empty principal grant replacements empty across compatibility backfill", async () => {
+    const { company, owner } = await createCompanyWithOwner(db);
+    const access = accessService(db);
+    await ensureHumanRoleDefaultGrants(db, { companyId: company.id, principalId: owner.principalId,
+      membershipRole: "owner", grantedByUserId: null });
+    await access.setPrincipalGrants(company.id, "user", owner.principalId, [], "permission-manager");
+
+    const backfill = await backfillPrincipalAccessCompatibility(db);
+    expect(backfill.humanGrantsInserted).toBe(0);
+    await expect(access.canUser(company.id, owner.principalId, "pipelines:write")).resolves.toBe(false);
   });
 
   it("backfills non-terminal agents as active company members without reviving pending or terminated agents", async () => {

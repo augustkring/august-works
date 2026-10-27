@@ -3869,8 +3869,15 @@
     {
       "idx": 554,
       "version": "7",
-      "when": 1793100000000,
+      "when": 1793067558018,
       "tag": "0554_company_import_fenced_effects",
+      "breakpoints": true
+    },
+    {
+      "idx": 555,
+      "version": "7",
+      "when": 1793070130356,
+      "tag": "0555_company_membership_permission_initialization",
       "breakpoints": true
     }
   ]

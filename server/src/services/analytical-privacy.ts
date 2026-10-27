@@ -7,7 +7,11 @@ import { conflict } from "../errors.js";
 type PrivacyTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 /** Preserve the existing company serialization key: native owner erasure,
  * event projection and analytical publication use one ordering boundary. */
-export async function lockAnalyticalCompany(tx: Pick<Db, "execute">, companyId: string) {
+export async function lockAnalyticalCompany(tx: Pick<Db, "execute">, companyId: string, mode: "read" | "write" = "write") {
+  if (mode === "read") {
+    await tx.execute(sql`select pg_advisory_xact_lock_shared(hashtextextended(${`business-events:${companyId}`}, 0))`);
+    return;
+  }
   await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`business-events:${companyId}`}, 0))`);
 }
 /** Native privacy/verified restore callers own admission. Rollout never gates

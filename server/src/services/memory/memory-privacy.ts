@@ -22,7 +22,11 @@ export function memoryDeletionKey(companyId: string, kind: "record" | "operation
   return createHash("sha256").update(JSON.stringify([companyId, kind, value])).digest("hex");
 }
 
-export async function lockMemoryPrivacy(db: Db, companyId: string) {
+export async function lockMemoryPrivacy(db: Db, companyId: string, mode: "read" | "write" = "write") {
+  if (mode === "read") {
+    await db.execute(sql`select pg_advisory_xact_lock_shared(hashtextextended(${`memory:privacy:${companyId}`}, 0))`);
+    return;
+  }
   await db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`memory:privacy:${companyId}`}, 0))`);
 }
 

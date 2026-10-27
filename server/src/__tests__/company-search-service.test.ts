@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   agents,
   companies,
+  companySkills,
   createDb,
   EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
   documents,
@@ -107,6 +108,7 @@ describeEmbeddedPostgres("companySearchService", () => {
     await db.delete(labels);
     await db.delete(projects);
     await db.delete(agents);
+    await db.delete(companySkills);
     await db.delete(companies);
   });
 

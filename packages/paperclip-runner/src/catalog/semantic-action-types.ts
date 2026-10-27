@@ -7,6 +7,8 @@ export type PaperclipSemanticActionId =
   | "read_document"
   | "list_document_revisions"
   | "report_progress"
+  | "update_task"
+  | "propose_completion"
   | "answer_status_question"
   | "write_document"
   | "request_human_input"

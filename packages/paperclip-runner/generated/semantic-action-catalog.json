@@ -474,6 +474,236 @@
       "planning",
       "skill_test"
     ],
+    "description": "Update editable fields on the active task without changing status, ownership, execution, policy, or approval state.",
+    "effect": "write",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "description": "Replacement task description.",
+          "maxLength": 50000,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expectedUpdatedAt": {
+          "description": "Exact current Task updatedAt timestamp in UTC ISO-8601 form.",
+          "maxLength": 40,
+          "minLength": 1,
+          "type": "string"
+        },
+        "idempotencyKey": {
+          "description": "Caller-stable retry key.",
+          "maxLength": 240,
+          "minLength": 1,
+          "type": "string"
+        },
+        "priority": {
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "title": {
+          "description": "Replacement task title.",
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "idempotencyKey",
+        "expectedUpdatedAt"
+      ],
+      "type": "object"
+    },
+    "operationId": "update_task",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "commandId": {
+          "description": "Stable command identifier.",
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        "disposition": {
+          "enum": [
+            "applied",
+            "duplicate"
+          ]
+        },
+        "entityRefs": {
+          "description": "Entities affected by the operation.",
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 200,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "scheduledWakeIds": {
+          "description": "Wake identifiers scheduled by the operation.",
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 200,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "stateRevision": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "commandId",
+        "disposition",
+        "stateRevision",
+        "entityRefs",
+        "scheduledWakeIds"
+      ],
+      "type": "object"
+    },
+    "placement": "always",
+    "requiredClaims": [],
+    "schema": "paperclip.semantic-action.v1",
+    "title": "Update task fields",
+    "version": 1
+  },
+  {
+    "allowedModes": [
+      "standard",
+      "skill_test"
+    ],
+    "description": "Request human review of completion readiness without changing Task status; the Native finalizer still requires current evidence and policy acceptance.",
+    "effect": "governance",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "expectedUpdatedAt": {
+          "description": "Exact current Task updatedAt timestamp in UTC ISO-8601 form.",
+          "maxLength": 40,
+          "minLength": 1,
+          "type": "string"
+        },
+        "idempotencyKey": {
+          "description": "Caller-stable retry key.",
+          "maxLength": 240,
+          "minLength": 1,
+          "type": "string"
+        },
+        "summary": {
+          "description": "Concise summary for the Human completion review.",
+          "maxLength": 900,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "idempotencyKey",
+        "expectedUpdatedAt",
+        "summary"
+      ],
+      "type": "object"
+    },
+    "operationId": "propose_completion",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "commandId": {
+          "description": "Stable completion proposal identifier.",
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        "currentTaskStatus": {
+          "enum": [
+            "backlog",
+            "todo",
+            "in_progress",
+            "in_review",
+            "blocked"
+          ]
+        },
+        "disposition": {
+          "enum": [
+            "applied",
+            "duplicate"
+          ]
+        },
+        "entityRefs": {
+          "description": "Task and review interaction identifiers.",
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 200,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "evidenceRequirement": {
+          "description": "The current Native finalizer must independently assess evidence and current policy before changing disposition.",
+          "maxLength": 20000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "proposalStatus": {
+          "enum": [
+            "pending_human_review"
+          ]
+        },
+        "scheduledWakeIds": {
+          "description": "Wake identifiers scheduled by the operation.",
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 200,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "stateRevision": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "taskStatusCommitted": {
+          "enum": [
+            false
+          ]
+        }
+      },
+      "required": [
+        "commandId",
+        "disposition",
+        "stateRevision",
+        "entityRefs",
+        "scheduledWakeIds",
+        "proposalStatus",
+        "currentTaskStatus",
+        "taskStatusCommitted",
+        "evidenceRequirement"
+      ],
+      "type": "object"
+    },
+    "placement": "always",
+    "requiredClaims": [],
+    "schema": "paperclip.semantic-action.v1",
+    "title": "Propose Task completion review",
+    "version": 1
+  },
+  {
+    "allowedModes": [
+      "standard",
+      "ask",
+      "planning",
+      "skill_test"
+    ],
     "description": "Append an answer to a status-only wake without changing task disposition.",
     "effect": "write",
     "inputSchema": {

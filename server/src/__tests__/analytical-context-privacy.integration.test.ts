@@ -90,6 +90,17 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
  async function root(){return (await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId)))[0]!;}
  async function erased(){expect(await heartbeatMemoryPayloadRetained(db,companyId,runId)).toBe(false);const [run]=await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,runId));expect(run!.resultJson).toBeNull();expect(run!.contextSnapshot).toEqual({});expect((await db.select().from(issueComments).where(eq(issueComments.issueId,issueId))).every(c=>c.body==="Source payload erased")).toBe(true);}
 
+ it("keeps the source-free native admission fast path current for task privacy and retirement",async()=>{
+  await contextManifestService(db).create({companyId,agentId,issueId,runId,query:"Native bootstrap only",policySnapshot:{fixture:true},selected:[]});
+  await expect(assertNativeAnalyticalRunPayloadAccess(db,companyId,runId)).resolves.toBeUndefined();
+  await db.delete(companyMemberships).where(and(eq(companyMemberships.companyId,companyId),eq(companyMemberships.principalId,userId)));
+  await expect(assertNativeAnalyticalRunPayloadAccess(db,companyId,runId)).rejects.toMatchObject({status:403,details:{code:"analytical_source_access_lost"}});
+  await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:userId,membershipRole:"admin",status:"active"});
+  await db.update(issues).set({conversationAgentId:null,conversationUserId:null,conversationState:null,status:"cancelled",hiddenAt:new Date(),
+   assigneeAgentId:null,assigneeUserId:null,executionRunId:null,checkoutRunId:null,conversationRetiredAt:new Date()}).where(eq(issues.id,issueId));
+  await expect(assertNativeAnalyticalRunPayloadAccess(db,companyId,runId)).rejects.toMatchObject({status:403,details:{code:"analytical_source_access_lost"}});
+ });
+
  it("retains a managed metric result in a separate immutable Context and revokes its original sources",async()=>{
   const f=await fixture();
   const original=await db.select().from(contextManifests).where(eq(contextManifests.runId,runId));

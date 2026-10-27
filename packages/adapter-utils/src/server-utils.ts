@@ -1,3 +1,4 @@
+export { readRequiredPlatformSkillFiles, type PlatformSkillFile } from "./platform-skill.js";
 import type { ExecutionContinuationEnvelope } from "@paperclipai/shared";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";

@@ -345,7 +345,10 @@ export function agentRuntimeFabricService(db: Db, decisionShadow?: { sourceSha: 
         key: pin.key, name: pin.name, selection: "required" as const, loadPoint: "always" as const,
         estimatedDescriptorTokens: Math.ceil(Buffer.byteLength(pin.key + pin.name, "utf8") / 4) })), estimatedTokens: 0, warnings: [] as string[] }
         : !authored && !stored && v5FeatureEnabled(flags, "skill_resolver_v5") ? await skillResolverService(db).resolve(actor, input.companyId, query, test?.evaluationContext ? [] : rolePack?.items ?? [], test ? { skillId: test.skillId, versionId: test.skillVersionId } : undefined,"task") : { skills: stored?.manifest.skills ?? [], estimatedTokens: stored?.manifest.inventoryEstimatedTokens ?? 0, warnings: [] };
-      if (!resolvedSkills.skills.some(pin => pin.key === platform.pin.key)) resolvedSkills.skills.unshift(platform.pin);
+      const authoredPlatformPin = resolvedSkills.skills.find(pin => pin.key === platform.pin.key);
+      if (authoredPlatformPin && authoredPlatformPin.versionId !== platform.pin.versionId)
+        throw conflict("The identified operating procedure changed; validate a new version before execution", { code: "platform_skill_contract_drift" });
+      if (!authoredPlatformPin) resolvedSkills.skills.unshift(platform.pin);
       const resolvedPlaybooks = procedures ? { pins: procedures.playbooks.map(pin => ({ playbookId: pin.playbookId, revisionId: pin.revisionId, required: true })), warnings: [] as string[] }
         : !authored && !stored && v5FeatureEnabled(flags, "playbooks_v5") ? await playbookResolverService(db).resolve(actor, input.companyId, query, rolePack?.items ?? [],"task") : { pins: stored?.manifest.playbooks ?? [], warnings: [] as string[] };
       if (!v5FeatureEnabled(flags, "playbooks_v5") && rolePack?.items.some((item) => item.type === "required_playbook")) throw conflict("This Role Pack requires the Playbook runtime");

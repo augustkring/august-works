@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import { workflowService } from "../services/workflows/workflow-service.js";
 import { workflowExecutorService } from "../services/workflows/workflow-executor.js";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   activityLog,
@@ -12,6 +12,7 @@ import {
   agents,
   approvals,
   companies,
+  companySkills,
   companySecretBindings,
   companySecrets,
   companyMemberships,
@@ -257,6 +258,7 @@ describeEmbeddedPostgres("tool gateway service", () => {
     await db.delete(issues);
     await db.delete(projects);
     await db.delete(companyMemberships);
+    await db.delete(companySkills);
     await db.delete(agents);
     await db.delete(companies);
   });
@@ -599,7 +601,7 @@ describeEmbeddedPostgres("tool gateway service", () => {
     const result = await gateway.executeTool({ sessionToken: session.token, tool: "blentera.task.comment.add", parameters });
     expect(result.status).toBe("completed");
     const replay = await gateway.executeTool({ sessionToken: session.token, tool: "blentera.task.comment.add", parameters });
-    expect(replay.status).toBe("completed");
+    expect(replay.status).toBe("replayed");
     const [comment] = await db.select().from(issueComments).where(eq(issueComments.issueId, issue.id));
     expect(await db.select().from(issueComments).where(eq(issueComments.issueId, issue.id))).toHaveLength(1);
     expect(comment).toMatchObject({ authorAgentId: agent.id, createdByRunId: run.id,
@@ -609,6 +611,57 @@ describeEmbeddedPostgres("tool gateway service", () => {
     expect(Object.values(receipts)).toEqual(expect.arrayContaining([
       expect.objectContaining({ transport: { channel: "tool_gateway_mcp", callId: result.invocationId } }),
     ]));
+
+    await db.insert(toolPolicies).values({ companyId: company.id, name: "Allow exact-version Task field updates",
+      policyType: "allow", selectors: { toolName: "paperclip-self:update_task" } });
+    expect((await gateway.listToolsForSession(session.token)).map(tool => tool.name))
+      .toContain("blentera.task.update");
+    const [taskBeforeUpdate] = await db.select().from(issues).where(eq(issues.id, issue.id));
+    const updateParameters = { idempotencyKey: randomUUID(), expectedUpdatedAt: taskBeforeUpdate.updatedAt.toISOString(),
+      title: "Updated through current Task owner" };
+    const updated = await gateway.executeTool({ sessionToken: session.token, tool: "blentera.task.update",
+      parameters: updateParameters });
+    expect(updated.status).toBe("completed");
+    const updateReplay = await gateway.executeTool({ sessionToken: session.token, tool: "blentera.task.update",
+      parameters: updateParameters });
+    expect(updateReplay.status).toBe("replayed");
+    const [taskAfterUpdate] = await db.select().from(issues).where(eq(issues.id, issue.id));
+    expect(taskAfterUpdate).toMatchObject({ title: updateParameters.title, status: taskBeforeUpdate.status,
+      assigneeAgentId: taskBeforeUpdate.assigneeAgentId, assigneeUserId: taskBeforeUpdate.assigneeUserId });
+    await expect(gateway.executeTool({ sessionToken: session.token, tool: "blentera.task.update", parameters: {
+      ...updateParameters, idempotencyKey: randomUUID(), title: "Stale update must not apply",
+    } })).rejects.toMatchObject({ status: 409 });
+
+    await db.insert(toolPolicies).values({ companyId: company.id, name: "Allow Task completion proposals",
+      policyType: "allow", selectors: { toolName: "paperclip-self:propose_completion" } });
+    expect((await gateway.listToolsForSession(session.token)).map(tool => tool.name))
+      .toContain("blentera.task.completion.propose");
+    const proposalParameters = { idempotencyKey: randomUUID(), expectedUpdatedAt: taskAfterUpdate.updatedAt.toISOString(),
+      summary: "The requested work and current Task evidence are ready for Human review." };
+    const proposal = await gateway.executeTool({ sessionToken: session.token,
+      tool: "blentera.task.completion.propose", parameters: proposalParameters });
+    expect(proposal.status).toBe("completed");
+    expect(proposal.result).toMatchObject({ proposalStatus: "pending_human_review", currentTaskStatus: "in_progress",
+      taskStatusCommitted: false, evidenceRequirement: expect.stringContaining("finalizer") });
+    const proposalReplay = await gateway.executeTool({ sessionToken: session.token,
+      tool: "blentera.task.completion.propose", parameters: proposalParameters });
+    expect(proposalReplay.status).toBe("replayed");
+    const [reviewRequest] = await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, issue.id));
+    expect(reviewRequest).toMatchObject({ status: "pending", resolverPolicy: "human_only", sourceRunId: run.id,
+      kind: "request_confirmation" });
+    expect(await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, issue.id))).toHaveLength(1);
+    const [taskAfterProposal] = await db.select().from(issues).where(eq(issues.id, issue.id));
+    expect(taskAfterProposal).toMatchObject({ status: taskAfterUpdate.status,
+      statusVersion: taskAfterUpdate.statusVersion, assigneeAgentId: taskAfterUpdate.assigneeAgentId });
+    await expect(gateway.executeTool({ sessionToken: session.token, tool: "blentera.task.completion.propose", parameters: {
+      ...proposalParameters, idempotencyKey: randomUUID(), expectedUpdatedAt: taskBeforeUpdate.updatedAt.toISOString(),
+    } })).rejects.toMatchObject({ status: 409 });
+
+    await db.update(heartbeatRuns).set({ runnerProfileJson: sql`${heartbeatRuns.runnerProfileJson} - 'platformSkillAdmission'` })
+      .where(eq(heartbeatRuns.id, run.id));
+    await expect(gateway.executeTool({ sessionToken: session.token, tool: "blentera.task.update", parameters: {
+      idempotencyKey: randomUUID(), expectedUpdatedAt: taskAfterUpdate.updatedAt.toISOString(), title: "Unpinned write must not apply",
+    } })).rejects.toMatchObject({ status: 409, reasonCode: "platform_skill_readmission_required" });
 
     await db.update(companyMemberships).set({ status: "inactive" }).where(and(
       eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"),

@@ -121,6 +121,8 @@ async function fixture(work, hooks = {}) {
         return { stdout: "{}" };
       }
       if (command[0] === "--version") return { stdout: "openshell 0.1.2\n" };
+      if (command[0] === "sandbox" && command[1] === "exec")
+        return { stdout: hooks.probeStdout ?? "" };
       if (command[0] === "sandbox" && command[1] === "get")
         return {
           stdout: JSON.stringify({
@@ -302,7 +304,7 @@ function modelBrokerExecRequest() {
   }))).digest("hex");
   return { request, token };
 }
-test("CLI fixtures cannot earn complete physical capabilities or passing probes", async () =>
+test("CLI fixtures cannot earn complete physical capabilities or forced-stop probes", async () =>
   fixture(async ({ engine, calls }) => {
     assert.deepEqual(
       (await engine.execute(randomUUID(), input("capabilities"), deadline()))
@@ -327,8 +329,25 @@ test("CLI fixtures cannot earn complete physical capabilities or passing probes"
       ).reply,
       { action: "probe", verdict: "unsupported", observationHash: null, contractHash: "a".repeat(64) },
     );
-    assert.equal(calls.length, 0);
+    assert.ok(calls.length > 0);
+    assert.ok(calls.every(({ args }) => !args.includes("start") && !args.includes("stop")));
+    assert.ok(calls.every(({ args }) => !args.includes("exec")));
   }));
+test("policy-bound process probe executes the pinned OpenShell command and hashes only its assertion", async () =>
+  fixture(async ({ engine, calls }) => {
+    const reply = await engine.execute(randomUUID(), {
+      ...input("probe"),
+      probe: { caseId: "process_nonprivileged", control: "processPrivilegePolicy", expected: "observe", contractHash: "c".repeat(64) },
+    }, deadline());
+    assert.equal(reply.reply.verdict, "pass");
+    assert.match(reply.reply.observationHash, /^[a-f0-9]{64}$/);
+    const execCall = calls.find(({ args }) => args.includes("exec"));
+    assert.ok(execCall);
+    assert.ok(execCall.args.includes("--no-login-shell"));
+    assert.ok(execCall.args.includes("--timeout"));
+    assert.deepEqual(execCall.args.slice(-3), ["--", "/usr/bin/id", "-u"]);
+    assert.equal(JSON.stringify(reply).includes("1000"), false);
+  }, { physical: true, running: true, probeStdout: "1000\n" }));
 test("observed metadata cannot substitute for image or complete control enforcement", async () =>
   fixture(async ({ engine }) => {
     const receipt = await engine.execute(

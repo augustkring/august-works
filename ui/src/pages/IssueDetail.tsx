@@ -7271,6 +7271,13 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
                   className="shrink-0"
                   aria-label="More task actions"
                   title="More task actions"
+                  onClick={(event) => {
+                    // The asChild Slot composes this handler with Radix's
+                    // trigger toggle. Keep the controlled state update here
+                    // and prevent Radix from toggling a second time.
+                    event.preventDefault();
+                    setMoreOpen((open) => !open);
+                  }}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();

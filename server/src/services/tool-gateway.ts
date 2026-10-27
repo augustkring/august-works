@@ -29,7 +29,7 @@ import {
   agentNativeOperationManifestHash,
   blenteraToolCatalogContractHash,
 } from "./agent-native-operation-manifest.js";
-import { CAPABILITY_SEMANTIC_TOOL_CATALOG } from "../vendor/paperclip-runner/index.js";
+import { CAPABILITY_SEMANTIC_TOOL_CATALOG, paperclipSemanticAction } from "../vendor/paperclip-runner/index.js";
 import { PaperclipRunnerToolAuthority } from "./native-runtime/paperclip-runner-tool-authority.js";
 import { claimSlackRateLimitRetry } from "./connectors/slack-retry.js";
 import { resolveSlackTaskAuthority } from "./connectors/slack-authority.js";
@@ -318,11 +318,15 @@ const TOOL_APPROVAL_DESCRIPTION_SUFFIX =
 
 function runnerSemanticToolSchema(operationId: string): Record<string, unknown> {
   const tool = CAPABILITY_SEMANTIC_TOOL_CATALOG.find((candidate) => candidate.operationId === operationId);
-  if (!tool) throw new Error("agent_native_runner_tool_binding_missing");
-  return tool.inputSchema as Record<string, unknown>;
+  const action = paperclipSemanticAction(operationId);
+  const schema = tool?.inputSchema ?? action?.inputSchema;
+  if (!schema) throw new Error("agent_native_runner_tool_binding_missing");
+  return schema as Record<string, unknown>;
 }
 const RUNNER_TASK_OPERATION_BY_SELF_TOOL: Readonly<Record<string, string>> = Object.freeze({
   "paperclip-self:create_task": "create_task",
+  "paperclip-self:update_task": "update_task",
+  "paperclip-self:propose_completion": "propose_completion",
   "paperclip-self:report_progress": "report_progress",
   "paperclip-self:reassign_task": "reassign_task",
   "paperclip-self:set_dependencies": "set_dependencies",
@@ -1139,6 +1143,20 @@ const BUILTIN_TOOLS: ToolGatewayDescriptor[] = [
     displayName: "Create Task",
     description: "Create governed follow-up work using the current Task owner and current run authority.",
     parametersSchema: runnerSemanticToolSchema("create_task"),
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "write",
+  },
+  {
+    name: "paperclip-self:update_task",
+    displayName: "Update Task fields",
+    description: "Update title, description, or priority on the Task attached to the current run using its exact current revision.",
+    parametersSchema: runnerSemanticToolSchema("update_task"),
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "write",
+  },
+  {
+    name: "paperclip-self:propose_completion",
+    displayName: "Request completion review",
+    description: "Ask the accountable Human to review Task completion readiness; Task status remains under the Native finalizer and evidence policy.",
+    parametersSchema: runnerSemanticToolSchema("propose_completion"),
     pluginId: "paperclip-self", providerType: "paperclip_self", risk: "write",
   },
   {
@@ -4046,7 +4064,8 @@ export function createToolGatewayService(
         const ids = await candidateQuery;
         if (ids.length === 0) return [];
         const hydrated = await projectService(queryDb).listByIds(session.companyId, ids.map(row => row.id));
-        const visible: typeof hydrated = [];
+        const visible: Array<Pick<(typeof hydrated)[number],
+          "id" | "name" | "description" | "status" | "visibility" | "targetDate" | "leadAgentId" | "archivedAt" | "updatedAt">> = [];
         for (const project of hydrated) {
           if (!(await canActorReadProjectPrivacy(queryDb, actor, project))) continue;
           const decision = await authorizationService(queryDb).decide({ actor, action: "project:read",

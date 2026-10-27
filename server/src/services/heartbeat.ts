@@ -24998,6 +24998,7 @@ export function heartbeatService(
                     config: runtimeConfig,
                     context: adapterContext,
                     providerRuntime: v5Fabric?.providerRuntime,
+                    platformSkillAdmission: requiredPlatform.identity,
                     executionContinuation: executionContinuation ?? null,
                     runtimeCommandSpec:
                       adapter.getRuntimeCommandSpec?.(runtimeConfig) ?? null,

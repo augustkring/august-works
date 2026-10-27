@@ -119,7 +119,7 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
     const binary = qualifiedOpenCodeBinary();
     if (!binary) throw new Error("qualified_opencode_binary_unavailable");
     vi.stubEnv("PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS", "1");
-    const result = await runManagedNativeConversationFrame({ db, root, opencodeBinary: binary, sandboxRelay: true,
+    const result = await runManagedNativeConversationFrame({ db, root, opencodeBinary: binary, sandboxRelay: true, timeoutSec: 600,
       configureHeartbeat: context => configureManagedConversationSandboxHost({ ...context, root }),
       beforeProviderResponse: async facts => {
         expect(facts.run.status).toBe("running");

@@ -83,6 +83,8 @@ describeEmbeddedPostgres("native company import job ledger", () => {
     const starts = await Promise.all([originalService.start(admitted.job), freshService.start(admitted.job)]);
     expect(starts.sort()).toEqual([false, true]);
 
+    await db.update(customerOperations).set({ leaseExpiresAt: new Date(Date.now() - 1000) })
+      .where(eq(customerOperations.id, admitted.job.id));
     const recovered = await freshService.recoverInterrupted();
     expect(recovered).toEqual([{ id: admitted.job.id }]);
     const stored = await freshService.get(admitted.job.id, authority.actorKey);
@@ -93,6 +95,57 @@ describeEmbeddedPostgres("native company import job ledger", () => {
       .rejects.toMatchObject({ status: 409, details: { code: "import_outcome_unknown" } });
     expect(await db.select({ id: customerOperations.id }).from(customerOperations)
       .where(eq(customerOperations.requestedByUserId, authority.userId))).toHaveLength(1);
+  }, 90_000);
+
+  it("keeps a live owner's lease and atomically rolls back a domain effect with its receipt", async () => {
+    const authority = await seedAuthority();
+    const service = companyImportJobService(db);
+    const admitted = await service.admit(admission(authority));
+    expect(await service.start(admitted.job)).toBe(true);
+    expect(await service.recoverInterrupted()).toEqual([]);
+
+    await service.checkpointEffect(admitted.job, { phase: "started", key: "project:atomic", kind: "project",
+      sourceSlug: "atomic-project" });
+    const projectId = randomUUID();
+    await expect(db.transaction(async tx => {
+      await tx.insert(projects).values({ id: projectId, companyId: authority.companyId, name: "Atomic receipt test" });
+      await service.checkpointEffect(admitted.job, { phase: "completed", key: "project:atomic", kind: "project",
+        sourceSlug: "atomic-project", targetIds: [projectId] }, tx);
+      throw new Error("rollback owner effect and receipt");
+    })).rejects.toThrow("rollback owner effect and receipt");
+
+    expect(await db.select({ id: projects.id }).from(projects).where(eq(projects.id, projectId))).toEqual([]);
+    expect((await service.get(admitted.job.id, authority.actorKey))?.effectCheckpoint).toMatchObject({ state: "applying",
+      activeEffect: { key: "project:atomic", kind: "project", sourceSlug: "atomic-project" }, idMap: [] });
+    expect(await service.succeed(admitted.job, { company: { id: authority.companyId, name: "x", action: "updated" },
+      agents: [], skills: [], projects: [], routines: [], envInputs: [], warnings: [] })).toBeNull();
+
+    await db.update(customerOperations).set({ leaseExpiresAt: new Date(Date.now() - 1000) })
+      .where(eq(customerOperations.id, admitted.job.id));
+    expect(await service.recoverInterrupted()).toEqual([{ id: admitted.job.id }]);
+  }, 90_000);
+
+  it("persists a safe accepted selection and per-effect target ID map", async () => {
+    const authority = await seedAuthority();
+    const actor: AuthorizationActor = { type: "board", source: "local_implicit", userId: authority.userId,
+      isInstanceAdmin: true };
+    const service = companyImportJobService(db);
+    const admitted = await service.admit(admission(authority));
+    expect(await service.start(admitted.job)).toBe(true);
+    await service.acceptPlan(admitted.job, { previewFingerprint: "a".repeat(64),
+      selectedPayloadFingerprint: "b".repeat(64), targetMode: "existing_company", targetCompanyId: authority.companyId,
+      selected: [{ kind: "issue", slug: "task-1", action: "create" }], acceptedByUserId: authority.userId,
+      acceptedAt: new Date().toISOString() }, actor);
+    await service.checkpointEffect(admitted.job, { phase: "started", key: "task:task-1", kind: "task",
+      sourceId: randomUUID(), sourceSlug: "task-1" });
+    const targetId = randomUUID();
+    await service.checkpointEffect(admitted.job, { phase: "completed", key: "task:task-1", kind: "task",
+      targetIds: [targetId] });
+    const stored = await service.get(admitted.job.id, authority.actorKey);
+    expect(stored?.acceptedPlan).toMatchObject({ version: 1, targetMode: "existing_company",
+      selected: [{ kind: "issue", slug: "task-1", action: "create" }], acceptedByUserId: authority.userId });
+    expect(stored?.effectCheckpoint).toMatchObject({ state: "idle", activeEffect: null,
+      idMap: [{ key: "task:task-1", kind: "task", sourceSlug: "task-1", targetIds: [targetId] }] });
   }, 90_000);
 
   it("fences settlement to the original attempt and stores only a compact result after a native effect", async () => {
@@ -122,7 +175,7 @@ describeEmbeddedPostgres("native company import job ledger", () => {
     };
     const forgedAttempt = { ...admitted.job, attemptId: randomUUID() };
     expect(await service.succeed(forgedAttempt, result)).toBeNull();
-    expect((await service.get(admitted.job.id, authority.actorKey))!.status).toBe("needs_reconciliation");
+    expect((await service.get(admitted.job.id, authority.actorKey))!.status).toBe("running");
 
     const settled = await companyImportJobService(db).succeed(admitted.job, result);
     expect(settled).toMatchObject({ id: admitted.job.id, status: "succeeded", attemptId: admitted.job.attemptId,
@@ -236,6 +289,8 @@ describeEmbeddedPostgres("native company import job ledger", () => {
     const requested = await service.requestCancellation(admitted.job.id, authority.actorKey, actor);
     expect(requested).toMatchObject({ status: "running", progressStage: "importing", cancelRequestedAt: expect.any(Date) });
     expect(await service.cancellationRequested(admitted.job)).toBe(true);
+    await db.update(customerOperations).set({ leaseExpiresAt: new Date(Date.now() - 1000) })
+      .where(eq(customerOperations.id, admitted.job.id));
     await service.recoverInterrupted();
     expect((await service.get(admitted.job.id, authority.actorKey))?.status).toBe("needs_reconciliation");
   }, 90_000);

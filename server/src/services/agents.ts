@@ -134,13 +134,17 @@ interface UpdateAgentOptions {
   allowBuiltInAgentMetadata?: boolean;
   allowPendingApprovalConfigUpdate?: boolean;
   claudeLogin?: ClaudeLoginContext;
+  transaction?: AgentTransaction;
 }
 
 interface CreateAgentOptions {
   aiConnectionInstall?: { connectionId: string; createdByUserId: string | null };
   allowBuiltInAgentMetadata?: boolean;
   claudeLogin?: ClaudeLoginContext;
+  transaction?: AgentTransaction;
 }
+
+type AgentTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 interface AgentShortnameRow {
   id: string;
@@ -881,6 +885,7 @@ export function agentService(db: Db) {
       return normalizedUpdated;
     };
 
+    if (options?.transaction) return applyUpdate(options.transaction as unknown as Db);
     const transaction = (db as unknown as {
       transaction?: (callback: (tx: unknown) => Promise<AgentUpdateResult>) => Promise<AgentUpdateResult>;
     }).transaction;
@@ -957,7 +962,7 @@ export function agentService(db: Db) {
         nextConfig: adapterConfig,
         priorConfig: null,
       });
-      return db.transaction(async (tx) => {
+      const applyCreate = async (tx: AgentTransaction) => {
         const txDb = tx as unknown as Db;
         // Consume the stored-session claim and create the fixed definition inside
         // the same transaction that inserts the binding. A rejected claim rolls
@@ -1000,7 +1005,10 @@ export function agentService(db: Db) {
           throw notFound("Agent not found");
         }
         return normalizedCreated;
-      });
+      };
+      return options?.transaction
+        ? applyCreate(options.transaction)
+        : db.transaction(applyCreate);
     },
 
     update: updateAgent,

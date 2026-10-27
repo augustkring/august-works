@@ -40,6 +40,8 @@ import {
   selectPaperclipTaskMarkdown,
   stringifyPaperclipWakePayload,
   isPaperclipRecoveryWakePayload,
+  readPaperclipRuntimeSkillEntries,
+  readRequiredPlatformSkillFiles,
 } from "@paperclipai/adapter-utils/server-utils";
 
 import {
@@ -55,6 +57,7 @@ import {
   resolveProvider,
 } from "./detect-model.js";
 import { reconcileHermesPaperclipSkills } from "./skills.js";
+import { hermesDataHome, hermesPresenceConfig, hermesProfileHash } from "./presence-profile.js";
 
 // ---------------------------------------------------------------------------
 // Config helpers
@@ -338,7 +341,10 @@ function parseHermesOutput(stdout: string, stderr: string): ParsedOutput {
 export async function execute(
   ctx: AdapterExecutionContext,
 ): Promise<AdapterExecutionResult> {
-  const config = (ctx.config ?? ctx.agent?.adapterConfig ?? {}) as Record<string, unknown>;
+  const originalConfig = (ctx.config ?? ctx.agent?.adapterConfig ?? {}) as Record<string, unknown>;
+  const config = ctx.platformSkillAdmission || ctx.providerRuntime?.isolationMode === "isolated_per_presence"
+    ? hermesPresenceConfig(originalConfig, { companyId: ctx.agent.companyId, agentId: ctx.agent.id }, ctx.providerRuntime?.isolationMode)
+    : originalConfig;
 
   // ── Resolve configuration ──────────────────────────────────────────────
   const hermesCmd = resolveHermesCommand(config);
@@ -354,6 +360,16 @@ export async function execute(
   const prevSessionId = cfgString(
     (ctx.runtime?.sessionParams as Record<string, unknown> | null)?.sessionId,
   );
+
+  if (ctx.platformSkillAdmission) {
+    const entries = (await readPaperclipRuntimeSkillEntries(config, import.meta.dirname))
+      .filter(entry => entry.key === "blentera-platform");
+    if (entries.length !== 1 || !entries[0]?.versionId || entries[0]?.sourceStatus === "missing")
+      throw new Error("hermes_required_platform_skill_unavailable");
+    await readRequiredPlatformSkillFiles(entries[0].source, ctx.platformSkillAdmission);
+    if (prevSessionId && ctx.runtime.sessionParams?.hermesProfileHash !== hermesProfileHash(config))
+      throw new Error("hermes_session_profile_unverified: start a newly admitted run in the current profile");
+  }
 
   // The server adds this runtime inventory at the run boundary. Requiring the
   // marker avoids touching a developer's real Hermes home in direct unit or
@@ -389,7 +405,7 @@ export async function execute(
 
   if (!explicitProvider) {
     try {
-      detectedConfig = await detectModel();
+      detectedConfig = await detectModel(ctx.platformSkillAdmission ? path.join(hermesDataHome(config), "config.yaml") : undefined);
     } catch {
       // Non-fatal — detection failure shouldn't block execution
     }
@@ -615,7 +631,7 @@ export async function execute(
 
   // Store session ID for next run
   if (persistSession && parsed.sessionId) {
-    executionResult.sessionParams = { sessionId: parsed.sessionId };
+    executionResult.sessionParams = { sessionId: parsed.sessionId, ...(ctx.platformSkillAdmission ? { hermesProfileHash: hermesProfileHash(config) } : {}) };
     executionResult.sessionDisplayId = parsed.sessionId.slice(0, 16);
   }
 

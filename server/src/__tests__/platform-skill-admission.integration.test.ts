@@ -35,6 +35,7 @@ describe.skipIf(!support.supported)("required platform procedure admission", () 
       versionSelections: new Map([[platform.pin.key, platform.pin.versionId]]),
     });
     expect(entries).toHaveLength(1);
+    expect(entries[0]?.missingDetail).toBeNull();
     expect(entries[0]).toMatchObject({ key: "blentera-platform", versionId: platform.pin.versionId, sourceStatus: "available" });
     expect(await fs.readFile(path.join(entries[0]!.source, "SKILL.md"), "utf8")).toContain("# Blentera Platform");
     expect(await fs.readFile(path.join(entries[0]!.source, "references/work.md"), "utf8")).toContain("Task");

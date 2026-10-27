@@ -50,6 +50,8 @@ export async function runManagedNativeConversationFrame(input: {
   opencodeBinary: string;
   /** Use a policy-valid DNS name that resolves to loopback for the signed host relay case. */
   sandboxRelay?: boolean;
+  /** Bounded run timeout for relay roundtrips; defaults to the normal 180s fixture limit. */
+  timeoutSec?: number;
   conversationWorkMode?: "standard" | "planning" | "ask";
   budgetMonthlyCents?: number;
   tariff?: WorkerModelProfile["tariff"];
@@ -167,7 +169,7 @@ export async function runManagedNativeConversationFrame(input: {
   const model = "fixture-managed-conversation-v1";
   const baseAdapterConfig = { provider: "opencode", model: `anthropic/${model}`, lifecycleMode: "per_turn" };
   await db.update(agents).set({ adapterType: "paperclip_runner", adapterConfig: baseAdapterConfig,
-    runtimeConfig: { timeoutSec: 180 }, status: "idle" })
+    runtimeConfig: { timeoutSec: input.timeoutSec ?? 180 }, status: "idle" })
     .where(eq(agents.id, agentId));
   await input.prepareNativeRuntimeContext?.({ db, actor: human, companyId, agentId });
   const [configuredAgent] = await db.select({ adapterConfig: agents.adapterConfig })

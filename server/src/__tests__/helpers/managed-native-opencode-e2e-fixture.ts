@@ -62,7 +62,8 @@ import type { AuthorizationActor } from "../../services/authorization.js";
 import { instanceSettingsService } from "../../services/instance-settings.js";
 import { orchestrationService } from "../../services/orchestration/orchestration-service.js";
 import { workerModelGateway } from "../../services/orchestration/worker-model-gateway.js";
-import { createToolGatewayService } from "../../services/tool-gateway.js";
+import { blenteraPlatformContractHashes, createToolGatewayService } from "../../services/tool-gateway.js";
+import { preparePlatformSkillAdmission } from "../../services/platform-skill-admission.js";
 import { recordNativeLocalProcessStopAfterExit } from "../../services/native-local-process-stop.js";
 import { managedOpenCodeRuntimeDirectory } from "../../services/native-runtime/runtime-asset-retention.js";
 import { getAssignedMcpGateway, registerAssignedMcpGateway } from "../../services/native-runtime/assigned-mcp-tools.js";
@@ -702,6 +703,8 @@ export async function runManagedNativeOpenCodeFixture(input: {
       status: "running", runtimeMode: "native", nativeIssueId: task.id,
       contextSnapshot: { issueId: task.id, ...(task.conversationSessionGeneration !== null
         ? { conversationSessionGeneration: task.conversationSessionGeneration } : {}) } }).returning();
+    await preparePlatformSkillAdmission(db, { companyId, agentId, runId: run!.id,
+      responsibleUserId: aliceUserId, requireExisting: false }, blenteraPlatformContractHashes());
     const localEnvironment = await environmentService(db).ensureLocalEnvironment();
     const runtimeEnvironment = environmentRuntimeService(db);
     const acquiredEnvironment = await runtimeEnvironment.acquireRunLease({ companyId, environment: localEnvironment,
@@ -833,8 +836,8 @@ export async function runManagedNativeOpenCodeFixture(input: {
     if (!sourceSet) throw new Error("Canonical source collector did not close the task input.");
     const bootstrapSourceClosure = { sourceSet,
       taskEnvelopeDigest: nativeSha256(execution.task) };
-    const profileBlob = { ...(run!.runnerProfileJson as Record<string, unknown>), nativeExecutionInput: execution };
-    await db.update(heartbeatRuns).set({ runnerProfileJson: profileBlob }).where(eq(heartbeatRuns.id, run!.id));
+    await db.update(heartbeatRuns).set({ runnerProfileJson: sql`coalesce(${heartbeatRuns.runnerProfileJson}, '{}'::jsonb) ||
+      ${JSON.stringify({ nativeExecutionInput: execution })}::jsonb` }).where(eq(heartbeatRuns.id, run!.id));
     const leaseOwner = `managed-opencode-e2e:${randomUUID()}`;
     const controller = await currentNativeControllerIdentity();
     await db.insert(nativeRunFinalizations).values({ runId: run!.id, companyId, issueId: task.id,
@@ -2453,6 +2456,8 @@ export async function runManagedNativeOpenCodeFixture(input: {
           matchingCaptureCount: captures.filter(value => value.callId === "managed-e2e-write-1" &&
             value.managedOpenCode === true && toolName(value.tool) === "write_document").length,
           writeInvocationStatusCounts,
+          failedInvocationErrors: invocations.filter(value => value.status === "failed" && value.errorCode)
+            .map(value => ({ tool: value.toolName, errorCode: value.errorCode })).slice(0, 24),
           succeededCanonicalInvocationCount: invocations.filter(value => value.toolName === "write_document" &&
             value.status === "succeeded").length,
           managedToolResultErrorCodes: diagnostics.flatMap(line => [...line.matchAll(/managed_opencode_tool_result_[a-z_]+/g)]

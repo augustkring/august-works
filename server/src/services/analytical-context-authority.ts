@@ -156,54 +156,195 @@ export async function assertAnalyticalContextPayloadAccess(db:Db,companyId:strin
 /** Verify a complete selected Task population while checking its shared
  * Original ancestors once. Every exact Task still receives its own direct
  * reader, retained-root, and lineage review in this physical transaction. */
-export async function assertAnalyticalContextPayloadAccessBatch(db:Db,companyId:string,actor:AuthorizationActor|undefined,
- issueIds:string[],readScope?:NativeReadScope):Promise<void> {
- const ids=[...new Set(issueIds)];
- if(ids.length>256||ids.some(id=>!z.string().uuid().safeParse(id).success))
-  throw new HttpError(403,"The complete analytical Task population is unavailable",{code:"analytical_source_access_lost"});
- if(!ids.length)return;
- if(!is(db,PgTransaction))return db.transaction(tx=>assertAnalyticalContextPayloadAccessBatch(tx as unknown as Db,companyId,actor,ids,readScope));
- // Match source erasure's ordering: company privacy locks precede all source
- // discovery and row pins, avoiding an advisory-lock/row-lock inversion.
- const {lockAnalyticalCompany}=await import("./analytical-privacy.js"),{lockMemoryPrivacy}=await import("./memory/memory-privacy.js");
- await lockAnalyticalCompany(db,companyId);await lockMemoryPrivacy(db,companyId);
- // Large imports commonly contain ordinary manual Tasks with no captured
- // analytical inputs. Prove that the complete selected population has no
- // retained Workflow/Routine/run/context edge in one query, then apply the
- // same current Task privacy predicate and erasure check in bulk. This avoids
- // repeating no-context discovery through several round trips per Task.
- if(actor&&ids.length>1){
+async function nativeTaskPayloadSourceShape(db:Db,companyId:string,ids:string[],runId?:string):Promise<{complex:boolean;selfOwnedConversationComment:boolean}> {
   const selectedIds=sql.join(ids.map(id=>sql`${id}::uuid`),sql`, `);
-  const [candidate]=await db.execute<{complex:boolean}>(sql`
+  const [candidate]=await db.execute<{complex:boolean;selfOwnedConversationComment:boolean}>(sql`
    with selected(id) as (select unnest(array[${selectedIds}]::uuid[])),
+   self_conversation_comments as (
+    select i.id as issue_id from selected join issues i on i.company_id=${companyId}::uuid and i.id=selected.id
+    cross join lateral jsonb_array_elements(case when jsonb_typeof(i.payload_source_snapshot->'inputs')='array'
+      then i.payload_source_snapshot->'inputs' else '[]'::jsonb end) input
+    join issue_comments c on c.company_id=i.company_id and c.issue_id=i.id
+      and c.id=case when input->>'commentId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+        then (input->>'commentId')::uuid end
+    where i.conversation_agent_id is not null and i.conversation_user_id is not null
+      and i.payload_source_protocol_version=1 and not i.payload_source_snapshot_invalidated
+      and jsonb_array_length(i.payload_source_snapshot->'inputs')=1
+      and input->>'kind'='comment' and input->>'issueId'=i.id::text
+      and input->>'sourceVersion'=extract(epoch from c.updated_at)::text
+      and input->>'contentHash' ~ '^[a-f0-9]{64}$'
+      and c.deleted_at is null and c.author_type='user' and c.author_user_id=i.conversation_user_id
+      and c.payload_source_protocol_version=1 and c.payload_source_snapshot is not null
+      and not c.payload_source_snapshot_invalidated
+      and c.payload_source_snapshot->'owner'->>'kind'='comment'
+      and c.payload_source_snapshot->'owner'->>'id'=c.id::text
+      and c.payload_source_snapshot->'owner'->>'companyId'=c.company_id::text
+      and c.payload_source_snapshot->'owner'->>'contentHash'=public.aw_native_payload_body_hash('comment',to_jsonb(c))
+      and c.payload_source_snapshot->'policy'->'issueIds'=jsonb_build_array(i.id::text)
+      and c.payload_source_snapshot->'policy'->'projectIds'='[]'::jsonb
+      and c.payload_source_snapshot->'policy'->'runIds'='[]'::jsonb
+      and c.payload_source_snapshot->'policy'->'memoryIds'='[]'::jsonb
+      and c.payload_source_snapshot->'policy'->'foundationRevisionIds'='[]'::jsonb
+      and c.payload_source_snapshot->'inputs'='[]'::jsonb
+      and c.payload_source_snapshot->>'digest'=encode(sha256(convert_to((c.payload_source_snapshot-'digest')::text,'UTF8')),'hex')
+   ),
    chains as (
     select selected.id,source.source_run_id,source.source_task_id,source.invalid
     from selected cross join lateral aw_runner_task_source_chain(${companyId}::uuid,null::uuid,selected.id) source
    )
    select (
     exists(select 1 from selected join issues i on i.company_id=${companyId}::uuid and i.id=selected.id
-      where i.origin_run_id is not null or i.execution_run_id is not null or
+      where i.origin_run_id is not null or (i.execution_run_id is not null and
+	       (${runId??null}::uuid is null or i.execution_run_id<>${runId??null}::uuid)) or
         i.payload_source_protocol_version not in (0,1) or
         (i.payload_source_protocol_version=1 and (i.payload_source_snapshot is null or i.payload_source_snapshot_invalidated
-          or jsonb_typeof(i.payload_source_snapshot->'inputs')<>'array' or jsonb_array_length(i.payload_source_snapshot->'inputs')>0
-          or jsonb_array_length(coalesce(i.payload_source_snapshot->'policy'->'issueIds','[]'::jsonb))>0
-          or jsonb_array_length(coalesce(i.payload_source_snapshot->'policy'->'projectIds','[]'::jsonb))>0
-          or jsonb_array_length(coalesce(i.payload_source_snapshot->'policy'->'runIds','[]'::jsonb))>0
-          or jsonb_array_length(coalesce(i.payload_source_snapshot->'policy'->'memoryIds','[]'::jsonb))>0
-          or jsonb_array_length(coalesce(i.payload_source_snapshot->'policy'->'foundationRevisionIds','[]'::jsonb))>0))
+          or i.payload_source_snapshot->>'version' is distinct from '1'
+          or i.payload_source_snapshot->>'digest' is distinct from encode(sha256(convert_to((i.payload_source_snapshot-'digest')::text,'UTF8')),'hex')
+          or i.payload_source_snapshot->'owner'->>'kind' is distinct from 'issue'
+          or i.payload_source_snapshot->'owner'->>'companyId' is distinct from ${companyId}::text
+          or i.payload_source_snapshot->'owner'->>'id' is distinct from selected.id::text
+          or i.payload_source_snapshot->'owner'->>'contentHash' is distinct from public.aw_native_payload_body_hash('issue',to_jsonb(i))
+          or jsonb_typeof(i.payload_source_snapshot->'inputs') is distinct from 'array'
+          or case when jsonb_typeof(i.payload_source_snapshot->'inputs')='array'
+            then jsonb_array_length(i.payload_source_snapshot->'inputs')>2 else true end
+          or (not exists(select 1 from jsonb_array_elements(case when jsonb_typeof(i.payload_source_snapshot->'inputs')='array'
+            then i.payload_source_snapshot->'inputs' else '[]'::jsonb end) input
+            where input->>'kind'='task' and input->>'issueId'=selected.id::text
+              and coalesce(input->>'sourceVersion','')<>'' and input->>'contentHash' ~ '^[a-f0-9]{64}$')
+            and not exists(select 1 from self_conversation_comments c where c.issue_id=selected.id))
+          or exists(select 1 from jsonb_array_elements(case when jsonb_typeof(i.payload_source_snapshot->'inputs')='array'
+            then i.payload_source_snapshot->'inputs' else '[]'::jsonb end) input
+            where not (input->>'kind'='task' and input->>'issueId'=selected.id::text
+                and coalesce(input->>'sourceVersion','')<>'' and input->>'contentHash' ~ '^[a-f0-9]{64}$')
+              and not (${runId??null}::uuid is not null and input->>'kind'='native_task_wake'
+                and input->>'runId'=${runId??null}::text and input->>'issueId'=selected.id::text
+                and coalesce(input->>'sourceVersion','')<>'' and input->>'contentHash' ~ '^[a-f0-9]{64}$')
+              and not (input->>'kind'='comment' and exists(select 1 from self_conversation_comments c where c.issue_id=selected.id)))
+          or exists(select 1 from jsonb_array_elements(case when jsonb_typeof(i.payload_source_snapshot->'inputs')='array'
+            then i.payload_source_snapshot->'inputs' else '[]'::jsonb end) wake
+            where wake->>'kind'='native_task_wake' and not exists(select 1 from jsonb_array_elements(case
+              when jsonb_typeof(i.payload_source_snapshot->'inputs')='array' then i.payload_source_snapshot->'inputs'
+              else '[]'::jsonb end) task where task->>'kind'='task' and task->>'issueId'=selected.id::text
+                and task->>'sourceVersion'=wake->>'sourceVersion'))
+          or jsonb_typeof(i.payload_source_snapshot->'policy') is distinct from 'object'
+          or jsonb_typeof(i.payload_source_snapshot->'policy'->'issueIds') is distinct from 'array'
+          or case when jsonb_typeof(i.payload_source_snapshot->'policy'->'issueIds')='array' then
+            jsonb_array_length(i.payload_source_snapshot->'policy'->'issueIds')>1 or
+            (jsonb_array_length(i.payload_source_snapshot->'policy'->'issueIds')=1 and
+              i.payload_source_snapshot->'policy'->'issueIds'->>0<>selected.id::text) else true end
+          or jsonb_typeof(i.payload_source_snapshot->'policy'->'projectIds') is distinct from 'array'
+          or case when jsonb_typeof(i.payload_source_snapshot->'policy'->'projectIds')='array' then jsonb_array_length(i.payload_source_snapshot->'policy'->'projectIds')>0 else true end
+          or jsonb_typeof(i.payload_source_snapshot->'policy'->'runIds') is distinct from 'array'
+          or case when jsonb_typeof(i.payload_source_snapshot->'policy'->'runIds')='array' then jsonb_array_length(i.payload_source_snapshot->'policy'->'runIds')>0 else true end
+          or jsonb_typeof(i.payload_source_snapshot->'policy'->'memoryIds') is distinct from 'array'
+          or case when jsonb_typeof(i.payload_source_snapshot->'policy'->'memoryIds')='array' then jsonb_array_length(i.payload_source_snapshot->'policy'->'memoryIds')>0 else true end
+          or jsonb_typeof(i.payload_source_snapshot->'policy'->'foundationRevisionIds') is distinct from 'array'
+          or case when jsonb_typeof(i.payload_source_snapshot->'policy'->'foundationRevisionIds')='array' then jsonb_array_length(i.payload_source_snapshot->'policy'->'foundationRevisionIds')>0 else true end))
         or i.origin_kind in ('workflow_task','routine_execution'))
     or exists(select 1 from chains where source_run_id is not null or source_task_id is not null or invalid)
     or exists(select 1 from selected join issue_privacy_sources s on s.company_id=${companyId}::uuid and s.issue_id=selected.id
       where s.source_kind in ('run','run_copy','workflow_run','routine_run'))
-    or exists(select 1 from selected join context_manifests cm on cm.company_id=${companyId}::uuid and cm.issue_id=selected.id)
+    or exists(select 1 from selected join context_manifests cm on cm.company_id=${companyId}::uuid and cm.issue_id=selected.id
+	      join context_manifest_memory_roots retained on retained.company_id=cm.company_id and retained.manifest_id=cm.id
+	      join analytical_context_roots root on root.company_id=retained.company_id and root.memory_record_id=retained.memory_record_id)
+     or exists(select 1 from selected join heartbeat_runs h on h.company_id=${companyId}::uuid
+       and (h.issue_id=selected.id or h.native_issue_id=selected.id)
+      join context_manifests cm on cm.company_id=h.company_id and cm.run_id=h.id
+	      join context_manifest_memory_roots retained on retained.company_id=cm.company_id and retained.manifest_id=cm.id
+	      join analytical_context_roots root on root.company_id=retained.company_id and root.memory_record_id=retained.memory_record_id)
     or exists(select 1 from selected join heartbeat_runs h on h.company_id=${companyId}::uuid
-      and coalesce(h.issue_id,h.native_issue_id)=selected.id
-      join context_manifests cm on cm.company_id=h.company_id and cm.run_id=h.id)
+      and (h.issue_id=selected.id or h.native_issue_id=selected.id) join workflow_step_runs step on step.company_id=h.company_id
+      and step.heartbeat_run_id=h.id)
+	   or exists(select 1 from selected join workflow_waits wait on wait.company_id=${companyId}::uuid
+	     and wait.reference_type='issue' and wait.reference_id=selected.id::text
+	     join workflow_step_runs step on step.company_id=wait.company_id and step.workflow_run_id=wait.workflow_run_id
+	     and step.node_id=wait.node_id)
+   or (${runId??null}::uuid is not null and exists(select 1 from context_manifests cm
+	     join context_manifest_memory_roots retained on retained.company_id=cm.company_id and retained.manifest_id=cm.id
+	     join analytical_context_roots root on root.company_id=retained.company_id and root.memory_record_id=retained.memory_record_id
+	     where cm.company_id=${companyId}::uuid and cm.run_id=${runId??null}::uuid))
+   or (${runId??null}::uuid is not null and exists(select 1 from agent_execution_manifests e
+	     join context_manifest_memory_roots retained on retained.company_id=e.company_id and retained.manifest_id=e.context_manifest_id
+	     join analytical_context_roots root on root.company_id=retained.company_id and root.memory_record_id=retained.memory_record_id
+	     where e.company_id=${companyId}::uuid and e.run_id=${runId??null}::uuid))
+   or (${runId??null}::uuid is not null and exists(select 1 from heartbeat_runs h join context_manifests cm
+	     on cm.company_id=h.company_id and cm.issue_id=h.issue_id
+	     join context_manifest_memory_roots retained on retained.company_id=cm.company_id and retained.manifest_id=cm.id
+	     join analytical_context_roots root on root.company_id=retained.company_id and root.memory_record_id=retained.memory_record_id
+	     where h.company_id=${companyId}::uuid and h.id=${runId??null}::uuid and h.issue_id is not null))
     or exists(select 1 from selected join context_manifest_items item on item.company_id=${companyId}::uuid
-      and item.source_provider='august_works_tasks' and item.source_ref='issue://'||selected.id::text)
-   ) as complex
+	      and item.source_provider='august_works_tasks' and item.source_ref='issue://'||selected.id::text
+	      join context_manifests cm on cm.company_id=item.company_id and cm.id=item.manifest_id
+	      join context_manifest_memory_roots retained on retained.company_id=cm.company_id and retained.manifest_id=cm.id
+	      join analytical_context_roots root on root.company_id=retained.company_id and root.memory_record_id=retained.memory_record_id)
+   ) as complex,
+   exists(select 1 from self_conversation_comments c join selected on selected.id=c.issue_id) as "selfOwnedConversationComment"
   `);
-  if(candidate?.complex!==true){
+ return {complex:candidate?.complex===true,selfOwnedConversationComment:candidate?.selfOwnedConversationComment===true};
+}
+
+export async function assertAnalyticalContextPayloadAccessBatch(db:Db,companyId:string,actor:AuthorizationActor|undefined,
+ issueIds:string[],readScope?:NativeReadScope,options:{fastPathOnly?:boolean;runId?:string}={}):Promise<void|boolean> {
+ const ids=[...new Set(issueIds)];
+ if(ids.length>256||ids.some(id=>!z.string().uuid().safeParse(id).success))
+  throw new HttpError(403,"The complete analytical Task population is unavailable",{code:"analytical_source_access_lost"});
+ if(!ids.length)return;
+ if(!is(db,PgTransaction))return db.transaction(tx=>assertAnalyticalContextPayloadAccessBatch(tx as unknown as Db,companyId,actor,ids,readScope,options));
+ const {lockAnalyticalCompany}=await import("./analytical-privacy.js");
+ const {lockMemoryPrivacy}=await import("./memory/memory-privacy.js");
+ // An unlocked probe only routes complex payloads to the original writer-lock
+ // path. A simple result is re-proven after taking shared source-writer locks.
+ if(options.fastPathOnly===true){
+  const initialShape=!actor||ids.length!==1?null:await nativeTaskPayloadSourceShape(db,companyId,ids,options.runId);
+  if(!initialShape||initialShape.complex&&!initialShape.selfOwnedConversationComment){
+   await lockAnalyticalCompany(db,companyId);await lockMemoryPrivacy(db,companyId);return false;
+  }
+ }
+ // Read-only fast admission shares the exact ordered advisory boundaries as
+ // source writers. Concurrent append checks can proceed together; retention,
+ // projection, suppression, and erasure still take the exclusive writer locks.
+ const lockMode=options.fastPathOnly===true?"read":"write";
+ await lockAnalyticalCompany(db,companyId,lockMode);await lockMemoryPrivacy(db,companyId,lockMode);
+ // Source-free native Tasks can still carry metadata-only bootstrap manifests.
+ // Prove that the selected population has no retained lineage, Workflow source,
+ // payload pin, privacy edge, or Context manifest attached to an analytical
+ // root, then apply the same current Task ACL and erasure check in bulk. The
+ // retained-root traversal below remains mandatory whenever such a root exists.
+ if(actor&&(ids.length>1||options.fastPathOnly===true)){
+  const selectedIds=sql.join(ids.map(id=>sql`${id}::uuid`),sql`, `);
+  const candidateShape=await nativeTaskPayloadSourceShape(db,companyId,ids,options.runId);
+  const candidateComplex=candidateShape.complex;
+  if(options.fastPathOnly===true&&initialShape&&
+    (candidateShape.complex!==initialShape.complex||candidateShape.selfOwnedConversationComment!==initialShape.selfOwnedConversationComment))
+   throw new HttpError(403,"Native task source access changed during admission",{code:"analytical_source_access_lost"});
+  if(options.fastPathOnly===true&&candidateShape.selfOwnedConversationComment)return false;
+  if(options.fastPathOnly===true&&process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS==="1"){
+   const [shape]=await db.execute<{sourceAncestorCount:number;privacySourceCount:number;metadataManifestCount:number;retainedRootCount:number;
+    executionManifestCount:number;workflowStepCount:number;priorExecutionRun:boolean;payloadSnapshotPresent:boolean}>(sql`
+    with selected(id) as (select ${ids[0]}::uuid), manifests(id) as (
+     select cm.id from context_manifests cm where cm.company_id=${companyId}::uuid and cm.issue_id=(select id from selected)
+     union select cm.id from context_manifests cm join heartbeat_runs h on h.company_id=cm.company_id and h.id=cm.run_id
+      where cm.company_id=${companyId}::uuid and (h.issue_id=(select id from selected) or h.native_issue_id=(select id from selected))
+     union select e.context_manifest_id from agent_execution_manifests e where e.company_id=${companyId}::uuid and e.run_id=${options.runId??null}::uuid
+    ) select
+     (select count(*)::int from aw_runner_task_source_chain(${companyId}::uuid,null::uuid,(select id from selected))) as "sourceAncestorCount",
+     (select count(*)::int from issue_privacy_sources s where s.company_id=${companyId}::uuid and s.issue_id=(select id from selected)) as "privacySourceCount",
+     (select count(*)::int from manifests) as "metadataManifestCount",
+     (select count(distinct root.memory_record_id)::int from manifests m join context_manifest_memory_roots retained
+      on retained.company_id=${companyId}::uuid and retained.manifest_id=m.id join analytical_context_roots root
+      on root.company_id=retained.company_id and root.memory_record_id=retained.memory_record_id) as "retainedRootCount",
+     (select count(*)::int from agent_execution_manifests e where e.company_id=${companyId}::uuid and e.run_id=${options.runId??null}::uuid) as "executionManifestCount",
+     (select count(*)::int from workflow_step_runs step where step.company_id=${companyId}::uuid and
+      (step.heartbeat_run_id=${options.runId??null}::uuid or exists(select 1 from heartbeat_runs h where h.company_id=step.company_id
+       and h.id=step.heartbeat_run_id and (h.issue_id=(select id from selected) or h.native_issue_id=(select id from selected))))) as "workflowStepCount",
+     exists(select 1 from issues i where i.company_id=${companyId}::uuid and i.id=(select id from selected)
+      and i.execution_run_id is not null and i.execution_run_id<>${options.runId??null}::uuid) as "priorExecutionRun",
+     exists(select 1 from issues i where i.company_id=${companyId}::uuid and i.id=(select id from selected)
+      and i.payload_source_protocol_version=1 and i.payload_source_snapshot is not null) as "payloadSnapshotPresent"
+   `);
+   console.info("native-analytical-batch-admission-shape",JSON.stringify({complex:candidateComplex,...shape}));
+  }
+   if(candidateComplex!==true){
    const [erasure]=await db.execute<{erased:boolean}>(sql`
     with selected(id) as (select unnest(array[${selectedIds}]::uuid[]))
     select coalesce(bool_or(aw_workflow_memory_erased(${companyId}::uuid,null::uuid,selected.id)),false) as erased from selected
@@ -212,9 +353,12 @@ export async function assertAnalyticalContextPayloadAccessBatch(db:Db,companyId:
    const readable=await db.select({id:issues.id}).from(issues).where(and(eq(issues.companyId,companyId),
     inArray(issues.id,ids),await issueReadSqlCondition(db,actor)));
    if(readable.length!==ids.length)throw new HttpError(403,"Native task source access is unavailable",{code:"analytical_source_access_lost"});
+   if(options.fastPathOnly===true)return true;
    return;
   }
+   if(options.fastPathOnly===true)return false;
  }
+  if(options.fastPathOnly===true)return false;
  const worklist:AnalyticalPayloadWorklist={directSources:new Map(),sharedSources:new Map(),finalChecks:[],workflowRunIds:new Set()};
  for(const issueId of ids)
   await assertAnalyticalContextPayloadAccessInternal(db,companyId,actor,{issueId},readScope,worklist);
@@ -475,9 +619,28 @@ async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string
 
 /** Provider inputs and outputs use the actual persisted native identity. A
  * caller supplies only the existing company/run binding, never a human grant. */
-export async function assertNativeAnalyticalRunPayloadAccess(db:Db,companyId:string,runId:string) {
+export async function assertNativeAnalyticalRunPayloadAccess(db:Db,companyId:string,runId:string):Promise<void> {
+ if(!is(db,PgTransaction))return db.transaction(tx=>assertNativeAnalyticalRunPayloadAccess(tx as unknown as Db,companyId,runId));
  const [run]=await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.id,runId))).limit(1);
  if(!run)throw new HttpError(403,"Analytical conversation source access is unavailable",{code:"analytical_source_access_lost"});
  const actor:AuthorizationActor={type:"agent",source:"agent_jwt",companyId,agentId:run.agentId,runId:run.id,onBehalfOfUserId:run.responsibleUserId};
+ if(run.nativeIssueId){
+  const simple=await assertAnalyticalContextPayloadAccessBatch(db,companyId,actor,[run.nativeIssueId],"task",{fastPathOnly:true,runId:run.id});
+  if(simple===true){
+   // The batch admission above owns the company and Memory privacy locks for
+   // this transaction. Re-pin the executing run and check its own current
+   // reader, erasure and conversation state before admitting this event.
+   const [current]=await db.select({id:heartbeatRuns.id,agentId:heartbeatRuns.agentId,responsibleUserId:heartbeatRuns.responsibleUserId,nativeIssueId:heartbeatRuns.nativeIssueId})
+    .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.id,run.id))).for("share").limit(1);
+   if(!current||current.agentId!==run.agentId||current.responsibleUserId!==run.responsibleUserId||current.nativeIssueId!==run.nativeIssueId||
+    !await canActorReadHeartbeatRunPrivacy(db,actor,{companyId,id:run.id}))
+    throw new HttpError(403,"Native task source access is unavailable",{code:"analytical_source_access_lost"});
+   const [erasure]=await db.execute<{erased:boolean}>(sql`select aw_workflow_memory_erased(${companyId}::uuid,${run.id}::uuid,${run.nativeIssueId}::uuid) as erased`);
+   if(erasure?.erased)throw new HttpError(403,"Analytical conversation source access is unavailable",{code:"analytical_source_access_lost"});
+   const retired=await db.select({id:issues.id}).from(issues).where(and(eq(issues.companyId,companyId),eq(issues.id,run.nativeIssueId),sql`${issues.conversationRetiredAt} is not null`)).limit(1);
+   if(retired.length)throw new HttpError(403,"Analytical conversation source access is unavailable",{code:"analytical_source_access_lost"});
+   return;
+  }
+ }
  await assertAnalyticalContextPayloadAccess(db,companyId,actor,{runId:run.id},"task");
 }

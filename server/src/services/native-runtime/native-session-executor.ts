@@ -13847,7 +13847,15 @@ async function createRunnerdBackendWithinSessionClaim(
                 "stderr",
                 "[paperclip-runner] using manifest-matched provider pack from the sandbox image\n",
               );
-            } catch {
+            } catch (error) {
+              const reason = error instanceof Error && error.message.includes("preinstalled provider pack could not be linked")
+                ? "preinstalled_link_failed"
+                : error instanceof Error && error.message.includes("OpenCode version mismatch")
+                  ? "opencode_version_mismatch"
+                  : error instanceof Error && error.message.includes("provider pack verification failed")
+                    ? "pack_verification_failed"
+                    : "preinstalled_pack_rejected";
+              await input.onLog?.("stderr", `[paperclip-runner] preinstalled provider pack rejected: ${reason}\n`);
               preinstalledProviderPack = null;
             }
           }

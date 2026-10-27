@@ -2,7 +2,7 @@ import {randomUUID} from "node:crypto";
 import {readFile} from "node:fs/promises";
 import path from "node:path";
 import {eq,sql} from "../../server/node_modules/drizzle-orm/index.js";
-import {createDb,memoryRecords,analyticalContextRoots,analyticalContextDependencies,contextManifestMemoryRoots,contextManifests,heartbeatRuns,heartbeatRunEvents,nativeRunFinalizations,nativeRunResults,workspaceOperations,businessMetricObservations,businessMetricVersions} from "../../packages/db/src/index.ts";
+import {createDb,memoryRecords,analyticalContextRoots,analyticalContextDependencies,contextManifestMemoryRoots,contextManifests,heartbeatRuns,heartbeatRunEvents,issues,nativeRunFinalizations,nativeRunResults,workspaceOperations,businessMetricObservations,businessMetricVersions} from "../../packages/db/src/index.ts";
 import {nativeRunInputSourceReceiptSchema} from "../../packages/shared/src/validators/native-payload-source-snapshot.ts";
 import {analyticalPurpose,metricDefinition} from "../../server/src/__tests__/helpers/business-metric-fixture.ts";
 import { expect, test, type Page } from "@playwright/test";
@@ -101,6 +101,46 @@ test("chat first open is read-only; concurrent first sends and retries share one
       try {
         const chatResponse = await request.get(f.chatPath);
         const failedIssueId = chatResponse.ok() ? (await chatResponse.json()).id : null;
+        const [sourceOwner] = failedIssueId ? await db.select({
+          companyId: issues.companyId,
+          version: issues.payloadSourceProtocolVersion,
+          snapshot: issues.payloadSourceSnapshot,
+          invalidated: issues.payloadSourceSnapshotInvalidated,
+        }).from(issues).where(eq(issues.id, failedIssueId)) : [];
+        const sourceSnapshot = sourceOwner?.snapshot && typeof sourceOwner.snapshot === "object"
+          ? sourceOwner.snapshot as Record<string, any> : {};
+        const sourcePolicy = sourceSnapshot.policy && typeof sourceSnapshot.policy === "object"
+          ? sourceSnapshot.policy as Record<string, unknown> : {};
+        const inputKinds = ["task", "project", "project_workspace", "memory", "foundation_revision", "comment",
+          "interaction", "document_revision", "attachment", "context", "skill_version", "runtime_skill",
+          "playbook_revision", "role_pack_version", "authored_definition", "runtime_instructions", "retained_run",
+          "retained_workspace", "tool_result", "completion_contract", "native_task_wake", "workspace_metadata",
+          "worker_model_dispatch", "conversation_model_dispatch"] as const;
+        const inputCounts = Object.fromEntries(inputKinds.map(kind => [kind, 0])) as Record<typeof inputKinds[number], number>;
+        let invalidInputCount = 0;
+        for (const input of Array.isArray(sourceSnapshot.inputs) ? sourceSnapshot.inputs : []) {
+          const kind = input && typeof input === "object" && !Array.isArray(input)
+            ? (input as Record<string, unknown>).kind : null;
+          if (typeof kind === "string" && Object.hasOwn(inputCounts, kind)) inputCounts[kind as keyof typeof inputCounts] += 1;
+          else invalidInputCount += 1;
+        }
+        const sourceSnapshotShape = {
+          version: sourceOwner?.version ?? null,
+          invalidated: sourceOwner?.invalidated ?? null,
+          ownerKind: typeof sourceSnapshot.owner?.kind === "string" && ["issue", "project", "memory_record", "comment", "document_revision", "attachment"].includes(sourceSnapshot.owner.kind)
+            ? sourceSnapshot.owner.kind : null,
+          ownerCompanyMatches: sourceSnapshot.owner?.companyId === (sourceOwner?.companyId ?? null),
+          ownerTaskMatches: sourceSnapshot.owner?.id === failedIssueId,
+          inputCounts,
+          invalidInputCount,
+          policyCounts: {
+            issueIds: Array.isArray(sourcePolicy.issueIds) ? sourcePolicy.issueIds.length : null,
+            projectIds: Array.isArray(sourcePolicy.projectIds) ? sourcePolicy.projectIds.length : null,
+            runIds: Array.isArray(sourcePolicy.runIds) ? sourcePolicy.runIds.length : null,
+            memoryIds: Array.isArray(sourcePolicy.memoryIds) ? sourcePolicy.memoryIds.length : null,
+            foundationRevisionIds: Array.isArray(sourcePolicy.foundationRevisionIds) ? sourcePolicy.foundationRevisionIds.length : null,
+          },
+        };
         const rows = failedIssueId
           ? await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.nativeIssueId, failedIssueId))
           : [];
@@ -359,7 +399,7 @@ test("chat first open is read-only; concurrent first sends and retries share one
             providerRuns,
           };
         } catch { /* Failure-only diagnostics must not mask the test failure. */ }
-        console.info("native-resume-witness-facts", JSON.stringify({ issueAvailable: Boolean(failedIssueId), rows: sanitized, lifecycleFacts, providerTraceFacts, pgWaitFacts }));
+        console.info("native-resume-witness-facts", JSON.stringify({ issueAvailable: Boolean(failedIssueId), sourceSnapshotShape, rows: sanitized, lifecycleFacts, providerTraceFacts, pgWaitFacts }));
       } finally {
         await db.$client.end();
       }

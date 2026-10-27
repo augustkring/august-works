@@ -88,7 +88,7 @@ import {
   type AttentionCaller,
 } from "../services/pipelines-aggregation.js";
 import { accessService } from "../services/access.js";
-import { authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy } from "../services/authorization.js";
+import { authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, pinCurrentBoardActor } from "../services/authorization.js";
 import { issueService } from "../services/issues.js";
 import { visibleIssueCondition } from "../services/issue-visibility.js";
 import { assertCompanyAccess } from "./authz.js";
@@ -712,6 +712,14 @@ async function canReadPipelineCaseBodySources(db: Db, req: Request, companyId: s
 }
 
 async function canReadPipelineCaseBodySourcesOnce(db: Db, req: Request, companyId: string, caseId: string) {
+  if (req.actor.type === "board") {
+    const pinned = req.actor.source === "local_implicit" ? { actor: req.actor, credentialExpiresAt: null }
+      : await db.transaction(async tx => pinCurrentBoardActor(tx, req.actor));
+    if (!pinned) return false;
+    const currentAccess = await authorizationService(db).decide({ actor: pinned.actor, action: "company_scope:read",
+      resource: { type: "company", companyId } });
+    if (!currentAccess.allowed) return false;
+  }
   const [caseRow] = await db.select({ createdByAgentId: pipelineCases.createdByAgentId,
     originRunId: pipelineCases.originRunId }).from(pipelineCases).where(and(
       eq(pipelineCases.companyId, companyId), eq(pipelineCases.id, caseId))).limit(1);
