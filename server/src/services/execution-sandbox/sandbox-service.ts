@@ -13,7 +13,7 @@ import { capabilityResolverService } from "../capability-resolver.js";
 import { compileSandboxPolicy } from "./policy-compiler.js";
 import { runSandboxQualification } from "./qualification.js";
 import { existingCellContainerBackend } from "./compatibility-backend.js";
-import { SANDBOX_PROBE_CASES, type ExecutionSandboxBackend, type SandboxIdentity } from "./backend.js";
+import { sandboxProbeCases, type ExecutionSandboxBackend, type SandboxIdentity } from "./backend.js";
 import { fenceSandboxAdmissionOutcome, releaseSandboxAdmissionClaim } from "./sandbox-guardian.js";
 import { createToolGatewayService, type SandboxCredentialBrokerBinding } from "../tool-gateway.js";
 
@@ -131,9 +131,9 @@ export function executionSandboxService(db: Db, options: {
       eq(sandboxQualificationRuns.id, sandboxBinding.qualificationRunId), eq(sandboxQualificationRuns.status, "passed"),
     )).for("share") : [];
     if (!qualification || qualification.evidenceKind !== "protected_host_report" || qualification.reportHash !== capability.qualificationHash ||
-      qualification.results.length !== SANDBOX_PROBE_CASES.length || SANDBOX_PROBE_CASES.some(test => {
+      qualification.results.length !== sandboxProbeCases(sandboxBinding.boundaryPolicyHash, sandboxBinding.boundaryPolicy.requiredControls).length || sandboxProbeCases(sandboxBinding.boundaryPolicyHash, sandboxBinding.boundaryPolicy.requiredControls).some(test => {
         const matches = qualification.results.filter(result => result.caseId === test.caseId);
-        return matches.length !== 1 || matches[0]?.control !== test.control || matches[0]?.verdict !== "pass" || !/^[a-f0-9]{64}$/.test(matches[0]?.observationHash ?? "");
+        return matches.length !== 1 || matches[0]?.control !== test.control || matches[0]?.contractHash !== test.contractHash || matches[0]?.verdict !== "pass" || !/^[a-f0-9]{64}$/.test(matches[0]?.observationHash ?? "");
       })) throw conflict("Current protected-host qualification is incomplete");
     const [policy] = await tx.select().from(runtimePolicySnapshots).where(and(
       eq(runtimePolicySnapshots.companyId, input.companyId), eq(runtimePolicySnapshots.bindingId, sandboxBinding.id),
@@ -258,12 +258,12 @@ export function executionSandboxService(db: Db, options: {
       qualification.status !== "passed" ||
       qualification.evidenceKind !== "protected_host_report" ||
       qualification.reportHash !== capability.qualificationHash ||
-      qualification.suiteVersion !== "aw-v7-boundary-1" ||
+      qualification.suiteVersion !== "aw-v7-boundary-2" ||
       !Array.isArray(qualification.results) ||
-      qualification.results.length !== SANDBOX_PROBE_CASES.length ||
-      SANDBOX_PROBE_CASES.some((test) => {
+      qualification.results.length !== sandboxProbeCases(row.boundaryPolicyHash, row.boundaryPolicy.requiredControls).length ||
+      sandboxProbeCases(row.boundaryPolicyHash, row.boundaryPolicy.requiredControls).some((test) => {
         const matches = qualification.results.filter((result) => result.caseId === test.caseId);
-        return matches.length !== 1 || matches[0]?.control !== test.control || matches[0]?.verdict !== "pass" || !/^[a-f0-9]{64}$/.test(matches[0]?.observationHash ?? "");
+        return matches.length !== 1 || matches[0]?.control !== test.control || matches[0]?.contractHash !== test.contractHash || matches[0]?.verdict !== "pass" || !/^[a-f0-9]{64}$/.test(matches[0]?.observationHash ?? "");
       })
     )
       throw conflict("The current protected-host qualification suite is incomplete");
@@ -404,7 +404,7 @@ export function executionSandboxService(db: Db, options: {
       if (!selected) throw conflict("The requested backend is not installed; the binding remains unqualified");
       const current = await cell(db, companyId, initial.runtimeCellId);
       if (initial.version !== expectedVersion || current.generation.toString() !== initial.cellGeneration || current.status !== "STOPPED") throw conflict("Qualification requires the current stopped cell, without disrupting a running workload");
-      const startedAt = new Date(), report = await runSandboxQualification(selected, identity(initial), startedAt);
+      const startedAt = new Date(), report = await runSandboxQualification(selected, identity(initial), startedAt, initial.boundaryPolicyHash, initial.boundaryPolicy.requiredControls);
       // Host I/O stays outside the binding-row transaction: the native host
       // command owner takes a shared binding lock while awaiting its receipt.
       // Holding an update lock here would deadlock qualification against its

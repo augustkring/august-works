@@ -431,7 +431,7 @@ export function openShellHostEngine({
     if (request.action === "capabilities")
       return { action: "capabilities", capabilities: null };
     if (request.action === "probe")
-      return { action: "probe", verdict: "unsupported", observationHash: null };
+      return { action: "probe", verdict: "unsupported", observationHash: null, contractHash: request.probe.contractHash };
     if (!config) throw new Error("sandbox_host_unavailable");
     const version = await cli(["--version"], deadlineAt, false);
     if (version.trim() !== "openshell 0.1.2")

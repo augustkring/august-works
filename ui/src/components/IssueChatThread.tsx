@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { preferredScrollBehavior } from "../lib/scroll-behavior";
 import { isExperienceCardToolName } from "@paperclipai/shared";
 import { ExperienceToolCard } from "./ExperienceToolCard";
@@ -3307,14 +3308,14 @@ function SystemNoticeCommentContent({
       ? (agentMap?.get(runAgentId)?.name ?? null)
       : null;
     if (authorType === "system") {
-      const label = runAgentName ?? "Paperclip";
+      const label = runAgentName ?? PRODUCT_IDENTITY.productName;
       if (runAgentId && runId)
         return { label, href: `/agents/${runAgentId}/runs/${runId}` };
       return { label };
     }
     if (runAgentId && runId) {
       return {
-        label: authorName ?? runAgentName ?? "Paperclip",
+        label: authorName ?? runAgentName ?? PRODUCT_IDENTITY.productName,
         href: `/agents/${runAgentId}/runs/${runId}`,
       };
     }

@@ -279,6 +279,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
   root: string;
   instanceId: string;
   steps?: ManagedNativeOpenCodeModelStep[];
+  taskTitle?: string;
   humanActions?: ManagedNativeOpenCodeHumanAction[];
   /** Prepare a private Task source; create its Human-reviewed Memory root after the configured model step. */
   privateContextContent?: string;
@@ -685,7 +686,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
       task = openedTask;
     } else {
       const createTaskResponse = await request(humanApp).post(`/api/companies/${companyId}/issues`)
-        .send({ title: "Save a source-bound note", description: "Create a short internal note and finish the task.",
+        .send({ title: input.taskTitle ?? "Save a source-bound note", description: "Create a short internal note and finish the task.",
           responsibleUserId: aliceUserId, visibility: "open" });
       expect(createTaskResponse.status, JSON.stringify(createTaskResponse.body)).toBe(201);
       const createdTask = createTaskResponse.body as { id: string };

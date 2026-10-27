@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import type { ExecutionProjection } from "@paperclipai/shared";
 import type {
   ReasoningMessagePart,
@@ -541,10 +542,10 @@ function authorNameForComment(
 ) {
   const authorAgentId = effectiveCommentAuthorAgentId(comment);
   if (authorAgentId) {
-    return agentMap?.get(authorAgentId)?.name ?? (options?.isSystemNotice ? "Paperclip" : authorAgentId.slice(0, 8));
+    return agentMap?.get(authorAgentId)?.name ?? (options?.isSystemNotice ? PRODUCT_IDENTITY.productName : authorAgentId.slice(0, 8));
   }
   const authorUserId = comment.authorUserId ?? null;
-  if (!authorUserId) return options?.isSystemNotice ? "Paperclip" : "You";
+  if (!authorUserId) return options?.isSystemNotice ? PRODUCT_IDENTITY.productName : "You";
   const userLabel = userLabelMap?.get(authorUserId)?.trim();
   if (userLabel) return userLabel;
   return formatAssigneeUserLabel(authorUserId, currentUserId, userLabelMap) ?? "You";

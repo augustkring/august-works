@@ -3456,7 +3456,7 @@
       "native_destruction_receipt_unavailable": "En signeret Stop- og Destroy-kvittering for denne sandkassegeneration er ikke tilgængelig.",
       "destroyed_binding_is_live_or_changing": "Sandkassebindingen er stadig aktiv eller under ændring.",
       "task_not_eligible_for_fresh_continuation": "Opgaven er ikke i en tilstand, hvor den kan få en ny fortsættelse.",
-      "prior_process_ownership_unverified": "Paperclip kunne ikke verificere, at den tidligere proces er stoppet.",
+      "prior_process_ownership_unverified": "{{productName}} kunne ikke verificere, at den tidligere proces er stoppet.",
       "prior_process_still_running": "Den tidligere proces kører stadig.",
       "prior_continuation_or_coordinator_exists": "En tidligere fortsættelse eller koordinator ejer stadig denne kørsel.",
       "prior_environment_authority_not_released": "Det tidligere kørselsmiljø har ikke frigivet sin autoritet.",

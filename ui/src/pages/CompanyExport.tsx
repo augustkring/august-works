@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
@@ -445,7 +446,7 @@ function generateReadmeFromSelection(
 
   lines.push("## What's Inside");
   lines.push("");
-  lines.push("This is an [Agent Company](https://paperclip.ing) package.");
+  lines.push(`This is an [Agent Company](${PRODUCT_IDENTITY.primaryWebsiteUrl}) package.`);
   lines.push("");
 
   const counts: Array<[string, number]> = [];
@@ -492,10 +493,10 @@ function generateReadmeFromSelection(
   lines.push("npx paperclipai company import this-github-url-or-folder");
   lines.push("```");
   lines.push("");
-  lines.push("See [Paperclip](https://paperclip.ing) for more information.");
+  lines.push(`See [${PRODUCT_IDENTITY.productName}](${PRODUCT_IDENTITY.primaryWebsiteUrl}) for more information.`);
   lines.push("");
   lines.push("---");
-  lines.push(`Exported from [Paperclip](https://paperclip.ing) on ${new Date().toISOString().split("T")[0]}`);
+  lines.push(`Exported from [${PRODUCT_IDENTITY.productName}](${PRODUCT_IDENTITY.primaryWebsiteUrl}) on ${new Date().toISOString().split("T")[0]}`);
   lines.push("");
 
   return lines.join("\n");

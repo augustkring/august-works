@@ -769,6 +769,8 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
           checkCancellation,
           onSourceReleaseReview: admittedJob ? async receipt => { await importJobs.recordSourceReleaseReview(admittedJob!, receipt, req.actor); } : undefined,
           onSourceReleaseTargetBound: admittedJob ? async companyId => { await importJobs.bindSourceReleaseTarget(admittedJob!, companyId, req.actor); } : undefined,
+          onAcceptedPlan: admittedJob ? async plan => { await importJobs.acceptPlan(admittedJob!, plan, req.actor); } : undefined,
+          onEffectCheckpoint: admittedJob ? async (checkpoint, tx) => { await importJobs.checkpointEffect(admittedJob!, checkpoint, tx); } : undefined,
         });
         // The import is committed. Settlement (hooks) runs before the
         // best-effort audit entry so a logging failure cannot make a

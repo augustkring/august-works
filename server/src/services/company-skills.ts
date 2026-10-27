@@ -6215,8 +6215,10 @@ export function companySkillService(db: Db) {
     return out;
   }
 
-  async function requiredPlatformSkill(companyId: string, actor: AuthorizationActor, contracts: { operationManifestHash: string; toolCatalogContractHash: string }) {
-    await ensureSkillInventoryCurrent(companyId);
+  async function requiredPlatformSkill(companyId: string, actor: AuthorizationActor, contracts: { operationManifestHash: string; toolCatalogContractHash: string }, options: { ensureInventory?: boolean } = {}) {
+    // Material operations validate the admitted release; they must never
+    // install, repair or promote a procedure while committing a business effect.
+    if (options.ensureInventory !== false) await ensureSkillInventoryCurrent(companyId);
     const releases = await readBundledSkillReleaseRegistry("blentera-platform");
     const release = releases.at(-1), identity = release?.platformRelease;
     if (!release || !identity || identity.operationManifestHash !== contracts.operationManifestHash || identity.toolCatalogContractHash !== contracts.toolCatalogContractHash) throw conflict("The required platform Skill needs validation against the current operation and tool contracts", { code: "platform_skill_contract_drift" });

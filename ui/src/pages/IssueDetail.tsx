@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { preferredScrollBehavior } from "../lib/scroll-behavior";
 import { useUserPreferences } from "../hooks/useUserPreferences";
 import { WorkflowAuthoringHandoff } from "../components/WorkflowAuthoringHandoff";
@@ -2249,7 +2250,7 @@ const IssueDetailChatTab = memo(function IssueDetailChatTab({
         if (code === "queued_comment_already_dispatching") {
           pushToast({
             title: "Message is already being sent",
-            body: "The continuation started before the discard was confirmed, so Paperclip could not unsend it.",
+            body: `The continuation started before the discard was confirmed, so ${PRODUCT_IDENTITY.productName} could not unsend it.`,
             tone: "error",
             ttlMs: 15_000,
             dedupeKey: `queued-comment-already-dispatching:${issueId}:${commentId}`,

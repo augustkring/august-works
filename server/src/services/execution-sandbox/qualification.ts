@@ -5,7 +5,7 @@ import {
 } from "@paperclipai/shared";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import {
-  SANDBOX_PROBE_CASES,
+  sandboxProbeCases,
   type ExecutionSandboxBackend,
   type SandboxIdentity,
 } from "./backend.js";
@@ -16,6 +16,8 @@ export async function runSandboxQualification(
   backend: ExecutionSandboxBackend,
   identity: SandboxIdentity,
   now = new Date(),
+  boundaryPolicyHash = "0".repeat(64),
+  requiredControls: readonly string[] = SANDBOX_CONTROLS,
 ) {
   const started = performance.now();
   const clock = () => new Date(now.getTime() + performance.now() - started);
@@ -42,19 +44,22 @@ export async function runSandboxQualification(
     control: string;
     verdict: "pass" | "fail" | "unsupported";
     observationHash: string | null;
+    contractHash: string;
   }> = [];
-  for (const test of SANDBOX_PROBE_CASES) {
+  const probeCases = sandboxProbeCases(boundaryPolicyHash, requiredControls);
+  for (const test of probeCases) {
     try {
       const result = await backend.probeBoundary({ ...identity, test });
+      const contractMatches = result.contractHash === test.contractHash;
       results.push({
         caseId: test.caseId,
         control: test.control,
-        verdict:
-          result.verdict === "pass" &&
+        verdict: !contractMatches ? "unsupported" : result.verdict === "pass" &&
           !result.observationHash?.match(/^[a-f0-9]{64}$/)
             ? "unsupported"
             : result.verdict,
         observationHash: result.observationHash,
+        contractHash: test.contractHash,
       });
     } catch {
       results.push({
@@ -62,6 +67,7 @@ export async function runSandboxQualification(
         control: test.control,
         verdict: "unsupported",
         observationHash: null,
+        contractHash: test.contractHash,
       });
     }
   }
@@ -77,15 +83,16 @@ export async function runSandboxQualification(
     .map((r) => `${r.caseId}:${r.verdict}`);
   if (!unchanged) exceptions.push("capability_snapshot_changed_or_expired");
   if (declared)
-    for (const control of SANDBOX_CONTROLS)
-      if (!declared[control]) exceptions.push(`${control}:not_declared`);
+  for (const control of requiredControls)
+      if (!declared[control as keyof SandboxCapabilitySnapshot]) exceptions.push(`${control}:not_declared`);
   const status = results.some((r) => r.verdict === "fail")
     ? "failed"
     : !unchanged || exceptions.length
       ? "inconclusive"
       : "passed";
   const reportHash = nativeSha256({
-    suiteVersion: "aw-v7-boundary-1",
+    suiteVersion: "aw-v7-boundary-2",
+    boundaryPolicyHash,
     identity,
     backend: backend.backend,
     backendVersion: declared?.backendVersion ?? null,
@@ -116,11 +123,12 @@ export async function runSandboxQualification(
     for (const control of SANDBOX_CONTROLS)
       capabilities[control] =
         declared[control] &&
+        probeCases.filter(r => r.control === control).length > 0 &&
         results
           .filter((r) => r.control === control)
           .every((r) => r.verdict === "pass");
   return {
-    suiteVersion: "aw-v7-boundary-1",
+    suiteVersion: "aw-v7-boundary-2",
     status: status as "passed" | "failed" | "inconclusive",
     capabilities,
     results,

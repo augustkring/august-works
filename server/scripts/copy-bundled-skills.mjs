@@ -15,7 +15,7 @@ export async function verifyPlatformSkillRelease(repositoryRoot = root) {
   const releases = JSON.parse(await readFile(path.join(releasesRoot, 'releases.json'), 'utf8'));
   if (!Array.isArray(releases) || releases.length === 0) throw Error('Missing platform Skill release');
   for (const release of releases) {
-    if (release.skillKey !== 'blentera-platform' || release.mutableByCustomer !== false || !/^[a-f0-9]{40}$/.test(release.sourceSha ?? '') || !/^[a-zA-Z0-9_-]+$/.test(release.dir ?? '') || !Array.isArray(release.files)) throw Error('Invalid platform Skill release');
+    if (release.skillKey !== 'blentera-platform' || release.mutableByCustomer !== false || !/^[a-f0-9]{40}$/.test(release.sourceSha ?? '') || !/^[a-zA-Z0-9_-]+$/.test(release.dir ?? '') || !Array.isArray(release.files) || !/^[a-f0-9]{64}$/.test(release.operationManifestHash ?? '') || !/^[a-f0-9]{64}$/.test(release.toolCatalogContractHash ?? '')) throw Error('Invalid platform Skill release');
     const directory = path.join(releasesRoot, release.dir), files = [];
     async function walk(dir) {
       for (const entry of await readdir(dir, { withFileTypes: true })) {

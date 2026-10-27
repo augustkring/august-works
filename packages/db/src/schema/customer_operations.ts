@@ -20,6 +20,24 @@ export const customerOperations = pgTable("customer_operations", {
   progressStage: text("progress_stage").notNull().default("admitted"),
   attempt: integer("attempt").notNull().default(1),
   attemptId: uuid("attempt_id").notNull().defaultRandom(),
+  leaseOwnerId: uuid("lease_owner_id"),
+  leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+  acceptedPlan: jsonb("accepted_plan").$type<{
+    version: 1;
+    previewFingerprint: string;
+    selectedPayloadFingerprint: string;
+    targetMode: "new_company" | "existing_company";
+    targetCompanyId: string | null;
+    selected: Array<{ kind: "agent" | "skill" | "project" | "issue" | "routine"; slug: string; action: string }>;
+    acceptedByUserId: string | null;
+    acceptedAt: string;
+  }>(),
+  effectCheckpoint: jsonb("effect_checkpoint").$type<{
+    version: 1;
+    state: "idle" | "applying" | "complete";
+    activeEffect: { key: string; kind: string; sourceId: string | null; sourceSlug: string | null; startedAt: string } | null;
+    idMap: Array<{ key: string; kind: string; sourceId: string | null; sourceSlug: string | null; targetIds: string[]; completedAt: string }>;
+  }>(),
   resultRef: jsonb("result_ref").$type<{ companyId: string; agentCount: number; warningCount: number; companyAction: "created" | "updated" | "unchanged" }>(),
   errorCode: text("error_code"),
   cancelRequestedAt: timestamp("cancel_requested_at", { withTimezone: true }),
@@ -50,6 +68,24 @@ export const customerOperations = pgTable("customer_operations", {
   check("customer_operations_state_check", sql`${t.status} in ('running','cancelled','succeeded','failed','needs_reconciliation')`),
   check("customer_operations_hash_check", sql`${t.requesterKeyHash} ~ '^[a-f0-9]{64}$' AND ${t.inputHash} ~ '^[a-f0-9]{64}$'`),
   check("customer_operations_attempt_check", sql`${t.attempt}>=1`),
+  check("customer_operations_lease_check", sql`(${t.leaseOwnerId} IS NULL) = (${t.leaseExpiresAt} IS NULL)`),
+  check("customer_operations_accepted_plan_check", sql`${t.acceptedPlan} IS NULL OR CASE
+    WHEN jsonb_typeof(${t.acceptedPlan}) <> 'object' THEN false
+    WHEN ${t.acceptedPlan}->>'version' <> '1' THEN false
+    WHEN ${t.acceptedPlan}->>'previewFingerprint' !~ '^[a-f0-9]{64}$'
+      OR ${t.acceptedPlan}->>'selectedPayloadFingerprint' !~ '^[a-f0-9]{64}$' THEN false
+    WHEN ${t.acceptedPlan}->>'targetMode' NOT IN ('new_company','existing_company') THEN false
+    WHEN ${t.acceptedPlan}->>'targetMode'='existing_company' AND ${t.acceptedPlan}->>'targetCompanyId' IS NULL THEN false
+    WHEN jsonb_typeof(${t.acceptedPlan}->'selected') <> 'array' OR jsonb_array_length(${t.acceptedPlan}->'selected') > 5000 THEN false
+    WHEN length(coalesce(${t.acceptedPlan}->>'acceptedAt','')) NOT BETWEEN 1 AND 64 THEN false
+    ELSE true END`),
+  check("customer_operations_effect_checkpoint_check", sql`${t.effectCheckpoint} IS NULL OR CASE
+    WHEN jsonb_typeof(${t.effectCheckpoint}) <> 'object' THEN false
+    WHEN ${t.effectCheckpoint}->>'version' <> '1' THEN false
+    WHEN ${t.effectCheckpoint}->>'state' NOT IN ('idle','applying','complete') THEN false
+    WHEN jsonb_typeof(${t.effectCheckpoint}->'idMap') <> 'array' OR jsonb_array_length(${t.effectCheckpoint}->'idMap') > 5000 THEN false
+    WHEN (${t.effectCheckpoint}->>'state'='applying') IS DISTINCT FROM (${t.effectCheckpoint}->'activeEffect' IS DISTINCT FROM 'null'::jsonb) THEN false
+    ELSE true END`),
   check("customer_operations_source_release_review_check", sql`${t.sourceReleaseReview} IS NULL OR CASE
     WHEN jsonb_typeof(${t.sourceReleaseReview}) <> 'object' THEN false
     WHEN ${t.sourceReleaseReview}->>'version' <> '1' THEN false

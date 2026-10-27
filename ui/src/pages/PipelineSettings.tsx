@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { useWorkspaceIsolationControls } from "@/hooks/useWorkspaceIsolationControls";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
@@ -1999,7 +2000,7 @@ export function PipelineSettings() {
     onError: async (error) => {
       pushToast({
         title: "Failed to save stage",
-        body: error instanceof Error ? error.message : "Paperclip could not save the stage.",
+        body: error instanceof Error ? error.message : `${PRODUCT_IDENTITY.productName} could not save the stage.`,
         tone: "error",
       });
     },
@@ -2037,7 +2038,7 @@ export function PipelineSettings() {
           ? error.message
           : error instanceof Error
             ? error.message
-            : "Paperclip could not save the stage secrets.",
+            : `${PRODUCT_IDENTITY.productName} could not save the stage secrets.`,
         tone: "error",
       });
     },
@@ -2114,7 +2115,7 @@ export function PipelineSettings() {
     onError: (error) => {
       pushToast({
         title: "Failed to delete stage",
-        body: error instanceof Error ? error.message : "Paperclip could not delete the stage.",
+        body: error instanceof Error ? error.message : `${PRODUCT_IDENTITY.productName} could not delete the stage.`,
         tone: "error",
       });
     },
@@ -2146,7 +2147,7 @@ export function PipelineSettings() {
       setStrictTransitionsEnabled(pipeline?.enforceTransitions ?? false);
       pushToast({
         title: "Failed to update transition rules",
-        body: error instanceof Error ? error.message : "Paperclip could not update transition rules.",
+        body: error instanceof Error ? error.message : `${PRODUCT_IDENTITY.productName} could not update transition rules.`,
         tone: "error",
       });
     },
@@ -2444,7 +2445,7 @@ export function PipelineSettings() {
         <div className="space-y-1">
           <h3 className="text-sm font-semibold text-foreground">Break into smaller pieces</h3>
           <p className="max-w-md text-sm text-muted-foreground">
-            The agent decides what the pieces are. Paperclip creates and tracks them.
+            The agent decides what the pieces are. {PRODUCT_IDENTITY.productName} creates and tracks them.
           </p>
         </div>
         <ToggleSwitch
@@ -3268,7 +3269,7 @@ export function PipelineSettings() {
                               </div>
                               {selectedAutomationProject && !selectedAutomationProjectWorkspace ? (
                                 <p className="mt-2 text-xs text-muted-foreground">
-                                  This project has no saved workspace default. Paperclip will use the project fallback when automation runs.
+                                  This project has no saved workspace default. {PRODUCT_IDENTITY.productName} will use the project fallback when automation runs.
                                 </p>
                               ) : null}
                             </FieldRow>

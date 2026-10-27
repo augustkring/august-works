@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { AgentIdentity } from "@/components/AgentIdentity";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -478,7 +479,7 @@ function StudioNewSkillPanel({
       toast?.pushToast({
         tone: "success",
         title: skill.forkedFromSkillId ? "Skill fork created" : "Skill created",
-        body: `${skill.name} is now editable in the Paperclip workspace.`,
+        body: `${skill.name} is now editable in the ${PRODUCT_IDENTITY.productName} workspace.`,
       });
       navigate(skillStudioRoute(skill.id));
     },
@@ -650,7 +651,7 @@ function StudioNewSkillPanel({
       <section className="space-y-3">
         <div>
           <h2 className="text-sm font-medium text-foreground">Sharing</h2>
-          <p className="text-xs text-muted-foreground">Choose who can discover this skill inside Paperclip.</p>
+          <p className="text-xs text-muted-foreground">Choose who can discover this skill inside {PRODUCT_IDENTITY.productName}.</p>
         </div>
         <div className="grid gap-2 sm:grid-cols-3">
           {(["company", "private"] as const).map((scope) => (

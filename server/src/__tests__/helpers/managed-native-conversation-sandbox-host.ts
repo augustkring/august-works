@@ -188,7 +188,7 @@ export async function configureManagedConversationSandboxHost(input: {
         destroySandbox: (value: { idempotencyKey: string }) => bridge.destroy({ ...identity, idempotencyKey: value.idempotencyKey }),
         probeBoundary: async (value: { test: SandboxProbeCase }) => {
           await bridge.probe({ ...identity, test: value.test });
-          return { verdict: "pass", observationHash: createHash("sha256").update(`controlled:${value.test.caseId}`).digest("hex") };
+          return { verdict: "pass", observationHash: createHash("sha256").update(`controlled:${value.test.caseId}`).digest("hex"), contractHash: value.test.contractHash };
         },
       } as any;
     } });
@@ -226,7 +226,7 @@ export async function configureManagedConversationSandboxHost(input: {
       const policyHash = typeof command.admission?.policyHash === "string" ? command.admission.policyHash : "";
       const reply = action === "capabilities" ? { action, capabilities: snapshot }
         : action === "prepare" ? { action, backendVersion: "0.1.2", imageDigest }
-        : action === "probe" ? { action, verdict: "pass", observationHash: createHash("sha256").update(`software:${command.probe?.case?.caseId ?? command.probe?.caseId ?? "probe"}`).digest("hex") }
+        : action === "probe" ? { action, verdict: "pass", observationHash: createHash("sha256").update(`software:${command.probe?.case?.caseId ?? command.probe?.caseId ?? "probe"}`).digest("hex"), contractHash: command.probe?.contractHash }
         : action === "inspect" ? { action, ...common, state: workloadStates.get(command.scope.cellId) ?? "stopped", policyHash: workloadPolicies.get(command.scope.cellId) ?? null, controlsHealthy: true }
         : action === "apply" ? (workloadStates.set(command.scope.cellId, "ready"), workloadPolicies.set(command.scope.cellId, command.admission.policyHash), { action, applied: true, requiresRecreate: false, policyHash: command.admission.policyHash, effectivePolicyHash: command.admission.policyHash })
         : action === "start" ? (workloadStates.set(command.scope.cellId, "running"), workloadPolicies.set(command.scope.cellId, command.start.policyHash), { action, started: true, operationId: claim.id, sandboxId: command.scope.bindingId, containerId: "b".repeat(64), imageDigest, policyHash: command.start.policyHash, effectivePolicyHash: command.start.policyHash })
@@ -273,6 +273,7 @@ export async function configureManagedConversationSandboxHost(input: {
   const executeSandboxTask: typeof runtime.executeSandboxTask = async execInput => {
     if (!execInput.runId || !execInput.leaseId || !prepareHostForRun)
       throw new Error("conversation_software_host_run_binding_unavailable");
+    await heartbeatHost();
     // The first runtime command is workspace preparation, before the Native
     // provider callback. Admit the same real manifest-bound host here, at the
     // original RuntimeControl execution seam, before delegating its signed exec.
@@ -346,6 +347,9 @@ export async function configureManagedConversationSandboxHost(input: {
     const previousPurpose = activeNativePreparationPurpose;
     activeNativePreparationPurpose = execInput.nativePreparationPurpose ?? null;
     try {
+      // Keep the controlled signed host fresh under the long OpenCode prep
+      // sequence; the periodic timer alone can be delayed by a busy test loop.
+      await heartbeatHost();
       return await runtime.executeSandboxTask(execInput);
     } finally {
       activeNativePreparationPurpose = previousPurpose;
@@ -372,6 +376,7 @@ export async function configureManagedConversationSandboxHost(input: {
   let hostHeartbeatFailed = false;
   let hostHeartbeatInFlight: Promise<void> | null = null;
   const heartbeatHost = async () => {
+    if (hostHeartbeatInFlight) return await hostHeartbeatInFlight;
     const run = async () => {
       const inventoryRows = await db.select({
         cellId: runtimeCells.id, companyId: runtimeCells.companyId, generation: runtimeCells.generation,
@@ -394,13 +399,14 @@ export async function configureManagedConversationSandboxHost(input: {
       await runtime.heartbeat(host.id, { agentVersion: "6.0.2", cells });
       hostHeartbeatCount++;
     };
-    hostHeartbeatInFlight = run().catch(() => { hostHeartbeatFailed = true; });
-    await hostHeartbeatInFlight;
-    hostHeartbeatInFlight = null;
+    const inFlight = run().catch(error => { hostHeartbeatFailed = true; throw error; });
+    hostHeartbeatInFlight = inFlight;
+    try { await inFlight; }
+    finally { if (hostHeartbeatInFlight === inFlight) hostHeartbeatInFlight = null; }
   };
   await heartbeatHost();
   const hostHeartbeatTimer = setInterval(() => {
-    if (!hostHeartbeatInFlight) void heartbeatHost();
+    if (!hostHeartbeatInFlight) void heartbeatHost().catch(() => {});
   }, 20_000);
   hostHeartbeatTimer.unref();
   const execFacts: Array<{ executable: string; cwdExact: boolean; modelCredentialPresent: boolean;

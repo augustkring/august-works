@@ -230,6 +230,10 @@ export class PaperclipControlPlanePort implements ControlPlanePort {
     let diagnosticStage = "before_db_transaction";
     let diagnosticStageStartedAt = Date.now();
     let diagnosticReportCount = 0;
+    let sourceAccessElapsedMs = 0;
+    let eventWriteElapsedMs = 0;
+    let transactionElapsedMs = 0;
+    let callbackElapsedMs = 0;
     let diagnosticTimer: ReturnType<typeof setTimeout> | undefined;
     const markDiagnosticStage = (stage: string) => {
       diagnosticStage = stage;
@@ -257,12 +261,17 @@ export class PaperclipControlPlanePort implements ControlPlanePort {
       diagnosticTimer.unref?.();
     }
     try {
+      const transactionStartedAt = Date.now();
       const persisted = await this.#db.transaction(async rawTx => {
         const tx = rawTx as unknown as Db;
         markDiagnosticStage("transaction_source_access_check");
-        if (event.sourceKind !== "control_plane" || event.sourceInstanceId === this.#binding.internalDraftSourceInstanceId)
+        if (event.sourceKind !== "control_plane" || event.sourceInstanceId === this.#binding.internalDraftSourceInstanceId) {
+          const sourceAccessStartedAt = Date.now();
           await assertNativeAnalyticalRunPayloadAccess(tx, this.#binding.companyId, this.#binding.runId);
+          sourceAccessElapsedMs = Date.now() - sourceAccessStartedAt;
+        }
         markDiagnosticStage("transaction_append_run_event");
+        const eventWriteStartedAt = Date.now();
         const result = await appendHeartbeatRunEvent(tx, {
           companyId: this.#binding.companyId,
           runId: this.#binding.runId,
@@ -279,10 +288,13 @@ export class PaperclipControlPlanePort implements ControlPlanePort {
             canonicalPayload: event as unknown as Record<string, unknown>,
           },
         });
+        eventWriteElapsedMs = Date.now() - eventWriteStartedAt;
         markDiagnosticStage("transaction_callback_return");
         return result;
       });
+      transactionElapsedMs = Date.now() - transactionStartedAt;
       markDiagnosticStage("after_db_commit");
+      const callbackStartedAt = Date.now();
       if (persisted.disposition === "committed") {
         publishChatPublicationCommitSignal({
           companyId: this.#binding.companyId,
@@ -302,7 +314,21 @@ export class PaperclipControlPlanePort implements ControlPlanePort {
         markDiagnosticStage("on_duplicate_event");
         await this.#onDuplicateEvent?.(event);
       }
+      callbackElapsedMs = Date.now() - callbackStartedAt;
       markDiagnosticStage("append_event_complete");
+      if (diagnosticsEnabled) {
+        process.stderr.write(`${JSON.stringify({
+          diagnostic: "native_concurrent_chat_append_event_timing",
+          runId: this.#binding.runId,
+          eventType: event.eventType,
+          sourceSeq: event.sourceSeq,
+          sourceAccessElapsedMs,
+          eventWriteElapsedMs,
+          transactionElapsedMs,
+          callbackElapsedMs,
+          totalElapsedMs: Date.now() - diagnosticStartedAt,
+        })}\n`);
+      }
       return {
         cursor: persisted.row.seq,
         highestContiguousSourceSeq: persisted.highestContiguousSourceSeq,

@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound, Stethoscope, Trash2, Vault } from "lucide-react";
@@ -474,7 +475,7 @@ export function AddConnectionDialog({
                       </p>
                     ) : null}
                     <p className="text-xs text-muted-foreground">
-                      Free-text secrets are not accepted — pick a vault entry; Paperclip stores only the
+                      Free-text secrets are not accepted — pick a vault entry; {PRODUCT_IDENTITY.productName} stores only the
                       <span className="font-mono"> vault://</span> reference and resolves it at gateway use time.
                     </p>
                   </>

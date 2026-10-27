@@ -13,6 +13,7 @@ import {
   issues,
   labels,
   projects,
+  routines,
 } from "@paperclipai/db";
 import { companySearchQuerySchema, COMPANY_SEARCH_MAX_QUERY_LENGTH } from "@paperclipai/shared";
 import {
@@ -166,6 +167,40 @@ describeEmbeddedPostgres("companySearchService", () => {
     });
     return id;
   }
+
+  it("reports bounded federated counts and an unavailable owner without implying complete coverage", async () => {
+    const companyId = await createCompany();
+    const actor = {
+      type: "board" as const,
+      source: "session" as const,
+      userId: randomUUID(),
+      sessionId: randomUUID(),
+      companyIds: [companyId],
+    };
+    await db.insert(routines).values(Array.from({ length: 9 }, (_, index) => ({
+      companyId,
+      title: `boundedfind routine ${index}`,
+      description: null,
+    })));
+
+    const result = await svc.search(companyId, companySearchQuerySchema.parse({ q: "boundedfind" }), {
+      actor,
+      noticeProjection: { state: "unavailable", items: [] },
+    });
+
+    const federation = result.federation;
+    expect(federation?.countsByDomain.routines).toBe(8);
+    expect(federation?.results.filter((item) => item.domain === "routines")).toHaveLength(8);
+    expect(federation?.coverage.find((item) => item.domain === "routines")).toMatchObject({
+      status: "partial",
+      message: "Some routines results may be outside this bounded search page.",
+    });
+    expect(federation?.coverage.find((item) => item.domain === "notices")).toMatchObject({
+      status: "unavailable",
+      message: "notices search is temporarily unavailable.",
+    });
+    expect(federation?.complete).toBe(false);
+  });
 
   it.each(["native", "filtered"] as const)("excludes private tasks and projects before counts, facets and pagination (%s)", async mode => {
     const companyId = await createCompany();

@@ -423,7 +423,8 @@ import {
   authorizationService,
   type AuthorizationActor,
 } from "./authorization.js";
-import { createToolGatewayService } from "./tool-gateway.js";
+import { createToolGatewayService, blenteraPlatformContractHashes } from "./tool-gateway.js";
+import { preparePlatformSkillAdmission } from "./platform-skill-admission.js";
 import { toolAccessService } from "./tool-access.js";
 import { visibleIssueCondition } from "./issue-visibility.js";
 import { ISSUE_BLOCKERS_RESOLVED_WAKE_REASON } from "./issue-dependency-wakeups.js";
@@ -21473,27 +21474,34 @@ export function heartbeatService(
         context.v5GovernedContext = v5Fabric.contextMarkdown;
         if (!v5Fabric.testSelected) delete context.paperclipSkillTest;
       }
+      // Required procedure admission is independent of the optional Fabric
+      // feature. Resumed immutable inputs cannot acquire a new pin silently.
+      const requiredPlatform = await preparePlatformSkillAdmission(db, {
+        companyId: agent.companyId, agentId: agent.id, runId: run.id,
+        responsibleUserId: run.responsibleUserId, requireExisting: Boolean(persistedNativeExecutionInput),
+      }, blenteraPlatformContractHashes());
       const eagerV5Skills = v5Fabric?.manifest.skills.filter((pin) => pin.loadPoint !== "on_demand");
       const effectiveResolvedConfig = v5Fabric
         ? writePaperclipSkillSyncPreference(resolvedConfig, eagerV5Skills!.map((pin) => ({ key: pin.key, versionId: pin.versionId })))
         : applyRunScopedMentionedSkillKeys(resolvedConfig, runScopedSkillKeys);
-      const runtimeSkillPreference = readPaperclipSkillSyncPreference(
-        effectiveResolvedConfig,
-      );
+      const platformResolvedConfig = writePaperclipSkillSyncPreference(effectiveResolvedConfig,
+        [...(readPaperclipSkillSyncPreference(effectiveResolvedConfig).desiredSkillEntries ?? [])
+          .filter(entry => entry.key !== requiredPlatform.pin.key),
+          { key: requiredPlatform.pin.key, versionId: requiredPlatform.pin.versionId }]);
+      const runtimeSkillPreference = readPaperclipSkillSyncPreference(platformResolvedConfig);
       const nativeRunnerPreparationSpans: NativeRunHistoricalSpan[] = [];
       const skillsPrepareStartedAtMs = Date.now();
       const runtimeSkillEntries = await (async () => {
         try {
           return await companySkills.listRuntimeSkillEntries(agent.companyId, {
             ...(v5Fabric ? { actor:{type:"agent" as const,source:"agent_jwt" as const,companyId:agent.companyId,agentId:agent.id,runId:run.id,onBehalfOfUserId:run.responsibleUserId},readScope:"task" as const,selectedSkillKeys: new Set(eagerV5Skills!.map((pin) => pin.key)), allowCandidateVersionsForTest: Boolean(pinnedSkillTestContext), versionSelections: new Map(eagerV5Skills!.map((pin) => [pin.key, pin.versionId])) } : {}),
-            versionSelections: v5Fabric ? new Map(eagerV5Skills!.map((pin) => [pin.key, pin.versionId])) : skillVersionSelectionMap(
-              runtimeSkillPreference.desiredSkillEntries,
-              {
-                versionPinsEnabled:
-                  resolvedInstanceSettings.experimental.enableBetaSkills ===
-                  true,
-              },
-            ),
+            versionSelections: new Map([
+              ...(v5Fabric ? eagerV5Skills!.map(pin => [pin.key, pin.versionId] as const) :
+                [...skillVersionSelectionMap(runtimeSkillPreference.desiredSkillEntries, {
+                  versionPinsEnabled: resolvedInstanceSettings.experimental.enableBetaSkills === true,
+                })]),
+              [requiredPlatform.pin.key, requiredPlatform.pin.versionId],
+            ]),
           });
         } catch (error) {
           if (agent.adapterType === "paperclip_runner") {
@@ -21516,7 +21524,7 @@ export function heartbeatService(
         endedAtMs: Date.now(),
       });
       const { assignments: connectorAssignments, config: connectorSkillConfig } = await prepareRetainedConnectorSkills(db,
-        { companyId: agent.companyId, agentId: agent.id, runId: run.id, issueId: typeof context.issueId === "string" ? context.issueId : undefined }, effectiveResolvedConfig, runtimeSkillEntries);
+        { companyId: agent.companyId, agentId: agent.id, runId: run.id, issueId: typeof context.issueId === "string" ? context.issueId : undefined }, platformResolvedConfig, runtimeSkillEntries);
       // Both CLI adapters and native context materialization use the same resolved set.
       runtimeSkillEntries.splice(0, runtimeSkillEntries.length, ...connectorSkillConfig.paperclipRuntimeSkills);
       const connectorDelivery = await prepareConnectorSkillDelivery(connectorSkillConfig, agent.adapterType);

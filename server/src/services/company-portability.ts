@@ -778,6 +778,7 @@ type ImportPlanInternal = {
   collisionStrategy: CompanyPortabilityCollisionStrategy;
   selectedAgents: CompanyPortabilityAgentManifestEntry[];
 };
+type ImportDbTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 type ImportMode = "board_full" | "agent_safe";
 
@@ -802,6 +803,13 @@ type ImportBehaviorOptions = {
     reviewedAt: string;
   }) => Promise<void>;
   onSourceReleaseTargetBound?: (targetCompanyId: string) => Promise<void>;
+  onAcceptedPlan?: (plan: { previewFingerprint: string; selectedPayloadFingerprint: string;
+    targetMode: "new_company" | "existing_company"; targetCompanyId: string | null;
+    selected: Array<{ kind: "agent" | "skill" | "project" | "issue" | "routine"; slug: string; action: string }>;
+    acceptedByUserId: string | null; acceptedAt: string }) => Promise<void>;
+  onEffectCheckpoint?: (event: { phase: "started" | "completed"; key: string; kind: string;
+    sourceId?: string | null; sourceSlug?: string | null; targetIds?: string[];
+    mappings?: Array<{ sourceId?: string | null; sourceSlug?: string | null; targetIds: string[] }> }, tx?: ImportDbTransaction) => Promise<void>;
 };
 
 export class ImportCancellationError extends Error {
@@ -3612,8 +3620,6 @@ export function parseGitHubSourceUrl(rawUrl: string) {
 }
 
 
-type ImportDbTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
-
 export function companyPortabilityService(db: Db, storage?: StorageService) {
   const companies = companyService(db);
   const agents = agentService(db);
@@ -5651,6 +5657,18 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         }
       });
     };
+    const checkpointEffect = async (event: { phase: "started" | "completed"; key: string; kind: string;
+      sourceId?: string | null; sourceSlug?: string | null; targetIds?: string[];
+      mappings?: Array<{ sourceId?: string | null; sourceSlug?: string | null; targetIds: string[] }> }, tx?: ImportDbTransaction) => {
+      try { await options?.onEffectCheckpoint?.(event, tx); }
+      catch (error) {
+        if (event.phase === "started" && !effectsStarted) {
+          if (error instanceof HttpError) throw new ImportPreflightError(error.status, error.message, error.details);
+          throw new ImportPreflightError(500, "Import effect admission could not be recorded.");
+        }
+        throw error;
+      }
+    };
     let copySources: Awaited<ReturnType<typeof validateCopySources>>;
     try {
       copySources = await validateCopySources(sourceManifest, input.target, include, importActor, options?.privateWorkAdmission,
@@ -5706,6 +5724,21 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     const sourceReleaseTargetId = input.target.mode === "existing_company" ? input.target.companyId : null;
     const sourceReleaseNeeded = nativeSourceCompanyIds.length === 0 || sourceReleaseTargetId === null
       || nativeSourceCompanyIds.some(id => id !== sourceReleaseTargetId);
+    const acceptedSelection = [
+      ...plan.preview.plan.agentPlans.map(item => ({ kind: "agent" as const, slug: item.slug, action: item.action })),
+      ...(include.skills ? sourceManifest.skills.map(item => ({ kind: "skill" as const, slug: item.slug, action: "import" })) : []),
+      ...plan.preview.plan.projectPlans.map(item => ({ kind: "project" as const, slug: item.slug, action: item.action })),
+      ...plan.preview.plan.issuePlans.map(item => ({ kind: "issue" as const, slug: item.slug, action: item.action })),
+      ...(include.routines ? sourceManifest.routines.map(item => ({ kind: "routine" as const, slug: item.slug, action: "import" })) : []),
+    ];
+    const selectedPayloadFingerprint = createHash("sha256").update(canonicalJson({
+      previewFingerprint: plan.preview.sourceFingerprint, include,
+      agents: plan.preview.plan.agentPlans.map(item => [item.slug, item.action]),
+      projects: plan.preview.plan.projectPlans.map(item => [item.slug, item.action]),
+      issues: plan.preview.plan.issuePlans.map(item => [item.slug, item.action]),
+      routines: acceptedSelection.filter(item => item.kind === "routine").map(item => [item.slug, item.action]),
+      skills: acceptedSelection.filter(item => item.kind === "skill").map(item => [item.slug, item.action]),
+    })).digest("hex");
     if (sourceReleaseReviewed && sourceReleaseNeeded && options?.onSourceReleaseReview) {
       if (importActor.type !== "board" || !importActor.userId || importActor.source !== "session")
         throw forbidden("A current Human session must review source release");
@@ -5720,13 +5753,6 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           : sourceManifest.projects.find(value => value.slug === item.slug);
         return entry?.sourceCompanyId ? [entry.sourceCompanyId] : [];
       }))].sort();
-      const selectedPayloadFingerprint = createHash("sha256").update(canonicalJson({
-        previewFingerprint: plan.preview.sourceFingerprint,
-        include,
-        agents: plan.preview.plan.agentPlans.map(item => [item.slug, item.action]),
-        projects: plan.preview.plan.projectPlans.map(item => [item.slug, item.action]),
-        issues: plan.preview.plan.issuePlans.map(item => [item.slug, item.action]),
-      })).digest("hex");
       try {
         await options.onSourceReleaseReview({
           version: 1,
@@ -5746,6 +5772,19 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         // business data yet, so a failed receipt admission is a known refusal.
         if (error instanceof HttpError) throw new ImportPreflightError(error.status, error.message, error.details);
         throw new ImportPreflightError(500, "Source release review could not be recorded.");
+      }
+    }
+
+    if (plan.preview.sourceFingerprint && options?.onAcceptedPlan) {
+      try {
+        await options.onAcceptedPlan({ previewFingerprint: plan.preview.sourceFingerprint,
+          selectedPayloadFingerprint, targetMode: input.target.mode,
+          targetCompanyId: input.target.mode === "existing_company" ? input.target.companyId : null,
+          selected: acceptedSelection, acceptedByUserId: importActor.type === "board" ? importActor.userId ?? null : null,
+          acceptedAt: new Date().toISOString() });
+      } catch (error) {
+        if (error instanceof HttpError) throw new ImportPreflightError(error.status, error.message, error.details);
+        throw new ImportPreflightError(500, "Accepted import plan could not be recorded.");
       }
     }
 
@@ -5783,6 +5822,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
               (await companies.list()).map((company) => company.name),
             ));
       await cancellationCheckpoint();
+      await checkpointEffect({ phase: "started", key: "company:create", kind: "company" });
       effectsStarted = true;
       const created = await companies.create({
         name: companyName,
@@ -5806,9 +5846,11 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           : null,
       });
       checkpointTargetCompanyId = created.id;
+      await checkpointEffect({ phase: "completed", key: "company:create", kind: "company", targetIds: [created.id] });
       if (sourceReleaseReviewed && sourceReleaseNeeded) {
         await options?.onSourceReleaseTargetBound?.(created.id);
       }
+      await checkpointEffect({ phase: "started", key: "company:ownership", kind: "company_ownership", targetIds: [created.id] });
       if (mode === "agent_safe" && options?.sourceCompanyId) {
         await cancellationCheckpoint();
         await access.copyActiveUserMemberships(options.sourceCompanyId, created.id);
@@ -5826,6 +5868,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           actorUserId ?? null,
         );
       }
+      await checkpointEffect({ phase: "completed", key: "company:ownership", kind: "company_ownership", targetIds: [created.id] });
       targetCompany = created;
       companyAction = "created";
     } else {
@@ -5833,6 +5876,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       if (!targetCompany) throw notFound("Target company not found");
       if (include.company && sourceManifest.company && mode === "board_full") {
         await cancellationCheckpoint();
+        await checkpointEffect({ phase: "started", key: "company:update", kind: "company", sourceId: targetCompany.id });
         effectsStarted = true;
         const updated = await companies.update(targetCompany.id, {
           name: sourceManifest.company.name,
@@ -5847,6 +5891,8 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           feedbackDataSharingConsentByUserId: sourceManifest.company.feedbackDataSharingConsentByUserId,
           feedbackDataSharingTermsVersion: sourceManifest.company.feedbackDataSharingTermsVersion,
         });
+        await checkpointEffect({ phase: "completed", key: "company:update", kind: "company",
+          sourceId: targetCompany.id, targetIds: [updated?.id ?? targetCompany.id] });
         targetCompany = updated ?? targetCompany;
         companyAction = "updated";
       }
@@ -5880,6 +5926,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     try {
       await cancellationCheckpoint();
       effectsStarted = true;
+      await checkpointEffect({ phase: "started", key: "environment:values", kind: "environment_values" });
       await materializeImportEnvInputValues(
         targetCompany.id,
         sourceManifest,
@@ -5889,6 +5936,8 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         createdImportSecretIds,
         cancellationCheckpoint,
       );
+      await checkpointEffect({ phase: "completed", key: "environment:values", kind: "environment_values",
+        targetIds: createdImportSecretIds });
       importProfile("environment-values-materialized");
 
       if (include.company) {
@@ -5911,6 +5960,8 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             if (!contentType || !COMPANY_LOGO_CONTENT_TYPE_EXTENSIONS[contentType]) {
               warnings.push(`Skipped company logo import for ${logoPath} because the file type is unsupported.`);
             } else {
+              await checkpointEffect({ phase: "started", key: "company:logo", kind: "company_asset",
+                sourceSlug: path.posix.basename(logoPath) });
               try {
                 const body = portableFileToBuffer(logoFile, logoPath);
                 await cancellationCheckpoint();
@@ -5937,8 +5988,10 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
                   logoAssetId: createdAsset.id,
                 });
                 targetCompany = updated ?? targetCompany;
+                await checkpointEffect({ phase: "completed", key: "company:logo", kind: "company_asset",
+                  sourceSlug: path.posix.basename(logoPath), targetIds: [createdAsset.id] });
               } catch (err) {
-                warnings.push(`Failed to import company logo ${logoPath}: ${err instanceof Error ? err.message : String(err)}`);
+                throw err;
               }
             }
           }
@@ -5968,6 +6021,9 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             // The pre-apply loop above already verified that every blobs/*
             // entry hashes to its path, which this entry's sha256 derives.
             const body = portableFileToBuffer(blobFile, blobPath);
+            const embeddedEffectKey = `embedded_asset:${embeddedAsset.assetId}`;
+            await checkpointEffect({ phase: "started", key: embeddedEffectKey, kind: "embedded_asset",
+              sourceId: embeddedAsset.assetId, sourceSlug: embeddedAssetLabel });
             try {
               await cancellationCheckpoint();
               const stored = await storage.putFile({
@@ -5989,8 +6045,10 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
                 createdByUserId: actorUserId ?? null,
               });
               embeddedAssetIdMap.set(embeddedAsset.assetId, createdAsset.id);
+              await checkpointEffect({ phase: "completed", key: embeddedEffectKey, kind: "embedded_asset",
+                sourceId: embeddedAsset.assetId, sourceSlug: embeddedAssetLabel, targetIds: [createdAsset.id] });
             } catch (error) {
-              warnings.push(`Embedded image asset ${embeddedAssetLabel} could not be imported: ${error instanceof Error ? error.message : String(error)}; its references were left unchanged.`);
+              throw error;
             }
           }
         }
@@ -6023,10 +6081,13 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       let importedSkills: Awaited<ReturnType<typeof companySkills.importPackageFiles>> = [];
       if (include.skills || include.agents) {
         await cancellationCheckpoint();
+        await checkpointEffect({ phase: "started", key: "skills:bundle", kind: "skill" });
         effectsStarted = true;
         importedSkills = await companySkills.importPackageFiles(targetCompany.id, pickTextFiles(plan.source.files), {
           onConflict: resolveSkillConflictStrategy(mode, plan.collisionStrategy),
         });
+        await checkpointEffect({ phase: "completed", key: "skills:bundle", kind: "skill",
+          targetIds: importedSkills.map(item => item.skill.id) });
       }
       const desiredSkillRefMap = new Map<string, string>();
       for (const importedSkill of importedSkills) {
@@ -6042,7 +6103,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       if (include.agents) {
         await cancellationCheckpoint();
         effectsStarted = true;
-        for (const planAgent of plan.preview.plan.agentPlans) {
+        for (const [agentIndex, planAgent] of plan.preview.plan.agentPlans.entries()) {
           await cancellationCheckpoint();
           const manifestAgent = plan.selectedAgents.find((agent) => agent.slug === planAgent.slug);
           if (!manifestAgent) continue;
@@ -6056,6 +6117,11 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             });
             continue;
           }
+
+          const effectKey = `agent:${agentIndex}`;
+          await checkpointEffect({ phase: "started", key: effectKey, kind: "agent",
+            sourceSlug: manifestAgent.slug });
+          effectsStarted = true;
 
           const bundlePrefix = `agents/${manifestAgent.slug}/`;
           const bundleFiles = Object.fromEntries(
@@ -6182,6 +6248,8 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
               name: updated.name,
               reason: planAgent.reason,
             });
+            await checkpointEffect({ phase: "completed", key: effectKey, kind: "agent",
+              sourceSlug: manifestAgent.slug, targetIds: [updated.id] });
             continue;
           }
 
@@ -6236,8 +6304,9 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             name: created.name,
             reason: planAgent.reason,
           });
+          await checkpointEffect({ phase: "completed", key: effectKey, kind: "agent",
+            sourceSlug: manifestAgent.slug, targetIds: [created.id] });
         }
-
         // Apply reporting links once all imported agent ids are available.
         for (const manifestAgent of plan.selectedAgents) {
           await cancellationCheckpoint();
@@ -6278,7 +6347,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       if (include.projects) {
         await cancellationCheckpoint();
         effectsStarted = true;
-        for (const planProject of plan.preview.plan.projectPlans) {
+        for (const [projectIndex, planProject] of plan.preview.plan.projectPlans.entries()) {
           await cancellationCheckpoint();
           const manifestProject = sourceManifest.projects.find((project) => project.slug === planProject.slug);
           if (!manifestProject) continue;
@@ -6292,6 +6361,11 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             });
             continue;
           }
+
+          const effectKey = `project:${projectIndex}`;
+          await checkpointEffect({ phase: "started", key: effectKey, kind: "project",
+            sourceId: manifestProject.sourceProjectId ?? null, sourceSlug: manifestProject.slug });
+          effectsStarted = true;
 
           const projectLeadAgentId = manifestProject.leadAgentSlug
             ? importedSlugToAgentId.get(manifestProject.leadAgentSlug)
@@ -6337,7 +6411,10 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
               await lockIssuePrivacyTree(tx, targetCompanyId);
               await validateCopySources(sourceManifest, input.target, include, importActor, options?.privateWorkAdmission,
                 sourceReleaseReviewed, tx);
-              return projects.update(planProject.existingProjectId!, projectPatch, importActor, tx);
+              const result = await projects.update(planProject.existingProjectId!, projectPatch, importActor, tx);
+              if (result) await checkpointEffect({ phase: "completed", key: effectKey, kind: "project",
+                sourceId: manifestProject.sourceProjectId ?? null, sourceSlug: manifestProject.slug, targetIds: [result.id] }, tx);
+              return result;
             });
             if (!updated) {
               warnings.push(`Skipped update for missing project ${planProject.existingProjectId}.`);
@@ -6365,7 +6442,10 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
               await lockIssuePrivacyTree(tx, targetCompanyId);
               await validateCopySources(sourceManifest, input.target, include, importActor, options?.privateWorkAdmission,
                 sourceReleaseReviewed, tx);
-              return projects.create(targetCompanyId, projectPatch, tx, importActor);
+              const result = await projects.create(targetCompanyId, projectPatch, tx, importActor);
+              await checkpointEffect({ phase: "completed", key: effectKey, kind: "project",
+                sourceId: manifestProject.sourceProjectId ?? null, sourceSlug: manifestProject.slug, targetIds: [result.id] }, tx);
+              return result;
             });
             projectId = created.id;
             importedSlugToProjectId.set(planProject.slug, created.id);
@@ -6381,14 +6461,18 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
 
           if (!projectId) continue;
 
+          await checkpointEffect({ phase: "started", key: `${effectKey}:env`, kind: "project_env", sourceSlug: manifestProject.slug });
           await secrets.syncEnvBindingsForTarget?.(
             targetCompany.id,
             { targetType: "project", targetId: projectId },
             normalizedProjectEnv ?? {},
           );
+          await checkpointEffect({ phase: "completed", key: `${effectKey}:env`, kind: "project_env", sourceSlug: manifestProject.slug });
 
           for (const workspace of manifestProject.workspaces) {
             await cancellationCheckpoint();
+            const workspaceEffectKey = `${effectKey}:workspace:${projectWorkspaceIdByKey.size}`;
+            await checkpointEffect({ phase: "started", key: workspaceEffectKey, kind: "project_workspace", sourceSlug: manifestProject.slug });
             const createdWorkspace = await projects.createWorkspace(projectId, {
               name: workspace.name,
               sourceType: workspace.sourceType ?? undefined,
@@ -6403,9 +6487,12 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             });
             if (!createdWorkspace) {
               warnings.push(`Project ${planProject.slug} workspace ${workspace.key} could not be created during import.`);
+              await checkpointEffect({ phase: "completed", key: workspaceEffectKey, kind: "project_workspace", sourceSlug: manifestProject.slug });
               continue;
             }
             projectWorkspaceIdByKey.set(workspace.key, createdWorkspace.id);
+            await checkpointEffect({ phase: "completed", key: workspaceEffectKey, kind: "project_workspace",
+              sourceSlug: manifestProject.slug, targetIds: [createdWorkspace.id] });
           }
           importedProjectWorkspaceIdByProjectSlug.set(planProject.slug, projectWorkspaceIdByKey);
 
@@ -6416,9 +6503,13 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             warnings,
           );
           if (hydratedProjectExecutionWorkspacePolicy) {
+            const policyEffectKey = `${effectKey}:workspace_policy`;
+            await checkpointEffect({ phase: "started", key: policyEffectKey, kind: "project_policy", sourceSlug: manifestProject.slug });
             await projects.update(projectId, {
               executionWorkspacePolicy: hydratedProjectExecutionWorkspacePolicy,
             });
+            await checkpointEffect({ phase: "completed", key: policyEffectKey, kind: "project_policy",
+              sourceSlug: manifestProject.slug, targetIds: [projectId] });
           }
         }
       }
@@ -6493,7 +6584,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         const attachmentRows: ImportIssueAttachmentRow[] = [];
         importProfile("issue-buffers-ready");
 
-        for (const manifestIssue of sourceManifest.issues) {
+        for (const [issueIndex, manifestIssue] of sourceManifest.issues.entries()) {
           const markdownRaw = readPortableTextFile(plan.source.files, manifestIssue.path);
           const parsed = markdownRaw ? parseFrontmatterMarkdown(markdownRaw) : null;
           const rawDescription = parsed?.body || manifestIssue.description || null;
@@ -6537,6 +6628,10 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
               variables: null,
               triggers: [],
             };
+            const routineEffectKey = `routine:${issueIndex}`;
+            await checkpointEffect({ phase: "started", key: routineEffectKey, kind: "routine",
+              sourceId: manifestIssue.sourceIssueId ?? null, sourceSlug: manifestIssue.slug });
+            effectsStarted = true;
             const createdRoutine = await routines.create(targetCompany.id, {
               projectId,
               goalId: null,
@@ -6615,6 +6710,8 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
                 userId: actorUserId ?? null,
               });
             }
+            await checkpointEffect({ phase: "completed", key: routineEffectKey, kind: "routine",
+              sourceId: manifestIssue.sourceIssueId ?? null, sourceSlug: manifestIssue.slug, targetIds: [createdRoutine.id] });
             continue;
           }
           let issueStatus = manifestIssue.status && ISSUE_STATUSES.includes(manifestIssue.status as any)
@@ -6774,6 +6871,9 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
                 warnings.push(`Task ${manifestIssue.slug} attachment ${attachmentLabel} was imported at task scope because its comment reference could not be resolved.`);
               }
             }
+            const attachmentEffectKey = `task_attachment:${manifestIssue.slug}:${attachmentEntry.sha256.slice(0, 32)}`;
+            await checkpointEffect({ phase: "started", key: attachmentEffectKey, kind: "task_attachment",
+              sourceId: attachmentEntry.sha256, sourceSlug: manifestIssue.slug });
             try {
               const stored = await storage.putFile({
                 companyId: targetCompany.id,
@@ -6795,8 +6895,10 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
                 createdByAgentId: null,
                 createdByUserId: actorUserId ?? null,
               });
+              await checkpointEffect({ phase: "completed", key: attachmentEffectKey, kind: "task_attachment",
+                sourceId: attachmentEntry.sha256, sourceSlug: manifestIssue.slug });
             } catch (error) {
-              warnings.push(`Task ${manifestIssue.slug} attachment ${attachmentLabel} could not be imported: ${error instanceof Error ? error.message : String(error)}`);
+              throw error;
             }
           }
           const privacyProof = copySources.tasks.get(manifestIssue.slug);
@@ -6902,6 +7004,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         // (e.g. routines only) issues no writes at all.
         const publications: ActivityPublication[] = [];
         await cancellationCheckpoint();
+        await checkpointEffect({ phase: "started", key: "tasks:batch", kind: "task_batch" });
         await db.transaction(async (tx) => {
           await validateCopySources(sourceManifest, input.target, include, importActor, options?.privateWorkAdmission,
             sourceReleaseReviewed, tx);
@@ -6932,6 +7035,11 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           if (documentRows.length > 0) await documentsSvc.createIssueDocumentsForImport(documentRows, tx);
           if (workProductRows.length > 0) await workProductsSvc.createManyForImport(workProductRows, tx);
           if (attachmentRows.length > 0) await issues.addImportedAttachments(attachmentRows, tx);
+          await checkpointEffect({ phase: "completed", key: "tasks:batch", kind: "task_batch",
+            mappings: issueRows.map(row => ({
+              sourceId: sourceManifest.issues.find(item => item.slug === row.ref)?.sourceIssueId ?? null,
+              sourceSlug: row.ref, targetIds: [row.id],
+            })) }, tx);
         });
         for (const publication of publications) {
           try { publishActivity(publication); }

@@ -104,16 +104,15 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
     const [taskA] = await db.select().from(issues).where(and(eq(issues.companyId, first.companyId), eq(issues.id, taskAId)));
     const [taskB] = await db.select().from(issues).where(and(eq(issues.companyId, first.companyId), eq(issues.id, taskBId)));
     if (!taskA || !taskB) throw new Error("The managed Native Task outputs disappeared");
-    await issueService(db).update(taskBId, { assigneeAgentId: null, assigneeUserId: first.bobUserId,
-      actorUserId: first.aliceUserId, privacyActor: first.aliceActor });
-    const [assignedTaskB] = await db.select().from(issues).where(and(eq(issues.companyId, first.companyId), eq(issues.id, taskBId)));
-    if (!assignedTaskB) throw new Error("The assigned Native Task B disappeared");
-    expect(assignedTaskB.assigneeUserId).toBe(first.bobUserId);
+    if (!taskB) throw new Error("The Native Task B disappeared");
 
     const second = await runManagedNativeOpenCodeFixture({ db, connectionString: database.connectionString,
       root, instanceId, reuseIdentity: first.reuseIdentity,
+      taskTitle: `Temporal follow-up ${randomUUID()}`,
       steps: [
-        { tool: "read_context", id: `temporal-context-b-${randomUUID()}`, input: { query: `${taskBTitle} ${assignedTaskB.description ?? ""}` } },
+        { tool: "write_document", id: `temporal-document-c-${randomUUID()}`, input: { idempotencyKey: randomUUID(),
+          key: `temporal-c-${randomUUID()}`, title: "Fresh-context follow-up", body: "A valid completed output after fresh Context.", baseRevisionId: null } },
+        { tool: "read_context", id: `temporal-context-b-${randomUUID()}`, input: { query: `${taskBTitle} ${taskB.description ?? ""}` } },
         { tool: "self_remember", id: `temporal-memory-c-${randomUUID()}`, input: { scope: "company", memoryType: "outcome",
           title: "Memory C inherited from Task B", content: "Memory C consumed the fresh Context selected from Task B.",
           idempotencyKey: randomUUID() } },
@@ -145,6 +144,11 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
     const memoryCId = second.toolResults.find(value => value.toolName === "paperclip-self:remember")?.memoryId;
     if (!memoryCId) throw new Error("The second managed run omitted Memory C");
     await memories.reviewCandidate(first.companyId, memoryCId, { decision: "accept" }, first.aliceMemoryActor);
+    await issueService(db).update(taskBId, { assigneeAgentId: null, assigneeUserId: first.bobUserId,
+      actorUserId: first.aliceUserId, privacyActor: first.aliceActor });
+    const [assignedTaskB] = await db.select().from(issues).where(and(eq(issues.companyId, first.companyId), eq(issues.id, taskBId)));
+    if (!assignedTaskB || assignedTaskB.assigneeUserId !== first.bobUserId)
+      throw new Error("The Native Task B assignee transfer was not persisted");
     return { first, second, documentKey, documentKeyB, taskATitle, taskBTitle, taskAId, taskBId, memoryAId, memoryBId,
       privateRootId, memoryCId, contextCapture, selectedItems, manifestId, assignedTaskB };
   }

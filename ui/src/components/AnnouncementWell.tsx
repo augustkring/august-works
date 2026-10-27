@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { useEffect, useState } from "react";
 import { useAccountIdentity } from "@/api/companies-query";
 import type { HealthStatus } from "@/api/health";
@@ -44,7 +45,7 @@ export function AnnouncementWell({ health }: { health?: HealthStatus }) {
   const modalOpen = useModalOpen(Boolean(announcement));
   if (!announcement || modalOpen || (toasts?.length ?? 0) > 0) return null;
   return (
-    <aside aria-label="Paperclip announcements" className="announcement-well shrink-0 border-t bg-background p-2 pb-(--announcement-mobile-bottom) md:px-3 md:pb-2">
+    <aside aria-label={`${PRODUCT_IDENTITY.productName} announcements`} className="announcement-well shrink-0 border-t bg-background p-2 pb-(--announcement-mobile-bottom) md:px-3 md:pb-2">
       <details key={announcement.id} className="group">
         <summary className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           <ChevronDown className="size-4 shrink-0 group-open:rotate-180" aria-hidden="true" />

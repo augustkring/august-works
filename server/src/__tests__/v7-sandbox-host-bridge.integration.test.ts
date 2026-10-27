@@ -272,7 +272,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         const common = { generation: command.scope.cellGeneration, imageDigest: command.imageDigest };
         const reply = action === "capabilities" ? { action, capabilities: testCapabilities(command.imageDigest) }
           : action === "prepare" ? { action, backendVersion: "0.1.2", imageDigest: command.imageDigest }
-          : action === "probe" ? { action, verdict: "pass", observationHash: "d".repeat(64) }
+          : action === "probe" ? { action, verdict: "pass", observationHash: "d".repeat(64), contractHash: command.probe.contractHash }
           : action === "inspect" ? { action, ...common, state: testWorkloadStates.get(command.scope.cellId) ?? "stopped", policyHash: testWorkloadPolicies.get(command.scope.cellId) ?? null, controlsHealthy: true }
           : action === "apply" ? (testWorkloadStates.set(command.scope.cellId, "ready"), testWorkloadPolicies.set(command.scope.cellId, command.admission.policyHash), { action, applied: true, requiresRecreate: false, policyHash: command.admission.policyHash, effectivePolicyHash: command.admission.policyHash })
           : action === "start" ? (testWorkloadStates.set(command.scope.cellId, "running"), testWorkloadPolicies.set(command.scope.cellId, command.start.policyHash), { action, started: true, operationId: claim.id, sandboxId: command.scope.bindingId, containerId: "b".repeat(64), imageDigest: command.imageDigest, policyHash: command.start.policyHash, effectivePolicyHash: command.start.policyHash })
@@ -563,6 +563,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
           const payload = decrypt(claim) as {
             claimToken: string;
             action: string;
+            probe?: { contractHash: string };
           };
           await transport.complete(host.id, claim.id, {
             claimToken: payload.claimToken,
@@ -575,6 +576,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
                     action: "probe",
                     verdict: "unsupported",
                     observationHash: null,
+                    contractHash: payload.probe!.contractHash,
                   },
             errorCode: null,
           });

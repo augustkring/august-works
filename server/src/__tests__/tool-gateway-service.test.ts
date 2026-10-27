@@ -55,6 +55,7 @@ import { materializeNativeInteractionResponses } from "../services/native-runtim
 import { toolActionDeliveryService } from "../services/tool-action-delivery.js";
 import { secretService } from "../services/secrets.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
+import { preparePlatformSkillAdmission } from "../services/platform-skill-admission.js";
 import { toolAccessService } from "../services/tool-access.js";
 import {
   createToolGatewayService,
@@ -563,6 +564,58 @@ describeEmbeddedPostgres("tool gateway service", () => {
       parameters: { name: "Plugin shadow attempt", idempotencyKey: "shadow" },
     })).rejects.toMatchObject({ status: 404, reasonCode: "tool_not_found" });
     expect(pluginCalls).toBe(0);
+  });
+
+  it("routes an MCP Task comment through the current Native owner and binds its honest transport identity", async () => {
+    const { company, agent, issue, run } = await createRunFixture(db);
+    const userId = `gateway-task-human-${randomUUID()}`;
+    await seedCurrentHumanSourceActor(db, [company.id], userId);
+    await db.insert(companyMemberships).values({ companyId: company.id, principalType: "agent", principalId: agent.id,
+      status: "active", membershipRole: "member" });
+    await db.update(heartbeatRuns).set({ responsibleUserId: userId, runtimeMode: "native", nativeIssueId: issue.id })
+      .where(eq(heartbeatRuns.id, run.id));
+    await db.update(issues).set({ executionRunId: run.id }).where(eq(issues.id, issue.id));
+    await preparePlatformSkillAdmission(db, { companyId: company.id, agentId: agent.id, runId: run.id,
+      responsibleUserId: userId, requireExisting: false }, blenteraPlatformContractHashes());
+    const humanMembership = await db.select().from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, userId), eq(companyMemberships.status, "active"),
+    )).then(rows => rows[0]!);
+    const actor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: company.id, agentId: agent.id,
+      runId: run.id, onBehalfOfUserId: userId, authenticatedCredentialExpiresAt: Date.now() + 60_000,
+      keyScope: { kind: "standard" }, companyIds: [company.id],
+      memberships: [{ companyId: company.id, membershipRole: "member", status: "active" }],
+      onBehalfOfMemberships: [{ companyId: humanMembership.companyId, membershipRole: humanMembership.membershipRole,
+        status: humanMembership.status }] };
+    await db.insert(toolPolicies).values({ companyId: company.id, name: "Allow internal Task comment",
+      policyType: "allow", selectors: { toolName: "paperclip-self:report_progress" } });
+    const gateway = createTestToolGatewayService(db);
+    const session = await gateway.createSession({ companyId: company.id, agentId: agent.id, runId: run.id,
+      issueId: issue.id, authorizationActor: actor });
+    expect((await gateway.listToolsForSession(session.token)).map(tool => tool.name))
+      .toContain("blentera.task.comment.add");
+
+    const parameters = { idempotencyKey: randomUUID(), body: "Internal progress update." };
+    const result = await gateway.executeTool({ sessionToken: session.token, tool: "blentera.task.comment.add", parameters });
+    expect(result.status).toBe("completed");
+    const replay = await gateway.executeTool({ sessionToken: session.token, tool: "blentera.task.comment.add", parameters });
+    expect(replay.status).toBe("completed");
+    const [comment] = await db.select().from(issueComments).where(eq(issueComments.issueId, issue.id));
+    expect(await db.select().from(issueComments).where(eq(issueComments.issueId, issue.id))).toHaveLength(1);
+    expect(comment).toMatchObject({ authorAgentId: agent.id, createdByRunId: run.id,
+      metadata: expect.objectContaining({ authorizationReason: "tool_gateway_mcp" }) });
+    const [currentRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, run.id));
+    const receipts = currentRun.resultJson?.semanticToolReceipts as Record<string, { transport?: { channel: string; callId: string } }>;
+    expect(Object.values(receipts)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ transport: { channel: "tool_gateway_mcp", callId: result.invocationId } }),
+    ]));
+
+    await db.update(companyMemberships).set({ status: "inactive" }).where(and(
+      eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, userId),
+    ));
+    await expect(gateway.executeTool({ sessionToken: session.token, tool: "blentera.task.comment.add", parameters }))
+      .rejects.toMatchObject({ status: 403 });
   });
 
   it("projects only current readable Projects through the canonical service and Human intersection", async () => {

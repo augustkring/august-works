@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { useEffect, useMemo, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, ScrollText } from "lucide-react";
@@ -137,7 +138,7 @@ function plainReason(event: ToolGatewayActivityEvent): string {
     case "failed":
       return "The app was allowed to run it, but returned an error.";
     default:
-      return "Recorded by Paperclip.";
+      return `Recorded by ${PRODUCT_IDENTITY.productName}.`;
   }
 }
 

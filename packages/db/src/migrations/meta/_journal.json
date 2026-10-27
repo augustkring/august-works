@@ -3865,6 +3865,13 @@
       "when": 1793064471402,
       "tag": "0553_cute_thor_girl",
       "breakpoints": true
+    },
+    {
+      "idx": 554,
+      "version": "7",
+      "when": 1793100000000,
+      "tag": "0554_company_import_fenced_effects",
+      "breakpoints": true
     }
   ]
 }

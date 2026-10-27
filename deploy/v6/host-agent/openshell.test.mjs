@@ -319,12 +319,13 @@ test("CLI fixtures cannot earn complete physical capabilities or passing probes"
               caseId: "force_stop",
               control: "forceStop",
               expected: "observe",
+              contractHash: "a".repeat(64),
             },
           },
           deadline(),
         )
       ).reply,
-      { action: "probe", verdict: "unsupported", observationHash: null },
+      { action: "probe", verdict: "unsupported", observationHash: null, contractHash: "a".repeat(64) },
     );
     assert.equal(calls.length, 0);
   }));

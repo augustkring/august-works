@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -221,7 +222,7 @@ export function GitHubPolicyEditor({
           }
         />
         <p className="text-xs text-muted-foreground">
-          Paperclip supplies repository, PR, base and head commits, sender, and
+          {PRODUCT_IDENTITY.productName} supplies repository, PR, base and head commits, sender, and
           prior head as typed context. Saved revisions remain attached to review
           activity.
         </p>
@@ -317,7 +318,7 @@ export function GitHubPolicyEditor({
           <option value="report">Report only</option>
         </select>
         <p className="text-xs text-muted-foreground">
-          Paperclip computes the result for the exact reviewed commit.
+          {PRODUCT_IDENTITY.productName} computes the result for the exact reviewed commit.
           Incomplete reviews cannot pass. To require it before merging, select
           “Paperclip Review” in your GitHub branch protection or ruleset
           settings and choose this bot’s GitHub App as the expected source. Run

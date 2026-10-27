@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 export const GITHUB_PRIVATE_KEY_FILE_MAX_BYTES = 64 * 1024;
 
 export function createGitHubPrivateKeyReadGuard() {
@@ -35,7 +36,7 @@ export async function readGitHubPrivateKeyFile(
     value = await file.text();
   } catch {
     throw new Error(
-      "Paperclip couldn't read that file. Choose the .pem file again or paste the private key.",
+      `${PRODUCT_IDENTITY.productName} couldn't read that file. Choose the .pem file again or paste the private key.`,
     );
   }
   if (!value.trim()) {

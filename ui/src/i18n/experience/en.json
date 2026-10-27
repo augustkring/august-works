@@ -3456,7 +3456,7 @@
       "native_destruction_receipt_unavailable": "A signed Stop and Destroy receipt for this sandbox generation is unavailable.",
       "destroyed_binding_is_live_or_changing": "The sandbox binding is still live or changing.",
       "task_not_eligible_for_fresh_continuation": "This task is not in a state that can receive a fresh continuation.",
-      "prior_process_ownership_unverified": "Paperclip could not verify that the previous process has stopped.",
+      "prior_process_ownership_unverified": "{{productName}} could not verify that the previous process has stopped.",
       "prior_process_still_running": "The previous process is still running.",
       "prior_continuation_or_coordinator_exists": "A previous continuation or coordinator still owns this execution.",
       "prior_environment_authority_not_released": "The previous execution environment has not released its authority.",

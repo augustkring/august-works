@@ -1,0 +1,142 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification
+
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > runtime connection tool delivery > delivers the complete environment contract and canonical guidance
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > runtime connection tool delivery > does not leak descriptor identity through guidance
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > runtime connection tool delivery > is absent outside an active runtime descriptor
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > runtime connection tool delivery > uses the exact same guidance in the default heartbeat prompt
+ ✓ |@paperclipai/adapter-utils| src/server-utils.test.ts > required platform Skill integrity > requires the platform procedure even for an empty desired set and removes the legacy overlapping default 2ms
+ ✓ |@paperclipai/adapter-utils| src/server-utils.test.ts > required platform Skill integrity > preserves an unrelated reserved-name directory and rejects its use 7ms
+ ✓ |@paperclipai/adapter-utils| src/server-utils.test.ts > required platform Skill integrity > accepts only the exact managed release link and preserves a conflicting link 3ms
+ ✓ |@paperclipai/adapter-utils| src/server-utils.test.ts > legacy adapter skill selection > keeps the operational skill selected without a stored preference 0ms
+ ✓ |@paperclipai/adapter-utils| src/server-utils.test.ts > legacy adapter skill selection > keeps the operational skill selected after an explicit empty replacement 0ms
+ ✓ |@paperclipai/adapter-utils| src/server-utils.test.ts > legacy adapter skill selection > does not force optional skills or synthesize a missing operational entry 0ms
+ ✓ |@paperclipai/adapter-utils| src/server-utils.test.ts > legacy adapter skill selection > leaves the configurable resolver available for native runners 0ms
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > buildInvocationEnvForLogs > redacts inline secrets from resolved command metadata
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > sanitizeSshRemoteEnv > drops inherited host shell identity variables for SSH remote execution
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > sanitizeSshRemoteEnv > preserves explicit remote overrides even for filtered key names
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > sanitizeSshRemoteEnv > filters identity keys via case-insensitive match against the inherited env
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > sanitizeSshRemoteEnv > preserves explicitly-set identity keys when the inherited env disagrees in case but not in value
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > materializePaperclipSkillCopy > refuses to materialize into an ancestor of the source
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > materializePaperclipSkillCopy > does not delete and recopy an unchanged materialized skill target
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > materializePaperclipSkillCopy > breaks stale materialization locks left by dead processes
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > adapter skill snapshots > reports runtime-mounted adapters as configured or missing without install state
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > adapter skill snapshots > reports source-missing company runtime skills without orphan warnings
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > adapter skill snapshots > keeps unsupported runtime-mounted adapters in tracked-only state
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > adapter skill snapshots > can surface read-only external skills for runtime-mounted adapters
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > adapter skill snapshots > reports persistent adapter installed, stale, external, and missing states
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > adapter skill snapshots > reports stale managed persistent skills when Paperclip owns an undesired available skill
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > runChildProcess > does not arm a timeout when timeoutSec is 0
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > runChildProcess > waits for onSpawn before sending stdin to the child
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > runChildProcess > kills descendant processes on timeout via the process group
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > runChildProcess > force-kills a child that ignores SIGTERM once the grace window elapses
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > runChildProcess > signalRunningProcess escalates SIGKILL on the direct-child fallback after SIGTERM is sent
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > runChildProcess > cleans up a lingering process group after terminal output and child exit
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > runChildProcess > cleans up a still-running child after terminal output
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > runChildProcess > does not clean up noisy runs that have no terminal output
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > leaves conversation disposition and accepted-plan handoff to the injected chat policy
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > recognizes only normalized, harness-checked-out ordinary external-chat wakes
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > describes authenticated reviewed chat as an execution binding, not a checkout or approval
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > renders one authoritative direct-response contract for fresh and resumed external-chat turns
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > uses only the run-scoped reader when an authenticated chat wake does not fit inline
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > preserves and renders the issue description in structured wake payloads
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > renders the simplified-english interaction directive only when the payload enables it
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > suppresses the issue description when the prompt already carries the task-context markdown
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > omits the issue description from non-assignment resume deltas and leaves a fetch breadcrumb
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > omits whitespace-only issue descriptions from structured wake prompts
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > keeps the default local-agent prompt action-oriented
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > leaves the execution contract to the heartbeat template on fresh scoped wake prompts
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > adds the execution contract to resume delta prompts and opted-in fresh prompts
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > preserves exact-output constraints for an external answered interaction continuation
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > preserves exact-output constraints for an external accepted interaction continuation
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > uses the actual answer in an attested native chat question continuation (resumed: false)
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > uses the actual answer in an attested native chat question continuation (resumed: true)
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > keeps newer comments outside the resolved-question background
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > does not grant the native chat answer prompt to malformed or unbound answer metadata
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > keeps routine prepared and waiting status out of native chat summaries (resumed: false)
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > keeps routine prepared and waiting status out of native chat summaries (resumed: true)
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > replaces the generic execution contract for process_lost recovery wakes
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > replaces the generic execution contract for successful_run_missing_state recovery wakes
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > replaces the generic execution contract for provider_quota recovery wakes
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > replaces the generic execution contract for codex_output_inactivity_monitor recovery wakes
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > replaces the generic execution contract for workspace_validation_failed recovery wakes
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > replaces the generic execution contract for stranded_assigned_issue recovery wakes
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > asks process-loss retries to lead with the work instead of narrating recovery
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > asks restored source owners to lead with work instead of narrating recovery
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > keeps exactly one execution contract in a composed fresh heartbeat prompt
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > trims comment-batch boilerplate on fresh wakes with zero pending comments
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > renders answered questions after stale coalesced comments for legacy adapters
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > renders the execution workspace branch guard only on non-resumed sessions
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > omits the branch guard when no execution workspace branch is pinned
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > keeps an execution-workspace-only wake payload alive
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > renders a plugin session message as the user turn without granting it system authority
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > sanitizes and structurally delimits an untrusted plugin session message
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > does not add a session-message section to ordinary heartbeat wakes
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > escapes backticks and strips control characters in the branch guard
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > renders resolved checkbox selections in scoped wake prompts
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > renders accepted empty checkbox selections explicitly
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > preserves Chinese, Japanese, and Hindi issue and comment text in scoped wake prompts
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > renders planning-mode directives for assignment and comment wakes
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > does not render stale accepted-plan continuation guidance for later planning comment wakes
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > renders accepted-plan continuation guidance for planning issues
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > keeps accepted-plan guidance when stale comment ids have no loaded comments
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > renders accepted plan review context with annotation text and comments
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > renders rejected plan review context even when the rejection reason is empty
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > renders grouped non-plan document annotations with editing scope
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > renders dependency-blocked interaction guidance
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > renders loose review request instructions for execution handoffs
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > delivers typed disposition repair instructions without liveness classification
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt > includes continuation and child issue summaries in structured wake context
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > WATCHDOG_DEFAULT_MANDATE > states the watchdog must verify stopped work instead of trusting agent claims
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > WATCHDOG_DEFAULT_MANDATE > authorizes restoring a live path inside the watched subtree without bypassing board-only governance
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > WATCHDOG_DEFAULT_MANDATE > declares custom instructions subordinate to product safety constraints
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > WATCHDOG_DEFAULT_MANDATE > forbids the watchdog from waking itself or nesting another watchdog
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > selectPaperclipTaskMarkdown > returns the full markdown for fresh sessions and assignment-shaped resumes
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > selectPaperclipTaskMarkdown > returns the compact markdown for non-assignment resume deltas
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > selectPaperclipTaskMarkdown > adds saved communication guidance only to a fresh session, including after recovery
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > selectPaperclipTaskMarkdown > falls back to the full markdown when no compact variant exists
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > selectPaperclipTaskMarkdown > keeps the full markdown on recovery resumes
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt - task watchdog > injects the watchdog mandate, watched-issue header, and stop fingerprint when taskWatchdog is present
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt - task watchdog > appends board-supplied custom instructions after the default mandate with an explicit non-override reminder
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt - task watchdog > renders the watchdog header even when the watched issue identifier is missing
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt - task watchdog > does not render the watchdog mandate when taskWatchdog context is absent
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt - task watchdog > suppresses planning-mode directives on a watchdog wake even if workMode is planning
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt - task watchdog > survives a JSON round-trip through stringifyPaperclipWakePayload
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > renderPaperclipWakePrompt - task watchdog > truncates oversized custom instructions and caps terminal leaf summaries
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > applyPaperclipWorkspaceEnv > adds shared workspace env vars including AGENT_HOME
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > applyPaperclipWorkspaceEnv > skips empty workspace env values
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > shapePaperclipWorkspaceEnvForExecution > maps editable project repositories inside the remote workspace
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > shapePaperclipWorkspaceEnvForExecution > rewrites workspace env paths for remote execution
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > shapePaperclipWorkspaceEnvForExecution > repoints a referenced hint to its staged remote directory when the map has an entry
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > shapePaperclipWorkspaceEnvForExecution > removes cwd from a referenced hint that has no staged directory
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > shapePaperclipWorkspaceEnvForExecution > leaves local execution workspace paths unchanged
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > rewriteWorkspaceCwdEnvVarsForExecution > rewrites custom *_WORKSPACE_CWD env vars for remote execution
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > rewriteWorkspaceCwdEnvVarsForExecution > does not rewrite matching values for local execution
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > rewriteWorkspaceCwdEnvVarsForExecution > only rewrites matching *_WORKSPACE_CWD string values
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > refreshPaperclipWorkspaceEnvForExecution > rewrites Paperclip workspace env to the prepared remote runtime cwd
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > refreshPaperclipWorkspaceEnvForExecution > forwards resolved adapter env but never overrides Paperclip runtime env
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > refreshPaperclipWorkspaceEnvForExecution > applies a configured PAPERCLIP_* key only when Paperclip has not set it
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > refreshPaperclipWorkspaceEnvForExecution > does not restore the retired wake JSON variable from config
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > refreshPaperclipWorkspaceEnvForExecution > never accepts PAPERCLIP_API_KEY from config env
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > appendWithByteCap > keeps valid UTF-8 when trimming through multibyte text
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > buildPaperclipEnv > prefers an explicit PAPERCLIP_API_URL override over the derived runtime URL
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > buildPaperclipEnv > falls back to the derived runtime URL when no explicit override is set
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > buildPaperclipEnv > derives a listen-host URL when neither override is set
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > runtime skill assignment boundaries > prefers the server repository's skills over an unrelated enclosing workspace
+ ↓ |@paperclipai/adapter-utils| src/server-utils.test.ts > runtime skill assignment boundaries > preserves an explicitly empty assignment instead of discovering bundled connector skills
+ ✓ |@paperclipai/server| scripts/copy-bundled-skills.test.mjs > the shipped platform artifact verifies with a real source commit and every focused reference 13ms
+ ✓ |@paperclipai/server| scripts/copy-bundled-skills.test.mjs > changed procedure bytes and extra unreviewed references fail artifact verification 30ms
+ ✓ |@paperclipai/server| scripts/copy-bundled-skills.test.mjs > symlinked procedure content cannot escape the promoted artifact 13ms
+ ✓ |@paperclipai/server| scripts/copy-bundled-skills.test.mjs > customer-mutable or unpinned releases cannot be packaged 11ms
+ ✓ |@paperclipai/server| src/__tests__/product-identity-routes.test.ts > public product security contact > publishes the central contact as plain text without a session or tenant context 20ms
+ ✓ |@paperclipai/server| src/__tests__/product-identity-routes.test.ts > public product security contact > redirects the legacy path without using untrusted request Host as a destination 3ms
+ ✓ |@paperclipai/server| src/__tests__/product-identity-routes.test.ts > public product security contact > does not silently renew an expired contact publication 2ms
+
+ Test Files  3 passed (3)
+      Tests  14 passed | 116 skipped (130)
+   Start at  01:50:20
+   Duration  4.63s (transform 2.69s, setup 110ms, import 4.06s, tests 109ms, environment 0ms)
+

@@ -423,9 +423,12 @@ export function nativeSandboxHostTransport(
           const { reply } = await invoke(actor, scope, "probe", scope.test);
           if (reply.action !== "probe")
             throw conflict("Native sandbox reply action changed");
+          if (reply.contractHash !== scope.test.contractHash)
+            throw conflict("Native sandbox probe contract changed");
           return {
             verdict: reply.verdict,
             observationHash: reply.observationHash,
+            contractHash: reply.contractHash,
           };
         },
       };

@@ -99,6 +99,7 @@ export const sandboxHostRequestSchema = z
         caseId: z.string().regex(/^[a-z0-9_]{1,100}$/),
         control: z.string().regex(/^[a-zA-Z0-9]{1,100}$/),
         expected: z.enum(["allow", "deny", "observe"]),
+        contractHash: hash,
       })
       .strict()
       .optional(),
@@ -193,6 +194,7 @@ export const sandboxHostReplySchema = z.discriminatedUnion("action", [
       action: z.literal("probe"),
       verdict: z.enum(["pass", "fail", "unsupported"]),
       observationHash: hash.nullable(),
+      contractHash: hash,
     })
     .strict(),
   z

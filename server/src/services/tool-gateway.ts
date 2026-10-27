@@ -29,6 +29,8 @@ import {
   agentNativeOperationManifestHash,
   blenteraToolCatalogContractHash,
 } from "./agent-native-operation-manifest.js";
+import { CAPABILITY_SEMANTIC_TOOL_CATALOG } from "../vendor/paperclip-runner/index.js";
+import { PaperclipRunnerToolAuthority } from "./native-runtime/paperclip-runner-tool-authority.js";
 import { claimSlackRateLimitRetry } from "./connectors/slack-retry.js";
 import { resolveSlackTaskAuthority } from "./connectors/slack-authority.js";
 import { SLACK_TOOLS } from "@paperclipai/shared";
@@ -313,6 +315,21 @@ const DEFAULT_MCP_GATEWAY_PROTOCOL_LIMITS: McpGatewayProtocolLimitOptions = {
 };
 const TOOL_APPROVAL_DESCRIPTION_SUFFIX =
   "Requires human approval: calling it posts an approval card on your task and you will be woken with the result once decided.";
+
+function runnerSemanticToolSchema(operationId: string): Record<string, unknown> {
+  const tool = CAPABILITY_SEMANTIC_TOOL_CATALOG.find((candidate) => candidate.operationId === operationId);
+  if (!tool) throw new Error("agent_native_runner_tool_binding_missing");
+  return tool.inputSchema as Record<string, unknown>;
+}
+const RUNNER_TASK_OPERATION_BY_SELF_TOOL: Readonly<Record<string, string>> = Object.freeze({
+  "paperclip-self:create_task": "create_task",
+  "paperclip-self:report_progress": "report_progress",
+  "paperclip-self:reassign_task": "reassign_task",
+  "paperclip-self:set_dependencies": "set_dependencies",
+  "paperclip-self:create_project": "create_project",
+  "paperclip-self:write_document": "write_document",
+  "paperclip-self:request_human_input": "request_human_input",
+});
 
 export type ToolGatewayProviderType =
   | "mcp_http_fixture"
@@ -1118,6 +1135,55 @@ const BUILTIN_TOOLS: ToolGatewayDescriptor[] = [
     risk: "read",
   },
   {
+    name: "paperclip-self:create_task",
+    displayName: "Create Task",
+    description: "Create governed follow-up work using the current Task owner and current run authority.",
+    parametersSchema: runnerSemanticToolSchema("create_task"),
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "write",
+  },
+  {
+    name: "paperclip-self:report_progress",
+    displayName: "Add internal Task comment",
+    description: "Add an internal progress comment to the Task attached to the current run.",
+    parametersSchema: runnerSemanticToolSchema("report_progress"),
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "write",
+  },
+  {
+    name: "paperclip-self:reassign_task",
+    displayName: "Reassign Task",
+    description: "Reassign an eligible Task after the current owner and version checks.",
+    parametersSchema: runnerSemanticToolSchema("reassign_task"),
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "write",
+  },
+  {
+    name: "paperclip-self:set_dependencies",
+    displayName: "Set Task blockers",
+    description: "Replace the blocker set for the Task attached to the current run.",
+    parametersSchema: runnerSemanticToolSchema("set_dependencies"),
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "write",
+  },
+  {
+    name: "paperclip-self:create_project",
+    displayName: "Create Project",
+    description: "Create a governed Project using the current Native Project owner.",
+    parametersSchema: runnerSemanticToolSchema("create_project"),
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "write",
+  },
+  {
+    name: "paperclip-self:write_document",
+    displayName: "Write Task document",
+    description: "Create or update a revisioned document on the Task attached to the current run.",
+    parametersSchema: runnerSemanticToolSchema("write_document"),
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "write",
+  },
+  {
+    name: "paperclip-self:request_human_input",
+    displayName: "Request Task input",
+    description: "Create a structured question or decision interaction on the Task attached to the current run.",
+    parametersSchema: runnerSemanticToolSchema("request_human_input"),
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "write",
+  },
+  {
     name: "paperclip-self:recall",
     displayName: "Recall Memory",
     description:
@@ -1770,11 +1836,16 @@ export function createToolGatewayService(
   }
 
   function pluginTools(): ToolGatewayDescriptor[] {
-    return (pluginToolDispatcher?.listToolsForAgent() ?? []).map((tool) => ({
+    return (pluginToolDispatcher?.listToolsForAgent() ?? [])
+      // First-party operation IDs and their historical selectors are reserved.
+      // A plugin with the same name must not create an ambiguous catalog entry
+      // or shadow the operation's policy selector.
+      .filter((tool) => !agentNativeOperationForToolName(tool.name))
+      .map((tool) => ({
       ...tool,
       providerType: "paperclip_plugin" as const,
       risk: inferToolRisk(tool.name),
-    }));
+      }));
   }
 
   function allTools(): ToolGatewayDescriptor[] {
@@ -3608,6 +3679,31 @@ export function createToolGatewayService(
     scopedContext?: ScopedToolGatewayContext,
   ) {
     const params = asRecord(parameters) ?? {};
+
+    const runnerTaskOperation = RUNNER_TASK_OPERATION_BY_SELF_TOOL[tool.name];
+    if (runnerTaskOperation) {
+      if (!session.agentId || !session.runId || !session.issueId || !invocationId) {
+        throw new ToolGatewayHttpError(403,
+          "Task mutations require a current Native Agent run and durable Tool Gateway call identity",
+          "native_task_run_required");
+      }
+      const actor = currentSessionMemoryActor(session);
+      if (!actor || actor.type !== "agent" || !actor.onBehalfOfUserId) {
+        throw new ToolGatewayHttpError(403,
+          "Task mutations require the original verified Agent credential and current represented Human",
+          "native_task_authority_unavailable");
+      }
+      const result = await new PaperclipRunnerToolAuthority(db, {
+        companyId: session.companyId,
+        agentId: session.agentId,
+        issueId: session.issueId,
+        runId: session.runId,
+        sourceChannel: "tool_gateway_mcp",
+        transportCallId: invocationId,
+        requireCurrentResponsibleUser: true,
+      }).execute({ tool: runnerTaskOperation, callId: invocationId, arguments: params });
+      return { content: JSON.stringify(result), data: result };
+    }
 
     if (tool.providerType === "paperclip_slack_chat") {
       if (!session.agentId || !session.runId || !session.issueId) throw new ToolGatewayHttpError(403, "Slack task binding required", "slack_task_required");

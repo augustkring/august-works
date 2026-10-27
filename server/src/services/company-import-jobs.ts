@@ -35,6 +35,10 @@ function validateSourceReleaseReview(receipt: SourceReleaseReview, actor: Author
 }
 
 type JobTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
+const IMPORT_LEASE_MS = 2 * 60_000;
+
+type AcceptedPlan = NonNullable<CompanyImportJob["acceptedPlan"]>;
+type ImportEffectCheckpoint = NonNullable<CompanyImportJob["effectCheckpoint"]>;
 
 async function pinImportCredential(tx: JobTransaction, actor?: AuthorizationActor) {
   if (!actor || actor.source === "local_implicit") return null;
@@ -114,8 +118,11 @@ export function companyImportJobService(db: Db) {
           // Only the original owner's pre-domain failure can resume. The
           // request is unchanged and this admission has a current requester;
           // an old callback cannot settle the new fenced attempt.
+          const attemptId = randomUUID();
           const [resumed] = await tx.update(customerOperations).set({ status: "running", progressStage: "admitted",
-            attempt: sql`${customerOperations.attempt} + 1`, attemptId: randomUUID(), errorCode: null,
+            attempt: sql`${customerOperations.attempt} + 1`, attemptId, leaseOwnerId: attemptId,
+            leaseExpiresAt: sql`clock_timestamp() + interval '2 minutes'`, acceptedPlan: null,
+            effectCheckpoint: { version: 1, state: "idle", activeEffect: null, idMap: [] }, errorCode: null,
             startedAt: null, completedAt: null, resultRef: null, domainOperationRef: input.transferId ?? null,
             cancelRequestedAt: null,
             sourceReleaseReview: null,
@@ -124,11 +131,14 @@ export function companyImportJobService(db: Db) {
             .returning();
           return finish({ job: resumed!, replay: false });
         }
+        const attemptId = randomUUID();
         const [job] = await tx.insert(customerOperations).values({
           id: `${input.actorKind === "cloud_tenant" ? "tenant-import" : "import"}-${randomUUID()}`,
           operationType: "company_import", domain: "company_portability", domainOperationRef: input.transferId ?? null,
           requesterKeyHash, requestedByUserId: input.userId, scopeKey: input.scopeKey,
           idempotencyKey: key, inputHash: input.inputHash, companyId: input.companyId,
+          attemptId, leaseOwnerId: attemptId, leaseExpiresAt: sql`clock_timestamp() + interval '2 minutes'`,
+          effectCheckpoint: { version: 1, state: "idle", activeEffect: null, idMap: [] },
         }).returning();
         return finish({ job: job!, replay: false });
       });
@@ -181,11 +191,21 @@ export function companyImportJobService(db: Db) {
     },
 
     async cancellationRequested(job: CompanyImportJob) {
-      const [current] = await db.select({ status: customerOperations.status,
-        cancelRequestedAt: customerOperations.cancelRequestedAt }).from(customerOperations).where(and(
-        eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),
-      )).limit(1);
-      return !current || current.status !== "running" || current.cancelRequestedAt !== null;
+      return db.transaction(async tx => {
+        const [current] = await tx.select({ status: customerOperations.status,
+          cancelRequestedAt: customerOperations.cancelRequestedAt, leaseOwnerId: customerOperations.leaseOwnerId,
+          leaseExpiresAt: customerOperations.leaseExpiresAt }).from(customerOperations).where(and(
+          eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),
+        )).for("update").limit(1);
+        if (!current || current.status !== "running" || current.cancelRequestedAt !== null
+          || current.leaseOwnerId !== job.attemptId || !current.leaseExpiresAt || current.leaseExpiresAt.getTime() <= Date.now()) return true;
+        await tx.update(customerOperations).set({ leaseExpiresAt: sql`clock_timestamp() + interval '2 minutes'`,
+          updatedAt: sql`clock_timestamp()`, progressAt: sql`clock_timestamp()` }).where(and(
+          eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),
+          eq(customerOperations.leaseOwnerId, job.attemptId), eq(customerOperations.status, "running"),
+          sql`${customerOperations.leaseExpiresAt} > clock_timestamp()`));
+        return false;
+      });
     },
 
     async recordSourceReleaseReview(job: CompanyImportJob, receipt: SourceReleaseReview, actor: AuthorizationActor) {
@@ -229,7 +249,8 @@ export function companyImportJobService(db: Db) {
             throw conflict("A different source release review is already recorded", { code: "import_source_review_changed" });
         }
         const [updated] = current.sourceReleaseReview ? [current] : await tx.update(customerOperations)
-          .set({ sourceReleaseReview: receipt, updatedAt: sql`clock_timestamp()`, progressAt: sql`clock_timestamp()` })
+          .set({ sourceReleaseReview: receipt, leaseExpiresAt: sql`clock_timestamp() + interval '2 minutes'`,
+            updatedAt: sql`clock_timestamp()`, progressAt: sql`clock_timestamp()` })
           .where(and(eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),
             eq(customerOperations.status, "running"), isNull(customerOperations.cancelRequestedAt),
             isNull(customerOperations.sourceReleaseReview))).returning();
@@ -258,6 +279,7 @@ export function companyImportJobService(db: Db) {
           throw conflict("The reviewed target company changed", { code: "import_target_changed" });
         const [updated] = await tx.update(customerOperations).set({
           sourceReleaseReview: { ...review, targetCompanyId: companyId },
+          leaseExpiresAt: sql`clock_timestamp() + interval '2 minutes'`,
           updatedAt: sql`clock_timestamp()`, progressAt: sql`clock_timestamp()`,
         }).where(and(eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),
           eq(customerOperations.status, "running"), isNull(customerOperations.cancelRequestedAt))).returning();
@@ -326,6 +348,7 @@ export function companyImportJobService(db: Db) {
           && currentActor.source !== "cloud_tenant" && !(await hasCurrentInstanceAdminRole(tx, currentActor.userId)))
           throw forbidden("Instance admin is required to start a new-company import");
         const rows = await tx.update(customerOperations).set({ progressStage: "importing", startedAt: sql`clock_timestamp()`,
+          leaseOwnerId: job.attemptId, leaseExpiresAt: sql`clock_timestamp() + interval '2 minutes'`,
           progressAt: sql`clock_timestamp()`, updatedAt: sql`clock_timestamp()` }).where(and(
           eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),
           eq(customerOperations.status, "running"), eq(customerOperations.progressStage, "admitted"),
@@ -340,34 +363,110 @@ export function companyImportJobService(db: Db) {
       // This compact native result reference contains no source prose, warning
       // text, names, environment defaults, credentials or imported instructions.
       const [settled] = await db.update(customerOperations).set({ status: "succeeded", progressStage: "settled",
+        leaseOwnerId: null, leaseExpiresAt: null,
+        effectCheckpoint: sql`case when ${customerOperations.effectCheckpoint} is null then null
+          else jsonb_set(${customerOperations.effectCheckpoint}, '{state}', '"complete"'::jsonb, true)
+            #- '{activeEffect}' end`,
         companyId: result.company.id, resultRef: { companyId: result.company.id, agentCount: result.agents.length,
           warningCount: result.warnings.length, companyAction: result.company.action }, errorCode: null,
         completedAt: sql`clock_timestamp()`, updatedAt: sql`clock_timestamp()`, progressAt: sql`clock_timestamp()`,
         expiresAt: sql`clock_timestamp() + interval '1 hour'`,
       }).where(and(eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),
-        inArray(customerOperations.status, ["running", "needs_reconciliation"]))).returning();
+        eq(customerOperations.leaseOwnerId, job.attemptId), eq(customerOperations.status, "running"),
+        sql`${customerOperations.leaseExpiresAt} > clock_timestamp()`)).returning();
       return settled ?? null;
     },
 
     async fail(job: CompanyImportJob, unknownOutcome: boolean, knownError: "import_rejected" | "import_preview_source_changed" | "import_cancelled" = "import_rejected") {
       const cancelled = !unknownOutcome && knownError === "import_cancelled";
       const [settled] = await db.update(customerOperations).set({ status: unknownOutcome ? "needs_reconciliation" : cancelled ? "cancelled" : "failed",
+        leaseOwnerId: null, leaseExpiresAt: null,
         progressStage: unknownOutcome ? "needs_reconciliation" : cancelled ? "cancelled" : "rejected_before_import",
         errorCode: unknownOutcome ? "import_outcome_unknown" : cancelled ? null : knownError,
         completedAt: unknownOutcome ? null : sql`clock_timestamp()`, updatedAt: sql`clock_timestamp()`, progressAt: sql`clock_timestamp()`,
       }).where(and(eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),
-        eq(customerOperations.status, "running"))).returning();
+        eq(customerOperations.leaseOwnerId, job.attemptId), eq(customerOperations.status, "running"))).returning();
       return settled ?? null;
     },
 
     async recoverInterrupted() {
-      // No retry is authorized by startup or elapsed time. A still-live native
-      // owner can settle its exact attempt with a real result; no successor is
-      // admitted and no old attempt ID is replaced.
+      // Only an owner whose fenced lease expired may be marked inconclusive.
+      // A live owner retains the right to settle its exact attempt.
       return db.update(customerOperations).set({ status: "needs_reconciliation", progressStage: "needs_reconciliation",
-        errorCode: "import_outcome_unknown", updatedAt: sql`clock_timestamp()`, progressAt: sql`clock_timestamp()` })
-        .where(and(eq(customerOperations.operationType, "company_import"), eq(customerOperations.status, "running")))
+        errorCode: "import_outcome_unknown", leaseOwnerId: null, leaseExpiresAt: null,
+        updatedAt: sql`clock_timestamp()`, progressAt: sql`clock_timestamp()` })
+        .where(and(eq(customerOperations.operationType, "company_import"), eq(customerOperations.status, "running"),
+          sql`${customerOperations.leaseExpiresAt} < clock_timestamp()`))
         .returning({ id: customerOperations.id });
+    },
+
+    async acceptPlan(job: CompanyImportJob, plan: Omit<AcceptedPlan, "version">, actor: AuthorizationActor) {
+      if (plan.selected.length > 5000 || plan.selected.some(item => item.slug.length < 1 || item.slug.length > 128
+        || !["agent", "skill", "project", "issue", "routine"].includes(item.kind)))
+        throw conflict("The accepted import plan is invalid", { code: "import_plan_invalid" });
+      if (actor.type === "board" && actor.userId !== job.requestedByUserId)
+        throw forbidden("The current import requester must accept the import plan");
+      const acceptedPlan: AcceptedPlan = { version: 1, ...plan };
+      const [updated] = await db.update(customerOperations).set({ acceptedPlan,
+        updatedAt: sql`clock_timestamp()`, progressAt: sql`clock_timestamp()`,
+        leaseExpiresAt: sql`clock_timestamp() + interval '2 minutes'` })
+        .where(and(eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),
+          eq(customerOperations.leaseOwnerId, job.attemptId), eq(customerOperations.status, "running"),
+          sql`${customerOperations.leaseExpiresAt} > clock_timestamp()`, isNull(customerOperations.acceptedPlan))).returning();
+      if (!updated) {
+        const [current] = await db.select({ acceptedPlan: customerOperations.acceptedPlan }).from(customerOperations)
+          .where(and(eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId))).limit(1);
+        if (current?.acceptedPlan && JSON.stringify(current.acceptedPlan) === JSON.stringify(acceptedPlan)) return;
+        throw conflict("The import attempt changed while recording its accepted plan", { code: "import_attempt_changed" });
+      }
+    },
+
+    async checkpointEffect(job: CompanyImportJob, event: { phase: "started" | "completed"; key: string; kind: string;
+      sourceId?: string | null; sourceSlug?: string | null; targetIds?: string[];
+      mappings?: Array<{ sourceId?: string | null; sourceSlug?: string | null; targetIds: string[] }> }, executor?: JobTransaction) {
+      if (!/^[a-z0-9:_-]{1,160}$/i.test(event.key) || !/^[a-z0-9_-]{1,40}$/i.test(event.kind)
+        || (event.sourceSlug != null && (event.sourceSlug.length < 1 || event.sourceSlug.length > 128))
+        || (event.targetIds?.length ?? 0) > 1024 || (event.mappings?.length ?? 0) > 5000
+        || event.mappings?.some(mapping => mapping.targetIds.length > 1024 || (mapping.sourceSlug != null && mapping.sourceSlug.length > 128)))
+        throw conflict("Import effect checkpoint is invalid", { code: "import_effect_checkpoint_invalid" });
+      const write = async (tx: JobTransaction) => {
+        const [current] = await tx.select().from(customerOperations).where(and(
+          eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),
+          eq(customerOperations.leaseOwnerId, job.attemptId), eq(customerOperations.status, "running"),
+          sql`${customerOperations.leaseExpiresAt} > clock_timestamp()`, isNull(customerOperations.cancelRequestedAt),
+        )).for("update");
+        if (!current) throw conflict("The import attempt lease expired", { code: "import_attempt_lease_expired" });
+        const checkpoint: ImportEffectCheckpoint = current.effectCheckpoint ?? {
+          version: 1, state: "idle", activeEffect: null, idMap: [],
+        };
+        if (event.phase === "started") {
+          if (checkpoint.activeEffect) throw conflict("An import effect is already in progress", { code: "import_effect_in_progress" });
+          checkpoint.activeEffect = { key: event.key, kind: event.kind, sourceId: event.sourceId ?? null,
+            sourceSlug: event.sourceSlug ?? null, startedAt: new Date().toISOString() };
+          checkpoint.state = "applying";
+        } else {
+          const active = checkpoint.activeEffect;
+          if (!active || active.key !== event.key || active.kind !== event.kind)
+            throw conflict("The import effect checkpoint changed", { code: "import_effect_checkpoint_changed" });
+          const completedAt = new Date().toISOString();
+          if (event.mappings?.length) {
+            for (const mapping of event.mappings) checkpoint.idMap.push({ key: active.key, kind: active.kind,
+              sourceId: mapping.sourceId ?? null, sourceSlug: mapping.sourceSlug ?? null,
+              targetIds: [...new Set(mapping.targetIds)], completedAt });
+          } else checkpoint.idMap.push({ key: active.key, kind: active.kind, sourceId: active.sourceId,
+            sourceSlug: active.sourceSlug, targetIds: [...new Set(event.targetIds ?? [])], completedAt });
+          checkpoint.activeEffect = null;
+          checkpoint.state = "idle";
+        }
+        const [updated] = await tx.update(customerOperations).set({ effectCheckpoint: checkpoint,
+          leaseExpiresAt: sql`clock_timestamp() + interval '2 minutes'`,
+          updatedAt: sql`clock_timestamp()`, progressAt: sql`clock_timestamp()` })
+          .where(and(eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),
+            eq(customerOperations.leaseOwnerId, job.attemptId), eq(customerOperations.status, "running"),
+            sql`${customerOperations.leaseExpiresAt} > clock_timestamp()`)).returning({ id: customerOperations.id });
+        if (!updated) throw conflict("The import attempt lease expired", { code: "import_attempt_lease_expired" });
+      };
+      return executor ? write(executor) : db.transaction(write);
     },
   };
 }

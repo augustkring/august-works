@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import type { PipelineStage } from "../api/pipelines";
 
 /**
@@ -151,7 +152,7 @@ export function breakdownSummarySentence(
   }
   const noun = config.pieceNoun;
   const parts: string[] = [
-    `Paperclip will create one ${noun} per item in ${names.targetPipelineName} → ${names.entryStageName}`,
+    `${PRODUCT_IDENTITY.productName} will create one ${noun} per item in ${names.targetPipelineName} → ${names.entryStageName}`,
   ];
   if (names.inheritedFieldLabels.length > 0) {
     parts.push(`carry over ${joinWithAnd(names.inheritedFieldLabels)}`);

@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -838,7 +839,7 @@ function splitRequiredOptional(schema: JsonSchemaNode): JsonSchemaNode {
 
 const GUT_CHECK: Record<ToolConnectionTestDecision, (app: string, agent: string) => string> = {
   allowed: (app, agent) => `This runs a real call against ${app} as ${agent}.`,
-  ask_first: () => `Waiting for your OK before this call leaves Paperclip.`,
+  ask_first: () => `Waiting for your OK before this call leaves ${PRODUCT_IDENTITY.productName}.`,
   off: (_app, agent) => `No call will be made — this action is off for ${agent}.`,
 };
 
@@ -1099,7 +1100,7 @@ function ProviderPendingResult({ pending, appName, connectionId, agent }: { pend
   return (
     <div role="status" className="space-y-3 rounded-md border border-border bg-muted/40 p-4 text-sm">
       <p className="font-medium">{pending.kind === "approval" ? "Approval needed" : "Authorization needed"} in {appName}</p>
-      <p className="text-muted-foreground">Paperclip allowed this call. The provider needs your input before it can continue.</p>
+      <p className="text-muted-foreground">{PRODUCT_IDENTITY.productName} allowed this call. The provider needs your input before it can continue.</p>
       {pending.links.map((link) => {
         const checked = checkOAuthEndpointUrl(link.url);
         return checked.ok ? <Button key={checked.url} variant="outline" asChild><a href={checked.url} target="_blank" rel="noopener noreferrer">Continue at {checked.host}</a></Button> : null;
@@ -1112,7 +1113,7 @@ function ProviderPendingResult({ pending, appName, connectionId, agent }: { pend
       {pending.resumeTool && agent ? <ProviderResumeControls pending={pending} connectionId={connectionId} agent={agent} onResult={setResumed} /> :
       <p className="text-muted-foreground">{pending.resumeTool
         ? `After approval, test the ${pending.resumeTool} action with this execution ID. Do not start the original action again.`
-        : "After authorizing, check the provider's result before using Run again. Paperclip will not repeat the call automatically."}</p>}
+        : `After authorizing, check the provider's result before using Run again. ${PRODUCT_IDENTITY.productName} will not repeat the call automatically.`}</p>}
     </div>
   );
 }

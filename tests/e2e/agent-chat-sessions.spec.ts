@@ -134,6 +134,9 @@ test("chat first open is read-only; concurrent first sends and retries share one
             runId: run.id,
             nativeSessionId: run.nativeSessionId,
             runnerProcessPid: run.processPid,
+            createdAt: run.createdAt.toISOString(),
+            startedAt: run.startedAt?.toISOString() ?? null,
+            finishedAt: run.finishedAt?.toISOString() ?? null,
             status: run.status,
             runtimeMode: run.runtimeMode,
             sourceProtocolVersion: run.nativeInputSourceProtocolVersion,
@@ -187,8 +190,10 @@ test("chat first open is read-only; concurrent first sends and retries share one
           const results = await db.select({ schemaStatus: nativeRunResults.schemaStatus,
             rejectionCode: nativeRunResults.rejectionCode }).from(nativeRunResults)
             .where(eq(nativeRunResults.runId, run.id));
-          const events = await db.select({ eventType: heartbeatRunEvents.eventType })
-            .from(heartbeatRunEvents).where(eq(heartbeatRunEvents.runId, run.id));
+          const events = await db.select({ eventType: heartbeatRunEvents.eventType,
+            sourceSeq: heartbeatRunEvents.sourceSeq, createdAt: heartbeatRunEvents.createdAt })
+            .from(heartbeatRunEvents).where(eq(heartbeatRunEvents.runId, run.id))
+            .orderBy(heartbeatRunEvents.seq);
           const operations = await db.select({ phase: workspaceOperations.phase,
             status: workspaceOperations.status }).from(workspaceOperations)
             .where(eq(workspaceOperations.heartbeatRunId, run.id));
@@ -207,6 +212,11 @@ test("chat first open is read-only; concurrent first sends and retries share one
             } : null,
             results: results.map(({ schemaStatus, rejectionCode }) => ({ schemaStatus, rejectionCode })),
             eventCounts,
+            eventTimes: events.map(({ eventType, sourceSeq, createdAt }) => ({
+              eventType,
+              sourceSeq,
+              createdAt: createdAt.toISOString(),
+            })),
             workspaceOperations: operations.map(({ phase, status }) => ({ phase, status })),
           };
         }));

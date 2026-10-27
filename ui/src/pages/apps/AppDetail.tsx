@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { isRetiredComposioConnection, RETIRED_COMPOSIO_MESSAGE, isRemoteMcpConnectorId, isRemoteMcpConnectorMethod } from "@paperclipai/shared";
 import { RemoteMcpManagement } from "@/features/connections/remote-mcp/RemoteMcpManagement";
 import { remoteMcpProviders } from "@/features/connections/remote-mcp/providers";
@@ -648,7 +649,7 @@ export function AppDetail({ renderActions, onReconnect }: {
                 onReplaceAudience={(grant, memberUserIds) =>
                   replaceAudience.mutate({ grantId: grant.id, memberUserIds })}
               />
-              {isRemoteMcpConnectorMethod(connection.config?.sourceTemplateKey, connection.config?.connectionMethodKey) && <p className="text-sm text-muted-foreground">Paperclip controls access to the tools listed here. App and action permissions inside these tools are managed in {baseAppName}.</p>}
+              {isRemoteMcpConnectorMethod(connection.config?.sourceTemplateKey, connection.config?.connectionMethodKey) && <p className="text-sm text-muted-foreground">{PRODUCT_IDENTITY.productName} controls access to the tools listed here. App and action permissions inside these tools are managed in {baseAppName}.</p>}
               <PermissionsPanel
                 actions={actionsContent}
                 connectionId={connectionId}

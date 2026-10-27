@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import type { Agent } from "@paperclipai/shared";
 import type { LiveRunForIssue } from "../api/heartbeats";
 import type {
@@ -62,7 +63,7 @@ function markdownBody(index: number) {
     "",
     "- Parsed checklist item one with inline `code`",
     "- Parsed checklist item two with **bold** and _italic_ text",
-    "- Parsed checklist item three with a link to [Paperclip](/PAP/dashboard)",
+    `- Parsed checklist item three with a link to [${PRODUCT_IDENTITY.productName}](/PAP/dashboard)`,
     "",
     "| Metric | Value |",
     "| --- | ---: |",
@@ -194,7 +195,7 @@ export const issueChatLongThreadFixtureContext = {
     title: "Long-thread rendering baseline fixture",
     status: "in_progress",
     priority: "medium",
-    projectName: "Paperclip App",
+    projectName: `${PRODUCT_IDENTITY.productName} App`,
   },
   documents: [
     "Implementation Plan",

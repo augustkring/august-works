@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { AlertTriangle } from "lucide-react";
 export function EmailSafetyNotice() {
   return (
@@ -16,7 +17,7 @@ export function EmailSafetyNotice() {
             allowlist in AgentMail to limit who can contact this inbox.
           </p>
           <p className="text-xs text-muted-foreground">
-            Paperclip does not verify sender restrictions. AgentMail controls
+            {PRODUCT_IDENTITY.productName} does not verify sender restrictions. AgentMail controls
             new messages and replies separately; check both lists.
           </p>
         </div>

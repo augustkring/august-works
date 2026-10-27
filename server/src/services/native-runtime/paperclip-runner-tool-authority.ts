@@ -1,4 +1,5 @@
 import { publicChatTaskUrl } from "../chat-task-url.js";
+import { assertPlatformSkillAdmission } from "../platform-skill-admission.js";
 import {MANAGEMENT_ANALYTICAL_TOOL_DEFINITIONS,isManagementAnalyticalTool,executeManagementAnalyticalTool} from "./management-analytical-tools.js";
 import {assertAnalyticalContextPayloadAccess} from "../analytical-context-authority.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
@@ -43,6 +44,7 @@ import { executeRunnerApi, validateRunnerApiCall, runnerApiUrl, RUNNER_API_MAX_B
 import { and, desc, eq, getTableColumns, isNull, notInArray, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
+  accountDeletionOperations,
   activityLog,
   agents,
   agentWakeupRequests,
@@ -63,6 +65,7 @@ import {
 } from "@paperclipai/db";
 import {
   bindManagedNativeMemoryOutputCapture,
+  blenteraPlatformContractHashes,
   managedNativeRememberToolDescriptor,
   type ScopedToolGatewayContext,
 } from "../tool-gateway.js";
@@ -147,6 +150,10 @@ type Binding = {
   issueId: string;
   runId: string;
   agentId: string;
+  /** Server-owned Tool Gateway transport identity; never sourced from tool input. */
+  sourceChannel?: "paperclip_runner_protocol" | "tool_gateway_mcp";
+  transportCallId?: string;
+  requireCurrentResponsibleUser?: boolean;
   normalizedSessionId?: string;
   pinnedMcpDigest?: string;
   /** Server-owned API origin and storage; never obtained from tool input. */
@@ -183,6 +190,7 @@ type ToolReceipt = {
   input: unknown;
   result: unknown;
   nativeInputDispatch: NativeInputDispatchReceiptIdentity | null;
+  transport?: { channel: "paperclip_runner_protocol" | "tool_gateway_mcp"; callId: string | null };
 };
 
 type NativeInputDispatchReceiptIdentity = {
@@ -401,6 +409,17 @@ function canonicalJson(value: unknown): string {
 
 export class PaperclipRunnerToolAuthority {
   constructor(readonly db: Db, readonly binding: Binding) {}
+
+  #sourceChannel(): "paperclip_runner_protocol" | "tool_gateway_mcp" {
+    return this.binding.sourceChannel ?? "paperclip_runner_protocol";
+  }
+
+  #transportDetails() {
+    return {
+      source: this.#sourceChannel(),
+      ...(this.binding.transportCallId ? { transportCallId: this.binding.transportCallId } : {}),
+    };
+  }
 
   definitions(): Array<Record<string, unknown>> {
     if (this.binding.nativeReview) {
@@ -1478,7 +1497,7 @@ export class PaperclipRunnerToolAuthority {
           this.binding.issueId,
           body,
           { agentId: this.binding.agentId, runId: this.binding.runId },
-          { authorizationReason: "paperclip_runner_protocol" },
+          { authorizationReason: this.#sourceChannel() },
           tx,
         );
         const result = { commentId: comment.id, issueId: this.binding.issueId, disposition: "applied" };
@@ -1497,8 +1516,8 @@ export class PaperclipRunnerToolAuthority {
             bodySnippet: comment.body.slice(0, 120),
             identifier: context.issue.identifier,
             issueTitle: context.issue.title,
-            authorizationReason: "paperclip_runner_protocol",
-            source: "paperclip_runner_protocol",
+            authorizationReason: this.#sourceChannel(),
+            ...this.#transportDetails(),
           },
         });
         publication = activity.publication;
@@ -1543,7 +1562,7 @@ export class PaperclipRunnerToolAuthority {
           title: write.document.title,
           format: write.document.format,
           revisionNumber: write.document.latestRevisionNumber,
-          source: "paperclip_runner_protocol",
+          ...this.#transportDetails(),
         },
       });
       publication = activity.publication;
@@ -1693,7 +1712,7 @@ export class PaperclipRunnerToolAuthority {
           agentId: this.binding.agentId, runId: this.binding.runId, issueId: child.id,
           action: "issue.created", entityType: "issue", entityId: child.id,
           details: { identifier: child.identifier, title: child.title, parentId: child.parentId,
-            assigneeAgentId: child.assigneeAgentId, status: childStatus, source: "paperclip_runner_protocol" },
+            assigneeAgentId: child.assigneeAgentId, status: childStatus, ...this.#transportDetails() },
         });
         publication = activity.publication;
       }
@@ -1887,7 +1906,7 @@ export class PaperclipRunnerToolAuthority {
         companyId: this.binding.companyId, actorType: "agent", actorId: this.binding.agentId,
         agentId: this.binding.agentId, runId: this.binding.runId, issueId: taskId,
         action: "issue.reassigned", entityType: "issue", entityId: taskId,
-        details: { source: "paperclip_runner_protocol", reassignmentKey: durableKey, inputFingerprint: fingerprint,
+        details: { ...this.#transportDetails(), reassignmentKey: durableKey, inputFingerprint: fingerprint,
           previousAssigneeAgentId: target.assigneeAgentId, assigneeAgentId, reason, changed, receipt },
       });
       publication = activity.publication;
@@ -1993,7 +2012,7 @@ export class PaperclipRunnerToolAuthority {
               commentId: prepared.result.entityRefs[2],
               identifier: context.issue.identifier,
               issueTitle: context.issue.title,
-              source: "paperclip_runner_protocol",
+              ...this.#transportDetails(),
             },
           });
           publication = activity.publication;
@@ -2309,6 +2328,9 @@ export class PaperclipRunnerToolAuthority {
           input,
           result,
           nativeInputDispatch,
+          ...(this.binding.transportCallId ? { transport: {
+            channel: this.#sourceChannel(), callId: this.binding.transportCallId,
+          } } : {}),
         } satisfies ToolReceipt;
         await tx
           .update(heartbeatRuns)
@@ -2367,6 +2389,7 @@ export class PaperclipRunnerToolAuthority {
       agentId: this.binding.agentId, runId: this.binding.runId, onBehalfOfUserId: context.run.responsibleUserId };
     await assertAnalyticalContextPayloadAccess(tx, this.binding.companyId, actor, { runId: this.binding.runId });
     await assertAnalyticalContextPayloadAccess(tx, this.binding.companyId, actor, { issueId: this.binding.issueId });
+    await assertPlatformSkillAdmission(tx, actor, blenteraPlatformContractHashes());
   }
 
   async #lockAuthorizedMutationContext(tx: Db): Promise<{
@@ -2423,6 +2446,20 @@ export class PaperclipRunnerToolAuthority {
       || ["paused", "terminated", "pending_approval", "error"].includes(context.actor.status)
     ) {
       throw new Error("paperclip_runner_tool_binding_not_authorized");
+    }
+    if (this.binding.requireCurrentResponsibleUser) {
+      const responsibleUserId = context.run.responsibleUserId;
+      if (!responsibleUserId) throw forbidden("This operation requires the current represented Human");
+      const [membership] = await tx.select({ principalId: companyMemberships.principalId })
+        .from(companyMemberships).where(and(
+          eq(companyMemberships.companyId, this.binding.companyId),
+          eq(companyMemberships.principalType, "user"),
+          eq(companyMemberships.principalId, responsibleUserId),
+          eq(companyMemberships.status, "active"),
+        )).limit(1).for("share", { noWait: true });
+      const [erasing] = await tx.select({ id: accountDeletionOperations.id })
+        .from(accountDeletionOperations).where(eq(accountDeletionOperations.userId, responsibleUserId)).limit(1);
+      if (!membership || erasing) throw forbidden("The current represented Human is no longer authorized");
     }
     if (bounded) await assertNativeToolPlanCurrent(tx, this.binding, true);
     this.binding.authoritySignal?.throwIfAborted();
@@ -2519,7 +2556,7 @@ export class PaperclipRunnerToolAuthority {
             interactionKind: interaction.kind,
             interactionStatus: interaction.status,
             continuationPolicy: interaction.continuationPolicy,
-            source: "paperclip_runner_protocol",
+            ...this.#transportDetails(),
           },
         });
         publication = activity.publication;
