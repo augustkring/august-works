@@ -128,14 +128,15 @@ describe("Conversation Foundation proposals retain the Original pending review",
 
   it("discovers and invokes the actual SDK proposal while preserving current feature gates",async()=>{
     const name="paperclip-self:propose_foundation_change";
+    const canonicalName="blentera.foundation.change.propose";
     await db.insert(toolPolicies).values({companyId:f.home,name:"Explicit Foundation proposal fixture",policyType:"allow",selectors:{toolName:name}});
     const gateway=createToolGatewayService(db,{toolActionSigningSecret:"foundation-test-only-signing-secret"});
     const session=await gateway.createSession({companyId:f.home,agentId:f.presence.id,runId,issueId:conversationId});
-    expect((await gateway.listToolsForSession(session.token)).map(tool=>tool.name)).toContain(name);
+    expect((await gateway.listToolsForSession(session.token)).map(tool=>tool.name)).toContain(canonicalName);
     expect(await gateway.executeTool({sessionToken:session.token,tool:name,parameters:input()})).toMatchObject({status:"completed",
       result:{data:{proposalStatus:"pending",canonicalChanged:false,requiresHumanReview:true}}});
     await instanceSettingsService(db).updateExperimental({ambient_commands_v9:false});
-    expect((await gateway.listToolsForSession(session.token)).map(tool=>tool.name)).not.toContain(name);
+    expect((await gateway.listToolsForSession(session.token)).map(tool=>tool.name)).not.toContain(canonicalName);
   });
 
   it("projects only the actual proposal metadata and excludes earlier conversation generations",async()=>{

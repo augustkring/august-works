@@ -1,5 +1,5 @@
 import {assertAnalyticalReader} from "./analytical-reader.js";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { processFindings, processFindingTransitions, type Db } from "@paperclipai/db";
 import { createProcessFindingSchema, transitionProcessFindingSchema, processFindingTransitionAllowed,
   type CreateProcessFinding, type ProcessAnalysisRunView, type ProcessFindingFacts, type ProcessFindingView,
@@ -89,6 +89,60 @@ export function processFindingService(db: Db) {
     return row;
   }
   return {
+    async search(companyId: string, actor: AuthorizationActor, query: string, limit = 20) {
+      const tokens = query.trim().split(/\s+/).filter(Boolean).slice(0, 8);
+      const tokenConditions = tokens.map((token) => {
+        const escaped = token.replace(/[\\%_]/g, (value) => `\\${value}`);
+        const pattern = `%${escaped}%`;
+        return or(ilike(processFindings.summary, pattern), ilike(processFindings.interpretation, pattern),
+          ilike(processFindings.findingType, pattern), ilike(processFindings.objectType, pattern));
+      });
+      const safeLimit = Math.min(100, Math.max(1, limit));
+      const candidateLimit = safeLimit * 5 + 1;
+      const candidates = await db.select().from(processFindings).where(and(
+        eq(processFindings.companyId, companyId),
+        ...tokenConditions,
+      )).orderBy(desc(processFindings.createdAt), asc(processFindings.id)).limit(candidateLimit);
+      let partial = candidates.length > candidateLimit - 1;
+      const items: Array<{ finding: ProcessFindingView; definitionId: string; runId: string }> = [];
+      const byRun = new Map<string, Finding[]>();
+      for (const row of candidates.slice(0, candidateLimit - 1)) {
+        const key = `${row.definitionId}:${row.analysisRunId}`;
+        const group = byRun.get(key) ?? [];
+        group.push(row);
+        byRun.set(key, group);
+      }
+      for (const rows of byRun.values()) {
+        const first = rows[0]!;
+        try {
+          const run = await db.transaction(async rawTx => {
+            const tx = rawTx as unknown as Db;
+            const currentRun = await boundary(tx, companyId, actor, first.definitionId, first.analysisRunId);
+            for (const row of rows) {
+              try {
+                const findingView = view(row, currentRun);
+                if (items.length < safeLimit) items.push({ finding: findingView, definitionId: first.definitionId, runId: first.analysisRunId });
+              } catch (error) {
+                if (error instanceof Error && "status" in error && [403, 404, 409].includes(Number(error.status))) {
+                  partial = true;
+                  continue;
+                }
+                throw error;
+              }
+            }
+            return currentRun;
+          });
+          void run;
+        } catch (error) {
+          if (error instanceof Error && "status" in error && [403, 404, 409].includes(Number(error.status))) {
+            partial = true;
+            continue;
+          }
+          throw error;
+        }
+      }
+      return { items, partial: partial || items.length >= safeLimit };
+    },
     async create(companyId: string, actor: AuthorizationActor, definitionId: string, runId: string, raw: CreateProcessFinding) {
       const input = createProcessFindingSchema.parse(raw);
       return withV7ActivityTransaction(db, async (tx, publications) => {

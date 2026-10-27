@@ -315,10 +315,12 @@ for (const journey of [
         await page.getByRole("button", { name: "Hide result details" }).click();
       }
       expect(calls()).toBe(journey === "decline" ? 0 : 1);
-      await page.reload();
+      // The decline case intentionally dropped the live interaction event and
+      // returned an empty first snapshot. Verify IssueDetail's retained polling
+      // reconciliation removes the stale pending card without a manual reload.
       await expect(
         page.getByRole("button", { name: "Approve & run", exact: true }),
-      ).not.toBeVisible();
+      ).not.toBeVisible({ timeout: 30_000 });
       await expect(
         queue.getByRole("button", { name: "Decline", exact: true }),
       ).not.toBeVisible({ timeout: 20_000 });

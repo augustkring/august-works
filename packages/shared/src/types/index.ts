@@ -354,6 +354,10 @@ export type {
 export type { Project, ProjectVisibility, ProjectAccessMember, ProjectAccessSubjectType, ProjectRepository, ProjectRepositoryOptions, ProjectBudgetSummary, ProjectCodebase, ProjectCodebaseOrigin, ProjectGoalRef, ProjectManagedByPlugin, ProjectWorkspace } from "./project.js";
 export type {
   CompanySearchCountType,
+  CompanySearchFederatedDomain,
+  CompanySearchFederatedDomainCoverage,
+  CompanySearchFederatedResult,
+  CompanySearchFederation,
   CompanySearchExtractIssueResult,
   CompanySearchExtractKind,
   CompanySearchExtractMatch,

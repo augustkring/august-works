@@ -27,8 +27,56 @@ for (const classic of [false, true]) {
       await page.goto(`/${company.issuePrefix}/issues/${task.identifier}`);
       const editor = (classic ? page.getByTestId("issue-chat-composer") : page).getByRole("textbox", { name: "editable markdown" });
       await editor.fill("Keep this draft until I resume.");
-      await page.getByRole("button", { name: "More task actions", exact: true }).click();
-      await page.getByRole("button", { name: "Pause work", exact: true }).click();
+      const moreActions = page.getByRole("button", { name: "More task actions", exact: true });
+      await moreActions.evaluate((element) => {
+        element.addEventListener("pointerdown", () => element.setAttribute("data-e2e-pointerdown", "1"), { once: true });
+        element.addEventListener("click", () => element.setAttribute("data-e2e-click", "1"), { once: true });
+      });
+      await moreActions.click();
+      const stateImmediatelyAfterClick = await moreActions.evaluate((element) => ({
+        expanded: element.getAttribute("aria-expanded"),
+        state: element.getAttribute("data-state"),
+      }));
+      const pauseAction = page.getByRole("button", { name: "Pause work", exact: true });
+      try {
+        await expect(pauseAction).toBeVisible({ timeout: 5_000 });
+      } catch {
+        const [accessResponse, stateResponse, holdsResponse, taskResponse, descendantsResponse] = await Promise.all([
+          request.get("/api/cli-auth/me"),
+          request.get(`/api/issues/${task.id}/tree-control/state`),
+          request.get(`/api/issues/${task.id}/tree-holds?status=active`),
+          request.get(`/api/issues/${task.id}`),
+          request.get(`/api/companies/${company.id}/issues?descendantOf=${encodeURIComponent(task.id)}&includeBlockedBy=true`),
+        ]);
+        const [access, state, holds, currentTask, descendants] = await Promise.all([
+          accessResponse.json().catch(() => null),
+          stateResponse.json().catch(() => null),
+          holdsResponse.json().catch(() => null),
+          taskResponse.json().catch(() => null),
+          descendantsResponse.json().catch(() => null),
+        ]);
+        const popover = await moreActions.evaluate((element) => ({
+          expanded: element.getAttribute("aria-expanded"),
+          state: element.getAttribute("data-state"),
+        })).catch(() => null);
+        throw new Error(`Pause work action was not rendered; status=${JSON.stringify({
+          popover,
+          stateImmediatelyAfterClick,
+          pointerdown: await moreActions.getAttribute("data-e2e-pointerdown"),
+          click: await moreActions.getAttribute("data-e2e-click"),
+          runWorkflowVisible: await page.getByRole("button", { name: "Run workflow", exact: true }).isVisible().catch(() => false),
+          accessCompanyIds: Array.isArray(access?.companyIds) ? access.companyIds : null,
+          state: stateResponse.status(),
+          activePauseHold: state?.activePauseHold ?? null,
+          holdsStatus: holdsResponse.status(),
+          activeHoldCount: Array.isArray(holds) ? holds.length : null,
+          descendantsStatus: descendantsResponse.status(),
+          descendantCount: Array.isArray(descendants) ? descendants.length : null,
+          taskStatus: taskResponse.status(),
+          task: currentTask && { status: currentTask.status, assigneeAgentId: currentTask.assigneeAgentId },
+        })}`);
+      }
+      await pauseAction.click();
       const takeover = page.getByTestId("paused-composer-takeover");
       await expect(takeover).toBeVisible();
       await expect(takeover).toContainText("Your draft is saved.");

@@ -84,3 +84,9 @@ test-results/
 .lifecycle-baseline/
 
 server/dist-runtime/
+
+# Generated npm/runtime copies of the canonical operating Skill packages.
+/server/skills/
+/server/skills-releases/
+/server/.bundled-skills-*/
+/server/.bundled-skills-releases-*/

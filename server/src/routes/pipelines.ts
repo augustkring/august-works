@@ -684,9 +684,34 @@ async function assertCaseAccess(db: Db, req: Request, caseId: string) {
   return companyId;
 }
 
+function hasPostgresLockUnavailableCode(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && current && typeof current === "object"; depth += 1) {
+    const record = current as { code?: unknown; sqlState?: unknown; cause?: unknown };
+    if (record.code === "55P03" || record.sqlState === "55P03") return true;
+    current = record.cause;
+  }
+  return false;
+}
+
 /** Human-authored case content remains company-shared. Agent-produced body
- * versions inherit the current native privacy of their retained producer runs. */
+ * versions inherit the current native privacy of their retained producer runs.
+ * Source-owner probes can use NOWAIT while an execution is committing. Retry
+ * the complete read proof in a fresh set of statements on that specific
+ * contention code; every retry re-reads the case, its producer roots and the
+ * current actor authority. */
 async function canReadPipelineCaseBodySources(db: Db, req: Request, companyId: string, caseId: string) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await canReadPipelineCaseBodySourcesOnce(db, req, companyId, caseId);
+    } catch (error) {
+      if (!hasPostgresLockUnavailableCode(error) || attempt >= 4) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 25 * (attempt + 1)));
+    }
+  }
+}
+
+async function canReadPipelineCaseBodySourcesOnce(db: Db, req: Request, companyId: string, caseId: string) {
   const [caseRow] = await db.select({ createdByAgentId: pipelineCases.createdByAgentId,
     originRunId: pipelineCases.originRunId }).from(pipelineCases).where(and(
       eq(pipelineCases.companyId, companyId), eq(pipelineCases.id, caseId))).limit(1);

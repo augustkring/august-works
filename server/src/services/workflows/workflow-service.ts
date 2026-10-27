@@ -4,7 +4,7 @@ import type {AuthorizationActor} from "../authorization.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 import { isDeepStrictEqual } from "node:util";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
@@ -512,6 +512,30 @@ export function workflowService(db: Db) {
           }
           return visible;
         }),
+
+    /** Bounded current-source search; raw candidates never leave this owner. */
+    search: async (companyId: string, actor: AuthorizationActor, query: string, limit = 20) => {
+      const tokens = query.trim().split(/\s+/).filter(Boolean).slice(0, 8);
+      const tokenConditions = tokens.map((token) => {
+        const escaped = token.replace(/[\\%_]/g, (value) => `\\${value}`);
+        const pattern = `%${escaped}%`;
+        return or(ilike(workflows.name, pattern), ilike(workflows.description, pattern));
+      });
+      const candidates = await db.select().from(workflows).where(and(
+        eq(workflows.companyId, companyId),
+        ...tokenConditions,
+      )).orderBy(desc(workflows.updatedAt), desc(workflows.id)).limit(Math.min(100, Math.max(1, limit)) + 1);
+      const items: Workflow[] = [];
+      for (const row of candidates.slice(0, limit)) {
+        try {
+          await assertWorkflowAuthoringSources(db, companyId, row.id, actor);
+          items.push(mapWorkflow(row));
+        } catch (error) {
+          if (!(error instanceof HttpError) || ![403, 404].includes(error.status)) throw error;
+        }
+      }
+      return { items, partial: candidates.length > limit };
+    },
 
     get: async (companyId: string, workflowId: string, actor?: AuthorizationActor) => {
       const row = await getWorkflowRow(db, companyId, workflowId);

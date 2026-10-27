@@ -147,15 +147,16 @@ describe("Conversation routine drafts use the Original owner without execution a
   });
   it("discovers and invokes the actual SDK tool while preserving its current feature and policy gates", async () => {
     const name = "paperclip-self:create_routine_draft";
+    const canonicalName = "blentera.routine.draft.create";
     await db.insert(toolPolicies).values({ companyId: f.home, name: "Explicit routine draft software fixture", policyType: "allow", selectors: { toolName: name } });
     const gateway = createToolGatewayService(db, { toolActionSigningSecret: "routine-draft-test-only-signing-secret" });
     const session = await gateway.createSession({ companyId: f.home, agentId: f.presence.id, runId, issueId: conversationId });
-    expect((await gateway.listToolsForSession(session.token)).map(tool => tool.name)).toContain(name);
+    expect((await gateway.listToolsForSession(session.token)).map(tool => tool.name)).toContain(canonicalName);
     const result = await gateway.executeTool({ sessionToken: session.token, tool: name, parameters: input() });
     expect(result).toMatchObject({ status: "completed", result: { data: { status: "created", enabled: false, executionConfigured: false } } });
     expect(await db.select().from(routines).where(eq(routines.companyId, f.home))).toHaveLength(1);
     await instanceSettingsService(db).updateExperimental({ ambient_commands_v9: false });
-    expect((await gateway.listToolsForSession(session.token)).map(tool => tool.name)).not.toContain(name);
+    expect((await gateway.listToolsForSession(session.token)).map(tool => tool.name)).not.toContain(canonicalName);
   });
   it("previews only the actual saved routine and distinguishes a later Human revision", async () => {
     const saved = await create();

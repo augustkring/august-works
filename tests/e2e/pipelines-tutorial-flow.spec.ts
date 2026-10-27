@@ -144,33 +144,52 @@ async function createPipelineWriterAgentKey(board: APIRequestContext, companyId:
     },
   });
   await expectOk(wakeResponse, "start original pipeline writer heartbeat run");
-  const run = await wakeResponse.json() as { id?: string; status?: string; agentId?: string; companyId?: string };
-  if (!run.id) throw new Error(`Pipeline writer wake did not return a persisted run: ${JSON.stringify(run)}`);
+  const wake = await wakeResponse.json() as {
+    id?: string;
+    status?: string;
+    agentId?: string;
+    companyId?: string;
+    reason?: string;
+    issueId?: string;
+    executionRunId?: string;
+    executionAgentId?: string;
+  };
+  // A wake can truthfully report that this exact issue is already executing.
+  // Reuse only the server-returned current run after the checks below prove its
+  // Human-created Task, company, Agent, live state, and reader privacy.
+  const runId = wake.id ?? (
+    wake.status === "skipped" &&
+    wake.reason === "issue_execution_deferred" &&
+    wake.issueId === task.id &&
+    wake.executionAgentId === approved.createdAgentId
+      ? wake.executionRunId
+      : undefined
+  );
+  if (!runId) throw new Error(`Pipeline writer wake did not identify a persisted current run: ${JSON.stringify(wake)}`);
   try {
     await expect.poll(async () => {
-      const response = await board.get(`/api/heartbeat-runs/${run.id}`);
+      const response = await board.get(`/api/heartbeat-runs/${runId}`);
       await expectOk(response, "read current Human-owned producer run");
       const current = await response.json() as { status: string };
       return current.status;
     }, { timeout: 30_000, message: "the original heartbeat owner must start the source-bound producer run" }).toBe("running");
-    const readableRunResponse = await board.get(`/api/heartbeat-runs/${run.id}`);
+    const readableRunResponse = await board.get(`/api/heartbeat-runs/${runId}`);
     await expectOk(readableRunResponse, "read current Human-owned producer run");
     const readableRun = await readableRunResponse.json() as {
       id: string; status: string; agentId?: string; companyId?: string; issueId?: string;
       contextSnapshot?: Record<string, unknown>;
     };
-    expect(readableRun.id).toBe(run.id);
+    expect(readableRun.id).toBe(runId);
     expect(readableRun.agentId).toBe(approved.createdAgentId);
     expect(readableRun.companyId).toBe(companyId);
     expect(readableRun.status).toBe("running");
     expect(readableRun.issueId ?? readableRun.contextSnapshot?.issueId).toBe(task.id);
 
-    const runId = run.id;
     const token = createLocalAgentJwt(approved.createdAgentId, companyId, "process", runId);
     if (!token) throw new Error("PAPERCLIP_AGENT_JWT_SECRET is required for pipeline writer JWT setup");
     return { agentId: approved.createdAgentId, runId, token, taskId: task.id };
   } catch (error) {
-    try { await board.post(`/api/heartbeat-runs/${run.id}/cancel`); } catch { /* Preserve the setup failure. */ }
+    try { await board.post(`/api/heartbeat-runs/${runId}/cancel`); } catch { /* Preserve the setup failure. */ }
     throw error;
   }
 }
@@ -230,7 +249,7 @@ async function assertCurrentHumanReadableProducerRun(
       .limit(1);
     expect(run).toBeTruthy();
     expect(task).toMatchObject({ id: input.taskId, companyId: input.companyId,
-      createdByUserId: session.user.id, assigneeAgentId: input.agentId, status: "todo" });
+      createdByUserId: session.user.id, assigneeAgentId: input.agentId, status: "in_progress" });
     expect(run).toMatchObject({ companyId: input.companyId, agentId: input.agentId, status: "running" });
     expect(run!.issueId ?? run!.contextSnapshot?.issueId).toBe(input.taskId);
     expect(run!.responsibleUserId).toBe(session.user.id);

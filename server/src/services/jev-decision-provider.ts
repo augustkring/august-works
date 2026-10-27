@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { experimental_decide as decide, type Experimental_DecisionModel } from "ai";
 import { type JevDecisionAnswer, type JevDecisionRequest } from "@paperclipai/shared";
@@ -42,8 +43,29 @@ export function decisionReceipt(result: unknown): JevDecisionReceipt {
 }
 export async function runJevDecision(input: {
   model: string; apiKey: string; request: JevDecisionRequest; signal: AbortSignal;
-}, options: { fetch?: typeof fetch } = {}): Promise<JevDecisionOutcome> {
-  const native = createOpenRouter({ apiKey: input.apiKey, fetch: options.fetch }).evaluationModel(input.model);
+}, options: {
+  fetch?: typeof fetch;
+  onWireDispatch?: (receipt: { method: "POST"; endpoint: "https://openrouter.ai/api/v1/chat/completions"; bodySha256: string }) => void | Promise<void>;
+} = {}): Promise<JevDecisionOutcome> {
+  const upstreamFetch = options.fetch ?? fetch;
+  const observedFetch: typeof fetch = async (requestInput, init) => {
+    const request = requestInput instanceof Request ? requestInput : null;
+    const url = new URL(request?.url ?? String(requestInput));
+    const method = (init?.method ?? request?.method ?? "GET").toUpperCase();
+    if (method !== "POST" || url.origin !== "https://openrouter.ai" || url.pathname !== "/api/v1/chat/completions" || url.search || url.hash)
+      throw new Error("provider_wire_endpoint_unqualified");
+    const body = init?.body ?? (request ? await request.clone().arrayBuffer() : null);
+    let bodyBytes: Uint8Array;
+    if (typeof body === "string") bodyBytes = Buffer.from(body, "utf8");
+    else if (body instanceof Uint8Array) bodyBytes = body;
+    else if (body instanceof ArrayBuffer) bodyBytes = new Uint8Array(body);
+    else if (body instanceof Blob) bodyBytes = new Uint8Array(await body.arrayBuffer());
+    else throw new Error("provider_wire_body_unavailable");
+    await options.onWireDispatch?.({ method: "POST", endpoint: "https://openrouter.ai/api/v1/chat/completions",
+      bodySha256: createHash("sha256").update(bodyBytes).digest("hex") });
+    return upstreamFetch(requestInput, init);
+  };
+  const native = createOpenRouter({ apiKey: input.apiKey, fetch: observedFetch }).evaluationModel(input.model);
   let receipt = decisionReceipt(null);
   // Capture only accounting metadata before SDK answer validation/refusal errors.
   const model: Exclude<Experimental_DecisionModel, string> = {

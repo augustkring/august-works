@@ -953,6 +953,13 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(expectedMinor).toBeLessThan(reservation.maximumMinor);
       expect(reservation).toMatchObject({ purpose: "conversation_model", status: "completed",
         conversationRunId: result.run?.id, conversationIssueId: result.issueId });
+      const retainedWire = reservation.providerWireReceipt;
+      expect(retainedWire).toMatchObject({
+        version: 1, reservationId: reservation.id, requestHash: reservation.requestHash,
+        method: "POST", endpoint: "https://api.anthropic.com/v1/messages",
+      });
+      expect(typeof retainedWire?.bodySha256).toBe("string");
+      expect(typeof retainedWire?.callId).toBe("string");
       const billingCode = `native-conversation-model:${reservation.id}`;
       expect(await db.select().from(costEvents).where(eq(costEvents.billingCode, billingCode))).toHaveLength(0);
       const operation = purgeHolder.value;
@@ -1189,7 +1196,7 @@ const support = await getEmbeddedPostgresTestSupport();
           .where(eq(orchestrationModelReservations.planId, plan.id)),
       ).toHaveLength(0);
     });
-    it("rechecks price and source before a single irreversible dispatch claim", async () => {
+    it("requires the persisted provider wire receipt after a single irreversible dispatch claim", async () => {
       const broker = service(),
         reservation = await broker.reserve(f.actor, request());
       await dispatchFixturePlan();
@@ -1210,11 +1217,13 @@ const support = await getEmbeddedPostgresTestSupport();
       ]);
       expect(outcomes.filter((v) => v.status === "fulfilled")).toHaveLength(1);
       expect(outcomes.filter((v) => v.status === "rejected")).toHaveLength(1);
-      await broker.recordOutcome(f.home, reservation.id, {
+      await expect(broker.recordOutcome(f.home, reservation.id, {
         status: "completed",
         providerResponseHash: "e".repeat(64),
         usage: { inputTokens: 1, outputTokens: 1 },
-      });
+      })).rejects.toMatchObject({ status: 409 });
+      expect((await db.select().from(orchestrationModelReservations)
+        .where(eq(orchestrationModelReservations.id, reservation.id)))[0]?.status).toBe("dispatched");
       await expect(
         broker.claimForDispatch(f.actor, f.home, reservation.id),
       ).rejects.toMatchObject({ status: 409 });
@@ -1496,12 +1505,23 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(fetch).toHaveBeenCalledTimes(1);
       const [reservation] = await db.select().from(orchestrationCompanyPurposeReservations)
         .where(eq(orchestrationCompanyPurposeReservations.companyId, f.home));
+      const transmitted = fetch.mock.calls[0]?.[1]?.body;
+      expect(typeof transmitted).toBe("string");
       expect(reservation).toMatchObject({
         status: "completed",
         principalUserId: f.userId,
         packageVersionId: supportPackageVersionId,
         providerResponseHash: expect.stringMatching(/^[a-f0-9]{64}$/),
         usage: { inputTokens: 100, outputTokens: 8 },
+      });
+      expect(reservation?.providerWireReceipt).toEqual({
+        version: 1,
+        reservationId: reservation?.id,
+        requestHash: reservation?.requestHash,
+        method: "POST",
+        endpoint: "https://api.anthropic.com/v1/messages",
+        bodySha256: createHash("sha256").update(transmitted!, "utf8").digest("hex"),
+        callId: null,
       });
       const replay = await gateway.answer(f.actor, f.home, request);
       expect(replay).toEqual({ requestId: request.requestId, kind: "already_processed", citations: [] });
@@ -1648,35 +1668,25 @@ const support = await getEmbeddedPostgresTestSupport();
         maxCalls: 1,
       });
     });
-    it("rechecks the original Human, source and funding profile before returning completed support content", async () => {
+    it("refuses direct completed company-purpose outcomes without an actual provider wire receipt", async () => {
       const broker = service();
       const reservation = await broker.reserveCompanyPurpose(f.actor, supportRequest());
       await broker.claimCompanyPurposeForDispatch(f.actor, f.home, reservation.id);
-      await broker.recordCompanyPurposeOutcome(f.home, reservation.id, {
+      await expect(broker.recordCompanyPurposeOutcome(f.home, reservation.id, {
         status: "completed",
         providerResponseHash: "e".repeat(64),
         usage: { inputTokens: 1, outputTokens: 1 },
-      });
-      await broker.assertCompanyPurposeResponseReturn(f.actor, f.home, reservation.id);
-      supportAuthorityHash = "f".repeat(64);
-      await expect(
-        broker.assertCompanyPurposeResponseReturn(f.actor, f.home, reservation.id),
-      ).rejects.toMatchObject({ status: 409 });
-      supportAuthorityHash = authorityHash;
-      supportFunding = changeCurrentSupportFunding({
-        tariff: { ...supportFunding!.tariff, outputMinorPerMillion: 1 },
-      });
-      await expect(
-        broker.assertCompanyPurposeResponseReturn(f.actor, f.home, reservation.id),
-      ).rejects.toMatchObject({ status: 409 });
+      })).rejects.toMatchObject({ status: 409 });
       const [stored] = await db.select().from(orchestrationCompanyPurposeReservations).where(eq(
         orchestrationCompanyPurposeReservations.id,
         reservation.id,
       ));
-      expect(stored?.status).toBe("completed");
+      expect(stored?.status).toBe("dispatched");
+      await expect(broker.assertCompanyPurposeResponseReturn(f.actor, f.home, reservation.id))
+        .rejects.toMatchObject({ status: 409 });
       expect(stored).not.toHaveProperty("response");
     });
-    it("settles a dispatched call after principal revocation but refuses content return", async () => {
+    it("does not claim a provider charge when principal revocation blocks the wire receipt before fetch", async () => {
       const broker = service();
       const reservation = await broker.reserveCompanyPurpose(f.actor, supportRequest());
       await broker.claimCompanyPurposeForDispatch(f.actor, f.home, reservation.id);
@@ -1685,10 +1695,12 @@ const support = await getEmbeddedPostgresTestSupport();
         status: "completed",
         providerResponseHash: "e".repeat(64),
         usage: { inputTokens: 1, outputTokens: 1 },
-      })).resolves.toMatchObject({ status: "completed" });
+      })).rejects.toMatchObject({ status: 409 });
       await expect(
         broker.assertCompanyPurposeResponseReturn(f.actor, f.home, reservation.id),
-      ).rejects.toMatchObject({ status: 403 });
+      ).rejects.toMatchObject({ status: 409 });
+      expect((await db.select().from(orchestrationCompanyPurposeReservations)
+        .where(eq(orchestrationCompanyPurposeReservations.id, reservation.id)))[0]?.status).toBe("dispatched");
       expect((await db.select().from(orchestrationCompanyPurposeBudgets).where(eq(orchestrationCompanyPurposeBudgets.companyId, f.home)))[0]).toMatchObject({ reservedMinor: 30, reservedCalls: 1 });
     });
     it("keeps unknown spend held when the original provider account cannot prove a late result", async () => {

@@ -147,7 +147,12 @@ export function Sidebar({ children }: { children?: ReactNode }) {
       </div>
 
       <nav className={primarySidebarStyles.nav}>
-        {experienceShell ? <ExperienceNavigation/> : <>
+        {experienceShell ? <>
+          <ExperienceNavigation/>
+          {/* The progressive navigation also exposes Ask, so retain its
+              scoped preference/picker and command fallback owner. */}
+          <SidebarAgentChats enabled={agentChatEnabled} showNavigation={false} />
+        </> : <>
         <div className={primarySidebarStyles.group}>
           {/* New Task button aligned with nav items */}
           {(() => {

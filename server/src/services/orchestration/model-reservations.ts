@@ -17,8 +17,10 @@ import {
   NATIVE_CONVERSATION_MODEL_BILLING_PREFIX,
   modelTariffCeilingSchema,
   modelReservationQuoteSchema,
+  modelProviderWireReceiptSchema,
   type ModelTariffCeiling,
   type ModelReservationQuote,
+  type ModelProviderWireReceipt,
   companyPurposeFundingSchema,
   companyPurposeReservationInputSchema,
   type CompanyPurposeFunding,
@@ -612,6 +614,58 @@ export function modelReservationService(
         };
       });
     },
+    async recordCompanyPurposeWireDispatch(
+      actor: AuthorizationActor,
+      companyId: string,
+      id: string,
+      raw: { method: "POST"; endpoint: string; bodySha256: string },
+      now = new Date(),
+    ): Promise<ModelProviderWireReceipt> {
+      const observed = z.object({
+        method: z.literal("POST"), endpoint: z.string().max(256), bodySha256: z.string().regex(/^[a-f0-9]{64}$/),
+      }).strict().parse(raw);
+      return withV7ActivityTransaction(db, async tx => {
+        await lockAnalyticalCompany(tx, companyId);
+        await lockMemoryPrivacy(tx, companyId);
+        const [initial] = await tx.select().from(orchestrationCompanyPurposeReservations).where(and(
+          eq(orchestrationCompanyPurposeReservations.companyId, companyId),
+          eq(orchestrationCompanyPurposeReservations.id, id),
+        )).for("update");
+        if (!initial || initial.status !== "dispatched" || initial.expiresAt <= now || initial.providerWireReceipt)
+          throw conflict("Only one current company-purpose dispatch may record its wire receipt");
+        const request: CompanyPurposeRequest = {
+          companyId, purpose: initial.purpose, idempotencyKey: initial.idempotencyKey,
+          inputHash: initial.inputHash, authorityHash: initial.authorityHash,
+          inputTokensUpperBound: initial.quote.inputTokensUpperBound, maxOutputTokens: initial.quote.maxOutputTokens,
+        };
+        const principal = await assertCompanyPurposeAuthority(tx, actor, request);
+        if (principal !== initial.principalUserId) throw forbidden("The original company-purpose principal is required");
+        const { funding, quote } = freshCompanyPurposeFunding(request, now);
+        if (initial.purpose === "first_party_support") await assertFirstPartySupportReservation(
+          tx, companyId, id, options.firstPartySupportVersionId ?? "", funding.tariff.sourceSha, now,
+        );
+        const budget = await ensureCompanyPurposeBudget(tx, funding);
+        if (budget.id !== initial.budgetId || nativeSha256(quote) !== nativeSha256(initial.quote))
+          throw conflict("The company-purpose funding or quote changed before provider dispatch");
+        const expectedEndpoint = initial.quote.provider === "anthropic"
+          ? "https://api.anthropic.com/v1/messages"
+          : initial.quote.provider === "openrouter"
+            ? "https://openrouter.ai/api/v1/chat/completions"
+            : null;
+        if (!expectedEndpoint || observed.endpoint !== expectedEndpoint)
+          throw forbidden("The provider wire endpoint does not match the company-purpose funding provider");
+        const receipt = modelProviderWireReceiptSchema.parse({
+          version: 1, reservationId: initial.id, requestHash: initial.requestHash,
+          method: observed.method, endpoint: observed.endpoint, bodySha256: observed.bodySha256, callId: null,
+        });
+        const [saved] = await tx.update(orchestrationCompanyPurposeReservations).set({ providerWireReceipt: receipt })
+          .where(and(eq(orchestrationCompanyPurposeReservations.companyId, companyId),
+            eq(orchestrationCompanyPurposeReservations.id, id), eq(orchestrationCompanyPurposeReservations.status, "dispatched")))
+          .returning({ id: orchestrationCompanyPurposeReservations.id });
+        if (!saved) throw conflict("The original company-purpose reservation changed before its wire receipt was retained");
+        return receipt;
+      });
+    },
     async recordCompanyPurposeOutcome(
       companyId: string,
       id: string,
@@ -636,6 +690,11 @@ export function modelReservationService(
         )).for("update");
         if (!record || record.status !== "dispatched") {
           throw conflict("Only an unreconciled company-purpose dispatch may record an outcome");
+        }
+        if (input.status === "completed") {
+          const wire = modelProviderWireReceiptSchema.safeParse(record.providerWireReceipt);
+          if (!wire.success || wire.data.reservationId !== record.id || wire.data.requestHash !== record.requestHash)
+            throw conflict("A completed company-purpose outcome requires its exact persisted provider wire receipt");
         }
         const overQuote = input.usage && (
           input.usage.inputTokens > record.quote.inputTokensUpperBound ||
@@ -685,6 +744,9 @@ export function modelReservationService(
         if (record.status !== "unknown" || record.providerResponseHash !== null || record.usage !== null) {
           throw conflict("This unknown company-purpose outcome has no safely reconcilable original dispatch proof");
         }
+        const wire = modelProviderWireReceiptSchema.safeParse(record.providerWireReceipt);
+        if (!wire.success || wire.data.reservationId !== record.id || wire.data.requestHash !== record.requestHash)
+          throw conflict("Unknown company-purpose spend without its exact provider wire receipt must remain held");
         if (!options.reconcileCompanyPurposeOutcome) {
           throw conflict("The original company-purpose provider account cannot prove this dispatch outcome");
         }
@@ -1057,6 +1119,87 @@ export function modelReservationService(
         return dispatched!;
       });
     },
+    /** Persist the exact outbound body identity before provider I/O. The caller
+     * supplies only the observed transport facts; reservation identity,
+     * request hash and original purpose come from the locked ledger row. */
+    async recordWireDispatch(
+      actor: AuthorizationActor,
+      companyId: string,
+      id: string,
+      raw: { method: "POST"; endpoint: string; bodySha256: string; callId?: string | null },
+      now = new Date(),
+    ): Promise<ModelProviderWireReceipt> {
+      const observed = z.object({
+        method: z.literal("POST"),
+        endpoint: z.string().max(256),
+        bodySha256: z.string().regex(/^[a-f0-9]{64}$/),
+        callId: z.string().min(1).max(200).nullable().optional(),
+      }).strict().parse(raw);
+      return withV7ActivityTransaction(db, async tx => {
+        await lockAnalyticalCompany(tx, companyId);
+        await lockMemoryPrivacy(tx, companyId);
+        const [initial] = await tx.select().from(orchestrationModelReservations).where(and(
+          eq(orchestrationModelReservations.companyId, companyId),
+          eq(orchestrationModelReservations.id, id),
+        )).for("update");
+        if (!initial || initial.status !== "dispatched" || initial.expiresAt <= now || initial.providerWireReceipt)
+          throw conflict("Only one current, undisclosed provider dispatch may record its wire receipt");
+
+        if (initial.purpose === "conversation_model") {
+          const currentConversationAuthority = options.currentConversationAuthority;
+          if (!currentConversationAuthority || !initial.conversationAgentId || !initial.conversationRunId ||
+            !initial.conversationIssueId || initial.conversationSessionGeneration === null || !initial.executionManifestId ||
+            !initial.executionManifestHash || v7HumanActorId(actor) !== initial.principalUserId)
+            throw forbidden("The original Native conversation principal and reservation are required");
+          const request: ConversationRequest = {
+            companyId, conversationAgentId: initial.conversationAgentId, conversationRunId: initial.conversationRunId,
+            conversationIssueId: initial.conversationIssueId, conversationSessionGeneration: initial.conversationSessionGeneration,
+            executionManifestId: initial.executionManifestId, executionManifestHash: initial.executionManifestHash,
+            idempotencyKey: initial.idempotencyKey, inputHash: initial.inputHash, authorityHash: initial.authorityHash,
+            inputTokensUpperBound: initial.quote.inputTokensUpperBound, maxOutputTokens: initial.quote.maxOutputTokens,
+          };
+          const { quote } = await freshConversationQuote(request, now);
+          await assertV7Enabled(tx, "orchestration_v7");
+          await assertV7Authorization(tx, actor, companyId, "company_scope:read");
+          if (nativeSha256(quote) !== nativeSha256(initial.quote) ||
+            await currentConversationAuthority(tx, actor, request) !== initial.authorityHash)
+            throw conflict("Native conversation authority changed before provider dispatch");
+        } else {
+          if (!initial.planId) throw forbidden("The original model reservation plan is required");
+          const { plan, userId } = await authority(tx, actor, companyId, initial.planId, null, true,
+            initial.purpose, initial.workerId, initial.workerAttemptId, now);
+          if (userId !== initial.principalUserId) throw forbidden("The original model reservation principal is required");
+          const quote = await freshQuote({ companyId, planId: plan.id, purpose: initial.purpose,
+            inputTokensUpperBound: initial.quote.inputTokensUpperBound, maxOutputTokens: initial.quote.maxOutputTokens }, now);
+          if (nativeSha256(quote) !== nativeSha256(initial.quote))
+            throw conflict("Model tariff or reservation scope changed before provider dispatch");
+        }
+
+        if (initial.purpose === "worker_model" || initial.purpose === "conversation_model") {
+          if (typeof observed.callId !== "string") throw forbidden("Managed model dispatch requires its exact provider call ID");
+        } else if (observed.callId !== undefined && observed.callId !== null) {
+          throw forbidden("Non-tool model dispatch cannot attach a provider tool call ID");
+        }
+        const expectedEndpoint = initial.quote.provider === "anthropic"
+          ? "https://api.anthropic.com/v1/messages"
+          : initial.quote.provider === "openrouter"
+            ? "https://openrouter.ai/api/v1/chat/completions"
+            : null;
+        if (!expectedEndpoint || observed.endpoint !== expectedEndpoint)
+          throw forbidden("The provider wire endpoint does not match the qualified reservation provider");
+        const receipt = modelProviderWireReceiptSchema.parse({
+          version: 1, reservationId: initial.id, requestHash: initial.requestHash,
+          method: observed.method, endpoint: observed.endpoint, bodySha256: observed.bodySha256,
+          callId: observed.callId ?? null,
+        });
+        const [saved] = await tx.update(orchestrationModelReservations).set({ providerWireReceipt: receipt })
+          .where(and(eq(orchestrationModelReservations.companyId, companyId),
+            eq(orchestrationModelReservations.id, id), eq(orchestrationModelReservations.status, "dispatched")))
+          .returning({ id: orchestrationModelReservations.id });
+        if (!saved) throw conflict("The original model reservation changed before its wire receipt was retained");
+        return receipt;
+      });
+    },
     async recordOutcome(
       companyId: string,
       id: string,
@@ -1099,6 +1242,11 @@ export function modelReservationService(
           throw conflict(
             "Only an unreconciled dispatch may record a model outcome",
           );
+        if (input.status === "completed") {
+          const wire = modelProviderWireReceiptSchema.safeParse(record.providerWireReceipt);
+          if (!wire.success || wire.data.reservationId !== record.id || wire.data.requestHash !== record.requestHash)
+            throw conflict("A completed model outcome requires its exact persisted provider wire receipt");
+        }
         const exceedsQuote =
           input.usage &&
           (input.usage.inputTokens > record.quote.inputTokensUpperBound ||

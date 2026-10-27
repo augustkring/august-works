@@ -50,15 +50,15 @@ async function fixture(work, hooks = {}) {
     };
     const calls = [];
     let sandboxId = randomUUID(),
-      phase = "Ready",
+      phase = hooks.phase ?? "Ready",
       wrongScope = false,
       attached = [{ name: "fixture-provider" }],
-      physical = false,
-      running = false,
+      physical = hooks.physical ?? false,
+      running = hooks.running ?? false,
       effectivePolicy = structuredClone(policyDocument),
       configRevision = 1,
-      wrongContainerLabels = false,
-      containerImageDigest = input("inspect").imageDigest;
+      wrongContainerLabels = hooks.wrongContainerLabels ?? false,
+      containerImageDigest = hooks.containerImageDigest ?? input("inspect").imageDigest;
     const containerId = "d".repeat(64),
       imageId = "sha256:" + "e".repeat(64);
     const run = async (file, args, options) => {
@@ -350,6 +350,35 @@ test("observed metadata cannot substitute for image or complete control enforcem
     );
     assert.equal(preparation.success, false);
   }));
+test("prepare returns only an observed exact stopped sandbox image and rejects drift", async () => {
+  await fixture(async ({ engine, calls }) => {
+    const receipt = await engine.execute(randomUUID(), input("prepare"), deadline());
+    assert.equal(receipt.success, true);
+    assert.deepEqual(receipt.reply, {
+      action: "prepare",
+      backendVersion: "0.1.2",
+      imageDigest: input("prepare").imageDigest,
+    });
+    assert.ok(calls.some(call => call.args[0] === "info"));
+    assert.ok(calls.some(call => call.args[0] === "ps"));
+    assert.ok(calls.some(call => call.args[0] === "inspect"));
+    assert.ok(calls.some(call => call.args[4] === "sandbox" && call.args[5] === "get"));
+    assert.ok(!calls.some(call => call.args[4] === "sandbox" && ["create", "start", "stop"].includes(call.args[5])));
+  }, { phase: "Stopped", physical: true });
+
+  for (const hooks of [
+    { phase: "Stopped", physical: true, containerImageDigest: "fixture.invalid/other@sha256:" + "c".repeat(64) },
+    { phase: "Stopped", physical: true, wrongContainerLabels: true },
+    { phase: "Ready", physical: true },
+    { phase: "Stopped", physical: true, running: true },
+  ]) {
+    await fixture(async ({ engine }) => {
+      const receipt = await engine.execute(randomUUID(), input("prepare"), deadline());
+      assert.equal(receipt.success, false);
+      assert.equal(receipt.reply, null);
+    }, hooks);
+  }
+});
 test("Stop checks immutable scope, targets one sandbox and persists a restart receipt", async () =>
   fixture(async ({ engine, config, calls, root, run }) => {
     const id = randomUUID(),

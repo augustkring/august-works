@@ -1,5 +1,19 @@
 import { z } from "zod";
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
+/** Body-free identity of the exact provider request at its final send boundary.
+ * The receipt contains no headers, credentials, or prompt body. */
+export const modelProviderWireReceiptSchema = z.object({
+  version: z.literal(1),
+  reservationId: z.string().uuid(),
+  requestHash: hash,
+  method: z.literal("POST"),
+  endpoint: z.enum([
+    "https://api.anthropic.com/v1/messages",
+    "https://openrouter.ai/api/v1/chat/completions",
+  ]),
+  bodySha256: hash,
+  callId: z.string().min(1).max(200).nullable(),
+}).strict();
 /** An operator-qualified price ceiling, never provider/worker output. Exact
  * tariff, currency, model and expiry are part of each immutable quote. */
 export const modelTariffCeilingSchema = z
@@ -69,4 +83,5 @@ export const companyPurposeReservationInputSchema = z.object({
 }).strict();
 export type ModelTariffCeiling = z.infer<typeof modelTariffCeilingSchema>;
 export type ModelReservationQuote = z.infer<typeof modelReservationQuoteSchema>;
+export type ModelProviderWireReceipt = z.infer<typeof modelProviderWireReceiptSchema>;
 export type CompanyPurposeFunding = z.infer<typeof companyPurposeFundingSchema>;

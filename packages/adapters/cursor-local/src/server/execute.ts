@@ -190,6 +190,7 @@ export async function ensureCursorSkillsInjected(
         `[paperclip] ${result === "repaired" ? "Repaired" : "Injected"} Cursor skill "${entry.key}" into ${skillsHome}\n`,
       );
     } catch (err) {
+      if (entry.key === "blentera-platform") throw err;
       await onLog(
         "stderr",
         `[paperclip] Failed to inject Cursor skill "${entry.key}" into ${skillsHome}: ${err instanceof Error ? err.message : String(err)}\n`,

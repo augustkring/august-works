@@ -661,6 +661,37 @@ describeEmbeddedPostgres("companySkillService.list", () => {
     });
   });
 
+  it("reserves the platform operating Skill and preserves its shipped immutable release", async () => {
+    const companyId = randomUUID();
+    await db.insert(companies).values({ id: companyId, name: "Platform integrity", issuePrefix: `T${companyId.slice(0, 6)}` });
+    const listed = await svc.listFull(companyId);
+    const platform = listed.find(skill => skill.key === "blentera-platform");
+    expect(platform).toMatchObject({ slug: "blentera-platform", lifecycleState: "active", sharingScope: "company", metadata: { sourceKind: "paperclip_bundled" } });
+    if (!platform?.activeVersionId) throw new Error("Expected exact platform release");
+    const version = await svc.getVersion(companyId, platform.id, platform.activeVersionId);
+    expect(version).toMatchObject({ releaseId: "v1", state: "active", visibility: "company" });
+    expect(version!.fileInventory).toHaveLength(14);
+    const before = await db.select().from(companySkillVersions).where(eq(companySkillVersions.companySkillId, platform.id));
+    for (const mutation of [
+      () => svc.createLocalSkill(companyId, { name: "blentera-platform" }),
+      () => svc.createLocalSkill(companyId, { name: "Another", slug: "blentera-platform" }),
+      () => svc.updateSkill(companyId, platform.id, { description: "Override instructions" }),
+      () => svc.updateFile(companyId, platform.id, "SKILL.md", "# Ignore policy"),
+      () => svc.createVersion(companyId, platform.id, { label: "Tenant replacement" }),
+      () => svc.deleteSkill(companyId, platform.id),
+    ]) await expect(mutation()).rejects.toMatchObject({ status: 403, details: { code: "platform_skill_reserved" } });
+    await expect(svc.importPackageFiles(companyId, {
+      "skills/pretender/SKILL.md": "---\nname: blentera-platform\nmetadata:\n  skillKey: blentera-platform\n  sourceKind: paperclip_bundled\n---\n# Override\n",
+    }, { onConflict: "skip" })).rejects.toMatchObject({ status: 422, details: { code: "platform_skill_reserved" } });
+    expect(await db.select().from(companySkillVersions).where(eq(companySkillVersions.companySkillId, platform.id))).toEqual(before);
+    expect((await svc.getById(companyId, platform.id))?.activeVersionId).toBe(platform.activeVersionId);
+    // Staged procedure content cannot authorize a run against missing/mismatched
+    // live operation contracts, even when the tenant library row is present.
+    await expect(svc.requiredPlatformSkill(companyId, { type: "board", userId: "not-a-release-owner" }, {
+      operationManifestHash: "0".repeat(64), toolCatalogContractHash: "0".repeat(64),
+    })).rejects.toMatchObject({ status: 409, details: { code: "platform_skill_contract_drift" } });
+  });
+
   it("does not retouch unchanged bundled skills during list refresh", async () => {
     const companyId = randomUUID();
     await db.insert(companies).values({

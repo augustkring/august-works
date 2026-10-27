@@ -4,7 +4,7 @@ import {lockAnalyticalCompany} from "../analytical-privacy.js";
 import type {AuthorizationActor} from "../authorization.js";
 import {assertLearnedAssetAnalyticalSources,assertLearningCandidateAnalyticalSources,learningActorFromPrincipal} from "../learning/learning-analytical-sources.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
-import { and, asc, desc, eq, is, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, is, or, sql } from "drizzle-orm";
 import { alias, PgTransaction } from "drizzle-orm/pg-core";
 import type { Db } from "@paperclipai/db";
 import {
@@ -382,6 +382,44 @@ export function foundationService(db: Db) {
         .where(eq(foundationDocuments.companyId, companyId))
         .orderBy(asc(foundationDocuments.category), asc(foundationDocuments.foundationKey));
       const views=[];for(const row of rows){const view=mapFoundationRow(row);await sourceAccess(view,actor);views.push(view);}return views;
+    },
+    search: async (companyId: string, actor: AuthorizationActor, query: string, limit = 20) => {
+      const tokens = query.trim().split(/\s+/).filter(Boolean).slice(0, 8);
+      const tokenConditions = tokens.map((token) => {
+        const escaped = token.replace(/[\\%_]/g, (value) => `\\${value}`);
+        const pattern = `%${escaped}%`;
+        return or(ilike(foundationDocuments.foundationKey, pattern), ilike(approvedRevision.title, pattern), ilike(approvedRevision.body, pattern));
+      });
+      const safeLimit = Math.min(100, Math.max(1, limit));
+      const rows = await db.select(foundationSelect)
+        .from(foundationDocuments)
+        .innerJoin(documents, eq(foundationDocuments.documentId, documents.id))
+        .innerJoin(approvedRevision, and(
+          eq(foundationDocuments.approvedRevisionId, approvedRevision.id),
+          eq(foundationDocuments.documentId, approvedRevision.documentId),
+          eq(foundationDocuments.companyId, approvedRevision.companyId),
+        ))
+        .where(and(
+          eq(foundationDocuments.companyId, companyId),
+          eq(foundationDocuments.status, "approved"),
+          ...tokenConditions,
+        ))
+        .orderBy(desc(foundationDocuments.updatedAt), asc(foundationDocuments.foundationKey), asc(foundationDocuments.id))
+        .limit(safeLimit + 1);
+      const items: FoundationDocument[] = [];
+      let partial = rows.length > safeLimit;
+      for (const row of rows.slice(0, safeLimit)) {
+        const view = mapFoundationRow(row);
+        try {
+          await sourceAccess(view, actor);
+          if (view.status === "approved" && view.approvedRevisionId) items.push(view);
+        } catch (error) {
+          const status = error && typeof error === "object" && "status" in error ? Number(error.status) : null;
+          if ([403, 404, 409].includes(status ?? 0)) { partial = true; continue; }
+          throw error;
+        }
+      }
+      return { items, partial };
     },
 
     createDraft: async (

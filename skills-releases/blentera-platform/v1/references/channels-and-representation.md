@@ -1,0 +1,3 @@
+# Channels and representation
+
+Resolve the channel initiator, linked Human, represented user, Co-worker principal, execution identity and target company independently. A channel membership or email address is not authority. Shared channels do not union participants’ permissions. Preserve accountable identity and resource scope through handoff and delegation. Use parameter-bound canonical approval interactions with the same version, expiry and replay rules as the web surface; do not turn a reaction or plain message into consent. Reconnect or revoke through the identity/Connection owner. When a message is accepted but processing is delayed, inspect durable state before resending. Discover current channel projections and supported structured interactions.

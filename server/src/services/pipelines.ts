@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { workflowDelegationForActor } from "./workflows/workflow-delegation.js";
 import { isDeepStrictEqual } from "node:util";
-import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "@paperclipai/db";
 import {
@@ -3820,6 +3820,23 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
 
   const service = {
     resolveBreakdownTarget,
+
+    async search(companyId: string, actor: AuthorizationActor, query: string, limit = 20) {
+      const decision = await authorization.decide({ actor, action: "company_scope:read", resource: { type: "company", companyId } });
+      if (!decision.allowed) return { items: [], partial: false };
+      const tokens = query.trim().split(/\s+/).filter(Boolean).slice(0, 8);
+      const tokenConditions = tokens.map((token) => {
+        const escaped = token.replace(/[\\%_]/g, (value) => `\\${value}`);
+        const pattern = `%${escaped}%`;
+        return or(ilike(pipelines.key, pattern), ilike(pipelines.name, pattern), ilike(pipelines.description, pattern));
+      });
+      const rows = await db.select({ id: pipelines.id, key: pipelines.key, name: pipelines.name,
+        description: pipelines.description, updatedAt: pipelines.updatedAt }).from(pipelines).where(and(
+        eq(pipelines.companyId, companyId), isNull(pipelines.archivedAt),
+        ...tokenConditions,
+      )).orderBy(desc(pipelines.updatedAt), desc(pipelines.id)).limit(Math.min(100, Math.max(1, limit)) + 1);
+      return { items: rows.slice(0, limit), partial: rows.length > limit };
+    },
 
     async createPipeline(input: {
       companyId: string;

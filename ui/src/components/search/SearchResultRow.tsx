@@ -2,7 +2,7 @@ import { AgentAvatar } from "../AgentAvatar";
 import { AgentIdentity } from "../AgentIdentity";
 import { memo, type ComponentType, type SVGProps } from "react";
 import { Bot, BookOpen, FileText, Hexagon, MessageSquare, Paperclip, Quote } from "lucide-react";
-import type { Agent, CompanySearchResult } from "@paperclipai/shared";
+import type { Agent, CompanySearchFederatedResult, CompanySearchResult } from "@paperclipai/shared";
 import { Link } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import { StatusIcon } from "../StatusIcon";
@@ -265,6 +265,32 @@ function SearchResultRowImpl({
 }
 
 export const SearchResultRow = memo(SearchResultRowImpl);
+
+export function FederatedSearchResultRow({ result, isActive, className }: {
+  result: CompanySearchFederatedResult;
+  isActive?: boolean;
+  className?: string;
+}) {
+  return (
+    <Link
+      to={result.action.href}
+      className={cn(ROW_BASE, "py-3", isActive && "bg-muted/40", className)}
+      data-result-type={result.type}
+      data-result-domain={result.domain}
+      aria-label={`${result.title}, ${result.breadcrumb ?? result.domain}`}
+    >
+      <Hexagon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2">
+          <span className="truncate text-sm font-medium">{result.title}</span>
+          <span className="shrink-0 text-xs text-muted-foreground">{result.type}</span>
+          {result.updatedAt ? <span className="ml-auto shrink-0 text-xs text-muted-foreground">{formatRelativeTime(result.updatedAt)}</span> : null}
+        </div>
+        {result.summary ? <SnippetLine text={result.summary} field={result.type} fallbackLabel={result.breadcrumb ?? result.domain} /> : null}
+      </div>
+    </Link>
+  );
+}
 
 interface SnippetLineProps {
   text: string;

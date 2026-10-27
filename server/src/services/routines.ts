@@ -9,7 +9,7 @@ import { verifyAppWebhook } from "./app-webhook.js";
 import { workflowDelegationForActor } from "./workflows/workflow-delegation.js";
 import crypto from "node:crypto";
 import { verifyFirefliesWebhook } from "./fireflies-webhook.js";
-import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lte, ne, not, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, ilike, inArray, isNotNull, isNull, lte, ne, not, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
@@ -2756,6 +2756,31 @@ export function routineService(
         lastRun: latestRunByRoutine.get(row.id) ?? null,
         activeIssue: activeIssueByRoutine.get(row.id) ?? null,
       }));
+    },
+
+    /** Bounded search projection through the same current-source reader as list(). */
+    search: async (companyId: string, query: string, limit = 20) => {
+      const tokens = query.trim().split(/\s+/).filter(Boolean).slice(0, 8);
+      const tokenConditions = tokens.map((token) => {
+        const escaped = token.replace(/[\\%_]/g, (value) => `\\${value}`);
+        const pattern = `%${escaped}%`;
+        return or(ilike(routines.title, pattern), ilike(routines.description, pattern));
+      });
+      const candidates = await db.select().from(routines).where(and(
+        eq(routines.companyId, companyId),
+        sql`not aw_conversation_routine_source_erased(${companyId}::uuid,${routines.id})`,
+        ...tokenConditions,
+      )).orderBy(desc(routines.updatedAt), asc(routines.title)).limit(Math.min(100, Math.max(1, limit)) + 1);
+      const items: Array<Pick<Routine, "id" | "title" | "description" | "updatedAt">> = [];
+      for (const row of candidates.slice(0, limit)) {
+        try {
+          await assertRoutineSourceAccess(db, row, deps.sourceActor);
+          items.push({ id: row.id, title: row.title, description: row.description, updatedAt: row.updatedAt });
+        } catch (error) {
+          if (!(error instanceof HttpError) || ![403, 404].includes(error.status)) throw error;
+        }
+      }
+      return { items, partial: candidates.length > limit };
     },
 
     getDetail: async (id: string): Promise<RoutineDetail | null> => {

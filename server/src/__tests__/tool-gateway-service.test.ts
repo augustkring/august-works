@@ -45,6 +45,9 @@ import type { PluginToolDispatcher } from "../services/plugin-tool-dispatcher.js
 import type { VercelConnectClient } from "../services/vercel-connect.js";
 import { initializeRunIdentity, reserveSteeredIdentity, reconcileSteeredIdentity } from "../services/run-identity.js";
 import { issueService } from "../services/issues.js";
+import { projectService } from "../services/projects.js";
+import type { AuthorizationActor } from "../services/authorization.js";
+import { createCanonicalHumanProject, seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 import { commitToolActionReview } from "../services/tool-action-review.js";
 import { materializeNativeInteractionResponses } from "../services/native-runtime/native-interaction-bridge.js";
 import { toolActionDeliveryService } from "../services/tool-action-delivery.js";
@@ -53,9 +56,11 @@ import { instanceSettingsService } from "../services/instance-settings.js";
 import { toolAccessService } from "../services/tool-access.js";
 import {
   createToolGatewayService,
+  blenteraPlatformContractHashes,
   ToolGatewayHttpError,
   type ScopedToolGatewayContext,
 } from "../services/tool-gateway.js";
+import { blenteraToolCatalogContractHash } from "../services/agent-native-operation-manifest.js";
 import { canonicalToolArguments, signToolArguments } from "../services/tool-content-guards.js";
 import {
   getEmbeddedPostgresTestSupport,
@@ -66,6 +71,28 @@ const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
 const testToolActionSigningSecret = "test-tool-action-signing-secret";
 type ToolGatewayServiceOptions = NonNullable<Parameters<typeof createToolGatewayService>[1]>;
+
+describe("Blentera platform contract hashes", () => {
+  it("exports stable operation and first-party tool catalog hashes", () => {
+    const first = blenteraPlatformContractHashes();
+    const second = blenteraPlatformContractHashes();
+    expect(first).toEqual(second);
+    expect(first.operationManifestHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(first.toolCatalogContractHash).toMatch(/^[a-f0-9]{64}$/);
+    const contract = {
+      toolId: "blentera.task.list_assigned",
+      operationId: "blentera.task.list_assigned",
+      legacyAliases: ["paperclip-self:list_my_issues"],
+      displayName: "List assigned Tasks",
+      description: "List the current Co-worker's assigned Tasks.",
+      inputSchema: { type: "object", additionalProperties: false },
+      risk: "read",
+    };
+    expect(blenteraToolCatalogContractHash([contract])).not.toBe(
+      blenteraToolCatalogContractHash([{ ...contract, displayName: "Changed display contract" }]),
+    );
+  });
+});
 
 function createTestToolGatewayService(db: ReturnType<typeof createDb>, options: ToolGatewayServiceOptions = {}) {
   return createToolGatewayService(db, {
@@ -400,10 +427,11 @@ describeEmbeddedPostgres("tool gateway service", () => {
 
     const disabledNames = (await gateway.listToolsForSession(session.token))
       .map((tool) => tool.name);
+    expect(disabledNames).not.toContain("blentera.memory.recall");
+    expect(disabledNames).not.toContain("blentera.memory.remember");
+    expect(disabledNames).not.toContain("blentera.memory.correct");
+    expect(disabledNames).not.toContain("blentera.memory.share");
     expect(disabledNames).not.toContain("paperclip-self:recall");
-    expect(disabledNames).not.toContain("paperclip-self:remember");
-    expect(disabledNames).not.toContain("paperclip-self:correct_memory");
-    expect(disabledNames).not.toContain("paperclip-self:share_memory");
 
     const enabledMemoryExperimental = {
       enableCollectiveMemoryV1: true,
@@ -425,12 +453,22 @@ describeEmbeddedPostgres("tool gateway service", () => {
       .map((tool) => tool.name);
     expect(enabledNames).toEqual(
       expect.arrayContaining([
-        "paperclip-self:recall",
-        "paperclip-self:remember",
-        "paperclip-self:correct_memory",
-        "paperclip-self:share_memory",
+        "blentera.memory.recall",
+        "blentera.memory.remember",
+        "blentera.memory.correct",
+        "blentera.memory.share",
       ]),
     );
+    const remember = (await gateway.listToolsForSession(session.token))
+      .find((tool) => tool.name === "blentera.memory.remember");
+    expect(remember).toMatchObject({
+      displayName: "Submit a Memory candidate from the current work",
+      description: "Submit a Memory candidate from the current work.",
+      providerType: "paperclip_self",
+      risk: "write",
+    });
+    expect(remember?.parametersSchema).toMatchObject({ type: "object" });
+    expect(remember?.description).not.toMatch(/Paperclip/i);
   });
 
   it("exposes AI workflow authoring tools only behind the full authoring feature gate", async () => {
@@ -475,7 +513,113 @@ describeEmbeddedPostgres("tool gateway service", () => {
 
     const enabledNames = (await gateway.listToolsForSession(session.token))
       .map((tool) => tool.name);
-    expect(enabledNames).toEqual(expect.arrayContaining(authoringToolNames));
+    expect(enabledNames).toEqual(expect.arrayContaining([
+      "blentera.workflow.draft.create",
+      "blentera.workflow.trigger.add",
+      "blentera.workflow.step.add",
+      "blentera.workflow.step.update",
+      "blentera.workflow.steps.connect",
+      "blentera.workflow.step.remove",
+      "blentera.workflow.step.test",
+      "blentera.workflow.publish.prepare",
+    ]));
+  });
+
+  it("does not let a plugin shadow a reserved first-party name while its feature gate is closed", async () => {
+    const { company, agent, run } = await createRunFixture(db);
+    let pluginCalls = 0;
+    const pluginDispatcher = fakePluginDispatcher();
+    pluginDispatcher.listToolsForAgent = () => [{
+      name: "blentera.workflow.draft.create",
+      displayName: "Plugin replacement",
+      description: "Conflicting plugin fixture.",
+      parametersSchema: { type: "object", properties: {}, additionalProperties: false },
+      pluginId: "fixture-plugin",
+    }];
+    pluginDispatcher.executeTool = async () => {
+      pluginCalls += 1;
+      return { pluginId: "fixture-plugin", toolName: "workflow.draft.create", result: { created: true } };
+    };
+    const gateway = createTestToolGatewayService(db, { pluginToolDispatcher });
+    const session = await gateway.createSession({ companyId: company.id, agentId: agent.id, runId: run.id });
+
+    await expect(gateway.executeTool({
+      sessionToken: session.token,
+      tool: "blentera.workflow.draft.create",
+      parameters: { name: "Plugin shadow attempt", idempotencyKey: "shadow" },
+    })).rejects.toMatchObject({ status: 404, reasonCode: "tool_not_found" });
+    expect(pluginCalls).toBe(0);
+  });
+
+  it("projects only current readable Projects through the canonical service and Human intersection", async () => {
+    const { company, agent, run } = await createRunFixture(db);
+    const userId = `gateway-project-human-${randomUUID()}`;
+    const humanActor = await seedCurrentHumanSourceActor(db, [company.id], userId);
+    await db.update(heartbeatRuns).set({ responsibleUserId: userId }).where(eq(heartbeatRuns.id, run.id));
+    await db.insert(companyMemberships).values({
+      companyId: company.id,
+      principalType: "agent",
+      principalId: agent.id,
+      status: "active",
+      membershipRole: "member",
+    });
+    const humanMembership = await db.select().from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, userId), eq(companyMemberships.status, "active"),
+    )).then(rows => rows[0]!);
+    const verifiedAgentActor: AuthorizationActor = {
+      type: "agent", source: "agent_jwt", companyId: company.id, agentId: agent.id, runId: run.id,
+      onBehalfOfUserId: userId, authenticatedCredentialExpiresAt: Date.now() + 60_000,
+      keyScope: { kind: "standard" }, companyIds: [company.id],
+      memberships: [{ companyId: company.id, membershipRole: "member", status: "active" }],
+      onBehalfOfMemberships: [{ companyId: humanMembership.companyId,
+        membershipRole: humanMembership.membershipRole, status: humanMembership.status }],
+    };
+    const visible = await createCanonicalHumanProject(db, company.id, humanActor, "Gateway-visible project", {
+      description: "Current company project summary.",
+    });
+    const bobId = `gateway-project-bob-${randomUUID()}`;
+    const bobActor = await seedCurrentHumanSourceActor(db, [company.id], bobId);
+    const hidden = await projectService(db).create(company.id, {
+      name: "Gateway-private project",
+      visibility: "private",
+      privacyOwnerUserId: bobId,
+      status: "backlog",
+    }, undefined, bobActor);
+    await db.insert(toolPolicies).values([
+      { companyId: company.id, name: "Allow Project list for fixture", policyType: "allow",
+        selectors: { toolName: "paperclip-self:list_projects" } },
+      { companyId: company.id, name: "Allow Project context for fixture", policyType: "allow",
+        selectors: { toolName: "paperclip-self:get_project_context" } },
+    ]);
+    const gateway = createTestToolGatewayService(db);
+    const session = await gateway.createSession({
+      companyId: company.id,
+      agentId: agent.id,
+      runId: run.id,
+      authorizationActor: verifiedAgentActor,
+    });
+
+    const listed = await gateway.executeTool({
+      sessionToken: session.token,
+      tool: "blentera.project.list",
+      parameters: { limit: 10 },
+    });
+    expect(listed.status).toBe("completed");
+    expect(listed.result).toMatchObject({ data: { projects: [expect.objectContaining({ id: visible.id, name: "Gateway-visible project" })] } });
+    expect(JSON.stringify(listed.result)).not.toContain(hidden.id);
+
+    const detail = await gateway.executeTool({
+      sessionToken: session.token,
+      tool: "blentera.project.get_context",
+      parameters: { projectId: visible.id },
+    });
+    expect(detail.result).toMatchObject({ data: { id: visible.id, name: "Gateway-visible project" } });
+    await expect(gateway.executeTool({
+      sessionToken: session.token,
+      tool: "blentera.project.get_context",
+      parameters: { projectId: hidden.id },
+    })).rejects.toMatchObject({ status: 404, reasonCode: "project_not_found" });
   });
 
   it("executes create_workflow through the governed gateway without publishing", async () => {
@@ -514,7 +658,7 @@ describeEmbeddedPostgres("tool gateway service", () => {
     });
     const result = await gateway.executeTool({
       sessionToken: session.token,
-      tool: "paperclip-self:create_workflow",
+      tool: "blentera.workflow.draft.create",
       parameters: {
         name: "Gateway-authored workflow",
         description: "Created through the governed self-tool",
@@ -533,6 +677,23 @@ describeEmbeddedPostgres("tool gateway service", () => {
         },
       },
     });
+
+    const replay = await gateway.executeTool({
+      sessionToken: session.token,
+      tool: "paperclip-self:create_workflow",
+      parameters: {
+        name: "Gateway-authored workflow",
+        description: "Created through the governed self-tool",
+        idempotencyKey: "gateway-create-v1",
+      },
+    });
+    expect(replay.status).toBe("completed");
+    const workflowId = (value: unknown) => {
+      expect(value).toMatchObject({ data: { workflow: { id: expect.any(String) } } });
+      return (value as { data: { workflow: { id: string } } }).data.workflow.id;
+    };
+    expect(workflowId(replay.result)).toBe(workflowId(result.result));
+    expect(await db.select().from(workflows).where(eq(workflows.companyId, company.id))).toHaveLength(1);
   });
 
   it("gates write tools with an action request and executes only stored reviewed arguments once", async () => {

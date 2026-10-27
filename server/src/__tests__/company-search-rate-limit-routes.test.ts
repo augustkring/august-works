@@ -88,6 +88,11 @@ describe("company search route rate limiting", () => {
 
     expect(search).toHaveBeenCalledTimes(1);
     expect(search.mock.calls[0]?.[1].assigneeUserId).toBe("user-1");
+    expect(search).toHaveBeenCalledWith(
+      "company-1",
+      expect.objectContaining({ assigneeUserId: "user-1" }),
+      expect.objectContaining({ actor: expect.objectContaining({ type: "board", userId: "user-1" }) }),
+    );
   });
 
   it("rejects invalid filter and sort params before invoking search", async () => {

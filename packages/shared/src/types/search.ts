@@ -11,6 +11,47 @@ export type CompanySearchUpdatedWithinOption = (typeof COMPANY_SEARCH_UPDATED_WI
 
 export type CompanySearchResultType = "issue" | "artifact" | "agent" | "project" | "help";
 export type CompanySearchCountType = CompanySearchResultType | "comment" | "document";
+
+/** Results projected from the original owner of each Universal Find domain. */
+export type CompanySearchFederatedDomain =
+  | "routines"
+  | "workflows"
+  | "skills"
+  | "packages"
+  | "knowledge"
+  | "people"
+  | "insights"
+  | "apps"
+  | "settings"
+  | "navigation";
+
+export interface CompanySearchFederatedResult {
+  id: string;
+  domain: CompanySearchFederatedDomain;
+  type: string;
+  title: string;
+  summary: string | null;
+  breadcrumb: string | null;
+  canonicalRef: string;
+  href: string;
+  updatedAt: string | null;
+  score: number;
+  whyMatched: string[];
+  action: { kind: "navigate"; href: string };
+}
+
+export interface CompanySearchFederatedDomainCoverage {
+  domain: CompanySearchFederatedDomain;
+  status: "complete" | "partial" | "unavailable";
+  message: string | null;
+}
+
+export interface CompanySearchFederation {
+  results: CompanySearchFederatedResult[];
+  countsByDomain: Partial<Record<CompanySearchFederatedDomain, number>>;
+  coverage: CompanySearchFederatedDomainCoverage[];
+  complete: boolean;
+}
 export type CompanySearchIssueFilterKey =
   | "status"
   | "assigneeAgentId"
@@ -113,6 +154,8 @@ export interface CompanySearchResponse {
   limit: number;
   offset: number;
   results: CompanySearchResult[];
+  /** Present on federated `all` searches; legacy scoped searches omit it. */
+  federation?: CompanySearchFederation;
   countsByType: Record<CompanySearchCountType, number>;
   filterOptionCounts: CompanySearchFilterOptionCounts;
   zeroResults: CompanySearchZeroResults | null;

@@ -23062,7 +23062,23 @@ export function heartbeatService(
 
         const currentUserRedactionOptions =
           await getCurrentUserRedactionOptions();
-        const onLog = async (stream: "stdout" | "stderr", chunk: string) => {
+        const onLog = (stream: "stdout" | "stderr", chunk: string) => {
+          let diagnosticStage = "source_access_check";
+          let settled = false;
+          const diagnosticStartedAt = Date.now();
+          const diagnosticTimer = process.env.PAPERCLIP_NATIVE_CONCURRENT_CHAT_DIAGNOSTICS === "1"
+            ? setTimeout(() => {
+                if (!settled) logger.warn({
+                  runId: run.id,
+                  stream,
+                  stage: diagnosticStage,
+                  elapsedMs: Date.now() - diagnosticStartedAt,
+                  chunkBytes: Buffer.byteLength(chunk),
+                }, "Native output callback remains pending");
+              }, 5_000)
+            : null;
+          diagnosticTimer?.unref?.();
+          const operation = (async () => {
           try {
             await assertNativeAnalyticalRunPayloadAccess(db, run.companyId, run.id);
           } catch (error) {
@@ -23086,6 +23102,7 @@ export function heartbeatService(
                   }
                 | undefined;
               try {
+                diagnosticStage = "terminal_run_recheck";
                 [latestRun] = await db
                   .select({
                     id: heartbeatRuns.id,
@@ -23124,6 +23141,7 @@ export function heartbeatService(
             }
             throw error;
           }
+          diagnosticStage = "redact_and_buffer";
           const sanitizedChunk = compactRunLogChunk(
             redactCurrentUserText(chunk, currentUserRedactionOptions),
           );
@@ -23137,6 +23155,7 @@ export function heartbeatService(
           const chunkSeq = outputSeq;
           let appendedBytes = 0;
           if (handle) {
+            diagnosticStage = "run_log_append";
             appendedBytes = await runLogStore.append(handle, {
               stream,
               chunk: sanitizedChunk,
@@ -23151,6 +23170,7 @@ export function heartbeatService(
             stream,
             bytes: persistedLogBytes,
           };
+          diagnosticStage = "output_progress_flush";
           await flushOutputProgress();
 
           // Streamed CLI output is real run activity: keep the in-memory
@@ -23183,6 +23203,7 @@ export function heartbeatService(
                 )
               : sanitizedChunk;
 
+          diagnosticStage = "publish_live_event";
           publishLiveEvent({
             companyId: run.companyId,
             type: "heartbeat.run.log",
@@ -23197,6 +23218,12 @@ export function heartbeatService(
               truncated: payloadChunk.length !== sanitizedChunk.length,
             },
           });
+          })();
+          void operation.then(
+            () => { settled = true; if (diagnosticTimer) clearTimeout(diagnosticTimer); },
+            () => { settled = true; if (diagnosticTimer) clearTimeout(diagnosticTimer); },
+          );
+          return operation;
         };
         if (runScopedMentionedSkillKeys.length > 0) {
           await onLog(

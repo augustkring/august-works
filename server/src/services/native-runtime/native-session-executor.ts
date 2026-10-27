@@ -138,6 +138,7 @@ import {
   nativeRunFinalizations,
   nativeRunResults,
   memoryRecords,
+  orchestrationPlans,
   orchestrationModelReservations,
   orchestrationWorkerAttempts,
   toolInvocations,
@@ -8091,6 +8092,7 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
   contextRead?: NativeContextReadBinding;
   projectRead?: NativeProjectToolResultSource;
   projectCreate?: NativeManagedProjectCreateCapture;
+  outputCapture?: NativeModelOutputCapture | null;
 }): Promise<void> {
   let diagnosticPhase: "capture_binding" | "transaction_locks" | "run_receipt" | "provider_dispatch" |
     "project_source" | "memory_source" | "context_source" | "document_task_source" | "receipt_build" | "receipt_persist" | "lease_renew" = "capture_binding";
@@ -8237,6 +8239,17 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
           }) : [];
       if (matchingModelCalls.length !== 1 || typeof matchingModelCalls[0]!.reservationId !== "string")
         throw new Error("managed_opencode_tool_result_binding_invalid");
+      const managedOutputCapture = input.outputCapture;
+      const managedUse = managedOutputCapture?.managedOpenCodeToolUse;
+      const outputCaptureMatchesCall = Boolean(managedOutputCapture && managedOutputCapture.runId === input.runId &&
+        managedUse?.callId === input.callId && managedUse.toolName === input.tool &&
+        managedUse.argumentsHash === input.argumentsHash && managedUse.responseContentHash === matchingModelCalls[0]!.responseContentHash &&
+        managedOutputCapture.dispatch.kind === "worker_model_dispatch" &&
+        managedOutputCapture.dispatch.runId === input.runId &&
+        managedOutputCapture.dispatch.reservationId === matchingModelCalls[0]!.reservationId &&
+        managedOutputCapture.dispatch.callId === matchingModelCalls[0]!.callId &&
+        managedOutputCapture.dispatch.requestHash === matchingModelCalls[0]!.requestHash &&
+        managedOutputCapture.dispatch.wireBodyHash === matchingModelCalls[0]!.wireBodyHash);
       let returnedProjectSource: Extract<NativePayloadSourceInput, { kind: "project" }> | null = null;
       let createdProjectSource: Extract<NativePayloadSourceInput, { kind: "project" }> | null = null;
       let createdProjectWorkspaceSources: Extract<NativePayloadSourceInput, { kind: "project_workspace" }>[] = [];
@@ -8418,10 +8431,18 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
           companyId: input.companyId, issueId: input.issueId, agentId: input.agentId,
           responsibleUserId: run.responsibleUserId, runId: input.runId,
         });
+        const planBackedDraftCall = matchingModelCalls[0]!.modelPurpose === "worker_model" &&
+          resultTask.parentId === null && resultTask.status === "backlog" && outputCaptureMatchesCall;
+        const [draftPlan] = planBackedDraftCall ? await tx.select().from(orchestrationPlans).where(and(
+          eq(orchestrationPlans.companyId, input.companyId), eq(orchestrationPlans.issueId, input.issueId),
+          eq(orchestrationPlans.status, "running"), eq(orchestrationPlans.actionClass, "internal_draft"),
+          eq(orchestrationPlans.riskClass, "C0"), isNull(orchestrationPlans.erasedAt),
+        )).for("share") : [];
+        const planBackedStandaloneDraft = planBackedDraftCall && Boolean(draftPlan);
         const unparentedConversationTask = resultTask.parentId === null && (conversationTask || workerConversationRootCurrent);
         const managedTaskParentBindingValid = typeof resultTask.id === "string" &&
           (typeof resultTask.parentId === "string" || resultTask.parentId === null) &&
-          (resultTask.parentId === input.issueId || unparentedConversationTask);
+          (resultTask.parentId === input.issueId || unparentedConversationTask || planBackedStandaloneDraft);
         if (!managedTaskParentBindingValid && process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1") {
           const workerConversationSnapshot = nativePayloadSourceSnapshotSchema.safeParse(workerConversationRoot?.payloadSourceSnapshot);
           const workerConversationInputs = workerConversationSnapshot.success ? workerConversationSnapshot.data.inputs : [];
@@ -8456,7 +8477,7 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
               workerConversationInputs[0].issueId === input.issueId,
             rootSnapshotPolicyEmpty: workerConversationSnapshot.success &&
               Object.values(workerConversationSnapshot.data.policy).every(values => values.length === 0),
-            unparentedConversationTask,
+            unparentedConversationTask, planBackedDraftCall, draftPlanCurrent: Boolean(draftPlan), outputCaptureMatchesCall,
           }));
         }
         if (!managedTaskParentBindingValid)
@@ -8466,11 +8487,17 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         const createdTaskId = resultTask.id as string;
         const [child] = await tx.select({ id: issues.id, identifier: issues.identifier, title: issues.title,
           description: issues.description, status: issues.status, priority: issues.priority, parentId: issues.parentId,
+          createdByAgentId: issues.createdByAgentId, originRunId: issues.originRunId, responsibleUserId: issues.responsibleUserId,
+          originKind: issues.originKind, originId: issues.originId,
           sourceVersion: sql<string>`extract(epoch from ${issues.updatedAt})::text`,
           ownerBodyHash: sql<string>`public.aw_native_payload_body_hash('issue',to_jsonb(${issues}))`,
         }).from(issues).where(and(eq(issues.companyId, input.companyId), eq(issues.id, createdTaskId),
-          unparentedConversationTask ? isNull(issues.parentId) : eq(issues.parentId, input.issueId)));
+          unparentedConversationTask || planBackedStandaloneDraft ? isNull(issues.parentId) : eq(issues.parentId, input.issueId)));
         if (!child) throw new Error("managed_opencode_tool_result_binding_invalid");
+        if (planBackedStandaloneDraft && (child.createdByAgentId !== input.agentId || child.originRunId !== input.runId ||
+          child.responsibleUserId !== run.responsibleUserId || child.status !== "backlog" || child.originKind !== "manual" ||
+          typeof child.originId !== "string" || !child.originId.startsWith(`paperclip-runner:create-task:${input.issueId}:`)))
+          throw new Error("managed_opencode_tool_result_binding_invalid");
         const taskInput = nativePayloadSourceInputSchema.parse({ kind: "task", issueId: child.id,
           sourceVersion: child.sourceVersion, contentHash: child.ownerBodyHash });
         if (taskInput.kind !== "task") throw new Error("managed_opencode_tool_result_binding_invalid");
@@ -10287,6 +10314,7 @@ async function executePaperclipNativeSessionWithinScope(
                     await recordManagedOpenCodeToolResult({ db: input.db, runId,
                       companyId: input.execution.binding.companyId, issueId: input.execution.binding.issueId,
                       agentId: input.execution.binding.agentId, leaseOwner, attempt, controller,
+                      outputCapture: managedOpenCodeOutputCaptureRef?.value ?? null,
                       ...call });
                   } finally {
                     if (managedOpenCodeOutputCaptureRef) managedOpenCodeOutputCaptureRef.value = null;

@@ -6,6 +6,8 @@ export const executionManifestCapabilitySchema = z.object({ type: z.enum(["nativ
 export const agentExecutionManifestSchema = z.object({
   schemaVersion: z.literal(5), runId: z.string().uuid(), companyId: z.string().uuid(), agentId: z.string().uuid(), agentIdentityId: z.string().uuid(), homeCompanyId: z.string().uuid(), responsibleUserId: z.string().min(1).max(200).nullable(),
   agentDefinitionVersion: z.object({ revisionId: z.string().uuid(), definitionHash: z.string().regex(/^[a-f0-9]{64}$/), procedureSnapshotHash: z.string().regex(/^[a-f0-9]{64}$/).optional(), version: z.number().int().positive().optional() }).strict().optional(),
+  platformSkill: z.object({ key: z.literal("blentera-platform"), version: z.string().min(1).max(100), digest: z.string().regex(/^sha256:[a-f0-9]{64}$/), sourceSha: z.string().regex(/^[a-f0-9]{40}$/) }).strict().optional(),
+  agentNativeContract: z.object({ operationManifestHash: z.string().regex(/^[a-f0-9]{64}$/), toolCatalogContractHash: z.string().regex(/^[a-f0-9]{64}$/), protocolProfile: z.literal("2026-07-28"), runtimeAdapter: z.string().min(1).max(100), runtimeCapabilitySnapshotHash: z.string().min(1).max(100) }).strict().optional(),
   executionScope: agentExecutionScopeSchema,
   rolePack: z.object({ systemKey: z.string().max(100), systemVersion: z.string().max(200), pins: z.array(z.object({ rolePackId: z.string().uuid(), versionId: z.string().uuid(), scopeType: z.string().max(20), scopeId: z.string().uuid() }).strict()).max(100) }).strict().nullable(),
   contextManifests: z.array(z.object({ companyId: z.string().uuid(), contextManifestId: z.string().uuid() }).strict()).min(1).max(9),

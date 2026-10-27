@@ -7,9 +7,27 @@ import { resolveWorkflowConnectorSession, type WorkflowGatewayContext } from "./
 import { validateWorkflowOutput, WorkflowOutputSchemaError } from "./workflows/workflow-output-schema.js";
 import { COGNEE_STDIO_TEMPLATE, cogneeCloudUrl, callCogneeCloud } from "./cognee-connection.js";
 import { HttpError } from "../errors.js";
-import type { AuthorizationActor } from "./authorization.js";
+import {
+  authorizationService,
+  canActorReadProjectPrivacy,
+  issueReadSqlCondition,
+  projectReadSqlCondition,
+  type AuthorizationActor,
+} from "./authorization.js";
+import { projectService } from "./projects.js";
+import { withCurrentTaskSourceRead } from "./task-source-read-scope.js";
+import { decisionSearchService } from "./decisions.js";
+import { processFindingService } from "./process-findings.js";
+import { withNativeAnalyticalReader } from "./analytical-reader.js";
 import type { NativeModelOutputCapture } from "./native-runtime/native-execution-input.js";
 import { nativeSha256 } from "./native-runtime/canonical.js";
+import {
+  AGENT_NATIVE_OPERATION_MANIFEST,
+  agentNativeOperationForLegacyToolName,
+  agentNativeOperationForToolName,
+  agentNativeOperationManifestHash,
+  blenteraToolCatalogContractHash,
+} from "./agent-native-operation-manifest.js";
 import { claimSlackRateLimitRetry } from "./connectors/slack-retry.js";
 import { resolveSlackTaskAuthority } from "./connectors/slack-authority.js";
 import { SLACK_TOOLS } from "@paperclipai/shared";
@@ -336,6 +354,11 @@ export interface ToolGatewayDescriptor extends AgentToolDescriptor {
   catalogEntryId?: string | null;
   upstreamToolName?: string | null;
   providerMetadata?: ConnectedMcpGatewayMetadata | Record<string, unknown>;
+}
+
+export interface BlenteraPlatformContractHashes {
+  operationManifestHash: string;
+  toolCatalogContractHash: string;
 }
 
 export interface ToolGatewaySession {
@@ -1263,6 +1286,60 @@ const BUILTIN_TOOLS: ToolGatewayDescriptor[] = [
     risk: "read",
   },
   {
+    name: "paperclip-self:list_projects",
+    displayName: "List readable Projects",
+    description: "List current non-archived Projects readable by this Co-worker and its represented Human.",
+    parametersSchema: {
+      type: "object",
+      properties: { limit: { type: "integer", minimum: 1, maximum: 50 } },
+      additionalProperties: false,
+    },
+    pluginId: "paperclip-self",
+    providerType: "paperclip_self",
+    risk: "read",
+  },
+  {
+    name: "paperclip-self:get_project_context",
+    displayName: "Read a Project summary",
+    description: "Read one current Project summary after current Project and retained Task-source access checks.",
+    parametersSchema: {
+      type: "object",
+      properties: { projectId: { type: "string", format: "uuid" } },
+      required: ["projectId"],
+      additionalProperties: false,
+    },
+    pluginId: "paperclip-self",
+    providerType: "paperclip_self",
+    risk: "read",
+  },
+  {
+    name: "paperclip-self:get_my_agent_context",
+    displayName: "Read my Co-worker status",
+    description: "Read a bounded identity and operating-status summary for the current verified Co-worker. No credentials, configuration, permissions, or other Co-workers are returned.",
+    parametersSchema: { type: "object", properties: {}, additionalProperties: false },
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "read",
+  },
+  {
+    name: "paperclip-self:search_decisions",
+    displayName: "Search readable Decisions",
+    description: "Search Decisions only when the current Co-worker and represented Human can read the origin and every referenced Task. Search does not decide or execute a Decision.",
+    parametersSchema: {
+      type: "object", properties: { query: { type: "string", minLength: 1, maxLength: 500 }, limit: { type: "integer", minimum: 1, maximum: 20 } },
+      required: ["query"], additionalProperties: false,
+    },
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "read",
+  },
+  {
+    name: "paperclip-self:search_process_findings",
+    displayName: "Search authorized Insights",
+    description: "Search current process findings only through the retained native analytical reader boundary. Findings are evidence for Human interpretation, not calibrated probability or an operational decision.",
+    parametersSchema: {
+      type: "object", properties: { query: { type: "string", maxLength: 500 }, limit: { type: "integer", minimum: 1, maximum: 20 } },
+      additionalProperties: false,
+    },
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "read",
+  },
+  {
     name: "mcp-stdio-fixture:increment_counter",
     displayName: "Stdio runtime counter",
     description:
@@ -1337,6 +1414,57 @@ const VIRTUAL_RUN_TOOL: ToolGatewayDescriptor = {
 };
 
 const VIRTUAL_TOOLS = [VIRTUAL_SEARCH_TOOLS, VIRTUAL_RUN_TOOL];
+
+function blenteraSelfToolContractCatalog() {
+  const catalog = AGENT_NATIVE_OPERATION_MANIFEST.map((operation) => {
+    const legacyName = operation.legacyAliases[0];
+    const tool = BUILTIN_TOOLS.find((candidate) => candidate.name === legacyName && candidate.providerType === "paperclip_self");
+    if (!tool) throw new Error("agent_native_operation_tool_binding_missing");
+    return {
+      toolId: operation.toolId,
+      operationId: operation.operationId,
+      legacyAliases: operation.legacyAliases,
+      displayName: operation.customerJob.replace(/\.$/, ""),
+      description: operation.customerJob,
+      inputSchema: tool.parametersSchema,
+      risk: tool.risk,
+    };
+  });
+  const manifestAliases = catalog.flatMap((operation) => operation.legacyAliases).sort();
+  const builtinSelfNames = BUILTIN_TOOLS
+    .filter((tool) => tool.providerType === "paperclip_self")
+    .map((tool) => tool.name)
+    .sort();
+  if (JSON.stringify(manifestAliases) !== JSON.stringify(builtinSelfNames)) {
+    throw new Error("agent_native_operation_catalog_incomplete");
+  }
+  return catalog;
+}
+
+function assertBlenteraSelfToolCatalogComplete(): void {
+  // A first-party tool added to Tool Gateway must acquire canonical coverage
+  // metadata before it can be discovered or executed through the model path.
+  blenteraSelfToolContractCatalog();
+}
+
+/** Stable contracts used by the reserved Blentera Platform Skill release. */
+export function blenteraPlatformContractHashes(): BlenteraPlatformContractHashes {
+  return {
+    operationManifestHash: agentNativeOperationManifestHash(),
+    toolCatalogContractHash: blenteraToolCatalogContractHash(blenteraSelfToolContractCatalog()),
+  };
+}
+
+function blenteraFirstPartyToolForDiscovery(tool: ToolGatewayDescriptor): ToolGatewayDescriptor {
+  const operation = agentNativeOperationForLegacyToolName(tool.name);
+  if (!operation) return tool;
+  return {
+    ...tool,
+    name: operation.toolId,
+    displayName: operation.customerJob.replace(/\.$/, ""),
+    description: operation.customerJob,
+  };
+}
 
 const MEMORY_SELF_TOOL_NAMES = new Set([
   "paperclip-self:recall",
@@ -1621,9 +1749,10 @@ export function createToolGatewayService(
     };
   }
 
-  async function staticToolsForSession(
+  async function eligibleStaticToolsForSession(
     session: ToolGatewaySession,
   ): Promise<ToolGatewayDescriptor[]> {
+    assertBlenteraSelfToolCatalogComplete();
     const tools = allTools();
     if (!session.agentId) {
       return tools.filter((tool) => tool.providerType !== "paperclip_self");
@@ -1646,6 +1775,12 @@ export function createToolGatewayService(
       }
       return true;
     });
+  }
+
+  async function staticToolsForSession(
+    session: ToolGatewaySession,
+  ): Promise<ToolGatewayDescriptor[]> {
+    return (await eligibleStaticToolsForSession(session)).map(blenteraFirstPartyToolForDiscovery);
   }
 
   async function connectedMcpToolsForCompany(
@@ -3029,12 +3164,16 @@ export function createToolGatewayService(
     idempotencyKey?: string | null;
     consumeRateLimit?: boolean;
   }): ToolAccessDecisionInput {
+    const operation = agentNativeOperationForToolName(input.tool.name);
+    const policyTool = operation
+      ? { ...input.tool, name: operation.legacyAliases[0] }
+      : input.tool;
     return policyInputForAgentTool({
       companyId: input.session.companyId,
       agentId: input.session.agentId,
       actorType: input.session.actorType,
       actorId: input.session.actorId ?? input.session.gatewayTokenId ?? null,
-      tool: input.tool,
+      tool: policyTool,
       parameters: input.parameters,
       idempotencyKey: input.idempotencyKey,
       consumeRateLimit: input.consumeRateLimit,
@@ -3104,7 +3243,10 @@ export function createToolGatewayService(
   }
 
   function findStaticTool(toolName: string): ToolGatewayDescriptor {
-    const tool = allTools().find((candidate) => candidate.name === toolName);
+    const operation = agentNativeOperationForToolName(toolName);
+    const tool = (operation ? BUILTIN_TOOLS.find((candidate) =>
+      candidate.providerType === "paperclip_self" && operation.legacyAliases.includes(candidate.name)) : undefined) ??
+      allTools().find((candidate) => candidate.name === toolName);
     if (!tool) {
       throw new ToolGatewayHttpError(
         404,
@@ -3124,14 +3266,20 @@ export function createToolGatewayService(
     const hasOnDemandTargets = connectedTools.some(isOnDemandRemoteTool);
     const virtualTools = hasOnDemandTargets ? VIRTUAL_TOOLS : [];
     const githubBotTools = await githubBotToolsForSession(db, session);
-    const tool = [...await staticToolsForSession(session), ...connectedTools, ...virtualTools, ...githubBotTools, ...await slackToolsForSession(db, session)]
+    const candidates = [...await eligibleStaticToolsForSession(session), ...connectedTools, ...virtualTools, ...githubBotTools, ...await slackToolsForSession(db, session)]
       .filter(
         (candidate) =>
           session.agentId ||
           (candidate.providerType !== "paperclip_self" &&
             candidate.providerType !== "paperclip_plugin"),
-      )
-      .find((candidate) => candidate.name === toolName);
+      );
+    const operation = agentNativeOperationForToolName(toolName);
+    const operationTool = operation ? candidates.find((candidate) =>
+      candidate.providerType === "paperclip_self" && operation.legacyAliases.includes(candidate.name)) : undefined;
+    // Canonical operation IDs and historical aliases are reserved names. A
+    // disabled first-party tool must stay unavailable instead of falling
+    // through to a same-named plugin/connector candidate.
+    const tool = operation ? operationTool : candidates.find((candidate) => candidate.name === toolName);
     if (!tool) {
       throw new ToolGatewayHttpError(
         404,
@@ -3139,6 +3287,9 @@ export function createToolGatewayService(
         "tool_not_found",
         { tool: toolName },
       );
+    }
+    if (tool.providerType === "paperclip_self" && !agentNativeOperationForLegacyToolName(tool.name)) {
+      throw new ToolGatewayHttpError(503, "First-party operation metadata is unavailable", "operation_manifest_incomplete");
     }
     const guestBotConnection = await githubGuestBotConnectionForSession(db, session);
     if (guestBotConnection && tool.connectionId && (tool.connectionId !== guestBotConnection || tool.providerType !== "paperclip_github_chat"))
@@ -3485,24 +3636,29 @@ export function createToolGatewayService(
           "agent_context_required",
         );
       }
+      const actor = currentSessionMemoryActor(session);
+      if (!actor) throw new ToolGatewayHttpError(403,
+        "Task discovery requires the original verified Agent credential and represented Human", "task_reader_authority_unavailable");
       const limit = Math.max(1, Math.min(50, Number(params.limit ?? 10) || 10));
-      const rows = await db
-        .select({
-          id: issues.id,
-          identifier: issues.identifier,
-          title: issues.title,
-          status: issues.status,
-          priority: issues.priority,
-        })
-        .from(issues)
-        .where(
-          and(
+      const rows = await withCurrentTaskSourceRead(db, session.companyId, actor, async (queryDb) => {
+        const readCondition = await issueReadSqlCondition(queryDb, actor);
+        return queryDb
+          .select({
+            id: issues.id,
+            identifier: issues.identifier,
+            title: issues.title,
+            status: issues.status,
+            priority: issues.priority,
+          })
+          .from(issues)
+          .where(and(
             eq(issues.companyId, session.companyId),
-            eq(issues.assigneeAgentId, session.agentId),
-          ),
-        )
-        .orderBy(desc(issues.updatedAt))
-        .limit(limit);
+            eq(issues.assigneeAgentId, session.agentId!),
+            readCondition,
+          ))
+          .orderBy(desc(issues.updatedAt))
+          .limit(limit);
+      }, true, true);
 
       return {
         content: JSON.stringify(rows),
@@ -3518,6 +3674,9 @@ export function createToolGatewayService(
           "agent_context_required",
         );
       }
+      const actor = currentSessionMemoryActor(session);
+      if (!actor) throw new ToolGatewayHttpError(403,
+        "Task context requires the original verified Agent credential and represented Human", "task_reader_authority_unavailable");
       const issueId =
         typeof params.issueId === "string" ? params.issueId : session.issueId;
       if (!issueId) {
@@ -3527,21 +3686,37 @@ export function createToolGatewayService(
           "missing_issue_id",
         );
       }
-      const [issue] = await db
-        .select({
-          id: issues.id,
-          identifier: issues.identifier,
-          title: issues.title,
-          description: issues.description,
-          status: issues.status,
-          priority: issues.priority,
-        })
-        .from(issues)
-        .where(
-          and(eq(issues.companyId, session.companyId), eq(issues.id, issueId)),
-        )
-        .limit(1);
-      if (!issue) {
+      const result = await withCurrentTaskSourceRead(db, session.companyId, actor, async (queryDb) => {
+        const readCondition = await issueReadSqlCondition(queryDb, actor);
+        const [issue] = await queryDb
+          .select({
+            id: issues.id,
+            identifier: issues.identifier,
+            title: issues.title,
+            description: issues.description,
+            status: issues.status,
+            priority: issues.priority,
+          })
+          .from(issues)
+          .where(and(eq(issues.companyId, session.companyId), eq(issues.id, issueId), readCondition))
+          .limit(1)
+          .for("share");
+        if (!issue) return null;
+
+        const [planDocument] = await queryDb
+          .select({
+            documentId: documents.id,
+            title: documents.title,
+            latestRevisionId: documents.latestRevisionId,
+            latestRevisionNumber: documents.latestRevisionNumber,
+          })
+          .from(issueDocuments)
+          .innerJoin(documents, eq(issueDocuments.documentId, documents.id))
+          .where(and(eq(issueDocuments.issueId, issue.id), eq(issueDocuments.key, "plan")))
+          .limit(1);
+        return { issue, planDocument: planDocument ?? null };
+      }, true, true);
+      if (!result) {
         throw new ToolGatewayHttpError(
           404,
           "Issue not found",
@@ -3549,27 +3724,111 @@ export function createToolGatewayService(
         );
       }
 
-      const [planDocument] = await db
-        .select({
-          documentId: documents.id,
-          title: documents.title,
-          latestRevisionId: documents.latestRevisionId,
-          latestRevisionNumber: documents.latestRevisionNumber,
-        })
-        .from(issueDocuments)
-        .innerJoin(documents, eq(issueDocuments.documentId, documents.id))
-        .where(
-          and(
-            eq(issueDocuments.issueId, issue.id),
-            eq(issueDocuments.key, "plan"),
-          ),
-        )
-        .limit(1);
-
       return {
-        content: JSON.stringify({ issue, planDocument: planDocument ?? null }),
-        data: { issue, planDocument: planDocument ?? null },
+        content: JSON.stringify(result),
+        data: result,
       };
+    }
+
+    if (tool.name === "paperclip-self:get_my_agent_context") {
+      if (!session.agentId || !session.runId) throw new ToolGatewayHttpError(403,
+        "Co-worker status requires an Agent-scoped current run", "agent_context_required");
+      const actor = currentSessionMemoryActor(session);
+      if (!actor) throw new ToolGatewayHttpError(403,
+        "Co-worker status requires the original verified Agent credential and represented Human", "agent_reader_authority_unavailable");
+      const data = await withCurrentTaskSourceRead(db, session.companyId, actor, async (queryDb) => {
+        const [agent] = await queryDb.select({ id: agents.id, name: agents.name, title: agents.title,
+          role: agents.role, status: agents.status, reportsTo: agents.reportsTo, lastHeartbeatAt: agents.lastHeartbeatAt,
+          updatedAt: agents.updatedAt }).from(agents).where(and(
+          eq(agents.companyId, session.companyId), eq(agents.id, session.agentId!),
+        )).limit(1).for("share");
+        const [run] = await queryDb.select({ id: heartbeatRuns.id, status: heartbeatRuns.status,
+          startedAt: heartbeatRuns.startedAt, finishedAt: heartbeatRuns.finishedAt }).from(heartbeatRuns).where(and(
+          eq(heartbeatRuns.companyId, session.companyId), eq(heartbeatRuns.id, session.runId!),
+          eq(heartbeatRuns.agentId, session.agentId!), eq(heartbeatRuns.responsibleUserId, actor.onBehalfOfUserId!),
+          eq(heartbeatRuns.status, "running"),
+        )).limit(1).for("share");
+        return agent && run ? { agent, run } : null;
+      }, true, true);
+      if (!data) throw new ToolGatewayHttpError(404, "Current Co-worker run not found", "agent_run_not_found");
+      return { content: JSON.stringify(data), data };
+    }
+
+    if (tool.name === "paperclip-self:search_decisions") {
+      if (!session.agentId || !session.runId) throw new ToolGatewayHttpError(403,
+        "Decision search requires an Agent-scoped current run", "agent_context_required");
+      const actor = currentSessionMemoryActor(session);
+      if (!actor) throw new ToolGatewayHttpError(403,
+        "Decision search requires the original verified Agent credential and represented Human", "decision_reader_authority_unavailable");
+      const query = typeof params.query === "string" ? params.query.trim() : "";
+      if (!query || query.length > 500) throw new ToolGatewayHttpError(400, "A search query of 1 to 500 characters is required", "invalid_parameters");
+      const data = await decisionSearchService(db).search(session.companyId, actor, query,
+        typeof params.limit === "number" ? params.limit : 20);
+      return { content: JSON.stringify(data), data };
+    }
+
+    if (tool.name === "paperclip-self:search_process_findings") {
+      if (!session.agentId || !session.runId) throw new ToolGatewayHttpError(403,
+        "Insight search requires an Agent-scoped current run", "agent_context_required");
+      const actor = currentSessionMemoryActor(session);
+      if (!actor) throw new ToolGatewayHttpError(403,
+        "Insight search requires the original verified Agent credential and represented Human", "insight_reader_authority_unavailable");
+      const query = typeof params.query === "string" ? params.query.trim() : "";
+      if (query.length > 500) throw new ToolGatewayHttpError(400, "Search query is too long", "invalid_parameters");
+      const data = await withNativeAnalyticalReader(db, session.companyId, actor,
+        () => processFindingService(db).search(session.companyId, actor, query,
+          typeof params.limit === "number" ? params.limit : 20), "task");
+      return { content: JSON.stringify(data), data };
+    }
+
+    if (tool.name === "paperclip-self:list_projects" || tool.name === "paperclip-self:get_project_context") {
+      if (!session.agentId) throw new ToolGatewayHttpError(403,
+        "Project tools require an agent-scoped gateway session", "agent_context_required");
+      const actor = currentSessionMemoryActor(session);
+      if (!actor) throw new ToolGatewayHttpError(403,
+        "Project reads require the original verified Agent credential and represented Human", "project_reader_authority_unavailable");
+      const requestedProjectId = tool.name === "paperclip-self:get_project_context"
+        ? typeof params.projectId === "string" && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(params.projectId) ? params.projectId.toLowerCase() : null
+        : null;
+      if (tool.name === "paperclip-self:get_project_context" && !requestedProjectId) {
+        throw new ToolGatewayHttpError(400, "projectId must be a UUID", "invalid_parameters");
+      }
+      const limit = Math.max(1, Math.min(50, Number(params.limit ?? 20) || 20));
+      const summaries = await withCurrentTaskSourceRead(db, session.companyId, actor, async (queryDb) => {
+        const projectCondition = await projectReadSqlCondition(queryDb, actor);
+        const candidateQuery = queryDb.select({ id: projects.id }).from(projects).where(and(
+          eq(projects.companyId, session.companyId),
+          ...(requestedProjectId ? [] : [isNull(projects.archivedAt)]),
+          projectCondition,
+          ...(requestedProjectId ? [eq(projects.id, requestedProjectId)] : []),
+        )).orderBy(desc(projects.updatedAt), asc(projects.name)).limit(requestedProjectId ? 1 : limit).for("share");
+        const ids = await candidateQuery;
+        if (ids.length === 0) return [];
+        const hydrated = await projectService(queryDb).listByIds(session.companyId, ids.map(row => row.id));
+        const visible: typeof hydrated = [];
+        for (const project of hydrated) {
+          if (!(await canActorReadProjectPrivacy(queryDb, actor, project))) continue;
+          const decision = await authorizationService(queryDb).decide({ actor, action: "project:read",
+            resource: { type: "project", companyId: session.companyId, projectId: project.id } });
+          if (!decision.allowed) continue;
+          visible.push({
+            id: project.id,
+            name: project.name,
+            description: project.description,
+            status: project.status,
+            visibility: project.visibility,
+            targetDate: project.targetDate,
+            leadAgentId: project.leadAgentId,
+            archivedAt: project.archivedAt,
+            updatedAt: project.updatedAt,
+          });
+        }
+        return visible;
+      }, true, true);
+      if (requestedProjectId && summaries.length === 0) throw new ToolGatewayHttpError(404,
+        "Project not found", "project_not_found");
+      const data = tool.name === "paperclip-self:get_project_context" ? summaries[0] : { projects: summaries };
+      return { content: JSON.stringify(data), data };
     }
 
     if (tool.name === "paperclip-self:propose_foundation_change") {

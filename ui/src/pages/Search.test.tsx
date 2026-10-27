@@ -292,6 +292,36 @@ describe("Search page", () => {
     });
   });
 
+  it("renders federated owner results with typed destinations and discloses incomplete domains", async () => {
+    searchApiMock.search.mockResolvedValueOnce(emptyResponse({
+      federation: {
+        results: [{
+          id: "routine-1", domain: "routines", type: "routine", title: "Review pipeline",
+          summary: "A current company routine", breadcrumb: "Routines", canonicalRef: "routines:company-1:routine-1",
+          href: "/routines/routine-1", updatedAt: "2026-10-27T00:00:00.000Z", score: 100,
+          whyMatched: ["title"], action: { kind: "navigate", href: "/routines/routine-1" },
+        }],
+        countsByDomain: { routines: 1 },
+        coverage: [{ domain: "routines", status: "partial", message: "Some routines may be outside this bounded search page." },
+          { domain: "apps", status: "unavailable", message: "Apps search is temporarily unavailable." }],
+        complete: false,
+      },
+    }));
+
+    const { root } = renderSearch("/search?q=pipeline", container);
+    try {
+      await waitForAssertion(() => {
+        const result = container.querySelector<HTMLAnchorElement>('a[data-result-domain="routines"]');
+        expect(result?.getAttribute("href")).toBe("/routines/routine-1");
+        expect(result?.textContent).toContain("Review pipeline");
+        expect(container.textContent).toContain("Apps search is temporarily unavailable.");
+        expect(container.textContent).toContain("Some routines may be outside this bounded search page.");
+      });
+    } finally {
+      flushSync(() => root.unmount());
+    }
+  });
+
   it("renders Help articles as explicitly preview-scoped Mintlify links", async () => {
     searchApiMock.search.mockResolvedValue({
       query: "imports",

@@ -22,7 +22,7 @@ import { assertFirstPartySupportRelease } from "../agent-packages/execution-gate
 import { modelReservationService } from "./model-reservations.js";
 import { anthropicReadOnlyCall, readOnlyModelEnvelopeBytes } from "./read-only-model-transport.js";
 import { assertFirstPartySupportModelProfileCurrent, firstPartySupportFunding, type FirstPartySupportModelProfile } from "./first-party-support-model-profiles.js";
-import type { guardedRemoteHttpFetch } from "../remote-http-fetch.js";
+import { guardedRemoteHttpFetch } from "../remote-http-fetch.js";
 import { pinnedSupportGuideEvidence, resolveSupportGuideSelection, supportGuideKnowledgePin } from "../experience/support-assistant-grounding.js";
 import { COMPANY_SEARCH_HELP_ARTICLES } from "../company-search-help.generated.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
@@ -291,8 +291,13 @@ export function firstPartySupportModelGateway(db: Db, options: GatewayOptions) {
       if (!credential || digest(credential) !== prepared.profile.credentialBindingHash)
         throw forbidden("Platform Support credential is unavailable");
       await checkCurrent();
-      providerCallStarted = true;
-      const response = await anthropicReadOnlyCall(modelRequest, credential, controller.signal, { fetch: options.fetch });
+      const response = await anthropicReadOnlyCall(modelRequest, credential, controller.signal, {
+        fetch: async (...args) => {
+          providerCallStarted = true;
+          return (options.fetch ?? guardedRemoteHttpFetch)(...args);
+        },
+        onWireDispatch: wire => reservations.recordCompanyPurposeWireDispatch(actor, companyId, reservation.id, wire),
+      });
       const outcome = await reservations.recordCompanyPurposeOutcome(companyId, reservation.id, {
         status: "completed",
         providerResponseHash: nativeSha256(response),

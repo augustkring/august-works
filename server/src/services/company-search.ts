@@ -1,4 +1,4 @@
-import { issueReadSqlCondition, projectReadSqlCondition } from "./authorization.js";
+import { authorizationService, issueReadSqlCondition, projectReadSqlCondition, type AuthorizationActor } from "./authorization.js";
 import { externalConversationStateSql } from "./slack-conversation-state.js";
 import { and, desc, eq, gte, inArray, isNotNull, isNull, notInArray, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
@@ -20,12 +20,16 @@ import {
   COMPANY_SEARCH_UPDATED_WITHIN_OPTIONS,
   COMPANY_ARTIFACTS_MAX_LIMIT,
   COMPANY_ARTIFACTS_MAX_QUERY_LENGTH,
+  APP_STORE_DEFINITIONS,
   ISSUE_PRIORITIES,
   ISSUE_STATUSES,
   SYSTEM_ISSUE_DOCUMENT_KEYS,
   type CompanyArtifact,
   type CompanySearchArtifactSummary,
   type CompanySearchCountType,
+  type CompanySearchFederatedDomain,
+  type CompanySearchFederatedResult,
+  type CompanySearchFederation,
   type CompanySearchFilterOptionCounts,
   type CompanySearchIssueFilterKey,
   type CompanySearchIssueSummary,
@@ -37,9 +41,27 @@ import {
   type CompanySearchSort,
   type CompanySearchUpdatedWithinOption,
   PRODUCT_IDENTITY,
+  isMemoryConnectorId,
 } from "@paperclipai/shared";
 import { companyArtifactsService } from "./company-artifacts.js";
 import { companySearchExtractService } from "./company-search-extract.js";
+import { routineService } from "./routines.js";
+import { workflowService } from "./workflows/workflow-service.js";
+import { pipelineService } from "./pipelines.js";
+import { companySkillService } from "./company-skills.js";
+import { foundationService } from "./foundation/foundation-service.js";
+import { agentPackageService } from "./agent-packages/package-service.js";
+import { accessService } from "./access.js";
+import { decisionSearchService } from "./decisions.js";
+import { processFindingService } from "./process-findings.js";
+import { businessMetricService } from "./business-metrics/service.js";
+import { businessForecastService } from "./business-forecasting/service.js";
+import { businessScenarioService } from "./business-scenarios/service.js";
+import { businessExperimentService } from "./business-experiments/service.js";
+import { managementReviewService } from "./management-reviews/service.js";
+import { aiConnectionService } from "./ai-connections.js";
+import { instanceSettingsService } from "./instance-settings.js";
+import { v7FeatureEnabled, v8FeatureEnabled } from "@paperclipai/shared";
 import { visibleIssueCondition } from "./issue-visibility.js";
 import { parseTaskSearch, taskSearchCtes, taskSearchScore, taskSearchFieldMatch, taskSearchTermMatch } from "./task-search.js";
 import { COMPANY_SEARCH_HELP_ARTICLES } from "./company-search-help.generated.js";
@@ -558,12 +580,326 @@ export function companySearchBranchFetchLimit(limit: number, offset = 0) {
   return Math.min(COMPANY_SEARCH_BRANCH_FETCH_LIMIT, normalizedOffset + normalizedLimit + 1);
 }
 
+const FEDERATED_RESULT_LIMIT = 8;
+const FEDERATED_DOMAIN_ORDER: readonly CompanySearchFederatedDomain[] = [
+  "routines", "workflows", "skills", "packages", "knowledge", "people", "apps", "insights", "settings", "navigation",
+];
+
+function federatedMatch(query: string, title: string, summary: string | null | undefined) {
+  const normalized = query.trim().toLocaleLowerCase("en");
+  if (!normalized) return null;
+  const titleText = title.toLocaleLowerCase("en");
+  const summaryText = (summary ?? "").toLocaleLowerCase("en");
+  const tokens = normalized.split(/\s+/).filter(Boolean);
+  const titleHit = titleText.includes(normalized) || tokens.every((token) => titleText.includes(token));
+  const summaryHit = summaryText.includes(normalized) || tokens.every((token) => `${titleText} ${summaryText}`.includes(token));
+  if (!titleHit && !summaryHit) return null;
+  return {
+    score: titleText.includes(normalized) ? 100 : titleHit ? 70 : 30,
+    whyMatched: [titleHit ? "title" : null, summaryHit && !titleHit ? "summary" : null].filter((value): value is string => Boolean(value)),
+  };
+}
+
+function makeFederatedResult(input: {
+  companyId: string;
+  domain: CompanySearchFederatedDomain;
+  type: string;
+  id: string;
+  title: string;
+  summary?: string | null;
+  breadcrumb?: string | null;
+  href: string;
+  updatedAt?: Date | string | null;
+  query: string;
+}): CompanySearchFederatedResult | null {
+  const match = federatedMatch(input.query, input.title, input.summary);
+  if (!match) return null;
+  const updatedAt = input.updatedAt ? iso(input.updatedAt) : null;
+  const summary = input.summary?.trim() ?? "";
+  let summaryExcerpt: string | null = null;
+  if (summary) {
+    if (summary.length <= 240) summaryExcerpt = summary;
+    else {
+      const lower = summary.toLocaleLowerCase("en");
+      const firstMatch = input.query.trim().toLocaleLowerCase("en").split(/\s+/).filter(Boolean)
+        .map((token) => lower.indexOf(token)).filter((index) => index >= 0).sort((left, right) => left - right)[0] ?? 0;
+      const start = Math.max(0, Math.min(firstMatch - 80, summary.length - 240));
+      summaryExcerpt = `${start > 0 ? "…" : ""}${summary.slice(start, start + 240)}${start + 240 < summary.length ? "…" : ""}`;
+    }
+  }
+  return {
+    id: input.id,
+    domain: input.domain,
+    type: input.type,
+    title: input.title.slice(0, 2000),
+    summary: summaryExcerpt,
+    breadcrumb: input.breadcrumb?.slice(0, 300) ?? null,
+    canonicalRef: `${input.domain}:${input.companyId}:${input.type}:${input.id}`,
+    href: input.href,
+    updatedAt,
+    score: match.score,
+    whyMatched: match.whyMatched,
+    action: { kind: "navigate", href: input.href },
+  };
+}
+
+function errorStatus(error: unknown): number | null {
+  if (!error || typeof error !== "object" || !("status" in error)) return null;
+  const value = Number((error as { status?: unknown }).status);
+  return Number.isInteger(value) ? value : null;
+}
+
+async function collectFederatedOwnerPages<T>(
+  load: (cursor?: string) => Promise<{ items: T[]; nextCursor?: string | null }>,
+  project: (item: T) => CompanySearchFederatedResult | null,
+) {
+  const results: CompanySearchFederatedResult[] = [];
+  let cursor: string | null | undefined;
+  let partial = false;
+  for (let pageNumber = 0; pageNumber < 5; pageNumber += 1) {
+    const page = await load(cursor ?? undefined);
+    results.push(...page.items.map(project).filter((item): item is CompanySearchFederatedResult => item !== null));
+    cursor = page.nextCursor;
+    if (results.length > FEDERATED_RESULT_LIMIT) {
+      partial = true;
+      break;
+    }
+    if (!cursor) break;
+    if (pageNumber === 4) partial = true;
+  }
+  return { results: results.slice(0, FEDERATED_RESULT_LIMIT), partial };
+}
+
+async function federatedCompanySearch(db: Db, companyId: string, query: string, actor: AuthorizationActor): Promise<CompanySearchFederation> {
+  const results: CompanySearchFederatedResult[] = [];
+  const coverage: CompanySearchFederation["coverage"] = [];
+  const countsByDomain: CompanySearchFederation["countsByDomain"] = {};
+  const queryTokenCapped = query.trim().split(/\s+/).filter(Boolean).length > 8;
+  type ExperimentalFlags = Awaited<ReturnType<ReturnType<typeof instanceSettingsService>["getExperimental"]>>;
+  let flags: ExperimentalFlags | null = null;
+  const flagsPromise = instanceSettingsService(db).getExperimental().then((value) => {
+    flags = value;
+  }).catch(() => {
+    // Feature availability is part of search coverage. Keep other owners
+    // searchable when settings itself is temporarily unavailable.
+  });
+
+  async function adapter(domain: CompanySearchFederatedDomain, run: () => Promise<{ results: Array<CompanySearchFederatedResult | null>; partial?: boolean }>) {
+    try {
+      const value = await run();
+      const matched = value.results.filter((item): item is CompanySearchFederatedResult => item !== null);
+      countsByDomain[domain] = Math.min(matched.length, FEDERATED_RESULT_LIMIT);
+      results.push(...matched.slice(0, FEDERATED_RESULT_LIMIT));
+      const partial = queryTokenCapped || value.partial === true || matched.length > FEDERATED_RESULT_LIMIT;
+      coverage.push({
+        domain,
+        status: partial ? "partial" : "complete",
+        message: partial ? `Some ${domain} results may be outside this bounded search page.` : null,
+      });
+    } catch (error) {
+      // A domain the actor cannot read is not advertised as present. Operational
+      // failures are visible to the caller so the UI cannot imply completeness.
+      if ([401, 403, 404].includes(errorStatus(error) ?? 0)) return;
+      coverage.push({ domain, status: "unavailable", message: `${domain} search is temporarily unavailable.` });
+    }
+  }
+
+  const auth = authorizationService(db);
+  const tasks: Array<Promise<void>> = [
+    adapter("routines", async () => {
+      const page = await routineService(db, { sourceActor: actor }).search(companyId, query, FEDERATED_RESULT_LIMIT + 1);
+      return { partial: page.partial, results: page.items.map((item) => makeFederatedResult({
+        companyId, domain: "routines", type: "routine", id: item.id, title: item.title,
+        summary: item.description, breadcrumb: "Routines", href: `/routines/${encodeURIComponent(item.id)}`,
+        updatedAt: item.updatedAt, query,
+      })) };
+    }),
+    adapter("skills", async () => {
+      const page = await companySkillService(db).search(companyId, actor, query, FEDERATED_RESULT_LIMIT + 1);
+      return { partial: page.partial, results: page.items.map((item) => makeFederatedResult({
+        companyId, domain: "skills", type: "skill", id: item.id, title: item.name,
+        summary: item.description ?? item.tagline, breadcrumb: "Skills and playbooks",
+        href: `/skills/${encodeURIComponent(item.id)}`, updatedAt: item.updatedAt, query,
+      })) };
+    }),
+  ];
+
+  // Start independent owner searches while instance feature settings load.
+  // Feature-gated adapters are appended after the settings result is known.
+  await flagsPromise;
+  const featureFlags = flags;
+  tasks.push(
+    adapter("workflows", async () => {
+      if (!featureFlags) throw new Error("workflow feature settings unavailable");
+      const pages = await Promise.all([
+        featureFlags.enableWorkflowsV1 && featureFlags.enableWorkflowBuilderV1
+          ? workflowService(db).search(companyId, actor, query, FEDERATED_RESULT_LIMIT + 1)
+          : Promise.resolve({ items: [], partial: false }),
+        featureFlags.enablePipelines
+          ? pipelineService(db).search(companyId, actor, query, FEDERATED_RESULT_LIMIT + 1)
+          : Promise.resolve({ items: [], partial: false }),
+      ]);
+      const [workflowPage, pipelinePage] = pages;
+      return { partial: workflowPage.partial || pipelinePage.partial, results: [
+        ...workflowPage.items.map((item) => makeFederatedResult({
+          companyId, domain: "workflows", type: "workflow", id: item.id, title: item.name,
+          summary: item.description, breadcrumb: "Workflows", href: `/workflows/${encodeURIComponent(item.id)}`,
+          updatedAt: item.updatedAt, query,
+        })),
+        ...pipelinePage.items.map((item) => makeFederatedResult({
+          companyId, domain: "workflows", type: "pipeline", id: item.id, title: item.name,
+          summary: item.description, breadcrumb: "Pipelines", href: `/pipelines/${encodeURIComponent(item.id)}`,
+          updatedAt: item.updatedAt, query,
+        })),
+      ] };
+    }),
+    adapter("knowledge", async () => {
+      if (!featureFlags) throw new Error("Foundation feature settings unavailable");
+      if (!featureFlags.enableFoundationV1) return { results: [] };
+      const page = await foundationService(db).search(companyId, actor, query, FEDERATED_RESULT_LIMIT + 1);
+      const matches = page.items.map((item) => makeFederatedResult({
+        companyId, domain: "knowledge", type: "foundation", id: item.id,
+        title: item.title || item.foundationKey, summary: item.canonicalRevision?.body ?? item.category,
+        breadcrumb: `Company knowledge · ${item.category}`, href: `/foundation/${encodeURIComponent(item.id)}`,
+        updatedAt: item.updatedAt, query,
+      })).filter((item): item is CompanySearchFederatedResult => item !== null);
+      return { partial: page.partial || matches.length > FEDERATED_RESULT_LIMIT, results: matches.slice(0, FEDERATED_RESULT_LIMIT + 1) };
+    }),
+  );
+  if (actor.type === "board" && actor.source === "session" && actor.userId) {
+    tasks.push(adapter("packages", async () => {
+      if (!featureFlags) throw new Error("package feature settings unavailable");
+      if (!v7FeatureEnabled(featureFlags, "agent_packages_v7")) return { results: [] };
+      const items = await agentPackageService(db).catalog(actor, "customer");
+      const matches = items.map((item) => makeFederatedResult({
+        companyId, domain: "packages", type: "agent-package", id: item.id,
+        title: item.name, summary: item.description, breadcrumb: "Agent packages",
+        href: "/agents/packages", updatedAt: null, query,
+      })).filter((item): item is CompanySearchFederatedResult => item !== null);
+      return { partial: matches.length > FEDERATED_RESULT_LIMIT, results: matches.slice(0, FEDERATED_RESULT_LIMIT + 1) };
+    }));
+    tasks.push(adapter("people", async () => {
+      const page = await accessService(db).searchMembers(companyId, actor, query, FEDERATED_RESULT_LIMIT + 1);
+      return { partial: page.partial, results: page.items.map((item) => makeFederatedResult({
+        companyId, domain: "people", type: "person", id: item.id, title: item.name,
+        summary: item.email, breadcrumb: "Company members", href: "/company/settings/members",
+        updatedAt: item.updatedAt, query,
+      })) };
+    }));
+  }
+
+  const hasInsights = featureFlags !== null && ["business_metrics_v8", "business_forecasting_v8", "scenario_planning_v8", "business_experiments_v8", "management_reviews_v8", "process_intelligence_v8"]
+    .some((feature) => v8FeatureEnabled(featureFlags, feature as Parameters<typeof v8FeatureEnabled>[1]));
+  tasks.push(adapter("insights", async () => {
+      const providers: Array<Promise<{ results: Array<CompanySearchFederatedResult | null>; partial?: boolean }>> = [
+        decisionSearchService(db).search(companyId, actor, query, FEDERATED_RESULT_LIMIT + 1).then((decisionPage) => ({
+          partial: decisionPage.partial,
+          results: decisionPage.items.map((item) => makeFederatedResult({ companyId, domain: "insights", type: "decision", id: item.id,
+            title: item.title, summary: item.body, breadcrumb: "Decisions", href: `/decisions?decisionId=${encodeURIComponent(item.id)}`,
+            updatedAt: item.createdAt, query })),
+        })),
+      ];
+      if (featureFlags && v8FeatureEnabled(featureFlags, "business_metrics_v8")) providers.push(collectFederatedOwnerPages(
+        (cursor) => businessMetricService(db).list(companyId, actor, cursor),
+        (item) => makeFederatedResult({ companyId, domain: "insights", type: "metric", id: item.id, title: item.key,
+          breadcrumb: "Business metrics", href: `/business-metrics`, updatedAt: item.updatedAt, query }),
+      ));
+      if (featureFlags && v8FeatureEnabled(featureFlags, "business_forecasting_v8")) providers.push(collectFederatedOwnerPages(
+        (cursor) => businessForecastService(db).list(companyId, actor, cursor),
+        (item) => makeFederatedResult({ companyId, domain: "insights", type: "forecast", id: item.id, title: item.key,
+          breadcrumb: "Forecasts", href: `/business-forecasts`, updatedAt: item.updatedAt, query }),
+      ));
+      if (featureFlags && v8FeatureEnabled(featureFlags, "scenario_planning_v8")) providers.push(collectFederatedOwnerPages(
+        (cursor) => businessScenarioService(db).list(companyId, actor, cursor),
+        ({ scenario }) => makeFederatedResult({ companyId, domain: "insights", type: "scenario", id: scenario.id, title: scenario.key,
+          breadcrumb: "Scenarios", href: `/business-scenarios`, updatedAt: scenario.updatedAt, query }),
+      ));
+      if (featureFlags && v8FeatureEnabled(featureFlags, "business_experiments_v8")) providers.push(collectFederatedOwnerPages(
+        (cursor) => businessExperimentService(db).list(companyId, actor, cursor),
+        ({ experiment }) => makeFederatedResult({ companyId, domain: "insights", type: "experiment", id: experiment.id, title: experiment.key,
+          breadcrumb: "Experiments", href: `/business-experiments`, updatedAt: experiment.updatedAt, query }),
+      ));
+      if (featureFlags && v8FeatureEnabled(featureFlags, "management_reviews_v8")) providers.push(collectFederatedOwnerPages(
+        (cursor) => managementReviewService(db).controls(companyId, actor, cursor),
+        (item) => makeFederatedResult({ companyId, domain: "insights", type: "review", id: item.id, title: `Management review ${item.status}`,
+          breadcrumb: "Management reviews", href: `/management-reviews?reviewId=${encodeURIComponent(item.id)}&reviewCompanyId=${encodeURIComponent(companyId)}`,
+          updatedAt: item.createdAt, query }),
+      ));
+      if (featureFlags && v8FeatureEnabled(featureFlags, "process_intelligence_v8")) providers.push(processFindingService(db).search(companyId, actor, query, FEDERATED_RESULT_LIMIT + 1).then((page) => ({
+        partial: page.partial,
+        results: page.items.map(({ finding, definitionId, runId }) => makeFederatedResult({ companyId, domain: "insights", type: "process-finding", id: finding.id,
+          title: finding.findingType.replace(/_/g, " "), summary: `${finding.summary} ${finding.interpretation ?? ""}`, breadcrumb: "Process findings",
+          href: `/process-intelligence?definitionId=${encodeURIComponent(definitionId)}&runId=${encodeURIComponent(runId)}`,
+          updatedAt: finding.createdAt, query })),
+      })));
+      const settled = await Promise.allSettled(providers);
+      const successful = settled.flatMap((item) => item.status === "fulfilled" ? [item.value] : []);
+      const operationalFailure = settled.some((item) => item.status === "rejected" && ![401, 403, 404].includes(errorStatus(item.reason) ?? 0));
+      if (!successful.length && operationalFailure) throw new Error("insight search failed");
+      return {
+        partial: !featureFlags || operationalFailure || successful.some((page) => page.partial),
+        results: successful.flatMap((page) => page.results),
+      };
+    }));
+
+  if (actor.type === "board" && actor.source === "session" && actor.userId) {
+    tasks.push(adapter("apps", async () => {
+      const decision = await auth.decide({ actor, action: "tools:use", resource: { type: "company", companyId } });
+      if (!decision.allowed) throw Object.assign(new Error("Apps are unavailable"), { status: 403 });
+      if (!featureFlags) throw new Error("app catalog feature settings unavailable");
+      const [items, connections] = await Promise.all([
+        Promise.resolve(APP_STORE_DEFINITIONS.filter((app) => featureFlags.enableMemoryConnectors || !isMemoryConnectorId(app.slug))),
+        aiConnectionService(db).list(companyId, actor.userId!),
+      ]);
+      return { results: [
+        ...items.map((item) => makeFederatedResult({
+          companyId, domain: "apps", type: "app", id: item.slug, title: item.name,
+          summary: item.description, breadcrumb: "App directory", href: "/apps", query,
+        })),
+        ...connections.map((item) => makeFederatedResult({
+        companyId, domain: "apps", type: "connection", id: item.id, title: item.name,
+        summary: item.accountLabel ?? null, breadcrumb: "Apps and connections", href: "/apps", query,
+        })),
+      ] };
+    }));
+  }
+
+  const navigation: Array<{ domain: "settings" | "navigation"; type: string; id: string; title: string; href: string; action: Parameters<typeof auth.decide>[0]["action"]; flag?: boolean }> = [
+    { domain: "settings", type: "setting", id: "company-settings", title: "Company settings", href: "/company/settings/general", action: "company_scope:read" },
+    { domain: "settings", type: "setting", id: "people-access", title: "People and access", href: "/company/settings/members", action: "users:manage_permissions" },
+    { domain: "navigation", type: "navigation", id: "apps", title: "Apps and connections", href: "/apps", action: "tools:use" },
+    { domain: "navigation", type: "navigation", id: "workflows", title: "Workflows and pipelines", href: "/workflows", action: "workflows:read", flag: Boolean(featureFlags?.enableWorkflowsV1 && featureFlags.enableWorkflowBuilderV1) },
+    { domain: "navigation", type: "navigation", id: "decisions", title: "Decisions", href: "/decisions", action: "decision_queue:read" },
+    { domain: "navigation", type: "navigation", id: "insights", title: "Insights", href: "/insights", action: "decision_queue:read", flag: hasInsights },
+    { domain: "navigation", type: "navigation", id: "process-intelligence", title: "Process intelligence", href: "/process-intelligence", action: "company_scope:read", flag: Boolean(featureFlags && v8FeatureEnabled(featureFlags, "process_intelligence_v8")) },
+    { domain: "navigation", type: "navigation", id: "foundation", title: "Company knowledge", href: "/foundation", action: "company_scope:read", flag: Boolean(featureFlags?.enableFoundationV1) },
+  ];
+  for (const domain of ["settings", "navigation"] as const) {
+    tasks.push(adapter(domain, async () => {
+      if (domain === "navigation" && !featureFlags) throw new Error("navigation feature settings unavailable");
+      const matched = await Promise.all(navigation.filter((item) => item.domain === domain && item.flag !== false).map(async (item) => {
+        const decision = await auth.decide({ actor, action: item.action, resource: { type: "company", companyId } });
+        return decision.allowed ? makeFederatedResult({
+          companyId, domain: item.domain, type: item.type, id: item.id, title: item.title,
+          breadcrumb: item.domain === "settings" ? "Settings" : "Navigation", href: item.href, query,
+        }) : null;
+      }));
+      return { results: matched };
+    }));
+  }
+
+  await Promise.all(tasks);
+  results.sort((left, right) => right.score - left.score || (right.updatedAt ?? "").localeCompare(left.updatedAt ?? "") || left.canonicalRef.localeCompare(right.canonicalRef));
+  coverage.sort((left, right) => FEDERATED_DOMAIN_ORDER.indexOf(left.domain) - FEDERATED_DOMAIN_ORDER.indexOf(right.domain));
+  return { results, countsByDomain, coverage, complete: coverage.every((item) => item.status === "complete") };
+}
+
 export function companySearchService(db: Db) {
   const extractService = companySearchExtractService(db);
   return {
     extract: extractService.extract,
     search: async (companyId: string, query: CompanySearchQuery,
-      options: { issueReadCondition?: SQL<boolean>; projectReadCondition?: SQL<boolean> } = {},
+      options: { issueReadCondition?: SQL<boolean>; projectReadCondition?: SQL<boolean>; actor?: AuthorizationActor } = {},
     ): Promise<CompanySearchResponse> => {
       const issueReadCondition = options.issueReadCondition ?? await issueReadSqlCondition(db, { type: "none" });
       const projectReadCondition = options.projectReadCondition ?? await projectReadSqlCondition(db, { type: "none" });
@@ -1199,6 +1535,9 @@ export function companySearchService(db: Db) {
           if (result.issue) result.issue.externalConversationState = byId.get(result.issue.id) ?? null;
         }
       }
+      const federation = options.actor && scope === "all" && !hasIssueOnlyFilters
+        ? await federatedCompanySearch(db, companyId, normalizedQuery, options.actor)
+        : undefined;
       return {
         query: query.q,
         normalizedQuery,
@@ -1207,6 +1546,7 @@ export function companySearchService(db: Db) {
         limit,
         offset,
         results: paged,
+        ...(federation ? { federation } : {}),
         countsByType,
         filterOptionCounts: aggregates.filterOptionCounts,
         zeroResults,

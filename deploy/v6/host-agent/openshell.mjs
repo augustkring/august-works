@@ -470,6 +470,23 @@ export function openShellHostEngine({
         };
       }
     }
+    if (request.action === "prepare") {
+      // Preparation is verification of a controller-pinned, pre-provisioned
+      // sandbox. OpenShell v0.1.2's `sandbox get` does not expose the image,
+      // so bind this receipt to the actual Docker daemon/container observation
+      // rather than echoing the requested image digest. This action never
+      // creates or adopts a sandbox and cannot qualify the physical controls.
+      if (detail.phase !== "Stopped")
+        throw new Error("sandbox_operation_unsupported");
+      const workload = await container(scope, detail, request.imageDigest, deadlineAt);
+      if (workload.State.Running)
+        throw new Error("sandbox_operation_unsupported");
+      return {
+        action: "prepare",
+        backendVersion: "0.1.2",
+        imageDigest: request.imageDigest,
+      };
+    }
     if (request.action === "effective_policy") {
       const current = await policy(scope, deadlineAt);
       return { action: "effective_policy", document: current.policy };

@@ -5,6 +5,9 @@ import {
   COMPANY_SEARCH_DEFAULT_LIMIT,
   COMPANY_SEARCH_SCOPES,
   type CompanySearchCountType,
+  type CompanySearchFederatedDomain,
+  type CompanySearchFederatedResult,
+  type CompanySearchFederatedDomainCoverage,
   type CompanySearchResponse,
   type CompanySearchResult,
   type CompanySearchScope,
@@ -39,7 +42,7 @@ import {
   type ParsedSearchQuery,
   type SearchQueryParserContext,
 } from "../lib/search-query-parser";
-import { SearchResultRow } from "../components/search/SearchResultRow";
+import { FederatedSearchResultRow, SearchResultRow } from "../components/search/SearchResultRow";
 import { SearchFilterBar, type SearchFilterDataProps } from "../components/search/SearchFilterBar";
 import { SearchFilterChips } from "../components/search/SearchFilterChips";
 import { SearchFilterSheet, SearchFilterSheetTrigger } from "../components/search/SearchFilterSheet";
@@ -89,6 +92,19 @@ function totalMatchCount(counts: Partial<Record<CompanySearchCountType, number>>
     + (counts.help ?? 0)
   );
 }
+
+const FEDERATED_DOMAIN_LABELS: Record<CompanySearchFederatedDomain, string> = {
+  routines: "Routines",
+  workflows: "Workflows and pipelines",
+  skills: "Skills and playbooks",
+  packages: "Agent packages",
+  knowledge: "Company knowledge",
+  people: "People",
+  insights: "Decisions and insights",
+  apps: "Apps and connections",
+  settings: "Settings",
+  navigation: "Navigation",
+};
 
 function mergeSearchFilters(
   base: ParsedSearchQuery["filters"],
@@ -454,8 +470,9 @@ export function Search() {
   }, [focusInput]);
 
   const counts = data?.countsByType ?? { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0, help: 0 };
-  const totalResults = data?.results.length ?? 0;
-  const allMatchTotal = data ? totalMatchCount(counts) : 0;
+  const universalResults = data?.federation?.results ?? [];
+  const totalResults = (data?.results.length ?? 0) + universalResults.length;
+  const allMatchTotal = data ? totalMatchCount(counts) + Object.values(data.federation?.countsByDomain ?? {}).reduce((sum, count) => sum + (count ?? 0), 0) : 0;
   const previewTotal = previewData ? totalMatchCount(previewData.countsByType) : null;
 
   const tabItems = useMemo<PageTabItem[]>(() => {
@@ -691,6 +708,8 @@ export function Search() {
                 recentSearches={recentSearches}
                 onRecentClick={handleRecentClick}
                 results={data?.results ?? []}
+                federatedResults={universalResults}
+                federatedCoverage={data?.federation?.coverage ?? []}
                 totalResults={totalResults}
                 allMatchTotal={allMatchTotal}
                 activeFilterCount={activeFilterCount}
@@ -737,6 +756,8 @@ interface SearchTabContentProps {
   recentSearches: string[];
   onRecentClick: (query: string) => void;
   results: CompanySearchResult[];
+  federatedResults: CompanySearchFederatedResult[];
+  federatedCoverage: CompanySearchFederatedDomainCoverage[];
   totalResults: number;
   allMatchTotal: number;
   activeFilterCount: number;
@@ -762,6 +783,8 @@ function SearchTabContent({
   recentSearches,
   onRecentClick,
   results,
+  federatedResults,
+  federatedCoverage,
   totalResults,
   allMatchTotal,
   activeFilterCount,
@@ -770,13 +793,19 @@ function SearchTabContent({
   isFetching,
   agentsById,
 }: SearchTabContentProps) {
+  const federatedGroups = new Map<CompanySearchFederatedDomain, CompanySearchFederatedResult[]>();
+  for (const result of federatedResults) {
+    const group = federatedGroups.get(result.domain) ?? [];
+    group.push(result);
+    federatedGroups.set(result.domain, group);
+  }
   if (showInitialState) {
     return (
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-10 sm:px-6">
         <div>
           <h2 className="text-lg font-semibold">Type to search organization memory.</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Tasks, comments, plan documents, artifacts, agents, projects — same surface, ranked by relevance.
+            Tasks, comments, documents, artifacts, agents, projects, and authorized company resources — same surface, grouped by domain.
           </p>
         </div>
         {recentSearches.length > 0 ? (
@@ -897,6 +926,13 @@ function SearchTabContent({
           </li>
           <li>Wrap multi-word phrases in quotes.</li>
         </ul>
+        {federatedCoverage.some((item) => item.status !== "complete") ? (
+          <div className="space-y-1 text-left text-sm text-muted-foreground" role="status" aria-live="polite" data-testid="search-coverage">
+            {federatedCoverage.filter((item) => item.status !== "complete").map((item) => (
+              <p key={item.domain}>{item.message ?? `${FEDERATED_DOMAIN_LABELS[item.domain]} results are incomplete.`}</p>
+            ))}
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -927,7 +963,22 @@ function SearchTabContent({
             agentsById={agentsById}
           />
         ))}
+        {[...federatedGroups.entries()].map(([domain, items]) => (
+          <section key={domain} aria-label={FEDERATED_DOMAIN_LABELS[domain]} className="mt-3">
+            <h2 className="px-3 py-1 text-(length:--text-micro) font-semibold uppercase tracking-wide text-muted-foreground">
+              {FEDERATED_DOMAIN_LABELS[domain]}
+            </h2>
+            {items.map((result) => <FederatedSearchResultRow key={result.canonicalRef} result={result} />)}
+          </section>
+        ))}
       </div>
+      {federatedCoverage.some((item) => item.status !== "complete") ? (
+        <div className="mb-6 space-y-1 px-3 text-sm text-muted-foreground" role="status" aria-live="polite" data-testid="search-coverage">
+          {federatedCoverage.filter((item) => item.status !== "complete").map((item) => (
+            <p key={item.domain}>{item.message ?? `${FEDERATED_DOMAIN_LABELS[item.domain]} results are incomplete.`}</p>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

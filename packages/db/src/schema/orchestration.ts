@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { pgTable, uuid, text, integer, jsonb, timestamp, foreignKey, unique, uniqueIndex, check, index } from "drizzle-orm/pg-core";
-import type { ExecutionPrincipal, SupervisionPolicy, OrchestrationBudget, ModelReservationQuote, ModelTariffCeiling } from "@paperclipai/shared";
+import type { ExecutionPrincipal, SupervisionPolicy, OrchestrationBudget, ModelReservationQuote, ModelTariffCeiling, ModelProviderWireReceipt } from "@paperclipai/shared";
 import { documentRevisions } from "./document_revisions.js";
 import { workflowRevisions } from "./workflows.js";
 import { toolInvocations } from "./tool_access.js";
@@ -61,7 +61,7 @@ export const orchestrationModelReservations = pgTable("orchestration_model_reser
   principalUserId: text("principal_user_id").notNull(), idempotencyKey: text("idempotency_key").notNull(), requestHash: text("request_hash").notNull(), inputHash: text("input_hash").notNull(), authorityHash: text("authority_hash").notNull(),
   quote: jsonb("quote").$type<ModelReservationQuote>().notNull(), maximumMinor: integer("maximum_minor").notNull(),
   status: text("status").$type<"reserved" | "dispatched" | "completed" | "failed" | "unknown" | "cancelled">().notNull().default("reserved"),
-  providerResponseHash: text("provider_response_hash"), usage: jsonb("usage").$type<{ inputTokens: number; outputTokens: number } | null>(),
+  providerResponseHash: text("provider_response_hash"), providerWireReceipt: jsonb("provider_wire_receipt").$type<ModelProviderWireReceipt | null>(), usage: jsonb("usage").$type<{ inputTokens: number; outputTokens: number } | null>(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(), dispatchedAt: timestamp("dispatched_at", { withTimezone: true }), completedAt: timestamp("completed_at", { withTimezone: true }), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, t => ({
   tenantUq: unique("orchestration_model_reservation_tenant_uq").on(t.companyId, t.id), keyUq: unique("orchestration_model_reservation_key_uq").on(t.companyId, t.planId, t.idempotencyKey),
@@ -101,7 +101,7 @@ export const orchestrationCompanyPurposeReservations = pgTable("orchestration_co
   idempotencyKey: text("idempotency_key").notNull(), requestHash: text("request_hash").notNull(), inputHash: text("input_hash").notNull(), authorityHash: text("authority_hash").notNull(),
   quote: jsonb("quote").$type<ModelReservationQuote>().notNull(), maximumMinor: integer("maximum_minor").notNull(),
   status: text("status").$type<"reserved" | "dispatched" | "completed" | "failed" | "unknown" | "cancelled">().notNull().default("reserved"),
-  providerResponseHash: text("provider_response_hash"), usage: jsonb("usage").$type<{ inputTokens: number; outputTokens: number } | null>(),
+  providerResponseHash: text("provider_response_hash"), providerWireReceipt: jsonb("provider_wire_receipt").$type<ModelProviderWireReceipt | null>(), usage: jsonb("usage").$type<{ inputTokens: number; outputTokens: number } | null>(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(), dispatchedAt: timestamp("dispatched_at", { withTimezone: true }), completedAt: timestamp("completed_at", { withTimezone: true }), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, t => ({
   tenantUq: unique("orchestration_company_purpose_reservation_tenant_uq").on(t.companyId, t.id),

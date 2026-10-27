@@ -1393,6 +1393,7 @@ async function prepareGeminiSkillRuntime(input: {
         );
       }
     } catch (err) {
+      if (entry.key === "blentera-platform") throw err;
       if (isErrnoException(err, "EPERM")) {
         const result = await materializePaperclipSkillCopy(entry.source, target);
         await input.onLog(

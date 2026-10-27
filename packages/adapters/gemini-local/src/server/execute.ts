@@ -181,6 +181,7 @@ async function ensureGeminiSkillsInjected(
         `[paperclip] ${result === "repaired" ? "Repaired" : "Linked"} Gemini skill: ${entry.key}\n`,
       );
     } catch (err) {
+      if (entry.key === "blentera-platform") throw err;
       await onLog(
         "stderr",
         `[paperclip] Failed to link Gemini skill "${entry.key}": ${err instanceof Error ? err.message : String(err)}\n`,

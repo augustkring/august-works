@@ -3690,7 +3690,9 @@ export async function listPaperclipSkillEntries(
 
   try {
     const entries = await fs.readdir(root, { withFileTypes: true });
-    const dirs = entries.filter((entry) => entry.isDirectory());
+    // The required platform procedure needs an exact server-issued immutable
+    // release pin; the legacy directory fallback must not select editable prose.
+    const dirs = entries.filter((entry) => entry.isDirectory() && entry.name !== "blentera-platform");
     return dirs.map((entry) => ({
       key: `paperclipai/paperclip/${entry.name}`,
       runtimeName: entry.name,
@@ -4197,7 +4199,8 @@ export function resolveLegacyPaperclipDesiredSkillNames(
     config,
     availableEntries,
   );
-  const operationalEntry = availableEntries.find(
+  const platformEntry = availableEntries.find(entry => entry.key === "blentera-platform");
+  const operationalEntry = platformEntry ?? availableEntries.find(
     (entry) =>
       entry.key.trim().toLowerCase() === PAPERCLIP_OPERATIONAL_SKILL_KEY,
   );
@@ -4206,7 +4209,7 @@ export function resolveLegacyPaperclipDesiredSkillNames(
   return [
     operationalEntry.key,
     ...desiredSkills.filter(
-      (key) => key.trim().toLowerCase() !== PAPERCLIP_OPERATIONAL_SKILL_KEY,
+      (key) => key !== operationalEntry.key && key.trim().toLowerCase() !== PAPERCLIP_OPERATIONAL_SKILL_KEY,
     ),
   ];
 }
@@ -4256,6 +4259,16 @@ export async function ensurePaperclipSkillSymlink(
   if (!existing) {
     await linkSkill(source, target);
     return "created";
+  }
+
+  if (path.basename(target) === "blentera-platform") {
+    // This name is required and platform-owned. Never quietly skip or remove
+    // an unrelated workspace/profile installation to win Skill precedence.
+    const [expected, effective] = await Promise.all([
+      fs.realpath(source), fs.realpath(target).catch(() => null),
+    ]);
+    if (!existing.isSymbolicLink() || effective !== expected) throw new Error("platform_skill_collision: the required blentera-platform Skill is occupied; repair the configured managed Skill location and requalify the binding");
+    return "skipped";
   }
 
   if (!existing.isSymbolicLink()) {

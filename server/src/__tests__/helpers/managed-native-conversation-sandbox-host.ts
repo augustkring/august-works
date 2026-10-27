@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import express from "express";
 import { WebSocket } from "ws";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import {
   agentProviderBindings, billingAccounts, billingAccountCompanies, billingSubscriptions, createDb,
   agents, agentExecutionManifests, environmentLeases, heartbeatRuns, issues, runtimeCapacityProfiles, runtimeCells, runtimeHosts, runtimeHostRequestNonces,
@@ -368,6 +368,41 @@ export async function configureManagedConversationSandboxHost(input: {
     await new Promise(resolve => setTimeout(resolve, 10));
   }
   if (!authenticated) throw new Error("conversation_software_host_relay_auth_failed");
+  let hostHeartbeatCount = 0;
+  let hostHeartbeatFailed = false;
+  let hostHeartbeatInFlight: Promise<void> | null = null;
+  const heartbeatHost = async () => {
+    const run = async () => {
+      const inventoryRows = await db.select({
+        cellId: runtimeCells.id, companyId: runtimeCells.companyId, generation: runtimeCells.generation,
+        activeImageDigest: runtimeCells.activeImageDigest, desiredImageDigest: runtimeCells.desiredImageDigest,
+        status: runtimeCells.status, capacityProfile: runtimeCells.capacityProfile,
+      }).from(runtimeCells).where(and(eq(runtimeCells.runtimeHostId, host.id), isNull(runtimeCells.deletedAt)));
+      const profileNames = [...new Set(inventoryRows.map(row => row.capacityProfile))];
+      const profiles = profileNames.length ? await db.select().from(runtimeCapacityProfiles)
+        .where(inArray(runtimeCapacityProfiles.key, profileNames)) : [];
+      const profileByName = new Map(profiles.map(profile => [profile.key, profile]));
+      const cells = inventoryRows.map(row => {
+        const profile = profileByName.get(row.capacityProfile);
+        if (!profile) throw new Error("conversation_software_host_capacity_profile_missing");
+        const status = row.status === "HEALTHY" ? "healthy" : row.status === "STOPPED" ? "stopped" :
+          row.status === "FENCED" ? "fenced" : row.status === "DEGRADED" || row.status === "FAILED" ? "failed" : "starting";
+        return { cellId: row.cellId, companyId: row.companyId, generation: row.generation.toString(),
+          imageDigest: row.activeImageDigest ?? row.desiredImageDigest, status,
+          cpuMillis: profile.cpuMillis, memoryBytes: profile.memoryBytes.toString(), diskBytes: profile.diskBytes.toString() };
+      });
+      await runtime.heartbeat(host.id, { agentVersion: "6.0.2", cells });
+      hostHeartbeatCount++;
+    };
+    hostHeartbeatInFlight = run().catch(() => { hostHeartbeatFailed = true; });
+    await hostHeartbeatInFlight;
+    hostHeartbeatInFlight = null;
+  };
+  await heartbeatHost();
+  const hostHeartbeatTimer = setInterval(() => {
+    if (!hostHeartbeatInFlight) void heartbeatHost();
+  }, 20_000);
+  hostHeartbeatTimer.unref();
   const execFacts: Array<{ executable: string; cwdExact: boolean; modelCredentialPresent: boolean;
     managedModelBrokerOriginPresent: boolean;
     assignedMcpEnvironmentAbsent: boolean; credentialEnvironmentAbsent: boolean;
@@ -568,6 +603,8 @@ export async function configureManagedConversationSandboxHost(input: {
       bindingId: binding.id, environmentId: environment.id, relayAuthenticated: relayHost.readyState === WebSocket.OPEN,
       providerAttestedLeaseExpiresAt: acquiredLeaseExpiresAt,
       preAdmissionObservation,
+      hostHeartbeatCount,
+      hostHeartbeatFailed,
       sandboxExecutionChecks,
       execCount: execFacts.length, exactPrivateCwdCount: execFacts.filter(fact => fact.cwdExact).length,
       managedModelCredentialCount: execFacts.filter(fact => fact.modelCredentialPresent).length,
@@ -577,7 +614,8 @@ export async function configureManagedConversationSandboxHost(input: {
       negativeNativeSessionStartControls,
       nativeSessionStartCredentialNegativeControls,
       executableNames: [...new Set(execFacts.map(fact => fact.executable.split("/").pop() ?? ""))] }),
-    close: async () => { relayHost.close(); await new Promise<void>(resolve => relayServer.close(() => resolve())); await runtime.relay.stop();
+    close: async () => { clearInterval(hostHeartbeatTimer); if (hostHeartbeatInFlight) await hostHeartbeatInFlight;
+      relayHost.close(); await new Promise<void>(resolve => relayServer.close(() => resolve())); await runtime.relay.stop();
       if (providerImageHome) rmSync(providerImageHome, { recursive: true, force: true }); },
   };
 }

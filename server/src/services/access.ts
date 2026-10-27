@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne, notInArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, ne, notInArray, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   companyMemberships,
@@ -18,7 +18,7 @@ import {
   userSecretDeclarations,
 } from "@paperclipai/db";
 import type { PermissionKey, PrincipalType } from "@paperclipai/shared";
-import { conflict } from "../errors.js";
+import { conflict, forbidden } from "../errors.js";
 import { assertAssignableAgent } from "./agent-assignability.js";
 import { authorizationService, type AuthorizationActor, type AuthorizationResource } from "./authorization.js";
 import { ensureHumanRoleDefaultGrants } from "./principal-access-compatibility.js";
@@ -465,6 +465,33 @@ export function accessService(db: Db) {
       .from(companyMemberships)
       .where(eq(companyMemberships.companyId, companyId))
       .orderBy(sql`${companyMemberships.createdAt} desc`);
+  }
+
+  async function searchMembers(companyId: string, actor: AuthorizationActor, query: string, limit = 20) {
+    const decision = await authorization.decide({
+      actor,
+      action: "users:manage_permissions",
+      resource: { type: "company", companyId },
+    });
+    if (!decision.allowed) throw forbidden("Company members are outside this actor's authorization boundary");
+    const escaped = query.replace(/[\\%_]/g, (value) => `\\${value}`);
+    const pattern = `%${escaped}%`;
+    const rows = await db.select({
+      id: authUsers.id,
+      name: authUsers.name,
+      email: authUsers.email,
+      updatedAt: companyMemberships.updatedAt,
+    }).from(companyMemberships)
+      .innerJoin(authUsers, eq(authUsers.id, companyMemberships.principalId))
+      .where(and(
+        eq(companyMemberships.companyId, companyId),
+        eq(companyMemberships.principalType, "user"),
+        eq(companyMemberships.status, "active"),
+        or(ilike(authUsers.name, pattern), ilike(authUsers.email, pattern)),
+      ))
+      .orderBy(desc(companyMemberships.updatedAt), asc(authUsers.name), asc(authUsers.id))
+      .limit(Math.min(100, Math.max(1, limit)) + 1);
+    return { items: rows.slice(0, limit), partial: rows.length > limit };
   }
 
   async function getMemberById(companyId: string, memberId: string) {
@@ -1298,6 +1325,7 @@ export function accessService(db: Db) {
     getMemberById,
     ensureMembership,
     listMembers,
+    searchMembers,
     listActiveUserMemberships,
     copyActiveUserMemberships,
     ensureRoleDefaultGrants,

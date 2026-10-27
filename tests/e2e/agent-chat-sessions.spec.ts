@@ -218,11 +218,95 @@ test("chat first open is read-only; concurrent first sends and retries share one
         const [blocked] = await db.execute<{ count: number }>(sql`select count(*)::int as count
           from pg_stat_activity where datname=current_database() and pid<>pg_backend_pid()
           and cardinality(pg_blocking_pids(pid)) > 0`);
+        const blockingRows = await db.execute<{
+          waiterPid: number;
+          blockerPid: number;
+          waiterState: string;
+          waiterWaitEventType: string | null;
+          waiterWaitEvent: string | null;
+          blockerState: string;
+          blockerWaitEventType: string | null;
+          blockerWaitEvent: string | null;
+          lockType: string;
+          waiterMode: string;
+          blockerMode: string | null;
+          classId: string | null;
+          objectId: string | null;
+          objectSubId: number | null;
+          relationName: string | null;
+          waiterXactAgeMs: number | null;
+          blockerXactAgeMs: number | null;
+          waiterQueryAgeMs: number | null;
+          blockerQueryAgeMs: number | null;
+          waiterQuery: string;
+          blockerQuery: string;
+        }>(sql`select w.pid as "waiterPid", b.pid as "blockerPid", w.state as "waiterState",
+          w.wait_event_type as "waiterWaitEventType", w.wait_event as "waiterWaitEvent",
+          b.state as "blockerState", b.wait_event_type as "blockerWaitEventType", b.wait_event as "blockerWaitEvent",
+          wl.locktype as "lockType", wl.mode as "waiterMode", bl.mode as "blockerMode",
+          wl.classid::text as "classId", wl.objid::text as "objectId", wl.objsubid as "objectSubId",
+          c.relname as "relationName",
+          (extract(epoch from clock_timestamp()-w.xact_start)*1000)::bigint as "waiterXactAgeMs",
+          (extract(epoch from clock_timestamp()-b.xact_start)*1000)::bigint as "blockerXactAgeMs",
+          (extract(epoch from clock_timestamp()-w.query_start)*1000)::bigint as "waiterQueryAgeMs",
+          (extract(epoch from clock_timestamp()-b.query_start)*1000)::bigint as "blockerQueryAgeMs",
+          w.query as "waiterQuery", b.query as "blockerQuery"
+          from pg_stat_activity w
+          join pg_locks wl on wl.pid=w.pid and not wl.granted
+          cross join lateral unnest(pg_blocking_pids(w.pid)) as blocked_pid(pid)
+          join pg_stat_activity b on b.pid=blocked_pid.pid
+          left join pg_locks bl on bl.pid=b.pid and bl.granted and bl.locktype=wl.locktype
+            and bl.database is not distinct from wl.database
+            and bl.relation is not distinct from wl.relation
+            and bl.page is not distinct from wl.page
+            and bl.tuple is not distinct from wl.tuple
+            and bl.virtualxid is not distinct from wl.virtualxid
+            and bl.transactionid is not distinct from wl.transactionid
+            and bl.classid is not distinct from wl.classid
+            and bl.objid is not distinct from wl.objid
+            and bl.objsubid is not distinct from wl.objsubid
+          left join pg_class c on c.oid=wl.relation
+          where w.datname=current_database() and w.pid<>pg_backend_pid()
+          order by w.xact_start nulls last, w.pid limit 32`).catch(() => []);
+        const queryClass = (query: string) => ({
+          command: /^\s*(select|insert|update|delete|with|commit|rollback|begin|set|call)\b/i.exec(query)?.[1]?.toLowerCase() ?? "other",
+          lockFunction: /\bpg_advisory_xact_lock\s*\(/i.test(query) ? "pg_advisory_xact_lock" : null,
+          table: /\b(?:from|join|update|into|delete\s+from)\s+(?:"?[a-z_][\w$]*"?\.)?"?([a-z_][\w$]*)"?/i.exec(query)?.[1] ?? null,
+        });
+        const pgBlockingEdges = blockingRows.map(({ waiterQuery, blockerQuery, ...row }) => ({
+          ...row,
+          waiterQueryClass: queryClass(waiterQuery),
+          blockerQueryClass: queryClass(blockerQuery),
+        }));
+        const advisoryOwnerCandidates = [
+          { owner: "issue-privacy-tree", key: `issue-privacy-tree:${f.company.id}` },
+          { owner: "business-event-privacy", key: `business-events:${f.company.id}` },
+          { owner: "memory-privacy", key: `memory:privacy:${f.company.id}` },
+          ...(failedIssueId ? [{ owner: "native-completion-contract", key: `paperclip:native-completion-contract:${f.company.id}:${failedIssueId}` }] : []),
+        ];
+        const candidateValues = sql.join(advisoryOwnerCandidates.map(candidate =>
+          sql`(${candidate.owner}, ${candidate.key})`,
+        ), sql`, `);
+        const hashedCandidates = await db.execute<{
+          owner: string;
+          lockHash: string;
+        }>(sql`with candidates(owner, lock_key) as (values ${candidateValues})
+          select owner, hashtextextended(lock_key, 0)::text as "lockHash" from candidates`);
+        const advisoryKeyMatches = new Set<string>();
+        for (const candidate of hashedCandidates) {
+          const hash = BigInt(candidate.lockHash);
+          const classId = Number(BigInt.asUintN(32, hash >> 32n)).toString();
+          const objectId = Number(BigInt.asUintN(32, hash)).toString();
+          if (blockingRows.some(row => row.classId === classId && row.objectId === objectId && row.objectSubId === 1))
+            advisoryKeyMatches.add(candidate.owner);
+        }
         const pgWaitFacts = {
           groups: waitGroups.map(({ waitEventType, waitEvent, state, count }) => ({
             waitEventType, waitEvent, state, count,
           })),
           blockedBackendCount: blocked?.count ?? 0,
+          blockingEdges: pgBlockingEdges,
+          matchedAdvisoryOwners: [...advisoryKeyMatches],
         };
         let providerTraceFacts = { eventCount: 0, turnCompletionCount: 0, providerProcessCount: 0, providerProcessesAlive: 0 };
         try {

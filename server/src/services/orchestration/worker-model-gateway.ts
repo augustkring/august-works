@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { assertAuthoredProceduresCurrent } from "../agents/authoring-procedures.js";
 import { assertAuthoredAgentManifestCurrent } from "../agents/authored-definition.js";
-import { and, eq, gte, inArray, or, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   agents,
   agentIdentities,
@@ -677,7 +677,8 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
             identifier: issues.identifier, title: issues.title, description: issues.description, status: issues.status,
             priority: issues.priority, projectId: issues.projectId, parentId: issues.parentId,
             assigneeAgentId: issues.assigneeAgentId, responsibleUserId: issues.responsibleUserId,
-            createdByAgentId: issues.createdByAgentId,
+            createdByAgentId: issues.createdByAgentId, originRunId: issues.originRunId,
+            originKind: issues.originKind, originId: issues.originId,
             sourceVersion: sql<string>`extract(epoch from ${issues.updatedAt})::text`,
             contentHash: sql<string>`public.aw_native_payload_body_hash('issue',to_jsonb(${issues}))`,
             hiddenAt: issues.hiddenAt, payloadSourceProtocolVersion: issues.payloadSourceProtocolVersion,
@@ -790,8 +791,24 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
               agentId: claims.sub, responsibleUserId: run.responsibleUserId, runId: claims.run_id,
               binding: claims.conversation_model,
             });
+          const planBackedDraftCapture = capture.managedOpenCode === true && capture.nativeReadResult !== true &&
+            capture.tool === "create_task" && capture.callId === block.tool_use_id &&
+            capture.argumentsHash === providerUse.argumentsHash && capture.resultDigest === sourceResultDigest &&
+            capture.turnId === matchingAssociations[0]!.turnId && capture.eventSeq === matchingAssociations[0]!.eventSeq &&
+            capture.attempt === matchingAssociations[0]!.attempt && capture.taskRef && typeof capture.taskRef === "object" &&
+            (capture.taskRef as Record<string, unknown>).issueId === taskId;
+          const [draftPlan] = task?.parentId === null && planBackedDraftCapture && claims.scope === "worker_model" &&
+            task.status === "backlog" && task.originRunId === claims.run_id && task.createdByAgentId === claims.sub &&
+            task.responsibleUserId === claims.responsible_user_id && task.originKind === "manual" &&
+            typeof task.originId === "string" && task.originId.startsWith(`paperclip-runner:create-task:${run.nativeIssueId}:`)
+            ? await db.select({ id: orchestrationPlans.id }).from(orchestrationPlans).where(and(
+              eq(orchestrationPlans.companyId, claims.company_id), eq(orchestrationPlans.issueId, run.nativeIssueId!),
+              eq(orchestrationPlans.status, "running"), eq(orchestrationPlans.actionClass, "internal_draft"),
+              eq(orchestrationPlans.riskClass, "C0"), isNull(orchestrationPlans.erasedAt),
+            )).for("share") : [];
+          const planBackedStandaloneDraftCurrent = Boolean(draftPlan);
           const taskParentCurrent = task?.parentId === run.nativeIssueId || task?.parentId === null &&
-            (workerConversationRootCurrent || conversationModelRootCurrent);
+            (workerConversationRootCurrent || conversationModelRootCurrent || planBackedStandaloneDraftCurrent);
           if (!task || !taskSource || taskSource.contentHash !== task.contentHash ||
             task.payloadSourceSnapshotInvalidated || !taskParentCurrent)
             throw forbidden("Managed OpenCode created Task source is no longer current");
@@ -1790,6 +1807,9 @@ export function workerModelGateway(db: Db, options: Options) {
               await tx.update(heartbeatRuns).set({ runnerProfileJson: { ...profile, nativeAwModelWireIntents: intents }, updatedAt: new Date() })
                 .where(and(eq(heartbeatRuns.companyId, run.companyId), eq(heartbeatRuns.id, run.id), eq(heartbeatRuns.status, "running")));
             });
+            await reservations.recordWireDispatch(actor, claims.company_id, reservation.id, {
+              method: receipt.method, endpoint: receipt.endpoint, bodySha256: receipt.bodySha256, callId: receipt.callId,
+            });
             internal?.onWireDispatch?.(receipt);
           } },
         );
@@ -2037,6 +2057,9 @@ export function workerModelGateway(db: Db, options: Options) {
               managedFailureStage = "wire_intent_write";
               await tx.update(heartbeatRuns).set({ runnerProfileJson: { ...profile, nativeAwModelWireIntents: intents }, updatedAt: new Date() })
                 .where(and(eq(heartbeatRuns.companyId, run.companyId), eq(heartbeatRuns.id, run.id), eq(heartbeatRuns.status, "running")));
+            });
+            await reservations.recordWireDispatch(actor, claims.company_id, reservation.id, {
+              method: receipt.method, endpoint: receipt.endpoint, bodySha256: receipt.bodySha256, callId: receipt.callId,
             });
             internal?.onWireDispatch?.(receipt);
             managedFailureStage = "provider_transport";

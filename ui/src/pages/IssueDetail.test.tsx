@@ -4643,9 +4643,7 @@ describe("IssueDetail", () => {
     expect(moreButton).toBeTruthy();
 
     await act(async () => {
-      moreButton!.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
-      );
+      moreButton!.click();
     });
     await flushReact();
 

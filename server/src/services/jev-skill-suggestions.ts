@@ -214,7 +214,10 @@ export function jevSkillSuggestionService(db: Db, options: {
         if (jevCredentialBindingHash(latestKey) !== profile.credentialBindingHash) throw forbidden("The qualified Jev connection credential changed");
         await recheck();
         providerStarted = true;
-        const result = await provider({ model: JEV_DECISION_MODEL, apiKey: latestKey, request, signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]) });
+        const result = await provider({ model: JEV_DECISION_MODEL, apiKey: latestKey, request,
+          signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]) }, {
+          onWireDispatch: wire => reservations.recordWireDispatch(actor, input.companyId, reservation.id, wire),
+        });
         await reservations.recordOutcome(input.companyId, reservation.id, { status: result.answers ? "completed" : result.receipt.costStatus === "unpriced" ? "unknown" : "failed",
           providerResponseHash: nativeSha256({ reservationId: reservation.id, errorCode: result.errorCode ?? null, usage: { inputTokens: result.receipt.inputTokens, outputTokens: result.receipt.outputTokens, costStatus: result.receipt.costStatus } }),
           usage: result.receipt.inputTokens !== null && result.receipt.outputTokens !== null ? { inputTokens: result.receipt.inputTokens, outputTokens: result.receipt.outputTokens } : null });

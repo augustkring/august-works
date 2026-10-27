@@ -881,6 +881,38 @@ async function consumeTurn(
   const inputTimers = new Map<string, ReturnType<typeof setTimeout>>();
   const handoffCleanupOperations = new Set<Promise<unknown>>();
   const eventIterator = session.events()[Symbol.asyncIterator]();
+  const concurrentChatDiagnostics =
+    process.env.PAPERCLIP_NATIVE_CONCURRENT_CHAT_DIAGNOSTICS === "1";
+  let diagnosticStage = "not_started";
+  let diagnosticEventType: string | null = null;
+  let diagnosticSourceSeq: number | null = null;
+  let diagnosticEventCount = 0;
+  let diagnosticStageStartedAt = Date.now();
+  let diagnosticTimer: ReturnType<typeof setTimeout> | undefined;
+  const markDiagnosticStage = (
+    stage: string,
+    eventType: string | null = null,
+    sourceSeq: number | null = null,
+  ) => {
+    if (!concurrentChatDiagnostics) return;
+    if (diagnosticTimer !== undefined) clearTimeout(diagnosticTimer);
+    diagnosticStage = stage;
+    diagnosticEventType = eventType;
+    diagnosticSourceSeq = sourceSeq;
+    diagnosticStageStartedAt = Date.now();
+    diagnosticTimer = setTimeout(() => {
+      console.warn(JSON.stringify({
+        diagnostic: "native_concurrent_chat_consume_turn_pending",
+        runId: input.binding.runId,
+        stage: diagnosticStage,
+        eventType: diagnosticEventType,
+        sourceSeq: diagnosticSourceSeq,
+        eventCount: diagnosticEventCount,
+        elapsedMs: Date.now() - diagnosticStageStartedAt,
+      }));
+    }, 5_000);
+    diagnosticTimer.unref?.();
+  };
   let stopConsumer = false;
   let rejectHandoff: ((error: unknown) => void) | null = null;
   const handoffFailure = new Promise<never>((_resolve, reject) => {
@@ -948,6 +980,7 @@ async function consumeTurn(
       };
     };
     while (true) {
+      markDiagnosticStage("event_iterator_next");
       const next = await eventIterator.next().catch((error) => {
         throw providerFailure ?? error;
       });
@@ -959,6 +992,7 @@ async function consumeTurn(
         );
       }
       const event = next.value;
+      markDiagnosticStage("append_event", event.eventType, event.sourceSeq);
       const payload = event.payload as Record<string, unknown>;
       const settlingRequestId =
         [
@@ -978,6 +1012,8 @@ async function consumeTurn(
       });
       if (stopConsumer) throw new Error("native event consumer stopped");
       eventCount += receipt.disposition === "committed" ? 1 : 0;
+      diagnosticEventCount = eventCount;
+      markDiagnosticStage("process_event", event.eventType, event.sourceSeq);
       highestContiguousSourceSeq = Math.max(
         highestContiguousSourceSeq,
         receipt.highestContiguousSourceSeq,
@@ -1167,6 +1203,7 @@ async function consumeTurn(
             };
           }
           if (!session.goal) throw new Error("native_session_goal_unavailable");
+          markDiagnosticStage("session_goal_get", event.eventType);
           const authoritativeGoal = await session.goal({ action: "get" });
           // `goal(get)` emits an authoritative goal snapshot. Keep consuming
           // until that snapshot is durably appended so the server projection
@@ -1245,6 +1282,7 @@ async function consumeTurn(
     }
     throw error;
   } finally {
+    if (diagnosticTimer !== undefined) clearTimeout(diagnosticTimer);
     stopConsumer = true;
     for (const inputTimer of inputTimers.values()) clearTimeout(inputTimer);
     inputTimers.clear();

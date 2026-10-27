@@ -295,7 +295,7 @@ import {
   pinIssueMutationHuman,
   type IssuePostCommitAction,
 } from "../services/issues.js";
-import { authorizationDeniedDetails, authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, issueReadSqlCondition, projectReadSqlCondition, pinCurrentBoardActor } from "../services/authorization.js";
+import { authorizationDeniedDetails, authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, issueReadSqlCondition, projectReadSqlCondition, pinCurrentBoardActor, type AuthorizationActor } from "../services/authorization.js";
 import { assertDirectInputSessionCurrent, assertNativeDocumentRevisionCurrentSourceAccess,
   directHumanPayloadSnapshotSql, nativePayloadSnapshotSql } from "../services/native-direct-input.js";
 import { withCurrentTaskSourceRead } from "../services/task-source-read-scope.js";
@@ -493,7 +493,7 @@ type CompanySearchService = {
   search(
     companyId: string,
     query: CompanySearchQuery,
-    options?: { issueReadCondition?: SQL<boolean>; projectReadCondition?: SQL<boolean> },
+    options?: { issueReadCondition?: SQL<boolean>; projectReadCondition?: SQL<boolean>; actor?: AuthorizationActor },
   ): Promise<CompanySearchResponse>;
 };
 type CompanySearchServiceFactory = (queryDb: Db) => CompanySearchService;
@@ -8184,6 +8184,7 @@ export function issueRoutes(
     const result = await runCompanySearchRead(req, companyId, async (queryDb, search) => search.search(companyId, query, {
       issueReadCondition: await issueReadSqlCondition(queryDb, req.actor),
       projectReadCondition: await projectReadSqlCondition(queryDb, req.actor),
+      actor: req.actor,
     }), needsTaskSources);
     res.json(result);
   });

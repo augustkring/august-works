@@ -242,18 +242,21 @@ export function nativeDraftConformanceService(db: Db, options: Options) {
           const credential = await aiConnectionService(db).credential(fresh.connection);
           if (createHash("sha256").update(credential).digest("hex") !== fresh.credentialHash) throw forbidden("Draft credential changed before dispatch");
           if ((await entry.current(db, run.id)).authorityHash !== authorityHash) throw forbidden("Draft authority changed during credential resolution");
-          const result = await anthropicReadOnlyCall(request, credential, controller.signal, { fetch: async (...args) => {
-            controller.signal.throwIfAborted();
-            await logActivity(db, { companyId: entry.cid, actorType: "user", actorId: userId, runId: run.id, agentId: entry.aid,
-              action: "provider.draft_conformance_dispatch_started", entityType: "heartbeat_run", entityId: run.id,
-              details: { groupId, reservationId, source: "native-draft-conformance", providerStreaming: false } });
-            eventRetained = true;
-            if ((await entry.current(db, run.id)).authorityHash !== authorityHash) throw forbidden("Draft authority changed at the actual dispatch boundary");
-            controller.signal.throwIfAborted();
-            dispatched = true;
-            if (cancel) cancelTimer = setTimeout(() => { cancellationRequested = true; controller.abort(); }, 100);
-            return (options.fetch ?? guardedRemoteHttpFetch)(...args);
-          } });
+          const result = await anthropicReadOnlyCall(request, credential, controller.signal, {
+            onWireDispatch: wire => broker.recordWireDispatch(actor, entry.cid, reservation.id, wire),
+            fetch: async (...args) => {
+              controller.signal.throwIfAborted();
+              await logActivity(db, { companyId: entry.cid, actorType: "user", actorId: userId, runId: run.id, agentId: entry.aid,
+                action: "provider.draft_conformance_dispatch_started", entityType: "heartbeat_run", entityId: run.id,
+                details: { groupId, reservationId, source: "native-draft-conformance", providerStreaming: false } });
+              eventRetained = true;
+              if ((await entry.current(db, run.id)).authorityHash !== authorityHash) throw forbidden("Draft authority changed at the actual dispatch boundary");
+              controller.signal.throwIfAborted();
+              dispatched = true;
+              if (cancel) cancelTimer = setTimeout(() => { cancellationRequested = true; controller.abort(); }, 100);
+              return (options.fetch ?? guardedRemoteHttpFetch)(...args);
+            },
+          });
           controller.signal.throwIfAborted();
           if ((await entry.current(db, run.id)).authorityHash !== authorityHash) throw forbidden("Draft authority changed before publication");
           const outcome = await broker.recordOutcome(entry.cid, reservation.id, { status: "completed", providerResponseHash: nativeSha256(result), usage: result.usage });
