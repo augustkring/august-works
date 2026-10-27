@@ -3772,5 +3772,35 @@
         "sensitivity": { "internal": "Intern", "confidential": "Fortrolig" }
       }
     }
+  },
+  "serviceStatus": {
+    "title": "Servicestatus",
+    "active": "Der er en opdatering om en driftsforstyrrelse eller vedligeholdelse.",
+    "view": "Se den uafhængige statusside",
+    "noIncident": "Statusudbyderen rapporterer ingen aktiv driftsforstyrrelse.",
+    "loading": "Henter servicestatus…",
+    "unavailable": "Vi kan ikke bekræfte den aktuelle servicestatus. Se den uafhængige statusside, eller kontakt support.",
+    "subscribe": "Tilmeld opdateringer på statussiden",
+    "history": "Hændelseshistorik og efterrapporter",
+    "starts": "Forventet start: {{value}}",
+    "ends": "Forventet afslutning: {{value}}",
+    "updated": "Udbyderens opdatering: {{value}}",
+    "checked": "Kontrolleret: {{value}}",
+    "states": {
+      "operational": "I drift",
+      "degraded_performance": "Nedsat ydeevne",
+      "partial_outage": "Delvist nedbrud",
+      "major_outage": "Større nedbrud",
+      "under_maintenance": "Under vedligeholdelse",
+      "investigating": "Undersøges",
+      "identified": "Identificeret",
+      "monitoring": "Overvåges",
+      "resolved": "Løst",
+      "postmortem": "Efterbehandling",
+      "scheduled": "Planlagt",
+      "in_progress": "I gang",
+      "verifying": "Kontrolleres",
+      "completed": "Afsluttet"
+    }
   }
 }

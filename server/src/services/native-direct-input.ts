@@ -2474,7 +2474,7 @@ async function assertNativeMemoryOutputSnapshotCurrentInScope(db: Db | Transacti
   const { source: dispatch, index: dispatchIndex } = dispatches[dispatches.length - 1]!;
   if (dispatchIndex !== input.snapshot.inputs.length - 1)
     throw forbidden("Native Memory output prefix is unavailable");
-  const [record] = await db.select({ metadata: memoryRecords.metadata }).from(memoryRecords).where(and(
+  const [record] = await db.select({ metadata: memoryRecords.metadata, updatedAt: memoryRecords.updatedAt }).from(memoryRecords).where(and(
     eq(memoryRecords.companyId, input.companyId), eq(memoryRecords.id, input.recordId)));
   const metadata = record?.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
     ? record.metadata as Record<string, unknown> : null;
@@ -2518,8 +2518,24 @@ async function assertNativeMemoryOutputSnapshotCurrentInScope(db: Db | Transacti
     consumedSourceComponents: consumed.components,
     dispatch, managedOpenCodeToolUse: { callId, toolName: "paperclip-self:remember",
       argumentsHash: use!.argumentsHash as string, responseContentHash: intentMatches[0]!.responseContentHash as string } };
-  await assertNativeMemoryToolInvocationCurrent(db, { companyId: input.companyId, issueId: run.nativeIssueId,
-    actor: inputActor, capture, invocationId, status: "succeeded", resultHash: invocation.resultHash, currentReader: input.actor });
+  const outputProofKey = `native-memory-output:${nativeSha256({ companyId: input.companyId, actor: input.actor,
+    currentReadScope: activeMemoryTemporalContexts(db, input.actor, "issue", dispatch.issueId) ?? null,
+    recordId: input.recordId, sourceVersion: record?.updatedAt.toISOString() ?? null, owner: input.snapshot.owner,
+    digest: input.snapshot.digest, policy: input.snapshot.policy, inputs: input.snapshot.inputs,
+    dispatch, invocationId, consumedSourceComponents: consumed.components, sourceSet: consumed.sourceSet })}`;
+  if (scope.active.has(outputProofKey)) throw forbidden("Native Memory output proof contains a source cycle");
+  const outputProofCurrent = scope.complete.has(outputProofKey);
+  if (outputProofCurrent) nativeSourceMemoCount("hits", input.actor);
+  else nativeSourceMemoCount("misses", input.actor);
+  scope.active.add(outputProofKey);
+  try {
+    // Recheck the exact current invocation and dispatch on every access. Only
+    // the immutable consumed-owner graph proof is reused within this locked
+    // Native source transaction and exact temporal read scope.
+    await assertNativeMemoryToolInvocationCurrent(db, { companyId: input.companyId, issueId: run.nativeIssueId,
+      actor: inputActor, capture, invocationId, status: "succeeded", resultHash: invocation.resultHash, currentReader: input.actor });
+    if (!outputProofCurrent) scope.complete.add(outputProofKey);
+  } finally { scope.active.delete(outputProofKey); }
 }
 
 async function assertNativeManagedConsumedSourceSetCurrentInScope(db: Db | Transaction, input: {
@@ -2536,7 +2552,14 @@ async function assertNativeManagedConsumedSourceSetCurrentInScope(db: Db | Trans
   const visitKey = `managed-consumed:${nativeSha256({ companyId: input.companyId, issueId: input.issueId,
     runId: input.runId, actor: actorBinding, components: input.components, sourceSet: input.sourceSet })}`;
   if (scope.active.has(visitKey)) throw forbidden("The Native consumed source graph contains a cycle");
-  if (scope.complete.has(visitKey)) return;
+  if (scope.complete.has(visitKey)) {
+    // The immutable source owners remain pinned by this transaction's privacy
+    // locks. Reuse their completed proof but schedule the exact current-reader
+    // pass again before this read can return.
+    deferNativeSourceReaderCheck(scope, { companyId: input.companyId, runId: input.runId, actor: input.actor,
+      policy: input.sourceSet.policy, inputs: input.sourceSet.inputs });
+    return;
+  }
   scope.active.add(visitKey);
   try {
     await assertNativeManagedConsumedSourceSetCurrentUncached(db, input, scope);

@@ -97,6 +97,7 @@ const apiPrefixes: Record<string, string> = {
   "foundation.ts": "/api",
   "goals.ts": "/api",
   "health.ts": "/api/health",
+  "service-health.ts": "",
   "inbox-agent-policy.ts": "/api",
   "inbox-dismissals.ts": "/api",
   "instance-database-backups.ts": "/api",

@@ -1,4 +1,4 @@
-import { insightExperimentSummarySchema, insightManagementSummarySchema } from "@paperclipai/shared";
+import { insightExperimentSummarySchema, insightManagementSummarySchema, serviceHealthProjectionSchema } from "@paperclipai/shared";
 import { experimentalApiMetadata } from "./experimental-api-metadata.js";
 import { workflowAuthoringApiCommandSchema } from "@paperclipai/shared";
 import { v5ApiPaths } from "./v5-api-paths.js";
@@ -1378,6 +1378,7 @@ const RUNTIME_TOOLS_OPERATIONS = new Set([
 const PUBLIC_OPERATIONS = new Set([
   "GET /api/agent-avatars/{version}/{palette}/{file}",
   "GET /api/health",
+  "GET /api/service-status",
   "GET /api/openapi.json",
   "GET /api/board-claim/{token}",
   "POST /api/cli-auth/challenges",
@@ -1961,6 +1962,14 @@ const healthServerInfoSchema = z
     ]),
   })
   .strict();
+
+registry.registerPath({
+  method: "get",
+  path: "/api/service-status",
+  tags: ["health"],
+  summary: "Read public managed service incident and maintenance communication",
+  responses: { 200: r.ok(serviceHealthProjectionSchema) },
+});
 
 registry.registerPath({
   method: "get",

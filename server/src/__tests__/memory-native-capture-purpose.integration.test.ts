@@ -14,7 +14,7 @@ import { contextManifestService } from "../services/context/context-manifest.js"
 import { assertLearnedAssetAnalyticalSources } from "../services/learning/learning-analytical-sources.js";
 import { memoryService, type MemoryMutationActor } from "../services/memory/memory-service.js";
 import { assertNativeMemoryCaptureSourcePrincipal, canActorReadMemorySources, lockMemoryPrivacy,
-  withNativeMemoryCaptureSources, type NativeMemoryCaptureReceipt } from "../services/memory/memory-privacy.js";
+  canActorReadMemorySourceSet, withNativeMemoryCaptureSources, type NativeMemoryCaptureReceipt } from "../services/memory/memory-privacy.js";
 import { nativePayloadSnapshotSql } from "../services/native-direct-input.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 
@@ -249,6 +249,23 @@ describe("Native capture source purpose stays inside its actual PostgreSQL trans
       // Actual persisted retained-edge cycle; no caller metadata supplies it.
       await tx.update(memoryRecords).set({sourceFoundationRevisionIds:[revisionId]}).where(eq(memoryRecords.id,source.record.id));
       expect(await canActorReadMemorySources(tx,companyId,actor(),source.record.id)).toBe(false);
+    }));
+  });
+  it("shares exact descendant proofs across a source-set read and rechecks revocation in a later read",async()=>{
+    await pinned((tx,receipt)=>withNativeMemoryCaptureSources(tx,companyId,actor(),receipt,async()=>{
+      const [left,right]=await tx.insert(memoryRecords).values([
+        {...source.record,id:randomUUID(),scopeType:"company",scopeId:null,ownerAgentId:null,
+          sourceMemoryIds:[source.record.id],sourceFoundationRevisionIds:[],createdByOperationId:randomUUID()},
+        {...source.record,id:randomUUID(),scopeType:"company",scopeId:null,ownerAgentId:null,
+          sourceMemoryIds:[source.record.id],sourceFoundationRevisionIds:[],createdByOperationId:randomUUID()},
+      ]).returning();
+      expect(left).toBeDefined();
+      expect(right).toBeDefined();
+      expect(await canActorReadMemorySourceSet(tx,companyId,actor(),[left!.id,right!.id])).toBe(true);
+
+      await memoryService(tx).revoke(companyId,source.record.id,{reason:"The shared retained source was revoked"},
+        {principal:{type:"user",userId}});
+      expect(await canActorReadMemorySourceSet(tx,companyId,actor(),[left!.id,right!.id])).toBe(false);
     }));
   });
 });

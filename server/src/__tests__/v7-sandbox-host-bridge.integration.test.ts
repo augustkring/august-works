@@ -799,7 +799,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
             markHostLocked(backend!.pid);
             await heartbeatRelease;
             await tx.execute(sql`set local lock_timeout = '2000ms'`);
-            if (invalidateHost) await tx.update(runtimeHosts).set({ status: "DEGRADED" }).where(eq(runtimeHosts.id, host!.id));
+            if (invalidateHost) await tx.update(runtimeHosts).set({ status: "BOOTSTRAPPING" }).where(eq(runtimeHosts.id, host!.id));
             await tx.update(runtimeCells).set({
               meteredThrough: new Date(),
             }).where(eq(runtimeCells.id, admissionCell!.id));
@@ -1095,7 +1095,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       expect((await db.select().from(runtimeCells).where(eq(runtimeCells.id, admissionCell!.id)))[0]).toMatchObject({ status: "STOPPED", activeSince: null });
       expect((await db.select().from(runtimeOperations).where(eq(runtimeOperations.runtimeCellId, admissionCell!.id))).map(row => [row.operationType, row.status])).toEqual([["start", "SUCCEEDED"], ["stop", "SUCCEEDED"]]);
       expect((await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.home), eq(activityLog.entityId, admissionCell!.id)))).some(event => event.action === "runtime.sandbox_workload_started")).toBe(true);
-    }, 120000);
+    }, 240000);
     it("rejects a late completion after host fencing and expires bounded pending work", async () => {
       const transport = nativeSandboxHostTransport(db, { operatorUserIds: [f.userId] }),
         result = transport

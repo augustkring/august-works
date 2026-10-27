@@ -3772,5 +3772,35 @@
         "sensitivity": { "internal": "Internal", "confidential": "Confidential" }
       }
     }
+  },
+  "serviceStatus": {
+    "title": "Service status",
+    "active": "A service incident or maintenance update is available.",
+    "view": "View independent status page",
+    "noIncident": "The status provider reports no active incident.",
+    "loading": "Checking the status provider…",
+    "unavailable": "We cannot verify current service status. Check the independent status page or contact support.",
+    "subscribe": "Subscribe on the status page",
+    "history": "Incident history and postmortems",
+    "starts": "Expected start: {{value}}",
+    "ends": "Expected end: {{value}}",
+    "updated": "Provider update: {{value}}",
+    "checked": "Checked: {{value}}",
+    "states": {
+      "operational": "Operational",
+      "degraded_performance": "Degraded performance",
+      "partial_outage": "Partial outage",
+      "major_outage": "Major outage",
+      "under_maintenance": "Under maintenance",
+      "investigating": "Investigating",
+      "identified": "Identified",
+      "monitoring": "Monitoring",
+      "resolved": "Resolved",
+      "postmortem": "Post-incident review",
+      "scheduled": "Scheduled",
+      "in_progress": "In progress",
+      "verifying": "Verifying",
+      "completed": "Completed"
+    }
   }
 }

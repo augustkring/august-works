@@ -12999,14 +12999,35 @@ async function createRunnerdBackendWithinSessionClaim(
           eq(heartbeatRuns.agentId, input.execution.binding.agentId),
         ));
       if (!current) throw new Error("managed_native_context_read_binding_invalid");
-      const binding = await assembleNativeContextRead(input.db, {
-        companyId: input.execution.binding.companyId, agentId: input.execution.binding.agentId,
-        runId: input.execution.binding.runId, issueId: input.execution.binding.issueId,
-        projectId: current.projectId ?? null, responsibleUserId: current.responsibleUserId ?? null,
-        actor: { type: "agent", source: "none", companyId: input.execution.binding.companyId,
-          agentId: input.execution.binding.agentId, runId: input.execution.binding.runId,
-          onBehalfOfUserId: current.responsibleUserId ?? undefined }, query,
-      });
+      let binding: NativeContextReadBinding;
+      try {
+        binding = await assembleNativeContextRead(input.db, {
+          companyId: input.execution.binding.companyId, agentId: input.execution.binding.agentId,
+          runId: input.execution.binding.runId, issueId: input.execution.binding.issueId,
+          projectId: current.projectId ?? null, responsibleUserId: current.responsibleUserId ?? null,
+          actor: { type: "agent", source: "none", companyId: input.execution.binding.companyId,
+            agentId: input.execution.binding.agentId, runId: input.execution.binding.runId,
+            onBehalfOfUserId: current.responsibleUserId ?? undefined }, query,
+        });
+      } catch (error) {
+        if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1") {
+          const diagnostic = error && typeof error === "object"
+            ? error as Error & { code?: unknown; status?: unknown; statusCode?: unknown; cause?: { code?: unknown } } : null;
+          const safeCode = (value: unknown) => typeof value === "string" && /^[A-Z0-9_:-]{1,100}$/i.test(value) ? value : null;
+          const frames = diagnostic?.stack?.split("\n").slice(1).flatMap(frame => {
+            const match = /server\/src\/services\/([^\s():]+\.ts):(\d+):\d+/.exec(frame);
+            return match ? [`${match[1]}:${match[2]}`] : [];
+          }).slice(0, 6) ?? [];
+          console.error("managed_native_context_assembly_test_failure", JSON.stringify({
+            name: diagnostic?.name === "HttpError" || diagnostic?.name === "Error" ? diagnostic.name : "other",
+            code: safeCode(diagnostic?.code), causeCode: safeCode(diagnostic?.cause?.code),
+            status: typeof diagnostic?.status === "number" ? diagnostic.status :
+              typeof diagnostic?.statusCode === "number" ? diagnostic.statusCode : null,
+            frames,
+          }));
+        }
+        throw error;
+      }
       input.managedNativeContextReadCapture!.value = binding;
       return { markdown: binding.markdown };
     } } : {}),

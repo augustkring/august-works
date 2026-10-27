@@ -129,6 +129,7 @@ import {
   type SourceTrustMetadata,
 } from "@paperclipai/shared";
 import {
+  agentExecutionManifests,
   agents,
   agentConfigRevisions,
   agentRuntimeState,
@@ -4467,6 +4468,8 @@ export async function buildPaperclipRuntimeMcpServers(input: {
     .select({
       responsibleUserId: heartbeatRuns.responsibleUserId,
       activeIdentityContextId: heartbeatRuns.activeIdentityContextId,
+      contextSnapshot: heartbeatRuns.contextSnapshot,
+      runnerProfileJson: heartbeatRuns.runnerProfileJson,
     })
     .from(heartbeatRuns)
     .where(
@@ -4585,12 +4588,49 @@ export async function buildPaperclipRuntimeMcpServers(input: {
       input.expectedAssignmentDigest !== assignmentDigest && !expectedEmptyAssignment) {
     return [];
   }
+  if (expectedEmptyAssignment) {
+    const [executionManifest] = await input.db.select({ manifest: agentExecutionManifests.manifest })
+      .from(agentExecutionManifests)
+      .where(and(
+        eq(agentExecutionManifests.companyId, input.agent.companyId),
+        eq(agentExecutionManifests.agentId, input.agent.id),
+        eq(agentExecutionManifests.runId, input.runId),
+      )).limit(1);
+    const manifest = parseObject(executionManifest?.manifest);
+    const authoredVersion = parseObject(manifest.agentDefinitionVersion);
+    const runContextAuthored = parseObject(runIdentity?.contextSnapshot).agentDefinitionVersion;
+    const profile = parseObject(runIdentity?.runnerProfileJson);
+    const nativeInput = parseObject(profile.nativeExecutionInput);
+    const nativeBootstrapSources = parseObject(profile.nativeBootstrapAuthoredSources);
+    const bootstrapInputs = Array.isArray(nativeBootstrapSources.inputs) ? nativeBootstrapSources.inputs : [];
+    const authoredNoToolAuthority = authoredAgentHasNoNativeToolAuthority(
+      executionManifest?.manifest,
+      profile.nativeExecutionInput,
+    );
+    const authoredCandidate = typeof authoredVersion.revisionId === "string" ||
+      Boolean(runContextAuthored && typeof runContextAuthored === "object" && !Array.isArray(runContextAuthored)) ||
+      bootstrapInputs.some((entry) => parseObject(entry).kind === "authored_definition");
+    if (authoredNoToolAuthority || authoredCandidate) {
+      await service.recordRuntimeMcpDeliveryDiagnostic({
+        companyId: input.agent.companyId,
+        agentId: input.agent.id,
+        runId: input.runId,
+        permittedNotInstalledConnections,
+        firstPartyToolsDelivered: false,
+      });
+      // The exact authored manifest plus original native MCP binding is the
+      // no-tool authority proof. Legacy authored markers without that complete
+      // proof also fail closed; an empty App set never grants first-party tools.
+      return [];
+    }
+  }
   if (assignedConnections.length === 0) {
     await service.recordRuntimeMcpDeliveryDiagnostic({
       companyId: input.agent.companyId,
       agentId: input.agent.id,
       runId: input.runId,
       permittedNotInstalledConnections,
+      firstPartyToolsDelivered: true,
     });
   }
   const profileKey = `native:${input.agent.id}:${assignmentDigest}`;
@@ -4749,6 +4789,19 @@ export async function buildPaperclipRuntimeMcpServers(input: {
       connectionId: `assignment:${assignmentDigest}`,
     },
   ];
+}
+
+/** Immutable authored manifests with no capabilities and no original MCP
+ * binding must stay text-only; an empty App list cannot create first-party tools. */
+export function authoredAgentHasNoNativeToolAuthority(manifestValue: unknown, nativeInputValue: unknown): boolean {
+  const manifest = parseObject(manifestValue);
+  const authoredVersion = parseObject(manifest.agentDefinitionVersion);
+  const nativeInput = parseObject(nativeInputValue);
+  const runtimeContext = parseObject(nativeInput.runtimeContext);
+  const mcp = parseObject(runtimeContext.mcp);
+  return typeof authoredVersion.revisionId === "string" &&
+    Array.isArray(manifest.capabilities) && manifest.capabilities.length === 0 &&
+    mcp.bindingId === null;
 }
 function createAdapterRuntimeMcpAccess(
   servers: AdapterRuntimeMcpServer[],

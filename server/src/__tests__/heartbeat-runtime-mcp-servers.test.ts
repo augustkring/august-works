@@ -24,7 +24,7 @@ import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
-import { buildPaperclipRuntimeMcpServers, createManagedMcpRunConfig } from "../services/heartbeat.js";
+import { authoredAgentHasNoNativeToolAuthority, buildPaperclipRuntimeMcpServers, createManagedMcpRunConfig } from "../services/heartbeat.js";
 
 import { toolAccessService } from "../services/tool-access.js";
 
@@ -500,6 +500,46 @@ describeEmbeddedPostgres("heartbeat runtime MCP servers", () => {
       reasonCode: "permitted_connections_not_installed",
       details: expect.objectContaining({ runId, deliveredServerCount: 1, deliveredAssignmentCount: 0, deliveredFirstPartyTools: true }),
     });
+  });
+
+  it("preserves an authored no-MCP Tool Gateway snapshot when its App assignment is empty", async () => {
+    const [company] = await db.insert(companies).values({
+      name: `Authored no-MCP ${randomUUID()}`,
+      issuePrefix: `AN${randomUUID().slice(0, 5).toUpperCase()}`,
+    }).returning();
+    const [agent] = await db.insert(agents).values({
+      companyId: company!.id,
+      name: "Authored no-MCP Agent",
+      role: "engineer",
+      adapterType: "paperclip_runner",
+      adapterConfig: {},
+    }).returning();
+    const runId = randomUUID();
+    await db.insert(heartbeatRuns).values({
+      id: runId,
+      companyId: company!.id,
+      agentId: agent!.id,
+      status: "running",
+      contextSnapshot: { agentDefinitionVersion: { revisionId: randomUUID(), definitionHash: "a".repeat(64) } },
+    });
+
+    await expect(buildPaperclipRuntimeMcpServers({
+      db,
+      agent: agent!,
+      runId,
+      expectedAssignmentDigest: null,
+    })).resolves.toEqual([]);
+    expect(await db.select().from(toolMcpGateways)).toHaveLength(0);
+    expect(await db.select().from(toolMcpGatewayTokens)).toHaveLength(0);
+  });
+
+  it("derives authored no-tool authority from the immutable manifest and original MCP binding", () => {
+    const manifest = { agentDefinitionVersion: { revisionId: randomUUID() }, capabilities: [] };
+    expect(authoredAgentHasNoNativeToolAuthority(manifest, { runtimeContext: { mcp: { bindingId: null } } })).toBe(true);
+    expect(authoredAgentHasNoNativeToolAuthority({ ...manifest, capabilities: [{ capability: "task.update" }] },
+      { runtimeContext: { mcp: { bindingId: null } } })).toBe(false);
+    expect(authoredAgentHasNoNativeToolAuthority(manifest,
+      { runtimeContext: { mcp: { bindingId: "native-mcp:run" } } })).toBe(false);
   });
 
   it("injects only managed gateways whose profile connections are installed for the agent", async () => {

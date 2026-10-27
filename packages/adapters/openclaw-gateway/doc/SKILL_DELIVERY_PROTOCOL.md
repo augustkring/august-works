@@ -34,6 +34,11 @@ allows only SKILL.md plus one-level Markdown references. The adapter applies
 the same 4 MiB packed archive ceiling. The admitted
 Blentera inventory digest is checked over every local file before packing; the
 same archive digest is required from the upload commit and install receipt.
+The adapter writes USTAR headers directly with sorted paths, fixed zero
+timestamps, fixed permissions, and numeric zero ownership. Rebuilding after a
+lost upload response produces the same archive SHA and therefore the same
+run/pin/archive idempotency key; retry staging-directory timestamps never
+create a second upload identity.
 
 OpenClaw's skills.files.get returns only the selected skill's SKILL.md;
 the current skills.status report has no full-file inventory digest. The

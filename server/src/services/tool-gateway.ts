@@ -20,6 +20,7 @@ import { withCurrentTaskSourceRead } from "./task-source-read-scope.js";
 import { decisionSearchService } from "./decisions.js";
 import { processFindingService } from "./process-findings.js";
 import { withNativeAnalyticalReader } from "./analytical-reader.js";
+import { managedServiceHealthFromEnvironment } from "./experience/service-health.js";
 import type { NativeModelOutputCapture } from "./native-runtime/native-execution-input.js";
 import { nativeSha256 } from "./native-runtime/canonical.js";
 import {
@@ -1483,6 +1484,13 @@ const BUILTIN_TOOLS: ToolGatewayDescriptor[] = [
     pluginId: "paperclip-self", providerType: "paperclip_self", risk: "read",
   },
   {
+    name: "paperclip-self:get_service_status",
+    displayName: "Read current service status",
+    description: "Read the bounded public Blentera Statuspage projection. This is separate from Support case intake availability and returns no customer case or credentials.",
+    parametersSchema: { type: "object", properties: {}, additionalProperties: false },
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "read",
+  },
+  {
     name: "paperclip-self:list_authorized_apps",
     displayName: "Check authorized Apps",
     description: "List only active Apps and connections whose tools are currently discoverable under this session's profile and policy. Reports bounded health state, never credentials or connection configuration.",
@@ -1646,6 +1654,7 @@ export function createToolGatewayService(
   db: Db,
   options: {
     supportCaseDataPolicy?: ReturnType<typeof readSupportCaseDataPolicy>;
+    serviceHealthReader?: ReturnType<typeof managedServiceHealthFromEnvironment>;
     pluginToolDispatcher?: PluginToolDispatcher;
     deploymentMode?: DeploymentMode;
     deploymentExposure?: DeploymentExposure;
@@ -1688,6 +1697,7 @@ export function createToolGatewayService(
   } = {},
 ) {
   const supportCaseDataPolicy = options.supportCaseDataPolicy ?? readSupportCaseDataPolicy(process.env);
+  const serviceHealthReader = options.serviceHealthReader ?? managedServiceHealthFromEnvironment(process.env);
   // Tool Gateway sessions persist only their token hash and execution IDs.
   // Retain the original verified Agent actor in process memory so Memory
   // writers can recheck its current credential, key revocation, run, and
@@ -4014,6 +4024,17 @@ export function createToolGatewayService(
         "Support intake status requires the original verified Agent credential and represented Human", "support_reader_authority_unavailable");
       const data = await customerSupportCaseService(db, { dataPolicy: supportCaseDataPolicy })
         .intakePolicyFromNative(actor, session.companyId);
+      return { content: JSON.stringify(data), data };
+    }
+
+    if (tool.name === "paperclip-self:get_service_status") {
+      if (!session.agentId || !session.runId) throw new ToolGatewayHttpError(403,
+        "Service status requires an Agent-scoped run", "agent_context_required");
+      const actor = currentSessionMemoryActor(session);
+      if (!actor) throw new ToolGatewayHttpError(403,
+        "Service status requires the original verified Agent credential and represented Human", "service_status_authority_unavailable");
+      await assertPlatformSkillAdmission(db, actor, blenteraPlatformContractHashes());
+      const data = await serviceHealthReader.read();
       return { content: JSON.stringify(data), data };
     }
 
@@ -10124,6 +10145,7 @@ export function createToolGatewayService(
       agentId: string;
       runId: string;
       permittedNotInstalledConnections: Array<{ id: string; name: string }>;
+      firstPartyToolsDelivered?: boolean;
     }) {
       if (input.permittedNotInstalledConnections.length === 0) return;
       const [run] = await db
@@ -10150,9 +10172,9 @@ export function createToolGatewayService(
         details: {
           decision: "diagnostic",
           reasonCode: "permitted_connections_not_installed",
-          deliveredServerCount: 1,
+          deliveredServerCount: input.firstPartyToolsDelivered === false ? 0 : 1,
           deliveredAssignmentCount: 0,
-          deliveredFirstPartyTools: true,
+          deliveredFirstPartyTools: input.firstPartyToolsDelivered !== false,
           permittedNotInstalledCount:
             input.permittedNotInstalledConnections.length,
           permittedNotInstalledConnections:

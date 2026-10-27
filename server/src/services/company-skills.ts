@@ -331,6 +331,25 @@ export function assertPlatformSkillCustomerMutable(skill: { key?: string | null;
   if (hasPlatformSkillIdentity(skill)) throw forbidden("The required Blentera platform Skill is platform-owned and cannot be changed by a company", { code: "platform_skill_reserved" });
 }
 
+function assertSkillMarkdownIdentityCustomerMutable(
+  skill: Pick<CompanySkill, "key" | "slug" | "name">,
+  markdown: string,
+) {
+  const parsed = parseFrontmatterMarkdown(markdown);
+  const frontmatterMetadata = isPlainRecord(parsed.frontmatter.metadata) ? parsed.frontmatter.metadata : null;
+  const contentIdentity = {
+    key: readCanonicalSkillKey(parsed.frontmatter, frontmatterMetadata),
+    slug: deriveImportedSkillSlug(parsed.frontmatter, skill.slug),
+    name: asString(parsed.frontmatter.name) ?? skill.name,
+  };
+  // Check the persisted identity and every identity the submitted document
+  // declares. A document cannot claim the reserved key while retaining a
+  // customer key in its import envelope (or vice versa).
+  assertPlatformSkillCustomerMutable(skill);
+  assertPlatformSkillCustomerMutable(contentIdentity);
+  return parsed;
+}
+
 function assertImportedSkillKeyAllowed(skill: ImportedSkill) {
   if (hasPlatformSkillIdentity(skill)) {
     if (skill.key === BLENTERA_PLATFORM_SKILL_KEY && asString(skill.metadata?.sourceKind) === "paperclip_bundled") return;
@@ -3749,10 +3768,14 @@ export function companySkillService(db: Db) {
     if (!options.skipInventoryRefresh) await ensureSkillInventoryCurrent(companyId);
     const skill = options.skill ?? await getById(companyId, skillId, options.database);
     if (!skill) throw notFound("Skill not found");
-    if (hasPlatformSkillIdentity(skill) && !(options.release && options.skipInventoryRefresh && asString(skill.metadata?.sourceKind) === "paperclip_bundled")) assertPlatformSkillCustomerMutable(skill);
-    const fileInventory = serializeVersionFileInventory(
-      options.fileInventory ?? await collectVersionFileInventory(companyId, skill),
-    );
+    const platformRelease = Boolean(options.release && options.skipInventoryRefresh && asString(skill.metadata?.sourceKind) === "paperclip_bundled");
+    if (!platformRelease) assertPlatformSkillCustomerMutable(skill);
+    const sourceInventory = options.fileInventory ?? await collectVersionFileInventory(companyId, skill);
+    if (!platformRelease) {
+      const skillMarkdown = sourceInventory.find(entry => normalizePortablePath(entry.path) === "SKILL.md")?.content;
+      if (typeof skillMarkdown === "string") assertSkillMarkdownIdentityCustomerMutable(skill, skillMarkdown);
+    }
+    const fileInventory = serializeVersionFileInventory(sourceInventory);
     const persist = async (tx: DbOrTransaction) => {
       await tx.execute(sql`
         select ${companySkills.id}
@@ -4110,6 +4133,10 @@ export function companySkillService(db: Db) {
     const forkSlug = uniqueSkillSlug(normalizeSkillSlug(input.slug ?? `${source.slug}-fork`) ?? `${source.slug}-fork`, usedSlugs);
     const forkName = input.name?.trim() || `${source.name} Fork`;
     const forkKey = `company/${companyId}/${forkSlug}`;
+    const markdown = await readFile(companyId, source.id, "SKILL.md").then(file => file?.content ?? source.markdown);
+    const parsed = assertSkillMarkdownIdentityCustomerMutable({ key: forkKey, slug: forkSlug, name: forkName }, markdown);
+    const effectiveForkName = asString(parsed.frontmatter.name) ?? forkName;
+    assertPlatformSkillCustomerMutable({ key: forkKey, slug: forkSlug, name: effectiveForkName });
     const plannedReassignments = await planSkillReassignments(companyId, source, forkKey, input.reassignAgentIds);
     const managedRoot = resolveManagedSkillsRoot(companyId);
     const forkDir = path.resolve(managedRoot, forkSlug);
@@ -4120,15 +4147,14 @@ export function companySkillService(db: Db) {
       if (!detail) continue;
       const targetPath = path.resolve(forkDir, detail.path);
       await fs.mkdir(path.dirname(targetPath), { recursive: true });
-      await fs.writeFile(targetPath, detail.content, "utf8");
+      await fs.writeFile(targetPath, detail.path === "SKILL.md" ? markdown : detail.content, "utf8");
     }
     const skillFilePath = path.join(forkDir, "SKILL.md");
-    const markdown = await fs.readFile(skillFilePath, "utf8").catch(() => source.markdown);
+    const persistedMarkdown = await fs.readFile(skillFilePath, "utf8").catch(() => markdown);
     if (!(await statPath(skillFilePath))?.isFile()) {
       await fs.writeFile(skillFilePath, markdown, "utf8");
     }
     const inventory = await collectLocalSkillInventory(forkDir);
-    const parsed = parseFrontmatterMarkdown(markdown);
     const metadata = {
       sourceKind: "managed_local",
       forkedFromSkillId: source.id,
@@ -4141,7 +4167,7 @@ export function companySkillService(db: Db) {
       slug: forkSlug,
       name: asString(parsed.frontmatter.name) ?? forkName,
       description: asString(parsed.frontmatter.description) ?? source.description,
-      markdown,
+      markdown: persistedMarkdown,
       sourceType: "local_path",
       sourceLocator: forkDir,
       sourceRef: null,
@@ -4624,6 +4650,7 @@ export function companySkillService(db: Db) {
     const markdown = input.markdown?.trim().length
       ? input.markdown
       : forkSource?.markdown ?? fallbackMarkdown;
+    assertSkillMarkdownIdentityCustomerMutable({ key, slug, name: input.name }, markdown);
 
     return db.transaction(async (tx) => {
       await tx.execute(sql`
@@ -4811,12 +4838,16 @@ export function companySkillService(db: Db) {
       const absolutePath = resolveLocalSkillFilePath(skill, normalizedPath);
       if (!absolutePath) throw notFound("Skill file not found");
 
+      const parsedSkillMarkdown = normalizedPath === "SKILL.md"
+        ? assertSkillMarkdownIdentityCustomerMutable(skill, content)
+        : null;
+
       const previousContent = await fs.readFile(absolutePath, "utf8").catch(() => null);
       await fs.mkdir(path.dirname(absolutePath), { recursive: true });
       await fs.writeFile(absolutePath, content, "utf8");
 
       if (normalizedPath === "SKILL.md") {
-        const parsed = parseFrontmatterMarkdown(content);
+        const parsed = parsedSkillMarkdown!;
         await tx
           .update(companySkills)
           .set({
@@ -6429,6 +6460,11 @@ export function companySkillService(db: Db) {
     const out: CompanySkill[] = [];
     for (const skill of imported) {
       assertImportedSkillKeyAllowed(skill);
+      const bundledPlatformRelease = skill.key === BLENTERA_PLATFORM_SKILL_KEY
+        && asString(skill.metadata?.sourceKind) === "paperclip_bundled";
+      if (!bundledPlatformRelease) {
+        assertSkillMarkdownIdentityCustomerMutable(skill, skill.markdown);
+      }
       assertImportedSkillSourceAllowed(skill);
       const existing = await getByKey(companyId, skill.key, database);
       const existingMeta = existing ? getSkillMeta(existing) : {};

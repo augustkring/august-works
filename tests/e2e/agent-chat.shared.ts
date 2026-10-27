@@ -13,6 +13,16 @@ import {
 // Per-file Playwright configuration (test.use, test.setTimeout) must stay in
 // the spec files themselves: calling test.use() from a shared helper makes
 // Playwright fail the whole worker with "inconsistent test.use() options".
+const CHAT_MUTABLE_EXPERIMENTAL_FLAGS = [
+  "analytical_lineage_v8",
+  "business_metrics_v8",
+  "management_reviews_v8",
+  "management_chat_tools_v8",
+  "enableContextEngineV1",
+  "ai_use_cases_v7",
+  "governance_evidence_v7",
+] as const;
+
 export async function json(response: Awaited<ReturnType<APIRequestContext["get"]>>) {
   expect(response.ok(), `${response.status()} ${await response.text()}`).toBe(
     true,
@@ -226,6 +236,9 @@ export async function setup(request: APIRequestContext, page?: Page) {
             data: {
               enableAgentChat: original.enableAgentChat,
               enableClassicTaskInterface: original.enableClassicTaskInterface,
+              ...Object.fromEntries(CHAT_MUTABLE_EXPERIMENTAL_FLAGS.map(
+                (flag) => [flag, original[flag]],
+              )),
               ...(nativeChat ? { enableNativeRunner: original.enableNativeRunner } : {}),
             },
             timeout: 5_000,

@@ -2,6 +2,7 @@ import { productIdentityRoutes } from "./routes/product-identity.js";
 import { companyImportJobService, scheduleCompanyImportRecovery } from "./services/company-import-jobs.js";
 import { purgeExpiredNotificationChannelCommands } from "./services/notifications/channel-retention.js";
 import { customerSupportRoutes } from "./routes/customer-support.js";
+import { serviceHealthRoutes } from "./routes/service-health.js";
 import { readSupportCaseDataPolicy } from "./services/experience/support-case-configuration.js";
 import { firstPartySupportModelGateway } from "./services/orchestration/first-party-support-model-gateway.js";
 import { searchAuthorizedSupportHelp } from "./services/experience/support-assistant-help.js";
@@ -648,6 +649,7 @@ export async function createApp(
   // Public contact discovery stays behind the configured origin/Host guards,
   // and is available before sign-in without exposing tenant information.
   app.use(productIdentityRoutes());
+  app.use(serviceHealthRoutes());
   if (opts.deploymentProfile !== "saas") app.use(cloudRuntimeIdentityMiddleware(db));
   // Connection-intent tools carry their own short-lived, run-bound bearer and
   // must be reachable by remote adapters that intentionally do not receive an

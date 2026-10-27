@@ -1,5 +1,4 @@
 import { adapterWebSocketOptions } from "@paperclipai/adapter-utils/network-policy";
-import { createTarballFromDirectory } from "@paperclipai/adapter-utils/sandbox-managed-runtime";
 import type {
   AdapterExecutionContext,
   AdapterExecutionResult,
@@ -127,20 +126,60 @@ async function unbindRequiredPlatformTools(client: GatewayWsClient, binding: Ope
 async function createSkillArchive(files: PlatformSkillFile[]): Promise<{ directory: string; archive: string; cleanup: () => Promise<void> }> {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-openclaw-skill-"));
   const archive = path.join(directory, "skill.tar");
-  const staged = path.join(directory, "source");
-  await fs.mkdir(staged, { mode: 0o700 });
-  for (const file of files) {
-    const target = path.join(staged, ...file.path.split("/"));
-    await fs.mkdir(path.dirname(target), { recursive: true, mode: 0o700 });
-    await fs.writeFile(target, file.bytes, { mode: 0o400, flag: "wx" });
-  }
   try {
-    await createTarballFromDirectory({ localDir: staged, archivePath: archive });
+    await fs.writeFile(archive, buildDeterministicSkillArchive(files), { mode: 0o400, flag: "wx" });
     return { directory, archive, cleanup: () => fs.rm(directory, { recursive: true, force: true }) };
   } catch (error) {
     await fs.rm(directory, { recursive: true, force: true });
     throw error;
   }
+}
+
+/** USTAR with fixed ownership, permissions and timestamps gives retries the
+ * same bytes even when upload.begin lost its response and a new temp dir is used. */
+export function buildDeterministicSkillArchive(files: PlatformSkillFile[]): Buffer {
+  const sorted = [...files].sort((a, b) => Buffer.compare(Buffer.from(a.path, "utf8"), Buffer.from(b.path, "utf8")));
+  const blocks: Buffer[] = [];
+  const octal = (header: Buffer, offset: number, length: number, value: number) => {
+    const encoded = Math.floor(value).toString(8);
+    if (encoded.length > length - 1) throw new Error("required_skill_tar_field_overflow");
+    header.write(encoded.padStart(length - 1, "0") + "\0", offset, length, "ascii");
+  };
+  for (const file of sorted) {
+    if (!/^(?:SKILL\.md|references\/[a-z0-9-]+\.md)$/.test(file.path) || file.bytes.byteLength > 128 * 1024) {
+      throw new Error("required_skill_tar_entry_invalid");
+    }
+    const header = Buffer.alloc(512);
+    const encodedPath = Buffer.from(file.path, "utf8");
+    let name = encodedPath;
+    let prefix = Buffer.alloc(0);
+    if (encodedPath.byteLength > 100) {
+      const slash = file.path.lastIndexOf("/");
+      const base = Buffer.from(file.path.slice(slash + 1), "utf8");
+      const parent = Buffer.from(file.path.slice(0, slash), "utf8");
+      if (base.byteLength > 100 || parent.byteLength > 155) throw new Error("required_skill_tar_path_overflow");
+      name = base;
+      prefix = parent;
+    }
+    name.copy(header, 0);
+    octal(header, 100, 8, 0o444);
+    octal(header, 108, 8, 0);
+    octal(header, 116, 8, 0);
+    octal(header, 124, 12, file.bytes.byteLength);
+    octal(header, 136, 12, 0);
+    header.fill(0x20, 148, 156);
+    header[156] = 0x30;
+    header.write("ustar\0", 257, 6, "ascii");
+    header.write("00", 263, 2, "ascii");
+    prefix.copy(header, 345);
+    const checksum = header.reduce((sum, byte) => sum + byte, 0);
+    header.write(checksum.toString(8).padStart(6, "0") + "\0 ", 148, 8, "ascii");
+    blocks.push(header, file.bytes);
+    const padding = (512 - (file.bytes.byteLength % 512)) % 512;
+    if (padding) blocks.push(Buffer.alloc(padding));
+  }
+  blocks.push(Buffer.alloc(1024));
+  return Buffer.concat(blocks);
 }
 
 async function deliverRequiredPlatformSkill(params: {

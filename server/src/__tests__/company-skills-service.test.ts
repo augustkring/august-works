@@ -692,6 +692,42 @@ describeEmbeddedPostgres("companySkillService.list", () => {
     })).rejects.toMatchObject({ status: 409, details: { code: "platform_skill_contract_drift" } });
   });
 
+  it("rejects customer Skill documents that claim the reserved platform identity before writing files or versions", async () => {
+    const companyId = randomUUID();
+    await db.insert(companies).values({ id: companyId, name: "Skill identity validation", issuePrefix: `T${companyId.slice(0, 6)}` });
+    const skill = await svc.createLocalSkill(companyId, { name: "Customer Notes" });
+    const originalFile = await svc.readFile(companyId, skill.id, "SKILL.md");
+    const originalRow = await svc.getById(companyId, skill.id);
+    const originalVersions = await svc.listVersions(companyId, skill.id);
+    const attacks = [
+      "---\nname: blentera-platform\n---\n# Customer Notes\n",
+      "---\nname: Customer Notes\nslug: blentera-platform\n---\n# Customer Notes\n",
+      "---\nname: Customer Notes\nmetadata:\n  skillKey: blentera-platform\n---\n# Customer Notes\n",
+    ];
+    for (const markdown of attacks) {
+      await expect(svc.updateFile(companyId, skill.id, "SKILL.md", markdown))
+        .rejects.toMatchObject({ status: 403, details: { code: "platform_skill_reserved" } });
+      await expect(svc.readFile(companyId, skill.id, "SKILL.md")).resolves.toEqual(originalFile);
+      await expect(svc.getById(companyId, skill.id)).resolves.toEqual(originalRow);
+      await expect(svc.listVersions(companyId, skill.id)).resolves.toEqual(originalVersions);
+    }
+    await expect(svc.createVersion(companyId, skill.id, {}, null, {
+      fileInventory: [{ path: "SKILL.md", kind: "skill", content: attacks[0]! }],
+    })).rejects.toMatchObject({ status: 403, details: { code: "platform_skill_reserved" } });
+    await expect(svc.listVersions(companyId, skill.id)).resolves.toEqual(originalVersions);
+
+    const rejectedCreateDir = path.join(paperclipHome!, "instances", "default", "skills", companyId, "harmless-folder");
+    await expect(svc.createLocalSkill(companyId, {
+      name: "Harmless Folder",
+      slug: "harmless-folder",
+      markdown: attacks[0]!,
+    })).rejects.toMatchObject({ status: 403, details: { code: "platform_skill_reserved" } });
+    await expect(fs.stat(rejectedCreateDir)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(svc.listFull(companyId)).resolves.not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ slug: "harmless-folder" }),
+    ]));
+  });
+
   it("does not retouch unchanged bundled skills during list refresh", async () => {
     const companyId = randomUUID();
     await db.insert(companies).values({

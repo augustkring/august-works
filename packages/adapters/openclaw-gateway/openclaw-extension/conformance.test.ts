@@ -17,7 +17,7 @@ const identity = {
 function harness(fetchImpl: typeof fetch, allow = ["blentera_platform_list_tools", "blentera_platform_call_tool"]) {
   vi.stubGlobal("fetch", fetchImpl);
   const methods = new Map<string, Function>();
-  let toolFactory: Function | undefined;
+  let toolFactory: Function | { create: Function } | undefined;
   register({
     pluginConfig: { paperclipApiOrigins: ["https://paperclip.example"] },
     runtime: { config: { current: () => ({
@@ -28,16 +28,19 @@ function harness(fetchImpl: typeof fetch, allow = ["blentera_platform_list_tools
       } },
     }) } },
     registerGatewayMethod: (name: string, handler: Function) => methods.set(name, handler),
-    registerTool: (factory: Function) => { toolFactory = factory; },
+    registerTool: (factory: Function | { create: Function }) => { toolFactory = factory; },
   } as never);
-  return { methods, makeTools: (ctx: unknown) => toolFactory?.(ctx) as Array<Record<string, any>> };
+  return { methods, makeTools: (ctx: unknown) => {
+    const factory = toolFactory as unknown as Function | { create: Function };
+    return (typeof factory === "function" ? factory(ctx) : factory?.create(ctx)) as Array<Record<string, any>>;
+  } };
 }
 
 function mcpResponse(body: unknown, status = 200) {
   return new Response(status === 202 ? null : JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
-function bindingFetch(options: { expired?: boolean; denyCall?: boolean; wrongRun?: boolean } = {}): typeof fetch {
+function bindingFetch(options: { expired?: boolean; denyCall?: boolean; wrongRun?: boolean; mutateAttestation?: Record<string, unknown> } = {}): typeof fetch {
   return vi.fn(async (_input: URL | RequestInfo, init?: RequestInit) => {
     const request = JSON.parse(String(init?.body)) as { method: string };
     if (request.method === "initialize") return mcpResponse({ jsonrpc: "2.0", id: "1", result: {
@@ -45,6 +48,7 @@ function bindingFetch(options: { expired?: boolean; denyCall?: boolean; wrongRun
       _meta: { "blentera/governed-run-binding.v1": {
         ...identity,
         ...(options.wrongRun ? { paperclipRunId: "other-run" } : {}),
+        ...options.mutateAttestation,
         responsibleUserId: "human-1",
         gatewayPublicId: "gw_abc",
         assignmentDigest: identity.assignmentDigest,
@@ -102,6 +106,22 @@ describe("Blentera OpenClaw governed bridge protocol v1", () => {
     const broadPolicy = harness(broadPolicyFetch, ["group:fs", "blentera_platform_list_tools", "blentera_platform_call_tool"]);
     await expect(invokeHandler(broadPolicy.methods.get("blentera.platform.bind.v1")!, bindParams)).rejects.toThrow("allow only the two Blentera");
     expect(broadPolicyFetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects stale contract, assignment, capability, or Skill pins before tool discovery", async () => {
+    const staleClaims = [
+      { operationManifestHash: "0".repeat(64) },
+      { toolCatalogContractHash: "0".repeat(64) },
+      { assignmentDigest: "0".repeat(64) },
+      { runtimeCapabilitySnapshotHash: "f".repeat(64) },
+      { platformSkill: { ...identity.platformSkill, digest: `sha256:${"0".repeat(64)}` } },
+    ];
+    for (const mutateAttestation of staleClaims) {
+      const fetchImpl = bindingFetch({ mutateAttestation });
+      const api = harness(fetchImpl);
+      await expect(invokeHandler(api.methods.get("blentera.platform.bind.v1")!, bindParams)).rejects.toThrow("did not attest");
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+    }
   });
 
   it("rejects expired run tokens, current-policy revocation, and invocation context substitution", async () => {

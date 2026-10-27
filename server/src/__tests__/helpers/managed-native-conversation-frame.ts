@@ -28,6 +28,9 @@ import { actorMiddleware } from "../../middleware/auth.js";
 import type { BetterAuthSessionResult } from "../../auth/better-auth.js";
 import { verifyRuntimeToolsToken } from "../../runtime-tools-token.js";
 import { setupRunnerPrpWebSocketServer, runnerPrpWebSocketInternals } from "../../realtime/runner-prp-ws.js";
+import { createToolGatewayService } from "../../services/tool-gateway.js";
+import { mcpGatewayProtocolRoutes } from "../../routes/tool-gateway.js";
+import { registerAssignedMcpGateway } from "../../services/native-runtime/assigned-mcp-tools.js";
 import type { AuthorizationActor } from "../../services/authorization.js";
 
 const OPENCODE_SHA256 = "513f500a1a5ea1dc7d865547ac87b32a8936334e8d5abd5b3ff585c45a170080";
@@ -286,6 +289,12 @@ export async function runManagedNativeConversationFrame(input: {
   const issuerFacts: Array<{ scope: string | null; runId: string; issueId: string; generation: number; manifestId: string; manifestHash: string }> = [];
   const brokerApp = express();
   brokerApp.use(express.json({ limit: "2mb" }));
+  // Heartbeat delivers a run-scoped MCP URL to the actual runner. Give the
+  // fixture that URL's real protocol endpoint instead of pointing it at a
+  // dummy base URL or suppressing managed MCP delivery.
+  const assignedToolGateway = createToolGatewayService(db);
+  registerAssignedMcpGateway(db, assignedToolGateway);
+  brokerApp.use(mcpGatewayProtocolRoutes(assignedToolGateway));
   const brokerRequestByObject = new WeakMap<object, (typeof brokerRequestFacts)[number]>();
   brokerApp.use((req, res, next) => {
     if (req.method === "POST" && req.path === "/runtime-tools/model/v1/messages") {
@@ -352,7 +361,9 @@ export async function runManagedNativeConversationFrame(input: {
   const prevJwt = process.env.PAPERCLIP_AGENT_JWT_SECRET;
   const prevCa = process.env.NODE_EXTRA_CA_CERTS;
   const prevRunnerPublicUrl = process.env.PAPERCLIP_RUNNER_PUBLIC_URL;
+  const prevPaperclipApiUrl = process.env.PAPERCLIP_API_URL;
   process.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN = origin;
+  process.env.PAPERCLIP_API_URL = origin;
   process.env.PAPERCLIP_AGENT_JWT_SECRET = `conversation-fixture-${randomUUID()}`;
   process.env.NODE_EXTRA_CA_CERTS = certBundlePath;
   if (input.sandboxRelay) {
@@ -526,6 +537,7 @@ export async function runManagedNativeConversationFrame(input: {
     if (prevJwt === undefined) delete process.env.PAPERCLIP_AGENT_JWT_SECRET; else process.env.PAPERCLIP_AGENT_JWT_SECRET = prevJwt;
     if (prevCa === undefined) delete process.env.NODE_EXTRA_CA_CERTS; else process.env.NODE_EXTRA_CA_CERTS = prevCa;
     if (prevRunnerPublicUrl === undefined) delete process.env.PAPERCLIP_RUNNER_PUBLIC_URL; else process.env.PAPERCLIP_RUNNER_PUBLIC_URL = prevRunnerPublicUrl;
+    if (prevPaperclipApiUrl === undefined) delete process.env.PAPERCLIP_API_URL; else process.env.PAPERCLIP_API_URL = prevPaperclipApiUrl;
     await makeConversationFixtureTreeWritable(runHome);
     await rm(runHome, { recursive: true, force: true });
   }

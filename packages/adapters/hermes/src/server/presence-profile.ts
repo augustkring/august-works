@@ -18,7 +18,9 @@ export function hermesPresenceConfig(config: Record<string, unknown>, identity: 
   const instance = process.env.PAPERCLIP_INSTANCE_ID || "default";
   if (!/^[a-zA-Z0-9_-]{1,100}$/.test(instance)) throw new Error("hermes_instance_identity_invalid");
   const home = path.resolve(process.env.PAPERCLIP_HOME || path.join(os.homedir(), ".paperclip"), "instances", instance,
-    "runtime", "hermes-profiles", createHash("sha256").update(JSON.stringify({ companyId: identity.companyId, agentId: identity.agentId })).digest("hex"));
+    // Hermes' CLI honors HERMES_HOME without consulting global active_profile
+    // only when its immediate parent is named profiles (main._apply_profile_override).
+    "runtime", "hermes-profiles", "profiles", createHash("sha256").update(JSON.stringify({ companyId: identity.companyId, agentId: identity.agentId })).digest("hex"));
   const env = object(config.env);
   for (const [key, expected] of Object.entries({ HERMES_HOME: home, HERMES_CONFIG: path.join(home, "config.yaml"), HERMES_ENV: path.join(home, ".env") })) {
     if (typeof env[key] === "string" && env[key] && path.resolve(env[key]) !== expected)
