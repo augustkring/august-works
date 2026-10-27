@@ -802,7 +802,7 @@ export class PaperclipRunnerToolAuthority {
     }
     const descriptor = CAPABILITY_SEMANTIC_TOOL_CATALOG.find(
       (candidate) => candidate.operationId === call.tool,
-    );
+    ) ?? paperclipSemanticAction(call.tool);
     if (
       !descriptor ||
       !descriptor.allowedModes.includes(

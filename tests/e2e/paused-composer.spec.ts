@@ -31,7 +31,7 @@ for (const classic of [false, true]) {
       const pauseAction = page.getByRole("button", { name: "Pause work", exact: true });
       await moreActions.click();
       await expect(pauseAction).toBeVisible();
-      await moreActions.press("Escape");
+      await page.keyboard.press("Escape");
       await expect(pauseAction).toBeHidden();
       await moreActions.click();
       await expect(pauseAction).toBeVisible();

@@ -91,7 +91,11 @@ function progress(turn, body, next = () => finish(turn, body)) {
 
 function finish(turn, text) {
   const emitReply = () => {
-    const item = { id: `agent-chat-message-${turn.number}`, type: "agentMessage", phase: "final_answer", channel: "final", text };
+    // A resumed session may retain the thread while this provider fixture is
+    // restarted in a new process, resetting its local turn number. Match the
+    // provider's turn identity so RunnerD cannot deduplicate a new reply as an
+    // item already completed by the prior process.
+    const item = { id: `agent-chat-message-${turn.turnId}`, type: "agentMessage", phase: "final_answer", channel: "final", text };
     send({ method: "item/started", params: { threadId, turnId: turn.turnId, item } });
     send({ method: "item/completed", params: { threadId, turnId: turn.turnId, item: { ...item, status: "completed" } } });
     note({ event: "final_item_emitted", turn: turn.number, processId: process.pid });

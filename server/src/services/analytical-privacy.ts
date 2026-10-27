@@ -5,6 +5,7 @@ import type { StrategyErasureType } from "./strategy-execution/privacy.js";
 import { eraseAnalyticalSourcesUnderMemory } from "./analytical-source-erasure.js";
 import { conflict } from "../errors.js";
 type PrivacyTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+const sharedAnalyticalPrivacyTransactions = new WeakSet<object>();
 /** Preserve the existing company serialization key: native owner erasure,
  * event projection and analytical publication use one ordering boundary. */
 export async function lockAnalyticalCompany(tx: Pick<Db, "execute">, companyId: string, mode: "read" | "write" = "write") {
@@ -14,6 +15,9 @@ export async function lockAnalyticalCompany(tx: Pick<Db, "execute">, companyId: 
   }
   await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`business-events:${companyId}`}, 0))`);
 }
+/** Mark only after both existing privacy keys were acquired shared in this Tx. */
+export function markAnalyticalPrivacyReadLocked(tx: object) { sharedAnalyticalPrivacyTransactions.add(tx); }
+export function analyticalPrivacyReadLocked(tx: object) { return sharedAnalyticalPrivacyTransactions.has(tx); }
 /** Native privacy/verified restore callers own admission. Rollout never gates
  * this operation. A minimal guard prevents late or restored payload publication. */
 export async function suppressAnalyticalSource(tx: PrivacyTx, companyId: string, inputType: StrategyErasureType, inputRef: string, suppressedAt = new Date()) {

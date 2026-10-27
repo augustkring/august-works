@@ -169,7 +169,9 @@ async function nativeTaskPayloadSourceShape(db:Db,companyId:string,ids:string[],
         then (input->>'commentId')::uuid end
     where i.conversation_agent_id is not null and i.conversation_user_id is not null
       and i.payload_source_protocol_version=1 and not i.payload_source_snapshot_invalidated
-      and jsonb_array_length(i.payload_source_snapshot->'inputs')=1
+      and jsonb_typeof(i.payload_source_snapshot->'inputs')='array'
+      and jsonb_array_length(case when jsonb_typeof(i.payload_source_snapshot->'inputs')='array'
+        then i.payload_source_snapshot->'inputs' else '[]'::jsonb end)=1
       and input->>'kind'='comment' and input->>'issueId'=i.id::text
       and input->>'sourceVersion'=extract(epoch from c.updated_at)::text
       and input->>'contentHash' ~ '^[a-f0-9]{64}$'
@@ -292,10 +294,11 @@ export async function assertAnalyticalContextPayloadAccessBatch(db:Db,companyId:
  if(!is(db,PgTransaction))return db.transaction(tx=>assertAnalyticalContextPayloadAccessBatch(tx as unknown as Db,companyId,actor,ids,readScope,options));
  const {lockAnalyticalCompany}=await import("./analytical-privacy.js");
  const {lockMemoryPrivacy}=await import("./memory/memory-privacy.js");
+ let initialShape:Awaited<ReturnType<typeof nativeTaskPayloadSourceShape>>|null=null;
  // An unlocked probe only routes complex payloads to the original writer-lock
  // path. A simple result is re-proven after taking shared source-writer locks.
  if(options.fastPathOnly===true){
-  const initialShape=!actor||ids.length!==1?null:await nativeTaskPayloadSourceShape(db,companyId,ids,options.runId);
+  initialShape=!actor||ids.length!==1?null:await nativeTaskPayloadSourceShape(db,companyId,ids,options.runId);
   if(!initialShape||initialShape.complex&&!initialShape.selfOwnedConversationComment){
    await lockAnalyticalCompany(db,companyId);await lockMemoryPrivacy(db,companyId);return false;
   }
@@ -303,8 +306,23 @@ export async function assertAnalyticalContextPayloadAccessBatch(db:Db,companyId:
  // Read-only fast admission shares the exact ordered advisory boundaries as
  // source writers. Concurrent append checks can proceed together; retention,
  // projection, suppression, and erasure still take the exclusive writer locks.
- const lockMode=options.fastPathOnly===true?"read":"write";
+ // A Task with a conversation Comment needs the unchanged deep reviewer. Keep
+ // those checks on the original exclusive transaction boundary: when a
+ // caller already owns this transaction the reviewer continues in that same
+ // transaction and must not upgrade shared advisory locks under a peer reader.
+ const lockMode=options.fastPathOnly===true&&!initialShape?.selfOwnedConversationComment?"read":"write";
  await lockAnalyticalCompany(db,companyId,lockMode);await lockMemoryPrivacy(db,companyId,lockMode);
+ if(options.fastPathOnly===true&&lockMode==="read"){const {markAnalyticalPrivacyReadLocked}=await import("./analytical-privacy.js");markAnalyticalPrivacyReadLocked(db as object);}
+ // The unlocked shape probe is only a routing hint. If it sees a self-owned
+ // conversation comment, force the original deep reviewer under exclusive
+ // source-writer locks. Recomputing the broad shape query here adds no authority:
+ // the deep reviewer revalidates the exact current owner and every source before
+ // admission. A stale positive can only select the slower deep path.
+ if(options.fastPathOnly===true&&initialShape?.selfOwnedConversationComment){
+  if(process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS==="1")
+   console.info("native-analytical-batch-deep-route",JSON.stringify({reason:"self_owned_conversation_comment",privacyLockMode:lockMode}));
+  return false;
+ }
  // Source-free native Tasks can still carry metadata-only bootstrap manifests.
  // Prove that the selected population has no retained lineage, Workflow source,
  // payload pin, privacy edge, or Context manifest attached to an analytical
@@ -317,7 +335,6 @@ export async function assertAnalyticalContextPayloadAccessBatch(db:Db,companyId:
   if(options.fastPathOnly===true&&initialShape&&
     (candidateShape.complex!==initialShape.complex||candidateShape.selfOwnedConversationComment!==initialShape.selfOwnedConversationComment))
    throw new HttpError(403,"Native task source access changed during admission",{code:"analytical_source_access_lost"});
-  if(options.fastPathOnly===true&&candidateShape.selfOwnedConversationComment)return false;
   if(options.fastPathOnly===true&&process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS==="1"){
    const [shape]=await db.execute<{sourceAncestorCount:number;privacySourceCount:number;metadataManifestCount:number;retainedRootCount:number;
     executionManifestCount:number;workflowStepCount:number;priorExecutionRun:boolean;payloadSnapshotPresent:boolean}>(sql`

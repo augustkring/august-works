@@ -7137,17 +7137,24 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           }
           if (relationRows.length > 0) {
             const relationCompanyId = targetCompany.id;
-            await db
-              .insert(issueRelations)
-              .values(relationRows.map((row) => ({
-                companyId: relationCompanyId,
-                issueId: row.issueId,
-                relatedIssueId: row.relatedIssueId,
-                type: "blocks" as const,
-                createdByAgentId: null,
-                createdByUserId: actorUserId ?? null,
-              })))
-              .onConflictDoNothing();
+            await cancellationCheckpoint();
+            await checkpointEffect({ phase: "started", key: "tasks:relations", kind: "task_relations" });
+            await db.transaction(async tx => {
+              await validateCopySources(sourceManifest, input.target, include, importActor,
+                options?.privateWorkAdmission, sourceReleaseReviewed, tx);
+              await lockIssuePrivacyTree(tx, relationCompanyId);
+              await tx.insert(issueRelations)
+                .values(relationRows.map((row) => ({
+                  companyId: relationCompanyId,
+                  issueId: row.issueId,
+                  relatedIssueId: row.relatedIssueId,
+                  type: "blocks" as const,
+                  createdByAgentId: null,
+                  createdByUserId: actorUserId ?? null,
+                })))
+                .onConflictDoNothing();
+              await checkpointEffect({ phase: "completed", key: "tasks:relations", kind: "task_relations" }, tx);
+            });
           }
         }
 

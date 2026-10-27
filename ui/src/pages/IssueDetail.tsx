@@ -258,7 +258,7 @@ import { PluginLauncherOutlet } from "@/plugins/launchers";
 import { Separator } from "@/components/ui/separator";
 import {
   Popover,
-  PopoverTrigger,
+  PopoverAnchor,
   PopoverContent,
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -2907,6 +2907,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
   const { pushToast } = useToastActions();
   const { isMobile } = useSidebar();
   const [moreOpen, setMoreOpen] = useState(false);
+  const moreActionsTriggerRef = useRef<HTMLButtonElement>(null);
   const [taskWorkflowOpen, setTaskWorkflowOpen] = useState(false);
   const taskWorkflowIdempotencyRef = useRef<{
     workflowId: string;
@@ -7263,32 +7264,47 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
             )}
           >
             <Popover open={moreOpen} onOpenChange={setMoreOpen}>
-              <PopoverTrigger asChild>
+              <PopoverAnchor asChild>
                 <Button
+                  ref={moreActionsTriggerRef}
                   type="button"
                   variant="ghost"
                   size="icon-xs"
                   className="shrink-0"
                   aria-label="More task actions"
                   title="More task actions"
-                  onClick={(event) => {
-                    // The asChild Slot composes this handler with Radix's
-                    // trigger toggle. Keep the controlled state update here
-                    // and prevent Radix from toggling a second time.
+                  aria-haspopup="dialog"
+                  aria-expanded={moreOpen}
+                  onPointerDown={(event) => {
+                    if (event.button !== 0) return;
                     event.preventDefault();
                     setMoreOpen((open) => !open);
                   }}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      setMoreOpen(true);
+                      setMoreOpen((open) => !open);
                     }
                   }}
                 >
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-52 p-1" align="end">
+              </PopoverAnchor>
+              <PopoverContent
+                className="w-52 p-1"
+                align="end"
+                onInteractOutside={(event) => {
+                  if (moreActionsTriggerRef.current?.contains(event.target as Node)) {
+                    event.preventDefault();
+                  }
+                }}
+                onCloseAutoFocus={(event) => {
+                  if (moreActionsTriggerRef.current) {
+                    event.preventDefault();
+                    moreActionsTriggerRef.current.focus();
+                  }
+                }}
+              >
                 {streamlinedTaskDetailEnabled ? (
                   <>
                     <button

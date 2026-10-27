@@ -40,6 +40,8 @@ async function main() {
     const portability = companyPortabilityService(db);
     const result = await portability.importBundle(body as Parameters<typeof portability.importBundle>[0], userId, {
       actor, privateWorkAdmission: "closed", pauseAutomations: true,
+      onAcceptedPlan: plan => jobs.acceptPlan(admitted.job, plan, actor),
+      onEffectCheckpoint: (checkpoint, tx) => jobs.checkpointEffect(admitted.job, checkpoint, tx),
     });
     const worker = result.agents.find(agent => agent.slug === "worker");
     if (worker?.id) {

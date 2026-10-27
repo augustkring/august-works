@@ -32,6 +32,7 @@ import {
 import { CAPABILITY_SEMANTIC_TOOL_CATALOG, paperclipSemanticAction } from "../vendor/paperclip-runner/index.js";
 import { PaperclipRunnerToolAuthority } from "./native-runtime/paperclip-runner-tool-authority.js";
 import { claimSlackRateLimitRetry } from "./connectors/slack-retry.js";
+import { assertPlatformSkillAdmission } from "./platform-skill-admission.js";
 import { resolveSlackTaskAuthority } from "./connectors/slack-authority.js";
 import { SLACK_TOOLS } from "@paperclipai/shared";
 import { slackToolsForSession } from "./connectors/slack-catalog.js";
@@ -64,6 +65,7 @@ import type { Db } from "@paperclipai/db";
 import {
   agents,
   agentPresenceRuntimeBindings,
+  agentExecutionManifests,
   approvals,
   companies,
   companyMemberships,
@@ -412,6 +414,24 @@ export interface ToolGatewaySession {
   workflowRunId?: string;
   workflowNodeId?: string;
   sandboxBrokerCapability?: SandboxBrokerCapabilityClaim;
+}
+
+export interface BlenteraGovernedRunBindingAttestation {
+  protocolVersion: 1;
+  companyId: string;
+  agentId: string;
+  paperclipRunId: string;
+  responsibleUserId: string;
+  runtimeAdapter: string;
+  runtimeCapabilitySnapshotHash: string | null;
+  platformSkill: { key: string; version: string; digest: string; sourceSha: string };
+  operationManifestHash: string;
+  toolCatalogContractHash: string;
+  gatewayId: string;
+  gatewayPublicId: string;
+  gatewayProfileId: string | null;
+  assignmentDigest: string | null;
+  tokenExpiresAt: string;
 }
 
 export type SandboxBrokerAuthority = (input: {
@@ -10130,7 +10150,9 @@ export function createToolGatewayService(
         details: {
           decision: "diagnostic",
           reasonCode: "permitted_connections_not_installed",
-          deliveredServerCount: 0,
+          deliveredServerCount: 1,
+          deliveredAssignmentCount: 0,
+          deliveredFirstPartyTools: true,
           permittedNotInstalledCount:
             input.permittedNotInstalledConnections.length,
           permittedNotInstalledConnections:
@@ -10490,6 +10512,115 @@ export function createToolGatewayService(
         protocolMethod: "initialize",
         callerHeaders: input.callerHeaders,
       });
+    },
+
+    /**
+     * Authenticated metadata for the repository-owned OpenClaw bridge plugin.
+     * The claims are reconstructed from the bearer token and the existing
+     * server-owned Run admission; caller-supplied identities are never used.
+     */
+    async describeNamedGatewayRunBinding(input: {
+      gatewayId?: string | null;
+      gatewayPublicId?: string | null;
+      bearerToken: string;
+      callerHeaders?: Record<string, string | string[] | undefined>;
+    }): Promise<BlenteraGovernedRunBindingAttestation | null> {
+      const session = await namedGatewaySessionFromBearer({
+        gatewayId: input.gatewayId ?? null,
+        gatewayPublicId: input.gatewayPublicId ?? null,
+        bearerToken: input.bearerToken,
+        protocolMethod: "initialize",
+        callerHeaders: input.callerHeaders,
+      });
+      if (!session.runId || !session.agentId || !session.responsibleUserId || !session.gatewayId || !session.gatewayPublicId) {
+        return null;
+      }
+      const contracts = blenteraPlatformContractHashes();
+      const actor: AuthorizationActor = {
+        type: "agent",
+        source: "none",
+        companyId: session.companyId,
+        agentId: session.agentId,
+        runId: session.runId,
+        onBehalfOfUserId: session.responsibleUserId,
+      };
+      await assertPlatformSkillAdmission(db, actor, contracts);
+      const [run] = await db.select({
+        runnerProfileJson: heartbeatRuns.runnerProfileJson,
+        runtimeAdapter: agents.adapterType,
+      }).from(heartbeatRuns).innerJoin(agents, and(
+        eq(agents.id, heartbeatRuns.agentId),
+        eq(agents.companyId, heartbeatRuns.companyId),
+      )).where(and(
+        eq(heartbeatRuns.companyId, session.companyId),
+        eq(heartbeatRuns.id, session.runId),
+        eq(heartbeatRuns.agentId, session.agentId),
+        eq(heartbeatRuns.status, "running"),
+      )).limit(1);
+      const [gateway] = await db.select({ metadata: toolMcpGateways.metadata })
+        .from(toolMcpGateways)
+        .where(and(
+          eq(toolMcpGateways.companyId, session.companyId),
+          eq(toolMcpGateways.id, session.gatewayId),
+          eq(toolMcpGateways.status, "active"),
+        )).limit(1);
+      const [manifestRow] = await db.select({ manifest: agentExecutionManifests.manifest })
+        .from(agentExecutionManifests)
+        .where(and(
+          eq(agentExecutionManifests.companyId, session.companyId),
+          eq(agentExecutionManifests.agentId, session.agentId),
+          eq(agentExecutionManifests.runId, session.runId),
+        )).limit(1);
+      const runnerProfile = asRecord(run?.runnerProfileJson);
+      const admission = asRecord(runnerProfile?.platformSkillAdmission);
+      const skill = asRecord(admission?.platformSkill);
+      const manifest = asRecord(manifestRow?.manifest);
+      const nativeContract = asRecord(manifest?.agentNativeContract);
+      const primaryProvider = Array.isArray(manifest?.providers)
+        ? asRecord(manifest.providers[0])
+        : null;
+      const metadata = asRecord(gateway?.metadata);
+      const assignmentDigest = metadata?.nativeRuntimeAssignmentDigest;
+      if (!run || typeof run.runtimeAdapter !== "string" || !admission || !skill || typeof skill.key !== "string" ||
+          typeof skill.version !== "string" || typeof skill.digest !== "string" ||
+          typeof skill.sourceSha !== "string" ||
+          !nativeContract ||
+          admission.operationManifestHash !== contracts.operationManifestHash ||
+          admission.toolCatalogContractHash !== contracts.toolCatalogContractHash ||
+          admission.runtimeAdapter !== run.runtimeAdapter ||
+          typeof assignmentDigest !== "string" || !/^[a-f0-9]{64}$/.test(assignmentDigest)) {
+        throw new ToolGatewayHttpError(409, "The current operating procedure admission is unavailable", "platform_skill_readmission_required");
+      }
+      if (manifestRow && (!nativeContract || nativeContract.operationManifestHash !== contracts.operationManifestHash ||
+          nativeContract.toolCatalogContractHash !== contracts.toolCatalogContractHash ||
+          nativeContract.protocolProfile !== "2026-07-28" || nativeContract.runtimeAdapter !== run.runtimeAdapter ||
+          typeof nativeContract.runtimeCapabilitySnapshotHash !== "string" ||
+          nativeContract.runtimeCapabilitySnapshotHash !== primaryProvider?.snapshotHash)) {
+        throw new ToolGatewayHttpError(409, "The current provider capability snapshot is unavailable", "provider_capability_revalidation_required");
+      }
+      return {
+        protocolVersion: 1,
+        companyId: session.companyId,
+        agentId: session.agentId,
+        paperclipRunId: session.runId,
+        responsibleUserId: session.responsibleUserId,
+        runtimeAdapter: run.runtimeAdapter,
+        runtimeCapabilitySnapshotHash: typeof nativeContract?.runtimeCapabilitySnapshotHash === "string"
+          ? nativeContract.runtimeCapabilitySnapshotHash : null,
+        platformSkill: {
+          key: skill.key,
+          version: skill.version,
+          digest: skill.digest,
+          sourceSha: skill.sourceSha,
+        },
+        operationManifestHash: contracts.operationManifestHash,
+        toolCatalogContractHash: contracts.toolCatalogContractHash,
+        gatewayId: session.gatewayId,
+        gatewayPublicId: session.gatewayPublicId,
+        gatewayProfileId: session.gatewayProfileId ?? null,
+        assignmentDigest: typeof assignmentDigest === "string" ? assignmentDigest : null,
+        tokenExpiresAt: session.expiresAt.toISOString(),
+      };
     },
 
     async listToolsForNamedGateway(input: {

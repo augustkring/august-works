@@ -9900,11 +9900,11 @@ async function executePaperclipNativeSessionWithinScope(
           });
           trace.activate(taskSettleScope);
         }
-        if (input.onLog)
-          await input.onLog(
-            "stdout",
-            `${JSON.stringify({ type: "paperclip.prp.event", event })}\n`,
-          );
+        // appendEvent commits this canonical event to heartbeat_run_events
+        // before entering the callback. Native transcript consumers read that
+        // retained event stream directly, so copying the full structured
+        // provider payload into stdout would duplicate private content and
+        // trigger a second source check/log write for every event.
         if (
           input.onEvent &&
           [

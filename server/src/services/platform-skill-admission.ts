@@ -1,6 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import { agents, heartbeatRuns, companySkills, companySkillVersions, type Db } from "@paperclipai/db";
-import { agentExecutionManifestSchema } from "@paperclipai/shared";
+import { platformSkillIdentitySchema } from "@paperclipai/shared";
 import { z } from "zod";
 import { conflict, forbidden } from "../errors.js";
 import type { AuthorizationActor } from "./authorization.js";
@@ -9,7 +9,7 @@ import { companySkillService } from "./company-skills.js";
 
 const admissionSchema = z.object({
   schemaVersion: z.literal(1),
-  platformSkill: agentExecutionManifestSchema.shape.platformSkill.unwrap(),
+  platformSkill: platformSkillIdentitySchema,
   operationManifestHash: z.string().regex(/^[a-f0-9]{64}$/),
   toolCatalogContractHash: z.string().regex(/^[a-f0-9]{64}$/),
   runtimeAdapter: z.string().min(1).max(100),

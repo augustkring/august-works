@@ -694,21 +694,30 @@ function hasPostgresLockUnavailableCode(error: unknown): boolean {
   return false;
 }
 
-/** Human-authored case content remains company-shared. Agent-produced body
- * versions inherit the current native privacy of their retained producer runs.
- * Source-owner probes can use NOWAIT while an execution is committing. Retry
- * the complete read proof in a fresh set of statements on that specific
- * contention code; every retry re-reads the case, its producer roots and the
- * current actor authority. */
-async function canReadPipelineCaseBodySources(db: Db, req: Request, companyId: string, caseId: string) {
+/** Retry a complete current-authority read proof only for PostgreSQL's
+ * lock-unavailable code. Each attempt starts fresh statements; every retry
+ * rechecks the current actor authority and source ownership. */
+async function retryPipelineCasePrivacyProof<T>(read: () => Promise<T>): Promise<T> {
   for (let attempt = 0; ; attempt += 1) {
     try {
-      return await canReadPipelineCaseBodySourcesOnce(db, req, companyId, caseId);
+      return await read();
     } catch (error) {
-      if (!hasPostgresLockUnavailableCode(error) || attempt >= 4) throw error;
-      await new Promise((resolve) => setTimeout(resolve, 25 * (attempt + 1)));
+      if (!hasPostgresLockUnavailableCode(error)) throw error;
+      if (attempt >= 4) {
+        throw conflict("Authentication state is changing; try again", {
+          code: "authentication_state_busy",
+          retryable: true,
+        });
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100 * (attempt + 1)));
     }
   }
+}
+
+/** Human-authored case content remains company-shared. Agent-produced body
+ * versions inherit the current native privacy of their retained producer runs. */
+async function canReadPipelineCaseBodySources(db: Db, req: Request, companyId: string, caseId: string) {
+  return retryPipelineCasePrivacyProof(() => canReadPipelineCaseBodySourcesOnce(db, req, companyId, caseId));
 }
 
 async function canReadPipelineCaseBodySourcesOnce(db: Db, req: Request, companyId: string, caseId: string) {
@@ -1801,23 +1810,25 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
         terminal === true ? isNotNull(pipelineCases.terminalKind) : terminal === false ? isNull(pipelineCases.terminalKind) : undefined,
       ))
       .orderBy(asc(pipelineCases.createdAt));
-    const bodyReadableRows = await Promise.all(rows.map(async row =>
-      await canReadPipelineCaseBodySources(db, req, companyId, row.case.id) ? row : null));
-    const readableRows = bodyReadableRows.filter((row): row is typeof rows[number] => row !== null)
-      .filter(row => !q || row.case.title.toLocaleLowerCase().includes(q.toLocaleLowerCase()) ||
-        (row.case.summary ?? "").toLocaleLowerCase().includes(q.toLocaleLowerCase()));
-    const caseIds = readableRows.map((row) => row.case.id);
-    const [activeWork, descendantActiveWorkCounts] = await Promise.all([
-      loadActiveWorkForCases(db, companyId, caseIds),
-      loadDescendantActiveWorkCountsForCases(db, companyId, caseIds),
-    ]);
-    res.json(await Promise.all(readableRows.map(async (row) => {
+    const visibilityRows = await Promise.all(rows.map(row => retryPipelineCasePrivacyProof(async () => {
+      if (!await canReadPipelineCaseBodySourcesOnce(db, req, companyId, row.case.id)) return null;
       const [tasksReadable, descendantsReadable] = await Promise.all([
         canReadAllPipelineCaseTaskSources(db, req, companyId, row.case.id),
         canReadPipelineCaseDescendants(db, req, companyId, row.case.id),
       ]);
       const parentReadable = row.parentCase?.id && row.parentPipeline?.id
-        ? await canReadPipelineCaseBodySources(db, req, companyId, row.parentCase.id) : false;
+        ? await canReadPipelineCaseBodySourcesOnce(db, req, companyId, row.parentCase.id) : false;
+      return { row, tasksReadable, descendantsReadable, parentReadable };
+    })));
+    const readableRows = visibilityRows.filter((entry): entry is Exclude<typeof entry, null> => entry !== null)
+      .filter(({ row }) => !q || row.case.title.toLocaleLowerCase().includes(q.toLocaleLowerCase()) ||
+        (row.case.summary ?? "").toLocaleLowerCase().includes(q.toLocaleLowerCase()));
+    const caseIds = readableRows.map(({ row }) => row.case.id);
+    const [activeWork, descendantActiveWorkCounts] = await Promise.all([
+      loadActiveWorkForCases(db, companyId, caseIds),
+      loadDescendantActiveWorkCountsForCases(db, companyId, caseIds),
+    ]);
+    res.json(await Promise.all(readableRows.map(async ({ row, tasksReadable, descendantsReadable, parentReadable }) => {
       return {
         case: row.case,
         stage: row.stage,

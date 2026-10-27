@@ -1232,17 +1232,24 @@ describeEmbeddedPostgres("access service", () => {
 
   it("marks combined role and permission replacements initialized even when the grant set is empty", async () => {
     const { company, owner } = await createCompanyWithOwner(db);
+    await ensureHumanRoleDefaultGrants(db, { companyId: company.id, principalId: owner.principalId,
+      membershipRole: "owner", grantedByUserId: null });
     const [member] = await db.insert(companyMemberships).values({ companyId: company.id,
       principalType: "user", principalId: `operator-${randomUUID()}`, status: "active", membershipRole: "operator" })
       .returning();
     await ensureHumanRoleDefaultGrants(db, { companyId: company.id, principalId: member!.principalId,
       membershipRole: "operator", grantedByUserId: null });
+    await expect(accessService(db).canUser(company.id, member!.principalId, "workflows:edit")).resolves.toBe(true);
 
     await accessService(db).updateMemberAndPermissions(company.id, member!.id,
       { membershipRole: "operator", grants: [] }, owner.principalId);
+    expect(await db.select({ id: principalPermissionGrants.id }).from(principalPermissionGrants).where(and(
+      eq(principalPermissionGrants.companyId, company.id), eq(principalPermissionGrants.principalType, "user"),
+      eq(principalPermissionGrants.principalId, member!.principalId),
+    ))).toEqual([]);
     const backfill = await backfillPrincipalAccessCompatibility(db);
     expect(backfill.humanGrantsInserted).toBe(0);
-    await expect(accessService(db).canUser(company.id, member!.principalId, "tasks:assign")).resolves.toBe(false);
+    await expect(accessService(db).canUser(company.id, member!.principalId, "workflows:edit")).resolves.toBe(false);
     const [updated] = await db.select().from(companyMemberships).where(eq(companyMemberships.id, member!.id));
     expect(updated?.permissionsInitializedAt).toBeInstanceOf(Date);
   });

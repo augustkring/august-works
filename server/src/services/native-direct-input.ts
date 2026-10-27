@@ -17,7 +17,7 @@ import { HttpError, forbidden } from "../errors.js";
 import { assertAnalyticalContextPayloadAccessBatch } from "./analytical-context-authority.js";
 import { activeMemoryTemporalContexts, withReadPinnedNativeTaskSnapshot, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, authorizationService,
   type AuthorizationActor } from "./authorization.js";
-import { canActorReadMemorySources, memoryPayloadVisible } from "./memory/memory-privacy.js";
+import { canActorReadMemorySourceSet, canActorReadMemorySources, memoryPayloadVisible } from "./memory/memory-privacy.js";
 import { resolveDefaultAgentWorkspaceDir } from "../home-paths.js";
 import { readNativeRuntimeAssetText } from "./native-runtime/runtime-context.js";
 import { assertAuthoredAgentSnapshotCurrent } from "./agents/authored-definition.js";
@@ -373,10 +373,12 @@ function inNativeSourceReadTransaction<T>(db: Db | Transaction, read: (tx: Db | 
 }
 async function lockNativeSourceReadPrivacy(db: Db | Transaction, companyId: string, scope: NativeSourceReadScope) {
   if (scope.context.privacyLockedCompanies.has(companyId)) return;
-  const { lockAnalyticalCompany } = await import("./analytical-privacy.js");
+  const { lockAnalyticalCompany, analyticalPrivacyReadLocked } = await import("./analytical-privacy.js");
   const { lockMemoryPrivacy } = await import("./memory/memory-privacy.js");
-  await lockAnalyticalCompany(db as Db, companyId);
-  await lockMemoryPrivacy(db as Db, companyId);
+  if (!analyticalPrivacyReadLocked(db as object)) {
+    await lockAnalyticalCompany(db as Db, companyId);
+    await lockMemoryPrivacy(db as Db, companyId);
+  }
   // The retained Task privacy predicate expands a bounded but very large
   // recursive source graph. PostgreSQL estimates this statement above its JIT
   // threshold, so repeated owner checks can pay LLVM compilation cost even
@@ -446,7 +448,7 @@ async function assertNativeSourceSetsReaderAccessCurrent(db: Db | Transaction, i
     }
     for (const root of roots) memoryIds.add(root.memoryRecordId);
   }
-  for (const memoryId of memoryIds) if (!await canActorReadMemorySources(db as Db, input.companyId, input.actor, memoryId))
+  if (memoryIds.size && !await canActorReadMemorySourceSet(db as Db, input.companyId, input.actor, [...memoryIds]))
     throw forbidden("A Native source Memory is unavailable");
   // Runtime bundles are the only filesystem reads in this source pass. Finish
   // them after the batched owner and ACL reads.
@@ -1822,13 +1824,14 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
       throw forbidden("A Native source Run is unavailable");
   }
   const exactMemoryInputIds = new Set(inputs.data.flatMap(source => source.kind === "memory" ? [source.memoryId] : []));
-  for (const memoryId of policy.data.memoryIds) {
-    // An exact Memory input below performs the same current ACL read while
-    // also validating its version and body. Keep the policy-only check for
-    // IDs that have no exact owner input.
-    if (exactMemoryInputIds.has(memoryId)) continue;
-    nativeSourceReadWork(scope);
-    if (!await canActorReadMemorySources(db, input.companyId, input.actor, memoryId)) throw forbidden("A Native source Memory is unavailable");
+  // Exact Memory inputs below perform their own current ACL check alongside
+  // version/body validation. Batch the policy-only roots so the same live
+  // principal is checked once around their shared retained-owner traversal.
+  const policyOnlyMemoryIds = policy.data.memoryIds.filter(memoryId => !exactMemoryInputIds.has(memoryId));
+  for (const _memoryId of policyOnlyMemoryIds) nativeSourceReadWork(scope);
+  if (policyOnlyMemoryIds.length) {
+    if (!await canActorReadMemorySourceSet(db as Db, input.companyId, input.actor, policyOnlyMemoryIds))
+      throw forbidden("A Native source Memory is unavailable");
   }
   const contexts = inputs.data.filter((source): source is Extract<NativePayloadSourceInput, { kind: "context" }> => source.kind === "context");
   await assertNativeTemporalContextInputsCurrent(db as Db, input.companyId, contexts);

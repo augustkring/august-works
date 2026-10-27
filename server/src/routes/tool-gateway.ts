@@ -72,7 +72,7 @@ async function handleMcpGatewayProtocol(
     const body = (req.body ?? {}) as { jsonrpc?: string; id?: unknown; method?: string; params?: Record<string, unknown> };
     const id = body.id ?? null;
     if (body.method === "initialize") {
-      await toolGateway.initializeNamedGatewayProtocol({
+      const binding = await toolGateway.describeNamedGatewayRunBinding({
         ...locator,
         bearerToken: token,
         callerHeaders: headers,
@@ -83,10 +83,11 @@ async function handleMcpGatewayProtocol(
         result: {
             protocolVersion: selectMcpProtocolVersion(body.params?.protocolVersion),
           capabilities: { tools: {}, resources: {}, prompts: {} },
-          serverInfo: { name: "blentera-mcp-gateway", version: "1.0.0" },
+          serverInfo: { name: "blentera-mcp-gateway", version: "2.0.0" },
           _meta: {
             "paperclip/mcp-app-ui": "unsupported",
             "paperclip/mcp-app-ui-detail": "Interactive ui:// iframe hosting is not available in Paperclip Runner.",
+            ...(binding ? { "blentera/governed-run-binding.v1": binding } : {}),
           },
         },
       });

@@ -112,11 +112,25 @@ export function executionSandboxService(db: Db, options: {
       throw conflict("Task or manifest binding changed before sandbox execution");
     const cellRef = /^aw:cell:([0-9a-f-]{36}):generation:([1-9][0-9]{0,18})$/i.exec(source.runtime.providerProfileRef);
     if (!cellRef) return null;
+    // Runtime heartbeats lock the host row before the host's cells. Keep the
+    // same order here: cell -> host would deadlock against a heartbeat that
+    // already owns the host and is waiting to refresh this cell's inventory.
+    const [cellCandidate] = await tx.select().from(runtimeCells).where(and(
+      eq(runtimeCells.companyId, input.companyId), eq(runtimeCells.id, cellRef[1]!), eq(runtimeCells.generation, BigInt(cellRef[2]!)),
+      eq(runtimeCells.status, "HEALTHY"), isNull(runtimeCells.deletedAt),
+    ));
+    if (!cellCandidate?.runtimeHostId || cellCandidate.suspendedReason) throw conflict("Current managed runtime cell is unavailable");
+    const [host] = await tx.select().from(runtimeHosts).where(and(
+      eq(runtimeHosts.id, cellCandidate.runtimeHostId), isNull(runtimeHosts.fencedAt), isNull(runtimeHosts.credentialRevokedAt), isNull(runtimeHosts.retiredAt),
+      inArray(runtimeHosts.status, ["READY", "DRAINING"]), gt(runtimeHosts.lastHeartbeatAt, new Date(now.getTime() - (options.runtimeSuspectSeconds ?? 90) * 1000)),
+    )).for("share");
+    if (!host) throw conflict("Current qualified OpenShell host is unavailable");
     const [cellRow] = await tx.select().from(runtimeCells).where(and(
       eq(runtimeCells.companyId, input.companyId), eq(runtimeCells.id, cellRef[1]!), eq(runtimeCells.generation, BigInt(cellRef[2]!)),
       eq(runtimeCells.status, "HEALTHY"), isNull(runtimeCells.deletedAt),
     )).for("update");
-    if (!cellRow?.runtimeHostId || cellRow.suspendedReason) throw conflict("Current managed runtime cell is unavailable");
+    if (!cellRow?.runtimeHostId || cellRow.suspendedReason || cellRow.runtimeHostId !== cellCandidate.runtimeHostId)
+      throw conflict("Current managed runtime cell is unavailable");
     const [sandboxBinding] = await tx.select().from(runtimeSandboxBindings).where(and(
       eq(runtimeSandboxBindings.companyId, input.companyId), eq(runtimeSandboxBindings.runtimeCellId, cellRow.id),
       eq(runtimeSandboxBindings.cellGeneration, cellRef[2]!), eq(runtimeSandboxBindings.status, "running"),
@@ -147,11 +161,6 @@ export function executionSandboxService(db: Db, options: {
       (credentials.mode === "brokered" && (!credentials.bindings.length || !capability.credentialBrokerProviderProfile || brokerDimensions.some(dimension => !capability.credentialBindingDimensions.includes(dimension)))) ||
       policy.compilation.sourcePolicyRefs.find(ref => ref.startsWith("manifest:")) !== `manifest:${manifest.id}:${manifest.hash}`)
       throw conflict("Current unexpired OpenShell policy is not bound to this exact Task manifest");
-    const [host] = await tx.select().from(runtimeHosts).where(and(
-      eq(runtimeHosts.id, cellRow.runtimeHostId), isNull(runtimeHosts.fencedAt), isNull(runtimeHosts.credentialRevokedAt), isNull(runtimeHosts.retiredAt),
-      inArray(runtimeHosts.status, ["READY", "DRAINING"]), gt(runtimeHosts.lastHeartbeatAt, new Date(now.getTime() - (options.runtimeSuspectSeconds ?? 90) * 1000)),
-    )).for("share");
-    if (!host) throw conflict("Current qualified OpenShell host is unavailable");
     const [attempt] = await tx.select().from(orchestrationWorkerAttempts).where(and(
       eq(orchestrationWorkerAttempts.companyId, input.companyId), eq(orchestrationWorkerAttempts.runId, run.id),
     )).for("share");

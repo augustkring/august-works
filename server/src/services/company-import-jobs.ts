@@ -7,6 +7,8 @@ import { pinCurrentBoardActor, authorizationService, hasCurrentInstanceAdminRole
 import { isAuthenticationStateBusy } from "../auth/authenticator-assurance.js";
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
+const IMPORT_RECOVERY_BATCH_LIMIT = 100;
+export const COMPANY_IMPORT_RECOVERY_INTERVAL_MS = 30_000;
 export type CompanyImportJob = typeof customerOperations.$inferSelect;
 type SourceReleaseReview = NonNullable<CompanyImportJob["sourceReleaseReview"]>;
 const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -398,12 +400,21 @@ export function companyImportJobService(db: Db) {
     async recoverInterrupted() {
       // Only an owner whose fenced lease expired may be marked inconclusive.
       // A live owner retains the right to settle its exact attempt.
-      return db.update(customerOperations).set({ status: "needs_reconciliation", progressStage: "needs_reconciliation",
-        errorCode: "import_outcome_unknown", leaseOwnerId: null, leaseExpiresAt: null,
-        updatedAt: sql`clock_timestamp()`, progressAt: sql`clock_timestamp()` })
-        .where(and(eq(customerOperations.operationType, "company_import"), eq(customerOperations.status, "running"),
-          sql`${customerOperations.leaseExpiresAt} < clock_timestamp()`))
-        .returning({ id: customerOperations.id });
+      return db.transaction(async tx => {
+        const expired = await tx.select({ id: customerOperations.id }).from(customerOperations).where(and(
+          eq(customerOperations.operationType, "company_import"), eq(customerOperations.status, "running"),
+          sql`${customerOperations.leaseExpiresAt} < clock_timestamp()`,
+        )).orderBy(customerOperations.leaseExpiresAt, customerOperations.id)
+          .limit(IMPORT_RECOVERY_BATCH_LIMIT).for("update", { skipLocked: true });
+        if (expired.length === 0) return [];
+        return tx.update(customerOperations).set({ status: "needs_reconciliation", progressStage: "needs_reconciliation",
+          errorCode: "import_outcome_unknown", leaseOwnerId: null, leaseExpiresAt: null,
+          updatedAt: sql`clock_timestamp()`, progressAt: sql`clock_timestamp()` })
+          .where(and(eq(customerOperations.operationType, "company_import"), eq(customerOperations.status, "running"),
+            inArray(customerOperations.id, expired.map(row => row.id)),
+            sql`${customerOperations.leaseExpiresAt} < clock_timestamp()`))
+          .returning({ id: customerOperations.id });
+      });
     },
 
     async acceptPlan(job: CompanyImportJob, plan: Omit<AcceptedPlan, "version">, actor: AuthorizationActor) {
@@ -479,6 +490,27 @@ export function companyImportJobService(db: Db) {
       };
       return executor ? write(executor) : db.transaction(write);
     },
+  };
+}
+
+/** Run the native import ledger's expired-lease recovery at startup and on a
+ * bounded interval. There is no second queue or persisted recovery registry. */
+export function scheduleCompanyImportRecovery(
+  recover: () => Promise<unknown>,
+  onError: (error: unknown) => void,
+): () => Promise<void> {
+  let inFlight: Promise<void> | null = null;
+  const tick = () => {
+    if (inFlight) return;
+    inFlight = Promise.resolve().then(recover).then(() => undefined).catch(onError)
+      .finally(() => { inFlight = null; });
+  };
+  const timer = setInterval(tick, COMPANY_IMPORT_RECOVERY_INTERVAL_MS);
+  timer.unref?.();
+  tick();
+  return async () => {
+    clearInterval(timer);
+    await inFlight;
   };
 }
 

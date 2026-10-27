@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { authSessions, authUsers, companies, companyMemberships, createDb, customerOperations, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, projects } from "@paperclipai/db";
 import type { CompanyPortabilityImportResult } from "@paperclipai/shared";
@@ -95,6 +95,33 @@ describeEmbeddedPostgres("native company import job ledger", () => {
       .rejects.toMatchObject({ status: 409, details: { code: "import_outcome_unknown" } });
     expect(await db.select({ id: customerOperations.id }).from(customerOperations)
       .where(eq(customerOperations.requestedByUserId, authority.userId))).toHaveLength(1);
+  }, 90_000);
+
+  it("reconciles expired imports in bounded batches and never returns checkpoint payloads", async () => {
+    const past = new Date(Date.now() - 1000);
+    const rows = Array.from({ length: 101 }, (_, index) => {
+      const attemptId = randomUUID();
+      const key = `expired-${index}-${randomUUID()}`;
+      return { id: `import-${randomUUID()}`, operationType: "company_import", domain: "company_portability",
+        requesterKeyHash: createHash("sha256").update(key).digest("hex"), requestedByUserId: null,
+        scopeKey: "new_company", idempotencyKey: createHash("sha256").update(key).digest("hex"),
+        inputHash: createHash("sha256").update(`input-${key}`).digest("hex"), status: "running",
+        attempt: 1, attemptId, leaseOwnerId: attemptId, leaseExpiresAt: past };
+    });
+    await db.insert(customerOperations).values(rows);
+
+    const first = await companyImportJobService(db).recoverInterrupted();
+    expect(first).toHaveLength(100);
+    expect(first.every(row => Object.keys(row).join(",") === "id")).toBe(true);
+    const ids = rows.map(row => row.id);
+    const remaining = await db.select({ id: customerOperations.id, status: customerOperations.status })
+      .from(customerOperations).where(inArray(customerOperations.id, ids));
+    expect(remaining.filter(row => row.status === "running")).toHaveLength(1);
+
+    const second = await companyImportJobService(db).recoverInterrupted();
+    expect(second).toHaveLength(1);
+    expect((await db.select({ status: customerOperations.status }).from(customerOperations)
+      .where(inArray(customerOperations.id, ids))).every(row => row.status === "needs_reconciliation")).toBe(true);
   }, 90_000);
 
   it("keeps a live owner's lease and atomically rolls back a domain effect with its receipt", async () => {

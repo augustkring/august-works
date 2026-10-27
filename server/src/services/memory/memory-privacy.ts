@@ -118,7 +118,10 @@ export async function withNativeMemoryCaptureSources<T>(db: Db, companyId: strin
 /** Current source authority, independent of a Memory record's display scope.
  * A shared/corrected copy keeps every original root. Unknown history is withheld. */
 type MemorySourceReadBudget = { signal?: AbortSignal; deadlineAt?: number; forbiddenRecordId?: string };
-type MemorySourceReadScope = { active:Set<string>;deadline:number;work:number;signal?:AbortSignal };
+type MemorySourceReadScope = { active:Set<string>;deadline:number;work:number;signal?:AbortSignal;
+  /** Set only while one bounded source-set read has checked the same live actor
+   * before and after all of its owner rows. Never retained across operations. */
+  batchAdmittedActors?:Set<string> };
 function assertMemorySourceReadActive(state: MemorySourceReadScope) {
   if (state.signal?.aborted) throw state.signal.reason ?? new Error("Memory source read was cancelled");
   if (performance.now() > state.deadline) throw new Error("Memory source read deadline exceeded");
@@ -159,7 +162,10 @@ export async function canActorReadMemorySources(db: Db, companyId: string, actor
   if(state.work>=256) { diagnosticDenied("work_budget"); return false; }
   const read=async()=>{
     state.active.add(key);
-    try{return await inspectMemorySourceAccess(db,companyId,actor,recordId,state,diagnosticDenied,budget.forbiddenRecordId);}
+    const actorKey=actor?`${companyId}:${createHash("sha256").update(JSON.stringify(actor)).digest("hex")}`:"";
+    const skipActorAdmission=Boolean(actorKey&&state.batchAdmittedActors?.has(actorKey));
+    try{return await inspectMemorySourceAccess(db,companyId,actor,recordId,state,diagnosticDenied,budget.forbiddenRecordId,
+      skipActorAdmission);}
     finally{state.active.delete(key);}
   };
   return inherited?read():memorySourceReads.run(state,read);
@@ -173,12 +179,44 @@ export async function canActorReadMemorySourceSet(db: Db, companyId: string, act
   const inspect=async()=>{
     const ids=[...new Set(recordIds)].sort();
     if(ids.length>256 || (forbiddenRecordId && ids.includes(forbiddenRecordId)))return false;
-    for(const id of ids){
-      try{assertMemorySourceReadActive(state);}catch{return false;}
-      if(!await canActorReadMemorySources(db,companyId,actor,id,
-        forbiddenRecordId?{forbiddenRecordId}:{}))return false;
+    if(!ids.length)return true;
+    const actorKey=actor?`${companyId}:${createHash("sha256").update(JSON.stringify(actor)).digest("hex")}`:"";
+    // Native Context readers often have several independently retained Memory
+    // roots. Check the live Human/Agent/company ACL once on each side of that
+    // bounded set, after all per-root provenance checks have run. This keeps
+    // currentness inside this read while avoiding repeating the same principal
+    // lookup around every root. Legacy authoring-test actors have no live run;
+    // they retain the individual per-root authority path below.
+    try{assertMemorySourceReadActive(state);}catch{return false;}
+    const batchAdmission=Boolean(actor&&await memorySourceActorCurrent(db,companyId,actor));
+    if(!batchAdmission){
+      // Legacy authoring-test actors use root-specific admission evidence and
+      // cannot share one principal admission across this set.
+      for(const id of ids){
+        try{assertMemorySourceReadActive(state);}catch{return false;}
+        if(!await canActorReadMemorySources(db,companyId,actor,id,forbiddenRecordId?{forbiddenRecordId}:{}))return false;
+      }
+      return true;
     }
-    return true;
+    const priorAdmission=Boolean(actorKey&&state.batchAdmittedActors?.has(actorKey));
+    if(batchAdmission&&actorKey){
+      state.batchAdmittedActors??=new Set();
+      state.batchAdmittedActors.add(actorKey);
+    }
+    try {
+      try{assertMemorySourceReadActive(state);}catch{return false;}
+      if(!await inspectMemorySourceAccess(db,companyId,actor,ids,state,reason=>{
+        if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1" && nativeMemorySourceFailureDiagnostics < 8) {
+          nativeMemorySourceFailureDiagnostics += 1;
+          console.error("native_memory_source_access_test_denial", JSON.stringify({ reason, inherited: Boolean(inherited),
+            activeCount: state.active.size, work: state.work, deadlineExpired: performance.now() > state.deadline,
+            signalAborted: state.signal?.aborted ?? false }));
+        }
+      },forbiddenRecordId,true))return false;
+      return batchAdmission?await memorySourceActorCurrent(db,companyId,actor):true;
+    } finally {
+      if(batchAdmission&&actorKey&&!priorAdmission)state.batchAdmittedActors?.delete(actorKey);
+    }
   };
   return inherited?inspect():memorySourceReads.run(state,inspect);
 }
@@ -204,13 +242,15 @@ async function memorySourceActorCurrent(db:Db,companyId:string,actor:Authorizati
   }
   return (await authorizationService(db).decide({actor,action:"company_scope:read",resource:{type:"company",companyId},enforceResponsibleUserIntersection:true})).allowed;
 }
-async function inspectMemorySourceAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,recordId:string,
+async function inspectMemorySourceAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,recordIds:string|readonly string[],
   state:MemorySourceReadScope,diagnosticDenied:(reason:NativeMemorySourceFailureStage|"scope_guard"|"cycle"|"deadline"|"work_budget")=>void,
-  forbiddenRecordId?:string):Promise<boolean> {
+  forbiddenRecordId?:string,skipActorAdmission=false):Promise<boolean> {
   if (!actor) { diagnosticDenied("source_owner"); return false; }
   const { authorizationService, canActorReadIssuePrivacy, canActorReadProjectPrivacy, canActorReadHeartbeatRunPrivacy } = await import("../authorization.js");
-  const admitted = () => memorySourceActorCurrent(db,companyId,actor,recordId);
-  if (!await admitted()) { diagnosticDenied("source_owner"); return false; }
+  const roots = typeof recordIds === "string" ? [recordIds] : [...new Set(recordIds)].sort();
+  if (!roots.length || roots.length > 256) { diagnosticDenied("source_budget"); return false; }
+  const admitted = () => memorySourceActorCurrent(db,companyId,actor,roots[0]);
+  if (!skipActorAdmission&&!await admitted()) { diagnosticDenied("source_owner"); return false; }
   const active = new Set<string>(), visited = new Set<string>();
   const runChecks = new Map<string, Map<string, string | null>>(), taskChecks = new Map<string, Map<string, string | null>>();
   const qualifiedOutputMemoryIds = new Set<string>();
@@ -349,7 +389,10 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
     if (visited.size+scopedReads+projectIds.size+revisions.size>256) { diagnosticDenied("source_budget"); return false; }
     return true;
   };
-  if (!await visit(recordId)) { diagnosticDenied("nested_source"); return false; }
+  for (const rootId of roots) {
+    try { assertMemorySourceReadActive(state); } catch { diagnosticDenied("scope_guard"); return false; }
+    if (!await visit(rootId)) { diagnosticDenied("nested_source"); return false; }
+  }
   const {withReadMemoryTemporalSources}=await import("../authorization.js");
   const {canActorReadNativeTaskSource}=await import("../native-direct-input.js");
   const temporalOwnerChecks = new Map<string, { runs: string[]; tasks: string[] }>();
@@ -405,7 +448,7 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
     }
   }
   if (performance.now()>deadline) { diagnosticDenied("source_deadline"); return false; }
-  if (!await admitted()) { diagnosticDenied("source_owner"); return false; }
+  if (!skipActorAdmission&&!await admitted()) { diagnosticDenied("source_owner"); return false; }
   return true;
 }
 

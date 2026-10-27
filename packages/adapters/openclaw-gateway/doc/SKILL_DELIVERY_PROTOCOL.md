@@ -43,6 +43,8 @@ after installation. It does not claim an independently read back hash for
 support files.
 
 This protocol does not provide a per-run tool or MCP injection field on
-agent. tools.catalog is read-only. Managed Skill delivery alone therefore
-does not qualify a Gateway connection for the Blentera governed MCP tool
-boundary; a separately attested current MCP binding is still required.
+agent. tools.catalog is read-only. The OpenClaw adapter therefore requires
+the repository-owned versioned Blentera bridge described in
+[GOVERNED_TOOL_BRIDGE_PROTOCOL.md](./GOVERNED_TOOL_BRIDGE_PROTOCOL.md).
+Skill delivery and the authenticated run-scoped MCP binding are independently
+verified before V10 capability qualification.

@@ -3879,6 +3879,13 @@
       "when": 1793070130356,
       "tag": "0555_company_membership_permission_initialization",
       "breakpoints": true
+    },
+    {
+      "idx": 556,
+      "version": "7",
+      "when": 1793071801521,
+      "tag": "0556_customer_operation_expired_lease_recovery",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import express from "express";
 import request from "supertest";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -42,6 +42,7 @@ import {
 import { errorHandler } from "../middleware/error-handler.js";
 import { issueRoutes } from "../routes/issues.js";
 import { projectRoutes } from "../routes/projects.js";
+import { companyRoutes } from "../routes/companies.js";
 import { pipelineRoutes } from "../routes/pipelines.js";
 import {
   PIPELINE_AUTOMATION_DEFAULT_TITLE_TEMPLATE,
@@ -139,7 +140,7 @@ describeEmbeddedPostgres("pipeline routes", () => {
     await db.insert(authSessions).values({ id: sessionId, userId, token: randomUUID(), createdAt: now,
       updatedAt: now, expiresAt: new Date(now.getTime() + 60 * 60_000) });
     await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId,
-      status: "active", membershipRole: "owner" });
+      status: "active", membershipRole: "owner", permissionsInitializedAt: now });
     await db.insert(principalPermissionGrants).values(grantsForHumanRole("owner").map(grant => ({
       companyId, principalType: "user" as const, principalId: userId, ...grant,
     })));
@@ -244,9 +245,25 @@ describeEmbeddedPostgres("pipeline routes", () => {
   };
 
   it("allows company owners to create pipelines by role default and denies after current grant revocation", async () => {
-    const company = await seedCompany("Pipeline owner role default");
-    const owner = await seedHumanMember(company.id, "Pipeline owner");
-    const http = request(app(owner.actor));
+    const userId = randomUUID();
+    const sessionId = randomUUID();
+    const now = new Date();
+    await db.insert(authUsers).values({ id: userId, name: "Pipeline owner", email: `${userId}@pipeline.test`,
+      emailVerified: true, createdAt: now, updatedAt: now });
+    await db.insert(authSessions).values({ id: sessionId, userId, token: randomUUID(), createdAt: now,
+      updatedAt: now, expiresAt: new Date(now.getTime() + 60 * 60_000) });
+    const companyCreator: Express.Request["actor"] = { type: "board", source: "session", userId, sessionId,
+      isInstanceAdmin: true };
+    const companyApp = express();
+    companyApp.use(express.json());
+    companyApp.use((req, _res, next) => { req.actor = companyCreator; next(); });
+    companyApp.use("/api", companyRoutes(db));
+    companyApp.use(errorHandler);
+    const created = await request(companyApp).post("/api").send({ name: "Pipeline owner role default" }).expect(201);
+    const company = created.body;
+    const actor: Express.Request["actor"] = { ...companyCreator, isInstanceAdmin: false,
+      companyIds: [company.id], memberships: [{ companyId: company.id, membershipRole: "owner", status: "active" }] };
+    const http = request(app(actor));
     await http.post(`/api/companies/${company.id}/pipelines`).send({
       key: "owner-default",
       name: "Owner default pipeline",
@@ -255,7 +272,7 @@ describeEmbeddedPostgres("pipeline routes", () => {
     await db.delete(principalPermissionGrants).where(and(
       eq(principalPermissionGrants.companyId, company.id),
       eq(principalPermissionGrants.principalType, "user"),
-      eq(principalPermissionGrants.principalId, owner.userId),
+      eq(principalPermissionGrants.principalId, userId),
       eq(principalPermissionGrants.permissionKey, "pipelines:write"),
     ));
     const revoked = await http.post(`/api/companies/${company.id}/pipelines`).send({
@@ -1116,13 +1133,46 @@ describeEmbeddedPostgres("pipeline routes", () => {
     await lockAcquired;
 
     const pendingRead = http.get(`/api/cases/${manualCase.case.id}`);
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise(resolve => setTimeout(resolve, 900));
     releaseRowLock();
     await holdSession;
     await db.delete(authSessions).where(eq(authSessions.id, owner.sessionId));
 
     const denied = await pendingRead.expect(404);
     expect(JSON.stringify(denied.body)).not.toContain("Current session owns this body");
+  }, 90_000);
+
+  it("returns a typed retryable busy response when current case authority stays locked", async () => {
+    const company = await seedCompany("Pipeline authority remains busy");
+    const owner = await seedHumanMember(company.id, "Busy pipeline reader");
+    const http = request(app(owner.actor));
+    const pipeline = await request(app(boardActor)).post(`/api/companies/${company.id}/pipelines`)
+      .send({ key: "authority-busy", name: "Authority remains busy" }).expect(201);
+    const manualCase = await pipelineService(db).ingestCase({ companyId: company.id, pipelineId: pipeline.body.id,
+      caseKey: "authority-busy", title: "Private while authority changes", actor: { type: "user", userId: owner.userId } });
+
+    let signalLockAcquired!: () => void;
+    let releaseRowLock!: () => void;
+    const lockAcquired = new Promise<void>(resolve => { signalLockAcquired = resolve; });
+    const releaseGate = new Promise<void>(resolve => { releaseRowLock = resolve; });
+    const holdSession = db.transaction(async tx => {
+      await tx.select({ id: authSessions.id }).from(authSessions)
+        .where(eq(authSessions.id, owner.sessionId)).for("update");
+      signalLockAcquired();
+      await releaseGate;
+    });
+    await lockAcquired;
+
+    try {
+      const pendingRead = http.get(`/api/cases/${manualCase.case.id}`);
+      await new Promise(resolve => setTimeout(resolve, 50));
+      const busy = await pendingRead.expect(409);
+      expect(busy.body).toMatchObject({ code: "authentication_state_busy", details: { retryable: true } });
+      expect(JSON.stringify(busy.body)).not.toContain("Private while authority changes");
+    } finally {
+      releaseRowLock();
+      await holdSession;
+    }
   }, 90_000);
 
   it("returns 404 for cross-company pipeline route classes", async () => {

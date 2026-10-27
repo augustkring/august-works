@@ -4568,15 +4568,6 @@ export async function buildPaperclipRuntimeMcpServers(input: {
     assignedConnectionIds.has(tool.connectionId),
   );
   const service = createToolGatewayService(input.db);
-  if (assignedConnections.length === 0) {
-    await service.recordRuntimeMcpDeliveryDiagnostic({
-      companyId: input.agent.companyId,
-      agentId: input.agent.id,
-      runId: input.runId,
-      permittedNotInstalledConnections,
-    });
-    return [];
-  }
   const assignment = {
     version: 1,
     agentId: input.agent.id,
@@ -4588,11 +4579,19 @@ export async function buildPaperclipRuntimeMcpServers(input: {
     .digest("hex");
   // Native runs may lose access after their immutable context is captured, but
   // they must never gain a new or changed assignment during dispatch.
-  if (
-    input.expectedAssignmentDigest !== undefined &&
-    input.expectedAssignmentDigest !== assignmentDigest
-  ) {
+  const expectedEmptyAssignment = input.expectedAssignmentDigest === null &&
+    assignedConnections.length === 0 && assignedTools.length === 0;
+  if (input.expectedAssignmentDigest !== undefined &&
+      input.expectedAssignmentDigest !== assignmentDigest && !expectedEmptyAssignment) {
     return [];
+  }
+  if (assignedConnections.length === 0) {
+    await service.recordRuntimeMcpDeliveryDiagnostic({
+      companyId: input.agent.companyId,
+      agentId: input.agent.id,
+      runId: input.runId,
+      permittedNotInstalledConnections,
+    });
   }
   const profileKey = `native:${input.agent.id}:${assignmentDigest}`;
   let [profile] = await input.db
@@ -21476,10 +21475,11 @@ export function heartbeatService(
       }
       // Required procedure admission is independent of the optional Fabric
       // feature. Resumed immutable inputs cannot acquire a new pin silently.
+      const platformSkillContracts = blenteraPlatformContractHashes();
       const requiredPlatform = await preparePlatformSkillAdmission(db, {
         companyId: agent.companyId, agentId: agent.id, runId: run.id,
         responsibleUserId: run.responsibleUserId, requireExisting: Boolean(persistedNativeExecutionInput),
-      }, blenteraPlatformContractHashes());
+      }, platformSkillContracts);
       const eagerV5Skills = v5Fabric?.manifest.skills.filter((pin) => pin.loadPoint !== "on_demand");
       const effectiveResolvedConfig = v5Fabric
         ? writePaperclipSkillSyncPreference(resolvedConfig, eagerV5Skills!.map((pin) => ({ key: pin.key, versionId: pin.versionId })))
@@ -24664,7 +24664,7 @@ export function heartbeatService(
               const digest = server?.connectionId.startsWith("assignment:")
                 ? server.connectionId.slice("assignment:".length)
                 : null;
-              if (digest && digest !== expectedNativeMcpDigest) {
+              if (expectedNativeMcpDigest && digest !== expectedNativeMcpDigest) {
                 throw new Error("native MCP assignment digest mismatch");
               }
             }
@@ -24999,6 +24999,7 @@ export function heartbeatService(
                     context: adapterContext,
                     providerRuntime: v5Fabric?.providerRuntime,
                     platformSkillAdmission: requiredPlatform.identity,
+                    platformSkillContracts,
                     executionContinuation: executionContinuation ?? null,
                     runtimeCommandSpec:
                       adapter.getRuntimeCommandSpec?.(runtimeConfig) ?? null,

@@ -42,7 +42,7 @@ import {instanceSettingsService} from "../services/instance-settings.js";
 import {businessMetricService} from "../services/business-metrics/service.js";
 import {aiGovernanceService} from "../services/ai-governance/governance-service.js";
 import {contextManifestService} from "../services/context/context-manifest.js";
-import {assertAnalyticalContextPayloadAccess,assertNativeAnalyticalRunPayloadAccess} from "../services/analytical-context-authority.js";
+import {assertAnalyticalContextPayloadAccess,assertAnalyticalContextPayloadAccessBatch,assertNativeAnalyticalRunPayloadAccess} from "../services/analytical-context-authority.js";
 import type {NativePayloadSourceSet} from "../services/native-runtime/native-execution-input.js";
 import {withAnalyticalConversationRetention} from "../services/analytical-context-privacy.js";
 import {heartbeatMemoryPayloadRetained,reapplyMemoryDeletionMarkers} from "../services/memory/memory-privacy.js";
@@ -70,7 +70,7 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
  let database:Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>,db:ReturnType<typeof createDb>,companyId:string,userId:string,agentId:string,issueId:string,runId:string,reader:AuthorizationActor;
  beforeAll(async()=>{database=await startEmbeddedPostgresTestDatabase("aw-v8-analytical-context-");db=createDb(database.connectionString);});afterAll(async()=>database?.cleanup());
  beforeEach(async()=>{
-  await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({analytical_lineage_v8:true,business_metrics_v8:true,management_reviews_v8:true,management_chat_tools_v8:true,enableContextEngineV1:true,ai_use_cases_v7:true,governance_evidence_v7:true});companyId=randomUUID();userId=randomUUID();agentId=randomUUID();issueId=randomUUID();runId=randomUUID();
+  await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({analytical_lineage_v8:true,business_metrics_v8:true,management_reviews_v8:true,management_chat_tools_v8:true,enableContextEngineV1:true,ai_use_cases_v7:true,governance_evidence_v7:true,enableAgentChat:false});companyId=randomUUID();userId=randomUUID();agentId=randomUUID();issueId=randomUUID();runId=randomUUID();
   await db.insert(companies).values({id:companyId,name:"Synthetic private native analytical conversation",issuePrefix:randomUUID()});await db.insert(authUsers).values({id:userId,name:"Current human",email:`${userId}@example.test`,createdAt:new Date(),updatedAt:new Date()});await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:userId,membershipRole:"admin",status:"active"});await db.insert(agents).values({id:agentId,companyId,name:"Native analytical reader",role:"engineer",status:"active",adapterType:"paperclip_runner"});
   const sessionId=await seedNativePasskeySession(db,userId),[session]=await db.select({expiresAt:authSessions.expiresAt}).from(authSessions).where(eq(authSessions.id,sessionId));
   reader={type:"board",source:"session",userId,sessionId,authenticatedCredentialExpiresAt:session!.expiresAt.getTime(),companyIds:[companyId]};
@@ -99,6 +99,38 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
   await db.update(issues).set({conversationAgentId:null,conversationUserId:null,conversationState:null,status:"cancelled",hiddenAt:new Date(),
    assigneeAgentId:null,assigneeUserId:null,executionRunId:null,checkoutRunId:null,conversationRetiredAt:new Date()}).where(eq(issues.id,issueId));
   await expect(assertNativeAnalyticalRunPayloadAccess(db,companyId,runId)).rejects.toMatchObject({status:403,details:{code:"analytical_source_access_lost"}});
+ });
+
+ it("keeps a current self-owned conversation comment on the deep privacy path and denies it after reader revocation",async()=>{
+  await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({enableAgentChat:true});
+  await db.update(issues).set({conversationAgentId:null,conversationUserId:null,conversationState:null}).where(eq(issues.id,issueId));
+  const app=express();app.use(express.json());app.use((req,_res,next)=>{req.actor=reader;next();});app.use("/api",issueRoutes(db,{wakeup:async()=>null} as never));app.use(errorHandler);
+  const chat=await request(app).post(`/api/companies/${companyId}/chats/${agentId}`).send({});
+  expect(chat.status,JSON.stringify(chat.body)).toBe(200);
+  issueId=chat.body.id;
+  const submitted=await request(app).post(`/api/issues/${issueId}/comments`).send({body:"Synthetic current conversation input",clientRequestId:randomUUID()});
+  expect(submitted.status,JSON.stringify(submitted.body)).toBe(201);
+  const [owner]=await db.select({protocol:issues.payloadSourceProtocolVersion,snapshot:issues.payloadSourceSnapshot,
+    invalidated:issues.payloadSourceSnapshotInvalidated}).from(issues).where(eq(issues.id,issueId));
+  const payloadSnapshot=owner?.snapshot as {owner?:{kind?:string;id?:string;companyId?:string};inputs?:Array<{kind?:string;commentId?:string}>;policy?:{issueIds?:string[];projectIds?:string[];runIds?:string[];memoryIds?:string[];foundationRevisionIds?:string[]}}|null;
+  expect(owner?.protocol).toBe(1);expect(owner?.invalidated).toBe(false);
+  expect(payloadSnapshot?.owner).toMatchObject({kind:"issue",id:issueId,companyId});
+  expect(payloadSnapshot?.inputs).toHaveLength(1);expect(payloadSnapshot?.inputs?.[0]).toMatchObject({kind:"comment",issueId,commentId:submitted.body.id});
+  expect(payloadSnapshot?.policy).toEqual({issueIds:[],projectIds:[],runIds:[],memoryIds:[],foundationRevisionIds:[]});
+  const priorDiagnostics=process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS,admissionLog=vi.spyOn(console,"info").mockImplementation(()=>{});
+  process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS="1";
+  try {
+    await expect(assertAnalyticalContextPayloadAccessBatch(db,companyId,reader,[issueId],"task",{fastPathOnly:true})).resolves.toBe(false);
+    expect(admissionLog).toHaveBeenCalledWith("native-analytical-batch-deep-route",
+      expect.stringContaining('"privacyLockMode":"write"'));
+  } finally {
+    admissionLog.mockRestore();
+    if(priorDiagnostics===undefined)delete process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS;
+    else process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS=priorDiagnostics;
+  }
+  await expect(assertAnalyticalContextPayloadAccess(db,companyId,reader,{issueId})).resolves.toBeUndefined();
+  await db.delete(companyMemberships).where(and(eq(companyMemberships.companyId,companyId),eq(companyMemberships.principalId,userId)));
+  await expect(assertAnalyticalContextPayloadAccess(db,companyId,reader,{issueId})).rejects.toMatchObject({status:403,details:{code:"analytical_source_access_lost"}});
  });
 
  it("retains a managed metric result in a separate immutable Context and revokes its original sources",async()=>{

@@ -5,7 +5,7 @@
 import type { SshRemoteExecutionSpec } from "./ssh.js";
 import type { AdapterExecutionTarget } from "./execution-target.js";
 import type { RuntimeStatusSink } from "./runtime-progress.js";
-import type { AgentExecutionManifest, ExecutionContinuationEnvelope, NativeFinalizationResult } from "@paperclipai/shared";
+import type { PlatformSkillIdentity, ExecutionContinuationEnvelope, NativeFinalizationResult } from "@paperclipai/shared";
 
 export interface AdapterAgent {
   id: string;
@@ -197,7 +197,9 @@ export interface AdapterRuntimeEvent {
 export interface AdapterExecutionContext {
   /** Server-owned immutable operating procedure identity, never adapter config
    * or a customer-provided permission grant. */
-  platformSkillAdmission?: NonNullable<AgentExecutionManifest["platformSkill"]>;
+  platformSkillAdmission?: PlatformSkillIdentity;
+  /** Server-computed contracts for that admission; not a caller claim. */
+  platformSkillContracts?: { operationManifestHash: string; toolCatalogContractHash: string };
   /** Server-owned V5 binding, supplied after current local authorization. */
   providerRuntime?: {
     providerType?: string;

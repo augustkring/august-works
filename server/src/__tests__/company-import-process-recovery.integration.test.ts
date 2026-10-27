@@ -89,7 +89,7 @@ describeEmbeddedPostgres("company import process recovery", () => {
     await db.insert(authUsers).values({ id: userId, name: "Process recovery owner", email: `${userId}@test.invalid`,
       emailVerified: true, createdAt: now, updatedAt: now });
     await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId,
-      membershipRole: "owner", status: "active" });
+      membershipRole: "owner", status: "active", permissionsInitializedAt: now });
     await db.insert(principalPermissionGrants).values(grantsForHumanRole("owner").map(grant => ({ companyId,
       principalType: "user" as const, principalId: userId, ...grant })));
     await db.insert(authSessions).values({ id: sessionId, userId, token: randomUUID(), createdAt: now,
@@ -144,6 +144,9 @@ describeEmbeddedPostgres("company import process recovery", () => {
       const originalId = String(domainReturned.jobId);
       const originalAttemptId = String(domainReturned.attemptId);
       const actorKey = `board:${userId}`;
+      expect(await companyImportJobService(db).recoverInterrupted()).toEqual([]);
+      await db.update(customerOperations).set({ leaseExpiresAt: new Date(Date.now() - 1000) })
+        .where(eq(customerOperations.id, originalId));
       const recoveredRows = await companyImportJobService(db).recoverInterrupted();
       expect(recoveredRows).toContainEqual({ id: originalId });
       const recovered = await companyImportJobService(db).get(originalId, actorKey);

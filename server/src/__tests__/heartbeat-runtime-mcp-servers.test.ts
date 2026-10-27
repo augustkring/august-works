@@ -410,7 +410,7 @@ describeEmbeddedPostgres("heartbeat runtime MCP servers", () => {
     expect(runtimeEntries.map((entry) => entry.connectionId)).toEqual([dedicated!.id]);
   });
 
-  it("audits permitted remote MCP connections that were not installed when delivery is empty", async () => {
+  it("audits uninstalled App access while still delivering first-party run tools", async () => {
     const [company] = await db.insert(companies).values({
       name: `Runtime MCP diagnostic ${randomUUID()}`,
       issuePrefix: `RD${randomUUID().slice(0, 5).toUpperCase()}`,
@@ -470,7 +470,11 @@ describeEmbeddedPostgres("heartbeat runtime MCP servers", () => {
 
     const servers = await buildPaperclipRuntimeMcpServers({ db, agent: agent!, runId });
 
-    expect(servers).toEqual([]);
+    expect(servers).toHaveLength(1);
+    expect(servers[0]).toMatchObject({
+      name: "paperclip-assigned",
+      connectionId: expect.stringMatching(/^assignment:[a-f0-9]{64}$/),
+    });
     const [activity] = await db
       .select()
       .from(activityLog)
@@ -481,7 +485,9 @@ describeEmbeddedPostgres("heartbeat runtime MCP servers", () => {
       runId,
       details: expect.objectContaining({
         reasonCode: "permitted_connections_not_installed",
-        deliveredServerCount: 0,
+        deliveredServerCount: 1,
+        deliveredAssignmentCount: 0,
+        deliveredFirstPartyTools: true,
         permittedNotInstalledCount: 1,
         permittedNotInstalledConnections: [{ id: connection!.id, name: "Zapier" }],
       }),
@@ -492,7 +498,7 @@ describeEmbeddedPostgres("heartbeat runtime MCP servers", () => {
       actorType: "agent",
       actorId: agent!.id,
       reasonCode: "permitted_connections_not_installed",
-      details: expect.objectContaining({ runId, deliveredServerCount: 0 }),
+      details: expect.objectContaining({ runId, deliveredServerCount: 1, deliveredAssignmentCount: 0, deliveredFirstPartyTools: true }),
     });
   });
 

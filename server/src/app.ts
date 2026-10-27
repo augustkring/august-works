@@ -1,5 +1,5 @@
 import { productIdentityRoutes } from "./routes/product-identity.js";
-import { companyImportJobService } from "./services/company-import-jobs.js";
+import { companyImportJobService, scheduleCompanyImportRecovery } from "./services/company-import-jobs.js";
 import { purgeExpiredNotificationChannelCommands } from "./services/notifications/channel-retention.js";
 import { customerSupportRoutes } from "./routes/customer-support.js";
 import { readSupportCaseDataPolicy } from "./services/experience/support-case-configuration.js";
@@ -88,6 +88,7 @@ import { cloudControlMiddleware } from "./middleware/cloud-control.js";
 import { cloudRoutes } from "./routes/cloud.js";
 import { companyRoutes } from "./routes/companies.js";
 import { companySkillRoutes } from "./routes/company-skills.js";
+
 import { foundationRoutes } from "./routes/foundation.js";
 import { readinessRoutes } from "./routes/readiness.js";
 import { foundationBootstrapRoutes } from "./routes/foundation-bootstrap.js";
@@ -248,6 +249,7 @@ import { COMPANY_IMPORT_API_PATH } from "./routes/company-import-paths.js";
 import { apiCompression } from "./middleware/api-compression.js";
 import { chatWebhookBodyParser } from "./middleware/chat-webhook-body.js";
 import { createChatWebhookDiagnostics } from "./services/chat-webhook-diagnostics.js";
+
 
 type UiMode = "none" | "static" | "vite-dev";
 const FEEDBACK_EXPORT_FLUSH_INTERVAL_MS = 5_000;
@@ -1449,11 +1451,12 @@ export async function createApp(
       IMPORT_TRANSFER_SPOOL_SWEEP_INTERVAL_MS,
     );
   importTransferSweepTimer.unref?.();
-  // A startup cannot prove whether an interrupted apply wrote domain data.
-  // Preserve its durable identity and block replay pending reconciliation.
-  void companyImportJobService(db).recoverInterrupted().catch(() => {
-    logger.error("interrupted durable import status could not be reconciled");
-  });
+  // A process may start while the crashed owner's lease is still live. Keep
+  // checking so that only subsequently expired leases become inconclusive.
+  let stopImportJobRecovery: (() => Promise<void>) | null = scheduleCompanyImportRecovery(
+    () => companyImportJobService(db).recoverInterrupted(),
+    () => logger.error("interrupted durable import status could not be reconciled"),
+  );
   void companyTransferRunService
     .recoverStrandedApplyingRuns(db)
     .then((recovered) => {
@@ -1559,6 +1562,11 @@ export async function createApp(
       if (importTransferSweepTimer) {
         clearInterval(importTransferSweepTimer);
         importTransferSweepTimer = null;
+      }
+      if (stopImportJobRecovery) {
+        const stopRecovery = stopImportJobRecovery;
+        stopImportJobRecovery = null;
+        await stopRecovery();
       }
       devWatcher?.close();
       viteHtmlRenderer?.dispose();

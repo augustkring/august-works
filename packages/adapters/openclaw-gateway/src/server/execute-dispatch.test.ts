@@ -11,6 +11,7 @@ const websocketState = vi.hoisted(() => ({
   events: [] as string[],
   messages: [] as string[],
   agentRequests: [] as Record<string, unknown>[],
+  governedBridgeRequests: [] as Array<{ method: string; params: Record<string, unknown> }>,
   methods: null as string[] | null,
   holdRun: false,
   waitTimedOut: false,
@@ -53,6 +54,9 @@ vi.mock("ws", async () => {
       if (request.method === "agent") websocketState.messages.push(request.params?.message ?? "");
       if (request.method === "agent") websocketState.agentRequests.push(request.params ?? {});
       if (request.method === "connect") websocketState.connections.push(request.params ?? {});
+      if (request.method.startsWith("blentera.platform.")) {
+        websocketState.governedBridgeRequests.push({ method: request.method, params: request.params ?? {} });
+      }
       websocketState.events.push(`send:${request.method}`);
       if (request.method === "agent" && websocketState.failAgentRequests > 0) {
         websocketState.failAgentRequests--;
@@ -80,6 +84,8 @@ vi.mock("ws", async () => {
         : request.method === "skills.upload.commit" ? { uploadId: request.params?.uploadId, sha256: request.params?.sha256 }
         : request.method === "skills.files.get" ? { path: request.params?.path, name: "Blentera platform", content: websocketState.skillText }
         : request.method === "skills.install" ? (websocketState.skillInstalled = true, { ok: true, slug: "blentera-platform", sha256: request.params?.sha256, targetDir: "/remote/agent/skills/blentera-platform" })
+        : request.method === "blentera.platform.bind.v1" ? { protocolVersion: 1, pluginVersion: "1.0.0", toolCount: 7, toolsHash: "b".repeat(64) }
+        : request.method === "blentera.platform.status.v1" ? { protocolVersion: 1, ready: true, paperclipRunId: "run-1", toolCount: 7, toolsHash: "b".repeat(64), expiresAt: new Date(Date.now() + 60_000).toISOString() }
         : request.method === "agent" && websocketState.holdRun ? { status: "accepted", runId: "remote-run-1" }
         : request.method === "agent.wait" && websocketState.cancelled ? { status: "cancelled" }
         : { status: "ok", runId: "remote-run-1", summary: "done" };
@@ -135,6 +141,35 @@ function createContext(input: {
   };
 }
 
+function prepareGovernedPlatformSkill(ctx: AdapterExecutionContext) {
+  ctx.platformSkillAdmission = {
+    key: "blentera-platform",
+    version: "v1",
+    digest: "sha256:25598388d69d9a7f5dd561a03fadfea63ad62aedff6bac12acf9e4cd7844e4b4",
+    sourceSha: "0fcea368aa1ed3e4c7a20aaaf53be81c7dde5910",
+  };
+  ctx.platformSkillContracts = {
+    operationManifestHash: "c".repeat(64),
+    toolCatalogContractHash: "d".repeat(64),
+  };
+  ctx.providerRuntime = {
+    providerBindingId: "binding-1",
+    providerAgentRef: "presence-provider",
+    providerProfileRef: "presence-profile",
+    sessionNamespace: "aw:company-1:agent-1",
+    isolationMode: "isolated_per_presence",
+    capabilitySnapshotHash: "e".repeat(64),
+  };
+  ctx.runtimeMcp = {
+    getServers: () => [{
+      name: "paperclip-assigned",
+      url: "https://paperclip.example.test/api/mcp/run-1",
+      token: "fixture-run-scoped-token",
+      connectionId: `assignment:${"f".repeat(64)}`,
+    }],
+  };
+}
+
 describe("openclaw_gateway execute dispatch boundary", () => {
   beforeEach(() => {
     websocketState.connectionAttempts = 0;
@@ -143,6 +178,7 @@ describe("openclaw_gateway execute dispatch boundary", () => {
     websocketState.events = [];
     websocketState.messages = [];
     websocketState.agentRequests = [];
+    websocketState.governedBridgeRequests = [];
     websocketState.methods = null;
     websocketState.holdRun = false;
     websocketState.waitTimedOut = false;
@@ -180,14 +216,9 @@ describe("openclaw_gateway execute dispatch boundary", () => {
   });
 
   it("refuses a pinned task before dispatch when the Gateway does not advertise real Skill delivery methods", async () => {
-    websocketState.methods = ["agent", "agent.wait"];
+    websocketState.methods = ["agent", "agent.wait", "blentera.platform.bind.v1", "blentera.platform.status.v1", "blentera.platform.unbind.v1"];
     const ctx = createContext();
-    ctx.platformSkillAdmission = {
-      key: "blentera-platform",
-      version: "v1",
-      digest: "sha256:25598388d69d9a7f5dd561a03fadfea63ad62aedff6bac12acf9e4cd7844e4b4",
-      sourceSha: "0fcea368aa1ed3e4c7a20aaaf53be81c7dde5910",
-    };
+    prepareGovernedPlatformSkill(ctx);
     const result = await execute(ctx);
     expect(result).toMatchObject({ exitCode: 1, errorCode: "openclaw_gateway_request_failed" });
     expect(result.errorMessage).toContain("skills.upload.begin is unavailable");
@@ -195,17 +226,24 @@ describe("openclaw_gateway execute dispatch boundary", () => {
     expect(websocketState.events).not.toContain("send:agent");
   });
 
+  it("refuses a pinned task before dispatch when the Gateway lacks the exact-run bridge methods", async () => {
+    websocketState.methods = ["agent", "agent.wait", "skills.upload.begin", "skills.upload.chunk", "skills.upload.commit", "skills.install", "skills.status", "skills.files.get"];
+    const ctx = createContext();
+    prepareGovernedPlatformSkill(ctx);
+    const result = await execute(ctx);
+    expect(result).toMatchObject({ exitCode: 1, errorCode: "openclaw_gateway_request_failed" });
+    expect(result.errorMessage).toContain("blentera.platform.bind.v1");
+    expect(websocketState.agentRequests).toHaveLength(0);
+    expect(websocketState.events).not.toContain("send:skills.install");
+    expect(websocketState.events).not.toContain("send:agent");
+  });
+
   it("delivers the exact immutable platform Skill over advertised upload/install methods before agent dispatch", async () => {
-    websocketState.methods = ["agent", "agent.wait", "chat.abort", "skills.status", "skills.files.get", "skills.upload.begin", "skills.upload.chunk", "skills.upload.commit", "skills.install"];
+    websocketState.methods = ["agent", "agent.wait", "chat.abort", "skills.status", "skills.files.get", "skills.upload.begin", "skills.upload.chunk", "skills.upload.commit", "skills.install", "blentera.platform.bind.v1", "blentera.platform.status.v1", "blentera.platform.unbind.v1"];
     const skillRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../../skills-releases/blentera-platform/v1");
     websocketState.skillText = await fs.readFile(path.join(skillRoot, "SKILL.md"), "utf8");
     const ctx = createContext();
-    ctx.platformSkillAdmission = {
-      key: "blentera-platform",
-      version: "v1",
-      digest: "sha256:25598388d69d9a7f5dd561a03fadfea63ad62aedff6bac12acf9e4cd7844e4b4",
-      sourceSha: "0fcea368aa1ed3e4c7a20aaaf53be81c7dde5910",
-    };
+    prepareGovernedPlatformSkill(ctx);
     ctx.config.paperclipRuntimeSkills = [{
       key: "blentera-platform", runtimeName: "blentera-platform", source: skillRoot,
       versionId: "db-pinned-version", sourceStatus: "available",
@@ -214,6 +252,12 @@ describe("openclaw_gateway execute dispatch boundary", () => {
     expect(result.exitCode).toBe(0);
     expect(websocketState.events.indexOf("send:skills.install")).toBeGreaterThan(-1);
     expect(websocketState.events.indexOf("send:skills.install")).toBeLessThan(websocketState.events.indexOf("send:agent"));
+    expect(websocketState.events.indexOf("send:blentera.platform.bind.v1")).toBeGreaterThan(websocketState.events.indexOf("send:agent"));
+    expect(websocketState.events).toContain("send:blentera.platform.status.v1");
+    expect(websocketState.events).toContain("send:blentera.platform.unbind.v1");
+    const bind = websocketState.governedBridgeRequests.find((request) => request.method === "blentera.platform.bind.v1")!;
+    expect(bind.params).toMatchObject({ agentId: "presence-provider", sessionKey: expect.any(String), providerRunId: "remote-run-1", paperclipRunId: "run-1" });
+    expect(bind.params.admission).toMatchObject({ protocolVersion: 1, companyId: "company-1", agentId: "agent-1", paperclipRunId: "run-1", runtimeAdapter: "openclaw_gateway", runtimeCapabilitySnapshotHash: "e".repeat(64), operationManifestHash: "c".repeat(64), toolCatalogContractHash: "d".repeat(64), assignmentDigest: "f".repeat(64) });
     expect(websocketState.agentRequests).toHaveLength(1);
   });
 

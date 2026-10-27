@@ -6,7 +6,7 @@ import express from "express";
 import request from "supertest";
 import { WebSocket } from "ws";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   activityLog,
   agents,
@@ -785,6 +785,62 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
           companyId: f.home, issueId: task!.id, heartbeatRunId: run!.id, status: "active",
           expiresAt: new Date(Date.now() + 60000), metadata: { driver: "sandbox" },
         }).returning();
+        const runAdmissionRace = async (invalidateHost: boolean) => {
+          let markHostLocked!: (pid: number) => void;
+          let releaseHeartbeat!: () => void;
+          let markAdmissionStarted!: (pid: number) => void;
+          const hostLocked = new Promise<number>(resolve => { markHostLocked = resolve; });
+          const heartbeatRelease = new Promise<void>(resolve => { releaseHeartbeat = resolve; });
+          const admissionStarted = new Promise<number>(resolve => { markAdmissionStarted = resolve; });
+          const heartbeatTx = db.transaction(async tx => {
+            const [backend] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+            await tx.select({ id: runtimeHosts.id }).from(runtimeHosts).where(eq(runtimeHosts.id, host!.id)).for("update");
+            await tx.update(runtimeHosts).set({ lastHeartbeatAt: new Date() }).where(eq(runtimeHosts.id, host!.id));
+            markHostLocked(backend!.pid);
+            await heartbeatRelease;
+            await tx.execute(sql`set local lock_timeout = '2000ms'`);
+            if (invalidateHost) await tx.update(runtimeHosts).set({ status: "DEGRADED" }).where(eq(runtimeHosts.id, host!.id));
+            await tx.update(runtimeCells).set({
+              meteredThrough: new Date(),
+            }).where(eq(runtimeCells.id, admissionCell!.id));
+          });
+          const heartbeatOutcome = heartbeatTx.then(() => ({ ok: true as const }), error => ({ ok: false as const, error }));
+          const heartbeatPid = await hostLocked;
+          const admission = db.transaction(async tx => {
+            const [backend] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+            markAdmissionStarted(Number(backend!.pid));
+            return executionSandboxService(tx as any, { runtimeSuspectSeconds: 90 }).assertTaskExecutionContext(tx as any, {
+              companyId: f.home, runId: run!.id, leaseId: lease!.id,
+            });
+          });
+          const admissionOutcome = admission.then(value => ({ ok: true as const, value }), error => ({ ok: false as const, error }));
+          const admissionPid = await admissionStarted;
+          try {
+            let waitingOnHost = false;
+            const waitDeadline = Date.now() + 5000;
+            while (Date.now() < waitDeadline) {
+              const [state] = await db.execute<{ waiting: boolean }>(sql`select exists(
+                select 1 from pg_stat_activity where pid=${admissionPid}
+                  and ${heartbeatPid}::integer=any(pg_blocking_pids(pid)) and wait_event_type='Lock'
+              ) as waiting`);
+              if (state?.waiting) { waitingOnHost = true; break; }
+              await new Promise(resolve => setTimeout(resolve, 20));
+            }
+            expect(waitingOnHost, "task admission must wait for the heartbeat's host lock").toBe(true);
+          } finally {
+            releaseHeartbeat();
+          }
+          expect(await heartbeatOutcome).toMatchObject({ ok: true });
+          const admissionResult = await admissionOutcome;
+          if (invalidateHost) {
+            expect(admissionResult).toMatchObject({ ok: false, error: { status: 409 } });
+            await db.update(runtimeHosts).set({ status: "READY" }).where(eq(runtimeHosts.id, host!.id));
+          } else {
+            expect(admissionResult).toMatchObject({ ok: true, value: { host: { id: host!.id }, cell: { runtimeHostId: host!.id } } });
+          }
+        };
+        await runAdmissionRace(false);
+        await runAdmissionRace(true);
         const environmentRuntime = environmentRuntimeService(db, { executeSandboxTask: runtime.executeSandboxTask });
         const executionEnvironment = { id: randomUUID(), driver: "sandbox", config: {}, envVars: {}, metadata: null } as any;
         const executeThroughAdapter = () => environmentRuntime.execute({
@@ -1039,7 +1095,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       expect((await db.select().from(runtimeCells).where(eq(runtimeCells.id, admissionCell!.id)))[0]).toMatchObject({ status: "STOPPED", activeSince: null });
       expect((await db.select().from(runtimeOperations).where(eq(runtimeOperations.runtimeCellId, admissionCell!.id))).map(row => [row.operationType, row.status])).toEqual([["start", "SUCCEEDED"], ["stop", "SUCCEEDED"]]);
       expect((await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.home), eq(activityLog.entityId, admissionCell!.id)))).some(event => event.action === "runtime.sandbox_workload_started")).toBe(true);
-    }, 60000);
+    }, 120000);
     it("rejects a late completion after host fencing and expires bounded pending work", async () => {
       const transport = nativeSandboxHostTransport(db, { operatorUserIds: [f.userId] }),
         result = transport
