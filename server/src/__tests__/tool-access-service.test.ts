@@ -4812,6 +4812,48 @@ describeEmbeddedPostgres("tool access service", () => {
     });
   });
 
+  it("projects current OAuth and GitHub lifecycle from the grant endpoint", async () => {
+    const company = await createCompany(db);
+    const expiresAt = new Date(Date.now() + 2 * 60 * 60_000).toISOString();
+    const userId = `lifecycle-owner-${randomUUID()}`;
+    await grantBoardUser(db, company.id, userId, [], "owner");
+    const service = createTestToolAccessService(db);
+    const connection = await service.createConnection(company.id, {
+      name: "GitHub lifecycle",
+      transport: "rest_api",
+      authKind: "oauth",
+      status: "active",
+      enabled: true,
+      config: { sourceTemplateKey: "github" },
+    }, { actorType: "user", actorId: userId });
+    const [grant] = await db.select().from(connectionGrants).where(and(
+      eq(connectionGrants.companyId, company.id), eq(connectionGrants.connectionId, connection.id),
+    ));
+    await db.update(connectionGrants).set({
+      providerTenant: {
+        oauth: { scopes: ["repo", "read:user"], accessTokenExpiresAt: expiresAt },
+        github: {
+          userId: "123", login: "octocat", installationCount: 1, repositoryCount: 2,
+          repositorySelection: "selected", installationIds: ["456"], installationOwnerLogins: ["octo"],
+          repositories: [{ id: "789", fullName: "octo/project", installationId: "456" }],
+          accessRevision: "access-version-1", lastAccessRefreshAt: "2026-10-28T00:00:00.000Z",
+          lastWebhookAt: "2026-10-27T23:00:00.000Z", webhookHealth: "healthy",
+        },
+      },
+    }).where(eq(connectionGrants.id, grant!.id));
+    const response = await request(createRouteApp(db, boardSessionActor(company.id, "owner", userId)))
+      .get(`/api/tool-connections/${connection.id}/grants`);
+    expect(response.status).toBe(200);
+    expect(response.body.grants[0].lifecycle).toMatchObject({
+      grantStatus: "active", scopeNames: ["read:user", "repo"], state: "DEGRADED",
+      credentialExpiresAt: expiresAt, accessVersion: "access-version-1",
+      webhook: { health: "healthy", lastDeliveryAt: "2026-10-27T23:00:00.000Z", expiry: "not_applicable" },
+      providerLifecycle: "not_reported", syncReconciliation: "not_reported",
+    });
+    expect(response.body.grants[0].lifecycle).not.toHaveProperty("accessToken");
+    expect(response.body.grants[0].lifecycle).not.toHaveProperty("refreshToken");
+  });
+
   it("installs the safe example fixture idempotently and smokes allow, deny, and audit paths", async () => {
     const company = await createCompany(db);
     const service = createTestToolAccessService(db);

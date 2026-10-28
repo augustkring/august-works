@@ -6,6 +6,7 @@ import { conflict, forbidden, HttpError, notFound } from "../../errors.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { accessService } from "../access.js";
 import { toolAccessService } from "../tool-access.js";
+import { projectToolConnectionLifecycle } from "../tool-connection-lifecycle.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { assertV5Authorization, v5HumanActorId } from "../v5-authorization.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
@@ -63,6 +64,28 @@ export async function readConnectorRecovery(db: Db, actor: AuthorizationActor, c
           or (${toolConnections.config}->>'sourceTemplateKey'='github' and not exists(select 1 from connection_grants g
             where g.company_id=${companyId}::uuid and g.connection_id=${toolConnections.id} and g.status='active'
             and (${toolConnections.credentialPolicy}<>'per_user' or (g.kind='user' and g.subject_user_id=${principal}))))
+          or exists(select 1 from connection_grants g where g.company_id=${companyId}::uuid and g.connection_id=${toolConnections.id}
+            and g.status in ('revoked','expired','needs_reauthorization') and (
+              g.kind='organization' or (g.kind='user' and g.subject_user_id=${principal})))
+          or (${manager} and exists(select 1 from connection_grants g where g.company_id=${companyId}::uuid and g.connection_id=${toolConnections.id}
+            and g.provider_tenant->'github'->>'accessRevision' is not null
+            and coalesce(jsonb_typeof(g.provider_tenant->'github'->'repositories'),'null') <> 'array'))
+          or (not ${manager} and exists(select 1 from connection_grants g where g.company_id=${companyId}::uuid and g.connection_id=${toolConnections.id}
+            and g.kind='user' and g.subject_user_id=${principal}
+            and g.provider_tenant->'github'->>'accessRevision' is not null
+            and coalesce(jsonb_typeof(g.provider_tenant->'github'->'repositories'),'null') <> 'array'))
+          or exists(select 1 from connection_grants g where g.company_id=${companyId}::uuid and g.connection_id=${toolConnections.id}
+            and g.status='active' and (
+              (${manager} and (g.kind='organization' or (g.kind='user' and g.subject_user_id=${principal})))
+              or (not ${manager} and g.kind='user' and g.subject_user_id=${principal})
+            ) and (
+              ${toolConnections.config}->>'sourceTemplateKey'='github'
+              or g.provider_tenant->'oauth'->>'accessTokenExpiresAt' is not null
+              or g.provider_tenant->'oauth'->>'refreshTokenExpiresAt' is not null
+              or exists(select 1 from jsonb_array_elements(case when jsonb_typeof(g.credential_secret_refs)='array'
+                then g.credential_secret_refs else '[]'::jsonb end) secret_ref
+                where jsonb_typeof(secret_ref)='object' and secret_ref->>'expiresAt' is not null)
+            ))
         )`)).orderBy(desc(toolConnections.updatedAt), desc(toolConnections.id)).limit(6).for("share");
     const cards: ExperienceCard[] = [];
     for (const row of rows) {
@@ -79,15 +102,26 @@ export async function readConnectorRecovery(db: Db, actor: AuthorizationActor, c
       }
       const connection = await original.getConnection(row.id, companyId, principal);
       const personalAccess = !!personal?.grant && ["revoked", "expired", "needs_reauthorization"].includes(personal.grant.status);
+      const personalLifecycle = personal?.grant?.lifecycle ?? null;
+      const needsPersonalGrantAction = Boolean(personalLifecycle && (
+        personalLifecycle.state === "REVOKED" || personalLifecycle.state === "REQUIRES_REAUTH" ||
+        personalLifecycle.state === "PERMISSION_CHANGED" || personalLifecycle.state === "DEGRADED"));
+      const managerGrantAttention = manager
+        ? (await original.listConnectionGrants(row.id, companyId)).grants
+            .filter(grant => grant.kind === "organization" || (grant.kind === "user" && grant.subjectUserId === principal))
+            .map(grant => projectToolConnectionLifecycle(connection, grant))
+            .find(lifecycle => lifecycle.state === "REVOKED" || lifecycle.state === "REQUIRES_REAUTH" || lifecycle.state === "PERMISSION_CHANGED") ?? null
+        : null;
       budget();
-      if (!personalAccess && !connection.requiresReauthorization && !isToolConnectionAttentionHealth(connection.healthStatus)) continue;
+      if (!personalAccess && !needsPersonalGrantAction && !managerGrantAttention && !connection.requiresReauthorization && !isToolConnectionAttentionHealth(connection.healthStatus)) continue;
       const source = { domain: "connection" as const, companyId, resourceId: row.id,
         version: nativeSha256({ ...row, manager, personal, updatedAt: row.updatedAt.toISOString(), applicationUpdatedAt: row.applicationUpdatedAt.toISOString(),
-          effectiveHealth: connection.healthStatus, reauthorization: Boolean(connection.requiresReauthorization) }), observedAt: new Date().toISOString() };
+          effectiveHealth: connection.healthStatus, reauthorization: Boolean(connection.requiresReauthorization),
+          personalLifecycle, grantLifecycle: managerGrantAttention }), observedAt: new Date().toISOString() };
       cards.push({ id: `connector-recovery:${row.id}`, kind: "recovery", source, freshness: "fresh",
         title: "Review app connection", whyYou: manager ? "You manage this company's app connections." : "This is your own connected account.",
         consequence: "Review current access in the existing app controls before reconnecting or changing permissions.",
-        evidence: [!manager ? "connector_personal_access_review" : personalAccess || connection.requiresReauthorization || connection.healthStatus === "missing_secret" ? "connector_access_review" : "connector_recovery_review"],
+        evidence: [!manager ? "connector_personal_access_review" : personalAccess || needsPersonalGrantAction || managerGrantAttention || connection.requiresReauthorization || connection.healthStatus === "missing_secret" ? "connector_access_review" : "connector_recovery_review"],
         actions: [{ id: "review-connection", label: "Review app connection", labelKey: "review", operation: "open",
           href: `/apps/${row.id}/permissions`, criticality: "C4", source, requiresCurrentAuthorization: true }] });
     }

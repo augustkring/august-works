@@ -202,6 +202,36 @@ export interface ToolConnection {
   grants?: ConnectionGrant[];
 }
 
+/** Read-only, normalized lifecycle facts derived from the current connection and grant. */
+export interface ToolConnectionLifecycle {
+  state: "HEALTHY" | "DEGRADED" | "REQUIRES_REAUTH" | "PERMISSION_CHANGED" | "SYNC_GAP" | "WEBHOOK_EXPIRING" | "PROVIDER_DEPRECATED" | "PAUSED" | "REVOKED" | "ERROR";
+  reason: string;
+  action: "reauthorize" | "refresh_access" | "reconnect" | "inspect_connection" | null;
+  grantStatus: ConnectionGrantStatus;
+  connectionHealth: { state: ToolConnectionHealthStatus; checkedAt: string | null };
+  scopeNames: string[];
+  scopeHash: string | null;
+  credentialExpirySource: "oauth_access_token" | "vercel_connect_issuance" | "not_reported";
+  credentialExpiresAt: string | null;
+  credentialFreshness: "current" | "expiring" | "expired" | "unknown";
+  refreshTokenExpiresAt: string | null;
+  refreshCredentialFreshness: "current" | "expiring" | "expired" | "unknown";
+  secretReferenceExpiresAt: string | null;
+  secretReferenceFreshness: "current" | "expiring" | "expired" | "unknown";
+  accessVersion: string | null;
+  lastAccessVerifiedAt: string | null;
+  lastCredentialRefreshedAt: string | null;
+  webhook: {
+    health: "pending" | "healthy" | "unhealthy";
+    lastDeliveryAt: string | null;
+    expiry: "not_applicable";
+  } | null;
+  /** No provider-wide version/deprecation contract exists for this connection. */
+  providerLifecycle: "not_reported";
+  /** No source cursor/watermark reconciliation owner exists for this connection. */
+  syncReconciliation: "not_reported";
+}
+
 export interface ConnectionGrant {
   id: string;
   companyId: string;
@@ -271,6 +301,7 @@ export interface ConnectionGrant {
    * creator/subject identity that the client cannot evaluate.
    */
   capabilities?: ConnectionGrantCapabilities;
+  lifecycle?: ToolConnectionLifecycle;
 }
 
 export interface ConnectionGrantCapabilities {

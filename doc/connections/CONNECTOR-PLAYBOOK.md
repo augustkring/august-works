@@ -1025,6 +1025,43 @@ scope names, expiry timestamps, and redacted provider metadata. They must not
 contain secret values. Logs and activity should identify the operation and
 outcome without echoing provider-authored credential-bearing errors.
 
+The grant response also includes a read-only `lifecycle` projection, derived
+from the current connection and exact grant. It reports the normalized state,
+source health and check timestamp, safe reason/action, sorted granted OAuth scopes and their hash, provider-token
+and configured secret-reference expiry/freshness, provider access version,
+access verification time, and credential refresh time. It adds no lifecycle
+table or parallel authorization state.
+For Vercel Connect, the grant expiry is the last short-lived token issuance;
+that issuance expiry alone does not mean the provider authorization needs
+reauthentication.
+When a grant is revoked or needs reauthorization, inspect the named grant and
+use the existing reconnect flow. When GitHub reports changed installation
+access, use **Refresh access** and wait for the repository list to be verified
+again; the existing Action needed item links to that same connection review.
+
+GitHub installation lifecycle metadata reports webhook delivery health and the
+last event observed. A healthy delivery is not proof of complete source sync.
+GitHub App installation webhooks do not have a per-install expiry in this
+connection owner; OAuth token expiry is tracked separately. The current
+tool-connection owners do not expose provider deprecation metadata, a generic
+expiring webhook subscription, or a source cursor/watermark reconciliation
+contract. Those lifecycle values remain explicitly `not_reported`; do not infer
+that a connector supports renewal, missed-event detection, or backfill from its
+OAuth status. Add those operations only with a provider-owned subscription or
+sync contract and corresponding lifecycle tests.
+
+For a customer report, use the connection's **Permissions** view and current
+`GET /api/tool-connections/:connectionId/grants` response. Check the exact
+grant's state, scope list/hash, expiry, version and verification timestamp,
+then compare GitHub's current installation/repository access using **Refresh
+access** where applicable. A `DEGRADED` or `PERMISSION_CHANGED` state requires
+review; `REQUIRES_REAUTH` requires the existing provider sign-in again. Never
+mark the connector recovered from a valid OAuth token alone: the connection
+health and provider-specific access snapshot must also be current. Use the
+webhook health and last-delivery fact in Permissions for observed GitHub events;
+they do not identify missed deliveries. If the provider has no cursor owner,
+record sync completeness as unreported rather than claiming reconciliation.
+
 ### Phase 11: Run the PR-ready verification ladder
 
 Run the smallest relevant suite first, then the full ladder when the change is

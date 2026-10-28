@@ -1,0 +1,3 @@
+The existing connection/grant owner now projects bounded lifecycle facts, without a new state store. Missing provider deprecation/sync/expiry facts stay unreported. Authorized personal recovery derives its safe projection at the canonical fixed-subject owner; it never fetches another person's grant. Current GitHub access snapshots and webhook health are required before projecting healthy verified access.
+
+Full recovery integration r3: 13/13 passed. Focused r2: three integration cases and one AppDetail UI case passed, including active expired refresh credentials, repair withdrawal and inaccessible owner. Raw earlier failure is retained in r1. Fresh full server typecheck and dedicated lifecycle units remain queued; no whole-workspace result is claimed.

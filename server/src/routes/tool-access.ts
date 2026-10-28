@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { filterVisibleToolConnections } from "../services/tool-connection-visibility.js";
+import { projectToolConnectionLifecycle } from "../services/tool-connection-lifecycle.js";
 import { z } from "zod";
 import { activationConnectionConsentService } from "../services/saas/activation-connection-consent.js";
 import type { Db } from "@paperclipai/db";
@@ -1725,6 +1726,7 @@ function connectorEnrollmentPrincipal(req: Request): string {
       ...listed,
       grants: visibleGrants.map((grant) => ({
         ...grant,
+        lifecycle: projectToolConnectionLifecycle(connection, grant),
         capabilities: describeGrantCapabilities(grant, grantContext),
       })),
       capabilities,

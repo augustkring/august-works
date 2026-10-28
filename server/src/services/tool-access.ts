@@ -4,6 +4,7 @@ import { instanceSettingsService } from "./instance-settings.js";
 import { assertActivationConnectionPurpose, assertActivationConnectionPurposeInTransaction } from "./saas/activation-owner.js";
 import { readDeferredActivationSetup, recordDeferredActivationCompletion } from "./saas/activation-connection-completion.js";
 import { originalOAuthGrantExpiration } from "./tool-oauth-grant-metadata.js";
+import { projectToolConnectionLifecycle } from "./tool-connection-lifecycle.js";
 import { nativeSha256 } from "./native-runtime/canonical.js";
 import { withV7ActivityTransaction } from "./v7-mutations.js";
 import type { ActivityPublication } from "./activity-log.js";
@@ -17057,8 +17058,10 @@ export function toolAccessService(
       const row = await getConnectionRow(connectionId, companyId);
       const identity = await fixedPersonalIdentityForReconnect(row, userId, { actorType: "user", actorId: userId });
       if (!identity) return null;
-      return { userId: identity.subjectUserId, grant: identity.grant ? {
-        id: identity.grant.id, status: identity.grant.status, updatedAt: identity.grant.updatedAt.toISOString(),
+      const grant = identity.grant ? toConnectionGrant(identity.grant) : null;
+      return { userId: identity.subjectUserId, grant: grant ? {
+        id: grant.id, status: grant.status, updatedAt: grant.updatedAt.toISOString(),
+        lifecycle: projectToolConnectionLifecycle(toConnection(row), grant),
       } : null };
     },
 

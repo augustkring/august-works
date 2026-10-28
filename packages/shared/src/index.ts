@@ -1511,6 +1511,7 @@ export type {
   ToolConnectionTestCallStatusPhase,
   ToolConnectionLifecycleEvent,
   ToolConnectionLifecycleEventType,
+  ToolConnectionLifecycle,
   ToolConnectionInstall,
   ToolConnectionInstallSnapshot,
   ToolConnectionInstallTargetType,
