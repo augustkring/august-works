@@ -1,3 +1,5 @@
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+registerEnglishAccountLocaleIsolation(test);
 import { createRequire } from "node:module";
 import { expect, test, type APIResponse, type APIRequestContext, type Page, type Locator } from "@playwright/test";
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
@@ -66,7 +68,7 @@ test("account security hides private drafts during a session check and waits for
     const state = await fixture(page, request, company);
     const main = page.getByRole("main"), heading = main.getByRole("heading", { name: "Account security", exact: true });
     const timezone = main.getByRole("textbox", { name: "Timezone", exact: true });
-    const password = main.getByLabel("Current password", { exact: true });
+    const password = main.getByRole("region", { name: "Delete your account", exact: true }).getByLabel("Current password", { exact: true });
     const confirmation = main.getByLabel("Type DELETE MY ACCOUNT", { exact: true });
     await timezone.fill("Europe/Paris"); await password.fill("PRIVATE current account password");
     await confirmation.fill("DELETE MY ACCOUNT");
@@ -98,7 +100,7 @@ test("unknown account deletion retains one original request across the actual or
     second = await json(await request.post("/api/companies", { data: { name: "Disposable account-deletion context B" } }));
     const state = await fixture(page, request, first), main = page.getByRole("main");
     await enterCurrentField(main.getByLabel("Type DELETE MY ACCOUNT", { exact: true }), "DELETE MY ACCOUNT");
-    await main.getByLabel("Current password", { exact: true }).fill("PRIVATE deletion password");
+    await main.getByRole("region", { name: "Delete your account", exact: true }).getByLabel("Current password", { exact: true }).fill("PRIVATE deletion password");
     await expect(main.getByLabel("Type DELETE MY ACCOUNT", { exact: true })).toHaveValue("DELETE MY ACCOUNT");
     await main.getByRole("checkbox", { name: "I have saved any exports I need.", exact: true }).check();
     await main.getByRole("button", { name: "Delete account", exact: true }).click();
@@ -111,11 +113,11 @@ test("unknown account deletion retains one original request across the actual or
     await page.getByRole("menuitem", { name: new RegExp(second!.name) }).click();
     await expect(page).toHaveURL(new RegExp(`/${second!.issuePrefix}/dashboard$`));
     await page.goto(`/${second!.issuePrefix}/company/settings/security`);
-    await expect(main.getByLabel("Current password", { exact: true })).toHaveValue("");
+    await expect(main.getByRole("region", { name: "Delete your account", exact: true }).getByLabel("Current password", { exact: true })).toHaveValue("");
     await expect(main).toContainText("An earlier deletion request is unresolved");
     expect(state.writes).toHaveLength(1);
     await enterCurrentField(main.getByLabel("Type DELETE MY ACCOUNT", { exact: true }), "DELETE MY ACCOUNT");
-    await main.getByLabel("Current password", { exact: true }).fill("PRIVATE deletion password");
+    await main.getByRole("region", { name: "Delete your account", exact: true }).getByLabel("Current password", { exact: true }).fill("PRIVATE deletion password");
     await expect(main.getByLabel("Type DELETE MY ACCOUNT", { exact: true })).toHaveValue("DELETE MY ACCOUNT");
     await main.getByRole("checkbox", { name: "I have saved any exports I need.", exact: true }).check();
     await main.getByRole("button", { name: "Retry the same deletion request", exact: true }).click();

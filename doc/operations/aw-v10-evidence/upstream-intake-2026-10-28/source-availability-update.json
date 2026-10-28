@@ -1,0 +1,10 @@
+{
+  "recordedAt": "2026-10-28T10:00:10.846821+00:00",
+  "repository": "https://github.com/paperclipai/paperclip",
+  "commit": "5623304586c04092d2a44c25b3850301a909989d",
+  "tree": "ad33c1e247992f068b49236787cf26eb64117aae",
+  "blobCount": 10713,
+  "missingBlobBodies": 0,
+  "method": "Isolated shallow fetch of the exact immutable commit, then cat-file --batch-check for every tree blob. No fork merge or source adoption.",
+  "boundary": "Availability receipt only. The earlier inventory missing-body count remains a true historical observation; source availability does not establish semantic review or software qualification."
+}

@@ -1,3 +1,5 @@
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+registerEnglishAccountLocaleIsolation(test);
 import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
 import { activationViewSchema, initialActivationState } from "../../packages/shared/src/activation.ts";
@@ -77,5 +79,8 @@ test("first task recovers through a current read, continues only explicitly and 
     expect(await json(await request.get(`${base}/issues`))).toEqual([]);expect(await json(await request.get(`${base}/agents`))).toEqual([]);
     const runs = await json(await request.get(`${base}/heartbeat-runs`));expect(Array.isArray(runs) ? runs : runs.items).toEqual([]);
     await page.screenshot({ path: info.outputPath("v9-first-task-stop-mobile.png"), fullPage: true });
-  } finally { await json(await request.delete(`/api/companies/${company.id}`)); }
+  } finally {
+    try { await json(await request.delete(`/api/companies/${company.id}`)); }
+    catch (error) { if (info.status === info.expectedStatus) throw error; }
+  }
 });

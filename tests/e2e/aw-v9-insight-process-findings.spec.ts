@@ -7,6 +7,7 @@ import { createDb, closeRegisteredClients, issues, activityLog, processAnalysisR
 import { eq } from "../../packages/db/node_modules/drizzle-orm/index.js";
 import { aiGovernanceService } from "../../server/src/services/ai-governance/governance-service.ts";
 import { businessEventService } from "../../server/src/services/business-events.ts";
+import { analyticalPrincipalId } from "../../server/src/services/analytical-reader.ts";
 import { processAnalysisService } from "../../server/src/services/process-analysis.ts";
 import { processFindingService } from "../../server/src/services/process-findings.ts";
 import { analyticalPurpose } from "../../server/src/__tests__/helpers/business-metric-fixture.ts";
@@ -26,7 +27,10 @@ test("Insights reads a retained process finding and withdraws it after Source ac
   expect(path.resolve(config.database.embeddedPostgresDataDir)).toBe(path.join(path.dirname(configPath), "db"));
   const pid = await readFile(path.join(config.database.embeddedPostgresDataDir, "postmaster.pid"), "utf8");
   const databaseUrl = `postgres://paperclip:paperclip@127.0.0.1:${pid.split("\n")[3]}/paperclip`, db = createDb(databaseUrl);
-  const actor = { type: "board" as const, source: "local_implicit" as const };
+  const session = await json(await request.get("/api/auth/get-session"));
+  const actor = { type: "board" as const, source: "session" as const, userId: session.user.id,
+    sessionId: session.session.id, companyIds: [company.id] };
+  const ownerUserId = analyticalPrincipalId(actor);
   let writes = 0;
   page.on("request", req => { if (req.method() !== "GET" && /\/process-definitions/.test(req.url())) writes++; });
   try {
@@ -37,12 +41,12 @@ test("Insights reads a retained process finding and withdraws it after Source ac
     const policy = await aiGovernanceService(db).obligation(actor, company.id, purpose);
     const [issue] = await db.insert(issues).values({ companyId: company.id, status: "done", title: "PRIVATE raw Source title", createdAt: new Date("2026-01-01T00:00:00Z") }).returning();
     await db.insert(activityLog).values([
-      { companyId: company.id, actorType: "user", actorId: "local-board", action: "issue.created", entityType: "issue", entityId: issue.id, details: { status: "todo" }, createdAt: new Date("2026-01-01T00:00:00Z") },
-      { companyId: company.id, actorType: "user", actorId: "local-board", action: "issue.updated", entityType: "issue", entityId: issue.id, details: { status: "done", previousStatus: "todo" }, createdAt: new Date("2026-01-01T00:01:00Z") },
+      { companyId: company.id, actorType: "user", actorId: session.user.id, action: "issue.created", entityType: "issue", entityId: issue.id, details: { status: "todo" }, createdAt: new Date("2026-01-01T00:00:00Z") },
+      { companyId: company.id, actorType: "user", actorId: session.user.id, action: "issue.updated", entityType: "issue", entityId: issue.id, details: { status: "done", previousStatus: "todo" }, createdAt: new Date("2026-01-01T00:01:00Z") },
     ]);
     const owner = processAnalysisService(db), period = { from: "2026-01-01T00:00:00Z", until: "2026-01-02T00:00:00Z" };
     const created = await owner.create(company.id, actor, { key: "arrival_review", definition: { name: "Recorded delivery path", businessQuestion: "Is arrival evidence sufficient for this recorded process?",
-      ownerUserId: "local-board", reviewFrequencyDays: 30, retentionDays: 30, scope: "company", sensitivity: "internal", purpose: "process_intelligence", governanceObligationRefs: [policy.id],
+      ownerUserId, reviewFrequencyDays: 30, retentionDays: 30, scope: "company", sensitivity: "internal", purpose: "process_intelligence", governanceObligationRefs: [policy.id],
       requiredSourceProviders: ["activity_log"], objectTypes: ["issue"], requiredActivities: ["issue.created", "issue.updated"], minimumCoverageSeconds: 3600,
       analysisFamilies: ["cycle_time"], requiresArrivalEvidence: true, maxLateArrivalRate: 0, conformance: null, cycleTimeSemantics: "first_completion_since_recorded_creation" } });
     await owner.publish(company.id, actor, created.root.id, { expectedRevision: 1, versionId: created.version.id, rationale: "Synthetic human review requires qualified arrival evidence" });
