@@ -17,6 +17,7 @@ const communication = z.strictObject({ id: z.string().regex(/^[a-zA-Z0-9_-]{1,10
 export const serviceHealthProjectionSchema = z.discriminatedUnion("state", [
   z.strictObject({ state: z.enum(["unconfigured", "unavailable"]), statusUrl: z.literal(PRODUCT_IDENTITY.statusOrigin) }),
   z.strictObject({ state: z.literal("current"), statusUrl: z.literal(PRODUCT_IDENTITY.statusOrigin), source: z.literal("statuspage_public_v2"),
+    customerImpact: z.literal("unknown"),
     observedAt: date, providerUpdatedAt: date, indicator: z.enum(["none", "minor", "major", "critical", "maintenance"]),
     components: z.array(component).max(128), incidents: z.array(communication).max(64), scheduledMaintenance: z.array(communication).max(64),
   }),

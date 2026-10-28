@@ -7,6 +7,13 @@ Customer-readable components are: Blentera app; Agent work / managed runtime;
 Apps & connections; Notifications; Authentication. Unknown/internal component
 names are rejected rather than projected into the product.
 
+The current projection marks `customerImpact` as `unknown`: the public summary
+reports provider, component and incident state, but does not identify affected
+accounts. The app labels account impact as unconfirmed when the provider reports
+an active issue. It does not infer company impact from component status or
+usage; V10-051 company targeting remains incomplete until an authoritative
+source supplies that scope.
+
 `BLENTERA_STATUSPAGE_ENABLED=true` enables the public, read-only projection.
 It is disabled by default. The application requests only the fixed canonical
 origin, with no tenant input, cookies, provider credentials, subscriber details,

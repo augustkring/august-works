@@ -20,10 +20,14 @@ export function ServiceHealth({ compact = false }: { compact?: boolean }) {
   const incidents = current?.incidents.filter(item => !["resolved", "postmortem"].includes(item.status)) ?? [];
   const maintenance = current?.scheduledMaintenance.filter(item => item.status !== "completed") ?? [];
   const impaired = current?.components.some(item => item.status !== "operational") ?? false;
+  const issueReported = !!current && (current.indicator !== "none" && current.indicator !== "maintenance" ||
+    current.components.some(item => ["degraded_performance", "partial_outage", "major_outage"].includes(item.status)) || incidents.length > 0);
   const active = !!current && (current.indicator !== "none" || impaired || incidents.length > 0 || maintenance.length > 0);
+  const accountImpactUnknown = current?.customerImpact === "unknown" && issueReported;
   const statusUrl = data?.statusUrl ?? PRODUCT_IDENTITY.statusOrigin;
   if (compact) return active ? <aside aria-label={t("serviceStatus.title")} className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-border bg-muted px-4 py-2 text-sm">
     <span>{t("serviceStatus.active")}</span>
+    {accountImpactUnknown && <span>{t("serviceStatus.accountImpactUnknown")}</span>}
     <a href={statusUrl} target="_blank" rel="noreferrer" className="font-medium underline underline-offset-4">{t("serviceStatus.view")}</a>
   </aside> : null;
 
@@ -33,6 +37,7 @@ export function ServiceHealth({ compact = false }: { compact?: boolean }) {
     <h2 id="public-service-health-title" className="font-medium">{t("serviceStatus.title")}</h2>
     <p className="text-sm text-muted-foreground">{current ? t(active ? "serviceStatus.active" : "serviceStatus.noIncident")
       : query.isPending ? t("serviceStatus.loading") : t("serviceStatus.unavailable")}</p>
+    {accountImpactUnknown && <p className="text-sm text-muted-foreground">{t("serviceStatus.accountImpactUnknown")}</p>}
     {current && <>
       <ul className="space-y-1 text-sm">{current.components.map(component => <li key={component.id}>
         {component.name}: {t(`serviceStatus.states.${component.status}`)}

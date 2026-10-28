@@ -21,7 +21,7 @@ it("projects only published customer communication and coalesces concurrent read
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(String(fetch.mock.calls[0]?.[0])).toBe(`${PRODUCT_IDENTITY.statusOrigin}/api/v2/summary.json`);
   expect(fetch.mock.calls[0]?.[1]).toMatchObject({ method: "GET", credentials: "omit", redirect: "error", headers: { accept: "application/json" } });
-  expect(first).toMatchObject({ state: "current", indicator: "minor", components: [{ name: "Blentera app", status: "degraded_performance" }],
+  expect(first).toMatchObject({ state: "current", customerImpact: "unknown", indicator: "minor", components: [{ name: "Blentera app", status: "degraded_performance" }],
     incidents: [{ href: `${PRODUCT_IDENTITY.statusOrigin}/incidents/incident1`, status: "investigating" }], scheduledMaintenance: [{ status: "scheduled" }] });
   await service.read(); expect(fetch).toHaveBeenCalledTimes(1);
 });

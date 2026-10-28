@@ -65,6 +65,7 @@ export function managedServiceHealth(options: {
               source.incidents.some(item => !["investigating", "identified", "monitoring", "resolved", "postmortem"].includes(item.status)) ||
               source.scheduled_maintenances.some(item => !["scheduled", "in_progress", "verifying", "completed"].includes(item.status))) throw new Error();
           return serviceHealthProjectionSchema.parse({ state: "current", statusUrl, source: "statuspage_public_v2",
+            customerImpact: "unknown",
             observedAt: new Date(now()).toISOString(), providerUpdatedAt: source.page.updated_at,
             indicator: source.status.indicator, components: source.components,
             incidents: source.incidents.map(project), scheduledMaintenance: source.scheduled_maintenances.map(project),

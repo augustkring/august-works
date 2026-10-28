@@ -864,6 +864,7 @@ describeEmbeddedPostgres("tool gateway service", () => {
     await db.insert(toolPolicies).values({ companyId: company.id, name: "Allow public service status",
       policyType: "allow", selectors: { toolName: "paperclip-self:get_service_status" } });
     const projection = { state: "current" as const, statusUrl: PRODUCT_IDENTITY.statusOrigin, source: "statuspage_public_v2" as const,
+      customerImpact: "unknown" as const,
       observedAt: new Date().toISOString(), providerUpdatedAt: new Date().toISOString(), indicator: "minor" as const,
       components: [{ id: "app", name: "Blentera app" as const, status: "degraded_performance" as const }],
       incidents: [], scheduledMaintenance: [] };

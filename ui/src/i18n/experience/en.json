@@ -3857,6 +3857,7 @@
   "serviceStatus": {
     "title": "Service status",
     "active": "A service incident or maintenance update is available.",
+    "accountImpactUnknown": "The provider reports an issue; impact on your account is not confirmed.",
     "view": "View independent status page",
     "noIncident": "The status provider reports no active incident.",
     "loading": "Checking the status provider…",

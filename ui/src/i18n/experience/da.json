@@ -3857,6 +3857,7 @@
   "serviceStatus": {
     "title": "Servicestatus",
     "active": "Der er en opdatering om en driftsforstyrrelse eller vedligeholdelse.",
+    "accountImpactUnknown": "Udbyderen rapporterer et problem; påvirkningen af din konto er ikke bekræftet.",
     "view": "Se den uafhængige statusside",
     "noIncident": "Statusudbyderen rapporterer ingen aktiv driftsforstyrrelse.",
     "loading": "Henter servicestatus…",
