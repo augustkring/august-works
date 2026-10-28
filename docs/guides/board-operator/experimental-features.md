@@ -25,6 +25,6 @@ An experimental setting is controlled at the instance level when the control is 
 
 ## Release information and service incidents
 
-This Help Center does not currently provide a complete release-by-release feature history. Use the feature’s current screen and its linked guidance for availability and limits. Open [Help and human support](/help/index) to ask about a specific product limitation. If Help shows a configured service status page, check it for reported service incidents; it does not describe every feature limitation.
+Open **Help → Product changes** for release notes when your operator has configured them. Check the displayed history coverage and language fallback; an empty list does not prove that no releases occurred. Use the feature’s current screen and its linked guidance for availability and limits. Open [Help and human support](/help/index) to ask about a specific product limitation. If Help shows a configured service status page, check it for reported service incidents; it does not describe every feature limitation.
 
 Internal and retired features cannot be enabled for new use through an old saved experimental setting. Their current lifecycle status governs availability. Ask the administrator for the supported replacement or migration guidance shown for the feature.

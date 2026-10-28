@@ -9,7 +9,7 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: da
-last_verified_at: 2026-10-25
+last_verified_at: 2026-10-28
 review_trigger: Ændringer i virksomhedsstandarder, enterprise-identitet eller driftsforhold, medlemmer, invitationer, adgangsanmodninger, roller, status eller omfordeling
 security_or_privacy_sensitive: true
 linked_source_files: [ui/src/pages/CompanySettings.tsx, ui/src/components/AccountExperienceLanguageSelect.tsx, ui/src/components/routine-triggers/RoutineTriggers.tsx, ui/src/pages/Enterprise.tsx, server/src/services/enterprise/identity-policy.ts, server/src/services/routines.ts, ui/src/pages/CompanyAccess.tsx, ui/src/components/access/InvitesSection.tsx, ui/src/components/access/CompanySettingsNav.tsx]
@@ -27,9 +27,15 @@ Hvis en anmodning om adgang kræver godkendelse, skal du gennemgå den under Mem
 
 Brug medlemmets redigeringshandling til at ændre den rolle eller status, siden tilbyder. Kontrollér den viste rolle og status, før du gemmer. Et suspenderet eller fjernet medlem kan miste adgangen til virksomhedens indhold og handlinger.
 
+Ved et sikkerhedsproblem kan du bruge **Suspendér af sikkerhedshensyn**, hvis du har rettighed til at administrere medlemmer. Vælg en begrundelse, og bekræft suspensionen fra din nyligt godkendte konto. Handlingen suspenderer adgangen til denne virksomhed, tilbagekalder tilknyttede tilladelser og midlertidig dækning og sætter berørt arbejde på pause. Den kan suspendere den sidste aktive ejer; den vælger ikke en erstatning. Gennemgå beskeden om genopretning, før du forsøger at genoptage arbejdet. Medlemskaber i andre virksomheder er adskilte. En ekstern handling, der allerede er sendt, kan stadig kræve afklaring.
+
 Før du fjerner et medlem, skal du gennemgå valgene for omfordeling. Siden kan vise opgaver, der er tildelt personen, og rutiner, som vedkommende ejer. Vælg, hvad der skal ske med dem, før du bekræfter fjernelsen. Kontrollér de nye ejere og statusser bagefter.
 
 Virksomhedsmedlemskab er adskilt fra en Co-workers plads i teamet. Se [Arbejd med Co-workers](/da/guides/board-operator/managing-agents) for arbejderstatus og [Eksport og sletning](/da/help/export-and-delete) for sletning af konto eller virksomhed.
+
+## Midlertidig workflow-dækning
+
+Brug **Midlertidig workflow-dækning** under adgangsindstillinger til at lade en anden aktiv person starte en bestemt udgivet workflow-version i en begrænset periode. Begge personer beholder deres egne rettigheder. Gennemgå versionen, opgavens afgrænsning, udløbstidspunktet og begrundelsen, før du gemmer. Tilbagekald dækningen her, når den ikke længere er nødvendig. Se [Brug Workflows](/da/help/workflows-preview) for kontrollerne, der gælder, når en kørsel starter.
 
 ## Angiv virksomhedsstandarder
 

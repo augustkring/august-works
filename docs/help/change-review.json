@@ -21,10 +21,10 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "approvals-and-stop",
-      "sourceSha256": "ffb03ab3d4744025801a7cf234227bc7da83f035cba1e4f3473d41f03192ac79",
+      "sourceSha256": "17601953ca2b7cf23453ed24e217a6077f096a46d9e870b7b3379e4d9deb1fa5",
       "articleSha256": "601860635ecfdbef65d0703b3966a9af6429ec84d78d857ab85ac9863b77ba60",
       "decision": "no_change",
-      "rationale": "The current task page removes the built-in feedback terms fallback URL; its approval, status, run-history, and recovery behavior still matches this article."
+      "rationale": "Current-session guards and the optional temporary workflow coverage selector preserve the described Task status, approval and recovery actions."
     },
     {
       "source": "ui/src/pages/ApprovalDetail.tsx",
@@ -45,10 +45,10 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "approvals-and-stop-da",
-      "sourceSha256": "ffb03ab3d4744025801a7cf234227bc7da83f035cba1e4f3473d41f03192ac79",
+      "sourceSha256": "17601953ca2b7cf23453ed24e217a6077f096a46d9e870b7b3379e4d9deb1fa5",
       "articleSha256": "b9ef02341c31fea40d5b41c881d1cc60efe7e709a12b3942092001b7b91a91b6",
       "decision": "no_change",
-      "rationale": "Danish version checked against the same source delta: the current task page removes the built-in feedback terms fallback URL; its approval, status, run-history, and recovery behavior still matches this article."
+      "rationale": "Danish counterpart checked against the same source behavior. Current-session guards and the optional temporary workflow coverage selector preserve the described Task status, approval and recovery actions."
     },
     {
       "source": "packages/shared/src/app-definitions/slack.json",
@@ -229,10 +229,10 @@
     {
       "source": "server/src/routes/saas.ts",
       "articleId": "billing-and-capacity",
-      "sourceSha256": "522f703046d6d7695a5dc81f21ea4ea7816ba1e789ea109b28d023789504d99d",
+      "sourceSha256": "8d464da479416eb38abfe46de00bdb6ed4015dfae6edd6e36a58a1e9d431568f",
       "articleSha256": "1dc8a089d3a9db6699cca986f76f7484a74027850a915d6dc245b3ac68614110",
-      "decision": "updated",
-      "rationale": "The configured Human operator response remains separate from customer case access; the Help guide describes replies, resolved-case reopening, and linked follow-up for closed cases."
+      "decision": "no_change",
+      "rationale": "Additional operator-only model and cost views preserve customer billing and support contracts; current authorization and source completeness remain explicit."
     },
     {
       "source": "server/src/services/billing/billing.ts",
@@ -253,10 +253,10 @@
     {
       "source": "ui/src/api/saas.ts",
       "articleId": "billing-and-capacity",
-      "sourceSha256": "6e4042fd96d79554385be81645a2d30b46621523d0981d8823d0efbc4a132625",
+      "sourceSha256": "ac5c1a4a0aef10d0f10a1ff235b26f271831f8fe10f33a1af7e05a246116dc42",
       "articleSha256": "1dc8a089d3a9db6699cca986f76f7484a74027850a915d6dc245b3ac68614110",
-      "decision": "updated",
-      "rationale": "Replaced token-cost promises with current subscription, portal, provider billing, access-state, and capacity wording."
+      "decision": "no_change",
+      "rationale": "The added operator inventory and cost-source endpoints do not change customer billing controls, subscription state or payment-provider handoff."
     },
     {
       "source": "ui/src/pages/SaasBilling.tsx",
@@ -269,10 +269,10 @@
     {
       "source": "server/src/routes/saas.ts",
       "articleId": "billing-and-capacity-da",
-      "sourceSha256": "522f703046d6d7695a5dc81f21ea4ea7816ba1e789ea109b28d023789504d99d",
+      "sourceSha256": "8d464da479416eb38abfe46de00bdb6ed4015dfae6edd6e36a58a1e9d431568f",
       "articleSha256": "b11c75a4dc5766898ef17113a345aebb2fb8700f1a14b5d07b4aa8c4e598ef5d",
-      "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: The configured Human operator response remains separate from customer case access; the Help guide describes replies, resolved-case reopening, and linked follow-up for closed cases."
+      "decision": "no_change",
+      "rationale": "Danish counterpart checked against the same source behavior. Additional operator-only model and cost views preserve customer billing and support contracts; current authorization and source completeness remain explicit."
     },
     {
       "source": "server/src/services/billing/billing.ts",
@@ -293,10 +293,10 @@
     {
       "source": "ui/src/api/saas.ts",
       "articleId": "billing-and-capacity-da",
-      "sourceSha256": "6e4042fd96d79554385be81645a2d30b46621523d0981d8823d0efbc4a132625",
+      "sourceSha256": "ac5c1a4a0aef10d0f10a1ff235b26f271831f8fe10f33a1af7e05a246116dc42",
       "articleSha256": "b11c75a4dc5766898ef17113a345aebb2fb8700f1a14b5d07b4aa8c4e598ef5d",
-      "decision": "updated",
-      "rationale": "Danish translation of billing-and-capacity: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "decision": "no_change",
+      "rationale": "Danish counterpart checked against the same source behavior. The added operator inventory and cost-source endpoints do not change customer billing controls, subscription state or payment-provider handoff."
     },
     {
       "source": "ui/src/pages/SaasBilling.tsx",
@@ -373,10 +373,10 @@
     {
       "source": "server/src/routes/openapi.ts",
       "articleId": "company-import-export",
-      "sourceSha256": "93badbd5ce2c24624d90404fa947f9f0a07ab130ac04f9c1a54cadf9ce074502",
+      "sourceSha256": "3cbbeeecf9cabc50a1b22ccd25674ef1d6159929a054885d6f84e1d9360a6606",
       "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
       "decision": "no_change",
-      "rationale": "Reviewed the Blentera API identity and authenticated customer release-notes contract. Import/export formats and advanced integration classification guidance remain accurate; the new release-note behavior is explained in Help and human support."
+      "rationale": "The API registry adds coverage, release history and operator views while preserving the documented requirement to check API classification and current authorization."
     },
     {
       "source": "server/src/services/company-export-readme.ts",
@@ -509,10 +509,10 @@
     {
       "source": "server/src/routes/openapi.ts",
       "articleId": "company-import-export-da",
-      "sourceSha256": "93badbd5ce2c24624d90404fa947f9f0a07ab130ac04f9c1a54cadf9ce074502",
+      "sourceSha256": "3cbbeeecf9cabc50a1b22ccd25674ef1d6159929a054885d6f84e1d9360a6606",
       "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
       "decision": "no_change",
-      "rationale": "Reviewed the Blentera API identity and authenticated customer release-notes contract. Import/export formats and advanced integration classification guidance remain accurate; the new release-note behavior is explained in Help and human support."
+      "rationale": "Danish counterpart checked against the same source behavior. The API registry adds coverage, release history and operator views while preserving the documented requirement to check API classification and current authorization."
     },
     {
       "source": "server/src/services/company-export-readme.ts",
@@ -589,10 +589,10 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "create-and-track-work",
-      "sourceSha256": "ffb03ab3d4744025801a7cf234227bc7da83f035cba1e4f3473d41f03192ac79",
+      "sourceSha256": "17601953ca2b7cf23453ed24e217a6077f096a46d9e870b7b3379e4d9deb1fa5",
       "articleSha256": "130e016c8eadf5e4e209d8bff86e4f48d3e1a861e40516e10fb75cb217ed4552",
       "decision": "no_change",
-      "rationale": "The current task page removes the built-in feedback terms fallback URL; its approval, status, run-history, and recovery behavior still matches this article."
+      "rationale": "Current-session guards and the optional temporary workflow coverage selector preserve the described Task status, approval and recovery actions."
     },
     {
       "source": "ui/src/pages/ExperienceWork.tsx",
@@ -605,10 +605,10 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "create-and-track-work-da",
-      "sourceSha256": "ffb03ab3d4744025801a7cf234227bc7da83f035cba1e4f3473d41f03192ac79",
+      "sourceSha256": "17601953ca2b7cf23453ed24e217a6077f096a46d9e870b7b3379e4d9deb1fa5",
       "articleSha256": "64dca34d586395422ea0fe867346e45c448fba6655558721f606c9c76d20b8af",
       "decision": "no_change",
-      "rationale": "Danish version checked against the same source delta: the current task page removes the built-in feedback terms fallback URL; its approval, status, run-history, and recovery behavior still matches this article."
+      "rationale": "Danish counterpart checked against the same source behavior. Current-session guards and the optional temporary workflow coverage selector preserve the described Task status, approval and recovery actions."
     },
     {
       "source": "cli/src/index.ts",
@@ -629,10 +629,10 @@
     {
       "source": "server/src/routes/openapi.ts",
       "articleId": "developer-and-advanced",
-      "sourceSha256": "93badbd5ce2c24624d90404fa947f9f0a07ab130ac04f9c1a54cadf9ce074502",
+      "sourceSha256": "3cbbeeecf9cabc50a1b22ccd25674ef1d6159929a054885d6f84e1d9360a6606",
       "articleSha256": "7e3f602d0174f483880b0c5b4656888a27e45894aad13ab36d00911a27727161",
       "decision": "no_change",
-      "rationale": "Reviewed the Blentera API identity and authenticated customer release-notes contract. Import/export formats and advanced integration classification guidance remain accurate; the new release-note behavior is explained in Help and human support."
+      "rationale": "The API registry adds coverage, release history and operator views while preserving the documented requirement to check API classification and current authorization."
     },
     {
       "source": "cli/src/index.ts",
@@ -653,10 +653,10 @@
     {
       "source": "server/src/routes/openapi.ts",
       "articleId": "developer-and-advanced-da",
-      "sourceSha256": "93badbd5ce2c24624d90404fa947f9f0a07ab130ac04f9c1a54cadf9ce074502",
+      "sourceSha256": "3cbbeeecf9cabc50a1b22ccd25674ef1d6159929a054885d6f84e1d9360a6606",
       "articleSha256": "2075f5ee10f13c7bf13eeaad37fe0e3e2c6d302bf343d6f6c23b7df2891f6efd",
       "decision": "no_change",
-      "rationale": "Reviewed the Blentera API identity and authenticated customer release-notes contract. Import/export formats and advanced integration classification guidance remain accurate; the new release-note behavior is explained in Help and human support."
+      "rationale": "Danish counterpart checked against the same source behavior. The API registry adds coverage, release history and operator views while preserving the documented requirement to check API classification and current authorization."
     },
     {
       "source": "server/src/routes/memory.ts",
@@ -669,26 +669,26 @@
     {
       "source": "server/src/services/memory/memory-privacy.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "ebdd88194f2d9adf9ba51c071cff0d62741814f16c90ab676c819b8e2746f19f",
+      "sourceSha256": "1878e5be0fb90fd1c7ee40bb8e09ce9bf9b8ecd7b4a7a05ce392429d39d48600",
       "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "no_change",
-      "rationale": "Reviewed batching of current Task ACL reads inside the original Memory source checks; current access, erasure and no-resurrection obligations in this article are unchanged."
+      "rationale": "Retained source checks distinguish the current reader and each owner source scope; private sharing still requires original-owner review and current source access."
     },
     {
       "source": "server/src/services/memory/memory-service.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "8af5d4e6e66504b816f0b4c515c6198b9b97b77b8924e139062638a9eaf6cf5b",
+      "sourceSha256": "4f559dd1077e631a7b1c334c11c32cde0a083b1a2c7366167f26b551bcbb42c5",
       "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "no_change",
-      "rationale": "Reviewed both EN/DA deletion articles: ordinary source expansion refuses and rolls back when it would invalidate an existing readable snapshot; the receipt-backed Native path returns only its existing resolution result after rechecking the complete staged source union. No stale body is returned. The documented blocked-update and retained source restrictions remain accurate."
+      "rationale": "The added environment-gated page timing profile does not change Memory visibility, private sharing, retention or erasure semantics described in this article."
     },
     {
       "source": "server/src/services/saas/account-deletion.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "7214bed4add42ad5778c1b8bc6e235e968c4bc2c9ae6bc3107c1b11e633c8911",
+      "sourceSha256": "3bc2e0e4df48c62261c16b874dbc681dcb1ad62f37a1c63ada19c54c6dc1dece",
       "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
-      "decision": "updated",
-      "rationale": "Account deletion requires a current session and, for accounts with an additional-factor requirement, recent authentication; the paired article now includes that condition and retains the existing password and export acknowledgements."
+      "decision": "no_change",
+      "rationale": "Pending account deletion now revokes and redacts temporary coverage before a retention hold; the article still distinguishes accepted requests, retention and final erasure."
     },
     {
       "source": "server/src/services/saas/company-purge.ts",
@@ -749,26 +749,26 @@
     {
       "source": "server/src/services/memory/memory-privacy.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "ebdd88194f2d9adf9ba51c071cff0d62741814f16c90ab676c819b8e2746f19f",
+      "sourceSha256": "1878e5be0fb90fd1c7ee40bb8e09ce9bf9b8ecd7b4a7a05ce392429d39d48600",
       "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "no_change",
-      "rationale": "Danish guidance checked against the same source behavior. Reviewed batching of current Task ACL reads inside the original Memory source checks; current access, erasure and no-resurrection obligations in this article are unchanged."
+      "rationale": "Danish counterpart checked against the same source behavior. Retained source checks distinguish the current reader and each owner source scope; private sharing still requires original-owner review and current source access."
     },
     {
       "source": "server/src/services/memory/memory-service.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "8af5d4e6e66504b816f0b4c515c6198b9b97b77b8924e139062638a9eaf6cf5b",
+      "sourceSha256": "4f559dd1077e631a7b1c334c11c32cde0a083b1a2c7366167f26b551bcbb42c5",
       "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "no_change",
-      "rationale": "Reviewed both EN/DA deletion articles: ordinary source expansion refuses and rolls back when it would invalidate an existing readable snapshot; the receipt-backed Native path returns only its existing resolution result after rechecking the complete staged source union. No stale body is returned. The documented blocked-update and retained source restrictions remain accurate."
+      "rationale": "Danish counterpart checked against the same source behavior. The added environment-gated page timing profile does not change Memory visibility, private sharing, retention or erasure semantics described in this article."
     },
     {
       "source": "server/src/services/saas/account-deletion.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "7214bed4add42ad5778c1b8bc6e235e968c4bc2c9ae6bc3107c1b11e633c8911",
+      "sourceSha256": "3bc2e0e4df48c62261c16b874dbc681dcb1ad62f37a1c63ada19c54c6dc1dece",
       "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
-      "decision": "updated",
-      "rationale": "Danish version checked against the same current behavior: Account deletion requires a current session and, for accounts with an additional-factor requirement, recent authentication; the paired article now includes that condition and retains the existing password and export acknowledgements."
+      "decision": "no_change",
+      "rationale": "Danish counterpart checked against the same source behavior. Pending account deletion now revokes and redacts temporary coverage before a retention hold; the article still distinguishes accepted requests, retention and final erasure."
     },
     {
       "source": "server/src/services/saas/company-purge.ts",
@@ -909,10 +909,10 @@
     {
       "source": "server/src/routes/saas.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "522f703046d6d7695a5dc81f21ea4ea7816ba1e789ea109b28d023789504d99d",
+      "sourceSha256": "8d464da479416eb38abfe46de00bdb6ed4015dfae6edd6e36a58a1e9d431568f",
       "articleSha256": "5a7726d09df94347e91fa3ff14ce8ed369fbbb0e03f998d0fb6893a60d0e6923",
-      "decision": "updated",
-      "rationale": "The configured Human operator response remains separate from customer case access; the Help guide describes replies, resolved-case reopening, and linked follow-up for closed cases."
+      "decision": "no_change",
+      "rationale": "Additional operator-only model and cost views preserve customer billing and support contracts; current authorization and source completeness remain explicit."
     },
     {
       "source": "server/src/saas-platform-config.ts",
@@ -949,10 +949,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "b972445713b6a890bab0051a0020e285722174678b16201393bbae96d7019088",
+      "sourceSha256": "699dcf1891363f8a33567b7198c5c7222f4ed2f02dc06af0e51caad1ce398866",
       "articleSha256": "5a7726d09df94347e91fa3ff14ce8ed369fbbb0e03f998d0fb6893a60d0e6923",
-      "decision": "updated",
-      "rationale": "Help now explains curated customer release notes, bounded coverage, explicit locale fallback and independence from personal news dismissals. Company-scoped mandatory actions remain with their canonical owners."
+      "decision": "no_change",
+      "rationale": "The generated Help search projection now includes the reviewed temporary workflow coverage explanation; the support article still describes authenticated search and the existing support channel."
     },
     {
       "source": "server/src/services/company-search.ts",
@@ -1221,10 +1221,10 @@
     {
       "source": "server/src/routes/saas.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "522f703046d6d7695a5dc81f21ea4ea7816ba1e789ea109b28d023789504d99d",
+      "sourceSha256": "8d464da479416eb38abfe46de00bdb6ed4015dfae6edd6e36a58a1e9d431568f",
       "articleSha256": "afb7cece5f017d8bab5b2d84bf6a2b5b2c7f41e4ab31321ab55850df54e44fa7",
-      "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: The configured Human operator response remains separate from customer case access; the Help guide describes replies, resolved-case reopening, and linked follow-up for closed cases."
+      "decision": "no_change",
+      "rationale": "Danish counterpart checked against the same source behavior. Additional operator-only model and cost views preserve customer billing and support contracts; current authorization and source completeness remain explicit."
     },
     {
       "source": "server/src/saas-platform-config.ts",
@@ -1261,10 +1261,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "b972445713b6a890bab0051a0020e285722174678b16201393bbae96d7019088",
+      "sourceSha256": "699dcf1891363f8a33567b7198c5c7222f4ed2f02dc06af0e51caad1ce398866",
       "articleSha256": "afb7cece5f017d8bab5b2d84bf6a2b5b2c7f41e4ab31321ab55850df54e44fa7",
-      "decision": "updated",
-      "rationale": "Help now explains curated customer release notes, bounded coverage, explicit locale fallback and independence from personal news dismissals. Company-scoped mandatory actions remain with their canonical owners."
+      "decision": "no_change",
+      "rationale": "Danish counterpart checked against the same source behavior. The generated Help search projection now includes the reviewed temporary workflow coverage explanation; the support article still describes authenticated search and the existing support channel."
     },
     {
       "source": "server/src/services/company-search.ts",
@@ -1446,97 +1446,97 @@
       "source": "ui/src/components/access/CompanySettingsNav.tsx",
       "articleId": "people-and-company-access",
       "sourceSha256": "040df1c9b646731d1f21961f00b270a3929352ff9e8ffee5019c86bab160ea2d",
-      "articleSha256": "1d34534ded3a06d051a286e6714e44007065e458a0715e862d6707384b875ab2",
+      "articleSha256": "d61fa3231a836a30745ff74ee60c195df8c538ba4febb1f0ccfaa9091f5423a5",
       "decision": "updated",
-      "rationale": "The paired article now covers the personal-language precedence, timezone fallback only for new schedules, current operating-fact entry and separate identity qualification; existing membership controls remain accurate."
+      "rationale": "The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
     },
     {
       "source": "ui/src/components/access/InvitesSection.tsx",
       "articleId": "people-and-company-access",
       "sourceSha256": "35b22bd6cb76c56137d54bb454d75b1589927530f3f0ee9f9e7f082b1003e4f9",
-      "articleSha256": "1d34534ded3a06d051a286e6714e44007065e458a0715e862d6707384b875ab2",
+      "articleSha256": "d61fa3231a836a30745ff74ee60c195df8c538ba4febb1f0ccfaa9091f5423a5",
       "decision": "updated",
-      "rationale": "Invite links now use the configured Blentera product name for their origin; the article does not promise a fixed invite hostname and its company-access guidance remains accurate."
+      "rationale": "The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
     },
     {
       "source": "ui/src/pages/CompanyAccess.tsx",
       "articleId": "people-and-company-access",
-      "sourceSha256": "9a17414a949ed4ed796eef2fe4d08dab8ff6309be6917a619cf33dc467f28b3d",
-      "articleSha256": "1d34534ded3a06d051a286e6714e44007065e458a0715e862d6707384b875ab2",
+      "sourceSha256": "bd1f793eaa84c5be6931b4e1d4b27ae357e04fc3f076c291e1445f43a85ddb46",
+      "articleSha256": "d61fa3231a836a30745ff74ee60c195df8c538ba4febb1f0ccfaa9091f5423a5",
       "decision": "updated",
-      "rationale": "The paired article now covers the personal-language precedence, timezone fallback only for new schedules, current operating-fact entry and separate identity qualification; existing membership controls remain accurate."
+      "rationale": "Temporary coverage and the distinct reasoned security-suspension action require the current account and session. The paired articles explain exact coverage scope and security suspension without a replacement owner or unrelated company revocation."
     },
     {
       "source": "ui/src/components/access/CompanySettingsNav.tsx",
       "articleId": "people-and-company-access-da",
       "sourceSha256": "040df1c9b646731d1f21961f00b270a3929352ff9e8ffee5019c86bab160ea2d",
-      "articleSha256": "dc70eb5048340883d961ff245928a6d992178a9cdad86bb79d870ecf3b140392",
+      "articleSha256": "b2c45c4d7946e975386f05856f47a0a1a3a07d88602bce933e49740bdb992b10",
       "decision": "updated",
-      "rationale": "Danish guidance now covers the actual company language fallback, new-schedule timezone fallback, current operating-fact entry and distinct identity qualification; existing membership controls remain accurate."
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
     },
     {
       "source": "ui/src/components/access/InvitesSection.tsx",
       "articleId": "people-and-company-access-da",
       "sourceSha256": "35b22bd6cb76c56137d54bb454d75b1589927530f3f0ee9f9e7f082b1003e4f9",
-      "articleSha256": "dc70eb5048340883d961ff245928a6d992178a9cdad86bb79d870ecf3b140392",
+      "articleSha256": "b2c45c4d7946e975386f05856f47a0a1a3a07d88602bce933e49740bdb992b10",
       "decision": "updated",
-      "rationale": "Danish version checked against the same source delta: invite links now use the configured Blentera product name for their origin; the article does not promise a fixed invite hostname and its company-access guidance remains accurate."
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
     },
     {
       "source": "ui/src/pages/CompanyAccess.tsx",
       "articleId": "people-and-company-access-da",
-      "sourceSha256": "9a17414a949ed4ed796eef2fe4d08dab8ff6309be6917a619cf33dc467f28b3d",
-      "articleSha256": "dc70eb5048340883d961ff245928a6d992178a9cdad86bb79d870ecf3b140392",
+      "sourceSha256": "bd1f793eaa84c5be6931b4e1d4b27ae357e04fc3f076c291e1445f43a85ddb46",
+      "articleSha256": "b2c45c4d7946e975386f05856f47a0a1a3a07d88602bce933e49740bdb992b10",
       "decision": "updated",
-      "rationale": "Danish guidance now covers the actual company language fallback, new-schedule timezone fallback, current operating-fact entry and distinct identity qualification; existing membership controls remain accurate."
+      "rationale": "Danish counterpart checked against the same source behavior. Temporary coverage and the distinct reasoned security-suspension action require the current account and session. The paired articles explain exact coverage scope and security suspension without a replacement owner or unrelated company revocation."
     },
     {
       "source": "packages/shared/src/v9-feature-flags.ts",
       "articleId": "preview-and-known-limits",
       "sourceSha256": "10d70828a4f7bff8763ac73a49eefab90150b8756ecbcc263eeb39968acbac15",
-      "articleSha256": "66280d70ccaa8131ab095ffcc03a2862b9bff174f1fd133f40fad824581b335e",
+      "articleSha256": "66127d42d3d1407db3b798b12a52c38e8834f8da9d0c2b047101ff0ef49d425c",
       "decision": "updated",
-      "rationale": "Replaced stale experiment-specific instructions with current maturity labels, availability limits, and the absence of a complete release history."
+      "rationale": "The paired article now points to the configured bounded Product changes history and its language fallback; this source and its feature availability behavior are unchanged."
     },
     {
       "source": "ui/src/hooks/useSaasCapabilities.ts",
       "articleId": "preview-and-known-limits",
       "sourceSha256": "30d58429b54ae6de1eb632f4ed0f27c93175e28d8899eff0612c183d5a2e1ed7",
-      "articleSha256": "66280d70ccaa8131ab095ffcc03a2862b9bff174f1fd133f40fad824581b335e",
+      "articleSha256": "66127d42d3d1407db3b798b12a52c38e8834f8da9d0c2b047101ff0ef49d425c",
       "decision": "updated",
-      "rationale": "Replaced stale experiment-specific instructions with current maturity labels, availability limits, and the absence of a complete release history."
+      "rationale": "The paired article now points to the configured bounded Product changes history and its language fallback; this source and its feature availability behavior are unchanged."
     },
     {
       "source": "ui/src/pages/InstanceExperimentalSettings.tsx",
       "articleId": "preview-and-known-limits",
       "sourceSha256": "9f9928a8c385f406be46594335fc2d697eb0ba4c7c1149c7e2299e6384b5d48f",
-      "articleSha256": "66280d70ccaa8131ab095ffcc03a2862b9bff174f1fd133f40fad824581b335e",
+      "articleSha256": "66127d42d3d1407db3b798b12a52c38e8834f8da9d0c2b047101ff0ef49d425c",
       "decision": "updated",
-      "rationale": "The article now explains that internal/retired lifecycle status prevents new use even when a historical saved experimental flag is true."
+      "rationale": "The paired article now points to the configured bounded Product changes history and its language fallback; this source and its feature availability behavior are unchanged."
     },
     {
       "source": "packages/shared/src/v9-feature-flags.ts",
       "articleId": "preview-and-known-limits-da",
       "sourceSha256": "10d70828a4f7bff8763ac73a49eefab90150b8756ecbcc263eeb39968acbac15",
-      "articleSha256": "f64ee0f8306ae956d6bee9bfbf3a8c91aa87c07a415c9e1745e4272fc715b7c4",
+      "articleSha256": "6d8adb5081cf9d7cb51949320f6d6c97bc06de1b45c3ce9f8bf5eaf7a4fc4e01",
       "decision": "updated",
-      "rationale": "Danish translation of preview-and-known-limits: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article now points to the configured bounded Product changes history and its language fallback; this source and its feature availability behavior are unchanged."
     },
     {
       "source": "ui/src/hooks/useSaasCapabilities.ts",
       "articleId": "preview-and-known-limits-da",
       "sourceSha256": "30d58429b54ae6de1eb632f4ed0f27c93175e28d8899eff0612c183d5a2e1ed7",
-      "articleSha256": "f64ee0f8306ae956d6bee9bfbf3a8c91aa87c07a415c9e1745e4272fc715b7c4",
+      "articleSha256": "6d8adb5081cf9d7cb51949320f6d6c97bc06de1b45c3ce9f8bf5eaf7a4fc4e01",
       "decision": "updated",
-      "rationale": "Danish translation of preview-and-known-limits: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article now points to the configured bounded Product changes history and its language fallback; this source and its feature availability behavior are unchanged."
     },
     {
       "source": "ui/src/pages/InstanceExperimentalSettings.tsx",
       "articleId": "preview-and-known-limits-da",
       "sourceSha256": "9f9928a8c385f406be46594335fc2d697eb0ba4c7c1149c7e2299e6384b5d48f",
-      "articleSha256": "f64ee0f8306ae956d6bee9bfbf3a8c91aa87c07a415c9e1745e4272fc715b7c4",
+      "articleSha256": "6d8adb5081cf9d7cb51949320f6d6c97bc06de1b45c3ce9f8bf5eaf7a4fc4e01",
       "decision": "updated",
-      "rationale": "Danish guidance checked against the same source behavior. The article now explains that internal/retired lifecycle status prevents new use even when a historical saved experimental flag is true."
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article now points to the configured bounded Product changes history and its language fallback; this source and its feature availability behavior are unchanged."
     },
     {
       "source": "server/src/routes/issues.ts",
@@ -1565,10 +1565,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "2e88993a295021b63e235e1bb02f33f7afd5315e55b611b8743254a4405297ff",
+      "sourceSha256": "2c8f93b6ee924cacbbf9f6fa8c1104b9989b533fd99f37d96bbe5ecbc95da612",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Heartbeat admission now enforces the pinned required Skill and handles late output callbacks; the article’s task status, retry, and recovery instructions remain accurate."
+      "rationale": "Read-only source fences and current default-Human resolution preserve Stop, source refusal and recovery behavior described in the articles."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1581,10 +1581,10 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "68815a74425b64c0ef8da824b1cf0a55989ad627617c4476bd53dbf4992d4337",
+      "sourceSha256": "9fde6c1ca4b69b6b2a7d8040864ad3d23818e57d55e37e6d87b578d69f3fe678",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Reviewed current-Human empty conversation shell checks, exact comment/wake projections, retained-run resume witnesses and source-loss recovery guards. Existing guidance still requires the original task, current source/workspace access, checking the latest run and waiting for confirmed Stop; these changes add no alternative retry or permission bypass. Integrated runtime/browser acceptance remains open."
+      "rationale": "Read-only privacy-tree locks retain the same source-access decisions; Task refusal, retained data and recovery semantics described by the article remain unchanged."
     },
     {
       "source": "server/src/services/managed-repository-checkout.ts",
@@ -1597,10 +1597,10 @@
     {
       "source": "server/src/services/routines.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "862eca945263b66ee7ca91781a8570eceb983c17383047ba9f09dc331528bfb6",
+      "sourceSha256": "405fdcbbcb8fd9b5d3e6fece3e25722f5ea7f015fc6c0c37dbeff69caf81372c",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Routine search uses the current-source reader and transaction-safe access; the article’s ownership, pause, and recovery guidance remains accurate."
+      "rationale": "Scheduled work resolves only the configured current active Human; an unavailable default is an owner recovery condition and does not choose a replacement silently."
     },
     {
       "source": "server/src/services/scheduled-work.ts",
@@ -1637,10 +1637,10 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "recovering-work",
-      "sourceSha256": "ffb03ab3d4744025801a7cf234227bc7da83f035cba1e4f3473d41f03192ac79",
+      "sourceSha256": "17601953ca2b7cf23453ed24e217a6077f096a46d9e870b7b3379e4d9deb1fa5",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "The current task page removes the built-in feedback terms fallback URL; its approval, status, run-history, and recovery behavior still matches this article."
+      "rationale": "Current-session guards and the optional temporary workflow coverage selector preserve the described Task status, approval and recovery actions."
     },
     {
       "source": "server/src/routes/issues.ts",
@@ -1669,10 +1669,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "2e88993a295021b63e235e1bb02f33f7afd5315e55b611b8743254a4405297ff",
+      "sourceSha256": "2c8f93b6ee924cacbbf9f6fa8c1104b9989b533fd99f37d96bbe5ecbc95da612",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Danish version checked against the same source delta: heartbeat admission now enforces the pinned required Skill and handles late output callbacks; the article’s task status, retry, and recovery instructions remain accurate."
+      "rationale": "Danish counterpart checked against the same source behavior. Read-only source fences and current default-Human resolution preserve Stop, source refusal and recovery behavior described in the articles."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1685,10 +1685,10 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "68815a74425b64c0ef8da824b1cf0a55989ad627617c4476bd53dbf4992d4337",
+      "sourceSha256": "9fde6c1ca4b69b6b2a7d8040864ad3d23818e57d55e37e6d87b578d69f3fe678",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Reviewed current-Human empty conversation shell checks, exact comment/wake projections, retained-run resume witnesses and source-loss recovery guards. Existing guidance still requires the original task, current source/workspace access, checking the latest run and waiting for confirmed Stop; these changes add no alternative retry or permission bypass. Integrated runtime/browser acceptance remains open."
+      "rationale": "Danish counterpart checked against the same source behavior. Read-only privacy-tree locks retain the same source-access decisions; Task refusal, retained data and recovery semantics described by the article remain unchanged."
     },
     {
       "source": "server/src/services/managed-repository-checkout.ts",
@@ -1701,10 +1701,10 @@
     {
       "source": "server/src/services/routines.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "862eca945263b66ee7ca91781a8570eceb983c17383047ba9f09dc331528bfb6",
+      "sourceSha256": "405fdcbbcb8fd9b5d3e6fece3e25722f5ea7f015fc6c0c37dbeff69caf81372c",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Danish version checked against the same source delta: routine search uses the current-source reader and transaction-safe access; the article’s ownership, pause, and recovery guidance remains accurate."
+      "rationale": "Danish counterpart checked against the same source behavior. Scheduled work resolves only the configured current active Human; an unavailable default is an owner recovery condition and does not choose a replacement silently."
     },
     {
       "source": "server/src/services/scheduled-work.ts",
@@ -1741,10 +1741,10 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "recovering-work-da",
-      "sourceSha256": "ffb03ab3d4744025801a7cf234227bc7da83f035cba1e4f3473d41f03192ac79",
+      "sourceSha256": "17601953ca2b7cf23453ed24e217a6077f096a46d9e870b7b3379e4d9deb1fa5",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Danish version checked against the same source delta: the current task page removes the built-in feedback terms fallback URL; its approval, status, run-history, and recovery behavior still matches this article."
+      "rationale": "Danish counterpart checked against the same source behavior. Current-session guards and the optional temporary workflow coverage selector preserve the described Task status, approval and recovery actions."
     },
     {
       "source": "server/src/services/saas/activation-first-task.ts",
@@ -1845,114 +1845,114 @@
     {
       "source": "server/src/routes/workflows.ts",
       "articleId": "workflows-preview",
-      "sourceSha256": "36843e5948653ce1a082d253e378fd7be97d24580f9b26b9f6c3957bb0d1269f",
-      "articleSha256": "93759d2a40ad3b6d5ab738f00aa85907a1d162fd20cfaba8bbabfa483ea9106b",
-      "decision": "no_change",
-      "rationale": "The route now passes the authenticated actor into Workflow authorization context; draft, test, publish and run actions remain as described, with their current capability gates."
+      "sourceSha256": "45117a317a22c78441b7a3f1b0a44104e463f89234329a62a669a5d8a4e63705",
+      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "decision": "updated",
+      "rationale": "Workflow starts validate optional coverage against the current Human and exact published revision; the paired workflow article describes the checks and queued admission."
     },
     {
       "source": "server/src/services/workflows/workflow-node-registry.ts",
       "articleId": "workflows-preview",
       "sourceSha256": "214ce3d5a536155ba2fd0709834c92ce718c35803b67cdcfb8bed3f961216723",
-      "articleSha256": "93759d2a40ad3b6d5ab738f00aa85907a1d162fd20cfaba8bbabfa483ea9106b",
+      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
       "decision": "updated",
-      "rationale": "Added current draft, test, publish, run, and capability-limit guidance from the Workflow UI and node registry."
+      "rationale": "The paired workflow article adds temporary coverage while preserving the existing draft, test, publish and preview guidance for this unchanged workflow source."
     },
     {
       "source": "server/src/services/workflows/workflow-service.ts",
       "articleId": "workflows-preview",
       "sourceSha256": "542b1dd3c6581c5ada29220856a64a99aa6f0a62578ffb3f247e8b246e4378f5",
-      "articleSha256": "93759d2a40ad3b6d5ab738f00aa85907a1d162fd20cfaba8bbabfa483ea9106b",
+      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
       "decision": "updated",
-      "rationale": "Workflow search adds a bounded projection through the existing source guard; authoring, testing, publishing, and operation behavior in the article remains accurate."
+      "rationale": "The paired workflow article adds temporary coverage while preserving the existing draft, test, publish and preview guidance for this unchanged workflow source."
     },
     {
       "source": "ui/src/pages/WorkflowBuilder.tsx",
       "articleId": "workflows-preview",
-      "sourceSha256": "08f70fe47782a89f13a940fd8be0e42ba3466b599ed02d190a963ab9869286f8",
-      "articleSha256": "93759d2a40ad3b6d5ab738f00aa85907a1d162fd20cfaba8bbabfa483ea9106b",
+      "sourceSha256": "7bffb0d5109a85fb043bbee1604de2518ea8fce4abe65dde11bb3dd22f143bf8",
+      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
       "decision": "updated",
-      "rationale": "Added current draft, test, publish, run, and capability-limit guidance from the Workflow UI and node registry."
+      "rationale": "The paired workflow article now explains the exact published version, current permissions, actual starting Human, coverage expiry and revocation."
     },
     {
       "source": "ui/src/pages/WorkflowDescribe.tsx",
       "articleId": "workflows-preview",
       "sourceSha256": "f2cb06f632c77fbdd7c7e436961dc2fbf68e861bc51df8830f4359be377fc4c8",
-      "articleSha256": "93759d2a40ad3b6d5ab738f00aa85907a1d162fd20cfaba8bbabfa483ea9106b",
+      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
       "decision": "updated",
-      "rationale": "Added current draft, test, publish, run, and capability-limit guidance from the Workflow UI and node registry."
+      "rationale": "The paired workflow article adds temporary coverage while preserving the existing draft, test, publish and preview guidance for this unchanged workflow source."
     },
     {
       "source": "ui/src/pages/WorkflowReview.tsx",
       "articleId": "workflows-preview",
       "sourceSha256": "95e074af2312083633592f05f620bff8dea0e161affb3fbd4887819b9cd7bd26",
-      "articleSha256": "93759d2a40ad3b6d5ab738f00aa85907a1d162fd20cfaba8bbabfa483ea9106b",
+      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
       "decision": "updated",
-      "rationale": "Added current draft, test, publish, run, and capability-limit guidance from the Workflow UI and node registry."
+      "rationale": "The paired workflow article adds temporary coverage while preserving the existing draft, test, publish and preview guidance for this unchanged workflow source."
     },
     {
       "source": "ui/src/pages/Workflows.tsx",
       "articleId": "workflows-preview",
       "sourceSha256": "ea58e8e84c102e15e2c85a59406b78b7b40949e9c2afc2f0547c4b484118e152",
-      "articleSha256": "93759d2a40ad3b6d5ab738f00aa85907a1d162fd20cfaba8bbabfa483ea9106b",
+      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
       "decision": "updated",
-      "rationale": "Added current draft, test, publish, run, and capability-limit guidance from the Workflow UI and node registry."
+      "rationale": "The paired workflow article adds temporary coverage while preserving the existing draft, test, publish and preview guidance for this unchanged workflow source."
     },
     {
       "source": "server/src/routes/workflows.ts",
       "articleId": "workflows-preview-da",
-      "sourceSha256": "36843e5948653ce1a082d253e378fd7be97d24580f9b26b9f6c3957bb0d1269f",
-      "articleSha256": "ded10f8b422669815e021718f2bcc686fd87c5839b8037edd4450cab3299ff56",
-      "decision": "no_change",
-      "rationale": "Danish version checked against the same current source behavior: The route now passes the authenticated actor into Workflow authorization context; draft, test, publish and run actions remain as described, with their current capability gates."
+      "sourceSha256": "45117a317a22c78441b7a3f1b0a44104e463f89234329a62a669a5d8a4e63705",
+      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. Workflow starts validate optional coverage against the current Human and exact published revision; the paired workflow article describes the checks and queued admission."
     },
     {
       "source": "server/src/services/workflows/workflow-node-registry.ts",
       "articleId": "workflows-preview-da",
       "sourceSha256": "214ce3d5a536155ba2fd0709834c92ce718c35803b67cdcfb8bed3f961216723",
-      "articleSha256": "ded10f8b422669815e021718f2bcc686fd87c5839b8037edd4450cab3299ff56",
+      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
       "decision": "updated",
-      "rationale": "Danish translation of workflows-preview: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "rationale": "Danish counterpart checked against the same source behavior. The paired workflow article adds temporary coverage while preserving the existing draft, test, publish and preview guidance for this unchanged workflow source."
     },
     {
       "source": "server/src/services/workflows/workflow-service.ts",
       "articleId": "workflows-preview-da",
       "sourceSha256": "542b1dd3c6581c5ada29220856a64a99aa6f0a62578ffb3f247e8b246e4378f5",
-      "articleSha256": "ded10f8b422669815e021718f2bcc686fd87c5839b8037edd4450cab3299ff56",
+      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
       "decision": "updated",
-      "rationale": "Danish version checked against the same source delta: workflow search adds a bounded projection through the existing source guard; authoring, testing, publishing, and operation behavior in the article remains accurate."
+      "rationale": "Danish counterpart checked against the same source behavior. The paired workflow article adds temporary coverage while preserving the existing draft, test, publish and preview guidance for this unchanged workflow source."
     },
     {
       "source": "ui/src/pages/WorkflowBuilder.tsx",
       "articleId": "workflows-preview-da",
-      "sourceSha256": "08f70fe47782a89f13a940fd8be0e42ba3466b599ed02d190a963ab9869286f8",
-      "articleSha256": "ded10f8b422669815e021718f2bcc686fd87c5839b8037edd4450cab3299ff56",
+      "sourceSha256": "7bffb0d5109a85fb043bbee1604de2518ea8fce4abe65dde11bb3dd22f143bf8",
+      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
       "decision": "updated",
-      "rationale": "Danish translation of workflows-preview: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "rationale": "Danish counterpart checked against the same source behavior. The paired workflow article now explains the exact published version, current permissions, actual starting Human, coverage expiry and revocation."
     },
     {
       "source": "ui/src/pages/WorkflowDescribe.tsx",
       "articleId": "workflows-preview-da",
       "sourceSha256": "f2cb06f632c77fbdd7c7e436961dc2fbf68e861bc51df8830f4359be377fc4c8",
-      "articleSha256": "ded10f8b422669815e021718f2bcc686fd87c5839b8037edd4450cab3299ff56",
+      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
       "decision": "updated",
-      "rationale": "Danish translation of workflows-preview: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "rationale": "Danish counterpart checked against the same source behavior. The paired workflow article adds temporary coverage while preserving the existing draft, test, publish and preview guidance for this unchanged workflow source."
     },
     {
       "source": "ui/src/pages/WorkflowReview.tsx",
       "articleId": "workflows-preview-da",
       "sourceSha256": "95e074af2312083633592f05f620bff8dea0e161affb3fbd4887819b9cd7bd26",
-      "articleSha256": "ded10f8b422669815e021718f2bcc686fd87c5839b8037edd4450cab3299ff56",
+      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
       "decision": "updated",
-      "rationale": "Danish translation of workflows-preview: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "rationale": "Danish counterpart checked against the same source behavior. The paired workflow article adds temporary coverage while preserving the existing draft, test, publish and preview guidance for this unchanged workflow source."
     },
     {
       "source": "ui/src/pages/Workflows.tsx",
       "articleId": "workflows-preview-da",
       "sourceSha256": "ea58e8e84c102e15e2c85a59406b78b7b40949e9c2afc2f0547c4b484118e152",
-      "articleSha256": "ded10f8b422669815e021718f2bcc686fd87c5839b8037edd4450cab3299ff56",
+      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
       "decision": "updated",
-      "rationale": "Danish translation of workflows-preview: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "rationale": "Danish counterpart checked against the same source behavior. The paired workflow article adds temporary coverage while preserving the existing draft, test, publish and preview guidance for this unchanged workflow source."
     },
     {
       "source": "server/src/services/agents.ts",
@@ -2053,114 +2053,114 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "2e88993a295021b63e235e1bb02f33f7afd5315e55b611b8743254a4405297ff",
+      "sourceSha256": "2c8f93b6ee924cacbbf9f6fa8c1104b9989b533fd99f37d96bbe5ecbc95da612",
       "articleSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9",
       "decision": "no_change",
-      "rationale": "Heartbeat admission now enforces the pinned required Skill and handles late output callbacks; the article’s task status, retry, and recovery instructions remain accurate."
+      "rationale": "Read-only source fences and current default-Human resolution preserve Stop, source refusal and recovery behavior described in the articles."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "2e88993a295021b63e235e1bb02f33f7afd5315e55b611b8743254a4405297ff",
+      "sourceSha256": "2c8f93b6ee924cacbbf9f6fa8c1104b9989b533fd99f37d96bbe5ecbc95da612",
       "articleSha256": "7aad0b3a058f2bb3c6d3832e7288006fccaacee8bd02133e7354abeedee9cf71",
       "decision": "no_change",
-      "rationale": "Danish version checked against the same source delta: heartbeat admission now enforces the pinned required Skill and handles late output callbacks; the article’s task status, retry, and recovery instructions remain accurate."
+      "rationale": "Danish counterpart checked against the same source behavior. Read-only source fences and current default-Human resolution preserve Stop, source refusal and recovery behavior described in the articles."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",
       "articleId": "people-and-company-access",
       "sourceSha256": "3063818fca9d6c7fad491f6134ff8c08a96323252bf2eb904cfc188c373609a6",
-      "articleSha256": "1d34534ded3a06d051a286e6714e44007065e458a0715e862d6707384b875ab2",
+      "articleSha256": "d61fa3231a836a30745ff74ee60c195df8c538ba4febb1f0ccfaa9091f5423a5",
       "decision": "updated",
-      "rationale": "The paired article now covers the personal-language precedence, timezone fallback only for new schedules, current operating-fact entry and separate identity qualification; existing membership controls remain accurate."
+      "rationale": "The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
     },
     {
       "source": "ui/src/components/AccountExperienceLanguageSelect.tsx",
       "articleId": "people-and-company-access",
       "sourceSha256": "c092cbd38652b71157cc39e706140bfbe7a4e463d5c4897369842d399be8c1e3",
-      "articleSha256": "1d34534ded3a06d051a286e6714e44007065e458a0715e862d6707384b875ab2",
+      "articleSha256": "d61fa3231a836a30745ff74ee60c195df8c538ba4febb1f0ccfaa9091f5423a5",
       "decision": "updated",
-      "rationale": "The paired article now covers the personal-language precedence, timezone fallback only for new schedules, current operating-fact entry and separate identity qualification; existing membership controls remain accurate."
+      "rationale": "The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
     },
     {
       "source": "ui/src/components/routine-triggers/RoutineTriggers.tsx",
       "articleId": "people-and-company-access",
       "sourceSha256": "851e6d36f19e1e2fcc4e414dccdb4b5e230f57b86c7fab44c7f32ee77c84a800",
-      "articleSha256": "1d34534ded3a06d051a286e6714e44007065e458a0715e862d6707384b875ab2",
+      "articleSha256": "d61fa3231a836a30745ff74ee60c195df8c538ba4febb1f0ccfaa9091f5423a5",
       "decision": "updated",
-      "rationale": "The paired article now covers the personal-language precedence, timezone fallback only for new schedules, current operating-fact entry and separate identity qualification; existing membership controls remain accurate."
+      "rationale": "The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
     },
     {
       "source": "ui/src/pages/Enterprise.tsx",
       "articleId": "people-and-company-access",
       "sourceSha256": "667e64f241169d7bef3ba8d886a12b70ced778af2bf57dcf34c94b4d2111576f",
-      "articleSha256": "1d34534ded3a06d051a286e6714e44007065e458a0715e862d6707384b875ab2",
+      "articleSha256": "d61fa3231a836a30745ff74ee60c195df8c538ba4febb1f0ccfaa9091f5423a5",
       "decision": "updated",
-      "rationale": "The paired article now covers the personal-language precedence, timezone fallback only for new schedules, current operating-fact entry and separate identity qualification; existing membership controls remain accurate."
+      "rationale": "The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
     },
     {
       "source": "server/src/services/enterprise/identity-policy.ts",
       "articleId": "people-and-company-access",
-      "sourceSha256": "c501c14f3af4f9d3b200200cc2fd1e48dd74f7b3c7ae340782ee874e09608032",
-      "articleSha256": "1d34534ded3a06d051a286e6714e44007065e458a0715e862d6707384b875ab2",
+      "sourceSha256": "66ab09946d66b5d5bd1d0e98f97355658e070e2a712fa805df8bb669d0332747",
+      "articleSha256": "d61fa3231a836a30745ff74ee60c195df8c538ba4febb1f0ccfaa9091f5423a5",
       "decision": "updated",
-      "rationale": "The paired article now covers the personal-language precedence, timezone fallback only for new schedules, current operating-fact entry and separate identity qualification; existing membership controls remain accurate."
+      "rationale": "Identity-policy suspension retains current membership enforcement and revokes temporary workflow coverage; the article retains the separate identity activation qualification caveat."
     },
     {
       "source": "server/src/services/routines.ts",
       "articleId": "people-and-company-access",
-      "sourceSha256": "862eca945263b66ee7ca91781a8570eceb983c17383047ba9f09dc331528bfb6",
-      "articleSha256": "1d34534ded3a06d051a286e6714e44007065e458a0715e862d6707384b875ab2",
-      "decision": "no_change",
-      "rationale": "Routine search uses the current-source reader and transaction-safe access; the article’s ownership, pause, and recovery guidance remains accurate."
+      "sourceSha256": "405fdcbbcb8fd9b5d3e6fece3e25722f5ea7f015fc6c0c37dbeff69caf81372c",
+      "articleSha256": "d61fa3231a836a30745ff74ee60c195df8c538ba4febb1f0ccfaa9091f5423a5",
+      "decision": "updated",
+      "rationale": "Scheduled work resolves only the configured current active Human; an unavailable default is an owner recovery condition and does not choose a replacement silently."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",
       "articleId": "people-and-company-access-da",
       "sourceSha256": "3063818fca9d6c7fad491f6134ff8c08a96323252bf2eb904cfc188c373609a6",
-      "articleSha256": "dc70eb5048340883d961ff245928a6d992178a9cdad86bb79d870ecf3b140392",
+      "articleSha256": "b2c45c4d7946e975386f05856f47a0a1a3a07d88602bce933e49740bdb992b10",
       "decision": "updated",
-      "rationale": "Danish guidance now covers the actual company language fallback, new-schedule timezone fallback, current operating-fact entry and distinct identity qualification; existing membership controls remain accurate."
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
     },
     {
       "source": "ui/src/components/AccountExperienceLanguageSelect.tsx",
       "articleId": "people-and-company-access-da",
       "sourceSha256": "c092cbd38652b71157cc39e706140bfbe7a4e463d5c4897369842d399be8c1e3",
-      "articleSha256": "dc70eb5048340883d961ff245928a6d992178a9cdad86bb79d870ecf3b140392",
+      "articleSha256": "b2c45c4d7946e975386f05856f47a0a1a3a07d88602bce933e49740bdb992b10",
       "decision": "updated",
-      "rationale": "Danish guidance now covers the actual company language fallback, new-schedule timezone fallback, current operating-fact entry and distinct identity qualification; existing membership controls remain accurate."
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
     },
     {
       "source": "ui/src/components/routine-triggers/RoutineTriggers.tsx",
       "articleId": "people-and-company-access-da",
       "sourceSha256": "851e6d36f19e1e2fcc4e414dccdb4b5e230f57b86c7fab44c7f32ee77c84a800",
-      "articleSha256": "dc70eb5048340883d961ff245928a6d992178a9cdad86bb79d870ecf3b140392",
+      "articleSha256": "b2c45c4d7946e975386f05856f47a0a1a3a07d88602bce933e49740bdb992b10",
       "decision": "updated",
-      "rationale": "Danish guidance now covers the actual company language fallback, new-schedule timezone fallback, current operating-fact entry and distinct identity qualification; existing membership controls remain accurate."
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
     },
     {
       "source": "ui/src/pages/Enterprise.tsx",
       "articleId": "people-and-company-access-da",
       "sourceSha256": "667e64f241169d7bef3ba8d886a12b70ced778af2bf57dcf34c94b4d2111576f",
-      "articleSha256": "dc70eb5048340883d961ff245928a6d992178a9cdad86bb79d870ecf3b140392",
+      "articleSha256": "b2c45c4d7946e975386f05856f47a0a1a3a07d88602bce933e49740bdb992b10",
       "decision": "updated",
-      "rationale": "Danish guidance now covers the actual company language fallback, new-schedule timezone fallback, current operating-fact entry and distinct identity qualification; existing membership controls remain accurate."
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
     },
     {
       "source": "server/src/services/enterprise/identity-policy.ts",
       "articleId": "people-and-company-access-da",
-      "sourceSha256": "c501c14f3af4f9d3b200200cc2fd1e48dd74f7b3c7ae340782ee874e09608032",
-      "articleSha256": "dc70eb5048340883d961ff245928a6d992178a9cdad86bb79d870ecf3b140392",
+      "sourceSha256": "66ab09946d66b5d5bd1d0e98f97355658e070e2a712fa805df8bb669d0332747",
+      "articleSha256": "b2c45c4d7946e975386f05856f47a0a1a3a07d88602bce933e49740bdb992b10",
       "decision": "updated",
-      "rationale": "Danish guidance now covers the actual company language fallback, new-schedule timezone fallback, current operating-fact entry and distinct identity qualification; existing membership controls remain accurate."
+      "rationale": "Danish counterpart checked against the same source behavior. Identity-policy suspension retains current membership enforcement and revokes temporary workflow coverage; the article retains the separate identity activation qualification caveat."
     },
     {
       "source": "server/src/services/routines.ts",
       "articleId": "people-and-company-access-da",
-      "sourceSha256": "862eca945263b66ee7ca91781a8570eceb983c17383047ba9f09dc331528bfb6",
-      "articleSha256": "dc70eb5048340883d961ff245928a6d992178a9cdad86bb79d870ecf3b140392",
-      "decision": "no_change",
-      "rationale": "Danish version checked against the same source delta: routine search uses the current-source reader and transaction-safe access; the article’s ownership, pause, and recovery guidance remains accurate."
+      "sourceSha256": "405fdcbbcb8fd9b5d3e6fece3e25722f5ea7f015fc6c0c37dbeff69caf81372c",
+      "articleSha256": "b2c45c4d7946e975386f05856f47a0a1a3a07d88602bce933e49740bdb992b10",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. Scheduled work resolves only the configured current active Human; an unavailable default is an owner recovery condition and does not choose a replacement silently."
     },
     {
       "source": "server/src/services/tool-connection-lifecycle.ts",
@@ -2213,10 +2213,10 @@
     {
       "source": "packages/shared/src/feature-catalog.ts",
       "articleId": "preview-and-known-limits",
-      "articleSha256": "66280d70ccaa8131ab095ffcc03a2862b9bff174f1fd133f40fad824581b335e",
-      "sourceSha256": "bd539363efe20b2cc13981708abec1f4f03d801820bf7aa00dfa3648058036b5",
+      "articleSha256": "66127d42d3d1407db3b798b12a52c38e8834f8da9d0c2b047101ff0ef49d425c",
+      "sourceSha256": "00650dcdad084aeab8eef6c439d66d59a46e5e879f0122e55980e9b57d4bda04",
       "decision": "updated",
-      "rationale": "The article explains current lifecycle availability and directs customers to supported replacement/migration guidance for internal or retired features."
+      "rationale": "Source-backed workflow and Apps documentation links enrich existing lifecycle metadata; the release keeps the compatible tier catalog and adds a separate lifecycle artifact without changing feature availability or claiming external consumer support."
     },
     {
       "source": "server/src/services/agents/authoring-publication.ts",
@@ -2309,10 +2309,10 @@
     {
       "source": "packages/shared/src/feature-catalog.ts",
       "articleId": "preview-and-known-limits-da",
-      "articleSha256": "f64ee0f8306ae956d6bee9bfbf3a8c91aa87c07a415c9e1745e4272fc715b7c4",
-      "sourceSha256": "bd539363efe20b2cc13981708abec1f4f03d801820bf7aa00dfa3648058036b5",
+      "articleSha256": "6d8adb5081cf9d7cb51949320f6d6c97bc06de1b45c3ce9f8bf5eaf7a4fc4e01",
+      "sourceSha256": "00650dcdad084aeab8eef6c439d66d59a46e5e879f0122e55980e9b57d4bda04",
       "decision": "updated",
-      "rationale": "Danish guidance checked against the same source behavior. The article explains current lifecycle availability and directs customers to supported replacement/migration guidance for internal or retired features."
+      "rationale": "Danish counterpart checked against the same source behavior. Source-backed workflow and Apps documentation links enrich existing lifecycle metadata; the release keeps the compatible tier catalog and adds a separate lifecycle artifact without changing feature availability or claiming external consumer support."
     },
     {
       "source": "server/src/services/agents/authoring-publication.ts",
@@ -2433,6 +2433,118 @@
       "sourceSha256": "4fb7aabe476b04977a4b787d0a9b69c8feda175f9502d0671a7e3f4485ea8f5b",
       "decision": "updated",
       "rationale": "Help now explains curated customer release notes, bounded coverage, explicit locale fallback and independence from personal news dismissals. Company-scoped mandatory actions remain with their canonical owners."
+    },
+    {
+      "source": "ui/src/pages/CompanyAccess.tsx",
+      "articleId": "workflows-preview",
+      "sourceSha256": "bd1f793eaa84c5be6931b4e1d4b27ae357e04fc3f076c291e1445f43a85ddb46",
+      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "decision": "updated",
+      "rationale": "Temporary coverage and the distinct reasoned security-suspension action require the current account and session. The paired articles explain exact coverage scope and security suspension without a replacement owner or unrelated company revocation."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "articleId": "workflows-preview",
+      "sourceSha256": "17601953ca2b7cf23453ed24e217a6077f096a46d9e870b7b3379e4d9deb1fa5",
+      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "decision": "updated",
+      "rationale": "Current-session guards and the optional temporary workflow coverage selector preserve the described Task status, approval and recovery actions."
+    },
+    {
+      "source": "server/src/routes/access.ts",
+      "articleId": "workflows-preview",
+      "sourceSha256": "a279232cd4603363ef4c3f8a1177745d73deb5154614964f3d403aeaed74030d",
+      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "decision": "updated",
+      "rationale": "The workflow article describes the authenticated coverage controls and explicit revocation; existing member access remains separate."
+    },
+    {
+      "source": "server/src/services/access.ts",
+      "articleId": "workflows-preview",
+      "sourceSha256": "1db330169f2492f12baf454114298c556a01a761baea72b9e0f68f2fd13c2d9e",
+      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "decision": "updated",
+      "rationale": "Coverage validates both current Humans and source access; required permission withdrawal permanently revokes the arrangement rather than reviving it on later regrant."
+    },
+    {
+      "source": "server/src/services/workflows/workflow-executor.ts",
+      "articleId": "workflows-preview",
+      "sourceSha256": "bf38aec5d5610d4ea6d127c22d0b2e3f89cebbcabf4afb934184a777fc7f9471",
+      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "decision": "updated",
+      "rationale": "Queued workflow claims recheck persisted coverage and current source access; the workflow article explicitly describes that second check."
+    },
+    {
+      "source": "packages/shared/src/validators/access.ts",
+      "articleId": "workflows-preview",
+      "sourceSha256": "a18c6b7145eb5ac15664f7f7ac61fe70f42769f976106f7fea12707422e3fb65",
+      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "decision": "updated",
+      "rationale": "The workflow article matches the bounded coverage window, required reason, exact revision and manual or visible Task trigger choices."
+    },
+    {
+      "source": "packages/db/src/schema/workflows.ts",
+      "articleId": "workflows-preview",
+      "sourceSha256": "6cb14b07252bdb21ec10da98e0d0a6d093cf2c2857bcff51ada7da5ae2e36dfc",
+      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "decision": "updated",
+      "rationale": "The workflow article describes the persisted exact-version coverage and actual starting Human; it does not imply a copied role or new permission grant."
+    },
+    {
+      "source": "ui/src/pages/CompanyAccess.tsx",
+      "articleId": "workflows-preview-da",
+      "sourceSha256": "bd1f793eaa84c5be6931b4e1d4b27ae357e04fc3f076c291e1445f43a85ddb46",
+      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. Temporary coverage and the distinct reasoned security-suspension action require the current account and session. The paired articles explain exact coverage scope and security suspension without a replacement owner or unrelated company revocation."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "articleId": "workflows-preview-da",
+      "sourceSha256": "17601953ca2b7cf23453ed24e217a6077f096a46d9e870b7b3379e4d9deb1fa5",
+      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. Current-session guards and the optional temporary workflow coverage selector preserve the described Task status, approval and recovery actions."
+    },
+    {
+      "source": "server/src/routes/access.ts",
+      "articleId": "workflows-preview-da",
+      "sourceSha256": "a279232cd4603363ef4c3f8a1177745d73deb5154614964f3d403aeaed74030d",
+      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The workflow article describes the authenticated coverage controls and explicit revocation; existing member access remains separate."
+    },
+    {
+      "source": "server/src/services/access.ts",
+      "articleId": "workflows-preview-da",
+      "sourceSha256": "1db330169f2492f12baf454114298c556a01a761baea72b9e0f68f2fd13c2d9e",
+      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. Coverage validates both current Humans and source access; required permission withdrawal permanently revokes the arrangement rather than reviving it on later regrant."
+    },
+    {
+      "source": "server/src/services/workflows/workflow-executor.ts",
+      "articleId": "workflows-preview-da",
+      "sourceSha256": "bf38aec5d5610d4ea6d127c22d0b2e3f89cebbcabf4afb934184a777fc7f9471",
+      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. Queued workflow claims recheck persisted coverage and current source access; the workflow article explicitly describes that second check."
+    },
+    {
+      "source": "packages/shared/src/validators/access.ts",
+      "articleId": "workflows-preview-da",
+      "sourceSha256": "a18c6b7145eb5ac15664f7f7ac61fe70f42769f976106f7fea12707422e3fb65",
+      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The workflow article matches the bounded coverage window, required reason, exact revision and manual or visible Task trigger choices."
+    },
+    {
+      "source": "packages/db/src/schema/workflows.ts",
+      "articleId": "workflows-preview-da",
+      "sourceSha256": "6cb14b07252bdb21ec10da98e0d0a6d093cf2c2857bcff51ada7da5ae2e36dfc",
+      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The workflow article describes the persisted exact-version coverage and actual starting Human; it does not imply a copied role or new permission grant."
     }
   ]
 }

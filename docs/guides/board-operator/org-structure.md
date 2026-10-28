@@ -9,7 +9,7 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: en
-last_verified_at: 2026-10-25
+last_verified_at: 2026-10-28
 review_trigger: Company defaults, enterprise identity or operating-fact controls, member, invite, join request, role, status, or reassignment behavior changes
 security_or_privacy_sensitive: true
 linked_source_files: [ui/src/pages/CompanySettings.tsx, ui/src/components/AccountExperienceLanguageSelect.tsx, ui/src/components/routine-triggers/RoutineTriggers.tsx, ui/src/pages/Enterprise.tsx, server/src/services/enterprise/identity-policy.ts, server/src/services/routines.ts, ui/src/pages/CompanyAccess.tsx, ui/src/components/access/InvitesSection.tsx, ui/src/components/access/CompanySettingsNav.tsx]
@@ -27,9 +27,15 @@ If a join request needs approval, review it in Members before approving or rejec
 
 Use a member’s edit action to update the role or status offered by the page. Check the displayed role and status before saving. A suspended or removed member may lose access to company content and actions.
 
+For a security concern, use **Suspend for security** when you have permission to manage members. Choose a reason and confirm the suspension from your recently authenticated account. This suspends access to this company, revokes related grants and temporary coverage, and pauses affected work. It can suspend the last active owner; it does not select a replacement. Review the recovery notice before trying to resume work. Other company memberships remain separate. An external action already sent may still need reconciliation.
+
 Before removing a member, review the reassignment choices. The page can identify tasks assigned to them and routines they own; select how to handle those items before confirming removal. Verify the resulting owners and statuses after the change.
 
 Company membership is separate from a Co-worker’s place in the team. See [Work with Co-workers](/guides/board-operator/managing-agents) for worker status and [Export and deletion](/help/export-and-delete) for account or company removal.
+
+## Temporary workflow coverage
+
+Use **Temporary workflow coverage** in access settings to let another active person start a specific published workflow version for a limited period. Both people keep their own permissions. Review the selected version, Task scope, expiry and reason before saving. Revoke coverage here when it is no longer needed. See [Use Workflows](/help/workflows-preview) for the checks that apply when a run starts.
 
 ## Set company defaults
 

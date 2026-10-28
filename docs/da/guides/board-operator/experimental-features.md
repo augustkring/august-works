@@ -25,6 +25,6 @@ En eksperimentel indstilling styres på instansniveau, når kontrollen vises. Sp
 
 ## Udgivelsesoplysninger og servicehændelser
 
-Dette Hjælp-center har endnu ikke en komplet historik over funktioner fra udgivelse til udgivelse. Brug funktionens aktuelle skærmbillede og tilknyttede vejledning til at se tilgængelighed og begrænsninger. Åbn [Hjælp og menneskelig support](/da/help/index) for at spørge til en konkret produktbegrænsning. Hvis Hjælp viser en konfigureret statusside, kan du kontrollere anmeldte servicehændelser dér. Den beskriver ikke alle funktionsbegrænsninger.
+Åbn **Hjælp → Produktændringer** for at se udgivelsesnoter, når din administrator har konfigureret dem. Kontrollér den viste historikdækning og eventuelle noter på et andet sprog; en tom liste beviser ikke, at der ikke har været udgivelser. Brug funktionens aktuelle skærmbillede og tilknyttede vejledning til at se tilgængelighed og begrænsninger. Åbn [Hjælp og menneskelig support](/da/help/index) for at spørge til en konkret produktbegrænsning. Hvis Hjælp viser en konfigureret statusside, kan du kontrollere anmeldte servicehændelser dér. Den beskriver ikke alle funktionsbegrænsninger.
 
 Interne og udfasede funktioner kan ikke aktiveres til ny brug via en gammel gemt eksperimentel indstilling. Funktionens aktuelle livscyklusstatus bestemmer tilgængeligheden. Bed administratoren om den understøttede erstatning eller migrationsvejledning, der vises for funktionen.
