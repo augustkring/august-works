@@ -544,6 +544,7 @@ async function getRecordDetail(db: Db, companyId: string, recordId: string, budg
 }
 
 type MemoryReadBudget = { signal?: AbortSignal; deadlineAt?: number };
+let memoryVisiblePageProfileCount = 0;
 function assertMemoryReadActive(budget: MemoryReadBudget = {}) {
   if (budget.signal?.aborted) throw budget.signal.reason ?? new Error("Memory retrieval was cancelled");
   if (budget.deadlineAt !== undefined && budget.deadlineAt <= Date.now())
@@ -570,8 +571,22 @@ async function visibleMemorySources(db:Db,companyId:string,rows:(typeof memoryRe
 async function visibleMemoryPage(db:Db,companyId:string,actor:MemoryMutationActor,limit:number,
   page:(db:Db,offset:number)=>Promise<(typeof memoryRecords.$inferSelect)[]>, budget: MemoryReadBudget = {},
   candidateFilter?: (record: typeof memoryRecords.$inferSelect) => boolean) {
-  return db.transaction(async rawTx=>{
+  const profile = process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS === "1";
+  const profileStartedAt = profile ? performance.now() : 0;
+  const profileStats = { stage: "transaction", pageQueries: 0, scannedRows: 0, candidateRows: 0, initiallyVisibleRows: 0,
+    firstReviewMs: 0, secondReviewMs: 0, pageQueryMs: 0, transactionOrdinal: null as number | null };
+  let profileResult = "error";
+  try { return await db.transaction(async rawTx=>{
     const tx=rawTx as unknown as Db;
+    if (profile) {
+      const globals = globalThis as unknown as Record<PropertyKey, unknown>;
+      const ordinals = globals[Symbol.for("paperclip.nativeSourceMemoDiagnosticTxOrdinals.v1")];
+      if (ordinals instanceof WeakMap) {
+        const ordinal = ordinals.get(tx);
+        if (typeof ordinal === "number") profileStats.transactionOrdinal = ordinal;
+      }
+    }
+    profileStats.stage = "privacy_fences";
     await setMemoryReadStatementBudget(tx, budget);
     await lockAnalyticalCompany(tx,companyId); await lockMemoryPrivacy(tx,companyId);
     await setMemoryReadStatementBudget(tx, budget);
@@ -580,18 +595,43 @@ async function visibleMemoryPage(db:Db,companyId:string,actor:MemoryMutationActo
     const visible:(typeof memoryRecords.$inferSelect)[]=[];
     for(let offset=0;;offset+=100){
       await setMemoryReadStatementBudget(tx, budget);
+      profileStats.stage = "candidate_page_query";
+      const pageStartedAt = profile ? performance.now() : 0;
       const rows=await page(tx,offset);
+      if (profile) {
+        profileStats.pageQueries += 1;
+        profileStats.scannedRows += rows.length;
+        profileStats.pageQueryMs += performance.now() - pageStartedAt;
+      }
       const candidates=candidateFilter ? rows.filter(candidateFilter) : rows;
-      visible.push(...await visibleMemorySources(tx,companyId,candidates,actor,budget));
+      profileStats.stage = "candidate_source_review";
+      const firstReviewStartedAt = profile ? performance.now() : 0;
+      const checked = await visibleMemorySources(tx,companyId,candidates,actor,budget);
+      if (profile) {
+        profileStats.candidateRows += candidates.length;
+        profileStats.firstReviewMs += performance.now() - firstReviewStartedAt;
+      }
+      visible.push(...checked);
+      if (profile) profileStats.initiallyVisibleRows = visible.length;
       if(performance.now()>deadline)throw conflict("Complete Memory source review exceeded its budget");
       if(visible.length>=limit || rows.length<100){
         // A later source may wait while an earlier reader grant is withdrawn.
+        profileStats.stage = "candidate_source_revalidation";
+        const secondReviewStartedAt = profile ? performance.now() : 0;
         const current=await visibleMemorySources(tx,companyId,visible.slice(0,limit),actor,budget);
+        if (profile) profileStats.secondReviewMs += performance.now() - secondReviewStartedAt;
         if(performance.now()>deadline)throw conflict("Complete Memory source review exceeded its budget");
+        profileResult = "ok";
         return current;
       }
     }
-  });
+  }); } finally {
+    if (profile && memoryVisiblePageProfileCount < 32) {
+      memoryVisiblePageProfileCount += 1;
+      console.error("native_memory_visible_page_profile", JSON.stringify({ ...profileStats,
+        elapsedMs: Math.round(performance.now() - profileStartedAt), result: profileResult }));
+    }
+  }
 }
 async function assertMemorySourceAccess(db:Db,companyId:string,recordId:string,actor:MemoryMutationActor) {
   if(!await canActorReadMemorySources(db,companyId,memorySourceActor(companyId,actor),recordId))throw notFound("Memory record not found");

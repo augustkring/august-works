@@ -36,7 +36,8 @@ import { withV7ActivityTransaction, logActivity } from "../v7-mutations.js";
 import { conflict, forbidden, notFound } from "../../errors.js";
 import { assertConfiguredOperatorAuthentication } from "../../auth/authenticator-assurance.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
-import { accessService } from "../access.js";
+import { accessService, type AccessTransaction } from "../access.js";
+import { heartbeatService } from "../heartbeat.js";
 type Policy = typeof enterpriseIdentityPolicies.$inferSelect;
 export interface EnterprisePublisherOptions {
   operatorUserIds: readonly string[];
@@ -632,8 +633,8 @@ export function enterpriseIdentityPolicyService(
       actor: AuthorizationActor,
       companyId: string,
       expectedVersion: number,
-    ) =>
-      withV7ActivityTransaction(db, async (tx, p) => {
+    ) => {
+      const result = await withV7ActivityTransaction(db, async (tx, p) => {
         const userId = await owner(tx, actor, companyId),
           row = await current(tx, companyId, true);
         if (row.version !== expectedVersion || row.status === "retired")
@@ -659,7 +660,7 @@ export function enterpriseIdentityPolicyService(
           ));
           if (!membership) continue;
           const result = await access.suspendMemberForSecurityInTransaction(
-            tx,
+            tx as unknown as AccessTransaction,
             companyId,
             membership.id,
             actor,
@@ -722,7 +723,30 @@ export function enterpriseIdentityPolicyService(
           p,
         );
         return view(updated!);
-      }),
+      });
+      // Membership state committed above denies new work. Ask the existing run
+      // owner to stop already-running work after that durable boundary. Query
+      // again after commit so a retry also finishes containment if a previous
+      // response failed after the decommission itself committed.
+      const withdrawn = await db.select({ userId: enterpriseSubjectBindings.userId })
+        .from(enterpriseSubjectBindings)
+        .innerJoin(companyMemberships, and(
+          eq(companyMemberships.companyId, enterpriseSubjectBindings.companyId),
+          eq(companyMemberships.principalType, "user"),
+          eq(companyMemberships.principalId, enterpriseSubjectBindings.userId),
+        ))
+        .where(and(
+          eq(enterpriseSubjectBindings.companyId, companyId),
+          eq(enterpriseSubjectBindings.managedMembership, true),
+          eq(enterpriseSubjectBindings.status, "revoked"),
+          sql`${companyMemberships.status} <> 'active'`,
+        ));
+      for (const { userId } of withdrawn) {
+        await heartbeatService(db).cancelRunsForResponsibleHuman(companyId, userId,
+          "Cancelled because SCIM decommission withdrew company access");
+      }
+      return result;
+    },
     suspend: async (
       actor: AuthorizationActor,
       companyId: string,

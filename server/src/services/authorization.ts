@@ -1983,15 +1983,23 @@ let nativeMemoryTemporalDiagnostics = 0;
 export async function withReadMemoryTemporalSources<T>(db: Db | DbTransaction, actor: AuthorizationActor,
   companyId: string, recordId: string, read: (sourceDb: Db | DbTransaction) => Promise<T>, expected?: { sourceVersion: string; snapshot: unknown;
     issueIds: string[]; projectIds: string[]; runIds: string[]; memoryIds: string[]; foundationRevisionIds: string[] }): Promise<T | false> {
+  const diagnosticStartedAt = performance.now();
+  let diagnosticDb = db as object;
   const diagnostic = (stage: "source_snapshot" | "source_body_hash" | "output_snapshot_currentness" |
     "context_inputs_currentness" | "callback_reader",
     facts: Record<string, boolean | number | string | null> = {}) => {
     if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1" && nativeMemoryTemporalDiagnostics < 8) {
       nativeMemoryTemporalDiagnostics += 1;
-      console.error("native_memory_temporal_reader_test_denial", JSON.stringify({ stage, ...facts }));
+      const map = process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS === "1"
+        ? (globalThis as unknown as Record<PropertyKey, unknown>)[Symbol.for("paperclip.nativeSourceMemoDiagnosticTxOrdinals.v1")]
+        : undefined;
+      const transactionOrdinal = map instanceof WeakMap ? map.get(diagnosticDb) ?? null : null;
+      console.error("native_memory_temporal_reader_test_denial", JSON.stringify({ stage,
+        elapsedMs: Math.round(performance.now() - diagnosticStartedAt), transactionOrdinal, ...facts }));
     }
   };
   const readInTransaction = async (sourceDb: Db | DbTransaction): Promise<T | false> => {
+    diagnosticDb = sourceDb as object;
     const [{ lockAnalyticalCompany, markAnalyticalPrivacyReadLocked }, { lockMemoryPrivacy }] = await Promise.all([
       import("./analytical-privacy.js"), import("./memory/memory-privacy.js"),
     ]);

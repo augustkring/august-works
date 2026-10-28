@@ -25,6 +25,8 @@
     "test:run": "pnpm run preflight:workspace-links && node scripts/run-vitest-stable.mjs",
     "check:aw-v4-security-evals": "node scripts/check-aw-v4-security-eval-coverage.mjs",
     "check:aw-v9-coverage": "node scripts/check-aw-v9-coverage.mjs",
+    "check:aw-v10-operation-coverage": "node scripts/check-aw-v10-operation-coverage.mjs",
+    "test:aw-v10-operation-coverage": "node --test scripts/check-aw-v10-operation-coverage.test.mjs",
     "test:aw-v4-security-evals": "pnpm run preflight:workspace-links && node scripts/run-aw-v4-security-evals.mjs",
     "test:runner-acceptance": "vitest run --config tests/runner-acceptance/vitest.config.ts",
     "test:runner-acceptance:typecheck": "tsc -p tests/runner-acceptance/tsconfig.json",

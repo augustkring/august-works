@@ -11061,6 +11061,15 @@ export function heartbeatService(
     });
   }
 
+  async function lockCurrentResponsibleHuman(tx: Db, companyId: string, userId: string) {
+    const [membership] = await tx.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, userId), eq(companyMemberships.status, "active"),
+      sql`not exists(select 1 from account_deletion_operations d where d.user_id=${companyMemberships.principalId})`,
+    )).for("share").limit(1);
+    return Boolean(membership);
+  }
+
   async function getRuntimeState(agentId: string) {
     return db
       .select()
@@ -17436,6 +17445,8 @@ export function heartbeatService(
               // run becomes running, a concurrent discard must observe the
               // claimed wake and return an explicit conflict; if discard wins,
               // this claim observes the cancelled queue and does no work.
+              if (!await lockCurrentResponsibleHuman(tx as unknown as Db, run.companyId, responsibleUserId))
+                return { kind: "stale" as const, run: null };
               const issueClaim = await lockIssueExecutionClaim(tx as unknown as Db);
               if (issueClaim.blocked) return { kind: "stale" as const, run: null };
               const wake = await tx
@@ -17748,12 +17759,15 @@ export function heartbeatService(
             updatedAt: claimedAt,
           };
           if (nativeReviewContext) {
+            if (!await lockCurrentResponsibleHuman(tx, run.companyId, responsibleUserId)) return null;
             return claimQueuedNativeReviewRun(tx, {
               run, claimedAt, claimValues,
               agentNameKey: normalizeAgentNameKey(agent.name),
             });
           }
           return tx.transaction(async (claimTx) => {
+            if (!await lockCurrentResponsibleHuman(claimTx as unknown as Db, run.companyId, responsibleUserId))
+              return null;
             const issueClaim = await lockIssueExecutionClaim(claimTx as unknown as Db);
             if (issueClaim.blocked) return null;
             const claimedRun = await claimTx.update(heartbeatRuns).set(claimValues).where(and(
@@ -30466,6 +30480,34 @@ export function heartbeatService(
 
     cancelRun: (runId: string, reason?: string, options?: CancelRunOptions) =>
       cancelRunInternal(runId, reason, options),
+
+    /**
+     * Contain work already executing under a Human's company responsibility
+     * after that responsibility has been withdrawn. New claims are separately
+     * fenced by the current-membership check at claim time.
+     */
+    cancelRunsForResponsibleHuman: async (companyId: string, userId: string, reason: string) => {
+      const runs = await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.companyId, companyId),
+        eq(heartbeatRuns.responsibleUserId, userId),
+        inArray(heartbeatRuns.status, [...CANCELLABLE_HEARTBEAT_RUN_STATUSES]),
+      ));
+      let cancelled = 0;
+      let firstFailure: unknown = null;
+      for (const run of runs) {
+        try {
+          const result = await cancelRunInternal(run.id, reason, {
+            errorCode: "responsible_user_access_withdrawn",
+            suppressImmediateRecovery: true,
+          });
+          if (result.status === "cancelled" || result.status === "interrupted") cancelled++;
+        } catch (error) {
+          firstFailure ??= error;
+        }
+      }
+      if (firstFailure) throw firstFailure;
+      return { scanned: runs.length, cancelled };
+    },
 
     /**
      * Pause-only. Emits errorCode "agent_paused" unconditionally; its sole caller is the

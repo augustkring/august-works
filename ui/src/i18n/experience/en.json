@@ -3884,6 +3884,32 @@
       "completed": "Completed"
     }
   },
+  "companyAccess": {
+    "securitySuspension": {
+      "action": "Suspend for security",
+      "title": "Suspend membership for security",
+      "description": "Suspend {{name}} immediately and revoke company grants, connector access, and temporary workflow coverage. Active owned routines are paused.",
+      "ownerWarning": "This can leave the company with no active owner. An authorized person must restore ownership; this action does not choose a replacement or start recovery.",
+      "reasonLabel": "Reason for suspension",
+      "chooseReason": "Choose a reason",
+      "reasons": {
+        "suspectedCompromise": "Suspected account compromise",
+        "reportedLoss": "Account or device reported lost",
+        "policyViolation": "Security policy violation",
+        "other": "Other security concern"
+      },
+      "recentAuthNote": "The server requires a current Human session authenticated within the last 5 minutes. If that check fails, sign in again and retry.",
+      "currentSessionRequired": "A current Human session is required for this action.",
+      "cancel": "Cancel",
+      "confirm": "Suspend access",
+      "pending": "Suspending access…",
+      "successTitle": "Membership suspended for security",
+      "successBody": "Company access has been suspended and related company access has been revoked.",
+      "ownerRecoveryRequired": "No active company owner remains. An authorized person must restore ownership before owner-only work can continue.",
+      "failureTitle": "Could not suspend membership",
+      "failureBody": "The security suspension could not be completed."
+    }
+  },
   "humanWorkflowCoverage": {
     "title": "Temporary workflow coverage",
     "intro": "Let another active person start one published workflow version during a window of up to 30 days. Both people need their own current permissions and Task access.",

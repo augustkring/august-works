@@ -3884,6 +3884,32 @@
       "completed": "Afsluttet"
     }
   },
+  "companyAccess": {
+    "securitySuspension": {
+      "action": "Suspendér af sikkerhedshensyn",
+      "title": "Suspendér medlemskab af sikkerhedshensyn",
+      "description": "Suspendér {{name}} med det samme, og tilbagekald virksomhedens tilladelser, connectoradgang og midlertidig workflow-dækning. Aktive rutiner, som personen ejer, sættes på pause.",
+      "ownerWarning": "Virksomheden kan stå uden en aktiv ejer. En autoriseret person skal genskabe ejerskabet; handlingen vælger ikke en ny ejer eller starter gendannelse.",
+      "reasonLabel": "Årsag til suspension",
+      "chooseReason": "Vælg en årsag",
+      "reasons": {
+        "suspectedCompromise": "Mistanke om kompromitteret konto",
+        "reportedLoss": "Konto eller enhed meldt mistet",
+        "policyViolation": "Overtrædelse af sikkerhedspolitik",
+        "other": "Anden sikkerhedsbekymring"
+      },
+      "recentAuthNote": "Serveren kræver en aktuel Human-session, der er godkendt inden for de seneste 5 minutter. Hvis kontrollen afvises, skal du logge ind igen og prøve på ny.",
+      "currentSessionRequired": "Denne handling kræver en aktuel Human-session.",
+      "cancel": "Annuller",
+      "confirm": "Suspendér adgang",
+      "pending": "Suspenderer adgang…",
+      "successTitle": "Medlemskab suspenderet af sikkerhedshensyn",
+      "successBody": "Virksomhedsadgangen er suspenderet, og tilknyttet adgang er tilbagekaldt.",
+      "ownerRecoveryRequired": "Der er ingen aktiv ejer i virksomheden. En autoriseret person skal genskabe ejerskabet, før ejerbegrænset arbejde kan fortsætte.",
+      "failureTitle": "Medlemskabet kunne ikke suspenderes",
+      "failureBody": "Sikkerhedssuspensionen kunne ikke gennemføres."
+    }
+  },
   "humanWorkflowCoverage": {
     "title": "Midlertidig workflow-dækning",
     "intro": "Lad en anden aktiv person starte én publiceret workflow-version i et tidsrum på op til 30 dage. Begge personer skal have de nødvendige aktuelle rettigheder og adgang til opgaven.",

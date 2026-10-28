@@ -251,6 +251,7 @@ import {
   createBoardApiKeySchema,
   updateCompanyMemberSchema,
   updateCompanyMemberWithPermissionsSchema,
+  securitySuspendCompanyMemberSchema,
   archiveCompanyMemberSchema,
   updateMemberPermissionsSchema,
   updateUserCompanyAccessSchema,
@@ -7078,7 +7079,7 @@ registry.registerPath({
   description: "Requires a current recent Human session and current company permission. This emergency action may suspend the last owner; ordinary member changes retain the sole-owner safeguard.",
   request: {
     params: z.object({ companyId: z.string(), memberId: z.string() }),
-    body: jsonBody(z.object({ reasonCode: z.enum(["suspected_compromise", "reported_loss", "policy_violation", "other"]) })),
+    body: jsonBody(securitySuspendCompanyMemberSchema),
   },
   responses: {
     200: r.ok(),

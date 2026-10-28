@@ -5,6 +5,7 @@ import { and, eq, gte, isNull, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   activityLog,
+  accountDeletionOperations,
   agentApiKeys,
   agents,
   authUsers,
@@ -760,27 +761,6 @@ async function resolveCloudTenantActorOnce(
     status: "active",
   };
 
-  if (shouldSync) await db
-    .insert(authUsers)
-    .values({
-      id: userId,
-      name: userName,
-      email: userEmail,
-      emailVerified: true,
-      image: null,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .onConflictDoUpdate({
-      target: authUsers.id,
-      set: {
-        name: userName,
-        email: userEmail,
-        emailVerified: true,
-        updatedAt: now,
-      },
-    });
-
   // Earlier cloud_tenant builds granted every tenant user `instance_admin`.
   // Stale rows from those deployments would still elevate this user through
   // the BetterAuth session path, board API keys, and the authorization
@@ -808,44 +788,81 @@ async function resolveCloudTenantActorOnce(
     await repairCloudTenantCompanyProvisionDefaults(db, { companyId, stackId, now });
   }
 
-  effectiveMembership = shouldSync ? await db
-    .insert(companyMemberships)
-    .values({
-      companyId,
-      principalType: "user",
-      principalId: userId,
-      status: "active",
-      membershipRole,
-      updatedAt: now,
-    })
-    .onConflictDoUpdate({
-      target: [
-        companyMemberships.companyId,
-        companyMemberships.principalType,
-        companyMemberships.principalId,
-      ],
-      set: {
+  // The debounce only suppresses profile/role writes. Membership state is
+  // always read from the database, and an attempted Cloud refresh can create
+  // an initial membership but can never reactivate a locally suspended or
+  // archived row. Serialize with account deletion by locking the user row
+  // before checking its durable tombstone and making any identity writes.
+  const identityState = await db.transaction(async tx => {
+    await tx.select({ id: authUsers.id }).from(authUsers)
+      .where(eq(authUsers.id, userId)).for("update");
+    const [deletion] = await tx.select({ userId: accountDeletionOperations.userId })
+      .from(accountDeletionOperations)
+      .where(eq(accountDeletionOperations.userId, userId)).limit(1);
+    if (deletion) return { deleted: true as const, membership: null };
+
+    if (shouldSync) {
+      await tx.insert(authUsers).values({
+        id: userId,
+        name: userName,
+        email: userEmail,
+        emailVerified: true,
+        image: null,
+        createdAt: now,
+        updatedAt: now,
+      }).onConflictDoUpdate({
+        target: authUsers.id,
+        set: { name: userName, email: userEmail, emailVerified: true, updatedAt: now },
+      });
+
+      const [claimed] = await tx.insert(companyMemberships).values({
+        companyId,
+        principalType: "user",
+        principalId: userId,
         status: "active",
         membershipRole,
         updatedAt: now,
-      },
-    })
-    .returning()
-    .then((rows) => rows[0] ?? {
-      companyId,
-      membershipRole,
-      status: "active",
-    }) : { companyId, membershipRole, status: "active" as const };
+      }).onConflictDoUpdate({
+        target: [companyMemberships.companyId, companyMemberships.principalType, companyMemberships.principalId],
+        set: { membershipRole, updatedAt: now },
+        // A pre-existing non-active row is an authoritative local denial.
+        // PostgreSQL rechecks this predicate after waiting on a concurrent
+        // revocation, so a stale Cloud header cannot win that race.
+        setWhere: eq(companyMemberships.status, "active"),
+      }).returning({ id: companyMemberships.id });
 
-  // Without instance-admin elevation, cloud tenant users are authorized purely
-  // through company-scoped permission grants — seed the same role defaults the
-  // regular membership flows create.
-  if (shouldSync) await ensureHumanRoleDefaultGrants(db, {
-    companyId,
-    principalId: userId,
-    membershipRole: effectiveMembership.membershipRole ?? membershipRole,
-    grantedByUserId: null,
+      if (claimed) {
+        // This helper locks the same membership row and only initializes
+        // missing defaults. It stays inside this transaction so revocation
+        // cannot interleave between the active check and grant initialization.
+        await ensureHumanRoleDefaultGrants(tx, {
+          companyId,
+          principalId: userId,
+          membershipRole,
+          grantedByUserId: null,
+        });
+      }
+    }
+
+    const [membership] = await tx.select({
+      companyId: companyMemberships.companyId,
+      membershipRole: companyMemberships.membershipRole,
+      status: companyMemberships.status,
+    }).from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, companyId),
+      eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, userId),
+    )).for("update");
+
+    return { deleted: false as const, membership: membership ?? null };
   });
+
+  if (identityState.deleted) {
+    cloudTenantWriteDebounce.delete(userId);
+    return null;
+  }
+  const currentMembership = identityState.membership;
+  effectiveMembership = currentMembership ?? { companyId, membershipRole: null, status: "missing" };
   if (shouldSync) {
     cloudTenantWriteDebounce.delete(userId);
     cloudTenantWriteDebounce.set(userId, { fingerprint: syncFingerprint, syncedAt: Date.now() });
@@ -879,13 +896,12 @@ async function resolveCloudTenantActorOnce(
     userId,
     userName,
     userEmail,
-    companyIds: [companyId, ...additionalMemberships.map((row) => row.companyId)],
+    companyIds: [
+      ...(effectiveMembership.status === "active" ? [companyId] : []),
+      ...additionalMemberships.map((row) => row.companyId),
+    ],
     memberships: [
-      {
-        companyId,
-        membershipRole: effectiveMembership.membershipRole ?? membershipRole,
-        status: effectiveMembership.status,
-      },
+      ...(effectiveMembership.status === "active" ? [effectiveMembership] : []),
       ...additionalMemberships,
     ],
     // Computed per request, never persisted: the stack owner is elevated to
@@ -893,7 +909,9 @@ async function resolveCloudTenantActorOnce(
     // `enableOwnerInstanceAdmin` flag is on. Non-owner stack roles stay
     // company-scoped. Turning the flag off de-elevates on the next request —
     // there is no role row to clean up.
-    isInstanceAdmin: await resolveOwnerInstanceAdmin(db, stackRole),
+    isInstanceAdmin: effectiveMembership.status === "active"
+      ? await resolveOwnerInstanceAdmin(db, stackRole)
+      : false,
     source: "cloud_tenant",
   };
 }

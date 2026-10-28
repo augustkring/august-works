@@ -1,4 +1,4 @@
-import type { AgentAdapterType, JoinRequest, PermissionKey, HumanWorkflowCoverage, CreateHumanWorkflowCoverage, ArchiveCompanyMemberResponse as SharedArchiveCompanyMemberResponse } from "@paperclipai/shared";
+import type { AgentAdapterType, JoinRequest, PermissionKey, HumanWorkflowCoverage, CreateHumanWorkflowCoverage, ArchiveCompanyMemberResponse as SharedArchiveCompanyMemberResponse, SecuritySuspendCompanyMember, SecuritySuspendCompanyMemberResponse } from "@paperclipai/shared";
 import { api, detachInflightGet, type RequestOptions } from "./client";
 
 export type HumanCompanyRole = "owner" | "admin" | "operator" | "viewer";
@@ -392,6 +392,18 @@ export const accessApi = {
       routineResponsibleUserId?: string | null;
     } = {},
   ) => api.post<ArchiveCompanyMemberResponse>(`/companies/${companyId}/members/${memberId}/archive`, input),
+
+  securitySuspendMember: (
+    companyId: string,
+    memberId: string,
+    input: SecuritySuspendCompanyMember,
+    expectedUserId: string,
+    expectedSessionId: string,
+  ) => api.post<SecuritySuspendCompanyMemberResponse>(
+    `/companies/${companyId}/members/${memberId}/security-suspend`,
+    input,
+    { headers: { "X-Blentera-Expected-User": expectedUserId, "X-Blentera-Expected-Session": expectedSessionId } },
+  ),
 
   approveJoinRequest: (companyId: string, requestId: string) =>
     api.post<JoinRequest>(`/companies/${companyId}/join-requests/${requestId}/approve`, {}),

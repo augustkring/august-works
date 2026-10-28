@@ -22,7 +22,7 @@ import {
   workflowRevisions,
   workflows,
 } from "@paperclipai/db";
-import type { CreateHumanWorkflowCoverage, HumanWorkflowCoverage, PermissionKey, PrincipalType } from "@paperclipai/shared";
+import type { CreateHumanWorkflowCoverage, HumanWorkflowCoverage, PermissionKey, PrincipalType, SecuritySuspendCompanyMember } from "@paperclipai/shared";
 import { conflict, forbidden, notFound, unprocessable } from "../errors.js";
 import { assertAssignableAgent } from "./agent-assignability.js";
 import { authorizationService, type AuthorizationActor, type AuthorizationResource } from "./authorization.js";
@@ -32,7 +32,7 @@ import { isUniqueViolation } from "../db-errors.js";
 import { assertHumanAuthentication, assertPinnedAuthenticationDeadline } from "../auth/authenticator-assurance.js";
 
 type MembershipRow = typeof companyMemberships.$inferSelect;
-type AccessTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
+export type AccessTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
 type GrantInput = {
   permissionKey: PermissionKey;
   scope?: Record<string, unknown> | null;
@@ -45,9 +45,7 @@ type MemberArchiveInput = {
   } | null;
   routineResponsibleUserId?: string | null;
 };
-const SECURITY_SUSPENSION_REASON_CODES = [
-  "suspected_compromise", "reported_loss", "policy_violation", "other", "enterprise_decommission",
-] as const;
+type SecuritySuspensionReason = SecuritySuspendCompanyMember["reasonCode"] | "enterprise_decommission";
 
 export function accessService(db: Db) {
   const authorization = authorizationService(db);
@@ -575,11 +573,8 @@ export function accessService(db: Db) {
     companyId: string,
     memberId: string,
     actor: AuthorizationActor,
-    reason: string,
+    reason: SecuritySuspensionReason,
   ) {
-    if (!(SECURITY_SUSPENSION_REASON_CODES as readonly string[]).includes(reason)) {
-      throw forbidden("A recognized security-suspension reason is required.", { code: "security_suspension_reason_required" });
-    }
     if (actor.type !== "board" || actor.source !== "session" || !actor.userId || !actor.sessionId) {
       throw forbidden("A current Human session is required for security suspension.", { code: "security_suspension_session_required" });
     }
@@ -598,10 +593,13 @@ export function accessService(db: Db) {
       eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
       eq(companyMemberships.status, "active"), eq(companyMemberships.membershipRole, "owner"),
     )).orderBy(asc(companyMemberships.principalId), asc(companyMemberships.id)).for("update");
-    const [targetMembership] = await tx.select().from(companyMemberships).where(and(
-      eq(companyMemberships.companyId, companyId), eq(companyMemberships.id, memberId),
-      eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, targetSnapshot.principalId),
-    )).for("update");
+    const lockedPrincipals = await tx.select().from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+      inArray(companyMemberships.principalId, principals),
+    )).orderBy(asc(companyMemberships.principalId), asc(companyMemberships.id)).for("update");
+    const [targetMembership] = lockedPrincipals.filter(membership =>
+      membership.id === memberId && membership.principalId === targetSnapshot.principalId,
+    );
     if (!targetMembership) return null;
     if (targetMembership.status === "archived") return null;
     // Revalidate the proof and company permission after locks. Request actor
@@ -1773,7 +1771,7 @@ export function accessService(db: Db) {
     updateMember,
     prepareMemberForOffboardingInTransaction,
     suspendMemberForSecurityInTransaction,
-    suspendMemberForSecurity: (companyId: string, memberId: string, actor: AuthorizationActor, reason: string) =>
+    suspendMemberForSecurity: (companyId: string, memberId: string, actor: AuthorizationActor, reason: SecuritySuspensionReason) =>
       db.transaction((tx) => suspendMemberForSecurityInTransaction(tx, companyId, memberId, actor, reason)),
     createWorkflowCoverage,
     listWorkflowCoverages,

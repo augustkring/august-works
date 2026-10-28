@@ -5,6 +5,7 @@ import { authUsers, companies, companyMemberships, createDb } from "@paperclipai
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "../__tests__/helpers/embedded-postgres.js";
 import { resolveCurrentDefaultResponsibleHuman } from "./company-responsibility.js";
 import { accessService } from "./access.js";
+import { eraseAccountAccess } from "./saas/account-deletion.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describePg = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -46,5 +47,10 @@ describePg("current company responsible Human", () => {
     await expect(resolveCurrentDefaultResponsibleHuman(db, companyId)).resolves.toBeNull();
     await db.update(companies).set({ defaultResponsibleUserId: null }).where(eq(companies.id, companyId));
     await expect(resolveCurrentDefaultResponsibleHuman(db, companyId)).resolves.toBeNull();
+
+    await db.update(companies).set({ defaultResponsibleUserId: userId }).where(eq(companies.id, companyId));
+    await db.transaction(tx => eraseAccountAccess(tx, userId, undefined, now));
+    await expect(resolveCurrentDefaultResponsibleHuman(db, companyId)).resolves.toBeNull();
+    expect(await db.select().from(companyMemberships).where(eq(companyMemberships.companyId, companyId))).toHaveLength(0);
   });
 });

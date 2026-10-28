@@ -5,6 +5,8 @@ import {
   hidesCompanyPage,
   type Agent,
   type CreateHumanWorkflowCoverage,
+  authSessionSchema,
+  type SecuritySuspendCompanyMember,
 } from "@paperclipai/shared";
 import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { Shield, ShieldCheck, Trash2, UserPlus } from "lucide-react";
@@ -46,6 +48,7 @@ import { useSecondTick } from "@/hooks/useSecondTick";
 
 const reassignmentIssueStatuses = "backlog,todo,in_progress,in_review,blocked,failed,timed_out";
 type EditableMemberStatus = "pending" | "active" | "suspended";
+type SecuritySuspensionReasonCode = SecuritySuspendCompanyMember["reasonCode"];
 
 export function CompanyAccess() {
   const { t } = useTranslation("experience");
@@ -65,10 +68,20 @@ export function CompanyAccess() {
   }
   const captureAccess = () => {
     const epoch = scope.current.epoch;
-    return { companyId: selectedCompanyId!,
+    const companyId = selectedCompanyId!;
+    const principalId = principal;
+    const sessionId = currentAccount.sessionId;
+    return { companyId,
       principalId: principal,
-      sessionId: currentAccount.sessionId,
-      isCurrent: () => !!selectedCompanyId && epoch === scope.current.epoch && authority.canRead() };
+      sessionId,
+      isCurrent: () => !!selectedCompanyId && epoch === scope.current.epoch && authority.canRead(),
+      isOriginalSessionCurrent: () => {
+        if (scope.current.company !== companyId || scope.current.principal !== principalId || !sessionId) return false;
+        const session = authSessionSchema.safeParse(queryClient.getQueryData(queryKeys.auth.session));
+        return session.success && !session.data.session.localImplicit &&
+          session.data.user.id === principalId && session.data.session.userId === principalId &&
+          session.data.session.id === sessionId;
+      } };
   };
   const [searchParams, setSearchParams] = useSearchParams();
   const cloud = useCloudInstance();
@@ -108,6 +121,8 @@ export function CompanyAccess() {
   };
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
+  const [securitySuspendingMemberId, setSecuritySuspendingMemberId] = useState<string | null>(null);
+  const [securitySuspensionReason, setSecuritySuspensionReason] = useState<SecuritySuspensionReasonCode | "">("");
   const [reassignmentTarget, setReassignmentTarget] = useState<string>("__unassigned");
   const [routineResponsibleTarget, setRoutineResponsibleTarget] = useState<string>("__unassigned");
   const [draftRole, setDraftRole] = useState<CompanyMember["membershipRole"]>(null);
@@ -130,6 +145,11 @@ export function CompanyAccess() {
     setCoverageTaskId("");
     setCoverageTaskSearch("");
     coverageRequestId.current = crypto.randomUUID();
+  }, [selectedCompanyId, currentAccount.userId, currentAccount.sessionId, currentAccount.authorityEpoch]);
+
+  useEffect(() => {
+    setSecuritySuspendingMemberId(null);
+    setSecuritySuspensionReason("");
   }, [selectedCompanyId, currentAccount.userId, currentAccount.sessionId, currentAccount.authorityEpoch]);
 
   useEffect(() => {
@@ -341,6 +361,14 @@ export function CompanyAccess() {
     () => membersQuery.data?.members.find((member) => member.id === removingMemberId) ?? null,
     [removingMemberId, membersQuery.data?.members],
   );
+  const securitySuspendingMember = useMemo(
+    () => membersQuery.data?.members.find((member) => member.id === securitySuspendingMemberId) ?? null,
+    [securitySuspendingMemberId, membersQuery.data?.members],
+  );
+  const securitySuspendReady = Boolean(
+    !identity.localImplicit && identity.userId && currentAccount.settled && currentAccount.sessionId &&
+    authority.canRead() && hasCurrentV9Session(queryClient, identity.userId, currentAccount.sessionId),
+  );
 
   const assignedIssuesQuery = useQuery({
     queryKey: ["access", "member-assigned-issues", selectedCompanyId ?? "", removingMember?.principalId ?? ""],
@@ -408,6 +436,55 @@ export function CompanyAccess() {
       pushToast({
         title: "Failed to remove member",
         body: error instanceof Error ? error.message : "Unknown error",
+        tone: "error",
+      });
+    },
+  });
+
+  const securitySuspendMemberMutation = useMutation({
+    mutationFn: async (input: { receipt: ReturnType<typeof captureAccess>; memberId: string; reasonCode: SecuritySuspensionReasonCode }) => {
+      if (!input.receipt.isCurrent() || input.receipt.principalId === "local-board" || !input.receipt.sessionId ||
+        !hasCurrentV9Session(queryClient, input.receipt.principalId, input.receipt.sessionId))
+        throw new Error("Current Human session is unavailable");
+      return accessApi.securitySuspendMember(
+        input.receipt.companyId,
+        input.memberId,
+        { reasonCode: input.reasonCode },
+        input.receipt.principalId,
+        input.receipt.sessionId,
+      );
+    },
+    onSuccess: async (result, { receipt }) => {
+      if (!receipt.isOriginalSessionCurrent()) return;
+      setSecuritySuspendingMemberId(null);
+      setSecuritySuspensionReason("");
+      let refreshed = false;
+      try {
+        refreshed = await refreshAccessData(receipt);
+      } catch {
+        // A committed security action still needs a same-session acknowledgement.
+      }
+      if (!receipt.isOriginalSessionCurrent()) return;
+      const accessQueryKeys = [
+        queryKeys.access.companyMembers(receipt.companyId),
+        queryKeys.access.companyUserDirectory(receipt.companyId),
+        queryKeys.access.joinRequests(receipt.companyId, "pending_approval"),
+      ];
+      if (!refreshed || accessQueryKeys.some((queryKey) => queryClient.getQueryState(queryKey)?.status === "error"))
+        for (const queryKey of accessQueryKeys) queryClient.removeQueries({ queryKey });
+      pushToast({
+        title: t("companyAccess.securitySuspension.successTitle"),
+        body: result.ownerRecoveryRequired
+          ? t("companyAccess.securitySuspension.ownerRecoveryRequired")
+          : t("companyAccess.securitySuspension.successBody"),
+        tone: "success",
+      });
+    },
+    onError: (error, { receipt }) => {
+      if (!receipt.isCurrent()) return;
+      pushToast({
+        title: t("companyAccess.securitySuspension.failureTitle"),
+        body: error instanceof Error ? error.message : t("companyAccess.securitySuspension.failureBody"),
         tone: "error",
       });
     },
@@ -588,6 +665,21 @@ export function CompanyAccess() {
                         <Button size="sm" variant="outline" onClick={() => setEditingMemberId(member.id)}>
                           Edit
                         </Button>
+                        {access?.canManageMembers && member.status !== "suspended" ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={!securitySuspendReady || securitySuspendMemberMutation.isPending}
+                            onClick={() => {
+                              if (!securitySuspendReady) return;
+                              setSecuritySuspensionReason("");
+                              setSecuritySuspendingMemberId(member.id);
+                            }}
+                          >
+                            <Shield className="mr-1 h-3.5 w-3.5" />
+                            {t("companyAccess.securitySuspension.action")}
+                          </Button>
+                        ) : null}
                         <span
                           className="inline-flex"
                           title={!canArchive ? removalReason ?? undefined : undefined}
@@ -802,6 +894,75 @@ export function CompanyAccess() {
               disabled={updateMemberMutation.isPending}
             >
               {updateMemberMutation.isPending ? "Saving…" : "Save member"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!securitySuspendingMember} onOpenChange={(open) => {
+        if (!open) {
+          setSecuritySuspendingMemberId(null);
+          setSecuritySuspensionReason("");
+        }
+      }}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>{t("companyAccess.securitySuspension.title")}</DialogTitle>
+            <DialogDescription>
+              {t("companyAccess.securitySuspension.description", { name: memberDisplayName(securitySuspendingMember) })}
+            </DialogDescription>
+          </DialogHeader>
+          {securitySuspendingMember ? (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-3 text-sm">
+                {t("companyAccess.securitySuspension.ownerWarning")}
+              </div>
+              <label className="space-y-2 text-sm">
+                <span className="font-medium">{t("companyAccess.securitySuspension.reasonLabel")}</span>
+                <select
+                  aria-label={t("companyAccess.securitySuspension.reasonLabel")}
+                  className="w-full rounded-md border border-border bg-background px-3 py-2"
+                  value={securitySuspensionReason}
+                  onChange={(event) => setSecuritySuspensionReason(event.target.value as SecuritySuspensionReasonCode | "")}
+                >
+                  <option value="">{t("companyAccess.securitySuspension.chooseReason")}</option>
+                  <option value="suspected_compromise">{t("companyAccess.securitySuspension.reasons.suspectedCompromise")}</option>
+                  <option value="reported_loss">{t("companyAccess.securitySuspension.reasons.reportedLoss")}</option>
+                  <option value="policy_violation">{t("companyAccess.securitySuspension.reasons.policyViolation")}</option>
+                  <option value="other">{t("companyAccess.securitySuspension.reasons.other")}</option>
+                </select>
+              </label>
+              <p className="text-sm text-muted-foreground">{t("companyAccess.securitySuspension.recentAuthNote")}</p>
+              {!securitySuspendReady ? (
+                <p role="status" className="text-sm text-destructive">{t("companyAccess.securitySuspension.currentSessionRequired")}</p>
+              ) : null}
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSecuritySuspendingMemberId(null);
+                setSecuritySuspensionReason("");
+              }}
+            >
+              {t("companyAccess.securitySuspension.cancel")}
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!securitySuspendReady || !securitySuspensionReason || securitySuspendMemberMutation.isPending}
+              onClick={() => {
+                if (!securitySuspendingMember || !securitySuspensionReason || !securitySuspendReady) return;
+                securitySuspendMemberMutation.mutate({
+                  receipt: captureAccess(),
+                  memberId: securitySuspendingMember.id,
+                  reasonCode: securitySuspensionReason,
+                });
+              }}
+            >
+              {securitySuspendMemberMutation.isPending
+                ? t("companyAccess.securitySuspension.pending")
+                : t("companyAccess.securitySuspension.confirm")}
             </Button>
           </DialogFooter>
         </DialogContent>

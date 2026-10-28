@@ -117,7 +117,7 @@ export async function withNativeMemoryCaptureSources<T>(db: Db, companyId: strin
 /** Current source authority, independent of a Memory record's display scope.
  * A shared/corrected copy keeps every original root. Unknown history is withheld. */
 type MemorySourceReadBudget = { signal?: AbortSignal; deadlineAt?: number; forbiddenRecordId?: string };
-type MemorySourceReadScope = { active:Set<string>;deadline:number;work:number;signal?:AbortSignal;
+type MemorySourceReadScope = { active:Set<string>;deadline:number;startedAt:number;work:number;signal?:AbortSignal;
   /** Set only while one bounded source-set read has checked the same live actor
    * before and after all of its owner rows. Never retained across operations. */
   batchAdmittedActors?:Set<string> };
@@ -128,6 +128,11 @@ function assertMemorySourceReadActive(state: MemorySourceReadScope) {
 const memorySourceReads=new AsyncLocalStorage<MemorySourceReadScope>();
 let nativeMemorySourceFailureDiagnostics = 0;
 let nativeMemorySourceAgentFailureDiagnostics = 0;
+function memorySourceDiagnosticTransactionOrdinal(db: object): number | null {
+  if (process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS !== "1") return null;
+  const map = (globalThis as unknown as Record<PropertyKey, unknown>)[Symbol.for("paperclip.nativeSourceMemoDiagnosticTxOrdinals.v1")];
+  return map instanceof WeakMap ? map.get(db) ?? null : null;
+}
 type NativeMemorySourceFailureStage = "source_owner" | "source_snapshot" | "private_owner" | "agent_scope" |
   "ancestor_retention" | "root_shape" | "human_evidence" | "snapshot_binding" | "published_share" |
   "nested_source" | "run_reader" | "task_reader" | "memory_temporal_reader" | "project_reader" |
@@ -143,7 +148,7 @@ export function memoryShareContentFingerprint(record:typeof memoryRecords.$infer
 }
 export async function canActorReadMemorySources(db: Db, companyId: string, actor: AuthorizationActor | undefined, recordId: string,
   budget: MemorySourceReadBudget = {}):Promise<boolean> {
-  const inherited=memorySourceReads.getStore(),state=inherited??{active:new Set<string>(),deadline:performance.now()+8000,work:0,
+  const inherited=memorySourceReads.getStore(),startedAt=performance.now(),state=inherited??{active:new Set<string>(),deadline:startedAt+8000,startedAt,work:0,
     ...(budget.signal ? { signal: budget.signal } : {})};
   const diagnosticDenied = (reason: NativeMemorySourceFailureStage | "scope_guard" | "cycle" | "deadline" | "work_budget",
     facts: Record<string, boolean | number | string | null> = {}) => {
@@ -157,7 +162,8 @@ export async function canActorReadMemorySources(db: Db, companyId: string, actor
         readerRole: actor?.type === "agent" ? actor.onBehalfOfUserId ? "agent_human" : "agent_no_human" :
           actor?.type === "board" ? "board_user" : "none",
         activeCount: state.active.size, work: state.work, deadlineExpired: performance.now() > state.deadline,
-        signalAborted: state.signal?.aborted ?? false, ...facts }));
+        signalAborted: state.signal?.aborted ?? false, elapsedMs: Math.round(performance.now() - state.startedAt),
+        transactionOrdinal: memorySourceDiagnosticTransactionOrdinal(db as object), ...facts }));
     }
   };
   if (budget.deadlineAt !== undefined) state.deadline = Math.min(state.deadline, performance.now() + Math.max(0, budget.deadlineAt - Date.now()));
@@ -182,7 +188,7 @@ export async function canActorReadMemorySources(db: Db, companyId: string, actor
  * beneath that target; reaching it would create a cycle after commit. */
 export async function canActorReadMemorySourceSet(db: Db, companyId: string, actor: AuthorizationActor | undefined,
   recordIds: readonly string[], forbiddenRecordId?: string): Promise<boolean> {
-  const inherited=memorySourceReads.getStore(),state=inherited??{active:new Set<string>(),deadline:performance.now()+8000,work:0};
+  const inherited=memorySourceReads.getStore(),startedAt=performance.now(),state=inherited??{active:new Set<string>(),deadline:startedAt+8000,startedAt,work:0};
   const inspect=async()=>{
     const ids=[...new Set(recordIds)].sort();
     if(ids.length>256 || (forbiddenRecordId && ids.includes(forbiddenRecordId)))return false;
@@ -223,7 +229,8 @@ export async function canActorReadMemorySourceSet(db: Db, companyId: string, act
             readerRole: actor?.type === "agent" ? actor.onBehalfOfUserId ? "agent_human" : "agent_no_human" :
               actor?.type === "board" ? "board_user" : "none",
             activeCount: state.active.size, work: state.work, deadlineExpired: performance.now() > state.deadline,
-            signalAborted: state.signal?.aborted ?? false, ...facts }));
+            signalAborted: state.signal?.aborted ?? false, elapsedMs: Math.round(performance.now() - state.startedAt),
+            transactionOrdinal: memorySourceDiagnosticTransactionOrdinal(db as object), ...facts }));
         }
       },forbiddenRecordId,true))return false;
       return batchAdmission?await memorySourceActorCurrent(db,companyId,actor):true;

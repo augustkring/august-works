@@ -89,6 +89,11 @@ export interface ArchiveCompanyMemberResponse {
   ownerActionRoutineCount: number;
 }
 
+export interface SecuritySuspendCompanyMemberResponse {
+  member: CompanyMemberRecord;
+  ownerRecoveryRequired: boolean;
+}
+
 export interface Invite {
   id: string;
   companyId: string | null;

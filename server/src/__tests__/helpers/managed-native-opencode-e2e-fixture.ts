@@ -394,7 +394,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
         sourceMemoTransactionRecords.push({ txOrdinal: memoTxOrdinal,
           startedAtElapsedMs: Math.max(0, memoTxStartedAt - sourceMemoStartedAt), heldMs: elapsed, frames: memoTxFrames });
         sourceMemoTransactionRecords.sort((a, b) => b.heldMs - a.heldMs);
-        sourceMemoTransactionRecords.length = Math.min(sourceMemoTransactionRecords.length, 16);
+        sourceMemoTransactionRecords.length = Math.min(sourceMemoTransactionRecords.length, 512);
       }
     }
   }) as typeof db.transaction;
@@ -2185,7 +2185,10 @@ export async function runManagedNativeOpenCodeFixture(input: {
             const memo = nativeSourceMemoDiagnosticsForTest();
             const transactions = Object.entries(memo.byTransaction).map(([txOrdinal, stats]) => ({ txOrdinal,
               hits: stats.hits, misses: stats.misses, uncachedProofMs: Math.round(stats.uncachedProofMs),
-              maxUncachedProofMs: Math.round(stats.maxUncachedProofMs), sourceKindMissCounts: stats.sourceKindMissCounts }))
+              maxUncachedProofMs: Math.round(stats.maxUncachedProofMs), sourceKindMissCounts: stats.sourceKindMissCounts,
+              transaction: sourceMemoTransactionRecords.find(record => record.txOrdinal === Number(txOrdinal)) ?? null,
+              opaqueProofKeys: Object.entries(stats.opaqueProofKeys).map(([proofKey, proof]) => ({ proofKey, ...proof }))
+                .sort((left, right) => right.misses - left.misses || right.elapsedMs - left.elapsedMs).slice(0, 16) }))
               .sort((left, right) => right.uncachedProofMs - left.uncachedProofMs).slice(0, 12);
             diagnostics.push(`managed native source memo summary: ${JSON.stringify({ roots: memo.roots,
               actorScopes: memo.actorScopes, nestedScopeReuses: memo.nestedScopeReuses,
@@ -2586,6 +2589,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
             roots: stats.roots, actorScopes: stats.actorScopes, hits: stats.hits, misses: stats.misses,
             uncachedProofMs: Math.round(stats.uncachedProofMs), maxUncachedProofMs: Math.round(stats.maxUncachedProofMs),
             sourceKindMissCounts: stats.sourceKindMissCounts,
+            transaction: sourceMemoTransactionRecords.find(record => record.txOrdinal === Number(txOrdinal)) ?? null,
             opaqueProofKeys: Object.entries(stats.opaqueProofKeys).map(([proofKey, proof]) => ({ proofKey, ...proof }))
               .sort((left, right) => right.misses - left.misses || right.elapsedMs - left.elapsedMs).slice(0, 16) }))
             .sort((left, right) => right.uncachedProofMs - left.uncachedProofMs).slice(0, 12);

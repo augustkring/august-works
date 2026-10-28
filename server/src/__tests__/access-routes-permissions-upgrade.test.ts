@@ -10,6 +10,7 @@ import {
   agents,
   companies,
   companyMemberships,
+  heartbeatRuns,
   connectionGrantDelegations,
   connectionGrants,
   createDb,
@@ -21,7 +22,8 @@ import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
-import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
+import { seedCurrentHumanMembership } from "./helpers/current-human-membership-fixture.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 
 vi.hoisted(() => {
   process.env.PAPERCLIP_HOME = "/tmp/paperclip-test-home";
@@ -109,6 +111,7 @@ describeEmbeddedPostgres("access routes permissions upgrade compatibility", () =
     await db.delete(connectionGrants);
     await db.delete(toolConnections);
     await db.delete(toolApplications);
+    await db.delete(heartbeatRuns);
     await db.delete(principalPermissionGrants);
     await db.delete(companyMemberships);
     await db.delete(agents);
@@ -140,19 +143,32 @@ describeEmbeddedPostgres("access routes permissions upgrade compatibility", () =
   it("allows an explicitly authorized recent Human to security-suspend the last owner and records owner recovery", async () => {
     const { company, owner } = await createCompanyWithOwner(db);
     const actorId = `continuity-admin-${randomUUID()}`;
-    const actor = await seedCurrentHumanSourceActor(db, [company.id], actorId);
-    await db.update(companyMemberships).set({ membershipRole: "admin" }).where(eq(companyMemberships.principalId, actorId));
+    await seedCurrentHumanMembership(db, company.id, actorId, "admin");
+    await db.insert(principalPermissionGrants).values({
+      companyId: company.id, principalType: "user", principalId: actorId,
+      permissionKey: "users:manage_permissions", scope: null,
+    });
+    const actorSessionId = await seedNativePasskeySession(db, actorId);
     await db.insert(authUsers).values({
       id: owner.principalId, name: "Last owner", email: `${owner.principalId}@fixture.invalid`,
       emailVerified: true, createdAt: new Date(), updatedAt: new Date(),
     });
+    const agent = await db.insert(agents).values({
+      companyId: company.id, name: "Owner work", role: "worker", adapterType: "process", adapterConfig: {},
+    }).returning().then((rows) => rows[0]!);
+    const [run] = await db.insert(heartbeatRuns).values({
+      companyId: company.id, agentId: agent.id, status: "running", startedAt: new Date(),
+      runtimeMode: "legacy", responsibleUserId: owner.principalId,
+    }).returning();
     await db.update(companies).set({ defaultResponsibleUserId: owner.principalId }).where(eq(companies.id, company.id));
 
-    const response = await request(await createApp(db, company.id, actorId, actor.sessionId!))
+    const response = await request(await createApp(db, company.id, actorId, actorSessionId))
       .post(`/api/companies/${company.id}/members/${owner.id}/security-suspend`)
       .send({ reasonCode: "suspected_compromise" });
     expect(response.status, JSON.stringify(response.body)).toBe(200);
     expect(response.body).toMatchObject({ ownerRecoveryRequired: true, member: { id: owner.id, status: "suspended" } });
+    expect(await db.select({ status: heartbeatRuns.status }).from(heartbeatRuns).where(eq(heartbeatRuns.id, run!.id)))
+      .toEqual([{ status: "cancelled" }]);
     expect(await db.select({ defaultResponsibleUserId: companies.defaultResponsibleUserId }).from(companies).where(eq(companies.id, company.id)))
       .toEqual([{ defaultResponsibleUserId: null }]);
     expect(await db.select({ action: activityLog.action }).from(activityLog).where(and(
@@ -163,9 +179,15 @@ describeEmbeddedPostgres("access routes permissions upgrade compatibility", () =
       .post(`/api/companies/${company.id}/members/${owner.id}/security-suspend`)
       .send({ reasonCode: "other" });
     expect(localAttempt.status).toBe(403);
+    const accountChangedAttempt = await request(await createApp(db, company.id, actorId, actor.sessionId!))
+      .post(`/api/companies/${company.id}/members/${owner.id}/security-suspend`)
+      .set("X-Blentera-Expected-User", actorId)
+      .set("X-Blentera-Expected-Session", randomUUID())
+      .send({ reasonCode: "other" });
+    expect(accountChangedAttempt.status).toBe(409);
     await db.update(authSessions).set({ authenticatedAt: new Date(Date.now() - 301_000) })
-      .where(eq(authSessions.id, actor.sessionId!));
-    const staleAttempt = await request(await createApp(db, company.id, actorId, actor.sessionId!))
+      .where(eq(authSessions.id, actorSessionId));
+    const staleAttempt = await request(await createApp(db, company.id, actorId, actorSessionId))
       .post(`/api/companies/${company.id}/members/${owner.id}/security-suspend`)
       .send({ reasonCode: "other" });
     expect(staleAttempt.status).toBe(403);

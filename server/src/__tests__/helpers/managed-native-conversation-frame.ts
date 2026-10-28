@@ -169,8 +169,11 @@ export async function runManagedNativeConversationFrame(input: {
   await db.update(companies).set({ budgetMonthlyCents }).where(eq(companies.id, companyId));
   await db.update(agents).set({ budgetMonthlyCents }).where(eq(agents.id, agentId));
   const sessionId = await seedNativePasskeySession(db, userId);
-  const human = { type: "board", source: "session", userId, companyIds: [companyId],
-    sessionId, isInstanceAdmin: false } satisfies AuthorizationActor & Express.Request["actor"];
+  // The route fixture uses the transport actor shape, whose identity fields
+  // are non-null when present. Keep one canonical Human actor through both
+  // route admission and the fixture's authorization callbacks.
+  const human: Express.Request["actor"] = { type: "board", source: "session", userId, companyIds: [companyId],
+    sessionId, isInstanceAdmin: false };
   const model = "fixture-managed-conversation-v1";
   const baseAdapterConfig = { provider: "opencode", model: `anthropic/${model}`, lifecycleMode: "per_turn" };
   await db.update(agents).set({ adapterType: "paperclip_runner", adapterConfig: baseAdapterConfig,

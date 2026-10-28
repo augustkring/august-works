@@ -153,6 +153,12 @@ export const updateCompanyMemberWithPermissionsSchema = z.object({
 
 export type UpdateCompanyMemberWithPermissions = z.infer<typeof updateCompanyMemberWithPermissionsSchema>;
 
+export const securitySuspendCompanyMemberSchema = z.object({
+  reasonCode: z.enum(["suspected_compromise", "reported_loss", "policy_violation", "other"]),
+}).strict();
+
+export type SecuritySuspendCompanyMember = z.infer<typeof securitySuspendCompanyMemberSchema>;
+
 export const archiveCompanyMemberSchema = z.object({
   reassignment: z
     .object({

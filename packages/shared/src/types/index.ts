@@ -978,6 +978,7 @@ export type {
   CompanyMembersResponse,
   HumanWorkflowCoverage,
   ArchiveCompanyMemberResponse,
+  SecuritySuspendCompanyMemberResponse,
   CompanyMembership,
   CompanyInviteListResponse,
   CompanyInviteRecord,

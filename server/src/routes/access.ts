@@ -47,6 +47,7 @@ import {
   updateMemberPermissionsSchema,
   updateUserCompanyAccessSchema,
   createHumanWorkflowCoverageSchema,
+  securitySuspendCompanyMemberSchema,
   PERMISSION_KEYS,
   isUuidLike,
 } from "@paperclipai/shared";
@@ -62,9 +63,6 @@ import {
 import { getHiddenSettings } from "../services/settings-visibility.js";
 import { runtimeCanonicalOrigin } from "../services/cloud-runtime-identity.js";
 
-const securitySuspensionCommandSchema = z.object({
-  reasonCode: z.enum(["suspected_compromise", "reported_loss", "policy_violation", "other"]),
-});
 
 /**
  * Floor: when the hosting operator hides the Instance Access surface
@@ -87,6 +85,7 @@ import {
 import { logger } from "../middleware/logger.js";
 import { validate } from "../middleware/validate.js";
 import { collectReachableInterfaceHosts } from "../runtime-api.js";
+import { heartbeatService } from "../services/heartbeat.js";
 import {
   accessService,
   agentService,
@@ -4544,6 +4543,10 @@ export function accessRoutes(
 
       const updated = await access.updateMember(companyId, memberId, req.body, req.actor.userId ?? null);
       if (!updated) throw notFound("Member not found");
+      if (updated.status !== "active" && memberToUpdate.principalType === "user") {
+        await heartbeatService(db).cancelRunsForResponsibleHuman(companyId, memberToUpdate.principalId,
+          "Cancelled because the responsible Human's company access was withdrawn");
+      }
 
       await logActivity(db, {
         companyId,
@@ -4588,6 +4591,10 @@ export function accessRoutes(
         req.actor.userId ?? null,
       );
       if (!updated) throw notFound("Member not found");
+      if (updated.status !== "active" && memberToUpdate.principalType === "user") {
+        await heartbeatService(db).cancelRunsForResponsibleHuman(companyId, memberToUpdate.principalId,
+          "Cancelled because the responsible Human's company access was withdrawn");
+      }
 
       await logActivity(db, {
         companyId,
@@ -4613,10 +4620,13 @@ export function accessRoutes(
 
   router.post(
     "/companies/:companyId/members/:memberId/security-suspend",
-    validate(securitySuspensionCommandSchema),
+    validate(securitySuspendCompanyMemberSchema),
     async (req, res) => {
       const companyId = req.params.companyId as string;
       const memberId = req.params.memberId as string;
+      assertExpectedBoardActor(req);
+      const memberBefore = await access.getMemberById(companyId, memberId);
+      if (!memberBefore) throw notFound("Member not found");
       const result = await access.suspendMemberForSecurity(
         companyId,
         memberId,
@@ -4624,6 +4634,10 @@ export function accessRoutes(
         req.body.reasonCode,
       );
       if (!result) throw notFound("Member not found");
+      if (memberBefore.principalType === "user") {
+        await heartbeatService(db).cancelRunsForResponsibleHuman(companyId, memberBefore.principalId,
+          "Cancelled because the responsible Human was security-suspended");
+      }
       const member = (await loadCompanyMemberRecords(db, companyId)).find(entry => entry.id === memberId);
       if (!member) throw notFound("Member not found");
       res.set("Cache-Control", "private, no-store");
@@ -4647,6 +4661,10 @@ export function accessRoutes(
         routineResponsibleUserId: req.body.routineResponsibleUserId ?? null,
       }, req.actor.userId ?? "board");
       if (!result) throw notFound("Member not found");
+      if (memberToArchive.principalType === "user") {
+        await heartbeatService(db).cancelRunsForResponsibleHuman(companyId, memberToArchive.principalId,
+          "Cancelled because the responsible Human's company access was withdrawn");
+      }
 
       await logActivity(db, {
         companyId,

@@ -26,6 +26,7 @@ const listWorkflowCoveragesMock = vi.hoisted(() => vi.fn());
 const listJoinRequestsMock = vi.hoisted(() => vi.fn());
 const updateMemberMock = vi.hoisted(() => vi.fn());
 const archiveMemberMock = vi.hoisted(() => vi.fn());
+const securitySuspendMemberMock = vi.hoisted(() => vi.fn());
 const listAgentsMock = vi.hoisted(() => vi.fn());
 const listIssuesMock = vi.hoisted(() => vi.fn());
 const listRoutinesMock = vi.hoisted(() => vi.fn());
@@ -50,6 +51,8 @@ vi.mock("@/api/access", () => ({
     updateMemberAccess: vi.fn(),
     archiveMember: (companyId: string, memberId: string, input: unknown) =>
       archiveMemberMock(companyId, memberId, input),
+    securitySuspendMember: (companyId: string, memberId: string, input: unknown, expectedUserId: string, expectedSessionId: string) =>
+      securitySuspendMemberMock(companyId, memberId, input, expectedUserId, expectedSessionId),
     approveJoinRequest: approveJoinRequestMock,
     rejectJoinRequest: rejectJoinRequestMock,
     listInvites: (companyId: string, options: unknown) => listInvitesMock(companyId, options),
@@ -221,6 +224,7 @@ describe("CompanyAccess", () => {
     ]);
     updateMemberMock.mockResolvedValue({});
     archiveMemberMock.mockResolvedValue({ reassignedIssueCount: 1 });
+    securitySuspendMemberMock.mockResolvedValue({ ownerRecoveryRequired: true, member: { id: "member-1", status: "suspended" } });
     listAgentsMock.mockResolvedValue([
       {
         id: "agent-1",
@@ -386,6 +390,193 @@ describe("CompanyAccess", () => {
     await act(async () => {
       root.unmount();
     });
+  });
+
+  it("security-suspends the last owner through the reasoned endpoint and reports owner recovery", async () => {
+    const root = createRoot(container);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const session = v9SessionFixture("user-1");
+    client.setQueryData(queryKeys.auth.session, session);
+    await act(async () => { root.render(<QueryClientProvider client={client}><CompanyAccess /></QueryClientProvider>); });
+    await flushReact();
+    await flushReact();
+
+    const action = [...container.querySelectorAll("button")].find(button => button.textContent?.includes("Suspend for security"));
+    expect(action).toBeTruthy();
+    await act(async () => { action!.click(); });
+    await flushReact();
+    expect(document.body.textContent).toContain("This can leave the company with no active owner");
+    expect(document.body.textContent).toContain("authenticated within the last 5 minutes");
+
+    const reason = [...document.body.querySelectorAll("select")].find(select => select.getAttribute("aria-label") === "Reason for suspension");
+    expect(reason).toBeTruthy();
+    await act(async () => {
+      reason!.value = "suspected_compromise";
+      reason!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await flushReact();
+    const confirm = [...document.body.querySelectorAll("button")].find(button => button.textContent === "Suspend access");
+    expect(confirm).toBeTruthy();
+    await act(async () => { confirm!.click(); });
+    await flushReact();
+
+    expect(securitySuspendMemberMock).toHaveBeenCalledWith(
+      "company-1", "member-1", { reasonCode: "suspected_compromise" }, "user-1", session.session.id,
+    );
+    expect(archiveMemberMock).not.toHaveBeenCalled();
+    expect(pushToastMock).toHaveBeenCalledWith(expect.objectContaining({
+      title: "Membership suspended for security",
+      body: "No active company owner remains. An authorized person must restore ownership before owner-only work can continue.",
+    }));
+    await act(async () => { root.unmount(); });
+    client.clear();
+  });
+
+  it("does not dispatch security suspension after the Human session is renewed", async () => {
+    const root = createRoot(container);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(queryKeys.auth.session, v9SessionFixture("user-1"));
+    await act(async () => { root.render(<QueryClientProvider client={client}><CompanyAccess /></QueryClientProvider>); });
+    await flushReact();
+    await flushReact();
+    const action = [...container.querySelectorAll("button")].find(button => button.textContent?.includes("Suspend for security"));
+    await act(async () => { action!.click(); });
+    await flushReact();
+    const reason = [...document.body.querySelectorAll("select")].find(select => select.getAttribute("aria-label") === "Reason for suspension");
+    await act(async () => {
+      reason!.value = "reported_loss";
+      reason!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await flushReact();
+    const confirm = [...document.body.querySelectorAll("button")].find(button => button.textContent === "Suspend access");
+    await act(async () => {
+      confirm!.click();
+      const session = v9SessionFixture("user-1");
+      client.setQueryData(queryKeys.auth.session, { ...session, session: { ...session.session, id: "renewed-user-1" } });
+    });
+    await flushReact();
+    expect(securitySuspendMemberMock).not.toHaveBeenCalled();
+    expect(pushToastMock).not.toHaveBeenCalled();
+    await act(async () => { root.unmount(); });
+    client.clear();
+  });
+
+  it("does not show a committed security result after the initiating Human session changes", async () => {
+    const root = createRoot(container);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const session = v9SessionFixture("user-1");
+    client.setQueryData(queryKeys.auth.session, session);
+    let resolveSuspension!: (value: { ownerRecoveryRequired: boolean; member: { id: string; status: string } }) => void;
+    securitySuspendMemberMock.mockReturnValueOnce(new Promise((resolve) => { resolveSuspension = resolve; }));
+    await act(async () => { root.render(<QueryClientProvider client={client}><CompanyAccess /></QueryClientProvider>); });
+    await flushReact();
+    await flushReact();
+
+    const action = [...container.querySelectorAll("button")].find(button => button.textContent?.includes("Suspend for security"));
+    await act(async () => { action!.click(); });
+    await flushReact();
+    const reason = [...document.body.querySelectorAll("select")].find(select => select.getAttribute("aria-label") === "Reason for suspension");
+    await act(async () => {
+      reason!.value = "reported_loss";
+      reason!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await flushReact();
+    const confirm = [...document.body.querySelectorAll("button")].find(button => button.textContent === "Suspend access");
+    await act(async () => { confirm!.click(); });
+    expect(securitySuspendMemberMock).toHaveBeenCalledWith(
+      "company-1", "member-1", { reasonCode: "reported_loss" }, "user-1", session.session.id,
+    );
+
+    const renewed = v9SessionFixture("user-1");
+    await act(async () => {
+      client.setQueryData(queryKeys.auth.session, { ...renewed, session: { ...renewed.session, id: "renewed-user-1" } });
+    });
+    await flushReact();
+    expect(document.body.textContent).not.toContain("Reason for suspension");
+    await act(async () => {
+      resolveSuspension({ ownerRecoveryRequired: true, member: { id: "member-1", status: "suspended" } });
+    });
+    await flushReact();
+    expect(pushToastMock).not.toHaveBeenCalled();
+    await act(async () => { root.unmount(); });
+    client.clear();
+  });
+
+  it("keeps the owner-recovery acknowledgement when the original session is temporarily unresolved", async () => {
+    const root = createRoot(container);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const session = v9SessionFixture("user-1");
+    client.setQueryData(queryKeys.auth.session, session);
+    let resolveSuspension!: (value: { ownerRecoveryRequired: boolean; member: { id: string; status: string } }) => void;
+    securitySuspendMemberMock.mockReturnValueOnce(new Promise((resolve) => { resolveSuspension = resolve; }));
+    await act(async () => { root.render(<QueryClientProvider client={client}><CompanyAccess /></QueryClientProvider>); });
+    await flushReact();
+    await flushReact();
+
+    const action = [...container.querySelectorAll("button")].find(button => button.textContent?.includes("Suspend for security"));
+    await act(async () => { action!.click(); });
+    await flushReact();
+    const reason = [...document.body.querySelectorAll("select")].find(select => select.getAttribute("aria-label") === "Reason for suspension");
+    await act(async () => {
+      reason!.value = "reported_loss";
+      reason!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await flushReact();
+    const confirm = [...document.body.querySelectorAll("button")].find(button => button.textContent === "Suspend access");
+    await act(async () => { confirm!.click(); });
+    expect(securitySuspendMemberMock).toHaveBeenCalledWith(
+      "company-1", "member-1", { reasonCode: "reported_loss" }, "user-1", session.session.id,
+    );
+
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: queryKeys.auth.session, exact: true, refetchType: "none" });
+    });
+    await flushReact();
+    await act(async () => {
+      resolveSuspension({ ownerRecoveryRequired: true, member: { id: "member-1", status: "suspended" } });
+    });
+    await flushReact();
+    expect(client.getQueryData(queryKeys.access.companyMembers("company-1"))).toBeUndefined();
+    expect(pushToastMock).toHaveBeenCalledWith(expect.objectContaining({
+      title: "Membership suspended for security",
+      body: "No active company owner remains. An authorized person must restore ownership before owner-only work can continue.",
+    }));
+    await act(async () => { root.unmount(); });
+    client.clear();
+  });
+
+  it("clears stale access rows but keeps owner-recovery acknowledgement when refresh is forbidden", async () => {
+    const root = createRoot(container);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(queryKeys.auth.session, v9SessionFixture("user-1"));
+    await act(async () => { root.render(<QueryClientProvider client={client}><CompanyAccess /></QueryClientProvider>); });
+    await flushReact();
+    await flushReact();
+    listMembersMock.mockRejectedValueOnce(new Error("Membership access was revoked"));
+
+    const action = [...container.querySelectorAll("button")].find(button => button.textContent?.includes("Suspend for security"));
+    await act(async () => { action!.click(); });
+    await flushReact();
+    const reason = [...document.body.querySelectorAll("select")].find(select => select.getAttribute("aria-label") === "Reason for suspension");
+    await act(async () => {
+      reason!.value = "suspected_compromise";
+      reason!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await flushReact();
+    const confirm = [...document.body.querySelectorAll("button")].find(button => button.textContent === "Suspend access");
+    await act(async () => { confirm!.click(); });
+    await flushReact();
+
+    expect(securitySuspendMemberMock).toHaveBeenCalledWith(
+      "company-1", "member-1", { reasonCode: "suspected_compromise" }, "user-1", v9SessionFixture("user-1").session.id,
+    );
+    expect(client.getQueryData(queryKeys.access.companyMembers("company-1"))).toBeUndefined();
+    expect(pushToastMock).toHaveBeenCalledWith(expect.objectContaining({
+      title: "Membership suspended for security",
+      body: "No active company owner remains. An authorized person must restore ownership before owner-only work can continue.",
+    }));
+    await act(async () => { root.unmount(); });
+    client.clear();
   });
 
   it("removes a member with an issue reassignment target", async () => {

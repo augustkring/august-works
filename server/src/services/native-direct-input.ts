@@ -98,7 +98,8 @@ function nativeSourceMemoRecordOpaqueProof(scope: NativeSourceReadScope, proofKe
     entry = stats.opaqueProofKeys[proofKey] = { hits: 0, misses: 0, elapsedMs: 0,
       sourceKinds: [...new Set(sources.map(source => source.kind))].sort() };
   }
-  entry[event] = Math.min(1_000_000, entry[event] + 1);
+  const countKey = event === "hit" ? "hits" : "misses";
+  entry[countKey] = Math.min(1_000_000, entry[countKey] + 1);
   entry.elapsedMs = Math.min(1_000_000_000, entry.elapsedMs + elapsedMs);
 }
 function nativeSourceMemoCount(key: "scopes" | "reuses" | "hits" | "misses", actor: AuthorizationActor) {
