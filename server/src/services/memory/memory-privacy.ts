@@ -17,7 +17,6 @@ import type { AuthorizationActor } from "../authorization.js";
 import { agentAuthoringTestMemorySourceReadActive } from "../agents/authoring-test-memory-source-scope.js";
 import { invalidateCognitiveRecords } from "./cognitive-privacy.js";
 import { invalidateDerivedMemory } from "./derived-privacy.js";
-import { tracePrivacyLock } from "../privacy-lock-diagnostics.js";
 
 export function memoryDeletionKey(companyId: string, kind: "record" | "operation" | "source", value: unknown) {
   return createHash("sha256").update(JSON.stringify([companyId, kind, value])).digest("hex");
@@ -25,7 +24,7 @@ export function memoryDeletionKey(companyId: string, kind: "record" | "operation
 
 export async function lockMemoryPrivacy(db: Db, companyId: string, mode: "read" | "write" = "write") {
   const key = `memory:privacy:${companyId}`;
-  await tracePrivacyLock(db, key, mode, () => mode === "read"
+  await (mode === "read"
     ? db.execute(sql`select pg_advisory_xact_lock_shared(hashtextextended(${key}, 0))`)
     : db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`));
 }

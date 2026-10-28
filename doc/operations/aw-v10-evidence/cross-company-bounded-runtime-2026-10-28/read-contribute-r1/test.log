@@ -1,0 +1,38 @@
+
+ RUN  v4.1.11 /workspace/blentera-v10/server
+
+ ↓ src/__tests__/agent-runtime-fabric-v5.test.ts > negative triggers veto selection and empty trigger sets do not match every task
+ ↓ src/__tests__/agent-runtime-fabric-v5.test.ts > V5 execution authority > does not discard required Role Pack Skills when their resolver is disabled
+ ↓ src/__tests__/agent-runtime-fabric-v5.test.ts > V5 execution authority > allows explicitly authorized guest act forecasts, denies read/contribute mutations and rechecks revoked humans
+ × src/__tests__/agent-runtime-fabric-v5.test.ts > V5 execution authority > preserves current-Human guest read and contribution within bounded plans while keeping guest act blocked 386ms
+   → Invalid V7 feature dependencies: orchestration_v7 requires enableWorkflowsV1
+ ↓ src/__tests__/agent-runtime-fabric-v5.test.ts > V5 execution authority > pins immutable provenance, rechecks resumed runs and rejects revoked human membership
+ ↓ src/__tests__/agent-runtime-fabric-v5.test.ts > V5 execution authority > routes guest connected tools through current local authority and denies writes/revoked result disclosure
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/agent-runtime-fabric-v5.test.ts > V5 execution authority > preserves current-Human guest read and contribution within bounded plans while keeping guest act blocked
+V7FeatureDependencyError: Invalid V7 feature dependencies: orchestration_v7 requires enableWorkflowsV1
+ ❯ assertV7FeatureDependencies ../packages/shared/src/v7-feature-flags.ts:135:28
+    133| export function assertV7FeatureDependencies(flags: V7FeatureSettings):…
+    134|   const issues = v7FeatureDependencyIssues(flags);
+    135|   if (issues.length) throw new V7FeatureDependencyError(issues);
+       |                            ^
+    136| }
+    137|
+ ❯ toExperimentalView src/services/instance-settings.ts:505:5
+ ❯ Object.getExperimental src/services/instance-settings.ts:619:14
+ ❯ assertV5Enabled src/services/v5-authorization.ts:8:25
+ ❯ Object.setPolicy src/services/cross-company-context.ts:88:7
+ ❯ src/__tests__/agent-runtime-fabric-v5.test.ts:181:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { issues: [ { feature: 'orchestration_v7', required: 'enableWorkflowsV1' } ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 5 skipped (6)
+   Start at  14:54:21
+   Duration  25.33s (transform 13.38s, setup 85ms, import 19.34s, tests 5.76s, environment 0ms)
+
