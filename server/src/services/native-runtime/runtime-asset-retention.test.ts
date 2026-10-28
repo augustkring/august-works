@@ -145,7 +145,8 @@ describe("remote Native runtime asset erasure binding", () => {
 
       const commandArgs = (leaseId: string, expectedDigest = digest) => ["-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT,
         "paperclip-native-runtime-asset-erasure", taskRoot, digest, runId, runnerInstanceId, leaseId, providerLeaseId,
-        expectedDigest, REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT, REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT];
+        expectedDigest, String(runner.pid), startedAt, REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT,
+        REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT];
       const wrongLease = spawnSync("sh", commandArgs(randomUUID()), { encoding: "utf8", timeout: 10_000 });
       expect(wrongLease.status).not.toBe(0);
       expect(await access(sessionRoot).then(() => true, () => false)).toBe(true);
@@ -182,6 +183,21 @@ describe("remote Native runtime asset erasure binding", () => {
       expect(reusedPid.status).not.toBe(0);
       expect(await access(sessionRoot).then(() => true, () => false)).toBe(true);
       expect(processIsAlive(runner.pid)).toBe(true);
+      const wrongGeneration = spawnSync("sh", ["-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT,
+        "paperclip-native-runtime-asset-erasure", taskRoot, digest, runId, runnerInstanceId, environmentLeaseId,
+        providerLeaseId, digest, String(runner.pid + 1), startedAt, REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT,
+        REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT], { encoding: "utf8", timeout: 10_000 });
+      expect(wrongGeneration.status).not.toBe(0);
+      expect(processIsAlive(runner.pid)).toBe(true);
+      expect(await access(sessionRoot).then(() => true, () => false)).toBe(true);
+      const wrongStartedAt = spawnSync("sh", ["-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT,
+        "paperclip-native-runtime-asset-erasure", taskRoot, digest, runId, runnerInstanceId, environmentLeaseId,
+        providerLeaseId, digest, String(runner.pid), new Date(Date.parse(startedAt) + 1).toISOString(),
+        REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT, REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT],
+      { encoding: "utf8", timeout: 10_000 });
+      expect(wrongStartedAt.status).not.toBe(0);
+      expect(processIsAlive(runner.pid)).toBe(true);
+      expect(await access(sessionRoot).then(() => true, () => false)).toBe(true);
       await writeFile(identityPath, validIdentity, { mode: 0o600 });
 
       const erased = spawnSync("sh", commandArgs(environmentLeaseId), { encoding: "utf8", timeout: 15_000 });

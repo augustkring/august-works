@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import type { Dir } from "node:fs";
 import { createHash } from "node:crypto";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { companies, companyDeletionOperations, environmentLeases, heartbeatRuns, memoryJobs, nativeRunFinalizations, type Db } from "@paperclipai/db";
+import { companies, companyDeletionOperations, environmentLeases, heartbeatRuns, memoryJobs, nativeRunFinalizations, runtimeHostCommands, type Db } from "@paperclipai/db";
 import { resolvePaperclipInstanceRoot } from "../../home-paths.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy, purgeDerivedWorkflowMemory } from "../memory/memory-privacy.js";
@@ -165,6 +165,43 @@ export function isRemoteRuntimeAssetRemovalReceipt(value: unknown, locator: Remo
     receipt.postDeleteAbsent === true;
 }
 
+async function hasExactRemoteRuntimeAssetStopReceipt(db: Db, locator: RemoteRuntimeAssetLocator,
+  companyPurgeOperationId?: string): Promise<RemoteRuntimeAssetRemovalReceipt | null> {
+  const locatorDigest = remoteRuntimeAssetLocatorDigest(locator);
+  const commands = await db.select({ idempotencyKey: runtimeHostCommands.idempotencyKey,
+    status: runtimeHostCommands.status, payload: runtimeHostCommands.payload,
+    safeResult: runtimeHostCommands.safeResult })
+    .from(runtimeHostCommands).where(and(eq(runtimeHostCommands.companyId, locator.companyId),
+      eq(runtimeHostCommands.commandType, "sandbox_exec"), eq(runtimeHostCommands.status, "SUCCEEDED"),
+      sql`${runtimeHostCommands.payload}->>'nativePreparationPurpose' = 'native_provider_data_erasure'`,
+      sql`${runtimeHostCommands.payload}->'remoteRuntimeAssetErasure'->>'locatorDigest' = ${locatorDigest}`));
+  for (const command of commands) {
+    const payload = command.payload && typeof command.payload === "object" && !Array.isArray(command.payload)
+      ? command.payload as Record<string, unknown> : {};
+    if (payload.nativePreparationPurpose !== "native_provider_data_erasure") continue;
+    const erasure = payload.remoteRuntimeAssetErasure && typeof payload.remoteRuntimeAssetErasure === "object" &&
+      !Array.isArray(payload.remoteRuntimeAssetErasure) ? payload.remoteRuntimeAssetErasure as Record<string, unknown> : {};
+    const safeResult = command.safeResult && typeof command.safeResult === "object" && !Array.isArray(command.safeResult)
+      ? command.safeResult as Record<string, unknown> : {};
+    const receipt = safeResult.remoteRuntimeAssetRemovalReceipt;
+    const resultBinding = safeResult.remoteRuntimeAssetErasure && typeof safeResult.remoteRuntimeAssetErasure === "object" &&
+      !Array.isArray(safeResult.remoteRuntimeAssetErasure)
+      ? safeResult.remoteRuntimeAssetErasure as Record<string, unknown> : {};
+    if (erasure.jobKey === runtimeAssetJobKey(locator.runId, []) && erasure.locatorDigest === locatorDigest &&
+      (erasure.companyPurgeOperationId ?? null) === (companyPurgeOperationId ?? null) &&
+      typeof erasure.expectedProcessPid === "number" && typeof erasure.expectedProcessStartedAt === "string" &&
+      isRemoteRuntimeAssetRemovalReceipt(receipt, locator) && receipt.commandRequestId === payload.requestId &&
+      payload.requestId === command.idempotencyKey &&
+      payload.hostId === receipt.target.hostId && payload.cellId === receipt.target.cellId &&
+      payload.generation === receipt.target.cellGeneration && payload.bindingId === receipt.target.bindingId &&
+      resultBinding.locatorDigest === locatorDigest && resultBinding.jobKey === erasure.jobKey &&
+      (resultBinding.companyPurgeOperationId ?? null) === (companyPurgeOperationId ?? null) && resultBinding.formatVersion === 1 &&
+      receipt.stopProof.pid === erasure.expectedProcessPid && receipt.stopProof.startedAt === erasure.expectedProcessStartedAt)
+      return receipt;
+  }
+  return null;
+}
+
 export async function readRemoteRuntimeAssetLocator(db: Db, run: {
   id: string; companyId: string; runnerProfileJson: unknown; nativeSessionId: string | null; runnerInstanceId: string | null;
 }): Promise<RemoteRuntimeAssetLocator | null> {
@@ -199,9 +236,19 @@ export async function assertRemoteRuntimeAssetErasureReady(db: Db, locator: Remo
   companyPurgeOperationId?: string) {
   const [run] = await db.select().from(heartbeatRuns).where(and(
     eq(heartbeatRuns.companyId, locator.companyId), eq(heartbeatRuns.id, locator.runId)));
+  const exactStopReceipt = run ? await hasExactRemoteRuntimeAssetStopReceipt(db, locator, companyPurgeOperationId) : null;
+  const processOwnerBoundToRemoteLocator = Boolean(run && run.processPid !== null &&
+    Number.isSafeInteger(run.processPid) && run.processPid > 1 && run.processStartedAt !== null &&
+    run.runnerInstanceId === locator.runnerInstanceId &&
+    run.processGroupId === null && run.controllerLeaseExpiresAt === null);
+  const currentProcessMatchesReceipt = Boolean(run && exactStopReceipt &&
+    (run.processPid === null && run.processStartedAt === null ||
+      (run.processPid === exactStopReceipt.stopProof.pid &&
+        run.processStartedAt?.toISOString() === exactStopReceipt.stopProof.startedAt)));
   if (!run || run.runtimeMode !== "native" || run.driverKind !== "opencode_server" ||
     !["succeeded", "interrupted", "failed", "cancelled", "timed_out"].includes(run.status) ||
-    run.processPid !== null || run.processGroupId !== null || run.controllerLeaseExpiresAt !== null)
+    (!processOwnerBoundToRemoteLocator && !exactStopReceipt) || (exactStopReceipt && !currentProcessMatchesReceipt) ||
+    run.processGroupId !== null || run.controllerLeaseExpiresAt !== null)
     throw conflict("Managed remote OpenCode data erasure awaits confirmed Native Stop", { code: REMOTE_ASSET_ERASURE_ERRORS.stop });
   const currentLocator = await readRemoteRuntimeAssetLocator(db, run);
   if (!currentLocator || remoteRuntimeAssetLocatorDigest(currentLocator) !== remoteRuntimeAssetLocatorDigest(locator))

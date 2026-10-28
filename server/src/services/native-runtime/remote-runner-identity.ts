@@ -44,14 +44,19 @@ export const REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT =
  * one direct child of the managed `sessions` directory. */
 export const REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT =
   String.raw`set -eu
-remote_cwd=$1; session_digest=$2; expected_run_id=$3; expected_runner_id=$4; expected_lease_id=$5; expected_provider_lease_id=$6; expected_session_digest=$7
+remote_cwd=$1; session_digest=$2; expected_run_id=$3; expected_runner_id=$4; expected_lease_id=$5; expected_provider_lease_id=$6; expected_session_digest=$7; expected_pid=$8; expected_started_at=$9
+cleanup_script=${"$"}{10}; identity_check=${"$"}{11}
 test "$session_digest" = "$expected_session_digest"
 case "$session_digest" in *[!a-f0-9]*|"") exit 4 ;; esac
 test "$(printf %s "$session_digest" | wc -c)" -eq 64
+case "$expected_pid" in ""|*[!0-9]*) exit 4 ;; esac; test "$expected_pid" -gt 1; test -n "$expected_started_at"
 runtime_root="$remote_cwd/.paperclip-runtime/paperclip-runner"; sessions_root="$runtime_root/sessions"; session_root="$sessions_root/$session_digest"
 for directory in "$remote_cwd" "$remote_cwd/.paperclip-runtime" "$runtime_root" "$sessions_root" "$session_root"; do test -d "$directory" && test ! -L "$directory" || exit 4; done
 test "$(dirname -- "$session_root")" = "$sessions_root"
-lock_dir="$sessions_root/."$session_digest".lock"; umask 077; mkdir -m 0700 -- "$lock_dir" || exit 6; printf '%s\\n' "$probe_nonce" > "$lock_dir/owner"; chmod 0600 "$lock_dir/owner"; test -d "$lock_dir" && test ! -L "$lock_dir" && test -f "$lock_dir/owner" && test ! -L "$lock_dir/owner" && test "$(cat -- "$lock_dir/owner")" = "$probe_nonce"
+lock_dir="$sessions_root/."$session_digest".lock"; probe_nonce=$(node -e 'process.stdout.write(require("node:crypto").randomUUID())'); case "$probe_nonce" in ""|*[!a-f0-9-]*) exit 4 ;; esac
+umask 077; mkdir -m 0700 -- "$lock_dir" || exit 6
+cleanup() { if test -d "$lock_dir" && test ! -L "$lock_dir" && test -f "$lock_dir/owner" && test ! -L "$lock_dir/owner" && test "$(cat -- "$lock_dir/owner")" = "$probe_nonce"; then rm -- "$lock_dir/owner"; rmdir -- "$lock_dir" 2>/dev/null || true; fi; }; trap cleanup EXIT
+printf '%s\n' "$probe_nonce" > "$lock_dir/owner"; chmod 0600 "$lock_dir/owner"; test -d "$lock_dir" && test ! -L "$lock_dir" && test -f "$lock_dir/owner" && test ! -L "$lock_dir/owner" && test "$(cat -- "$lock_dir/owner")" = "$probe_nonce"
 for directory in "$remote_cwd" "$remote_cwd/.paperclip-runtime" "$runtime_root" "$sessions_root" "$session_root"; do test -d "$directory" && test ! -L "$directory" || exit 4; done
 state="$session_root/runner/runner-state.json"; identity="$session_root/runner/runner-process.identity"
 test -d "$session_root/runner" && test ! -L "$session_root/runner" && test -f "$state" && test ! -L "$state" && test -f "$identity" && test ! -L "$identity" || exit 4
@@ -59,10 +64,10 @@ check_state() { node -e 'const fs=require("node:fs"),c=require("node:crypto");co
 check_state
 marker=$(cat -- "$identity"); nonce=$(sed -n '1p' "$identity"); pid=$(sed -n '2p' "$identity"); started_at=$(sed -n '3p' "$identity"); runner_id=$(sed -n '4p' "$identity"); fingerprint=$(sed -n '5p' "$identity")
 case "$nonce" in ""|*[!A-Za-z0-9_-]*) exit 4 ;; esac; case "$pid" in ""|*[!0-9]*) exit 4 ;; esac
-test "$pid" -gt 1 && test "$runner_id" = "$expected_runner_id" && test -n "$started_at"
+test "$pid" -gt 1 && test "$pid" = "$expected_pid" && test "$runner_id" = "$expected_runner_id" && test "$started_at" = "$expected_started_at"
 case "$fingerprint" in linux:[0-9a-f-]*:[0-9]*) ;; *) exit 4 ;; esac
 identity_digest=$(sha256sum "$identity" | cut -d " " -f 1); fingerprint_digest=$(printf %s "$fingerprint" | sha256sum | cut -d " " -f 1)
-sh -c "$8" paperclip-runtime-asset-erasure "$identity" "$nonce" "$expected_runner_id" "$9"
+sh -c "$cleanup_script" paperclip-runtime-asset-erasure "$identity" "$nonce" "$expected_runner_id" "$identity_check"
 test ! -e "$identity" && test ! -L "$identity"; check_state
 stopped_at=$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ"); rm -rf -- "$session_root"
 test ! -e "$session_root" && test ! -L "$session_root"

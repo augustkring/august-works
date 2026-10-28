@@ -401,22 +401,30 @@ describe("Native harness-state relay command owner", () => {
     const locator = createRemoteRuntimeAssetLocator({ companyId: randomUUID(), runId: randomUUID(),
       environmentId: randomUUID(), environmentLeaseId: randomUUID(), provider: "sandbox-fixture",
       providerLeaseId: "lease-fixture", runnerInstanceId: randomUUID(), normalizedSessionId: randomUUID(), remoteCwd });
+    const expectedProcessPid = 23123;
+    const expectedProcessStartedAt = "2026-10-28T12:00:00.000Z";
     const argv = ["sh", "-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT, "paperclip-native-asset-erasure",
       remoteCwd, locator.normalizedSessionIdDigest, locator.runId, locator.runnerInstanceId,
       locator.environmentLeaseId, locator.providerLeaseId, locator.normalizedSessionIdDigest,
+      String(expectedProcessPid), expectedProcessStartedAt,
       REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT, REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT];
     const request = { argv, cwd: remoteCwd, stdinBase64: "", env: {} } as unknown as RuntimeSandboxExecRelayRequest;
-    expect(exactNativeRuntimeAssetErasureCommand({ request, locator, remoteCwd })).toBe(true);
+    const authority = { request, locator, remoteCwd, expectedProcessPid, expectedProcessStartedAt };
+    expect(exactNativeRuntimeAssetErasureCommand(authority)).toBe(true);
     expect(exactNativeRuntimeAssetErasureCommand({ request: { ...request,
-      argv: [...argv.slice(0, 4), "/workspace/outside", ...argv.slice(5)] }, locator, remoteCwd })).toBe(false);
+      argv: [...argv.slice(0, 4), "/workspace/outside", ...argv.slice(5)] }, locator, remoteCwd,
+      expectedProcessPid, expectedProcessStartedAt })).toBe(false);
     expect(exactNativeRuntimeAssetErasureCommand({ request: { ...request,
-      argv: [...argv.slice(0, 5), "f".repeat(64), ...argv.slice(6)] }, locator, remoteCwd })).toBe(false);
-    expect(exactNativeRuntimeAssetErasureCommand({ request: { ...request, cwd: `${remoteCwd}/other` }, locator, remoteCwd })).toBe(false);
-    expect(exactNativeRuntimeAssetErasureCommand({ request: { ...request, stdinBase64: "eA==" }, locator, remoteCwd })).toBe(false);
-    expect(exactNativeRuntimeAssetErasureCommand({ request: { ...request, env: { PATH: "/tmp" } }, locator, remoteCwd })).toBe(false);
+      argv: [...argv.slice(0, 5), "f".repeat(64), ...argv.slice(6)] }, locator, remoteCwd,
+      expectedProcessPid, expectedProcessStartedAt })).toBe(false);
+    expect(exactNativeRuntimeAssetErasureCommand({ ...authority, request: { ...request, cwd: `${remoteCwd}/other` } })).toBe(false);
+    expect(exactNativeRuntimeAssetErasureCommand({ ...authority, request: { ...request, stdinBase64: "eA==" } })).toBe(false);
+    expect(exactNativeRuntimeAssetErasureCommand({ ...authority, request: { ...request, env: { PATH: "/tmp" } } })).toBe(false);
     expect(exactNativeRuntimeAssetErasureCommand({ request: { ...request,
-      brokerCredential: { capabilityToken: "test-only" } as any }, locator, remoteCwd })).toBe(false);
+      brokerCredential: { capabilityToken: "test-only" } as any }, locator, remoteCwd,
+      expectedProcessPid, expectedProcessStartedAt })).toBe(false);
     expect(exactNativeRuntimeAssetErasureCommand({ request: { ...request,
-      modelBrokerCredential: { capabilityToken: "test-only" } as any }, locator, remoteCwd })).toBe(false);
+      modelBrokerCredential: { capabilityToken: "test-only" } as any }, locator, remoteCwd,
+      expectedProcessPid, expectedProcessStartedAt })).toBe(false);
   });
 });

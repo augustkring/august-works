@@ -95,6 +95,7 @@ import {
   assertRemoteRuntimeAssetErasureReady,
   isRemoteRuntimeAssetLocator,
   isRemoteRuntimeAssetRemovalReceipt,
+  readRemoteRuntimeAssetLocator,
   remoteRuntimeAssetLocatorDigest,
   type RemoteRuntimeAssetLocator,
   type RemoteRuntimeAssetRemovalReceipt,
@@ -220,13 +221,16 @@ export function exactNativeRuntimeAssetErasureCommand(input: {
   request: import("@paperclipai/shared").RuntimeSandboxExecRelayRequest;
   locator: RemoteRuntimeAssetLocator;
   remoteCwd: string;
+  expectedProcessPid: number;
+  expectedProcessStartedAt: string;
 }): boolean {
-  const { request, locator, remoteCwd } = input;
+  const { request, locator, remoteCwd, expectedProcessPid, expectedProcessStartedAt } = input;
   const argv = request.argv;
   const expected = ["sh", "-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT,
     "paperclip-native-asset-erasure", remoteCwd, locator.normalizedSessionIdDigest,
     locator.runId, locator.runnerInstanceId, locator.environmentLeaseId, locator.providerLeaseId,
-    locator.normalizedSessionIdDigest, REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT,
+    locator.normalizedSessionIdDigest, String(expectedProcessPid), expectedProcessStartedAt,
+    REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT,
     REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT];
   return request.cwd === remoteCwd && request.stdinBase64 === "" && Object.keys(request.env).length === 0 &&
     argv.length === expected.length && expected.every((value, index) => argv[index] === value) &&
@@ -2740,6 +2744,38 @@ export function runtimeControlService(
       throw conflict("Managed remote OpenCode erasure locator or MemoryJob identity is invalid");
     const source = await remoteRuntimeAssetDispatchContext(locator, input.companyPurgeOperationId);
     const locatorDigest = remoteRuntimeAssetLocatorDigest(locator);
+    let expectedProcessPid = source.run.processPid;
+    let expectedProcessStartedAt = source.run.processStartedAt?.toISOString() ?? null;
+    if (expectedProcessPid === null || expectedProcessStartedAt === null) {
+      const completedCommands = await db.select({ payload: runtimeHostCommands.payload,
+        safeResult: runtimeHostCommands.safeResult }).from(runtimeHostCommands).where(and(
+        eq(runtimeHostCommands.companyId, locator.companyId), eq(runtimeHostCommands.commandType, "sandbox_exec"),
+        eq(runtimeHostCommands.status, "SUCCEEDED"),
+        sql`${runtimeHostCommands.payload}->>'nativePreparationPurpose' = 'native_provider_data_erasure'`,
+        sql`${runtimeHostCommands.payload}->'remoteRuntimeAssetErasure'->>'locatorDigest' = ${locatorDigest}`,
+      )).orderBy(desc(runtimeHostCommands.completedAt));
+      const priorReceipt = completedCommands.map(command => {
+        const payload = command.payload && typeof command.payload === "object" && !Array.isArray(command.payload)
+          ? command.payload as Record<string, unknown> : {};
+        const erasure = payload.remoteRuntimeAssetErasure && typeof payload.remoteRuntimeAssetErasure === "object" &&
+          !Array.isArray(payload.remoteRuntimeAssetErasure) ? payload.remoteRuntimeAssetErasure as Record<string, unknown> : {};
+        const result = command.safeResult && typeof command.safeResult === "object" && !Array.isArray(command.safeResult)
+          ? command.safeResult as Record<string, unknown> : {};
+        const receipt = result.remoteRuntimeAssetRemovalReceipt;
+        if (erasure.jobKey !== input.jobKey || (erasure.companyPurgeOperationId ?? null) !== (input.companyPurgeOperationId ?? null) ||
+          typeof erasure.expectedProcessPid !== "number" || !Number.isSafeInteger(erasure.expectedProcessPid) ||
+          typeof erasure.expectedProcessStartedAt !== "string" || !isRemoteRuntimeAssetRemovalReceipt(receipt, locator) ||
+          receipt.commandRequestId !== payload.requestId || receipt.stopProof.pid !== erasure.expectedProcessPid ||
+          receipt.stopProof.startedAt !== erasure.expectedProcessStartedAt) return null;
+        return { pid: erasure.expectedProcessPid, startedAt: erasure.expectedProcessStartedAt };
+      }).find(candidate => candidate !== null);
+      if (!priorReceipt) throw conflict("Completed remote OpenCode erasure has no recoverable process generation");
+      expectedProcessPid = priorReceipt.pid;
+      expectedProcessStartedAt = priorReceipt.startedAt;
+    }
+    if (expectedProcessPid === null || !Number.isSafeInteger(expectedProcessPid) || expectedProcessPid <= 1 ||
+      expectedProcessStartedAt === null || Number.isNaN(Date.parse(expectedProcessStartedAt)))
+      throw conflict("Managed remote OpenCode erasure has no exact persisted process generation");
     const requestId = randomUUID();
     const deadlineAt = new Date(Math.min(Date.now() + 60_000, source.lease.expiresAt!.getTime(),
       source.policy.expiresAt.getTime(), source.capabilityExpiresAt ?? Number.POSITIVE_INFINITY));
@@ -2747,7 +2783,8 @@ export function runtimeControlService(
     const command = ["sh", "-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT,
       "paperclip-native-asset-erasure", source.remoteCwd, locator.normalizedSessionIdDigest,
       locator.runId, locator.runnerInstanceId, locator.environmentLeaseId, locator.providerLeaseId,
-      locator.normalizedSessionIdDigest, REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT,
+      locator.normalizedSessionIdDigest, String(expectedProcessPid), expectedProcessStartedAt,
+      REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT,
       REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT];
     const env: Record<string, string> = {};
     const commandDigest = nativeSha256({ argv: command, cwd: source.remoteCwd, env, stdinHash: sha256(""),
@@ -2766,6 +2803,8 @@ export function runtimeControlService(
       remoteRuntimeAssetErasure: {
         locator, locatorDigest, jobId: input.jobId, jobKey: input.jobKey,
         purpose: "native_provider_data_erasure", formatVersion: 1, idempotencyKey,
+        expectedProcessPid,
+        expectedProcessStartedAt,
         ...(input.companyPurgeOperationId ? { companyPurgeOperationId: input.companyPurgeOperationId } : {}),
       },
     };
@@ -2821,12 +2860,33 @@ export function runtimeControlService(
             ? safeResult.remoteRuntimeAssetErasure as Record<string, unknown> : {};
           const completedPayload = completed.payload && typeof completed.payload === "object" && !Array.isArray(completed.payload)
             ? completed.payload as Record<string, unknown> : {};
+          const completedErasure = completedPayload.remoteRuntimeAssetErasure && typeof completedPayload.remoteRuntimeAssetErasure === "object" &&
+            !Array.isArray(completedPayload.remoteRuntimeAssetErasure)
+            ? completedPayload.remoteRuntimeAssetErasure as Record<string, unknown> : {};
           if (!isRemoteRuntimeAssetRemovalReceipt(receipt, locator) || receipt.commandRequestId !== completedPayload.requestId ||
+            completedErasure.expectedProcessPid !== receipt.stopProof.pid ||
+            completedErasure.expectedProcessStartedAt !== receipt.stopProof.startedAt ||
             resultBinding.locatorDigest !== locatorDigest || resultBinding.jobKey !== input.jobKey ||
             resultBinding.companyPurgeOperationId !== (input.companyPurgeOperationId ?? null) || resultBinding.formatVersion !== 1 ||
             receipt.target.hostId !== current.host.id || receipt.target.cellId !== current.cell.id ||
             receipt.target.cellGeneration !== current.cell.generation.toString() || receipt.target.bindingId !== current.binding.id)
             throw conflict("Completed remote OpenCode erasure has no recoverable exact receipt");
+          const [currentRun] = await tx.select().from(heartbeatRuns).where(and(
+            eq(heartbeatRuns.companyId, locator.companyId), eq(heartbeatRuns.id, locator.runId),
+          )).for("update");
+          if (!currentRun || currentRun.runnerInstanceId !== locator.runnerInstanceId ||
+            (currentRun.processPid !== null && (currentRun.processPid !== receipt.stopProof.pid ||
+              currentRun.processStartedAt?.toISOString() !== receipt.stopProof.startedAt)) ||
+            (currentRun.processPid === null && currentRun.processStartedAt !== null))
+            throw conflict("Completed remote OpenCode erasure receipt belongs to a different process generation");
+          if (currentRun.processPid !== null) {
+            const [cleared] = await tx.update(heartbeatRuns).set({ processPid: null, processGroupId: null,
+              processStartedAt: null, updatedAt: new Date() })
+              .where(and(eq(heartbeatRuns.companyId, locator.companyId), eq(heartbeatRuns.id, locator.runId),
+                eq(heartbeatRuns.runnerInstanceId, locator.runnerInstanceId), eq(heartbeatRuns.processPid, receipt.stopProof.pid),
+                eq(heartbeatRuns.processStartedAt, new Date(receipt.stopProof.startedAt)))).returning({ id: heartbeatRuns.id });
+            if (!cleared) throw conflict("Completed remote OpenCode receipt could not clear its exact process generation");
+          }
           return { claim: null, receipt };
         }
         throw conflict("A prior remote OpenCode erasure command requires reconciliation");
@@ -2886,6 +2946,7 @@ export function runtimeControlService(
       const [rawPid, startedAt, processIdentityDigest, processStartFingerprintDigest, stoppedAt] = lines;
       const pid = Number(rawPid);
       if (!Number.isSafeInteger(pid) || pid <= 1 || !startedAt || Number.isNaN(Date.parse(startedAt)) ||
+        pid !== expectedProcessPid || startedAt !== expectedProcessStartedAt ||
         !stoppedAt || Number.isNaN(Date.parse(stoppedAt)) ||
         !/^[a-f0-9]{64}$/.test(processIdentityDigest ?? "") || !/^[a-f0-9]{64}$/.test(processStartFingerprintDigest ?? ""))
         throw conflict("Managed remote OpenCode erasure process stop proof is malformed");
@@ -2908,14 +2969,47 @@ export function runtimeControlService(
           processIdentityDigest: processIdentityDigest!, processStartFingerprintDigest: processStartFingerprintDigest!, stoppedAt },
         stopProofBeforeDelete: true, exitCode: 0, timedOut: false, postDeleteAbsent: true,
       };
-      const [completed] = await db.update(runtimeHostCommands).set({ status: "SUCCEEDED", completedAt: new Date(),
-        safeResult: { exitCode: 0, timedOut: false, postDeleteAbsent: true,
-          remoteRuntimeAssetRemovalReceipt: receipt,
-          remoteRuntimeAssetErasure: { locatorDigest, jobKey: input.jobKey,
-            companyPurgeOperationId: input.companyPurgeOperationId ?? null, formatVersion: 1 } } }).where(and(
-        eq(runtimeHostCommands.id, claim.id), eq(runtimeHostCommands.status, "CLAIMED"),
-      )).returning({ id: runtimeHostCommands.id });
-      if (!completed) throw conflict("Managed remote OpenCode erasure command was fenced");
+      await db.transaction(async transaction => {
+        const tx = transaction as unknown as Db;
+        await lockAnalyticalCompany(tx, locator.companyId);
+        await lockMemoryPrivacy(tx, locator.companyId);
+        const [currentJob] = await tx.select().from(memoryJobs).where(and(
+          eq(memoryJobs.companyId, locator.companyId), eq(memoryJobs.id, input.jobId),
+          eq(memoryJobs.jobKey, input.jobKey), eq(memoryJobs.status, "running"),
+          gt(memoryJobs.leaseExpiresAt, new Date()),
+        )).for("update");
+        const currentJobSource = currentJob?.sourceRefJson && typeof currentJob.sourceRefJson === "object" &&
+          !Array.isArray(currentJob.sourceRefJson) ? currentJob.sourceRefJson as Record<string, unknown> : {};
+        if (!currentJob || currentJob.operationType !== "retention" || currentJobSource.kind !== "runtime_asset_erasure" ||
+          currentJobSource.runId !== locator.runId || currentJobSource.companyPurgeOperationId !== input.companyPurgeOperationId ||
+          !isRemoteRuntimeAssetLocator(currentJobSource.remoteAssetLocator, { companyId: locator.companyId, runId: locator.runId }) ||
+          remoteRuntimeAssetLocatorDigest(currentJobSource.remoteAssetLocator as RemoteRuntimeAssetLocator) !== locatorDigest)
+          throw conflict("Remote Native asset erasure lost its current MemoryJob before receipt commit");
+        const [currentRun] = await tx.select().from(heartbeatRuns).where(and(
+          eq(heartbeatRuns.companyId, locator.companyId), eq(heartbeatRuns.id, locator.runId),
+        )).for("update");
+        const [currentLocator] = currentRun ? [await readRemoteRuntimeAssetLocator(tx, currentRun)] : [];
+        if (!currentRun || !currentLocator || remoteRuntimeAssetLocatorDigest(currentLocator) !== locatorDigest ||
+          currentRun.runnerInstanceId !== locator.runnerInstanceId ||
+          currentRun.processPid !== pid || currentRun.processStartedAt?.toISOString() !== startedAt ||
+          currentRun.processGroupId !== null || currentRun.controllerLeaseExpiresAt !== null ||
+          !["succeeded", "interrupted", "failed", "cancelled", "timed_out"].includes(currentRun.status))
+          throw conflict("Managed remote OpenCode process generation changed before stop receipt commit");
+        const [completed] = await tx.update(runtimeHostCommands).set({ status: "SUCCEEDED", completedAt: new Date(),
+          safeResult: { exitCode: 0, timedOut: false, postDeleteAbsent: true,
+            remoteRuntimeAssetRemovalReceipt: receipt,
+            remoteRuntimeAssetErasure: { locatorDigest, jobKey: input.jobKey,
+              companyPurgeOperationId: input.companyPurgeOperationId ?? null, formatVersion: 1 } } }).where(and(
+          eq(runtimeHostCommands.id, claim.id), eq(runtimeHostCommands.status, "CLAIMED"),
+        )).returning({ id: runtimeHostCommands.id });
+        if (!completed) throw conflict("Managed remote OpenCode erasure command was fenced");
+        const [cleared] = await tx.update(heartbeatRuns).set({ processPid: null, processGroupId: null,
+          processStartedAt: null, updatedAt: new Date() })
+          .where(and(eq(heartbeatRuns.companyId, locator.companyId), eq(heartbeatRuns.id, locator.runId),
+            eq(heartbeatRuns.runnerInstanceId, locator.runnerInstanceId), eq(heartbeatRuns.processPid, pid),
+            eq(heartbeatRuns.processStartedAt, new Date(startedAt)))).returning({ id: heartbeatRuns.id });
+        if (!cleared) throw conflict("Managed remote OpenCode process stop receipt could not clear its exact generation");
+      });
       return receipt;
     } catch (error) {
       await db.update(runtimeHostCommands).set({ status: "EXPIRED", errorCode: "remote_asset_erasure_unknown", completedAt: new Date() })
@@ -2983,8 +3077,11 @@ export function runtimeControlService(
           expected.hostId !== current.host.id || expected.hostEpoch !== request.hostEpoch ||
           expected.manifestId !== current.manifest.id || expected.manifestHash !== current.manifest.hash ||
           expected.policySnapshotId !== current.policy.id || expected.policyHash !== current.policy.policyHash ||
+          rawErasure.expectedProcessPid !== current.run.processPid ||
+          rawErasure.expectedProcessStartedAt !== current.run.processStartedAt?.toISOString() ||
           !exactNativeRuntimeAssetErasureCommand({ request, locator: locator as RemoteRuntimeAssetLocator,
-            remoteCwd: current.remoteCwd }))
+            remoteCwd: current.remoteCwd, expectedProcessPid: current.run.processPid ?? -1,
+            expectedProcessStartedAt: current.run.processStartedAt?.toISOString() ?? "" }))
           throw forbidden("Sandbox remote asset erasure target changed before dispatch");
         const [consumed] = await tx.update(runtimeHostCommands).set({ status: "CLAIMED", attempt: 1 }).where(and(
           eq(runtimeHostCommands.id, operation.id), eq(runtimeHostCommands.status, "PENDING"),

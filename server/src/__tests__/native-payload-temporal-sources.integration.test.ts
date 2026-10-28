@@ -110,6 +110,7 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
 
     const second = await runManagedNativeOpenCodeFixture({ db, connectionString: database.connectionString,
       root, instanceId, reuseIdentity: first.reuseIdentity, existingTaskId: taskBId,
+      onPreserveDebugArtifacts: () => { preserveDebugArtifacts = true; },
       taskTitle: `Temporal follow-up ${randomUUID()}`,
       steps: [
         { tool: "read_context", id: `temporal-context-b-${randomUUID()}`, input: { query: `${taskBTitle} ${taskB.description ?? ""}` } },

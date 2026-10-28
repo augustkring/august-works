@@ -26,7 +26,7 @@ import { agentExecutionScopeSchema, crossCompanyPolicySchema, type AgentExecutio
 import { conflict, forbidden, HttpError, unprocessable } from "../../errors.js";
 import { markAnalyticalPrivacyReadLocked } from "../analytical-privacy.js";
 import { learningAssetRoots,retainLearnedAssetsInContext } from "../learning/learning-assets.js";
-import { memoryPayloadVisible, canActorReadMemorySources } from "../memory/memory-privacy.js";
+import { memoryPayloadVisible, canActorReadMemorySources, canActorReadMemorySourceSet } from "../memory/memory-privacy.js";
 import { modelLineage, observationLineage } from "../memory/derived-memory.js";
 import { lockIssuePrivacyTree } from "../issues.js";
 import { foundationIndexService } from "../foundation/foundation-index.js";
@@ -847,9 +847,12 @@ export function contextManifestService(db: Db) {
         }
 
         diagnosticStage = "final_memory_acl";
-        for(const id of rootIds)
-          if(!await canActorReadMemorySources(sourceDb,input.companyId,sourceActor,id))
-            throw forbidden("Context Memory source access changed during assembly");
+        const finalMemoryAclStartedAt = Date.now();
+        const finalMemoryAclCurrent = !rootIds.length || await canActorReadMemorySourceSet(sourceDb, input.companyId, sourceActor, rootIds);
+        if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1")
+          console.warn("native_context_manifest_memory_acl_profile", JSON.stringify({ elapsedMs: Date.now() - finalMemoryAclStartedAt,
+            rootCount: rootIds.length }));
+        if (!finalMemoryAclCurrent) throw forbidden("Context Memory source access changed during assembly");
         diagnosticStage = "final_task_acl";
         for (const id of selectedTaskIds) {
           // `assertScopePrivacy` below rechecks this exact primary Task after

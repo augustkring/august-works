@@ -251,6 +251,20 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
             eq(environmentLeases.companyId, facts.companyId), eq(environmentLeases.id, locator.environmentLeaseId))).limit(1);
           const remoteCwd = lease?.metadata && typeof lease.metadata.remoteCwd === "string" ? lease.metadata.remoteCwd : null;
           if (!remoteCwd) throw new Error("conversation_remote_native_asset_cwd_missing");
+          const [leaseLifecycle] = await db.select({ status: environmentLeases.status,
+            leasePolicy: environmentLeases.leasePolicy, releasedAt: environmentLeases.releasedAt,
+            cleanupStatus: environmentLeases.cleanupStatus, expiresAt: environmentLeases.expiresAt,
+            provider: environmentLeases.provider, providerLeaseId: environmentLeases.providerLeaseId })
+            .from(environmentLeases).where(and(eq(environmentLeases.companyId, facts.companyId),
+              eq(environmentLeases.id, locator.environmentLeaseId))).limit(1);
+          console.info("managed remote erasure current lease lifecycle", {
+            status: leaseLifecycle?.status ?? "missing", leasePolicy: leaseLifecycle?.leasePolicy ?? "missing",
+            releasedAtPresent: leaseLifecycle?.releasedAt !== null && leaseLifecycle?.releasedAt !== undefined,
+            cleanupStatus: leaseLifecycle?.cleanupStatus ?? "missing",
+            expiresInMs: leaseLifecycle?.expiresAt ? leaseLifecycle.expiresAt.getTime() - Date.now() : null,
+            remoteProvider: Boolean(leaseLifecycle?.provider && leaseLifecycle.provider !== "local"),
+            providerLeaseIdPresent: Boolean(leaseLifecycle?.providerLeaseId),
+          });
           const sessionsRoot = path.join(remoteCwd, ".paperclip-runtime", "paperclip-runner", "sessions");
           const siblingSessionRoot = path.join(sessionsRoot, "f".repeat(64));
           await fs.mkdir(siblingSessionRoot, { recursive: true });
@@ -372,7 +386,8 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
               workerOutcome: lostWorkerOutcome,
               job: failedJob ?? null,
               commandReceipts: (await relatedErasureCommands()).map(command => ({ requestId: command.idempotencyKey,
-                status: command.status, errorCode: command.errorCode, purpose: command.purpose, attempt: command.attempt })).slice(0, 8),
+                status: command.status, errorCode: command.errorCode,
+                purpose: command.payload.nativePreparationPurpose ?? null, attempt: command.attempt })).slice(0, 8),
             });
           }
           expect(receiptOrCompletion).toBe("receipt");
@@ -388,7 +403,7 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
               requestId: command.idempotencyKey,
               status: command.status,
               errorCode: command.errorCode,
-              purpose: command.purpose,
+              purpose: command.payload.nativePreparationPurpose ?? null,
               attempt: command.attempt,
             })).slice(0, 8),
           });
