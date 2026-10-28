@@ -1031,6 +1031,13 @@ source health and check timestamp, safe reason/action, sorted granted OAuth scop
 and configured secret-reference expiry/freshness, provider access version,
 access verification time, and credential refresh time. It adds no lifecycle
 table or parallel authorization state.
+The projection also states which lifecycle operations have a current native
+owner. Credential refresh is provider-dependent; pause and revoke use the
+existing connection/grant owners. Subscription renewal, sync reconciliation,
+and provider deprecation remain `not_reported` unless a provider owner supplies
+those facts. GitHub App installation webhooks are `not_applicable` for expiry
+and renewal because they have no per-install expiry. This contract does not
+start a background renewal or deprecation worker by itself.
 For Vercel Connect, the grant expiry is the last short-lived token issuance;
 that issuance expiry alone does not mean the provider authorization needs
 reauthentication.

@@ -28,6 +28,12 @@ describe("tool connection lifecycle projection", () => {
       state: "HEALTHY", action: null, grantStatus: "active", scopeNames: ["read:user", "repo"],
       credentialExpiresAt: "2026-10-28T02:00:00.000Z", credentialFreshness: "current",
       providerLifecycle: "not_reported", syncReconciliation: "not_reported",
+      operations: {
+        credentialRefresh: "provider_dependent", subscriptionRenewal: "not_reported",
+        syncReconciliation: "not_reported", pause: "supported", revoke: "supported",
+        deprecation: "not_reported",
+      },
+      subscription: { state: "not_reported", expiresAt: null, renewal: "not_reported" },
     });
     expect(result.scopeHash).toMatch(/^[0-9a-f]{64}$/);
     expect(result).not.toHaveProperty("accessToken");
@@ -107,6 +113,7 @@ describe("tool connection lifecycle projection", () => {
       state: "PERMISSION_CHANGED", action: "refresh_access", accessVersion: "version-2",
       webhook: { health: "unhealthy", lastDeliveryAt: "2026-10-27T01:00:00.000Z", expiry: "not_applicable" },
       syncReconciliation: "not_reported",
+      subscription: { state: "not_applicable", expiresAt: null, renewal: "not_applicable" },
     });
   });
 
@@ -119,5 +126,17 @@ describe("tool connection lifecycle projection", () => {
       .toMatchObject({ state: "DEGRADED", reason: "health_not_checked" });
     expect(projectToolConnectionLifecycle(connection({ enabled: false }), grant(), now))
       .toMatchObject({ state: "PAUSED" });
+  });
+
+  it("keeps subscription and deprecation behavior unknown when no provider owner reports facts", () => {
+    expect(projectToolConnectionLifecycle(connection({ config: {} }), grant(), now)).toMatchObject({
+      operations: {
+        credentialRefresh: "provider_dependent", subscriptionRenewal: "not_reported",
+        syncReconciliation: "not_reported", pause: "supported", revoke: "supported",
+        deprecation: "not_reported",
+      },
+      subscription: { state: "not_reported", expiresAt: null, renewal: "not_reported" },
+      providerLifecycle: "not_reported",
+    });
   });
 });

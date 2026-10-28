@@ -7803,54 +7803,29 @@
       "id": "V10-100",
       "sourceLine": 6911,
       "work": "production hotspot responsibility map.",
-      "reconciliation": "software_requirement_missing_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
         "bindingClause": "100. `V10-100` production hotspot responsibility map.",
         "sourceOwners": [
-          "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md",
-          "server/src/services/chat-channels.ts",
-          "server/src/services/heartbeat.ts",
-          "server/src/services/tool-access.ts",
-          "server/src/services/tool-gateway.ts"
+          "doc/operations/production-hotspot-responsibilities.json",
+          "doc/operations/production-hotspot-responsibilities.md",
+          "scripts/check-module-boundaries.mjs",
+          ".github/CODEOWNERS"
         ],
-        "implementationFinding": "The brief identifies production responsibility hotspots including chat-channels, heartbeat, tool-access/tool-gateway and workflow/native execution. In this review, no maintained hotspot register was found assigning each hotspot a current owner, key callers/tests, stable seam and change-review responsibility; source locations alone are not a responsibility map.",
+        "implementationFinding": "A source-linked register now covers all 25 production paths named in section 26.1, with domain responsibilities, exact reviewed source hashes, direct relative-import callers/tests, maintenance instructions and per-domain extraction rules. Named accountable production maintainers are not declared by existing CODEOWNERS and remain explicitly unassigned.",
         "scopedEvidence": [
           {
-            "reference": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md",
-            "availability": "present",
-            "sourcePath": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md",
-            "currentWorktreeSha256": "7f4387338e6c9ce82359801a92c802c55b9af5c92cd65d1b6271f8ae68970c22",
-            "scope": "Source inspected to determine the stated implementation subset and remaining gap. Source hash is a review pin, not qualification or release evidence."
-          },
-          {
-            "reference": "server/src/services/chat-channels.ts",
-            "availability": "present",
-            "sourcePath": "server/src/services/chat-channels.ts",
-            "currentWorktreeSha256": "f167ce1ed44dd346e6d6b8d70e43595c45d61af985f8ff2929319e8b9e031bf8",
-            "scope": "Source inspected to determine the stated implementation subset and remaining gap. Source hash is a review pin, not qualification or release evidence."
-          },
-          {
-            "reference": "server/src/services/heartbeat.ts",
-            "availability": "present",
-            "sourcePath": "server/src/services/heartbeat.ts",
-            "currentWorktreeSha256": "2e88993a295021b63e235e1bb02f33f7afd5315e55b611b8743254a4405297ff",
-            "scope": "Source inspected to determine the stated implementation subset and remaining gap. Source hash is a review pin, not qualification or release evidence."
-          },
-          {
-            "reference": "server/src/services/tool-access.ts",
-            "availability": "present",
-            "sourcePath": "server/src/services/tool-access.ts",
-            "currentWorktreeSha256": "f3d4244dc1ef21e13d1bfd88e86bad2ac9e568501e3b51d1c8e25d04e0876ad7",
-            "scope": "Source inspected to determine the stated implementation subset and remaining gap. Source hash is a review pin, not qualification or release evidence."
-          },
-          {
-            "reference": "server/src/services/tool-gateway.ts",
-            "availability": "present",
-            "sourcePath": "server/src/services/tool-gateway.ts",
-            "currentWorktreeSha256": "edc8ee1efc39771f2d1df5b19294daf2150802f19bdef8dee6d3ac2c0cfffa2d",
-            "scope": "Source inspected to determine the stated implementation subset and remaining gap. Source hash is a review pin, not qualification or release evidence."
+            "kind": "source_review",
+            "paths": [
+              "doc/operations/production-hotspot-responsibilities.json",
+              "doc/operations/production-hotspot-responsibilities.md",
+              "scripts/check-module-boundaries.mjs",
+              ".github/CODEOWNERS"
+            ],
+            "finding": "A source-linked register now covers all 25 production paths named in section 26.1, with domain responsibilities, exact reviewed source hashes, direct relative-import callers/tests, maintenance instructions and per-domain extraction rules. Named accountable production maintainers are not declared by existing CODEOWNERS and remain explicitly unassigned.",
+            "verification": "All 25 section-26.1 paths exist; direct relative-import references were resolved from current source. No test pass or named maintainer assignment is inferred."
           }
         ],
         "historicalPinComparison": {
@@ -7858,7 +7833,7 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Create a maintained, source-linked ownership map for the named hotspots, including responsibility boundaries, key callers/tests, owner/team and extraction rule when new cross-cutting coupling is introduced."
+        "remainingWork": "Repository maintainers must assign accountable production maintainers before this register can serve as an operational escalation roster. Maintain responsibility/import edges as affected source changes. Continue affected behavior and module-boundary qualification; the source register itself is not release acceptance."
       }
     },
     {
@@ -9049,7 +9024,7 @@
           "ui/src/pages/V9RouteEntries.tsx",
           "cli/package.json"
         ],
-        "implementationFinding": "The runtime Agent-Native manifest exports 62 operations, including all six material entries. A new AST-backed gate reads that typed runtime export, resolves the mounted UI import graph through App/V9 route registries (including aliases, barrels and dynamic imports), classifies API reads from actual client HTTP definitions, and records exact write callsites with route, source line and arguments. It explicitly classifies 58 write/unknown callsites in five scoped UI sources. The current whole-graph scan finds 989 write/unknown callsites across 271 mounted UI modules; 931 calls in 266 other modules remain unclassified, so the release gate currently fails closed. The negative fixture proves an arbitrary API action in a newly mounted route fails. This is bounded classification, not global UI-operation coverage or release acceptance.",
+        "implementationFinding": "The runtime Agent-Native manifest exports 62 operations, including all six material entries. The AST-backed gate reads the typed runtime export, resolves the mounted UI import graph through App/V9 route registries (including aliases, barrels and dynamic imports), classifies reads from actual API client HTTP definitions, and records exact write/unknown callsites with route, source line and arguments. The inventory lists 102 exact client callsites across 21 scoped UI sources; 13 additional write/unknown calls in those sources are still unclassified. The whole-graph scan finds 989 write/unknown callsites across 271 mounted UI modules: 887 calls across the other 250 modules remain unclassified. The release gate therefore fails closed with 263 findings (13 unclassified calls and 250 sources lacking reviewed classifications). The negative fixture proves an arbitrary API action in a newly mounted route fails. This is bounded and partial classification, not global UI-operation coverage or release acceptance.",
         "scopedEvidence": [
           {
             "kind": "source_review",
@@ -9077,8 +9052,8 @@
               "ui/src/pages/V9RouteEntries.tsx",
               "cli/package.json"
             ],
-            "finding": "The operation gate consumes the actual typed 62-entry manifest (six material entries), parses actual API client HTTP definitions, and scans 1,354 reachable UI source modules. It has 58 exact classified write/unknown callsites across its five declared material UI sources. The current whole-graph scan finds 931 additional write/unknown callsites in 266 other mounted modules and fails closed. The new-route/custom-method and duplicate-direct-POST fixtures pass.",
-            "verification": "node --test scripts/check-aw-v10-operation-coverage.test.mjs passed; node scripts/check-aw-v10-operation-coverage.mjs and the integrated V9 release checker fail closed on the 264 unclassified mounted sources; no external provider, user, or deployment qualification is claimed"
+            "finding": "The operation gate consumes the actual typed 62-entry manifest (six material entries), parses actual API client HTTP definitions, and scans 1,354 reachable UI source modules. It lists 102 exact write/unknown callsites across 21 scoped UI sources; the current graph has 115 such callsites in those sources, leaving 13 unclassified. The graph has 989 total write/unknown callsites; 887 calls in 250 other mounted modules remain unclassified. The current checker reports 263 failures (13 unclassified operations and 250 unclassified source modules). New-route/custom-method and duplicate-direct-POST fixtures pass.",
+            "verification": "node --test scripts/check-aw-v10-operation-coverage.test.mjs passed 9/9; the integrated V10 operation gate and V9 release checker fail closed on 13 unclassified calls in scoped files and 250 other mounted sources with 887 calls. No external provider, user, deployment qualification, or release readiness is claimed"
           },
           {
             "kind": "additional_route_owner_review",
@@ -9098,6 +9073,19 @@
             ],
             "finding": "The source-review worklist now contains 158 current client-method/route groups (252 callsites) in the readinessApi–workSignalsApi lexical slice. All 158 groups were reviewed at route guards and canonical owners. Findings include Agent-accessible readiness, routine, team install, workflow run, runtime execution, status-card and work-signal operations; board-only Human boundaries; explicit operator-only internal SaaS routes; and non-mutating POST previews/queries. Agent-capable workflow run/cancel/retry APIs lack matching manifest IDs; UI publish remains distinct from the Agent prepare-publication operation. This audit worklist is not merged as active inventory coverage.",
             "verification": "read-only source inspection; no test claims behavior or release acceptance"
+          },
+          {
+            "kind": "current_operation_group_review",
+            "paths": [
+              "doc/operations/aw-v10-evidence/operation-coverage-2026-10-28/r4/client-operation-groups.json",
+              "doc/operations/aw-v10-evidence/operation-coverage-2026-10-28/r4/review-readiness.json",
+              "doc/operations/aw-v10-evidence/operation-coverage-2026-10-28/r4/review-root.json",
+              "doc/operations/aw-v10-evidence/operation-coverage-2026-10-28/r4/review-security.json",
+              "doc/operations/aw-v10-evidence/operation-coverage-2026-10-28/r4/review-supplement.json",
+              "doc/operations/aw-v10-evidence/operation-coverage-2026-10-28/r4/review-merged.json"
+            ],
+            "finding": "Current exact route/client worklist has 643 groups. Readiness, root, security and supplemental route-owner reviews are merged by exact client-call, HTTP classification and route-signature key; 638 groups have a classification and five remain unresolved (the shared post:base operation, computed approvals API, and three polymorphic annotation operations). Classifications record source route/service guards and do not create manifest operation IDs where parity was not proven.",
+            "verification": "source review artifact only; not consumed by the release gate and does not establish global inventory coverage"
           }
         ],
         "historicalPinComparison": {
@@ -9105,7 +9093,7 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Review the 931 remaining write/unknown callsites in the 266 unclassified mounted UI modules, reduce them by exact imported client method and HTTP route, resolve canonical server owners, and either map launch-relevant operations to the typed manifest or record operation-specific Human/operator boundaries. Resolve ten unknown API client callsites rather than treating them as reads. Keep the release gate blocked until every launch-relevant write has a reviewed mapping or a specific exclusion.",
+        "remainingWork": "Review the 887 write/unknown callsites in 250 other mounted UI sources, plus 13 unclassified calls in the 21 currently scoped sources. Resolve opaque API client dispatches instead of treating them as reads; trace exact route/service owners and actual principals, then map launch-relevant operations to the typed manifest or record operation-specific Human/operator boundaries. Keep the release gate blocked until all required launch-critical actions have a reviewed mapping or specific exclusion.",
         "implementationStatus": "partial_implementation",
         "sourceReviewFindings": [
           {
@@ -9125,7 +9113,7 @@
             "observedWorktreeSha256": "11c0357020a7a400bb176305bdd684149218fe34132689376f2a1c55f4477178"
           }
         ],
-        "reviewBasis": "Current source and AST inspection at dirty worktree; typed manifest import succeeds. The isolated fail-closed fixtures pass. Whole-graph production gate intentionally fails on 266 mounted UI sources with 931 unreviewed write/unknown callsites. The route-owner worklist has 158 groups/252 callsites in the readinessApi–workSignalsApi lexical slice, all 158 source-reviewed. No hosted deployment, provider/Human acceptance, or release readiness is claimed.",
+        "reviewBasis": "Current source and AST inspection at dirty worktree; typed manifest import succeeds. The isolated fail-closed fixtures pass. Whole-graph production gate intentionally fails with 263 findings: 13 unclassified calls in scoped files and 250 other mounted sources containing 887 calls. The route-owner worklist has 643 groups and five exact-key groups remain unresolved; this is not full release coverage. No hosted deployment, provider/Human acceptance, or release readiness is claimed.",
         "currentPins": [
           {
             "path": "server/src/services/agent-native-operation-manifest.ts",
@@ -9137,7 +9125,7 @@
           },
           {
             "path": "doc/operations/agent-native-ui-operation-coverage.json",
-            "observedWorktreeSha256": "b7b26ef1277e4c5185b353fbf90677483f8d63884accd991e13369e9e53f657a"
+            "observedWorktreeSha256": "0db281fa5d0269181c1727a1d49ac53e34ec3ce19e619b9d9d86c2682a98b1a2"
           },
           {
             "path": "scripts/aw-v10-operation-coverage.mjs",

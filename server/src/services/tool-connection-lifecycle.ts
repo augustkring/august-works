@@ -85,6 +85,11 @@ export function projectToolConnectionLifecycle(
           ? "expiring" as const
           : "current" as const;
   const githubConfigured = record(connection.config).sourceTemplateKey === "github";
+  // GitHub App installation webhooks have no per-install expiry. Other
+  // providers remain unknown until their lifecycle owner reports a contract.
+  const subscriptionStatus = githubConfigured
+    ? "not_applicable" as const
+    : "not_reported" as const;
   const githubAccessUnverified = githubConfigured && (!github?.accessRevision || !github.lastAccessRefreshAt || !github.repositories);
   const githubWebhookUnverified = Boolean(github && github.webhookHealth !== "healthy");
   const connectionHealthUnverified = (connection.healthStatus === "ok" || connection.healthStatus === "healthy") && !connection.healthCheckedAt;
@@ -173,6 +178,19 @@ export function projectToolConnectionLifecycle(
       lastDeliveryAt: github.lastWebhookAt ?? null,
       expiry: "not_applicable",
     } : null,
+    operations: {
+      credentialRefresh: connection.authKind === "oauth" ? "provider_dependent" : "not_applicable",
+      subscriptionRenewal: subscriptionStatus,
+      syncReconciliation: "not_reported",
+      pause: "supported",
+      revoke: "supported",
+      deprecation: "not_reported",
+    },
+    subscription: {
+      state: subscriptionStatus,
+      expiresAt: null,
+      renewal: subscriptionStatus,
+    },
     providerLifecycle: "not_reported",
     syncReconciliation: "not_reported",
   };

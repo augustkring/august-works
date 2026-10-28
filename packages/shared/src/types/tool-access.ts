@@ -226,6 +226,21 @@ export interface ToolConnectionLifecycle {
     lastDeliveryAt: string | null;
     expiry: "not_applicable";
   } | null;
+  /** Provider-owned lifecycle operations. Unknown provider behavior stays explicit. */
+  operations: {
+    credentialRefresh: "provider_dependent" | "not_applicable";
+    subscriptionRenewal: "not_reported" | "not_applicable";
+    syncReconciliation: "not_reported";
+    pause: "supported";
+    revoke: "supported";
+    deprecation: "not_reported";
+  };
+  /** Expiring provider subscriptions are only projected when an owner reports one. */
+  subscription: {
+    state: "not_reported" | "not_applicable";
+    expiresAt: null;
+    renewal: "not_reported" | "not_applicable";
+  };
   /** No provider-wide version/deprecation contract exists for this connection. */
   providerLifecycle: "not_reported";
   /** No source cursor/watermark reconciliation owner exists for this connection. */
