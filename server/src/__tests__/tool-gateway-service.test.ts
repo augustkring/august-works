@@ -620,6 +620,12 @@ describeEmbeddedPostgres("tool gateway service", () => {
     expect(await db.select().from(issueComments).where(eq(issueComments.issueId, issue.id))).toHaveLength(1);
     expect(comment).toMatchObject({ authorAgentId: agent.id, createdByRunId: run.id,
       metadata: expect.objectContaining({ authorizationReason: "tool_gateway_mcp" }) });
+    await db.insert(toolPolicies).values({ companyId: company.id, name: "Block this Task comment on replay",
+      policyType: "block", priority: 1, selectors: { toolName: "paperclip-self:report_progress" },
+      conditions: { arguments: { fieldEquals: { body: parameters.body } } } });
+    await expect(gateway.executeTool({ sessionToken: session.token, tool: "blentera.task.comment.add", parameters }))
+      .rejects.toMatchObject({ status: 403 });
+    expect(await db.select().from(issueComments).where(eq(issueComments.issueId, issue.id))).toHaveLength(1);
     const [currentRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, run.id));
     const receipts = currentRun.resultJson?.semanticToolReceipts as Record<string, { transport?: { channel: string; callId: string } }>;
     expect(Object.values(receipts)).toEqual(expect.arrayContaining([

@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/packages/adapters/openclaw-gateway
+
+
+ Test Files  1 passed (1)
+      Tests  4 passed | 12 skipped (16)
+   Start at  05:00:37
+   Duration  2.59s (transform 1.66s, setup 0ms, import 2.43s, tests 37ms, environment 0ms)
+

@@ -191,14 +191,14 @@ export const COMPANY_SEARCH_HELP_ARTICLES: readonly CompanySearchHelpArticle[] =
     "slug": "help/developer-and-advanced",
     "title": "Developer and advanced documentation",
     "summary": "Find the API, CLI, deployment, and advanced configuration references",
-    "body": "For technical setup and integration details, use the existing documentation references: - API overview, authentication, and API reference - CLI overview and setup commands - Deployment modes, secrets, and environment variables The API and CLI references describe their own supported commands and endpoints. Availability can depend on your deployment, enabled features, and current authorization. Use the documentation for your installed version and review the current screen or API response before repeating a write after an interrupted request. For help with a customer task, use Help and human support instead of placing private data or credentials in a developer log.",
+    "body": "For technical setup and integration details, use the existing documentation references: - API overview, authentication, and API reference - CLI overview and setup commands - Deployment modes, secrets, and environment variables The API and CLI references describe their own supported commands and endpoints. Availability can depend on your deployment, enabled features, and current authorization. Use the documentation for your installed version and review the current screen or API response before repeating a write after an interrupted request. The canonical CLI command is blentera . For a release that includes it, follow the command migration guide before updating automation. The temporary paperclipai command uses the same implementation and writes a deprecation notice to stderr. Command naming does not change your stored state or permissions. For help with a customer task, use Help and human support instead of placing private data or credentials in a developer log.",
     "audience": "developers-and-instance-administrators",
     "maturity": "preview",
     "applicableProductVersions": [
       "V10"
     ],
     "locale": "en",
-    "lastVerifiedAt": "2026-10-24"
+    "lastVerifiedAt": "2026-10-28"
   },
   {
     "articleId": "start-and-first-result-da",
@@ -387,13 +387,13 @@ export const COMPANY_SEARCH_HELP_ARTICLES: readonly CompanySearchHelpArticle[] =
     "slug": "da/help/developer-and-advanced",
     "title": "Dokumentation for udviklere og avancerede brugere",
     "summary": "Find API-, CLI-, installations- og avancerede konfigurationsreferencer",
-    "body": "Brug den eksisterende engelske dokumentation til teknisk opsætning og integration: - API-oversigt, godkendelse og API-reference - CLI-oversigt og opsætningskommandoer - Installationsmåder, hemmeligheder og miljøvariabler API- og CLI-referencerne beskriver deres egne understøttede kommandoer og endpoints. Tilgængeligheden kan afhænge af din installation, aktiverede funktioner og aktuelle autorisation. Brug dokumentationen til den installerede version, og kontrollér den aktuelle side eller API-svar, før du gentager en skrivehandling efter et afbrudt svar. Ved hjælp til en kundeopgave skal du bruge Hjælp og menneskelig support i stedet for at lægge private data eller adgangsoplysninger i en udviklerlog.",
+    "body": "Brug den eksisterende engelske dokumentation til teknisk opsætning og integration: - API-oversigt, godkendelse og API-reference - CLI-oversigt og opsætningskommandoer - Installationsmåder, hemmeligheder og miljøvariabler API- og CLI-referencerne beskriver deres egne understøttede kommandoer og endpoints. Tilgængeligheden kan afhænge af din installation, aktiverede funktioner og aktuelle autorisation. Brug dokumentationen til den installerede version, og kontrollér den aktuelle side eller API-svar, før du gentager en skrivehandling efter et afbrudt svar. Den primære CLI-kommando er blentera . For en version, der indeholder kommandoen, skal du følge migrationsvejledningen, før du opdaterer automatisering. Den midlertidige paperclipai -kommando bruger samme implementering og skriver en udfasningsmeddelelse til stderr. Kommandonavnet ændrer ikke dine gemte data eller rettigheder. Ved hjælp til en kundeopgave skal du bruge Hjælp og menneskelig support i stedet for at lægge private data eller adgangsoplysninger i en udviklerlog.",
     "audience": "developers-and-instance-administrators",
     "maturity": "preview",
     "applicableProductVersions": [
       "V10"
     ],
     "locale": "da",
-    "lastVerifiedAt": "2026-10-25"
+    "lastVerifiedAt": "2026-10-28"
   }
 ];

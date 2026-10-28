@@ -1,0 +1,14 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/services/optimizer/optimizer-evaluation.integration.test.ts > governed optimizer workflow integration > uses the native version workspace for actual generated-code replay, shadow, canary and active execution 35047ms
+ ↓ src/services/optimizer/optimizer-evaluation.integration.test.ts > governed optimizer workflow integration > uses generated contracts, reviewed runs, shadow observations, bound approval, canary and fallback
+ ↓ src/services/optimizer/optimizer-evaluation.integration.test.ts > governed optimizer workflow integration > quarantines an active replacement when an authoritative reviewer corrects its output
+ ↓ src/services/optimizer/optimizer-evaluation.integration.test.ts > governed optimizer workflow integration > quarantines a replacement when its pinned published workflow changes
+ ↓ src/services/optimizer/optimizer-evaluation.integration.test.ts > governed optimizer workflow integration > falls back when an activated candidate artifact is revoked
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 4 skipped (5)
+   Start at  07:29:02
+   Duration  51.96s (transform 8.83s, setup 71ms, import 12.84s, tests 38.93s, environment 0ms)
+

@@ -11989,7 +11989,12 @@ export function createToolGatewayService(
             // current Tool Gateway policy is also required. An operation
             // without a known safe owner class fails closed instead of using
             // the generic cached result.
-            const currentPolicy = await policyService.decide(policyInputForTool({ session, tool }));
+            const currentPolicy = await policyService.decide(policyInputForTool({
+              session,
+              tool,
+              parameters: requestedParameters,
+              consumeRateLimit: true,
+            }));
             if (!currentPolicy.allowed) {
               throw new ToolGatewayHttpError(403, "Current Tool Gateway policy no longer permits this operation", "tool_policy_denied");
             }
