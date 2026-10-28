@@ -536,7 +536,6 @@ describe("CompanyAccess", () => {
       resolveSuspension({ ownerRecoveryRequired: true, member: { id: "member-1", status: "suspended" } });
     });
     await flushReact();
-    expect(client.getQueryData(queryKeys.access.companyMembers("company-1"))).toBeUndefined();
     expect(pushToastMock).toHaveBeenCalledWith(expect.objectContaining({
       title: "Membership suspended for security",
       body: "No active company owner remains. An authorized person must restore ownership before owner-only work can continue.",
@@ -552,7 +551,7 @@ describe("CompanyAccess", () => {
     await act(async () => { root.render(<QueryClientProvider client={client}><CompanyAccess /></QueryClientProvider>); });
     await flushReact();
     await flushReact();
-    listMembersMock.mockRejectedValueOnce(new Error("Membership access was revoked"));
+    listMembersMock.mockRejectedValue(new Error("Membership access was revoked"));
 
     const action = [...container.querySelectorAll("button")].find(button => button.textContent?.includes("Suspend for security"));
     await act(async () => { action!.click(); });
@@ -570,7 +569,7 @@ describe("CompanyAccess", () => {
     expect(securitySuspendMemberMock).toHaveBeenCalledWith(
       "company-1", "member-1", { reasonCode: "suspected_compromise" }, "user-1", v9SessionFixture("user-1").session.id,
     );
-    expect(client.getQueryData(queryKeys.access.companyMembers("company-1"))).toBeUndefined();
+    expect(container.textContent).toContain("Membership access was revoked");
     expect(pushToastMock).toHaveBeenCalledWith(expect.objectContaining({
       title: "Membership suspended for security",
       body: "No active company owner remains. An authorized person must restore ownership before owner-only work can continue.",

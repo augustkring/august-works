@@ -11,6 +11,7 @@ import {
   companies,
   companyMemberships,
   heartbeatRuns,
+  heartbeatRunEvents,
   connectionGrantDelegations,
   connectionGrants,
   createDb,
@@ -111,6 +112,7 @@ describeEmbeddedPostgres("access routes permissions upgrade compatibility", () =
     await db.delete(connectionGrants);
     await db.delete(toolConnections);
     await db.delete(toolApplications);
+    await db.delete(heartbeatRunEvents);
     await db.delete(heartbeatRuns);
     await db.delete(principalPermissionGrants);
     await db.delete(companyMemberships);
@@ -179,7 +181,7 @@ describeEmbeddedPostgres("access routes permissions upgrade compatibility", () =
       .post(`/api/companies/${company.id}/members/${owner.id}/security-suspend`)
       .send({ reasonCode: "other" });
     expect(localAttempt.status).toBe(403);
-    const accountChangedAttempt = await request(await createApp(db, company.id, actorId, actor.sessionId!))
+    const accountChangedAttempt = await request(await createApp(db, company.id, actorId, actorSessionId))
       .post(`/api/companies/${company.id}/members/${owner.id}/security-suspend`)
       .set("X-Blentera-Expected-User", actorId)
       .set("X-Blentera-Expected-Session", randomUUID())
