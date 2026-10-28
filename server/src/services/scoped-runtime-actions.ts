@@ -1,6 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
-import { heartbeatRuns, issues, playbookDocuments, type Db } from "@paperclipai/db";
+import { heartbeatRuns, issues, projects, playbookDocuments, type Db } from "@paperclipai/db";
 import { scopedRuntimeActionSchema } from "@paperclipai/shared";
 import type { z } from "zod";
 import { conflict, forbidden, HttpError, notFound, unprocessable } from "../errors.js";
@@ -30,6 +30,35 @@ export function scopedRuntimeActionService(db: Db, toolGateway?: ToolGatewayServ
       if (!local) throw forbidden("Target company is outside this pinned execution scope");
       const runContext = run.contextSnapshot && typeof run.contextSnapshot === "object" ? run.contextSnapshot : null;
       const executionIssueId = run.issueId ?? (typeof runContext?.issueId === "string" ? runContext.issueId : null);
+      let gatewayIssueId: string | null = null, gatewayProjectId: string | null = null;
+      if (input.companyId === companyId) {
+        const issueReferences = [run.nativeIssueId, run.issueId,
+          typeof runContext?.issueId === "string" ? runContext.issueId : null]
+          .filter((value): value is string => typeof value === "string" && value.length > 0);
+        const issueId = new Set(issueReferences).size === 1 ? issueReferences[0] : null;
+        if (issueId) {
+          const [task] = await db.select({ id: issues.id, projectId: issues.projectId,
+            responsibleUserId: issues.responsibleUserId, executionRunId: issues.executionRunId,
+            checkoutRunId: issues.checkoutRunId }).from(issues).where(and(
+              eq(issues.companyId, companyId), eq(issues.id, issueId), isNull(issues.hiddenAt), isNull(issues.harnessKind),
+            )).limit(1);
+          const runBound = task && (run.nativeIssueId === task.id || task.executionRunId === run.id || task.checkoutRunId === run.id);
+          if (runBound && task.responsibleUserId === run.responsibleUserId) {
+            gatewayIssueId = task.id;
+            if (task.projectId) {
+              const [project] = await db.select({ id: projects.id }).from(projects).where(and(
+                eq(projects.companyId, companyId), eq(projects.id, task.projectId),
+              )).limit(1);
+              gatewayProjectId = project?.id ?? null;
+            }
+          }
+        } else if (issueReferences.length === 0 && typeof runContext?.projectId === "string") {
+          const [project] = await db.select({ id: projects.id }).from(projects).where(and(
+            eq(projects.companyId, companyId), eq(projects.id, runContext.projectId),
+          )).limit(1);
+          gatewayProjectId = project?.id ?? null;
+        }
+      }
       const assertBoundedGuestAct = async (accessMode: "read" | "contribute" | "act") => {
         if (input.companyId !== companyId && accessMode === "act" && await hasOrchestrationPlan(db, companyId, executionIssueId))
           throw forbidden("Bounded plans cannot dispatch delegated act scope until delegated side-effect and budget receipts are qualified");
@@ -44,7 +73,12 @@ export function scopedRuntimeActionService(db: Db, toolGateway?: ToolGatewayServ
         // confidential rather than relabeling an arbitrary upstream response.
         classification = "confidential";
         const context: ScopedToolGatewayContext = {
-          session: { id: randomUUID(), token: "", companyId: input.companyId, agentId: local.presence.id, runId: null, issueId: null, projectId: null, actorType: "agent", actorId: local.presence.id, responsibleUserId: run.responsibleUserId, createdAt: new Date(), expiresAt: new Date(Date.now() + 60_000) },
+          session: { id: randomUUID(), token: "", companyId: input.companyId, agentId: local.presence.id,
+            runId: input.companyId === companyId ? runId : null,
+            issueId: input.companyId === companyId ? gatewayIssueId : null,
+            projectId: input.companyId === companyId ? gatewayProjectId : null,
+            actorType: "agent", actorId: local.presence.id, responsibleUserId: run.responsibleUserId,
+            createdAt: new Date(), expiresAt: new Date(Date.now() + 60_000) },
           assertCurrent: async (tool) => {
             if (context.session.expiresAt.getTime() <= Date.now()) throw forbidden("Scoped tool request expired");
             const [current] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.id, runId), eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, run.agentId), eq(heartbeatRuns.status, "running"))).limit(1);

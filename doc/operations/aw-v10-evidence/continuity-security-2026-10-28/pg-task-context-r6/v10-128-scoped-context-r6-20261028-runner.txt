@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/__tests__/agent-runtime-fabric-v5.test.ts
+test_pattern=routes guest connected tools|current Task policy context
