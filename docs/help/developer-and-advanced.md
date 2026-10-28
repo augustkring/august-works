@@ -26,3 +26,5 @@ The API and CLI references describe their own supported commands and endpoints. 
 The canonical CLI command is `blentera`. For a release that includes it, follow the [command migration guide](/cli/migration) before updating automation. The temporary `paperclipai` command uses the same implementation and writes a deprecation notice to stderr. Command naming does not change your stored state or permissions.
 
 For help with a customer task, use [Help and human support](/help/index) instead of placing private data or credentials in a developer log.
+
+Before building an integration, check the operation’s API surface classification in the current reference. An internal route is not a supported public integration contract. For a rate-limited operation, respect the response’s retry guidance before sending another request.

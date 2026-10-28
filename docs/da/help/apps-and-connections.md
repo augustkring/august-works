@@ -9,10 +9,10 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: da
-last_verified_at: 2026-10-25
+last_verified_at: 2026-10-28
 review_trigger: Ændringer i appforbindelser, udbydergodkendelse, fornyelse af adgang eller adgangskontrol
 security_or_privacy_sensitive: true
-linked_source_files: [ui/src/pages/apps/Connections.tsx, ui/src/pages/apps/AppNotConnected.tsx, ui/src/pages/apps/AppDetail.tsx, ui/src/pages/apps/app-detail/PermissionsPanel.tsx, ui/src/features/connections/ConnectionSetupFlow.tsx, packages/shared/src/app-definitions/slack.json, server/src/services/tool-access.ts, server/src/services/paperclip-cloud-connector.ts, ui/src/components/JevSkillSuggestionSettings.tsx, server/src/routes/jev-decisions.ts, server/src/services/jev-skill-suggestions.ts]
+linked_source_files: [ui/src/pages/apps/Connections.tsx, ui/src/pages/apps/AppNotConnected.tsx, ui/src/pages/apps/AppDetail.tsx, ui/src/pages/apps/app-detail/PermissionsPanel.tsx, ui/src/features/connections/ConnectionSetupFlow.tsx, packages/shared/src/app-definitions/slack.json, server/src/services/tool-access.ts, server/src/services/paperclip-cloud-connector.ts, ui/src/components/JevSkillSuggestionSettings.tsx, server/src/routes/jev-decisions.ts, server/src/services/jev-skill-suggestions.ts, server/src/services/tool-connection-lifecycle.ts, server/src/services/experience/connector-recovery.ts, ui/src/pages/apps/app-detail/IdentitiesSection.tsx]
 ---
 
 Åbn **Apps** eller **Company settings → Apps and data** for at se de forbindelser, virksomheden kan bruge. Apps, loginmetoder og kontroller afhænger af den aktuelle installation.
@@ -38,3 +38,7 @@ Kontrollér forbindelsens status, når du vender tilbage. Indsæt ikke adgangsko
 Virksomhedens forbindelsesadministratorer kan vælge en delt OpenRouter API-nøgle under **Virksomhedsindstillinger → Valgfrie Jev-forslag til Skills**. Jev er slået fra som standard. Når forbindelsen gemmes, starter baggrundskald ikke. Baggrundskontroller i skyggetilstand kræver både **Skyggevaluering** og den særskilte indstilling **Tillad baggrundskontroller i skyggetilstand**. Den native Skill-løsning er fortsat bestemmende, og påkrævede Skills ændres ikke.
 
 Opsætningstesten sender kun en fast, harmløs prøve til den valgte OpenRouter-konto. Skærmen viser den aktuelle operatørkvalificerede profils nøjagtige valuta og maksimale pris, før du giver samtykke; OpenRouter fakturerer virksomhedens delte konto. Gennemgå meddelelsen, og giv udtrykkeligt samtykke for hver test. Et vellykket svar bekræfter kun forbindelsen; det kvalificerer eller aktiverer ikke Skill-forslag. Der kræves en aktuel operatørkvalificeret Jev-profil og virksomhedens behandlingspolitik. EU-begrænsede politikker blokerer denne OpenRouter-rute. Hvis udbyderens resultat er ukendt, tilbageholdes det maksimale reserverede beløb. Behold testreferencen, og bed en administrator kontrollere betalingen, før du starter endnu en betalt test.
+
+## Kontrollér forbindelsens tilstand
+
+Forbindelsens detaljer kan vise udløb for OAuth-adgangstoken og fornyelsestoken, når udbyderen har oplyst dem. Manglende oplysninger om udløb eller udfasning betyder, at de ikke er oplyst. Et udløbet adgangstoken kan kræve fornyelse; et udløbet fornyelsestoken kræver genforbindelse. GitHub-adgang afhænger også af en aktuel kontrol af adgangen til repositories og webhookens tilstand. Følg den aktuelle handling til genopretning, og kontrollér status bagefter. Når forbindelsen er genoprettet, kræver den ikke længere den handling.

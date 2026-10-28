@@ -26,3 +26,5 @@ API- og CLI-referencerne beskriver deres egne understøttede kommandoer og endpo
 Den primære CLI-kommando er `blentera`. For en version, der indeholder kommandoen, skal du følge [migrationsvejledningen](https://docs.blentera.com/cli/migration), før du opdaterer automatisering. Den midlertidige `paperclipai`-kommando bruger samme implementering og skriver en udfasningsmeddelelse til stderr. Kommandonavnet ændrer ikke dine gemte data eller rettigheder.
 
 Ved hjælp til en kundeopgave skal du bruge [Hjælp og menneskelig support](/da/help/index) i stedet for at lægge private data eller adgangsoplysninger i en udviklerlog.
+
+Før du bygger en integration, skal du kontrollere operationens klassifikation af API-overfladen i den aktuelle reference. En intern rute er ikke en understøttet offentlig integrationskontrakt. Ved en begrænset kaldefrekvens skal du følge svarets vejledning om genforsøg, før du sender en ny anmodning.

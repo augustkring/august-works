@@ -9,7 +9,7 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: en
-last_verified_at: 2026-10-25
+last_verified_at: 2026-10-28
 review_trigger: Import source, receipt, recovery, authorization, or retention behavior changes
 security_or_privacy_sensitive: true
 linked_source_files: [ui/src/App.tsx, ui/src/pages/CompanyImport.tsx, ui/src/pages/CompanyImportHistory.tsx, server/src/routes/companies.ts, server/src/services/company-import-jobs.ts, server/src/services/company-import-transfers.ts, server/src/services/company-portability.ts, server/src/services/company-export-readme.ts, packages/shared/src/customer-operations.ts, packages/shared/src/company-import-transfer.ts, cli/src/commands/client/company.ts, server/src/errors.ts, packages/shared/src/types/company-portability.ts, packages/shared/src/validators/company-portability.ts, packages/db/src/schema/customer_operations.ts, server/src/routes/openapi.ts, server/src/services/github-fetch.ts]
@@ -80,10 +80,12 @@ A server restart preserves the accepted operation. Automatic replay and self-ser
 
 ## Exporting a Company
 
+Use the canonical `blentera` CLI command in these examples. The temporary `paperclipai` compatibility command runs the same implementation and prints a deprecation message; see the [CLI migration guide](/cli/migration).
+
 Export a company into a portable folder:
 
 ```sh
-paperclipai company export <company-id> --out ./my-export
+blentera company export <company-id> --out ./my-export
 ```
 
 ### Options
@@ -102,13 +104,13 @@ paperclipai company export <company-id> --out ./my-export
 
 ```sh
 # Export company with agents and projects
-paperclipai company export abc123 --out ./backup --include company,agents,projects
+blentera company export abc123 --out ./backup --include company,agents,projects
 
 # Export everything including tasks and skills
-paperclipai company export abc123 --out ./full-export --include company,agents,projects,tasks,skills
+blentera company export abc123 --out ./full-export --include company,agents,projects,tasks,skills
 
 # Export only specific skills
-paperclipai company export abc123 --out ./skills-only --include skills --skills review,deploy
+blentera company export abc123 --out ./skills-only --include skills --skills review,deploy
 ```
 
 ### What Gets Exported
@@ -128,17 +130,17 @@ Import from a local directory, GitHub URL, or GitHub shorthand:
 
 ```sh
 # From a local folder
-paperclipai company import ./my-export
+blentera company import ./my-export
 
 # From a GitHub URL
-paperclipai company import https://github.com/org/repo
+blentera company import https://github.com/org/repo
 
 # From a GitHub subfolder
-paperclipai company import https://github.com/org/repo/tree/main/companies/acme
+blentera company import https://github.com/org/repo/tree/main/companies/acme
 
 # From GitHub shorthand
-paperclipai company import org/repo
-paperclipai company import org/repo/companies/acme
+blentera company import org/repo
+blentera company import org/repo/companies/acme
 ```
 
 ### Options
@@ -161,7 +163,7 @@ paperclipai company import org/repo/companies/acme
 - **`new`** — Creates a fresh company from company and Co-worker configuration. Task and project content requires the source publication flow described above.
 - **`existing`** — Merges the package into an existing company. Use `--company-id` to specify the target.
 
-If `--target` is not specified, Paperclip infers it: if a `--company-id` is provided (or one exists in context), it defaults to `existing`; otherwise `new`.
+If `--target` is not specified, Blentera infers it: if a `--company-id` is provided (or one exists in context), it defaults to `existing`; otherwise `new`.
 
 ### Collision Strategies
 
@@ -180,7 +182,7 @@ When running interactively (no `--yes` or `--json` flags), the import command sh
 Always preview first with `--dry-run`:
 
 ```sh
-paperclipai company import org/repo --target existing --company-id abc123 --dry-run
+blentera company import org/repo --target existing --company-id abc123 --dry-run
 ```
 
 The preview shows:
@@ -198,7 +200,7 @@ Imports can additionally request `pauseAutomations` (the default in the app's Im
 **Clone a company template from GitHub:**
 
 ```sh
-paperclipai company import org/company-templates/engineering-team \
+blentera company import org/company-templates/engineering-team \
   --target new \
   --new-company-name "My Engineering Team"
 ```
@@ -206,7 +208,7 @@ paperclipai company import org/company-templates/engineering-team \
 **Add agents from a package into your existing company:**
 
 ```sh
-paperclipai company import ./shared-agents \
+blentera company import ./shared-agents \
   --target existing \
   --company-id abc123 \
   --include agents \
@@ -216,13 +218,13 @@ paperclipai company import ./shared-agents \
 **Import a specific branch or tag:**
 
 ```sh
-paperclipai company import org/repo --ref v2.0.0 --dry-run
+blentera company import org/repo --ref v2.0.0 --dry-run
 ```
 
 **Non-interactive import (CI/scripts):**
 
 ```sh
-paperclipai company import ./package \
+blentera company import ./package \
   --target new \
   --yes \
   --json
@@ -247,7 +249,7 @@ CEO agents can also use the safe import routes (`/imports/preview` and `/imports
 
 ## GitHub Sources
 
-Paperclip supports several GitHub URL formats:
+Blentera supports several GitHub URL formats:
 
 - Full URL: `https://github.com/org/repo`
 - Subfolder URL: `https://github.com/org/repo/tree/main/path/to/company`

@@ -9,10 +9,10 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: en
-last_verified_at: 2026-10-24
+last_verified_at: 2026-10-28
 review_trigger: Feature maturity labels, experimental settings, availability, or public release information changes
 security_or_privacy_sensitive: false
-linked_source_files: [ui/src/pages/InstanceExperimentalSettings.tsx, ui/src/hooks/useSaasCapabilities.ts, packages/shared/src/v9-feature-flags.ts]
+linked_source_files: [ui/src/pages/InstanceExperimentalSettings.tsx, ui/src/hooks/useSaasCapabilities.ts, packages/shared/src/v9-feature-flags.ts, packages/shared/src/feature-catalog.ts]
 ---
 
 Feature availability can differ by deployment and company. A feature marked **Preview** or **Experimental** is still changing. The Experimental settings page says experimental features may break; do not make a critical process depend on one unless your team accepts that risk.
@@ -26,3 +26,5 @@ An experimental setting is controlled at the instance level when the control is 
 ## Release information and service incidents
 
 This Help Center does not currently provide a complete release-by-release feature history. Use the feature’s current screen and its linked guidance for availability and limits. Open [Help and human support](/help/index) to ask about a specific product limitation. If Help shows a configured service status page, check it for reported service incidents; it does not describe every feature limitation.
+
+Internal and retired features cannot be enabled for new use through an old saved experimental setting. Their current lifecycle status governs availability. Ask the administrator for the supported replacement or migration guidance shown for the feature.

@@ -9,10 +9,10 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: da
-last_verified_at: 2026-10-25
+last_verified_at: 2026-10-28
 review_trigger: Ændringer i modenhedsmærkater, eksperimentelle indstillinger, tilgængelighed eller udgivelsesoplysninger
 security_or_privacy_sensitive: false
-linked_source_files: [ui/src/pages/InstanceExperimentalSettings.tsx, ui/src/hooks/useSaasCapabilities.ts, packages/shared/src/v9-feature-flags.ts]
+linked_source_files: [ui/src/pages/InstanceExperimentalSettings.tsx, ui/src/hooks/useSaasCapabilities.ts, packages/shared/src/v9-feature-flags.ts, packages/shared/src/feature-catalog.ts]
 ---
 
 Funktioners tilgængelighed kan variere mellem installationer og virksomheder. En funktion markeret **Preview** eller **Experimental** er stadig under udvikling. Siden for eksperimentelle indstillinger siger, at eksperimentelle funktioner kan gå i stykker. Gør ikke en sådan funktion kritisk for en proces, medmindre dit team accepterer risikoen.
@@ -26,3 +26,5 @@ En eksperimentel indstilling styres på instansniveau, når kontrollen vises. Sp
 ## Udgivelsesoplysninger og servicehændelser
 
 Dette Hjælp-center har endnu ikke en komplet historik over funktioner fra udgivelse til udgivelse. Brug funktionens aktuelle skærmbillede og tilknyttede vejledning til at se tilgængelighed og begrænsninger. Åbn [Hjælp og menneskelig support](/da/help/index) for at spørge til en konkret produktbegrænsning. Hvis Hjælp viser en konfigureret statusside, kan du kontrollere anmeldte servicehændelser dér. Den beskriver ikke alle funktionsbegrænsninger.
+
+Interne og udfasede funktioner kan ikke aktiveres til ny brug via en gammel gemt eksperimentel indstilling. Funktionens aktuelle livscyklusstatus bestemmer tilgængeligheden. Bed administratoren om den understøttede erstatning eller migrationsvejledning, der vises for funktionen.

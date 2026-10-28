@@ -9,10 +9,10 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: en
-last_verified_at: 2026-10-25
+last_verified_at: 2026-10-28
 review_trigger: App connection, provider authorization, credential renewal, or access review changes
 security_or_privacy_sensitive: true
-linked_source_files: [ui/src/pages/apps/Connections.tsx, ui/src/pages/apps/AppNotConnected.tsx, ui/src/pages/apps/AppDetail.tsx, ui/src/pages/apps/app-detail/PermissionsPanel.tsx, ui/src/features/connections/ConnectionSetupFlow.tsx, packages/shared/src/app-definitions/slack.json, server/src/services/tool-access.ts, server/src/services/paperclip-cloud-connector.ts, ui/src/components/JevSkillSuggestionSettings.tsx, server/src/routes/jev-decisions.ts, server/src/services/jev-skill-suggestions.ts]
+linked_source_files: [ui/src/pages/apps/Connections.tsx, ui/src/pages/apps/AppNotConnected.tsx, ui/src/pages/apps/AppDetail.tsx, ui/src/pages/apps/app-detail/PermissionsPanel.tsx, ui/src/features/connections/ConnectionSetupFlow.tsx, packages/shared/src/app-definitions/slack.json, server/src/services/tool-access.ts, server/src/services/paperclip-cloud-connector.ts, ui/src/components/JevSkillSuggestionSettings.tsx, server/src/routes/jev-decisions.ts, server/src/services/jev-skill-suggestions.ts, server/src/services/tool-connection-lifecycle.ts, server/src/services/experience/connector-recovery.ts, ui/src/pages/apps/app-detail/IdentitiesSection.tsx]
 ---
 
 Open **Apps** or **Company settings → Apps and data** to view connections available to your company. The apps, sign-in methods, and controls shown depend on the current deployment.
@@ -38,3 +38,7 @@ Check the connection status after returning. Do not paste passwords, API keys, o
 Company connection managers can select a shared OpenRouter API-key connection under **Company settings → Optional Jev Skill suggestions**. Jev is off by default. Saving the connection does not start background requests. Background shadow checks require both **Shadow evaluation** and the separate **Allow background shadow checks** control. Native Skill resolution remains authoritative, and required Skills do not change.
 
 The setup test sends only a fixed harmless sample to the selected OpenRouter account. The screen shows the current operator-qualified profile's exact currency and maximum charge before you consent; OpenRouter bills that shared company account. Review that disclosure and give explicit consent for each test. A successful response proves connectivity only; it does not qualify or enable Skill suggestions. A current operator-qualified Jev profile and company processing policy are required. EU-only processing policies block this OpenRouter route. If the provider outcome is unknown, the maximum reserved amount stays held. Keep the test reference and ask an administrator to verify the charge before another paid test.
+
+## Check connection health
+
+The connection detail can show OAuth access-token and refresh-token expiry when the provider has reported them. Missing expiry or deprecation information means it has not been reported. An expired access token may need refresh; an expired refresh token requires reconnecting. GitHub access also depends on a current repository-access check and webhook health. Follow the current repair action and check the status again afterward. A repaired connection no longer needs that action.

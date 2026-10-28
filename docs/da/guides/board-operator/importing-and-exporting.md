@@ -9,7 +9,7 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: da
-last_verified_at: 2026-10-25
+last_verified_at: 2026-10-28
 review_trigger: Ændringer i importkilde, kvittering, genopretning, autorisation eller opbevaring
 security_or_privacy_sensitive: true
 linked_source_files: [ui/src/App.tsx, ui/src/pages/CompanyImport.tsx, ui/src/pages/CompanyImportHistory.tsx, server/src/routes/companies.ts, server/src/services/company-import-jobs.ts, server/src/services/company-import-transfers.ts, server/src/services/company-portability.ts, server/src/services/company-export-readme.ts, packages/shared/src/customer-operations.ts, packages/shared/src/company-import-transfer.ts, cli/src/commands/client/company.ts, server/src/errors.ts, packages/shared/src/types/company-portability.ts, packages/shared/src/validators/company-portability.ts, packages/db/src/schema/customer_operations.ts, server/src/routes/openapi.ts, server/src/services/github-fetch.ts]
@@ -80,10 +80,12 @@ En genstart af serveren bevarer den accepterede operation. Automatisk genafspiln
 
 ## Eksportér en virksomhed med CLI
 
+Brug den kanoniske `blentera`-kommando i eksemplerne. Den midlertidige `paperclipai`-kompatibilitetskommando kører samme implementering og viser en udfasningsmeddelelse; se [migrationsvejledningen for CLI](/cli/migration).
+
 Eksportér en virksomhed til en flytbar mappe:
 
 ~~~sh
-paperclipai company export <company-id> --out ./my-export
+blentera company export <company-id> --out ./my-export
 ~~~
 
 ### Indstillinger
@@ -102,13 +104,13 @@ paperclipai company export <company-id> --out ./my-export
 
 ~~~sh
 # Eksportér virksomhed med agenter og projekter
-paperclipai company export abc123 --out ./backup --include company,agents,projects
+blentera company export abc123 --out ./backup --include company,agents,projects
 
 # Eksportér alt, inklusive opgaver og skills
-paperclipai company export abc123 --out ./full-export --include company,agents,projects,tasks,skills
+blentera company export abc123 --out ./full-export --include company,agents,projects,tasks,skills
 
 # Eksportér kun bestemte skills
-paperclipai company export abc123 --out ./skills-only --include skills --skills review,deploy
+blentera company export abc123 --out ./skills-only --include skills --skills review,deploy
 ~~~
 
 ### Hvad eksporten indeholder
@@ -128,17 +130,17 @@ Du kan importere fra en lokal mappe, GitHub-URL eller GitHub-genvej:
 
 ~~~sh
 # Fra en lokal mappe
-paperclipai company import ./my-export
+blentera company import ./my-export
 
 # Fra en GitHub-URL
-paperclipai company import https://github.com/org/repo
+blentera company import https://github.com/org/repo
 
 # Fra en undermappe på GitHub
-paperclipai company import https://github.com/org/repo/tree/main/companies/acme
+blentera company import https://github.com/org/repo/tree/main/companies/acme
 
 # Fra GitHub-genvej
-paperclipai company import org/repo
-paperclipai company import org/repo/companies/acme
+blentera company import org/repo
+blentera company import org/repo/companies/acme
 ~~~
 
 ### Indstillinger
@@ -161,7 +163,7 @@ paperclipai company import org/repo/companies/acme
 - **new** opretter en ny virksomhed ud fra virksomheds- og Co-worker-opsætning. Opgave- og projektindhold kræver publiceringsforløbet beskrevet ovenfor.
 - **existing** fletter pakken ind i en eksisterende virksomhed. Brug --company-id til at vælge målet.
 
-Hvis --target ikke angives, udleder Paperclip værdien. Hvis --company-id er angivet eller findes i konteksten, bliver standarden existing; ellers new.
+Hvis --target ikke angives, udleder Blentera værdien. Hvis --company-id er angivet eller findes i konteksten, bliver standarden existing; ellers new.
 
 ### Strategier ved navnekonflikt
 
@@ -180,7 +182,7 @@ Når kommandoen køres interaktivt uden --yes eller --json, viser importkommando
 Forhåndsvis altid først med --dry-run:
 
 ~~~sh
-paperclipai company import org/repo --target existing --company-id abc123 --dry-run
+blentera company import org/repo --target existing --company-id abc123 --dry-run
 ~~~
 
 Forhåndsvisningen viser:
@@ -198,7 +200,7 @@ Importen kan også angive pauseAutomations (standard i appens Import-side), så 
 **Kopiér en virksomhedsskabelon fra GitHub:**
 
 ~~~sh
-paperclipai company import org/company-templates/engineering-team \
+blentera company import org/company-templates/engineering-team \
   --target new \
   --new-company-name "My Engineering Team"
 ~~~
@@ -206,7 +208,7 @@ paperclipai company import org/company-templates/engineering-team \
 **Tilføj agenter fra en pakke til en eksisterende virksomhed:**
 
 ~~~sh
-paperclipai company import ./shared-agents \
+blentera company import ./shared-agents \
   --target existing \
   --company-id abc123 \
   --include agents \
@@ -216,13 +218,13 @@ paperclipai company import ./shared-agents \
 **Importér en bestemt gren eller et bestemt tag:**
 
 ~~~sh
-paperclipai company import org/repo --ref v2.0.0 --dry-run
+blentera company import org/repo --ref v2.0.0 --dry-run
 ~~~
 
 **Kør uden interaktiv dialog, f.eks. i CI eller scripts:**
 
 ~~~sh
-paperclipai company import ./package \
+blentera company import ./package \
   --target new \
   --yes \
   --json
@@ -247,7 +249,7 @@ CEO-agenter kan også bruge de sikre importruter (/imports/preview og /imports/a
 
 ## GitHub-kilder
 
-Paperclip understøtter flere GitHub-URL-formater:
+Blentera understøtter flere GitHub-URL-formater:
 
 - Fuld URL: https://github.com/org/repo
 - URL til undermappe: https://github.com/org/repo/tree/main/path/to/company

@@ -9,10 +9,10 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: en
-last_verified_at: 2026-10-24
+last_verified_at: 2026-10-28
 review_trigger: Co-worker setup, account connections, status, pause, or task assignment changes
 security_or_privacy_sensitive: true
-linked_source_files: [ui/src/pages/Agents.tsx, ui/src/pages/AgentDetail.tsx, server/src/services/agents.ts]
+linked_source_files: [ui/src/pages/Agents.tsx, ui/src/pages/AgentDetail.tsx, server/src/services/agents.ts, server/src/services/agents/authoring-publication.ts, server/src/services/experience/model-retirement-notices.ts, ui/src/components/AgentRuntimeCandidates.tsx, ui/src/components/AgentDraftPublication.tsx, ui/src/components/MandatoryProductNotices.tsx]
 ---
 
 Blentera calls the workers in your company **Co-workers**. Some current screens still use **Agent**. You can find them in the company’s Agents area and open a Co-worker to review its settings, connection, and recent work.
@@ -30,3 +30,7 @@ Pause a Co-worker when you do not want it to receive new scheduled or assigned w
 When assigning work, review the task’s instructions, owner, and project. The task page is the source for its current status and recorded result; the Co-worker’s status alone does not confirm that a task is complete.
 
 For company members and their access, see [People and company access](/guides/board-operator/org-structure). For a task that did not finish, see [Recover interrupted work](/help/recovering-work).
+
+## Review a model change
+
+If Action Needed says that a current Agent model needs migration, open that Agent and review a replacement through its draft and qualified runtime candidate. Publishing a model change requires a Human review of the exact candidate and retained test evidence. A rollback also requires a currently qualified candidate and review. Blentera does not silently replace a retired model. If qualification or baseline evidence is missing, ask your administrator to resolve the block before publishing.
