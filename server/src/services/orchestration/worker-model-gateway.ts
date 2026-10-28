@@ -891,9 +891,9 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
  * remain closed at orchestration admission: exposing this consumer does not
  * qualify their undisclosed model calls or their physical sandbox. */
 export function workerModelGateway(db: Db, options: Options) {
-  function profile(companyId: string, agentId: string, profileId?: string, configurationHash?: string) {
+  function profile(companyId: string, agentId: string, profileId?: string, configurationHash?: string, purpose: "runtime" | "candidate_evaluation" = "runtime") {
     return selectWorkerModelProfile(options.profiles, { companyId, agentId, profileId, configurationHash,
-      sourceSha: options.sourceSha, protectedEvidenceOrigin: options.protectedEvidenceOrigin });
+      sourceSha: options.sourceSha, protectedEvidenceOrigin: options.protectedEvidenceOrigin, purpose });
   }
   async function current(tx: Db, claims: BoundClaims) {
     const now = new Date(),
@@ -1501,8 +1501,8 @@ export function workerModelGateway(db: Db, options: Options) {
   return {
     runtimeCandidates: agentRuntimeCandidateService(db, options),
     runtimeCandidateConformance: agentRuntimeCandidateConformanceService(db, options),
-    qualifyAuthoringTest: authoringTestRuntime(db, options, profile).qualify,
-    executeAuthoringTest: authoringTestRuntime(db, options, profile).execute,
+    qualifyAuthoringTest: authoringTestRuntime(db, options, (companyId, agentId, profileId) => profile(companyId, agentId, profileId, undefined, "candidate_evaluation")).qualify,
+    executeAuthoringTest: authoringTestRuntime(db, options, (companyId, agentId, profileId) => profile(companyId, agentId, profileId, undefined, "candidate_evaluation")).execute,
     /** Private pre-start qualification. Editable provider configuration is a
      * selector; only the installed operator profile supplies prices/authority. */
     async qualifyDraft(tx: Db, input: { companyId: string; agentId: string; responsibleUserId: string }) {

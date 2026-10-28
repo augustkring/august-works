@@ -6,6 +6,7 @@ import { companyPurposeFundingSchema } from "@paperclipai/shared";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import {
   assertModelQualificationMetadata,
+  assertModelLifecycleAdmission,
   modelQualificationMetadataSchema,
   type ModelQualificationMetadata,
 } from "./read-only-model-profiles.js";
@@ -54,6 +55,7 @@ export function assertFirstPartySupportModelProfileCurrent(
 ) {
   const profile = firstPartySupportModelProfileSchema.parse(raw);
   assertModelQualificationMetadata(profile, sourceSha, protectedEvidenceOrigin, now);
+  assertModelLifecycleAdmission(profile.lifecycle, "runtime", now);
   if (Date.parse(profile.periodStartsAt) > now.getTime() || Date.parse(profile.periodEndsAt) <= now.getTime())
     throw new Error("first_party_support_funding_period_unavailable");
   return profile;
@@ -74,6 +76,7 @@ export function firstPartySupportFunding(profile: FirstPartySupportModelProfile)
     maxCostMinor: profile.maxCostMinor,
     maxCalls: profile.maxCalls,
     tariff: profile.tariff,
+    ...(profile.lifecycle ? { lifecycle: profile.lifecycle } : {}),
   });
   const { profileHash: _placeholder, ...immutable } = funding;
   return { ...funding, profileHash: nativeSha256(immutable) };

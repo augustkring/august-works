@@ -64,6 +64,7 @@ import {
 import { hasAuthoredAgentDefinition, compileAuthoredAgentDefinition } from "./agents/authored-definition.js";
 import { nativeSha256 } from "./native-runtime/canonical.js";
 import { issueThreadInteractionService } from "./issue-thread-interactions.js";
+import { modelRoutingRollbackWouldChange } from "./agents/model-routing-snapshots.js";
 
 function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
@@ -718,15 +719,27 @@ export function agentService(db: Db) {
   ) {
     const existing = await getById(id);
     if (!existing) return null;
+    const nextModelRouting = { ...existing, adapterType: data.adapterType ?? existing.adapterType,
+      adapterConfig: data.adapterConfig ?? existing.adapterConfig, runtimeConfig: data.runtimeConfig ?? existing.runtimeConfig };
     const installsAuthoredDefinition = isPlainRecord(data.runtimeConfig) &&
       Object.prototype.hasOwnProperty.call(data.runtimeConfig, AUTHORED_AGENT_DEFINITION_KEY);
-    if (installsAuthoredDefinition || (hasAuthoredAgentDefinition(existing) && (hasConfigPatchFields(data) || data.permissions !== undefined))) {
+    const canonicalAuthoredPublication = (() => {
       const definition = options?.authoredPublication;
-      if (!definition || options?.recordRevision?.source !== "agent_authoring_publish" ||
-          options.recordRevision.id !== definition.revisionId || !installsAuthoredDefinition ||
-          nativeSha256(data.runtimeConfig?.[AUTHORED_AGENT_DEFINITION_KEY]) !== nativeSha256(definition) ||
-          nativeSha256(compileAuthoredAgentDefinition(definition.content, definition.revisionId, definition.candidateHash, definition.procedureSnapshotHash,
-            definition.publication ? { version: definition.version!, provenance: definition.publication } : undefined)) !== nativeSha256(definition))
+      if (!definition || !installsAuthoredDefinition || options?.recordRevision?.source !== "agent_authoring_publish" ||
+        options.recordRevision.id !== definition.revisionId ||
+        nativeSha256(data.runtimeConfig?.[AUTHORED_AGENT_DEFINITION_KEY]) !== nativeSha256(definition)) return false;
+      try {
+        return nativeSha256(compileAuthoredAgentDefinition(definition.content, definition.revisionId, definition.candidateHash,
+          definition.procedureSnapshotHash, definition.publication ? { version: definition.version!, provenance: definition.publication } : undefined)) ===
+          nativeSha256(definition);
+      } catch { return false; }
+    })();
+    if (modelRoutingRollbackWouldChange(existing, nextModelRouting) && !canonicalAuthoredPublication)
+      throw conflict("Model or provider routing changes require a current qualified candidate and Human-reviewed publication", {
+        code: "model_migration_publication_required",
+      });
+    if (installsAuthoredDefinition || (hasAuthoredAgentDefinition(existing) && (hasConfigPatchFields(data) || data.permissions !== undefined))) {
+      if (!canonicalAuthoredPublication)
         throw conflict("Edit and publish a draft to change this identified Agent version", { code: "authored_agent_version_readonly" });
     }
     if(data.adapterType!==undefined||data.adapterConfig!==undefined)assertSaasRemoteAdapterConfig(data.adapterType??existing.adapterType,data.adapterConfig??existing.adapterConfig);
@@ -1219,6 +1232,13 @@ export function agentService(db: Db) {
         .where(and(eq(agentConfigRevisions.agentId, id), eq(agentConfigRevisions.id, revisionId)))
         .then((rows) => rows[0] ?? null);
       if (!revision) return null;
+      const current = await getById(id);
+      if (!current) return null;
+      if (modelRoutingRollbackWouldChange(current, revision.afterConfig)) {
+        throw conflict("Model or provider routing changes require a current qualified candidate and Human-reviewed publication", {
+          code: "model_migration_publication_required",
+        });
+      }
       if (containsRedactedMarker(revision.afterConfig)) {
         throw unprocessable("Cannot roll back a revision that contains redacted secret values");
       }

@@ -1,0 +1,36 @@
+{
+  "head": "5a1def7795c2fc8c9f23d9c4b47678379d8426f9",
+  "dirtyWorktree": true,
+  "files": [
+    {
+      "path": "packages/shared/src/model-broker.ts",
+      "sha256": "b70407f288a41e4614e0d55093be7a2cb12e1ab8ebc172459f942d6eea29a012",
+      "bytes": 5728
+    },
+    {
+      "path": "packages/shared/src/agent-runtime-candidates.ts",
+      "sha256": "97849f92493b2a493c35c3507fa0ac55ddc67cbdb551076feb2000e6bbc976dd",
+      "bytes": 3701
+    },
+    {
+      "path": "ui/src/components/AgentRuntimeCandidates.tsx",
+      "sha256": "79d1c44d8f92c557b96064d35abf5ea27bc2d652de22aa274acc36d8bb89d0f2",
+      "bytes": 14796
+    },
+    {
+      "path": "ui/src/components/AgentRuntimeCandidates.test.tsx",
+      "sha256": "89bc2282b4f045b21c80d5f43c162ab48932c04922d8056bfa1b3c1e9d1f6752",
+      "bytes": 10217
+    },
+    {
+      "path": "ui/src/i18n/experience/en.json",
+      "sha256": "5ede9ec3d64defa2b5db4072120334de6c8e8460e7d52e29f1fbf601db36573b",
+      "bytes": 236144
+    },
+    {
+      "path": "ui/src/i18n/experience/da.json",
+      "sha256": "9f7f4dd7b713225f4561d036a9e2dcf53676090ebe6f3aa567b9085497f524ff",
+      "bytes": 252972
+    }
+  ]
+}

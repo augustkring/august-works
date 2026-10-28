@@ -29,6 +29,31 @@ describe("Canonical authored Agent definition", () => {
     expect(() => compileAuthoredAgentDefinition({ ...candidate(), internalDescription: "eyJhbGciOiJIUzI1NiJ9.payload.signature" }, randomUUID(), "a".repeat(64)))
       .toThrow("Remove credential-shaped values");
   });
+  it("retains a bounded current-version model migration receipt and requires a linked rollback", () => {
+    const agentId = randomUUID(), revisionId = randomUUID(), profileHash = "1".repeat(64), configHash = "2".repeat(64);
+    const modelRuntime = { adapterConfigurationHash: configHash, configurationHash: "3".repeat(64), profileHash,
+      qualificationProfileHash: "c".repeat(64), lifecycleHash: "d".repeat(64),
+      qualificationArtifactSha256: "4".repeat(64), verifiedTestIds: [randomUUID()] };
+    const common = { draftId: randomUUID(), draftVersion: 2, candidateRevision: 2, requestedByUserId: "owner",
+      reviewHash: "5".repeat(64), requestHash: "6".repeat(64), verifiedTestIds: [randomUUID()], priorRevisionId: revisionId,
+      activatedAtPublication: true, procedureSnapshotHash: "7".repeat(64), modelRuntime };
+    const migration = { action: "migration" as const, cohort: { kind: "single_agent" as const, agentId,
+      baselineRevisionId: revisionId, baselineVersion: 1, targetVersion: 2, maxAgents: 1 as const },
+      baseline: { adapterConfigurationHash: configHash, modelProfileHash: profileHash, qualificationProfileHash: "c".repeat(64),
+        lifecycleHash: "d".repeat(64), verifiedTestIds: [randomUUID()] },
+      currentIncumbent: { profileHash: "e".repeat(64), qualificationProfileHash: "c".repeat(64), lifecycleHash: "f".repeat(64) },
+      candidate: { configurationHash: "8".repeat(64), profileHash: "9".repeat(64), conformanceRequestId: randomUUID(),
+        conformanceEvidenceHash: "a".repeat(64), verifiedTestIds: [randomUUID()] },
+      behaviorHash: "b".repeat(64), reviewedByUserId: "owner", reviewedAt: "2026-10-28T00:00:00Z" };
+    const valid = compileAuthoredAgentDefinition(candidate(), randomUUID(), "c".repeat(64), "d".repeat(64), {
+      version: 2, provenance: { ...common, modelMigration: migration },
+    });
+    expect(valid.publication?.modelMigration?.cohort).toMatchObject({ agentId, baselineVersion: 1, targetVersion: 2, maxAgents: 1 });
+    const rollback = { ...migration, action: "rollback" as const, rollbackOfRevisionId: revisionId };
+    expect(() => compileAuthoredAgentDefinition(candidate(), randomUUID(), "c".repeat(64), "d".repeat(64), {
+      version: 2, provenance: { ...common, modelMigration: { ...rollback, rollbackOfRevisionId: undefined } },
+    })).toThrow();
+  });
   it.each(["blentera.welcome.v1", "welcome..draft."])("preserves the valid dotted package key %s without a redaction exception", key => {
     const packageInstallation = { installationId: randomUUID(), versionId: randomUUID(), keyParts: key.split("."),
       releaseVersion: ["1", "0", "0"] as [string, string, string], contentHash: "e".repeat(64) };

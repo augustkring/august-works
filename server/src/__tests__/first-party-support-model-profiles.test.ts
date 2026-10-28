@@ -95,4 +95,18 @@ describe("private first-party Support funding profiles", () => {
     }
     expect(firstPartySupportModelProfileSchema.safeParse({ ...p, apiKey: "never-store-keys-here" }).success).toBe(false);
   });
+  it("does not spend the support funding profile after its owner retires it", () => {
+    const p = profile();
+    expect(() => assertFirstPartySupportModelProfileCurrent({ ...p, lifecycle: { status: "retired", owner: "support model owner",
+      retirementAt: null, replacementProfileId: null, regionOrRoutingProfile: "fixture-region", dataUseProfile: "fixture-no-training",
+      supportedInputOutput: ["text"], toolUseCapability: false, rateLimits: { requestsPerMinute: 10, tokensPerMinute: 1000 } } }, sourceSha, protectedOrigin))
+      .toThrow("model_lifecycle_profile_unavailable");
+  });
+  it("binds declared lifecycle changes into the support funding identity", () => {
+    const p = profile(), old = firstPartySupportFunding(p);
+    const declared = { ...p, lifecycle: { status: "active" as const, owner: "support model owner", retirementAt: null,
+      replacementProfileId: null, regionOrRoutingProfile: "fixture-region", dataUseProfile: "fixture-no-training",
+      supportedInputOutput: ["text" as const], toolUseCapability: false, rateLimits: { requestsPerMinute: 100, tokensPerMinute: 100000 } } };
+    expect(firstPartySupportFunding(declared).profileHash).not.toBe(old.profileHash);
+  });
 });

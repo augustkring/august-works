@@ -11182,7 +11182,7 @@ registerCurrentRoute({
   method: "get",
   path: "/api/tool-connections/{connectionId}/grants",
   tags: ["tool-access"],
-  summary: "List tool connection grants",
+  summary: "List currently visible tool grants with current authorization, credential-expiry, and provider-health lifecycle facts",
 });
 
 registerCurrentRoute({

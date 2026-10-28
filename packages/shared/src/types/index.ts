@@ -487,6 +487,7 @@ export type {
   ToolConnectionActivityResponse,
   ToolConnectionLifecycleEvent,
   ToolConnectionLifecycleEventType,
+  ToolConnectionLifecycle,
   ToolConnectionInstall,
   ToolConnectionInstallSnapshot,
   ToolConnectionInstallTargetType,

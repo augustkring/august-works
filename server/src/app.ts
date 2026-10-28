@@ -993,7 +993,7 @@ export async function createApp(
   api.use(sidebarPreferenceRoutes(db));
   const announcementOptions = { ...opts.announcements, version: opts.hostVersion ?? serverVersion };
   const announcementFeed = announcementFeedService(announcementOptions);
-  api.use(announcementRoutes(db, announcementOptions, announcementFeed));
+  api.use(announcementRoutes(db, announcementOptions, announcementFeed, opts.saasPlatform?.config.workerModelProfiles ?? []));
   api.use(resourceMembershipRoutes(db));
   api.use(inboxDismissalRoutes(db));
   api.use(instanceSettingsRoutes(db, {

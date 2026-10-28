@@ -1,17 +1,21 @@
 import { Router } from "express";
 import { z } from "zod";
 import { and, eq, inArray } from "drizzle-orm";
-import { companies, trustDocumentAcceptances, trustDocumentActionReceipts, type Db } from "@paperclipai/db";
+import { agents, companies, trustDocumentAcceptances, trustDocumentActionReceipts, type Db } from "@paperclipai/db";
 import { ANNOUNCEMENT_ANIMATION_CSP, announcementIdSchema, dismissAnnouncementSchema, trustAcceptanceNoticeListSchema, trustDocumentListQuerySchema } from "@paperclipai/shared";
-import { badRequest, forbidden, notFound } from "../errors.js";
+import { badRequest, conflict, forbidden, HttpError, notFound } from "../errors.js";
 import { validate } from "../middleware/validate.js";
 import { assertAuthenticated, assertBoard, assertCompanyAccess, hasCompanyAccess } from "./authz.js";
 import { announcementService } from "../services/announcements.js";
 import { announcementFeedService, type AnnouncementFeedOptions } from "../services/announcement-feed.js";
 import { resolveCurrentTrustMaterialChangeRequirements } from "../services/trust-documents.js";
 import { projectTrustAcceptanceNotices } from "../services/experience/product-notices.js";
+import { projectCurrentModelRetirementNotice } from "../services/experience/model-retirement-notices.js";
+import type { WorkerModelProfile } from "../services/orchestration/worker-model-profiles.js";
+import { assertV5Authorization } from "../services/v5-authorization.js";
 
-export function announcementRoutes(db: Db, options: AnnouncementFeedOptions, feed = announcementFeedService(options)) {
+export function announcementRoutes(db: Db, options: AnnouncementFeedOptions, feed = announcementFeedService(options),
+  modelProfiles: readonly WorkerModelProfile[] = []) {
   const router = Router();
   const service = announcementService(db);
   router.use("/announcements", (req, res, next) => {
@@ -38,7 +42,25 @@ export function announcementRoutes(db: Db, options: AnnouncementFeedOptions, fee
       const tx = raw as unknown as Db;
       const resolved = await resolveCurrentTrustMaterialChangeRequirements(tx, req.actor, companyId, query.expectedUserId);
       const requirements = resolved.documents;
-      if (!requirements.length) return { configured: false, notices: [] };
+      const modelNotices: NonNullable<ReturnType<typeof projectCurrentModelRetirementNotice>>[] = [];
+      const rows = modelProfiles.length ? await tx.select({ id: agents.id, adapterConfig: agents.adapterConfig })
+        .from(agents).where(eq(agents.companyId, companyId)).limit(1001) : [];
+      if (rows.length > 1000) throw conflict("The current Agent model inventory exceeds the bounded Action Needed projection");
+      for (const agent of rows) {
+        const notice = projectCurrentModelRetirementNotice(companyId, agent, modelProfiles);
+        if (!notice) continue;
+        try {
+          const currentActor = { ...req.actor, ignoreInstanceAdmin: true, isInstanceAdmin: false };
+          await assertV5Authorization(tx, currentActor, companyId, "agent:read", { type: "agent", companyId, agentId: agent.id });
+          await assertV5Authorization(tx, currentActor, companyId, "agents:configure", { type: "agent", companyId, agentId: agent.id });
+        } catch (error) {
+          if (error instanceof HttpError && [403, 404].includes(error.status)) continue;
+          throw error;
+        }
+        modelNotices.push(notice);
+      }
+      if (modelNotices.length > 100) throw conflict("Affected Agent model notices exceed the bounded Action Needed projection");
+      if (!requirements.length) return { configured: modelNotices.length > 0, notices: [], modelNotices };
       const completed = new Set<string>();
       const registryIds = requirements.map(document => document.id);
       const acceptedRows = await tx.select({ registryEntryId: trustDocumentAcceptances.registryEntryId,
@@ -62,7 +84,7 @@ export function announcementRoutes(db: Db, options: AnnouncementFeedOptions, fee
           completed.add(`${row.action}\u0000${row.registryEntryId}\u0000${row.documentRevisionId}\u0000${row.documentVersion}`);
       }
       const canAdminAcknowledge = resolved.membershipRole === "owner" || resolved.membershipRole === "admin";
-      return { configured: true, notices: projectTrustAcceptanceNotices(companyId, requirements, completed, canAdminAcknowledge) };
+      return { configured: true, notices: projectTrustAcceptanceNotices(companyId, requirements, completed, canAdminAcknowledge), modelNotices };
     });
     res.json(trustAcceptanceNoticeListSchema.parse(result));
   });

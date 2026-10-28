@@ -6,6 +6,7 @@ import {
   modelQualificationProfileSchema,
   checkModelQualificationProvider,
   assertModelQualificationMetadata,
+  assertModelLifecycleAdmission,
 } from "./read-only-model-profiles.js";
 
 /** Price/token qualification is separate from independent judge calibration.
@@ -36,6 +37,7 @@ export type WorkerModelProfile = z.infer<typeof workerModelProfileSchema>;
  * presence's credential, price or qualification. */
 export function selectWorkerModelProfile(profiles: readonly WorkerModelProfile[], input: {
   companyId: string; agentId: string; profileId?: string; configurationHash?: string; sourceSha: string; protectedEvidenceOrigin: string;
+  purpose?: "runtime" | "candidate_evaluation";
 }) {
   if (input.profileId === undefined && input.configurationHash === undefined)
     throw forbidden("The exact installed worker model qualification is required");
@@ -43,16 +45,19 @@ export function selectWorkerModelProfile(profiles: readonly WorkerModelProfile[]
     (input.profileId === undefined || p.id === input.profileId) &&
     (input.configurationHash === undefined || p.qualifiedConfigurationHash === input.configurationHash));
   if (matches.length !== 1) throw forbidden("The exact installed worker model qualification is required");
-  return assertWorkerModelProfileCurrent(matches[0]!, input.sourceSha, input.protectedEvidenceOrigin);
+  return assertWorkerModelProfileCurrent(matches[0]!, input.sourceSha, input.protectedEvidenceOrigin, input.purpose);
 }
 
 export function assertWorkerModelProfileCurrent(
   raw: WorkerModelProfile,
   sourceSha: string,
   protectedOrigin: string,
+  purpose: "runtime" | "candidate_evaluation" = "runtime",
+  now = new Date(),
 ) {
   const p = workerModelProfileSchema.parse(raw);
-  assertModelQualificationMetadata(p, sourceSha, protectedOrigin);
+  assertModelQualificationMetadata(p, sourceSha, protectedOrigin, now);
+  assertModelLifecycleAdmission(p.lifecycle, purpose, now);
   return p;
 }
 

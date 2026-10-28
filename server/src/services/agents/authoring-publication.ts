@@ -20,6 +20,8 @@ import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { withV7ActivityTransaction, logActivity } from "../v7-mutations.js";
 import { conflict, forbidden, HttpError, notFound } from "../../errors.js";
+import { compareModelMigrationBehavior, modelLifecycleHash, modelQualificationProfileHash, modelRoutingRollbackWouldChange,
+  modelRoutingSnapshotHash } from "./model-routing-snapshots.js";
 
 /** A C3 publication swaps one identified, tested configuration through the
  * Original Agent/revision owners. It does not provision runtimes, grant rights,
@@ -80,6 +82,33 @@ export function agentAuthoringPublicationService(db: Db) {
       if (!(error instanceof HttpError) || ![403, 404, 409, 422].includes(error.status)) throw error;
       block("publication_runtime_changed", "Review the exact runtime, required procedures and remaining budget again");
     }
+    const candidateConfiguration = current?.runtimeCandidate?.configuration;
+    const modelMigrationRequired = !!candidateConfiguration && modelRoutingRollbackWouldChange(agent, {
+      adapterType: agent.adapterType, adapterConfig: candidateConfiguration,
+    }) && !!prior?.publication;
+    const modelMigrationAction = modelMigrationRequired && prior?.publication?.modelMigration && current?.runtimeCandidate &&
+      modelQualificationProfileHash(current.runtimeCandidate.p) === prior.publication.modelMigration.baseline.qualificationProfileHash ? "rollback" as const : "migration" as const;
+    let migrationBehaviorHash: string | null = null;
+    if (modelMigrationRequired) {
+      const priorPublication = prior!.publication!;
+      const behavior = compareModelMigrationBehavior(prior!.content, row.content);
+      migrationBehaviorHash = behavior.behaviorHash;
+      if (!behavior.compatible)
+        block("model_migration_behavior_changed", "A model migration must preserve the exact published behavior; make behavior changes in a separate reviewed publication");
+      if (!priorPublication.verifiedTestIds?.length)
+        block("model_migration_baseline_evidence_missing", "The active version has no retained Human-verified baseline scenarios for this migration");
+      if (!priorPublication.modelRuntime || !priorPublication.procedureSnapshotHash || priorPublication.procedureSnapshotHash !== procedures?.hash)
+        block("model_migration_baseline_changed", "The active version lacks an exact current profile/source baseline or its selected sources changed");
+      if (priorPublication.modelRuntime && current?.runtimeCandidate?.incumbentProfile &&
+        priorPublication.modelRuntime.qualificationProfileHash !== modelQualificationProfileHash(current.runtimeCandidate.incumbentProfile))
+        block("model_migration_incumbent_rotated", "The incumbent qualification changed since the active version was published; re-establish its baseline");
+      if (priorPublication.modelRuntime && priorPublication.modelRuntime.adapterConfigurationHash !== modelRoutingSnapshotHash(agent))
+        block("model_migration_incumbent_configuration_changed", "The exact incumbent routing configuration changed since publication; re-establish its baseline");
+      if (!current?.runtimeCandidate?.incumbentProfile)
+        block("model_migration_incumbent_unqualified", "The current model lifecycle and compatibility facts are unavailable; migration is blocked");
+      if (!current?.runtimeCandidate?.request?.id || !current.runtimeCandidate.evidence)
+        block("model_migration_conformance_missing", "The exact candidate conformance receipt is unavailable");
+    }
     await assertV5Authorization(tx, { ...actor, ignoreInstanceAdmin: true }, companyId, "agent:wake", { type: "agent", companyId, agentId });
     const values = { companyId, draftId, version: row.version, agentId,
       previousVersion: prior?.version ?? null, nextVersion: (prior?.version ?? 0) + 1,
@@ -90,12 +119,27 @@ export function agentAuthoringPublicationService(db: Db) {
       ...(procedures?.playbooks.length ? { requiredPlaybooks: procedures.playbooks.map(({ body, key, ...pin }) => pin) } : {}),
       maximumPerModelCallMinor: current?.quote.maximumMinor ?? null, currency: "USD" as const,
       provider: current?.p.tariff.provider ?? null, model: current?.p.tariff.model ?? null,
+      modelMigration: { required: modelMigrationRequired, action: modelMigrationRequired ? modelMigrationAction : "none" as const,
+        stage: "single_agent" as const },
       runtimeBindingId: row.content.runtimeBindingId, modelCalled: false as const, authorityGranted: false as const, executionStarted: false as const };
     const reviewHash = nativeSha256({ values, candidateHash: authoringCandidateHash(row),
       baselineHash: row.baselineHash, priorRevisionId: prior?.revisionId ?? null,
       configurationHash: current?.configurationHash ?? null, stateHash: current?.authorityHash ?? null,
+      modelMigrationEvidence: modelMigrationRequired ? {
+        behaviorHash: migrationBehaviorHash,
+        baselineProfileHash: prior?.publication?.modelRuntime?.profileHash ?? null,
+        baselineQualificationProfileHash: prior?.publication?.modelRuntime?.qualificationProfileHash ?? null,
+        baselineLifecycleHash: prior?.publication?.modelRuntime?.lifecycleHash ?? null,
+        baselineTestIds: prior?.publication?.modelRuntime?.verifiedTestIds ?? [],
+        currentIncumbentProfileHash: current?.runtimeCandidate?.incumbentProfile ? nativeSha256(current.runtimeCandidate.incumbentProfile) : null,
+        currentIncumbentLifecycleHash: current?.runtimeCandidate?.incumbentProfile ? modelLifecycleHash(current.runtimeCandidate.incumbentProfile) : null,
+        candidateProfileHash: current?.runtimeCandidate?.row.profileHash ?? null,
+        conformanceRequestId: current?.runtimeCandidate?.request.id ?? null,
+        conformanceEvidenceHash: current?.runtimeCandidate?.evidence ? nativeSha256(current.runtimeCandidate.evidence) : null,
+      } : null,
       procedureSnapshotHash: procedures?.hash ?? null, testIds: qualified?.testIds ?? [], packageInstallation });
-    return { row, agent, prior, qualified, current, procedures, packageInstallation, review: agentDraftPublicationReviewSchema.parse({ ...values, reviewHash }) };
+    return { row, agent, prior, qualified, current, procedures, packageInstallation, migrationBehaviorHash,
+      modelMigrationRequired, modelMigrationAction, review: agentDraftPublicationReviewSchema.parse({ ...values, reviewHash }) };
   }
   function receipt(companyId: string, record: typeof agentConfigRevisions.$inferSelect) {
     const definition = authoredAgentDefinitionSchema.parse((record.afterConfig.runtimeConfig as Record<string, unknown>)[AUTHORED_AGENT_DEFINITION_KEY]);
@@ -181,6 +225,43 @@ export function agentAuthoringPublicationService(db: Db) {
           state.procedures.hash, { version: state.review.nextVersion, provenance: { draftId, draftVersion: state.row.version,
             candidateRevision: state.row.candidateRevision, requestedByUserId: userId, reviewHash: state.review.reviewHash,
             requestHash, verifiedTestIds: state.qualified.testIds, priorRevisionId: state.prior?.revisionId ?? null, activatedAtPublication: true,
+            ...(state.current && state.procedures ? { procedureSnapshotHash: state.procedures.hash } : {}),
+            ...(state.current && state.qualified ? (() => {
+              const adapterConfig = state.current.runtimeCandidate?.configuration ?? state.agent.adapterConfig;
+              const adapterConfigurationHash = modelRoutingSnapshotHash({ ...state.agent, adapterConfig });
+              if (!adapterConfigurationHash) return {};
+              return { modelRuntime: {
+                adapterConfigurationHash,
+                configurationHash: state.current.configurationHash,
+                profileHash: nativeSha256(state.current.p),
+                qualificationProfileHash: modelQualificationProfileHash(state.current.p),
+                lifecycleHash: modelLifecycleHash(state.current.p),
+                qualificationArtifactSha256: state.current.p.qualificationArtifactSha256,
+                ...(state.current.runtimeCandidate ? { conformanceRequestId: state.current.runtimeCandidate.request.id,
+                  conformanceEvidenceHash: nativeSha256(state.current.runtimeCandidate.evidence) } : {}),
+                verifiedTestIds: state.qualified.testIds,
+              } };
+            })() : {}),
+            ...(state.modelMigrationRequired && state.current.runtimeCandidate && state.prior?.publication?.modelRuntime && state.migrationBehaviorHash &&
+              state.current.runtimeCandidate.incumbentProfile ? { modelMigration: {
+                action: state.modelMigrationAction,
+                ...(state.modelMigrationAction === "rollback" ? { rollbackOfRevisionId: state.prior.revisionId } : {}),
+                cohort: { kind: "single_agent" as const, agentId: state.agent.id, baselineRevisionId: state.prior.revisionId,
+                  baselineVersion: state.prior.version!, targetVersion: state.review.nextVersion, maxAgents: 1 as const },
+                baseline: { adapterConfigurationHash: state.prior.publication.modelRuntime.adapterConfigurationHash,
+                  modelProfileHash: state.prior.publication.modelRuntime.profileHash,
+                  qualificationProfileHash: state.prior.publication.modelRuntime.qualificationProfileHash,
+                  lifecycleHash: state.prior.publication.modelRuntime.lifecycleHash,
+                  verifiedTestIds: state.prior.publication.modelRuntime.verifiedTestIds },
+                currentIncumbent: { profileHash: nativeSha256(state.current.runtimeCandidate.incumbentProfile),
+                  qualificationProfileHash: modelQualificationProfileHash(state.current.runtimeCandidate.incumbentProfile),
+                  lifecycleHash: modelLifecycleHash(state.current.runtimeCandidate.incumbentProfile) },
+                candidate: { configurationHash: state.current.runtimeCandidate.row.configurationHash,
+                  profileHash: state.current.runtimeCandidate.row.profileHash,
+                  conformanceRequestId: state.current.runtimeCandidate.request.id,
+                  conformanceEvidenceHash: nativeSha256(state.current.runtimeCandidate.evidence), verifiedTestIds: state.qualified.testIds },
+                behaviorHash: state.migrationBehaviorHash, reviewedByUserId: userId, reviewedAt: new Date().toISOString(),
+              } } : {}),
             ...(state.packageInstallation && packageVersion ? { packageInstallation: { installationId: state.packageInstallation.id,
               versionId: packageVersion.id, keyParts: state.row.packageKey!.split("."), releaseVersion: packageVersion.version.split(".") as [string, string, string],
               contentHash: packageVersion.contentHash } } : {}) } });

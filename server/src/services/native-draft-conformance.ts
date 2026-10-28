@@ -94,7 +94,8 @@ export function nativeDraftConformanceService(db: Db, options: Options) {
         const selected = resolvePaperclipRunnerProviderProfile(proposed?.configuration ?? configured.adapterConfig);
         if (selected.provider !== "aw_text_only") throw forbidden("The installed text transport is required");
         const p = selectWorkerModelProfile(options.profiles, { companyId: cid, agentId: aid, profileId: selected.workerModelProfileId,
-          sourceSha: options.sourceSha, protectedEvidenceOrigin: options.protectedEvidenceOrigin });
+          sourceSha: options.sourceSha, protectedEvidenceOrigin: options.protectedEvidenceOrigin,
+          purpose: proposed ? "candidate_evaluation" : "runtime" });
         const advertised = proposed ? { capabilitySnapshotHash: proposed.snapshot.hash, capabilitySnapshot: proposed.snapshot }
           : await providerDiscoveryService(db).discover(actor, cid, aid);
         if (advertised.capabilitySnapshotHash !== p.providerSnapshotHash) throw conflict("Draft capability profile changed before qualification");
@@ -105,7 +106,7 @@ export function nativeDraftConformanceService(db: Db, options: Options) {
         async function current(tx: Db, runId?: string) {
           const virtual = proposed ? await virtualCandidate(tx) : null;
           await assertV7Enabled(tx, "orchestration_v7");
-          const fresh = assertWorkerModelProfileCurrent(p, options.sourceSha, options.protectedEvidenceOrigin);
+          const fresh = assertWorkerModelProfileCurrent(p, options.sourceSha, options.protectedEvidenceOrigin, proposed ? "candidate_evaluation" : "runtime");
           for (const action of ["agents:configure", "agent:wake"] as const)
             await assertV7Authorization(tx, actor, cid, action, { type: "agent", companyId: cid, agentId: aid });
           const [presence] = await tx.select({ agent: agents, identity: agentIdentities, company: companies }).from(agents)
@@ -219,7 +220,7 @@ export function nativeDraftConformanceService(db: Db, options: Options) {
         const timeout = setTimeout(() => controller.abort(), 20000);
         let cancelTimer: ReturnType<typeof setTimeout> | undefined;
         const broker = modelReservationService(db, { sourceSha: options.sourceSha,
-          qualifiedTariff: async () => assertWorkerModelProfileCurrent(entry.p, options.sourceSha, options.protectedEvidenceOrigin).tariff,
+          qualifiedTariff: async () => assertWorkerModelProfileCurrent(entry.p, options.sourceSha, options.protectedEvidenceOrigin, "candidate_evaluation").tariff,
           currentAuthority: async (tx) => (await entry.current(tx, run.id)).authorityHash });
         const guard = setInterval(() => {
           if (checking || !authorityHash) return;

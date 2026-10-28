@@ -1,5 +1,25 @@
 import { z } from "zod";
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
+/** Owner-declared lifecycle facts are bound by the installed profile file pin.
+ * Missing metadata is reported as untracked by the profile owner; it does not
+ * create a replacement choice or qualify a fallback. */
+export const modelLifecycleMetadataSchema = z.object({
+  status: z.enum(["candidate", "qualifying", "qualified", "active", "deprecated", "migration_required", "blocked", "retired"]),
+  owner: z.string().trim().min(1).max(200),
+  retirementAt: z.iso.datetime().nullable(),
+  replacementProfileId: z.string().trim().min(1).max(200).nullable(),
+  regionOrRoutingProfile: z.string().trim().min(1).max(160),
+  dataUseProfile: z.string().trim().min(1).max(160),
+  supportedInputOutput: z.array(z.enum(["text", "image", "audio", "video"])).min(1).max(4),
+  toolUseCapability: z.boolean(),
+  rateLimits: z.object({ requestsPerMinute: z.number().int().positive().nullable(), tokensPerMinute: z.number().int().positive().nullable() }).strict(),
+}).strict().superRefine((lifecycle, context) => {
+  if (lifecycle.status === "migration_required" && !lifecycle.replacementProfileId)
+    context.addIssue({ code: "custom", message: "Migration-required profiles need an owner-selected candidate profile", path: ["replacementProfileId"] });
+  if (lifecycle.retirementAt !== null && !["deprecated", "migration_required", "retired"].includes(lifecycle.status))
+    context.addIssue({ code: "custom", message: "A retirement date requires a deprecated, migration-required, or retired status", path: ["retirementAt"] });
+});
+export type ModelLifecycleMetadata = z.infer<typeof modelLifecycleMetadataSchema>;
 /** Body-free identity of the exact provider request at its final send boundary.
  * The receipt contains no headers, credentials, or prompt body. */
 export const modelProviderWireReceiptSchema = z.object({
@@ -61,6 +81,7 @@ export const companyPurposeFundingSchema = z.object({
   maxCostMinor: z.number().int().min(1).max(1_000_000),
   maxCalls: z.number().int().min(1).max(10_000),
   tariff: modelTariffCeilingSchema,
+  lifecycle: modelLifecycleMetadataSchema.optional(),
 }).strict().superRefine((value, ctx) => {
   const start = Date.parse(value.periodStartsAt), end = Date.parse(value.periodEndsAt);
   if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end) {

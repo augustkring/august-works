@@ -2091,6 +2091,8 @@
     "changes": "Gennemgåede versionsændringer",
     "versions": "Aktiv version {{before}} → version {{after}}",
     "perCallCost": "Maksimal pris pr. fremtidigt modelkald",
+    "modelMigration": "Dette ændrer modellen for denne ene Agent-version. Det bruger Agentens gemte, menneskeverificerede baseline og den aktuelle kandidats dokumentation. Hver anden Agent kræver sin egen gennemgåede migrering; der udføres ingen automatisk reserve eller tilbagerulning.",
+    "modelRollback": "Dette fører denne ene Agent tilbage til en tidligere brugt model, efter at kvalifikation og test er gentaget med gældende politik og livscyklus. Hver anden Agent kræver sin egen gennemgang; der udføres ingen automatisk tilbagerulning.",
     "confirmPublication": "Jeg bekræfter publicering af denne gemte og verificerede version.",
     "confirmActivation": "Jeg bekræfter at erstatte den aktive version til fremtidigt arbejde med det eksisterende budget og den eksisterende adgang.",
     "publish": "Publicér og aktivér",

@@ -1,0 +1,86 @@
+{
+  "head": "5a1def7795c2fc8c9f23d9c4b47678379d8426f9",
+  "dirtyWorktree": true,
+  "files": [
+    {
+      "path": "packages/shared/src/model-broker.ts",
+      "sha256": "0ec197ea037f1dcde502946ac8e86fdf842501313b814ef90d2e0f6d7b6632dd",
+      "bytes": 5658
+    },
+    {
+      "path": "packages/shared/src/agent-runtime-candidates.ts",
+      "sha256": "898da41ea69a944a196f28ee0507d9b56a32b54a115fb91a5215a1fcab15d6c5",
+      "bytes": 3699
+    },
+    {
+      "path": "server/src/services/orchestration/read-only-model-profiles.ts",
+      "sha256": "d818b57be2ab91e9a83c190f2ec26b6979d29ab53960eff8a91058ee96bbcdc2",
+      "bytes": 8368
+    },
+    {
+      "path": "server/src/services/orchestration/worker-model-profiles.ts",
+      "sha256": "f5ab82dd2055a21e13c9f5151927846a88ed47fa7c79e1570d752bb678c3289d",
+      "bytes": 4425
+    },
+    {
+      "path": "server/src/services/orchestration/worker-model-gateway.ts",
+      "sha256": "254cc3bcd49648746c881a54b74faf7d85067a6f499a56f7049899318c2fdd08",
+      "bytes": 141777
+    },
+    {
+      "path": "server/src/services/orchestration/first-party-support-model-profiles.ts",
+      "sha256": "e15b0ff5888282d88e2a0661f3bece9d76529c6d3f88b66e55c222afd5c645ef",
+      "bytes": 5842
+    },
+    {
+      "path": "server/src/services/agents/authoring-runtime-candidates.ts",
+      "sha256": "f7e8c8d4bd3c293393d85bd4e2e6f1ba02235e73122d70a51898b4bb8041335d",
+      "bytes": 24530
+    },
+    {
+      "path": "server/src/services/agents/authoring-runtime-candidate-conformance.ts",
+      "sha256": "69146cbef03959d3c96c33fd31dd630d0a51227fdcdd6099626f280c036f4f13",
+      "bytes": 17963
+    },
+    {
+      "path": "server/src/services/agents/authoring-test-runtime.ts",
+      "sha256": "31a6d2478570407ec2c813c101f79e62ab2a272f33b2246a40e16b9fe3075d09",
+      "bytes": 20570
+    },
+    {
+      "path": "server/src/services/native-draft-conformance.ts",
+      "sha256": "87e1e4f478619ffd63f33c640cb6ecdde900c87ab72398874ef6ed8716dec284",
+      "bytes": 30766
+    },
+    {
+      "path": "server/src/__tests__/v7-worker-model-profiles.test.ts",
+      "sha256": "ecc6bbac89ea3779b663e982de8e7b84e32018b06001350843bc4d1e3764111b",
+      "bytes": 11806
+    },
+    {
+      "path": "server/src/__tests__/v9-runtime-candidates.integration.test.ts",
+      "sha256": "22874a1bd2ee92eb95218adf1dd8b3f318bf648fb06d8ae2b6f48157add8f93f",
+      "bytes": 12251
+    },
+    {
+      "path": "ui/src/components/AgentRuntimeCandidates.tsx",
+      "sha256": "79d1c44d8f92c557b96064d35abf5ea27bc2d652de22aa274acc36d8bb89d0f2",
+      "bytes": 14796
+    },
+    {
+      "path": "ui/src/components/AgentRuntimeCandidates.test.tsx",
+      "sha256": "89bc2282b4f045b21c80d5f43c162ab48932c04922d8056bfa1b3c1e9d1f6752",
+      "bytes": 10217
+    },
+    {
+      "path": "ui/src/i18n/experience/en.json",
+      "sha256": "5ede9ec3d64defa2b5db4072120334de6c8e8460e7d52e29f1fbf601db36573b",
+      "bytes": 236144
+    },
+    {
+      "path": "ui/src/i18n/experience/da.json",
+      "sha256": "9f7f4dd7b713225f4561d036a9e2dcf53676090ebe6f3aa567b9085497f524ff",
+      "bytes": 252972
+    }
+  ]
+}

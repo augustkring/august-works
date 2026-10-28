@@ -151,7 +151,21 @@ export const trustAcceptanceNoticeProjectionSchema = z.strictObject({
 export const trustAcceptanceNoticeListSchema = z.strictObject({
   configured: z.boolean(),
   notices: z.array(trustAcceptanceNoticeProjectionSchema).max(100),
+  modelNotices: z.array(z.strictObject({
+    id: z.string().uuid(),
+    category: z.literal("action_required"),
+    title: z.literal("A current Agent model needs migration"),
+    summary: z.literal("Review the affected Agent and publish a currently qualified replacement model."),
+    affectedCompanyId: z.string().uuid(),
+    affectedAgentId: z.string().uuid(),
+    effectiveAt: z.iso.datetime().nullable(),
+    actionRequired: z.literal(true),
+    mandatoryVisibility: z.literal(true),
+    completionOwner: z.literal("current_agent_model_selection"),
+    actionPath: z.string().regex(/^\/agents\/[0-9a-f-]{36}$/),
+  }).strict()).max(100).default([]),
 });
+export type ModelRetirementNoticeProjection = z.infer<typeof trustAcceptanceNoticeListSchema>["modelNotices"][number];
 export type AnnouncementAction = z.infer<typeof announcementActionSchema>;
 export type Announcement = z.infer<typeof announcementSchema>;
 export type AnnouncementManifest = z.infer<typeof announcementManifestSchema>;

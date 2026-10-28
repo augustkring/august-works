@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import type { TrustAcceptanceNoticeProjection } from "@paperclipai/shared";
+import type { ModelRetirementNoticeProjection, TrustAcceptanceNoticeProjection } from "@paperclipai/shared";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MarkdownBody } from "@/components/MarkdownBody";
@@ -62,6 +62,21 @@ function MandatoryTrustNotice({ notice, userId }: { notice: TrustAcceptanceNotic
   );
 }
 
+function MandatoryModelMigrationNotice({ notice }: { notice: ModelRetirementNoticeProjection }) {
+  const { t } = useTranslation("experience");
+  return <Card role="alert" aria-labelledby={`mandatory-model-notice-${notice.id}`} className="border-amber-600/50 bg-amber-50/50 dark:bg-amber-950/20">
+    <CardHeader className="pb-2">
+      <p className="text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-200">{t("announcement.mandatory.eyebrow")}</p>
+      <CardTitle id={`mandatory-model-notice-${notice.id}`} className="text-base">{t("announcement.mandatory.modelMigrationTitle")}</CardTitle>
+      <p className="text-sm text-muted-foreground">{t("announcement.mandatory.modelMigrationSummary")}</p>
+    </CardHeader>
+    <CardContent className="space-y-3">
+      {notice.effectiveAt && <p className="text-xs text-muted-foreground">{t("announcement.mandatory.modelMigrationDeadline", { date: new Date(notice.effectiveAt).toLocaleDateString() })}</p>}
+      <Button asChild><a href={notice.actionPath}>{t("announcement.mandatory.reviewAgent")}</a></Button>
+    </CardContent>
+  </Card>;
+}
+
 export function MandatoryProductNotices({ companyId, userId }: { companyId: string | null; userId: string | null }) {
   const { t } = useTranslation("experience");
   const query = useQuery({
@@ -71,10 +86,12 @@ export function MandatoryProductNotices({ companyId, userId }: { companyId: stri
     retry: false,
     refetchInterval: 60_000,
   });
-  if (!companyId || !userId || query.data?.notices.length === 0) return null;
+  if (!companyId || !userId || (query.data?.notices.length === 0 && (query.data?.modelNotices?.length ?? 0) === 0)) return null;
   if (query.isError) return <aside role="alert" className="border-t bg-amber-50/50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/20 dark:text-amber-100">{t("announcement.mandatory.unavailable")}</aside>;
   const notices = query.data?.notices ?? [];
+  const modelNotices = query.data?.modelNotices ?? [];
   return <aside aria-label={t("announcement.mandatory.landmark")} className="space-y-2 border-t bg-background p-2 md:px-3">
     {notices.map(notice => <MandatoryTrustNotice key={notice.id} notice={notice} userId={userId} />)}
+    {modelNotices.map(notice => <MandatoryModelMigrationNotice key={notice.id} notice={notice} />)}
   </aside>;
 }

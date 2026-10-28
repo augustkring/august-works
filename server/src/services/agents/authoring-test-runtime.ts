@@ -134,7 +134,7 @@ export function authoringTestRuntime(db: Db, options: Options, profile: (company
     let tariffProfile: WorkerModelProfile | null = null;
     const broker = modelReservationService(db, { sourceSha: options.sourceSha,
       qualifiedTariff: async () => tariffProfile
-        ? assertWorkerModelProfileCurrent(tariffProfile, options.sourceSha, options.protectedEvidenceOrigin).tariff : null,
+        ? assertWorkerModelProfileCurrent(tariffProfile, options.sourceSha, options.protectedEvidenceOrigin, "candidate_evaluation").tariff : null,
       currentAuthority: async (tx, actor, scope) => {
         if (actor.type !== "board" || actor.userId !== test.createdByUserId || scope.companyId !== test.companyId || scope.planId !== test.planId ||
           scope.purpose !== "agent_safe_test" || scope.workerId || scope.workerAttemptId) throw forbidden("The original test's model authority is required");

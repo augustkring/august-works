@@ -68,6 +68,22 @@ describe("mandatory product notices", () => {
     expect(api.complete).not.toHaveBeenCalled();
   });
 
+  it("shows sanitized model retirement Action Needed only with the canonical Agent link", async () => {
+    const modelNotice = { id: "00000000-0000-4000-8000-000000000009", category: "action_required" as const,
+      title: "A current Agent model needs migration" as const,
+      summary: "Review the affected Agent and publish a currently qualified replacement model." as const,
+      affectedCompanyId: companyId, affectedAgentId: "00000000-0000-4000-8000-000000000010",
+      effectiveAt: "2026-11-01T00:00:00Z", actionRequired: true as const, mandatoryVisibility: true as const,
+      completionOwner: "current_agent_model_selection" as const, actionPath: "/agents/00000000-0000-4000-8000-000000000010" };
+    api.actionRequired.mockReset().mockResolvedValue({ configured: true, notices: [], modelNotices: [modelNotice] });
+    await render();
+    await act(async () => { await vi.waitFor(() => expect(container.querySelector("a")).not.toBeNull()); });
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("announcement.mandatory.modelMigrationTitle");
+    expect(container.querySelector("a")?.getAttribute("href")).toBe(modelNotice.actionPath);
+    expect(api.content).not.toHaveBeenCalled();
+    expect(api.complete).not.toHaveBeenCalled();
+  });
+
   it("requires an explicit action for a notice-mode receipt and does not complete an admin-only action for a member", async () => {
     const readNotice: TrustAcceptanceNoticeProjection = { ...notice,
       summary: "Review the current version (4) and mark the notice as read.",

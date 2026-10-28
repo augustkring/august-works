@@ -2091,6 +2091,8 @@
     "changes": "Reviewed version changes",
     "versions": "Active version {{before}} → version {{after}}",
     "perCallCost": "Maximum cost per future model call",
+    "modelMigration": "This changes the model for this one Agent version. It uses this Agent’s retained Human-verified baseline and current candidate evidence. Each other Agent needs its own reviewed migration; no automatic fallback or rollback will run.",
+    "modelRollback": "This returns this one Agent to a previously used model only after fresh qualification and tests against current policy and lifecycle. Each other Agent needs its own review; no automatic rollback will run.",
     "confirmPublication": "I confirm publishing this saved and verified version.",
     "confirmActivation": "I confirm replacing the active version for future work under the existing budget and access.",
     "publish": "Publish and activate",
