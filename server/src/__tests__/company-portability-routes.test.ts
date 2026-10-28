@@ -1048,10 +1048,11 @@ describe.sequential("company portability routes", () => {
     expect(accepted.body.statusUrl).toMatch(/^\/api\/companies\/import\/jobs\/tenant-import-/);
     expect(accepted.body.retryAfterMs).toBe(1000);
     await waitForCondition(() => mockCompanyPortabilityService.importBundle.mock.calls.length === 1, "import job start");
-    expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledWith(importRequest, "cloud-user-1", {
+    expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledWith(importRequest, "cloud-user-1", expect.objectContaining({
       pauseAutomations: false, actor: cloudTenantActor(), privateWorkAdmission: "closed", checkCancellation: expect.any(Function),
+      onAcceptedPlan: expect.any(Function), onEffectCheckpoint: expect.any(Function),
       onSourceReleaseReview: expect.any(Function), onSourceReleaseTargetBound: expect.any(Function),
-    });
+    }));
     expect(mockLogActivity).not.toHaveBeenCalled();
 
     resolveImport(createImportResult("updated"));
@@ -1212,8 +1213,9 @@ describe.sequential("company portability routes", () => {
     expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledWith(
       { ...importRequest, pauseAutomations: true },
       "cloud-user-1",
-      { pauseAutomations: true, actor: cloudTenantActor(), privateWorkAdmission: "closed", checkCancellation: expect.any(Function),
-        onSourceReleaseReview: expect.any(Function), onSourceReleaseTargetBound: expect.any(Function) },
+      expect.objectContaining({ pauseAutomations: true, actor: cloudTenantActor(), privateWorkAdmission: "closed", checkCancellation: expect.any(Function),
+        onAcceptedPlan: expect.any(Function), onEffectCheckpoint: expect.any(Function),
+        onSourceReleaseReview: expect.any(Function), onSourceReleaseTargetBound: expect.any(Function) }),
     );
   });
 
@@ -1237,10 +1239,11 @@ describe.sequential("company portability routes", () => {
     expect(accepted.body.statusUrl).toMatch(/^\/api\/companies\/import\/jobs\/import-/);
     expect(accepted.body.statusUrl).not.toMatch(/\/jobs\/tenant-import-/);
     await waitForCondition(() => mockCompanyPortabilityService.importBundle.mock.calls.length === 1, "board import start");
-    expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledWith(importRequest, "board-user-a", {
+    expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledWith(importRequest, "board-user-a", expect.objectContaining({
       pauseAutomations: false, actor: boardActor("board-user-a"), privateWorkAdmission: "closed", checkCancellation: expect.any(Function),
+      onAcceptedPlan: expect.any(Function), onEffectCheckpoint: expect.any(Function),
       onSourceReleaseReview: expect.any(Function), onSourceReleaseTargetBound: expect.any(Function),
-    });
+    }));
 
     const fullResult = createImportResult("created");
     resolveImport(fullResult);
@@ -1478,10 +1481,11 @@ describe.sequential("company portability routes", () => {
     // consumes; the other import fields ride along from the JSON meta field.
     expect(call[0]).toEqual({ ...importMeta, source: { type: "inline", rootPath: "paperclip", files } });
     expect(call[1]).toBe("board-user-a");
-    expect(call[2]).toEqual({
+    expect(call[2]).toEqual(expect.objectContaining({
       pauseAutomations: false, actor: boardActor("board-user-a"), privateWorkAdmission: "closed", checkCancellation: expect.any(Function),
+      onAcceptedPlan: expect.any(Function), onEffectCheckpoint: expect.any(Function),
       onSourceReleaseReview: expect.any(Function), onSourceReleaseTargetBound: expect.any(Function),
-    });
+    }));
   });
 
   it.sequential("previews a company from a multipart zip upload", async () => {
