@@ -96,12 +96,12 @@ export async function handoffToOnboardedService(
   const deps = { ...defaultDashboardDependencies, ...dependencies };
   const runtime = await deps.waitUntilReady();
   const dashboardUrl = resolveOnboardServiceDashboardUrl(config, runtime);
-  deps.info(`Paperclip dashboard: ${pc.cyan(dashboardUrl)}`);
+  deps.info(`Blentera dashboard: ${pc.cyan(dashboardUrl)}`);
 
   if (!runtime) {
     deps.warn(
       `The background service started, but the dashboard is not ready yet. ` +
-        `Open ${dashboardUrl} after checking \`paperclipai service logs\`.`,
+        `Open ${dashboardUrl} after checking \`blentera service logs\`.`,
     );
     return;
   }
@@ -109,7 +109,7 @@ export async function handoffToOnboardedService(
   if (!deps.isInteractive() || envDisablesBrowser()) return;
 
   if (await deps.openDashboard(dashboardUrl)) {
-    deps.success("Sent the Paperclip dashboard to your browser.");
+    deps.success("Sent the Blentera dashboard to your browser.");
   } else {
     deps.warn(`Could not open a browser automatically. Open ${dashboardUrl} manually.`);
   }
@@ -170,7 +170,7 @@ const defaultDependencies: OnboardServiceDependencies = {
           installedNow: false,
           reason:
             `this build reports version ${packageVersion}, which is not an installable release; ` +
-            "run `paperclipai install` (or `paperclipai install --repo <repo> --ref <ref>` for source builds) first",
+            "run `blentera install` (or `blentera install --repo <repo> --ref <ref>` for source builds) first",
         };
       }
     } catch (error) {
@@ -191,14 +191,14 @@ const defaultDependencies: OnboardServiceDependencies = {
   },
   confirm: async () => {
     const answer = await p.confirm({
-      message: "Install Paperclip as a background service?",
+      message: "Install Blentera as a background service?",
       initialValue: true,
     });
     return !p.isCancel(answer) && answer === true;
   },
   confirmLinger: async () => {
     const answer = await p.confirm({
-      message: "Allow Paperclip to keep running after logout? This may request system authorization.",
+      message: "Allow Blentera to keep running after logout? This may request system authorization.",
       initialValue: false,
     });
     return !p.isCancel(answer) && answer === true;
@@ -220,7 +220,7 @@ export async function handleOnboardService(
   const canPrompt = options.yes !== true && deps.isInteractive();
   if (!explicitlyRequested && !canPrompt) {
     deps.info(
-      "Background service not installed. Use `paperclipai onboard --install-service` or `paperclipai service install` to opt in.",
+      "Background service not installed. Use `blentera onboard --install-service` or `blentera service install` to opt in.",
     );
     return false;
   }
@@ -242,12 +242,12 @@ export async function handleOnboardService(
   if (!shim.ok) {
     deps.warn(
       `Background service not installed: ${shim.reason ?? "the managed install could not be completed"}. ` +
-        "Run `paperclipai install`, then `paperclipai service install`.",
+        "Run `blentera install`, then `blentera service install`.",
     );
     return false;
   }
   if (shim.installedNow) {
-    deps.success("Installed the managed paperclipai payload and command shim for the service.");
+      deps.success("Installed the managed Blentera CLI payload and command shim for the service.");
   }
 
   await detection.manager.install({ startNow: true, startOnLogin: true });

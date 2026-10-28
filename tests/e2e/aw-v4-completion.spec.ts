@@ -97,7 +97,7 @@ test("reviews an artifact through keyboard controls and exports and erases Memor
   }
 });
 
-test("reviews run evidence and qualifies, shadows and retires a generated optimizer candidate", async ({ page, request }) => {
+test("reviews run evidence and qualifies, shadows and retires a generated optimizer candidate", async ({ page, request, playwright }) => {
   test.setTimeout(120_000);
   const flags = await json(await request.get("/api/instance/settings/experimental"));
   const enabled = { enableWorkflowsV1: true, enableWorkflowBuilderV1: true, enableAutomationArtifactsV1: true,
@@ -128,7 +128,12 @@ test("reviews run evidence and qualifies, shadows and retires a generated optimi
     await qualify.focus(); await page.keyboard.press("Enter");
     await page.getByRole("button", { name: "Generate from reviewed runs", exact: true }).click();
     await expect(page.getByLabel("Candidate contract JSON")).toHaveValue(/preserve-0/);
+    const compilation = page.waitForResponse(response =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname.startsWith(`${base}/workflows/${workflow.id}/optimizer-suggestions/`) &&
+      new URL(response.url()).pathname.endsWith("/compile"));
     await page.getByRole("button", { name: "Compile and run replay", exact: true }).click();
+    expect(await json(await compilation)).toMatchObject({ gatesPassed: true });
     await expect(page.getByRole("status").filter({ hasText: "Qualification passed." })).toBeVisible();
     const shadowResponse = page.waitForResponse(response =>
       response.request().method() === "POST" &&
@@ -147,8 +152,16 @@ test("reviews run evidence and qualifies, shadows and retires a generated optimi
     await expect(page.getByText(/shadow: 3 passed, 0 failed/)).toBeVisible();
     const evaluations = await json(await request.get(`${base}/workflows/${workflow.id}/optimizer-evaluations`));
     expect(evaluations).toMatchObject([{ status: "shadow", replayEvaluation: { status: "passed" }, shadowEvaluation: { status: "passed" } }]);
-    // Anonymous local-board access does not impersonate an identified approver.
-    expect((await request.post(`${base}/workflows/${workflow.id}/optimizer-evaluations/${evaluations[0].id}/request-approval`, { data: {} })).status()).toBe(403);
+    // The main fixture has a real Human session. Use a separate empty cookie
+    // jar to verify an anonymous caller cannot request approval.
+    const anonymous = await playwright.request.newContext({
+      baseURL: new URL(page.url()).origin, storageState: { cookies: [], origins: [] },
+    });
+    try {
+      expect((await anonymous.post(`${base}/workflows/${workflow.id}/optimizer-evaluations/${evaluations[0].id}/request-approval`, { data: {} })).status()).toBe(401);
+    } finally {
+      await anonymous.dispose();
+    }
     await page.screenshot({ path: "test-results/aw-v4-optimizer-shadow.png", fullPage: true });
     await page.getByRole("button", { name: "Retire and use original transform", exact: true }).click();
     await expect.poll(async () => json(await request.get(`${base}/workflows/${workflow.id}/optimizer-evaluations`))).toMatchObject([{ status: "retired" }]);

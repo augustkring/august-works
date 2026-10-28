@@ -33,7 +33,7 @@ export async function llmCheck(config: PaperclipConfig): Promise<CheckResult> {
       status: "fail",
       message: `${config.llm.provider === "claude" ? "Claude" : "OpenAI"} API key is invalid (401/403)`,
       canRepair: false,
-      repairHint: "Run `paperclipai configure --section llm`",
+      repairHint: "Run `blentera configure --section llm`",
     };
   }
   {

@@ -126,7 +126,7 @@ export function launchdServiceName(instanceId: string): string {
 
 export function renderSystemdUnit(input: { instanceId: string; shimPath: string; homeDir: string }): string {
   return `[Unit]
-Description=Paperclip AI (${escapeSystemd(input.instanceId)})
+Description=Blentera (${escapeSystemd(input.instanceId)})
 After=network.target
 StartLimitIntervalSec=60
 StartLimitBurst=5
@@ -350,12 +350,12 @@ export async function detectServiceManager(input: { instanceId?: string; platfor
   const platform = input.platform ?? process.platform;
   const runner = input.runner ?? defaultCommandRunner;
   if (platform === "darwin") return { supported: true, manager: new LaunchdServiceManager(instanceId, runner) };
-  if (platform !== "linux") return { supported: false, reason: `Service management is not supported on ${platform}. Use paperclipai run instead.` };
+  if (platform !== "linux") return { supported: false, reason: `Service management is not supported on ${platform}. Use blentera run instead.` };
   try {
     await runner("systemctl", ["--user", "show-environment"]);
     return { supported: true, manager: new SystemdServiceManager(instanceId, runner) };
   } catch {
-    return { supported: false, reason: "No usable systemd user manager was detected (common in containers and WSL1). Use paperclipai run instead." };
+    return { supported: false, reason: "No usable systemd user manager was detected (common in containers and WSL1). Use blentera run instead." };
   }
 }
 
@@ -364,5 +364,5 @@ export async function assertForegroundRunAllowed(instanceId: string, force = fal
   const detection = await detector({ instanceId });
   if (!detection.supported) return;
   const status = await detection.manager.status();
-  if (status.active) throw new Error(`Paperclip instance '${instanceId}' is already running as ${status.serviceName}. Use 'paperclipai service status --instance ${instanceId}' or pass --force to bypass this safety check.`);
+  if (status.active) throw new Error(`Blentera instance '${instanceId}' is already running as ${status.serviceName}. Use 'blentera service status --instance ${instanceId}' or pass --force to bypass this safety check.`);
 }

@@ -7276,10 +7276,6 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
                   title="More task actions"
                   aria-haspopup="dialog"
                   aria-expanded={moreOpen}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    setMoreOpen((open) => !open);
-                  }}
                 >
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>

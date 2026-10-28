@@ -90,7 +90,7 @@ test("V7 discovery answers, readiness and governance remain human reviewed and c
     await expect(page.getByRole("region", { name: "Readiness assessment", exact: true })).toContainText("blocked");
     await expect(page.getByRole("region", { name: "Knowledge requiring review", exact: true })).toBeVisible();
 
-    const updateWell = page.getByRole("complementary", { name: "Paperclip announcements", exact: true });
+    const updateWell = page.getByRole("complementary", { name: "Blentera announcements", exact: true });
     await expect(updateWell).toBeVisible();
     await expect(updateWell.locator("details")).not.toHaveAttribute("open");
     await updateWell.locator("summary").focus(); await page.keyboard.press("Enter");
