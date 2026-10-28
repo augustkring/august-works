@@ -3,8 +3,9 @@ import { assertExecutionGovernance } from "./services/ai-governance/execution-ga
 import { assertManagedRuntimeCommercialAuthority } from "./services/billing/managed-runtime-admission.js";
 import { v7FeatureEnabled } from "@paperclipai/shared";
 import { and, eq } from "drizzle-orm";
-import { heartbeatRuns, instanceSettings, orchestrationPlans, orchestrationWorkerAttempts, type Db } from "@paperclipai/db";
+import { heartbeatRuns, orchestrationPlans, orchestrationWorkerAttempts, type Db } from "@paperclipai/db";
 import { forbidden } from "./errors.js";
+import { instanceSettingsService } from "./services/instance-settings.js";
 
 /** Stop revokes write authority before waiting for the executor to settle. */
 export function agentRunWritesRevoked(run: {
@@ -59,8 +60,8 @@ export async function assertAgentRunPolicyAllowed(tx: Db, companyId: string, act
   const [orchestration] = await tx.select({ status: orchestrationPlans.status, startedAt: orchestrationPlans.startedAt, budgets: orchestrationPlans.budgets }).from(orchestrationWorkerAttempts)
     .innerJoin(orchestrationPlans, and(eq(orchestrationPlans.companyId, orchestrationWorkerAttempts.companyId), eq(orchestrationPlans.id, orchestrationWorkerAttempts.planId)))
     .where(and(eq(orchestrationWorkerAttempts.companyId, companyId), eq(orchestrationWorkerAttempts.runId, actor.runId))).for("share", { of: orchestrationPlans });
-  const [settings] = orchestration ? await tx.select({ flags: instanceSettings.experimental }).from(instanceSettings).where(eq(instanceSettings.singletonKey, "default")) : [];
-  if (orchestration && (!v7FeatureEnabled(settings?.flags ?? {}, "orchestration_v7") || orchestration.status !== "running" || !orchestration.startedAt || Date.now() >= orchestration.startedAt.getTime() + orchestration.budgets.maxWallClockSeconds * 1000) && !stoppedForThisMutation) {
+  const flags = orchestration ? await instanceSettingsService(tx).getExperimental({ db: tx }) : {};
+  if (orchestration && (!v7FeatureEnabled(flags, "orchestration_v7") || orchestration.status !== "running" || !orchestration.startedAt || Date.now() >= orchestration.startedAt.getTime() + orchestration.budgets.maxWallClockSeconds * 1000) && !stoppedForThisMutation) {
     throw forbidden("This orchestration attempt no longer has write authority", { code: "orchestration_attempt_stopped" });
   }
   if (agentRunWritesRevoked(run) && !stoppedForThisMutation) {

@@ -1,5 +1,4 @@
 import type { NativeNotificationChannelGateway } from "./notifications/channel-delivery.js";
-import { instanceSettings } from "@paperclipai/db";
 import { v9FeatureEnabled } from "@paperclipai/shared";
 import { safeCardForPublication } from "./chat-card-rendering.js";
 import { withSlackBoardLease } from "./slack-board-lease.js";
@@ -10502,9 +10501,8 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
     },
   ): Promise<void> {
     if (input.v9Confirmation) {
-      const [settings] = await tx.select({ experimental: instanceSettings.experimental })
-        .from(instanceSettings).where(eq(instanceSettings.singletonKey, "default")).for("share");
-      if (!v9FeatureEnabled(settings?.experimental ?? {}, "action_cards_v9"))
+      const experimental = await instanceSettingsService(tx).getExperimental({ db: tx, lock: "share" });
+      if (!v9FeatureEnabled(experimental, "action_cards_v9"))
         throw forbidden("This chat action is no longer authorized", { code: "chat_action_authorization_changed" });
     }
     const endpoint = await runtimeCallbackEndpoint(

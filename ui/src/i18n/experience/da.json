@@ -2276,7 +2276,19 @@
   },
   "loadingView": "Indlæser visning…",
   "announcement": {
-    "summary": "Produktnyheder"
+    "summary": "Produktnyheder",
+    "mandatory": {
+      "landmark": "Påkrævede meddelelser",
+      "eyebrow": "Handling påkrævet",
+      "loading": "Indlæser den gældende dokumentversion…",
+      "contentUnavailable": "Vi kunne ikke bekræfte det gældende dokument. Accept er ikke mulig. Opdater siden, og prøv igen.",
+      "documentContent": "Indholdet af det gældende dokument",
+      "version": "Gældende version {{version}}",
+      "accept": "Jeg har gennemgået og accepterer denne version",
+      "accepting": "Registrerer accept…",
+      "acceptFailed": "Accepten kunne ikke registreres. Opdater siden for at kontrollere den aktuelle status.",
+      "unavailable": "Vi kunne ikke bekræfte påkrævede meddelelser for denne virksomhed. Opdater siden for at kontrollere igen."
+    }
   },
   "notificationProposal": {
     "review": "Gennemgå notifikationsforslag",
@@ -3803,5 +3815,64 @@
       "verifying": "Kontrolleres",
       "completed": "Afsluttet"
     }
+  },
+  "featureLifecycle": {
+    "maturityLabel": "Kapabilitetens modenhed: {{maturity}}",
+    "recordSummary": "Kapabilitetens livscyklus og udgivelsesbeviser",
+    "maturities": {
+      "internal": "Intern",
+      "experimental": "Eksperimentel",
+      "preview": "Forhåndsvisning",
+      "ga": "Generelt tilgængelig",
+      "deprecated": "Forældet",
+      "retired": "Udgået"
+    },
+    "support": "Support",
+    "supportLevels": {
+      "unqualified": "Ikke kvalificeret",
+      "no_compatibility_guarantee": "Ingen kompatibilitetsgaranti",
+      "preview": "Support i forhåndsvisning",
+      "standard": "Standard-support"
+    },
+    "owner": "Ansvarlig",
+    "customerSurfaces": "Kundevendte flader",
+    "experienceProfiles": "Oplevelsesprofiler",
+    "entitlement": "Adgangsret",
+    "criticality": "Kritikalitet",
+    "dataCategories": "Datakategorier",
+    "serviceDependencies": "Serviceafhængigheder",
+    "docsHelp": "Dokumentation / hjælp",
+    "releaseEvidence": "Udgivelsesbeviser",
+    "deprecation": "Forældelsesdato",
+    "sunset": "Udfasningsdato",
+    "replacement": "Erstatning",
+    "migrationGuide": "Migreringsvejledning",
+    "lastReviewed": "Senest gennemgået",
+    "gaSecurityPrivacy": "GA-sikkerhed / privatliv",
+    "gaAccessibility": "GA-tilgængelighed",
+    "gaOperability": "GA-drift",
+    "gaMigrationPlan": "GA-migreringsplan",
+    "gaCriticalityEvidence": "GA-bevis for kritikalitet",
+    "criticalities": {
+      "unqualified": "Ikke kvalificeret",
+      "low": "Lav",
+      "standard": "Standard",
+      "high": "Høj"
+    },
+    "readiness": {
+      "unqualified": "Ikke kvalificeret",
+      "qualified": "Kvalificeret",
+      "not_applicable": "Ikke relevant"
+    },
+    "notRecorded": "Ikke registreret",
+    "notMapped": "Ikke kortlagt endnu",
+    "notLinked": "Ikke knyttet til",
+    "notScheduled": "Ikke planlagt",
+    "supportPath": "Menneskelig support og hjælp",
+    "openHelp": "Åbn hjælp",
+    "retiredNewUse": "Udgået — ikke tilgængelig til ny brug. Denne indstilling sletter ikke eksisterende data eller annullerer gendannelsesarbejde, som eksisterende tjenester ejer.",
+    "registryTitle": "Register over kapabiliteters livscyklus",
+    "registryDescription": "Komplet oversigt fra det fælles kapabilitetskatalog. Tomme eller ukvalificerede felter er ikke kvalificeret endnu; de betyder ikke, at en kapabilitet eller dens data mangler.",
+    "internalNewUse": "Intern — tilbydes ikke til kundebrug. Denne indstilling sletter ikke eksisterende data eller annullerer gendannelsesarbejde, som eksisterende tjenester ejer."
   }
 }

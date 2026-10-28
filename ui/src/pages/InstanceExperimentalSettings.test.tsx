@@ -3,12 +3,14 @@
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { INSTANCE_FEATURE_KEYS, v5FeatureFlagsSchema } from "@paperclipai/shared";
+import { MemoryRouter } from "react-router-dom";
+import { INSTANCE_FEATURE_CATALOG, INSTANCE_FEATURE_KEYS, v5FeatureFlagsSchema } from "@paperclipai/shared";
 import type {
   InstanceExperimentalSettings as InstanceExperimentalSettingsPayload,
   InstanceExperimentalSettingsWithManaged,
 } from "@paperclipai/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { i18n } from "@/i18n";
 import { InstanceExperimentalSettings } from "./InstanceExperimentalSettings";
 import { queryKeys } from "../lib/queryKeys";
 
@@ -179,9 +181,11 @@ describe("InstanceExperimentalSettings — Conference Room Chat card (PAP-11233)
     });
     flushSync(() => {
       root!.render(
-        <QueryClientProvider client={queryClient}>
-          <InstanceExperimentalSettings />
-        </QueryClientProvider>,
+        <MemoryRouter initialEntries={["/company/settings/instance/experimental"]}>
+          <QueryClientProvider client={queryClient}>
+            <InstanceExperimentalSettings />
+          </QueryClientProvider>
+        </MemoryRouter>,
       );
     });
     await flushReact();
@@ -200,7 +204,8 @@ describe("InstanceExperimentalSettings — Conference Room Chat card (PAP-11233)
     });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await i18n.changeLanguage("en");
     flushSync(() => {
       root?.unmount();
     });
@@ -219,6 +224,33 @@ describe("InstanceExperimentalSettings — Conference Room Chat card (PAP-11233)
     );
     expect(warning?.textContent).toContain("Experimental features may break at any time.");
     expect(warning?.textContent).toContain("no compatibility guarantees");
+  });
+
+  it("projects lifecycle and unqualified release evidence from the shared catalog", async () => {
+    await renderPage();
+
+    await act(() => container.querySelector<HTMLDetailsElement>('[data-testid="capability-lifecycle-registry"]')?.querySelector("summary")?.click());
+    await flushReact();
+    const lifecycle = container.querySelector('[data-testid="capability-lifecycle-enableAgentChat"]');
+    expect(container.querySelector('[aria-label="Capability maturity: Experimental"]')).not.toBeNull();
+    expect(lifecycle?.textContent).toContain("No compatibility guarantee");
+    expect(lifecycle?.textContent).toContain("Not recorded");
+    expect(lifecycle?.textContent).toContain("Not linked");
+    expect(lifecycle?.textContent).toContain("Not scheduled");
+    expect(lifecycle?.textContent).toContain("Open Help");
+  });
+
+  it("uses Danish lifecycle labels and accessible maturity wording", async () => {
+    await i18n.changeLanguage("da");
+    await renderPage();
+    await act(() => container.querySelector<HTMLDetailsElement>('[data-testid="capability-lifecycle-registry"]')?.querySelector("summary")?.click());
+    await flushReact();
+
+    expect(container.querySelector('[aria-label="Kapabilitetens modenhed: Eksperimentel"]')).not.toBeNull();
+    const summary = container.querySelector('[data-testid="capability-lifecycle-enableAgentChat"] summary')?.textContent;
+    expect(summary).toContain("Agent Chat");
+    expect(summary).toContain("Eksperimentel");
+    expect(container.textContent).toContain("Åbn hjælp");
   });
 
   it("does not render an Apps experimental setting", async () => {
@@ -243,8 +275,10 @@ describe("InstanceExperimentalSettings — Conference Room Chat card (PAP-11233)
 
   it("does not offer a retired MCP aggregators toggle", async () => {
     await renderPage();
+    await act(() => container.querySelector<HTMLDetailsElement>('[data-testid="capability-lifecycle-registry"]')?.querySelector("summary")?.click());
+    await flushReact();
     expect(container.querySelector('button[aria-label="Toggle MCP aggregators experimental setting"]')).toBeNull();
-    expect(container.textContent).not.toContain("MCP aggregators");
+    expect(container.querySelector('[data-testid="capability-lifecycle-enableMcpAggregators"] [aria-label="Capability maturity: Deprecated"]')).not.toBeNull();
   });
 
   it("defaults chat connectors off and persists an explicit toggle in both directions", async () => {
@@ -785,9 +819,11 @@ describe("InstanceExperimentalSettings — cloud-managed keys", () => {
     });
     flushSync(() => {
       root!.render(
-        <QueryClientProvider client={queryClient}>
-          <InstanceExperimentalSettings />
-        </QueryClientProvider>,
+        <MemoryRouter initialEntries={["/company/settings/instance/experimental"]}>
+          <QueryClientProvider client={queryClient}>
+            <InstanceExperimentalSettings />
+          </QueryClientProvider>
+        </MemoryRouter>,
       );
     });
     await flushReact();
@@ -938,9 +974,11 @@ describe("InstanceExperimentalSettings — card ordering and headings (PAP-393)"
     });
     flushSync(() => {
       root!.render(
-        <QueryClientProvider client={queryClient}>
-          <InstanceExperimentalSettings />
-        </QueryClientProvider>,
+        <MemoryRouter initialEntries={["/company/settings/instance/experimental"]}>
+          <QueryClientProvider client={queryClient}>
+            <InstanceExperimentalSettings />
+          </QueryClientProvider>
+        </MemoryRouter>,
       );
     });
     await flushReact();
@@ -1012,13 +1050,16 @@ describe("InstanceExperimentalSettings — card ordering and headings (PAP-393)"
     expect(cards.every((card) => card.classList.contains("bg-transparent"))).toBe(true);
   });
 
-  it("no longer renders an 'Experimental' secondary badge on any card", async () => {
+  it("shows the maturity recorded for each settings capability", async () => {
     await renderPage(defaultExperimentalSettings());
+    await act(() => container.querySelector<HTMLDetailsElement>('[data-testid="capability-lifecycle-registry"]')?.querySelector("summary")?.click());
+    await flushReact();
 
-    const badges = [...container.querySelectorAll('[data-slot="badge"]')].map(
-      (badge) => badge.textContent?.trim(),
-    );
-    expect(badges).not.toContain("Experimental");
+    for (const key of ["enableAgentChat", "enablePipelines", "skill_lifecycle_v5"] as const) {
+      const maturity = INSTANCE_FEATURE_CATALOG[key].lifecycle.maturity;
+      const localizedMaturity = maturity === "internal" ? "Internal" : maturity === "preview" ? "Preview" : "Experimental";
+      expect(container.querySelector(`[aria-label="Capability maturity: ${localizedMaturity}"]`)).not.toBeNull();
+    }
   });
 });
 
@@ -1054,9 +1095,11 @@ describe("InstanceExperimentalSettings — operator-hidden cards", () => {
     });
     flushSync(() => {
       root!.render(
-        <QueryClientProvider client={queryClient}>
-          <InstanceExperimentalSettings />
-        </QueryClientProvider>,
+        <MemoryRouter initialEntries={["/company/settings/instance/experimental"]}>
+          <QueryClientProvider client={queryClient}>
+            <InstanceExperimentalSettings />
+          </QueryClientProvider>
+        </MemoryRouter>,
       );
     });
     await flushReact();

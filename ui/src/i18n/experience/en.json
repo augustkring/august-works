@@ -2276,7 +2276,19 @@
   },
   "loadingView": "Loading view…",
   "announcement": {
-    "summary": "Product updates"
+    "summary": "Product updates",
+    "mandatory": {
+      "landmark": "Required notices",
+      "eyebrow": "Action required",
+      "loading": "Loading the current document version…",
+      "contentUnavailable": "We could not verify the current document. Acceptance is unavailable; refresh to try again.",
+      "documentContent": "Current document content",
+      "version": "Current version {{version}}",
+      "accept": "I have reviewed and accept this version",
+      "accepting": "Recording acceptance…",
+      "acceptFailed": "Acceptance could not be recorded. Refresh to check the current status.",
+      "unavailable": "We could not verify required notices for this company. Refresh to check again."
+    }
   },
   "notificationProposal": {
     "review": "Review notification proposal",
@@ -3803,5 +3815,64 @@
       "verifying": "Verifying",
       "completed": "Completed"
     }
+  },
+  "featureLifecycle": {
+    "maturityLabel": "Capability maturity: {{maturity}}",
+    "recordSummary": "Capability lifecycle and release evidence",
+    "maturities": {
+      "internal": "Internal",
+      "experimental": "Experimental",
+      "preview": "Preview",
+      "ga": "Generally available",
+      "deprecated": "Deprecated",
+      "retired": "Retired"
+    },
+    "support": "Support",
+    "supportLevels": {
+      "unqualified": "Unqualified",
+      "no_compatibility_guarantee": "No compatibility guarantee",
+      "preview": "Preview support",
+      "standard": "Standard support"
+    },
+    "owner": "Owner",
+    "customerSurfaces": "Customer surfaces",
+    "experienceProfiles": "Experience profiles",
+    "entitlement": "Entitlement",
+    "criticality": "Criticality",
+    "dataCategories": "Data categories",
+    "serviceDependencies": "Service dependencies",
+    "docsHelp": "Docs / help",
+    "releaseEvidence": "Release evidence",
+    "deprecation": "Deprecation",
+    "sunset": "Sunset",
+    "replacement": "Replacement",
+    "migrationGuide": "Migration guide",
+    "lastReviewed": "Last reviewed",
+    "gaSecurityPrivacy": "GA security / privacy",
+    "gaAccessibility": "GA accessibility",
+    "gaOperability": "GA operability",
+    "gaMigrationPlan": "GA migration plan",
+    "gaCriticalityEvidence": "GA criticality evidence",
+    "criticalities": {
+      "unqualified": "Unqualified",
+      "low": "Low",
+      "standard": "Standard",
+      "high": "High"
+    },
+    "readiness": {
+      "unqualified": "Unqualified",
+      "qualified": "Qualified",
+      "not_applicable": "Not applicable"
+    },
+    "notRecorded": "Not recorded",
+    "notMapped": "Not mapped yet",
+    "notLinked": "Not linked",
+    "notScheduled": "Not scheduled",
+    "supportPath": "Human support and Help",
+    "openHelp": "Open Help",
+    "retiredNewUse": "Retired — not available for new use. This setting does not delete existing data or cancel recovery work owned by existing services.",
+    "registryTitle": "Capability lifecycle registry",
+    "registryDescription": "Full record from the shared capability catalog. Blank or unqualified fields have not been qualified; they do not mean a capability or its data is absent.",
+    "internalNewUse": "Internal — not offered for customer use. This setting does not delete existing data or cancel recovery work owned by existing services."
   }
 }

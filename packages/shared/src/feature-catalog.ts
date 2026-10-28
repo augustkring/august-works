@@ -1,8 +1,8 @@
-import { V8_FEATURES, type V8FeatureKey } from "./v8-feature-flags.js";
-import { V9_FEATURES, type V9FeatureKey } from "./v9-feature-flags.js";
-import { V6_FEATURES, type V6FeatureKey } from "./v6-feature-flags.js";
-import { V7_FEATURES, type V7FeatureKey } from "./v7-feature-flags.js";
-import { V5_FEATURES, type V5FeatureKey } from "./v5-feature-flags.js";
+import { V8_FEATURES, V8_ROLLOUT, type V8FeatureKey } from "./v8-feature-flags.js";
+import { V9_FEATURES, V9_ROLLOUT, type V9FeatureKey } from "./v9-feature-flags.js";
+import { V6_FEATURES, V6_ROLLOUT, type V6FeatureKey } from "./v6-feature-flags.js";
+import { V7_FEATURES, V7_ROLLOUT, type V7FeatureKey } from "./v7-feature-flags.js";
+import { V5_FEATURES, V5_ROLLOUT, type V5FeatureKey } from "./v5-feature-flags.js";
 import { z } from "zod";
 import { instanceExperimentalSettingsSchema } from "./validators/instance.js";
 
@@ -36,7 +36,7 @@ export type InstanceFeatureKey = {
   [K in keyof ExperimentalSettings]: ExperimentalSettings[K] extends boolean ? K : never;
 }[keyof ExperimentalSettings];
 
-export interface FeatureCatalogEntry {
+interface FeatureCatalogBase {
   title: string;
   description: string;
   tier: FeatureTier;
@@ -46,20 +46,190 @@ export interface FeatureCatalogEntry {
   selfHostedDefault: boolean;
 }
 
-const v5Catalog = Object.fromEntries(Object.entries(V5_FEATURES).map(([key, [title, description]]) => [key, { title, description, tier: "managed", cloudDefault: false, selfHostedDefault: false }])) as Record<V5FeatureKey, FeatureCatalogEntry>;
+export interface FeatureCatalogEntry extends FeatureCatalogBase {
+  lifecycle: CapabilityLifecycle;
+}
 
-const v6Catalog = Object.fromEntries(Object.entries(V6_FEATURES).map(([key, [title, description]]) => [key, { title, description, tier: "managed", cloudDefault: false, selfHostedDefault: false }])) as Record<V6FeatureKey, FeatureCatalogEntry>;
+export const CAPABILITY_MATURITIES = ["internal", "experimental", "preview", "ga", "deprecated", "retired"] as const;
+export type CapabilityMaturity = (typeof CAPABILITY_MATURITIES)[number];
 
-export const INSTANCE_FEATURE_CATALOG: Record<InstanceFeatureKey, FeatureCatalogEntry> = {
+/** Release and support facts are nullable until a named owner has qualified them. */
+export interface CapabilityLifecycle {
+  capabilityKey: InstanceFeatureKey;
+  customerName: string;
+  owner: string | null;
+  maturity: CapabilityMaturity;
+  firstSupportedVersion: string | null;
+  customerSurfaces: string[];
+  experienceProfiles: string[];
+  entitlementKey: string | null;
+  criticality: "unqualified" | "low" | "standard" | "high";
+  dataCategories: string[];
+  serviceDependencies: string[];
+  docsRef: string | null;
+  supportPathRef: string | null;
+  supportLevel: "unqualified" | "no_compatibility_guarantee" | "preview" | "standard";
+  releaseEvidenceRefs: string[];
+  gaReadiness: {
+    securityPrivacy: "unqualified" | "qualified" | "not_applicable";
+    accessibility: "unqualified" | "qualified" | "not_applicable";
+    operability: "unqualified" | "qualified" | "not_applicable";
+    migrationPlan: "unqualified" | "qualified" | "not_applicable";
+    criticalityEvidence: "unqualified" | "qualified" | "not_applicable";
+  };
+  deprecationAt: string | null;
+  sunsetAt: string | null;
+  replacementCapability: string | null;
+  migrationGuideRef: string | null;
+  lastReviewedAt: string | null;
+}
+
+// These V10 links are copied only where current Help frontmatter names the
+// corresponding screens and source services; they do not count as GA evidence.
+const VERIFIED_HELP_LINKAGE: Partial<Record<InstanceFeatureKey, Partial<CapabilityLifecycle>>> = {
+  enablePipelines: {
+    owner: "augustkring/august-works",
+    maturity: "preview",
+    customerSurfaces: ["WORKFLOW", "WORKFLOW-DESCRIBE", "WORKFLOW-REVIEW", "WORKFLOW-TEST", "WORKFLOW-PUBLISH", "WORKFLOW-RECOVER"],
+    dataCategories: ["Workflow definitions", "Step inputs", "Run history"],
+    serviceDependencies: ["server/src/services/workflows/workflow-node-registry.ts", "server/src/services/workflows/workflow-service.ts"],
+    docsRef: "docs/help/workflows-preview.md",
+  },
+  enableAiWorkflowAuthoring: {
+    owner: "augustkring/august-works",
+    maturity: "preview",
+    customerSurfaces: ["WORKFLOW", "WORKFLOW-DESCRIBE", "WORKFLOW-REVIEW", "WORKFLOW-TEST", "WORKFLOW-PUBLISH", "WORKFLOW-RECOVER"],
+    dataCategories: ["Workflow definitions", "Step inputs", "Run history"],
+    serviceDependencies: ["server/src/services/workflows/workflow-node-registry.ts", "server/src/services/workflows/workflow-service.ts"],
+    docsRef: "docs/help/workflows-preview.md",
+  },
+  enableApps: {
+    owner: "augustkring/august-works",
+    customerSurfaces: ["APPS", "SETTINGS-APPS-DATA"],
+    dataCategories: ["Provider account identity", "Granted permissions", "Connection credentials"],
+    serviceDependencies: ["server/src/services/tool-access.ts", "server/src/services/paperclip-cloud-connector.ts"],
+    docsRef: "docs/help/apps-and-connections.md",
+  },
+};
+
+function capabilityLifecycle(key: InstanceFeatureKey, title: string): CapabilityLifecycle {
+  // These two keys are retained compatibility switches; their capabilities are
+  // always enabled and stored values are ignored by instance-settings.
+  const compatibilityKey = key === "enableApps" || key === "enableMcpAggregators";
+  const maturity: CapabilityMaturity = compatibilityKey ? "deprecated" : "experimental";
+  return {
+    capabilityKey: key,
+    customerName: title,
+    owner: historicalAdmissionFlagOwner(key),
+    maturity,
+    firstSupportedVersion: null,
+    customerSurfaces: [],
+    experienceProfiles: [],
+    entitlementKey: null,
+    criticality: "unqualified",
+    dataCategories: [],
+    serviceDependencies: [],
+    docsRef: null,
+    supportPathRef: "/company/help",
+    supportLevel: compatibilityKey ? "unqualified" : "no_compatibility_guarantee",
+    releaseEvidenceRefs: [],
+    gaReadiness: {
+      securityPrivacy: "unqualified",
+      accessibility: "unqualified",
+      operability: "unqualified",
+      migrationPlan: "unqualified",
+      criticalityEvidence: "unqualified",
+    },
+    deprecationAt: null,
+    sunsetAt: null,
+    replacementCapability: null,
+    migrationGuideRef: null,
+    lastReviewedAt: null,
+    ...VERIFIED_HELP_LINKAGE[key],
+  };
+}
+
+function historicalAdmissionFlagOwner(key: InstanceFeatureKey): string | null {
+  if (Object.hasOwn(V5_FEATURES, key)) return V5_ROLLOUT[key as V5FeatureKey].owner;
+  if (Object.hasOwn(V6_FEATURES, key)) return V6_ROLLOUT[key as V6FeatureKey].owner;
+  if (Object.hasOwn(V7_FEATURES, key)) return V7_ROLLOUT[key as V7FeatureKey].owner;
+  if (Object.hasOwn(V8_FEATURES, key)) return V8_ROLLOUT[key as V8FeatureKey].owner;
+  if (Object.hasOwn(V9_FEATURES, key)) return V9_ROLLOUT[key as V9FeatureKey].owner;
+  return null;
+}
+
+export function isCapabilityAdvertisedForNewUse(key: InstanceFeatureKey): boolean {
+  return isCapabilityMaturityAdvertisedForNewUse(INSTANCE_FEATURE_CATALOG[key].lifecycle.maturity);
+}
+
+export function isCapabilityMaturityAdvertisedForNewUse(maturity: CapabilityMaturity): boolean {
+  return maturity !== "internal" && maturity !== "retired";
+}
+
+/** Apply lifecycle availability to the effective admission flags without changing stored settings. */
+export function applyCapabilityLifecycleAvailability<T extends object>(
+  flags: T,
+  catalog: Partial<Record<InstanceFeatureKey, Pick<FeatureCatalogEntry, "lifecycle">>> = INSTANCE_FEATURE_CATALOG,
+): T {
+  const effective = { ...flags } as unknown as Record<string, unknown>;
+  for (const [key, entry] of Object.entries(catalog) as Array<[
+    InstanceFeatureKey,
+    Pick<FeatureCatalogEntry, "lifecycle"> | undefined,
+  ]>) {
+    if (entry && !isCapabilityMaturityAdvertisedForNewUse(entry.lifecycle.maturity)) {
+      effective[key] = false;
+    }
+  }
+  return effective as T;
+}
+
+export function capabilityGaAdmissionIssues(lifecycle: CapabilityLifecycle): string[] {
+  const issues: string[] = [];
+  if (!lifecycle.owner) issues.push("owner");
+  if (!lifecycle.docsRef) issues.push("docs/help");
+  if (lifecycle.supportLevel === "unqualified" || lifecycle.supportLevel === "no_compatibility_guarantee") {
+    issues.push("support path");
+  }
+  if (lifecycle.releaseEvidenceRefs.length === 0) issues.push("release evidence");
+  if (!lifecycle.lastReviewedAt) issues.push("review date");
+  for (const [gate, status] of Object.entries(lifecycle.gaReadiness)) {
+    if (status === "unqualified") issues.push(gate);
+  }
+  return issues;
+}
+
+export function capabilityLifecyclePolicyIssues(lifecycle: CapabilityLifecycle): string[] {
+  const issues = capabilityLifecycleDateIssues(lifecycle);
+  if (lifecycle.maturity === "ga") issues.unshift(...capabilityGaAdmissionIssues(lifecycle));
+  return issues;
+}
+
+export function capabilityEnablementIssues(
+  patch: Record<string, unknown>,
+  catalog: Partial<Record<InstanceFeatureKey, Pick<FeatureCatalogEntry, "lifecycle">>> = INSTANCE_FEATURE_CATALOG,
+): Array<{ capabilityKey: string; maturity: CapabilityMaturity }> {
+  return Object.entries(patch).flatMap(([key, value]) => {
+    const lifecycle = catalog[key as InstanceFeatureKey]?.lifecycle;
+    return value === true && lifecycle && !isCapabilityMaturityAdvertisedForNewUse(lifecycle.maturity)
+      ? [{ capabilityKey: key, maturity: lifecycle.maturity }]
+      : [];
+  });
+}
+
+const v5Catalog = Object.fromEntries(Object.entries(V5_FEATURES).map(([key, [title, description]]) => [key, { title, description, tier: "managed", cloudDefault: false, selfHostedDefault: false }])) as Record<V5FeatureKey, FeatureCatalogBase>;
+
+const v6Catalog = Object.fromEntries(Object.entries(V6_FEATURES).map(([key, [title, description]]) => [key, { title, description, tier: "managed", cloudDefault: false, selfHostedDefault: false }])) as Record<V6FeatureKey, FeatureCatalogBase>;
+
+const INSTANCE_FEATURE_CATALOG_BASE: Record<InstanceFeatureKey, FeatureCatalogBase> = {
   ...Object.fromEntries(Object.entries(V9_FEATURES).map(([key, [title, description]]) => [key, {
     title, description, tier: "managed", cloudDefault: false, selfHostedDefault: false,
-  }])) as Record<V9FeatureKey, FeatureCatalogEntry>,
+  }])) as Record<V9FeatureKey, FeatureCatalogBase>,
   ...Object.fromEntries(Object.entries(V8_FEATURES).map(([key, [title, description]]) => [key, {
     title, description, tier: "managed", cloudDefault: false, selfHostedDefault: false,
-  }])) as Record<V8FeatureKey, FeatureCatalogEntry>,
+  }])) as Record<V8FeatureKey, FeatureCatalogBase>,
   ...Object.fromEntries(Object.entries(V7_FEATURES).map(([key, [title, description]]) => [key, {
     title, description, tier: "managed", cloudDefault: false, selfHostedDefault: false,
-  }])) as Record<V7FeatureKey, FeatureCatalogEntry>,
+  }])) as Record<V7FeatureKey, FeatureCatalogBase>,
   ...v5Catalog,
   ...v6Catalog,
   enableEnvironments: {
@@ -71,9 +241,9 @@ export const INSTANCE_FEATURE_CATALOG: Record<InstanceFeatureKey, FeatureCatalog
     selfHostedDefault: false,
   },
   enableNativeRunner: {
-    title: "Paperclip Runner",
+    title: "Blentera Runner",
     description:
-      "Allow explicitly configured local Codex, OpenCode, and qualified ACPX agents to use the experimental Rust Paperclip Runner, including authenticated sandbox ingress when required. Onboarding remains on legacy adapters.",
+      "Allow explicitly configured local Codex, OpenCode, and qualified ACPX agents to use the experimental Rust Blentera Runner, including authenticated sandbox ingress when required. Onboarding remains on legacy adapters.",
     tier: "managed",
     cloudDefault: false,
     // On by default for self-hosted instances. Requires a Rust toolchain (or
@@ -460,24 +630,79 @@ export const INSTANCE_FEATURE_CATALOG: Record<InstanceFeatureKey, FeatureCatalog
   },
 };
 
+export const INSTANCE_FEATURE_CATALOG: Record<InstanceFeatureKey, FeatureCatalogEntry> = Object.fromEntries(
+  Object.entries(INSTANCE_FEATURE_CATALOG_BASE).map(([key, entry]) => [
+    key, { ...entry, lifecycle: capabilityLifecycle(key as InstanceFeatureKey, entry.title) },
+  ]),
+) as Record<InstanceFeatureKey, FeatureCatalogEntry>;
+
 export const INSTANCE_FEATURE_KEYS = Object.keys(INSTANCE_FEATURE_CATALOG).sort() as InstanceFeatureKey[];
 
 /**
- * Shape of the `feature-catalog.json` release artifact the cloud harness
- * imports per app release and validates feature writes against.
+ * Shape of the existing tier-only `feature-catalog.json` release contract
+ * consumed by the cloud harness. Lifecycle metadata is available in explicit
+ * schema v2 until that external consumer is qualified.
  */
-export const featureCatalogArtifactSchema = z
+const featureCatalogArtifactV1Schema = z.object({
+  catalogVersion: z.string().min(1),
+  features: z.record(z.string().min(1), z.object({ tier: z.enum(FEATURE_TIERS) }).strict()),
+}).strict();
+
+const featureCatalogArtifactV2Schema = z
   .object({
+    schemaVersion: z.literal(2),
     catalogVersion: z.string().min(1),
     features: z.record(
       z.string().min(1),
-      z.object({ tier: z.enum(FEATURE_TIERS) }).strict(),
+      z.object({
+        title: z.string().min(1),
+        description: z.string().min(1),
+        tier: z.enum(FEATURE_TIERS),
+        lifecycle: z.object({
+          capabilityKey: z.string().min(1),
+          customerName: z.string().min(1),
+          owner: z.string().min(1).nullable(),
+          maturity: z.enum(CAPABILITY_MATURITIES),
+          firstSupportedVersion: z.string().min(1).nullable(),
+          customerSurfaces: z.array(z.string().min(1)),
+          experienceProfiles: z.array(z.string().min(1)),
+          entitlementKey: z.string().min(1).nullable(),
+          criticality: z.enum(["unqualified", "low", "standard", "high"]),
+          dataCategories: z.array(z.string().min(1)),
+          serviceDependencies: z.array(z.string().min(1)),
+          docsRef: z.string().min(1).nullable(),
+          supportPathRef: z.string().min(1).nullable(),
+          supportLevel: z.enum(["unqualified", "no_compatibility_guarantee", "preview", "standard"]),
+          releaseEvidenceRefs: z.array(z.string().min(1)),
+          gaReadiness: z.object({
+            securityPrivacy: z.enum(["unqualified", "qualified", "not_applicable"]),
+            accessibility: z.enum(["unqualified", "qualified", "not_applicable"]),
+            operability: z.enum(["unqualified", "qualified", "not_applicable"]),
+            migrationPlan: z.enum(["unqualified", "qualified", "not_applicable"]),
+            criticalityEvidence: z.enum(["unqualified", "qualified", "not_applicable"]),
+          }).strict(),
+          deprecationAt: z.string().min(1).nullable(),
+          sunsetAt: z.string().min(1).nullable(),
+          replacementCapability: z.string().min(1).nullable(),
+          migrationGuideRef: z.string().min(1).nullable(),
+          lastReviewedAt: z.string().min(1).nullable(),
+        }).strict(),
+      }).strict(),
     ),
   })
   .strict();
 
-export type FeatureCatalogArtifact = z.infer<typeof featureCatalogArtifactSchema>;
+/** Accepts existing v1 artifacts and explicit lifecycle-rich v2 artifacts. */
+export const featureCatalogArtifactSchema = z.union([
+  featureCatalogArtifactV1Schema,
+  featureCatalogArtifactV2Schema,
+]);
 
+export type FeatureCatalogArtifact = z.infer<typeof featureCatalogArtifactV1Schema>;
+export type FeatureCatalogArtifactV2 = z.infer<typeof featureCatalogArtifactV2Schema>;
+export type FeatureCatalogArtifactInput = z.infer<typeof featureCatalogArtifactSchema>;
+
+/** Preserve the existing tier-only artifact contract. */
 export function buildFeatureCatalogArtifact(catalogVersion: string): FeatureCatalogArtifact {
   if (catalogVersion.trim().length === 0) {
     throw new Error("catalogVersion must be a non-empty string");
@@ -489,7 +714,44 @@ export function buildFeatureCatalogArtifact(catalogVersion: string): FeatureCata
   return { catalogVersion, features };
 }
 
+/** Build the lifecycle-rich artifact explicitly; do not switch release builds until consumers qualify v2. */
+export function buildFeatureCatalogArtifactV2(catalogVersion: string): FeatureCatalogArtifactV2 {
+  if (catalogVersion.trim().length === 0) {
+    throw new Error("catalogVersion must be a non-empty string");
+  }
+  const features: FeatureCatalogArtifactV2["features"] = {};
+  for (const key of INSTANCE_FEATURE_KEYS) {
+    const entry = INSTANCE_FEATURE_CATALOG[key];
+    const policyIssues = capabilityLifecyclePolicyIssues(entry.lifecycle);
+    if (policyIssues.length > 0) {
+      throw new Error(`Invalid lifecycle metadata for ${key}: ${policyIssues.join(", ")}`);
+    }
+    features[key] = {
+      title: entry.title,
+      description: entry.description,
+      tier: entry.tier,
+      lifecycle: entry.lifecycle,
+    };
+  }
+  return { schemaVersion: 2, catalogVersion, features };
+}
+
+function capabilityLifecycleDateIssues(lifecycle: CapabilityLifecycle): string[] {
+  const issues: string[] = [];
+  if ((lifecycle.deprecationAt || lifecycle.sunsetAt) && !lifecycle.replacementCapability) {
+    issues.push("replacement capability");
+  }
+  if ((lifecycle.deprecationAt || lifecycle.sunsetAt) && !lifecycle.migrationGuideRef) {
+    issues.push("migration guide");
+  }
+  if (lifecycle.sunsetAt && !lifecycle.deprecationAt) issues.push("deprecation date before sunset");
+  return issues;
+}
+
 /** Deterministic serialization (sorted keys, trailing newline) for the artifact file. */
-export function renderFeatureCatalogArtifact(catalogVersion: string): string {
-  return `${JSON.stringify(buildFeatureCatalogArtifact(catalogVersion), null, 2)}\n`;
+export function renderFeatureCatalogArtifact(catalogVersion: string, schemaVersion: 1 | 2 = 1): string {
+  const artifact = schemaVersion === 2
+    ? buildFeatureCatalogArtifactV2(catalogVersion)
+    : buildFeatureCatalogArtifact(catalogVersion);
+  return `${JSON.stringify(artifact, null, 2)}\n`;
 }

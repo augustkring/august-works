@@ -19,6 +19,7 @@ import {
   DEFAULT_FEEDBACK_DATA_SHARING_PREFERENCE,
   DEFAULT_BACKUP_RETENTION,
   PAPERCLIP_CLOUD_MANAGED_BY,
+  applyCapabilityLifecycleAvailability,
   instanceGeneralSettingsSchema,
   type InstanceGeneralSettings,
   instanceExperimentalSettingsSchema,
@@ -33,6 +34,7 @@ import {
 } from "@paperclipai/shared";
 import {
   INSTANCE_FEATURE_CATALOG,
+  capabilityEnablementIssues,
   applyOperatorGeneralDefaults,
   stripOperatorGeneralEchoes,
 } from "@paperclipai/shared";
@@ -500,8 +502,12 @@ export function instanceSettingsService(db: Db, options: InstanceSettingsService
     assertV7FeatureDependencies(experimental);
     assertV8FeatureDependencies(experimental);
     assertV9FeatureDependencies(experimental);
+    // Lifecycle is an admission floor over stored/managed settings. Apply it
+    // only to the returned view so historical state remains available to the
+    // existing canonical owners and is never silently rewritten.
+    const availableExperimental = applyCapabilityLifecycleAvailability(experimental);
     // Self-hosted responses stay byte-identical: no managedKeys field at all.
-    return managedConfig ? { ...experimental, managedKeys } : experimental;
+    return managedConfig ? { ...availableExperimental, managedKeys } : availableExperimental;
   }
 
   function toInstanceSettings(row: typeof instanceSettings.$inferSelect): InstanceSettings {
@@ -514,11 +520,15 @@ export function instanceSettingsService(db: Db, options: InstanceSettingsService
       updatedAt: row.updatedAt,
     } as InstanceSettings;
   }
-  async function getOrCreateRow(runner: InstanceSettingsWriteDb = db) {
-    const existing = await runner
+  async function getOrCreateRow(
+    runner: InstanceSettingsWriteDb = db,
+    lock?: "share" | "update",
+  ) {
+    const existingQuery = runner
       .select()
       .from(instanceSettings)
-      .where(eq(instanceSettings.singletonKey, DEFAULT_SINGLETON_KEY))
+      .where(eq(instanceSettings.singletonKey, DEFAULT_SINGLETON_KEY));
+    const existing = await (lock ? existingQuery.for(lock) : existingQuery)
       .then((rows) => rows[0] ?? null);
     let row = existing;
     if (!row) {
@@ -599,8 +609,10 @@ export function instanceSettingsService(db: Db, options: InstanceSettingsService
       return toGeneralView(row.general);
     },
 
-    getExperimental: async (): Promise<InstanceExperimentalSettingsWithManaged> => {
-      const row = await getOrCreateRow();
+    getExperimental: async (
+      readOptions?: { db?: InstanceSettingsWriteDb; lock?: "share" | "update" },
+    ): Promise<InstanceExperimentalSettingsWithManaged> => {
+      const row = await getOrCreateRow(readOptions?.db, readOptions?.lock);
       return toExperimentalView(row.experimental);
     },
 
@@ -643,6 +655,13 @@ export function instanceSettingsService(db: Db, options: InstanceSettingsService
       patch: PatchInstanceExperimentalSettings,
       writeOptions?: { db?: InstanceSettingsWriteDb },
     ): Promise<InstanceSettings> => {
+      const lifecycleIssues = capabilityEnablementIssues(patch as Record<string, unknown>);
+      if (lifecycleIssues.length > 0) {
+        throw badRequest("Internal or retired capabilities cannot be enabled for new use", {
+          code: "CAPABILITY_LIFECYCLE_NEW_USE_BLOCKED",
+          issues: lifecycleIssues,
+        });
+      }
       const write = async (tx: InstanceSettingsWriteDb) => {
         const row = await getOrCreateRow(tx);
         // Serialize the complete read/validate/write. Concurrent patches cannot
