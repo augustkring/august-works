@@ -331,7 +331,9 @@ const support = await getEmbeddedPostgresTestSupport();
       // ACLs, so use the same current company member who owns this signal.
       await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:"local-board",status:"active",membershipRole:"owner"}).onConflictDoNothing();
       await db.insert(principalPermissionGrants).values(["company_scope:read","workflows:read","issue:read","agent:read"].map(permissionKey=>({companyId,principalType:"user",principalId:"local-board",permissionKey}))).onConflictDoNothing();
-      const sourceOwner={type:"board" as const,source:"session" as const,userId:"local-board"};
+      // Keep the seeded session ID: this proof uses the actual authenticated
+      // Human fixture, not a display-only reconstruction of its identity.
+      const sourceOwner=sourceActor;
       const artifactActor={principal:{type:"user" as const,userId:"local-board"},sourceActor:sourceOwner};
       const [consumer] = await db.select().from(workflowRuns).where(and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.workflowId, created.id)));
       // Actual native owner IDs; the association is a software provenance
@@ -422,7 +424,8 @@ const support = await getEmbeddedPostgresTestSupport();
             }};
           });
           let completed:Awaited<ReturnType<typeof executor.startManualRun>>;
-          try { completed=await executor.startManualRun(companyId,ordinary.id,{input:{value:7}},human,null); }
+          try { completed=await executor.startManualRun(companyId,ordinary.id,{input:{value:7}},
+            {principal:human.principal,authorizationActor:sourceActor},null); }
           finally { spy.mockRestore(); }
           expect(completed.run.status,JSON.stringify({failure:completed.run.failureMessage,steps:completed.steps.map(step=>({nodeId:step.nodeId,errorCode:step.errorCode,errorMessage:step.errorMessage}))})).toBe("succeeded");
           sourcefulRunId=completed.run.id;
@@ -431,7 +434,9 @@ const support = await getEmbeddedPostgresTestSupport();
           expect((await db.execute(sql`select aw_learning_link_current(${companyId}::uuid,${link.id}::uuid) as current`))[0]).toMatchObject({current:false});
           await expect(executor.getRun(companyId,completed.run.id,owner)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
           await db.update(memoryRecords).set({verificationState:"human_verified"}).where(eq(memoryRecords.id,roots[0]!));
-          await expect(executor.startManualRun(companyId,ordinary.id,{input:{value:9}},{principal:{type:"user",userId:"local-reviewer"}},null)).resolves.toMatchObject({run:{status:"succeeded"}});
+          const reviewerSourceActor=await seedCurrentHumanSourceActor(db,[companyId],"local-reviewer");
+          await expect(executor.startManualRun(companyId,ordinary.id,{input:{value:9}},
+            {principal:{type:"user",userId:"local-reviewer"},authorizationActor:reviewerSourceActor},null)).resolves.toMatchObject({run:{status:"succeeded"}});
 
           const pinned = completed.steps.find(step=>step.nodeId==="artifact")!;
           expect(pinned).toMatchObject({automationArtifactVersionId:replay.artifactVersionId,outputJson:{value:7}});

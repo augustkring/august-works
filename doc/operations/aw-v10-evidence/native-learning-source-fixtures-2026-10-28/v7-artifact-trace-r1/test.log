@@ -1,0 +1,127 @@
+
+ RUN  v4.1.11 /workspace/blentera-v10/server
+
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains a supplemental original V8 signal while still requiring verified native Task outcomes and current source access
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > erases analytical Learning derivatives through the existing outbox with flags off and company paused, preserving verified outcomes
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > closes an expired original analytical signal through the native retention owner
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > requires current signal access for native human Foundation reads and approval, then leaves approval with that owner
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > preserves original analytical sensitivity when proposing a native Learning change
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > rejects incomplete or mutable signal bindings at the native PostgreSQL boundary
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains current Optimizer source authority and erases native compiler copies: verified_memory
+[v7-learning-phase] started elapsedMs=0
+[v7-learning-phase] signal-ready elapsedMs=305
+[v7-learning-phase] source-actor-ready elapsedMs=318
+[v7-learning-phase] workflow-created elapsedMs=350
+[v7-learning-phase] workflow-draft-saved elapsedMs=380
+[v7-learning-phase] workflow-published elapsedMs=418
+[v7-learning-phase] review-run-1-starting elapsedMs=422
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains current Optimizer source authority and erases native compiler copies: artifact_signal
+workflow-run-detail-diagnostic {"readerType":"board","readScope":"task","caller":["    at Object.startManualRun (/workspace/blentera-v10/server/src/services/workflows/workflow-executor.ts:8660:28)","    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)","    at /workspace/blentera-v10/server/src/__tests__/v7-learning.integration.test.ts:254:19","    at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"]}
+
+[v7-learning-phase] review-run-1-started elapsedMs=696
+[v7-learning-phase] review-run-1-reviewed elapsedMs=789
+[v7-learning-phase] review-run-2-starting elapsedMs=789
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains current Optimizer source authority and erases native compiler copies: artifact_signal
+workflow-run-detail-diagnostic {"readerType":"board","readScope":"task","caller":["    at Object.startManualRun (/workspace/blentera-v10/server/src/services/workflows/workflow-executor.ts:8660:28)","    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)","    at /workspace/blentera-v10/server/src/__tests__/v7-learning.integration.test.ts:254:19","    at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"]}
+
+[v7-learning-phase] review-run-2-started elapsedMs=1014
+[v7-learning-phase] review-run-2-reviewed elapsedMs=1101
+[v7-learning-phase] review-run-3-starting elapsedMs=1101
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains current Optimizer source authority and erases native compiler copies: artifact_signal
+workflow-run-detail-diagnostic {"readerType":"board","readScope":"task","caller":["    at Object.startManualRun (/workspace/blentera-v10/server/src/services/workflows/workflow-executor.ts:8660:28)","    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)","    at /workspace/blentera-v10/server/src/__tests__/v7-learning.integration.test.ts:254:19","    at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"]}
+
+[v7-learning-phase] review-run-3-started elapsedMs=1299
+[v7-learning-phase] review-run-3-reviewed elapsedMs=1398
+[v7-learning-phase] reviewed-runs-complete elapsedMs=1398
+[v7-learning-phase] suggestion-ready elapsedMs=1848
+[v7-learning-phase] candidate-request-ready elapsedMs=1980
+[v7-learning-phase] optimizer-compile-starting elapsedMs=1987
+[v7-learning-phase] optimizer-compiled elapsedMs=5795
+[v7-learning-phase] artifact-domain-proposal-starting elapsedMs=5797
+[v7-learning-phase] artifact-candidate-proposed elapsedMs=9982
+[v7-learning-phase] signal-consumer-checks-starting elapsedMs=11122
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains current Optimizer source authority and erases native compiler copies: artifact_signal
+workflow-run-detail-diagnostic {"readerType":"board","readScope":null,"caller":["    at Object.getRun (/workspace/blentera-v10/server/src/services/workflows/workflow-executor.ts:8348:7)","    at /workspace/blentera-v10/server/src/__tests__/v7-learning.integration.test.ts:343:30","    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)","    at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"]}
+
+[v7-learning-phase] signal-consumer-source-checks-complete elapsedMs=19074
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains current Optimizer source authority and erases native compiler copies: artifact_signal
+workflow-run-detail-diagnostic {"readerType":"none","readScope":null,"caller":["    at Object.getRun (/workspace/blentera-v10/server/src/services/workflows/workflow-executor.ts:8348:7)","    at /workspace/blentera-v10/server/src/__tests__/v7-learning.integration.test.ts:369:29","    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)","    at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"]}
+
+[v7-learning-phase] withdrawn-source-denials-complete elapsedMs=33189
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains current Optimizer source authority and erases native compiler copies: artifact_signal
+workflow-run-detail-diagnostic {"readerType":"board","readScope":null,"caller":["    at Object.getRun (/workspace/blentera-v10/server/src/services/workflows/workflow-executor.ts:8348:7)","    at /workspace/blentera-v10/server/src/__tests__/v7-learning.integration.test.ts:385:29","    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)","    at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"]}
+
+[v7-learning-phase] source-restored elapsedMs=34760
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains current Optimizer source authority and erases native compiler copies: artifact_signal
+workflow-run-detail-diagnostic {"readerType":"board","readScope":null,"caller":["    at Object.getRun (/workspace/blentera-v10/server/src/services/workflows/workflow-executor.ts:8348:7)","    at /workspace/blentera-v10/server/src/__tests__/v7-learning.integration.test.ts:397:30","    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)","    at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"]}
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains current Optimizer source authority and erases native compiler copies: artifact_signal
+workflow-run-detail-diagnostic {"readerType":"none","readScope":"task","caller":["    at Object.startManualRun (/workspace/blentera-v10/server/src/services/workflows/workflow-executor.ts:8660:28)","    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)","    at /workspace/blentera-v10/server/src/__tests__/v7-learning.integration.test.ts:427:27","    at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"]}
+
+ × src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains current Optimizer source authority and erases native compiler copies: artifact_signal 46727ms
+   → Current Workflow source access is unavailable.
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains current Optimizer source authority and erases native compiler copies: workflow_signal
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains current Optimizer source authority and erases native compiler copies: promoted_artifact_signal
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains current Optimizer source authority and erases native compiler copies: expired_artifact_signal
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > keeps Role Pack challengers unpublished, preserves required policies and erases descendants
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > erases actual no-wait Workflow Tasks and native/preparation child copies: verified_memory
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > erases actual no-wait Workflow Tasks and native/preparation child copies: workflow_signal
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains Workflow challenger roots through publication, executions and later drafts
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > keeps analytical Workflow reads, native publication and execution bound to current original sources
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > requires the actual native approval receipt before completing a cycle and fences closure replays
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > propagates learned Foundation roots into actual Context consumers and erases late runtime writes with Learning off
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains actual analytical Foundation Context for an ordinary assigned preparation run and preserves independent verified outcomes on C7
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains actual analytical Foundation Context for an ordinary assigned native run and preserves independent verified outcomes on C7
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains actual learned role_pack signals before ordinary native runtime consumption
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains actual learned playbook signals before ordinary native runtime consumption
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > lets an owned live worker propose a hypothesis but cannot self-review or write after Stop
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > cancels a pre-proposal cycle without permitting further evaluation or hypothesis writes
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > uses the native Skill challenger lifecycle and still requires native Skill evaluation for promotion
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > erases native Skill snapshots with flags off, retries unsafe filesystem ancestors, and fences late publishers
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > uses the native Playbook proposal without replacing its approved procedure
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > repeats current analytical admission at the original Playbook read and human review owner
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill active Source before native body and snapshot consumption
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > checks analytical source admission before native Skill payload reads and promotion
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > keeps roadmap dates unchanged and policy proposals behind explicit human acknowledgement
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > preserves a bound Project capture for an unchanged roadmap policy and invalidates it when the policy changes
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > rechecks actual analytical signals at native project review and erases only derived prose after Human acceptance
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > rechecks actual analytical signals at native policy review and erases only derived prose after Human acceptance
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > keeps failed comparisons out of production even when the challenger is cheaper
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > creates a domain proposal after reviewed comparison without publishing canonical truth
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > rejects reflected-only evidence, copied cases, forged baselines and unevaluated edits
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > serializes hypothesis budgets and rejects agent self-certification and foreign evidence
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > rechecks current outcomes before creating a proposal
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > blocks domain acceptance when source evidence changes with V7 disabled
+ ↓ src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > erases accepted derived revisions and prevents restored proposal content from surviving
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains current Optimizer source authority and erases native compiler copies: artifact_signal
+Error: Current Workflow source access is unavailable.
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ src/services/authorization.ts:2631:21
+ ❯ Object.owner.readWorkflowSources src/services/authorization.ts:2625:9
+ ❯ src/services/authorization.ts:3057:7
+ ❯ withReadScope src/services/authorization.ts:2699:22
+ ❯ src/services/workflows/workflow-executor.ts:303:5
+ ❯ ../packages/db/src/work-signals.ts:38:22
+ ❯ scope ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { status: 403, details: { code: 'analytical_source_access_lost' } }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 41 skipped (42)
+   Start at  14:08:21
+   Duration  69.20s (transform 12.21s, setup 70ms, import 17.58s, tests 51.43s, environment 0ms)
+
