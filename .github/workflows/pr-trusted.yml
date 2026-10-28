@@ -304,9 +304,6 @@ jobs:
       - name: Test feature module boundary check
         run: node --test ./scripts/check-module-boundaries.test.mjs
 
-      - name: Validate customer product identity and compatibility exceptions
-        run: pnpm check:customer-brand && pnpm test:customer-brand
-
       - name: Test PR quality-gate scripts
         run: node --test '.github/scripts/tests/*.test.mjs'
 
@@ -335,6 +332,9 @@ jobs:
         run: |
           pnpm install --frozen-lockfile --ignore-scripts
           git diff --exit-code -- pnpm-lock.yaml
+
+      - name: Validate customer product identity and compatibility exceptions
+        run: pnpm check:customer-brand && pnpm test:customer-brand
 
   help_docs:
     name: Help docs metadata and links

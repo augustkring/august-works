@@ -94,6 +94,14 @@ const pg = await getEmbeddedPostgresTestSupport();
 
   it("uses the real Decisions adapter over a mock wire, settles its original company-purpose reservation, and never resends an idempotent request", async () => {
     const command = body();
+    wire.mockImplementationOnce(async () => {
+      const [admitted] = await db.select().from(orchestrationCompanyPurposeReservations)
+        .where(eq(orchestrationCompanyPurposeReservations.companyId, f.home));
+      expect(admitted).toMatchObject({ status: "dispatched", providerWireReceipt: {
+        method: "POST", endpoint: "https://openrouter.ai/api/alpha/decisions",
+      } });
+      return response();
+    });
     const first = await request(app).post(path()).send(command).expect(200);
     expect(first.body).toMatchObject({ status: "completed", model: "typesafe/jev-1.13", inputTokens: 12, outputTokens: 2, costAmount: "0.0005166", costStatus: "reported" });
     expect(wire).toHaveBeenCalledTimes(1);

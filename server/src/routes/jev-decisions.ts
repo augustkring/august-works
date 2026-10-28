@@ -187,7 +187,10 @@ export function jevDecisionRoutes(db: Db, options: { sourceSha?: string; profile
       const latestKey = await checkCurrent();
       providerStarted = true;
       const result = await runJevDecision({ model: JEV_DECISION_MODEL, apiKey: latestKey, request,
-        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(Math.max(1, deadlineAt - Date.now()))]) }, options.fetch ? { fetch: options.fetch } : {});
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(Math.max(1, deadlineAt - Date.now()))]) }, {
+        ...(options.fetch ? { fetch: options.fetch } : {}),
+        onWireDispatch: async wire => { await broker.recordCompanyPurposeWireDispatch(actor, companyId, reservation.id, wire); },
+      });
       const knownUsage = result.receipt.inputTokens !== null && result.receipt.outputTokens !== null;
       const knownCost = result.receipt.costAmount !== null && result.receipt.costStatus !== "unpriced";
       const reportedCost = result.receipt.costAmount === null ? null : Number(result.receipt.costAmount);
