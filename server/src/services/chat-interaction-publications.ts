@@ -33,7 +33,7 @@ const QUESTION_ACTION_TOKEN_BYTES = 16;
 export const CHAT_QUESTION_ACTION_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
 export const TELEGRAM_CALLBACK_DATA_LIMIT_BYTES = 64;
 
-type ChatPublicationDb = Pick<Db, "select" | "insert" | "update">;
+type ChatPublicationDb = Pick<Db, "select" | "insert" | "update" | "transaction">;
 
 function terminalNativeInteractionCopy(
   interaction: IssueThreadInteraction,

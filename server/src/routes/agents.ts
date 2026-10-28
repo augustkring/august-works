@@ -10,6 +10,7 @@ import { assertAiConnectionCreateAccess, canInstallSharedAiConnectionForNewAgent
 import { isAiConnectionCompatible } from "@paperclipai/shared";
 import { applyConnectorSkills, resolveConnectorAssignments, annotateConnectorSkills, isConnectorSkill } from "../services/connector-runtime.js";
 import { getExecutionBlocker } from "../services/execution-blocker.js";
+import { admitAgentSelfApiRead } from "../services/agent-api-rate-limit.js";
 import { paperclipRunnerTransitionConfig, normalizeLegacyRunnerProvider, isPaperclipRunnerProvider } from "@paperclipai/adapter-utils";
 import { executionProjectionForRun, executionProjectionsForRuns } from "../services/execution-projection.js";
 import { Router, type NextFunction, type Request, type Response } from "express";
@@ -83,7 +84,7 @@ import {
   syncInstructionsBundleConfigFromFilePath,
   workspaceOperationService,
 } from "../services/index.js";
-import { badRequest, conflict, forbidden, HttpError, notFound, unprocessable } from "../errors.js";
+import { badRequest, conflict, forbidden, HttpError, notFound, tooManyRequests, unprocessable } from "../errors.js";
 import { ONBOARDING_FIRST_TASK_SKILL_KEY, PAPERCLIP_CORE_SKILL_KEYS } from "../services/company-skills.js";
 import { createRunSecretRedactionRegistry } from "../services/run-secret-redaction.js";
 import { assertAuthenticated, assertBoard, assertCompanyAccess, assertInstanceAdmin, buildActorSecretContext, getAccessibleResource, getActorInfo, hasCompanyAccess } from "./authz.js";
@@ -4151,9 +4152,18 @@ export function agentRoutes(
   });
 
   router.get("/agents/me", async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
     if (req.actor.type !== "agent" || !req.actor.agentId) {
       res.status(401).json({ error: "Agent authentication required" });
       return;
+    }
+    const admission = await admitAgentSelfApiRead(db, req.actor.agentId);
+    if (!admission.allowed) {
+      res.setHeader("Retry-After", String(admission.retryAfterSeconds));
+      throw tooManyRequests("Agent self-identity read limit reached. Retry after the indicated delay.", {
+        code: "agent_self_read_rate_limited",
+        retryAfterSeconds: admission.retryAfterSeconds,
+      });
     }
     const agent = await svc.getById(req.actor.agentId);
     if (!agent) {

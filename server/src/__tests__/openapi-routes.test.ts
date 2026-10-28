@@ -98,6 +98,8 @@ const apiPrefixes: Record<string, string> = {
   "goals.ts": "/api",
   "health.ts": "/api/health",
   "service-health.ts": "",
+  "product-identity.ts": "",
+  "trust-documents.ts": "/api",
   "inbox-agent-policy.ts": "/api",
   "inbox-dismissals.ts": "/api",
   "instance-database-backups.ts": "/api",
@@ -224,7 +226,7 @@ function loadActualRoutes() {
     const prefix = apiPrefixes[file];
     const source = fs.readFileSync(path.join(ROUTES_DIR, file), "utf8");
     const localConstants = Object.fromEntries([...source.matchAll(/\b([A-Za-z_$][\w$]*)\s*=\s*(["'`])([^"'`]+)\2/g)].map((match) => [match[1], match[3]]));
-    if (!prefix) {
+    if (prefix === undefined) {
       if (ROUTER_METHOD_PATTERN.test(source)) {
         unknownRouteFiles.push(file);
       }
@@ -295,6 +297,45 @@ function loadSpecRoutes() {
 }
 
 describe("openapi routes", () => {
+  it("publishes source-owned surface classification and the bounded stable agent identity contract", () => {
+    const spec = buildOpenApiSpec() as any;
+    const manifest = spec["x-blentera-api-surface-manifest"];
+    expect(manifest.scope).toContain("exact-route OpenAPI coverage check");
+    expect(manifest.counts.openApiDocumentedOperations).toBeGreaterThan(0);
+    expect(manifest.counts.publicStable).toBe(1);
+    expect(manifest.operations).toContainEqual(expect.objectContaining({
+      method: "GET", path: "/api/agents/me", surface: "PUBLIC STABLE",
+      contract: expect.objectContaining({ version: "v1", idempotency: expect.stringContaining("Read-only") }),
+    }));
+    expect(manifest.operations).toContainEqual(expect.objectContaining({
+      method: "POST", path: "/api/routine-triggers/public/{publicId}/fire", surface: "PARTNER / PREVIEW",
+    }));
+    for (const path of ["/api/webhooks/paddle", "/api/webhooks/mailgun", "/api/chat-webhooks/agentmail/{publicId}", "/api/chat-webhooks/{publicId}/{provider}"]) {
+      expect(manifest.operations.some((operation: any) => operation.path === path && operation.surface === "PARTNER / PREVIEW")).toBe(true);
+    }
+    expect(manifest.operations.filter((operation: any) => operation.path.includes("/mcp/gateways/")).every(
+      (operation: any) => operation.surface === "PARTNER / PREVIEW",
+    )).toBe(true);
+
+    const identity = spec.paths["/api/agents/me"].get;
+    expect(identity.security).toEqual([{ AgentBearerAuth: [] }]);
+    expect(identity["x-paperclip-authorization"]).toEqual({ actor: "agent", selfOnly: true, companyBoundToCurrentAgent: true });
+    expect(identity["x-blentera-api-surface"]).toBe("PUBLIC STABLE");
+    expect(identity.responses[200].content["application/json"].schema.required).toEqual(
+      expect.arrayContaining(["id", "companyId", "name", "role", "title", "status"]),
+    );
+    expect(identity.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    expect(identity.responses[429].headers["Retry-After"].schema.minimum).toBe(1);
+    expect(identity.responses[429].content["application/json"].schema.properties).toMatchObject({
+      code: { type: "string", enum: ["agent_self_read_rate_limited"] },
+      details: expect.any(Object),
+    });
+    expect(identity.apiContract).toBeUndefined();
+    expect(identity["x-blentera-api-contract"]).toMatchObject({ version: "v1", deprecation: { state: "none_scheduled" } });
+    expect(identity["x-blentera-api-contract"].rateResourcePolicy).toContain("database statement clock");
+    expect(identity.responses[200].content["application/json"].schema.additionalProperties).not.toBe(false);
+  });
+
   it("documents Native support/access availability and the optional grant-revocation body", () => {
     const paths = buildOpenApiSpec().paths;
     const policy = paths["/api/companies/{companyId}/support/policy"]?.get;
@@ -991,6 +1032,8 @@ describe("openapi routes", () => {
       unknownRouteFiles,
     } = loadActualRoutes();
     const { routes: specRoutes } = loadSpecRoutes();
+    const classifiedRoutes = new Set((buildOpenApiSpec() as any)["x-blentera-api-surface-manifest"].operations
+      .map((operation: any) => `${operation.method} ${operation.path}`));
 
     const missingInSpec = [...actualRoutes]
       .filter((route) => !specRoutes.has(route))
@@ -1013,6 +1056,7 @@ describe("openapi routes", () => {
       extraInSpec: [],
       excludedRoutes: [...explicitOpenApiOperationCoverageExclusions].sort(),
     });
+    expect([...actualRoutes, ...excludedRoutes].every(route => classifiedRoutes.has(route))).toBe(true);
   });
 
   it("documents V9 private human/operator admission and blocked publication without an invented success", () => {
@@ -1084,6 +1128,33 @@ describe("openapi routes", () => {
     }
     expect(replacement.requestBody.content["application/json"].schema.required).toContain("repositoryIds");
     expect(replacement.responses["422"]).toBeDefined();
+  });
+
+  it("documents mandatory Trust notices and Trust routes as native-session-only", () => {
+    const { spec } = loadSpecRoutes();
+    const paths = [
+      ["/api/companies/{companyId}/notices/action-required", "get"],
+      ["/api/companies/{companyId}/trust/documents", "get"],
+      ["/api/companies/{companyId}/trust/documents/{registryEntryId}/content", "get"],
+      ["/api/companies/{companyId}/trust/documents", "post"],
+      ["/api/companies/{companyId}/trust/acceptances", "post"],
+    ] as const;
+    for (const [path, method] of paths) {
+      const operation = spec.paths[path][method];
+      expect(operation.security).toEqual([{ BoardSessionAuth: [] }]);
+      expect(operation.security).not.toContainEqual({ BoardApiKeyAuth: [] });
+      expect(operation["x-paperclip-authorization"]).toMatchObject({ actor: "board", humanSession: true });
+      const successStatus = method === "get" ? 200 : 201;
+      const expectedCacheControl = path.endsWith("/notices/action-required") ? ["no-store"] : ["private, no-store"];
+      expect(operation.responses[successStatus]?.headers?.["Cache-Control"]?.schema.enum).toEqual(expectedCacheControl);
+    }
+    const notices = spec.paths["/api/companies/{companyId}/notices/action-required"].get;
+    expect(notices.parameters.some((parameter: { name: string; required?: boolean }) =>
+      parameter.name === "expectedUserId" && parameter.required)).toBe(true);
+    expect(notices.responses[200].content["application/json"].schema.properties).toMatchObject({
+      configured: { type: "boolean" },
+      notices: { type: "array" },
+    });
   });
 
   it("documents auth and reviewed response-code invariants", () => {

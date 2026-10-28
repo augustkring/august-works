@@ -374,9 +374,25 @@ import { optimizerCandidateRequestSchema, workflowRunReviewSchema, memoryMainten
 
 type JsonSchema = Record<string, unknown>;
 type OpenApiResponse = Record<string, unknown>;
+type ApiSurface = "INTERNAL" | "PARTNER / PREVIEW" | "PUBLIC STABLE";
+type ApiSurfaceContract = {
+  version: string;
+  owner: string;
+  authentication: string;
+  companyBinding: string;
+  authorization: string;
+  idempotency: string;
+  rateResourcePolicy: string;
+  errorContract: string;
+  documentation: string[];
+  compatibility: string;
+  deprecation: { state: "none_scheduled" } | { state: "deprecated"; announcedAt: string; sunsetAt?: string };
+};
 type OpenApiPathRegistration = {
   method: string;
   path: string;
+  surface?: ApiSurface;
+  apiContract?: ApiSurfaceContract;
   request?: {
     params?: z.ZodTypeAny;
     query?: z.ZodTypeAny;
@@ -389,6 +405,19 @@ type OpenApiPathRegistration = {
   responses?: Record<string, OpenApiResponse>;
   [key: string]: unknown;
 };
+
+const API_SURFACE_OPENAPI_EXCLUSIONS = [
+  {
+    method: "POST", path: "/api/chat-webhooks/agentmail/{publicId}", surface: "PARTNER / PREVIEW" as const,
+    owner: "Chat provider webhook adapter; server/src/routes/chat-channels.ts",
+    reason: "Provider-authenticated callback intentionally remains outside the board API OpenAPI document; its path is retained in the surface manifest.",
+  },
+  {
+    method: "POST", path: "/api/chat-webhooks/{publicId}/{provider}", surface: "PARTNER / PREVIEW" as const,
+    owner: "Chat provider webhook adapter; server/src/routes/chat-channels.ts",
+    reason: "Provider-authenticated callback intentionally remains outside the board API OpenAPI document; its path is retained in the surface manifest.",
+  },
+] as const;
 
 // Zod 4 stores each schema definition on `_def` with a lowercase `type`
 // discriminator and moves the wrapped members onto that def. This loose view
@@ -671,10 +700,12 @@ class OpenAPIRegistry {
 
   buildPaths() {
     const paths: Record<string, Record<string, unknown>> = {};
-    for (const { method, path, request, responses, ...operation } of this
+    for (const { method, path, request, responses, surface, apiContract, ...operation } of this
       .paths) {
       const normalizedOperation: Record<string, unknown> = {
         ...operation,
+        "x-blentera-api-surface": surface ?? "INTERNAL",
+        ...(apiContract ? { "x-blentera-api-contract": apiContract } : {}),
         responses: normalizeResponses(responses),
       };
       if (request?.params) {
@@ -705,6 +736,41 @@ class OpenAPIRegistry {
       paths[path][method] = normalizedOperation;
     }
     return paths;
+  }
+
+  buildApiSurfaceManifest() {
+    const operations = new Map<string, { method: string; path: string; surface: ApiSurface; contract?: ApiSurfaceContract }>();
+    for (const registration of this.paths) {
+      const key = operationKey(registration.method, registration.path);
+      const surface = registration.surface ?? "INTERNAL";
+      const existing = operations.get(key);
+      if (existing && (existing.surface !== surface || JSON.stringify(existing.contract) !== JSON.stringify(registration.apiContract)))
+        throw new Error(`Conflicting API surface classification: ${key}`);
+      operations.set(key, { method: registration.method.toUpperCase(), path: registration.path, surface,
+        ...(registration.apiContract ? { contract: registration.apiContract } : {}) });
+    }
+    const registered = [...operations.values()];
+    const classified = [
+      ...registered.map(item => ({ ...item, openApiDocumented: true as const })),
+      ...API_SURFACE_OPENAPI_EXCLUSIONS.map(item => ({
+        method: item.method, path: item.path, surface: item.surface,
+        openApiDocumented: false as const, owner: item.owner, reason: item.reason,
+      })),
+    ].sort((a, b) => `${a.method} ${a.path}`.localeCompare(`${b.method} ${b.path}`));
+    return {
+      version: 1,
+      scope: "Mounted server route coverage is paired with the exact-route OpenAPI coverage check in server/src/__tests__/openapi-routes.test.ts; the two provider callback exclusions below remain in this manifest but outside the OpenAPI document. INTERNAL describes contract support, not whether a URL is anonymous or network-reachable.",
+      publicStableEligibility: "Only operations with an explicit owner-authored contract metadata entry are PUBLIC STABLE. Anonymous HTTP reachability or OpenAPI publication alone does not create a stable customer API.",
+      counts: {
+        internal: classified.filter(item => item.surface === "INTERNAL").length,
+        partnerPreview: classified.filter(item => item.surface === "PARTNER / PREVIEW").length,
+        publicStable: classified.filter(item => item.surface === "PUBLIC STABLE").length,
+        openApiDocumentedOperations: registered.length,
+        explicitlyExcludedProviderRoutes: API_SURFACE_OPENAPI_EXCLUSIONS.length,
+        classifiedMountedOperations: classified.length,
+      },
+      operations: classified,
+    };
   }
 
   buildComponents() {
@@ -1300,6 +1366,8 @@ function registerCurrentRoute(input: {
   path: string;
   tags: string[];
   summary: string;
+  surface?: ApiSurface;
+  apiContract?: ApiSurfaceContract;
   description?: string;
   query?: z.ZodTypeAny;
   body?: z.ZodTypeAny;
@@ -1320,6 +1388,8 @@ function registerCurrentRoute(input: {
   registry.registerPath({
     method: input.method,
     path: input.path,
+    surface: input.surface,
+    apiContract: input.apiContract,
     tags: input.tags,
     summary: input.summary,
     ...(input.description ? { description: input.description } : {}),
@@ -1335,6 +1405,7 @@ function registerCurrentRoute(input: {
 
 type OpenApiAuthLevel =
   | "public"
+  | "agent"
   | "worker_model"
   | "agent_run"
   | "runtime_tools"
@@ -1380,6 +1451,8 @@ const PUBLIC_OPERATIONS = new Set([
   "GET /api/agent-avatars/{version}/{palette}/{file}",
   "GET /api/health",
   "GET /api/service-status",
+  "GET /.well-known/security.txt",
+  "GET /security.txt",
   "GET /api/openapi.json",
   "GET /api/board-claim/{token}",
   "POST /api/cli-auth/challenges",
@@ -1394,10 +1467,15 @@ const PUBLIC_OPERATIONS = new Set([
   "GET /api/invites/{token}/test-resolution",
   "POST /api/invites/{token}/accept",
   "POST /api/join-requests/{requestId}/claim-api-key",
+  "POST /api/routine-triggers/public/{publicId}/fire",
   "GET /mcp/gateways/{gatewayPublicId}",
   "POST /mcp/gateways/{gatewayPublicId}",
   "GET /api/tool-gateway/gateways/{gatewayId}/mcp",
   "POST /api/tool-gateway/gateways/{gatewayId}/mcp",
+]);
+
+const AGENT_SELF_OPERATIONS = new Set([
+  "GET /api/agents/me",
 ]);
 
 const BOARD_ONLY_PREFIXES = [
@@ -1762,6 +1840,7 @@ function resolveOperationAuthLevel(
 ): OpenApiAuthLevel {
   const key = operationKey(method, path);
   if (PUBLIC_OPERATIONS.has(key)) return "public";
+  if (AGENT_SELF_OPERATIONS.has(key)) return "agent";
   if (BOARD_SESSION_ONLY_OPERATIONS.has(key)) return "board_session";
   if (key === "POST /runtime-tools/model/messages" || key === "POST /runtime-tools/model/anthropic-messages" || key === "POST /runtime-tools/model/v1/messages") return "worker_model";
   if (key === "POST /api/companies/{companyId}/workflow-authoring") return "agent_run";
@@ -1847,6 +1926,8 @@ function applyDocumentFixups(document: any): any {
       const authLevel = resolveOperationAuthLevel(method, path);
       if (authLevel === "public") {
         operation.security = [];
+      } else if (authLevel === "agent") {
+        operation.security = [securityRequirement(AGENT_BEARER_AUTH_SCHEME)];
       } else if (authLevel === "worker_model") {
         operation.security = [securityRequirement(WORKER_MODEL_BEARER_AUTH_SCHEME)];
       } else if (authLevel === "agent_run") {
@@ -1868,6 +1949,8 @@ function applyDocumentFixups(document: any): any {
             ? { actor: "board" }
             : authLevel === "board_session"
               ? { actor: "board", humanSession: true }
+              : authLevel === "agent"
+                ? { actor: "agent", selfOnly: true, companyBoundToCurrentAgent: true }
               : authLevel === "agent_run"
               ? { actor: "agent", heartbeatBound: true,
                   taskBound: !path.endsWith("/direct-result"),
@@ -1984,6 +2067,24 @@ const healthServerInfoSchema = z
     ]),
   })
   .strict();
+
+registry.registerPath({
+  method: "get",
+  path: "/.well-known/security.txt",
+  tags: ["health"],
+  summary: "Read the expiring Blentera security contact publication",
+  responses: {
+    200: { description: "Current RFC 9116 contact publication", content: { "text/plain": { schema: z.string() } } },
+    503: { description: "Publication expired and requires renewal", content: { "text/plain": { schema: z.string() } } },
+  },
+});
+registry.registerPath({
+  method: "get",
+  path: "/security.txt",
+  tags: ["health"],
+  summary: "Redirect to the well-known security contact publication",
+  responses: { 308: { description: "Permanent redirect to /.well-known/security.txt" } },
+});
 
 registry.registerPath({
   method: "get",
@@ -3638,12 +3739,52 @@ registry.registerPath({
   responses: { 200: r.ok(), 401: r.unauthorized },
 });
 
+const agentSelfIdentitySchema = z.object({
+  id: z.string(),
+  companyId: z.string(),
+  name: z.string(),
+  role: z.string(),
+  title: z.string().nullable(),
+  status: z.string(),
+}).passthrough();
+const agentSelfRateLimitErrorSchema = z.object({
+  error: z.string(),
+  code: z.literal("agent_self_read_rate_limited"),
+  details: z.object({ retryAfterSeconds: z.number().int().positive() }).passthrough(),
+}).passthrough();
+
 registry.registerPath({
   method: "get",
   path: "/api/agents/me",
   tags: ["agents"],
-  summary: "Get the current agent",
-  responses: { 200: r.ok(), 401: r.unauthorized },
+  summary: "Read the authenticated agent's stable self-identity fields",
+  description: "Stable v1 contract covers id, companyId, name, role, title and status only. Additional response fields are current runtime detail and may vary by trust preset. Agent API credentials are self-only and resolve companyId from the current canonical agent row. Read-only; no idempotency key is required. Limited to 120 admitted requests per authenticated agent in a fixed 60-second window anchored at the first admitted request; admitted reads and denied retries do not move the window boundary. A 429 response includes Retry-After. Existing application/json error/code/details responses remain in use.",
+  surface: "PUBLIC STABLE",
+  apiContract: {
+    version: "v1",
+    owner: "Agent API; server/src/routes/agents.ts",
+    authentication: "Agent API key or Paperclip-issued agent JWT; self-only.",
+    companyBinding: "The authenticated principal identifies one current agent; companyId is loaded from that canonical agent row.",
+    authorization: "Current agent self-read with existing trust-preset projection and secret redaction.",
+    idempotency: "Read-only GET; repeating the request has no mutation effect, so no key is required.",
+    rateResourcePolicy: "120 admitted requests per authenticated agent in a fixed 60-second window anchored at the first admitted request; admitted reads and denied retries do not move the boundary. Enforced atomically through the existing auth_rate_limits table using the database statement clock; 429 supplies Retry-After.",
+    errorContract: "Existing structured application/json contract: error, optional code, and optional details; internal traces are not returned.",
+    documentation: ["docs/api/agents.md", "docs/api/authentication.md"],
+    compatibility: "Contract version v1 guarantees only the six documented identity fields; additional response fields are not stable. Additive optional fields are compatible. Breaking changes require an explicit compatibility transition and migration guidance.",
+    deprecation: { state: "none_scheduled" },
+  },
+  responses: {
+    200: { ...r.ok(agentSelfIdentitySchema), description: "Current authenticated agent identity; non-contract runtime detail may also be present.", headers: { "Cache-Control": { schema: { type: "string", enum: ["private, no-store"] } } } },
+    401: r.unauthorized,
+    403: r.forbidden,
+    404: r.notFound,
+    429: {
+      ...r.tooManyRequests,
+      description: "Per-agent self-read limit exceeded; wait for Retry-After.",
+      content: { "application/json": { schema: agentSelfRateLimitErrorSchema } },
+      headers: { "Retry-After": { description: "Seconds until the admission window resets.", schema: { type: "integer", minimum: 1 } } },
+    },
+  },
 });
 
 registry.registerPath({
@@ -5139,8 +5280,30 @@ registry.registerPath({
   path: "/api/routine-triggers/public/{publicId}/fire",
   tags: ["routines"],
   summary: "Fire a public routine trigger",
-  request: { params: z.object({ publicId: z.string() }) },
-  responses: { 200: r.ok(), 401: r.unauthorized, 404: r.notFound },
+  description: "Partner / Preview operation. Trigger-specific bearer/HMAC admission and delivery semantics are documented in docs/api/routines.md. No general API rate or compatibility guarantee is made by this classification.",
+  surface: "PARTNER / PREVIEW",
+  request: {
+    params: z.object({ publicId: z.string() }),
+    headers: z.object({
+      authorization: z.string().optional(),
+      "x-paperclip-timestamp": z.string().optional(),
+      "x-paperclip-signature": z.string().optional(),
+      "x-hub-signature-256": z.string().optional(),
+      "x-hub-signature": z.string().optional(),
+      "idempotency-key": z.string().optional(),
+      "x-github-delivery": z.string().optional(),
+    }),
+    body: jsonBody(z.record(z.string(), z.unknown())),
+  },
+  responses: {
+    202: { ...r.ok(), description: "Accepted for asynchronous routine dispatch; accepted does not imply completion." },
+    400: r.badRequest,
+    401: r.unauthorized,
+    404: r.notFound,
+    409: r.conflict,
+    415: r.unsupportedMediaType,
+    422: r.unprocessable,
+  },
 });
 
 // ─── Goals ───────────────────────────────────────────────────────────────────
@@ -5611,6 +5774,22 @@ const costSummaryPaths = [
   "quota-windows",
 ] as const;
 
+const companyCostSummarySchema = z.object({
+  companyId: z.string(),
+  spendCents: z.number(),
+  unpricedEventCount: z.number().int().nonnegative(),
+  budgetCents: z.number(),
+  utilizationPercent: z.number(),
+  successfulRunCount: z.number().int().nonnegative(),
+  successfulRunsWithCostEvents: z.number().int().nonnegative(),
+  successfulRunsWithoutCostEvents: z.number().int().nonnegative(),
+  successfulRunProviderCostCents: z.number(),
+  successfulRunEstimatedEventCount: z.number().int().nonnegative(),
+  successfulRunUnpricedEventCount: z.number().int().nonnegative(),
+  providerCostPerSuccessfulRunCents: z.number().nullable(),
+  providerCostPerSuccessfulRunStatus: z.enum(["reported", "estimated", "incomplete", "unavailable"]),
+}).strict();
+
 for (const segment of costSummaryPaths) {
   registry.registerPath({
     method: "get",
@@ -5618,7 +5797,7 @@ for (const segment of costSummaryPaths) {
     tags: ["costs"],
     summary: `Cost report: ${segment}`,
     request: { params: z.object({ companyId: z.string() }) },
-    responses: { 200: r.ok(), 401: r.unauthorized },
+    responses: { 200: r.ok(segment === "summary" ? companyCostSummarySchema : undefined), 401: r.unauthorized },
   });
 }
 
@@ -11625,6 +11804,7 @@ registerCurrentRoute({
   path: "/mcp/gateways/{gatewayPublicId}",
   tags: ["tool-gateway"],
   summary: "Describe a public MCP gateway endpoint",
+  surface: "PARTNER / PREVIEW",
 });
 
 registerCurrentRoute({
@@ -11632,6 +11812,7 @@ registerCurrentRoute({
   path: "/mcp/gateways/{gatewayPublicId}",
   tags: ["tool-gateway"],
   summary: "Handle MCP gateway protocol requests by public id",
+  surface: "PARTNER / PREVIEW",
   body: mcpGatewayProtocolSchema,
   responses: {
     200: r.ok(),
@@ -11718,6 +11899,7 @@ registerCurrentRoute({
   path: "/api/tool-gateway/gateways/{gatewayId}/mcp",
   tags: ["tool-gateway"],
   summary: "Describe a named MCP gateway endpoint",
+  surface: "PARTNER / PREVIEW",
 });
 
 registerCurrentRoute({
@@ -11725,6 +11907,7 @@ registerCurrentRoute({
   path: "/api/tool-gateway/gateways/{gatewayId}/mcp",
   tags: ["tool-gateway"],
   summary: "Handle named MCP gateway protocol requests",
+  surface: "PARTNER / PREVIEW",
   body: mcpGatewayProtocolSchema,
   responses: {
     200: r.ok(),
@@ -11944,6 +12127,7 @@ for (const operation of v6ApiPaths) {
   registry.registerPath({
     method: operation.method,
     path: operation.path,
+    ...(operation.auth === "provider" ? { surface: "PARTNER / PREVIEW" as const } : {}),
     tags: [operation.auth === "native" ? "Native" : operation.auth === "session" ? "V6 SaaS" : "V6 machine ingress"],
     summary: `${operation.method.toUpperCase()} ${operation.path}`,
     description: operation.auth === "native"
@@ -12106,6 +12290,7 @@ export function buildOpenApiDocument(): any {
       description: "REST API for the Paperclip AI agent management platform",
     },
     servers: [{ url: "/" }],
+    "x-blentera-api-surface-manifest": registry.buildApiSurfaceManifest(),
     components: registry.buildComponents(),
     paths: registry.buildPaths(),
   });

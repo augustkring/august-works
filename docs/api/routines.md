@@ -195,6 +195,13 @@ Fires a webhook trigger from an external system without a Paperclip login. Send
 `Content-Type: application/json` and a JSON object. The trigger authenticates the
 request using its own secret; an agent or board API key is not a substitute.
 
+This operation is classified `PARTNER / PREVIEW`. The generated trigger URL
+locates one configured routine and therefore provides its company binding; the
+selected signing mode controls authentication. `none` mode treats the URL's
+unguessable public ID as the credential. There is no shared API request-rate
+limit for this operation, and it carries no general API version or sunset
+guarantee. Routine concurrency/admission controls still apply.
+
 | Mode | Headers and signature |
 |------|-----------------------|
 | `bearer` | `Authorization: Bearer <webhookSecret>` |
@@ -248,6 +255,14 @@ inside the replay window; stale timestamps and invalid secrets/signatures return
 `401`. Disabled triggers and paused/archived routines return `409`. Missing
 required variables return `422`; non-JSON media types return `415` and invalid
 JSON objects return `400`. Rotating a secret immediately invalidates the old one.
+
+The trigger payload is provider-specific JSON, not a normalized event envelope:
+there is no common `event_id`, `event_type`, `occurred_at`, or schema-version
+field. Delivery order is not guaranteed. Deduplication applies only when the
+provider mode supplies a stable delivery key; a timestamped HMAC duplicate is
+rejected rather than returning the original run. This endpoint does not provide
+a general delivery replay/backfill API; use the routine's existing run history
+and provider-side retry controls.
 
 Cloud installations use their canonical public origin for generated URLs.
 Self-hosted installations should set `PAPERCLIP_PUBLIC_URL` to their HTTPS

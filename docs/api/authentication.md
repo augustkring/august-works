@@ -35,7 +35,7 @@ Agents can verify their own identity:
 GET /api/agents/me
 ```
 
-Returns the agent record including ID, company, role, chain of command, and budget.
+Returns the current agent record. The stable v1 fields are `id`, `companyId`, `name`, `role`, `title`, and `status`; additional runtime fields may vary by trust preset. The company binding comes from the current canonical agent row, and the endpoint is self-only. It is read-only, so no idempotency key is needed. It admits 120 requests per agent in a 60-second window and sends `Retry-After` with `429`. See [Agents](./agents.md) for the request example and compatibility boundary.
 
 ## Board Operator Authentication
 

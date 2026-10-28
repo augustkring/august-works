@@ -480,7 +480,10 @@ export function stripCloudCatalogDefaultEchoes(
   return result as Partial<InstanceExperimentalSettings>;
 }
 
-export function instanceSettingsService(db: Db, options: InstanceSettingsServiceOptions = {}) {
+export function instanceSettingsService(
+  db: InstanceSettingsWriteDb & Pick<Db, "transaction">,
+  options: InstanceSettingsServiceOptions = {},
+) {
   // Fail closed: a malformed PAPERCLIP_MANAGED_CONFIG throws here (and at
   // boot in index.ts) rather than silently running without the overlay.
   const managedConfig = getManagedInstanceConfig(options.runtimeEnv ?? process.env);
