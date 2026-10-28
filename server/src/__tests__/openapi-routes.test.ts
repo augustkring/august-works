@@ -336,6 +336,24 @@ describe("openapi routes", () => {
     expect(identity.responses[200].content["application/json"].schema.additionalProperties).not.toBe(false);
   });
 
+  it("documents the bounded successful-run provider cost cohort", () => {
+    const response = buildOpenApiSpec().paths["/api/companies/{companyId}/costs/summary"].get.responses[200];
+    const schema = response.content["application/json"].schema;
+    expect(schema.required).toEqual(expect.arrayContaining([
+      "successfulRunCount",
+      "successfulRunsWithCostEvents",
+      "successfulRunsWithoutCostEvents",
+      "successfulRunProviderCostCents",
+      "successfulRunEstimatedEventCount",
+      "successfulRunUnpricedEventCount",
+      "providerCostPerSuccessfulRunCents",
+      "providerCostPerSuccessfulRunStatus",
+    ]));
+    expect(schema.properties.providerCostPerSuccessfulRunStatus.enum).toEqual(["reported_events", "estimated_events", "incomplete_events", "no_successful_runs"]);
+    expect(schema.properties.providerCostPerSuccessfulRunCoverage.enum).toEqual(["recorded_events_only"]);
+    expect(schema.properties.providerCostPerSuccessfulRunCents).toMatchObject({ type: "number", nullable: true });
+  });
+
   it("documents Native support/access availability and the optional grant-revocation body", () => {
     const paths = buildOpenApiSpec().paths;
     const policy = paths["/api/companies/{companyId}/support/policy"]?.get;
@@ -1136,7 +1154,11 @@ describe("openapi routes", () => {
       ["/api/companies/{companyId}/notices/action-required", "get"],
       ["/api/companies/{companyId}/trust/documents", "get"],
       ["/api/companies/{companyId}/trust/documents/{registryEntryId}/content", "get"],
+      ["/api/companies/{companyId}/trust/gated/documents", "get"],
+      ["/api/companies/{companyId}/trust/gated/documents/{registryEntryId}/content", "get"],
       ["/api/companies/{companyId}/trust/documents", "post"],
+      ["/api/companies/{companyId}/trust/gated/grants", "post"],
+      ["/api/companies/{companyId}/trust/gated/grants/{grantReceiptId}/revoke", "post"],
       ["/api/companies/{companyId}/trust/acceptances", "post"],
     ] as const;
     for (const [path, method] of paths) {
@@ -1151,6 +1173,17 @@ describe("openapi routes", () => {
     const notices = spec.paths["/api/companies/{companyId}/notices/action-required"].get;
     expect(notices.parameters.some((parameter: { name: string; required?: boolean }) =>
       parameter.name === "expectedUserId" && parameter.required)).toBe(true);
+    const gatedList = spec.paths["/api/companies/{companyId}/trust/gated/documents"].get;
+    expect(gatedList.responses[200].content["application/json"].schema.properties).toMatchObject({
+      configured: { type: "boolean" }, canGrant: { type: "boolean" }, documents: { type: "array" },
+    });
+    const gatedContent = spec.paths["/api/companies/{companyId}/trust/gated/documents/{registryEntryId}/content"].get;
+    expect(gatedContent.parameters.some((parameter: { name: string; required?: boolean }) =>
+      parameter.name === "grantReceiptId" && parameter.required)).toBe(true);
+    const grant = spec.paths["/api/companies/{companyId}/trust/gated/grants"].post;
+    const grantCommand = grant.requestBody.content["application/json"].schema;
+    expect(grantCommand.additionalProperties).toBe(false);
+    expect(grantCommand.required).toEqual(expect.arrayContaining(["registryEntryId", "version", "granteeUserId", "expiresAt"]));
     expect(notices.responses[200].content["application/json"].schema.properties).toMatchObject({
       configured: { type: "boolean" },
       notices: { type: "array" },

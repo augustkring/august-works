@@ -15,12 +15,19 @@ const state = vi.hoisted(() => ({
   authorityReady: true,
 }));
 const searchMock = vi.hoisted(() => vi.fn());
+const trustMock = vi.hoisted(() => ({ list: vi.fn(), content: vi.fn(), grant: vi.fn(), revoke: vi.fn(), granted: false }));
 vi.mock("../context/CompanyContext", () => ({
   useCompany: () => ({ selectedCompanyId: state.companyId, selectedCompany: { issuePrefix: "PAP" } }),
 }));
 vi.mock("../api/search", async importOriginal => ({
   ...await importOriginal<typeof import("../api/search")>(), searchApi: { search: searchMock },
 }));
+vi.mock("../api/trust-gated-documents", () => ({ trustGatedDocumentsApi: {
+  list: (...args: unknown[]) => trustMock.list(...args),
+  content: (...args: unknown[]) => trustMock.content(...args),
+  grant: (...args: unknown[]) => trustMock.grant(...args),
+  revoke: (...args: unknown[]) => trustMock.revoke(...args),
+} }));
 vi.mock("../hooks/useV9CurrentAccount", () => ({
   useV9CurrentAccount: () => ({ userId: state.userId, localImplicit: false, settled: true, failed: false,
     sessionId: state.sessionId, authorityEpoch: state.epoch }),
@@ -36,6 +43,14 @@ vi.mock("../hooks/useV9PrivateReadAuthority", () => ({
       const value = await operation();
       if (!state.authorityReady || epoch !== state.epoch || principal !== state.userId || sessionId !== state.sessionId)
         throw new Error("Help search access changed during the request");
+      return value;
+    },
+    write: async (operation: () => Promise<object>) => {
+      const epoch = state.epoch, principal = state.userId, sessionId = state.sessionId;
+      if (!state.authorityReady) throw new Error("Current Help access is unavailable");
+      const value = await operation();
+      if (!state.authorityReady || epoch !== state.epoch || principal !== state.userId || sessionId !== state.sessionId)
+        throw new Error("Help access changed during the request");
       return value;
     },
   }),
@@ -68,6 +83,39 @@ const articleResponse = {
   zeroResults: null, hasMore: false,
 };
 const emptyResponse = { ...articleResponse, results: [], countsByType: { ...articleResponse.countsByType, help: 0 } };
+const gatedGrantId = "00000000-0000-4000-8000-000000000006";
+const gatedDocument = {
+  id: "00000000-0000-4000-8000-000000000007",
+  documentId: "00000000-0000-4000-8000-000000000008",
+  documentRevisionId: "00000000-0000-4000-8000-000000000009",
+  title: "Penetration test summary", version: "4", owner: "trust-owner",
+  effectiveAt: "2026-10-01T00:00:00.000Z", evidenceRefs: ["assurance-record"],
+  customerVisibility: "gated" as const, ndaRequired: false, lastReviewedAt: "2026-10-01T00:00:00.000Z",
+  nextReviewOrTrigger: "annual review", expiresAt: "2027-10-01T00:00:00.000Z", supersededBy: null,
+  materialChangeAction: "no_action" as const, acceptanceRequired: false,
+};
+function configureTrustMocks() {
+  trustMock.granted = false;
+  trustMock.list.mockImplementation(async () => ({ configured: trustMock.granted, canGrant: true,
+    documents: trustMock.granted ? [{ document: gatedDocument, access: { state: "granted",
+      grantReceiptId: gatedGrantId, expiresAt: "2030-01-01T00:00:00.000Z" } }] : [] }));
+  trustMock.content.mockResolvedValue({ document: gatedDocument, grantReceiptId: gatedGrantId,
+    format: "markdown", body: "Restricted report body." });
+  trustMock.grant.mockImplementation(async (_companyId: string, input: { expiresAt: string; requestId: string }) => {
+    trustMock.granted = true;
+    return { id: gatedGrantId, companyId: state.companyId, registryEntryId: gatedDocument.id,
+      documentRevisionId: gatedDocument.documentRevisionId, documentVersion: gatedDocument.version,
+      granteeUserId: state.userId, grantedByUserId: state.userId, grantedAt: "2026-10-28T00:00:00.000Z",
+      expiresAt: input.expiresAt, requestId: input.requestId, surface: "trust_center_gated_evidence" };
+  });
+  trustMock.revoke.mockImplementation(async (_companyId: string, grantReceiptId: string, input: { requestId: string }) => {
+    trustMock.granted = false;
+    return { id: "00000000-0000-4000-8000-000000000004", companyId: state.companyId,
+      grantReceiptId, revokedByUserId: state.userId, revokedAt: "2026-10-28T00:00:00.000Z",
+      requestId: input.requestId, surface: "trust_center_gated_evidence" };
+  });
+}
+configureTrustMocks();
 
 afterEach(async () => {
   if (root) await act(async () => root!.unmount());
@@ -75,10 +123,12 @@ afterEach(async () => {
   client?.clear();
   container?.remove(); container = null;
   searchMock.mockReset();
+  trustMock.list.mockReset(); trustMock.content.mockReset(); trustMock.grant.mockReset(); trustMock.revoke.mockReset();
   state.companyId = "00000000-0000-4000-8000-000000000001";
   state.userId = "help-user-a";
   state.sessionId = "00000000-0000-4000-8000-000000000002";
   state.epoch = 0; state.authorityReady = true;
+  configureTrustMocks();
   await act(async () => { await i18n.changeLanguage("en"); });
 });
 
@@ -185,6 +235,58 @@ it("keeps the hidden Help pane idle after moving to support cases", async () => 
   await act(async () => navigate("/PAP/company/support")); await flush();
   expect(lastPath).toBe("/PAP/company/support");
   expect(searchMock).toHaveBeenCalledTimes(1);
+});
+
+it("requires an expiring admin grant before showing or downloading gated evidence", async () => {
+  trustMock.granted = false;
+  trustMock.list.mockImplementation(async () => ({ configured: true, canGrant: true,
+    documents: trustMock.granted ? [{ document: gatedDocument, access: { state: "granted",
+      grantReceiptId: gatedGrantId, expiresAt: "2030-01-01T00:00:00.000Z" } }]
+      : [{ document: gatedDocument, access: { state: "grant_required" } }] }));
+  await render();
+  await vi.waitFor(() => expect(container!.textContent).toContain("Penetration test summary"));
+  expect(container!.textContent).not.toContain("Restricted report body.");
+  expect(trustMock.content).not.toHaveBeenCalled();
+  const expiry = container!.querySelector<HTMLInputElement>('input[type="datetime-local"]')!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(expiry, "2026-10-29T12:00");
+    expiry.dispatchEvent(new Event("input", { bubbles: true }));
+    expiry.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  const grantButton = [...container!.querySelectorAll("button")].find(button => button.textContent === "Grant me access")!;
+  await act(async () => grantButton.click());
+  await vi.waitFor(() => expect(trustMock.grant).toHaveBeenCalledWith(state.companyId, expect.objectContaining({
+    expectedUserId: state.userId, registryEntryId: gatedDocument.id, version: gatedDocument.version,
+    granteeUserId: state.userId, expiresAt: new Date("2026-10-29T12:00").toISOString(), surface: "trust_center_gated_evidence",
+  })));
+  await vi.waitFor(() => expect([...container!.querySelectorAll("button")]
+    .some(button => button.textContent === "Review current document")).toBe(true));
+  const reviewButton = [...container!.querySelectorAll("button")]
+    .find(button => button.textContent === "Review current document")!;
+  await act(async () => reviewButton.click());
+  await vi.waitFor(() => expect(container!.textContent).toContain("Restricted report body."));
+  expect(trustMock.content).toHaveBeenCalledWith(state.companyId, gatedDocument.id, state.userId, gatedGrantId, expect.any(AbortSignal));
+  expect([...container!.querySelectorAll("button")].some(button => button.textContent === "Download current document")).toBe(true);
+  const revokeButton = [...container!.querySelectorAll("button")].find(button => button.textContent === "Revoke grant")!;
+  await act(async () => revokeButton.click());
+  await vi.waitFor(() => expect(container!.textContent).not.toContain("Restricted report body."));
+  expect(trustMock.revoke).toHaveBeenCalledWith(state.companyId, gatedGrantId,
+    expect.objectContaining({ expectedUserId: state.userId, surface: "trust_center_gated_evidence" }));
+});
+
+it("shows NDA-required metadata as unconfigured without offering a checkbox or body access", async () => {
+  trustMock.list.mockResolvedValue({ configured: true, canGrant: true, documents: [{
+    document: { ...gatedDocument, ndaRequired: true },
+    access: { state: "nda_binding_unconfigured", registryEntryId: gatedDocument.id,
+      documentRevisionId: gatedDocument.documentRevisionId, version: gatedDocument.version,
+      requiredBindingOwner: "canonical_nda_agreement", receiptReference: null },
+  }] });
+  await render();
+  await vi.waitFor(() => expect(container!.textContent).toContain("canonical NDA agreement"));
+  expect(container!.querySelector('input[type="checkbox"]')).toBeNull();
+  expect(container!.textContent).not.toContain("Restricted report body.");
+  expect(trustMock.content).not.toHaveBeenCalled();
+  expect(trustMock.grant).not.toHaveBeenCalled();
 });
 
 

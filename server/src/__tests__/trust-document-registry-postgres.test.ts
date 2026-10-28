@@ -9,6 +9,8 @@ import {
   documents,
   trustDocumentAcceptances,
   trustDocumentActionReceipts,
+  trustDocumentAccessGrants,
+  trustDocumentAccessRevocations,
   trustDocumentRegistry,
 } from "@paperclipai/db";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
@@ -86,5 +88,41 @@ describePg("trust document acceptance receipt retention", () => {
     await db.delete(companies).where(eq(companies.id, companyId));
     expect(await db.select().from(trustDocumentActionReceipts)
       .where(eq(trustDocumentActionReceipts.companyId, companyId))).toHaveLength(0);
+  });
+
+  it("keeps exact gated grants and separate revocation receipts append-only", async () => {
+    const companyId = randomUUID();
+    const documentId = randomUUID();
+    const revisionId = randomUUID();
+    const now = new Date();
+    await db.insert(companies).values({ id: companyId, name: "Gated access test", issuePrefix: `G${companyId.slice(0, 6)}` });
+    await db.insert(documents).values({ id: documentId, companyId, latestBody: "fixture", latestRevisionNumber: 1,
+      createdByUserId: "owner", updatedByUserId: "owner" });
+    await db.insert(documentRevisions).values({ id: revisionId, companyId, documentId, revisionNumber: 1,
+      body: "fixture", createdByUserId: "owner" });
+    const [registry] = await db.insert(trustDocumentRegistry).values({ companyId, documentId,
+      documentRevisionId: revisionId, owner: "owner", version: "1", effectiveAt: now,
+      customerVisibility: "gated", ndaRequired: false, lastReviewedAt: now,
+      materialChangeAction: "no_action", acceptanceRequired: false, createdByUserId: "owner" }).returning();
+    const [grant] = await db.insert(trustDocumentAccessGrants).values({ companyId,
+      registryEntryId: registry.id, documentRevisionId: revisionId, documentVersion: "1",
+      granteeUserId: "member", grantedByUserId: "owner", expiresAt: new Date(now.getTime() + 60_000),
+      requestId: randomUUID(), requestHash: "c".repeat(64), surface: "fixture-gated" }).returning();
+    const [revocation] = await db.insert(trustDocumentAccessRevocations).values({ companyId,
+      grantReceiptId: grant.id, revokedByUserId: "owner", requestId: randomUUID(),
+      requestHash: "d".repeat(64), surface: "fixture-revoke" }).returning();
+    await expect(db.update(trustDocumentAccessGrants).set({ surface: "forged" })
+      .where(eq(trustDocumentAccessGrants.id, grant.id))).rejects.toMatchObject({ cause: { code: "55000" } });
+    await expect(db.delete(trustDocumentAccessGrants)
+      .where(eq(trustDocumentAccessGrants.id, grant.id))).rejects.toMatchObject({ cause: { code: "55000" } });
+    await expect(db.update(trustDocumentAccessRevocations).set({ surface: "forged" })
+      .where(eq(trustDocumentAccessRevocations.id, revocation.id))).rejects.toMatchObject({ cause: { code: "55000" } });
+    await expect(db.delete(trustDocumentAccessRevocations)
+      .where(eq(trustDocumentAccessRevocations.id, revocation.id))).rejects.toMatchObject({ cause: { code: "55000" } });
+    await db.delete(companies).where(eq(companies.id, companyId));
+    expect(await db.select().from(trustDocumentAccessGrants)
+      .where(eq(trustDocumentAccessGrants.companyId, companyId))).toHaveLength(0);
+    expect(await db.select().from(trustDocumentAccessRevocations)
+      .where(eq(trustDocumentAccessRevocations.companyId, companyId))).toHaveLength(0);
   });
 });

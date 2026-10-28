@@ -49,6 +49,24 @@ async function createStandaloneTrustDocument(db: Db, companyId: string, userId: 
   return { documentId, revisionId };
 }
 
+async function appendStandaloneTrustRevision(db: Db, companyId: string, documentId: string, userId: string,
+  title: string, body: string, revisionNumber: number, now: Date) {
+  const revisionId = randomUUID();
+  await db.insert(documentRevisions).values({ id: revisionId, companyId, documentId, revisionNumber,
+    title, format: "markdown", body, createdByUserId: userId, payloadSourceProtocolVersion: 1, createdAt: now });
+  await db.execute(sql`update document_revisions as source set payload_source_snapshot = (
+    with payload as (select jsonb_build_object('version',1,'owner',jsonb_build_object(
+      'kind','document_revision','companyId',source.company_id::text,'id',source.id::text,
+      'contentHash',public.aw_native_payload_body_hash('document_revision',to_jsonb(source))),
+      'policy',jsonb_build_object('issueIds','[]'::jsonb,'projectIds','[]'::jsonb,'runIds','[]'::jsonb,
+        'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb) as value)
+    select value || jsonb_build_object('digest',encode(sha256(convert_to(value::text,'UTF8')),'hex')) from payload)
+    where source.id=${revisionId}::uuid`);
+  await db.update(documents).set({ latestRevisionId: revisionId, latestRevisionNumber: revisionNumber,
+    latestBody: body, updatedByUserId: userId, updatedAt: now }).where(eq(documents.id, documentId));
+  return revisionId;
+}
+
 describePg("V10 trust document route lifecycle on PostgreSQL", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
   let db: ReturnType<typeof createDb>;
@@ -210,6 +228,116 @@ describePg("V10 trust document route lifecycle on PostgreSQL", () => {
       .query({ expectedUserId: legacyUserId }).expect(200);
     expect(legacyRead.body.configured).toBe(true);
     expect(legacyRead.body.documents.some((row: { id: string }) => row.id === register.body.id)).toBe(true);
+
+    // Gated evidence is absent from the public projection and requires a
+    // current administrator's exact-version, expiring Human grant.
+    const gatedListPath = `/api/companies/${companyId}/trust/gated/documents`;
+    const gatedContentPath = (registryEntryId: string) => `${gatedListPath}/${registryEntryId}/content`;
+    const gatedGrantPath = `/api/companies/${companyId}/trust/gated/grants`;
+    const gatedRevokePath = (grantReceiptId: string) => `${gatedGrantPath}/${grantReceiptId}/revoke`;
+    const gatedDoc = await createStandaloneTrustDocument(db, companyId, userId, "Gated report", "Gated body fixture.", now);
+    const ndaDoc = await createStandaloneTrustDocument(db, companyId, userId, "NDA report", "NDA body fixture.", now);
+    const expiringDoc = await createStandaloneTrustDocument(db, companyId, userId, "Expiring report", "Expiring body fixture.", now);
+    const supersededDoc = await createStandaloneTrustDocument(db, companyId, userId, "Superseded report", "Old gated body.", now);
+    const privateDoc = await createStandaloneTrustDocument(db, companyId, userId, "Private-linked report", "Private linked body.", now);
+    const registerGated = async (source: { documentId: string; revisionId: string }, ndaRequired = false) =>
+      http.post(docsPath).set(ownerCookie).send({ ...registryMetadata, documentId: source.documentId,
+        documentRevisionId: source.revisionId, customerVisibility: "gated", ndaRequired,
+        materialChangeAction: "no_action" }).expect(201);
+    const gatedRegister = await registerGated(gatedDoc);
+    const ndaRegister = await registerGated(ndaDoc, true);
+    const expiringRegister = await registerGated(expiringDoc);
+    const supersededRegister = await registerGated(supersededDoc);
+    const privateRegister = await registerGated(privateDoc);
+    const publicProjection = await http.get(docsPath).set(ownerCookie).query({ expectedUserId: userId }).expect(200);
+    expect(publicProjection.body.documents.some((row: { id: string }) => row.id === gatedRegister.body.id)).toBe(false);
+    const gatedAdminProjection = await http.get(gatedListPath).set(ownerCookie).query({ expectedUserId: userId }).expect(200);
+    expect(gatedAdminProjection.body.documents.find((row: { document: { id: string } }) =>
+      row.document.id === gatedRegister.body.id)).toMatchObject({ access: { state: "grant_required" } });
+    expect(gatedAdminProjection.body.documents.find((row: { document: { id: string } }) =>
+      row.document.id === ndaRegister.body.id)).toMatchObject({ access: {
+        state: "nda_binding_unconfigured", requiredBindingOwner: "canonical_nda_agreement", receiptReference: null,
+      } });
+    expect((await http.get(gatedListPath).set(legacyCookie).query({ expectedUserId: legacyUserId }).expect(200))
+      .body.documents).toEqual([]);
+    const grantCommand = { expectedUserId: userId, requestId: randomUUID(),
+      registryEntryId: gatedRegister.body.id, version: "1", granteeUserId: legacyUserId,
+      expiresAt: new Date(now.getTime() + 60 * 60_000).toISOString(), surface: "fixture-gated-review" };
+    const grant = await http.post(gatedGrantPath).set(ownerCookie).send(grantCommand).expect(201);
+    expect(grant.headers["cache-control"]).toBe("private, no-store");
+    expect(grant.body).toMatchObject({ companyId, registryEntryId: gatedRegister.body.id,
+      documentRevisionId: gatedDoc.revisionId, documentVersion: "1", granteeUserId: legacyUserId,
+      grantedByUserId: userId, surface: "fixture-gated-review" });
+    expect(await http.post(gatedGrantPath).set(ownerCookie).send(grantCommand).expect(200).then(response => response.body))
+      .toEqual(grant.body);
+    await http.post(gatedGrantPath).set(legacyCookie).send({ ...grantCommand,
+      expectedUserId: legacyUserId, requestId: randomUUID() }).expect(403);
+    await http.post(gatedGrantPath).set(ownerCookie).send({ ...grantCommand,
+      requestId: randomUUID(), granteeUserId: randomUUID() }).expect(409);
+    const gatedContentQuery = { expectedUserId: legacyUserId, grantReceiptId: grant.body.id };
+    const gatedContent = await http.get(gatedContentPath(gatedRegister.body.id)).set(legacyCookie)
+      .query(gatedContentQuery).expect(200);
+    expect(gatedContent.headers["cache-control"]).toBe("private, no-store");
+    expect(gatedContent.body).toMatchObject({ grantReceiptId: grant.body.id, format: "markdown",
+      body: "Gated body fixture.", document: { id: gatedRegister.body.id, ndaRequired: false, version: "1" } });
+    await db.update(companies).set({ status: "suspended" }).where(eq(companies.id, companyId));
+    await http.get(gatedContentPath(gatedRegister.body.id)).set(legacyCookie).query(gatedContentQuery).expect(403);
+    await db.update(companies).set({ status: "active" }).where(eq(companies.id, companyId));
+    expect((await http.get(gatedListPath).set(legacyCookie).query({ expectedUserId: legacyUserId }).expect(200))
+      .body.documents).toMatchObject([{ access: { state: "granted", grantReceiptId: grant.body.id } }]);
+    await http.get(gatedContentPath(gatedRegister.body.id)).set(legacyCookie)
+      .query({ ...gatedContentQuery, grantReceiptId: randomUUID() }).expect(404);
+    await http.get(`/api/companies/${randomUUID()}/trust/gated/documents/${gatedRegister.body.id}/content`)
+      .set(ownerCookie).query({ expectedUserId: userId, grantReceiptId: grant.body.id }).expect(403);
+    const ndaDenied = await http.post(gatedGrantPath).set(ownerCookie).send({ ...grantCommand,
+      requestId: randomUUID(), registryEntryId: ndaRegister.body.id }).expect(409);
+    expect(ndaDenied.body.details).toMatchObject({ code: "trust_nda_binding_unconfigured",
+      state: "nda_binding_unconfigured", registryEntryId: ndaRegister.body.id,
+      requiredBindingOwner: "canonical_nda_agreement", receiptReference: null });
+    await http.post(gatedGrantPath).set(ownerCookie).send({ ...grantCommand,
+      requestId: randomUUID(), version: "wrong" }).expect(409);
+
+    // Revocation and expiry remove the recipient's list entry and body access.
+    const revokeCommand = { expectedUserId: userId, requestId: randomUUID(),
+      grantReceiptId: grant.body.id, surface: "fixture-revoke" };
+    await http.post(gatedRevokePath(grant.body.id)).set(legacyCookie).send({ ...revokeCommand,
+      expectedUserId: legacyUserId, requestId: randomUUID() }).expect(403);
+    const revoked = await http.post(gatedRevokePath(grant.body.id)).set(ownerCookie).send(revokeCommand).expect(201);
+    expect(revoked.headers["cache-control"]).toBe("private, no-store");
+    expect(revoked.body).toMatchObject({ companyId, grantReceiptId: grant.body.id, revokedByUserId: userId });
+    await http.post(gatedRevokePath(grant.body.id)).set(ownerCookie).send(revokeCommand).expect(200);
+    await http.get(gatedContentPath(gatedRegister.body.id)).set(legacyCookie).query(gatedContentQuery).expect(404);
+    const expiringGrant = await http.post(gatedGrantPath).set(ownerCookie).send({ ...grantCommand,
+      requestId: randomUUID(), registryEntryId: expiringRegister.body.id,
+      expiresAt: new Date(Date.now() + 1_000).toISOString() }).expect(201);
+    await new Promise(resolve => setTimeout(resolve, 1_100));
+    await http.get(gatedContentPath(expiringRegister.body.id)).set(legacyCookie)
+      .query({ expectedUserId: legacyUserId, grantReceiptId: expiringGrant.body.id }).expect(404);
+
+    const supersededGrant = await http.post(gatedGrantPath).set(ownerCookie).send({ ...grantCommand,
+      requestId: randomUUID(), registryEntryId: supersededRegister.body.id }).expect(201);
+    const supersededRevisionId = await appendStandaloneTrustRevision(db, companyId, supersededDoc.documentId,
+      userId, "Superseded report v2", "New gated body.", 2, now);
+    const supersedingRevision = await http.post(docsPath).set(ownerCookie).send({ ...registryMetadata,
+      documentId: supersededDoc.documentId, documentRevisionId: supersededRevisionId,
+      customerVisibility: "gated", ndaRequired: false, materialChangeAction: "no_action" }).expect(201);
+    expect(supersedingRevision.body.documentRevisionId).toBe(supersededRevisionId);
+    await http.get(gatedContentPath(supersededRegister.body.id)).set(legacyCookie)
+      .query({ expectedUserId: legacyUserId, grantReceiptId: supersededGrant.body.id }).expect(404);
+
+    const privateGrant = await http.post(gatedGrantPath).set(ownerCookie).send({ ...grantCommand,
+      requestId: randomUUID(), registryEntryId: privateRegister.body.id }).expect(201);
+    const gatedPrivateIssue = await issueService(db).create(companyId, {
+      title: "Private gated source task", createdByUserId: userId,
+    });
+    await db.insert(issueDocuments).values({ companyId, issueId: gatedPrivateIssue.id,
+      documentId: privateDoc.documentId, key: "gated-private-source" });
+    await http.get(gatedContentPath(privateRegister.body.id)).set(legacyCookie)
+      .query({ expectedUserId: legacyUserId, grantReceiptId: privateGrant.body.id }).expect(404);
+    const memberGatedProjection = await http.get(gatedListPath).set(legacyCookie)
+      .query({ expectedUserId: legacyUserId }).expect(200);
+    expect(memberGatedProjection.body.documents.some((row: { document: { id: string } }) =>
+      row.document.id === privateRegister.body.id)).toBe(false);
 
     const noticePath = `/api/companies/${companyId}/trust/notices/read`;
     const adminAckPath = `/api/companies/${companyId}/trust/admin-acknowledgments`;

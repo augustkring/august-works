@@ -33,6 +33,77 @@ export const trustDocumentContentSchema = z.object({
   format: z.string().min(1).max(100),
   body: z.string(),
 });
+export const trustDocumentNdaUnconfiguredSchema = z.object({
+  state: z.literal("nda_binding_unconfigured"),
+  registryEntryId: z.string().uuid(),
+  documentRevisionId: z.string().uuid(),
+  version: z.string(),
+  requiredBindingOwner: z.literal("canonical_nda_agreement"),
+  receiptReference: z.null(),
+});
+export const trustDocumentNdaUnconfiguredErrorSchema = trustDocumentNdaUnconfiguredSchema.extend({
+  code: z.literal("trust_nda_binding_unconfigured"),
+});
+export const trustDocumentGatedAccessSchema = z.object({
+  document: trustDocumentSchema,
+  access: z.discriminatedUnion("state", [
+    z.object({ state: z.literal("grant_required") }),
+    z.object({ state: z.literal("granted"), grantReceiptId: z.string().uuid(), expiresAt: z.string().datetime() }),
+    trustDocumentNdaUnconfiguredSchema,
+  ]),
+});
+export const trustDocumentGatedRegistrySchema = z.object({
+  configured: z.boolean(),
+  canGrant: z.boolean(),
+  documents: z.array(trustDocumentGatedAccessSchema),
+});
+export const trustDocumentGatedContentQuerySchema = z.object({
+  expectedUserId: z.string().min(1).max(300),
+  grantReceiptId: z.string().uuid(),
+}).strict();
+export const trustDocumentGatedContentSchema = z.object({
+  document: trustDocumentSchema,
+  grantReceiptId: z.string().uuid(),
+  format: z.string().min(1).max(100),
+  body: z.string(),
+});
+export const trustDocumentGatedGrantCommandSchema = z.object({
+  expectedUserId: z.string().min(1).max(300),
+  requestId: z.string().uuid(),
+  registryEntryId: z.string().uuid(),
+  version: z.string().min(1).max(128),
+  granteeUserId: z.string().min(1).max(300),
+  expiresAt: z.string().datetime(),
+  surface: z.string().min(1).max(128),
+}).strict();
+export const trustDocumentGatedGrantReceiptSchema = z.object({
+  id: z.string().uuid(),
+  companyId: z.string().uuid(),
+  registryEntryId: z.string().uuid(),
+  documentRevisionId: z.string().uuid(),
+  documentVersion: z.string(),
+  granteeUserId: z.string().min(1),
+  grantedByUserId: z.string().min(1),
+  grantedAt: z.string().datetime(),
+  expiresAt: z.string().datetime(),
+  requestId: z.string().uuid(),
+  surface: z.string(),
+});
+export const trustDocumentGatedRevokeCommandSchema = z.object({
+  expectedUserId: z.string().min(1).max(300),
+  requestId: z.string().uuid(),
+  grantReceiptId: z.string().uuid(),
+  surface: z.string().min(1).max(128),
+}).strict();
+export const trustDocumentGatedRevokeReceiptSchema = z.object({
+  id: z.string().uuid(),
+  companyId: z.string().uuid(),
+  grantReceiptId: z.string().uuid(),
+  revokedByUserId: z.string().min(1),
+  revokedAt: z.string().datetime(),
+  requestId: z.string().uuid(),
+  surface: z.string(),
+});
 export const trustDocumentListQuerySchema = z.object({
   expectedUserId: z.string().min(1).max(300),
 }).strict();
@@ -108,6 +179,8 @@ export const trustDocumentRegistrationReceiptSchema = z.object({
   materialChangeAction: trustMaterialChangeActionSchema,
 });
 export type TrustDocument = z.infer<typeof trustDocumentSchema>;
+export type TrustDocumentGatedAccess = z.infer<typeof trustDocumentGatedAccessSchema>;
+export type TrustDocumentNdaUnconfigured = z.infer<typeof trustDocumentNdaUnconfiguredSchema>;
 export type TrustDocumentAcceptanceCommand = z.infer<typeof trustDocumentAcceptanceCommandSchema>;
 export type TrustDocumentRegisterCommand = z.infer<typeof trustDocumentRegisterCommandSchema>;
 export type TrustDocumentAcceptanceReceipt = z.infer<typeof trustDocumentAcceptanceReceiptSchema>;

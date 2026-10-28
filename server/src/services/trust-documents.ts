@@ -4,6 +4,7 @@ import {
   authSessions,
   authUsers,
   caseDocuments,
+  companies,
   companyMemberships,
   documentAnnotationAnchorSnapshots,
   documentAnnotationComments,
@@ -20,10 +21,12 @@ import {
   statusCards,
   summarySlots,
   trustDocumentRegistry,
+  trustDocumentAccessGrants,
+  trustDocumentAccessRevocations,
   type Db,
 } from "@paperclipai/db";
 import { playbookDocuments } from "@paperclipai/db/schema/playbooks";
-import { nativePayloadSourceSnapshotSchema, trustDocumentSchema, type TrustDocument } from "@paperclipai/shared";
+import { nativePayloadSourceSnapshotSchema, trustDocumentSchema, type TrustDocument, type TrustDocumentGatedAccess } from "@paperclipai/shared";
 import { conflict, forbidden } from "../errors.js";
 import { v5HumanActorId } from "./v5-authorization.js";
 
@@ -91,6 +94,14 @@ export function isCurrentReviewedPublicTrustDocument(
     (row.expiresAt === null || row.expiresAt > now) &&
     (!requireAcceptance || row.acceptanceRequired);
 }
+export function isCurrentReviewedGatedTrustDocument(
+  row: TrustDocumentLifecycleState,
+  now = new Date(),
+) {
+  return row.customerVisibility === "gated" && row.effectiveAt !== null && row.effectiveAt <= now &&
+    row.lastReviewedAt !== null && row.lastReviewedAt <= now && row.supersededBy === null &&
+    (row.expiresAt === null || row.expiresAt > now);
+}
 type TrustActor = Express.Request["actor"];
 
 function actorUserId(actor: TrustActor, expectedUserId: string) {
@@ -129,6 +140,9 @@ export async function assertCurrentCompanyHuman(
   if (!isCurrentHumanSession({ source: actor.source, actorUserId: actor.userId,
     actorSessionId: actor.sessionId, expectedUserId, databaseSession: session ?? null, now }))
     throw forbidden("The authenticated Human session is no longer current");
+  const [company] = await tx.select({ status: companies.status }).from(companies)
+    .where(eq(companies.id, companyId)).limit(1).for("share");
+  if (company?.status !== "active") throw forbidden("The current company is unavailable");
   const [membership] = await tx.select({ principalType: companyMemberships.principalType,
     principalId: companyMemberships.principalId, status: companyMemberships.status,
     membershipRole: companyMemberships.membershipRole })
@@ -192,6 +206,7 @@ export async function resolveCurrentTrustDocuments(
   companyId: string,
   expectedUserId: string,
   acceptanceRequiredOnly = false,
+  visibility: "public" | "gated" = "public",
 ): Promise<TrustDocument[]> {
   const queryAt = new Date();
   const rows = await tx.select({
@@ -238,8 +253,8 @@ export async function resolveCurrentTrustDocuments(
     .where(and(
       eq(trustDocumentRegistry.companyId, companyId),
       eq(documents.latestRevisionId, trustDocumentRegistry.documentRevisionId),
-      eq(trustDocumentRegistry.customerVisibility, "public"),
-      eq(trustDocumentRegistry.ndaRequired, false),
+      eq(trustDocumentRegistry.customerVisibility, visibility),
+      visibility === "public" ? eq(trustDocumentRegistry.ndaRequired, false) : undefined,
       acceptanceRequiredOnly ? eq(trustDocumentRegistry.acceptanceRequired, true) : undefined,
       isNull(trustDocumentRegistry.supersededBy),
       sql`${trustDocumentRegistry.lastReviewedAt} is not null`,
@@ -253,7 +268,10 @@ export async function resolveCurrentTrustDocuments(
     rows.map(row => ({ documentId: row.documentId, revisionId: row.documentRevisionId })));
   const projectionAt = new Date();
   return rows.filter(row => {
-    if (row.registryVersion !== String(row.version) || !isCurrentReviewedPublicTrustDocument(row, projectionAt, acceptanceRequiredOnly)) return false;
+    if (row.registryVersion !== String(row.version) ||
+      !(visibility === "public"
+        ? isCurrentReviewedPublicTrustDocument(row, projectionAt, acceptanceRequiredOnly)
+        : isCurrentReviewedGatedTrustDocument(row, projectionAt))) return false;
     const parsedSnapshot = row.sourceSnapshot === null ? null : nativePayloadSourceSnapshotSchema.safeParse(row.sourceSnapshot);
     const hasInheritedSources = row.payloadSourceProtocolVersion !== 1 || row.payloadSourceSnapshotInvalidated ||
       row.documentRevisionErased || row.sourceSnapshot === null ||
@@ -289,6 +307,82 @@ export async function resolveCurrentTrustDocuments(
     materialChangeAction: row.materialChangeAction,
     acceptanceRequired: row.materialChangeAction === "reacceptance",
   }));
+}
+
+export async function resolveCurrentTrustGatedDocuments(
+  tx: Db,
+  actor: TrustActor,
+  companyId: string,
+  expectedUserId: string,
+) {
+  const userId = await assertCurrentCompanyHuman(tx, actor, companyId, expectedUserId);
+  const documents = await resolveCurrentTrustDocuments(tx, actor, companyId, expectedUserId, false, "gated");
+  const [membership] = await tx.select({ membershipRole: companyMemberships.membershipRole })
+    .from(companyMemberships)
+    .where(and(eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, userId), eq(companyMemberships.status, "active")))
+    .limit(1).for("share");
+  const isAdmin = membership?.membershipRole === "owner" || membership?.membershipRole === "admin";
+  const now = new Date();
+  const grants = await tx.select({ grant: trustDocumentAccessGrants, revokedId: trustDocumentAccessRevocations.id })
+    .from(trustDocumentAccessGrants)
+    .leftJoin(trustDocumentAccessRevocations, and(
+      eq(trustDocumentAccessRevocations.companyId, trustDocumentAccessGrants.companyId),
+      eq(trustDocumentAccessRevocations.grantReceiptId, trustDocumentAccessGrants.id),
+    ))
+    .where(and(eq(trustDocumentAccessGrants.companyId, companyId),
+      eq(trustDocumentAccessGrants.granteeUserId, userId), gt(trustDocumentAccessGrants.expiresAt, now),
+      isNull(trustDocumentAccessRevocations.id)));
+  const activeByDocument = new Map(grants.map(row => [row.grant.registryEntryId, row.grant]));
+  const visibleDocuments = documents.flatMap<TrustDocumentGatedAccess>(document => {
+    const grant = activeByDocument.get(document.id);
+    if (document.ndaRequired) {
+      if (!isAdmin) return [];
+      return [{ document, access: {
+        state: "nda_binding_unconfigured" as const,
+        registryEntryId: document.id,
+        documentRevisionId: document.documentRevisionId,
+        version: document.version,
+        requiredBindingOwner: "canonical_nda_agreement" as const,
+        receiptReference: null,
+      } }];
+    }
+    if (grant) return [{ document, access: { state: "granted" as const,
+      grantReceiptId: grant.id, expiresAt: grant.expiresAt.toISOString() } }];
+    return isAdmin ? [{ document, access: { state: "grant_required" as const } }] : [];
+  });
+  return { canGrant: isAdmin, documents: visibleDocuments };
+}
+
+export async function resolveCurrentTrustGatedGrant(
+  tx: Db,
+  actor: TrustActor,
+  companyId: string,
+  expectedUserId: string,
+  registryEntryId: string,
+  grantReceiptId: string,
+) {
+  const userId = await assertCurrentCompanyHuman(tx, actor, companyId, expectedUserId);
+  const documents = await resolveCurrentTrustDocuments(tx, actor, companyId, expectedUserId, false, "gated");
+  const document = documents.find(row => row.id === registryEntryId);
+  if (!document || document.ndaRequired) return null;
+  const now = new Date();
+  const [row] = await tx.select({ grant: trustDocumentAccessGrants })
+    .from(trustDocumentAccessGrants)
+    .leftJoin(trustDocumentAccessRevocations, and(
+      eq(trustDocumentAccessRevocations.companyId, trustDocumentAccessGrants.companyId),
+      eq(trustDocumentAccessRevocations.grantReceiptId, trustDocumentAccessGrants.id),
+    ))
+    .where(and(eq(trustDocumentAccessGrants.companyId, companyId),
+      eq(trustDocumentAccessGrants.id, grantReceiptId),
+      eq(trustDocumentAccessGrants.registryEntryId, registryEntryId),
+      eq(trustDocumentAccessGrants.documentRevisionId, document.documentRevisionId),
+      eq(trustDocumentAccessGrants.documentVersion, document.version),
+      eq(trustDocumentAccessGrants.granteeUserId, userId),
+      gt(trustDocumentAccessGrants.expiresAt, now), isNull(trustDocumentAccessRevocations.id)))
+    .limit(1).for("update", { of: trustDocumentAccessGrants });
+  if (row) await assertCurrentCompanyHuman(tx, actor, companyId, expectedUserId);
+  return row ? { document, grant: row.grant } : null;
 }
 
 export function resolveCurrentTrustAcceptanceRequirements(

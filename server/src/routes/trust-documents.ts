@@ -1,12 +1,17 @@
 import { createHash } from "node:crypto";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, gt, isNull, notExists, sql } from "drizzle-orm";
 import { Router, type Request } from "express";
 import { z } from "zod";
 import {
+  accountDeletionOperations,
+  authUsers,
+  companyMemberships,
   documentRevisions,
   documents,
   trustDocumentAcceptances,
   trustDocumentActionReceipts,
+  trustDocumentAccessGrants,
+  trustDocumentAccessRevocations,
   trustDocumentRegistry,
   type Db,
 } from "@paperclipai/db";
@@ -17,6 +22,15 @@ import {
   trustDocumentActionReceiptSchema,
   trustDocumentActionReceiptKindSchema,
   trustDocumentContentSchema,
+  trustDocumentGatedContentQuerySchema,
+  trustDocumentGatedContentSchema,
+  trustDocumentGatedGrantCommandSchema,
+  trustDocumentGatedGrantReceiptSchema,
+  trustDocumentGatedRegistrySchema,
+  trustDocumentGatedRevokeCommandSchema,
+  trustDocumentGatedRevokeReceiptSchema,
+  trustDocumentNdaUnconfiguredSchema,
+  trustDocumentNdaUnconfiguredErrorSchema,
   trustDocumentListQuerySchema,
   trustDocumentRegisterCommandSchema,
   trustDocumentRegistrationReceiptSchema,
@@ -30,6 +44,8 @@ import {
   assertCurrentCompanyHuman,
   isStandaloneHumanOwnedDocument,
   privateOwnerLinkedDocumentIds,
+  resolveCurrentTrustGatedDocuments,
+  resolveCurrentTrustGatedGrant,
   resolveCurrentTrustAcceptanceRequirements,
   resolveCurrentTrustDocuments,
 } from "../services/trust-documents.js";
@@ -66,6 +82,24 @@ function actionReceipt(row: typeof trustDocumentActionReceipts.$inferSelect) {
     action: row.action,
     completedAt: row.completedAt.toISOString(),
     surface: row.surface,
+  });
+}
+
+function gatedGrantReceipt(row: typeof trustDocumentAccessGrants.$inferSelect) {
+  return trustDocumentGatedGrantReceiptSchema.parse({
+    id: row.id, companyId: row.companyId, registryEntryId: row.registryEntryId,
+    documentRevisionId: row.documentRevisionId, documentVersion: row.documentVersion,
+    granteeUserId: row.granteeUserId, grantedByUserId: row.grantedByUserId,
+    grantedAt: row.grantedAt.toISOString(), expiresAt: row.expiresAt.toISOString(),
+    requestId: row.requestId, surface: row.surface,
+  });
+}
+
+function gatedRevokeReceipt(row: typeof trustDocumentAccessRevocations.$inferSelect) {
+  return trustDocumentGatedRevokeReceiptSchema.parse({
+    id: row.id, companyId: row.companyId, grantReceiptId: row.grantReceiptId,
+    revokedByUserId: row.revokedByUserId, revokedAt: row.revokedAt.toISOString(),
+    requestId: row.requestId, surface: row.surface,
   });
 }
 
@@ -154,6 +188,145 @@ export function trustDocumentRoutes(db: Db) {
       return trustDocumentContentSchema.parse({ document, format: revision.format, body: revision.body });
     });
     res.json(content);
+  });
+
+  router.get("/companies/:companyId/trust/gated/documents", async (req, res) => {
+    assertBoard(req);
+    const companyId = z.uuid().parse(req.params.companyId);
+    assertCompanyAccess(req, companyId);
+    const query = trustDocumentListQuerySchema.parse(req.query);
+    const gated = await db.transaction(tx => resolveCurrentTrustGatedDocuments(
+      tx as unknown as Db, req.actor, companyId, query.expectedUserId,
+    ));
+    res.json(trustDocumentGatedRegistrySchema.parse({ configured: gated.documents.length > 0, ...gated }));
+  });
+
+  router.get("/companies/:companyId/trust/gated/documents/:registryEntryId/content", async (req, res) => {
+    assertBoard(req);
+    const companyId = z.uuid().parse(req.params.companyId);
+    const registryEntryId = z.uuid().parse(req.params.registryEntryId);
+    assertCompanyAccess(req, companyId);
+    const query = trustDocumentGatedContentQuerySchema.parse(req.query);
+    const content = await db.transaction(async tx => {
+      const access = await resolveCurrentTrustGatedGrant(tx as unknown as Db, req.actor,
+        companyId, query.expectedUserId, registryEntryId, query.grantReceiptId);
+      if (!access) throw notFound("Current gated trust document grant not found");
+      const [revision] = await tx.select({ format: documentRevisions.format, body: documentRevisions.body })
+        .from(documentRevisions)
+        .where(and(eq(documentRevisions.companyId, companyId),
+          eq(documentRevisions.id, access.document.documentRevisionId)))
+        .limit(1).for("share");
+      if (!revision) throw notFound("Current gated trust document revision not found");
+      return trustDocumentGatedContentSchema.parse({ document: access.document,
+        grantReceiptId: access.grant.id, format: revision.format, body: revision.body });
+    });
+    res.json(content);
+  });
+
+  router.post("/companies/:companyId/trust/gated/grants", async (req, res) => {
+    z.strictObject({}).parse(req.query);
+    assertBoard(req);
+    const companyId = z.uuid().parse(req.params.companyId);
+    assertCompanyAccess(req, companyId);
+    const input = trustDocumentGatedGrantCommandSchema.parse(req.body);
+    const grantorUserId = actorUserId(req, input.expectedUserId);
+    const fingerprint = createHash("sha256").update(JSON.stringify({
+      companyId, grantorUserId, requestId: input.requestId, registryEntryId: input.registryEntryId,
+      version: input.version, granteeUserId: input.granteeUserId,
+      expiresAt: new Date(input.expiresAt).toISOString(), surface: input.surface,
+    })).digest("hex");
+    const result = await db.transaction(async tx => {
+      const key = `trust-document-gated-grant:${companyId}:${grantorUserId}:${input.requestId}`;
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
+      await assertCurrentCompanyHuman(tx as unknown as Db, req.actor, companyId, input.expectedUserId, true);
+      const [prior] = await tx.select().from(trustDocumentAccessGrants).where(and(
+        eq(trustDocumentAccessGrants.companyId, companyId),
+        eq(trustDocumentAccessGrants.grantedByUserId, grantorUserId),
+        eq(trustDocumentAccessGrants.requestId, input.requestId),
+      )).limit(1);
+      if (prior) {
+        if (prior.requestHash !== fingerprint) throw conflict("This gated grant request ID was already used for different terms");
+        return { row: prior, created: false };
+      }
+      const currentDocuments = await resolveCurrentTrustDocuments(
+        tx as unknown as Db, req.actor, companyId, input.expectedUserId, false, "gated",
+      );
+      const document = currentDocuments.find(row => row.id === input.registryEntryId && row.version === input.version);
+      if (!document) throw conflict("This exact gated document version is not current, reviewed, or eligible");
+      if (document.ndaRequired) {
+        const condition = trustDocumentNdaUnconfiguredSchema.parse({
+          state: "nda_binding_unconfigured", registryEntryId: document.id,
+          documentRevisionId: document.documentRevisionId, version: document.version,
+          requiredBindingOwner: "canonical_nda_agreement", receiptReference: null,
+        });
+        throw conflict("A canonical NDA binding is not configured for this document",
+          trustDocumentNdaUnconfiguredErrorSchema.parse({ ...condition, code: "trust_nda_binding_unconfigured" }));
+      }
+      const now = new Date();
+      const expiresAt = new Date(input.expiresAt);
+      if (!(expiresAt > now)) throw conflict("A gated access grant must expire in the future");
+      const [target] = await tx.select({ principalId: companyMemberships.principalId })
+        .from(companyMemberships)
+        .innerJoin(authUsers, eq(authUsers.id, companyMemberships.principalId))
+        .where(and(eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+          eq(companyMemberships.principalId, input.granteeUserId), eq(companyMemberships.status, "active"),
+          notExists(tx.select({ userId: accountDeletionOperations.userId }).from(accountDeletionOperations)
+            .where(eq(accountDeletionOperations.userId, authUsers.id)))))
+        .limit(1).for("share", { of: [companyMemberships, authUsers] });
+      if (!target) throw conflict("Gated access can be granted only to an existing active company Human");
+      const [row] = await tx.insert(trustDocumentAccessGrants).values({
+        companyId, registryEntryId: document.id, documentRevisionId: document.documentRevisionId,
+        documentVersion: document.version, granteeUserId: target.principalId,
+        grantedByUserId: grantorUserId, expiresAt, requestId: input.requestId,
+        requestHash: fingerprint, surface: input.surface,
+      }).returning();
+      return { row, created: true };
+    });
+    res.status(result.created ? 201 : 200).json(gatedGrantReceipt(result.row));
+  });
+
+  router.post("/companies/:companyId/trust/gated/grants/:grantReceiptId/revoke", async (req, res) => {
+    z.strictObject({}).parse(req.query);
+    assertBoard(req);
+    const companyId = z.uuid().parse(req.params.companyId);
+    const grantReceiptId = z.uuid().parse(req.params.grantReceiptId);
+    assertCompanyAccess(req, companyId);
+    const input = trustDocumentGatedRevokeCommandSchema.parse(req.body);
+    const grantorUserId = actorUserId(req, input.expectedUserId);
+    const fingerprint = createHash("sha256").update(JSON.stringify({
+      companyId, grantorUserId, requestId: input.requestId, grantReceiptId, surface: input.surface,
+    })).digest("hex");
+    const result = await db.transaction(async tx => {
+      const key = `trust-document-gated-revoke:${companyId}:${grantorUserId}:${input.requestId}`;
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
+      await assertCurrentCompanyHuman(tx as unknown as Db, req.actor, companyId, input.expectedUserId, true);
+      const [prior] = await tx.select().from(trustDocumentAccessRevocations).where(and(
+        eq(trustDocumentAccessRevocations.companyId, companyId),
+        eq(trustDocumentAccessRevocations.revokedByUserId, grantorUserId),
+        eq(trustDocumentAccessRevocations.requestId, input.requestId),
+      )).limit(1);
+      if (prior) {
+        if (prior.requestHash !== fingerprint) throw conflict("This gated revocation request ID was already used for different terms");
+        return { row: prior, created: false };
+      }
+      const [grant] = await tx.select().from(trustDocumentAccessGrants).where(and(
+        eq(trustDocumentAccessGrants.companyId, companyId),
+        eq(trustDocumentAccessGrants.id, grantReceiptId),
+      )).limit(1).for("update");
+      if (!grant) throw notFound("Gated access grant not found");
+      await assertCurrentCompanyHuman(tx as unknown as Db, req.actor, companyId, input.expectedUserId, true);
+      const [existing] = await tx.select().from(trustDocumentAccessRevocations).where(and(
+        eq(trustDocumentAccessRevocations.companyId, companyId),
+        eq(trustDocumentAccessRevocations.grantReceiptId, grantReceiptId),
+      )).limit(1);
+      if (existing) throw conflict("This gated access grant has already been revoked");
+      const [row] = await tx.insert(trustDocumentAccessRevocations).values({
+        companyId, grantReceiptId, revokedByUserId: grantorUserId,
+        requestId: input.requestId, requestHash: fingerprint, surface: input.surface,
+      }).returning();
+      return { row, created: true };
+    });
+    res.status(result.created ? 201 : 200).json(gatedRevokeReceipt(result.row));
   });
 
   router.post("/companies/:companyId/trust/documents", async (req, res) => {

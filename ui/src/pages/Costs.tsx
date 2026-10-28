@@ -660,6 +660,40 @@ export function Costs({
               icon={ArrowUpRight}
             />
           </dl>
+
+          <Card>
+            <CardHeader className="px-5 pt-5 pb-2">
+              <CardTitle className="text-base">{t("costPricing.recordedProviderEventsPerSuccessfulRun")}</CardTitle>
+              <CardDescription>{t("costPricing.providerCostPerSuccessfulRunScope")}</CardDescription>
+            </CardHeader>
+            <CardContent className="px-5 pb-5 pt-2">
+              <p className="font-mono text-2xl font-semibold tabular-nums">
+                {spendData?.summary.providerCostPerSuccessfulRunStatus === "reported_events" || spendData?.summary.providerCostPerSuccessfulRunStatus === "estimated_events"
+                  ? formatCents(spendData.summary.providerCostPerSuccessfulRunCents ?? 0)
+                  : t(spendData?.summary.providerCostPerSuccessfulRunStatus === "incomplete_events"
+                    ? "costPricing.providerCostPerSuccessfulRunIncomplete"
+                    : "costPricing.providerCostPerSuccessfulRunUnavailable")}
+              </p>
+              {spendData?.summary.providerCostPerSuccessfulRunStatus === "reported_events" ? (
+                <p className="text-sm text-muted-foreground">
+                  {t("costPricing.providerCostPerSuccessfulRunReportedEvents", { count: spendData.summary.successfulRunCount })}
+                </p>
+              ) : null}
+              {spendData?.summary.providerCostPerSuccessfulRunStatus === "estimated_events" ? (
+                <p className="text-sm text-muted-foreground">
+                  {t("costPricing.providerCostPerSuccessfulRunEstimatedEvents", { count: spendData.summary.successfulRunCount })}
+                </p>
+              ) : null}
+              {spendData?.summary.providerCostPerSuccessfulRunStatus === "incomplete_events" ? (
+                <p className="text-sm text-muted-foreground">
+                  {t("costPricing.providerCostPerSuccessfulRunMissing", {
+                    missing: spendData.summary.successfulRunsWithoutCostEvents,
+                    unpriced: spendData.summary.successfulRunUnpricedEventCount,
+                  })}
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
         </div>
       ) : null}
 

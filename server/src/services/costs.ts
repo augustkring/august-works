@@ -1,4 +1,4 @@
-import { agentAvatarUrl, resolveAgentAppearance, NATIVE_CONVERSATION_MODEL_BILLING_PREFIX } from "@paperclipai/shared";
+import { agentAvatarUrl, resolveAgentAppearance, NATIVE_CONVERSATION_MODEL_BILLING_PREFIX, type CostSummary } from "@paperclipai/shared";
 import { and, desc, eq, gte, isNotNull, isNull, lt, lte, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "@paperclipai/db";
@@ -131,6 +131,39 @@ export function costService(db: Db, budgetHooks: BudgetServiceHooks = {}) {
         .from(costEvents)
         .where(and(...conditions));
 
+      const successfulRunConditions: ReturnType<typeof eq>[] = [
+        eq(heartbeatRuns.companyId, companyId),
+        eq(heartbeatRuns.status, "succeeded"),
+      ];
+      if (range?.from) successfulRunConditions.push(gte(heartbeatRuns.finishedAt, range.from));
+      if (range?.to) successfulRunConditions.push(lte(heartbeatRuns.finishedAt, range.to));
+      const [runProviderCosts] = await db
+        .select({
+          runCount: sql<number>`count(distinct ${heartbeatRuns.id})::int`,
+          runsWithCostEvents: sql<number>`count(distinct case when ${costEvents.id} is not null then ${heartbeatRuns.id} end)::int`,
+          unpricedEventCount: sql<number>`count(case when ${costEvents.costStatus} = 'unpriced' then ${costEvents.id} end)::int`,
+          estimatedEventCount: sql<number>`count(case when ${costEvents.costStatus} = 'estimated' then ${costEvents.id} end)::int`,
+          providerCostCents: sumAsNumber(costEvents.costCents),
+        })
+        .from(heartbeatRuns)
+        .leftJoin(costEvents, and(
+          eq(costEvents.companyId, companyId),
+          eq(costEvents.heartbeatRunId, heartbeatRuns.id),
+        ))
+        .where(and(...successfulRunConditions));
+
+      const successfulRunCount = Number(runProviderCosts?.runCount ?? 0);
+      const successfulRunsWithCostEvents = Number(runProviderCosts?.runsWithCostEvents ?? 0);
+      const successfulRunsWithoutCostEvents = Math.max(0, successfulRunCount - successfulRunsWithCostEvents);
+      const successfulRunProviderCostCents = Number(runProviderCosts?.providerCostCents ?? 0);
+      const runCostStatus: CostSummary["providerCostPerSuccessfulRunStatus"] = successfulRunCount === 0
+        ? "no_successful_runs"
+        : successfulRunsWithoutCostEvents > 0 || Number(runProviderCosts?.unpricedEventCount ?? 0) > 0
+          ? "incomplete_events"
+          : Number(runProviderCosts?.estimatedEventCount ?? 0) > 0
+            ? "estimated_events"
+            : "reported_events";
+
       const spendCents = Number(total);
       const utilization =
         company.budgetMonthlyCents > 0
@@ -143,6 +176,17 @@ export function costService(db: Db, budgetHooks: BudgetServiceHooks = {}) {
         unpricedEventCount: Number(unpriced),
         budgetCents: company.budgetMonthlyCents,
         utilizationPercent: Number(utilization.toFixed(2)),
+        successfulRunCount,
+        successfulRunsWithCostEvents,
+        successfulRunsWithoutCostEvents,
+        successfulRunProviderCostCents,
+        successfulRunEstimatedEventCount: Number(runProviderCosts?.estimatedEventCount ?? 0),
+        successfulRunUnpricedEventCount: Number(runProviderCosts?.unpricedEventCount ?? 0),
+        providerCostPerSuccessfulRunCents: runCostStatus === "reported_events" || runCostStatus === "estimated_events"
+          ? successfulRunProviderCostCents / successfulRunCount
+          : null,
+        providerCostPerSuccessfulRunCoverage: "recorded_events_only",
+        providerCostPerSuccessfulRunStatus: runCostStatus,
       };
     },
 

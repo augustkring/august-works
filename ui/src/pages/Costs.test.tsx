@@ -119,4 +119,40 @@ describe("Costs embedded Audit surfaces", () => {
     expect(container.querySelector('[data-testid="mixed"]')?.textContent).toBe("$1.25 + 2 forbrugshændelser uden pris");
     await act(async () => { await i18n.changeLanguage("en"); });
   });
+
+  it("renders the successful-run provider cost only when event coverage supports it", async () => {
+    costsApiMocks.summary.mockResolvedValue({
+      companyId: "company-1", spendCents: 400, unpricedEventCount: 0,
+      budgetCents: 0, utilizationPercent: 0,
+      successfulRunCount: 2, successfulRunsWithCostEvents: 2,
+      successfulRunsWithoutCostEvents: 0, successfulRunProviderCostCents: 400,
+      successfulRunEstimatedEventCount: 0, successfulRunUnpricedEventCount: 0,
+      providerCostPerSuccessfulRunCoverage: "recorded_events_only",
+      providerCostPerSuccessfulRunCents: 200,
+      providerCostPerSuccessfulRunStatus: "reported_events",
+    });
+    costsApiMocks.byAgent.mockResolvedValue([]);
+    costsApiMocks.byProject.mockResolvedValue([]);
+    costsApiMocks.byAgentModel.mockResolvedValue([]);
+    costsApiMocks.financeSummary.mockResolvedValue({ netCents: 0, debitCents: 0, creditCents: 0, estimatedDebitCents: 0, eventCount: 0 });
+    costsApiMocks.financeByBiller.mockResolvedValue([]);
+    costsApiMocks.financeByKind.mockResolvedValue([]);
+    costsApiMocks.financeEvents.mockResolvedValue([]);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    root = createRoot(container);
+    await act(async () => {
+      await i18n.changeLanguage("en");
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <Costs />
+        </QueryClientProvider>,
+      );
+    });
+    await act(async () => {
+      await vi.waitFor(() => expect(container.textContent).toContain("$2.00"));
+    });
+    expect(container.textContent).toContain("Recorded provider event cost per successful run");
+    expect(container.textContent).toContain("Recorded provider events across 2 successful runs; event capture completeness is not established.");
+    expect(container.textContent).toContain("not total cost to serve");
+  });
 });

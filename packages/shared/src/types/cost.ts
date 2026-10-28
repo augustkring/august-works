@@ -30,6 +30,21 @@ export interface CostSummary {
   spendCents: number;
   budgetCents: number;
   utilizationPercent: number;
+  /** Successful heartbeat runs whose finish time falls in the selected range. */
+  successfulRunCount: number;
+  /** Successful runs with at least one linked provider cost event. */
+  successfulRunsWithCostEvents: number;
+  /** Successful runs with no linked provider cost event; prevents a zero from implying complete metering. */
+  successfulRunsWithoutCostEvents: number;
+  /** Sum of existing provider cost events linked to successful runs in the selected range. */
+  successfulRunProviderCostCents: number;
+  successfulRunEstimatedEventCount: number;
+  successfulRunUnpricedEventCount: number;
+  /** Mean linked provider cost per successful run, unavailable when the cohort is incomplete. */
+  providerCostPerSuccessfulRunCents: number | null;
+  /** These amounts summarize stored cost events only; they do not prove event capture is complete. */
+  providerCostPerSuccessfulRunCoverage: "recorded_events_only";
+  providerCostPerSuccessfulRunStatus: "reported_events" | "estimated_events" | "incomplete_events" | "no_successful_runs";
 }
 
 export interface IssueCostSummary {

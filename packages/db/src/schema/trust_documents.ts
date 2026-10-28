@@ -26,6 +26,7 @@ export const trustDocumentRegistry = pgTable("trust_document_registry", {
 }, table => [
   unique("trust_document_registry_company_id_uq").on(table.companyId, table.id),
   unique("trust_document_registry_revision_uq").on(table.companyId, table.documentRevisionId),
+  unique("trust_document_registry_exact_version_uq").on(table.companyId, table.id, table.documentRevisionId, table.version),
   foreignKey({
     name: "trust_document_registry_revision_fk",
     columns: [table.companyId, table.documentId, table.documentRevisionId],
@@ -71,6 +72,56 @@ export const trustDocumentActionReceipts = pgTable("trust_document_action_receip
   check("trust_document_action_receipts_hash_ck", sql`${table.requestHash} ~ '^[a-f0-9]{64}$'`),
   check("trust_document_action_receipts_version_ck", sql`length(btrim(${table.documentVersion})) between 1 and 128`),
   check("trust_document_action_receipts_surface_ck", sql`length(btrim(${table.surface})) between 1 and 128`),
+]);
+
+/** Exact-version, Human-targeted gated evidence grants. Grant rows are immutable. */
+export const trustDocumentAccessGrants = pgTable("trust_document_access_grants", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  registryEntryId: uuid("registry_entry_id").notNull(),
+  documentRevisionId: uuid("document_revision_id").notNull(),
+  documentVersion: text("document_version").notNull(),
+  granteeUserId: text("grantee_user_id").notNull(),
+  grantedByUserId: text("granted_by_user_id").notNull(),
+  grantedAt: timestamp("granted_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  requestId: uuid("request_id").notNull(),
+  requestHash: text("request_hash").notNull(),
+  surface: text("surface").notNull(),
+}, table => [
+  foreignKey({
+    name: "trust_document_access_grants_registry_fk",
+    columns: [table.companyId, table.registryEntryId, table.documentRevisionId, table.documentVersion],
+    foreignColumns: [trustDocumentRegistry.companyId, trustDocumentRegistry.id, trustDocumentRegistry.documentRevisionId, trustDocumentRegistry.version],
+  }).onDelete("cascade"),
+  unique("trust_document_access_grants_company_id_uq").on(table.companyId, table.id),
+  unique("trust_document_access_grants_request_uq").on(table.companyId, table.grantedByUserId, table.requestId),
+  index("trust_document_access_grants_principal_idx").on(table.companyId, table.registryEntryId, table.granteeUserId, table.expiresAt),
+  check("trust_document_access_grants_hash_ck", sql`${table.requestHash} ~ '^[a-f0-9]{64}$'`),
+  check("trust_document_access_grants_version_ck", sql`length(btrim(${table.documentVersion})) between 1 and 128`),
+  check("trust_document_access_grants_surface_ck", sql`length(btrim(${table.surface})) between 1 and 128`),
+]);
+
+/** Immutable revocation proof, separate from the original grant receipt. */
+export const trustDocumentAccessRevocations = pgTable("trust_document_access_revocations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  grantReceiptId: uuid("grant_receipt_id").notNull(),
+  revokedByUserId: text("revoked_by_user_id").notNull(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }).notNull().defaultNow(),
+  requestId: uuid("request_id").notNull(),
+  requestHash: text("request_hash").notNull(),
+  surface: text("surface").notNull(),
+}, table => [
+  foreignKey({
+    name: "trust_document_access_revocations_grant_fk",
+    columns: [table.companyId, table.grantReceiptId],
+    foreignColumns: [trustDocumentAccessGrants.companyId, trustDocumentAccessGrants.id],
+  }).onDelete("cascade"),
+  unique("trust_document_access_revocations_grant_uq").on(table.companyId, table.grantReceiptId),
+  unique("trust_document_access_revocations_request_uq").on(table.companyId, table.revokedByUserId, table.requestId),
+  check("trust_document_access_revocations_hash_ck", sql`${table.requestHash} ~ '^[a-f0-9]{64}$'`),
+  check("trust_document_access_revocations_surface_ck", sql`length(btrim(${table.surface})) between 1 and 128`),
 ]);
 
 /** Append-only proof of an explicit action against one exact registry version. */

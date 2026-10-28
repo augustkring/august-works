@@ -1725,16 +1725,12 @@ const BOARD_ONLY_OPERATIONS = new Set([
   "GET /api/issues/{issueId}/chat-binding",
 ]);
 
-// Trust reads and acceptance require a current native Human session, not just a board key.
-const BOARD_SESSION_ONLY_OPERATIONS = new Set([
-  "GET /api/companies/{companyId}/notices/action-required",
-  "GET /api/companies/{companyId}/trust/documents",
-  "GET /api/companies/{companyId}/trust/documents/{registryEntryId}/content",
-  "POST /api/companies/{companyId}/trust/documents",
-  "POST /api/companies/{companyId}/trust/notices/read",
-  "POST /api/companies/{companyId}/trust/admin-acknowledgments",
-  "POST /api/companies/{companyId}/trust/acceptances",
-]);
+// All company Trust routes share the canonical current-Human session owner.
+// Match that mounted family so new gated/action routes cannot inherit board-key docs.
+function requiresBoardSession(method: string, path: string): boolean {
+  return path.startsWith("/api/companies/{companyId}/trust/") ||
+    operationKey(method, path) === "GET /api/companies/{companyId}/notices/action-required";
+}
 
 const INSTANCE_ADMIN_OPERATIONS = new Set([
   "DELETE /api/companies/{companyId}/business-events/sources/{sourceRef}",
@@ -1841,7 +1837,7 @@ function resolveOperationAuthLevel(
   const key = operationKey(method, path);
   if (PUBLIC_OPERATIONS.has(key)) return "public";
   if (AGENT_SELF_OPERATIONS.has(key)) return "agent";
-  if (BOARD_SESSION_ONLY_OPERATIONS.has(key)) return "board_session";
+  if (requiresBoardSession(method, path)) return "board_session";
   if (key === "POST /runtime-tools/model/messages" || key === "POST /runtime-tools/model/anthropic-messages" || key === "POST /runtime-tools/model/v1/messages") return "worker_model";
   if (key === "POST /api/companies/{companyId}/workflow-authoring") return "agent_run";
   if (key === "POST /api/mcp/project-tools" || key === "POST /api/companies/{companyId}/slack/tasks/{issueId}/tools" ||
@@ -2002,7 +1998,7 @@ function applyDocumentFixups(document: any): any {
   for (const contract of v9ApiPaths) {
     const operation = document.paths[contract.path]?.[contract.method];
     if (!operation) throw new Error(`Missing V9 API operation: ${contract.path}`);
-    const sessionOnly = BOARD_SESSION_ONLY_OPERATIONS.has(operationKey(contract.method, contract.path));
+    const sessionOnly = requiresBoardSession(contract.method, contract.path);
     operation.security = contract.auth === "public" ? [] : sessionOnly
       ? [securityRequirement(BOARD_SESSION_AUTH_SCHEME)] : BOARD_SECURITY;
     operation["x-paperclip-authorization"] = contract.auth === "public" ? { actor: "public" } : sessionOnly
@@ -5787,7 +5783,8 @@ const companyCostSummarySchema = z.object({
   successfulRunEstimatedEventCount: z.number().int().nonnegative(),
   successfulRunUnpricedEventCount: z.number().int().nonnegative(),
   providerCostPerSuccessfulRunCents: z.number().nullable(),
-  providerCostPerSuccessfulRunStatus: z.enum(["reported", "estimated", "incomplete", "unavailable"]),
+  providerCostPerSuccessfulRunCoverage: z.literal("recorded_events_only"),
+  providerCostPerSuccessfulRunStatus: z.enum(["reported_events", "estimated_events", "incomplete_events", "no_successful_runs"]),
 }).strict();
 
 for (const segment of costSummaryPaths) {

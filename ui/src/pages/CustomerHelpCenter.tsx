@@ -12,6 +12,7 @@ import { useV9PrivateReadAuthority } from "../hooks/useV9PrivateReadAuthority";
 import { queryKeys } from "../lib/queryKeys";
 import { CustomerSupportAssistant } from "../components/CustomerSupportAssistant";
 import { ServiceHealth } from "../components/ServiceHealth";
+import { TrustGatedEvidence } from "../components/TrustGatedEvidence";
 
 const HELP_SEARCH_LIMIT = 8;
 
@@ -134,6 +135,7 @@ export function CustomerHelpCenter({ navigationState }: { navigationState?: unkn
           {t("helpCenter.trust")}
         </a>
       </div>
+      <TrustGatedEvidence companyId={selectedCompanyId} active={active} />
       <section aria-labelledby="customer-help-contact" className="space-y-2 rounded-lg border border-border p-4">
         <h2 id="customer-help-contact" className="font-medium">{t("helpCenter.humanTitle")}</h2>
         <p className="text-sm text-muted-foreground">{t("helpCenter.humanDescription")}</p>
