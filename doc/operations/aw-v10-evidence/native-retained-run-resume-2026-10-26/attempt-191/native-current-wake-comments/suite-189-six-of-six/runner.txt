@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/services/native-runtime/current-wake-comments.test.ts
+test_pattern=.

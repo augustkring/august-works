@@ -1,0 +1,4 @@
+
+> @paperclipai/ui@0.3.1 typecheck /workspace/blentera-v10/ui
+> tsc -b
+

@@ -1,0 +1,5 @@
+# Current coverage, session and UI checks
+
+All captured exits are `0`: the covered Workflow HTTP integration case, the local-implicit denial route case, four UI/API test files (170 tests), and the UI TypeScript build. The covered Workflow case exercises the PostgreSQL lock-wait/expiry race, explicit API creation/read/revoke/run, and stale expected-session rejection. The local-implicit case asserts that local implicit administrator access cannot read, create, or revoke Human coverage. UI test output includes CompanyAccess late-session result handling and WorkflowBuilder/IssueDetail session-fenced actions.
+
+`source-pins.sha256` was captured after acquiring the shared test lock. It contains hashes for each exercised server/UI module and test. The original hash command also named a nonexistent `useAccountIdentity.ts`, emitted a shell error, and continued; that symbol lives in the pinned `useV9CurrentAccount.ts`. `useV9PrivateReadAuthority.ts`, another actual dependency, is recorded in `source-pin-supplement.sha256`; it was captured before the UI test command began. Both pin files verify against the current worktree.

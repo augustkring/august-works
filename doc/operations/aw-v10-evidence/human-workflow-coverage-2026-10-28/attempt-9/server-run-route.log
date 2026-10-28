@@ -1,0 +1,35 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ↓ |@paperclipai/server| src/__tests__/workflow-routes.test.ts > Workflow routes > rejects a changed review account before reads or gateway decisions and keeps errors private
+ ↓ |@paperclipai/server| src/__tests__/workflow-routes.test.ts > Workflow routes > keeps Original unbound review callers compatible with the workflow rollout gate
+ ↓ |@paperclipai/server| src/__tests__/workflow-routes.test.ts > Workflow routes > fails closed while Workflows V1 is disabled
+ ↓ |@paperclipai/server| src/__tests__/workflow-routes.test.ts > Workflow routes > creates, reads, updates, publishes, and audits a valid manual workflow
+ ↓ |@paperclipai/server| src/__tests__/workflow-routes.test.ts > Workflow routes > uses effective permissions for normal session users
+ ✓ |@paperclipai/server| src/__tests__/workflow-routes.test.ts > Workflow routes > admits a covered manual workflow run as the named delegatee and stores the coverage receipt 701ms
+ ↓ |@paperclipai/server| src/__tests__/workflow-routes.test.ts > Workflow routes > projects separate draft and active versions without configuration or mutation authority
+ ↓ |@paperclipai/server| src/__tests__/workflow-routes.test.ts > Workflow routes > requires a matching human account and rejects disabled, foreign and agent reads
+ ↓ |@paperclipai/server| src/__tests__/workflow-routes.test.ts > Workflow routes > uses current native read grants, suppresses edit controls and honors membership revocation
+ ↓ |@paperclipai/server| src/__tests__/workflow-routes.test.ts > Workflow routes > does not expose a workflow through another company route
+ ↓ |@paperclipai/server| src/__tests__/workflow-routes.test.ts > Workflow routes > does not advertise human-only Workflow mutations to agents
+ ↓ |@paperclipai/server| src/__tests__/workflow-routes.test.ts > Workflow routes > does not expose optimizer state for nonexistent or cross-company workflows
+ ↓ |@paperclipai/server| src/__tests__/workflow-routes.test.ts > Workflow routes > keeps optimizer suggestions read-only and feature-gated
+ ↓ |@paperclipai/server| src/__tests__/workflow-routes.test.ts > Workflow routes > exposes the typed Node Registry to authorized readers
+ ↓ |@paperclipai/server| src/__tests__/workflow-routes.test.ts > Workflow routes > searches deterministic Workflow capabilities for authorized readers
+ ↓ |@paperclipai/server| src/__tests__/workflow-routes.test.ts > Workflow routes > advertises run capability once the manual durable executor exists
+ ↓ |@paperclipai/server| src/__tests__/workflow-routes.test.ts > Workflow routes > builds a deterministic Data Selector model for the current unsaved graph
+ ↓ |@paperclipai/server| src/__tests__/workflow-routes.test.ts > Workflow routes > starts an idempotent manual Workflow run only from a published revision
+ ↓ |@paperclipai/server| src/__tests__/workflow-routes.test.ts > Workflow routes > retries a failed Workflow run through HTTP with immutable lineage and request idempotency
+ ↓ |@paperclipai/server| src/__tests__/workflow-routes.test.ts > Workflow routes > invokes a published Workflow from an active task with authoritative task context and idempotency
+ ↓ |@paperclipai/server| src/__tests__/workflow-routes.test.ts > Workflow routes > does not invoke a Workflow through a task from another company
+ ↓ |@paperclipai/server| src/__tests__/workflow-routes.test.ts > Workflow routes > requires task mutation access before using a task to invoke a Workflow
+ ↓ |@paperclipai/server| src/__tests__/workflow-routes.test.ts > Workflow routes > refuses Task to Workflow invocation after the task is terminal
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 22 skipped (23)
+   Start at  16:36:26
+   Duration  25.32s (transform 13.75s, setup 86ms, import 19.66s, tests 5.42s, environment 0ms)
+
