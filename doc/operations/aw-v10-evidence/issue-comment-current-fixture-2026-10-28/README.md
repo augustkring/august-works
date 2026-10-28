@@ -1,0 +1,1 @@
+Full issue-comment reopen route suite: 100/100 tests passed, exit 0. The isolated issues-service mock now provides the canonical unsealed-conversation-shell helper; its local_implicit default actor has no session-bound shell exception. Production privacy guards are unchanged. This source-pinned run replaces the previously unarchived pass report.

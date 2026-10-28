@@ -10,7 +10,7 @@ const fixture=vi.hoisted(()=>({companyId:"00000000-0000-4000-8000-000000000001",
 vi.mock("@/context/CompanyContext",()=>({useCompany:()=>({selectedCompanyId:fixture.companyId})}));
 vi.mock("@/context/BreadcrumbContext",()=>({useBreadcrumbs:()=>({setBreadcrumbs:fixture.breadcrumbs})}));
 vi.mock("@/api/companies-query",()=>({useAccountIdentity:()=>fixture}));
-vi.mock("@/lib/router",()=>({Link:({to,children}:{to:string;children:React.ReactNode})=><a href={to}>{children}</a>}));
+vi.mock("@/lib/router",()=>({useSearchParams:()=>[new URLSearchParams(),vi.fn()],Link:({to,children}:{to:string;children:React.ReactNode})=><a href={to}>{children}</a>}));
 vi.mock("@/api/process-analysis",()=>({processAnalysisApi:{list:vi.fn(),detail:vi.fn(),create:vi.fn(),revise:vi.fn(),publish:vi.fn(),retire:vi.fn(),run:vi.fn(),getRun:vi.fn(),listRuns:vi.fn(),listFindings:vi.fn(),findingDetail:vi.fn(),createFinding:vi.fn(),transitionFinding:vi.fn()}}));
 vi.mock("@/api/ai-governance",()=>({aiGovernanceApi:{obligations:vi.fn(async()=>[{id:"00000000-0000-4000-8000-000000000004",obligation:{framework:"company_policy",citation:"Reviewed process purpose",analyticalPurpose:{status:"approved",purpose:"process_intelligence",capabilities:["process"]}}}])}}));
 (globalThis as {IS_REACT_ACT_ENVIRONMENT?:boolean}).IS_REACT_ACT_ENVIRONMENT=true;

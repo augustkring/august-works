@@ -1,0 +1,4 @@
+70673d650a37e31596f8465bec74434fc31d6ce9284da0a2985f5e5c1277ffb3  ui/src/context/BreadcrumbContext.test.tsx
+5f843559501884bf4475eeada8c0bf1aeae9367a4cbb2c2e3446d30c6de22601  ui/src/pages/Agents.test.tsx
+641f91625320a9d07530fb7d74fc46d578c11174f6f1ce5ca5b27e903c7cfaf5  ui/src/pages/Secrets.render.test.tsx
+7cc347182280000b65ab3c25fa2912e93d759aa0570383664c000277091a8ac4  ui/src/pages/ProcessIntelligence.test.tsx
