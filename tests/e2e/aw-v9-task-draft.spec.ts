@@ -37,6 +37,8 @@ test("an explicit task draft reconciles a lost Native acknowledgement with reads
       data: { name: "Disposable Native task-draft qualification" },
     }),
   );
+  const session = await json(await request.get("/api/auth/get-session"));
+  const expectedActorId = `user:${session.user.id}`;
   const base = `/api/companies/${company.id}`;
   const attempts: Array<Record<string, unknown>> = [];
   let savedId: string | undefined,
@@ -45,7 +47,7 @@ test("an explicit task draft reconciles a lost Native acknowledgement with reads
   await page.route(`**${base}/issues?**`, async (route) => {
     if (route.request().method() !== "POST") return route.continue();
     const params = new URL(route.request().url()).searchParams;
-    expect(params.get("expectedActorId")).toBe("local-board");
+    expect(params.get("expectedActorId")).toBe(expectedActorId);
     expect(params.get("awExperienceDraft")).toBe("task");
     attempts.push(route.request().postDataJSON());
     expect(attempts).toHaveLength(1);
@@ -66,7 +68,7 @@ test("an explicit task draft reconciles a lost Native acknowledgement with reads
     expect(route.request().method()).toBe("GET");
     expect(
       new URL(route.request().url()).searchParams.get("expectedActorId"),
-    ).toBe("local-board");
+    ).toBe(expectedActorId);
     reads++;
     if (reads === 1) return route.abort("failed");
     await route.continue();

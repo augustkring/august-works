@@ -324,9 +324,13 @@ for (const journey of [
       await expect(
         queue.getByRole("button", { name: "Decline", exact: true }),
       ).not.toBeVisible({ timeout: 20_000 });
-      expect(
-        await json<{ status: string }>(await request.get(`/api/issues/${issue.id}`)),
-      ).toMatchObject({ status: "done" });
+      await expect
+        .poll(
+          async () =>
+            (await json<{ status: string }>(await request.get(`/api/issues/${issue.id}`))).status,
+          { timeout: 30_000 },
+        )
+        .toBe("done");
       const showResolvedDetails = page.getByRole("button", {
         name: "Show result details",
         exact: true,

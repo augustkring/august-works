@@ -39,6 +39,8 @@ test("maintenance history reads native receipts separately from current state an
       data: { name: "Disposable maintenance history fixture" },
     }),
   );
+  const session = await json(await request.get("/api/auth/get-session"));
+  const userId = session.user.id as string;
   const agent = await json(
     await request.post(`/api/companies/${company.id}/agents`, {
       data: {
@@ -82,7 +84,7 @@ test("maintenance history reads native receipts separately from current state an
         state: "testing",
         release: {} as PackageRelease,
         contentHash: hash,
-        createdByUserId: "local-board",
+        createdByUserId: userId,
       })),
     );
     await db.insert(companyAgentPackageInstallations).values({
@@ -91,7 +93,7 @@ test("maintenance history reads native receipts separately from current state an
       packageId,
       installedVersionId: next,
       agentId: agent.id,
-      installedByUserId: "local-board",
+      installedByUserId: userId,
       status: "configuring",
       version: 2,
       components: [],
@@ -114,7 +116,7 @@ test("maintenance history reads native receipts separately from current state an
           candidateVersion: next,
           maintenanceClass: "M2",
           policyVersion: "aw-v9-package-maintenance-1",
-          policyOwnerUserId: "local-board",
+          policyOwnerUserId: userId,
           reviewedSource: {
             expectedInstallationVersion: 1,
             expectedInstalledVersionId: previous,
@@ -134,7 +136,7 @@ test("maintenance history reads native receipts separately from current state an
         details: {
           maintenanceClass: "M2",
           policyVersion: "aw-v9-package-maintenance-1",
-          policyOwnerUserId: "local-board",
+          policyOwnerUserId: userId,
           policy: "auto_low_risk",
           previousVersion: previous,
           nextVersion: next,
@@ -160,7 +162,7 @@ test("maintenance history reads native receipts separately from current state an
         details: {
           maintenanceClass: "M2",
           policyVersion: "aw-v9-package-maintenance-1",
-          policyOwnerUserId: "local-board",
+          policyOwnerUserId: userId,
           reason: "configured_change_budget",
           humanReviewRequired: true,
         },
@@ -197,7 +199,7 @@ test("maintenance history reads native receipts separately from current state an
     );
     const base = `/api/companies/${company.id}/agent-package-installations/${installationId}/experience/maintenance`;
     const view = await json(
-      await request.get(base + "?expectedUserId=local-board"),
+      await request.get(`${base}?expectedUserId=${encodeURIComponent(userId)}`),
     );
     expect(view.installationStatus).toBe("configuring");
     expect(view.attemptHistory).toMatchObject({
@@ -287,7 +289,7 @@ test("maintenance history reads native receipts separately from current state an
       }),
     ).toHaveCount(0);
     expect(
-      (await request.get(base + "?expectedUserId=local-board")).status(),
+      (await request.get(`${base}?expectedUserId=${encodeURIComponent(userId)}`)).status(),
     ).toBe(404);
     const [retained] = await db
       .select()
