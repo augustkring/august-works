@@ -1,0 +1,46 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+stdout | src/__tests__/heartbeat-dependency-scheduling.test.ts > heartbeat dependency-aware queued run selection
+{
+  severity_local: 'NOTICE',
+  severity: 'NOTICE',
+  code: '42P07',
+  message: 'relation "issue_relations" already exists, skipping',
+  file: 'parse_utilcmd.c',
+  line: '211',
+  routine: 'transformCreateStmt'
+}
+
+[09:54:19] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"ca704216-cd9a-4e61-b861-01a3ed0b419f","agentId":"d233b670-b579-4276-96d7-6a57c41d4183","runId":"86194ccc-344d-40e7-8375-369920afebda"}[39m
+[09:54:22] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"ca704216-cd9a-4e61-b861-01a3ed0b419f","agentId":"d233b670-b579-4276-96d7-6a57c41d4183","runId":"268e1b1c-308f-496b-9c17-4e01ccc925da"}[39m
+ ✓ src/__tests__/heartbeat-dependency-scheduling.test.ts > heartbeat dependency-aware queued run selection > dispatches and coalesces durable native status wake intents into one heartbeat run 4593ms
+ ✓ src/__tests__/heartbeat-dependency-scheduling.test.ts > heartbeat dependency-aware queued run selection > coalesces the native intent when dispatch admission defers behind an active issue run 5378ms
+[09:54:29] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"5b150f3c-71fa-4948-b0f2-5fec69797175","agentId":"a1cebab9-3ecc-4f1d-85c9-ad3eeece6030","runId":"7f51e3d6-9da8-41dd-9a82-3bdec7b689ee"}[39m
+[09:54:31] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"5b150f3c-71fa-4948-b0f2-5fec69797175","agentId":"a1cebab9-3ecc-4f1d-85c9-ad3eeece6030","runId":"6f1bc011-f291-4ef9-b8d8-ff80c2e9181d"}[39m
+[09:54:32] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"5b150f3c-71fa-4948-b0f2-5fec69797175","agentId":"a1cebab9-3ecc-4f1d-85c9-ad3eeece6030","runId":"aaf0626b-ffe1-4536-aba1-42fd2ac618dd"}[39m
+[09:54:34] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"5b150f3c-71fa-4948-b0f2-5fec69797175","agentId":"a1cebab9-3ecc-4f1d-85c9-ad3eeece6030","runId":"121b6256-0ef9-4aa0-9070-8dd486eb6c67"}[39m
+[09:54:35] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"5b150f3c-71fa-4948-b0f2-5fec69797175","agentId":"a1cebab9-3ecc-4f1d-85c9-ad3eeece6030","runId":"30a8a4a9-58f2-44d8-bc6f-7360735188a2"}[39m
+ ✓ src/__tests__/heartbeat-dependency-scheduling.test.ts > heartbeat dependency-aware queued run selection > keeps blocked descendants idle until their blockers resolve 8070ms
+[09:54:37] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"fb68cb41-0681-4b7b-adbc-43d0c878ff71","agentId":"2465e721-884a-4582-b454-1a0e03e8a5eb","runId":"4b5cb021-f366-46c0-bbdc-b4ec77fb61f8"}[39m
+[09:54:38] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"fb68cb41-0681-4b7b-adbc-43d0c878ff71","agentId":"2465e721-884a-4582-b454-1a0e03e8a5eb","runId":"64094d82-ef1c-4c54-b185-f6a8c440cb53"}[39m
+[09:54:40] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"fb68cb41-0681-4b7b-adbc-43d0c878ff71","agentId":"2465e721-884a-4582-b454-1a0e03e8a5eb","runId":"7680f97d-0cd0-4415-a6e6-9a2d17f50892"}[39m
+ ✓ src/__tests__/heartbeat-dependency-scheduling.test.ts > heartbeat dependency-aware queued run selection > defers issue_blockers_resolved as a follow-up when the same issue is already running 279ms
+[09:54:40] [32mINFO[39m: [36mclaimQueuedRun: cancelled blocked queued run[39m [90m{"runId":"4e438292-7f51-47dd-a56d-e65bc1f16cdf","issueId":"b650c995-47d7-47c6-b618-f510d6e3db16","unresolvedBlockerCount":1}[39m
+[09:54:40] [31mERROR[39m: [36mheartbeat execution setup failed[39m [90m{"runId":"9a113019-c186-48d1-9fa3-3a2c9873f4c0","failureCode":"setup_failed"}[39m
+[09:54:40] [32mINFO[39m: [36mskipping late setup failure finalization because the run already left running state[39m [90m{"runId":"9a113019-c186-48d1-9fa3-3a2c9873f4c0","attemptedStatus":"failed","currentStatus":null}[39m
+[09:54:41] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"f104ee24-93e3-466c-aae7-00e772bf1dd7","agentId":"3f8a225c-3274-43e1-9958-026c643f3262","runId":"da51807e-eabb-4e6f-8db3-fa7e512077dd"}[39m
+ ✓ src/__tests__/heartbeat-dependency-scheduling.test.ts > heartbeat dependency-aware queued run selection > honors maxConcurrentRuns 1 by leaving a second assignment wake queued 4233ms
+[09:54:42] [31mERROR[39m: [36mheartbeat execution setup failed[39m [90m{"runId":"a66492c1-9eba-48ee-ac7c-46b2d1e90cda","failureCode":"setup_failed"}[39m
+[09:54:42] [32mINFO[39m: [36mskipping late setup failure finalization because the run already left running state[39m [90m{"runId":"a66492c1-9eba-48ee-ac7c-46b2d1e90cda","attemptedStatus":"failed","currentStatus":null}[39m
+ ✓ src/__tests__/heartbeat-dependency-scheduling.test.ts > heartbeat dependency-aware queued run selection > cancels stale queued runs when issue blockers are still unresolved 1690ms
+[09:54:43] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"c24479a8-7fd3-477d-9f05-c910ff070956","agentId":"16feea32-6f5d-4135-85b2-72d1a380d350","runId":"5e8070fe-d311-4372-8a34-2cd69f5a28df"}[39m
+ ✓ src/__tests__/heartbeat-dependency-scheduling.test.ts > heartbeat dependency-aware queued run selection > suppresses normal wakeups while allowing comment interaction wakes under a pause hold 1747ms
+[09:54:45] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"fc19284d-5d68-4bf4-8690-3e4bbf59a7b4","agentId":"5730a49c-d67d-41d1-a103-5ed0c738e8f3","runId":"185b92ed-3a6e-431e-89f3-8b61a5b2563b"}[39m
+ ✓ src/__tests__/heartbeat-dependency-scheduling.test.ts > heartbeat dependency-aware queued run selection > allows comment interaction wakes when a legacy hold has a full_pause note 1706ms
+
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+   Start at  09:53:54
+   Duration  50.86s (transform 12.33s, setup 86ms, import 18.04s, tests 32.59s, environment 0ms)
+
