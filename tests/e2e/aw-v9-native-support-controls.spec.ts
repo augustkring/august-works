@@ -1,3 +1,5 @@
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+registerEnglishAccountLocaleIsolation(test);
 import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
 test.use({ trace: "retain-on-failure" });
