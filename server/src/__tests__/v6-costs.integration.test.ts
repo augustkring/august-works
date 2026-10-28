@@ -269,8 +269,9 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(await db.select().from(platformAdminAudit)).toEqual(before);
     });
     it("keeps shared billing account host estimates unallocated instead of splitting them across companies", async () => {
-      await db.update(authSessions).set({ authenticatedAt: new Date(), updatedAt: new Date() })
-        .where(eq(authSessions.id, operatorActor.sessionId!));
+      // The preceding credential insertion rotates the authenticator generation;
+      // a fresh domain fixture must use that generation rather than revive the old session.
+      operatorActor = { ...operatorActor, sessionId: await seedNativePasskeySession(db, "operator") };
       await db.update(billingAccountCompanies).set({ status: "inactive", updatedAt: now })
         .where(eq(billingAccountCompanies.companyId, secondCompanyId));
       await db.insert(billingAccountCompanies).values({ companyId: secondCompanyId, billingAccountId: accountId, status: "active" });

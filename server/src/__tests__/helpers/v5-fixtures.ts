@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
-import { companyMemberships, instanceSettings, principalPermissionGrants, type Db } from "@paperclipai/db";
+import { instanceSettings, principalPermissionGrants, type Db } from "@paperclipai/db";
 import { V5_FEATURE_KEYS } from "@paperclipai/shared";
 import { grantsForHumanRole } from "../../services/company-member-roles.js";
 import type { AuthorizationActor } from "../../services/authorization.js";
@@ -24,7 +24,8 @@ export async function seedV5Companies(db: Db) {
   await db.execute(sql`insert into companies (id,name,issue_prefix,created_at,updated_at) values
     (${home},'Home',${`H${home.slice(0, 7)}`},${now},${now}),
     (${guest},'Guest',${`G${guest.slice(0, 7)}`},${now},${now})`);
-  await db.insert(companyMemberships).values([home, guest].map((companyId) => ({ companyId, principalType: "user", principalId: userId, status: "active", membershipRole: "owner" })));
+  await db.execute(sql`insert into company_memberships(company_id,principal_type,principal_id,status,membership_role)
+    values (${home}::uuid,'user',${userId},'active','owner'),(${guest}::uuid,'user',${userId},'active','owner')`);
   await db.insert(principalPermissionGrants).values([home, guest].flatMap((companyId) => grantsForHumanRole("owner").map((grant) => ({ companyId, principalType: "user", principalId: userId, ...grant }))));
   const actor: AuthorizationActor = { type: "board", source: "session", userId, companyIds: [home, guest] };
   return { userId, home, guest, actor };

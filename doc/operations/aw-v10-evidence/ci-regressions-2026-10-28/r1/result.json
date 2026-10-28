@@ -1,0 +1,23 @@
+{
+  "scope": "Independent executed regressions, not aggregate final-head or release qualification",
+  "sourceHead": "ad9ebf0f637a335ab3b4a5c6e90f2831953fce43",
+  "cohorts": [
+    {
+      "name": "root-v6-cost-generation-r1-20261028",
+      "passed": 4,
+      "skipped": 1,
+      "meaning": "Current native generation in the cost-domain fixture; separate integer-allocation test outside selected describe was not run"
+    },
+    {
+      "name": "root-historical-replay-schema-r1-20261028",
+      "passed": 1,
+      "meaning": "Actual historical pre-0497 migration provenance upgrade with schema-era seed columns"
+    },
+    {
+      "name": "relay-process-marker-provenance-20261028-r3",
+      "passed": 1,
+      "skipped": 141,
+      "meaning": "Remote process marker persistence is not replaced by local PID observation; not full C0 physical-erasure acceptance"
+    }
+  ]
+}

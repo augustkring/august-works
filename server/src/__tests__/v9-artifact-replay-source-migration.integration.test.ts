@@ -6,7 +6,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { expect, it } from "vitest";
 import { automationArtifacts, automationArtifactVersions, authUsers, companyMemberships, createDb,
-  principalPermissionGrants, workflowOptimizerSuggestions, workflowRuns } from "@paperclipai/db";
+  principalPermissionGrants, workflowOptimizerSuggestions } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { seedV5Companies } from "./helpers/v5-fixtures.js";
 import { automationArtifactService, automationArtifactVersionContentHash } from "../services/automation-artifacts/automation-artifact-service.js";
@@ -34,7 +34,8 @@ it("upgrades actual historical replay relationships and quarantines missing lega
       const sourceRevisionId = randomUUID(), parentId = randomUUID(), parentRevisionId = randomUUID();
       await legacy.execute(sql`insert into agents(id,company_id,name,role,status) values
         (${agentId}::uuid,${companyId}::uuid,'Historical Author','general','idle')`);
-      await legacy.insert(companyMemberships).values({ companyId, principalType: "agent", principalId: agentId, status: "active" }).onConflictDoNothing();
+      await legacy.execute(sql`insert into company_memberships(company_id,principal_type,principal_id,status)
+        values(${companyId}::uuid,'agent',${agentId},'active') on conflict do nothing`);
       await legacy.insert(principalPermissionGrants).values(["workflows:read", "workflows:edit"].map(permissionKey =>
         ({ companyId, principalType: "user", principalId: userId, permissionKey }))).onConflictDoNothing();
       await legacy.execute(sql`insert into issues(id,company_id,title,status,priority,assignee_agent_id,created_by_user_id,
@@ -57,8 +58,9 @@ it("upgrades actual historical replay relationships and quarantines missing lega
         await tx.execute(sql`update workflows set draft_revision_id=${sourceRevisionId}::uuid where id=${privateWorkflowId}::uuid`);
         await tx.execute(sql`update workflows set draft_revision_id=${parentRevisionId}::uuid where id=${parentId}::uuid`);
       });
-      const runs = await legacy.insert(workflowRuns).values(Array.from({ length: 3 }, () => ({ companyId, workflowId: privateWorkflowId,
-        workflowRevisionId: sourceRevisionId, source: "manual", status: "queued" }))).returning();
+      const runs = Array.from({ length: 3 }, () => ({ id: randomUUID() }));
+      for (const run of runs) await legacy.execute(sql`insert into workflow_runs(id,company_id,workflow_id,workflow_revision_id,source,status)
+        values(${run.id}::uuid,${companyId}::uuid,${privateWorkflowId}::uuid,${sourceRevisionId}::uuid,'manual','queued')`);
       for (const [artifactId, versionId, sourceRuns] of [[completeId, completeVersion, runs.map(run => run.id)], [incompleteId, incompleteVersion, Array.from({ length: 3 }, () => randomUUID())]] as const) {
         const [suggestion] = await legacy.insert(workflowOptimizerSuggestions).values({ companyId, workflowId: parentId,
           workflowRevisionId: parentRevisionId, signatureHash: artifactId.replaceAll("-", "").repeat(2), status: "detected", candidateType: "transform",
