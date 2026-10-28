@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { afterAll, afterEach, beforeEach, beforeAll, describe, expect, it } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   activityLog,
   accountDeletionOperations,
@@ -277,9 +277,16 @@ describeEmbeddedPostgres("cloud tenant company provisioning", () => {
         )).for("update");
         finishRevocation();
         await refreshStarted;
-        // The Cloud writer has started while this transaction owns the row
-        // lock. Its status predicate must be checked after this commit.
-        await new Promise(resolve => setTimeout(resolve, 30));
+        // Wait until the Cloud writer is blocked on this membership row so
+        // the test proves PostgreSQL rechecks its status predicate at commit.
+        await expect.poll(async () => {
+          const [row] = await db.execute<{ waiting: boolean }>(sql`select exists(
+            select 1 from pg_stat_activity where datname = current_database()
+              and pid <> pg_backend_pid() and wait_event_type = 'Lock'
+              and query ilike '%company_memberships%'
+          ) as waiting`);
+          return row?.waiting;
+        }, { timeout: 5_000 }).toBe(true);
         await tx.update(companyMemberships).set({ status: "suspended" }).where(and(
           eq(companyMemberships.companyId, companyId),
           eq(companyMemberships.principalType, "user"),
@@ -290,10 +297,8 @@ describeEmbeddedPostgres("cloud tenant company provisioning", () => {
         ));
       });
       await revocationLocked;
-      refresh = resolveCloudTenantActor(db, tenantHeaders({ stackId, userId, role: "member" })).then(value => {
-        startRefresh();
-        return value;
-      });
+      refresh = resolveCloudTenantActor(db, tenantHeaders({ stackId, userId, role: "member" }));
+      startRefresh();
       await revocation;
       const refreshed = await refresh;
       expect(refreshed?.companyIds).not.toContain(companyId);
