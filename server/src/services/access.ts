@@ -2,8 +2,10 @@ import { and, asc, desc, eq, ilike, inArray, isNull, ne, notInArray, or, sql } f
 import type { Db } from "@paperclipai/db";
 import {
   companyMemberships,
+  humanWorkflowCoverages,
   activityLog,
   authUsers,
+  accountDeletionOperations,
   companySecretBindings,
   companySecrets,
   connectionGrantDelegations,
@@ -16,13 +18,16 @@ import {
   toolAccessAuditEvents,
   toolConnections,
   userSecretDeclarations,
+  workflowRevisions,
+  workflows,
 } from "@paperclipai/db";
-import type { PermissionKey, PrincipalType } from "@paperclipai/shared";
-import { conflict, forbidden } from "../errors.js";
+import type { CreateHumanWorkflowCoverage, HumanWorkflowCoverage, PermissionKey, PrincipalType } from "@paperclipai/shared";
+import { conflict, forbidden, notFound, unprocessable } from "../errors.js";
 import { assertAssignableAgent } from "./agent-assignability.js";
 import { authorizationService, type AuthorizationActor, type AuthorizationResource } from "./authorization.js";
 import { ensureHumanRoleDefaultGrants } from "./principal-access-compatibility.js";
 import { routineService } from "./routines.js";
+import { isUniqueViolation } from "../db-errors.js";
 
 type MembershipRow = typeof companyMemberships.$inferSelect;
 type GrantInput = {
@@ -40,6 +45,130 @@ type MemberArchiveInput = {
 
 export function accessService(db: Db) {
   const authorization = authorizationService(db);
+
+  function workflowCoverageActor(userId: string): AuthorizationActor {
+    return { type: "board", source: "session", userId, ignoreInstanceAdmin: true };
+  }
+
+  async function assertWorkflowCoverageHumanRights(input: {
+    tx: Parameters<Parameters<Db["transaction"]>[0]>[0];
+    companyId: string;
+    principalUserId: string;
+    delegateeUserId: string;
+    workflowId: string;
+    workflowRevisionId: string;
+    scopeType: "manual" | "task";
+    taskId: string | null;
+  }) {
+    if (input.principalUserId === input.delegateeUserId) {
+      throw unprocessable("Workflow coverage must route to a different Human.", { code: "workflow_coverage_self_route" });
+    }
+    const userIds = [input.principalUserId, input.delegateeUserId];
+    const currentUsers = await input.tx.select({ id: authUsers.id }).from(authUsers).where(and(
+      inArray(authUsers.id, userIds),
+      sql`not exists (select 1 from ${accountDeletionOperations} d where d.user_id = ${authUsers.id})`,
+    )).for("share");
+    if (currentUsers.length !== 2) {
+      throw forbidden("Both workflow coverage principals must be current Human accounts.", { code: "workflow_coverage_human_unavailable" });
+    }
+    const memberships = await input.tx.select({ principalId: companyMemberships.principalId }).from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, input.companyId),
+      eq(companyMemberships.principalType, "user"),
+      inArray(companyMemberships.principalId, userIds),
+      eq(companyMemberships.status, "active"),
+    )).for("share");
+    if (new Set(memberships.map((membership) => membership.principalId)).size !== 2) {
+      throw forbidden("Both workflow coverage principals need active company membership.", { code: "workflow_coverage_membership_unavailable" });
+    }
+
+    const [workflow] = await input.tx.select({ status: workflows.status, publishedRevisionId: workflows.publishedRevisionId })
+      .from(workflows).where(and(eq(workflows.companyId, input.companyId), eq(workflows.id, input.workflowId))).for("share");
+    const [revision] = await input.tx.select({ state: workflowRevisions.state }).from(workflowRevisions).where(and(
+      eq(workflowRevisions.companyId, input.companyId),
+      eq(workflowRevisions.workflowId, input.workflowId),
+      eq(workflowRevisions.id, input.workflowRevisionId),
+    )).for("share");
+    if (!workflow || workflow.status !== "active" || workflow.publishedRevisionId !== input.workflowRevisionId || revision?.state !== "published") {
+      throw conflict("Coverage must name the currently published active workflow revision.", { code: "workflow_coverage_revision_changed" });
+    }
+
+    const scopedAuthorization = authorizationService(input.tx as unknown as Db);
+    for (const userId of userIds) {
+      const decision = await scopedAuthorization.decide({
+        actor: workflowCoverageActor(userId),
+        action: "workflows:run",
+        resource: { type: "company", companyId: input.companyId },
+      });
+      if (!decision.allowed) {
+        throw forbidden("Both workflow coverage principals must currently be authorized to run this workflow.", {
+          code: "workflow_coverage_run_permission_unavailable", reason: decision.reason,
+        });
+      }
+    }
+
+    if (input.scopeType === "task" && input.taskId) {
+      const [task] = await input.tx.select({ id: issues.id, companyId: issues.companyId, projectId: issues.projectId,
+        parentId: issues.parentId, assigneeAgentId: issues.assigneeAgentId, assigneeUserId: issues.assigneeUserId,
+        originKind: issues.originKind, originId: issues.originId, status: issues.status,
+      }).from(issues).where(and(eq(issues.companyId, input.companyId), eq(issues.id, input.taskId))).for("share");
+      if (!task) throw notFound("Task not found");
+      if (task.status === "done" || task.status === "cancelled") {
+        throw conflict("Task is already terminal", { code: "workflow_task_not_active", issueId: task.id, status: task.status });
+      }
+      const taskResource: AuthorizationResource = {
+        type: "issue", companyId: input.companyId, issueId: task.id, projectId: task.projectId,
+        parentIssueId: task.parentId, assigneeAgentId: task.assigneeAgentId, assigneeUserId: task.assigneeUserId,
+        originKind: task.originKind, originId: task.originId, status: task.status,
+      };
+      for (const userId of userIds) {
+        const decision = await scopedAuthorization.decide({ actor: workflowCoverageActor(userId), action: "issue:mutate", resource: taskResource });
+        if (!decision.allowed) {
+          throw forbidden("Both workflow coverage principals need current Task access and mutation authority.", {
+            code: "workflow_coverage_task_authority_unavailable", reason: decision.reason,
+          });
+        }
+      }
+    }
+  }
+
+  async function assertWorkflowCoverageCurrent(input: {
+    tx: Parameters<Parameters<Db["transaction"]>[0]>[0];
+    companyId: string;
+    coverageId: string;
+    delegateeUserId: string;
+    workflowId: string;
+    workflowRevisionId: string;
+    scopeType: "manual" | "task";
+    taskId: string | null;
+    now?: Date;
+  }) {
+    // Lock authorization owners before the coverage row. Member permission
+    // updates and offboarding lock membership first, then revoke matching
+    // coverage rows; matching that order prevents a claim/offboarding cycle.
+    const [candidate] = await input.tx.select().from(humanWorkflowCoverages).where(and(
+      eq(humanWorkflowCoverages.companyId, input.companyId), eq(humanWorkflowCoverages.id, input.coverageId),
+    ));
+    if (!candidate) {
+      throw forbidden("Current Human workflow coverage is unavailable for this exact action.", { code: "workflow_coverage_unavailable" });
+    }
+    await assertWorkflowCoverageHumanRights({ tx: input.tx, companyId: input.companyId,
+      principalUserId: candidate.principalUserId, delegateeUserId: candidate.delegateeUserId,
+      workflowId: input.workflowId, workflowRevisionId: input.workflowRevisionId,
+      scopeType: input.scopeType, taskId: input.taskId });
+
+    const [coverage] = await input.tx.select().from(humanWorkflowCoverages).where(and(
+      eq(humanWorkflowCoverages.companyId, input.companyId), eq(humanWorkflowCoverages.id, input.coverageId),
+    )).for("update");
+    const now = input.now ?? new Date();
+    if (!coverage || coverage.revokedAt || coverage.startsAt > now || coverage.expiresAt <= now ||
+      coverage.delegateeUserId !== input.delegateeUserId || coverage.workflowId !== input.workflowId ||
+      coverage.workflowRevisionId !== input.workflowRevisionId || coverage.scopeType !== input.scopeType ||
+      coverage.taskId !== input.taskId || coverage.principalUserId !== candidate.principalUserId ||
+      coverage.delegateeUserId !== candidate.delegateeUserId) {
+      throw forbidden("Current Human workflow coverage is unavailable for this exact action.", { code: "workflow_coverage_unavailable" });
+    }
+    return coverage;
+  }
 
   async function sweepMemberConnectionAccess(
     tx: Parameters<Parameters<Db["transaction"]>[0]>[0],
@@ -616,6 +745,7 @@ export function accessService(db: Db) {
       if (existing.status === "active" && nextStatus !== "active" && existing.principalType === "user") {
         await sweepMemberConnectionAccess(tx, companyId, existing.principalId, now);
         await pauseActiveOwnedRoutinesForWithdrawal(tx, companyId, existing.principalId, grantedByUserId);
+        await revokeWorkflowCoveragesForMember(tx, companyId, existing.principalId, grantedByUserId, now);
       }
       const updated = await tx
         .update(companyMemberships)
@@ -792,6 +922,7 @@ export function accessService(db: Db) {
 
       const now = new Date();
       await sweepMemberConnectionAccess(tx, companyId, existing.principalId, now);
+      await revokeWorkflowCoveragesForMember(tx, companyId, existing.principalId, actorUserId, now);
       const assignmentPatch = {
         assigneeAgentId: input.reassignment?.assigneeAgentId ?? null,
         assigneeUserId: input.reassignment?.assigneeUserId ?? null,
@@ -1010,6 +1141,7 @@ export function accessService(db: Db) {
             membership.principalId,
             options.actorUserId,
           );
+          await revokeWorkflowCoveragesForMember(tx, membership.companyId, membership.principalId, options.actorUserId ?? null, now);
         }
         await tx
           .update(companyMemberships)
@@ -1264,6 +1396,107 @@ export function accessService(db: Db) {
     });
   }
 
+  async function createWorkflowCoverage(companyId: string, input: {
+    requestId: string;
+    delegateeUserId: string;
+    workflowId: string;
+    workflowRevisionId: string;
+    scopeType: "manual" | "task";
+    taskId: string | null;
+    startsAt: Date;
+    expiresAt: Date;
+    reason: string;
+  }, actor: AuthorizationActor) {
+    if (actor.type !== "board" || actor.source !== "session" || !actor.userId || actor.userId === input.delegateeUserId) {
+      throw forbidden("A current Human session must create coverage for a different Human.", { code: "workflow_coverage_session_required" });
+    }
+    const assertSameRequest = (existing: typeof humanWorkflowCoverages.$inferSelect) => {
+      if (existing.principalUserId !== actor.userId || existing.delegateeUserId !== input.delegateeUserId ||
+          existing.workflowId !== input.workflowId || existing.workflowRevisionId !== input.workflowRevisionId ||
+          existing.scopeType !== input.scopeType || existing.taskId !== input.taskId ||
+          existing.startsAt.getTime() !== input.startsAt.getTime() || existing.expiresAt.getTime() !== input.expiresAt.getTime() ||
+          existing.reason !== input.reason.trim()) {
+        throw conflict("Coverage request ID was already used for different terms.", { code: "workflow_coverage_request_reused" });
+      }
+      return { coverage: existing, created: false as const };
+    };
+    try {
+      return await db.transaction(async (tx) => {
+        const [existing] = await tx.select().from(humanWorkflowCoverages).where(and(
+          eq(humanWorkflowCoverages.companyId, companyId), eq(humanWorkflowCoverages.requestId, input.requestId),
+        )).for("update");
+        if (existing) return assertSameRequest(existing);
+        await assertWorkflowCoverageHumanRights({ tx, companyId, principalUserId: actor.userId!,
+          delegateeUserId: input.delegateeUserId, workflowId: input.workflowId,
+          workflowRevisionId: input.workflowRevisionId, scopeType: input.scopeType, taskId: input.taskId });
+        const [coverage] = await tx.insert(humanWorkflowCoverages).values({
+          requestId: input.requestId, companyId, principalUserId: actor.userId!, delegateeUserId: input.delegateeUserId,
+          actionKey: "workflows:run", workflowId: input.workflowId, workflowRevisionId: input.workflowRevisionId,
+          scopeType: input.scopeType, taskId: input.taskId, startsAt: input.startsAt, expiresAt: input.expiresAt,
+          reason: input.reason.trim(), createdAt: new Date(),
+        }).returning();
+        if (!coverage) throw new Error("Workflow coverage insert returned no row");
+        return { coverage, created: true as const };
+      });
+    } catch (error) {
+      if (!isUniqueViolation(error, "human_workflow_coverages_company_request_uq")) throw error;
+      const [existing] = await db.select().from(humanWorkflowCoverages).where(and(
+        eq(humanWorkflowCoverages.companyId, companyId), eq(humanWorkflowCoverages.requestId, input.requestId),
+      ));
+      if (!existing) throw error;
+      return assertSameRequest(existing);
+    }
+  }
+
+  async function listWorkflowCoverages(companyId: string, userId: string) {
+    return db.select().from(humanWorkflowCoverages).where(and(
+      eq(humanWorkflowCoverages.companyId, companyId),
+      or(eq(humanWorkflowCoverages.principalUserId, userId), eq(humanWorkflowCoverages.delegateeUserId, userId)),
+    )).orderBy(desc(humanWorkflowCoverages.createdAt)).limit(100);
+  }
+
+  async function revokeWorkflowCoverage(companyId: string, coverageId: string, actor: AuthorizationActor) {
+    if (actor.type !== "board" || actor.source !== "session" || !actor.userId) {
+      throw forbidden("A current Human session is required to revoke workflow coverage.", { code: "workflow_coverage_session_required" });
+    }
+    return db.transaction(async (tx) => {
+      const [coverage] = await tx.select().from(humanWorkflowCoverages).where(and(
+        eq(humanWorkflowCoverages.companyId, companyId), eq(humanWorkflowCoverages.id, coverageId),
+      )).for("update");
+      if (!coverage) return null;
+      if (actor.userId !== coverage.principalUserId && actor.userId !== coverage.delegateeUserId) {
+        throw forbidden("Only a Human named by this workflow coverage may revoke it.", { code: "workflow_coverage_revoke_denied" });
+      }
+      if (coverage.revokedAt) return coverage;
+      const [revoked] = await tx.update(humanWorkflowCoverages).set({ revokedAt: new Date(), revokedByUserId: actor.userId })
+        .where(and(eq(humanWorkflowCoverages.companyId, companyId), eq(humanWorkflowCoverages.id, coverageId), isNull(humanWorkflowCoverages.revokedAt)))
+        .returning();
+      return revoked ?? coverage;
+    });
+  }
+
+  async function revokeWorkflowCoveragesForMember(
+    tx: Parameters<Parameters<Db["transaction"]>[0]>[0], companyId: string, userId: string, revokedByUserId: string | null, now: Date,
+  ) {
+    await tx.update(humanWorkflowCoverages).set({ revokedAt: now, revokedByUserId })
+      .where(and(eq(humanWorkflowCoverages.companyId, companyId), isNull(humanWorkflowCoverages.revokedAt),
+        or(eq(humanWorkflowCoverages.principalUserId, userId), eq(humanWorkflowCoverages.delegateeUserId, userId))));
+  }
+
+  async function authorizeWorkflowCoverage(input: {
+    tx: Parameters<Parameters<Db["transaction"]>[0]>[0];
+    companyId: string;
+    coverageId: string;
+    delegateeUserId: string;
+    workflowId: string;
+    workflowRevisionId: string;
+    scopeType: "manual" | "task";
+    taskId: string | null;
+    now?: Date;
+  }) {
+    return assertWorkflowCoverageCurrent(input);
+  }
+
   async function updateMember(
     companyId: string,
     memberId: string,
@@ -1327,6 +1560,7 @@ export function accessService(db: Db) {
       ) {
         await sweepMemberConnectionAccess(tx, companyId, existing.principalId, now);
         await pauseActiveOwnedRoutinesForWithdrawal(tx, companyId, existing.principalId, actorUserId);
+        await revokeWorkflowCoveragesForMember(tx, companyId, existing.principalId, actorUserId, now);
       }
 
       return tx
@@ -1367,5 +1601,9 @@ export function accessService(db: Db) {
     listPrincipalGrants,
     setPrincipalPermission,
     updateMember,
+    createWorkflowCoverage,
+    listWorkflowCoverages,
+    revokeWorkflowCoverage,
+    authorizeWorkflowCoverage,
   };
 }

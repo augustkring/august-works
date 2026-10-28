@@ -155,6 +155,7 @@ export { workflowOptimizerSuggestions, workflowRunReviews, workflowOptimizerEval
 export {
   workflows,
   workflowRevisions,
+  humanWorkflowCoverages,
   workflowRuns,
   workflowStepRuns,
   workflowWaits,

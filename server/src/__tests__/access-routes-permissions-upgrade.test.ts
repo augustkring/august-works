@@ -133,6 +133,24 @@ describeEmbeddedPostgres("access routes permissions upgrade compatibility", () =
     expect(unchanged.membershipRole).toBe("owner");
   }, 10_000);
 
+  it("does not let local implicit administrator access read, create, or revoke Human workflow coverage", async () => {
+    const { company, owner } = await createCompanyWithOwner(db);
+    const http = request(await createApp(db, company.id, owner.principalId));
+    await http.get(`/api/companies/${company.id}/workflow-coverages`).expect(403).expect((response) => {
+      expect(response.body.error).toMatch(/current Human session is required/i);
+    });
+    await http.post(`/api/companies/${company.id}/workflow-coverages`).send({
+      requestId: randomUUID(), delegateeUserId: `delegatee-${randomUUID()}`,
+      workflowId: randomUUID(), workflowRevisionId: randomUUID(), scopeType: "manual", taskId: null,
+      startsAt: new Date(Date.now() + 60_000), expiresAt: new Date(Date.now() + 3_600_000), reason: "Human session required",
+    }).expect(403).expect((response) => {
+      expect(response.body.error).toMatch(/current Human session is required/i);
+    });
+    await http.delete(`/api/companies/${company.id}/workflow-coverages/${randomUUID()}`).expect(403).expect((response) => {
+      expect(response.body.error).toMatch(/current Human session is required/i);
+    });
+  });
+
   it("keeps custom grants when the role-only member route changes a member role", async () => {
     const { company, owner } = await createCompanyWithOwner(db);
     const member = await db

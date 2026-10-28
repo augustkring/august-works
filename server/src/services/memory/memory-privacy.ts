@@ -17,17 +17,17 @@ import type { AuthorizationActor } from "../authorization.js";
 import { agentAuthoringTestMemorySourceReadActive } from "../agents/authoring-test-memory-source-scope.js";
 import { invalidateCognitiveRecords } from "./cognitive-privacy.js";
 import { invalidateDerivedMemory } from "./derived-privacy.js";
+import { tracePrivacyLock } from "../privacy-lock-diagnostics.js";
 
 export function memoryDeletionKey(companyId: string, kind: "record" | "operation" | "source", value: unknown) {
   return createHash("sha256").update(JSON.stringify([companyId, kind, value])).digest("hex");
 }
 
 export async function lockMemoryPrivacy(db: Db, companyId: string, mode: "read" | "write" = "write") {
-  if (mode === "read") {
-    await db.execute(sql`select pg_advisory_xact_lock_shared(hashtextextended(${`memory:privacy:${companyId}`}, 0))`);
-    return;
-  }
-  await db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`memory:privacy:${companyId}`}, 0))`);
+  const key = `memory:privacy:${companyId}`;
+  await tracePrivacyLock(db, key, mode, () => mode === "read"
+    ? db.execute(sql`select pg_advisory_xact_lock_shared(hashtextextended(${key}, 0))`)
+    : db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`));
 }
 
 /** Internal receipt from the native worker's locked capture transaction. Neither
@@ -128,6 +128,7 @@ function assertMemorySourceReadActive(state: MemorySourceReadScope) {
 }
 const memorySourceReads=new AsyncLocalStorage<MemorySourceReadScope>();
 let nativeMemorySourceFailureDiagnostics = 0;
+let nativeMemorySourceAgentFailureDiagnostics = 0;
 type NativeMemorySourceFailureStage = "source_owner" | "source_snapshot" | "private_owner" | "agent_scope" |
   "ancestor_retention" | "root_shape" | "human_evidence" | "snapshot_binding" | "published_share" |
   "nested_source" | "run_reader" | "task_reader" | "memory_temporal_reader" | "project_reader" |
@@ -145,12 +146,19 @@ export async function canActorReadMemorySources(db: Db, companyId: string, actor
   budget: MemorySourceReadBudget = {}):Promise<boolean> {
   const inherited=memorySourceReads.getStore(),state=inherited??{active:new Set<string>(),deadline:performance.now()+8000,work:0,
     ...(budget.signal ? { signal: budget.signal } : {})};
-  const diagnosticDenied = (reason: NativeMemorySourceFailureStage | "scope_guard" | "cycle" | "deadline" | "work_budget") => {
-    if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1" && nativeMemorySourceFailureDiagnostics < 8) {
-      nativeMemorySourceFailureDiagnostics += 1;
+  const diagnosticDenied = (reason: NativeMemorySourceFailureStage | "scope_guard" | "cycle" | "deadline" | "work_budget",
+    facts: Record<string, boolean | number | string | null> = {}) => {
+    const focusAgent = actor?.type === "agent" && Boolean(actor.onBehalfOfUserId);
+    if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1" &&
+      (focusAgent ? nativeMemorySourceAgentFailureDiagnostics < 8 : nativeMemorySourceFailureDiagnostics < 8)) {
+      if (focusAgent) nativeMemorySourceAgentFailureDiagnostics += 1;
+      else nativeMemorySourceFailureDiagnostics += 1;
       console.error("native_memory_source_access_test_denial", JSON.stringify({ reason, inherited: Boolean(inherited),
+        actorType: actor?.type ?? "none", actorKey: actor ? createHash("sha256").update(JSON.stringify(actor)).digest("hex").slice(0, 16) : null,
+        readerRole: actor?.type === "agent" ? actor.onBehalfOfUserId ? "agent_human" : "agent_no_human" :
+          actor?.type === "board" ? "board_user" : "none",
         activeCount: state.active.size, work: state.work, deadlineExpired: performance.now() > state.deadline,
-        signalAborted: state.signal?.aborted ?? false }));
+        signalAborted: state.signal?.aborted ?? false, ...facts }));
     }
   };
   if (budget.deadlineAt !== undefined) state.deadline = Math.min(state.deadline, performance.now() + Math.max(0, budget.deadlineAt - Date.now()));
@@ -206,9 +214,15 @@ export async function canActorReadMemorySourceSet(db: Db, companyId: string, act
     try {
       try{assertMemorySourceReadActive(state);}catch{return false;}
       if(!await inspectMemorySourceAccess(db,companyId,actor,ids,state,reason=>{
-        if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1" && nativeMemorySourceFailureDiagnostics < 8) {
-          nativeMemorySourceFailureDiagnostics += 1;
+        const focusAgent = actor?.type === "agent" && Boolean(actor.onBehalfOfUserId);
+        if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1" &&
+          (focusAgent ? nativeMemorySourceAgentFailureDiagnostics < 8 : nativeMemorySourceFailureDiagnostics < 8)) {
+          if (focusAgent) nativeMemorySourceAgentFailureDiagnostics += 1;
+          else nativeMemorySourceFailureDiagnostics += 1;
           console.error("native_memory_source_access_test_denial", JSON.stringify({ reason, inherited: Boolean(inherited),
+            actorType: actor?.type ?? "none", actorKey: actor ? createHash("sha256").update(JSON.stringify(actor)).digest("hex").slice(0, 16) : null,
+            readerRole: actor?.type === "agent" ? actor.onBehalfOfUserId ? "agent_human" : "agent_no_human" :
+              actor?.type === "board" ? "board_user" : "none",
             activeCount: state.active.size, work: state.work, deadlineExpired: performance.now() > state.deadline,
             signalAborted: state.signal?.aborted ?? false }));
         }
@@ -412,7 +426,7 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
   for (const [id,owners] of taskChecks) for (const [ownerId,encoded] of owners) {
     try { assertMemorySourceReadActive(state); } catch { diagnosticDenied("source_deadline"); return false; }
     if (encoded === null) {
-      if (performance.now()>deadline) { diagnosticDenied("task_reader"); return false; }
+      if (performance.now()>deadline) { diagnosticDenied("task_reader", { phase: "unscoped_deadline" }); return false; }
       unscopedTaskChecks.push(id);
     } else temporalChecksFor(ownerId).tasks.push(id);
   }
@@ -421,7 +435,8 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
     const readers = await canActorReadIssuePrivacyBatch(db, actor, companyId, unscopedTaskChecks);
     const deniedIds = unscopedTaskChecks.filter(id=>readers.get(id)!==true);
     if (performance.now()>deadline || deniedIds.length) {
-      diagnosticDenied("task_reader"); return false;
+      diagnosticDenied("task_reader", { phase: "unscoped_acl_batch", candidateCount: unscopedTaskChecks.length,
+        deniedCount: deniedIds.length }); return false;
     }
   }
   for (const ownerId of new Set([...qualifiedOutputMemoryIds, ...temporalOwnerChecks.keys()])) {
@@ -437,7 +452,7 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
         try { assertMemorySourceReadActive(state); } catch { diagnosticDenied("source_deadline"); return false; }
         const nativeAllowed = await canActorReadNativeTaskSource(sourceDb, { companyId, actor, issueId: id });
         if (nativeAllowed === false) {
-          diagnosticDenied("task_reader"); return false;
+          diagnosticDenied("task_reader", { phase: "pinned_native_task_reader" }); return false;
         }
         if (nativeAllowed === null) currentTaskAclChecks.push(id);
       }
@@ -446,7 +461,8 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
         const readers = await canActorReadIssuePrivacyBatch(sourceDb, actor, companyId, currentTaskAclChecks);
         const deniedIds = currentTaskAclChecks.filter(id=>readers.get(id)!==true);
         if (performance.now()>deadline || deniedIds.length) {
-          diagnosticDenied("task_reader"); return false;
+          diagnosticDenied("task_reader", { phase: "pinned_acl_batch", candidateCount: currentTaskAclChecks.length,
+            deniedCount: deniedIds.length }); return false;
         }
       }
       return true;
@@ -664,8 +680,8 @@ export async function assertMemoryOperationRetained(db: Db, companyId: string, o
 }
 
 export async function assertMemorySourcesRetained(db: Db, companyId: string,
-  evidence: Array<{ sourceProvider: string; sourceRef: string }>) {
-  await lockMemoryPrivacy(db, companyId);
+  evidence: Array<{ sourceProvider: string; sourceRef: string }>, lockMode: "read" | "write" = "write") {
+  await lockMemoryPrivacy(db, companyId, lockMode);
   if (!evidence.length) return;
   const keys = evidence.flatMap((item) => evidenceDeletionKeys(companyId, item));
   const [marker] = await db.select().from(memoryDeletionMarkers).where(and(eq(memoryDeletionMarkers.companyId, companyId),

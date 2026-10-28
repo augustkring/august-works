@@ -6,7 +6,8 @@ import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { companyMemberships, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, memoryRecords } from "@paperclipai/db";
 import { canActorReadIssuePrivacy, canActorReadIssuePrivacyBatch, withReadMemoryTemporalSources } from "../services/authorization.js";
-import { lockAnalyticalCompany } from "../services/analytical-privacy.js";
+import { assertAnalyticalContextPayloadAccess, assertAnalyticalContextPayloadAccessBatch } from "../services/analytical-context-authority.js";
+import { analyticalPrivacyReadLocked, lockAnalyticalCompany } from "../services/analytical-privacy.js";
 import { memoryService } from "../services/memory/memory-service.js";
 import { canActorReadMemorySources, lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
 import { canActorReadNativeTaskSource } from "../services/native-direct-input.js";
@@ -111,9 +112,12 @@ describe("Native Memory Task source checks preserve readers when reusing one tra
 
     // The Memory reader owns shared company/Memory privacy locks before it
     // validates this frozen Native Task. Queue an exclusive canonical writer
-    // first, then run the nested owner check on the same backend. It must keep
-    // the shared locks instead of upgrading them behind the waiting writer.
+    // first, then run the owner check through a nested savepoint wrapper on
+    // the same backend/xact. That wrapper deliberately misses the WeakSet
+    // marker, so its fallback must reacquire shared locks rather than upgrade
+    // them behind the waiting writer.
     expect(record!.sourceIssueIds.length).toBeGreaterThan(0);
+    expect(record!.sourceRunIds.length).toBeGreaterThan(0);
     let signalReaderInside!: () => void;
     const readerInside = new Promise<void>(resolve => { signalReaderInside = resolve; });
     let resumeReader!: () => void;
@@ -123,13 +127,30 @@ describe("Native Memory Task source checks preserve readers when reusing one tra
     let readerResult: unknown;
     let readerFailure: unknown;
     let writerFailure: unknown;
+    let nestedSavepointMarkerWasLost = false;
+    let samePhysicalTransaction = false;
     const reader = db.transaction(async rawTx => {
       const tx = rawTx as unknown as typeof db;
       return withReadMemoryTemporalSources(tx, fixture.aliceActor, fixture.companyId, memoryId!, async sourceDb => {
         signalReaderInside();
         await readerGate;
-        const native = await canActorReadNativeTaskSource(sourceDb, {
-          companyId: fixture.companyId, actor: fixture.aliceActor, issueId: record!.sourceIssueIds[0]!,
+        const [outerTx] = await sourceDb.execute<{ backendPid: number; transactionId: string }>(sql`
+          select pg_backend_pid() as "backendPid", pg_current_xact_id()::text as "transactionId"`);
+        const native = await sourceDb.transaction(async nestedRawTx => {
+          const nestedTx = nestedRawTx as unknown as typeof db;
+          const [nestedTxFacts] = await nestedTx.execute<{ backendPid: number; transactionId: string }>(sql`
+            select pg_backend_pid() as "backendPid", pg_current_xact_id()::text as "transactionId"`);
+          samePhysicalTransaction = nestedTxFacts?.backendPid === outerTx?.backendPid &&
+            nestedTxFacts?.transactionId === outerTx?.transactionId;
+          nestedSavepointMarkerWasLost = !analyticalPrivacyReadLocked(nestedTx as object);
+          const native = await canActorReadNativeTaskSource(nestedTx, {
+            companyId: fixture.companyId, actor: fixture.aliceActor, issueId: record!.sourceIssueIds[0]!,
+          });
+          await assertAnalyticalContextPayloadAccessBatch(nestedTx, fixture.companyId, fixture.aliceActor,
+            [record!.sourceIssueIds[0]!], undefined, { privacyLockMode: "read" });
+          await assertAnalyticalContextPayloadAccess(nestedTx, fixture.companyId, fixture.aliceActor,
+            { runId: record!.sourceRunIds[0]! }, "task");
+          return native;
         });
         return native !== false;
       }, { sourceVersion: record!.updatedAt.toISOString(), snapshot: record!.payloadSourceSnapshot,
@@ -164,9 +185,14 @@ describe("Native Memory Task source checks preserve readers when reusing one tra
     }
     await Promise.all([reader, writer]);
     expect(writerWaiting).toBe(true);
+    expect(samePhysicalTransaction).toBe(true);
     expect(readerFailure).toBeUndefined();
     expect(writerFailure).toBeUndefined();
     expect(readerResult).toBe(true);
+    console.info("native-memory-task-savepoint-lock-regression", JSON.stringify({
+      samePhysicalTransaction, nestedSavepointMarkerWasLost, writerWaiting,
+      readerCompleted: readerFailure === undefined, writerCompleted: writerFailure === undefined,
+    }));
 
     await db.update(companyMemberships).set({ status: "suspended" }).where(and(
       eq(companyMemberships.companyId, fixture.companyId), eq(companyMemberships.principalType, "user"),

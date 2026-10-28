@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { saasCostSnapshotSchema } from "@paperclipai/shared";
 import type { AuthorizationActor } from "../services/authorization.js";
 import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 import { randomUUID } from "node:crypto";
@@ -7,13 +8,17 @@ import {
   authUsers,
   authAccounts,
   authSessions,
+  agents,
+  billingAccountCompanies,
   billingSubscriptions,
+  costEvents,
   createDb,
   runtimeCapacityProfiles,
   runtimeCells,
   runtimeHosts,
   runtimeVersionCatalog,
   platformAdminAudit,
+  usageAggregates,
 } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
@@ -47,6 +52,7 @@ const support = await getEmbeddedPostgresTestSupport();
       db: ReturnType<typeof createDb>,
       hostId: string,
       accountId: string;
+    let firstCompanyId: string, secondCompanyId: string;
     let operatorActor: AuthorizationActor;
     const now = new Date(),
       config = {
@@ -87,6 +93,8 @@ const support = await getEmbeddedPostgresTestSupport();
           idempotencyKey: "cost-company-b-001",
         });
       accountId = first.billingAccountId;
+      firstCompanyId = first.companyId;
+      secondCompanyId = second.companyId;
       await db.insert(billingSubscriptions).values({
         billingAccountId: accountId,
         providerSubscriptionId: "sub_cost",
@@ -175,12 +183,25 @@ const support = await getEmbeddedPostgresTestSupport();
       await expect(
         service.record(operatorActor, { ...report(), accountRevenue: [] }, now),
       ).rejects.toMatchObject({ status: 409 });
+      const [agent] = await db.insert(agents).values({ companyId: firstCompanyId, name: "Cost fixture" }).returning();
+      await db.insert(costEvents).values([
+        { companyId: firstCompanyId, agentId: agent!.id, provider: "fixture", biller: "fixture", billingType: "metered_api", costStatus: "reported", model: "fixture/model", costCents: 125, occurredAt: now },
+        { companyId: firstCompanyId, agentId: agent!.id, provider: "fixture", biller: "fixture", billingType: "metered_api", costStatus: "unpriced", model: "fixture/model", costCents: 0, occurredAt: now },
+      ]);
+      const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+      const dayEnd = new Date(monthStart.getTime() + 86400000);
+      await db.insert(usageAggregates).values([
+        { companyId: firstCompanyId, billingAccountId: accountId, meterKey: "runtime.shared_millisecond", bucketStart: monthStart, bucketEnd: dayEnd, quantity: "60000", unit: "millisecond", sourceWatermark: now },
+        { companyId: firstCompanyId, billingAccountId: accountId, meterKey: "storage.byte_millisecond", bucketStart: monthStart, bucketEnd: dayEnd, quantity: "4096000", unit: "byte_millisecond", sourceWatermark: now },
+        { companyId: firstCompanyId, billingAccountId: accountId, meterKey: "backup.byte_millisecond", bucketStart: monthStart, bucketEnd: dayEnd, quantity: "2048000", unit: "byte_millisecond", sourceWatermark: now },
+      ]);
       const input = report(),
         results = await Promise.all([
           service.record(operatorActor, input, now),
           service.record(operatorActor, input, now),
         ]);
       expect(results[0]).toEqual(results[1]);
+      expect(() => saasCostSnapshotSchema.parse(results[0])).not.toThrow();
       expect(results[0]).toMatchObject({
         estimatedMonthlyCogsMinor: "15000",
         reportedMrrMinor: "25000",
@@ -193,6 +214,33 @@ const support = await getEmbeddedPostgresTestSupport();
           (account) => account.estimatedRuntimeMonthlyMinor,
         ),
       ).toEqual(["2500", "2500"]);
+      expect(results[0]!.unitEconomics).toMatchObject({
+        coverage: "partial_sources_only",
+        platformCost: { amountMinor: "5000", currency: "EUR", allocation: "environment_unallocated" },
+        managedRuntimeHostCost: { amountMinor: "10000", currency: "EUR", basis: "provider_price_estimate", unallocatedMultiCompanyMinor: "0" },
+        providerModelCost: { reportedCents: "125", estimatedCents: null, currency: "unspecified", reportedEventCount: 1, unpricedEventCount: 1, captureCompleteness: "not_established" },
+        unavailable: { supportCost: "not_recorded", analyticsCost: "not_recorded", storageAndRuntimeRates: "not_configured", acceptedOutcomeCost: "no_canonical_cost_attribution" },
+      });
+      expect(results[0]!.unitEconomics!.runtimeAndStorageUsage.quantities).toEqual(expect.arrayContaining([
+        { meterKey: "runtime.shared_millisecond", quantity: "60000", unit: "millisecond" },
+        { meterKey: "storage.byte_millisecond", quantity: "4096000", unit: "byte_millisecond" },
+        { meterKey: "backup.byte_millisecond", quantity: "2048000", unit: "byte_millisecond" },
+      ]));
+      expect(results[0]!.unitEconomics!.tenants).toContainEqual(expect.objectContaining({
+        companyId: firstCompanyId, billingAccountId: accountId, providerReportedCents: "125", providerEstimatedCents: null, providerUnpricedEventCount: 1,
+        estimatedHostRuntimeMinor: "2500", estimatedHostRuntimeCurrency: "EUR", hostAllocation: "single_active_company", totalCost: "unavailable_incomplete_components",
+      }));
+      const current = await service.latest();
+      expect(current).toMatchObject({ unitEconomics: { coverage: "partial_sources_only" } });
+      expect(current!.unitEconomics!.providerModelCost.currency).toBe("unspecified");
+      expect(current!.unitEconomics!.tenants.find((tenant) => tenant.companyId === firstCompanyId)?.usage)
+        .toEqual(expect.arrayContaining([{ meterKey: "runtime.shared_millisecond", quantity: "60000", unit: "millisecond" }]));
+      await db.insert(costEvents).values({ companyId: firstCompanyId, agentId: agent!.id, provider: "fixture", biller: "fixture",
+        billingType: "metered_api", costStatus: "reported", model: "fixture/model", costCents: 50, occurredAt: now });
+      expect(await service.record(operatorActor, input, now)).toEqual(results[0]);
+      const refreshed = await service.latest();
+      expect(refreshed!.unitEconomics!.providerModelCost).toMatchObject({ reportedCents: "175", reportedEventCount: 2 });
+      expect(refreshed!.unitEconomics!.providerModelCost).not.toEqual(results[0]!.unitEconomics!.providerModelCost);
       await expect(
         service.record(
           operatorActor,
@@ -219,6 +267,19 @@ const support = await getEmbeddedPostgresTestSupport();
         authenticatedAt: createdAt, authenticatorVersion: user!.version });
       await expect(service.record({ ...operatorActor, sessionId }, input, now)).rejects.toMatchObject({ status: 403 });
       expect(await db.select().from(platformAdminAudit)).toEqual(before);
+    });
+    it("keeps shared billing account host estimates unallocated instead of splitting them across companies", async () => {
+      await db.update(authSessions).set({ authenticatedAt: new Date(), updatedAt: new Date() })
+        .where(eq(authSessions.id, operatorActor.sessionId!));
+      await db.update(billingAccountCompanies).set({ status: "inactive", updatedAt: now })
+        .where(eq(billingAccountCompanies.companyId, secondCompanyId));
+      await db.insert(billingAccountCompanies).values({ companyId: secondCompanyId, billingAccountId: accountId, status: "active" });
+      await db.update(runtimeCells).set({ billingAccountId: accountId }).where(eq(runtimeCells.companyId, secondCompanyId));
+      const snapshot = await saasCostService(db, config).record(operatorActor, report(), now);
+      expect(snapshot.unitEconomics!.managedRuntimeHostCost).toMatchObject({ amountMinor: "10000", unallocatedMultiCompanyMinor: "5000" });
+      const sharedTenants = snapshot.unitEconomics!.tenants.filter((tenant) => tenant.billingAccountId === accountId);
+      expect(sharedTenants).toHaveLength(2);
+      expect(sharedTenants.every((tenant) => tenant.hostAllocation === "shared_account_unallocated" && tenant.estimatedHostRuntimeMinor === null)).toBe(true);
     });
     it("serializes automatic creation against a fresh cost envelope and closes admission without an explicit EUR ceiling", async () => {
       const provider = {

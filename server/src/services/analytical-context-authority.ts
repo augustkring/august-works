@@ -102,7 +102,7 @@ export async function inspectAnalyticalContextPins(tx:Db,companyId:string,actor:
  if(manifestIds.size>26200||!Number.isFinite(expiresAt)||expiresAt<=Date.now())throw conflict("Native analytical source retention is unavailable");
  const {assertMemorySourcesRetained}=await import("./memory/memory-privacy.js");
  const unverifiedRetention=[...manifestIds].filter(id=>!retentionAlreadyVerified.has(id));
- if(unverifiedRetention.length)await assertMemorySourcesRetained(tx,companyId,unverifiedRetention.map(id=>({sourceProvider:"august_works_analytical",sourceRef:`manifest://${id}`})));
+ if(unverifiedRetention.length)await assertMemorySourcesRetained(tx,companyId,unverifiedRetention.map(id=>({sourceProvider:"august_works_analytical",sourceRef:`manifest://${id}`})),"read");
  return {sourceSensitivity:sourceSensitivity as "internal"|"confidential",pins,manifestIds:[...manifestIds].sort(),expiresAt:new Date(expiresAt)};
 }
 
@@ -304,15 +304,20 @@ export async function assertAnalyticalContextPayloadAccessBatch(db:Db,companyId:
   throw new HttpError(403,"The complete analytical Task population is unavailable",{code:"analytical_source_access_lost"});
  if(!ids.length&&!directRunIds.length)return;
  if(!is(db,PgTransaction))return db.transaction(tx=>assertAnalyticalContextPayloadAccessBatch(tx as unknown as Db,companyId,actor,ids,readScope,options));
- const {lockAnalyticalCompany}=await import("./analytical-privacy.js");
+ const {lockAnalyticalCompany,markAnalyticalPrivacyReadLocked}=await import("./analytical-privacy.js");
  const {lockMemoryPrivacy}=await import("./memory/memory-privacy.js");
+ const lockMode=options.privacyLockMode??(options.fastPathOnly===true||directRunIds.length>0?"read":"write");
+ const acquirePrivacyLocks=async()=>{
+  await lockAnalyticalCompany(db,companyId,lockMode);await lockMemoryPrivacy(db,companyId,lockMode);
+  if(lockMode==="read")markAnalyticalPrivacyReadLocked(db as object);
+ };
  let initialShape:Awaited<ReturnType<typeof nativeTaskPayloadSourceShape>>|null=null;
  // An unlocked probe only routes complex payloads to the full source review.
  // A source-free result is re-proven after acquiring the shared writer locks.
  if(options.fastPathOnly===true){
   initialShape=!actor||ids.length!==1?null:await nativeTaskPayloadSourceShape(db,companyId,ids,options.runId);
   if(!initialShape||initialShape.complex&&!initialShape.selfOwnedConversationComment){
-   await lockAnalyticalCompany(db,companyId);await lockMemoryPrivacy(db,companyId);return false;
+   await acquirePrivacyLocks();return false;
   }
  }
  // Native provider-event admission is a pure source review. It shares the
@@ -322,9 +327,7 @@ export async function assertAnalyticalContextPayloadAccessBatch(db:Db,companyId:
  // so the shared acquisition here cannot introduce an upgrade in its effect.
  // Deep retained-root checks use the same transaction and preserve every
  // current reader/source recheck after any row or owner wait.
- const lockMode=options.privacyLockMode??(options.fastPathOnly===true||directRunIds.length>0?"read":"write");
- await lockAnalyticalCompany(db,companyId,lockMode);await lockMemoryPrivacy(db,companyId,lockMode);
- if(lockMode==="read"){const {markAnalyticalPrivacyReadLocked}=await import("./analytical-privacy.js");markAnalyticalPrivacyReadLocked(db as object);}
+ await acquirePrivacyLocks();
  // The unlocked shape probe is only a routing hint. If it sees a self-owned
  // conversation comment, force the original deep reviewer under shared
  // source-reader locks. Recomputing the broad shape query here adds no authority:
@@ -568,7 +571,7 @@ async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string
  diagnosticStage="retained_context_lookup";
  const condition="issueId" in scope?or(eq(contextManifests.issueId,scope.issueId),
   sql`exists(select 1 from heartbeat_runs h where h.company_id=${companyId}::uuid and h.id=${contextManifests.runId} and h.agent_id=${contextManifests.agentId} and h.issue_id=${scope.issueId}::uuid)`):or(eq(contextManifests.runId,scope.runId),conversationIssueId?eq(contextManifests.issueId,conversationIssueId):undefined,sql`exists(select 1 from ${agentExecutionManifests} e where e.company_id=${companyId}::uuid and e.run_id=${scope.runId}::uuid and e.context_manifest_id=${contextManifests.id})`);
- const {lockAnalyticalCompany,analyticalPrivacyReadLocked}=await import("./analytical-privacy.js"),{lockMemoryPrivacy}=await import("./memory/memory-privacy.js");
+ const {lockAnalyticalCompany,analyticalPrivacyReadLocked,markAnalyticalPrivacyReadLocked}=await import("./analytical-privacy.js"),{lockMemoryPrivacy}=await import("./memory/memory-privacy.js");
  const inspectIn=async(tx:Db)=>{
   // The caller already owns a pinned source transaction in the batched/Home
   // path. Opening a savepoint for every retained Context root adds a full
@@ -578,7 +581,8 @@ async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string
    diagnosticStage="retained_context_privacy_locks";
    await tx.execute(sql`set local statement_timeout='8s'`);
    if(!analyticalPrivacyReadLocked(tx as object)){
-    await lockAnalyticalCompany(tx,companyId);await lockMemoryPrivacy(tx,companyId);
+    await lockAnalyticalCompany(tx,companyId,"read");await lockMemoryPrivacy(tx,companyId,"read");
+    markAnalyticalPrivacyReadLocked(tx as object);
    }
   }
   const currentActor=actor;

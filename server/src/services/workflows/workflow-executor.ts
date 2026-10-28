@@ -5,6 +5,7 @@ import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { assertLearnedWorkflowPayloadAccess } from "../analytical-context-authority.js";
 import { admitOrchestrationWorkflow } from "../orchestration/orchestration-admission.js";
 import { authorizationService, type AuthorizationActor } from "../authorization.js";
+import { accessService } from "../access.js";
 import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 import { WorkflowCheckpointError } from "./workflow-errors.js";
 import { assertWorkflowTaskAssignmentAuthorized } from "./workflow-task-authority.js";
@@ -363,6 +364,7 @@ function assertIdempotentRequestMatches(
     triggerPayload: Record<string, unknown>;
     retryOfRunId?: string | null;
     idempotencyRootRunId?: string | null;
+    humanCoverageId?: string | null;
   },
 ) {
   if (
@@ -372,6 +374,7 @@ function assertIdempotentRequestMatches(
     existing.triggerId !== (input.triggerId ?? null) ||
     existing.retryOfRunId !== (input.retryOfRunId ?? null) ||
     existing.idempotencyRootRunId !== (input.idempotencyRootRunId ?? null) ||
+    existing.humanCoverageId !== (input.humanCoverageId ?? null) ||
     !isDeepStrictEqual(existing.triggerPayload ?? {}, input.triggerPayload)
   ) {
     throw conflict("Idempotency key was already used for a different workflow run request", {
@@ -398,6 +401,9 @@ export interface EnqueueWorkflowRunInput {
   parentWorkflowRunId?: string;
   parentNodeId?: string;
   customerTestCommand?: WorkflowTestCommand;
+  humanCoverageId?: string | null;
+  coverageScopeType?: "manual" | "task";
+  coverageTaskId?: string | null;
 }
 
 export async function enqueueWorkflowRunInTransaction(
@@ -469,6 +475,21 @@ export async function enqueueWorkflowRunInTransaction(
     throw conflict("A test command cannot admit live workflow work");
   }
 
+  if (input.humanCoverageId) {
+    const userId = input.actor.principal.type === "user" ? input.actor.principal.userId : null;
+    const credential = input.actor.authorizationActor;
+    if (!userId || !credential || credential.type !== "board" || credential.source !== "session" || credential.userId !== userId ||
+        !input.coverageScopeType || (input.coverageScopeType === "task") !== Boolean(input.coverageTaskId)) {
+      throw forbidden("Human workflow coverage requires its named delegatee's current authenticated session.", { code: "workflow_coverage_session_required" });
+    }
+    await accessService(executor).authorizeWorkflowCoverage({
+      tx: executor as unknown as Parameters<Parameters<Db["transaction"]>[0]>[0],
+      companyId: input.companyId, coverageId: input.humanCoverageId, delegateeUserId: userId,
+      workflowId: input.workflowId, workflowRevisionId: input.revisionId,
+      scopeType: input.coverageScopeType, taskId: input.coverageTaskId ?? null,
+    });
+  }
+
   const now = new Date();
   const [run] = await executor
     .insert(workflowRuns)
@@ -477,6 +498,7 @@ export async function enqueueWorkflowRunInTransaction(
       workflowId: input.workflowId,
       workflowRevisionId: input.revisionId,
       triggerId: input.triggerId ?? null,
+      humanCoverageId: input.humanCoverageId ?? null,
       status: "queued",
       source: input.source,
       triggerPayload: input.triggerPayload,
@@ -523,6 +545,7 @@ export async function enqueueWorkflowRunInTransaction(
         triggerId: input.triggerId ?? null,
         retryOfRunId: input.retryOfRunId ?? null,
         idempotencyRootRunId: input.idempotencyRootRunId ?? null,
+        humanCoverageId: input.humanCoverageId ?? null,
       },
     },
   );
@@ -574,6 +597,31 @@ async function claimQueuedRun(
   const publications: ActivityPublication[] = [];
   const claimed = await db.transaction(async (tx) => {
     const now = new Date();
+    const [pending] = await tx.select().from(workflowRuns).where(and(
+      eq(workflowRuns.companyId, companyId), eq(workflowRuns.id, runId), eq(workflowRuns.status, "queued"),
+    )).for("update");
+    if (!pending) return null;
+    if (pending.humanCoverageId) {
+      // Queue claims can be performed by the workflow recovery worker after
+      // the interactive session has ended. The immutable run admission keeps
+      // the delegatee identity; revalidate that identity's live rights here.
+      const userId = pending.executionPrincipal?.type === "user"
+        ? pending.executionPrincipal.userId : null;
+      const payloadTask = typeof pending.triggerPayload.task === "object" && pending.triggerPayload.task !== null
+        ? (pending.triggerPayload.task as Record<string, unknown>).id : null;
+      const taskId = pending.source === "task" && typeof payloadTask === "string" ? payloadTask : null;
+      if (!userId || pending.responsibleUserId !== userId ||
+          !["manual", "task"].includes(pending.source) || (pending.source === "task" && !taskId)) {
+        throw forbidden("Covered workflow run has no exact Human delegatee admission identity.", { code: "workflow_coverage_session_required" });
+      }
+      await accessService(tx as unknown as Db).authorizeWorkflowCoverage({
+        tx: tx as unknown as Parameters<Parameters<Db["transaction"]>[0]>[0], companyId,
+        coverageId: pending.humanCoverageId, delegateeUserId: userId,
+        workflowId: pending.workflowId, workflowRevisionId: pending.workflowRevisionId,
+        scopeType: pending.source === "task" ? "task" : "manual", taskId,
+        now,
+      });
+    }
     const leaseExpiresAt = new Date(now.getTime() + WORKFLOW_EXECUTION_LEASE_MS);
     const [row] = await tx
       .update(workflowRuns)
@@ -602,7 +650,7 @@ async function claimQueuedRun(
         action: "workflow.run_started",
         entityType: "workflow_run",
         entityId: runId,
-        details: { executionOwnerId: ownerId },
+        details: { executionOwnerId: ownerId, humanCoverageId: row.humanCoverageId ?? null },
       },
     );
     publications.push(publication);
@@ -8611,6 +8659,7 @@ export function workflowExecutorService(
       rawInput: StartWorkflowRun,
       actor: WorkflowRunActor,
       idempotencyKey: string | null,
+      humanCoverageId: string | null = null,
     ): Promise<WorkflowRunDetail> => {
       const parsed = startWorkflowRunSchema.safeParse(rawInput);
       if (!parsed.success) {
@@ -8642,6 +8691,9 @@ export function workflowExecutorService(
         idempotencyKey,
         correlationId: randomUUID(),
         actor,
+        humanCoverageId,
+        coverageScopeType: "manual",
+        coverageTaskId: null,
       });
 
       if (queued.created) {
@@ -8668,6 +8720,7 @@ export function workflowExecutorService(
       rawInput: StartWorkflowRun,
       actor: WorkflowRunActor,
       idempotencyKey: string | null,
+      humanCoverageId: string | null = null,
     ): Promise<WorkflowRunDetail> => {
       const parsed = startWorkflowRunSchema.safeParse(rawInput);
       if (!parsed.success) {
@@ -8730,17 +8783,21 @@ export function workflowExecutorService(
         triggerId: null,
         source: "task",
         triggerPayload,
-        responsibleUserId:
-          actor.responsibleUserId ??
-          issue.responsibleUserId ??
-          (actor.principal.type === "user"
-            ? actor.principal.userId
-            : actor.principal.type === "agent"
-              ? actor.principal.responsibleUserId ?? null
-              : null),
+        responsibleUserId: humanCoverageId && actor.principal.type === "user"
+          ? actor.principal.userId
+          : actor.responsibleUserId ??
+            issue.responsibleUserId ??
+            (actor.principal.type === "user"
+              ? actor.principal.userId
+              : actor.principal.type === "agent"
+                ? actor.principal.responsibleUserId ?? null
+                : null),
         idempotencyKey,
         correlationId: `task:${issue.id}:${randomUUID()}`,
         actor,
+        humanCoverageId,
+        coverageScopeType: "task",
+        coverageTaskId: issue.id,
       });
 
       if (queued.created) {

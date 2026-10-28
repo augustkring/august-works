@@ -6,6 +6,7 @@ import {
   index,
   integer,
   jsonb,
+  foreignKey,
   pgTable,
   text,
   timestamp,
@@ -21,9 +22,11 @@ import type {
   WorkflowWaitStatus,
 } from "@paperclipai/shared";
 import { agents } from "./agents.js";
+import { authUsers } from "./auth.js";
 import { companies } from "./companies.js";
 import { folders } from "./folders.js";
 import { heartbeatRuns } from "./heartbeat_runs.js";
+import { issues } from "./issues.js";
 import { projects } from "./projects.js";
 
 export const workflows = pgTable(
@@ -94,6 +97,7 @@ export const workflowRuns = pgTable(
     triggerPayload: jsonb("trigger_payload").$type<Record<string, unknown>>().notNull().default({}),
     responsibleUserId: text("responsible_user_id"),
     executionPrincipal: jsonb("execution_principal").$type<ExecutionPrincipal>(),
+    humanCoverageId: uuid("human_coverage_id"),
     // Actual private workflow copy owners retained across child-run removal.
     // Native capture propagates these IDs to the existing parent run chain.
     authoringSourceWorkflowIds: jsonb("authoring_source_workflow_ids").$type<string[]>().notNull().default([]),
@@ -354,3 +358,54 @@ export const workflowRevisions = pgTable(
     ),
   }),
 );
+
+/**
+ * Temporary Human-to-Human routing scope for one exact published workflow
+ * revision. This is not a permission grant: both Users retain their own
+ * current company and resource authorization at admission and dispatch.
+ */
+export const humanWorkflowCoverages = pgTable("human_workflow_coverages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  requestId: uuid("request_id").notNull(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  principalUserId: text("principal_user_id").notNull().references(() => authUsers.id, { onDelete: "cascade" }),
+  delegateeUserId: text("delegatee_user_id").notNull().references(() => authUsers.id, { onDelete: "cascade" }),
+  actionKey: text("action_key").notNull().default("workflows:run"),
+  workflowId: uuid("workflow_id").notNull(),
+  workflowRevisionId: uuid("workflow_revision_id").notNull(),
+  scopeType: text("scope_type").notNull(),
+  taskId: uuid("task_id"),
+  startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  reason: text("reason").notNull(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  revokedByUserId: text("revoked_by_user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  companyIdUq: unique("human_workflow_coverages_company_id_uq").on(table.companyId, table.id),
+  requestUq: unique("human_workflow_coverages_company_request_uq").on(table.companyId, table.requestId),
+  workflowRevisionFk: foreignKey({
+    name: "human_workflow_coverages_revision_fk",
+    columns: [table.companyId, table.workflowId, table.workflowRevisionId],
+    foreignColumns: [workflowRevisions.companyId, workflowRevisions.workflowId, workflowRevisions.id],
+  }).onDelete("cascade"),
+  workflowFk: foreignKey({
+    name: "human_workflow_coverages_workflow_fk",
+    columns: [table.companyId, table.workflowId],
+    foreignColumns: [workflows.companyId, workflows.id],
+  }).onDelete("cascade"),
+  taskFk: foreignKey({
+    name: "human_workflow_coverages_task_fk",
+    columns: [table.companyId, table.taskId],
+    foreignColumns: [issues.companyId, issues.id],
+  }).onDelete("cascade"),
+  actionCheck: check("human_workflow_coverages_action_check", sql`${table.actionKey} = 'workflows:run'`),
+  scopeCheck: check("human_workflow_coverages_scope_check",
+    sql`(${table.scopeType} = 'manual' and ${table.taskId} is null) or (${table.scopeType} = 'task' and ${table.taskId} is not null)`),
+  intervalCheck: check("human_workflow_coverages_interval_check",
+    sql`${table.expiresAt} > ${table.startsAt} and ${table.reason} <> ''`),
+  revocationPairCheck: check("human_workflow_coverages_revocation_pair_check",
+    sql`${table.revokedAt} is not null or ${table.revokedByUserId} is null`),
+  principalIdx: index("human_workflow_coverages_principal_idx").on(table.companyId, table.principalUserId, table.expiresAt),
+  delegateeIdx: index("human_workflow_coverages_delegatee_idx").on(table.companyId, table.delegateeUserId, table.expiresAt),
+}));

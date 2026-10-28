@@ -130,6 +130,15 @@ const apiPrefixes: Record<string, string> = {
   "workflows.ts": "/api",
 };
 
+it("documents the operator model dependency projection as private noncacheable metadata", () => {
+  const operation = buildOpenApiSpec().paths["/api/saas/internal/operations"]?.get as {
+    responses: Record<string, { headers?: Record<string, { schema?: { enum?: string[] } }>; content?: Record<string, { schema?: { properties?: Record<string, unknown> } }> }>;
+  };
+  const response = operation.responses["200"];
+  expect(response.headers?.["Cache-Control"].schema?.enum).toEqual(["private, no-store"]);
+  expect(response.content?.["application/json"].schema?.properties).toHaveProperty("modelDependencies");
+});
+
 const ROUTE_LITERAL_PATTERN =
   /router\.(get|post|put|patch|delete)\(\s*["'`]([^"'`]+)["'`]/g;
 const ROUTER_METHOD_PATTERN = /router\.(get|post|put|patch|delete)\(/;
@@ -352,6 +361,18 @@ describe("openapi routes", () => {
     expect(schema.properties.providerCostPerSuccessfulRunStatus.enum).toEqual(["reported_events", "estimated_events", "incomplete_events", "no_successful_runs"]);
     expect(schema.properties.providerCostPerSuccessfulRunCoverage.enum).toEqual(["recorded_events_only"]);
     expect(schema.properties.providerCostPerSuccessfulRunCents).toMatchObject({ type: "number", nullable: true });
+  });
+
+  it("documents partial per-tenant cost coverage without implying complete unit economics", () => {
+    const operation = buildOpenApiSpec().paths["/api/saas/internal/costs"].get;
+    const schema = operation.responses[200].content["application/json"].schema;
+    expect(schema.properties.unitEconomics.required).toEqual(expect.arrayContaining([
+      "coverage", "platformCost", "managedRuntimeHostCost", "providerModelCost", "runtimeAndStorageUsage", "unavailable", "tenants",
+    ]));
+    expect(schema.properties.unitEconomics.properties.coverage.enum).toEqual(["partial_sources_only"]);
+    expect(schema.properties.unitEconomics.properties.providerModelCost.properties.currency.enum).toEqual(["unspecified"]);
+    expect(schema.properties.unitEconomics.properties.unavailable.properties.acceptedOutcomeCost.enum).toEqual(["no_canonical_cost_attribution"]);
+    expect(operation.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
   });
 
   it("documents Native support/access availability and the optional grant-revocation body", () => {
@@ -1188,6 +1209,34 @@ describe("openapi routes", () => {
       configured: { type: "boolean" },
       notices: { type: "array" },
     });
+  });
+
+  it("documents temporary Human workflow coverage as session-only and binds the covered-run header", () => {
+    const { spec } = loadSpecRoutes();
+    const coveragePaths = [
+      ["/api/companies/{companyId}/workflow-coverages", "get"],
+      ["/api/companies/{companyId}/workflow-coverages", "post"],
+      ["/api/companies/{companyId}/workflow-coverages/{coverageId}", "delete"],
+    ] as const;
+    for (const [path, method] of coveragePaths) {
+      const operation = spec.paths[path][method];
+      expect(operation.security).toEqual([{ BoardSessionAuth: [] }]);
+      expect(operation.security).not.toContainEqual({ BoardApiKeyAuth: [] });
+      expect(operation["x-paperclip-authorization"]).toMatchObject({ actor: "board", humanSession: true });
+    }
+    const list = spec.paths["/api/companies/{companyId}/workflow-coverages"].get;
+    expect(list.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    const create = spec.paths["/api/companies/{companyId}/workflow-coverages"].post;
+    expect(create.responses[200]).toBeDefined();
+    expect(create.responses[201]).toBeDefined();
+    expect(create.requestBody.content["application/json"].schema.additionalProperties).toBe(false);
+
+    const run = spec.paths["/api/companies/{companyId}/workflows/{workflowId}/run"].post;
+    expect(run.parameters).toContainEqual(expect.objectContaining({ name: "X-Human-Workflow-Coverage-Id", in: "header", required: false }));
+    expect(run.description).toContain("a Board API key cannot use Human coverage");
+    expect(run.responses[201].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    const taskRun = spec.paths["/api/companies/{companyId}/issues/{issueId}/workflows/{workflowId}/run"].post;
+    expect(taskRun.description).toContain("exact Task-scoped coverage receipt");
   });
 
   it("documents auth and reviewed response-code invariants", () => {

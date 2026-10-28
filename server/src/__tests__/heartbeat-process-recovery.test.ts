@@ -17,7 +17,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, eq, or, inArray, sql } from "drizzle-orm";
-import { nativeSha256 } from "../services/native-runtime/canonical.js";
+import { nativeCommentProjectionHash, nativeSha256 } from "../services/native-runtime/canonical.js";
 import {
   afterAll,
   afterEach,
@@ -87,6 +87,7 @@ import {
   workspaceOperations,
 } from "@paperclipai/db";
 import { installHeartbeatApiUrlFixture, seedHeartbeatResponsibleHuman } from "./helpers/heartbeat-runtime-fixtures.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -1768,6 +1769,10 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
         },
       })
       .where(eq(issues.id, issueId));
+    // Runtime source admission pins the accountable Human independently of
+    // the Agent's low-trust execution boundary. Use a real current session so
+    // unrelated Human source checks do not fail before isolation preflight.
+    await seedNativePasskeySession(db, "responsible-user");
     const heartbeat = heartbeatService(db);
 
     await heartbeat.resumeQueuedRuns();
@@ -1778,9 +1783,9 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     const failureProjection = { status: failedRun?.status, errorCode: failedRun?.errorCode, error: failedRun?.error };
     expect(failureProjection, JSON.stringify(failureProjection)).toMatchObject({
       status: "failed",
-      errorCode: "setup_failed",
-      error: expect.stringContaining("low_trust_review agents cannot use company-wide or privileged company_scope:read APIs by default."),
+      errorCode: "low_trust_isolation_unavailable",
     });
+    expect((failedRun?.runnerProfileJson ?? {}) as Record<string, unknown>).not.toHaveProperty("platformSkillAdmission");
     expect(
       mockAdapterExecute.mock.calls.some(
         ([input]) => (input as { runId?: string } | undefined)?.runId === runId,
@@ -2896,8 +2901,8 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       expect(cancellationError).toBeUndefined();
       expect(reachedDispatch).toBe(true);
       const finalRun = await heartbeat.getRun(runId);
-      const finalProjection = { status: finalRun?.status, errorCode: finalRun?.errorCode, error: finalRun?.error,
-        resultJson: finalRun?.resultJson };
+      const finalProjection = { status: finalRun?.status, runtimeMode: finalRun?.runtimeMode,
+        errorCode: finalRun?.errorCode, error: finalRun?.error, resultJson: finalRun?.resultJson };
       expect(finalProjection, JSON.stringify(finalProjection)).toMatchObject({ status: "cancelled", runtimeMode: "native",
         resultJson: { startupPreparationSettledAt: expect.any(String) },
       });
@@ -2945,34 +2950,62 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       let reachedDispatch = false;
       let cancellation: Promise<unknown> | null = null;
       let cancellationError: unknown;
+      let observedDispatch: {
+        profile: Record<string, unknown>;
+        taskVersion: string;
+        taskOwnerHash: string;
+        commentVersion: string;
+      } | null = null;
+      let releaseDispatch!: () => void;
+      const dispatchGate = new Promise<void>((resolve) => { releaseDispatch = resolve; });
       const heartbeat = heartbeatService(db, {
         nativeSessionBackendFactory: factory,
         beforeChatControlRecoveryCheck: async ({ stage, runId: id }) => {
           if (stage !== "dispatch") return;
           reachedDispatch = true;
           const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, id));
-          const [task] = await db.select().from(issues).where(eq(issues.id, issueId));
           const [version] = await db.execute<{ version: string; ownerHash: string }>(sql`select
             extract(epoch from i.updated_at)::text as version,
             public.aw_native_payload_body_hash('issue',to_jsonb(i)) as "ownerHash"
             from issues i where i.id=${issueId}::uuid`);
-          const profile = run!.runnerProfileJson!;
+          const [commentVersion] = await db.execute<{ version: string }>(sql`select extract(epoch from updated_at)::text as version
+            from issue_comments where id=${comment!.id}::uuid`);
+          observedDispatch = {
+            profile: run!.runnerProfileJson as Record<string, unknown>,
+            taskVersion: version!.version,
+            taskOwnerHash: version!.ownerHash,
+            commentVersion: commentVersion!.version,
+          };
+          await dispatchGate;
+        },
+      });
+
+      const resumePromise = heartbeat.resumeQueuedRuns();
+      const capturedDispatch = await waitForValue(async () => observedDispatch);
+      let sourceAssertionError: unknown;
+      try {
+        expect(capturedDispatch).not.toBeNull();
+        if (capturedDispatch) {
+          const profile = capturedDispatch.profile!;
           const selectedInput = paperclipRunner.parseNativeExecutionInput(profile.nativeExecutionInput);
-          expect(profile.nativeBootstrapAuthoredSources).toEqual({ inputs: [{ kind: "runtime_instructions", agentId,
-            bundleDigest: selectedInput.runtimeContext.instructions.bundle.digest,
-            manifestDigest: selectedInput.runtimeContext.instructions.bundle.manifestDigest }], contextManifests: [] });
+          expect(profile.nativeBootstrapAuthoredSources).toEqual({ inputs: [
+            { kind: "runtime_instructions", agentId,
+              bundleDigest: selectedInput.runtimeContext.instructions.bundle.digest,
+              manifestDigest: selectedInput.runtimeContext.instructions.bundle.manifestDigest },
+            ...selectedInput.runtimeContext.skills.map(skill => ({ kind: "runtime_skill" as const,
+              key: skill.key, versionId: skill.versionId, bundleDigest: skill.bundle.digest,
+              manifestDigest: skill.bundle.manifestDigest })),
+          ], contextManifests: [] });
           expect(profile.nativeBootstrapRolePackSources).toEqual([]);
-          expect(profile.nativeBootstrapTaskSource).toEqual({ input: { kind: "task", issueId, sourceVersion: version!.version,
-            contentHash: version!.ownerHash }, payloadSourceSnapshot: null });
+          expect(profile.nativeBootstrapTaskSource).toEqual({ input: { kind: "task", issueId, sourceVersion: capturedDispatch.taskVersion,
+            contentHash: capturedDispatch.taskOwnerHash }, payloadSourceSnapshot: null });
           expect(profile.nativeBootstrapTaskPlanSources).toEqual([{ input: { kind: "document_revision", documentId: plan.document.id,
             revisionId: plan.document.latestRevisionId, issueId,
             contentHash: createHash("sha256").update("Original native bootstrap plan").digest("hex") }, payloadSourceSnapshot: null }]);
           expect(profile.nativeBootstrapPlanningSources).toEqual([]);
-          const [commentVersion] = await db.execute<{ version: string }>(sql`select extract(epoch from updated_at)::text as version
-            from issue_comments where id=${comment!.id}::uuid`);
           const expectedCommentSource = { input: { kind: "comment", issueId,
-            commentId: comment!.id, sourceVersion: commentVersion!.version,
-            contentHash: createHash("sha256").update(JSON.stringify({ body: deliveredBody, presentation: null, metadata: null })).digest("hex") },
+            commentId: comment!.id, sourceVersion: capturedDispatch.commentVersion,
+            contentHash: nativeCommentProjectionHash({ body: deliveredBody, presentation: null, metadata: null }) },
             payloadSourceSnapshot: null };
           expect(profile.nativeBootstrapInlineWakeCommentSources).toEqual([expectedCommentSource]);
           expect(profile.nativeBootstrapWakeCommentSources).toEqual({
@@ -3002,35 +3035,47 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
           expect(JSON.stringify(profile.nativeExecutionInput)).toContain(deliveredBody);
           if (redactSecret) expect(JSON.stringify(profile.nativeExecutionInput)).not.toContain(registeredSecret);
           expect(JSON.stringify(profile.nativeExecutionInput)).toContain("Original native bootstrap plan");
-          const retained = structuredClone(profile);
-          await db.update(issues).set({ title: "Later Task title", updatedAt: new Date() }).where(eq(issues.id, issueId));
-          await documentService(db).upsertIssueDocument({ issueId, key: "plan", format: "markdown", body: "Later plan revision",
-            baseRevisionId: plan.document.latestRevisionId });
-          await db.update(issueComments).set({ body: "Later inline comment body", updatedAt: new Date() }).where(eq(issueComments.id, comment!.id));
-          await db.update(issueThreadInteractions).set({ title: "Later question title", updatedAt: new Date() })
-            .where(eq(issueThreadInteractions.id, question!.id));
-          const [after] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, id));
-          expect(after!.runnerProfileJson).toEqual(retained);
-          // Let the dispatch gate return so the run can observe cancellation;
-          // awaiting cancelRun here would wait on this same execution.
-          cancellation = heartbeat.cancelRun(id).catch((error) => { cancellationError = error; });
-          const requested = await waitForValue(async () => {
-            const [current] = await db.select({ resultJson: heartbeatRuns.resultJson })
-              .from(heartbeatRuns).where(eq(heartbeatRuns.id, id));
-            const result = current?.resultJson as Record<string, unknown> | null | undefined;
-            const state = (result?.executionCancellation as Record<string, unknown> | undefined)?.state;
-            return state === "requested" ? true : null;
-          });
-          expect(requested).toBe(true);
-        },
+        }
+      } catch (error) {
+        sourceAssertionError = error;
+      }
+
+      // Record cancellation before changing live sources. Otherwise the
+      // source-currentness guard may correctly fail the run before this
+      // dispatch-gate test reaches the cancellation assertion.
+      cancellation = heartbeat.cancelRun(runId).catch((error) => { cancellationError = error; });
+      const requested = await waitForValue(async () => {
+        const [current] = await db.select({ resultJson: heartbeatRuns.resultJson })
+          .from(heartbeatRuns).where(eq(heartbeatRuns.id, runId));
+        const result = current?.resultJson as Record<string, unknown> | null | undefined;
+        const state = (result?.executionCancellation as Record<string, unknown> | undefined)?.state;
+        const startupRequestedAt = (result?.startupCancellation as Record<string, unknown> | undefined)?.requestedAt;
+        return state === "requested" || typeof startupRequestedAt === "string" ? true : null;
       });
-      await heartbeat.resumeQueuedRuns();
+      if (requested) {
+        await db.update(issues).set({ title: "Later Task title", updatedAt: new Date() }).where(eq(issues.id, issueId));
+        await documentService(db).upsertIssueDocument({ issueId, key: "plan", format: "markdown", body: "Later plan revision",
+          baseRevisionId: plan.document.latestRevisionId });
+        await db.update(issueComments).set({ body: "Later inline comment body", updatedAt: new Date() }).where(eq(issueComments.id, comment!.id));
+        await db.update(issueThreadInteractions).set({ title: "Later question title", updatedAt: new Date() })
+          .where(eq(issueThreadInteractions.id, question!.id));
+      }
+      const retained = capturedDispatch ? structuredClone(capturedDispatch.profile) : null;
+      const [after] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, runId));
+      if (retained) expect(after!.runnerProfileJson).toEqual(retained);
+      releaseDispatch();
+      await resumePromise;
       await heartbeat.drainActiveRunExecutions();
       await cancellation;
       expect(cancellationError).toBeUndefined();
+      expect(requested).toBe(true);
       expect(reachedDispatch).toBe(true);
       expect(factory).not.toHaveBeenCalled();
-      expect(await heartbeat.getRun(runId)).toMatchObject({ status: "cancelled", runtimeMode: "native" });
+      if (sourceAssertionError) throw sourceAssertionError;
+      const finalRun = await heartbeat.getRun(runId);
+      const finalProjection = { status: finalRun?.status, runtimeMode: finalRun?.runtimeMode,
+        errorCode: finalRun?.errorCode, error: finalRun?.error, resultJson: finalRun?.resultJson };
+      expect(finalProjection, JSON.stringify(finalProjection)).toMatchObject({ status: "cancelled", runtimeMode: "native" });
     });
   });
 

@@ -1539,6 +1539,9 @@ const BOARD_ONLY_OPERATIONS = new Set([
   "PATCH /api/companies/{companyId}/members/{memberId}/role-and-grants",
   "POST /api/companies/{companyId}/members/{memberId}/archive",
   "PATCH /api/companies/{companyId}/members/{memberId}/permissions",
+  "GET /api/companies/{companyId}/workflow-coverages",
+  "POST /api/companies/{companyId}/workflow-coverages",
+  "DELETE /api/companies/{companyId}/workflow-coverages/{coverageId}",
   "GET /api/companies/{companyId}/user-directory",
   "GET /api/companies/{companyId}/managed-agent-profiles",
   "POST /api/companies/{companyId}/managed-agent-profiles",
@@ -1727,10 +1730,11 @@ const BOARD_ONLY_OPERATIONS = new Set([
   "GET /api/issues/{issueId}/chat-binding",
 ]);
 
-// All company Trust routes share the canonical current-Human session owner.
-// Match that mounted family so new gated/action routes cannot inherit board-key docs.
+// Trust and temporary Human workflow coverage are session-owned surfaces.
+// Match their mounted families so these routes cannot inherit board-key docs.
 function requiresBoardSession(method: string, path: string): boolean {
   return path.startsWith("/api/companies/{companyId}/trust/") ||
+    path.startsWith("/api/companies/{companyId}/workflow-coverages") ||
     operationKey(method, path) === "GET /api/companies/{companyId}/notices/action-required";
 }
 
@@ -12447,15 +12451,18 @@ registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/runs/{ru
 
 // V9 follows native owners; blocked capabilities have no invented 2xx result.
 for (const operation of v9ApiPaths) {
+  const successStatuses = [...new Set([operation.successStatus, ...(operation.additionalSuccessStatuses ?? [])]
+    .filter((status): status is 200 | 201 | 202 => status !== undefined))];
   registerCurrentRoute({
     method: operation.method, path: operation.path, tags: ["V9"],
-    summary: operation.summary, query: operation.query, body: operation.body, headers: operation.headers, bodyContent: operation.bodyContent,
+    summary: operation.summary, description: operation.description,
+    query: operation.query, body: operation.body, headers: operation.headers, bodyContent: operation.bodyContent,
     responses: {
-      ...(operation.successStatus ? { [operation.successStatus]: {
+      ...Object.fromEntries(successStatuses.map(status => [status, {
         ...r.ok(operation.result),
         ...(operation.responseContent ? { content: operation.responseContent } : {}),
         ...(operation.privateResponse ? { headers: { "Cache-Control": { schema: { type: "string", enum: [operation.cacheControl ?? "private, no-store"] } } } } : {}),
-      } } : {}),
+      }])),
       400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound,
       409: { description: "Current account, native source, original request or expected version changed" },
       ...(operation.blocked || operation.unavailable ? { 422: { description: operation.blocked ? "Publication remains unqualified; no production change" : "Current capability, schema or qualification is unavailable" } } : {}),

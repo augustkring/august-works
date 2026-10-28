@@ -7,12 +7,13 @@ import { activationConnectionConsentService } from "../services/saas/activation-
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { z } from "zod";
 import { Router, type Request, type Response } from "express";
-import { and, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
 import {
   authSecurityEvents,
   authSessions,
   authUsers,
   agents,
+  companies,
   companyMemberships,
   companyDeletionOperations,
   runtimeHosts,
@@ -39,7 +40,7 @@ import {
   type PermissionKey,
   type V6FeatureKey,
 } from "@paperclipai/shared";
-import { badRequest, conflict, forbidden, notFound, unauthorized } from "../errors.js";
+import { badRequest, conflict, forbidden, HttpError, notFound, unauthorized } from "../errors.js";
 import { accessService } from "../services/access.js";
 import { logActivity } from "../services/activity-log.js";
 import type { SaasPlatform } from "../services/saas/platform.js";
@@ -684,10 +685,27 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
     await gate("admin_support_v6");
     const snapshot = await operatorRead(req, async reader => {
       const modelAgents = await reader.select({
-        id: agents.id, companyId: agents.companyId, adapterType: agents.adapterType, adapterConfig: agents.adapterConfig,
-      }).from(agents).where(eq(agents.adapterType, "paperclip_runner")).limit(10001);
+        id: agents.id, companyId: agents.companyId, adapterType: agents.adapterType,
+        adapterConfig: sql<Record<string, unknown>>`jsonb_build_object(
+          'provider', ${agents.adapterConfig}->'provider',
+          'model', ${agents.adapterConfig}->'model',
+          'workerModelProfileId', ${agents.adapterConfig}->'workerModelProfileId',
+          'maxOutputTokens', ${agents.adapterConfig}->'maxOutputTokens',
+          'lifecycleMode', ${agents.adapterConfig}->'lifecycleMode',
+          'env', case when coalesce(${agents.adapterConfig}->'env', '{}'::jsonb) = '{}'::jsonb
+            then '{}'::jsonb else '{"configured":true}'::jsonb end,
+          'aiConnection', case when jsonb_exists(${agents.adapterConfig}, 'aiConnection') then 'configured' else null end,
+          'managedAiConnection', case when jsonb_exists(${agents.adapterConfig}, 'managedAiConnection') then 'configured' else null end
+        )`,
+        runtimeConfig: sql<Record<string, unknown>>`jsonb_build_object(
+          'provider', ${agents.runtimeConfig}->'provider',
+          'model', ${agents.runtimeConfig}->'model'
+        )`,
+      }).from(agents).innerJoin(companies, and(eq(companies.id, agents.companyId), eq(companies.status, "active")))
+        .where(and(ne(agents.status, "terminated"),
+          ne(agents.status, "pending_approval"))).limit(10001);
       if (modelAgents.length > 10000)
-        throw conflict("The bounded model dependency inventory is unavailable", {
+        throw new HttpError(503, "The bounded model dependency inventory is unavailable", {
           code: "model_dependency_inventory_unavailable",
           retryable: true,
         });
@@ -783,26 +801,26 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
           workerProfiles: platform.config.workerModelProfiles ?? [],
           readOnlyProfiles: platform.config.readOnlyModelProfiles ?? [],
           supportProfiles: platform.config.firstPartySupportModelProfiles ?? [],
-          workerProfilesConfigured: Boolean(platform.config.workerModelProfiles),
-          readOnlyProfilesConfigured: Boolean(platform.config.readOnlyModelProfiles),
-          supportProfilesConfigured: Boolean(platform.config.firstPartySupportModelProfiles),
+          workerProfilesConfigured: Boolean(platform.config.workerModelProfiles?.length),
+          readOnlyProfilesConfigured: Boolean(platform.config.readOnlyModelProfiles?.length),
+          supportProfilesConfigured: Boolean(platform.config.firstPartySupportModelProfiles?.length),
         }),
       });
     });
-    res.set("Cache-Control", "no-store").json(snapshot);
+    res.set("Cache-Control", "private, no-store").json(snapshot);
   });
   router.get("/saas/internal/costs", async (req, res) => {
     const actor = await user(req);
     platform.support.operator(actor.id);
     await gate("admin_support_v6");
-    res.set("Cache-Control", "no-store").json(await operatorRead(req, async reader => platform.costs.latest(reader)));
+    res.set("Cache-Control", "private, no-store").json(await operatorRead(req, async reader => platform.costs.latest(reader)));
   });
   router.post("/saas/internal/costs", async (req, res) => {
     const actor = await user(req);
     platform.support.operator(actor.id);
     await gate("admin_support_v6");
     await gate("billing_usage_v6");
-    res.status(201).json(await platform.costs.record(req.actor, req.body));
+    res.set("Cache-Control", "private, no-store").status(201).json(await platform.costs.record(req.actor, req.body));
   });
   router.get("/saas/internal/fleet", async (req, res) => {
     const actor = await user(req);

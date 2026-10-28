@@ -14,6 +14,7 @@ import { budgetService } from "./budgets.js";
 import { projectControlService } from "./project-control.js";
 import { assertV5Authorization } from "./v5-authorization.js";
 import { ToolGatewayHttpError, type ToolGatewayService, type ScopedToolGatewayContext } from "./tool-gateway.js";
+import { hasOrchestrationPlan } from "./orchestration/orchestration-admission.js";
 
 export { scopedRuntimeActionSchema };
 
@@ -27,6 +28,13 @@ export function scopedRuntimeActionService(db: Db, toolGateway?: ToolGatewayServ
       await agentProviderBindingService(db).assertRuntime(companyId, run.agentId);
       const cross = crossCompanyContextService(db), resolved = await cross.resolve(actor, scope), local = resolved.scopes.find((s) => s.companyId === input.companyId);
       if (!local) throw forbidden("Target company is outside this pinned execution scope");
+      const runContext = run.contextSnapshot && typeof run.contextSnapshot === "object" ? run.contextSnapshot : null;
+      const executionIssueId = run.issueId ?? (typeof runContext?.issueId === "string" ? runContext.issueId : null);
+      const assertBoundedGuestAct = async (accessMode: "read" | "contribute" | "act") => {
+        if (input.companyId !== companyId && accessMode === "act" && await hasOrchestrationPlan(db, companyId, executionIssueId))
+          throw forbidden("Bounded plans cannot dispatch delegated act scope until delegated side-effect and budget receipts are qualified");
+      };
+      await assertBoundedGuestAct(local.accessMode);
       const budgets = budgetService(db);
       if (await budgets.getInvocationBlock(companyId, run.agentId) || await budgets.getInvocationBlock(input.companyId, local.presence.id)) throw forbidden("Current company or agent budget blocks this scoped action");
       let result: unknown, classification = "internal";
@@ -43,6 +51,7 @@ export function scopedRuntimeActionService(db: Db, toolGateway?: ToolGatewayServ
             if (!current || current.responsibleUserId !== actor.onBehalfOfUserId) throw forbidden("Primary execution authority changed");
             const fresh = (await cross.resolve(actor, scope)).scopes.find(entry => entry.companyId === input.companyId);
             if (!fresh) throw forbidden("Target company left this execution scope");
+            await assertBoundedGuestAct(fresh.accessMode);
             if (input.companyId !== companyId && !fresh.policy.allowedSensitivities.includes("confidential")) throw forbidden("Guest policy excludes confidential connection output");
             if (tool && tool.risk !== "read") {
               if (input.companyId !== companyId && fresh.accessMode !== "act") throw forbidden("Guest tool mutations require act scope");

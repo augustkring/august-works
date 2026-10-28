@@ -12551,7 +12551,7 @@ async function waitForRemoteRunnerProcessIdentity(input: {
   nonce: string;
   runnerInstanceId: string;
   nativeHarnessState?: boolean;
-}): Promise<{ pid: number; startedAt: string }> {
+}): Promise<{ pid: number; startedAt: string; processStartFingerprint?: string }> {
   const deadline = Date.now() + REMOTE_RUNNER_PROCESS_IDENTITY_WAIT_MS;
   while (Date.now() < deadline) {
     const result = await input.runner
@@ -12870,6 +12870,55 @@ export function createRemoteRunnerProcessLauncher(input: {
               .slice(-4)
               .map((value) => redactSensitiveText(value).slice(-1_000))
           : [];
+        if (process.env.PAPERCLIP_MANAGED_OPENCODE_E2E_DIAGNOSTICS === "1") {
+          const recoveryReasons: ReadonlySet<string> = new Set([
+            "transport_reconnect_grace_exceeded",
+            "transport_reconnect_deadline_exceeded",
+            "lease_expired_requires_bootstrap",
+          ]);
+          const knownLifecycles: readonly string[] = [
+            "connecting", "ready", "terminal", "backpressure", "draining", "revoked", "stopped",
+            "recoverable_failure", "unrecoverable",
+          ];
+          const knownFailureMarkers = [
+            ["transport reconnect grace exceeded; durable state is preserved", "transport_reconnect_grace_exceeded"],
+            ["transport reconnect deadline elapsed; durable state is preserved", "transport_reconnect_deadline_exceeded"],
+            ["connection lease expired; a fresh bootstrap is required", "lease_expired_requires_bootstrap"],
+            ["active connection lease expired", "active_connection_lease_expired"],
+          ] as const;
+          const classify = (value: string) => knownFailureMarkers
+            .find(([marker]) => value.includes(marker))?.[1] ?? null;
+          const ownerFrames = (new Error().stack?.split("\n").slice(1, 6) ?? [])
+            .flatMap((line) => {
+              const match = /^\s*at (?:(.*?) \()?(.+?):(\d+):\d+\)?$/.exec(line);
+              return match && /^[-\w.]+\.(?:ts|js|mjs|cjs)$/.test(match[2]!.split(/[\\/]/).at(-1)!)
+                ? [{ functionName: match[1] || null, sourceFile: match[2]!.split(/[\\/]/).at(-1), line: Number(match[3]) }]
+                : [];
+            }).slice(0, 4);
+          console.info("native remote runner exit facts", JSON.stringify({
+            runnerInstanceId: input.runnerInstanceId,
+            pid: identity.pid,
+            phase: input.nativeSessionStart ? "native_session_start" : "remote_process_monitor",
+            ownerFrames,
+            processStartFingerprintRecorded: Boolean(identity.processStartFingerprint),
+            monitorExitCode: observed.exitCode,
+            monitorTimedOut: observed.timedOut,
+            monitorSignal: observed.signal,
+            identityMismatch,
+            remoteProcessSignal: child.signalCode ?? null,
+            signalObservation: "remote_identity_probe_does_not_report_process_signal",
+            lifecycle: knownLifecycles.includes(lifecycle) ? lifecycle : "unavailable",
+            durableStateAvailable: Boolean(durableState),
+            runnerDiagnosticAvailable: diagnostic?.exitCode === 0 && !diagnostic.timedOut,
+            recoverableFailure: typeof recoverableFailure === "string" && recoveryReasons.has(recoverableFailure)
+              ? recoverableFailure : null,
+            stderrFailureMarker: classify(diagnosticTail),
+            stateFailureMarkers: stateDiagnostics.flatMap((value) => {
+              const marker = classify(value);
+              return marker ? [marker] : [];
+            }),
+          }));
+        }
         const stateSummary = `runner_remote_process_exited lifecycle=${lifecycle}${recoverableFailure ? ` recoverableFailure=${redactSensitiveText(recoverableFailure).slice(-1_000)}` : ""}${stateDiagnostics.length > 0 ? ` diagnostics=${JSON.stringify(stateDiagnostics)}` : ""}`;
         return {
           code: null,

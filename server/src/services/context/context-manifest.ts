@@ -24,9 +24,9 @@ import type {
 } from "@paperclipai/shared";
 import { agentExecutionScopeSchema, crossCompanyPolicySchema, type AgentExecutionScope } from "@paperclipai/shared";
 import { conflict, forbidden, HttpError, unprocessable } from "../../errors.js";
-import { lockAnalyticalCompany } from "../analytical-privacy.js";
+import { markAnalyticalPrivacyReadLocked } from "../analytical-privacy.js";
 import { learningAssetRoots,retainLearnedAssetsInContext } from "../learning/learning-assets.js";
-import { memoryPayloadVisible, canActorReadMemorySources, lockMemoryPrivacy } from "../memory/memory-privacy.js";
+import { memoryPayloadVisible, canActorReadMemorySources } from "../memory/memory-privacy.js";
 import { modelLineage, observationLineage } from "../memory/derived-memory.js";
 import { lockIssuePrivacyTree } from "../issues.js";
 import { foundationIndexService } from "../foundation/foundation-index.js";
@@ -120,10 +120,12 @@ export async function revalidateStoredContextManifestSources(db: Db, input: {
   companyId: string; manifestId: string; agentId: string; runId?: string | null; actor: AuthorizationActor;
 }) {
   if (!is(db, PgTransaction)) throw forbidden("Delegated Context source review requires its active native transaction.");
-  // Acquire shared source locks before pinning the run or any owner rows. Event
-  // publication uses analytical -> Memory -> run, so source review must match.
-  await lockAnalyticalCompany(db, input.companyId);
-  await lockMemoryPrivacy(db, input.companyId);
+  // Pure source revalidation must hold the canonical shared fence before
+  // locking the run or any source-owner rows. Event publication uses
+  // analytical -> Memory -> run; taking these locks shared prevents upgrades
+  // later in this transaction from deadlocking with a privacy writer.
+  await lockIssuePrivacyTree(db as unknown as Parameters<typeof lockIssuePrivacyTree>[0], input.companyId, "read");
+  markAnalyticalPrivacyReadLocked(db as object);
   const [manifest] = await db.select({ id: contextManifests.id, agentId: contextManifests.agentId,
     runId: contextManifests.runId, issueId: contextManifests.issueId }).from(contextManifests).where(and(
     eq(contextManifests.companyId, input.companyId), eq(contextManifests.id, input.manifestId))).limit(1);
@@ -139,8 +141,6 @@ export async function revalidateStoredContextManifestSources(db: Db, input: {
       manifest.issueId !== (run.nativeIssueId ?? run.issueId))
       throw forbidden("Native bootstrap Context accountability changed");
   }
-  await lockIssuePrivacyTree(db as unknown as Parameters<typeof lockIssuePrivacyTree>[0], input.companyId);
-  await lockMemoryPrivacy(db, input.companyId);
   const items = await db.select().from(contextManifestItems).where(and(
     eq(contextManifestItems.companyId, input.companyId), eq(contextManifestItems.manifestId, input.manifestId)))
     .orderBy(contextManifestItems.rank).limit(257);
@@ -152,7 +152,8 @@ export async function revalidateStoredContextManifestSources(db: Db, input: {
 
   const expectedRoots = new Map<string, string>();
   const foundationRefs: Array<{ documentId: string; revisionId: string }> = [];
-  const analyticalRead = (issueId: string) => assertAnalyticalContextPayloadAccess(db, input.companyId, input.actor, { issueId }, "task");
+  const analyticalRead = (issueId: string) => assertAnalyticalContextPayloadAccess(db, input.companyId, input.actor,
+    { issueId }, "task", { privacyLockMode: "read" });
   for (const item of items) {
     if (item.sourceProvider === "august_works_tasks") {
       const ref = /^issue:\/\/([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})$/i.exec(item.sourceRef);
@@ -231,6 +232,9 @@ export async function revalidateNativeBootstrapContextWitness(db: Db, input: {
   await db.transaction(async rawTx => {
     const tx = rawTx as unknown as Db;
     const actor = captured.actor;
+    // Pin the company privacy boundary before taking the run row lock. Run
+    // publishers take this same analytical -> Memory -> run order.
+    await lockIssuePrivacyTree(rawTx, input.companyId, "read");
     const [run] = await tx.select({ id: heartbeatRuns.id, status: heartbeatRuns.status,
       agentId: heartbeatRuns.agentId, responsibleUserId: heartbeatRuns.responsibleUserId,
       issueId: heartbeatRuns.issueId, nativeIssueId: heartbeatRuns.nativeIssueId }).from(heartbeatRuns).where(and(

@@ -46,7 +46,7 @@ describe("operator model dependency inventory projection", () => {
     const result = projectSaasModelDependencyInventory({
       ...empty(),
       agents: [{ id: agentId, companyId, adapterType: "paperclip_runner",
-        adapterConfig: { provider: "opencode", model: "provider/model-exact", env: { TOKEN: "secret-value" } } }],
+        adapterConfig: { provider: "opencode", model: "provider/model-exact", env: { TOKEN: "secret-value" } }, runtimeConfig: {} }],
     });
     expect(result.entries).toHaveLength(1);
     expect(result.entries[0]).toMatchObject({
@@ -57,8 +57,33 @@ describe("operator model dependency inventory projection", () => {
     expect(JSON.stringify(result)).not.toContain("secret-value");
   });
 
+  it("covers other current Agent adapters without inventing provider/model or lifecycle facts", () => {
+    const otherAgentId = "00000000-0000-4000-8000-000000000007";
+    const credentialShapedAgentId = "00000000-0000-4000-8000-000000000008";
+    const result = projectSaasModelDependencyInventory({
+      ...empty(),
+      agents: [
+        { id: agentId, companyId, adapterType: "opencode_local",
+          adapterConfig: { model: "openrouter/deepseek-v4-flash" }, runtimeConfig: {} },
+        { id: otherAgentId, companyId, adapterType: "http", adapterConfig: {}, runtimeConfig: {} },
+        { id: credentialShapedAgentId, companyId, adapterType: "codex_local",
+          adapterConfig: { model: "sk-ant-api03-do-not-return" }, runtimeConfig: {} },
+      ],
+    });
+    expect(result.entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ agentId, runtimeAdapter: "opencode_local", provider: "openrouter",
+        model: "openrouter/deepseek-v4-flash", lifecycleStatus: "untracked", bindingState: "provider_model_configured" }),
+      expect.objectContaining({ agentId: otherAgentId, runtimeAdapter: "http", provider: null,
+        model: null, lifecycleStatus: "untracked", bindingState: "adapter_model_not_reported" }),
+      expect.objectContaining({ agentId: credentialShapedAgentId, runtimeAdapter: "codex_local", provider: null,
+        model: null, lifecycleStatus: "untracked", bindingState: "adapter_model_not_reported" }),
+    ]));
+    expect(result.unresolvedAgentBindings).toBe(2);
+    expect(JSON.stringify(result)).not.toContain("sk-ant-api03-do-not-return");
+  });
+
   it("uses only the exact selected worker qualification and projects its lifecycle without credentials or private refs", () => {
-    const lifecycle = { status: "migration_required", owner: "model owner",
+    const lifecycle = { status: "migration_required" as const, owner: "model owner",
       retirementAt: "2026-11-01T00:00:00.000Z", replacementProfileId: "private-candidate",
       regionOrRoutingProfile: "region-a", dataUseProfile: "no-training",
       supportedInputOutput: ["text"] as ("text" | "image" | "audio" | "video")[], toolUseCapability: false,
@@ -66,7 +91,7 @@ describe("operator model dependency inventory projection", () => {
     const result = projectSaasModelDependencyInventory({
       ...empty(),
       agents: [{ id: agentId, companyId, adapterType: "paperclip_runner",
-        adapterConfig: { provider: "aw_text_only", model: "claude-exact-release", workerModelProfileId: profileId } }],
+        adapterConfig: { provider: "aw_text_only", model: "claude-exact-release", workerModelProfileId: profileId }, runtimeConfig: {} }],
       workerProfiles: [worker(lifecycle)],
       workerProfilesConfigured: true,
     });
@@ -87,18 +112,18 @@ describe("operator model dependency inventory projection", () => {
       expect.objectContaining({ dependency: "read_only_verifier", configuration: "configured", entries: 1, untracked: 1 }),
       expect.objectContaining({ dependency: "first_party_support", configuration: "configured", entries: 1, untracked: 1 }),
     ]));
-    expect(result.entries.map(entry => entry.dependency)).toEqual(["read_only_verifier", "first_party_support"]);
+    expect(result.entries.map(entry => entry.dependency)).toEqual(["first_party_support", "read_only_verifier"]);
     expect(result.entries.every(entry => entry.lifecycleStatus === "untracked")).toBe(true);
     expect(JSON.stringify(result)).not.toContain("operator-private-secret");
     expect(JSON.stringify(result)).not.toContain("qualification/private-record");
   });
 
-  it("records an unresolved current Agent provider binding and makes missing profile config visible", () => {
+  it("reports a configured provider without a model and makes missing profile config visible", () => {
     const result = projectSaasModelDependencyInventory({
-      ...empty(), agents: [{ id: agentId, companyId, adapterType: "paperclip_runner", adapterConfig: { provider: "unsupported" } }],
+      ...empty(), agents: [{ id: agentId, companyId, adapterType: "paperclip_runner", adapterConfig: { provider: "unsupported" }, runtimeConfig: {} }],
     });
-    expect(result.entries[0]).toMatchObject({ lifecycleStatus: "untracked", bindingState: "unresolved",
-      provider: null, model: null });
+    expect(result.entries[0]).toMatchObject({ lifecycleStatus: "untracked", bindingState: "adapter_model_not_reported",
+      provider: "unsupported", model: null });
     expect(result.unresolvedAgentBindings).toBe(1);
     expect(result.coverage).toEqual(expect.arrayContaining([
       expect.objectContaining({ dependency: "read_only_verifier", configuration: "unconfigured", entries: 0 }),

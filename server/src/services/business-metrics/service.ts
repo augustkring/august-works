@@ -74,7 +74,8 @@ export function businessMetricService(db: Db) {
     const [row] = await (lock ? query.for("update") : query.for("share"));
     if (!row) throw notFound("Metric not found"); return row;
   }
-  async function definitionAdmission(tx: Db, companyId: string, actor: AuthorizationActor, definition: BusinessMetricDefinition) {
+  async function definitionAdmission(tx: Db, companyId: string, actor: AuthorizationActor, definition: BusinessMetricDefinition,
+    retentionLockMode: "read" | "write" = "write") {
     if (definition.ownerUserId !== analyticalPrincipalId(actor)) {
       const [membership] = await tx.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
         eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
@@ -82,7 +83,7 @@ export function businessMetricService(db: Db) {
       )).for("share");
       if (!membership) throw conflict("Metric owner must be a current company human principal");
     }
-    return currentMetricPurpose(tx, companyId, definition);
+    return currentMetricPurpose(tx, companyId, definition, new Date(), retentionLockMode);
   }
   async function inspectCurrentObservationWithLineage(companyId: string, actor: AuthorizationActor, observationId: string): Promise<CurrentMetricObservationLineage> {
       if (!is(db, PgTransaction)) return db.transaction(async tx => businessMetricService(tx as unknown as Db).inspectCurrentObservationWithLineage(companyId, actor, observationId));
@@ -93,13 +94,13 @@ export function businessMetricService(db: Db) {
       const [observation] = await db.select().from(businessMetricObservations).where(and(eq(businessMetricObservations.companyId, companyId), eq(businessMetricObservations.id, observationId))).for("share");
       if (!observation || observation.expiresAt.getTime() <= Date.now()) throw conflict("Metric observation is no longer current");
       sourceStage="observation_manifest_retention";
-      await assertMemorySourcesRetained(db,companyId,[{sourceProvider:"august_works_analytical",sourceRef:`manifest://${observation.lineageManifestId}`}]);
+      await assertMemorySourcesRetained(db,companyId,[{sourceProvider:"august_works_analytical",sourceRef:`manifest://${observation.lineageManifestId}`}],"read");
       sourceStage="metric_publication";
       const row = await metric(db, companyId, observation.metricId);
       if (row.status !== "published") throw conflict("Metric is not currently published");
       sourceStage="metric_definition";
-      const revision = await version(db, companyId, row.id, observation.versionId);
-      await definitionAdmission(db, companyId, actor, revision.definition);
+      const revision = await version(db, companyId, row.id, observation.versionId, "read");
+      await definitionAdmission(db, companyId, actor, revision.definition, "read");
       sourceStage="lineage_lookup";
       const [manifest] = await db.select().from(analyticalLineageManifests).where(and(eq(analyticalLineageManifests.companyId, companyId), eq(analyticalLineageManifests.id, observation.lineageManifestId))).for("share");
       const edges = await db.select().from(analyticalLineageEdges).where(and(eq(analyticalLineageEdges.companyId, companyId), eq(analyticalLineageEdges.manifestId, observation.lineageManifestId))).limit(20066).for("share");
@@ -144,12 +145,12 @@ export function businessMetricService(db: Db) {
     queryTimeBudget(deadline);
     if(observations.length!==observationIds.length || observations.some(row=>row.expiresAt.getTime()<=Date.now())) throw conflict("Metric observation is no longer current");
     const manifestIds=[...new Set(observations.map(row=>row.lineageManifestId))];
-    await assertMemorySourcesRetained(db,companyId,manifestIds.map(id=>({sourceProvider:"august_works_analytical",sourceRef:`manifest://${id}`})));
+    await assertMemorySourcesRetained(db,companyId,manifestIds.map(id=>({sourceProvider:"august_works_analytical",sourceRef:`manifest://${id}`})),"read");
     queryTimeBudget(deadline);
     const row=await metric(db,companyId,metricId);
     if(row.status!=="published") throw conflict("Metric is not currently published");
-    const revision=await version(db,companyId,metricId,versionId);
-    await definitionAdmission(db,companyId,actor,revision.definition);
+    const revision=await version(db,companyId,metricId,versionId,"read");
+    await definitionAdmission(db,companyId,actor,revision.definition,"read");
     const calculation=revision.definition.calculation,population=calculation.kind==="native_count"?calculation.population:calculation.kind==="native_ratio"?calculation.denominator:null;
     if(!population) throw conflict("Metric observation lineage is unavailable");
     const manifests=await db.select().from(analyticalLineageManifests).where(and(eq(analyticalLineageManifests.companyId,companyId),inArray(analyticalLineageManifests.id,manifestIds))).for("share");
@@ -173,10 +174,11 @@ export function businessMetricService(db: Db) {
     queryTimeBudget(deadline);
     return {observations:observations.map(observation=>({result:observation.result,observation,manifest:manifestById.get(observation.lineageManifestId)!,revision})),edges};
   }
-  async function version(tx: Db, companyId: string, metricId: string, id: string) {
+  async function version(tx: Db, companyId: string, metricId: string, id: string,
+    retentionLockMode: "read" | "write" = "write") {
     const [row] = await tx.select().from(businessMetricVersions).where(and(eq(businessMetricVersions.companyId, companyId), eq(businessMetricVersions.metricId, metricId), eq(businessMetricVersions.id, id))).for("share");
     if (!row || !businessMetricDefinitionSchema.safeParse(row.definition).success || nativeSha256(row.definition) !== row.contentHash) throw conflict("Metric definition version is unavailable");
-    await assertMemorySourcesRetained(tx,companyId,[{sourceProvider:"august_works_analytical_input",sourceRef:`metric_version://${id}`}]);
+    await assertMemorySourcesRetained(tx,companyId,[{sourceProvider:"august_works_analytical_input",sourceRef:`metric_version://${id}`}],retentionLockMode);
     if (row.createdAt.getTime() + row.definition.reviewFrequencyDays * 86_400_000 <= Date.now()) throw conflict("Metric definition review is overdue; publish a current review version");
     return row;
   }
@@ -278,10 +280,10 @@ export function businessMetricService(db: Db) {
       await admit(db, companyId, actor);
       const row = await metric(db, companyId, metricId);
       if (row.status !== "published") throw conflict("Metric is not currently published");
-      const revision = await version(db, companyId, metricId, versionId);
+      const revision = await version(db, companyId, metricId, versionId, "read");
       const published = await db.select().from(businessMetricPublications).where(and(eq(businessMetricPublications.companyId, companyId), eq(businessMetricPublications.metricId, metricId), eq(businessMetricPublications.versionId, versionId)));
       if (!published.length) throw conflict("Requested definition version has never been published");
-      await definitionAdmission(db, companyId, actor, revision.definition);
+      await definitionAdmission(db, companyId, actor, revision.definition, "read");
       const calculation = revision.definition.calculation;
       const population = calculation.kind === "native_count" ? calculation.population : calculation.kind === "native_ratio" ? calculation.denominator : null;
       if (population?.entity === "issue" && population.projectId && !await permitted(db, companyId, actor, "project", population.projectId)) throw forbidden("Metric population is outside the current authorization boundary");

@@ -9,7 +9,7 @@ import {issueService} from "../issues.js";
 import {documentService} from "../documents.js";
 import {analyticalPurpose,metricDefinition} from "../../__tests__/helpers/business-metric-fixture.js";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -26,6 +26,8 @@ import { projectRoutes } from "../../routes/projects.js";
 import { issueRoutes } from "../../routes/issues.js";
 import { seedNativePasskeySession } from "../../__tests__/helpers/native-authentication-fixtures.js";
 import { nativeCancelOriginTestFactsForRun } from "./native-session-executor.js";
+import { redactSensitiveText } from "../../redaction.js";
+import { validatePrpEvent } from "../../vendor/paperclip-runner/index.js";
 
 function qualifiedOpenCodeBinary(): string | null {
   if (process.platform !== "linux") return null;
@@ -116,9 +118,10 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
   }, 240_000);
 
   it("runs the route-created conversation through RuntimeControl and its signed qualified sandbox relay", async () => {
+    vi.stubEnv("PAPERCLIP_MANAGED_OPENCODE_E2E_DIAGNOSTICS", "1");
     vi.stubEnv("PAPERCLIP_NATIVE_CANCEL_ORIGIN_TEST_DIAGNOSTICS", "1");
     vi.stubEnv("PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS", "1");
-    let settledRunEvidence: Record<string, unknown> | null = null;
+    const settledRunEvidence: { current: Record<string, unknown> | null } = { current: null };
     const binary = qualifiedOpenCodeBinary();
     if (!binary) throw new Error("qualified_opencode_binary_unavailable");
     const result = await runManagedNativeConversationFrame({ db, root, opencodeBinary: binary, sandboxRelay: true, timeoutSec: 600,
@@ -131,8 +134,41 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
       },
       afterRunSettledBeforeTeardown: async facts => {
         if (!facts.run) return;
-        const events = await db.select({ seq: heartbeatRunEvents.seq, eventType: heartbeatRunEvents.eventType })
+        const events = await db.select({ seq: heartbeatRunEvents.seq, eventType: heartbeatRunEvents.eventType,
+          payload: heartbeatRunEvents.payload })
           .from(heartbeatRunEvents).where(eq(heartbeatRunEvents.runId, facts.run.id)).orderBy(heartbeatRunEvents.seq);
+        const parsedEvents = events.flatMap(event => {
+          const envelope = event.payload && typeof event.payload === "object" && !Array.isArray(event.payload)
+            ? event.payload as Record<string, unknown> : {};
+          const parsed = validatePrpEvent(envelope.prpEvent);
+          return parsed.ok ? [parsed.event] : [];
+        });
+        const failedTurn = parsedEvents.find(event => event.eventType === "turn.failed");
+        const sessionFailed = parsedEvents.find(event => event.eventType === "session.failed");
+        const failedTurnPayload = failedTurn?.payload && typeof failedTurn.payload === "object" && !Array.isArray(failedTurn.payload)
+          ? failedTurn.payload as Record<string, unknown> : {};
+        const sessionFailedPayload = sessionFailed?.payload && typeof sessionFailed.payload === "object" && !Array.isArray(sessionFailed.payload)
+          ? sessionFailed.payload as Record<string, unknown> : {};
+        const sessionFailureError = sessionFailedPayload.error && typeof sessionFailedPayload.error === "object" &&
+          !Array.isArray(sessionFailedPayload.error) ? sessionFailedPayload.error as Record<string, unknown> : {};
+        const failedTurnCode = typeof failedTurnPayload.code === "string" && /^[a-z0-9_.:-]{1,100}$/i.test(failedTurnPayload.code)
+          ? failedTurnPayload.code : null;
+        const sessionFailedCode = typeof sessionFailedPayload.code === "string" && /^[a-z0-9_.:-]{1,100}$/i.test(sessionFailedPayload.code)
+          ? sessionFailedPayload.code : null;
+        const failureArtifactPath = process.env.PAPERCLIP_NATIVE_RELAY_FAILURE_EVIDENCE_PATH;
+        if (failureArtifactPath === "/workspace/blentera-v10/doc/operations/aw-v10-evidence/rt01-runtime-probe-contract-2026-10-27/r68/runner-stderr-redacted.txt") {
+          if (typeof facts.run.stderrExcerpt === "string") {
+            const redacted = Buffer.from(redactSensitiveText(facts.run.stderrExcerpt), "utf8");
+            await writeFile(failureArtifactPath, redacted.subarray(Math.max(0, redacted.length - 8192)),
+              { flag: "wx", mode: 0o600 });
+          }
+          if (sessionFailed || failedTurn) {
+            const failurePayload = sessionFailed ? sessionFailedPayload : failedTurnPayload;
+            const redactedPayload = Buffer.from(redactSensitiveText(JSON.stringify(failurePayload)), "utf8");
+            await writeFile(failureArtifactPath.replace("runner-stderr-redacted.txt", "turn-failure-redacted.txt"),
+              redactedPayload.subarray(0, 2048), { flag: "wx", mode: 0o600 });
+          }
+        }
         const commands = await db.select({ requestId: runtimeHostCommands.idempotencyKey, status: runtimeHostCommands.status,
           errorCode: runtimeHostCommands.errorCode, attempt: runtimeHostCommands.attempt, createdAt: runtimeHostCommands.createdAt,
           purpose: sql<string | null>`${runtimeHostCommands.payload}->>'nativePreparationPurpose'`,
@@ -146,11 +182,10 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
           !Array.isArray(resultJson.nativeCancellation) ? resultJson.nativeCancellation as Record<string, unknown> : {};
         const startupCancellation = resultJson.startupCancellation && typeof resultJson.startupCancellation === "object" &&
           !Array.isArray(resultJson.startupCancellation) ? resultJson.startupCancellation as Record<string, unknown> : {};
-        const relayCommandOwners = new Map((Array.isArray(facts.sandboxRuntimeFacts?.relayCommandOwners)
+        const relayCommandOwners = (Array.isArray(facts.sandboxRuntimeFacts?.relayCommandOwners)
           ? facts.sandboxRuntimeFacts.relayCommandOwners as Array<Record<string, unknown>> : [])
-          .filter(owner => typeof owner.requestId === "string" && typeof owner.owner === "string")
-          .map(owner => [owner.requestId as string, owner.owner as string]));
-        settledRunEvidence = {
+          .filter(owner => typeof owner.requestId === "string" && typeof owner.owner === "string");
+        settledRunEvidence.current = {
           eventTypes: events.map(event => event.eventType),
           eventCount: events.length,
           runStartedAt: facts.run.startedAt?.toISOString() ?? null,
@@ -168,8 +203,15 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
           failedSandboxCommands: commands.filter(command => command.status === "FAILED")
             .slice(-16).map(command => ({ requestId: command.requestId, errorCode: command.errorCode,
               attempt: command.attempt, purpose: command.purpose, commandDigest: command.commandDigest,
-              relayCommandOwner: relayCommandOwners.get(command.requestId) ?? null,
+              relayCommandOwner: relayCommandOwners.find(owner => owner.requestId === command.requestId)?.owner ?? null,
               createdAt: command.createdAt.toISOString() })),
+          nativeFailureFacts: facts.run.stderrExcerpt?.match(/\[paperclip-runner\] native session original failure facts: (\{[^\r\n]+\})/)?.[1] ?? null,
+          failedTurnEventPresent: Boolean(failedTurn),
+          failedTurnCode,
+          sessionFailedEventPresent: Boolean(sessionFailed),
+          sessionFailedCode,
+          failedTurnPayloadKeys: Object.keys(failedTurnPayload).sort().slice(0, 24),
+          sessionFailureErrorKeys: Object.keys(sessionFailureError).sort().slice(0, 24),
           runErrorMarkers: ["runner_remote_process_launch_failed", "runner_remote_process_launch_timed_out",
             "runner_remote_process_identity_unavailable", "runner_remote_process_identity_unavailable_cleanup_failed",
             "runner_remote_process_exited", "runner_remote_process_identity_mismatch", "runner_process_status_unavailable",
@@ -189,6 +231,7 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
         executionStage: result.run.executionStage, lastOutputAt: result.run.lastOutputAt,
         lastOutputSeq: result.run.lastOutputSeq, lastOutputStream: result.run.lastOutputStream,
         stdoutExcerptPresent: Boolean(result.run.stdoutExcerpt), stderrExcerptPresent: Boolean(result.run.stderrExcerpt),
+        stderrNativeFailureFacts: settledRunEvidence.current?.nativeFailureFacts ?? null,
         executionCancellation: result.run.resultJson?.executionCancellation } : null,
       errorCode: result.run?.errorCode, providerCallCount: result.providerCallCount,
       reservation: result.reservation ? { status: result.reservation.status, purpose: result.reservation.purpose,
@@ -196,7 +239,7 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
       providerHookInvoked: result.providerHookInvoked, providerHookFailure: result.providerHookFailure,
       providerStubFailure: result.providerStubFailure, brokerRequestFacts: result.brokerRequestFacts,
       cancelOriginFacts: result.run ? nativeCancelOriginTestFactsForRun(result.run.id) : [],
-      settledRunEvidence,
+      settledRunEvidence: settledRunEvidence.current,
       sandboxRuntimeFacts: result.sandboxRuntimeFacts })).toBe(true);
     expect(result.providerHookInvoked).toBe(true);
     expect(result.providerKeyMatched).toBe(true);
@@ -227,7 +270,8 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
       ? runtimeFacts.execFacts as Array<Record<string, unknown>>
       : [];
     expect(relayExecFacts.some(fact => fact.modelCredentialPresent === true &&
-      fact.managedModelBrokerOriginPresent === true && fact.cwdExact === true)).toBe(true);
+      fact.managedModelBrokerOriginPresent === true && fact.cwdExact === true &&
+      fact.exactBrokerProxyConfigured === true)).toBe(true);
     expect(relayExecFacts.some(fact => fact.nativePreparationPurpose === "native_workspace_prepare" &&
       fact.modelCredentialPresent === false && fact.managedModelBrokerOriginPresent === false &&
       fact.credentialEnvironmentAbsent === true && fact.assignedMcpEnvironmentAbsent === true &&

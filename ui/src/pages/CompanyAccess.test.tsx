@@ -22,6 +22,7 @@ beforeEach(() => {
 });
 
 const listMembersMock = vi.hoisted(() => vi.fn());
+const listWorkflowCoveragesMock = vi.hoisted(() => vi.fn());
 const listJoinRequestsMock = vi.hoisted(() => vi.fn());
 const updateMemberMock = vi.hoisted(() => vi.fn());
 const archiveMemberMock = vi.hoisted(() => vi.fn());
@@ -40,6 +41,7 @@ vi.mock("@/api/cloud", () => ({
 
 vi.mock("@/api/access", () => ({
   accessApi: {
+    listWorkflowCoverages: (...args: unknown[]) => listWorkflowCoveragesMock(...args),
     listMembers: (companyId: string) => listMembersMock(companyId),
     listJoinRequests: (companyId: string, status: string) => listJoinRequestsMock(companyId, status),
     updateMember: (companyId: string, memberId: string, input: unknown) =>
@@ -54,6 +56,10 @@ vi.mock("@/api/access", () => ({
     createCompanyInvite: vi.fn(),
     revokeInvite: vi.fn(),
   },
+}));
+
+vi.mock("@/api/workflows", () => ({
+  workflowsApi: { list: vi.fn(async () => []) },
 }));
 
 vi.mock("@/api/agents", () => ({
@@ -136,6 +142,7 @@ describe("CompanyAccess", () => {
     document.body.appendChild(container);
     mockSearchParamsState.current = new URLSearchParams();
     listInvitesMock.mockResolvedValue({ invites: [], nextOffset: null });
+    listWorkflowCoveragesMock.mockResolvedValue({ coverages: [] });
     listRoutinesMock.mockResolvedValue([]);
     listMembersMock.mockResolvedValue({
       members: [
@@ -295,6 +302,44 @@ describe("CompanyAccess", () => {
     await act(async () => {
       root.unmount();
     });
+  });
+
+  it("hides a late coverage response after the Human session changes and labels each party correctly", async () => {
+    const root = createRoot(container);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(queryKeys.auth.session, v9SessionFixture("user-1"));
+    let release!: (value: { coverages: Array<Record<string, unknown>> }) => void;
+    listWorkflowCoveragesMock.mockReturnValueOnce(new Promise((resolve) => { release = resolve; }));
+    await act(async () => { root.render(<QueryClientProvider client={client}><CompanyAccess /></QueryClientProvider>); });
+    await flushReact();
+
+    const renewed = v9SessionFixture("user-1");
+    client.setQueryData(queryKeys.auth.session, { ...renewed, session: { ...renewed.session, id: "renewed-user-1" } });
+    await flushReact();
+    await act(async () => {
+      release({ coverages: [{
+        id: "coverage-secret", companyId: "company-1", principalUserId: "user-1", delegateeUserId: "user-2",
+        actionKey: "workflows:run", workflowId: "workflow-1", workflowRevisionId: "revision-1", scopeType: "manual",
+        taskId: null, startsAt: new Date(Date.now() - 60_000), expiresAt: new Date(Date.now() + 60_000),
+        reason: "PRIVATE OLD SESSION REASON", revokedAt: null, revokedByUserId: null, createdAt: new Date(),
+      }] });
+    });
+    await flushReact();
+    expect(container.textContent).not.toContain("PRIVATE OLD SESSION REASON");
+    expect(container.textContent).not.toContain("Covered by Board User");
+    listWorkflowCoveragesMock.mockResolvedValueOnce({ coverages: [{
+      id: "coverage-current", companyId: "company-1", principalUserId: "user-1", delegateeUserId: "user-2",
+      actionKey: "workflows:run", workflowId: "workflow-1", workflowRevisionId: "revision-1", scopeType: "manual",
+      taskId: null, startsAt: new Date(Date.now() - 60_000), expiresAt: new Date(Date.now() + 60_000),
+      reason: "Current coverage", revokedAt: null, revokedByUserId: null, createdAt: new Date(),
+    }] });
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ["access", "workflow-coverages", "company-1", "user-1"] });
+    });
+    await flushReact();
+    expect(container.textContent).toContain("Covered by Board User");
+    await act(async () => { root.unmount(); });
+    client.clear();
   });
 
   it("saves member role and status without touching grants", async () => {

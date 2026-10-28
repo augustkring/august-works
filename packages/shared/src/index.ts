@@ -1341,6 +1341,7 @@ export type {
   AccessUserProfile,
   CompanyMemberRecord,
   CompanyMembersResponse,
+  HumanWorkflowCoverage,
   ArchiveCompanyMemberResponse,
   CompanyMembership,
   CompanyInviteListResponse,
@@ -1845,6 +1846,7 @@ export {
   patchInstanceExperimentalSettingsSchema,
   patchInstanceSettingsSchema,
   createSmokeRunSchema,
+  createHumanWorkflowCoverageSchema,
   updateSmokeRunSchema,
   recordSmokeRunStepSchema,
   smokeRunStatusSchema,
@@ -1860,6 +1862,7 @@ export {
   type PatchInstanceExperimentalSettings,
   type PatchInstanceSettings,
   type CreateSmokeRun,
+  type CreateHumanWorkflowCoverage,
   type UpdateSmokeRun,
   type RecordSmokeRunStep,
   type TrustPresetInput,
@@ -3344,7 +3347,7 @@ export * from "./runtime-host-contracts.js";
 export * from "./runtime-relay-contracts.js";
 
 export type { SaasOperationsSnapshot, SaasSupportStatus, SaasProviderInventory, SaasModelDependencyInventory } from "./saas-operations.js";
-export { saasCostReportSchema } from "./saas-costs.js";
+export { saasCostReportSchema, saasCostSnapshotSchema } from "./saas-costs.js";
 export type { SaasCostSnapshot } from "./saas-costs.js";
 export * from "./learning.js";
 

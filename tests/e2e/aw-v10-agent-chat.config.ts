@@ -69,6 +69,9 @@ export default defineConfig({
       ...(process.env.PAPERCLIP_CHAT_RECOVERY_DB_DIAGNOSTICS === "1"
         ? { PAPERCLIP_CHAT_RECOVERY_DB_DIAGNOSTICS: "1" }
         : {}),
+      ...(process.env.PAPERCLIP_NATIVE_PRIVACY_LOCK_DIAGNOSTICS === "1"
+        ? { PAPERCLIP_NATIVE_PRIVACY_LOCK_DIAGNOSTICS: "1" }
+        : {}),
     },
   },
   outputDir,

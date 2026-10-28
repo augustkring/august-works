@@ -629,6 +629,7 @@ export const queryKeys = {
       ["access", "company-members", companyId] as const,
     companyUserDirectory: (companyId: string) =>
       ["access", "company-user-directory", companyId] as const,
+    workflowCoverages: (companyId: string, principalId?: string) => ["access", "workflow-coverages", companyId, principalId ?? "__current_principal"] as const,
     adminUsers: (query: string) => ["access", "admin-users", query] as const,
     userCompanyAccess: (userId: string) =>
       ["access", "user-company-access", userId] as const,

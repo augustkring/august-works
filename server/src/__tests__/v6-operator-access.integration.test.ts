@@ -230,7 +230,7 @@ const support = await getEmbeddedPostgresTestSupport();
         .get("/api/saas/internal/operations?expectedUserId=operator")
         .set("x-fixture-user", "operator");
       expect(response.status).toBe(200);
-      expect(response.headers["cache-control"]).toBe("no-store");
+      expect(response.headers["cache-control"]).toBe("private, no-store");
       expect(response.body).toMatchObject({
         environment: "staging",
         hosts: [],
@@ -256,6 +256,7 @@ const support = await getEmbeddedPostgresTestSupport();
       expect((await request(app).get("/api/saas/internal/fleet/inventory").set("x-fixture-user", "operator")).status).toBe(200);
       const costs = await request(app).get("/api/saas/internal/costs").set("x-fixture-user", "operator");
       expect(costs.status).toBe(200);
+      expect(costs.headers["cache-control"]).toBe("private, no-store");
       expect(costs.body).toBeNull();
       await db
         .update(authUsers)

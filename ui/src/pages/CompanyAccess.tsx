@@ -4,14 +4,17 @@ import {
   HUMAN_COMPANY_MEMBERSHIP_ROLE_LABELS,
   hidesCompanyPage,
   type Agent,
+  type CreateHumanWorkflowCoverage,
 } from "@paperclipai/shared";
 import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { Shield, ShieldCheck, Trash2, UserPlus } from "lucide-react";
 import { accessApi, type CompanyMember } from "@/api/access";
+import { workflowsApi } from "@/api/workflows";
 import { useAccountIdentity } from "@/api/companies-query";
 import { useV9PrivateReadAuthority } from "@/hooks/useV9PrivateReadAuthority";
+import { hasCurrentV9Session, useV9CurrentAccount } from "@/hooks/useV9CurrentAccount";
 import { agentsApi } from "@/api/agents";
-import { ApiError } from "@/api/client";
+import { ApiError, detachInflightGet } from "@/api/client";
 import { cloudApi } from "@/api/cloud";
 import { issuesApi } from "@/api/issues";
 import { routinesApi } from "@/api/routines";
@@ -38,16 +41,20 @@ import { PageTabBar } from "@/components/PageTabBar";
 import { useHiddenSettings } from "@/hooks/useHiddenSettings";
 import { useCloudInstance } from "@/hooks/useCloudInstance";
 import { InvitesSection } from "@/components/access/InvitesSection";
+import { useTranslation } from "@/i18n";
+import { useSecondTick } from "@/hooks/useSecondTick";
 
 const reassignmentIssueStatuses = "backlog,todo,in_progress,in_review,blocked,failed,timed_out";
 type EditableMemberStatus = "pending" | "active" | "suspended";
 
 export function CompanyAccess() {
+  const { t } = useTranslation("experience");
   const { selectedCompany, selectedCompanyId } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
   const { pushToast } = useToast();
   const queryClient = useQueryClient();
   const identity = useAccountIdentity({ refetchOnMount: false });
+  const currentAccount = useV9CurrentAccount();
   const principal = identity.localImplicit ? "local-board" : identity.userId ?? "";
   const authority = useV9PrivateReadAuthority(principal, true);
   const scope = useRef({ company: selectedCompanyId, principal, accountEpoch: authority.epoch, epoch: 0 });
@@ -59,6 +66,7 @@ export function CompanyAccess() {
   const captureAccess = () => {
     const epoch = scope.current.epoch;
     return { companyId: selectedCompanyId!,
+      principalId: principal,
       isCurrent: () => !!selectedCompanyId && epoch === scope.current.epoch && authority.canRead() };
   };
   const [searchParams, setSearchParams] = useSearchParams();
@@ -103,6 +111,25 @@ export function CompanyAccess() {
   const [routineResponsibleTarget, setRoutineResponsibleTarget] = useState<string>("__unassigned");
   const [draftRole, setDraftRole] = useState<CompanyMember["membershipRole"]>(null);
   const [draftStatus, setDraftStatus] = useState<EditableMemberStatus>("active");
+  const [coverageDelegatee, setCoverageDelegatee] = useState("");
+  const [coverageWorkflowId, setCoverageWorkflowId] = useState("");
+  const [coverageScopeType, setCoverageScopeType] = useState<"manual" | "task">("manual");
+  const [coverageTaskId, setCoverageTaskId] = useState("");
+  const [coverageTaskSearch, setCoverageTaskSearch] = useState("");
+  const toLocalDateTimeInput = (date: Date) => new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+  const [coverageStart, setCoverageStart] = useState(() => toLocalDateTimeInput(new Date(Date.now() + 5 * 60 * 1000)));
+  const [coverageExpiry, setCoverageExpiry] = useState(() => toLocalDateTimeInput(new Date(Date.now() + 24 * 60 * 60 * 1000)));
+  const [coverageReason, setCoverageReason] = useState("");
+  const coverageRequestId = useRef(crypto.randomUUID());
+  const changeCoverageTerms = () => { coverageRequestId.current = crypto.randomUUID(); };
+
+  useEffect(() => {
+    setCoverageDelegatee("");
+    setCoverageWorkflowId("");
+    setCoverageTaskId("");
+    setCoverageTaskSearch("");
+    coverageRequestId.current = crypto.randomUUID();
+  }, [selectedCompanyId, currentAccount.userId, currentAccount.sessionId, currentAccount.authorityEpoch]);
 
   useEffect(() => {
     setBreadcrumbs([
@@ -117,6 +144,59 @@ export function CompanyAccess() {
     queryFn: () => accessApi.listMembers(selectedCompanyId!),
     enabled: !!selectedCompanyId,
   });
+
+  const workflowCoveragesQuery = useQuery({
+    queryKey: ["access", "workflow-coverages", selectedCompanyId ?? "", identity.userId ?? "", currentAccount.sessionId ?? "", authority.epoch],
+    queryFn: async ({ signal }) => {
+      if (!selectedCompanyId || !identity.userId || identity.localImplicit || !currentAccount.settled ||
+        !currentAccount.sessionId || !authority.canRead() ||
+        !hasCurrentV9Session(queryClient, identity.userId, currentAccount.sessionId))
+        throw new Error("Current Human session is unavailable");
+      const result = await accessApi.listWorkflowCoverages(selectedCompanyId, identity.userId, currentAccount.sessionId, { signal });
+      signal.throwIfAborted();
+      if (!authority.canRead() || !hasCurrentV9Session(queryClient, identity.userId, currentAccount.sessionId))
+        throw new Error("Current Human session changed");
+      return result;
+    },
+    enabled: !!selectedCompanyId && !!identity.userId && !identity.localImplicit && currentAccount.settled &&
+      !!currentAccount.sessionId && authority.readReady,
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
+  });
+  useSecondTick((workflowCoveragesQuery.data?.coverages.length ?? 0) > 0);
+  const workflowsForCoverageQuery = useQuery({
+    queryKey: queryKeys.workflows.list(selectedCompanyId ?? ""),
+    queryFn: () => workflowsApi.list(selectedCompanyId!),
+    enabled: !!selectedCompanyId && !identity.localImplicit,
+    retry: false,
+  });
+  const coverageTasksQuery = useQuery({
+    queryKey: ["access", "workflow-coverage-tasks", selectedCompanyId ?? "", identity.userId ?? "", currentAccount.sessionId ?? "", authority.epoch, coverageTaskSearch],
+    queryFn: async ({ signal }) => {
+      if (!selectedCompanyId || !identity.userId || !currentAccount.sessionId || !authority.canRead() ||
+        !hasCurrentV9Session(queryClient, identity.userId, currentAccount.sessionId))
+        throw new Error("Current Human session is unavailable");
+      const filters = { q: coverageTaskSearch.trim() || undefined, limit: 20 };
+      const params = new URLSearchParams();
+      if (filters.q) params.set("q", filters.q);
+      params.set("limit", String(filters.limit));
+      detachInflightGet(`/companies/${selectedCompanyId}/issues?${params.toString()}`);
+      const result = await issuesApi.list(selectedCompanyId, filters, { signal, cache: "no-store" });
+      signal.throwIfAborted();
+      if (!authority.canRead() || !hasCurrentV9Session(queryClient, identity.userId, currentAccount.sessionId))
+        throw new Error("Current Human session changed");
+      return result;
+    },
+    enabled: !!selectedCompanyId && !!identity.userId && !identity.localImplicit && currentAccount.settled &&
+      !!currentAccount.sessionId && authority.readReady && coverageScopeType === "task",
+    retry: false,
+    staleTime: 0,
+    gcTime: 0,
+  });
+  const activeCoverageWorkflows = (workflowsForCoverageQuery.data ?? []).filter((workflow) =>
+    workflow.status === "active" && workflow.publishedRevisionId,
+  );
 
   const agentsQuery = useQuery({
     queryKey: queryKeys.agents.list(selectedCompanyId ?? ""),
@@ -166,6 +246,43 @@ export function CompanyAccess() {
         body: error instanceof Error ? error.message : "Unknown error",
         tone: "error",
       });
+    },
+  });
+
+  const createWorkflowCoverageMutation = useMutation({
+    mutationFn: async (input: { receipt: ReturnType<typeof captureAccess>; value: CreateHumanWorkflowCoverage }) => {
+      if (!input.receipt.isCurrent()) throw new Error("Current account access changed");
+      return accessApi.createWorkflowCoverage(input.receipt.companyId, input.value);
+    },
+    onSuccess: async (_coverage, { receipt }) => {
+      if (!receipt.isCurrent()) return;
+      setCoverageReason("");
+      setCoverageTaskId("");
+      setCoverageStart(toLocalDateTimeInput(new Date(Date.now() + 5 * 60 * 1000)));
+      setCoverageExpiry(toLocalDateTimeInput(new Date(Date.now() + 24 * 60 * 60 * 1000)));
+      coverageRequestId.current = crypto.randomUUID();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.access.workflowCoverages(receipt.companyId, receipt.principalId) });
+      if (receipt.isCurrent()) pushToast({ title: "Workflow coverage created", tone: "success" });
+    },
+    onError: (error, { receipt }) => {
+      if (!receipt.isCurrent()) return;
+      pushToast({ title: "Could not create workflow coverage", body: error instanceof Error ? error.message : "Unknown error", tone: "error" });
+    },
+  });
+
+  const revokeWorkflowCoverageMutation = useMutation({
+    mutationFn: async (input: { receipt: ReturnType<typeof captureAccess>; coverageId: string }) => {
+      if (!input.receipt.isCurrent()) throw new Error("Current account access changed");
+      return accessApi.revokeWorkflowCoverage(input.receipt.companyId, input.coverageId);
+    },
+    onSuccess: async (_coverage, { receipt }) => {
+      if (!receipt.isCurrent()) return;
+      await queryClient.invalidateQueries({ queryKey: queryKeys.access.workflowCoverages(receipt.companyId, receipt.principalId) });
+      if (receipt.isCurrent()) pushToast({ title: "Workflow coverage revoked", tone: "success" });
+    },
+    onError: (error, { receipt }) => {
+      if (!receipt.isCurrent()) return;
+      pushToast({ title: "Could not revoke workflow coverage", body: error instanceof Error ? error.message : "Unknown error", tone: "error" });
     },
   });
 
@@ -496,6 +613,129 @@ export function CompanyAccess() {
           </table>
         </div>
       </section>
+
+      {!identity.localImplicit && identity.userId && authority.canRead() ? (
+        <section className="space-y-4 rounded-lg border border-border bg-card p-4">
+          <div className="space-y-1">
+          <h2 className="text-base font-semibold">{t("humanWorkflowCoverage.title")}</h2>
+            <p className="text-sm text-muted-foreground">
+              {t("humanWorkflowCoverage.intro")}
+            </p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="space-y-1 text-sm">
+              <span className="font-medium">{t("humanWorkflowCoverage.delegateTo")}</span>
+              <select className="h-10 w-full rounded-md border border-input bg-background px-3" value={coverageDelegatee}
+                onChange={(event) => { changeCoverageTerms(); setCoverageDelegatee(event.target.value); }}>
+                <option value="">{t("humanWorkflowCoverage.selectHuman")}</option>
+                {(membersQuery.data?.members ?? []).filter((member) => member.status === "active" && member.principalId !== identity.userId)
+                  .map((member) => <option key={member.principalId} value={member.principalId}>{memberDisplayName(member)}</option>)}
+              </select>
+            </label>
+            <label className="space-y-1 text-sm">
+              <span className="font-medium">{t("humanWorkflowCoverage.workflow")}</span>
+              <select className="h-10 w-full rounded-md border border-input bg-background px-3" value={coverageWorkflowId}
+                onChange={(event) => { changeCoverageTerms(); setCoverageWorkflowId(event.target.value); }}>
+                <option value="">{t("humanWorkflowCoverage.selectWorkflow")}</option>
+                {activeCoverageWorkflows.map((workflow) => <option key={workflow.id} value={workflow.id}>{workflow.name}</option>)}
+              </select>
+            </label>
+            <label className="space-y-1 text-sm">
+              <span className="font-medium">{t("humanWorkflowCoverage.scope")}</span>
+              <select className="h-10 w-full rounded-md border border-input bg-background px-3" value={coverageScopeType}
+                onChange={(event) => { changeCoverageTerms(); setCoverageScopeType(event.target.value as "manual" | "task"); }}>
+                <option value="manual">{t("humanWorkflowCoverage.manualRun")}</option>
+                <option value="task">{t("humanWorkflowCoverage.taskRun")}</option>
+              </select>
+            </label>
+            {coverageScopeType === "task" ? (
+              <label className="space-y-1 text-sm">
+                <span className="font-medium">{t("humanWorkflowCoverage.task")}</span>
+                <input className="mb-2 h-10 w-full rounded-md border border-input bg-background px-3" value={coverageTaskSearch}
+                  onChange={(event) => setCoverageTaskSearch(event.target.value)} placeholder={t("humanWorkflowCoverage.searchTasks")} />
+                <select className="h-10 w-full rounded-md border border-input bg-background px-3" value={coverageTaskId}
+                  onChange={(event) => { changeCoverageTerms(); setCoverageTaskId(event.target.value); }}>
+                  <option value="">{t("humanWorkflowCoverage.selectTask")}</option>
+                  {(coverageTasksQuery.data ?? []).map((task) => <option key={task.id} value={task.id}>
+                    {task.identifier ?? task.id.slice(0, 8)} · {task.title}
+                  </option>)}
+                </select>
+              </label>
+            ) : null}
+            <label className="space-y-1 text-sm">
+              <span className="font-medium">{t("humanWorkflowCoverage.startsAt")}</span>
+              <input type="datetime-local" className="h-10 w-full rounded-md border border-input bg-background px-3"
+                value={coverageStart} onChange={(event) => { changeCoverageTerms(); setCoverageStart(event.target.value); }} />
+            </label>
+            <label className="space-y-1 text-sm">
+              <span className="font-medium">{t("humanWorkflowCoverage.expiresAt")}</span>
+              <input type="datetime-local" className="h-10 w-full rounded-md border border-input bg-background px-3"
+                value={coverageExpiry} onChange={(event) => { changeCoverageTerms(); setCoverageExpiry(event.target.value); }} />
+            </label>
+            <label className="space-y-1 text-sm md:col-span-2">
+              <span className="font-medium">{t("humanWorkflowCoverage.reason")}</span>
+              <input className="h-10 w-full rounded-md border border-input bg-background px-3" value={coverageReason}
+                onChange={(event) => { changeCoverageTerms(); setCoverageReason(event.target.value); }} maxLength={500}
+                placeholder={t("humanWorkflowCoverage.reasonPlaceholder")} />
+            </label>
+          </div>
+          <Button size="sm" disabled={createWorkflowCoverageMutation.isPending || !coverageDelegatee || !coverageWorkflowId ||
+            (coverageScopeType === "task" && !coverageTaskId) || !coverageReason.trim() || !coverageStart || !coverageExpiry}
+            onClick={() => {
+              const workflow = activeCoverageWorkflows.find((candidate) => candidate.id === coverageWorkflowId);
+              if (!workflow?.publishedRevisionId || !selectedCompanyId) return;
+              const value: CreateHumanWorkflowCoverage = {
+                requestId: coverageRequestId.current,
+                delegateeUserId: coverageDelegatee,
+                workflowId: workflow.id,
+                workflowRevisionId: workflow.publishedRevisionId,
+                scopeType: coverageScopeType,
+                taskId: coverageScopeType === "task" ? coverageTaskId : null,
+                startsAt: new Date(coverageStart),
+                expiresAt: new Date(coverageExpiry),
+                reason: coverageReason,
+              };
+              createWorkflowCoverageMutation.mutate({ receipt: captureAccess(), value });
+            }}>
+            {t("humanWorkflowCoverage.create")}
+          </Button>
+
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold">{t("humanWorkflowCoverage.yourCoverage")}</h3>
+            {(workflowCoveragesQuery.data?.coverages ?? []).length === 0 ? (
+              <p className="text-sm text-muted-foreground">{t("humanWorkflowCoverage.none")}</p>
+            ) : (workflowCoveragesQuery.data?.coverages ?? []).map((coverage) => {
+              const expiresAt = new Date(coverage.expiresAt);
+              const startsAt = new Date(coverage.startsAt);
+              const state = coverage.revokedAt ? "revoked" : expiresAt.getTime() <= Date.now() ? "expired" : startsAt.getTime() > Date.now() ? "scheduled" : "active";
+              const isPrincipal = coverage.principalUserId === identity.userId;
+              const workflowName = workflowsForCoverageQuery.data?.find((workflow) => workflow.id === coverage.workflowId)?.name ?? t("humanWorkflowCoverage.workflowFallback");
+              const delegatee = membersQuery.data?.members.find((member) => member.principalId === coverage.delegateeUserId);
+              const principalMember = membersQuery.data?.members.find((member) => member.principalId === coverage.principalUserId);
+              const coverageWorkflow = workflowsForCoverageQuery.data?.find((workflow) => workflow.id === coverage.workflowId);
+              const revisionIsStale = !!coverageWorkflow?.publishedRevisionId && coverageWorkflow.publishedRevisionId !== coverage.workflowRevisionId;
+              return (
+                <div key={coverage.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border p-3">
+                  <div className="min-w-0 space-y-1 text-sm">
+                    <div className="font-medium">{t(isPrincipal ? "humanWorkflowCoverage.coveredBy" : "humanWorkflowCoverage.youCover")} {isPrincipal
+                      ? (delegatee ? memberDisplayName(delegatee) : t("humanWorkflowCoverage.anotherHuman"))
+                      : (principalMember ? memberDisplayName(principalMember) : t("humanWorkflowCoverage.anotherHuman"))} · {workflowName}</div>
+                    <div className="text-muted-foreground">{coverage.scopeType === "task" ? t("humanWorkflowCoverage.taskScoped") : t("humanWorkflowCoverage.manualRuns")} · {t("humanWorkflowCoverage.expiresLabel", { value: expiresAt.toLocaleString() })} · {coverage.reason}</div>
+                    {revisionIsStale ? <div className="text-amber-700 dark:text-amber-400">{t("humanWorkflowCoverage.staleRevision")}</div> : null}
+                    <Badge variant={state === "active" ? "secondary" : "outline"}>{t(`humanWorkflowCoverage.states.${state}`)}</Badge>
+                  </div>
+                  {state !== "revoked" && (
+                    <Button size="sm" variant="outline" disabled={revokeWorkflowCoverageMutation.isPending}
+                      onClick={() => revokeWorkflowCoverageMutation.mutate({ receipt: captureAccess(), coverageId: coverage.id })}>
+                      {t("humanWorkflowCoverage.revoke")}
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
 
       <Dialog open={!!editingMember} onOpenChange={(open) => !open && setEditingMemberId(null)}>
         <DialogContent className="max-w-2xl">

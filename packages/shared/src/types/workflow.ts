@@ -373,6 +373,7 @@ export interface WorkflowRun {
   source: WorkflowRunSource;
   triggerPayload: Record<string, unknown>;
   executionPrincipal?: ExecutionPrincipal | null;
+  humanCoverageId?: string | null;
   executionAgentRunId?: string | null;
   responsibleUserId: string | null;
   idempotencyKey: string | null;

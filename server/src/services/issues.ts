@@ -2069,9 +2069,13 @@ export async function isCurrentUnsealedConversationShell(
     (membership === "member" || membership === "instance_admin");
 }
 
-export async function lockIssuePrivacyTree(tx: DbTransaction, companyId: string) {
-  await lockBusinessEventCompany(tx, companyId);
-  await lockMemoryPrivacy(tx as unknown as Db, companyId);
+export async function lockIssuePrivacyTree(tx: DbTransaction, companyId: string, mode: "read" | "write" = "write") {
+  await lockBusinessEventCompany(tx, companyId, mode);
+  await lockMemoryPrivacy(tx as unknown as Db, companyId, mode);
+  if (mode === "read") {
+    await tx.execute(sql`select pg_advisory_xact_lock_shared(hashtextextended(${`issue-privacy-tree:${companyId}`}, 0))`);
+    return;
+  }
   await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`issue-privacy-tree:${companyId}`}, 0))`);
 }
 

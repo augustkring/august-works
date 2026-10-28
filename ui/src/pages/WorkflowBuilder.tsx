@@ -4,6 +4,7 @@ import {
   useDeferredValue,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -48,6 +49,8 @@ import { workflowsApi } from "@/api/workflows";
 import { agentsApi } from "@/api/agents";
 import { projectsApi } from "@/api/projects";
 import { accessApi } from "@/api/access";
+import { hasCurrentV9Session, useV9CurrentAccount } from "@/hooks/useV9CurrentAccount";
+import { useV9PrivateReadAuthority } from "@/hooks/useV9PrivateReadAuthority";
 import { ApiError } from "@/api/client";
 import { useCompany } from "@/context/CompanyContext";
 import { useBreadcrumbs } from "@/context/BreadcrumbContext";
@@ -62,6 +65,8 @@ import { EmptyState } from "@/components/EmptyState";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { WorkflowDataSelector } from "@/components/workflows/WorkflowDataSelector";
 import { WorkflowOptimizerSuggestions } from "@/components/workflows/WorkflowOptimizerSuggestions";
+import { useTranslation } from "@/i18n";
+import { useSecondTick } from "@/hooks/useSecondTick";
 
 type BuilderNodeData = {
   workflowNode: WorkflowNodeV1;
@@ -397,6 +402,11 @@ const NODE_TYPES = { "workflow-node": WorkflowNodeCard };
 
 export function WorkflowBuilder() {
   const { selectedCompanyId } = useCompany();
+  const accountIdentity = useV9CurrentAccount();
+  const { t } = useTranslation("experience");
+  const accountIdentityRef = useRef(accountIdentity);
+  accountIdentityRef.current = accountIdentity;
+  const coverageAuthority = useV9PrivateReadAuthority(accountIdentity.localImplicit ? "local-board" : accountIdentity.userId ?? "", false);
   const { workflowId } = useParams();
   const requestedNodeId = new URLSearchParams(useLocation().search).get("node");
   const { setBreadcrumbs } = useBreadcrumbs();
@@ -418,6 +428,11 @@ export function WorkflowBuilder() {
   const deferredCapabilitySearch = useDeferredValue(capabilitySearch);
   const [connectTargetId, setConnectTargetId] = useState("");
   const [connectBranch, setConnectBranch] = useState<string>("true");
+  const [runCoverageId, setRunCoverageId] = useState("");
+
+  useEffect(() => {
+    setRunCoverageId("");
+  }, [selectedCompanyId, accountIdentity.userId, accountIdentity.sessionId, accountIdentity.authorityEpoch]);
 
   useEffect(() => {
     setBreadcrumbs([
@@ -431,6 +446,33 @@ export function WorkflowBuilder() {
     queryFn: () => workflowsApi.get(selectedCompanyId!, workflowId!),
     enabled: !!selectedCompanyId && !!workflowId,
   });
+  const workflowCoveragesQuery = useQuery({
+    queryKey: ["access", "workflow-coverages", selectedCompanyId ?? "", accountIdentity.userId ?? "", accountIdentity.sessionId ?? "", accountIdentity.authorityEpoch],
+    queryFn: async ({ signal }) => {
+      if (!selectedCompanyId || !accountIdentity.userId || !accountIdentity.sessionId || accountIdentity.localImplicit ||
+        !coverageAuthority.canRead() || !hasCurrentV9Session(queryClient, accountIdentity.userId, accountIdentity.sessionId))
+        throw new Error("Current Human session is unavailable");
+      const result = await accessApi.listWorkflowCoverages(selectedCompanyId, accountIdentity.userId, accountIdentity.sessionId, { signal });
+      signal.throwIfAborted();
+      if (!coverageAuthority.canRead() || !hasCurrentV9Session(queryClient, accountIdentity.userId, accountIdentity.sessionId))
+        throw new Error("Current Human session changed");
+      return result;
+    },
+    enabled: !!selectedCompanyId && !!accountIdentity.userId && !!accountIdentity.sessionId && accountIdentity.settled &&
+      !accountIdentity.localImplicit && coverageAuthority.readReady,
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
+  });
+  useSecondTick((workflowCoveragesQuery.data?.coverages.length ?? 0) > 0);
+  const manualRunCoverageOptions = (coverageAuthority.canRead() ? workflowCoveragesQuery.data?.coverages ?? [] : []).filter((coverage) =>
+    coverage.delegateeUserId === accountIdentity.userId && coverage.workflowId === workflowId &&
+    coverage.scopeType === "manual" &&
+    !coverage.taskId && !coverage.revokedAt && new Date(coverage.startsAt).getTime() <= Date.now() &&
+    new Date(coverage.expiresAt).getTime() > Date.now(),
+  );
+  const selectedRunCoverage = manualRunCoverageOptions.find((coverage) => coverage.id === runCoverageId) ?? null;
+  const selectedRunCoverageIsStale = !!selectedRunCoverage && selectedRunCoverage.workflowRevisionId !== detailQuery.data?.publishedRevisionId;
   const capabilitiesQuery = useQuery({
     queryKey: queryKeys.workflows.capabilities(selectedCompanyId!),
     queryFn: () => workflowsApi.capabilities(selectedCompanyId!),
@@ -664,26 +706,42 @@ export function WorkflowBuilder() {
   });
 
   const runMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedCompanyId || !workflowId || !detailQuery.data?.publishedRevisionId) {
+    mutationFn: async (input: { companyId: string; userId: string | null; sessionId: string | null; epoch: number; coverageId: string | null }) => {
+      if (!input.companyId || !workflowId || !detailQuery.data?.publishedRevisionId) {
         throw new Error("Publish a workflow revision before starting a live run.");
       }
-      return workflowsApi.startRun(
-        selectedCompanyId,
+      const currentIdentity = accountIdentityRef.current;
+      if (!currentIdentity.settled || currentIdentity.userId !== input.userId || currentIdentity.sessionId !== input.sessionId ||
+        currentIdentity.authorityEpoch !== input.epoch || currentIdentity.localImplicit || !coverageAuthority.canRead() ||
+        !input.userId || !input.sessionId || !hasCurrentV9Session(queryClient, input.userId, input.sessionId)) {
+        throw new Error("Current account access changed. Reload before starting this run.");
+      }
+      const result = await workflowsApi.startRun(
+        input.companyId,
         workflowId,
         { input: {}, revisionId: null },
         randomId("ui-run"),
+        input.coverageId,
       );
+      if (accountIdentityRef.current.userId !== input.userId || accountIdentityRef.current.sessionId !== input.sessionId ||
+        accountIdentityRef.current.authorityEpoch !== input.epoch || !hasCurrentV9Session(queryClient, input.userId, input.sessionId))
+        throw new Error("Current account access changed while the run was starting.");
+      return result;
     },
-    onSuccess: async (detail) => {
-      if (!selectedCompanyId || !workflowId) return;
+    onSuccess: async (detail, input) => {
+      if (accountIdentityRef.current.userId !== input.userId || accountIdentityRef.current.sessionId !== input.sessionId ||
+        accountIdentityRef.current.authorityEpoch !== input.epoch || selectedCompanyId !== input.companyId || !workflowId) return;
       await queryClient.invalidateQueries({
-        queryKey: queryKeys.workflows.runs(selectedCompanyId, workflowId),
+        queryKey: queryKeys.workflows.runs(input.companyId, workflowId),
       });
+      if (accountIdentityRef.current.userId !== input.userId || accountIdentityRef.current.sessionId !== input.sessionId ||
+        accountIdentityRef.current.authorityEpoch !== input.epoch || selectedCompanyId !== input.companyId) return;
       pushToast({ title: "Workflow run started", tone: "success" });
       navigate(`/workflows/${workflowId}/runs/${detail.run.id}`);
     },
-    onError: (error) => {
+    onError: (error, input) => {
+      if (accountIdentityRef.current.userId !== input.userId || accountIdentityRef.current.sessionId !== input.sessionId ||
+        accountIdentityRef.current.authorityEpoch !== input.epoch) return;
       pushToast({
         title: "Could not run workflow",
         body: workflowErrorMessage(error),
@@ -829,16 +887,27 @@ export function WorkflowBuilder() {
             Runs
           </Button>
           {capabilities?.run && detailQuery.data.publishedRevisionId ? (
+            <>
+            {manualRunCoverageOptions.length > 0 ? (
+              <select aria-label={t("humanWorkflowCoverage.selectForRun")} className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                value={runCoverageId} onChange={(event) => setRunCoverageId(event.target.value)}>
+                <option value="">{t("humanWorkflowCoverage.runAsMe")}</option>
+                {manualRunCoverageOptions.map((coverage, index) => <option key={coverage.id} value={coverage.id} disabled={coverage.workflowRevisionId !== detailQuery.data?.publishedRevisionId}>
+                  {t("humanWorkflowCoverage.temporaryOption", { index: index + 1 })}{coverage.workflowRevisionId !== detailQuery.data?.publishedRevisionId ? ` · ${t("humanWorkflowCoverage.staleOption")}` : ""}
+                </option>)}
+              </select>
+            ) : null}
             <Button
               variant="outline"
               size="sm"
-              disabled={runMutation.isPending || detailQuery.data.status !== "active"}
-              onClick={() => runMutation.mutate()}
+              disabled={runMutation.isPending || detailQuery.data.status !== "active" || selectedRunCoverageIsStale}
+              onClick={() => runMutation.mutate({ companyId: selectedCompanyId!, userId: accountIdentity.userId, sessionId: accountIdentity.sessionId, epoch: accountIdentity.authorityEpoch, coverageId: runCoverageId || null })}
               title="Runs the current published revision. Unsaved draft changes are not included."
             >
               <Play className="mr-1.5 h-3.5 w-3.5" />
               {runMutation.isPending ? "Running…" : "Run published"}
             </Button>
+            </>
           ) : null}
           {conflicted ? (
             <Button

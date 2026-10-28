@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { agents, companies, companyMemberships, agentExecutionManifests, agentExecutionScopeRequests, delegatedContextManifestBindings, heartbeatRuns, instanceSettings, issues, projects, toolApplications, toolConnections, connectionGrants, contextManifests, toolCatalogEntries, toolProfiles, toolProfileBindings, toolInvocations, principalPermissionGrants, createDb } from "@paperclipai/db";
+import { agents, companies, companyMemberships, agentExecutionManifests, agentExecutionScopeRequests, delegatedContextManifestBindings, heartbeatRuns, instanceSettings, issues, projects, toolApplications, toolConnections, connectionGrants, contextManifests, contextManifestItems, toolCatalogEntries, toolProfiles, toolProfileBindings, toolInvocations, principalPermissionGrants, createDb } from "@paperclipai/db";
 import { PROVIDER_CAPABILITY_FEATURES } from "@paperclipai/shared";
 import { startEmbeddedPostgresTestDatabase, getEmbeddedPostgresTestSupport } from "./helpers/embedded-postgres.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
@@ -17,6 +17,8 @@ import { projectControlService } from "../services/project-control.js";
 import { issueService } from "../services/issues.js";
 import { foundationService } from "../services/foundation/foundation-service.js";
 import { foundationIndexService } from "../services/foundation/foundation-index.js";
+import { orchestrationService } from "../services/orchestration/orchestration-service.js";
+import { playbookService } from "../services/playbooks.js";
 import { createCanonicalHumanProject, seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 import { roadmapPolicySchema, crossCompanyPolicySchema } from "@paperclipai/shared";
 
@@ -163,6 +165,86 @@ describe.skipIf(!support.supported)("V5 execution authority", () => {
       eq(contextManifests.id, lastDelegated!.contextManifestId)))).toEqual([]);
     expect(await db.select().from(delegatedContextManifestBindings).where(eq(delegatedContextManifestBindings.contextManifestId,
       lastDelegated!.contextManifestId))).toEqual([]);
+  });
+  it("preserves current-Human guest read and contribution within bounded plans while keeping guest act blocked", async () => {
+    const f = await seedV5Presences(db), providers = agentProviderBindingService(db), fabric = agentRuntimeFabricService(db), cross = crossCompanyContextService(db), actions = scopedRuntimeActionService(db);
+    const currentHuman = await seedCurrentHumanSourceActor(db, [f.home, f.guest], f.userId);
+    const features = Object.fromEntries(PROVIDER_CAPABILITY_FEATURES.map((key) => [key, false])) as Record<(typeof PROVIDER_CAPABILITY_FEATURES)[number], boolean>;
+    for (const [companyId, agentId] of [[f.home, f.presence.id], [f.guest, f.guestPresence.id]] as const) {
+      const binding = await providers.create(f.actor, companyId, agentId, { providerType: "paperclip_native", providerAgentRef: agentId, providerEndpointRef: null, isolationMode: "isolated_per_presence" });
+      await providers.attach(f.actor, companyId, agentId, { providerBindingId: binding.id, providerProfileRef: agentId });
+      await providers.recordDiscovery(companyId, agentId, { provider: "paperclip_native", version: "bounded-cross-company-fixture", features, skills: [], tools: [], discoveredAt: new Date().toISOString() }, { connect: true, identity: true, start: true, stream: true, wait: true, cancel: true, memoryScoping: true });
+    }
+    const [settings] = await db.select().from(instanceSettings).where(eq(instanceSettings.singletonKey, "default"));
+    try {
+      await db.update(instanceSettings).set({ experimental: { ...settings!.experimental, enableWorkflowsV1: true, readiness_engine_v7: true, orchestration_v7: true } }).where(eq(instanceSettings.singletonKey, "default"));
+      await cross.setPolicy(f.actor, f.guest, crossCompanyPolicySchema.parse({ allowRead: true, allowContribute: true, allowAct: true }));
+      const foundationActor = { principal: { type: "user" as const, userId: f.userId } };
+      const boundedQuery = "Guest task forecast the explicitly delegated guest delivery";
+      const foundation = await foundationService(db).createDraft(f.guest, { foundationKey: "bounded_guest_guidance",
+        title: "Bounded guest guidance", body: boundedQuery,
+        category: "company", documentType: "profile", sensitivity: "internal", reviewFrequencyDays: 30 }, foundationActor);
+      await foundationService(db).submitForReview(f.guest, foundation.id, foundation.latestRevisionId!, foundationActor);
+      await foundationService(db).approve(f.guest, foundation.id, foundation.latestRevisionId!, foundationActor);
+      await foundationIndexService(db).reindexRevision(f.guest, foundation.id, foundation.latestRevisionId!);
+      expect(await foundationIndexService(db).search(f.guest, { query: boundedQuery, limit: 12, scope: "approved" }, currentHuman, "task")).toHaveLength(1);
+      // Multi-company presence creation is separate from local runtime
+      // membership. The guest Agent needs an explicit, current local member
+      // row before its already Human-granted contribution permission applies.
+      await db.insert(companyMemberships).values({ companyId: f.guest, principalType: "agent", principalId: f.guestPresence.id,
+        status: "active", membershipRole: "member" }).onConflictDoNothing();
+      await db.insert(principalPermissionGrants).values(["foundation:read", "foundation:propose"].map(permissionKey => ({
+        companyId: f.guest, principalType: "agent", principalId: f.guestPresence.id,
+        permissionKey, scope: null, grantedByUserId: f.userId,
+      })));
+      const book = await playbookService(db).create(f.actor, f.guest, { key: "bounded_guest_contribution", title: "Bounded guest contribution",
+        category: "general", markdown: "# Guest procedure\n\nA current Human reviews proposed changes.", sensitivity: "internal",
+        ownerUserId: f.userId, ownerAgentId: null, reviewFrequencyDays: 90 });
+
+      const startPlan = async (task: typeof issues.$inferSelect) => {
+        const plan = await orchestrationService(db).create(f.actor, f.home, { issueId: task.id, expectedIssueUpdatedAt: task.updatedAt.toISOString(),
+          riskClass: "C0", workload: "semantic", completionContract: { objective: "Use only authorized company sources for this bounded worker", requiredOutputs: [{ key: "result" }], businessInvariants: ["Preserve current company and Human authority"] }, budgets: {}, workers: [{ key: "worker", issueId: task.id }] });
+        await orchestrationService(db).decide(f.actor, f.home, plan.id, { expectedVersion: plan.version, action: "start", rationale: "Start this bounded cross-company authorization fixture" });
+      };
+      const executeMode = async (accessMode: "read" | "contribute" | "act", bounded = true) => {
+        const query = boundedQuery;
+        const [task] = await db.insert(issues).values({ companyId: f.home, title: `Bounded ${accessMode} scope`, status: "todo", assigneeAgentId: f.presence.id }).returning();
+        if (bounded) await startPlan(task!);
+        const request = await fabric.requestScope(currentHuman, f.home, f.presence.id, { executionScope: { primaryCompanyId: f.home, primaryAgentPresenceId: f.presence.id,
+          delegatedScopes: [{ companyId: f.guest, agentPresenceId: f.guestPresence.id, accessMode, purpose: query }] }, query, issueId: task!.id });
+        const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId,
+          status: "running", issueId: task!.id, contextSnapshot: { issueId: task!.id } }).returning();
+        const runActor = { type: "agent" as const, source: "agent_jwt" as const, companyId: f.home, agentId: f.presence.id, runId: run!.id, onBehalfOfUserId: f.userId };
+        const prepare = () => fabric.prepare({ companyId: f.home, agentId: f.presence.id, runId: run!.id,
+          responsibleUserId: f.userId, issueId: task!.id, query, scopeRequestId: request.id });
+        return { prepare, runActor, runId: run!.id, task: task! };
+      };
+
+      const read = await executeMode("read"), readPrepared = await read.prepare();
+      expect(readPrepared!.manifest.executionScope.delegatedScopes[0]).toMatchObject({ companyId: f.guest, accessMode: "read" });
+      const readGuestRef = readPrepared!.inputContextManifests.find(ref => ref.companyId === f.guest)!;
+      const readItems = await db.select().from(contextManifestItems).where(and(eq(contextManifestItems.companyId, f.guest), eq(contextManifestItems.manifestId, readGuestRef.contextManifestId)));
+      expect(readItems.some(item => item.sourceProvider === "august_works_foundation" && item.sourceVersion === foundation.latestRevisionId)).toBe(true);
+      expect(readItems.every(item => item.sourceClass !== "private_memory" && item.sensitivity !== "restricted")).toBe(true);
+
+      const contribute = await executeMode("contribute"), contributePrepared = await contribute.prepare();
+      expect(contributePrepared!.manifest.executionScope.delegatedScopes[0]).toMatchObject({ companyId: f.guest, accessMode: "contribute" });
+      const proposed = await actions.execute(contribute.runActor, f.home, contribute.runId, { action: "playbook.propose", companyId: f.guest, playbookId: book.id,
+        proposal: { baseApprovedRevisionId: null, title: "Proposed bounded clarification", markdown: "# Guest procedure\n\nClarify the checked handoff.",
+          reason: "The bounded worker identified a specific documented clarification for Human review.", sourceSkillId: null, sourceSkillVersionId: null } });
+      expect(proposed).toMatchObject({ sourceCompanyId: f.guest, resultOwnerCompanyId: f.home, classification: "internal", result: { status: "pending", createdByAgentId: f.guestPresence.id } });
+
+      const act = await executeMode("act");
+      await expect(act.prepare()).rejects.toMatchObject({ status: 403 });
+      const previouslyPreparedAct = await executeMode("act", false);
+      await previouslyPreparedAct.prepare();
+      await startPlan(previouslyPreparedAct.task);
+      await expect(actions.execute(previouslyPreparedAct.runActor, f.home, previouslyPreparedAct.runId, { action: "playbook.propose", companyId: f.guest, playbookId: book.id,
+        proposal: { baseApprovedRevisionId: null, title: "Forbidden bounded change", markdown: "# Guest procedure\n\nShould not persist.",
+          reason: "An act-scoped bounded proposal is denied even with current guest policy.", sourceSkillId: null, sourceSkillVersionId: null } })).rejects.toMatchObject({ status: 403 });
+    } finally {
+      await db.update(instanceSettings).set({ experimental: settings!.experimental }).where(eq(instanceSettings.singletonKey, "default"));
+    }
   });
   it("pins immutable provenance, rechecks resumed runs and rejects revoked human membership", async () => {
     const f = await seedV5Presences(db), providers = agentProviderBindingService(db), svc = agentRuntimeFabricService(db);

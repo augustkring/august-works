@@ -131,7 +131,10 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
       item.sourceRef === `memory://record/${privateRootId}`)).toBe(true);
     expect(firstContextCapture.sourceSet?.policy?.memoryIds).toContain(privateRootId);
     expect(firstContextCapture.sourceSet?.policy?.issueIds).toContain(first.privateRoot?.issueId);
-    expect(await memories.get(first.companyId, privateRootId!, first.aliceMemoryActor)).toBeNull();
+    // Reusing the existing Human credential preserves its current authority;
+    // the first and second run actors are the same reader for this private
+    // owner, so both reads must follow the same live membership decision.
+    expect((await memories.get(first.companyId, privateRootId!, first.aliceMemoryActor))?.record.id).toBe(privateRootId);
     expect((await memories.get(first.companyId, privateRootId!, second.aliceMemoryActor))?.record.id).toBe(privateRootId);
     expect(await memories.get(first.companyId, privateRootId!, second.bobMemoryActor)).toBeNull();
 

@@ -67,6 +67,10 @@ import {
 } from "../lib/recovery-reconcile";
 import { agentsApi } from "../api/agents";
 import { authApi } from "../api/auth";
+import { hasCurrentV9Session, useV9CurrentAccount } from "@/hooks/useV9CurrentAccount";
+import { useV9PrivateReadAuthority } from "@/hooks/useV9PrivateReadAuthority";
+import { useSecondTick } from "@/hooks/useSecondTick";
+import { useTranslation } from "@/i18n";
 import { projectsApi } from "../api/projects";
 import { workflowsApi } from "../api/workflows";
 import { executionWorkspacesApi } from "../api/execution-workspaces";
@@ -2864,6 +2868,11 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
   agent: Agent; issue: Issue | null; ensureIssue: () => Promise<Issue>; refreshConversation?: () => void;
   workflowAuthoring?: { workflowId: string; draftRevisionId: string };
 } }) {
+  const coverageIdentity = useV9CurrentAccount();
+  const coverageIdentityRef = useRef(coverageIdentity);
+  coverageIdentityRef.current = coverageIdentity;
+  const coverageAuthority = useV9PrivateReadAuthority(coverageIdentity.userId ?? "", false);
+  const { t } = useTranslation("experience");
   const { issueId: routeIssueId, companyPrefix } = useParams<{ issueId: string; companyPrefix: string }>();
   const issueId = conversation ? conversation.issue?.id : routeIssueId;
   const [draftWorkMode, setDraftWorkMode] = useState<IssueWorkMode>("standard");
@@ -2910,8 +2919,14 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
   const [moreOpen, setMoreOpen] = useState(false);
   const moreActionsTriggerRef = useRef<HTMLButtonElement>(null);
   const [taskWorkflowOpen, setTaskWorkflowOpen] = useState(false);
+  const [taskWorkflowCoverageId, setTaskWorkflowCoverageId] = useState("");
+  useEffect(() => {
+    setTaskWorkflowCoverageId("");
+    setTaskWorkflowOpen(false);
+  }, [coverageIdentity.userId, coverageIdentity.sessionId, coverageIdentity.authorityEpoch, selectedCompanyId]);
   const taskWorkflowIdempotencyRef = useRef<{
     workflowId: string;
+    coverageId: string | null;
     key: string;
   } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -3064,33 +3079,47 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     [taskWorkflowsQuery.data],
   );
   const runTaskWorkflow = useMutation({
-    mutationFn: async (workflowId: string) => {
+    mutationFn: async (input: { workflowId: string; coverageId: string | null; userId: string | null; sessionId: string | null; epoch: number; companyId: string }) => {
       if (!resolvedCompanyId || !issue) {
         throw new Error("Task context is unavailable.");
       }
+      const currentIdentity = coverageIdentityRef.current;
+      if (!currentIdentity.settled || !input.userId || currentIdentity.userId !== input.userId ||
+        currentIdentity.sessionId !== input.sessionId || currentIdentity.authorityEpoch !== input.epoch ||
+        input.companyId !== resolvedCompanyId || !coverageAuthority.canRead() || !input.sessionId ||
+        !hasCurrentV9Session(queryClient, input.userId, input.sessionId))
+        throw new Error("Current account access changed. Reload before starting this run.");
       const existingAttempt = taskWorkflowIdempotencyRef.current;
       const fallbackSuffix = `${Date.now().toString(36)}-${Math.round(
         performance.now() * 1_000,
       ).toString(36)}`;
       const key =
-        existingAttempt?.workflowId === workflowId
+        existingAttempt?.workflowId === input.workflowId && existingAttempt.coverageId === input.coverageId
           ? existingAttempt.key
-          : `task-ui:${issue.id}:${workflowId}:${
+          : `task-ui:${issue.id}:${input.workflowId}:${input.coverageId ?? "self"}:${
               typeof globalThis.crypto?.randomUUID === "function"
                 ? globalThis.crypto.randomUUID()
                 : fallbackSuffix
             }`;
-      taskWorkflowIdempotencyRef.current = { workflowId, key };
-      return workflowsApi.startTaskRun(
+      taskWorkflowIdempotencyRef.current = { workflowId: input.workflowId, coverageId: input.coverageId, key };
+      const result = await workflowsApi.startTaskRun(
         resolvedCompanyId,
         issue.id,
-        workflowId,
+        input.workflowId,
         { input: {} },
         key,
+        input.coverageId,
       );
+      if (coverageIdentityRef.current.userId !== input.userId || coverageIdentityRef.current.sessionId !== input.sessionId ||
+        coverageIdentityRef.current.authorityEpoch !== input.epoch || !hasCurrentV9Session(queryClient, input.userId, input.sessionId))
+        throw new Error("Current account access changed while the run was starting.");
+      return result;
     },
-    onSuccess: (detail) => {
+    onSuccess: (detail, input) => {
+      if (coverageIdentityRef.current.userId !== input.userId || coverageIdentityRef.current.sessionId !== input.sessionId ||
+        coverageIdentityRef.current.authorityEpoch !== input.epoch || selectedCompanyId !== input.companyId) return;
       taskWorkflowIdempotencyRef.current = null;
+      setTaskWorkflowCoverageId("");
       setTaskWorkflowOpen(false);
       pushToast({
         title: "Workflow started",
@@ -3101,7 +3130,9 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
         `/workflows/${detail.run.workflowId}/runs/${detail.run.id}`,
       );
     },
-    onError: (mutationError) => {
+    onError: (mutationError, input) => {
+      if (coverageIdentityRef.current.userId !== input.userId || coverageIdentityRef.current.sessionId !== input.sessionId ||
+        coverageIdentityRef.current.authorityEpoch !== input.epoch) return;
       pushToast({
         title: "Could not run workflow",
         body:
@@ -3442,6 +3473,31 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     enabled: !!selectedCompanyId,
   });
   const currentUserId = session?.user?.id ?? session?.session?.userId ?? null;
+  const taskWorkflowCoveragesQuery = useQuery({
+    queryKey: ["access", "workflow-coverages", resolvedCompanyId ?? "", currentUserId ?? "", coverageIdentity.sessionId ?? "", coverageIdentity.authorityEpoch],
+    queryFn: async ({ signal }) => {
+      if (!resolvedCompanyId || !currentUserId || !coverageIdentity.sessionId || !coverageIdentity.settled ||
+        coverageIdentity.userId !== currentUserId || !coverageAuthority.canRead() ||
+        !hasCurrentV9Session(queryClient, currentUserId, coverageIdentity.sessionId))
+        throw new Error("Current Human session is unavailable");
+      const result = await accessApi.listWorkflowCoverages(resolvedCompanyId, currentUserId, coverageIdentity.sessionId, { signal });
+      signal.throwIfAborted();
+      if (!coverageAuthority.canRead() || !hasCurrentV9Session(queryClient, currentUserId, coverageIdentity.sessionId))
+        throw new Error("Current Human session changed");
+      return result;
+    },
+    enabled: taskWorkflowOpen && !!resolvedCompanyId && !!currentUserId && coverageIdentity.settled &&
+      coverageIdentity.userId === currentUserId && !!coverageIdentity.sessionId && coverageAuthority.readReady,
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
+  });
+  useSecondTick((taskWorkflowCoveragesQuery.data?.coverages.length ?? 0) > 0);
+  const taskWorkflowCoverageOptions = (coverageAuthority.canRead() ? taskWorkflowCoveragesQuery.data?.coverages ?? [] : []).filter((coverage) =>
+    coverage.delegateeUserId === currentUserId && coverage.scopeType === "task" && coverage.taskId === issue?.id &&
+    !coverage.revokedAt && new Date(coverage.startsAt).getTime() <= Date.now() && new Date(coverage.expiresAt).getTime() > Date.now(),
+  );
+  const selectedTaskWorkflowCoverage = taskWorkflowCoverageOptions.find((coverage) => coverage.id === taskWorkflowCoverageId) ?? null;
   useEffect(() => {
     if (!streamlinedUiEnabled || !issue || !sessionResolved) return;
     recordRecentTask(issue, currentUserId);
@@ -8247,13 +8303,26 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
           >
             <DialogContent className="max-w-lg">
               <DialogHeader>
-                <DialogTitle>Run workflow</DialogTitle>
+                <DialogTitle>{t("humanWorkflowCoverage.runWorkflow")}</DialogTitle>
                 <DialogDescription>
-                  Use a published workflow as deterministic automation while
-                  completing this task. The task is passed as authoritative
-                  workflow context.
+                  {t("humanWorkflowCoverage.runWorkflowDescription")}
                 </DialogDescription>
               </DialogHeader>
+
+              {taskWorkflowCoverageOptions.length > 0 ? (
+                <label className="space-y-1 text-sm">
+                  <span className="font-medium">{t("humanWorkflowCoverage.runAuthority")}</span>
+                  <select className="h-10 w-full rounded-md border border-input bg-background px-3" value={taskWorkflowCoverageId}
+                    onChange={(event) => setTaskWorkflowCoverageId(event.target.value)}>
+                    <option value="">{t("humanWorkflowCoverage.runAsMe")}</option>
+                    {taskWorkflowCoverageOptions.map((coverage, index) => {
+                      const workflowName = taskRunnableWorkflows.find((workflow) => workflow.id === coverage.workflowId)?.name ?? t("humanWorkflowCoverage.anotherWorkflow");
+                      const stale = taskRunnableWorkflows.find((workflow) => workflow.id === coverage.workflowId)?.publishedRevisionId !== coverage.workflowRevisionId;
+                      return <option key={coverage.id} value={coverage.id} disabled={stale}>{t("humanWorkflowCoverage.temporaryOption", { index: index + 1 })} · {workflowName}{stale ? ` · ${t("humanWorkflowCoverage.staleOption")}` : ""}</option>;
+                    })}
+                  </select>
+                </label>
+              ) : null}
 
               {taskWorkflowsQuery.isLoading ? (
                 <div className="space-y-2 py-2" aria-label="Loading workflows">
@@ -8285,11 +8354,16 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
               ) : (
                 <div className="divide-y divide-border border-y border-border">
                   {taskRunnableWorkflows.map((workflow) => (
+                    (() => {
+                      const coverageMatches = !selectedTaskWorkflowCoverage ||
+                        (selectedTaskWorkflowCoverage.workflowId === workflow.id && selectedTaskWorkflowCoverage.workflowRevisionId === workflow.publishedRevisionId);
+                      return (
                     <button
                       key={workflow.id}
                       type="button"
-                      disabled={runTaskWorkflow.isPending}
-                      onClick={() => runTaskWorkflow.mutate(workflow.id)}
+                      disabled={runTaskWorkflow.isPending || !coverageMatches}
+                      onClick={() => runTaskWorkflow.mutate({ workflowId: workflow.id, coverageId: selectedTaskWorkflowCoverage?.id ?? null,
+                        userId: coverageIdentity.userId, sessionId: coverageIdentity.sessionId, epoch: coverageIdentity.authorityEpoch, companyId: resolvedCompanyId! })}
                       className="flex w-full items-center gap-3 px-2 py-3 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <GitBranch
@@ -8308,11 +8382,13 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
                       </span>
                       <span className="text-xs text-muted-foreground">
                         {runTaskWorkflow.isPending &&
-                        runTaskWorkflow.variables === workflow.id
+                        runTaskWorkflow.variables?.workflowId === workflow.id
                           ? "Starting…"
-                          : "Run"}
+                          : coverageMatches ? "Run" : t("humanWorkflowCoverage.staleRevision")}
                       </span>
                     </button>
+                      );
+                    })()
                   ))}
                 </div>
               )}

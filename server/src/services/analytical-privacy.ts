@@ -4,16 +4,16 @@ import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
 import type { StrategyErasureType } from "./strategy-execution/privacy.js";
 import { eraseAnalyticalSourcesUnderMemory } from "./analytical-source-erasure.js";
 import { conflict } from "../errors.js";
+import { tracePrivacyLock } from "./privacy-lock-diagnostics.js";
 type PrivacyTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 const sharedAnalyticalPrivacyTransactions = new WeakSet<object>();
 /** Preserve the existing company serialization key: native owner erasure,
  * event projection and analytical publication use one ordering boundary. */
 export async function lockAnalyticalCompany(tx: Pick<Db, "execute">, companyId: string, mode: "read" | "write" = "write") {
-  if (mode === "read") {
-    await tx.execute(sql`select pg_advisory_xact_lock_shared(hashtextextended(${`business-events:${companyId}`}, 0))`);
-    return;
-  }
-  await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`business-events:${companyId}`}, 0))`);
+  const key = `business-events:${companyId}`;
+  await tracePrivacyLock(tx, key, mode, () => mode === "read"
+    ? tx.execute(sql`select pg_advisory_xact_lock_shared(hashtextextended(${key}, 0))`)
+    : tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`));
 }
 /** Mark only after both existing privacy keys were acquired shared in this Tx. */
 export function markAnalyticalPrivacyReadLocked(tx: object) { sharedAnalyticalPrivacyTransactions.add(tx); }

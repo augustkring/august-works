@@ -90,6 +90,8 @@ import {
   workflowStopCommandSchema,
   workflowStopReceiptSchema,
   workflowRunControlSchema,
+  createHumanWorkflowCoverageSchema,
+  startWorkflowRunSchema,
 } from "@paperclipai/shared";
 
 /** Current mounted contracts. Listing an operation confers no rollout or execution qualification. */
@@ -97,6 +99,7 @@ export interface V9ApiOperation {
   method: "get" | "post" | "delete";
   path: string;
   summary: string;
+  description?: string;
   auth: "public" | "board" | "operator";
   query?: z.ZodType;
   body?: z.ZodType;
@@ -105,6 +108,7 @@ export interface V9ApiOperation {
   responseContent?: Record<string, { schema: unknown }>;
   result?: z.ZodType;
   successStatus?: 200 | 201 | 202;
+  additionalSuccessStatuses?: Array<200 | 201 | 202>;
   privateResponse?: boolean;
   cacheControl?: "no-store" | "private, no-store";
   unavailable?: boolean;
@@ -119,6 +123,17 @@ const internal = "/api/internal/customer-feedback/{companyId}";
 const account = z.object({ expectedUserId: z.string().optional() });
 const draftAccount = z.strictObject({ expectedUserId: z.string().min(1).max(300) });
 const page = account.extend({ before: z.uuid().optional() });
+const humanWorkflowCoverageResultSchema = z.strictObject({
+  id: z.uuid(), companyId: z.uuid(), principalUserId: z.string(), delegateeUserId: z.string(),
+  actionKey: z.literal("workflows:run"), workflowId: z.uuid(), workflowRevisionId: z.uuid(),
+  scopeType: z.enum(["manual", "task"]), taskId: z.uuid().nullable(),
+  startsAt: z.string().datetime(), expiresAt: z.string().datetime(), reason: z.string(),
+  revokedAt: z.string().datetime().nullable(), revokedByUserId: z.string().nullable(), createdAt: z.string().datetime(),
+});
+const workflowRunHeaders = z.strictObject({
+  "Idempotency-Key": z.string().trim().min(1).max(200).optional(),
+  "X-Human-Workflow-Coverage-Id": z.uuid().optional(),
+});
 const read = (
   path: string,
   summary: string,
@@ -152,6 +167,27 @@ const write = (
   privateResponse: true,
 });
 export const v9ApiPaths: V9ApiOperation[] = [
+  { method: "post", path: `${company}/workflows/{workflowId}/run`,
+    summary: "Start the published workflow as the current authenticated principal",
+    description: "The optional X-Human-Workflow-Coverage-Id header requires a current Human session. It routes only the named delegatee to the exact published revision under both principals' current rights; a Board API key cannot use Human coverage.",
+    auth: "board", query: z.strictObject({}), headers: workflowRunHeaders, body: startWorkflowRunSchema,
+    successStatus: 201, privateResponse: true, cacheControl: "private, no-store" },
+  { method: "post", path: `${company}/issues/{issueId}/workflows/{workflowId}/run`,
+    summary: "Start a published workflow for the exact current Task",
+    description: "The optional X-Human-Workflow-Coverage-Id header requires a current Human session and an exact Task-scoped coverage receipt for this Task and workflow revision. Both named Humans' current workflow and Task authority is rechecked before enqueue and dispatch.",
+    auth: "board", query: z.strictObject({}), headers: workflowRunHeaders, body: startWorkflowRunSchema,
+    successStatus: 201, privateResponse: true, cacheControl: "private, no-store" },
+  { ...read(`${company}/workflow-coverages`,
+    "List temporary workflow routing involving the current Human; each exact workflow and Task remains subject to current authority",
+    z.strictObject({ coverages: z.array(humanWorkflowCoverageResultSchema) }), z.strictObject({})), cacheControl: "private, no-store" },
+  { ...write(`${company}/workflow-coverages`,
+    "Create bounded, idempotent Human routing for one exact published workflow revision and optional Task; no permission is copied",
+    createHumanWorkflowCoverageSchema, humanWorkflowCoverageResultSchema, 201),
+    additionalSuccessStatuses: [200], query: z.strictObject({}), cacheControl: "private, no-store" },
+  { method: "delete", path: `${company}/workflow-coverages/{coverageId}`,
+    summary: "Revoke temporary workflow routing; a queued run must recheck this receipt before dispatch",
+    auth: "board", query: z.strictObject({}), result: humanWorkflowCoverageResultSchema,
+    successStatus: 200, privateResponse: true, cacheControl: "private, no-store" },
   { ...read(`${company}/agent-package-installations/requests/{requestId}`, "Read the Original Human request binding and current Native installation metadata; absence stays unconfirmed and reading never installs, activates or grants access",
     packageInstallationRequestReceiptSchema, packageInstallationRequestQuerySchema), cacheControl: "private, no-store" },
   { ...read(`${company}/workflows/{workflowId}/experience/authors`, "Read current bounded Native conversation author choices for the exact saved draft; selection is not runtime admission or a new grant",

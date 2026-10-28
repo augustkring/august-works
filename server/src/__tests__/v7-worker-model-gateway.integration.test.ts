@@ -48,11 +48,13 @@ import {
   agentAuthoringContentSchema, AUTHORED_AGENT_DEFINITION_KEY,
   nativePayloadSourceSnapshotSchema,
   nativeRunInputSourceReceiptSchema,
+  crossCompanyPolicySchema,
   type WorkerModelBinding,
 } from "@paperclipai/shared";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
 import { agentRuntimeFabricService } from "../services/agent-runtime-fabric.js";
+import { crossCompanyContextService } from "../services/cross-company-context.js";
 import { aiConnectionService } from "../services/ai-connections.js";
 import { orchestrationService } from "../services/orchestration/orchestration-service.js";
 import { workerModelGateway } from "../services/orchestration/worker-model-gateway.js";
@@ -1961,6 +1963,59 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         .where(eq(supervisionInterventions.planId, plan.id));
       expect(interventions[0]).toMatchObject({ reasonCode: "worker_model_unsettled" });
       expect(calls).toBe(1);
+    });
+    it("revalidates the exact represented-Human guest read binding before bounded worker admission", async () => {
+      const currentHuman = await seedCurrentHumanSourceActor(db, [f.home, f.guest], f.userId);
+      const providers = agentProviderBindingService(db), guestBinding = await providers.create(f.actor, f.guest, f.guestPresence.id, {
+        providerType: "paperclip_native", providerAgentRef: f.guestPresence.id, providerEndpointRef: null, isolationMode: "isolated_per_presence" });
+      await providers.attach(f.actor, f.guest, f.guestPresence.id, { providerBindingId: guestBinding.id, providerProfileRef: f.guestPresence.id });
+      await providers.recordDiscovery(f.guest, f.guestPresence.id, { provider: "paperclip_native", version: "bounded-worker-guest-fixture",
+        features: Object.fromEntries(PROVIDER_CAPABILITY_FEATURES.map(key => [key, false])) as Record<(typeof PROVIDER_CAPABILITY_FEATURES)[number], boolean>,
+        skills: [], tools: [], discoveredAt: new Date().toISOString() }, { connect: true, identity: true, start: true, stream: true, wait: true, cancel: true, memoryScoping: true });
+      await crossCompanyContextService(db).setPolicy(f.actor, f.guest, crossCompanyPolicySchema.parse({ allowRead: true }));
+      const [delegatedTask] = await db.insert(issues).values({ companyId: f.home, title: "Revalidate delegated read at bounded worker admission",
+        status: "todo", assigneeAgentId: f.presence.id }).returning();
+      const [delegatedRun] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId,
+        status: "running", runtimeMode: "native", nativeIssueId: delegatedTask!.id, issueId: delegatedTask!.id,
+        contextSnapshot: { issueId: delegatedTask!.id } }).returning();
+      const query = "Read the explicitly shared guest source for a bounded draft";
+      const request = await agentRuntimeFabricService(db).requestScope(currentHuman, f.home, f.presence.id, { executionScope: {
+        primaryCompanyId: f.home, primaryAgentPresenceId: f.presence.id,
+        delegatedScopes: [{ companyId: f.guest, agentPresenceId: f.guestPresence.id, accessMode: "read", purpose: query }],
+      }, query, issueId: delegatedTask!.id });
+      const prepared = await agentRuntimeFabricService(db).prepare({ companyId: f.home, agentId: f.presence.id, runId: delegatedRun!.id,
+        responsibleUserId: f.userId, issueId: delegatedTask!.id, query, scopeRequestId: request.id });
+      expect(prepared!.manifest.executionScope.delegatedScopes).toMatchObject([{ companyId: f.guest, accessMode: "read" }]);
+      const delegatedPlan = await orchestrationService(db).create(f.actor, f.home, { issueId: delegatedTask!.id,
+        expectedIssueUpdatedAt: delegatedTask!.updatedAt.toISOString(), workload: "semantic", riskClass: "C0",
+        completionContract: { objective: "Produce a bounded internal draft from authorized sources", requiredOutputs: [{ key: "result" }], businessInvariants: ["Retain source company authority"] },
+        budgets: { maxModelCostMinor: 6, maxToolActions: 2 }, workers: [{ key: "writer", issueId: delegatedTask!.id }] });
+      await db.update(orchestrationPlans).set({ status: "running", startedAt: new Date(), executionPrincipal: { type: "user", userId: f.userId } }).where(eq(orchestrationPlans.id, delegatedPlan.id));
+      const [delegatedWorker] = await db.update(orchestrationWorkers).set({ status: "running", attemptCount: 1 })
+        .where(eq(orchestrationWorkers.planId, delegatedPlan.id)).returning();
+      const [delegatedAttempt] = await db.insert(orchestrationWorkerAttempts).values({ companyId: f.home, planId: delegatedPlan.id,
+        workerId: delegatedWorker!.id, agentId: f.presence.id, runId: delegatedRun!.id, executionManifestId: prepared!.record.id, attempt: 1 }).returning();
+      await db.update(issues).set({ executionRunId: delegatedRun!.id }).where(eq(issues.id, delegatedTask!.id));
+      const delegatedWorkerBinding: WorkerModelBinding = { planId: delegatedPlan.id, workerId: delegatedWorker!.id,
+        workerAttemptId: delegatedAttempt!.id, executionManifestId: prepared!.record.id, expectedPlanVersion: delegatedPlan.version };
+      await expect(gateway().issue({ companyId: f.home, agentId: f.presence.id, runId: delegatedRun!.id,
+        responsibleUserId: f.userId, binding: delegatedWorkerBinding })).resolves.toMatchObject({ inputTokensUpperBound: profile.inputTokensUpperBound });
+      let nativeReadCalls = 0;
+      const nativeBinding = { companyId: f.home, issueId: delegatedTask!.id, agentId: f.presence.id, runId: delegatedRun!.id };
+      const nativeRead = { tool: "get_task_context", callId: "bounded-guest-read-context", arguments: {} };
+      await expect(withOrchestrationNativeTool(db, nativeBinding, nativeRead, async () => {
+        nativeReadCalls++;
+        return { taskId: delegatedTask!.id };
+      })).resolves.toEqual({ taskId: delegatedTask!.id });
+      await db.delete(companyMemberships).where(and(eq(companyMemberships.companyId, f.guest), eq(companyMemberships.principalId, f.userId)));
+      await expect(gateway().issue({ companyId: f.home, agentId: f.presence.id, runId: delegatedRun!.id,
+        responsibleUserId: f.userId, binding: delegatedWorkerBinding })).rejects.toMatchObject({ status: 403 });
+      await expect(withOrchestrationNativeTool(db, nativeBinding, { ...nativeRead, callId: "revoked-bounded-guest-read" }, async () => {
+        nativeReadCalls++;
+        return { taskId: delegatedTask!.id };
+      })).rejects.toMatchObject({ status: 403 });
+      expect(nativeReadCalls).toBe(1);
+      expect(calls).toBe(0);
     });
     it("binds company, run, attempt, manifest and current source instead of accepting caller prices or destinations", async () => {
       for (const altered of [

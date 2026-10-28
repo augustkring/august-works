@@ -22,12 +22,14 @@ export interface SaasModelDependencyInventory {
     dependency: "agent_runtime" | "worker_qualification_profile" | "read_only_verifier" | "first_party_support";
     companyId: string;
     agentId: string | null;
+    runtimeAdapter: string | null;
     provider: string | null;
     model: string | null;
     modelVersionOrReleaseIdentity: string | null;
     lifecycleStatus: "candidate" | "qualifying" | "qualified" | "active" | "deprecated" | "migration_required" | "blocked" | "retired" | "untracked";
     lifecycleOwner: string | null;
     retirementAt: string | null;
+    qualificationHash: string | null;
     regionOrRoutingProfile: string | null;
     dataUseProfile: string | null;
     supportedInputOutput: ("text" | "image" | "audio" | "video")[] | null;
@@ -44,7 +46,8 @@ export interface SaasModelDependencyInventory {
     rateLimits: { requestsPerMinute: number | null; tokensPerMinute: number | null } | null;
     runtimeAvailability: "not_assessed";
     bindingState: "unresolved" | "qualification_profile_unresolved" | "qualified_profile_bound" |
-      "provider_model_configured" | "provider_model_unresolved" | "configured_profile" | "configured_not_currently_selected";
+      "provider_model_configured" | "provider_model_unresolved" | "adapter_model_not_reported" |
+      "configured_profile" | "configured_not_current_agent_runtime";
   }[];
 }
 export interface SaasOperationsSnapshot {

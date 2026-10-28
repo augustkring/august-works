@@ -61,6 +61,7 @@ import { enqueueSupervisionStop } from "../supervision/supervision-outbox.js";
 import { modelReservationService, quoteModelReservation } from "./model-reservations.js";
 import { resolvePaperclipRunnerProviderProfile } from "../native-runtime/provider-profile.js";
 import { hashContextPolicySnapshot } from "../context/context-manifest.js";
+import { resolveDelegatedContextManifestBindings } from "../context/delegated-context-binding.js";
 import { assertNativeAnalyticalRunPayloadAccess } from "../analytical-context-authority.js";
 import { assertNativeManagedConsumedSourceSetCurrent } from "../native-direct-input.js";
 import { assertNativeManagedProjectCreateReceiptCurrent, type NativeProjectCreateReceipt } from "../native-project-output.js";
@@ -963,6 +964,20 @@ export function workerModelGateway(db: Db, options: Options) {
           eq(agentExecutionManifests.runId, claims.run_id),
         ),
       );
+    const delegatedScopes = manifest?.manifest.executionScope.delegatedScopes ?? [];
+    const delegatedRefs = manifest?.manifest.contextManifests.filter(ref => ref.companyId !== claims.company_id) ?? [];
+    if (delegatedScopes.length) {
+      const scopedCompanies = delegatedScopes.map(scope => scope.companyId).sort();
+      const contextCompanies = delegatedRefs.map(ref => ref.companyId).sort();
+      if (delegatedScopes.some(scope => scope.accessMode === "act") || delegatedRefs.length !== delegatedScopes.length ||
+        JSON.stringify(scopedCompanies) !== JSON.stringify(contextCompanies))
+        throw forbidden("Bounded Native workers require exact delegated read/contribute Context and cannot use guest act scope");
+      const runtimeActor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: claims.company_id,
+        agentId: claims.sub, runId: claims.run_id, onBehalfOfUserId: claims.responsible_user_id };
+      await resolveDelegatedContextManifestBindings(tx, { homeCompanyId: claims.company_id, homeAgentId: claims.sub,
+        homeRunId: claims.run_id, responsibleUserId: claims.responsible_user_id, actor: runtimeActor,
+        manifestIds: delegatedRefs.map(ref => ref.contextManifestId) });
+    } else if (delegatedRefs.length) throw forbidden("A bounded Native worker has guest Context without its execution scope");
     const currentFacts = {
       planPresent: !!plan,
       planNotErased: !!plan && !plan.erasedAt,
@@ -987,8 +1002,8 @@ export function workerModelGateway(db: Db, options: Options) {
       runTaskMatches: !!worker && run?.nativeIssueId === worker.issueId,
       runHumanMatches: run?.responsibleUserId === claims.responsible_user_id,
       manifestHumanMatches: manifest?.manifest.responsibleUserId === claims.responsible_user_id,
-      manifestScopesCompanyScoped: !!manifest &&
-        manifest.manifest.executionScope.delegatedScopes.every(s => s.companyId === claims.company_id),
+      manifestScopesReadContributionOnly: !!manifest &&
+        manifest.manifest.executionScope.delegatedScopes.every(s => s.accessMode === "read" || s.accessMode === "contribute"),
     };
     if (Object.values(currentFacts).some(valid => !valid)) {
       if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1")

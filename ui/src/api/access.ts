@@ -1,5 +1,5 @@
-import type { AgentAdapterType, JoinRequest, PermissionKey, ArchiveCompanyMemberResponse as SharedArchiveCompanyMemberResponse } from "@paperclipai/shared";
-import { api, detachInflightGet } from "./client";
+import type { AgentAdapterType, JoinRequest, PermissionKey, HumanWorkflowCoverage, CreateHumanWorkflowCoverage, ArchiveCompanyMemberResponse as SharedArchiveCompanyMemberResponse } from "@paperclipai/shared";
+import { api, detachInflightGet, type RequestOptions } from "./client";
 
 export type HumanCompanyRole = "owner" | "admin" | "operator" | "viewer";
 
@@ -318,6 +318,28 @@ export const accessApi = {
 
   listMembers: (companyId: string) =>
     api.get<CompanyMembersResponse>(`/companies/${companyId}/members`),
+
+  listWorkflowCoverages: (companyId: string, expectedUserId: string, expectedSessionId: string, options?: RequestOptions) => {
+    const path = `/companies/${companyId}/workflow-coverages`;
+    // GET coalescing is keyed by path. Detach before reading private data so a
+    // request issued under another Human session cannot supply this response.
+    detachInflightGet(path);
+    return api.get<{ coverages: HumanWorkflowCoverage[] }>(path, {
+      ...options,
+      cache: "no-store",
+      headers: {
+        ...(options?.headers ?? {}),
+        "X-Blentera-Expected-User": expectedUserId,
+        "X-Blentera-Expected-Session": expectedSessionId,
+      },
+    });
+  },
+
+  createWorkflowCoverage: (companyId: string, input: CreateHumanWorkflowCoverage) =>
+    api.post<HumanWorkflowCoverage>(`/companies/${companyId}/workflow-coverages`, input),
+
+  revokeWorkflowCoverage: (companyId: string, coverageId: string) =>
+    api.delete<HumanWorkflowCoverage>(`/companies/${companyId}/workflow-coverages/${coverageId}`),
 
   listUserDirectory: (companyId: string) =>
     api.get<CompanyUserDirectoryResponse>(`/companies/${companyId}/user-directory`),

@@ -104,6 +104,32 @@ export const updateMemberPermissionsSchema = z.object({
   ),
 });
 
+export const createHumanWorkflowCoverageSchema = z.object({
+  requestId: z.uuid(),
+  delegateeUserId: z.string().min(1).max(300),
+  workflowId: z.uuid(),
+  workflowRevisionId: z.uuid(),
+  scopeType: z.enum(["manual", "task"]),
+  taskId: z.uuid().nullable().optional(),
+  startsAt: z.coerce.date().optional(),
+  expiresAt: z.coerce.date(),
+  reason: z.string().trim().min(1).max(500),
+}).strict().superRefine((value, ctx) => {
+  if ((value.scopeType === "task") !== Boolean(value.taskId)) {
+    ctx.addIssue({ code: "custom", path: ["taskId"], message: "Task-scoped coverage must include exactly one Task ID." });
+  }
+  const startsAt = value.startsAt ?? new Date();
+  const now = Date.now();
+  if (startsAt.getTime() < now - 60_000 || startsAt.getTime() > now + 30 * 24 * 60 * 60_000) {
+    ctx.addIssue({ code: "custom", path: ["startsAt"], message: "Coverage start must be within the next 30 days." });
+  }
+  if (value.expiresAt.getTime() <= startsAt.getTime() || value.expiresAt.getTime() > startsAt.getTime() + 30 * 24 * 60 * 60_000) {
+    ctx.addIssue({ code: "custom", path: ["expiresAt"], message: "Coverage must expire after it starts and within 30 days." });
+  }
+});
+
+export type CreateHumanWorkflowCoverage = z.input<typeof createHumanWorkflowCoverageSchema>;
+
 export type UpdateMemberPermissions = z.infer<typeof updateMemberPermissionsSchema>;
 
 const editableMembershipStatuses = ["pending", "active", "suspended"] as const;

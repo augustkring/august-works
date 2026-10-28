@@ -69,13 +69,14 @@ function supportApprovalReceipt(
   return row;
 }
 export const saasApi = {
-  costs: (userId: string) =>
-    api.get<SaasCostSnapshot | null>(scoped("/saas/internal/costs", userId)),
+  costs: (userId: string, signal?: AbortSignal) =>
+    api.get<SaasCostSnapshot | null>(scoped("/saas/internal/costs", userId), { signal, cache: "no-store" }),
   recordCosts: (userId: string, input: unknown) =>
     api.post<SaasCostSnapshot>(scoped("/saas/internal/costs", userId), input),
-  providerInventory: (userId: string) =>
+  providerInventory: (userId: string, signal?: AbortSignal) =>
     api.get<{ observedAt: string; report: SaasProviderInventory } | null>(
       scoped("/saas/internal/fleet/inventory", userId),
+      { signal, cache: "no-store" },
     ),
   backupPolicy: (companyId: string, userId: string, cellId: string) =>
     api.get<SaasRuntimeBackupPolicy | null>(
@@ -530,9 +531,10 @@ export const saasApi = {
       createdAt: string;
       completedAt: string | null;
     }>(scoped("/saas/account/deletion", userId), input),
-  operations: (userId: string) =>
+  operations: (userId: string, signal?: AbortSignal) =>
     api.get<SaasOperationsSnapshot>(
       scoped("/saas/internal/operations", userId),
+      { signal, cache: "no-store" },
     ),
   registerRuntimeVersion: (userId: string, input: RuntimeVersionCandidate) =>
     api.post(scoped("/saas/internal/runtime-versions", userId), input),

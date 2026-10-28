@@ -976,6 +976,7 @@ export type {
   AccessUserProfile,
   CompanyMemberRecord,
   CompanyMembersResponse,
+  HumanWorkflowCoverage,
   ArchiveCompanyMemberResponse,
   CompanyMembership,
   CompanyInviteListResponse,

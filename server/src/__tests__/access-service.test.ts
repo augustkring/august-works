@@ -17,6 +17,7 @@ import {
   instanceUserRoles,
   issues,
   heartbeatRuns,
+  humanWorkflowCoverages,
   principalPermissionGrants,
   routines,
   routineRevisions,
@@ -25,6 +26,8 @@ import {
   toolConnections,
   userSecretDeclarations,
   userSecretDefinitions,
+  workflowRevisions,
+  workflows,
 } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
@@ -88,6 +91,8 @@ describeEmbeddedPostgres("access service", () => {
     await db.delete(routineRevisions);
     await db.delete(routines);
     await db.delete(principalPermissionGrants);
+    await db.delete(humanWorkflowCoverages);
+    await db.delete(workflows);
     await db.delete(heartbeatRuns);
     await db.delete(instanceUserRoles);
     await db.delete(agents);
@@ -99,6 +104,103 @@ describeEmbeddedPostgres("access service", () => {
 
   afterAll(async () => {
     await tempDb?.cleanup();
+  });
+
+  it("routes exact published-workflow coverage without copying rights and withdraws it on member suspension", async () => {
+    const company = await db.insert(companies).values({ name: `Coverage ${randomUUID()}`, issuePrefix: `CV${randomUUID().slice(0, 6).toUpperCase()}` }).returning().then(rows => rows[0]!);
+    const principalUserId = randomUUID(), delegateeUserId = randomUUID(), now = new Date();
+    await db.insert(authUsers).values([principalUserId, delegateeUserId].map(id => ({
+      id, name: id, email: `${id}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now,
+    })));
+    const [principal, delegatee] = await db.insert(companyMemberships).values([
+      { companyId: company.id, principalType: "user", principalId: principalUserId, membershipRole: "owner", status: "active" },
+      { companyId: company.id, principalType: "user", principalId: delegateeUserId, membershipRole: "operator", status: "active" },
+    ]).returning();
+    const workflowId = randomUUID(), revisionId = randomUUID();
+    await db.transaction(async tx => {
+      await tx.insert(workflows).values({ id: workflowId, companyId: company.id, name: "Coverage target", status: "active", publishedRevisionId: revisionId });
+      await tx.insert(workflowRevisions).values({
+        id: revisionId, companyId: company.id, workflowId, revisionNumber: 1, state: "published",
+        graph: { version: 1, nodes: [{ id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} }], edges: [], variables: [], settings: {} },
+        createdByUserId: principalUserId,
+      });
+    });
+    const workflow = (await db.select().from(workflows).where(eq(workflows.id, workflowId)))[0]!;
+    const revision = (await db.select().from(workflowRevisions).where(eq(workflowRevisions.id, revisionId)))[0]!;
+    await db.insert(principalPermissionGrants).values([principalUserId, delegateeUserId].map(userId => ({
+      companyId: company.id, principalType: "user" as const, principalId: userId,
+      permissionKey: "workflows:run" as const,
+    })));
+
+    const access = accessService(db), actor = { type: "board" as const, source: "session" as const, userId: principalUserId };
+    const input = { requestId: randomUUID(), delegateeUserId, workflowId: workflow.id, workflowRevisionId: revision.id,
+      scopeType: "manual" as const, taskId: null, startsAt: new Date(Date.now() - 5_000),
+      expiresAt: new Date(Date.now() + 60_000), reason: "Temporary Human absence" };
+    const created = await access.createWorkflowCoverage(company.id, input, actor);
+    expect(created.created).toBe(true);
+    expect(created.coverage).toMatchObject({ principalUserId, delegateeUserId, actionKey: "workflows:run", workflowId: workflow.id,
+      workflowRevisionId: revision.id, scopeType: "manual", taskId: null, revokedAt: null });
+    expect((await access.createWorkflowCoverage(company.id, input, actor)).created).toBe(false);
+    await expect(access.createWorkflowCoverage(company.id, { ...input, reason: "Different request meaning" }, actor))
+      .rejects.toMatchObject({ status: 409, details: { code: "workflow_coverage_request_reused" } });
+    await db.transaction(async tx => expect(await access.authorizeWorkflowCoverage({
+      tx: tx as never, companyId: company.id, coverageId: created.coverage.id, delegateeUserId,
+      workflowId: workflow.id, workflowRevisionId: revision.id, scopeType: "manual", taskId: null,
+    })).toMatchObject({ id: created.coverage.id }));
+
+    await access.updateMember(company.id, delegatee.id, { status: "suspended" }, principalUserId);
+    const [withdrawn] = await db.select().from(humanWorkflowCoverages).where(eq(humanWorkflowCoverages.id, created.coverage.id));
+    expect(withdrawn).toMatchObject({ revokedByUserId: principalUserId });
+    expect(withdrawn?.revokedAt).toBeInstanceOf(Date);
+    await db.transaction(async tx => expect(access.authorizeWorkflowCoverage({
+      tx: tx as never, companyId: company.id, coverageId: created.coverage.id, delegateeUserId,
+      workflowId: workflow.id, workflowRevisionId: revision.id, scopeType: "manual", taskId: null,
+    })).rejects.toMatchObject({ status: 403 }));
+  });
+
+  it("requires both Humans' current privacy-respecting Task authority for Task-scoped coverage", async () => {
+    const company = await db.insert(companies).values({ name: `Task coverage ${randomUUID()}`, issuePrefix: `TC${randomUUID().slice(0, 6).toUpperCase()}` }).returning().then(rows => rows[0]!);
+    const principalUserId = randomUUID(), delegateeUserId = randomUUID(), now = new Date();
+    await db.insert(authUsers).values([principalUserId, delegateeUserId].map(id => ({
+      id, name: id, email: `${id}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now,
+    })));
+    await db.insert(companyMemberships).values([
+      { companyId: company.id, principalType: "user", principalId: principalUserId, membershipRole: "owner", status: "active" },
+      { companyId: company.id, principalType: "user", principalId: delegateeUserId, membershipRole: "operator", status: "active" },
+    ]);
+    const workflowId = randomUUID(), revisionId = randomUUID();
+    await db.transaction(async tx => {
+      await tx.insert(workflows).values({ id: workflowId, companyId: company.id, name: "Task coverage target", status: "active", publishedRevisionId: revisionId });
+      await tx.insert(workflowRevisions).values({
+        id: revisionId, companyId: company.id, workflowId, revisionNumber: 1, state: "published",
+        graph: { version: 1, nodes: [{ id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} }], edges: [], variables: [], settings: {} },
+        createdByUserId: principalUserId,
+      });
+    });
+    const workflow = (await db.select().from(workflows).where(eq(workflows.id, workflowId)))[0]!;
+    const revision = (await db.select().from(workflowRevisions).where(eq(workflowRevisions.id, revisionId)))[0]!;
+    await db.insert(principalPermissionGrants).values([principalUserId, delegateeUserId].map(userId => ({
+      companyId: company.id, principalType: "user" as const, principalId: userId, permissionKey: "workflows:run" as const,
+    })));
+    const privateTask = await issueService(db).create(company.id, {
+      title: "Private coverage Task", visibility: "private", createdByUserId: principalUserId,
+    });
+    const access = accessService(db), actor = { type: "board" as const, source: "session" as const, userId: principalUserId };
+    const terms = { delegateeUserId, workflowId: workflow.id, workflowRevisionId: revision.id,
+      scopeType: "task" as const, startsAt: new Date(Date.now() - 1_000), expiresAt: new Date(Date.now() + 60_000),
+      reason: "One private Task" };
+    await expect(access.createWorkflowCoverage(company.id, { ...terms, requestId: randomUUID(), taskId: privateTask.id }, actor))
+      .rejects.toMatchObject({ status: 403, details: { code: "workflow_coverage_task_authority_unavailable" } });
+
+    const openTask = await issueService(db).create(company.id, {
+      title: "Open coverage Task", createdByUserId: principalUserId, assigneeUserId: delegateeUserId,
+    });
+    const created = await access.createWorkflowCoverage(company.id, { ...terms, requestId: randomUUID(), taskId: openTask.id }, actor);
+    expect(created.coverage).toMatchObject({ scopeType: "task", taskId: openTask.id });
+    await db.transaction(async tx => expect(await access.authorizeWorkflowCoverage({
+      tx: tx as never, companyId: company.id, coverageId: created.coverage.id, delegateeUserId,
+      workflowId: workflow.id, workflowRevisionId: revision.id, scopeType: "task", taskId: openTask.id,
+    })).toMatchObject({ id: created.coverage.id }));
   });
 
   it.each(["owner", "admin"])("keeps the existing %s role when one read permission changes", async role => {

@@ -258,7 +258,29 @@ export function createSandboxExecJwt(input: {
   nativeLeaseExpiresAt: Date;
 }) {
   const config = jwtConfig();
-  if (!config || !parseSandboxExecCapabilityClaim(input.claim)) return null;
+  const diagnosticFailure = (reason: string) => {
+    if (process.env.PAPERCLIP_MANAGED_OPENCODE_E2E_DIAGNOSTICS !== "1") return;
+    const invalidFields: string[] = [];
+    if (reason === "claim_invalid") {
+      const claim = input.claim as unknown as Record<string, unknown>;
+      const keys = ["requestId", "bindingId", "cellId", "generation", "hostId", "hostEpoch", "runId", "attemptId", "attempt", "manifestId", "manifestHash", "policySnapshotId", "policyHash", "commandDigest", "deadlineAt"];
+      const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
+      const digest = /^[a-f0-9]{64}$/;
+      if (Object.keys(claim).length !== keys.length || keys.some(key => !Object.hasOwn(claim, key))) invalidFields.push("claim_fields");
+      for (const key of ["requestId", "bindingId", "cellId", "hostId", "runId", "manifestId", "policySnapshotId"])
+        if (typeof claim[key] !== "string" || !uuid.test(claim[key] as string)) invalidFields.push(key);
+      if (!(claim.attemptId === null || typeof claim.attemptId === "string" && uuid.test(claim.attemptId))) invalidFields.push("attemptId");
+      if (!Number.isSafeInteger(claim.attempt) || (claim.attempt as number) < 1) invalidFields.push("attempt");
+      if (typeof claim.generation !== "string" || !/^[1-9][0-9]{0,18}$/.test(claim.generation)) invalidFields.push("generation");
+      if (!Number.isSafeInteger(claim.hostEpoch) || (claim.hostEpoch as number) < 1) invalidFields.push("hostEpoch");
+      for (const key of ["manifestHash", "policyHash", "commandDigest"])
+        if (typeof claim[key] !== "string" || !digest.test(claim[key] as string)) invalidFields.push(key);
+      if (typeof claim.deadlineAt !== "string" || !Number.isFinite(Date.parse(claim.deadlineAt))) invalidFields.push("deadlineAt");
+    }
+    console.info("sandbox exec capability mint failure", JSON.stringify({ requestId: input.claim.requestId, reason, invalidFields }));
+  };
+  if (!config) { diagnosticFailure("jwt_config_unavailable"); return null; }
+  if (!parseSandboxExecCapabilityClaim(input.claim)) { diagnosticFailure("claim_invalid"); return null; }
   const now = Math.floor(Date.now() / 1000);
   const deadlineAt = Date.parse(input.claim.deadlineAt);
   const exp = Math.min(
@@ -267,7 +289,7 @@ export function createSandboxExecJwt(input: {
     Math.floor(input.nativeLeaseExpiresAt.getTime() / 1000),
     Math.floor(deadlineAt / 1000),
   );
-  if (exp <= now) return null;
+  if (exp <= now) { diagnosticFailure("capability_expired_before_mint"); return null; }
   const claims: LocalAgentJwtClaims = {
     sub: input.agentId,
     company_id: input.companyId,

@@ -278,7 +278,8 @@ async function flushNativeSourceReaderChecks(context: NativeSourceReadContext) {
         const pendingIssueIds = [...group.issueIds].filter(issueId => !group.checkedIssueIds.has(issueId));
         if (!pendingIssueIds.length) break;
         const startedAt = nativeSourceMemoDiagnosticsEnabled() ? performance.now() : 0;
-        await assertAnalyticalContextPayloadAccessBatch(context.db as Db, group.companyId, group.actor, pendingIssueIds);
+        await assertAnalyticalContextPayloadAccessBatch(context.db as Db, group.companyId, group.actor, pendingIssueIds,
+          undefined, { privacyLockMode: "read" });
         if (nativeSourceMemoDiagnosticsEnabled()) {
           nativeSourceMemoDiagnostics.analyticalTaskFlushes = Math.min(1_000_000,
             nativeSourceMemoDiagnostics.analyticalTaskFlushes + 1);
@@ -374,11 +375,15 @@ function inNativeSourceReadTransaction<T>(db: Db | Transaction, read: (tx: Db | 
 }
 async function lockNativeSourceReadPrivacy(db: Db | Transaction, companyId: string, scope: NativeSourceReadScope) {
   if (scope.context.privacyLockedCompanies.has(companyId)) return;
-  const { lockAnalyticalCompany, analyticalPrivacyReadLocked } = await import("./analytical-privacy.js");
+  const { lockAnalyticalCompany, analyticalPrivacyReadLocked, markAnalyticalPrivacyReadLocked } = await import("./analytical-privacy.js");
   const { lockMemoryPrivacy } = await import("./memory/memory-privacy.js");
   if (!analyticalPrivacyReadLocked(db as object)) {
-    await lockAnalyticalCompany(db as Db, companyId);
-    await lockMemoryPrivacy(db as Db, companyId);
+    // This helper is used only by source/currentness readers. An ALS/savepoint
+    // alias may not retain the WeakSet marker from an outer Memory read; reacquire
+    // the same shared fences instead of upgrading behind an exclusive writer.
+    await lockAnalyticalCompany(db as Db, companyId, "read");
+    await lockMemoryPrivacy(db as Db, companyId, "read");
+    markAnalyticalPrivacyReadLocked(db as object);
   }
   // The retained Task privacy predicate expands a bounded but very large
   // recursive source graph. PostgreSQL estimates this statement above its JIT
@@ -1590,6 +1595,21 @@ export async function assertNativeTaskSourceOwnerCurrent(db: Db | Transaction, i
  * prefix. Memory readers may contain several Tasks captured at different
  * points in time; applying the enclosing Memory prefix to each Task would let
  * a later Context retroactively change an earlier Task's reader result. */
+let nativeTaskSourceReadDiagnosticCount = 0;
+function nativeTaskSourceReadDiagnostic(db: Db | Transaction, actor: AuthorizationActor, companyId: string,
+  issueId: string, reason: string, facts: Record<string, boolean | number | string | null> = {}) {
+  if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS !== "1" || nativeTaskSourceReadDiagnosticCount >= 12) return;
+  nativeTaskSourceReadDiagnosticCount += 1;
+  const contextIds = activeMemoryTemporalContexts(db, actor, "issue", issueId);
+  console.error("native_task_source_reader_test_denial", JSON.stringify({ reason,
+    taskKey: nativeSha256({ companyId, issueId }).slice(0, 16), actorKey: nativeSha256(actor).slice(0, 16), actorType: actor.type,
+    readerRole: actor.type === "agent" ? actor.onBehalfOfUserId ? "agent_human" : "agent_no_human" :
+      actor.type === "board" ? "board_user" : "none",
+    actorSource: actor.source === "agent_jwt" || actor.source === "local_implicit" || actor.source === "none"
+      ? actor.source : "other", transaction: is(db, PgTransaction),
+    temporalScopePresent: contextIds !== undefined, temporalContextCount: contextIds?.length ?? null, ...facts }));
+}
+
 export async function canActorReadNativeTaskSource(db: Db | Transaction, input: {
   companyId: string; actor: AuthorizationActor; issueId: string;
 }): Promise<boolean | null> {
@@ -1598,28 +1618,62 @@ export async function canActorReadNativeTaskSource(db: Db | Transaction, input: 
     const [owner] = await tx.select({ payloadSourceProtocolVersion: issues.payloadSourceProtocolVersion,
       payloadSourceSnapshot: issues.payloadSourceSnapshot }).from(issues).where(and(
       eq(issues.companyId, input.companyId), eq(issues.id, input.issueId))).for("share");
-    if (!owner) return false;
+    if (!owner) {
+      nativeTaskSourceReadDiagnostic(tx, input.actor, input.companyId, input.issueId, "owner_missing");
+      return false;
+    }
     if (owner.payloadSourceProtocolVersion === 0 || owner.payloadSourceProtocolVersion === null) return null;
-    if (owner.payloadSourceProtocolVersion !== 1) return false;
+    if (owner.payloadSourceProtocolVersion !== 1) {
+      nativeTaskSourceReadDiagnostic(tx, input.actor, input.companyId, input.issueId, "protocol_unsupported",
+        { protocolOne: false });
+      return false;
+    }
     const snapshot = nativePayloadSourceSnapshotSchema.safeParse(owner.payloadSourceSnapshot);
     if (!snapshot.success || snapshot.data.owner.kind !== "issue" || snapshot.data.owner.companyId !== input.companyId ||
-      snapshot.data.owner.id !== input.issueId) return false;
+      snapshot.data.owner.id !== input.issueId) {
+      nativeTaskSourceReadDiagnostic(tx, input.actor, input.companyId, input.issueId, "snapshot_owner_invalid",
+        { snapshotValid: snapshot.success, ownerKindIssue: snapshot.success && snapshot.data.owner.kind === "issue",
+          ownerCompanyMatches: snapshot.success && snapshot.data.owner.companyId === input.companyId,
+          ownerIdMatches: snapshot.success && snapshot.data.owner.id === input.issueId });
+      return false;
+    }
     if (!snapshot.data.inputs.some(source => source.kind === "worker_model_dispatch" || source.kind === "conversation_model_dispatch"))
       return null;
+    let phase: "task_source_currentness" | "effective_acl" = "task_source_currentness";
     try {
       return await withReadPinnedNativeTaskSnapshot(tx, input.actor, input.companyId, input.issueId,
         async (currentOwnerHash, currentSnapshotDigest) => {
-        if (currentOwnerHash !== snapshot.data.owner.contentHash || currentSnapshotDigest !== snapshot.data.digest) return false;
+        if (currentOwnerHash !== snapshot.data.owner.contentHash || currentSnapshotDigest !== snapshot.data.digest) {
+          nativeTaskSourceReadDiagnostic(tx, input.actor, input.companyId, input.issueId, "pinned_snapshot_changed",
+            { ownerHashMatches: currentOwnerHash === snapshot.data.owner.contentHash,
+              snapshotDigestMatches: currentSnapshotDigest === snapshot.data.digest });
+          return false;
+        }
         const priorProof = scope.taskTemporalScopes.get(input.issueId);
         if (priorProof?.contentHash !== snapshot.data.owner.contentHash || priorProof.snapshotDigest !== snapshot.data.digest) {
           const source: Extract<NativePayloadSourceInput, { kind: "task" }> = { kind: "task", issueId: input.issueId,
             sourceVersion: "snapshot-owner-current", contentHash: snapshot.data.owner.contentHash };
           await assertNativeTaskSourceInputCurrentInScope(tx, input.companyId, input.actor, source, scope);
         }
-        return canActorReadIssuePrivacy(tx, input.actor, { id: input.issueId, companyId: input.companyId });
+        phase = "effective_acl";
+        const readable = await canActorReadIssuePrivacy(tx, input.actor, { id: input.issueId, companyId: input.companyId });
+        if (!readable) nativeTaskSourceReadDiagnostic(tx, input.actor, input.companyId, input.issueId, "effective_acl_denied",
+          { pinnedTemporalScopePresent: activeMemoryTemporalContexts(tx, input.actor, "issue", input.issueId) !== undefined,
+            sourceSnapshotWasPreviouslyProven: Boolean(priorProof && priorProof.contentHash === snapshot.data.owner.contentHash &&
+              priorProof.snapshotDigest === snapshot.data.digest) });
+        return readable;
       });
     } catch (error) {
-      if (error instanceof HttpError && [403, 404, 409, 422].includes(error.status)) return false;
+      if (error instanceof HttpError && [403, 404, 409, 422].includes(error.status)) {
+        const frames = (typeof error.stack === "string" ? error.stack : "").split("\n").flatMap(line => {
+          const match = /server\/src\/services\/([A-Za-z0-9_./-]+\.ts):(\d+):\d+/.exec(line);
+          return match ? [`${match[1]}:${match[2]}`] : [];
+        }).slice(0, 4);
+        nativeTaskSourceReadDiagnostic(tx, input.actor, input.companyId, input.issueId, "pinned_source_currentness_rejected",
+          { phase: phase === "effective_acl" ? 2 : 1, httpStatus: error.status,
+            sourceFrames: frames.join(",") });
+        return false;
+      }
       throw error;
     }
   }));

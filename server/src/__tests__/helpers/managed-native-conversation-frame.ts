@@ -3,8 +3,10 @@ import { chmod, lstat, mkdtemp, readdir, rm, writeFile } from "node:fs/promises"
 import { lookup } from "node:dns/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { createServer as createHttpServer, request as httpRequest } from "node:http";
+import { createConnection, type Socket } from "node:net";
 import { createServer as createHttpsServer } from "node:https";
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import express from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { agents, agentExecutionManifests, authSessions, authUsers, companies, companyMemberships,
@@ -79,6 +81,7 @@ export async function runManagedNativeConversationFrame(input: {
     runHome: string;
     opencodeBinary: string;
     brokerOrigin: string;
+    brokerProxyOrigin: string | null;
     certBundlePath: string;
     setBrokerToken: (token: string) => void;
   }) => Promise<{
@@ -138,12 +141,11 @@ export async function runManagedNativeConversationFrame(input: {
   const caKeyPath = join(runHome, "broker-ca-key.pem"), caCertPath = join(runHome, "broker-ca-cert.pem");
   const csrPath = join(runHome, "broker.csr"), extensionsPath = join(runHome, "broker-extensions.cnf");
   const brokerHostname = input.sandboxRelay ? "127-0-0-1.sslip.io" : "broker.localhost";
-  // The signed sandbox policy requires a public-DNS-shaped hostname. Only that
-  // explicit relay case uses sslip; ordinary local broker fixtures retain the
-  // original reserved localhost name and its local routing semantics.
+  // The relay policy keeps its public-DNS-shaped exact broker origin; the
+  // normal fixture keeps its reserved test hostname.
   if (input.sandboxRelay) {
     const brokerAddresses = await lookup(brokerHostname, { all: true });
-    if (brokerAddresses.length === 0 || brokerAddresses.some(value => value.address !== "127.0.0.1"))
+    if (brokerAddresses.length === 0 || brokerAddresses.some(value => !["127.0.0.1", "::1"].includes(value.address)))
       throw new Error("conversation_fixture_broker_dns_not_loopback");
   }
   execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", caKeyPath,
@@ -352,10 +354,85 @@ export async function runManagedNativeConversationFrame(input: {
   await new Promise<void>(resolve => broker.once("listening", resolve));
   const address = broker.address();
   if (!address || typeof address === "string") throw new Error("conversation_fixture_broker_listen_failed");
-  // The public wildcard DNS record resolves to the loopback HTTPS listener.
   // Durable PRP and the runner accept only an origin, with no trailing path
   // separator; a slash would make the managed environment tuple invalid.
   const origin = new URL(`https://${brokerHostname}:${address.port}`).origin;
+  let brokerProxy: ReturnType<typeof createHttpServer> | null = null;
+  let brokerProxyOrigin: string | null = null;
+  const brokerProxySockets = new Set<Socket>();
+  let brokerProxyTunnelCount = 0;
+  let brokerProxyRejectedCount = 0;
+  if (input.sandboxRelay) {
+    brokerProxy = createHttpServer();
+    brokerProxy.on("connection", socket => {
+      brokerProxySockets.add(socket);
+      socket.setTimeout(60_000, () => socket.destroy());
+      socket.once("close", () => brokerProxySockets.delete(socket));
+    });
+    brokerProxy.on("request", (_request, response) => {
+      brokerProxyRejectedCount++;
+      response.writeHead(403, { connection: "close" }).end();
+    });
+    brokerProxy.on("connect", (request, client, head) => {
+      if (request.url !== `${brokerHostname}:${address.port}`) {
+        brokerProxyRejectedCount++;
+        client.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
+        return;
+      }
+      brokerProxyTunnelCount++;
+      const upstream = createConnection(address.port, "127.0.0.1");
+      brokerProxySockets.add(upstream);
+      upstream.setTimeout(60_000, () => upstream.destroy());
+      upstream.once("close", () => brokerProxySockets.delete(upstream));
+      upstream.once("connect", () => {
+        client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+        if (head.length > 0) upstream.write(head);
+        client.pipe(upstream);
+        upstream.pipe(client);
+      });
+      upstream.once("error", () => client.end("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n"));
+      client.once("error", () => upstream.destroy());
+    });
+    brokerProxy.listen(0, "127.0.0.1");
+    await new Promise<void>(resolve => brokerProxy!.once("listening", resolve));
+    const proxyAddress = brokerProxy.address();
+    if (!proxyAddress || typeof proxyAddress === "string") throw new Error("conversation_fixture_broker_proxy_listen_failed");
+    brokerProxyOrigin = `http://127.0.0.1:${proxyAddress.port}`;
+    const runProxyCurl = (args: string[], env: NodeJS.ProcessEnv) => new Promise<string>((resolve, reject) => {
+      execFile("curl", args, { encoding: "utf8", timeout: 5_000, env }, (error, stdout) => {
+        if (error) reject(error); else resolve(stdout.trim());
+      });
+    });
+    try {
+      const status = await runProxyCurl(["--max-time", "5", "--silent", "--show-error", "--output", "/dev/null",
+        "--write-out", "%{http_code}", "--cacert", caCertPath,
+        `${origin}/__proxy_preflight`], {
+          ...process.env, HTTP_PROXY: "", http_proxy: "", HTTPS_PROXY: brokerProxyOrigin, https_proxy: brokerProxyOrigin,
+          ALL_PROXY: "", all_proxy: "", NO_PROXY: "", no_proxy: "" });
+      const wrongConnectStatus = await new Promise<number>((resolve, reject) => {
+        const request = httpRequest({ host: "127.0.0.1", port: proxyAddress.port, method: "CONNECT",
+          path: `untrusted.example:${address.port}`, timeout: 5_000 });
+        request.once("response", response => { response.resume(); resolve(response.statusCode ?? 0); });
+        request.once("connect", (response, socket) => { socket.destroy(); resolve(response.statusCode ?? 0); });
+        request.once("timeout", () => request.destroy(new Error("broker_proxy_reject_timeout")));
+        request.once("error", reject);
+        request.end();
+      });
+      const plainHttpStatus = await runProxyCurl(["--max-time", "5", "--silent", "--show-error", "--output", "/dev/null",
+        "--write-out", "%{http_code}", "--proxy", brokerProxyOrigin, "--noproxy", "", "http://localhost/"], {
+          ...process.env, HTTP_PROXY: "", http_proxy: "", HTTPS_PROXY: "", https_proxy: "",
+          ALL_PROXY: "", all_proxy: "", NO_PROXY: "", no_proxy: "" });
+      if (status !== "404" || wrongConnectStatus !== 403 || plainHttpStatus !== "403" ||
+        brokerProxyTunnelCount !== 1 || brokerProxyRejectedCount !== 2)
+        throw new Error("unexpected_broker_proxy_preflight_result");
+    } catch {
+      for (const socket of brokerProxySockets) socket.destroy();
+      if (brokerProxy.listening) await new Promise<void>(resolve => brokerProxy!.close(() => resolve()));
+      if (broker.listening) await new Promise<void>(resolve => broker.close(() => resolve()));
+      await rm(runHome, { recursive: true, force: true });
+      throw new Error("conversation_fixture_broker_proxy_preflight_failed");
+    }
+  }
   setupRunnerPrpWebSocketServer(broker, { apiUrl: origin });
   const prevBroker = process.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN;
   const prevJwt = process.env.PAPERCLIP_AGENT_JWT_SECRET;
@@ -373,7 +450,7 @@ export async function runManagedNativeConversationFrame(input: {
   }
   const sandboxHeartbeat = await input.configureHeartbeat?.({ db, actor: human, companyId, agentId,
     providerBindingId: provider.provider.id, gateway, profile, runHome, opencodeBinary: input.opencodeBinary,
-    brokerOrigin: origin, certBundlePath, setBrokerToken: token => { activeToken = token; } });
+    brokerOrigin: origin, brokerProxyOrigin, certBundlePath, setBrokerToken: token => { activeToken = token; } });
   const heartbeat = heartbeatService(db, { sandboxExec: sandboxHeartbeat?.sandboxExec,
     environmentRuntime: sandboxHeartbeat?.environmentRuntime,
     testNativeRunnerEnvironment: async ({ execution, runId, issueId,
@@ -414,6 +491,13 @@ export async function runManagedNativeConversationFrame(input: {
       PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: String(minted.maxOutputTokens),
       PATH: `${dirname(input.opencodeBinary)}:${process.env.PATH ?? ""}`,
       OPENCODE_DISABLE_DEFAULT_PLUGINS: "true", OPENCODE_DISABLE_MODELS_FETCH: "true",
+      // The relay's exact public-DNS-shaped broker origin is tunneled through
+      // a loopback-only test proxy because this environment blocks direct
+      // loopback egress. The proxy accepts only that exact broker host+port.
+      NO_PROXY: input.sandboxRelay ? "localhost,127.0.0.1,::1" : new URL(origin).hostname,
+      no_proxy: input.sandboxRelay ? "localhost,127.0.0.1,::1" : new URL(origin).hostname,
+      HTTP_PROXY: "", http_proxy: "", HTTPS_PROXY: brokerProxyOrigin ?? "", https_proxy: brokerProxyOrigin ?? "",
+      ALL_PROXY: "", all_proxy: "",
       NODE_EXTRA_CA_CERTS: certBundlePath, SSL_CERT_FILE: certBundlePath };
   } });
   const [humanSession] = await db.select({ id: authSessions.id, userId: authSessions.userId,
@@ -532,6 +616,8 @@ export async function runManagedNativeConversationFrame(input: {
   } finally {
     await heartbeat.drainActiveRunExecutions().catch(() => undefined);
     await sandboxHeartbeat?.close?.().catch(() => undefined);
+    for (const socket of brokerProxySockets) socket.destroy();
+    if (brokerProxy?.listening) await new Promise<void>(resolve => brokerProxy!.close(() => resolve()));
     runnerPrpWebSocketInternals.resetForTests();
     await new Promise<void>(resolve => broker.close(() => resolve()));
     if (prevBroker === undefined) delete process.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN; else process.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN = prevBroker;

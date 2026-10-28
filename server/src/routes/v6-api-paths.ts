@@ -32,6 +32,42 @@ const importJobListItemSchema = z.strictObject({
 });
 const importJobListSchema = z.strictObject({ jobs: z.array(importJobListItemSchema).max(50), nextCursor: z.string().max(512).nullable() });
 const importJobListQuerySchema = z.strictObject({ limit: z.coerce.number().int().min(1).max(50).default(20), cursor: z.string().min(1).max(512).optional(), expectedUserId: z.string().optional() });
+const saasModelDependencyInventorySchema = z.strictObject({
+  observedAt: z.iso.datetime(), truncated: z.boolean(), unresolvedAgentBindings: z.number().int().nonnegative(),
+  coverage: z.array(z.strictObject({ dependency: z.enum(["agent_runtime", "worker_qualification_profile", "read_only_verifier", "first_party_support"]),
+    configuration: z.enum(["database_inventory", "configured", "unconfigured"]), entries: z.number().int().nonnegative(),
+    untracked: z.number().int().nonnegative(), unresolved: z.number().int().nonnegative() })),
+  entries: z.array(z.strictObject({ dependency: z.enum(["agent_runtime", "worker_qualification_profile", "read_only_verifier", "first_party_support"]),
+    companyId: z.string(), agentId: z.string().nullable(), runtimeAdapter: z.string().nullable(), provider: z.string().nullable(),
+    model: z.string().nullable(), modelVersionOrReleaseIdentity: z.string().nullable(),
+    lifecycleStatus: z.enum(["candidate", "qualifying", "qualified", "active", "deprecated", "migration_required", "blocked", "retired", "untracked"]),
+    lifecycleOwner: z.string().nullable(), retirementAt: z.iso.datetime().nullable(), qualificationHash: z.string().nullable(),
+    regionOrRoutingProfile: z.string().nullable(), dataUseProfile: z.string().nullable(),
+    supportedInputOutput: z.array(z.enum(["text", "image", "audio", "video"])).nullable(), toolUseCapability: z.boolean().nullable(),
+    contextLimits: z.strictObject({ inputTokensUpperBound: z.number(), maxOutputTokens: z.number(), maximumEnvelopeBytes: z.number() }).nullable(),
+    costProfile: z.strictObject({ currency: z.string(), model: z.string(), inputMinorPerMillion: z.number(), outputMinorPerMillion: z.number(),
+      fixedMinor: z.number(), expiresAt: z.iso.datetime() }).nullable(),
+    rateLimits: z.strictObject({ requestsPerMinute: z.number().nullable(), tokensPerMinute: z.number().nullable() }).nullable(),
+    runtimeAvailability: z.literal("not_assessed"), bindingState: z.enum(["unresolved", "qualification_profile_unresolved", "qualified_profile_bound",
+      "provider_model_configured", "provider_model_unresolved", "adapter_model_not_reported", "configured_profile", "configured_not_current_agent_runtime"]) })),
+});
+const saasOperationsResponseSchema = z.strictObject({
+  environment: z.enum(["staging", "production"]),
+  jobs: z.array(z.strictObject({ jobKey: z.string(), leaseUntil: z.iso.datetime(), lastSuccessAt: z.iso.datetime().nullable(),
+    lastErrorCode: z.string().nullable() })),
+  queues: z.array(z.strictObject({ domain: z.string(), status: z.string(), count: z.string() })),
+  hosts: z.array(z.strictObject({ id: z.string(), status: z.string(), region: z.string(),
+    lastHeartbeatAt: z.iso.datetime().nullable(), fencedAt: z.iso.datetime().nullable(),
+    cpuTotalMillis: z.number(), cpuReservedMillis: z.number() })),
+  profiles: z.array(z.strictObject({ key: z.string(), commercialProductKey: z.string(), cpuMillis: z.number(),
+    memoryBytes: z.string(), diskBytes: z.string(), qualified: z.boolean() })),
+  versions: z.array(z.strictObject({ imageDigest: z.string(), providerVersion: z.string(), stateFormat: z.string(),
+    status: z.string(), approvedAt: z.iso.datetime().nullable() })),
+  support: z.array(z.strictObject({ id: z.string(), companyId: z.string(), scopes: z.array(z.string()), expiresAt: z.iso.datetime() })),
+  deployments: z.array(z.strictObject({ sourceSha: z.string(), imageDigest: z.string(), schemaVersion: z.string(),
+    environment: z.string(), verificationResult: z.string(), deployedAt: z.iso.datetime() })),
+  modelDependencies: saasModelDependencyInventorySchema,
+});
 
 // Explicit profile-specific contracts; the route coverage gate checks this catalogue against mounted handlers.
 export const v6ApiPaths: {
@@ -353,18 +389,24 @@ export const v6ApiPaths: {
     path: "/api/saas/internal/operations",
     successStatus: 200,
     auth: "session",
+    result: saasOperationsResponseSchema,
+    privateResponse: true,
   },
   {
     method: "get",
     path: "/api/saas/internal/costs",
     successStatus: 200,
     auth: "session",
+    result: shared.saasCostSnapshotSchema,
+    privateResponse: true,
   },
   {
     method: "post",
     path: "/api/saas/internal/costs",
     successStatus: 201,
     auth: "session",
+    result: shared.saasCostSnapshotSchema,
+    privateResponse: true,
   },
   {
     method: "get",

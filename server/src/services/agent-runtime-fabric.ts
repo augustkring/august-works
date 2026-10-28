@@ -307,7 +307,9 @@ export function agentRuntimeFabricService(db: Db, decisionShadow?: { sourceSha: 
           throw forbidden("Delegated execution has no exact claimed scope request");
         claimedScopeRequestId = request.id;
       }
-      if (scope.delegatedScopes.length && await hasOrchestrationPlan(db, input.companyId, input.issueId)) throw forbidden("Bounded plans require local execution until delegated side-effect and budget receipts are qualified");
+      const boundedPlan = await hasOrchestrationPlan(db, input.companyId, input.issueId);
+      if (boundedPlan && scope.delegatedScopes.some((delegated) => delegated.accessMode === "act"))
+        throw forbidden("Bounded plans cannot use delegated act scope until delegated side-effect and budget receipts are qualified");
       if (authored && scope.delegatedScopes.length)
         throw forbidden("This authored version has no delegated execution authority");
       const scoped = scope.delegatedScopes.length ? await crossCompanyContextService(db).resolve(actor, scope) : null;

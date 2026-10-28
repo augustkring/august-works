@@ -266,6 +266,14 @@ export function workflowRoutes(db: Db) {
     return value;
   }
 
+  function humanWorkflowCoverageId(req: Request) {
+    const value = req.header("X-Human-Workflow-Coverage-Id")?.trim();
+    if (!value) return null;
+    const parsed = z.uuid().safeParse(value);
+    if (!parsed.success) throw unprocessable("X-Human-Workflow-Coverage-Id must be a UUID", { code: "workflow_coverage_id_invalid" });
+    return parsed.data;
+  }
+
   async function decidePermission(
     req: Request,
     companyId: string,
@@ -484,6 +492,7 @@ export function workflowRoutes(db: Db) {
         req.body,
         runActor(req),
         idempotencyKey(req),
+        humanWorkflowCoverageId(req),
       );
       await audit(req, {
         companyId,
@@ -496,6 +505,7 @@ export function workflowRoutes(db: Db) {
           workflowRevisionId: result.run.workflowRevisionId,
         },
       });
+      res.set("Cache-Control", "private, no-store");
       res.status(201).json(result);
     },
   );
@@ -513,7 +523,9 @@ export function workflowRoutes(db: Db) {
         req.body,
         runActor(req),
         idempotencyKey(req),
+        humanWorkflowCoverageId(req),
       );
+      res.set("Cache-Control", "private, no-store");
       res.status(201).json(result);
     },
   );

@@ -143,7 +143,7 @@ export async function authorizeStrategyNativePopulation(tx: Db, companyId: strin
   // transaction. Some canonical readers arrive with the root database; start
   // the transaction here before selecting rows so the owner cannot mistake
   // autocommit facts for the locked population.
-  if (!is(tx, PgTransaction)) return tx.transaction(async raw => {
+  if (!is(tx, PgTransaction)) return tx.transaction(async (raw): Promise<NativePopulationResult> => {
     const scoped = raw as unknown as Db;
     if (!is(scoped, PgTransaction)) throw forbidden("Strategy source authorization requires its native read transaction.");
     return authorizeStrategyNativePopulation(scoped, companyId, actor, type, unitIds, sensitivity, deadline);

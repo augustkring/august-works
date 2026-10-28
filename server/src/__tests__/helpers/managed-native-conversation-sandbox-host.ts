@@ -106,6 +106,7 @@ export async function configureManagedConversationSandboxHost(input: {
   root: string;
   opencodeBinary: string;
   brokerOrigin: string;
+  brokerProxyOrigin: string | null;
   certBundlePath: string;
   setBrokerToken: (token: string) => void;
 }) {
@@ -657,6 +658,7 @@ export async function configureManagedConversationSandboxHost(input: {
   const execFacts: Array<{ executable: string; cwdExact: boolean; modelCredentialPresent: boolean;
     managedModelBrokerOriginPresent: boolean;
     assignedMcpEnvironmentAbsent: boolean; credentialEnvironmentAbsent: boolean;
+    exactBrokerProxyConfigured: boolean;
     nativePreparationPurpose: string | null; providerPackImageProbe: boolean;
     exitCode: number | null; timedOut: boolean }> = [];
   relayHost.on("message", raw => {
@@ -696,12 +698,6 @@ export async function configureManagedConversationSandboxHost(input: {
       !requestEnv.PAPERCLIP_NATIVE_MCP_URL && !requestEnv.PAPERCLIP_NATIVE_MCP_TOKEN;
     const providerPackImageProbe = nativePreparationPurpose === "provider_artifact" && argv[0] === "sh" &&
       typeof argv[2] === "string" && argv[2].includes("$HOME/.local/share/paperclip-runner/provider-pack");
-    const fact = { executable: argv[0] ?? "", cwdExact: cwd === expectedTaskRoot, modelCredentialPresent,
-      managedModelBrokerOriginPresent: requestEnv.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === brokerOrigin,
-      assignedMcpEnvironmentAbsent, credentialEnvironmentAbsent: noCredentialEnvironment,
-      nativePreparationPurpose, providerPackImageProbe,
-      exitCode: null as number | null, timedOut: false };
-    execFacts.push(fact);
     const env = { ...process.env, ...requestEnv,
       ...(nativePreparationPurpose === "provider_artifact" && providerImageHome ? { HOME: providerImageHome } : {}),
       ...(request.modelBrokerCredential ? { ANTHROPIC_API_KEY: "paperclip-managed-model-broker" } : {}) } as NodeJS.ProcessEnv;
@@ -711,6 +707,16 @@ export async function configureManagedConversationSandboxHost(input: {
         "PAPERCLIP_SANDBOX_BROKER_TOKEN", "PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN",
         "PAPERCLIP_SANDBOX_BROKER_SESSION_ID"]) delete env[name];
     }
+    const fact = { executable: argv[0] ?? "", cwdExact: cwd === expectedTaskRoot, modelCredentialPresent,
+      managedModelBrokerOriginPresent: requestEnv.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === brokerOrigin,
+      assignedMcpEnvironmentAbsent, credentialEnvironmentAbsent: noCredentialEnvironment,
+      exactBrokerProxyConfigured: input.brokerProxyOrigin !== null && env.HTTPS_PROXY === input.brokerProxyOrigin &&
+        env.https_proxy === input.brokerProxyOrigin && env.NO_PROXY === "localhost,127.0.0.1,::1" &&
+        requestEnv.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === brokerOrigin &&
+        ["HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy"].every(name => !env[name]),
+      nativePreparationPurpose, providerPackImageProbe,
+      exitCode: null as number | null, timedOut: false };
+    execFacts.push(fact);
     const child = spawn(argv[0]!, argv.slice(1), { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
     if (typeof request.stdinBase64 === "string") child.stdin.end(Buffer.from(request.stdinBase64, "base64")); else child.stdin.end();
     for (const [stream, output] of [["stdout", child.stdout], ["stderr", child.stderr]] as const)
@@ -733,7 +739,10 @@ export async function configureManagedConversationSandboxHost(input: {
     if (expectedIssueId !== issueId) throw new Error("conversation_software_host_issue_binding_changed");
     return { PATH: `${input.opencodeBinary.slice(0, input.opencodeBinary.lastIndexOf("/"))}:${process.env.PATH ?? ""}`,
       OPENCODE_DISABLE_DEFAULT_PLUGINS: "true", OPENCODE_DISABLE_MODELS_FETCH: "true",
-      NODE_EXTRA_CA_CERTS: input.certBundlePath, SSL_CERT_FILE: input.certBundlePath };
+      NODE_EXTRA_CA_CERTS: input.certBundlePath, SSL_CERT_FILE: input.certBundlePath,
+      ...(input.brokerProxyOrigin ? { HTTP_PROXY: "", http_proxy: "", HTTPS_PROXY: input.brokerProxyOrigin,
+        https_proxy: input.brokerProxyOrigin, ALL_PROXY: "", all_proxy: "",
+        NO_PROXY: "localhost,127.0.0.1,::1", no_proxy: "localhost,127.0.0.1,::1" } : {}) };
   };
 
   const prepareHostForRunOnce = async (runId: string, expectedLeaseId: string) => {

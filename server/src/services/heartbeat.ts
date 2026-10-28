@@ -21275,6 +21275,29 @@ export function heartbeatService(
           : selectedEnvironmentId
             ? await environmentsSvc.getById(selectedEnvironmentId)
             : null;
+      // Fail closed on low-trust workspace isolation before preparing any
+      // credentials, required Skills, or runtime context. Environment
+      // resolution is a bounded read and has no provider/network side effect;
+      // the later preflight repeats it before workspace resolution so a
+      // changed environment cannot inherit stale admission.
+      const resolveSelectedEnvironmentDriver = async () => {
+        const preflightEnvironment = await envOrchestrator.resolveEnvironment({
+          companyId: agent.companyId,
+          selectedEnvironmentId,
+          localEnvironmentId: localEnvironment.id,
+        });
+        return preflightEnvironment.driver;
+      };
+      await preflightLowTrustWorkspaceIsolation({
+        db,
+        trustPreset,
+        isolatedWorkspacesEnabled,
+        effectiveExecutionWorkspaceMode,
+        issue: issueRef
+          ? { companyId: agent.companyId, id: issueRef.id, projectId: issueRef.projectId }
+          : null,
+        resolveSelectedEnvironmentDriver,
+      });
       const nativeChatWorkspaceScope = await findNativeChatWorkspaceScope(db, {
         adapterType: agent.adapterType,
         environmentDriver: selectedEnvironmentForConfig?.driver ?? null,
@@ -21703,16 +21726,7 @@ export function heartbeatService(
               projectId: issueRef.projectId,
             }
           : null,
-        resolveSelectedEnvironmentDriver: async () => {
-          const preflightEnvironment = await envOrchestrator.resolveEnvironment(
-            {
-              companyId: agent.companyId,
-              selectedEnvironmentId,
-              localEnvironmentId: localEnvironment.id,
-            },
-          );
-          return preflightEnvironment.driver;
-        },
+        resolveSelectedEnvironmentDriver,
         resolveWorkspace: async () => {
           if (nativeChatWorkspaceScope && !nativeChatWorkspaceScope.projectId) {
             const cwd = await materializeNativeChatTaskRoot(

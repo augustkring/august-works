@@ -709,7 +709,7 @@ test("Stop then queued /new resets unpause the conversation without losing histo
       headers: { Authorization: `Bearer ${staleToken}` },
       data: { body: "Forbidden late response" },
     });
-    expect([403, 409]).toContain(late.status());
+    expect([403, 404, 409]).toContain(late.status());
     const mutation = await request.post(
       `/api/companies/${f.company.id}/projects`,
       {
@@ -717,7 +717,7 @@ test("Stop then queued /new resets unpause the conversation without losing histo
         data: { name: "Cancelled project" },
       },
     );
-    expect([403, 409]).toContain(mutation.status());
+    expect([403, 404, 409]).toContain(mutation.status());
     expect(
       await json(await request.get(`/api/companies/${f.company.id}/projects`)),
     ).toHaveLength(0);

@@ -34,6 +34,8 @@ import { agentProviderBindingService } from "../agent-provider-bindings.js";
 import { assertAuthoredAgentManifestCurrent } from "../agents/authored-definition.js";
 import { enqueueSupervisionStop } from "../supervision/supervision-outbox.js";
 import { withV7ActivityTransaction, logActivity } from "../v7-mutations.js";
+import { resolveDelegatedContextManifestBindings } from "../context/delegated-context-binding.js";
+import type { AuthorizationActor } from "../authorization.js";
 
 type Binding = {
   companyId: string;
@@ -202,6 +204,20 @@ export async function assertNativeToolPlanCurrent(
     .innerJoin(agentIdentities, eq(agentIdentities.id, agents.agentIdentityId))
     .innerJoin(companies, eq(companies.id, agents.companyId))
     .where(and(eq(agents.companyId, b.companyId), eq(agents.id, b.agentId)));
+  const delegatedScopes = manifest?.manifest.executionScope.delegatedScopes ?? [];
+  const delegatedRefs = manifest?.manifest.contextManifests.filter(ref => ref.companyId !== b.companyId) ?? [];
+  if (delegatedScopes.length) {
+    const scopedCompanies = delegatedScopes.map(scope => scope.companyId).sort();
+    const contextCompanies = delegatedRefs.map(ref => ref.companyId).sort();
+    if (!userId || userId !== run?.responsibleUserId || delegatedScopes.some(scope => scope.accessMode === "act") ||
+      delegatedRefs.length !== delegatedScopes.length || JSON.stringify(scopedCompanies) !== JSON.stringify(contextCompanies))
+      throw forbidden("Native bounded tools require exact delegated read/contribute Context and cannot use guest act scope");
+    const runtimeActor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: b.companyId,
+      agentId: b.agentId, runId: b.runId, onBehalfOfUserId: userId };
+    await resolveDelegatedContextManifestBindings(db, { homeCompanyId: b.companyId, homeAgentId: b.agentId,
+      homeRunId: b.runId, responsibleUserId: userId, actor: runtimeActor,
+      manifestIds: delegatedRefs.map(ref => ref.contextManifestId) });
+  } else if (delegatedRefs.length) throw forbidden("Native bounded tools have guest Context without its execution scope");
   if (
     !run ||
     run.status !== "running" ||
@@ -217,7 +233,6 @@ export async function assertNativeToolPlanCurrent(
     ["done", "cancelled"].includes(task.status) ||
     !manifest ||
     manifest.manifest.responsibleUserId !== run.responsibleUserId ||
-    manifest.manifest.executionScope.delegatedScopes.length ||
     !presence ||
     presence.identity.status !== "active" ||
     presence.company.status !== "active" ||

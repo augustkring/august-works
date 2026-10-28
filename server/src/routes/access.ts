@@ -12,6 +12,7 @@ import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { z } from "zod";
 import { Router } from "express";
 import type { NextFunction, Request, Response } from "express";
 import { and, desc, eq, gt, inArray, isNotNull, isNull, lte, ne } from "drizzle-orm";
@@ -45,6 +46,7 @@ import {
   archiveCompanyMemberSchema,
   updateMemberPermissionsSchema,
   updateUserCompanyAccessSchema,
+  createHumanWorkflowCoverageSchema,
   PERMISSION_KEYS,
   isUuidLike,
 } from "@paperclipai/shared";
@@ -4460,6 +4462,60 @@ export function accessRoutes(
       members: await addCompanyMemberRemovalAccess(req, db, access, companyId, members),
       access: currentAccess,
     });
+  });
+
+  router.get("/companies/:companyId/workflow-coverages", async (req, res) => {
+    const companyId = req.params.companyId as string;
+    if (req.actor.type !== "board" || req.actor.source !== "session" || !req.actor.userId) {
+      throw forbidden("A current Human session is required to view workflow coverage.", { code: "workflow_coverage_session_required" });
+    }
+    assertExpectedBoardActor(req);
+    assertCompanyAccess(req, companyId);
+    res.set("Cache-Control", "private, no-store");
+    res.json({ coverages: await access.listWorkflowCoverages(companyId, req.actor.userId) });
+  });
+
+  router.post("/companies/:companyId/workflow-coverages", validate(createHumanWorkflowCoverageSchema), async (req, res) => {
+    const companyId = req.params.companyId as string;
+    if (req.actor.type !== "board" || req.actor.source !== "session" || !req.actor.userId) {
+      throw forbidden("A current Human session is required to create workflow coverage.", { code: "workflow_coverage_session_required" });
+    }
+    assertCompanyAccess(req, companyId);
+    const result = await access.createWorkflowCoverage(companyId, {
+      ...req.body,
+      taskId: req.body.taskId ?? null,
+      startsAt: req.body.startsAt ?? new Date(),
+    }, req.actor);
+    const coverage = result.coverage;
+    if (result.created) await logActivity(db, {
+      companyId, actorType: "user", actorId: req.actor.userId,
+      action: "company.workflow_coverage.created", entityType: "human_workflow_coverage", entityId: coverage.id,
+      details: { delegateeUserId: coverage.delegateeUserId, workflowId: coverage.workflowId,
+        workflowRevisionId: coverage.workflowRevisionId, scopeType: coverage.scopeType,
+        taskId: coverage.taskId, startsAt: coverage.startsAt.toISOString(), expiresAt: coverage.expiresAt.toISOString(),
+        requestId: coverage.requestId },
+    });
+    res.set("Cache-Control", "private, no-store");
+    res.status(result.created ? 201 : 200).json(coverage);
+  });
+
+  router.delete("/companies/:companyId/workflow-coverages/:coverageId", async (req, res) => {
+    const companyId = req.params.companyId as string;
+    const coverageId = z.uuid().parse(req.params.coverageId);
+    if (req.actor.type !== "board" || req.actor.source !== "session" || !req.actor.userId) {
+      throw forbidden("A current Human session is required to revoke workflow coverage.", { code: "workflow_coverage_session_required" });
+    }
+    assertCompanyAccess(req, companyId);
+    const coverage = await access.revokeWorkflowCoverage(companyId, coverageId, req.actor);
+    if (!coverage) throw notFound("Workflow coverage not found");
+    if (coverage.revokedByUserId === req.actor.userId) {
+      await logActivity(db, { companyId, actorType: "user", actorId: req.actor.userId,
+        action: "company.workflow_coverage.revoked", entityType: "human_workflow_coverage", entityId: coverage.id,
+        details: { workflowId: coverage.workflowId, workflowRevisionId: coverage.workflowRevisionId,
+          scopeType: coverage.scopeType, taskId: coverage.taskId } });
+    }
+    res.set("Cache-Control", "private, no-store");
+    res.json(coverage);
   });
 
   router.get("/companies/:companyId/user-directory", async (req, res) => {
