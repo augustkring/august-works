@@ -1,0 +1,17 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/__tests__/documents-service.test.ts > documentService system issue documents > filters continuation summaries from default document lists and issue payload summaries 241ms
+ ✓ src/__tests__/documents-service.test.ts > documentService system issue documents > keeps system documents available for includeSystem and direct fetch callers 133ms
+ ✓ src/__tests__/documents-service.test.ts > documentService system issue documents > retains the summary revision through the original document owner without adding DTO fields 81ms
+ ✓ src/__tests__/documents-service.test.ts > documentService system issue documents > captures the selected revision separately and keeps unknown or mismatched history unknown 119ms
+ ✓ src/__tests__/documents-service.test.ts > documentService system issue documents > retains a known selected revision snapshot after its original body changes 95ms
+ ✓ src/__tests__/documents-service.test.ts > documentService system issue documents > explains the revision guard and rejects missing or stale update revisions without changing the document 73ms
+ ✓ src/__tests__/documents-service.test.ts > documentService system issue documents > locks and unlocks issue documents 74ms
+ ✓ src/__tests__/documents-service.test.ts > documentService system issue documents > creates a new document instead of updating a locked document when requested 61ms
+
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+   Start at  12:08:04
+   Duration  21.21s (transform 10.85s, setup 115ms, import 15.93s, tests 5.02s, environment 0ms)
+

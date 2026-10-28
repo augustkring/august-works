@@ -20,6 +20,8 @@ import { applyTaskDrain, getTaskDrainStatus, heartbeatService, startTaskDrain, s
 import { projectRoutes } from "../../routes/projects.js";
 import type { AuthorizationActor } from "../../services/authorization.js";
 import { errorHandler } from "../../middleware/error-handler.js";
+import { preparePlatformSkillAdmission } from "../../services/platform-skill-admission.js";
+import { blenteraPlatformContractHashes } from "../../services/tool-gateway.js";
 
 let fixtureAdmissionHolds = 0;
 let restoreRunAdmission = () => {};
@@ -103,7 +105,7 @@ export async function startRunnerApiTestServer() {
       const foreignCompanyId = id("foreign-company"), foreignProjectId = id("foreign-project");
       const projectWorkspaceId = id("workspace"), artifactId = id("artifact"), binaryArtifactId = id("binary-artifact"), goalId = id("goal");
       const blockerId = id("blocker"), approvalId = id("approval");
-      const responsibleUserId = options.connectionScenario || options.conversation || options.projectReadSource ? id("responsible-user") : null;
+      const responsibleUserId = id("responsible-user");
       const humanSessionId = options.projectReadSource ? id("project-human-session") : null;
       const humanSessionToken = humanSessionId ? randomUUID() : null;
       const workspace = await mkdtemp(join(root, "workspace-"));
@@ -141,6 +143,8 @@ export async function startRunnerApiTestServer() {
       await db.insert(heartbeatRuns).values({ id: runId, companyId, agentId, status: "running", responsibleUserId, runtimeMode: "native", nativeIssueId: issueId, invocationSource: "assignment", triggerDetail: "system", contextSnapshot: { issueId, ...(options.conversation ? { conversationSessionGeneration: 0 } : {}) } });
       await db.update(issues).set({ executionRunId: runId }).where(eq(issues.id, issueId));
       if (responsibleUserId) await initializeRunIdentity(db, { companyId, runId, issueId, responsibleUserId, cause: "instruction" });
+      await preparePlatformSkillAdmission(db, { companyId, agentId, runId, responsibleUserId,
+        requireExisting: false }, blenteraPlatformContractHashes());
       let qualifiedProjectId: string | null = null;
       let qualifiedForeignProjectId: string | null = null;
       if (options.projectReadSource && responsibleUserId && humanSessionId) {

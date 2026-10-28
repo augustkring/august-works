@@ -124,7 +124,9 @@ describeEmbeddedPostgres("documentService system issue documents", () => {
     expect(selected).toEqual(normal);
     expect(captures).toEqual([{ input: { kind: "document_revision", documentId: expect.any(String),
       revisionId: selected!.latestRevisionId, issueId, contentHash: createHash("sha256").update(selected!.body).digest("hex") },
-      payloadSourceSnapshot: null }]);
+      payloadSourceSnapshot: null, returnedResultDigest: createHash("sha256").update(JSON.stringify({
+        document: await svc.getIssueDocumentByKey(issueId, ISSUE_CONTINUATION_SUMMARY_DOCUMENT_KEY),
+      }), "utf8").digest("hex") }]);
     expect(Object.keys(selected!)).toEqual(["key", "title", "body", "latestRevisionId", "latestRevisionNumber", "sourceTrust", "updatedAt"]);
   });
 
@@ -135,7 +137,8 @@ describeEmbeddedPostgres("documentService system issue documents", () => {
     const first = (await read())!;
     expect(captures).toEqual([{ input: { kind: "document_revision", documentId: first.id,
       revisionId: first.latestRevisionId, issueId,
-      contentHash: createHash("sha256").update(first.body!).digest("hex") }, payloadSourceSnapshot: null }]);
+      contentHash: createHash("sha256").update(first.body!).digest("hex") }, payloadSourceSnapshot: null,
+      returnedResultDigest: createHash("sha256").update(JSON.stringify({ document: first }), "utf8").digest("hex") }]);
     expect(first).not.toHaveProperty("sourceRevision");
     expect(first).not.toHaveProperty("payloadSourceSnapshot");
     const saved = await svc.upsertIssueDocument({ issueId, key: "plan", format: "markdown", body: "# New plan", baseRevisionId: first.latestRevisionId });

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 import express from "express";
 import request from "supertest";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -636,9 +637,12 @@ describePg("Workflow routes", () => {
     await http.get(`/api/companies/${other.id}/workflow-runs/${first.body.run.id}/experience?expectedUserId=local-board`).expect(404);
     await request(app({ type: "agent", agentId: randomUUID(), companyId: company.id, source: "agent_key" })).get(`${privateRead}?expectedUserId=local-board`).expect(403);
     const userId = "workflow-run-viewer";
+    await db.insert(authUsers).values({ id: userId, name: "Workflow viewer", email: `${userId}@fixture.invalid`,
+      emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
+    const sessionId = await seedNativePasskeySession(db, userId);
     await db.insert(companyMemberships).values({ companyId: company.id, principalType: "user", principalId: userId, status: "active", membershipRole: "viewer" });
     await db.insert(principalPermissionGrants).values({ companyId: company.id, principalType: "user", principalId: userId, permissionKey: "workflows:read", scope: null });
-    const viewer = request(app({ type: "board", userId, source: "session", isInstanceAdmin: false, companyIds: [company.id] }));
+    const viewer = request(app({ type: "board", userId, sessionId, source: "session", isInstanceAdmin: false, companyIds: [company.id] }));
     await viewer.get(`${privateRead}?expectedUserId=${userId}`).expect(200);
     await db.delete(principalPermissionGrants).where(eq(principalPermissionGrants.principalId, userId));
     await viewer.get(`${privateRead}?expectedUserId=${userId}`).expect(403);

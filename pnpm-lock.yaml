@@ -389,6 +389,9 @@ importers:
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
+      typebox:
+        specifier: 1.4.1
+        version: 1.4.1
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
@@ -8875,6 +8878,9 @@ packages:
   type-is@2.1.0:
     resolution: {integrity: sha512-faYHw0anBbc/kWF3zFTEnxSFOAGUX9GFbOBthvDdLsIlEoWOFOtS0zgCiQYwIskL9iGXZL3kAXD8OoZ4GmMATA==}
     engines: {node: '>= 18'}
+
+  typebox@1.4.1:
+    resolution: {integrity: sha512-t3PeLDn0qJkwg0x6r9s6EuaOG7wivByLlst62TI7r6fy7eXHu/5LF/cRIeRcrT9qhJZ5VRFM6efHt1/bc7LMCg==}
 
   typescript@5.9.3:
     resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
@@ -17476,6 +17482,8 @@ snapshots:
       content-type: 2.1.0
       media-typer: 1.1.0
       mime-types: 3.0.2
+
+  typebox@1.4.1: {}
 
   typescript@5.9.3: {}
 

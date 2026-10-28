@@ -52,20 +52,26 @@ function createFakeDb(options: {
       deletedTables.push(table);
       return chain;
     },
-    select: () => {
-      if (options.selectThrows) throw new Error("select unavailable");
+    transaction: async (work: (tx: Db) => unknown) => work(db),
+    select: (fields?: { permissionsInitializedAt?: unknown }) => {
+      // Grant initialization is covered separately; these actor fixtures retain
+      // an already-initialized membership under the canonical row lock.
+      const initializing = fields?.permissionsInitializedAt !== undefined;
       return {
         from: (table: unknown) => ({
           where: (condition: unknown) => {
-            selectWheres.push({ table, condition });
-            const rows =
-              table === instanceSettings && settingsRow
+            if (!initializing) selectWheres.push({ table, condition });
+            const rows = initializing
+              ? [{ id: "fixture-membership", permissionsInitializedAt: new Date() }]
+              : table === instanceSettings && settingsRow
                 ? [settingsRow]
                 : table === companyMemberships
                   ? (options.membershipQueryRows ?? [])
                   : [];
             return {
-              then: (resolve: (v: unknown) => unknown) => Promise.resolve(rows).then(resolve),
+              for: () => Promise.resolve(rows),
+              then: (resolve: (v: unknown) => unknown, reject: (error: unknown) => unknown) =>
+                (options.selectThrows && !initializing ? Promise.reject(new Error("select unavailable")) : Promise.resolve(rows)).then(resolve, reject),
             };
           },
         }),
