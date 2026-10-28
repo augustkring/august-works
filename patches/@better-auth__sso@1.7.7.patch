@@ -165,7 +165,7 @@ index 8b177bb8f..e7c2bee7e 100644
 +		const matchingConfirmations = verifiedAuthentication.bearerConfirmations.filter((confirmation) => {
 +			const notOnOrAfter = parseStrictSAMLTimestamp(confirmation.notOnOrAfter);
 +			return confirmation.inResponseTo === validatedRequest.id &&
-+				typeof confirmation.recipient === "string" && expectedRecipients.has(confirmation.recipient) &&
++				typeof confirmation.recipient === "string" && expectedRecipients.includes(confirmation.recipient) &&
 +				Number.isFinite(notOnOrAfter) && notOnOrAfter > now;
 +		});
 +		if (verifiedAuthentication.bearerConfirmations.length !== 1 || matchingConfirmations.length !== 1) failChallenge();

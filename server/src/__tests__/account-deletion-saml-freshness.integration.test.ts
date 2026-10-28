@@ -16,6 +16,7 @@ import {
   authVerifications, companyMemberships, enterpriseIdentityPolicies, type Db,
 } from "@paperclipai/db";
 import { createBetterAuthInstance } from "../auth/better-auth.js";
+import { accountDeletionService } from "../services/saas/account-deletion.js";
 import { enterpriseIdentityPolicyService, enterprisePolicyHash } from "../services/enterprise/identity-policy.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
@@ -252,14 +253,22 @@ const sourceSha = "a".repeat(40);
       started => signedSamlResponse(started, { expiredSCD: true }),
       started => signedSamlResponse(started, { omitAssertionSignature: true }),
     ];
-    for (const makeResponse of badCases) {
+    for (const [caseIndex, makeResponse] of badCases.entries()) {
       const challenge = await startDeletionChallenge(sourceSessionId);
       const started = await startSaml(challenge.callbackURL, sourceSessionId);
       const raw = inflateRawSync(Buffer.from(started.samlRequest, "base64")).toString("utf8");
       expect(raw).toMatch(/ForceAuthn="true"/);
       expect(started.requestId).toBeTruthy();
       const callback = await submitSaml(await makeResponse(started));
-      expect(callback.status).toBe(302);
+      const callbackBody = await callback.clone().json().catch(() => null) as { code?: unknown; message?: unknown; error?: unknown } | null;
+      const callbackLocation = callback.headers.get("location");
+      const callbackError = callbackLocation ? new URL(callbackLocation).searchParams.get("error") : null;
+      expect(callback.status, JSON.stringify({
+        caseIndex, status: callback.status, redirectError: callbackError,
+        code: typeof callbackBody?.code === "string" ? callbackBody.code : null,
+        message: typeof callbackBody?.message === "string" ? callbackBody.message : null,
+        error: typeof callbackBody?.error === "string" ? callbackBody.error : null,
+      })).toBe(302);
       const status = await (await request("/account-deletion/sso/status", "GET", undefined, expectedHeaders(sourceSessionId))).json() as { ready: boolean };
       expect(status.ready).toBe(false);
       await clearSignInRateLimit();
@@ -273,21 +282,51 @@ const sourceSha = "a".repeat(40);
     const callback = await submitSaml(assertion);
     expect(callback.status).toBe(302);
     const proofSessionId = await currentSession();
-    const ready = await (await request("/account-deletion/sso/status", "GET", undefined, expectedHeaders(proofSessionId))).json() as {
-      ready: boolean; challengeId: string | null;
-    };
-    expect(ready).toMatchObject({ ready: true, challengeId: challenge.challengeId });
-
     const [proofRow] = await db.select().from(authVerifications)
       .where(eq(authVerifications.identifier, `account-deletion-oidc:${targetUserId}`));
+    const proof = proofRow ? JSON.parse(proofRow.value) as Record<string, unknown> : null;
+    const proofSummary = proof ? {
+      protocol: proof.protocol, state: proof.state,
+      authTimePresent: Number.isSafeInteger(proof.authTime),
+      callbackSessionBound: proof.callbackSessionId === proofSessionId,
+      proofSessionBound: proof.proofSessionId === proofSessionId,
+      samlRequestRecorded: proof.samlRequestId === started.requestId,
+      samlAssertionRecorded: typeof proof.samlAssertionId === "string" && Boolean(proof.samlAssertionId),
+      signedIssuerBound: proof.samlIssuer === idpIssuer,
+      signedSubjectBound: proof.samlSubject === subject,
+      signedAuthnInstantRecorded: typeof proof.samlAuthnInstant === "string" && Number.isFinite(Date.parse(proof.samlAuthnInstant)),
+      recipientRecorded: typeof proof.samlRecipient === "string" && proof.samlRecipient.startsWith(`${origin}/api/auth/sso/saml2/sp/acs/`),
+      expiryRecorded: typeof proof.samlNotOnOrAfter === "string" && Number.isFinite(Date.parse(proof.samlNotOnOrAfter)),
+      postBindingRecorded: proof.samlBinding === "post",
+    } : null;
+    const ready = await (await request("/account-deletion/sso/status", "GET", undefined, expectedHeaders(proofSessionId))).json() as {
+      userId: string; providerId: string | null; available: boolean; requiresNativeFactor: boolean;
+      ready: boolean; challengeId: string | null;
+    };
+    expect(ready, JSON.stringify({ status: ready, proof: proofSummary }))
+      .toMatchObject({ ready: true, challengeId: challenge.challengeId });
     expect(proofRow).toBeTruthy();
-    const proof = JSON.parse(proofRow!.value) as { protocol: string; samlRequestId: string; samlAssertionId: string };
     expect(proof).toMatchObject({ protocol: "saml", samlRequestId: started.requestId });
-    expect(proof.samlAssertionId).toMatch(/^_/);
+    expect(proof?.samlAssertionId).toMatch(/^_/);
 
     // The same signed response and consumed request cannot mint a second proof.
     expect((await submitSaml(assertion)).status).toBe(302);
     const replayReady = await (await request("/account-deletion/sso/status", "GET", undefined, expectedHeaders(proofSessionId))).json() as { ready: boolean };
     expect(replayReady.ready).toBe(true);
+
+    const deletion = accountDeletionService(db, {
+      enterpriseSourceSha: sourceSha,
+      removeSecret: async () => {},
+      cancelRun: async () => {},
+    });
+    const receipt = await deletion.request(targetUserId, {
+      confirmation: "DELETE MY ACCOUNT",
+      reauthenticationProofId: challenge.challengeId,
+      acknowledgeExport: true,
+      idempotencyKey: "saml-delete-receipt-0001",
+    }, new Date(), { type: "board", source: "session", userId: targetUserId, sessionId: proofSessionId });
+    expect(receipt.status).toBe("requested");
+    expect(await db.select().from(authVerifications)
+      .where(eq(authVerifications.identifier, `account-deletion-oidc:${targetUserId}`))).toEqual([]);
   });
 });

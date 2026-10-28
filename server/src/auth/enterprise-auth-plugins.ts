@@ -468,7 +468,8 @@ export function enterpriseAuthPlugins(
           }),
         },
         {
-          matcher: (ctx) => ctx.path?.startsWith("/sso/callback/") === true,
+          matcher: (ctx) => ctx.path?.startsWith("/sso/callback/") === true ||
+            ctx.path?.startsWith("/sso/saml2/sp/acs/") === true,
           handler: createAuthMiddleware(async (ctx) => {
             const created = ctx.context.newSession;
             if (!created) return;
