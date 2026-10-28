@@ -29,18 +29,20 @@ const receipt = { id: "private-deletion-receipt", companyId: "PRIVATE-DELETION-C
 const deferred = <T,>() => { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; };
 let root: Root, host: HTMLDivElement, client: QueryClient;
 async function render() { await act(async () => root.render(<QueryClientProvider client={client}><SaasAccountPage /></QueryClientProvider>)); }
-async function mount(options: { coldSessionFailure?: boolean; passwordless?: boolean; readyChallenge?: string } = {}) {
+async function mount(options: { coldSessionFailure?: boolean; passwordless?: boolean; readyChallenge?: string; pendingFactorChallenge?: string; twoFactorEnabled?: boolean } = {}) {
   await i18n.changeLanguage("en"); context.company = "company-one";
-  if (options.readyChallenge) window.history.replaceState({}, "", `/company/settings/security?accountDeletionReauth=${options.readyChallenge}`);
+  const callbackChallenge = options.readyChallenge ?? options.pendingFactorChallenge;
+  if (callbackChallenge) window.history.replaceState({}, "", `/company/settings/security?accountDeletionReauth=${callbackChallenge}`);
   client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false } } });
   if (!options.coldSessionFailure) client.setQueryData(queryKeys.auth.session, v9SessionFixture("owner"));
   client.setQueryData(["saas-capabilities"], capabilities);
   vi.spyOn(saasApi, "capabilities").mockResolvedValue(capabilities);
   const account = vi.spyOn(authApi, "getSession").mockResolvedValue(v9SessionFixture("owner"));
   vi.spyOn(authApi, "securityStatus").mockResolvedValue({ userId: "owner", hasPassword: !options.passwordless,
-    twoFactorEnabled: false, phishingResistantRequired: false, passkeysAvailable: false });
+    twoFactorEnabled: !!options.twoFactorEnabled, phishingResistantRequired: false, passkeysAvailable: false });
   vi.spyOn(authApi, "accountDeletionSsoStatus").mockResolvedValue({ userId: "owner", providerId: options.passwordless ? "qualified-oidc" : null,
-    available: !!options.passwordless, ready: !!options.readyChallenge, challengeId: options.readyChallenge ?? null });
+    available: !!options.passwordless, ready: !!options.readyChallenge, requiresNativeFactor: !!options.twoFactorEnabled,
+    challengeId: callbackChallenge ?? null });
   if (options.coldSessionFailure) account.mockRejectedValueOnce(new Error("PRIVATE-COLD-BOOT-ERROR"));
   vi.spyOn(instanceSettingsApi, "getExperimental").mockResolvedValue({ notification_policy_v9: true } as never);
   vi.spyOn(saasApi, "sessions").mockResolvedValue([session]);
@@ -175,7 +177,7 @@ it("requires all explicit deletion confirmations even when a form submit is disp
   await act(async () => submitDeletion()); expect(remove).not.toHaveBeenCalled();
 });
 it("requires a fresh company sign-in and keeps deletion behind the explicit confirmation form", async () => {
-  await mount({ passwordless: true });
+  await mount({ passwordless: true, twoFactorEnabled: true });
   const start = vi.spyOn(authApi, "startAccountDeletionSso").mockResolvedValue({
     challengeId: "11111111-1111-4111-8111-111111111111", providerId: "qualified-oidc",
     callbackURL: "https://example.test/company/settings/security?accountDeletionReauth=11111111-1111-4111-8111-111111111111",
@@ -205,6 +207,29 @@ it("submits a session-bound company sign-in proof only after explicit delete and
   await vi.waitFor(() => expect(remove).toHaveBeenCalledOnce());
   expect(remove.mock.calls[0]![1]).toMatchObject({ confirmation: "DELETE MY ACCOUNT", reauthenticationProofId: proofId, acknowledgeExport: true });
   expect(remove.mock.calls[0]![1]).not.toHaveProperty("password");
+});
+
+it("requires the existing native factor after fresh company sign-in before offering deletion", async () => {
+  const challengeId = "33333333-3333-4333-8333-333333333333";
+  await mount({ passwordless: true, twoFactorEnabled: true, pendingFactorChallenge: challengeId });
+  const complete = vi.spyOn(authApi, "completeAccountDeletionSsoFactor").mockResolvedValue({
+    userId: "owner", sessionId: "factor-session", challengeId,
+  });
+  const verify = vi.spyOn(authApi, "verifyTotp").mockResolvedValue({ sessionId: "factor-session" });
+  const freshSession = { ...v9SessionFixture("owner"), session: { ...v9SessionFixture("owner").session, id: "factor-session" } };
+  vi.mocked(authApi.getSession).mockResolvedValueOnce(freshSession);
+  vi.mocked(authApi.accountDeletionSsoStatus)
+    .mockResolvedValueOnce({ userId: "owner", providerId: "qualified-oidc", available: true, ready: true,
+      requiresNativeFactor: true, challengeId });
+  const remove = vi.spyOn(saasApi, "deleteAccount");
+  const factorInput = deletionSection().querySelector<HTMLInputElement>('input[inputmode="numeric"]')!;
+  await act(async () => setInput(factorInput, "123456"));
+  const confirm = [...deletionSection().querySelectorAll("button")].find(button => button.textContent === "Confirm my identity")!;
+  await act(async () => confirm.click());
+  await vi.waitFor(() => expect(complete).toHaveBeenCalledWith("owner", "factor-session"));
+  expect(verify).toHaveBeenCalledWith("123456", "owner", "session-owner");
+  expect(remove).not.toHaveBeenCalled();
+  expect(deletionSection().querySelector<HTMLInputElement>('input[autocomplete="off"]')?.value).toBe("");
 });
 it("hides private cached data after an actual session failure and exposes an original-session retry", async () => {
   await mount();

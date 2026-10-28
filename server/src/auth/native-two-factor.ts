@@ -1,11 +1,12 @@
 import { createHash, createHmac, randomUUID } from "node:crypto";
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { APIError, type GenericEndpointContext } from "better-auth";
 import { changePassword as nativeChangePassword, createAuthEndpoint, createAuthMiddleware, getSessionFromCtx, sessionMiddleware } from "better-auth/api";
 import { deleteSessionCookie, expireCookie, setSessionCookie } from "better-auth/cookies";
 import { twoFactor } from "better-auth/plugins";
 import { parseUserOutput } from "better-auth/db";
-import { authRateLimits, type Db } from "@paperclipai/db";
+import { authRateLimits, authVerifications, type Db } from "@paperclipai/db";
+import { parseAccountDeletionSsoChallenge } from "./account-deletion-sso-proof.js";
 import { assertHumanAuthentication, assertPinnedAuthenticationDeadline, isAuthenticationStateBusy } from "./authenticator-assurance.js";
 import { assertExpectedAuthenticationSession, assertExpectedAuthenticationUser, withNativeAuthenticationTransaction, type NativeAuthenticationSchema } from "./native-authentication-transaction.js";
 
@@ -16,7 +17,8 @@ type Operation = "enable" | "disable" | "codes" | "uri" | "totp" | "backup_code"
 type FactorSnapshot = {
   userId: string; version: number; enabled: boolean; phishingResistantRequired: boolean; factorId: string | null;
   secret: string | null; verified: boolean | null; sessionId?: string; sessionToken?: string;
-  authenticatedCredentialExpiresAt?: number;
+  authenticatedCredentialExpiresAt?: number; accountDeletionSsoChallengeId?: string | null;
+  accountDeletionSsoSourceSessionExpiresAt?: string | null;
 };
 
 function deny(): never {
@@ -40,6 +42,37 @@ function nativeFailure(error: unknown): never {
  * completed proof; configuration never becomes a substitute authentication event. */
 export function nativeTwoFactorPlugin(db: Db, schema: NativeAuthenticationSchema, operatorUserIds: readonly string[]) {
   const native = twoFactor({ issuer: "Blentera", skipVerificationOnEnable: false, allowPasswordless: true });
+
+  async function accountDeletionSsoFactorCarrier(tx: Pick<Db, "execute" | "select">, owner: FactorSnapshot) {
+    if (!owner.sessionId || !owner.enabled || owner.phishingResistantRequired || operatorUserIds.includes(owner.userId)) return null;
+    const [row] = await tx.execute<{ id: string; value: string; expiresAt: Date | string }>(sql`
+      select ${authVerifications.id} as id,${authVerifications.value} as value,
+        ${authVerifications.expiresAt} as "expiresAt"
+      from ${authVerifications}
+      where ${authVerifications.identifier}=${`account-deletion-oidc:${owner.userId}`}
+      limit 1 for share`);
+    const challenge = row ? parseAccountDeletionSsoChallenge(row.value) : null;
+    if (!row || !challenge || challenge.userId !== owner.userId || challenge.state !== "ready" ||
+      challenge.callbackSessionId !== owner.sessionId || challenge.proofSessionId !== owner.sessionId ||
+      challenge.nativeFactorSessionId !== null || challenge.authenticatorVersion !== owner.version ||
+      !Number.isSafeInteger(challenge.authTime)) return null;
+    const [source] = await tx.execute<{ sourceSessionExpiresAt: Date | string }>(sql`
+      select source.expires_at as "sourceSessionExpiresAt"
+      from "user" u join "session" source on source.user_id=u.id and source.id=${challenge.sourceSessionId}
+      where u.id=${owner.userId} and u.authenticator_version=${owner.version} and u.two_factor_enabled and not u.phishing_resistant_required
+        and not exists(select 1 from account a where a.user_id=u.id and a.provider_id='credential' and a.password is not null)
+        and ${challenge.authTime!}::double precision between
+          (extract(epoch from clock_timestamp())-299)*1000 and (extract(epoch from clock_timestamp())+5000)*1000
+        and ${new Date(challenge.expiresAt).toISOString()}::timestamptz>clock_timestamp()+interval '1 second'
+        and ${new Date(row.expiresAt).toISOString()}::timestamptz>clock_timestamp()+interval '1 second'
+        and (source.authenticator_version is null or source.authenticator_version=${challenge.authenticatorVersion})
+        and source.expires_at>clock_timestamp()
+        and exists(select 1 from "session" callback where callback.id=${owner.sessionId} and callback.user_id=u.id
+          and callback.authentication_method is null and callback.authenticator_version is null and callback.expires_at>clock_timestamp())
+      for share of u,source`);
+    return source ? { challengeId: challenge.challengeId,
+      sourceSessionExpiresAt: new Date(source.sourceSessionExpiresAt).toISOString() } : null;
+  }
 
   async function invoke(ctx: GenericEndpointContext, endpoint: NativeEndpoint) {
     // These native overloads share the same wire contract when both return
@@ -73,8 +106,11 @@ export function nativeTwoFactorPlugin(db: Db, schema: NativeAuthenticationSchema
       assertExpectedAuthenticationUser(ctx, owner.userId);
       // An already absent pending factor is a safe idempotent cancellation.
       if (!cancelling || owner.factorId) assertExpectedAuthenticationSession(ctx, session?.session.id);
+      let accountDeletionSsoCarrier: { challengeId: string; sourceSessionExpiresAt: string } | null = null;
       if (session) {
-        await assertHumanAuthentication(tx, { type: "board", source: "session", userId: owner.userId,
+        const carrierOwner = { ...owner, sessionId: session.session.id };
+        accountDeletionSsoCarrier = await accountDeletionSsoFactorCarrier(tx, carrierOwner);
+        if (!accountDeletionSsoCarrier) await assertHumanAuthentication(tx, { type: "board", source: "session", userId: owner.userId,
           sessionId: session.session.id, authenticatedCredentialExpiresAt: session.session.expiresAt.getTime() },
           { requireRecent: !reserveAttempt || owner.verified !== true,
           phishingResistant: operatorUserIds.includes(owner.userId) });
@@ -86,7 +122,7 @@ export function nativeTwoFactorPlugin(db: Db, schema: NativeAuthenticationSchema
       if (reserveAttempt && (owner.phishingResistantRequired || operatorUserIds.includes(owner.userId))) {
         throw new APIError("FORBIDDEN", { code: "PHISHING_RESISTANT_AUTHENTICATION_REQUIRED", message: "Use your passkey" });
       }
-      if (!reserveAttempt) return { owner, limited: false };
+      if (!reserveAttempt) return { owner, limited: false, accountDeletionSsoCarrier };
       const key = "factor-reauth:" + createHash("sha256").update(owner.userId).digest("hex");
       const now = sql`floor(extract(epoch from statement_timestamp())*1000)::bigint`;
       const cutoff = sql`${now}-600000`;
@@ -95,12 +131,14 @@ export function nativeTwoFactorPlugin(db: Db, schema: NativeAuthenticationSchema
           count: sql`case when ${authRateLimits.lastRequest}<${cutoff} then 1 else ${authRateLimits.count}+1 end`,
           lastRequest: sql`case when ${authRateLimits.lastRequest}<${cutoff} then ${now} else ${authRateLimits.lastRequest} end`,
         } }).returning();
-      return { owner, limited: budget!.count > 10 };
+      return { owner, limited: budget!.count > 10, accountDeletionSsoCarrier };
     }).catch(nativeFailure);
     if (result.limited) throw new APIError("TOO_MANY_REQUESTS", {
       code: "REAUTHENTICATION_RATE_LIMITED", message: "Too many confirmation attempts; try again later",
     });
-    return { ...result.owner, sessionId: session?.session.id, sessionToken: session?.session.token,
+    return { ...result.owner, accountDeletionSsoChallengeId: result.accountDeletionSsoCarrier?.challengeId ?? null,
+      accountDeletionSsoSourceSessionExpiresAt: result.accountDeletionSsoCarrier?.sourceSessionExpiresAt ?? null,
+      sessionId: session?.session.id, sessionToken: session?.session.token,
       authenticatedCredentialExpiresAt: session?.session.expiresAt.getTime() };
   }
 
@@ -187,9 +225,14 @@ export function nativeTwoFactorPlugin(db: Db, schema: NativeAuthenticationSchema
               for update of u nowait`);
           if (!valid || valid.secret !== owner.secret) deny();
           if (operation === "totp" && owner.verified && owner.sessionId) {
-            await assertHumanAuthentication(tx, { type: "board", source: "session", userId: owner.userId,
-              sessionId: owner.sessionId, authenticatedCredentialExpiresAt: owner.authenticatedCredentialExpiresAt },
-              { requireRecent: false, phishingResistant: false });
+            const carrier = await accountDeletionSsoFactorCarrier(tx, owner);
+            if (owner.accountDeletionSsoChallengeId) {
+              if (carrier?.challengeId !== owner.accountDeletionSsoChallengeId) deny();
+            } else {
+              await assertHumanAuthentication(tx, { type: "board", source: "session", userId: owner.userId,
+                sessionId: owner.sessionId, authenticatedCredentialExpiresAt: owner.authenticatedCredentialExpiresAt },
+                { requireRecent: false, phishingResistant: false });
+            }
           }
           return valid;
         }
@@ -223,8 +266,43 @@ export function nativeTwoFactorPlugin(db: Db, schema: NativeAuthenticationSchema
         }
         const session = await withNativeAuthenticationTransaction(db, ctx, schema, async tx => {
           const valid = await pinVerifiedFactor(tx);
-          return rotate(ctx, tx, owner, version, { authenticationMethod: operation,
+          const next = await rotate(ctx, tx, owner, version, { authenticationMethod: operation,
             authenticatedAt: verifiedAt ?? new Date(valid.at) });
+          // If this TOTP step rotates the exact fresh company callback session,
+          // bind the deletion proof to the resulting native session atomically.
+          // A separate same-user MFA session cannot be substituted later.
+          if ((operation === "totp" || operation === "backup_code") && owner.sessionId && owner.accountDeletionSsoChallengeId) {
+            const [row] = await tx.select().from(authVerifications)
+              .where(eq(authVerifications.identifier, `account-deletion-oidc:${owner.userId}`)).limit(1).for("update");
+            const challenge = row ? parseAccountDeletionSsoChallenge(row.value) : null;
+            const authTime = challenge?.authTime;
+            if (row && challenge && challenge.state === "ready" && challenge.userId === owner.userId &&
+              challenge.callbackSessionId === owner.sessionId && challenge.proofSessionId === owner.sessionId &&
+              challenge.nativeFactorSessionId === null &&
+              owner.accountDeletionSsoSourceSessionExpiresAt &&
+              challenge.authenticatorVersion === owner.version && Number.isSafeInteger(authTime) &&
+              version === owner.version + (operation === "backup_code" ? 1 : 0)) {
+              const [fresh] = await tx.execute<{ valid: boolean }>(sql`
+                select ${authTime!}::double precision between
+                    (extract(epoch from clock_timestamp())-299)*1000 and (extract(epoch from clock_timestamp())+5000)*1000
+                  and ${new Date(challenge.expiresAt).toISOString()}::timestamptz>clock_timestamp()+interval '1 second'
+                  and ${new Date(row.expiresAt).toISOString()}::timestamptz>clock_timestamp()+interval '1 second'
+                  and ${new Date(owner.accountDeletionSsoSourceSessionExpiresAt).toISOString()}::timestamptz>clock_timestamp()+interval '1 second'
+                  and not exists(select 1 from "session" where id=${owner.sessionId} and user_id=${owner.userId})
+                  and exists(select 1 from "session" where id=${next.id} and user_id=${owner.userId}
+                    and authentication_method=${operation} and authenticator_version=${version}
+                    and expires_at>clock_timestamp()) as valid`);
+              if (fresh?.valid) {
+                challenge.nativeFactorSessionId = next.id;
+                challenge.proofSessionId = next.id;
+                challenge.nativeFactorAuthenticatorVersion = version;
+                challenge.sourceSessionExpiresAt = owner.accountDeletionSsoSourceSessionExpiresAt;
+                await tx.update(authVerifications).set({ value: JSON.stringify(challenge), updatedAt: new Date() })
+                  .where(and(eq(authVerifications.id, row.id), eq(authVerifications.identifier, `account-deletion-oidc:${owner.userId}`)));
+              }
+            }
+          }
+          return next;
         });
         return { ...response, sessionId: session.id, token: session.token, user: parseUserOutput(ctx.context.options, ctx.context.session!.user) };
       } catch (error) {

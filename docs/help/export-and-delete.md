@@ -29,7 +29,7 @@ Deletion may remain in a retention state while managed backups reach their delet
 
 ## Request personal account deletion
 
-Open **Company settings → Security** to review personal account deletion. The form requires your current password, the text **DELETE MY ACCOUNT**, and acknowledgement that you saved the exports you need. If your account requires additional authentication, confirm the recent factor when asked. If the request is accepted, the account page redirects and provides a deletion receipt when available.
+Open **Company settings → Security** to review personal account deletion. Enter **DELETE MY ACCOUNT** and confirm that you saved the exports you need. If you use a password, confirm your current password. If company sign-in confirmation is offered, return from your identity provider and review the deletion request before submitting it. If your account requires additional authentication, confirm the recent factor when asked. If the request is accepted, the account page redirects and provides a deletion receipt when available.
 
 If an earlier request has an unknown result, use the recovery shown on the account page instead of starting a new request. For a privacy question, contact [privacy@blentera.com](mailto:privacy@blentera.com). Do not send your password, recovery code, or API key.
 

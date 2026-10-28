@@ -8963,26 +8963,56 @@ function isProcessAlive(pid: number | null | undefined) {
 export async function persistHeartbeatRunProcessMetadata(
   db: Db,
   runId: string,
-  meta: { pid: number; processGroupId: number | null; startedAt: string },
+  meta: { pid: number; processGroupId: number | null; startedAt: string; identitySource?: "remote_marker";
+    remoteRunnerInstanceId?: string },
 ) {
-  const observedStartedAt = await readProcessStartedAt(meta.pid).catch(
-    () => null,
-  );
-  const startedAt = new Date(observedStartedAt ?? meta.startedAt);
+  if ((meta.identitySource !== undefined && meta.identitySource !== "remote_marker") ||
+    (meta.identitySource === undefined && meta.remoteRunnerInstanceId !== undefined))
+    throw conflict("Process identity source is invalid");
+  let startedAt = new Date(meta.startedAt);
+  if (meta.identitySource === "remote_marker") {
+    if (!Number.isSafeInteger(meta.pid) || meta.pid <= 1 || Number.isNaN(startedAt.getTime()) ||
+      startedAt.toISOString() !== meta.startedAt)
+      throw conflict("Remote process marker is invalid");
+  } else {
+    const observedStartedAt = await readProcessStartedAt(meta.pid).catch(() => null);
+    startedAt = new Date(observedStartedAt ?? meta.startedAt);
+  }
   return db.transaction(async tx => {
-    const run = await tx
-      .update(heartbeatRuns)
+    const [currentRun] = await tx.select().from(heartbeatRuns)
+      .where(eq(heartbeatRuns.id, runId)).for("update");
+    if (!currentRun) return null;
+    if (meta.identitySource === "remote_marker") {
+      const now = new Date();
+      const remoteLeases = await tx.select({ id: environmentLeases.id, environmentId: environmentLeases.environmentId,
+        provider: environmentLeases.provider, providerLeaseId: environmentLeases.providerLeaseId,
+        metadata: environmentLeases.metadata }).from(environmentLeases).where(and(
+          eq(environmentLeases.companyId, currentRun.companyId), eq(environmentLeases.heartbeatRunId, runId),
+          eq(environmentLeases.status, "active"), gt(environmentLeases.expiresAt, now),
+        )).for("update");
+      if (currentRun.runtimeMode !== "native" || currentRun.status !== "running" || !currentRun.runnerInstanceId ||
+        meta.remoteRunnerInstanceId !== currentRun.runnerInstanceId ||
+        remoteLeases.length !== 1 || !remoteLeases[0]?.environmentId || !remoteLeases[0].provider ||
+        remoteLeases[0].provider === "local" || !remoteLeases[0].providerLeaseId?.trim() ||
+        !remoteLeases[0].metadata || typeof remoteLeases[0].metadata.remoteCwd !== "string" ||
+        !remoteLeases[0].metadata.remoteCwd.trim())
+        throw conflict("Remote process marker does not match a current Native remote run binding");
+    }
+    const run = await tx.update(heartbeatRuns)
       .set({
         processPid: meta.pid,
         processGroupId: meta.processGroupId,
-        processStartedAt: Number.isNaN(startedAt.getTime())
-          ? new Date()
-          : startedAt,
+        processStartedAt: Number.isNaN(startedAt.getTime()) ? new Date() : startedAt,
         updatedAt: new Date(),
       })
-      .where(eq(heartbeatRuns.id, runId))
+      .where(and(eq(heartbeatRuns.id, runId),
+        ...(meta.identitySource === "remote_marker"
+          ? [eq(heartbeatRuns.status, "running"), eq(heartbeatRuns.runnerInstanceId, currentRun.runnerInstanceId!)]
+          : [])))
       .returning()
-      .then((rows) => rows[0] ?? null);
+      .then(rows => rows[0] ?? null);
+    if (meta.identitySource === "remote_marker" && !run)
+      throw conflict("Remote Native process generation changed before metadata was recorded");
     if (run?.runtimeMode === "native") await appendHeartbeatRunEvent(tx as unknown as Db, {
       companyId: run.companyId, runId, agentId: run.agentId,
       eventType: PROCESS_IDENTITY_RECORDED, stream: "system", level: "info",
@@ -13846,7 +13876,8 @@ export function heartbeatService(
 
   async function persistRunProcessMetadata(
     runId: string,
-    meta: { pid: number; processGroupId: number | null; startedAt: string },
+    meta: { pid: number; processGroupId: number | null; startedAt: string; identitySource?: "remote_marker";
+      remoteRunnerInstanceId?: string },
   ) {
     return persistHeartbeatRunProcessMetadata(db, runId, meta);
   }

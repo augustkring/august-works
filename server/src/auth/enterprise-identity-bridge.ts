@@ -134,15 +134,26 @@ export function enterpriseIdentityBridge(
         action: "reject",
         code: "ENTERPRISE_NATIVE_USER_VERIFICATION_REQUIRED",
       };
-    if (input.protocol === "oidc" && input.verifiedIdTokenClaims) {
+    if (input.protocol === "oidc" || input.protocol === "saml") {
       const challenge = await context.database.findOne<{ id: string; value: string; expiresAt: Date | string }>({
         model: "verification",
         where: where({ identifier: `account-deletion-oidc:${binding.userId}` }),
       });
       const proof = challenge ? parseAccountDeletionSsoChallenge(challenge.value) : null;
-      const claims = input.verifiedIdTokenClaims;
-      const authTime = claims.auth_time;
-      const authTimeMs = typeof authTime === "number" && Number.isSafeInteger(authTime) ? authTime * 1000 : NaN;
+      const claims = input.protocol === "oidc" ? input.verifiedIdTokenClaims : null;
+      const saml = (input as typeof input & { samlAuthentication?: {
+        purpose: "account-deletion"; challengeId: string; userId: string; sourceSessionId: string;
+        providerId: string; requestId: string; assertionId: string; issuer: string; subject: string;
+        authnInstant: string; recipient: string; notOnOrAfter: string; binding: "post";
+      } }).samlAuthentication;
+      let authTimeMs = NaN;
+      if (input.protocol === "oidc") {
+        const authTime = claims?.auth_time;
+        if (typeof authTime === "number" && Number.isSafeInteger(authTime)) authTimeMs = authTime * 1000;
+      } else if (typeof saml?.authnInstant === "string") {
+        const parsedAuthTime = Date.parse(saml.authnInstant);
+        if (Number.isFinite(parsedAuthTime)) authTimeMs = parsedAuthTime;
+      }
       const policyUpdatedAt = new Date(policy.updatedAt).toISOString();
       const revision = createHash("sha256").update(JSON.stringify({ id: policy.id, version: policy.version,
         companyId: policy.companyId, providerId: policy.providerId, issuer: policy.issuer,
@@ -150,12 +161,20 @@ export function enterpriseIdentityBridge(
       const session = proof && await context.database.findOne<{ id: string; userId: string; expiresAt: Date | string; authenticatorVersion: number | null }>({
         model: "session", where: where({ id: String(proof.sourceSessionId), userId: binding.userId }),
       });
-      if (challenge && proof && proof.state === "authorization_started" && proof.purpose === "account-deletion" &&
+      const protocolEvidenceValid = input.protocol === "oidc"
+        ? Boolean(claims && proof?.idTokenNonce === claims.nonce && typeof claims.nonce === "string")
+        : Boolean(saml && saml.purpose === "account-deletion" && saml.challengeId === proof?.challengeId &&
+          saml.userId === binding.userId && saml.sourceSessionId === proof?.sourceSessionId &&
+          saml.providerId === input.providerId && saml.requestId && saml.assertionId && saml.binding === "post" &&
+          saml.issuer === input.accountKey.issuer && saml.subject === input.accountKey.accountId &&
+          Number.isFinite(Date.parse(saml.authnInstant)) && Number.isFinite(Date.parse(saml.notOnOrAfter)) &&
+          Date.parse(saml.notOnOrAfter) > Date.now() && saml.recipient.startsWith("https://"));
+      if (challenge && proof && proof.protocol === input.protocol && proof.state === "authorization_started" && proof.purpose === "account-deletion" &&
         proof.userId === binding.userId && proof.providerId === input.providerId && proof.policyId === policy.id &&
         proof.policyVersion === policy.version && proof.policyRevision === revision && proof.bindingId === binding.id &&
         proof.issuer === input.accountKey.issuer && proof.subject === input.accountKey.accountId &&
-        proof.idTokenNonce === claims.nonce && typeof claims.nonce === "string" &&
-        !user.twoFactorEnabled && !user.phishingResistantRequired &&
+        protocolEvidenceValid &&
+        !user.phishingResistantRequired &&
         Number.isFinite(Date.parse(proof.expiresAt)) && Date.parse(proof.expiresAt) > Date.now() &&
         Number.isFinite(new Date(challenge.expiresAt).getTime()) && new Date(challenge.expiresAt).getTime() > Date.now() &&
         Number.isFinite(authTimeMs) && authTimeMs <= Date.now() + 5_000 && Date.now() - authTimeMs <= 300_000 &&
@@ -165,6 +184,16 @@ export function enterpriseIdentityBridge(
         proof.authenticatorVersion === user.authenticatorVersion) {
         proof.state = "callback_verified";
         proof.authTime = authTimeMs;
+        if (saml) {
+          proof.samlRequestId = saml.requestId;
+          proof.samlAssertionId = saml.assertionId;
+          proof.samlIssuer = saml.issuer;
+          proof.samlSubject = saml.subject;
+          proof.samlAuthnInstant = saml.authnInstant;
+          proof.samlRecipient = saml.recipient;
+          proof.samlNotOnOrAfter = saml.notOnOrAfter;
+          proof.samlBinding = saml.binding;
+        }
         await context.database.update({
           model: "verification",
           where: where({ id: challenge.id }),

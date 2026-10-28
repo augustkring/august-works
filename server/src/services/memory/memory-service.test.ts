@@ -25,8 +25,11 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "../../__tests__/helpers/embedded-postgres.js";
 import { memoryService, type MemoryMutationActor } from "./memory-service.js";
+import { retrieveEligibleMemory } from "./memory-retrieval.js";
 import { issueService } from "../issues.js";
 import { initializeRunIdentity } from "../run-identity.js";
+import { grantsForHumanRole } from "../company-member-roles.js";
+import { canActorReadIssuePrivacy } from "../authorization.js";
 import { reapplyMemoryDeletionMarkers, expireMemoryPayloads } from "./memory-privacy.js";
 
 const support = await getEmbeddedPostgresTestSupport();
@@ -188,11 +191,13 @@ describePg("Memory Core service", () => {
       type: "board", source: "session", userId, sessionId, authenticatedCredentialExpiresAt: expiresAt.getTime(),
     } };
   }
-  async function humanTaskSource(seeded: Awaited<ReturnType<typeof seed>>, content: string) {
+  async function humanTaskSource(seeded: Awaited<ReturnType<typeof seed>>, content: string,
+    visibility: "open" | "private" = "open") {
     const actor = await verifiedUserActor(seeded.userId);
     const task = await issueService(db).create(seeded.companyId, {
       title: "Memory source deletion fixture",
       description: content,
+      visibility,
       createdByUserId: seeded.userId,
       responsibleUserId: seeded.userId,
     }, db, undefined, { manualInputActor: actor.authorizationActor });
@@ -931,6 +936,60 @@ describePg("Memory Core service", () => {
         eq(companyMemberships.companyId, seeded.companyId), eq(companyMemberships.principalType, "user"),
         eq(companyMemberships.principalId, seeded.userId)));
     }
+  });
+
+  it("does not let an unauthorized high-ranked Task memory hide an authorized top-K fallback", async () => {
+    const seeded = await seed();
+    const b = await binding(seeded.companyId, seeded.userId);
+    const svc = memoryService(db);
+    const privateContent = "Acme quarterly risk forecast is confidential to its owner.";
+    const publicContent = "The quarterly risk forecast is available to the company team.";
+    const privateSource = await humanTaskSource(seeded, privateContent, "private");
+    const publicSource = await humanTaskSource(seeded, publicContent, "open");
+    const privateCandidate = await svc.createCandidate(seeded.companyId, candidate(b.id, {
+      title: "Quarterly risk forecast", content: privateContent, summary: null, evidence: privateSource.evidence,
+    }), privateSource.actor);
+    const publicCandidate = await svc.createCandidate(seeded.companyId, candidate(b.id, {
+      title: "Team notes", content: publicContent, summary: null, evidence: publicSource.evidence,
+    }), publicSource.actor);
+    await svc.reviewCandidate(seeded.companyId, privateCandidate.record.id, { decision: "accept" }, userActor(seeded.userId));
+    await svc.reviewCandidate(seeded.companyId, publicCandidate.record.id, { decision: "accept" }, userActor(seeded.userId));
+    expect(privateCandidate.record.id).not.toBe(publicCandidate.record.id);
+
+    const bobId = randomUUID();
+    await db.insert(authUsers).values({ id: bobId, name: "Memory Core Bob", email: `${bobId}@example.test`,
+      emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
+    await db.insert(companyMemberships).values({ companyId: seeded.companyId, principalType: "user", principalId: bobId,
+      status: "active", membershipRole: "operator" });
+    await db.insert(principalPermissionGrants).values([
+      ...grantsForHumanRole("operator"), { permissionKey: "company_scope:read", scope: null },
+    ].map(grant => ({ companyId: seeded.companyId, principalType: "user" as const, principalId: bobId, ...grant })));
+    const bob = await verifiedUserActor(bobId);
+    const [persistedPrivateTask, persistedPublicTask] = await Promise.all([
+      db.select({ visibility: issues.visibility }).from(issues).where(eq(issues.id, privateSource.task.id)).then(rows => rows[0]),
+      db.select({ visibility: issues.visibility }).from(issues).where(eq(issues.id, publicSource.task.id)).then(rows => rows[0]),
+    ]);
+    expect(persistedPrivateTask?.visibility).toBe("private");
+    expect(persistedPublicTask?.visibility).toBe("open");
+    expect(await canActorReadIssuePrivacy(db, bob.authorizationActor!, { companyId: seeded.companyId, id: privateSource.task.id })).toBe(false);
+    expect(await canActorReadIssuePrivacy(db, bob.authorizationActor!, { companyId: seeded.companyId, id: publicSource.task.id })).toBe(true);
+    const [storedPrivateRecord] = await db.select().from(memoryRecords).where(eq(memoryRecords.id, privateCandidate.record.id));
+    expect(storedPrivateRecord?.sourceIssueIds).toContain(privateSource.task.id);
+    expect(storedPrivateRecord?.payloadSourceProtocolVersion).toBe(1);
+    expect(storedPrivateRecord?.sourceProvenanceQualified).toBe(true);
+    const snapshot = storedPrivateRecord?.payloadSourceSnapshot as { policy?: { issueIds?: string[] } } | null;
+    expect(snapshot?.policy?.issueIds).toContain(privateSource.task.id);
+    const legacyVisible = await svc.listEligible(seeded.companyId, { scopeType: "company", scopeId: null, limit: 100,
+      sensitivityCeiling: "internal" }, bob);
+    expect(legacyVisible.some(record => record.id === privateCandidate.record.id)).toBe(false);
+    expect(await svc.get(seeded.companyId, privateCandidate.record.id, bob)).toBeNull();
+    const result = await retrieveEligibleMemory(db, {
+      companyId: seeded.companyId, agentId: null, actor: bob, allowShared: true, allowPrivate: false,
+      query: "quarterly risk forecast", topK: 1, sensitivityCeiling: "internal",
+    });
+
+    expect(result.map(row => row.detail.record.title)).toEqual(["Team notes"]);
+    expect(result.some(row => row.detail.record.id === privateCandidate.record.id)).toBe(false);
   });
 
   it("denies private memory detail and recall to same-company non-owner principals", async () => {

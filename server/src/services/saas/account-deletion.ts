@@ -1,4 +1,4 @@
-import { assertHumanAuthentication } from "../../auth/authenticator-assurance.js";
+import { assertHumanAuthentication, assertPinnedAuthenticationDeadline } from "../../auth/authenticator-assurance.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { randomUUID } from "node:crypto";
 import { verifyPassword } from "better-auth/crypto";
@@ -80,10 +80,17 @@ export function accountDeletionService(
         rowExpiresAt: string;
         proofExpiresAt: string;
         qualificationExpiresAt: string;
+        callbackSessionId: string;
+        sourceSessionExpiresAt: string | null;
         sourceSessionId: string;
         proofSessionId: string;
+        sourceAuthVersion: number;
+        proofAuthVersion: number;
+        samlNotOnOrAfter: string | null;
         sessionExpiries: [string, string];
       } | null = null;
+      let pendingNativeProof: Awaited<ReturnType<typeof assertHumanAuthentication>> | null = null;
+      let expectedPostEraseAuthenticatorVersion = user?.authenticatorVersion ?? -1;
       if (!user?.emailVerified) throw unauthorized("Verified account required");
       const [activeSession] = await tx.execute<{ id: string }>(sql`select id from "session"
         where id=${actor.sessionId} and user_id=${userId} and expires_at>clock_timestamp() for share nowait`);
@@ -114,7 +121,14 @@ export function accountDeletionService(
         if (!input.reauthenticationProofId || input.password || !proofRow || !proof ||
           proof.challengeId !== input.reauthenticationProofId || proof.purpose !== "account-deletion" ||
           proof.state !== "ready" || proof.userId !== userId || proof.proofSessionId !== actor.sessionId ||
-          proof.authenticatorVersion !== user.authenticatorVersion ||
+          !proof.callbackSessionId || proof.callbackSessionId === proof.sourceSessionId ||
+          (user.twoFactorEnabled ? proof.callbackSessionId === proof.proofSessionId : proof.callbackSessionId !== proof.proofSessionId) ||
+          (user.twoFactorEnabled ? proof.nativeFactorSessionId !== actor.sessionId : proof.nativeFactorSessionId !== null) ||
+          (user.twoFactorEnabled
+            ? proof.nativeFactorAuthenticatorVersion !== user.authenticatorVersion ||
+              (proof.nativeFactorAuthenticatorVersion !== proof.authenticatorVersion && proof.nativeFactorAuthenticatorVersion !== proof.authenticatorVersion + 1) ||
+              !proof.sourceSessionExpiresAt || !Number.isFinite(Date.parse(proof.sourceSessionExpiresAt))
+            : proof.nativeFactorAuthenticatorVersion !== null || proof.authenticatorVersion !== user.authenticatorVersion) ||
           !Number.isSafeInteger(proofTime) || now.getTime() - proofTime > 300_000 || proofTime > now.getTime() + 5_000 ||
           !Number.isFinite(Date.parse(proof.expiresAt)) || Date.parse(proof.expiresAt) <= now.getTime() ||
           !Number.isFinite(proofRowExpiryMs) || proofRowExpiryMs <= now.getTime() ||
@@ -134,7 +148,7 @@ export function accountDeletionService(
           where b.id=${String(proof.bindingId)} and b.user_id=${userId} and b.status='active'
             and p.id=${String(proof.policyId)} and p.status='qualified' and p.version=${Number(proof.policyVersion)}
             and p.qualification->>'sourceRevision'=${effects.enterpriseSourceSha}
-            and p.configuration->>'protocol'='oidc'
+            and p.configuration->>'protocol'=${proof.protocol}
           for share of p,b,m`);
         if (!authority || authority.companyId !== proof.companyId || authority.providerId !== proof.providerId ||
           authority.issuer !== proof.issuer || authority.bindingId !== proof.bindingId || authority.subject !== proof.subject)
@@ -147,19 +161,29 @@ export function accountDeletionService(
         const qualificationExpiresAt = typeof authority.qualification.expiresAt === "string"
           ? Date.parse(authority.qualification.expiresAt)
           : NaN;
-        if (revision !== proof.policyRevision || !keyPin ||
-          keyPin.secretId !== authority.configuration.privateKeySecretId ||
-          keyPin.version !== authority.configuration.privateKeySecretVersion ||
-          !Number.isFinite(qualificationExpiresAt))
+        if (revision !== proof.policyRevision || !Number.isFinite(qualificationExpiresAt) ||
+          proof.protocol === "oidc" && (!keyPin ||
+            keyPin.secretId !== authority.configuration.privateKeySecretId ||
+            keyPin.version !== authority.configuration.privateKeySecretVersion) ||
+          proof.protocol === "saml" && (!proof.samlRequestId || !proof.samlAssertionId ||
+            proof.samlIssuer !== proof.issuer || proof.samlSubject !== proof.subject ||
+            !proof.samlAuthnInstant || !Number.isFinite(Date.parse(proof.samlAuthnInstant)) ||
+            Date.parse(proof.samlAuthnInstant) !== proof.authTime ||
+            !proof.samlRecipient || !proof.samlNotOnOrAfter || !Number.isFinite(Date.parse(proof.samlNotOnOrAfter)) ||
+            proof.samlBinding !== "post"))
           throw forbidden("Current company sign-in confirmation required");
-        const [key] = await tx.execute<{ id: string }>(sql`
-          select s.id from company_secrets s join company_secret_versions v
-            on v.secret_id=s.id and v.version=${keyPin?.version ?? -1}
-          where s.id=${keyPin?.secretId ?? ""} and s.company_id=${authority.companyId}
-            and s.scope='company' and s.provider='local_encrypted' and s.status='active' and s.deleted_at is null
-            and s.latest_version=${keyPin?.version ?? -1} and v.status='current' and v.revoked_at is null
-            and v.value_sha256=${keyPin?.valueSha256 ?? ""} for share of s,v`);
-        if (!key || !proof.sourceSessionId || proof.sourceSessionId === proof.proofSessionId)
+        let keyCurrent = proof.protocol === "saml";
+        if (proof.protocol === "oidc") {
+          const [key] = await tx.execute<{ id: string }>(sql`
+            select s.id from company_secrets s join company_secret_versions v
+              on v.secret_id=s.id and v.version=${keyPin?.version ?? -1}
+            where s.id=${keyPin?.secretId ?? ""} and s.company_id=${authority.companyId}
+              and s.scope='company' and s.provider='local_encrypted' and s.status='active' and s.deleted_at is null
+              and s.latest_version=${keyPin?.version ?? -1} and v.status='current' and v.revoked_at is null
+              and v.value_sha256=${keyPin?.valueSha256 ?? ""} for share of s,v`);
+          keyCurrent = Boolean(key);
+        }
+        if (!keyCurrent || !proof.sourceSessionId || proof.sourceSessionId === proof.proofSessionId)
           throw forbidden("Current company sign-in confirmation required");
         pendingSsoProof = {
           rowId: proofRow.id,
@@ -167,14 +191,19 @@ export function accountDeletionService(
           rowExpiresAt: new Date(proofRowExpiryMs).toISOString(),
           proofExpiresAt: new Date(proof.expiresAt).toISOString(),
           qualificationExpiresAt: new Date(qualificationExpiresAt).toISOString(),
+          callbackSessionId: proof.callbackSessionId!,
+          sourceSessionExpiresAt: proof.sourceSessionExpiresAt,
           sourceSessionId: proof.sourceSessionId,
           proofSessionId: proof.proofSessionId!,
+          sourceAuthVersion: proof.authenticatorVersion,
+          proofAuthVersion: user.twoFactorEnabled ? proof.nativeFactorAuthenticatorVersion! : proof.authenticatorVersion,
+          samlNotOnOrAfter: proof.protocol === "saml" ? proof.samlNotOnOrAfter : null,
           sessionExpiries: ["", ""],
         };
       }
       if (user.twoFactorEnabled || user.phishingResistantRequired) {
         if (actor?.type !== "board" || actor.userId !== userId) throw forbidden("Recent factor confirmation required");
-        await assertHumanAuthentication(tx, actor, { requireRecent: true, phishingResistant: false });
+        pendingNativeProof = await assertHumanAuthentication(tx, actor, { requireRecent: true, phishingResistant: false });
       }
       // This rare, bounded operation must also serialize native membership writers that
       // do not take a company lock. Never remove the last owner using a stale snapshot.
@@ -207,18 +236,27 @@ export function accountDeletionService(
         if (pendingSsoProof.proofSessionId !== actor.sessionId ||
           pendingSsoProof.sourceSessionId === pendingSsoProof.proofSessionId)
           throw forbidden("Current company sign-in confirmation required");
+        const sameGeneration = pendingSsoProof.proofAuthVersion === pendingSsoProof.sourceAuthVersion;
         const sessions = await tx.execute<{ id: string; expiresAt: Date | string }>(sql`
           select id,expires_at as "expiresAt" from "session" where id in (${pendingSsoProof.sourceSessionId},${actor.sessionId})
-            and user_id=${userId} and (authenticator_version is null or authenticator_version=${user.authenticatorVersion})
+            and user_id=${userId} and ((id=${pendingSsoProof.sourceSessionId} and ${sameGeneration
+              ? sql`(authenticator_version is null or authenticator_version=${pendingSsoProof.sourceAuthVersion})`
+              : sql`false`}) or
+              (id=${actor.sessionId} and (authenticator_version is null or
+                authenticator_version=${pendingSsoProof.proofAuthVersion})))
+            and ${sameGeneration
+              ? sql`exists(select 1 from "session" where id=${pendingSsoProof.sourceSessionId} and user_id=${userId})`
+              : sql`not exists(select 1 from "session" where id=${pendingSsoProof.sourceSessionId} and user_id=${userId})`}
           for share nowait`);
         if (new Set(sessions.map(row => row.id)).size !== 2)
-          throw forbidden("Current company sign-in confirmation required");
+          if (sameGeneration || sessions.length !== 1 || sessions[0]?.id !== actor.sessionId)
+            throw forbidden("Current company sign-in confirmation required");
         const sourceSession = sessions.find(row => row.id === pendingSsoProof.sourceSessionId);
         const proofSession = sessions.find(row => row.id === actor.sessionId);
-        if (!sourceSession || !proofSession)
+        if (!proofSession || sameGeneration && !sourceSession || !pendingSsoProof.sourceSessionExpiresAt && !sourceSession)
           throw forbidden("Current company sign-in confirmation required");
         pendingSsoProof.sessionExpiries = [
-          new Date(sourceSession.expiresAt).toISOString(),
+          pendingSsoProof.sourceSessionExpiresAt ?? new Date(sourceSession!.expiresAt).toISOString(),
           new Date(proofSession.expiresAt).toISOString(),
         ];
       }
@@ -232,6 +270,15 @@ export function accountDeletionService(
         })
         .returning();
       await eraseAccountAccess(tx, userId, user.email, now, pendingSsoProof?.rowId);
+      // Account erasure intentionally disables/removes native factors and
+      // therefore advances the generation through the database-owned trigger.
+      // The user row has stayed locked since request start, so pin this exact
+      // self-induced post-erasure generation rather than assuming one increment.
+      const [postEraseAuthenticator] = await tx.execute<{ authenticatorVersion: number }>(sql`
+        select authenticator_version as "authenticatorVersion" from "user" where id=${userId} for update`);
+      if (!postEraseAuthenticator || postEraseAuthenticator.authenticatorVersion < user.authenticatorVersion)
+        throw forbidden("Current authentication state changed; authenticate again to continue");
+      expectedPostEraseAuthenticatorVersion = postEraseAuthenticator.authenticatorVersion;
       // Provider-held secret material stays in a fenced durable operation until confirmed removed.
       await tx
         .update(companySecrets)
@@ -245,16 +292,24 @@ export function accountDeletionService(
       if (pendingSsoProof) {
         const [fresh] = await tx.execute<{ valid: boolean }>(sql`
           select ${pendingSsoProof.authTime}::double precision between
-              (extract(epoch from clock_timestamp())-299)*1000 and (extract(epoch from clock_timestamp())+5000)*1000
+              (extract(epoch from clock_timestamp())-299)*1000 and (extract(epoch from clock_timestamp())+5)*1000
             and ${pendingSsoProof.rowExpiresAt}::timestamptz>clock_timestamp()+interval '1 second'
             and ${pendingSsoProof.proofExpiresAt}::timestamptz>clock_timestamp()+interval '1 second'
             and ${pendingSsoProof.qualificationExpiresAt}::timestamptz>clock_timestamp()+interval '1 second'
             and ${pendingSsoProof.sessionExpiries[0]}::timestamptz>clock_timestamp()+interval '1 second'
             and ${pendingSsoProof.sessionExpiries[1]}::timestamptz>clock_timestamp()+interval '1 second'
-            and exists(select 1 from "user" where id=${userId} and authenticator_version=${user.authenticatorVersion}) as valid`);
+            and (${pendingSsoProof.samlNotOnOrAfter === null
+              ? sql`true`
+              : sql`${pendingSsoProof.samlNotOnOrAfter}::timestamptz>clock_timestamp()+interval '1 second'`})
+            and ${user.twoFactorEnabled
+              ? sql`not exists(select 1 from "session" where id=${pendingSsoProof.callbackSessionId} and user_id=${userId})`
+              : sql`true`}
+            and exists(select 1 from "user" where id=${userId}
+              and authenticator_version=${expectedPostEraseAuthenticatorVersion}) as valid`);
         if (!fresh?.valid) throw forbidden("Current company sign-in confirmation required");
         await tx.delete(authVerifications).where(eq(authVerifications.id, pendingSsoProof.rowId));
       }
+      if (pendingNativeProof) await assertPinnedAuthenticationDeadline(tx, pendingNativeProof);
       return receipt(operation!);
     });
   }

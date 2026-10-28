@@ -729,6 +729,21 @@ export async function runManagedNativeOpenCodeFixture(input: {
       manifest = await agentRuntimeFabricService(db).prepare({ companyId, agentId, runId: run!.id,
         responsibleUserId: aliceUserId, issueId: task.id, query: task.title });
     } catch (error) {
+      input.onPreserveDebugArtifacts?.();
+      if (sourceMemoDiagnosticsEnabled) {
+        const memo = nativeSourceMemoDiagnosticsForTest();
+        const transactions = Object.entries(memo.byTransaction).map(([txOrdinal, stats]) => ({ txOrdinal,
+          roots: stats.roots, actorScopes: stats.actorScopes, hits: stats.hits, misses: stats.misses,
+          uncachedProofMs: Math.round(stats.uncachedProofMs), sourceKindMissCounts: stats.sourceKindMissCounts,
+          opaqueProofKeys: Object.entries(stats.opaqueProofKeys).map(([proofKey, proof]) => ({ proofKey,
+            hits: proof.hits, misses: proof.misses, elapsedMs: Math.round(proof.elapsedMs), sourceKinds: proof.sourceKinds }))
+            .sort((left, right) => right.misses - left.misses || right.elapsedMs - left.elapsedMs).slice(0, 8),
+        })).sort((left, right) => right.uncachedProofMs - left.uncachedProofMs).slice(0, 8);
+        console.error("managed native Context preparation source memo summary", JSON.stringify({
+          roots: memo.roots, actorScopes: memo.actorScopes, memoHits: memo.memoHits, memoMisses: memo.memoMisses,
+          uncachedProofMs: Math.round(memo.uncachedProofMs), transactions,
+        }));
+      }
       let postgresWaitFacts: unknown = { available: false };
       try {
         const [sample] = await contextProbe<{ active: number; idleInTransaction: number; waiters: Array<{

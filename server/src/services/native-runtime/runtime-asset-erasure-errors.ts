@@ -9,6 +9,10 @@ export const REMOTE_ASSET_ERASURE_ERRORS = {
   finalization: "native_asset_erasure_finalization_pending",
   lease: "native_asset_erasure_lease_pending",
   coOwner: "native_asset_erasure_retained_coowner",
+  target: "native_asset_erasure_target_unqualified",
+  reconciliation: "native_asset_erasure_reconciliation_pending",
+  relay: "native_asset_erasure_relay_failed",
+  result: "native_asset_erasure_result_invalid",
 } as const;
 const allowedCodes = new Set<string>(Object.values(REMOTE_ASSET_ERASURE_ERRORS));
 export function isRemoteAssetErasureErrorCode(value: unknown): value is string {

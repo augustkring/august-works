@@ -29,7 +29,7 @@ Sletningen kan forblive i en opbevaringstilstand, mens administrerede sikkerheds
 
 ## Anmod om sletning af personlig konto
 
-Åbn **Company settings → Security** for at gennemgå sletning af din personlige konto. Formularen kræver din aktuelle adgangskode, teksten **DELETE MY ACCOUNT** og en bekræftelse af, at du har gemt de eksporter, du har brug for. Hvis din konto kræver yderligere godkendelse, skal du bekræfte den seneste faktor, når du bliver bedt om det. Hvis anmodningen accepteres, viderestilles kontosiden og viser en kvittering, når den er tilgængelig.
+Åbn **Company settings → Security** for at gennemgå sletning af din personlige konto. Indtast **DELETE MY ACCOUNT**, og bekræft, at du har gemt de eksporter, du har brug for. Hvis du bruger en adgangskode, skal du bekræfte din aktuelle adgangskode. Hvis du får tilbudt bekræftelse gennem virksomhedens login, skal du vende tilbage fra identitetsudbyderen og gennemgå anmodningen, før du sender den. Hvis din konto kræver yderligere godkendelse, skal du bekræfte den seneste faktor, når du bliver bedt om det. Hvis anmodningen accepteres, viderestilles kontosiden og viser en kvittering, når den er tilgængelig.
 
 Hvis en tidligere anmodning har et ukendt resultat, skal du bruge gendannelsen på kontosiden i stedet for at indsende en ny anmodning. Ved spørgsmål om privatliv kan du skrive til [privacy@blentera.com](mailto:privacy@blentera.com). Send ikke din adgangskode, gendannelseskode eller API-nøgle.
 

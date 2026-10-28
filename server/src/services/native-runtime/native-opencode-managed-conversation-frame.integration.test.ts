@@ -26,6 +26,7 @@ import { projectRoutes } from "../../routes/projects.js";
 import { issueRoutes } from "../../routes/issues.js";
 import { seedNativePasskeySession } from "../../__tests__/helpers/native-authentication-fixtures.js";
 import { nativeCancelOriginTestFactsForRun } from "./native-session-executor.js";
+import { isRemoteAssetErasureErrorCode } from "./runtime-asset-erasure-errors.js";
 import { redactSensitiveText } from "../../redaction.js";
 import { validatePrpEvent } from "../../vendor/paperclip-runner/index.js";
 import { memoryJobService } from "../memory/memory-jobs.js";
@@ -356,7 +357,62 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
                 eraseRemoteNativeRuntimeAsset!(currentLocator, commandInput),
                 eraseRemoteNativeRuntimeAsset!(currentLocator, commandInput),
               ]);
+              const rejectionFacts = concurrent.flatMap(result => result.status === "rejected" ? [result.reason] : [])
+                .map(reason => {
+                  const details = reason && typeof reason === "object" && "details" in reason &&
+                    reason.details && typeof reason.details === "object" ? reason.details as Record<string, unknown> : {};
+                  const frames = reason instanceof Error ? (reason.stack ?? "").split("\n").slice(1, 9)
+                    .flatMap(line => {
+                      const match = /^\s*at (?:(.*?) \()?(.+?):(\d+):\d+\)?$/.exec(line);
+                      if (!match) return [];
+                      const sourceFile = match[2]!.split(/[\\/]/).at(-1)!;
+                      const row = Number(match[3]);
+                      return /^[-\w.]+\.(?:ts|js|mjs|cjs)$/.test(sourceFile) && Number.isSafeInteger(row)
+                        ? [`${sourceFile}:${row}`] : [];
+                    }).slice(0, 6) : [];
+                  const protocolFacts: Record<string, boolean | number | null> = {};
+                  for (const key of ["upstreamStatus", "exitCode", "timedOut", "stdoutBytes", "stdoutLineCount",
+                    "runIdMatches", "providerLeaseIdMatches", "pidMatches", "startedAtMatches", "stoppedAtValid",
+                    "processIdentityDigestValid", "processStartFingerprintDigestValid"] as const) {
+                    const value = details[key];
+                    if (typeof value === "boolean" || typeof value === "number" || value === null) protocolFacts[key] = value;
+                  }
+                  return { name: reason instanceof Error ? reason.name : "non_error_throwable",
+                    status: reason && typeof reason === "object" && "status" in reason &&
+                      typeof reason.status === "number" ? reason.status : null,
+                    code: isRemoteAssetErasureErrorCode(details.code) ? details.code : null,
+                    protocolFacts,
+                    failedChecks: Array.isArray(details.failedChecks)
+                      ? details.failedChecks.filter((check): check is string => typeof check === "string" && [
+                        "cell_current", "host_current", "binding_running", "manifest_current", "agent_present",
+                        "capability_snapshot_valid", "capability_unexpired", "image_matches", "host_agent_version",
+                        "qualification_matches", "policy_unexpired", "execution_authorization_present", "policy_manifest_matches",
+                        "policy_capability_matches", "policy_has_no_credentials",
+                      ].includes(check)).sort() : [], frames };
+                });
+              const hostRuntime = facts.sandboxRuntimeFacts ?? {};
+              const erasureExecFacts = Array.isArray(hostRuntime.execFacts) ? hostRuntime.execFacts
+                .filter((value): value is Record<string, unknown> => Boolean(value && typeof value === "object" &&
+                  !Array.isArray(value) && value.nativePreparationPurpose === "native_provider_data_erasure"))
+                .slice(-4).map(value => ({ exitCode: typeof value.exitCode === "number" ? value.exitCode : null,
+                  timedOut: value.timedOut === true, credentialEnvironmentAbsent: value.credentialEnvironmentAbsent === true,
+                  assignedMcpEnvironmentAbsent: value.assignedMcpEnvironmentAbsent === true })) : [];
+              const erasureExecutionFailures = Array.isArray(hostRuntime.sandboxExecutionFailures) ? hostRuntime.sandboxExecutionFailures
+                .filter((value): value is Record<string, unknown> => Boolean(value && typeof value === "object" &&
+                  !Array.isArray(value) && value.nativePreparationPurpose === "native_provider_data_erasure"))
+                .slice(-4).map(value => ({ failureClass: typeof value.failureClass === "string" && /^[a-z][a-z0-9_:-]{0,99}$/.test(value.failureClass)
+                  ? value.failureClass : "unclassified", claimStatus: typeof value.claimStatus === "string" &&
+                    ["PENDING", "CLAIMED", "SUCCEEDED", "FAILED", "EXPIRED"].includes(value.claimStatus) ? value.claimStatus : null,
+                  claimErrorCode: typeof value.claimErrorCode === "string" &&
+                    ["remote_asset_erasure_unknown", "exec_capability_unavailable"].includes(value.claimErrorCode)
+                    ? value.claimErrorCode : null,
+                  requestAssociationSource: typeof value.requestAssociationSource === "string" &&
+                    ["signed_relay_request", "persisted_command_claim", "pre_claim_error"].includes(value.requestAssociationSource)
+                    ? value.requestAssociationSource : "unknown" })) : [];
               const receipts = concurrent.flatMap(result => result.status === "fulfilled" ? [result.value] : []);
+              if (!receipts.length) console.info("managed remote erasure dispatch rejection facts", JSON.stringify({
+                rejectionFacts, erasureExecFacts, erasureExecutionFailures,
+              }));
               expect(receipts.length).toBeGreaterThan(0);
               expect(receipts.every(receipt => receipt.commandRequestId === receipts[0]!.commandRequestId)).toBe(true);
               await db.update(memoryJobs).set({ leaseExpiresAt: new Date(Date.now() - 1), updatedAt: new Date() })

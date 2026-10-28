@@ -65,6 +65,34 @@ export type RemoteRuntimeAssetRemovalReceipt = {
   postDeleteAbsent: true;
 };
 
+type RemoteRuntimeAssetErasureLeaseSnapshot = {
+  provider: string | null;
+  status: string;
+  leasePolicy: string;
+  releasedAt: Date | null;
+  cleanupStatus: string | null;
+  expiresAt: Date | null;
+};
+
+/**
+ * The environment execution lease may already be retired when a terminal-run
+ * retention job executes. Permit that cleanup-only case only when the
+ * provider's exact ephemeral lease was released successfully and its
+ * provider-attested deadline is still live. RuntimeControl separately checks
+ * the current host/cell/binding, provider lease identity, and process
+ * generation before it signs the fixed erasure command.
+ */
+export function remoteRuntimeAssetErasureLeaseIsCurrent(
+  lease: RemoteRuntimeAssetErasureLeaseSnapshot,
+  now = new Date(),
+) {
+  if (!lease.provider?.trim() || lease.provider === "local" || !lease.expiresAt || lease.expiresAt <= now) return false;
+  if (["active", "pending_cleanup"].includes(lease.status))
+    return lease.releasedAt === null && lease.cleanupStatus !== "success";
+  return lease.status === "expired" && lease.leasePolicy === "ephemeral" &&
+    lease.releasedAt !== null && lease.cleanupStatus === "success";
+}
+
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
 
 export function remoteRuntimeAssetRelativePath(normalizedSessionIdDigest: string) {
@@ -284,8 +312,7 @@ export async function assertRemoteRuntimeAssetErasureReady(db: Db, locator: Remo
   const remoteLeases = await db.select().from(environmentLeases).where(and(
     eq(environmentLeases.companyId, locator.companyId), eq(environmentLeases.id, locator.environmentLeaseId),
     eq(environmentLeases.heartbeatRunId, locator.runId)));
-  if (remoteLeases.length !== 1 || remoteLeases.some(lease => lease.provider === "local" ||
-    !["active", "pending_cleanup"].includes(lease.status) || lease.releasedAt !== null || lease.cleanupStatus === "success"))
+  if (remoteLeases.length !== 1 || remoteLeases.some(lease => !remoteRuntimeAssetErasureLeaseIsCurrent(lease)))
     throw conflict("Managed remote OpenCode data erasure awaits its exact current cleanup lease", { code: REMOTE_ASSET_ERASURE_ERRORS.lease });
   const coOwners = await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
     eq(heartbeatRuns.companyId, locator.companyId),

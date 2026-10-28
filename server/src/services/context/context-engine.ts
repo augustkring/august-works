@@ -64,6 +64,12 @@ export function contextMemoryProviderTimeoutMs(totalDeadlineMs: number): number 
   return Math.min(MAX_CONTEXT_MEMORY_PROVIDER_TIMEOUT_MS,
     Math.max(0, totalDeadlineMs - CONTEXT_FINALIZATION_RESERVE_MS));
 }
+export function contextTaskProviderTimeoutMs(totalDeadlineMs: number, nativeBootstrap = false): number {
+  return nativeBootstrap
+    ? Math.min(MAX_CONTEXT_MEMORY_PROVIDER_TIMEOUT_MS,
+      Math.max(0, totalDeadlineMs - CONTEXT_FINALIZATION_RESERVE_MS))
+    : DEFAULT_CONTEXT_PROVIDER_TIMEOUT_MS;
+}
 
 export const DEFAULT_CONTEXT_BUDGET: ContextBudget = {
   maxItems: 24,
@@ -590,10 +596,11 @@ function memoryContextProvider(db: Db, totalDeadlineMs: number): ContextProvider
   };
 }
 
-function taskProvider(db: Db): ContextProvider {
+function taskProvider(db: Db, timeoutMs = DEFAULT_CONTEXT_PROVIDER_TIMEOUT_MS): ContextProvider {
   return {
     key: "task",
     requirement: "mandatory",
+    timeoutMs,
     async retrieve({ request }) {
       const issueId = request.issueId;
       if (!issueId) return { evidence: [] };
@@ -814,7 +821,7 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
         });
       }
       const providers = options.providers ?? [
-        ...(input.issueId ? [taskProvider(activeDb)] : []),
+        ...(input.issueId ? [taskProvider(activeDb, contextTaskProviderTimeoutMs(totalDeadlineMs, nativeBootstrap))] : []),
         ...(input.sourceScope === "task_only" ? [] : [
           ...(input.includeFoundation === false ? [] : [foundationProvider(activeDb)]),
           memoryContextProvider(activeDb, totalDeadlineMs), cognitiveContextProvider(activeDb), derivedMemoryContextProvider(activeDb),

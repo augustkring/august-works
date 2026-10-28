@@ -8,6 +8,7 @@ import {
   createRemoteRuntimeAssetLocator,
   isRemoteRuntimeAssetLocator,
   isRemoteRuntimeAssetRemovalReceipt,
+  remoteRuntimeAssetErasureLeaseIsCurrent,
   remoteRuntimeAssetLocatorDigest,
   remoteRuntimeAssetPathDigest,
 } from "./runtime-asset-retention.js";
@@ -15,6 +16,29 @@ import { REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT, REMOTE_RUNNER_FAILED_IDENTI
   REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROBE_SCRIPT, REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT } from "./remote-runner-identity.js";
 
 describe("remote Native runtime asset erasure binding", () => {
+  it("admits only a live cleanup lease or a successfully retired exact ephemeral lease", () => {
+    const now = new Date("2026-10-28T12:00:00.000Z");
+    const futureExpiry = new Date(now.getTime() + 60_000);
+    const releasedAt = new Date(now.getTime() - 1_000);
+    const expiredEphemeral = { provider: "sandbox-fixture", status: "expired", leasePolicy: "ephemeral",
+      releasedAt, cleanupStatus: "success", expiresAt: futureExpiry };
+    expect(remoteRuntimeAssetErasureLeaseIsCurrent(expiredEphemeral, now)).toBe(true);
+    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, cleanupStatus: "failed" }, now)).toBe(false);
+    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, status: "failed" }, now)).toBe(false);
+    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, status: "released" }, now)).toBe(false);
+    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, releasedAt: null }, now)).toBe(false);
+    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, leasePolicy: "reuse_by_environment" }, now)).toBe(false);
+    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, expiresAt: null }, now)).toBe(false);
+    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, expiresAt: now }, now)).toBe(false);
+    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, provider: "local" }, now)).toBe(false);
+    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, provider: null }, now)).toBe(false);
+    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, status: "active", releasedAt: null,
+      cleanupStatus: null }, now)).toBe(true);
+    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, status: "pending_cleanup", releasedAt: null,
+      cleanupStatus: "pending" }, now)).toBe(true);
+    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, status: "active", releasedAt }, now)).toBe(false);
+  });
+
   function fixture() {
     const locator = createRemoteRuntimeAssetLocator({
       companyId: randomUUID(),
@@ -216,6 +240,39 @@ describe("remote Native runtime asset erasure binding", () => {
       }
       expect(runner.exitCode !== null || runner.signalCode !== null).toBe(true);
       expect(processIsAlive(runner.pid)).toBe(false);
+
+      const deadRunner = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"],
+        { detached: true, stdio: "ignore" });
+      if (!deadRunner.pid) throw new Error("test_dead_runner_pid_unavailable");
+      const deadRunnerExit = new Promise<void>(resolve => deadRunner.once("exit", () => resolve()));
+      const deadStat = await readFile(`/proc/${deadRunner.pid}/stat`, "utf8");
+      const deadStatEnd = deadStat.lastIndexOf(") ");
+      const deadProcessTicks = deadStat.slice(deadStatEnd + 2).trim().split(/\s+/)[19];
+      if (deadStatEnd < 0 || !/^\d+$/.test(deadProcessTicks ?? ""))
+        throw new Error("test_dead_runner_fingerprint_unavailable");
+      deadRunner.kill("SIGKILL");
+      await deadRunnerExit;
+      expect(processIsAlive(deadRunner.pid)).toBe(false);
+      const deadSessionId = randomUUID();
+      const deadDigest = createHash("sha256").update(deadSessionId).digest("hex");
+      const deadSessionRoot = join(sessionsRoot, deadDigest);
+      const deadRunnerRoot = join(deadSessionRoot, "runner");
+      const deadNonce = randomUUID();
+      const deadStartedAt = new Date().toISOString();
+      const deadFingerprint = `linux:${bootId}:${deadProcessTicks}`;
+      await mkdir(deadRunnerRoot, { recursive: true, mode: 0o700 });
+      await writeFile(join(deadRunnerRoot, "runner-state.json"), JSON.stringify({ runId, runnerInstanceId,
+        environmentLeaseId, normalizedSessionId: deadSessionId }) + "\n", { mode: 0o600 });
+      await writeFile(join(deadRunnerRoot, "runner-process.identity"),
+        `${deadNonce}\n${deadRunner.pid}\n${deadStartedAt}\n${runnerInstanceId}\n${deadFingerprint}\n`, { mode: 0o600 });
+      const deadErasure = spawnSync("sh", ["-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT,
+        "paperclip-native-runtime-asset-erasure", taskRoot, deadDigest, runId, runnerInstanceId, environmentLeaseId,
+        providerLeaseId, deadDigest, String(deadRunner.pid), deadStartedAt, REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT,
+        REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT], { encoding: "utf8", timeout: 10_000 });
+      expect(deadErasure.status, JSON.stringify({ stderr: deadErasure.stderr, stdout: deadErasure.stdout })).toBe(0);
+      expect(deadErasure.stdout.trim().split("\n")).toHaveLength(7);
+      expect(await access(deadSessionRoot).then(() => true, () => false)).toBe(false);
+      expect(await readFile(join(neighborRoot, "keep.txt"), "utf8")).toBe("neighbor remains\n");
     } finally {
       if (runner.exitCode === null && runner.signalCode === null) {
         try { process.kill(-runner.pid!, "SIGKILL"); } catch { /* runner already stopped */ }

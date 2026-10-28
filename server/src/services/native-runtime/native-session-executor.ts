@@ -9326,6 +9326,8 @@ export async function executePaperclipNativeSession(input: {
     pid: number;
     processGroupId: number | null;
     startedAt: string;
+    identitySource?: "remote_marker";
+    remoteRunnerInstanceId?: string;
   }) => Promise<void>;
   /** Test seam at the provider boundary; production uses a qualified package backend. */
   backend?: NativeSessionBackend;
@@ -12736,6 +12738,8 @@ export function createRemoteRunnerProcessLauncher(input: {
     pid: number;
     processGroupId: number | null;
     startedAt: string;
+    identitySource?: "remote_marker";
+    remoteRunnerInstanceId?: string;
   }) => Promise<void>;
   onLog?: (stream: "stdout" | "stderr", chunk: string) => Promise<void>;
   trace?: NativeRunTrace;
@@ -12901,6 +12905,8 @@ export function createRemoteRunnerProcessLauncher(input: {
         pid: identity.pid,
         processGroupId: null,
         startedAt: identity.startedAt,
+        identitySource: "remote_marker",
+        remoteRunnerInstanceId: input.runnerInstanceId,
       });
       await input.trace?.record({
         name: "runner.process.launch",
@@ -13108,6 +13114,8 @@ export async function createRunnerdBackend(input: {
     pid: number;
     processGroupId: number | null;
     startedAt: string;
+    identitySource?: "remote_marker";
+    remoteRunnerInstanceId?: string;
   }) => Promise<void>;
   runnerEnvironment?: NodeJS.ProcessEnv;
   /** Private grant materialization; never a user-configured host path. */

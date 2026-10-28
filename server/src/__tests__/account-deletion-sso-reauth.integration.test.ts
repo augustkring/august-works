@@ -1,8 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { randomUUID, generateKeyPairSync, createSign } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
+import { symmetricEncrypt } from "better-auth/crypto";
+import { createOTP } from "@better-auth/utils/otp";
 import {
-  createDb, authAccounts, authPasskeys, authRateLimits, authSessions, authUsers, authVerifications, accountDeletionOperations,
+  createDb, authAccounts, authPasskeys, authRateLimits, authSessions, authTwoFactors, authUsers, authVerifications, accountDeletionOperations,
   enterpriseIdentityPolicies, type Db,
 } from "@paperclipai/db";
 import { createBetterAuthInstance } from "../auth/better-auth.js";
@@ -29,7 +31,7 @@ const origin = "https://enterprise.example.test", sourceSha = "a".repeat(40);
   const previousSecret = process.env.BETTER_AUTH_SECRET;
   const previousEncryptionKey = process.env.PAPERCLIP_SECRETS_MASTER_KEY;
   const idpIssuer = "https://oidc.test.invalid";
-  const idpSubject = "fixture-stable-subject";
+  let idpSubject = "fixture-stable-subject";
   const oidcClientId = "account-delete-oidc-fixture";
   const jwksKid = "account-delete-jwks";
   const tokenByCode = new Map<string, string>();
@@ -206,7 +208,7 @@ const origin = "https://enterprise.example.test", sourceSha = "a".repeat(40);
 
     const challenge = await startDeleteReauth(sessionId);
     const authorization = await request("/sign-in/sso", "POST", { providerId, callbackURL: challenge.callbackURL }, expectedHeaders(sessionId));
-    expect(authorization.status).toBe(200);
+    expect(authorization.status, JSON.stringify(await authorization.clone().json())).toBe(200);
     const authorizationBody = await authorization.json() as { url: string };
     const authorizationUrl = new URL(authorizationBody.url);
     expect(authorizationUrl.searchParams.get("prompt")).toBe("login");
@@ -221,7 +223,8 @@ const origin = "https://enterprise.example.test", sourceSha = "a".repeat(40);
     const ready = await (await request("/account-deletion/sso/status", "GET", undefined, expectedHeaders(sessionId))).json() as {
       ready: boolean; challengeId: string | null;
     };
-    expect(ready).toEqual({ userId: targetUserId, providerId, available: true, ready: true, challengeId: challenge.challengeId });
+    expect(ready).toEqual({ userId: targetUserId, providerId, available: true, requiresNativeFactor: false,
+      ready: true, challengeId: challenge.challengeId });
     expect(await db.select().from(accountDeletionOperations).where(eq(accountDeletionOperations.userId, targetUserId))).toEqual([]);
 
     const deletion = accountDeletionService(db, { enterpriseSourceSha: sourceSha, removeSecret: async () => {}, cancelRun: async () => {} });
@@ -285,5 +288,117 @@ const origin = "https://enterprise.example.test", sourceSha = "a".repeat(40);
     expect(await db.select().from(accountDeletionOperations).where(eq(accountDeletionOperations.userId, targetUserId))).toHaveLength(1);
     await expect(deletion.request(targetUserId, { ...input, idempotencyKey: "oidc-delete-receipt-0002" }, new Date(), actor))
       .rejects.toThrow("Account deletion is already requested");
+  });
+
+  it("requires a real native TOTP session after the fresh OIDC callback for 2FA accounts", async () => {
+    jar.clear();
+    targetUserId = `oidc-delete-mfa-target-${randomUUID()}`;
+    idpSubject = `fixture-mfa-subject-${randomUUID()}`;
+    const time = new Date();
+    await db.insert(authUsers).values({ id: targetUserId, name: "OIDC deletion MFA fixture",
+      email: `${targetUserId}@test.invalid`, emailVerified: true, createdAt: time, updatedAt: time });
+    const { companyMemberships } = await import("@paperclipai/db");
+    await db.insert(companyMemberships).values({ companyId: operator.home, principalType: "user", principalId: targetUserId,
+      status: "active", membershipRole: "viewer" });
+    await enterpriseIdentityPolicyService(db, { operatorUserIds: [operator.userId], sourceSha,
+      protectedEvidenceOrigin: "https://qualification.test.invalid", appOrigin: origin })
+      .bind(operatorActor, operator.home, { userId: targetUserId, subject: idpSubject,
+        manageMembershipLifecycle: false, reason: "Bind the native-factor OIDC fixture subject" });
+    const otpSecret = "JBSWY3DPEHPK3PXP";
+    const context = await (auth as unknown as import("better-auth").Auth).$context;
+    const encryptedSecret = await symmetricEncrypt({ key: context.secretConfig, data: otpSecret });
+    const encryptedBackupCodes = await symmetricEncrypt({ key: context.secretConfig, data: JSON.stringify(["DELETE-CODE-12345"]) });
+    await db.insert(authTwoFactors).values({ id: randomUUID(), userId: targetUserId, secret: encryptedSecret,
+      backupCodes: encryptedBackupCodes, verified: true });
+    await db.update(authUsers).set({ twoFactorEnabled: true, authenticatorVersion: 1 }).where(eq(authUsers.id, targetUserId));
+    expect((await completeOidc(`${origin}/company/settings/security`)).callback.status).toBe(302);
+    await clearThisFixtureSignInRateLimit();
+    const initialSessionId = await currentSession();
+
+    const challenge = await startDeleteReauth(initialSessionId);
+    const authorization = await request("/sign-in/sso", "POST", { providerId, callbackURL: challenge.callbackURL }, expectedHeaders(initialSessionId));
+    expect(authorization.status, JSON.stringify(await authorization.clone().json())).toBe(200);
+    const url = new URL((await authorization.json() as { url: string }).url);
+    const state = url.searchParams.get("state")!, nonce = url.searchParams.get("nonce")!;
+    const code = randomUUID();
+    tokenByCode.set(code, await signedToken({ nonce, authTime: Math.floor(Date.now() / 1000) }));
+    expect((await request(`/sso/callback/${providerId}?state=${encodeURIComponent(state)}&code=${encodeURIComponent(code)}`)).status).toBe(302);
+    const callbackSessionId = await currentSession();
+    const pendingStatus = await (await request("/account-deletion/sso/status", "GET", undefined, expectedHeaders(callbackSessionId))).json() as {
+      ready: boolean; requiresNativeFactor: boolean; challengeId: string | null;
+    };
+    expect(pendingStatus).toMatchObject({ ready: false, requiresNativeFactor: true, challengeId: challenge.challengeId });
+    expect((await request("/account-deletion/sso/factor-complete", "POST", {}, expectedHeaders(callbackSessionId))).status).toBe(403);
+    const step = Math.floor(Date.now() / 30_000);
+    const verified = await request("/two-factor/verify-totp", "POST", { code: await createOTP(otpSecret).hotp(step) });
+    expect(verified.status, JSON.stringify(await verified.clone().json())).toBe(200);
+    const factorSessionId = await currentSession();
+    expect(factorSessionId).not.toBe(callbackSessionId);
+    const completed = await request("/account-deletion/sso/factor-complete", "POST", {}, expectedHeaders(factorSessionId));
+    expect(completed.status).toBe(200);
+    expect(await completed.json()).toMatchObject({ userId: targetUserId, sessionId: factorSessionId,
+      challengeId: challenge.challengeId, ready: true });
+    const replay = await request("/account-deletion/sso/factor-complete", "POST", {}, expectedHeaders(factorSessionId));
+    expect(replay.status).toBe(200); // Acknowledgement is idempotent; the proof remains session-bound and one-use at deletion.
+    const ready = await (await request("/account-deletion/sso/status", "GET", undefined, expectedHeaders(factorSessionId))).json();
+    expect(ready).toMatchObject({ ready: true, requiresNativeFactor: true, challengeId: challenge.challengeId });
+
+    const recoveryChallenge = await startDeleteReauth(factorSessionId);
+    const recoveryAuthorization = await request("/sign-in/sso", "POST", { providerId, callbackURL: recoveryChallenge.callbackURL }, expectedHeaders(factorSessionId));
+    expect(recoveryAuthorization.status).toBe(200);
+    const recoveryUrl = new URL((await recoveryAuthorization.json() as { url: string }).url);
+    const recoveryState = recoveryUrl.searchParams.get("state")!, recoveryNonce = recoveryUrl.searchParams.get("nonce")!;
+    const recoveryCode = randomUUID();
+    tokenByCode.set(recoveryCode, await signedToken({ nonce: recoveryNonce, authTime: Math.floor(Date.now() / 1000) }));
+    expect((await request(`/sso/callback/${providerId}?state=${encodeURIComponent(recoveryState)}&code=${encodeURIComponent(recoveryCode)}`)).status).toBe(302);
+    const recoveryCallbackSessionId = await currentSession();
+    const recoveryVerified = await request("/two-factor/verify-backup-code", "POST", { code: "DELETE-CODE-12345" });
+    expect(recoveryVerified.status, JSON.stringify(await recoveryVerified.clone().json())).toBe(200);
+    const recoverySessionId = await currentSession();
+    expect(recoverySessionId).not.toBe(recoveryCallbackSessionId);
+    const recoveryFinished = await request("/account-deletion/sso/factor-complete", "POST", {}, expectedHeaders(recoverySessionId));
+    if (recoveryFinished.status !== 200) {
+      const [proofRow] = await db.select().from(authVerifications)
+        .where(eq(authVerifications.identifier, `account-deletion-oidc:${targetUserId}`));
+      const proof = JSON.parse(proofRow!.value) as Record<string, unknown>;
+      const [factorSession] = await db.select({ id: authSessions.id, authenticationMethod: authSessions.authenticationMethod,
+        authenticatorVersion: authSessions.authenticatorVersion, expiresAt: authSessions.expiresAt })
+        .from(authSessions).where(eq(authSessions.id, recoverySessionId));
+      const [sourceSession] = await db.select({ id: authSessions.id, authenticatorVersion: authSessions.authenticatorVersion,
+        expiresAt: authSessions.expiresAt }).from(authSessions).where(eq(authSessions.id, String(proof.sourceSessionId)));
+      const [ownerVersion] = await db.select({ version: authUsers.authenticatorVersion }).from(authUsers)
+        .where(eq(authUsers.id, targetUserId));
+      const [callbackSession] = await db.select({ id: authSessions.id }).from(authSessions)
+        .where(eq(authSessions.id, String(proof.callbackSessionId)));
+      throw new Error(JSON.stringify({ response: await recoveryFinished.clone().json(), challenge: {
+        state: proof.state, authenticatorVersion: proof.authenticatorVersion, callbackSessionId: proof.callbackSessionId,
+        proofSessionId: proof.proofSessionId, nativeFactorSessionId: proof.nativeFactorSessionId,
+        nativeFactorAuthenticatorVersion: proof.nativeFactorAuthenticatorVersion,
+      }, ownerVersion, sourceSession, factorSession, callbackSession }));
+    }
+    expect(await recoveryFinished.json()).toMatchObject({ challengeId: recoveryChallenge.challengeId, ready: true });
+
+    const deletion = accountDeletionService(db, { enterpriseSourceSha: sourceSha, removeSecret: async () => {}, cancelRun: async () => {} });
+    let receipt;
+    try {
+      receipt = await deletion.request(targetUserId, { confirmation: "DELETE MY ACCOUNT", reauthenticationProofId: recoveryChallenge.challengeId,
+        acknowledgeExport: true, idempotencyKey: "oidc-delete-mfa-receipt-0001" }, new Date(),
+        { type: "board", source: "session", userId: targetUserId, sessionId: recoverySessionId });
+    } catch (error) {
+      const [proofRow] = await db.select().from(authVerifications)
+        .where(eq(authVerifications.identifier, `account-deletion-oidc:${targetUserId}`));
+      const proof = JSON.parse(proofRow!.value) as Record<string, unknown>;
+      const [diagnostics] = await db.execute(sql`select
+        ${proof.authTime!}::double precision between (extract(epoch from clock_timestamp())-299)*1000 and (extract(epoch from clock_timestamp())+5000)*1000 as auth_time,
+        ${proofRow!.expiresAt.toISOString()}::timestamptz>clock_timestamp()+interval '1 second' as row_expiry,
+        ${String(proof.expiresAt)}::timestamptz>clock_timestamp()+interval '1 second' as proof_expiry,
+        ${String(proof.sourceSessionExpiresAt)}::timestamptz>clock_timestamp()+interval '1 second' as source_expiry,
+        (select expires_at>clock_timestamp()+interval '1 second' from "session" where id=${recoverySessionId}) as factor_expiry,
+        not exists(select 1 from "session" where id=${String(proof.callbackSessionId)} and user_id=${targetUserId}) as callback_absent,
+        exists(select 1 from "user" where id=${targetUserId} and authenticator_version=${String(proof.nativeFactorAuthenticatorVersion)}::integer) as owner_version,
+        ${String(proof.sourceSessionExpiresAt)} as saved_source_expiry`);
+      throw new Error(JSON.stringify({ error: error instanceof Error ? error.message : "failed", diagnostics }));
+    }
+    expect(receipt.status).toBe("requested");
   });
 });

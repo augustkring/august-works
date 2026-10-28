@@ -622,6 +622,22 @@ async function visibleMemoryPage<T>(db:Db,companyId:string,actor:MemoryMutationA
         profileStats.pageQueryMs += performance.now() - pageStartedAt;
       }
       const candidates=candidateFilter ? rows.filter(candidateFilter) : rows;
+      // A short first page is the complete candidate universe. For internal
+      // detail retrieval, materialize/rank that bounded set before source
+      // qualification and let its finalizer revalidate every selected graph
+      // after the evidence waits. The public row limit still applies, while a
+      // paginated or truncated candidate set keeps the original pre-review.
+      if (finalize && offset === 0 && rows.length < 100 && limit >= rows.length) {
+        profileStats.candidateRows += candidates.length;
+        profileStats.stage = "candidate_detail_materialization";
+        const revalidate: VisibleMemoryPageRevalidate = selected => visibleMemorySources(tx,companyId,selected,actor,pageBudget);
+        const finalizeStartedAt = profile ? performance.now() : 0;
+        const result = await finalize(tx, candidates, pageBudget, revalidate);
+        if (profile) profileStats.detailFinalizeMs += performance.now() - finalizeStartedAt;
+        if (performance.now() > deadline) throw conflict("Complete Memory source review exceeded its budget");
+        profileResult = "ok";
+        return result;
+      }
       profileStats.stage = "candidate_source_review";
       const firstReviewStartedAt = profile ? performance.now() : 0;
       const checked = await visibleMemorySources(tx,companyId,candidates,actor,pageBudget);

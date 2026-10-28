@@ -9,7 +9,7 @@ import { authApi } from "@/api/auth";
 import { Button } from "@/components/ui/button";
 import { Link } from "@/lib/router";
 import { useSaasCapabilities } from "@/hooks/useSaasCapabilities";
-import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
+import { hasCurrentV9Session, useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
 import { useV9AccountScope } from "../hooks/useV9AccountScope";
 import { queryKeys } from "../lib/queryKeys";
 import { ApiError } from "../api/client";
@@ -74,7 +74,7 @@ function AccountSecurityScope({ principal, companyId }: { principal: string; com
       if (!current.success || current.data.user.id !== principal) throw new Error("Current account is unresolved");
       return authApi.accountDeletionSsoStatus(principal, current.data.session.id);
     }, "deletion"), enabled: scope.ready && capabilities.data?.deletion === true && authentication.isSuccess &&
-      !authentication.data.hasPassword && !authentication.data.twoFactorEnabled && !authentication.data.phishingResistantRequired,
+      !authentication.data.hasPassword && !authentication.data.phishingResistantRequired,
     staleTime: 0, gcTime: 0, retry: false });
   const callbackReauthId = (() => {
     try { return new URLSearchParams(window.location.search).get("accountDeletionReauth"); } catch { return null; }
@@ -126,7 +126,7 @@ function AccountSecurityScope({ principal, companyId }: { principal: string; com
   const beginSsoReauth = useMutation({
     mutationFn: async () => {
       if (!scope.canUse("deletion") || !authentication.data || authentication.data.hasPassword ||
-        authentication.data.twoFactorEnabled || authentication.data.phishingResistantRequired || !ssoReauth.data?.available)
+        authentication.data.phishingResistantRequired || !ssoReauth.data?.available)
         throw new Error("A supported recent sign-in method is unavailable");
       const current = authSessionSchema.safeParse(client.getQueryData(queryKeys.auth.session));
       if (!current.success || current.data.user.id !== principal) throw new Error("Current account is unresolved");
@@ -141,6 +141,26 @@ function AccountSecurityScope({ principal, companyId }: { principal: string; com
   });
   const readyProofId = ssoReauth.data?.ready && callbackReauthId && ssoReauth.data.challengeId === callbackReauthId
     ? ssoReauth.data.challengeId : null;
+  const completeSsoNativeFactor = useMutation({
+    mutationFn: async (receipt: { userId: string; sessionId: string }) => {
+      const capabilitiesState = client.getQueryState(["saas-capabilities"]);
+      const currentCapabilities = client.getQueryData<{ deletion?: boolean }>(["saas-capabilities"]);
+      if (receipt.userId !== principal || !hasCurrentV9Session(client, principal, receipt.sessionId) ||
+        capabilitiesState?.status !== "success" || capabilitiesState.fetchStatus !== "idle" || capabilitiesState.isInvalidated ||
+        currentCapabilities?.deletion !== true) throw new Error("Current account is unresolved");
+      const current = authSessionSchema.safeParse(client.getQueryData(queryKeys.auth.session));
+      if (!current.success || current.data.user.id !== principal || current.data.session.id !== receipt.sessionId)
+        throw new Error("Native confirmation changed accounts");
+      const result = await authApi.completeAccountDeletionSsoFactor(principal, receipt.sessionId);
+      if (result.challengeId !== callbackReauthId) throw new Error("Company sign-in confirmation changed");
+      return result;
+    }, retry: false,
+    onSuccess: () => {
+      setSsoReauthError(false);
+      void client.invalidateQueries({ queryKey: ["saas-account-deletion-sso", principal] });
+    },
+    onError: () => { if (hasCurrentV9Session(client, principal, client.getQueryData<{ session?: { id?: string } }>(queryKeys.auth.session)?.session?.id ?? null)) setSsoReauthError(true); },
+  });
   const deletionAttempt = useRef<Parameters<typeof saasApi.deleteAccount>[1] | null>(null);
   const deletion = useMutation({
     mutationFn: async () => {
@@ -199,7 +219,7 @@ function AccountSecurityScope({ principal, companyId }: { principal: string; com
   useEffect(() => { if (interruptionPolicy.enabled) setPolicySeen(true); }, [interruptionPolicy.enabled]);
   const privateReady = scope.ready && scope.canUse();
   const preferencesVisible = privateReady && preferences.isSuccess && !preferences.isFetching && preferencesCurrent();
-  const deleteLocked = deletion.isPending || beginSsoReauth.isPending || !!deletionAttempt.current || recoveryUnavailable;
+  const deleteLocked = deletion.isPending || beginSsoReauth.isPending || completeSsoNativeFactor.isPending || !!deletionAttempt.current || recoveryUnavailable;
   return <section className="saas-page" aria-labelledby="account-security-title">
     <h1 id="account-security-title" className="saas-title outline-none" tabIndex={-1} ref={heading}>{t("account.heading")}</h1>
     <NativeAuthenticationSettings key={principal} principal={principal} />
@@ -245,6 +265,10 @@ function AccountSecurityScope({ principal, companyId }: { principal: string; com
           <label className="saas-label">{t("account.confirmDelete")}<input className="saas-input" value={deleteConfirmation} onChange={event => setDeleteConfirmation(event.target.value)} required autoComplete="off" disabled={deleteLocked} /></label>
           {authentication.data?.hasPassword && <label className="saas-label">{t("account.currentPassword")}<input className="saas-input" type="password" autoComplete="current-password" maxLength={LOCAL_PASSWORD_MAX_UTF16_LENGTH} value={deletePassword} onChange={event => setDeletePassword(event.target.value)} required disabled={deleteLocked} /></label>}
           {authentication.data && !authentication.data.hasPassword && readyProofId && <p role="status">{t("account.companySignInReady")}</p>}
+          {authentication.data && !authentication.data.hasPassword && !readyProofId && ssoReauth.data?.requiresNativeFactor &&
+            callbackReauthId && ssoReauth.data.challengeId === callbackReauthId &&
+            <NativeAuthenticationSettings key={`${principal}:account-delete-confirm`} principal={principal} confirmationOnly
+              onConfirmed={receipt => completeSsoNativeFactor.mutate(receipt)} />}
           {authentication.data && !authentication.data.hasPassword && !readyProofId && ssoReauth.isSuccess && ssoReauth.data.available &&
             <Button type="button" variant="outline" disabled={deleteLocked || beginSsoReauth.isPending} onClick={() => { setSsoReauthError(false); beginSsoReauth.mutate(); }}>{t("account.companySignInReauthenticate")}</Button>}
           {authentication.data && !authentication.data.hasPassword && !readyProofId && ssoReauth.isSuccess && !ssoReauth.data.available &&

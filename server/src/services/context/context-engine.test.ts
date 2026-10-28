@@ -4,6 +4,7 @@ import { forbidden } from "../../errors.js";
 import type { ContextPacket, EvidenceItem } from "@paperclipai/shared";
 import {
   contextMemoryProviderTimeoutMs,
+  contextTaskProviderTimeoutMs,
   contextTotalDeadlineMs,
   DEFAULT_CONTEXT_PROVIDER_TIMEOUT_MS,
   DEFAULT_CONTEXT_TOTAL_DEADLINE_MS,
@@ -105,6 +106,9 @@ describe("Context provider deadline policy", () => {
     expect(DEFAULT_CONTEXT_PROVIDER_TIMEOUT_MS).toBe(900);
     expect(contextMemoryProviderTimeoutMs(DEFAULT_CONTEXT_TOTAL_DEADLINE_MS)).toBe(1_150);
     expect(contextMemoryProviderTimeoutMs(NATIVE_CONTEXT_BOOTSTRAP_TOTAL_DEADLINE_MS)).toBe(3_650);
+    expect(contextTaskProviderTimeoutMs(DEFAULT_CONTEXT_TOTAL_DEADLINE_MS)).toBe(900);
+    expect(contextTaskProviderTimeoutMs(NATIVE_CONTEXT_BOOTSTRAP_TOTAL_DEADLINE_MS, true)).toBe(3_650);
+    expect(contextTaskProviderTimeoutMs(400, true)).toBe(50);
 
     let capturedSignal: AbortSignal | undefined;
     let releaseLateResult: ((result: { evidence: EvidenceItem[] }) => void) | undefined;

@@ -814,6 +814,8 @@ describe("remote runner process supervision", () => {
       pid: 4321,
       processGroupId: null,
       startedAt: "2026-09-06T00:00:00.000Z",
+      identitySource: "remote_marker",
+      remoteRunnerInstanceId: "runner-remote",
     });
     expect(handle.child.pid).toBe(4321);
 

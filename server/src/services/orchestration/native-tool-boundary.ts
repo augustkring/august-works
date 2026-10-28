@@ -17,7 +17,7 @@ import {
   type Db,
 } from "@paperclipai/db";
 import { orchestrationCompletionSchema } from "@paperclipai/shared";
-import { badRequest, conflict, forbidden } from "../../errors.js";
+import { badRequest, conflict, forbidden, HttpError } from "../../errors.js";
 import {
   assertAgentRunWriteAllowed,
   agentRunWritesRevoked,
@@ -574,13 +574,18 @@ export async function withOrchestrationNativeTool(
     await fence(db, b, preliminary.plan.id, "native_tool_budget_exhausted");
     throw forbidden("The cumulative native tool budget is exhausted");
   }
+  let failureStage = "effect";
   try {
-    const result = nativeToolWireResult(await effect());
+    const effectResult = await effect();
+    failureStage = "wire_result";
+    const result = nativeToolWireResult(effectResult);
+    failureStage = "plan_recheck";
     await db.transaction(async (tx) => {
       const t = tx as unknown as Db;
       await lockNativeToolPlan(t, b);
       await assertNativeToolPlanCurrent(t, b, draftWrites.has(call.tool));
     });
+    failureStage = "persist_success";
     if (reservation)
       await db
         .update(toolInvocations)
@@ -611,6 +616,26 @@ export async function withOrchestrationNativeTool(
         );
     return result;
   } catch (error) {
+    if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1") {
+      const facts = error && typeof error === "object"
+        ? error as { status?: unknown; stack?: unknown; details?: unknown } : {};
+      const details = facts.details && typeof facts.details === "object"
+        ? facts.details as Record<string, unknown> : {};
+      const providerKey = ["foundation", "memory", "task"].includes(String(details.providerKey))
+        ? String(details.providerKey) : null;
+      const providerReason = ["timeout", "provider_failed", "context_deadline"].includes(String(details.reason))
+        ? String(details.reason) : null;
+      const frames = typeof facts.stack === "string" ? facts.stack.split("\n").flatMap(line => {
+        const match = /server\/src\/services\/([A-Za-z0-9_./-]+\.ts):(\d+):\d+/.exec(line);
+        return match ? [`${match[1]}:${match[2]}`] : [];
+      }).slice(0, 5) : [];
+      console.warn("native_orchestration_tool_failure_stage", JSON.stringify({ tool: call.tool,
+        stage: failureStage, errorClass: error instanceof HttpError ? "HttpError" :
+          error instanceof ReferenceError ? "ReferenceError" : error instanceof TypeError ? "TypeError" :
+          error instanceof Error ? "Error" : "NonError", status: typeof facts.status === "number" ? facts.status : null,
+        providerKey, providerReason, frames }));
+    }
+    failureStage = "persist_failure";
     if (reservation)
       await db
         .update(toolInvocations)
@@ -626,6 +651,7 @@ export async function withOrchestrationNativeTool(
             eq(toolInvocations.id, reservation.id),
           ),
         );
+    failureStage = "fence_plan";
     await fence(db, b, preliminary.plan.id, "native_tool_result_unsettled");
     throw error;
   }

@@ -17,6 +17,8 @@ import { startEmbeddedPostgresTestDatabase, getEmbeddedPostgresTestSupport } fro
 import { admitExplicitNativeContinuation } from "./explicit-native-continuation.js";
 import { buildExecutionContinuation } from "./execution-continuation.js";
 import { heartbeatService, persistHeartbeatRunProcessMetadata, type HeartbeatEnvironmentRuntime } from "./heartbeat.js";
+import { createRemoteRuntimeAssetLocator } from "./native-runtime/runtime-asset-retention.js";
+import { readProcessStartedAt } from "./hot-restart.js";
 import { getExecutionBlocker } from "./execution-blocker.js";
 import { createDurableChatWakeupRequest } from "./durable-chat-wakeup.js";
 const support = await getEmbeddedPostgresTestSupport();
@@ -583,6 +585,35 @@ const support = await getEmbeddedPostgresTestSupport();
     const [stopped] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, f.sourceRunId));
     expect(stopped).toMatchObject({ processPid: null, processGroupId: null, processStartedAt: null });
     expect(await hasNativeLocalProcessStop(db, f.companyId, f.sourceRunId)).toBe(true);
+  });
+
+  it("persists the validated remote process marker when its PID collides with a local process", async () => {
+    const f = await seed();
+    const environmentId = randomUUID(), environmentLeaseId = randomUUID(), runnerInstanceId = randomUUID();
+    const nativeSessionId = randomUUID(), remoteCwd = "/workspace/remote-runner";
+    const remoteMarkerStartedAt = "2001-02-03T04:05:06.007Z";
+    const localObservedStartedAt = await readProcessStartedAt(process.pid);
+    expect(localObservedStartedAt).toBeTruthy();
+    expect(localObservedStartedAt).not.toBe(remoteMarkerStartedAt);
+    await expect(persistHeartbeatRunProcessMetadata(db, f.sourceRunId, { pid: process.pid, processGroupId: null,
+      startedAt: remoteMarkerStartedAt, identitySource: "remote_marker", remoteRunnerInstanceId: randomUUID() })).rejects.toThrow();
+    await db.insert(environments).values({ id: environmentId, name: `Remote identity ${environmentId}`, driver: "sandbox" });
+    await db.insert(environmentLeases).values({ id: environmentLeaseId, companyId: f.companyId,
+      environmentId, heartbeatRunId: f.sourceRunId, provider: "sandbox-fixture", providerLeaseId: "provider-lease-1",
+      status: "active", leasePolicy: "ephemeral", expiresAt: new Date(Date.now() + 60_000), metadata: { remoteCwd } });
+    const locator = createRemoteRuntimeAssetLocator({ companyId: f.companyId, runId: f.sourceRunId, environmentId,
+      environmentLeaseId, provider: "sandbox-fixture", providerLeaseId: "provider-lease-1", runnerInstanceId,
+      normalizedSessionId: nativeSessionId, remoteCwd });
+    await db.update(heartbeatRuns).set({ status: "running", driverKind: "opencode_server", nativeSessionId,
+      runnerInstanceId, runnerProfileJson: { nativeRemoteRuntimeAssetLocator: locator } })
+      .where(eq(heartbeatRuns.id, f.sourceRunId));
+
+    await persistHeartbeatRunProcessMetadata(db, f.sourceRunId, { pid: process.pid, processGroupId: null,
+      startedAt: remoteMarkerStartedAt, identitySource: "remote_marker", remoteRunnerInstanceId: runnerInstanceId });
+
+    const [stored] = await db.select({ processStartedAt: heartbeatRuns.processStartedAt,
+      processPid: heartbeatRuns.processPid }).from(heartbeatRuns).where(eq(heartbeatRuns.id, f.sourceRunId));
+    expect(stored).toMatchObject({ processPid: process.pid, processStartedAt: new Date(remoteMarkerStartedAt) });
   });
 
   it("does not infer an ordinary Native Stop from an unknown or still-live process", async () => {

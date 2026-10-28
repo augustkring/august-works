@@ -58,7 +58,7 @@ import {
 } from "@paperclipai/shared";
 import type { z } from "zod";
 import type { SaasPlatformConfig } from "../../saas-platform-config.js";
-import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
+import { HttpError, conflict, forbidden, notFound, unprocessable } from "../../errors.js";
 import { entitlementService } from "../billing/entitlements.js";
 import { usageService } from "../billing/usage.js";
 import type { AuthorizationActor } from "../authorization.js";
@@ -100,6 +100,7 @@ import {
   type RemoteRuntimeAssetLocator,
   type RemoteRuntimeAssetRemovalReceipt,
 } from "../native-runtime/runtime-asset-retention.js";
+import { REMOTE_ASSET_ERASURE_ERRORS } from "../native-runtime/runtime-asset-erasure-errors.js";
 
 type IssuedWorkerModelCredential = Awaited<
   ReturnType<ReturnType<typeof workerModelGateway>["issueForRun"]>
@@ -2712,26 +2713,44 @@ export function runtimeControlService(
       eq(runtimePolicySnapshots.companyId, locator.companyId), eq(runtimePolicySnapshots.bindingId, binding.id),
       eq(runtimePolicySnapshots.executionManifestId, manifest.id), eq(runtimePolicySnapshots.status, "qualified"),
     )).orderBy(desc(runtimePolicySnapshots.policyVersion)).limit(1) : [];
-    const qualified = Boolean(cell && host && binding?.backend === "openshell" && binding.status === "running" &&
-      capability?.success && capability.data.evidenceKind === "protected_host_report" &&
-      capability.data.expiresAt > new Date().toISOString() &&
-      capability.data.sandboxImageDigest === (cell.activeImageDigest ?? cell.desiredImageDigest) &&
-      Boolean(software && hostVersionMeetsMinimum(host.hostAgentVersion, software.minimum)) &&
-      qualification?.evidenceKind === "protected_host_report" &&
-      qualification.reportHash === capability.data.qualificationHash &&
-      qualification.results.length === sandboxProbeCases(binding.boundaryPolicyHash, binding.boundaryPolicy.requiredControls).length &&
-      !sandboxProbeCases(binding.boundaryPolicyHash, binding.boundaryPolicy.requiredControls).some(test => {
+    const expectedImageDigest = cell?.activeImageDigest ?? cell?.desiredImageDigest;
+    const probeCases = binding ? sandboxProbeCases(binding.boundaryPolicyHash, binding.boundaryPolicy.requiredControls) : [];
+    const qualificationMatches = Boolean(qualification && binding && capability?.success &&
+      qualification.evidenceKind === "protected_host_report" &&
+      qualification.reportHash === capability.data.qualificationHash && qualification.results.length === probeCases.length &&
+      !probeCases.some(test => {
         const matches = qualification.results.filter(result => result.caseId === test.caseId);
         return matches.length !== 1 || matches[0]?.control !== test.control || matches[0]?.contractHash !== test.contractHash ||
           matches[0]?.verdict !== "pass" || !/^[a-f0-9]{64}$/.test(matches[0]?.observationHash ?? "");
-      }) && policy && authorization && policy.expiresAt > new Date() &&
-      policy.authorityHash === authorization.authorityHash &&
-      policy.sourcePolicyRefs.includes(`manifest:${manifest!.id}:${manifest!.hash}`) &&
-      policy.capabilitySnapshotHash === binding.capabilitySnapshotHash &&
-      policy.compilation.compiledPolicy.credentials.mode === "none" &&
-      policy.compilation.compiledPolicy.credentials.bindings.length === 0);
-    if (!qualified || !cell || !host || !binding || !manifest || !agent || !policy || !capability?.success)
-      throw conflict("Managed remote OpenCode data erasure is not qualified for the current signed sandbox target");
+      }));
+    const targetChecks: Array<[string, boolean]> = [
+      ["cell_current", Boolean(cell)],
+      ["host_current", Boolean(host)],
+      ["binding_running", Boolean(binding?.backend === "openshell" && binding.status === "running")],
+      ["manifest_current", Boolean(manifest)],
+      ["agent_present", Boolean(agent)],
+      ["capability_snapshot_valid", Boolean(capability?.success && capability.data.evidenceKind === "protected_host_report")],
+      ["capability_unexpired", Boolean(capability?.success && capability.data.expiresAt > new Date().toISOString())],
+      ["image_matches", Boolean(capability?.success && capability.data.sandboxImageDigest === expectedImageDigest)],
+      ["host_agent_version", Boolean(software && host && hostVersionMeetsMinimum(host.hostAgentVersion, software.minimum))],
+      ["qualification_matches", qualificationMatches],
+      ["policy_unexpired", Boolean(policy && policy.expiresAt > new Date())],
+      // These hashes come from separate authorities: the manifest authorization
+      // records agent-runtime-fabric policy, while the runtime policy hashes the
+      // current sandbox source authority. Require both rows and the exact
+      // manifest linkage, but do not compare unlike hash domains during cleanup.
+      ["execution_authorization_present", Boolean(authorization)],
+      ["policy_manifest_matches", Boolean(policy && manifest && policy.sourcePolicyRefs.includes(`manifest:${manifest.id}:${manifest.hash}`))],
+      ["policy_capability_matches", Boolean(policy && binding && policy.capabilitySnapshotHash === binding.capabilitySnapshotHash)],
+      ["policy_has_no_credentials", Boolean(policy && policy.compilation.compiledPolicy.credentials.mode === "none" &&
+        policy.compilation.compiledPolicy.credentials.bindings.length === 0)],
+    ];
+    if (targetChecks.some(([, passes]) => !passes) || !cell || !host || !binding || !manifest || !agent || !policy ||
+      !capability?.success)
+      throw conflict("Managed remote OpenCode data erasure is not qualified for the current signed sandbox target", {
+        code: REMOTE_ASSET_ERASURE_ERRORS.target,
+        failedChecks: targetChecks.filter(([, passes]) => !passes).map(([name]) => name),
+      });
     return { run, lease, remoteCwd, cell, host, binding, manifest, agent, policy,
       capabilityExpiresAt: Date.parse(capability.data.expiresAt) };
   }
@@ -2741,7 +2760,9 @@ export function runtimeControlService(
   ): Promise<RemoteRuntimeAssetRemovalReceipt> {
     if (!isRemoteRuntimeAssetLocator(locator) || !/^[0-9a-f-]{36}$/i.test(input.jobId) ||
       input.jobKey !== `runtime-asset-erasure:v1:${locator.runId}`)
-      throw conflict("Managed remote OpenCode erasure locator or MemoryJob identity is invalid");
+      throw conflict("Managed remote OpenCode erasure locator or MemoryJob identity is invalid", {
+        code: REMOTE_ASSET_ERASURE_ERRORS.locator,
+      });
     const source = await remoteRuntimeAssetDispatchContext(locator, input.companyPurgeOperationId);
     const locatorDigest = remoteRuntimeAssetLocatorDigest(locator);
     let expectedProcessPid = source.run.processPid;
@@ -2779,7 +2800,9 @@ export function runtimeControlService(
     const requestId = randomUUID();
     const deadlineAt = new Date(Math.min(Date.now() + 60_000, source.lease.expiresAt!.getTime(),
       source.policy.expiresAt.getTime(), source.capabilityExpiresAt ?? Number.POSITIVE_INFINITY));
-    if (deadlineAt <= new Date()) throw conflict("Managed remote OpenCode erasure lease expired before dispatch");
+    if (deadlineAt <= new Date()) throw conflict("Managed remote OpenCode erasure lease expired before dispatch", {
+      code: REMOTE_ASSET_ERASURE_ERRORS.relay, upstreamStatus: null,
+    });
     const command = ["sh", "-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT,
       "paperclip-native-asset-erasure", source.remoteCwd, locator.normalizedSessionIdDigest,
       locator.runId, locator.runnerInstanceId, locator.environmentLeaseId, locator.providerLeaseId,
@@ -2863,14 +2886,16 @@ export function runtimeControlService(
           const completedErasure = completedPayload.remoteRuntimeAssetErasure && typeof completedPayload.remoteRuntimeAssetErasure === "object" &&
             !Array.isArray(completedPayload.remoteRuntimeAssetErasure)
             ? completedPayload.remoteRuntimeAssetErasure as Record<string, unknown> : {};
-          if (!isRemoteRuntimeAssetRemovalReceipt(receipt, locator) || receipt.commandRequestId !== completedPayload.requestId ||
+      if (!isRemoteRuntimeAssetRemovalReceipt(receipt, locator) || receipt.commandRequestId !== completedPayload.requestId ||
             completedErasure.expectedProcessPid !== receipt.stopProof.pid ||
             completedErasure.expectedProcessStartedAt !== receipt.stopProof.startedAt ||
             resultBinding.locatorDigest !== locatorDigest || resultBinding.jobKey !== input.jobKey ||
             resultBinding.companyPurgeOperationId !== (input.companyPurgeOperationId ?? null) || resultBinding.formatVersion !== 1 ||
             receipt.target.hostId !== current.host.id || receipt.target.cellId !== current.cell.id ||
             receipt.target.cellGeneration !== current.cell.generation.toString() || receipt.target.bindingId !== current.binding.id)
-            throw conflict("Completed remote OpenCode erasure has no recoverable exact receipt");
+            throw conflict("Completed remote OpenCode erasure has no recoverable exact receipt", {
+              code: REMOTE_ASSET_ERASURE_ERRORS.reconciliation,
+            });
           const [currentRun] = await tx.select().from(heartbeatRuns).where(and(
             eq(heartbeatRuns.companyId, locator.companyId), eq(heartbeatRuns.id, locator.runId),
           )).for("update");
@@ -2878,18 +2903,24 @@ export function runtimeControlService(
             (currentRun.processPid !== null && (currentRun.processPid !== receipt.stopProof.pid ||
               currentRun.processStartedAt?.toISOString() !== receipt.stopProof.startedAt)) ||
             (currentRun.processPid === null && currentRun.processStartedAt !== null))
-            throw conflict("Completed remote OpenCode erasure receipt belongs to a different process generation");
+            throw conflict("Completed remote OpenCode erasure receipt belongs to a different process generation", {
+              code: REMOTE_ASSET_ERASURE_ERRORS.stop,
+            });
           if (currentRun.processPid !== null) {
             const [cleared] = await tx.update(heartbeatRuns).set({ processPid: null, processGroupId: null,
               processStartedAt: null, updatedAt: new Date() })
               .where(and(eq(heartbeatRuns.companyId, locator.companyId), eq(heartbeatRuns.id, locator.runId),
                 eq(heartbeatRuns.runnerInstanceId, locator.runnerInstanceId), eq(heartbeatRuns.processPid, receipt.stopProof.pid),
                 eq(heartbeatRuns.processStartedAt, new Date(receipt.stopProof.startedAt)))).returning({ id: heartbeatRuns.id });
-            if (!cleared) throw conflict("Completed remote OpenCode receipt could not clear its exact process generation");
+            if (!cleared) throw conflict("Completed remote OpenCode receipt could not clear its exact process generation", {
+              code: REMOTE_ASSET_ERASURE_ERRORS.stop,
+            });
           }
           return { claim: null, receipt };
         }
-        throw conflict("A prior remote OpenCode erasure command requires reconciliation");
+        throw conflict("A prior remote OpenCode erasure command requires reconciliation", {
+          code: REMOTE_ASSET_ERASURE_ERRORS.reconciliation,
+        });
       }
       const [claim] = await tx.insert(runtimeHostCommands).values({
         runtimeHostId: source.host.id, companyId: locator.companyId, runtimeCellId: source.cell.id,
@@ -2900,7 +2931,9 @@ export function runtimeControlService(
     });
     if (admission.receipt) return admission.receipt;
     const claim = admission.claim;
-    if (!claim) throw conflict("Managed remote OpenCode erasure command could not be persisted");
+    if (!claim) throw conflict("Managed remote OpenCode erasure command could not be persisted", {
+      code: REMOTE_ASSET_ERASURE_ERRORS.reconciliation,
+    });
     const request = {
       requestId, bindingId: source.binding.id, hostEpoch: source.host.credentialVersion,
       runId: source.run.id, attemptId: null, attempt,
@@ -2925,36 +2958,63 @@ export function runtimeControlService(
     if (!capabilityToken) {
       await db.update(runtimeHostCommands).set({ status: "FAILED", errorCode: "exec_capability_unavailable", completedAt: new Date() })
         .where(and(eq(runtimeHostCommands.id, claim.id), eq(runtimeHostCommands.status, "PENDING")));
-      throw conflict("Managed remote OpenCode erasure capability could not be issued");
+      throw conflict("Managed remote OpenCode erasure capability could not be issued", {
+        code: REMOTE_ASSET_ERASURE_ERRORS.relay, upstreamStatus: null,
+      });
     }
     const output: Buffer[] = [];
     let outputSize = 0;
     try {
-      const result = await relay.executeOpenShell({ cellId: source.cell.id,
-        generation: source.cell.generation.toString(), request, capabilityToken,
-        onOutput: async (stream, chunk) => {
-          if (stream !== "stdout") return;
-          outputSize += chunk.length;
-          if (outputSize > 4096) throw conflict("Managed remote OpenCode erasure receipt exceeded its bound");
-          output.push(chunk);
-        },
-      });
+      let result: { exitCode: number; timedOut: boolean };
+      try {
+        result = await relay.executeOpenShell({ cellId: source.cell.id,
+          generation: source.cell.generation.toString(), request, capabilityToken,
+          onOutput: async (stream, chunk) => {
+            if (stream !== "stdout") return;
+            outputSize += chunk.length;
+            if (outputSize > 4096) throw conflict("Managed remote OpenCode erasure receipt exceeded its bound", {
+              code: REMOTE_ASSET_ERASURE_ERRORS.result,
+            });
+            output.push(chunk);
+          },
+        });
+      } catch (error) {
+        const upstreamStatus = error && typeof error === "object" && "status" in error &&
+          typeof error.status === "number" && [400, 401, 403, 404, 409, 429, 500, 502, 503, 504].includes(error.status)
+          ? error.status : null;
+        const details = { code: REMOTE_ASSET_ERASURE_ERRORS.relay, upstreamStatus };
+        if (error instanceof HttpError) throw new HttpError(error.status, "Managed remote OpenCode erasure relay failed", details);
+        throw conflict("Managed remote OpenCode erasure relay failed", details);
+      }
       const lines = Buffer.concat(output).toString("utf8").trimEnd().split("\n");
-      if (result.exitCode !== 0 || result.timedOut || lines.length !== 7 ||
-        lines[5] !== locator.runId || lines[6] !== locator.providerLeaseId)
-        throw conflict("Managed remote OpenCode erasure did not return an exact stop and absence proof");
       const [rawPid, startedAt, processIdentityDigest, processStartFingerprintDigest, stoppedAt] = lines;
       const pid = Number(rawPid);
-      if (!Number.isSafeInteger(pid) || pid <= 1 || !startedAt || Number.isNaN(Date.parse(startedAt)) ||
-        pid !== expectedProcessPid || startedAt !== expectedProcessStartedAt ||
-        !stoppedAt || Number.isNaN(Date.parse(stoppedAt)) ||
-        !/^[a-f0-9]{64}$/.test(processIdentityDigest ?? "") || !/^[a-f0-9]{64}$/.test(processStartFingerprintDigest ?? ""))
-        throw conflict("Managed remote OpenCode erasure process stop proof is malformed");
+      const resultFacts = {
+        exitCode: Number.isSafeInteger(result.exitCode) && result.exitCode >= -1 && result.exitCode <= 255 ? result.exitCode : null,
+        timedOut: result.timedOut === true,
+        stdoutBytes: outputSize,
+        stdoutLineCount: lines.length,
+        runIdMatches: lines.length === 7 && lines[5] === locator.runId,
+        providerLeaseIdMatches: lines.length === 7 && lines[6] === locator.providerLeaseId,
+        pidMatches: Number.isSafeInteger(pid) && pid > 1 && pid === expectedProcessPid,
+        startedAtMatches: Boolean(startedAt && startedAt === expectedProcessStartedAt && !Number.isNaN(Date.parse(startedAt))),
+        stoppedAtValid: Boolean(stoppedAt && !Number.isNaN(Date.parse(stoppedAt))),
+        processIdentityDigestValid: /^[a-f0-9]{64}$/.test(processIdentityDigest ?? ""),
+        processStartFingerprintDigestValid: /^[a-f0-9]{64}$/.test(processStartFingerprintDigest ?? ""),
+      };
+      if (result.exitCode !== 0 || result.timedOut || lines.length !== 7 || !resultFacts.runIdMatches ||
+        !resultFacts.providerLeaseIdMatches || !resultFacts.pidMatches || !resultFacts.startedAtMatches ||
+        !resultFacts.stoppedAtValid || !resultFacts.processIdentityDigestValid || !resultFacts.processStartFingerprintDigestValid)
+        throw conflict("Managed remote OpenCode erasure did not return an exact stop and absence proof", {
+          code: REMOTE_ASSET_ERASURE_ERRORS.result, ...resultFacts,
+        });
       const finalSource = await remoteRuntimeAssetDispatchContext(locator, input.companyPurgeOperationId);
       if (finalSource.host.id !== source.host.id || finalSource.host.credentialVersion !== source.host.credentialVersion ||
         finalSource.cell.id !== source.cell.id || finalSource.cell.generation !== source.cell.generation ||
         finalSource.binding.id !== source.binding.id || finalSource.lease.id !== source.lease.id)
-        throw conflict("Managed remote OpenCode erasure target changed before receipt persistence");
+        throw conflict("Managed remote OpenCode erasure target changed before receipt persistence", {
+          code: REMOTE_ASSET_ERASURE_ERRORS.target, failedChecks: ["target_changed_before_receipt"],
+        });
       const receipt: RemoteRuntimeAssetRemovalReceipt = {
         schema: "paperclip.remote-runtime-asset-removal.v1",
         locatorDigest: remoteRuntimeAssetLocatorDigest(locator), commandRequestId: requestId,

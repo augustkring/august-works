@@ -270,10 +270,19 @@ export const authApi = {
     if (!payload || typeof payload !== "object" || (payload as Record<string, unknown>).userId !== expectedUserId ||
       typeof (payload as Record<string, unknown>).available !== "boolean" ||
       typeof (payload as Record<string, unknown>).ready !== "boolean" ||
+      typeof (payload as Record<string, unknown>).requiresNativeFactor !== "boolean" ||
       ((payload as Record<string, unknown>).challengeId !== null && typeof (payload as Record<string, unknown>).challengeId !== "string") ||
       ((payload as Record<string, unknown>).providerId !== null && typeof (payload as Record<string, unknown>).providerId !== "string"))
       throw new Error("Company sign-in status is unavailable");
-    return payload as { userId: string; providerId: string | null; available: boolean; ready: boolean; challengeId: string | null };
+    return payload as { userId: string; providerId: string | null; available: boolean; ready: boolean;
+      requiresNativeFactor: boolean; challengeId: string | null };
+  },
+
+  completeAccountDeletionSsoFactor: async (expectedUserId: string, expectedSessionId: string) => {
+    const value = await authPost("/account-deletion/sso/factor-complete", {}, expectedUserId, expectedSessionId) as Record<string, unknown>;
+    if (value.userId !== expectedUserId || value.sessionId !== expectedSessionId || value.ready !== true ||
+      typeof value.challengeId !== "string") throw new Error("Native factor confirmation is unavailable");
+    return { userId: expectedUserId, sessionId: expectedSessionId, challengeId: value.challengeId };
   },
 
   startAccountDeletionSso: async (expectedUserId: string, expectedSessionId: string) => {
