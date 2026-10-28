@@ -73,7 +73,8 @@ export async function checkOperationCoverage(rootPath = root) {
     mountedSources,
     mountedUiOperations,
   });
-  return { failures, summary: `V10 material operation coverage verified: ${inventory.operations.length} manifest operations classified; ${inventory.uiOnlyActions.length} UI-only actions and ${inventory.clientOperations?.length ?? 0} mounted UI client operations reviewed.` };
+  const apiOnlyCount = AGENT_NATIVE_OPERATION_MANIFEST.filter((entry) => entry.apiOnly).length;
+  return { failures, summary: `V10 mounted UI operation classification verified: ${inventory.operations.length} Agent tool operations, ${apiOnlyCount} unqualified existing API-only contracts, ${inventory.clientOperations?.length ?? 0} exact mounted UI callsites reviewed; API-only contracts expose no tools.` };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename)) {

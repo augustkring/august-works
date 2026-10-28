@@ -214,7 +214,7 @@ export function validateOperationCoverage({ manifestEntries, inventory, readSour
       failures.push(`Inventory operation is absent from the Agent-Native manifest: ${row.operationId}`);
       continue;
     }
-    if (entry.criticality !== "material") failures.push(`Inventory row is not material in the manifest: ${row.operationId}`);
+    if (entry.apiOnly || entry.criticality !== "material") failures.push(`Inventory row is not material in the Agent tool manifest: ${row.operationId}`);
     if (!row.uiSource || !exists(row.uiSource)) failures.push(`Missing mounted UI source: ${row.operationId}`);
     else if (!row.sourceAnchor || !readSource(row.uiSource).includes(row.sourceAnchor)) {
       failures.push(`UI source anchor is missing: ${row.operationId}`);
@@ -231,7 +231,7 @@ export function validateOperationCoverage({ manifestEntries, inventory, readSour
     }
   }
 
-  const materialIds = new Set(manifestEntries.filter((entry) => entry.criticality === "material").map((entry) => entry.operationId));
+  const materialIds = new Set(manifestEntries.filter((entry) => !entry.apiOnly && entry.criticality === "material").map((entry) => entry.operationId));
   for (const operationId of materialIds) {
     if (!inventoryIds.has(operationId)) failures.push(`Unclassified material Agent-Native operation: ${operationId}`);
   }
@@ -260,6 +260,24 @@ export function validateOperationCoverage({ manifestEntries, inventory, readSour
     return failures;
   }
   const listedClientOperations = new Map();
+  const apiManifestEntries = new Map(manifestEntries.filter((entry) => entry.apiOnly).map((entry) => [entry.operationId, entry]));
+  const mappedApiOperationIds = new Set();
+  for (const entry of apiManifestEntries.values()) {
+    if (entry.toolId !== null || entry.mcpExposed !== false || entry.legacyAliases?.length !== 0 ||
+      entry.mode !== "DIRECT_AGENT" || !entry.apiOperation || !/^(GET|POST|PUT|PATCH|DELETE)\s+\S/.test(entry.apiOperation) ||
+      !["ordinary", "launchcritical", "nonmaterial"].includes(entry.sourceMateriality) ||
+      entry.qualificationStatus !== "UNQUALIFIED_SOURCE_ONLY" || entry.testStatus !== "NOT_REVIEWED" ||
+      !Array.isArray(entry.sourceCallsites) || entry.sourceCallsites.length === 0 ||
+      typeof entry.authorizationRationale !== "string" || entry.authorizationRationale.trim().length < 32) {
+      failures.push(`Invalid existing API-only manifest contract: ${entry.operationId}`);
+    }
+    if (!entry.authorityEvidence?.length || entry.authorityEvidence.some((row) => !exists(row.path) || typeof row.claim !== "string" || row.claim.length < 12)) {
+      failures.push(`Existing API-only manifest contract lacks route evidence: ${entry.operationId}`);
+    }
+    if (!entry.materialityEvidence?.length || entry.materialityEvidence.some((row) => !exists(row.path) || typeof row.claim !== "string" || row.claim.length < 12)) {
+      failures.push(`Existing API-only manifest contract lacks materiality evidence: ${entry.operationId}`);
+    }
+  }
   for (const operation of inventory.clientOperations) {
     const key = operationKey(operation.source, operation);
     if (!operation.source || !operation.clientCall || !Number.isInteger(operation.line) || listedClientOperations.has(key)) {
@@ -270,13 +288,53 @@ export function validateOperationCoverage({ manifestEntries, inventory, readSour
     const label = operationLabel(operation.source, operation);
     if (!exists(operation.source)) failures.push(`Missing mounted UI operation source: ${label}`);
     if (!operation.owner || !exists(operation.owner)) failures.push(`Missing canonical UI operation owner: ${label}`);
+    const classifications = new Set([
+      "DIRECT_AGENT", "AGENT_ACCESSIBLE_UNMAPPED", "HUMAN_ONLY", "HUMAN_CONFIRMATION",
+      "OPERATOR_ONLY", "PROPOSAL_ONLY", "NOT_APPLICABLE", "QUERY_POST", "NON_MUTATING_PREVIEW",
+    ]);
+    if (!classifications.has(operation.classification)) {
+      failures.push(`UI client operation needs a reviewed authorization classification: ${label}`);
+    }
+    if (typeof operation.reviewRationale !== "string" || operation.reviewRationale.trim().length < 32) {
+      failures.push(`UI client operation needs a source-reviewed rationale: ${label}`);
+    }
+    if (!Array.isArray(operation.materialityEvidence) || operation.materialityEvidence.length === 0 || operation.materialityEvidence.some((row) =>
+      typeof row.path !== "string" || !exists(row.path) || typeof row.claim !== "string" || row.claim.trim().length < 12
+    )) {
+      failures.push(`UI client operation needs source-backed materiality evidence: ${label}`);
+    }
+    const evidence = operation.authorityEvidence;
+    const evidenceRows = evidence?.sourceEvidence;
+    if (!Array.isArray(evidenceRows) || evidenceRows.length === 0 || evidenceRows.some((row) =>
+      typeof row.path !== "string" || !exists(row.path) || typeof row.claim !== "string" || row.claim.trim().length < 12
+    )) {
+      failures.push(`UI client operation needs current source authorization citations: ${label}`);
+    }
+    if (operation.canonicalServerOwners !== undefined && (!Array.isArray(operation.canonicalServerOwners) ||
+      operation.canonicalServerOwners.length < 2 || operation.canonicalServerOwners.some((path) => !exists(path)))) {
+      failures.push(`Polymorphic UI client operation needs every concrete server owner: ${label}`);
+    }
+    if (operation.classification === "DIRECT_AGENT") {
+      if (!Array.isArray(operation.operationIds) || operation.operationIds.length === 0) {
+        failures.push(`Direct-Agent UI client operation needs an existing API manifest mapping: ${label}`);
+      } else for (const operationId of operation.operationIds) {
+        const entry = apiManifestEntries.get(operationId);
+        if (!entry) failures.push(`Direct-Agent UI client operation references no existing API contract: ${label}`);
+        else if (entry.owner !== operation.owner) failures.push(`Direct-Agent UI client operation owner does not match its API contract: ${label}`);
+        else mappedApiOperationIds.add(operationId);
+      }
+    }
+    if (operation.materiality !== undefined && !["ordinary", "launchcritical", "nonmaterial"].includes(operation.materiality)) {
+      failures.push(`UI client operation needs reviewed materiality: ${label}`);
+    }
     if (operation.operationId) {
       const entry = manifestById.get(operation.operationId);
-      if (!entry) failures.push(`UI client operation references an absent manifest operation: ${label}`);
+      if (!entry || entry.apiOnly) failures.push(`UI client operation references an absent Agent tool operation: ${label}`);
       else if (entry.owner !== operation.owner) failures.push(`UI client operation owner does not match the manifest: ${label}`);
-    } else if (typeof operation.reason !== "string" || operation.reason.trim().length < 48) {
-      failures.push(`UI-only client operation requires an explicit exclusion reason: ${label}`);
     }
+  }
+  for (const operationId of apiManifestEntries.keys()) {
+    if (!mappedApiOperationIds.has(operationId)) failures.push(`Unmapped existing API-only manifest contract: ${operationId}`);
   }
   const scopedUiSources = new Set([
     ...inventory.operations.map((operation) => operation.uiSource),

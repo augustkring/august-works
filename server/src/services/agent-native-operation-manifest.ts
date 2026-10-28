@@ -1,4 +1,6 @@
 import { nativeSha256 } from "./native-runtime/canonical.js";
+import { AGENT_NATIVE_EXISTING_API_OPERATION_MANIFEST } from "./agent-native-existing-api-operation-manifest.js";
+export { AGENT_NATIVE_EXISTING_API_OPERATION_MANIFEST };
 
 export type AgentNativeOperationMode =
   | "DIRECT_AGENT"
@@ -15,7 +17,7 @@ export interface AgentNativeOperationManifestEntry {
   canonicalService: string;
   webSurface: string;
   apiOperation: string;
-  toolId: string;
+  toolId: string | null;
   legacyAliases: readonly string[];
   principalTypes: readonly ("agent" | "human")[];
   experienceProfiles: readonly string[];
@@ -33,6 +35,26 @@ export interface AgentNativeOperationManifestEntry {
   openclawQualified: boolean;
   tests: readonly string[];
   owner: string;
+  apiOnly?: boolean;
+  qualificationStatus?: "UNQUALIFIED_SOURCE_ONLY";
+  testStatus?: "NOT_REVIEWED";
+  sourceCallsites?: readonly { path: string; line: number; clientCall: string; routeSignatures: readonly string[] }[];
+  authorizationRationale?: string;
+  sourceMateriality?: "ordinary" | "launchcritical" | "nonmaterial";
+  authorityEvidence?: readonly { path: string; line?: number; claim: string }[];
+  materialityEvidence?: readonly { path: string; line?: number; claim: string }[];
+}
+
+export interface AgentNativeApiOperationContract extends AgentNativeOperationManifestEntry {
+  apiOnly: true;
+  qualificationStatus: "UNQUALIFIED_SOURCE_ONLY";
+  testStatus: "NOT_REVIEWED";
+  apiOperation: string;
+  toolId: null;
+  sourceMateriality: "ordinary" | "launchcritical" | "nonmaterial";
+  authorityEvidence: readonly { path: string; line?: number; claim: string }[];
+  materialityEvidence: readonly { path: string; line?: number; claim: string }[];
+  clientMethods: readonly string[];
 }
 
 /**
@@ -650,13 +672,17 @@ const NATIVE_RUNNER_OPERATION_ENTRIES: readonly AgentNativeOperationManifestEntr
 export const AGENT_NATIVE_OPERATION_MANIFEST: readonly AgentNativeOperationManifestEntry[] = Object.freeze([
   ...AGENT_NATIVE_OPERATION_BASE_MANIFEST,
   ...NATIVE_RUNNER_OPERATION_ENTRIES,
+  ...AGENT_NATIVE_EXISTING_API_OPERATION_MANIFEST,
 ]);
 
 const byLegacyToolName = new Map<string, AgentNativeOperationManifestEntry>();
 const byOperationId = new Map<string, AgentNativeOperationManifestEntry>();
+const allOperationIds = new Set<string>();
 for (const entry of AGENT_NATIVE_OPERATION_MANIFEST) {
-  if (byOperationId.has(entry.operationId)) throw new Error("duplicate_agent_native_operation_id");
-  byOperationId.set(entry.operationId, entry);
+  if (allOperationIds.has(entry.operationId)) throw new Error("duplicate_agent_native_operation_id");
+  allOperationIds.add(entry.operationId);
+  // Existing API contracts describe route behavior without registering tools.
+  if (!entry.apiOnly) byOperationId.set(entry.operationId, entry);
   for (const legacyName of entry.legacyAliases) {
     if (byLegacyToolName.has(legacyName)) throw new Error("duplicate_agent_native_tool_alias");
     byLegacyToolName.set(legacyName, entry);

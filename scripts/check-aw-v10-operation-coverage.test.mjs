@@ -37,6 +37,34 @@ test("fails closed when a new material manifest operation lacks UI classificatio
   assert.ok(failures.includes("Unclassified material Agent-Native operation: blentera.new.material"));
 });
 
+test("keeps existing API-only contracts explicitly unqualified and tool-free", () => {
+  const source = 'const render = <button onClick={run}/>; api.post("/api/action", { enabled: true });';
+  sources.set("ui/action.tsx", source);
+  const [call] = extractUiClientOperations(source, "ui/action.tsx");
+  const apiContract = {
+    operationId: "existing-api:example", apiOnly: true, criticality: "material", owner: "server/owner.ts",
+    toolId: null, mcpExposed: false, legacyAliases: [], mode: "DIRECT_AGENT", apiOperation: "POST /api/action",
+    sourceMateriality: "ordinary", qualificationStatus: "UNQUALIFIED_SOURCE_ONLY", testStatus: "NOT_REVIEWED",
+    sourceCallsites: [{ path: "ui/action.tsx", line: call.line, clientCall: call.clientCall, routeSignatures: call.routeSignatures }],
+    authorizationRationale: "Existing route source citations remain authoritative; this registration adds no access.",
+    authorityEvidence: [{ path: "server/owner.ts", claim: "Route verifies the current actor before applying the action." }],
+    materialityEvidence: [{ path: "server/owner.ts", claim: "The route mutates the represented company resource." }],
+  };
+  const inventory = structuredClone(base);
+  inventory.clientOperations = [{
+    source: "ui/action.tsx", ...call, owner: "server/owner.ts", classification: "DIRECT_AGENT",
+    operationIds: [apiContract.operationId], reviewRationale: "The existing API route and its source authorization guards were reviewed.",
+    authorityEvidence: { sourceEvidence: [{ path: "server/owner.ts", claim: "Route verifies the current actor before applying the action." }] },
+    materialityEvidence: [{ path: "server/owner.ts", claim: "The route mutates the represented company resource." }],
+  }];
+  const actual = new Map([["ui/action.tsx", [call]]]);
+  assert.deepEqual(validate([entry("blentera.example.run"), apiContract], inventory, actual), []);
+  delete apiContract.qualificationStatus;
+  assert.ok(validate([entry("blentera.example.run"), apiContract], inventory, actual)
+    .includes("Invalid existing API-only manifest contract: existing-api:example"));
+  sources.set("ui/action.tsx", "<button onClick={run}>");
+});
+
 test("rejects an unmapped mounted UI operation instead of accepting a wildcard", () => {
   const inventory = structuredClone(base);
   inventory.uiOnlyActions.push({ ...action("new.ui.action"), reason: "" });
@@ -47,6 +75,36 @@ test("fails when a new UI client mutation appears while the inventory stays unch
   sources.set("ui/action.tsx", "export const save = () => accessApi.securitySuspendMember();");
   const failures = validate([entry("blentera.example.run")]);
   assert.ok(failures.some((failure) => failure.startsWith("Unclassified mounted UI client operation: ui/action.tsx#accessApi.securitySuspendMember:unknown@")));
+  sources.set("ui/action.tsx", "<button onClick={run}>");
+});
+
+test("requires an authorization classification and source citations for each inventoried callsite", () => {
+  const source = 'api.post("/api/action", { enabled: true });';
+  sources.set("ui/action.tsx", source);
+  const [call] = extractUiClientOperations(source, "ui/action.tsx");
+  const inventory = structuredClone(base);
+  inventory.clientOperations = [{
+    source: "ui/action.tsx",
+    ...call,
+    owner: "server/owner.ts",
+    reviewRationale: "The route owner and current authorization behavior were reviewed for this UI callsite.",
+    authorityEvidence: { sourceEvidence: [{ path: "server/owner.ts", claim: "The route checks the current authenticated actor." }] },
+  }];
+  assert.ok(validate([entry("blentera.example.run")], inventory).some((failure) =>
+    failure.startsWith("UI client operation needs a reviewed authorization classification:"),
+  ));
+  sources.set("ui/action.tsx", "<button onClick={run}>");
+});
+
+test("keeps computed HTTP client methods unknown and fails when they are unclassified", () => {
+  const source = 'api[decision === "approve" ? "post" : "patch"]("/api/review", payload);';
+  sources.set("ui/action.tsx", source);
+  const [call] = extractUiClientOperations(source, "ui/action.tsx");
+  assert.equal(call.apiVerb, "unknown");
+  const operations = new Map([["ui/action.tsx", [call]]]);
+  assert.ok(validate([entry("blentera.example.run")], base, operations).some((failure) =>
+    failure.startsWith("Unclassified mounted UI client operation: ui/action.tsx#api.<computed>:unknown@"),
+  ));
   sources.set("ui/action.tsx", "<button onClick={run}>");
 });
 

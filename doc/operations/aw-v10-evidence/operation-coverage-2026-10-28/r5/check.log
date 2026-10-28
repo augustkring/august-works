@@ -1,0 +1,5 @@
+
+> paperclip@ check:aw-v10-operation-coverage /workspace/blentera-v10
+> node scripts/check-aw-v10-operation-coverage.mjs
+
+V10 mounted UI operation classification verified: 6 Agent tool operations, 159 unqualified existing API-only contracts, 990 exact mounted UI callsites reviewed; API-only contracts expose no tools.

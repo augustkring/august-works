@@ -66,7 +66,7 @@ import {
   ToolGatewayHttpError,
   type ScopedToolGatewayContext,
 } from "../services/tool-gateway.js";
-import { AGENT_NATIVE_OPERATION_MANIFEST, blenteraToolCatalogContractHash } from "../services/agent-native-operation-manifest.js";
+import { AGENT_NATIVE_EXISTING_API_OPERATION_MANIFEST, AGENT_NATIVE_OPERATION_MANIFEST, agentNativeOperationForToolName, blenteraToolCatalogContractHash } from "../services/agent-native-operation-manifest.js";
 import { canonicalToolArguments, signToolArguments } from "../services/tool-content-guards.js";
 import {
   getEmbeddedPostgresTestSupport,
@@ -79,6 +79,18 @@ const testToolActionSigningSecret = "test-tool-action-signing-secret";
 type ToolGatewayServiceOptions = NonNullable<Parameters<typeof createToolGatewayService>[1]>;
 
 describe("Blentera platform contract hashes", () => {
+  it("records existing Agent APIs without registering tools or MCP exposure", () => {
+    expect(AGENT_NATIVE_EXISTING_API_OPERATION_MANIFEST.length).toBeGreaterThan(0);
+    for (const operation of AGENT_NATIVE_EXISTING_API_OPERATION_MANIFEST) {
+      expect(operation).toMatchObject({ toolId: null, legacyAliases: [], mcpExposed: false, apiOnly: true });
+      expect(operation.apiOperation).toMatch(/^(GET|POST|PUT|PATCH|DELETE)\s+\S/);
+      expect(operation.principalTypes).toContain("agent");
+      expect(operation.authorityEvidence.length).toBeGreaterThan(0);
+      expect(operation.materialityEvidence.length).toBeGreaterThan(0);
+      expect(agentNativeOperationForToolName(operation.operationId)).toBeUndefined();
+    }
+  });
+
   it("exports stable operation and first-party tool catalog hashes", () => {
     const first = blenteraPlatformContractHashes();
     const second = blenteraPlatformContractHashes();
@@ -86,7 +98,7 @@ describe("Blentera platform contract hashes", () => {
     expect(first.operationManifestHash).toMatch(/^[a-f0-9]{64}$/);
     expect(first.toolCatalogContractHash).toMatch(/^[a-f0-9]{64}$/);
     const releaseRegistry = JSON.parse(readFileSync(new URL("../../../skills-releases/blentera-platform/releases.json", import.meta.url), "utf8")) as Array<Record<string, unknown>>;
-    expect(releaseRegistry.find(release => release.id === "v1")).toMatchObject(first);
+    expect(releaseRegistry.at(-1)).toMatchObject(first);
     const contract = {
       toolId: "blentera.task.list_assigned",
       operationId: "blentera.task.list_assigned",
