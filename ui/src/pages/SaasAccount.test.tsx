@@ -64,6 +64,7 @@ function setInput(input: HTMLInputElement, value: string) {
   input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 const deletionSection = () => host.querySelector<HTMLElement>('section[aria-label="Delete your account"]')!;
+const deletionPassword = () => host.querySelector<HTMLInputElement>('section[aria-label="Delete your account"] input[type="password"]');
 async function confirmDeletion(password = "PRIVATE-CURRENT-PASSWORD") {
   await act(async () => {
     setInput(deletionSection().querySelector<HTMLInputElement>('input[autocomplete="off"]')!, "DELETE MY ACCOUNT");
@@ -77,11 +78,11 @@ it("withdraws private account data and preserves a same-person deletion draft th
   await mount(); await confirmDeletion();
   const current = deferred<ReturnType<typeof v9SessionFixture>>(); let recheck!: Promise<unknown>;
   await act(async () => { recheck = client.fetchQuery({ queryKey: queryKeys.auth.session, queryFn: () => current.promise }); });
-  await vi.waitFor(() => expect(host.querySelector('input[type="password"]')).toBeNull());
+  await vi.waitFor(() => expect(deletionPassword()).toBeNull());
   expect(host.textContent).not.toContain(receipt.companyId); expect(host.textContent).not.toContain("Signed in");
   expect(host.querySelector('input[name="timezone"]')).toBeNull();
   await act(async () => { current.resolve(v9SessionFixture("owner")); await recheck; });
-  await vi.waitFor(() => expect(host.querySelector<HTMLInputElement>('input[type="password"]')?.value).toBe("PRIVATE-CURRENT-PASSWORD"));
+  await vi.waitFor(() => expect(deletionPassword()?.value).toBe("PRIVATE-CURRENT-PASSWORD"));
   await vi.waitFor(() => expect(host.textContent).toContain(receipt.companyId));
   expect(deletionSection().querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked).toBe(true);
   expect(document.activeElement).toBe(host.querySelector("h1"));
@@ -104,7 +105,7 @@ it("purges the previous person's password and unsaved policy when the actual ses
   await mount(); await confirmDeletion();
   await act(async () => setInput(host.querySelector<HTMLInputElement>('input[name="timezone"]')!, "Europe/Paris"));
   await act(async () => client.setQueryData(queryKeys.auth.session, v9SessionFixture("other-owner")));
-  await vi.waitFor(() => expect(host.querySelector<HTMLInputElement>('input[type="password"]')?.value).toBe(""));
+  await vi.waitFor(() => expect(deletionPassword()?.value).toBe(""));
   await vi.waitFor(() => expect(host.querySelector<HTMLInputElement>('input[name="timezone"]')?.value).toBe("Europe/Copenhagen"));
   expect(deletionSection().querySelector<HTMLInputElement>('input[autocomplete="off"]')?.value).toBe("");
   expect(deletionSection().querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked).toBe(false);
@@ -163,7 +164,7 @@ it("keeps a late deletion acknowledgement unconfirmed across the same account's 
   await act(async () => submitDeletion()); await vi.waitFor(() => expect(remove).toHaveBeenCalledOnce());
   const current = deferred<ReturnType<typeof v9SessionFixture>>(); let recheck!: Promise<unknown>;
   await act(async () => { recheck = client.fetchQuery({ queryKey: queryKeys.auth.session, queryFn: () => current.promise }); });
-  await vi.waitFor(() => expect(host.querySelector('input[type="password"]')).toBeNull());
+  await vi.waitFor(() => expect(deletionPassword()).toBeNull());
   await act(async () => accepted.resolve({ id: "native-deletion", status: "requested", createdAt: "2026-10-10T00:00:00Z", completedAt: null }));
   await act(async () => { current.resolve(v9SessionFixture("owner")); await recheck; });
   await vi.waitFor(() => expect(host.textContent).toContain("Your deletion request is not confirmed"));
@@ -211,7 +212,7 @@ it("hides private cached data after an actual session failure and exposes an ori
   await act(async () => { await client.refetchQueries({ queryKey: queryKeys.auth.session, exact: true }); });
   await vi.waitFor(() => expect(host.textContent).toContain("Account access could not be checked"));
   expect(host.textContent).not.toContain(receipt.companyId); expect(host.textContent).not.toContain("PRIVATE-SESSION-FAILURE");
-  expect(host.querySelector('input[type="password"]')).toBeNull();
+  expect(deletionPassword()).toBeNull();
   const retry = [...host.querySelectorAll("button")].find(item => item.textContent === "Try again")!;
   await act(async () => retry.click());
   await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(2));
@@ -228,7 +229,7 @@ it("does not read private accounts when the original SaaS capability owner repor
   await mount();
   await act(async () => client.setQueryData(["saas-capabilities"], null));
   await vi.waitFor(() => expect(host.textContent).toContain("Personal account features are currently unavailable"));
-  expect(host.querySelector('input[type="password"]')).toBeNull();
+  expect(deletionPassword()).toBeNull();
   expect(host.textContent).not.toContain(receipt.companyId);
   expect(saasApi.sessions).toHaveBeenCalledOnce(); expect(saasApi.notificationPreferences).toHaveBeenCalledOnce();
 });
@@ -244,7 +245,7 @@ it("offers an original-session retry after a cold-boot failure without any priva
 
 async function reopenAccount() {
   await act(async () => root.unmount()); root = createRoot(host);
-  await render(); await vi.waitFor(() => expect(host.querySelector('input[type="password"]')).toBeTruthy());
+  await render(); await vi.waitFor(() => expect(deletionPassword()).toBeTruthy());
 }
 it("reopens only the original deletion key after route unmount and requires new explicit consent without persisting a password", async () => {
   await mount(); await confirmDeletion();

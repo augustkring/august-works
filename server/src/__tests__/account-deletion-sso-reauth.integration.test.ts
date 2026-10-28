@@ -1,9 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { randomUUID, generateKeyPairSync } from "node:crypto";
-import { SignJWT, exportJWK } from "jose";
-import { and, eq } from "drizzle-orm";
+import { randomUUID, generateKeyPairSync, createSign } from "node:crypto";
+import { and, eq, sql } from "drizzle-orm";
 import {
-  createDb, authSessions, authUsers, authVerifications, accountDeletionOperations,
+  createDb, authAccounts, authPasskeys, authRateLimits, authSessions, authUsers, authVerifications, accountDeletionOperations,
   enterpriseIdentityPolicies, type Db,
 } from "@paperclipai/db";
 import { createBetterAuthInstance } from "../auth/better-auth.js";
@@ -35,8 +34,7 @@ const origin = "https://enterprise.example.test", sourceSha = "a".repeat(40);
   const jwksKid = "account-delete-jwks";
   const tokenByCode = new Map<string, string>();
   const { privateKey: idpPrivateKey, publicKey: idpPublicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
-  const idpPrivatePem = idpPrivateKey.export({ type: "pkcs8", format: "pem" }).toString();
-  const idpPublicJwkPromise = exportJWK(idpPublicKey);
+  const idpPublicJwk = idpPublicKey.export({ format: "jwk" });
 
   beforeAll(async () => {
     process.env.PAPERCLIP_SECRETS_MASTER_KEY = "c".repeat(64);
@@ -45,13 +43,23 @@ const origin = "https://enterprise.example.test", sourceSha = "a".repeat(40);
     db = createDb(database.connectionString);
     await instanceSettingsService(db).getExperimental();
     await enableV5ForTest(db);
-    await instanceSettingsService(db).updateExperimental({ enterprise_identity_v7: true, company_deletion_v6: true });
     operator = await seedV5Companies(db);
     const time = new Date(), operatorSessionId = randomUUID();
+    await db.insert(authAccounts).values({ id: randomUUID(), issuer: "local:credential", accountId: operator.userId,
+      providerId: "credential", userId: operator.userId, password: "structural-fixture-not-a-password-hash",
+      createdAt: time, updatedAt: time });
+    await db.insert(authPasskeys).values({ id: randomUUID(), name: "OIDC fixture operator structural passkey",
+      publicKey: "structural-fixture-not-a-credential", userId: operator.userId, credentialID: randomUUID(), counter: 0,
+      deviceType: "singleDevice", backedUp: false, transports: null, createdAt: time, aaguid: null });
+    const [operatorAuthenticator] = await db.select({ authenticatorVersion: authUsers.authenticatorVersion })
+      .from(authUsers).where(eq(authUsers.id, operator.userId));
     await db.insert(authSessions).values({ id: operatorSessionId, userId: operator.userId, token: randomUUID(),
       createdAt: time, updatedAt: time, expiresAt: new Date(time.getTime() + 86_400_000),
-      authenticationMethod: "passkey", authenticatedAt: time, authenticatorVersion: 0 });
+      authenticationMethod: "passkey", authenticatedAt: time, authenticatorVersion: operatorAuthenticator!.authenticatorVersion });
     operatorActor = { ...operator.actor, sessionId: operatorSessionId };
+    await instanceSettingsService(db).updateExperimental({ saas_deployment_profile_v6: true, transactional_email_v6: true,
+      email_verification_required_v6: true, server_onboarding_v6: true, billing_v6: true, billing_entitlements_v6: true,
+      ai_use_cases_v7: true, governance_evidence_v7: true, enterprise_identity_v7: true, company_deletion_v6: true });
     targetUserId = `oidc-delete-target-${randomUUID()}`;
     await db.insert(authUsers).values({ id: targetUserId, name: "OIDC deletion fixture", email: `${targetUserId}@test.invalid`,
       emailVerified: true, createdAt: time, updatedAt: time });
@@ -60,7 +68,8 @@ const origin = "https://enterprise.example.test", sourceSha = "a".repeat(40);
       status: "active", membershipRole: "viewer" });
 
     const appSigningKey = generateKeyPairSync("rsa", { modulusLength: 2048, privateKeyEncoding: { type: "pkcs8", format: "pem" }, publicKeyEncoding: { type: "spki", format: "pem" } }).privateKey;
-    const key = await secretService(db).create(operatorActor, { name: "OIDC deletion app key", provider: "local_encrypted", value: appSigningKey }, { userId: operator.userId });
+    const key = await secretService(db).create(operator.home,
+      { name: "OIDC deletion app key", provider: "local_encrypted", value: appSigningKey }, { userId: operator.userId });
     const policyService = enterpriseIdentityPolicyService(db, { operatorUserIds: [operator.userId], sourceSha,
       protectedEvidenceOrigin: "https://qualification.test.invalid", appOrigin: origin });
     const policy = await policyService.configure(operatorActor, operator.home, { expectedVersion: 0,
@@ -72,7 +81,7 @@ const origin = "https://enterprise.example.test", sourceSha = "a".repeat(40);
       scimRequired: false, reason: "Configure local signed OIDC account deletion fixture" });
     const [configured] = await db.select().from(enterpriseIdentityPolicies).where(eq(enterpriseIdentityPolicies.id, policy.id));
     const qualified = await policyService.qualify(operatorActor, operator.home, { expectedVersion: 1,
-      configurationHash: enterprisePolicyHash(configured!), uri: "https://qualification.test.invalid/account-delete-oidc",
+      configurationHash: enterprisePolicyHash(configured!), uri: "https://qualification.test.invalid/qualification/account-delete-oidc",
       sha256: "d".repeat(64), expiresAt: new Date(Date.now() + 86_400_000).toISOString() });
     providerId = qualified.providerId;
     await policyService.bind(operatorActor, operator.home, { userId: targetUserId, subject: idpSubject,
@@ -83,7 +92,7 @@ const origin = "https://enterprise.example.test", sourceSha = "a".repeat(40);
       port: 3100, publicOriginConfig: { primaryAppOrigin: origin, allowedAppOrigins: [origin], legacyOrigins: [] },
       saasPlatform: { deployment: { sourceSha }, operatorUserIds: [operator.userId] } } as unknown as Config;
     auth = createBetterAuthInstance(db, config, [origin, idpIssuer]);
-    const publicJwk = await idpPublicJwkPromise;
+    const publicJwk = { ...idpPublicJwk };
     Object.assign(publicJwk, { kid: jwksKid, use: "sig", alg: "RS256" });
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(input instanceof Request ? input.url : String(input));
@@ -128,10 +137,17 @@ const origin = "https://enterprise.example.test", sourceSha = "a".repeat(40);
     return response;
   }
   async function signedToken(input: { nonce: string; authTime: number; subject?: string }) {
-    return new SignJWT({ email: `${targetUserId}@test.invalid`, email_verified: true, name: "OIDC deletion fixture",
-      nonce: input.nonce, auth_time: input.authTime })
-      .setProtectedHeader({ alg: "RS256", kid: jwksKid }).setIssuer(idpIssuer).setAudience(oidcClientId)
-      .setSubject(input.subject ?? idpSubject).setIssuedAt().setExpirationTime("5m").sign(idpPrivateKey);
+    const base64url = (value: string) => Buffer.from(value).toString("base64url");
+    const issuedAt = Math.floor(Date.now() / 1000);
+    const header = base64url(JSON.stringify({ alg: "RS256", kid: jwksKid }));
+    const payload = base64url(JSON.stringify({ iss: idpIssuer, aud: oidcClientId, sub: input.subject ?? idpSubject,
+      iat: issuedAt, exp: issuedAt + 300, email: `${targetUserId}@test.invalid`, email_verified: true,
+      name: "OIDC deletion fixture", nonce: input.nonce, auth_time: input.authTime }));
+    const signingInput = `${header}.${payload}`;
+    const signer = createSign("RSA-SHA256");
+    signer.update(signingInput);
+    signer.end();
+    return `${signingInput}.${signer.sign(idpPrivateKey).toString("base64url")}`;
   }
   async function completeOidc(callbackURL: string, options: { authTime?: number; subject?: string; badNonce?: boolean } = {}) {
     const start = await request("/sign-in/sso", "POST", { providerId, callbackURL });
@@ -160,6 +176,9 @@ const origin = "https://enterprise.example.test", sourceSha = "a".repeat(40);
     expect(result.status).toBe(200);
     return result.json() as Promise<{ userId: string; challengeId: string; providerId: string; callbackURL: string }>;
   }
+  async function clearThisFixtureSignInRateLimit() {
+    await db.delete(authRateLimits).where(sql`${authRateLimits.key} like ${"%|%/sign-in/sso"}`);
+  }
 
   it("requires a signed fresh OIDC auth_time, nonce and exact state, then consumes a session-bound proof atomically", async () => {
     const first = await completeOidc(`${origin}/company/settings/security`);
@@ -172,6 +191,7 @@ const origin = "https://enterprise.example.test", sourceSha = "a".repeat(40);
     const staleChallenge = await startDeleteReauth(initialSessionId);
     const stale = await completeOidc(staleChallenge.callbackURL, { authTime: Math.floor(Date.now() / 1000) - 600 });
     expect(stale.callback.status).toBe(302);
+    await clearThisFixtureSignInRateLimit();
     let sessionId = await currentSession();
     let status = await (await request("/account-deletion/sso/status", "GET", undefined, expectedHeaders(sessionId))).json() as { ready: boolean };
     expect(status.ready).toBe(false);
@@ -179,6 +199,7 @@ const origin = "https://enterprise.example.test", sourceSha = "a".repeat(40);
     const failedChallenge = await startDeleteReauth(sessionId);
     const wrongNonce = await completeOidc(failedChallenge.callbackURL, { badNonce: true });
     expect(wrongNonce.callback.status).toBe(302);
+    await clearThisFixtureSignInRateLimit();
     sessionId = await currentSession();
     status = await (await request("/account-deletion/sso/status", "GET", undefined, expectedHeaders(sessionId))).json() as { ready: boolean };
     expect(status.ready).toBe(false);
@@ -223,7 +244,42 @@ const origin = "https://enterprise.example.test", sourceSha = "a".repeat(40);
     await expect(deletion.request(targetUserId, input, new Date(), { ...actor, sessionId: otherSessionForTarget }))
       .rejects.toThrow("Current company sign-in confirmation required");
 
-    const receipt = await deletion.request(targetUserId, input, new Date(), actor);
+    const [proofRow] = await db.select().from(authVerifications)
+      .where(eq(authVerifications.identifier, `account-deletion-oidc:${targetUserId}`));
+    const proofValue = JSON.parse(proofRow!.value) as { expiresAt: string };
+    const shortenedExpiry = new Date(Date.now() + 1_000);
+    proofValue.expiresAt = shortenedExpiry.toISOString();
+    await db.update(authVerifications).set({ value: JSON.stringify(proofValue), expiresAt: shortenedExpiry })
+      .where(eq(authVerifications.id, proofRow!.id));
+    const lockDb = createDb(database.connectionString);
+    let blockedDelete: Promise<{ ok: true } | { error: unknown }> | undefined;
+    await lockDb.transaction(async tx => {
+      await tx.execute(sql`lock table company_memberships in share row exclusive mode`);
+      blockedDelete = deletion.request(targetUserId, input, new Date(), actor)
+        .then(() => ({ ok: true as const }), error => ({ error }));
+      let waiting = false;
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const [activity] = await db.execute<{ waiting: boolean }>(sql`
+          select exists(select 1 from pg_stat_activity where wait_event_type='Lock'
+            and query ilike '%lock table company_memberships in share row exclusive mode%') as waiting`);
+        if (activity?.waiting) { waiting = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(waiting).toBe(true);
+      await new Promise(resolve => setTimeout(resolve, 1_200));
+    });
+    const expired = await blockedDelete!;
+    expect("error" in expired).toBe(true);
+    expect((expired as { error: unknown }).error).toMatchObject({ message: "Current company sign-in confirmation required" });
+    expect(await db.select().from(accountDeletionOperations).where(eq(accountDeletionOperations.userId, targetUserId))).toEqual([]);
+    expect(await db.select().from(authVerifications).where(eq(authVerifications.identifier, `account-deletion-oidc:${targetUserId}`))).toHaveLength(1);
+
+    const retryChallenge = await startDeleteReauth(sessionId);
+    const retried = await completeOidc(retryChallenge.callbackURL);
+    expect(retried.callback.status).toBe(302);
+    sessionId = await currentSession();
+    const retryInput = { ...input, reauthenticationProofId: retryChallenge.challengeId };
+    const receipt = await deletion.request(targetUserId, retryInput, new Date(), { ...actor, sessionId });
     expect(receipt.status).toBe("requested");
     expect(await db.select().from(authVerifications).where(eq(authVerifications.identifier, `account-deletion-oidc:${targetUserId}`))).toEqual([]);
     expect(await db.select().from(accountDeletionOperations).where(eq(accountDeletionOperations.userId, targetUserId))).toHaveLength(1);

@@ -346,26 +346,53 @@ export function enterpriseAuthPlugins(
           handler: createAuthMiddleware(async (ctx) => {
             const created = ctx.context.newSession;
             if (!created) return;
-            const [row] = await db.select().from(authVerifications)
-              .where(eq(authVerifications.identifier, reauthIdentifier(created.user.id))).limit(1);
-            if (!row) return;
-            const challenge = parseAccountDeletionSsoChallenge(row.value);
-            if (!challenge) return;
-            if (challenge.state !== "callback_verified") return;
-            const state = typeof ctx.query.state === "string" ? ctx.query.state : null;
-            const authTime = typeof challenge.authTime === "number" ? challenge.authTime : NaN;
-            if (!state || state !== challenge.authorizationState || challenge.userId !== created.user.id ||
-              challenge.providerId !== (ctx.params as { providerId?: string }).providerId ||
-              !Number.isFinite(authTime) || Date.now() - authTime > 300_000 || authTime > Date.now() + 5_000) {
+            const callbackState = typeof ctx.query?.state === "string" ? ctx.query.state : null;
+            const callbackProviderId = (ctx.params as { providerId?: string }).providerId;
+            const ready = await db.transaction(async tx => {
+              const [currentUser] = await tx.select({ authenticatorVersion: authUsers.authenticatorVersion })
+                .from(authUsers).where(eq(authUsers.id, created.user.id)).limit(1).for("share");
+              if (!currentUser) return "invalid" as const;
+              const [row] = await tx.select().from(authVerifications)
+                .where(eq(authVerifications.identifier, reauthIdentifier(created.user.id)))
+                .limit(1).for("update");
+              if (!row) return "none" as const;
+              const challenge = parseAccountDeletionSsoChallenge(row.value);
+              if (!challenge || challenge.state !== "callback_verified") return "none" as const;
+              const authTime = challenge.authTime;
+              const matchingState = Boolean(callbackState && callbackState === challenge.authorizationState &&
+                challenge.userId === created.user.id && challenge.providerId === callbackProviderId &&
+                challenge.proofSessionId === null && challenge.sourceSessionId !== created.session.id &&
+                Number.isSafeInteger(authTime));
+              if (!matchingState) return "invalid" as const;
+              const sessions = await tx.execute<{ id: string }>(sql`
+                select s.id from "session" s join "user" u on u.id=s.user_id
+                where s.id in (${challenge.sourceSessionId},${created.session.id}) and s.user_id=${created.user.id}
+                  and u.authenticator_version=${challenge.authenticatorVersion}
+                  and (s.authenticator_version is null or s.authenticator_version=u.authenticator_version)
+                  and s.expires_at>clock_timestamp()
+                for share of s,u nowait`);
+              const validRows = await tx.execute<{ valid: boolean }>(sql`
+                select exists(select 1 from ${authVerifications}
+                    where ${authVerifications.id}=${row.id}
+                      and ${authVerifications.expiresAt}>clock_timestamp())
+                  and ${challenge.expiresAt}::timestamptz>clock_timestamp()
+                  and to_timestamp(${authTime!}::double precision / 1000.0)
+                    between clock_timestamp()-interval '5 minutes' and clock_timestamp()+interval '5 seconds'
+                  as valid`);
+              if (new Set(sessions.map(session => session.id)).size !== 2 || !validRows[0]?.valid)
+                return "invalid" as const;
+              challenge.state = "ready";
+              challenge.proofSessionId = created.session.id;
+              await tx.update(authVerifications).set({ value: JSON.stringify(challenge), updatedAt: new Date() })
+                .where(and(eq(authVerifications.id, row.id), eq(authVerifications.identifier, reauthIdentifier(created.user.id))));
+              return "ready" as const;
+            });
+            if (ready === "invalid") {
               deleteSessionCookie(ctx);
               ctx.context.setNewSession(null);
               await ctx.context.internalAdapter.deleteSession(created.session.token);
               throw new APIError("UNAUTHORIZED", { code: "ACCOUNT_DELETION_SSO_REAUTH_INVALID", message: "The sign-in confirmation could not be verified" });
             }
-            challenge.state = "ready";
-            challenge.proofSessionId = created.session.id;
-            await db.update(authVerifications).set({ value: JSON.stringify(challenge), updatedAt: new Date() })
-              .where(and(eq(authVerifications.id, row.id), eq(authVerifications.identifier, reauthIdentifier(created.user.id))));
           }),
         },
       ],

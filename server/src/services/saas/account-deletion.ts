@@ -6,6 +6,7 @@ import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import {
   accountDeletionOperations,
   authVerifications,
+  companySecrets,
   feedbackImageDeletions,
   authAccounts,
   authRateLimits,
@@ -73,6 +74,16 @@ export function accountDeletionService(
           throw conflict("Account deletion is already requested");
         return receipt(existing);
       }
+      let pendingSsoProof: {
+        rowId: string;
+        authTime: number;
+        rowExpiresAt: string;
+        proofExpiresAt: string;
+        qualificationExpiresAt: string;
+        sourceSessionId: string;
+        proofSessionId: string;
+        sessionExpiries: [string, string];
+      } | null = null;
       if (!user?.emailVerified) throw unauthorized("Verified account required");
       const [activeSession] = await tx.execute<{ id: string }>(sql`select id from "session"
         where id=${actor.sessionId} and user_id=${userId} and expires_at>clock_timestamp() for share nowait`);
@@ -97,12 +108,16 @@ export function accountDeletionService(
           .where(eq(authVerifications.identifier, `account-deletion-oidc:${userId}`)).for("update");
         const proof = proofRow ? parseAccountDeletionSsoChallenge(proofRow.value) : null;
         const proofTime = proof?.authTime ?? NaN;
+        const proofRowExpiryMs = proofRow?.expiresAt instanceof Date
+          ? proofRow.expiresAt.getTime()
+          : Date.parse(String(proofRow?.expiresAt ?? ""));
         if (!input.reauthenticationProofId || input.password || !proofRow || !proof ||
           proof.challengeId !== input.reauthenticationProofId || proof.purpose !== "account-deletion" ||
           proof.state !== "ready" || proof.userId !== userId || proof.proofSessionId !== actor.sessionId ||
           proof.authenticatorVersion !== user.authenticatorVersion ||
-          !Number.isFinite(proofTime) || now.getTime() - proofTime > 300_000 || proofTime > now.getTime() + 5_000 ||
+          !Number.isSafeInteger(proofTime) || now.getTime() - proofTime > 300_000 || proofTime > now.getTime() + 5_000 ||
           !Number.isFinite(Date.parse(proof.expiresAt)) || Date.parse(proof.expiresAt) <= now.getTime() ||
+          !Number.isFinite(proofRowExpiryMs) || proofRowExpiryMs <= now.getTime() ||
           typeof proof.policyRevision !== "string" || !effects.enterpriseSourceSha)
           throw forbidden("Current company sign-in confirmation required");
         const [authority] = await tx.execute<{
@@ -119,7 +134,6 @@ export function accountDeletionService(
           where b.id=${String(proof.bindingId)} and b.user_id=${userId} and b.status='active'
             and p.id=${String(proof.policyId)} and p.status='qualified' and p.version=${Number(proof.policyVersion)}
             and p.qualification->>'sourceRevision'=${effects.enterpriseSourceSha}
-            and (p.qualification->>'expiresAt')::timestamptz>clock_timestamp()
             and p.configuration->>'protocol'='oidc'
           for share of p,b,m`);
         if (!authority || authority.companyId !== proof.companyId || authority.providerId !== proof.providerId ||
@@ -130,9 +144,13 @@ export function accountDeletionService(
           configuration: authority.configuration, qualification: authority.qualification,
           updatedAt: new Date(authority.updatedAt).toISOString() }));
         const keyPin = authority.qualification.signingKey as { secretId?: string; version?: number; valueSha256?: string } | null;
+        const qualificationExpiresAt = typeof authority.qualification.expiresAt === "string"
+          ? Date.parse(authority.qualification.expiresAt)
+          : NaN;
         if (revision !== proof.policyRevision || !keyPin ||
           keyPin.secretId !== authority.configuration.privateKeySecretId ||
-          keyPin.version !== authority.configuration.privateKeySecretVersion)
+          keyPin.version !== authority.configuration.privateKeySecretVersion ||
+          !Number.isFinite(qualificationExpiresAt))
           throw forbidden("Current company sign-in confirmation required");
         const [key] = await tx.execute<{ id: string }>(sql`
           select s.id from company_secrets s join company_secret_versions v
@@ -143,18 +161,16 @@ export function accountDeletionService(
             and v.value_sha256=${keyPin?.valueSha256 ?? ""} for share of s,v`);
         if (!key || !proof.sourceSessionId || proof.sourceSessionId === proof.proofSessionId)
           throw forbidden("Current company sign-in confirmation required");
-        const liveSessions = await tx.execute<{ id: string }>(sql`select id from "session" where id in (${actor.sessionId},${proof.sourceSessionId})
-          and user_id=${userId} and expires_at>clock_timestamp()
-          and (authenticator_version is null or authenticator_version=${user.authenticatorVersion}) for share nowait`);
-        if (new Set(liveSessions.map(row => row.id)).size !== 2)
-          throw forbidden("Current company sign-in confirmation required");
-        const [fresh] = await tx.execute<{ valid: boolean }>(sql`
-          select ${proofTime}::double precision between
-            (extract(epoch from clock_timestamp())-300)*1000 and extract(epoch from clock_timestamp())*1000
-            and ${proofRow.expiresAt}::timestamptz>clock_timestamp()
-            and (${authority.qualification.expiresAt ?? ""})::timestamptz>clock_timestamp() as valid`);
-        if (!fresh?.valid) throw forbidden("Current company sign-in confirmation required");
-        await tx.delete(authVerifications).where(eq(authVerifications.id, proofRow.id));
+        pendingSsoProof = {
+          rowId: proofRow.id,
+          authTime: proofTime,
+          rowExpiresAt: new Date(proofRowExpiryMs).toISOString(),
+          proofExpiresAt: new Date(proof.expiresAt).toISOString(),
+          qualificationExpiresAt: new Date(qualificationExpiresAt).toISOString(),
+          sourceSessionId: proof.sourceSessionId,
+          proofSessionId: proof.proofSessionId!,
+          sessionExpiries: ["", ""],
+        };
       }
       if (user.twoFactorEnabled || user.phishingResistantRequired) {
         if (actor?.type !== "board" || actor.userId !== userId) throw forbidden("Recent factor confirmation required");
@@ -187,6 +203,25 @@ export function accountDeletionService(
         throw conflict("Close or transfer your billing accounts first", {
           code: "ACCOUNT_BILLING_OPEN",
         });
+      if (pendingSsoProof) {
+        if (pendingSsoProof.proofSessionId !== actor.sessionId ||
+          pendingSsoProof.sourceSessionId === pendingSsoProof.proofSessionId)
+          throw forbidden("Current company sign-in confirmation required");
+        const sessions = await tx.execute<{ id: string; expiresAt: Date | string }>(sql`
+          select id,expires_at as "expiresAt" from "session" where id in (${pendingSsoProof.sourceSessionId},${actor.sessionId})
+            and user_id=${userId} and (authenticator_version is null or authenticator_version=${user.authenticatorVersion})
+          for share nowait`);
+        if (new Set(sessions.map(row => row.id)).size !== 2)
+          throw forbidden("Current company sign-in confirmation required");
+        const sourceSession = sessions.find(row => row.id === pendingSsoProof.sourceSessionId);
+        const proofSession = sessions.find(row => row.id === actor.sessionId);
+        if (!sourceSession || !proofSession)
+          throw forbidden("Current company sign-in confirmation required");
+        pendingSsoProof.sessionExpiries = [
+          new Date(sourceSession.expiresAt).toISOString(),
+          new Date(proofSession.expiresAt).toISOString(),
+        ];
+      }
       const [operation] = await tx
         .insert(accountDeletionOperations)
         .values({
@@ -196,7 +231,7 @@ export function accountDeletionService(
           notBefore: now,
         })
         .returning();
-      await eraseAccountAccess(tx, userId, user.email, now);
+      await eraseAccountAccess(tx, userId, user.email, now, pendingSsoProof?.rowId);
       // Provider-held secret material stays in a fenced durable operation until confirmed removed.
       await tx
         .update(companySecrets)
@@ -207,6 +242,19 @@ export function accountDeletionService(
             eq(companySecrets.ownerUserId, userId),
           ),
         );
+      if (pendingSsoProof) {
+        const [fresh] = await tx.execute<{ valid: boolean }>(sql`
+          select ${pendingSsoProof.authTime}::double precision between
+              (extract(epoch from clock_timestamp())-299)*1000 and (extract(epoch from clock_timestamp())+5000)*1000
+            and ${pendingSsoProof.rowExpiresAt}::timestamptz>clock_timestamp()+interval '1 second'
+            and ${pendingSsoProof.proofExpiresAt}::timestamptz>clock_timestamp()+interval '1 second'
+            and ${pendingSsoProof.qualificationExpiresAt}::timestamptz>clock_timestamp()+interval '1 second'
+            and ${pendingSsoProof.sessionExpiries[0]}::timestamptz>clock_timestamp()+interval '1 second'
+            and ${pendingSsoProof.sessionExpiries[1]}::timestamptz>clock_timestamp()+interval '1 second'
+            and exists(select 1 from "user" where id=${userId} and authenticator_version=${user.authenticatorVersion}) as valid`);
+        if (!fresh?.valid) throw forbidden("Current company sign-in confirmation required");
+        await tx.delete(authVerifications).where(eq(authVerifications.id, pendingSsoProof.rowId));
+      }
       return receipt(operation!);
     });
   }
@@ -339,6 +387,7 @@ export async function eraseAccountAccess(
   userId: string,
   email?: string,
   now = new Date(),
+  preserveVerificationId?: string,
 ) {
   // Native intake takes the principal before the content root. Support roots
   // precede feedback roots, matching company purge's ordering.
@@ -404,10 +453,9 @@ export async function eraseAccountAccess(
   await tx.execute(sql`delete from two_factor where user_id=${userId}`);
   await tx.execute(sql`delete from passkey where user_id=${userId}`);
   await tx.execute(sql`delete from board_api_keys where user_id=${userId}`);
-  await tx.execute(
-    sql`delete from verification where value=${userId}
-      or aw_native_verification_user_id(value)=${userId} ${email ? sql`or identifier=${email}` : sql``}`,
-  );
+  await tx.execute(sql`delete from verification where
+    (value=${userId} or aw_native_verification_user_id(value)=${userId} ${email ? sql`or identifier=${email}` : sql``})
+    ${preserveVerificationId ? sql`and id<>${preserveVerificationId}` : sql``}`);
   await tx.execute(
     sql`delete from company_memberships where principal_type='user' and principal_id=${userId}`,
   );
