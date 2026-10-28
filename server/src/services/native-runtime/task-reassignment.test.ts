@@ -4,6 +4,8 @@ import { eq, and } from "drizzle-orm";
 import { activityLog, agents, authUsers, companyMemberships, companies, createDb, heartbeatRuns, issues, issueComments } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { issueService } from "../issues.js";
+import { preparePlatformSkillAdmission } from "../platform-skill-admission.js";
+import { blenteraPlatformContractHashes } from "../tool-gateway.js";
 import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
 
 describe("runner task reassignment", () => {
@@ -18,7 +20,7 @@ describe("runner task reassignment", () => {
   async function fixture(status = "todo") {
     const companyId = randomUUID(), userId = randomUUID(), agentId = randomUUID(), nextId = randomUUID(), issueId = randomUUID(), targetId = randomUUID(), runId = randomUUID();
     await db.insert(companies).values({ id: companyId, name: "Reassignment", issuePrefix: `R${companyId.slice(0, 6)}` });
-    await db.insert(authUsers).values({ id: userId, name: "Reassignment owner", email: `${userId}@test.invalid`, createdAt: new Date(), updatedAt: new Date() });
+    await db.insert(authUsers).values({ id: userId, name: "Reassignment owner", email: `${userId}@test.invalid`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
     await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId, status: "active", membershipRole: "member" });
     await db.insert(agents).values([
       { id: agentId, companyId, name: "Manager", role: "ceo", status: "active", adapterType: "paperclip_runner" },
@@ -30,6 +32,8 @@ describe("runner task reassignment", () => {
     ]);
     await db.insert(heartbeatRuns).values({ id: runId, companyId, agentId, responsibleUserId: userId, status: "running", runtimeMode: "native", nativeIssueId: issueId, invocationSource: "assignment", triggerDetail: "system", contextSnapshot: { issueId } });
     await db.update(issues).set({ executionRunId: runId }).where(eq(issues.id, issueId));
+    await preparePlatformSkillAdmission(db, { companyId, agentId, runId, responsibleUserId: userId,
+      requireExisting: false }, blenteraPlatformContractHashes());
     const enqueueWakeup = vi.fn().mockResolvedValue({ id: randomUUID() });
     const stopTaskForReassignment = vi.fn().mockResolvedValue(undefined);
     const binding = { companyId, agentId, issueId, runId, enqueueWakeup, stopTaskForReassignment };
@@ -64,6 +68,8 @@ describe("runner task reassignment", () => {
     const replacement = randomUUID();
     await db.insert(heartbeatRuns).values({ id: replacement, companyId: f.companyId, agentId: f.agentId, responsibleUserId: f.userId, nativeIssueId: f.issueId, runtimeMode: "native", status: "running", invocationSource: "assignment", triggerDetail: "system" });
     await db.update(issues).set({ executionRunId: replacement }).where(eq(issues.id, f.issueId));
+    await preparePlatformSkillAdmission(db, { companyId: f.companyId, agentId: f.agentId, runId: replacement,
+      responsibleUserId: f.userId, requireExisting: false }, blenteraPlatformContractHashes());
     await expect(new PaperclipRunnerToolAuthority(db, { ...f.binding, runId: replacement }).execute(f.call)).resolves.toEqual(receipt);
     expect((await f.target()).statusVersion).toBe(1);
   });

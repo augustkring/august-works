@@ -1,0 +1,130 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > excludes generated runner evidence while preserving authored runner guidance 3ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > excludes root runtime recordings and uploads but still scans unsafe docs and source guidance 3ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > allows only exact-allowlist pnpm paperclipai commands on every guidance surface 1667ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > never recommends the broken pnpm exec paperclipai form 604ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > flags a value-bearing option that the old flag list omitted 1ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > flags a context-profile value and every worktree path/ref/id/name option 0ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > does not let an npx mention on the same line suppress detection 0ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > rejects a command-substitution or variable span in a recommended command 0ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > flags an allowlisted prefix followed by a quoted or backtick suffix 0ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > fails closed on a leading unmatched double quote before the marker 0ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > fails closed on a leading unmatched backtick and on mixed delimiters 0ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > does not let an escaped delimiter before the marker open a span 0ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > still trusts a span in its proven literal context 0ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > fails closed on a shell eval that concatenates a quoted form with a substitution 0ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > fails closed on a quoted residual in a Markdown line 0ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > fails closed on a TypeScript quote span that a concatenation or a substitution follows 0ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > still accepts the legitimate source literals in the Playwright configs 0ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > fails closed on an allowlisted prefix joined with a tail in an array literal 0ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > fails closed on an allowlisted prefix passed as a call argument with a tail 0ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > flags an allowlisted prefix with a backtick suffix on a continued line 0ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > allows an exact allowlist entry and a bare documentation mention 0ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > emits a static, non-interpolated safe form from the private-hostname guard messages 0ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > emits a static, non-interpolated safe form from the onboarding access diagnostics 1ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > emits the safe form from the agent onboarding prompt 0ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > emits the safe form in the generated company-export README 1ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > emits the safe form in the company-export preview builder 0ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > emits the onboard hint from the server startup banner 0ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > emits the safe run form from the client connection-error hint 0ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > emits the checked-out CLI cleanup form from the env-lab status output 0ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > emits the bootstrap fallback command from the UI 0ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > emits the setup form from the board skill 0ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > documents the safe form in doc/CLI.md 0ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > documents offline and air-gapped use with a safe cache-only form 1ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > documents the safe form in the agent-facing skill 0ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > flags a content-bearing pnpm paperclipai command split across continued lines 0ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > flags a continued command whose only content-bearing flag sits on the last line 0ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > does not flag a continued npx paperclipai command 0ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > does not flag a continued pnpm paperclipai command that stays on the allowlist 0ms
+ ✓ src/__tests__/cli-invocation-safety.test.ts > paperclipai CLI invocation safety > flags a recommended pnpm exec paperclipai line but skips a warning line 0ms
+[12:20:33] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_direct_tls_only","deploymentMode":"authenticated"}[39m
+[12:20:33] [32mINFO[39m: [36mplugin job coordinator started — listening to lifecycle events[39m [90m{"service":"plugin-job-coordinator"}[39m
+[12:20:33] [32mINFO[39m: [36mplugin job scheduler started[39m [90m{"service":"plugin-job-scheduler","tickIntervalMs":30000,"maxConcurrentJobs":10}[39m
+[12:20:33] [32mINFO[39m: [36minitializing plugin tool dispatcher[39m [90m{"service":"plugin-tool-dispatcher"}[39m
+[12:20:33] [32mINFO[39m: [36mplugin-dev-watcher: initialized[39m [90m{"service":"plugin-dev-watcher","resolvesInstalledPlugins":true}[39m
+[12:20:33] [32mINFO[39m: [36mplugin-loader: loading all ready plugins[39m [90m{"service":"plugin-loader"}[39m
+[12:20:33] [32mINFO[39m: [36mloaded tools from ready plugins[39m [90m{"service":"plugin-tool-dispatcher","readyPlugins":0,"registeredTools":0}[39m
+[12:20:33] [34mDEBUG[39m: [36msubscribed to lifecycle events[39m [90m{"service":"plugin-tool-dispatcher"}[39m
+[12:20:33] [32mINFO[39m: [36mplugin tool dispatcher initialized[39m [90m{"service":"plugin-tool-dispatcher","totalTools":0}[39m
+[12:20:33] [32mINFO[39m: [36mplugin-loader: no ready plugins to load[39m [90m{"service":"plugin-loader"}[39m
+[12:20:34] [33mWARN[39m: [36mPATCH /api/issues/b7071d1c-743f-4577-8b57-62a625b87f60 422[39m [90m{"reqBody":{"status":"in_review","comment":"The plan is ready for our next discussion."}}[39m
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > does not let an unqualified Agent API call mutate its private conversation 1095ms
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > does not let an unqualified Agent direct-tool call create a private conversation Task 1696ms
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > rejects creation, child helpers, and reparenting under a chat, while retaining legacy children 666ms
+[12:20:37] [33mWARN[39m: [36mPOST /api/companies/3bf62ebf-e459-4144-9bb3-b3e8b91eb9a7/issues 422[39m [90m{"reqBody":{"visibility":"open","projectId":"e39870ab-fe33-491d-b4c8-e07da482dbc8","parentId":null,"title":"MCP handoff","status":"todo","workMode":"standard","priority":"medium","assigneeAgentId":"44e4dc8a-9842-4fe4-a785-84e60081df78","requestDepth":0,"initialPlan":"# Plan\nImplement in the execution task.","idempotencyKey":"chat-handoff:16c693f9-e0e6-447e-8a62-78a6c5e323e9:mcp","allowDuplicate":false}}[39m
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > rejects an unqualified MCP Agent handoff while preserving the plan document 620ms
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > retains ordinary child delegation and projectless task creation 1581ms
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > creates one Project through the authenticated Human API when an idempotency request is replayed 1410ms
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > includes an explicitly selected repository in a Human-created Project workspace 1135ms
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > registers and deduplicates repositories through the authenticated Human Project API 949ms
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > allows planning documents while denying project/task creation in Plan and Ask mode 2071ms
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > rejects invented repository IDs through Human admission and rejects a cancelled Agent run 745ms
+[12:20:45] [32mINFO[39m: [36mplugin job scheduler stopped[39m [90m{"service":"plugin-job-scheduler","activeJobCount":0}[39m
+[12:20:45] [32mINFO[39m: [36mplugin job coordinator stopped[39m [90m{"service":"plugin-job-coordinator"}[39m
+[12:20:56] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_direct_tls_only","deploymentMode":"authenticated"}[39m
+[12:20:56] [32mINFO[39m: [36mplugin job coordinator started — listening to lifecycle events[39m [90m{"service":"plugin-job-coordinator"}[39m
+[12:20:56] [32mINFO[39m: [36mplugin job scheduler started[39m [90m{"service":"plugin-job-scheduler","tickIntervalMs":30000,"maxConcurrentJobs":10}[39m
+[12:20:56] [32mINFO[39m: [36minitializing plugin tool dispatcher[39m [90m{"service":"plugin-tool-dispatcher"}[39m
+[12:20:56] [32mINFO[39m: [36mplugin-dev-watcher: initialized[39m [90m{"service":"plugin-dev-watcher","resolvesInstalledPlugins":true}[39m
+[12:20:56] [32mINFO[39m: [36mplugin-loader: loading all ready plugins[39m [90m{"service":"plugin-loader"}[39m
+[12:20:56] [32mINFO[39m: [36mloaded tools from ready plugins[39m [90m{"service":"plugin-tool-dispatcher","readyPlugins":0,"registeredTools":0}[39m
+[12:20:56] [34mDEBUG[39m: [36msubscribed to lifecycle events[39m [90m{"service":"plugin-tool-dispatcher"}[39m
+[12:20:56] [32mINFO[39m: [36mplugin tool dispatcher initialized[39m [90m{"service":"plugin-tool-dispatcher","totalTools":0}[39m
+[12:20:56] [32mINFO[39m: [36mplugin-loader: no ready plugins to load[39m [90m{"service":"plugin-loader"}[39m
+[12:20:58] [32mINFO[39m: [36mGET /issues/484c1917-d8e6-426f-868a-0275bd120746/attachments 200[39m
+[12:20:59] [32mINFO[39m: [36mPOST /companies/a2a885b2-7d54-4538-bb3e-00dcdc350455/issues/484c1917-d8e6-426f-868a-0275bd120746/attachments 201[39m
+[12:21:00] [32mINFO[39m: [36mPOST /issues/484c1917-d8e6-426f-868a-0275bd120746/work-products 201[39m
+[12:21:01] [32mINFO[39m: [36mPOST /issues/484c1917-d8e6-426f-868a-0275bd120746/comments 201[39m
+[12:21:01] [32mINFO[39m: [36mGET /issues/484c1917-d8e6-426f-868a-0275bd120746/attachments 200[39m
+[12:21:02] [32mINFO[39m: [36mPOST /issues/484c1917-d8e6-426f-868a-0275bd120746/work-products 201[39m
+[12:21:03] [32mINFO[39m: [36mPOST /issues/484c1917-d8e6-426f-868a-0275bd120746/comments 201[39m
+[12:21:03] [32mINFO[39m: [36mGET /attachments/23a17c96-6b6c-45ac-a46a-19fceeed260a/content 200[39m
+[12:21:03] [32mINFO[39m: [36mGET /issues/484c1917-d8e6-426f-868a-0275bd120746/attachments 200[39m
+[12:21:04] [32mINFO[39m: [36mPOST /companies/a2a885b2-7d54-4538-bb3e-00dcdc350455/issues/484c1917-d8e6-426f-868a-0275bd120746/attachments 201[39m
+[12:21:05] [32mINFO[39m: [36mPOST /issues/484c1917-d8e6-426f-868a-0275bd120746/work-products 201[39m
+[12:21:05] [32mINFO[39m: [36mPOST /issues/484c1917-d8e6-426f-868a-0275bd120746/comments 201[39m
+[12:21:06] [32mINFO[39m: [36mGET /issues/484c1917-d8e6-426f-868a-0275bd120746/attachments 200[39m
+[12:21:06] [32mINFO[39m: [36mPOST /issues/484c1917-d8e6-426f-868a-0275bd120746/work-products 201[39m
+[12:21:07] [32mINFO[39m: [36mPOST /issues/484c1917-d8e6-426f-868a-0275bd120746/comments 201[39m
+[12:21:07] [32mINFO[39m: [36mGET /attachments/066dcf5f-7051-4380-82a6-dc73566145ab/content 200[39m
+[12:21:08] [33mWARN[39m: [36mGET /issues/71f8f37b-152b-482a-8093-3de598a7cb67/attachments 404[39m [90m{"reqParams":{"id":"71f8f37b-152b-482a-8093-3de598a7cb67"},"routePath":"/issues/:id/attachments"}[39m
+[12:21:11] [32mINFO[39m: [36mGET /attachments/23a17c96-6b6c-45ac-a46a-19fceeed260a/content 200[39m
+[12:21:11] [32mINFO[39m: [36mGET /attachments/066dcf5f-7051-4380-82a6-dc73566145ab/content 200[39m
+ ✓ src/__tests__/file-delivery-bridges.test.ts > durable file delivery (local processes) > runs the actual Bash helper with HTTP/2 enabled=false 14576ms
+[12:21:12] [32mINFO[39m: [36mGET /issues/87b96034-3a26-406f-9be1-2f6c25452374/attachments 200[39m
+[12:21:12] [32mINFO[39m: [36mPOST /companies/f79676b2-b539-4c80-9786-b32b62f495fd/issues/87b96034-3a26-406f-9be1-2f6c25452374/attachments 201[39m
+[12:21:13] [32mINFO[39m: [36mPOST /issues/87b96034-3a26-406f-9be1-2f6c25452374/work-products 201[39m
+[12:21:13] [32mINFO[39m: [36mPOST /issues/87b96034-3a26-406f-9be1-2f6c25452374/comments 201[39m
+[12:21:13] [32mINFO[39m: [36mGET /issues/87b96034-3a26-406f-9be1-2f6c25452374/attachments 200[39m
+[12:21:14] [32mINFO[39m: [36mPOST /issues/87b96034-3a26-406f-9be1-2f6c25452374/work-products 201[39m
+[12:21:14] [32mINFO[39m: [36mPOST /issues/87b96034-3a26-406f-9be1-2f6c25452374/comments 201[39m
+[12:21:15] [32mINFO[39m: [36mGET /attachments/cab0e956-3d00-41b3-9dfc-da3f4fa8ee2a/content 200[39m
+[12:21:15] [32mINFO[39m: [36mGET /issues/87b96034-3a26-406f-9be1-2f6c25452374/attachments 200[39m
+[12:21:15] [32mINFO[39m: [36mPOST /companies/f79676b2-b539-4c80-9786-b32b62f495fd/issues/87b96034-3a26-406f-9be1-2f6c25452374/attachments 201[39m
+[12:21:16] [32mINFO[39m: [36mPOST /issues/87b96034-3a26-406f-9be1-2f6c25452374/work-products 201[39m
+[12:21:16] [32mINFO[39m: [36mPOST /issues/87b96034-3a26-406f-9be1-2f6c25452374/comments 201[39m
+[12:21:16] [32mINFO[39m: [36mGET /issues/87b96034-3a26-406f-9be1-2f6c25452374/attachments 200[39m
+[12:21:17] [32mINFO[39m: [36mPOST /issues/87b96034-3a26-406f-9be1-2f6c25452374/work-products 201[39m
+[12:21:17] [32mINFO[39m: [36mPOST /issues/87b96034-3a26-406f-9be1-2f6c25452374/comments 201[39m
+[12:21:17] [32mINFO[39m: [36mGET /attachments/cd84c41a-6fc1-4560-a965-b25b1863905b/content 200[39m
+[12:21:18] [33mWARN[39m: [36mGET /issues/d90279c3-1c70-40a5-bdfe-655150050ded/attachments 404[39m [90m{"reqParams":{"id":"d90279c3-1c70-40a5-bdfe-655150050ded"},"routePath":"/issues/:id/attachments"}[39m
+[12:21:18] [32mINFO[39m: [36mGET /attachments/cab0e956-3d00-41b3-9dfc-da3f4fa8ee2a/content 200[39m
+[12:21:18] [32mINFO[39m: [36mGET /attachments/cd84c41a-6fc1-4560-a965-b25b1863905b/content 200[39m
+ ✓ src/__tests__/file-delivery-bridges.test.ts > durable file delivery (local processes) > runs the actual Bash helper with HTTP/2 enabled=true 7136ms
+[12:21:21] [32mINFO[39m: [36mGET /attachments/4c0cb2b4-6482-4eda-b1da-bf3b8399410e/content 200[39m
+[12:21:21] [32mINFO[39m: [36mGET /attachments/cb07cac5-0a6d-4dba-b318-5885924c552e/content 200[39m
+[12:21:21] [32mINFO[39m: [36mplugin job scheduler stopped[39m [90m{"service":"plugin-job-scheduler","activeJobCount":0}[39m
+[12:21:21] [32mINFO[39m: [36mplugin job coordinator stopped[39m [90m{"service":"plugin-job-coordinator"}[39m
+ ✓ src/__tests__/file-delivery-bridges.test.ts > durable file delivery (local processes) > registers native files with API tools disabled and returns durable download receipts 3570ms
+ ✓ src/__tests__/v9-agent-authored-context.integration.test.ts > Instruction-only authored context keeps the current task boundary > retrieves the authorized current Task without opening persistent-memory providers 1013ms
+ ✓ src/__tests__/v9-agent-authored-context.integration.test.ts > Instruction-only authored context keeps the current task boundary > keeps the task boundary in the actual V5 runtime manifest 2262ms
+ ✓ src/__tests__/v9-agent-authored-context.integration.test.ts > Instruction-only authored context keeps the current task boundary > fails closed on an unknown source scope instead of selecting broader context 42ms
+
+ Test Files  4 passed (4)
+      Tests  55 passed (55)
+   Start at  12:20:04
+   Duration  89.68s (transform 15.20s, setup 262ms, import 31.51s, tests 57.39s, environment 0ms)
+

@@ -81,7 +81,7 @@ const support = await getEmbeddedPostgresTestSupport();
     const settings = instanceSettingsService(db);
     await settings.updateExperimental({ role_packs_v5: false });
     const result = await agentRuntimeFabricService(db).prepare(input);
-    expect(result?.manifest.skills).toEqual([]); expect(result?.manifest.playbooks).toEqual([]); expect(result?.manifest.capabilities).toEqual([]);
+    expect(result?.manifest.skills).toEqual([expect.objectContaining({ key: "blentera-platform", selection: "required" })]); expect(result?.manifest.playbooks).toEqual([]); expect(result?.manifest.capabilities).toEqual([]);
     expect(result?.manifest.executionScope.delegatedScopes).toEqual([]);
     expect(result?.contextMarkdown).toContain(sourceTask.description);
     expect(result?.contextMarkdown).not.toContain("Explicit scoped actions: POST");
