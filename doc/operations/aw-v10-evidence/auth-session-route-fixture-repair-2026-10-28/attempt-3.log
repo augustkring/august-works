@@ -1,0 +1,36 @@
+
+ RUN  v4.1.11 /workspace/blentera-v10/server
+
+ ❯ src/__tests__/auth-session-route.test.ts (13 tests | 1 failed | 12 skipped) 38ms
+     × trusts Cloud tenant identity headers and seeds board access 36ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/auth-session-route.test.ts > actorMiddleware authenticated session profile > trusts Cloud tenant identity headers and seeds board access
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/auth-session-route.test.ts:183:24
+    181|       .set("x-paperclip-cloud-stack-role", "owner");
+    182|
+    183|     expect(res.status).toBe(200);
+       |                        ^
+    184|     expect(res.body).toMatchObject({
+    185|       type: "board",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 12 skipped (13)
+   Start at  11:11:57
+   Duration  16.44s (transform 11.42s, setup 76ms, import 16.17s, tests 38ms, environment 0ms)
+
+undefined
+/workspace/blentera-v10/server:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/__tests__/auth-session-route.test.ts -t trusts Cloud tenant identity headers

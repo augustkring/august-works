@@ -163,6 +163,9 @@ vi.mock("../services/instance-settings.js", () => ({
 
 vi.mock("../services/issues.js", () => ({
   issueService: () => mockIssueService,
+  // This file has no real session-bound conversation owner fixture. Its default
+  // board actor is local_implicit, which cannot own the unsealed-shell exception.
+  isCurrentUnsealedConversationShell: vi.fn(async () => false),
 }));
 
 vi.mock("../services/routines.js", () => ({
@@ -761,7 +764,7 @@ describe.sequential("issue comment reopen routes", () => {
       .post("/api/issues/11111111-1111-4111-8111-111111111111/comments")
       .send({ body: "hello" });
 
-    expect(res.status).toBe(201);
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
     expect(mockIssueService.update).toHaveBeenCalledWith(
       "11111111-1111-4111-8111-111111111111",
       { status: "todo" },

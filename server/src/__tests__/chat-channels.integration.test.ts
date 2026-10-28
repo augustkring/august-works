@@ -53416,6 +53416,15 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
           .from(issueAttachments)
           .where(eq(issueAttachments.issueId, conversation.issueId));
         expect(attachment?.issueCommentId).toBeTruthy();
+        // Manual native-run fixtures need the same current-Human authority
+        // and required platform-procedure pin that heartbeat establishes for
+        // real Co-worker runs before a material attachment operation.
+        await seedCurrentHumanSourceActor(db, [fixture.companyId], "owner-user");
+        await db.update(companyMemberships).set({ membershipRole: "owner" }).where(and(
+          eq(companyMemberships.companyId, fixture.companyId),
+          eq(companyMemberships.principalType, "user"),
+          eq(companyMemberships.principalId, "owner-user"),
+        ));
         const runId = randomUUID();
         const binding = {
           companyId: fixture.companyId,
@@ -53443,10 +53452,22 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
           ...binding,
           nativeIssueId: conversation.issueId,
           id: runId,
+          responsibleUserId: "owner-user",
           runtimeMode: "native",
           status: "running",
           contextSnapshot: context,
         });
+        const [{ preparePlatformSkillAdmission }, { blenteraPlatformContractHashes }] = await Promise.all([
+          import("../services/platform-skill-admission.js"),
+          import("../services/tool-gateway.js"),
+        ]);
+        await preparePlatformSkillAdmission(db, {
+          companyId: fixture.companyId,
+          agentId: fixture.assignedAgentId,
+          runId,
+          responsibleUserId: "owner-user",
+          requireExisting: false,
+        }, blenteraPlatformContractHashes());
         await db
           .update(issues)
           .set({ executionRunId: runId, status: "in_progress" })
