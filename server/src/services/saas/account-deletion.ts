@@ -10,6 +10,7 @@ import {
   authRateLimits,
   authUsers,
   companySecrets,
+  humanWorkflowCoverages,
   heartbeatRuns,
   type Db,
 } from "@paperclipai/db";
@@ -21,6 +22,7 @@ import {
   unauthorized,
 } from "../../errors.js";
 import { sha256 } from "./crypto.js";
+import { accessService } from "../access.js";
 
 export function accountDeletionService(
   db: Db,
@@ -269,7 +271,7 @@ function receipt(row: typeof accountDeletionOperations.$inferSelect) {
 
 /** Also used by quarantine replay. Audit actor IDs and required financial records stay stable. */
 export async function eraseAccountAccess(
-  tx: Pick<Db, "execute">,
+  tx: Parameters<Parameters<Db["transaction"]>[0]>[0],
   userId: string,
   email?: string,
   now = new Date(),
@@ -277,6 +279,18 @@ export async function eraseAccountAccess(
   // Native intake takes the principal before the content root. Support roots
   // precede feedback roots, matching company purge's ordering.
   await tx.execute(sql`select id from "user" where id=${userId} for update`);
+  // Reuse the company access owner before removing membership rows: revocation
+  // pauses user-owned routines, withdraws connection access/coverage and clears
+  // explicit responsible-human defaults in the same erasure transaction.
+  await accessService(tx as unknown as Db).prepareMemberForOffboardingInTransaction(tx, userId, null, now);
+  // Coverage authority ends as soon as account deletion begins. Keep the
+  // immutable receipt row for audit, but erase its user-authored reason while
+  // a support or legal hold keeps the account row pending physical deletion.
+  await tx.execute(sql`update ${humanWorkflowCoverages}
+    set revoked_at=coalesce(revoked_at,${now.toISOString()}::timestamptz),
+        revoked_by_user_id=case when revoked_at is null then null else revoked_by_user_id end,
+        reason='Revoked during account deletion'
+    where principal_user_id=${userId} or delegatee_user_id=${userId}`);
   // Operation metadata contains no bundle/credential/body. Remove the
   // principal's private receipts under the same native erasure fence.
   await tx.execute(sql`delete from customer_operations where requested_by_user_id=${userId}`);

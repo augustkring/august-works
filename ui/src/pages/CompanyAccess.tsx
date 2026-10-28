@@ -67,6 +67,7 @@ export function CompanyAccess() {
     const epoch = scope.current.epoch;
     return { companyId: selectedCompanyId!,
       principalId: principal,
+      sessionId: currentAccount.sessionId,
       isCurrent: () => !!selectedCompanyId && epoch === scope.current.epoch && authority.canRead() };
   };
   const [searchParams, setSearchParams] = useSearchParams();
@@ -251,8 +252,9 @@ export function CompanyAccess() {
 
   const createWorkflowCoverageMutation = useMutation({
     mutationFn: async (input: { receipt: ReturnType<typeof captureAccess>; value: CreateHumanWorkflowCoverage }) => {
-      if (!input.receipt.isCurrent()) throw new Error("Current account access changed");
-      return accessApi.createWorkflowCoverage(input.receipt.companyId, input.value);
+      if (!input.receipt.isCurrent() || !input.receipt.sessionId || input.receipt.principalId === "local-board")
+        throw new Error("Current account access changed");
+      return accessApi.createWorkflowCoverage(input.receipt.companyId, input.value, input.receipt.principalId, input.receipt.sessionId);
     },
     onSuccess: async (_coverage, { receipt }) => {
       if (!receipt.isCurrent()) return;
@@ -272,8 +274,9 @@ export function CompanyAccess() {
 
   const revokeWorkflowCoverageMutation = useMutation({
     mutationFn: async (input: { receipt: ReturnType<typeof captureAccess>; coverageId: string }) => {
-      if (!input.receipt.isCurrent()) throw new Error("Current account access changed");
-      return accessApi.revokeWorkflowCoverage(input.receipt.companyId, input.coverageId);
+      if (!input.receipt.isCurrent() || !input.receipt.sessionId || input.receipt.principalId === "local-board")
+        throw new Error("Current account access changed");
+      return accessApi.revokeWorkflowCoverage(input.receipt.companyId, input.coverageId, input.receipt.principalId, input.receipt.sessionId);
     },
     onSuccess: async (_coverage, { receipt }) => {
       if (!receipt.isCurrent()) return;
@@ -643,7 +646,7 @@ export function CompanyAccess() {
             <label className="space-y-1 text-sm">
               <span className="font-medium">{t("humanWorkflowCoverage.scope")}</span>
               <select className="h-10 w-full rounded-md border border-input bg-background px-3" value={coverageScopeType}
-                onChange={(event) => { changeCoverageTerms(); setCoverageScopeType(event.target.value as "manual" | "task"); }}>
+                onChange={(event) => { changeCoverageTerms(); setCoverageTaskId(""); setCoverageTaskSearch(""); setCoverageScopeType(event.target.value as "manual" | "task"); }}>
                 <option value="manual">{t("humanWorkflowCoverage.manualRun")}</option>
                 <option value="task">{t("humanWorkflowCoverage.taskRun")}</option>
               </select>

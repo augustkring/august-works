@@ -106,6 +106,7 @@ import {
 } from "./workflows/workflow-executor.js";
 import type { PluginWorkerManager } from "./plugin-worker-manager.js";
 import { runtimePublicOrigin } from "./cloud-runtime-identity.js";
+import { resolveCurrentDefaultResponsibleHuman } from "./company-responsibility.js";
 
 const OPEN_ISSUE_STATUSES = ["backlog", "todo", "in_progress", "in_review", "blocked"];
 const LIVE_HEARTBEAT_RUN_STATUSES = ["queued", "running", "scheduled_retry"];
@@ -169,28 +170,7 @@ function legacyExecutionIssueTransientFailureStatus(
 }
 
 async function resolveCompanyDefaultResponsibleUserId(db: Db, companyId: string) {
-  const company = await db
-    .select({ defaultResponsibleUserId: companies.defaultResponsibleUserId })
-    .from(companies)
-    .where(eq(companies.id, companyId))
-    .then((rows) => rows[0] ?? null);
-  if (company?.defaultResponsibleUserId) return company.defaultResponsibleUserId;
-
-  const owner = await db
-    .select({ userId: companyMemberships.principalId })
-    .from(companyMemberships)
-    .where(
-      and(
-        eq(companyMemberships.companyId, companyId),
-        eq(companyMemberships.principalType, "user"),
-        eq(companyMemberships.status, "active"),
-        eq(companyMemberships.membershipRole, "owner"),
-      ),
-    )
-    .orderBy(asc(companyMemberships.createdAt), asc(companyMemberships.id))
-    .limit(1)
-    .then((rows) => rows[0] ?? null);
-  return owner?.userId ?? null;
+  return resolveCurrentDefaultResponsibleHuman(db, companyId);
 }
 
 async function resolveRoutineResponsibleUserId(db: Db, companyId: string, actorUserId: string | null | undefined, parentIssueId?: string | null) {

@@ -15,6 +15,7 @@ import { purgeCompanyContent } from "./company-purge.js";
 import { reapplyMemoryDeletionMarkers } from "../memory/memory-privacy.js";
 import { suppressAnalyticalSource } from "../analytical-privacy.js";
 import { suppressBusinessEventSource } from "../business-event-privacy.js";
+import { accessService } from "../access.js";
 export { assertDatabaseRestoreAdmission } from "./database-admission.js";
 
 export interface RestoreDeletionLedger {
@@ -68,6 +69,11 @@ export async function prepareRestoredQuarantine(
     throw Error("Isolated quarantine database required");
   await applyPendingMigrations(connectionString);
   await db.transaction(async (tx) => {
+    // A raw database archive can predate a revocation that committed after
+    // its snapshot. Never let restored Human routing receipts regain effect
+    // when the operator later clears restore admission. Migrations run above
+    // so this also covers archives that predate the coverage table.
+    await accessService(db).revokeAllWorkflowCoveragesForRestore(tx, new Date());
     await tx.execute(sql`delete from "session"`);
     await tx.execute(sql`delete from verification`);
     await tx.execute(sql`update agent_api_keys set revoked_at=now()`);

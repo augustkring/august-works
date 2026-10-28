@@ -75,6 +75,7 @@ import {
   startAdapterExecutionTargetPaperclipBridge,
 } from "@paperclipai/adapter-utils/execution-target";
 import { agentService } from "./agents.js";
+import { resolveCurrentDefaultResponsibleHuman } from "./company-responsibility.js";
 import { normalizeLegacyRunnerProvider } from "@paperclipai/adapter-utils";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -10884,46 +10885,7 @@ export function heartbeatService(
   }
 
   async function resolveCompanyDefaultResponsibleUserId(companyId: string) {
-    const company = await db
-      .select({ defaultResponsibleUserId: companies.defaultResponsibleUserId })
-      .from(companies)
-      .where(eq(companies.id, companyId))
-      .then((rows) => rows[0] ?? null);
-    const explicitDefault = readNonEmptyString(
-      company?.defaultResponsibleUserId,
-    );
-    if (explicitDefault) return explicitDefault;
-
-    const owner = await db
-      .select({ userId: companyMemberships.principalId })
-      .from(companyMemberships)
-      .where(
-        and(
-          eq(companyMemberships.companyId, companyId),
-          eq(companyMemberships.principalType, "user"),
-          eq(companyMemberships.status, "active"),
-          eq(companyMemberships.membershipRole, "owner"),
-        ),
-      )
-      .orderBy(asc(companyMemberships.createdAt), asc(companyMemberships.id))
-      .limit(1)
-      .then((rows) => rows[0] ?? null);
-    if (owner?.userId) return owner.userId;
-
-    const firstUser = await db
-      .select({ userId: companyMemberships.principalId })
-      .from(companyMemberships)
-      .where(
-        and(
-          eq(companyMemberships.companyId, companyId),
-          eq(companyMemberships.principalType, "user"),
-          eq(companyMemberships.status, "active"),
-        ),
-      )
-      .orderBy(asc(companyMemberships.createdAt), asc(companyMemberships.id))
-      .limit(1)
-      .then((rows) => rows[0] ?? null);
-    return firstUser?.userId ?? null;
+    return resolveCurrentDefaultResponsibleHuman(db, companyId);
   }
 
   async function resolveParentIssueResponsibleUserId(

@@ -22,11 +22,14 @@ import {
   companySecrets,
   companySecretVersions,
   emailDeliveries,
+  humanWorkflowCoverages,
   principalPermissionGrants,
   supportCaseDeletionMarkers,
   supportCaseEvents,
   supportCases,
   userSecretDefinitions,
+  workflowRevisions,
+  workflows,
   createDb,
 } from "@paperclipai/db";
 import {
@@ -380,6 +383,16 @@ const support = await getEmbeddedPostgresTestSupport();
         principalId: "member-delete",
         membershipRole: "member",
       });
+      const workflowId = randomUUID(), revisionId = randomUUID();
+      await db.transaction(async tx => {
+        await tx.insert(workflows).values({ id: workflowId, companyId: id, name: "Deletion coverage fixture", status: "active", publishedRevisionId: revisionId });
+        await tx.insert(workflowRevisions).values({ id: revisionId, companyId: id, workflowId, revisionNumber: 1,
+          state: "published", graph: { version: 1, nodes: [{ id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} }], edges: [], variables: [], settings: {} },
+          createdByUserId: "coworker" });
+      });
+      const [coverage] = await db.insert(humanWorkflowCoverages).values({ requestId: randomUUID(), companyId: id, principalUserId: "member-delete",
+        delegateeUserId: "coworker", workflowId, workflowRevisionId: revisionId, scopeType: "manual", taskId: null,
+        startsAt: now, expiresAt: new Date(now.getTime() + 86400_000), reason: "Private personal leave detail" }).returning();
       await db.insert(authSessions).values({
         id: randomUUID(),
         userId: "member-delete",
@@ -455,6 +468,8 @@ const support = await getEmbeddedPostgresTestSupport();
         now,
       );
       expect(accepted.status).toBe("requested");
+      expect(await db.select().from(humanWorkflowCoverages).where(eq(humanWorkflowCoverages.id, coverage!.id)))
+        .toMatchObject([{ revokedAt: expect.any(Date), reason: "Revoked during account deletion" }]);
       expect(
         await service.request(
           "member-delete",

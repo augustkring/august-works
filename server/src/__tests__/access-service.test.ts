@@ -148,6 +148,24 @@ describeEmbeddedPostgres("access service", () => {
       workflowId: workflow.id, workflowRevisionId: revision.id, scopeType: "manual", taskId: null,
     })).toMatchObject({ id: created.coverage.id }));
 
+    await access.setMemberPermissions(company.id, delegatee.id, [], principalUserId);
+    const [permissionWithdrawn] = await db.select().from(humanWorkflowCoverages)
+      .where(eq(humanWorkflowCoverages.id, created.coverage.id));
+    expect(permissionWithdrawn?.revokedAt).toBeInstanceOf(Date);
+    await access.setMemberPermissions(company.id, delegatee.id, [{ permissionKey: "workflows:run" }], principalUserId);
+    await db.transaction(async tx => expect(access.authorizeWorkflowCoverage({
+      tx: tx as never, companyId: company.id, coverageId: created.coverage.id, delegateeUserId,
+      workflowId: workflow.id, workflowRevisionId: revision.id, scopeType: "manual", taskId: null,
+    })).rejects.toMatchObject({ status: 403, details: { code: "workflow_coverage_unavailable" } }));
+
+    const secondCoverage = await access.createWorkflowCoverage(company.id, { ...input, requestId: randomUUID() }, actor);
+    await access.updateMemberAndPermissions(company.id, delegatee.id, {
+      membershipRole: "viewer", grants: [],
+    }, principalUserId);
+    const [roleWithdrawn] = await db.select().from(humanWorkflowCoverages)
+      .where(eq(humanWorkflowCoverages.id, secondCoverage.coverage.id));
+    expect(roleWithdrawn?.revokedAt).toBeInstanceOf(Date);
+
     await access.updateMember(company.id, delegatee.id, { status: "suspended" }, principalUserId);
     const [withdrawn] = await db.select().from(humanWorkflowCoverages).where(eq(humanWorkflowCoverages.id, created.coverage.id));
     expect(withdrawn).toMatchObject({ revokedByUserId: principalUserId });

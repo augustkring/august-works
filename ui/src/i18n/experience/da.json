@@ -3886,7 +3886,7 @@
   },
   "humanWorkflowCoverage": {
     "title": "Midlertidig workflow-dækning",
-    "intro": "Rut én publiceret workflow-version til en anden aktiv Human i op til 30 dage. Begge personer beholder deres egne aktuelle tilladelser og Task-adgang.",
+    "intro": "Lad en anden aktiv person starte én publiceret workflow-version i et tidsrum på op til 30 dage. Begge personer skal have de nødvendige aktuelle rettigheder og adgang til opgaven.",
     "delegateTo": "Deleger til",
     "selectHuman": "Vælg en aktiv Human",
     "workflow": "Workflow",

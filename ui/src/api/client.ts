@@ -100,6 +100,7 @@ function coalescedGet<T>(path: string, options?: RequestOptions): Promise<T> {
       method: "GET",
       signal: controller.signal,
       ...(options?.cache ? { cache: options.cache } : {}),
+      ...(options?.headers ? { headers: options.headers } : {}),
     });
     const created: InflightGet = { promise, controller, refs: new Set() };
     // Clear the shared entry once settled so later calls issue a fresh request.
@@ -206,7 +207,12 @@ export const api = {
   delete: <T>(path: string, bodyOrOptions?: unknown, options?: RequestOptions) => {
     const requestOptions = isRequestOptions(bodyOrOptions) ? bodyOrOptions : options;
     const body = bodyOrOptions === undefined || isRequestOptions(bodyOrOptions) ? undefined : JSON.stringify(bodyOrOptions);
-    return request<T>(path, { method: "DELETE", ...(body === undefined ? {} : { body }), signal: requestOptions?.signal });
+    return request<T>(path, {
+      method: "DELETE",
+      ...(body === undefined ? {} : { body }),
+      signal: requestOptions?.signal,
+      ...(requestOptions?.headers ? { headers: requestOptions.headers } : {}),
+    });
   },
   deleteWithBody: <T>(path: string, body: unknown, options?: RequestOptions) =>
     request<T>(path, { method: "DELETE", body: JSON.stringify(body), signal: options?.signal }),

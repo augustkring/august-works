@@ -62,6 +62,10 @@ import {
 import { getHiddenSettings } from "../services/settings-visibility.js";
 import { runtimeCanonicalOrigin } from "../services/cloud-runtime-identity.js";
 
+const securitySuspensionCommandSchema = z.object({
+  reasonCode: z.enum(["suspected_compromise", "reported_loss", "policy_violation", "other"]),
+});
+
 /**
  * Floor: when the hosting operator hides the Instance Access surface
  * (`instance.access` in PAPERCLIP_HIDDEN_SETTINGS), instance-admin user
@@ -4480,6 +4484,7 @@ export function accessRoutes(
     if (req.actor.type !== "board" || req.actor.source !== "session" || !req.actor.userId) {
       throw forbidden("A current Human session is required to create workflow coverage.", { code: "workflow_coverage_session_required" });
     }
+    assertExpectedBoardActor(req);
     assertCompanyAccess(req, companyId);
     const result = await access.createWorkflowCoverage(companyId, {
       ...req.body,
@@ -4505,6 +4510,7 @@ export function accessRoutes(
     if (req.actor.type !== "board" || req.actor.source !== "session" || !req.actor.userId) {
       throw forbidden("A current Human session is required to revoke workflow coverage.", { code: "workflow_coverage_session_required" });
     }
+    assertExpectedBoardActor(req);
     assertCompanyAccess(req, companyId);
     const coverage = await access.revokeWorkflowCoverage(companyId, coverageId, req.actor);
     if (!coverage) throw notFound("Workflow coverage not found");
@@ -4603,6 +4609,26 @@ export function accessRoutes(
       if (!member) throw notFound("Member not found");
       res.json(member);
     }
+  );
+
+  router.post(
+    "/companies/:companyId/members/:memberId/security-suspend",
+    validate(securitySuspensionCommandSchema),
+    async (req, res) => {
+      const companyId = req.params.companyId as string;
+      const memberId = req.params.memberId as string;
+      const result = await access.suspendMemberForSecurity(
+        companyId,
+        memberId,
+        req.actor,
+        req.body.reasonCode,
+      );
+      if (!result) throw notFound("Member not found");
+      const member = (await loadCompanyMemberRecords(db, companyId)).find(entry => entry.id === memberId);
+      if (!member) throw notFound("Member not found");
+      res.set("Cache-Control", "private, no-store");
+      res.json({ member, ownerRecoveryRequired: result.ownerRecoveryRequired });
+    },
   );
 
   router.post(

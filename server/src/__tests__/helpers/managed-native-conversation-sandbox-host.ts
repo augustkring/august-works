@@ -658,7 +658,6 @@ export async function configureManagedConversationSandboxHost(input: {
   const execFacts: Array<{ executable: string; cwdExact: boolean; modelCredentialPresent: boolean;
     managedModelBrokerOriginPresent: boolean;
     assignedMcpEnvironmentAbsent: boolean; credentialEnvironmentAbsent: boolean;
-    exactBrokerProxyConfigured: boolean;
     nativePreparationPurpose: string | null; providerPackImageProbe: boolean;
     exitCode: number | null; timedOut: boolean }> = [];
   relayHost.on("message", raw => {
@@ -710,10 +709,6 @@ export async function configureManagedConversationSandboxHost(input: {
     const fact = { executable: argv[0] ?? "", cwdExact: cwd === expectedTaskRoot, modelCredentialPresent,
       managedModelBrokerOriginPresent: requestEnv.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === brokerOrigin,
       assignedMcpEnvironmentAbsent, credentialEnvironmentAbsent: noCredentialEnvironment,
-      exactBrokerProxyConfigured: input.brokerProxyOrigin !== null && env.HTTPS_PROXY === input.brokerProxyOrigin &&
-        env.https_proxy === input.brokerProxyOrigin && env.NO_PROXY === "localhost,127.0.0.1,::1" &&
-        requestEnv.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === brokerOrigin &&
-        ["HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy"].every(name => !env[name]),
       nativePreparationPurpose, providerPackImageProbe,
       exitCode: null as number | null, timedOut: false };
     execFacts.push(fact);

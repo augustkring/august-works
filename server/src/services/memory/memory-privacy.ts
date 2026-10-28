@@ -213,7 +213,7 @@ export async function canActorReadMemorySourceSet(db: Db, companyId: string, act
     }
     try {
       try{assertMemorySourceReadActive(state);}catch{return false;}
-      if(!await inspectMemorySourceAccess(db,companyId,actor,ids,state,reason=>{
+      if(!await inspectMemorySourceAccess(db,companyId,actor,ids,state,(reason,facts={})=>{
         const focusAgent = actor?.type === "agent" && Boolean(actor.onBehalfOfUserId);
         if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1" &&
           (focusAgent ? nativeMemorySourceAgentFailureDiagnostics < 8 : nativeMemorySourceFailureDiagnostics < 8)) {
@@ -224,7 +224,7 @@ export async function canActorReadMemorySourceSet(db: Db, companyId: string, act
             readerRole: actor?.type === "agent" ? actor.onBehalfOfUserId ? "agent_human" : "agent_no_human" :
               actor?.type === "board" ? "board_user" : "none",
             activeCount: state.active.size, work: state.work, deadlineExpired: performance.now() > state.deadline,
-            signalAborted: state.signal?.aborted ?? false }));
+            signalAborted: state.signal?.aborted ?? false, ...facts }));
         }
       },forbiddenRecordId,true))return false;
       return batchAdmission?await memorySourceActorCurrent(db,companyId,actor):true;
@@ -257,7 +257,8 @@ async function memorySourceActorCurrent(db:Db,companyId:string,actor:Authorizati
   return (await authorizationService(db).decide({actor,action:"company_scope:read",resource:{type:"company",companyId},enforceResponsibleUserIntersection:true})).allowed;
 }
 async function inspectMemorySourceAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,recordIds:string|readonly string[],
-  state:MemorySourceReadScope,diagnosticDenied:(reason:NativeMemorySourceFailureStage|"scope_guard"|"cycle"|"deadline"|"work_budget")=>void,
+  state:MemorySourceReadScope,diagnosticDenied:(reason:NativeMemorySourceFailureStage|"scope_guard"|"cycle"|"deadline"|"work_budget",
+    facts?:Record<string,boolean|number|string|null>)=>void,
   forbiddenRecordId?:string,skipActorAdmission=false):Promise<boolean> {
   if (!actor) { diagnosticDenied("source_owner"); return false; }
   const { authorizationService, canActorReadIssuePrivacy, canActorReadIssuePrivacyBatch,
@@ -408,7 +409,7 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
     try { assertMemorySourceReadActive(state); } catch { diagnosticDenied("scope_guard"); return false; }
     if (!await visit(rootId)) { diagnosticDenied("nested_source"); return false; }
   }
-  const {withReadMemoryTemporalSources}=await import("../authorization.js");
+  const {withReadMemoryTemporalSources,withUnscopedMemorySourceReader}=await import("../authorization.js");
   const {canActorReadNativeTaskSource}=await import("../native-direct-input.js");
   const temporalOwnerChecks = new Map<string, { runs: string[]; tasks: string[] }>();
   const unscopedTaskChecks: string[] = [];
@@ -432,7 +433,10 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
   }
   if (unscopedTaskChecks.length) {
     try { assertMemorySourceReadActive(state); } catch { diagnosticDenied("source_deadline"); return false; }
-    const readers = await canActorReadIssuePrivacyBatch(db, actor, companyId, unscopedTaskChecks);
+    const readers = actor
+      ? await withUnscopedMemorySourceReader(db, actor,
+        sourceDb => canActorReadIssuePrivacyBatch(sourceDb, actor, companyId, unscopedTaskChecks))
+      : await canActorReadIssuePrivacyBatch(db, actor, companyId, unscopedTaskChecks);
     const deniedIds = unscopedTaskChecks.filter(id=>readers.get(id)!==true);
     if (performance.now()>deadline || deniedIds.length) {
       diagnosticDenied("task_reader", { phase: "unscoped_acl_batch", candidateCount: unscopedTaskChecks.length,

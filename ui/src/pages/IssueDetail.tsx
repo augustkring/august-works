@@ -3079,15 +3079,19 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     [taskWorkflowsQuery.data],
   );
   const runTaskWorkflow = useMutation({
-    mutationFn: async (input: { workflowId: string; coverageId: string | null; userId: string | null; sessionId: string | null; epoch: number; companyId: string }) => {
+    mutationFn: async (input: { workflowId: string; coverageId: string | null; userId: string | null; sessionId: string | null; epoch: number; localImplicit: boolean; companyId: string }) => {
       if (!resolvedCompanyId || !issue) {
         throw new Error("Task context is unavailable.");
       }
       const currentIdentity = coverageIdentityRef.current;
-      if (!currentIdentity.settled || !input.userId || currentIdentity.userId !== input.userId ||
+      const identityChanged = !currentIdentity.settled || currentIdentity.userId !== input.userId ||
         currentIdentity.sessionId !== input.sessionId || currentIdentity.authorityEpoch !== input.epoch ||
-        input.companyId !== resolvedCompanyId || !coverageAuthority.canRead() || !input.sessionId ||
-        !hasCurrentV9Session(queryClient, input.userId, input.sessionId))
+        currentIdentity.localImplicit !== input.localImplicit || input.companyId !== resolvedCompanyId;
+      const currentHumanSession = !input.localImplicit && !!input.userId && !!input.sessionId &&
+        hasCurrentV9Session(queryClient, input.userId, input.sessionId);
+      if (identityChanged || (input.coverageId
+        ? input.localImplicit || !coverageAuthority.canRead() || !currentHumanSession
+        : !input.localImplicit && !currentHumanSession))
         throw new Error("Current account access changed. Reload before starting this run.");
       const existingAttempt = taskWorkflowIdempotencyRef.current;
       const fallbackSuffix = `${Date.now().toString(36)}-${Math.round(
@@ -3111,13 +3115,15 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
         input.coverageId,
       );
       if (coverageIdentityRef.current.userId !== input.userId || coverageIdentityRef.current.sessionId !== input.sessionId ||
-        coverageIdentityRef.current.authorityEpoch !== input.epoch || !hasCurrentV9Session(queryClient, input.userId, input.sessionId))
+        coverageIdentityRef.current.authorityEpoch !== input.epoch || coverageIdentityRef.current.localImplicit !== input.localImplicit ||
+        (!input.localImplicit && (!input.userId || !input.sessionId || !hasCurrentV9Session(queryClient, input.userId, input.sessionId))))
         throw new Error("Current account access changed while the run was starting.");
       return result;
     },
     onSuccess: (detail, input) => {
       if (coverageIdentityRef.current.userId !== input.userId || coverageIdentityRef.current.sessionId !== input.sessionId ||
-        coverageIdentityRef.current.authorityEpoch !== input.epoch || selectedCompanyId !== input.companyId) return;
+        coverageIdentityRef.current.authorityEpoch !== input.epoch || coverageIdentityRef.current.localImplicit !== input.localImplicit ||
+        selectedCompanyId !== input.companyId) return;
       taskWorkflowIdempotencyRef.current = null;
       setTaskWorkflowCoverageId("");
       setTaskWorkflowOpen(false);
@@ -3132,7 +3138,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     },
     onError: (mutationError, input) => {
       if (coverageIdentityRef.current.userId !== input.userId || coverageIdentityRef.current.sessionId !== input.sessionId ||
-        coverageIdentityRef.current.authorityEpoch !== input.epoch) return;
+        coverageIdentityRef.current.authorityEpoch !== input.epoch || coverageIdentityRef.current.localImplicit !== input.localImplicit) return;
       pushToast({
         title: "Could not run workflow",
         body:
@@ -3492,7 +3498,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     gcTime: 0,
     retry: false,
   });
-  useSecondTick((taskWorkflowCoveragesQuery.data?.coverages.length ?? 0) > 0);
+  useSecondTick(taskWorkflowOpen && (taskWorkflowCoveragesQuery.data?.coverages.length ?? 0) > 0);
   const taskWorkflowCoverageOptions = (coverageAuthority.canRead() ? taskWorkflowCoveragesQuery.data?.coverages ?? [] : []).filter((coverage) =>
     coverage.delegateeUserId === currentUserId && coverage.scopeType === "task" && coverage.taskId === issue?.id &&
     !coverage.revokedAt && new Date(coverage.startsAt).getTime() <= Date.now() && new Date(coverage.expiresAt).getTime() > Date.now(),
@@ -8363,7 +8369,8 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
                       type="button"
                       disabled={runTaskWorkflow.isPending || !coverageMatches}
                       onClick={() => runTaskWorkflow.mutate({ workflowId: workflow.id, coverageId: selectedTaskWorkflowCoverage?.id ?? null,
-                        userId: coverageIdentity.userId, sessionId: coverageIdentity.sessionId, epoch: coverageIdentity.authorityEpoch, companyId: resolvedCompanyId! })}
+                        userId: coverageIdentity.userId, sessionId: coverageIdentity.sessionId, epoch: coverageIdentity.authorityEpoch,
+                        localImplicit: coverageIdentity.localImplicit, companyId: resolvedCompanyId! })}
                       className="flex w-full items-center gap-3 px-2 py-3 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <GitBranch

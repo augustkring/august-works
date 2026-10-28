@@ -596,7 +596,6 @@ async function claimQueuedRun(
 ) {
   const publications: ActivityPublication[] = [];
   const claimed = await db.transaction(async (tx) => {
-    const now = new Date();
     const [pending] = await tx.select().from(workflowRuns).where(and(
       eq(workflowRuns.companyId, companyId), eq(workflowRuns.id, runId), eq(workflowRuns.status, "queued"),
     )).for("update");
@@ -619,9 +618,12 @@ async function claimQueuedRun(
         coverageId: pending.humanCoverageId, delegateeUserId: userId,
         workflowId: pending.workflowId, workflowRevisionId: pending.workflowRevisionId,
         scopeType: pending.source === "task" ? "task" : "manual", taskId,
-        now,
       });
     }
+    // Coverage and both principals' current rights may have waited behind
+    // concurrent transactions. Sample the execution lease clock only after
+    // those locks and authorization checks have settled.
+    const now = new Date();
     const leaseExpiresAt = new Date(now.getTime() + WORKFLOW_EXECUTION_LEASE_MS);
     const [row] = await tx
       .update(workflowRuns)

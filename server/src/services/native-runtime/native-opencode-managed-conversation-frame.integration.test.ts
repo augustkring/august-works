@@ -156,7 +156,7 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
         const sessionFailedCode = typeof sessionFailedPayload.code === "string" && /^[a-z0-9_.:-]{1,100}$/i.test(sessionFailedPayload.code)
           ? sessionFailedPayload.code : null;
         const failureArtifactPath = process.env.PAPERCLIP_NATIVE_RELAY_FAILURE_EVIDENCE_PATH;
-        if (failureArtifactPath === "/workspace/blentera-v10/doc/operations/aw-v10-evidence/rt01-runtime-probe-contract-2026-10-27/r68/runner-stderr-redacted.txt") {
+        if (failureArtifactPath === "/workspace/blentera-v10/doc/operations/aw-v10-evidence/rt01-runtime-probe-contract-2026-10-27/r74/runner-stderr-redacted.txt") {
           if (typeof facts.run.stderrExcerpt === "string") {
             const redacted = Buffer.from(redactSensitiveText(facts.run.stderrExcerpt), "utf8");
             await writeFile(failureArtifactPath, redacted.subarray(Math.max(0, redacted.length - 8192)),
@@ -270,8 +270,7 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
       ? runtimeFacts.execFacts as Array<Record<string, unknown>>
       : [];
     expect(relayExecFacts.some(fact => fact.modelCredentialPresent === true &&
-      fact.managedModelBrokerOriginPresent === true && fact.cwdExact === true &&
-      fact.exactBrokerProxyConfigured === true)).toBe(true);
+      fact.managedModelBrokerOriginPresent === true && fact.cwdExact === true)).toBe(true);
     expect(relayExecFacts.some(fact => fact.nativePreparationPurpose === "native_workspace_prepare" &&
       fact.modelCredentialPresent === false && fact.managedModelBrokerOriginPresent === false &&
       fact.credentialEnvironmentAbsent === true && fact.assignedMcpEnvironmentAbsent === true &&

@@ -1226,6 +1226,11 @@ describe("openapi routes", () => {
     }
     const list = spec.paths["/api/companies/{companyId}/workflow-coverages"].get;
     expect(list.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    for (const operation of [list, spec.paths["/api/companies/{companyId}/workflow-coverages"].post,
+      spec.paths["/api/companies/{companyId}/workflow-coverages/{coverageId}"].delete]) {
+      expect(operation.parameters).toContainEqual(expect.objectContaining({ name: "X-Blentera-Expected-User", in: "header", required: false }));
+      expect(operation.parameters).toContainEqual(expect.objectContaining({ name: "X-Blentera-Expected-Session", in: "header", required: false }));
+    }
     const create = spec.paths["/api/companies/{companyId}/workflow-coverages"].post;
     expect(create.responses[200]).toBeDefined();
     expect(create.responses[201]).toBeDefined();

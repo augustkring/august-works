@@ -368,7 +368,7 @@ const support = await getEmbeddedPostgresTestSupport();
         responsibleUserId: owner,
         createdByUserId: owner,
       });
-      const genericPrivateTaskWrite = await request(app)
+      const genericPrivateTaskWrite = await request(appFor(owner))
         .post(`/api/issues/${privateWorkTask.id}/comments`)
         .send({ body: "Hello", clientRequestId: randomUUID() });
       expect(genericPrivateTaskWrite.status).toBe(422);

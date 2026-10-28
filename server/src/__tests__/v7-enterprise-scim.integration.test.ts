@@ -539,8 +539,13 @@ const support = await getEmbeddedPostgresTestSupport(),
           .select()
           .from(authSessions)
           .where(eq(authSessions.userId, targetUserId));
+      // A managed subject can later become an owner through the company owner
+      // path; SCIM decommission must still run the canonical security sweep.
+      await db.update(companyMemberships).set({ membershipRole: "owner" }).where(and(
+        eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, targetUserId),
+      ));
       const result = await service.decommissionScim(
-        f.actor,
+        operatorActor,
         f.home,
         before.version,
       );
@@ -568,6 +573,10 @@ const support = await getEmbeddedPostgresTestSupport(),
           ),
         );
       expect(guest?.status).toBe("active");
+      const [home] = await db.select().from(companyMemberships).where(and(
+        eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, targetUserId),
+      ));
+      expect(home?.status).toBe("suspended");
       expect(
         await db.select().from(authUsers).where(eq(authUsers.id, targetUserId)),
       ).toHaveLength(1);
@@ -577,7 +586,7 @@ const support = await getEmbeddedPostgresTestSupport(),
         .where(eq(enterpriseSubjectBindings.companyId, f.home));
       expect(binding?.status).toBe("revoked");
       await expect(
-        service.decommissionScim(f.actor, f.home, before.version),
+        service.decommissionScim(operatorActor, f.home, before.version),
       ).rejects.toMatchObject({ status: 409 });
     });
   },

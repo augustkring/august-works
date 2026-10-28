@@ -1,12 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { authUsers, companies, accountDeletionOperations, companyDeletionOperations, createDb, applyPendingMigrations, supportCases, supportCaseEvents, supportCaseDeletionMarkers,
+import { authUsers, companies, accountDeletionOperations, companyDeletionOperations, companyMemberships, principalPermissionGrants,
+  humanWorkflowCoverages, workflows, workflowRevisions, createDb, applyPendingMigrations, supportCases, supportCaseEvents, supportCaseDeletionMarkers,
   EMBEDDED_POSTGRES_TEST_TIMEOUT_MS } from "@paperclipai/db";
 import type { SupportCaseDataPolicy } from "@paperclipai/shared";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { prepareRestoredQuarantine, assertDatabaseRestoreAdmission } from "../services/saas/quarantine.js";
 import { purgeCompanyContent } from "../services/saas/company-purge.js";
+import { accessService } from "../services/access.js";
 
 // Explicit test policy, never a default or deployed retention qualification.
 const dataPolicy: SupportCaseDataPolicy = {
@@ -181,6 +183,116 @@ describe("native support case storage and erasure boundaries", () => {
       await expect(prepareRestoredQuarantine(restored, target.toString(), { ...ledger,
         supportCases: supportCasesLedger.map(m => ({ ...m, company_id: retained.companyId })) }))
         .rejects.toThrow("Conflicting support erasure identity");
+    } finally {
+      await restored.$client.end({ timeout: 1 });
+      await db.execute(sql`drop database ${sql.identifier(name)} with (force)`);
+    }
+  }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
+  it("revokes an active Human workflow coverage copied from an older DB snapshot before restore admission can reopen", async () => {
+    const companyId = randomUUID(), principalUserId = randomUUID(), delegateeUserId = randomUUID();
+    const workflowId = randomUUID(), revisionId = randomUUID(), now = new Date();
+    await db.insert(companies).values({ id: companyId, name: "Coverage restore company", issuePrefix: randomUUID() });
+    await db.insert(authUsers).values([principalUserId, delegateeUserId].map(id => ({
+      id, name: id, email: `${id}@example.test`, emailVerified: true, createdAt: now, updatedAt: now,
+    })));
+    await db.insert(companyMemberships).values([
+      { companyId, principalType: "user", principalId: principalUserId, membershipRole: "owner", status: "active" },
+      { companyId, principalType: "user", principalId: delegateeUserId, membershipRole: "operator", status: "active" },
+    ]);
+    await db.insert(principalPermissionGrants).values([principalUserId, delegateeUserId].map(principalId => ({
+      companyId, principalType: "user" as const, principalId, permissionKey: "workflows:run" as const,
+    })));
+    await db.transaction(async tx => {
+      await tx.insert(workflows).values({ id: workflowId, companyId, name: "Restore coverage target", status: "active" });
+      await tx.insert(workflowRevisions).values({
+        id: revisionId, companyId, workflowId, revisionNumber: 1, state: "published",
+        graph: { version: 1, nodes: [{ id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} }], edges: [], variables: [], settings: {} },
+        createdByUserId: principalUserId,
+      });
+      await tx.update(workflows).set({ publishedRevisionId: revisionId }).where(eq(workflows.id, workflowId));
+    });
+    const created = await accessService(db).createWorkflowCoverage(companyId, {
+      requestId: randomUUID(), delegateeUserId, workflowId, workflowRevisionId: revisionId,
+      scopeType: "manual", taskId: null, startsAt: new Date(now.getTime() - 60_000),
+      expiresAt: new Date(now.getTime() + 24 * 60 * 60_000), reason: "Pre-snapshot routing receipt",
+    }, { type: "board", source: "session", userId: principalUserId });
+
+    const name = `aw_restore_${randomUUID().replaceAll("-", "")}`, target = new URL(database.connectionString);
+    target.pathname = `/${name}`;
+    await db.execute(sql`create database ${sql.identifier(name)}`);
+    const restored = createDb(target.toString());
+    try {
+      // Model the archived DB state before a later source-side revocation.
+      // The isolated PostgreSQL target contains a valid active receipt, as an
+      // older raw backup would, while the original owner then revokes it.
+      await applyPendingMigrations(target.toString());
+      const company = await db.select().from(companies).where(eq(companies.id, companyId));
+      const users = await db.select().from(authUsers).where(inArray(authUsers.id, [principalUserId, delegateeUserId]));
+      const memberships = await db.select().from(companyMemberships).where(eq(companyMemberships.companyId, companyId));
+      const grants = await db.select().from(principalPermissionGrants).where(eq(principalPermissionGrants.companyId, companyId));
+      const workflow = await db.select().from(workflows).where(eq(workflows.id, workflowId));
+      const revision = await db.select().from(workflowRevisions).where(eq(workflowRevisions.id, revisionId));
+      await restored.insert(companies).values(company);
+      await restored.insert(authUsers).values(users);
+      await restored.insert(companyMemberships).values(memberships);
+      await restored.insert(principalPermissionGrants).values(grants);
+      await restored.transaction(async tx => {
+        await tx.insert(workflows).values({ ...workflow[0]!, publishedRevisionId: null });
+        await tx.insert(workflowRevisions).values(revision);
+        await tx.update(workflows).set({ publishedRevisionId: revisionId }).where(eq(workflows.id, workflowId));
+      });
+      await restored.insert(humanWorkflowCoverages).values(created.coverage);
+      await expect(restored.transaction(tx => accessService(restored).authorizeWorkflowCoverage({
+        tx: tx as never, companyId, coverageId: created.coverage.id, delegateeUserId,
+        workflowId, workflowRevisionId: revisionId, scopeType: "manual", taskId: null,
+      }))).resolves.toMatchObject({ id: created.coverage.id, revokedAt: null });
+      await accessService(db).revokeWorkflowCoverage(companyId, created.coverage.id,
+        { type: "board", source: "session", userId: principalUserId });
+
+      const ledger = { companies: [], memory: [], businessEvents: [], analyticalSources: [], feedback: [], supportCases: [] };
+      await prepareRestoredQuarantine(restored, target.toString(), ledger);
+      const [firstRestoreReceipt] = await restored.select().from(humanWorkflowCoverages)
+        .where(eq(humanWorkflowCoverages.id, created.coverage.id));
+      expect(firstRestoreReceipt).toMatchObject({ revokedByUserId: null });
+      expect(firstRestoreReceipt!.revokedAt).toBeInstanceOf(Date);
+      await prepareRestoredQuarantine(restored, target.toString(), ledger);
+      const [replayedRestoreReceipt] = await restored.select().from(humanWorkflowCoverages)
+        .where(eq(humanWorkflowCoverages.id, created.coverage.id));
+      expect(replayedRestoreReceipt!.revokedAt.getTime()).toBe(firstRestoreReceipt!.revokedAt.getTime());
+
+      // Clear only the restore admission marker in the isolated fixture. The
+      // retained Humans, memberships, grants and exact active revision still
+      // satisfy every other authorization prerequisite.
+      await restored.execute(sql`update instance_settings set general=general-'awV6RestoreQuarantine' where singleton_key='default'`);
+      await expect(assertDatabaseRestoreAdmission(restored)).resolves.toBeUndefined();
+      await expect(restored.transaction(tx => accessService(restored).authorizeWorkflowCoverage({
+        tx: tx as never, companyId, coverageId: created.coverage.id, delegateeUserId,
+        workflowId, workflowRevisionId: revisionId, scopeType: "manual", taskId: null,
+      }))).rejects.toMatchObject({ status: 403, details: { code: "workflow_coverage_unavailable" } });
+    } finally {
+      await restored.$client.end({ timeout: 1 });
+      await db.execute(sql`drop database ${sql.identifier(name)} with (force)`);
+    }
+  }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
+  it("applies the coverage migration before quarantine when an older restore has no coverage table", async () => {
+    const name = `aw_restore_${randomUUID().replaceAll("-", "")}`, target = new URL(database.connectionString);
+    target.pathname = `/${name}`;
+    await db.execute(sql`create database ${sql.identifier(name)}`);
+    const restored = createDb(target.toString());
+    try {
+      await applyPendingMigrations(target.toString());
+      await restored.execute(sql`drop table human_workflow_coverages`);
+      await restored.execute(sql`alter table workflow_runs drop column human_coverage_id`);
+      await restored.execute(sql`delete from drizzle.__drizzle_migrations where id=(select max(id) from drizzle.__drizzle_migrations)`);
+
+      await prepareRestoredQuarantine(restored, target.toString(), {
+        companies: [], memory: [], businessEvents: [], analyticalSources: [], feedback: [], supportCases: [],
+      });
+      const [coverageTable] = await restored.execute<{ tableName: string | null }>(sql`
+        select to_regclass('public.human_workflow_coverages')::text as "tableName"
+      `);
+      expect(coverageTable?.tableName).toBe("human_workflow_coverages");
+      await expect(assertDatabaseRestoreAdmission(restored)).rejects.toThrow("remains quarantined");
     } finally {
       await restored.$client.end({ timeout: 1 });
       await db.execute(sql`drop database ${sql.identifier(name)} with (force)`);

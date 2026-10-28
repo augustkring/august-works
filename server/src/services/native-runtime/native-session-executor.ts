@@ -7880,6 +7880,16 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
         throw new Error("managed_opencode_source_prompt_budget_exceeded");
       const sourceSetHash = nativeSha256(sourceClosure.sourceSet);
       const existingPromptBinding = priorBindings.map(record).filter(value => value.promptHash === promptHash);
+      if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1") {
+        console.warn("managed_model_prompt_source_diagnostic", {
+          runId: input.runId,
+          promptLength: input.turnInput.message.text.length,
+          promptHash,
+          continuation: input.turnInput.continuation === true,
+          sourceClosurePresent: Boolean(sourceClosure),
+          sourceClosureMatches: sourceClosureMatches === true,
+        });
+      }
       if (existingPromptBinding.length > 1 || existingPromptBinding.length === 1 && existingPromptBinding[0]!.sourceSetHash !== sourceSetHash)
         throw new Error("managed_opencode_source_prompt_binding_ambiguous");
       const authorizedPromptHashes = priorPrompts.includes(promptHash) ? priorPrompts : [...priorPrompts, promptHash];
@@ -12749,7 +12759,7 @@ export function createRemoteRunnerProcessLauncher(input: {
             : "runner_remote_process_launch_failed",
         );
       }
-      let identity: { pid: number; startedAt: string };
+      let identity: { pid: number; startedAt: string; processStartFingerprint?: string };
       try {
         identity = await waitForRemoteRunnerProcessIdentity({
           runner,
@@ -13087,6 +13097,15 @@ async function createRunnerdBackendWithinSessionClaim(
   let recoveryPending = retainedTransition !== undefined;
   const target = input.runnerExecutionTarget ?? { kind: "local" as const };
   const remoteTarget = target.kind === "remote" ? target : null;
+  const remoteRuntimeRoot = remoteTarget
+    ? posix.join(remoteTarget.remoteCwd, ".paperclip-runtime", "paperclip-runner")
+    : null;
+  const remoteSessionDigest = createHash("sha256")
+    .update(nativeSessionKey(input.execution))
+    .digest("hex");
+  const remoteSessionRoot = remoteRuntimeRoot
+    ? posix.join(remoteRuntimeRoot, "sessions", remoteSessionDigest)
+    : null;
   const nativeConversationHarnessState = input.conversationMode === true && remoteTarget?.transport === "sandbox" &&
     input.execution.provider.kind === "opencode" && input.execution.session.driverKind === "opencode_server";
   const remoteCommandRunner = remoteTarget
@@ -13329,11 +13348,24 @@ async function createRunnerdBackendWithinSessionClaim(
         "Return one semantic completion result through paperclip_finish or paperclip_block.",
       ],
     });
+    const sourceContextForAuthority = "runtimeContext" in input.execution ? input.execution.runtimeContext : null;
+    const remoteInstructionRootForAuthority = remoteSessionRoot && sourceContextForAuthority
+      ? posix.join(remoteSessionRoot, "filesystem", "context", "instructions")
+      : null;
+    const systemInstructions = nativeSystemInstructions(input.execution);
+    // Runnerd replaces the local source bundle root with this exact staged
+    // root before the provider sees system instructions. Bind that resulting
+    // text so the broker verifies the actual remote prompt without relaxing
+    // its equality check.
+    const sourceBoundSystemInstructions = remoteInstructionRootForAuthority && sourceContextForAuthority
+      ? systemInstructions.replaceAll(sourceContextForAuthority.instructions.bundle.rootPath,
+        remoteInstructionRootForAuthority)
+      : systemInstructions;
     const sourceAuthority = {
       version: 1,
       executionInputHash: input.nativeBootstrapExecutionInputHash ?? nativeSha256(input.execution),
       attachmentStageHash: null as string | null,
-      systemInstructionsHash: nativeSha256(nativeSystemInstructions(input.execution)),
+      systemInstructionsHash: nativeSha256(sourceBoundSystemInstructions),
       toolSchemasHash: nativeSha256(schemas),
       toolSchemas: schemas,
       // A prompt becomes authorized only from the exact prepared turn passed
@@ -13403,13 +13435,6 @@ async function createRunnerdBackendWithinSessionClaim(
     input.durableEnvironmentLeaseId ??
     input.execution.binding.executionWorkspaceId;
   mkdirSync(root, { recursive: true, mode: 0o700 });
-  const remoteRuntimeRoot = remoteTarget
-    ? posix.join(
-        remoteTarget.remoteCwd,
-        ".paperclip-runtime",
-        "paperclip-runner",
-      )
-    : null;
   const requiresRemoteProviderPack =
     remoteTarget !== null &&
     (input.execution.provider.kind === "opencode" ||
@@ -13464,12 +13489,6 @@ async function createRunnerdBackendWithinSessionClaim(
           )
         : posix.join(remoteRuntimeRoot, "bin", "codex")
       : null;
-  const remoteSessionDigest = createHash("sha256")
-    .update(nativeSessionKey(input.execution))
-    .digest("hex");
-  const remoteSessionRoot = remoteRuntimeRoot
-    ? posix.join(remoteRuntimeRoot, "sessions", remoteSessionDigest)
-    : null;
   const remoteStateDirectory = remoteSessionRoot
     ? posix.join(remoteSessionRoot, "runner")
     : undefined;

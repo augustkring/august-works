@@ -2580,6 +2580,22 @@ export async function runManagedNativeOpenCodeFixture(input: {
       if (originalPaperclipApiUrl === undefined) delete process.env.PAPERCLIP_API_URL;
       else process.env.PAPERCLIP_API_URL = originalPaperclipApiUrl;
       if (sourceMemoDiagnosticsEnabled) {
+        try {
+          const memo = nativeSourceMemoDiagnosticsForTest();
+          const transactions = Object.entries(memo.byTransaction).map(([txOrdinal, stats]) => ({ txOrdinal,
+            roots: stats.roots, actorScopes: stats.actorScopes, hits: stats.hits, misses: stats.misses,
+            uncachedProofMs: Math.round(stats.uncachedProofMs), maxUncachedProofMs: Math.round(stats.maxUncachedProofMs),
+            sourceKindMissCounts: stats.sourceKindMissCounts,
+            opaqueProofKeys: Object.entries(stats.opaqueProofKeys).map(([proofKey, proof]) => ({ proofKey, ...proof }))
+              .sort((left, right) => right.misses - left.misses || right.elapsedMs - left.elapsedMs).slice(0, 16) }))
+            .sort((left, right) => right.uncachedProofMs - left.uncachedProofMs).slice(0, 12);
+          console.error("managed native source memo final", JSON.stringify({ roots: memo.roots,
+            actorScopes: memo.actorScopes, nestedScopeReuses: memo.nestedScopeReuses,
+            memoHits: memo.memoHits, memoMisses: memo.memoMisses, uncachedProofMs: Math.round(memo.uncachedProofMs),
+            byActor: memo.byActor, transactions }));
+        } catch {
+          console.error("managed native source memo final unavailable");
+        }
         const globals = globalThis as unknown as Record<PropertyKey, unknown>;
         if (globals[sourceMemoTxOrdinalSymbol] === sourceMemoTxOrdinalMap) delete globals[sourceMemoTxOrdinalSymbol];
       }

@@ -10,6 +10,7 @@ import {
   companies,
   companyMemberships,
   createDb,
+  humanWorkflowCoverages,
   instanceSettings,
   issues,
   principalPermissionGrants,
@@ -27,7 +28,7 @@ import { accessRoutes } from "../routes/access.js";
 import { workflowRoutes } from "../routes/workflows.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { enqueueWorkflowRunInTransaction, workflowExecutorService } from "../services/workflows/workflow-executor.js";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 const support = await getEmbeddedPostgresTestSupport();
 const describePg = support.supported ? describe.sequential : describe.skip;
@@ -322,6 +323,51 @@ describePg("Workflow routes", () => {
     }).expect(201).then(result => result.body);
     const runActor = { principal: { type: "user" as const, userId: delegateeUserId }, responsibleUserId: delegateeUserId,
       authorizationActor: { ...delegatee } };
+    const expiringCoverage = await accessHttp.post(`/api/companies/${company.id}/workflow-coverages`).send({
+      requestId: randomUUID(), delegateeUserId, workflowId: created.body.id,
+      workflowRevisionId: published.body.publishedRevision.id, scopeType: "manual", taskId: null,
+      startsAt: new Date(Date.now() - 1_000), expiresAt: new Date(Date.now() + 60_000), reason: "Expiry lock race",
+    }).expect(201).then(result => result.body);
+    const expiringRun = await db.transaction(tx => enqueueWorkflowRunInTransaction(tx as unknown as typeof db, {
+      companyId: company.id, workflowId: created.body.id, revisionId: published.body.publishedRevision.id,
+      nodeId: "start", source: "manual", triggerPayload: {}, responsibleUserId: delegateeUserId,
+      idempotencyKey: randomUUID(), correlationId: randomUUID(), actor: runActor,
+      humanCoverageId: expiringCoverage.id, coverageScopeType: "manual", coverageTaskId: null,
+    }));
+    let releaseMembershipLock!: () => void;
+    let membershipLockReady!: (pid: number) => void;
+    let membershipLockFailed!: (error: unknown) => void;
+    const membershipLocked = new Promise<number>((resolve, reject) => { membershipLockReady = resolve; membershipLockFailed = reject; });
+    const membershipGate = new Promise<void>(resolve => { releaseMembershipLock = resolve; });
+    const membershipLock = db.transaction(async tx => {
+      const [backend] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+      await tx.select().from(companyMemberships).where(eq(companyMemberships.principalId, principalUserId)).for("update");
+      membershipLockReady(backend!.pid);
+      await membershipGate;
+    }).catch(error => { membershipLockFailed(error); });
+    const lockPid = await membershipLocked;
+    const expiryClaim = workflowExecutorService(db).executeQueuedRun(company.id, expiringRun.run.id,
+      { principal: { type: "system", service: "workflow-recovery" } });
+    try {
+      const lockDeadline = Date.now() + 5_000;
+      for (;;) {
+        const [waiting] = await db.execute<{ blocked: boolean }>(sql`select exists(
+          select 1 from pg_stat_activity a where ${lockPid}=any(pg_blocking_pids(a.pid)) and a.wait_event_type='Lock'
+        ) as blocked`);
+        if (waiting?.blocked) break;
+        if (Date.now() >= lockDeadline) throw new Error("workflow coverage claim did not block on the Human membership lock");
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      await db.update(humanWorkflowCoverages).set({ expiresAt: new Date(Date.now() - 1_000) })
+        .where(eq(humanWorkflowCoverages.id, expiringCoverage.id));
+    } finally {
+      releaseMembershipLock();
+      await membershipLock;
+    }
+    await expect(expiryClaim).rejects.toMatchObject({ status: 403, details: { code: "workflow_coverage_unavailable" } });
+    const [stillQueuedAfterExpiry] = await db.select().from(workflowRuns).where(eq(workflowRuns.id, expiringRun.run.id));
+    expect(stillQueuedAfterExpiry).toMatchObject({ status: "queued", humanCoverageId: expiringCoverage.id });
+
     const queued = await db.transaction(tx => enqueueWorkflowRunInTransaction(tx as unknown as typeof db, {
       companyId: company.id, workflowId: created.body.id, revisionId: published.body.publishedRevision.id,
       nodeId: "start", source: "manual", triggerPayload: {}, responsibleUserId: delegateeUserId,

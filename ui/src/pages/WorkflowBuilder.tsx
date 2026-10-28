@@ -706,14 +706,19 @@ export function WorkflowBuilder() {
   });
 
   const runMutation = useMutation({
-    mutationFn: async (input: { companyId: string; userId: string | null; sessionId: string | null; epoch: number; coverageId: string | null }) => {
+    mutationFn: async (input: { companyId: string; userId: string | null; sessionId: string | null; epoch: number; localImplicit: boolean; coverageId: string | null }) => {
       if (!input.companyId || !workflowId || !detailQuery.data?.publishedRevisionId) {
         throw new Error("Publish a workflow revision before starting a live run.");
       }
       const currentIdentity = accountIdentityRef.current;
-      if (!currentIdentity.settled || currentIdentity.userId !== input.userId || currentIdentity.sessionId !== input.sessionId ||
-        currentIdentity.authorityEpoch !== input.epoch || currentIdentity.localImplicit || !coverageAuthority.canRead() ||
-        !input.userId || !input.sessionId || !hasCurrentV9Session(queryClient, input.userId, input.sessionId)) {
+      const identityChanged = !currentIdentity.settled || currentIdentity.userId !== input.userId ||
+        currentIdentity.sessionId !== input.sessionId || currentIdentity.authorityEpoch !== input.epoch ||
+        currentIdentity.localImplicit !== input.localImplicit;
+      const currentHumanSession = !input.localImplicit && !!input.userId && !!input.sessionId &&
+        hasCurrentV9Session(queryClient, input.userId, input.sessionId);
+      if (identityChanged || (input.coverageId
+        ? input.localImplicit || !coverageAuthority.canRead() || !currentHumanSession
+        : !input.localImplicit && !currentHumanSession)) {
         throw new Error("Current account access changed. Reload before starting this run.");
       }
       const result = await workflowsApi.startRun(
@@ -724,24 +729,27 @@ export function WorkflowBuilder() {
         input.coverageId,
       );
       if (accountIdentityRef.current.userId !== input.userId || accountIdentityRef.current.sessionId !== input.sessionId ||
-        accountIdentityRef.current.authorityEpoch !== input.epoch || !hasCurrentV9Session(queryClient, input.userId, input.sessionId))
+        accountIdentityRef.current.authorityEpoch !== input.epoch || accountIdentityRef.current.localImplicit !== input.localImplicit ||
+        (!input.localImplicit && (!input.userId || !input.sessionId || !hasCurrentV9Session(queryClient, input.userId, input.sessionId))))
         throw new Error("Current account access changed while the run was starting.");
       return result;
     },
     onSuccess: async (detail, input) => {
       if (accountIdentityRef.current.userId !== input.userId || accountIdentityRef.current.sessionId !== input.sessionId ||
-        accountIdentityRef.current.authorityEpoch !== input.epoch || selectedCompanyId !== input.companyId || !workflowId) return;
+        accountIdentityRef.current.authorityEpoch !== input.epoch || accountIdentityRef.current.localImplicit !== input.localImplicit ||
+        selectedCompanyId !== input.companyId || !workflowId) return;
       await queryClient.invalidateQueries({
         queryKey: queryKeys.workflows.runs(input.companyId, workflowId),
       });
       if (accountIdentityRef.current.userId !== input.userId || accountIdentityRef.current.sessionId !== input.sessionId ||
-        accountIdentityRef.current.authorityEpoch !== input.epoch || selectedCompanyId !== input.companyId) return;
+        accountIdentityRef.current.authorityEpoch !== input.epoch || accountIdentityRef.current.localImplicit !== input.localImplicit ||
+        selectedCompanyId !== input.companyId) return;
       pushToast({ title: "Workflow run started", tone: "success" });
       navigate(`/workflows/${workflowId}/runs/${detail.run.id}`);
     },
     onError: (error, input) => {
       if (accountIdentityRef.current.userId !== input.userId || accountIdentityRef.current.sessionId !== input.sessionId ||
-        accountIdentityRef.current.authorityEpoch !== input.epoch) return;
+        accountIdentityRef.current.authorityEpoch !== input.epoch || accountIdentityRef.current.localImplicit !== input.localImplicit) return;
       pushToast({
         title: "Could not run workflow",
         body: workflowErrorMessage(error),
@@ -901,7 +909,9 @@ export function WorkflowBuilder() {
               variant="outline"
               size="sm"
               disabled={runMutation.isPending || detailQuery.data.status !== "active" || selectedRunCoverageIsStale}
-              onClick={() => runMutation.mutate({ companyId: selectedCompanyId!, userId: accountIdentity.userId, sessionId: accountIdentity.sessionId, epoch: accountIdentity.authorityEpoch, coverageId: runCoverageId || null })}
+              onClick={() => runMutation.mutate({ companyId: selectedCompanyId!, userId: accountIdentity.userId,
+                sessionId: accountIdentity.sessionId, epoch: accountIdentity.authorityEpoch,
+                localImplicit: accountIdentity.localImplicit, coverageId: runCoverageId || null })}
               title="Runs the current published revision. Unsaved draft changes are not included."
             >
               <Play className="mr-1.5 h-3.5 w-3.5" />

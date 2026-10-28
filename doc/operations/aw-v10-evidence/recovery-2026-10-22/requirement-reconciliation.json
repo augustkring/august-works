@@ -870,23 +870,23 @@
         "sourceOwners": [
           "packages/shared/src/product-identity.ts",
           "server/src/config.ts",
-          "server/src/services/saas",
           "ui/src/lib/oauthHandoff.ts",
-          "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+          "server/src/services/connectors/slack-search-oauth.ts",
+          "doc/plans/2026-10-28-blentera-origin-and-repository-rename.md"
         ],
-        "implementationFinding": "The product identity and origin/config validators provide current app/docs/status/trust URL constants, and OAuth/channel connection owners exist. The targeted source search found no versioned V10 manifest mapping old/new `blentera.com` domains, OAuth redirect registrations, Slack/Teams origins, public service origins, and safe repository rename steps.",
+        "implementationFinding": "ProductIdentity and SaaS origin validation provide source-owned Blentera origins; Slack Search derives `/api/slack/search/callback` from its configured public origin. The new dated plan inventories current software owners and lays out a reversible origin/provider/repository sequence with explicit registration, consent, role, verification, and rollback evidence fields. It does not claim live DNS/TLS, domain ownership, OAuth provider setup, or repository rename.",
         "scopedEvidence": [
           {
-            "kind": "source_review",
+            "kind": "current_source_and_document_review",
             "paths": [
               "packages/shared/src/product-identity.ts",
               "server/src/config.ts",
-              "server/src/services/saas",
               "ui/src/lib/oauthHandoff.ts",
-              "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+              "server/src/services/connectors/slack-search-oauth.ts",
+              "doc/plans/2026-10-28-blentera-origin-and-repository-rename.md"
             ],
-            "finding": "The product identity and origin/config validators provide current app/docs/status/trust URL constants, and OAuth/channel connection owners exist. The targeted source search found no versioned V10 manifest mapping old/new `blentera.com` domains, OAuth redirect registrations, Slack/Teams origins, public service origins, and safe repository rename steps.",
-            "verification": "read-only source inspection; not a test or acceptance receipt"
+            "finding": "ProductIdentity and SaaS origin validation provide source-owned Blentera origins; Slack Search derives `/api/slack/search/callback` from its configured public origin. The new dated plan inventories current software owners and lays out a reversible origin/provider/repository sequence with explicit registration, consent, role, verification, and rollback evidence fields. It does not claim live DNS/TLS, domain ownership, OAuth provider setup, or repository rename.",
+            "verification": "read-only owner inspection and plan review; no DNS/provider/GitHub action or hosted acceptance performed"
           }
         ],
         "historicalPinComparison": {
@@ -894,8 +894,8 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Write the scoped migration manifest and safe rename plan with each external registration, owner, redirect/re-consent behavior, rollback, provenance obligation, and verification. Domain/provider ownership remains operationally unverified.",
-        "implementationStatus": "software_requirement_missing",
+        "remainingWork": "Before cutover, an accountable operator must populate the actual staging/production/provider registration inventory, verify domain/DNS/TLS and registration ownership, rehearse callback/re-consent and rollback, then separately approve and perform the deployment and GitHub rename. Unknown or customer-managed registrations remain blockers.",
+        "implementationStatus": "operator_plan_added_external_cutover_unqualified",
         "sourceReviewFindings": [
           {
             "path": "packages/shared/src/product-identity.ts",
@@ -906,20 +906,19 @@
             "observedWorktreeSha256": "f9f81f20ea69a6b688ea86d7f016c2af1722512f544caa54376c1705efb0859c"
           },
           {
-            "path": "server/src/services/saas",
-            "kind": "directory_scope",
-            "note": "Directory mapped as a domain owner; no single-file hash."
-          },
-          {
             "path": "ui/src/lib/oauthHandoff.ts",
             "observedWorktreeSha256": "e53a8e759c8a72f77727f3f23079191c465af0d7852984a726dfa1e6cb911cc3"
           },
           {
-            "path": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
-            "observedWorktreeSha256": "75ca2cdd2f78398a43b66317ed1135d9b031147d0115e8f41a613c367288c8c9"
+            "path": "server/src/services/connectors/slack-search-oauth.ts",
+            "observedWorktreeSha256": "71c7253097029aeff277a4b21f1168b38853a4904fe7d648c1108cdcac445b4e"
+          },
+          {
+            "path": "doc/plans/2026-10-28-blentera-origin-and-repository-rename.md",
+            "observedWorktreeSha256": "3c88eb975b4ea5e949b333c3adfd401697648a2794299d4f4466ae23f5ecaea2"
           }
         ],
-        "reviewBasis": "Current source owner inspection at recorded HEAD plus dirty worktree; source observations do not certify full tests, hosted deployment, customer/provider operation, or release acceptance."
+        "reviewBasis": "Targeted source and document owner review in the shared dirty worktree on 2026-10-28. Hashes identify observed bytes at review time; they do not certify complete tests, external provider/domain operation, Human approval, or release qualification."
       }
     },
     {
@@ -1172,18 +1171,18 @@
           "scripts/generate-feature-catalog.ts",
           "packages/shared/src/feature-catalog.test.ts"
         ],
-        "implementationFinding": "The existing generated feature catalog contains schema-derived feature flags with title, description, managed/preference/floor tier, and defaults. Its release artifact schema emits only `tier`; neither the type nor generated artifact contains the required capability maturity, version, customer surfaces, support, documentation, or evidence fields.",
+        "implementationFinding": "The existing feature catalog now carries lifecycle maturity, owner, supported version, surfaces/profiles, entitlement, criticality, data/dependencies, docs/support/evidence, GA-readiness and deprecation/sunset/replacement metadata. Lifecycle admission gates distinguish internal/retired from other maturity states and GA metadata issues are validated. The generator can explicitly emit lifecycle-rich schema v2; release default remains schema v1 until downstream consumers are qualified. Most catalog entries intentionally retain null/unqualified fields.",
         "scopedEvidence": [
           {
-            "kind": "source_review",
+            "kind": "current_source_review",
             "paths": [
               "packages/shared/src/feature-catalog.ts",
               "packages/shared/src/v9-feature-flags.ts",
               "scripts/generate-feature-catalog.ts",
               "packages/shared/src/feature-catalog.test.ts"
             ],
-            "finding": "The existing generated feature catalog contains schema-derived feature flags with title, description, managed/preference/floor tier, and defaults. Its release artifact schema emits only `tier`; neither the type nor generated artifact contains the required capability maturity, version, customer surfaces, support, documentation, or evidence fields.",
-            "verification": "read-only source inspection; not a test or acceptance receipt"
+            "finding": "The existing feature catalog now carries lifecycle maturity, owner, supported version, surfaces/profiles, entitlement, criticality, data/dependencies, docs/support/evidence, GA-readiness and deprecation/sunset/replacement metadata. Lifecycle admission gates distinguish internal/retired from other maturity states and GA metadata issues are validated. The generator can explicitly emit lifecycle-rich schema v2; release default remains schema v1 until downstream consumers are qualified. Most catalog entries intentionally retain null/unqualified fields.",
+            "verification": "current dirty-worktree source inspection only; source presence is not a test PASS, provider operation, or release qualification"
           }
         ],
         "historicalPinComparison": {
@@ -1191,12 +1190,12 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Extend the existing catalog with the §8.2 capability lifecycle metadata while keeping authorization unchanged. Keep flags/defaults/tier distinct from maturity and require lifecycle fields in the generated catalog artifact.",
-        "implementationStatus": "software_requirement_missing",
+        "remainingWork": "Complete owner-reviewed lifecycle facts for customer-facing capabilities beyond the instance-flag subset, and qualify every downstream schema-v2 consumer before changing the release artifact default. Do not infer GA/support or customer version from code presence.",
+        "implementationStatus": "partially_implemented_lifecycle_catalog",
         "sourceReviewFindings": [
           {
             "path": "packages/shared/src/feature-catalog.ts",
-            "observedWorktreeSha256": "7ef04703a272e640183b9e2b281c7426505d8140de611ed7252e5954e40ca719"
+            "observedWorktreeSha256": "bd539363efe20b2cc13981708abec1f4f03d801820bf7aa00dfa3648058036b5"
           },
           {
             "path": "packages/shared/src/v9-feature-flags.ts",
@@ -1204,14 +1203,14 @@
           },
           {
             "path": "scripts/generate-feature-catalog.ts",
-            "observedWorktreeSha256": "f1f4ebd50b2a138a0c56803d6370b4b86a8c15eae8379a5eb686d6aaddd881cb"
+            "observedWorktreeSha256": "0e03be3ec22ad1c468a3d98e1d5e49ed389dab73f78d3c228b4ee45ddc740f77"
           },
           {
             "path": "packages/shared/src/feature-catalog.test.ts",
-            "observedWorktreeSha256": "3736c90d578cb66aa55aa018205ff82649a62a598e1c7be963de86c9b313211e"
+            "observedWorktreeSha256": "710d6390d24b80a64dc773d601521d561ceb5877cd7bceaa17c4186fcdf52c14"
           }
         ],
-        "reviewBasis": "Current source owner inspection at recorded HEAD plus dirty worktree; source observations do not certify full tests, hosted deployment, customer/provider operation, or release acceptance."
+        "reviewBasis": "Targeted source and document owner review in the shared dirty worktree on 2026-10-28. Hashes identify observed bytes at review time; they do not certify complete tests, external provider/domain operation, Human approval, or release qualification."
       }
     },
     {
@@ -1232,10 +1231,10 @@
           "docs/da/help",
           "server/src/services/company-search-help.generated.ts"
         ],
-        "implementationFinding": "Help article metadata and V9 screen contracts separately record audience/maturity/version/source paths; the feature-catalog artifact emits only flag tier. No source mapping was found linking each product capability to its docs, support level, owner, customer surface, profile, and release evidence in the canonical catalog.",
+        "implementationFinding": "The same catalog provides `docsRef`, `supportPathRef`, `serviceDependencies`, customer surfaces and release evidence fields; three capability entries have source-checked Help/surface linkage. Help metadata and V9 screen contracts remain separate contracts, and the catalog does not yet map every product capability to reviewed Help, support level, owner, profile and release evidence. Most entries are unqualified and the lifecycle-rich artifact is opt-in schema v2.",
         "scopedEvidence": [
           {
-            "kind": "source_review",
+            "kind": "current_source_review",
             "paths": [
               "packages/shared/src/feature-catalog.ts",
               "scripts/generate-feature-catalog.ts",
@@ -1245,8 +1244,8 @@
               "docs/da/help",
               "server/src/services/company-search-help.generated.ts"
             ],
-            "finding": "Help article metadata and V9 screen contracts separately record audience/maturity/version/source paths; the feature-catalog artifact emits only flag tier. No source mapping was found linking each product capability to its docs, support level, owner, customer surface, profile, and release evidence in the canonical catalog.",
-            "verification": "read-only source inspection; not a test or acceptance receipt"
+            "finding": "The same catalog provides `docsRef`, `supportPathRef`, `serviceDependencies`, customer surfaces and release evidence fields; three capability entries have source-checked Help/surface linkage. Help metadata and V9 screen contracts remain separate contracts, and the catalog does not yet map every product capability to reviewed Help, support level, owner, profile and release evidence. Most entries are unqualified and the lifecycle-rich artifact is opt-in schema v2.",
+            "verification": "current dirty-worktree source inspection only; source presence is not a test PASS, provider operation, or release qualification"
           }
         ],
         "historicalPinComparison": {
@@ -1254,16 +1253,16 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Add canonical docs/support/evidence references to the existing product capability catalog and generate/validate the map. Existing Help and screen metadata remain useful separate contracts but are not linked capability records.",
-        "implementationStatus": "software_requirement_missing",
+        "remainingWork": "Extend verified mappings through the existing catalog and source owners for the remaining product capabilities, keep unverified references null, and qualify the schema-v2 consumer before making the richer artifact the release contract.",
+        "implementationStatus": "partially_implemented_sparse_linkage",
         "sourceReviewFindings": [
           {
             "path": "packages/shared/src/feature-catalog.ts",
-            "observedWorktreeSha256": "7ef04703a272e640183b9e2b281c7426505d8140de611ed7252e5954e40ca719"
+            "observedWorktreeSha256": "bd539363efe20b2cc13981708abec1f4f03d801820bf7aa00dfa3648058036b5"
           },
           {
             "path": "scripts/generate-feature-catalog.ts",
-            "observedWorktreeSha256": "f1f4ebd50b2a138a0c56803d6370b4b86a8c15eae8379a5eb686d6aaddd881cb"
+            "observedWorktreeSha256": "0e03be3ec22ad1c468a3d98e1d5e49ed389dab73f78d3c228b4ee45ddc740f77"
           },
           {
             "path": "doc/experience/v9/coverage.json",
@@ -1274,21 +1273,11 @@
             "observedWorktreeSha256": "c3895614a481d92a10939263cb97581fd28c21aa0295f9a5cc8ff5664464829a"
           },
           {
-            "path": "docs/help",
-            "kind": "directory_scope",
-            "note": "Directory mapped as a domain owner; no single-file hash."
-          },
-          {
-            "path": "docs/da/help",
-            "kind": "directory_scope",
-            "note": "Directory mapped as a domain owner; no single-file hash."
-          },
-          {
             "path": "server/src/services/company-search-help.generated.ts",
-            "observedWorktreeSha256": "2acb5ac1e532bbd5493f57f7a619e7e26762b8050424a02e9ccda879552c5cb4"
+            "observedWorktreeSha256": "5d3c1580cc78ca7b8fcd8e8ac7ebe76e6b3d78172c17629b0dd925a1c567c2c4"
           }
         ],
-        "reviewBasis": "Current source owner inspection at recorded HEAD plus dirty worktree; source observations do not certify full tests, hosted deployment, customer/provider operation, or release acceptance."
+        "reviewBasis": "Targeted source and document owner review in the shared dirty worktree on 2026-10-28. Hashes identify observed bytes at review time; they do not certify complete tests, external provider/domain operation, Human approval, or release qualification."
       }
     },
     {
@@ -2397,23 +2386,33 @@
       "currentAssessment": {
         "bindingClause": "24. `V10-024` evaluate export/delete/restore/provisioning for envelope adoption.",
         "sourceOwners": [
+          "packages/shared/src/customer-operations.ts",
+          "server/src/services/company-import-jobs.ts",
+          "server/src/routes/companies.ts",
           "server/src/services/company-portability.ts",
           "server/src/services/saas/account-deletion.ts",
-          "packages/db/src/schema/saas_lifecycle.ts",
-          "server/src/services/company-import-jobs.ts"
+          "server/src/services/saas/support.ts",
+          "server/src/services/saas/quarantine.ts",
+          "server/src/services/saas/onboarding.ts",
+          "doc/plans/2026-10-28-v10-operation-envelope-adoption-decisions.md"
         ],
-        "implementationFinding": "The inspected paths show domain-owned portability/import and account/company deletion ledgers. The operation envelope is not a generic replacement, and this audit did not find an owner-by-owner adoption decision covering export, restore and provisioning.",
+        "implementationFinding": "The new owner-by-owner decision note finds the envelope is already a projection for durable company import, whose native job retains effects/idempotency/reconciliation. Export remains a bounded native portability response; company deletion is routed synchronously through the company lifecycle owner; account deletion has its own durable privacy/secret-removal ledger; backup restore remains support/quarantine-owned; SaaS onboarding remains idempotent onboarding-owned. No shared envelope should replace these domain ledgers or authorities.",
         "scopedEvidence": [
           {
             "kind": "current_source_review",
             "paths": [
+              "packages/shared/src/customer-operations.ts",
+              "server/src/services/company-import-jobs.ts",
+              "server/src/routes/companies.ts",
               "server/src/services/company-portability.ts",
               "server/src/services/saas/account-deletion.ts",
-              "packages/db/src/schema/saas_lifecycle.ts",
-              "server/src/services/company-import-jobs.ts"
+              "server/src/services/saas/support.ts",
+              "server/src/services/saas/quarantine.ts",
+              "server/src/services/saas/onboarding.ts",
+              "doc/plans/2026-10-28-v10-operation-envelope-adoption-decisions.md"
             ],
-            "finding": "The inspected paths show domain-owned portability/import and account/company deletion ledgers. The operation envelope is not a generic replacement, and this audit did not find an owner-by-owner adoption decision covering export, restore and provisioning.",
-            "verification": "current dirty-worktree source inspection only; source presence is not a test PASS or runtime qualification"
+            "finding": "The new owner-by-owner decision note finds the envelope is already a projection for durable company import, whose native job retains effects/idempotency/reconciliation. Export remains a bounded native portability response; company deletion is routed synchronously through the company lifecycle owner; account deletion has its own durable privacy/secret-removal ledger; backup restore remains support/quarantine-owned; SaaS onboarding remains idempotent onboarding-owned. No shared envelope should replace these domain ledgers or authorities.",
+            "verification": "current dirty-worktree source inspection only; source presence is not a test PASS, provider operation, or release qualification"
           }
         ],
         "historicalPinComparison": {
@@ -2421,27 +2420,47 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Record a bounded decision for each long-running domain (including restore and provisioning), reuse its existing operation owner where appropriate, and document why a shared projection is or is not needed.",
-        "implementationStatus": "no_implementation_found",
+        "remainingWork": "Keep these decisions aligned when owners change execution mode. If export or company deletion becomes asynchronous, add a native durable receipt first and expose only a customer-safe projection; preserve restore quarantine and account privacy boundaries. Existing domain-specific restart/recovery qualification remains separate.",
+        "implementationStatus": "owner_adoption_decisions_recorded_source_only",
         "sourceReviewFindings": [
+          {
+            "path": "packages/shared/src/customer-operations.ts",
+            "observedWorktreeSha256": "29ce914bb8ed7ec869cefa628b642fccd938de8b2d7d6b686df4efdf698e9b33"
+          },
+          {
+            "path": "server/src/services/company-import-jobs.ts",
+            "observedWorktreeSha256": "f2725ca5266e99b73acf799e68281e1e15c669c463622852f8c1523bc1124fca"
+          },
+          {
+            "path": "server/src/routes/companies.ts",
+            "observedWorktreeSha256": "b4ee7289e09e3f9e88bdc50c6beee244ac62c5260de7017ffc9415b6bef12e44"
+          },
           {
             "path": "server/src/services/company-portability.ts",
             "observedWorktreeSha256": "89d5e6ef9a23d9dc814187bffee2c90bbb499daa12bf21e14f1d36661690995a"
           },
           {
             "path": "server/src/services/saas/account-deletion.ts",
-            "observedWorktreeSha256": "7214bed4add42ad5778c1b8bc6e235e968c4bc2c9ae6bc3107c1b11e633c8911"
+            "observedWorktreeSha256": "5ae8f08f348e3a87f1566febaca954cbcbf6273df0f8c9e6dd4a65398e486483"
           },
           {
-            "path": "packages/db/src/schema/saas_lifecycle.ts",
-            "observedWorktreeSha256": "e465817bfe9e956cf1a09382fd0bc0163eb8ec4302e41a9096253ec1b3d9efee"
+            "path": "server/src/services/saas/support.ts",
+            "observedWorktreeSha256": "08ab5f2b158f2fb8d8a70de8f8f8897b061e2047ebd56b554cd7c225c0d4834b"
           },
           {
-            "path": "server/src/services/company-import-jobs.ts",
-            "observedWorktreeSha256": "f2725ca5266e99b73acf799e68281e1e15c669c463622852f8c1523bc1124fca"
+            "path": "server/src/services/saas/quarantine.ts",
+            "observedWorktreeSha256": "dc7b2f4c28bbd148d2e171bd47bc24fc13763cc3fcea9aea636e8e35259291df"
+          },
+          {
+            "path": "server/src/services/saas/onboarding.ts",
+            "observedWorktreeSha256": "f29f6b9226e5bd22ce63db8bbe27a5e219294d7947447bd4abb2845b257a9911"
+          },
+          {
+            "path": "doc/plans/2026-10-28-v10-operation-envelope-adoption-decisions.md",
+            "observedWorktreeSha256": "66ed827b1ed817d8ec6394e10d4ae61abe16dcecda180cba3c60e7c2f689ac5c"
           }
         ],
-        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification."
+        "reviewBasis": "Targeted source and document owner review in the shared dirty worktree on 2026-10-28. Hashes identify observed bytes at review time; they do not certify complete tests, external provider/domain operation, Human approval, or release qualification."
       }
     },
     {
@@ -2873,19 +2892,21 @@
         "sourceOwners": [
           "server/src/services/readiness/readiness-policy.ts",
           "server/src/routes/readiness.ts",
-          "server/src/services/access.ts"
+          "server/src/services/access.ts",
+          "server/src/services/stewards/core-stewards.ts"
         ],
-        "implementationFinding": "System readiness requirements and last-owner protection are separate mechanisms. This review found no unified critical-contact/backup-ownership readiness policy tied to material-object coverage.",
+        "implementationFinding": "Current code has action-scoped readiness evidence and current Human workflow coverage for a different delegatee, exact published workflow revision, manual/task scope, bounded start/expiry/revocation, and current intersection of both Humans’ workflow and Task rights. Readiness still models authorized domain evidence generically, Core Steward findings are readiness/source reassessment findings, and last-owner protection is a separate membership invariant. The reviewed owners do not define a critical-contact/backup-owner registry or readiness rule per material object, nor tests proving dependent-only blocking and recovery actions.",
         "scopedEvidence": [
           {
             "kind": "current_source_review",
             "paths": [
               "server/src/services/readiness/readiness-policy.ts",
               "server/src/routes/readiness.ts",
-              "server/src/services/access.ts"
+              "server/src/services/access.ts",
+              "server/src/services/stewards/core-stewards.ts"
             ],
-            "finding": "System readiness requirements and last-owner protection are separate mechanisms. This review found no unified critical-contact/backup-ownership readiness policy tied to material-object coverage.",
-            "verification": "current dirty-worktree source inspection only; source presence is not a test PASS or runtime qualification"
+            "finding": "Current code has action-scoped readiness evidence and current Human workflow coverage for a different delegatee, exact published workflow revision, manual/task scope, bounded start/expiry/revocation, and current intersection of both Humans’ workflow and Task rights. Readiness still models authorized domain evidence generically, Core Steward findings are readiness/source reassessment findings, and last-owner protection is a separate membership invariant. The reviewed owners do not define a critical-contact/backup-owner registry or readiness rule per material object, nor tests proving dependent-only blocking and recovery actions.",
+            "verification": "current dirty-worktree source inspection only; source presence is not a test PASS, provider operation, or release qualification"
           }
         ],
         "historicalPinComparison": {
@@ -2893,8 +2914,8 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Define required backup owner/contact rules from the actual company policy and verify readiness failures block only the dependent operation, with clear owner actions.",
-        "implementationStatus": "no_implementation_found",
+        "remainingWork": "Define required backup/contact policy from an accountable company/service policy, link material objects to named primary and backup owners through their existing domain owners, and add readiness/last-owner/offboarding tests that block only dependent actions and show clear recovery steps. Workflow coverage alone does not satisfy general responsibility continuity.",
+        "implementationStatus": "partially_implemented_workflow_coverage_only",
         "sourceReviewFindings": [
           {
             "path": "server/src/services/readiness/readiness-policy.ts",
@@ -2906,10 +2927,14 @@
           },
           {
             "path": "server/src/services/access.ts",
-            "observedWorktreeSha256": "f8501e3e2644a1eb901a620a7e3b62699c13d880694d4329bf4f00593b22328e"
+            "observedWorktreeSha256": "6a4ed41900f0ef2a30f1566f83dd7d18d961223c02b3351fb0052baac566dd4d"
+          },
+          {
+            "path": "server/src/services/stewards/core-stewards.ts",
+            "observedWorktreeSha256": "8d2a85da4a348f0576083235f9df8babb931e236e283cb22fe7e136590160ef9"
           }
         ],
-        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification."
+        "reviewBasis": "Targeted source and document owner review in the shared dirty worktree on 2026-10-28. Hashes identify observed bytes at review time; they do not certify complete tests, external provider/domain operation, Human approval, or release qualification."
       }
     },
     {
@@ -4226,19 +4251,21 @@
         "sourceOwners": [
           "server/src/services/experience/service-health.ts",
           "server/src/routes/service-health.ts",
-          "server/src/__tests__/service-health-routes.test.ts"
+          "ui/src/components/ServiceHealth.tsx",
+          "doc/operations/service-health/README.md"
         ],
-        "implementationFinding": "The application only reads the public provider summary; no role-checked/audited incident or maintenance publish operation is implemented in these owners.",
+        "implementationFinding": "The application provides a disabled-by-default, fixed-origin read-only Statuspage projection and links customers to the provider for subscription/history. The operations README documents the canonical provider handoff, required least-privilege publisher roles, audit trail, backup operator, manual failover, and evidence to retain. There is no local incident/maintenance publishing API or publisher audit owner, and no provider account/role/audit receipt is recorded; the external handoff is therefore not an executed or qualified publication path.",
         "scopedEvidence": [
           {
-            "kind": "current_source_review",
+            "kind": "current_source_and_document_review",
             "paths": [
               "server/src/services/experience/service-health.ts",
               "server/src/routes/service-health.ts",
-              "server/src/__tests__/service-health-routes.test.ts"
+              "ui/src/components/ServiceHealth.tsx",
+              "doc/operations/service-health/README.md"
             ],
-            "finding": "The application only reads the public provider summary; no role-checked/audited incident or maintenance publish operation is implemented in these owners.",
-            "verification": "current dirty-worktree source inspection only; source presence is not a test PASS or runtime qualification"
+            "finding": "The application provides a disabled-by-default, fixed-origin read-only Statuspage projection and links customers to the provider for subscription/history. The operations README documents the canonical provider handoff, required least-privilege publisher roles, audit trail, backup operator, manual failover, and evidence to retain. There is no local incident/maintenance publishing API or publisher audit owner, and no provider account/role/audit receipt is recorded; the external handoff is therefore not an executed or qualified publication path.",
+            "verification": "read-only source/doc inspection; no provider account access, publication, or external evidence review"
           }
         ],
         "historicalPinComparison": {
@@ -4246,8 +4273,8 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Implement the approved operator publication path or explicitly rely on provider UI with external role/audit proof; do not infer it from the read-only adapter.",
-        "implementationStatus": "no_implementation_found",
+        "remainingWork": "An operator must identify the managed provider account and named primary/backup publishers, capture role and audit evidence, and rehearse publish/update/resolve and manual failover. If the product needs local publishing, implement it through a reviewed provider adapter with authenticated role checks and auditable results; do not infer this from public read projection.",
+        "implementationStatus": "provider_owned_handoff_external_evidence_unqualified",
         "sourceReviewFindings": [
           {
             "path": "server/src/services/experience/service-health.ts",
@@ -4258,11 +4285,15 @@
             "observedWorktreeSha256": "bdf5a7eef496817669c1f21a67637636534d3eef548f44676a0f9c91b982cf82"
           },
           {
-            "path": "server/src/__tests__/service-health-routes.test.ts",
-            "observedWorktreeSha256": "a34bffdd16907d9bc6850ecb2f25c684b04620aa4cc1e9b33d411ae1cecce9cf"
+            "path": "ui/src/components/ServiceHealth.tsx",
+            "observedWorktreeSha256": "d1e5afe83de14f659cbae4b4a4f0931f153a7fffaf68542952fd05fcf9e81a0c"
+          },
+          {
+            "path": "doc/operations/service-health/README.md",
+            "observedWorktreeSha256": "38004ac19cdef34a29223e36db8446f6ec87b409e708e7b01a8a2e3f387a5b1c"
           }
         ],
-        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification."
+        "reviewBasis": "Targeted source and document owner review in the shared dirty worktree on 2026-10-28. Hashes identify observed bytes at review time; they do not certify complete tests, external provider/domain operation, Human approval, or release qualification."
       }
     },
     {
@@ -4328,19 +4359,21 @@
         "sourceOwners": [
           "ui/src/components/ServiceHealth.tsx",
           "server/src/services/experience/service-health.ts",
-          "server/src/routes/service-health.ts"
+          "server/src/routes/service-health.ts",
+          "doc/operations/service-health/README.md"
         ],
-        "implementationFinding": "The UI links to provider subscription but no in-app subscriber/notification integration is present in the inspected code.",
+        "implementationFinding": "The UI hands off to the external provider subscription page. The app has no subscriber identity/consent store, in-app notification integration, or delivery worker. The operations README now assigns consent, unsubscribe, delivery proof, and failover to the provider owner and defines redacted evidence to retain. No consent receipt, provider notification configuration, delivery receipt, or failover proof is present in the reviewed source/docs.",
         "scopedEvidence": [
           {
-            "kind": "current_source_review",
+            "kind": "current_source_and_document_review",
             "paths": [
               "ui/src/components/ServiceHealth.tsx",
               "server/src/services/experience/service-health.ts",
-              "server/src/routes/service-health.ts"
+              "server/src/routes/service-health.ts",
+              "doc/operations/service-health/README.md"
             ],
-            "finding": "The UI links to provider subscription but no in-app subscriber/notification integration is present in the inspected code.",
-            "verification": "current dirty-worktree source inspection only; source presence is not a test PASS or runtime qualification"
+            "finding": "The UI hands off to the external provider subscription page. The app has no subscriber identity/consent store, in-app notification integration, or delivery worker. The operations README now assigns consent, unsubscribe, delivery proof, and failover to the provider owner and defines redacted evidence to retain. No consent receipt, provider notification configuration, delivery receipt, or failover proof is present in the reviewed source/docs.",
+            "verification": "read-only source/doc inspection; no subscription, consent, delivery, or external provider evidence performed"
           }
         ],
         "historicalPinComparison": {
@@ -4348,8 +4381,8 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Record subscription consent and delivery owner or document provider-owned subscription and evidence current delivery/failover.",
-        "implementationStatus": "no_implementation_found",
+        "remainingWork": "Provider owner must record the live account/domain, explicit consent and unsubscribe behavior, a redacted test-delivery reference, export/exit steps, and failover ownership before relying on notifications. Keep any future in-app integration opt-in with explicit purpose and canonical provider delivery evidence.",
+        "implementationStatus": "provider_owned_handoff_external_evidence_unqualified",
         "sourceReviewFindings": [
           {
             "path": "ui/src/components/ServiceHealth.tsx",
@@ -4362,9 +4395,13 @@
           {
             "path": "server/src/routes/service-health.ts",
             "observedWorktreeSha256": "bdf5a7eef496817669c1f21a67637636534d3eef548f44676a0f9c91b982cf82"
+          },
+          {
+            "path": "doc/operations/service-health/README.md",
+            "observedWorktreeSha256": "38004ac19cdef34a29223e36db8446f6ec87b409e708e7b01a8a2e3f387a5b1c"
           }
         ],
-        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification."
+        "reviewBasis": "Targeted source and document owner review in the shared dirty worktree on 2026-10-28. Hashes identify observed bytes at review time; they do not certify complete tests, external provider/domain operation, Human approval, or release qualification."
       }
     },
     {
@@ -4380,16 +4417,16 @@
           "doc/operations/service-health/README.md",
           "server/src/services/experience/service-health.ts"
         ],
-        "implementationFinding": "A service-health operations README and read-only provider projection exist; no postmortem/customer-communication template owner was found in these scoped sources.",
+        "implementationFinding": "The existing service-health operations owner contains customer update templates for investigating/identified, monitoring/resolved, scheduled maintenance, and postmortem communications. The README now also distinguishes provider-owned publication from the app’s read projection and gives privacy constraints and evidence handoff. Templates provide usable wording but no completed incident/postmortem, approval, publication, or customer-delivery evidence.",
         "scopedEvidence": [
           {
-            "kind": "current_source_review",
+            "kind": "current_document_and_source_review",
             "paths": [
               "doc/operations/service-health/README.md",
               "server/src/services/experience/service-health.ts"
             ],
-            "finding": "A service-health operations README and read-only provider projection exist; no postmortem/customer-communication template owner was found in these scoped sources.",
-            "verification": "current dirty-worktree source inspection only; source presence is not a test PASS or runtime qualification"
+            "finding": "The existing service-health operations owner contains customer update templates for investigating/identified, monitoring/resolved, scheduled maintenance, and postmortem communications. The README now also distinguishes provider-owned publication from the app’s read projection and gives privacy constraints and evidence handoff. Templates provide usable wording but no completed incident/postmortem, approval, publication, or customer-delivery evidence.",
+            "verification": "read-only source/doc inspection; no incident or customer communication was published"
           }
         ],
         "historicalPinComparison": {
@@ -4397,19 +4434,19 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Provide actionable customer update and postmortem templates with audience, workaround, known status and next update fields.",
-        "implementationStatus": "no_implementation_found",
+        "remainingWork": "Use the templates with verified facts and accountable owners for each real incident; retain separately reviewed provider publication and delivery receipts. Do not treat template availability as proof of an incident response or published postmortem.",
+        "implementationStatus": "operator_templates_present_external_use_unqualified",
         "sourceReviewFindings": [
           {
             "path": "doc/operations/service-health/README.md",
-            "observedWorktreeSha256": "c0ef05c00b9d844fc39b6a30749c488c62e4b31f9c7197a16afaedaef6767131"
+            "observedWorktreeSha256": "38004ac19cdef34a29223e36db8446f6ec87b409e708e7b01a8a2e3f387a5b1c"
           },
           {
             "path": "server/src/services/experience/service-health.ts",
             "observedWorktreeSha256": "e7d8481bcf4a2a5300ea5db7a953df380e45d1a13f4acadb6b6fc4498be006f0"
           }
         ],
-        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification."
+        "reviewBasis": "Targeted source and document owner review in the shared dirty worktree on 2026-10-28. Hashes identify observed bytes at review time; they do not certify complete tests, external provider/domain operation, Human approval, or release qualification."
       }
     },
     {

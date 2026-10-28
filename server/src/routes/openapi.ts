@@ -1537,6 +1537,7 @@ const BOARD_ONLY_OPERATIONS = new Set([
   "GET /api/companies/{companyId}/members",
   "PATCH /api/companies/{companyId}/members/{memberId}",
   "PATCH /api/companies/{companyId}/members/{memberId}/role-and-grants",
+  "POST /api/companies/{companyId}/members/{memberId}/security-suspend",
   "POST /api/companies/{companyId}/members/{memberId}/archive",
   "PATCH /api/companies/{companyId}/members/{memberId}/permissions",
   "GET /api/companies/{companyId}/workflow-coverages",
@@ -1735,6 +1736,7 @@ const BOARD_ONLY_OPERATIONS = new Set([
 function requiresBoardSession(method: string, path: string): boolean {
   return path.startsWith("/api/companies/{companyId}/trust/") ||
     path.startsWith("/api/companies/{companyId}/workflow-coverages") ||
+    operationKey(method, path) === "POST /api/companies/{companyId}/members/{memberId}/security-suspend" ||
     operationKey(method, path) === "GET /api/companies/{companyId}/notices/action-required";
 }
 
@@ -7064,6 +7066,25 @@ registry.registerPath({
     200: r.ok(),
     400: r.badRequest,
     401: r.unauthorized,
+    404: r.notFound,
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/companies/{companyId}/members/{memberId}/security-suspend",
+  tags: ["access"],
+  summary: "Immediately suspend a company member for a security reason",
+  description: "Requires a current recent Human session and current company permission. This emergency action may suspend the last owner; ordinary member changes retain the sole-owner safeguard.",
+  request: {
+    params: z.object({ companyId: z.string(), memberId: z.string() }),
+    body: jsonBody(z.object({ reasonCode: z.enum(["suspected_compromise", "reported_loss", "policy_violation", "other"]) })),
+  },
+  responses: {
+    200: r.ok(),
+    400: r.badRequest,
+    401: r.unauthorized,
+    403: r.forbidden,
     404: r.notFound,
   },
 });

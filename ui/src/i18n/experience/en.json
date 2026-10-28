@@ -3886,7 +3886,7 @@
   },
   "humanWorkflowCoverage": {
     "title": "Temporary workflow coverage",
-    "intro": "Route one published workflow revision to another active Human for up to 30 days. Both people keep their own current permissions and Task access.",
+    "intro": "Let another active person start one published workflow version during a window of up to 30 days. Both people need their own current permissions and Task access.",
     "delegateTo": "Delegate to",
     "selectHuman": "Select an active Human",
     "workflow": "Workflow",

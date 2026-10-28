@@ -28,6 +28,12 @@ this application does not subscribe or contact anyone automatically.
 Configure the managed provider's account, approved public components, custom
 Blentera domain/brand, ownership/access and security/privacy contract. Verify:
 
+- named primary and backup provider-account operators; least-privilege roles
+  for incident creation/update/resolution and scheduled-maintenance publication;
+- provider audit history for who published or changed each incident and
+  maintenance notice, with retention/export and an escalation path if a
+  publisher account is compromised;
+
 - independent DNS/TLS and page access with the application/authentication down;
 - investigating → identified → monitoring → resolved lifecycle and update history;
 - scheduled maintenance window, customer impact and completion;
@@ -41,6 +47,27 @@ fixture or configured URL is not evidence that an account, domain, subscriber
 notification or published postmortem is operational. This change does not
 provision a provider account, publish incidents, send notifications, change
 DNS or claim those external gates have passed.
+
+### Publication and notification handoff
+
+The current product integration is a public read-only projection. It has no
+local incident editor, publisher role, incident audit ledger, subscriber list,
+notification preference, or delivery worker. The provider account is therefore
+the canonical publisher and subscriber-consent owner. Before a launch or an
+incident response depends on this path, the service owner records the named
+provider operators and their publishing roles, the provider's immutable audit
+entry for a test change, the account's subscriber-consent/unsubscribe controls,
+and a test delivery with timestamp and destination redacted to an approved
+evidence reference. Keep raw recipient addresses and provider credentials out
+of this repository.
+
+If the external provider is unavailable, use its documented manual-publication
+or failover procedure and record the operator, time, affected components,
+customer-safe update, and next-update commitment in the incident record. Do not
+report delivery success from a status-page link or from this app's public read
+projection. Until provider roles, audit, consent, delivery, export and failover
+are evidenced, the path remains operationally unqualified and the external
+status page is the source of truth.
 
 ## Customer communication templates
 

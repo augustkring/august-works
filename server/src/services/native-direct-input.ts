@@ -69,7 +69,8 @@ const nativeSourceMemoDiagnostics = { roots: 0, actorScopes: 0, nestedScopeReuse
   foundationSourceChecks: 0, foundationSourceCheckMs: 0,
   frozenTaskMemoByKind: {} as Record<string, { eligibleCalls: number; ineligibleCalls: number; hits: number; misses: number }>,
   byTransaction: {} as Record<string, { roots: number; actorScopes: number; hits: number; misses: number;
-    uncachedProofMs: number; maxUncachedProofMs: number; sourceKindMissCounts: Record<string, number> }>, byActor: {} as Record<string, {
+    uncachedProofMs: number; maxUncachedProofMs: number; sourceKindMissCounts: Record<string, number>;
+    opaqueProofKeys: Record<string, { hits: number; misses: number; elapsedMs: number; sourceKinds: string[] }> }>, byActor: {} as Record<string, {
     scopes: number; reuses: number; hits: number; misses: number;
   }> };
 function nativeSourceMemoDiagnosticsEnabled() { return process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS === "1"; }
@@ -85,7 +86,20 @@ function nativeSourceMemoTransactionStats(scope: NativeSourceReadScope) {
   if (!nativeSourceMemoDiagnosticsEnabled() || ordinal === undefined) return undefined;
   return nativeSourceMemoDiagnostics.byTransaction[String(ordinal)] ??=
     { roots: 0, actorScopes: 0, hits: 0, misses: 0, uncachedProofMs: 0, maxUncachedProofMs: 0,
-      sourceKindMissCounts: {} };
+      sourceKindMissCounts: {}, opaqueProofKeys: {} };
+}
+function nativeSourceMemoRecordOpaqueProof(scope: NativeSourceReadScope, proofKey: string,
+  event: "hit" | "miss", elapsedMs: number, sources: NativePayloadSourceInput[]) {
+  const stats = nativeSourceMemoTransactionStats(scope);
+  if (!stats) return;
+  let entry = stats.opaqueProofKeys[proofKey];
+  if (!entry) {
+    if (Object.keys(stats.opaqueProofKeys).length >= 128) return;
+    entry = stats.opaqueProofKeys[proofKey] = { hits: 0, misses: 0, elapsedMs: 0,
+      sourceKinds: [...new Set(sources.map(source => source.kind))].sort() };
+  }
+  entry[event] = Math.min(1_000_000, entry[event] + 1);
+  entry.elapsedMs = Math.min(1_000_000_000, entry.elapsedMs + elapsedMs);
 }
 function nativeSourceMemoCount(key: "scopes" | "reuses" | "hits" | "misses", actor: AuthorizationActor) {
   if (!nativeSourceMemoDiagnosticsEnabled()) return;
@@ -1639,7 +1653,7 @@ export async function canActorReadNativeTaskSource(db: Db | Transaction, input: 
     }
     if (!snapshot.data.inputs.some(source => source.kind === "worker_model_dispatch" || source.kind === "conversation_model_dispatch"))
       return null;
-    let phase: "task_source_currentness" | "effective_acl" = "task_source_currentness";
+    const diagnostic = { phase: "task_source_currentness" as "task_source_currentness" | "effective_acl" };
     try {
       return await withReadPinnedNativeTaskSnapshot(tx, input.actor, input.companyId, input.issueId,
         async (currentOwnerHash, currentSnapshotDigest) => {
@@ -1655,7 +1669,7 @@ export async function canActorReadNativeTaskSource(db: Db | Transaction, input: 
             sourceVersion: "snapshot-owner-current", contentHash: snapshot.data.owner.contentHash };
           await assertNativeTaskSourceInputCurrentInScope(tx, input.companyId, input.actor, source, scope);
         }
-        phase = "effective_acl";
+        diagnostic.phase = "effective_acl";
         const readable = await canActorReadIssuePrivacy(tx, input.actor, { id: input.issueId, companyId: input.companyId });
         if (!readable) nativeTaskSourceReadDiagnostic(tx, input.actor, input.companyId, input.issueId, "effective_acl_denied",
           { pinnedTemporalScopePresent: activeMemoryTemporalContexts(tx, input.actor, "issue", input.issueId) !== undefined,
@@ -1670,7 +1684,7 @@ export async function canActorReadNativeTaskSource(db: Db | Transaction, input: 
           return match ? [`${match[1]}:${match[2]}`] : [];
         }).slice(0, 4);
         nativeTaskSourceReadDiagnostic(tx, input.actor, input.companyId, input.issueId, "pinned_source_currentness_rejected",
-          { phase: phase === "effective_acl" ? 2 : 1, httpStatus: error.status,
+          { phase: diagnostic.phase === "effective_acl" ? 2 : 1, httpStatus: error.status,
             sourceFrames: frames.join(",") });
         return false;
       }
@@ -1697,6 +1711,7 @@ async function assertNativePayloadSourceSetCurrentInScope(db: Db | Transaction, 
   }, scope, true, completedTaskSourceProofs);
   const completeKey = `payload-source-set:${nativeSha256({ companyId: input.companyId, issueId: input.issueId,
     runId: input.runId, actor: input.actor, policy: policy.data, inputs: inputs.data })}`;
+  const opaqueProofKey = completeKey.slice("payload-source-set:".length);
   if (scope.active.has(completeKey)) throw forbidden("The Native source prefix contains a cycle");
   // Repeated exact components in a cumulative dispatch receipt are common.
   // Reuse only a completed proof in this same transaction. Reader/expiry ACLs
@@ -1705,6 +1720,7 @@ async function assertNativePayloadSourceSetCurrentInScope(db: Db | Transaction, 
     nativeSourceMemoCount("hits", input.actor);
     const txStats = nativeSourceMemoTransactionStats(scope);
     if (txStats) txStats.hits = Math.min(1_000_000, txStats.hits + 1);
+    nativeSourceMemoRecordOpaqueProof(scope, opaqueProofKey, "hit", 0, inputs.data);
     deferNativeSourceReaderCheck(scope, { companyId: input.companyId, actor: input.actor, runId: input.runId,
       policy: policy.data, inputs: inputs.data });
     return;
@@ -1727,7 +1743,11 @@ async function assertNativePayloadSourceSetCurrentInScope(db: Db | Transaction, 
       policy: policy.data, inputs: inputs.data });
   } finally {
     scope.active.delete(completeKey);
-    if (nativeSourceMemoDiagnosticsEnabled()) nativeSourceMemoRecordProofTime(proofStartedAt, scope);
+    if (nativeSourceMemoDiagnosticsEnabled()) {
+      const elapsed = Math.max(0, performance.now() - proofStartedAt);
+      nativeSourceMemoRecordProofTime(proofStartedAt, scope);
+      nativeSourceMemoRecordOpaqueProof(scope, opaqueProofKey, "miss", elapsed, inputs.data);
+    }
   }
 }
 

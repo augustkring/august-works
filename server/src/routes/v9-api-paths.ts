@@ -134,6 +134,10 @@ const workflowRunHeaders = z.strictObject({
   "Idempotency-Key": z.string().trim().min(1).max(200).optional(),
   "X-Human-Workflow-Coverage-Id": z.uuid().optional(),
 });
+const expectedHumanSessionHeaders = z.strictObject({
+  "X-Blentera-Expected-User": z.string().min(1).max(300).optional(),
+  "X-Blentera-Expected-Session": z.string().uuid().optional(),
+});
 const read = (
   path: string,
   summary: string,
@@ -179,14 +183,14 @@ export const v9ApiPaths: V9ApiOperation[] = [
     successStatus: 201, privateResponse: true, cacheControl: "private, no-store" },
   { ...read(`${company}/workflow-coverages`,
     "List temporary workflow routing involving the current Human; each exact workflow and Task remains subject to current authority",
-    z.strictObject({ coverages: z.array(humanWorkflowCoverageResultSchema) }), z.strictObject({})), cacheControl: "private, no-store" },
+    z.strictObject({ coverages: z.array(humanWorkflowCoverageResultSchema) }), z.strictObject({})), headers: expectedHumanSessionHeaders, cacheControl: "private, no-store" },
   { ...write(`${company}/workflow-coverages`,
     "Create bounded, idempotent Human routing for one exact published workflow revision and optional Task; no permission is copied",
     createHumanWorkflowCoverageSchema, humanWorkflowCoverageResultSchema, 201),
-    additionalSuccessStatuses: [200], query: z.strictObject({}), cacheControl: "private, no-store" },
+    additionalSuccessStatuses: [200], query: z.strictObject({}), headers: expectedHumanSessionHeaders, cacheControl: "private, no-store" },
   { method: "delete", path: `${company}/workflow-coverages/{coverageId}`,
     summary: "Revoke temporary workflow routing; a queued run must recheck this receipt before dispatch",
-    auth: "board", query: z.strictObject({}), result: humanWorkflowCoverageResultSchema,
+    auth: "board", query: z.strictObject({}), headers: expectedHumanSessionHeaders, result: humanWorkflowCoverageResultSchema,
     successStatus: 200, privateResponse: true, cacheControl: "private, no-store" },
   { ...read(`${company}/agent-package-installations/requests/{requestId}`, "Read the Original Human request binding and current Native installation metadata; absence stays unconfirmed and reading never installs, activates or grants access",
     packageInstallationRequestReceiptSchema, packageInstallationRequestQuerySchema), cacheControl: "private, no-store" },

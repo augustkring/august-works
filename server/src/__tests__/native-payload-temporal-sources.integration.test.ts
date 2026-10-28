@@ -8,13 +8,13 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { companyMemberships, contextManifestItems, createDb, documents, documentRevisions,
   heartbeatRuns, issueDocuments, issues, memoryJobs, memoryRecords, toolInvocations } from "@paperclipai/db";
 import { nativePayloadSourceSnapshotSchema } from "@paperclipai/shared";
-import { canActorReadIssuePrivacy } from "../services/authorization.js";
+import { activeMemoryTemporalContexts, canActorReadIssuePrivacy, withReadPinnedNativeTaskSnapshot } from "../services/authorization.js";
 import { issueService } from "../services/issues.js";
 import { memoryService } from "../services/memory/memory-service.js";
 import { memoryJobService } from "../services/memory/memory-jobs.js";
 import { assertNativeDocumentRevisionCurrentSourceAccess, assertNativeMemoryOutputSnapshotCurrent } from "../services/native-direct-input.js";
 import { lockAnalyticalCompany } from "../services/analytical-privacy.js";
-import { lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
+import { canActorReadMemorySources, lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
 import { managedOpenCodeRuntimeDirectory } from "../services/native-runtime/runtime-asset-retention.js";
 import { assertScopedNativeMemoryReplayReceiptCurrent } from "../services/tool-gateway.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
@@ -182,6 +182,24 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
   it("keeps earlier shared Memory A readable after the same run later reads private Context, while narrowing Memory B", async () => {
     const { first, second, memoryAId, memoryBId } = temporal;
     const memories = memoryService(db);
+    const [legacyPrivateRoot] = await db.select({ payloadSourceSnapshot: memoryRecords.payloadSourceSnapshot,
+      sourceIssueIds: memoryRecords.sourceIssueIds }).from(memoryRecords).where(and(
+      eq(memoryRecords.companyId, first.companyId), eq(memoryRecords.id, first.privateRootId!)));
+    expect(legacyPrivateRoot?.payloadSourceSnapshot).toBeNull();
+    expect(legacyPrivateRoot?.sourceIssueIds).toContain(first.privateRoot!.issueId);
+    const consumerScope = await db.transaction(async rawTx => {
+      const sourceDb = rawTx as unknown as typeof db;
+      return withReadPinnedNativeTaskSnapshot(sourceDb, second.aliceActor, first.companyId, temporal.taskBId,
+        async () => {
+          const inherited = activeMemoryTemporalContexts(sourceDb, second.aliceActor, "run", first.runId);
+          expect(inherited?.length).toBeGreaterThan(0);
+          expect(await canActorReadMemorySources(sourceDb, first.companyId, second.aliceActor, first.privateRootId!)).toBe(true);
+          expect(await canActorReadMemorySources(sourceDb, first.companyId, second.bobActor, first.privateRootId!)).toBe(false);
+          expect(activeMemoryTemporalContexts(sourceDb, second.aliceActor, "run", first.runId)).toEqual(inherited);
+          return true;
+        });
+    });
+    expect(consumerScope).toBe(true);
     expect((await memories.get(first.companyId, memoryAId, second.aliceMemoryActor))?.record.id).toBe(memoryAId);
     expect((await memories.get(first.companyId, memoryAId, second.bobMemoryActor))?.record.id).toBe(memoryAId);
     const [memoryA] = await db.select({ payloadSourceSnapshot: memoryRecords.payloadSourceSnapshot }).from(memoryRecords)

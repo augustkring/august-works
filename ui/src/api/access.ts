@@ -335,11 +335,15 @@ export const accessApi = {
     });
   },
 
-  createWorkflowCoverage: (companyId: string, input: CreateHumanWorkflowCoverage) =>
-    api.post<HumanWorkflowCoverage>(`/companies/${companyId}/workflow-coverages`, input),
+  createWorkflowCoverage: (companyId: string, input: CreateHumanWorkflowCoverage, expectedUserId: string, expectedSessionId: string) =>
+    api.post<HumanWorkflowCoverage>(`/companies/${companyId}/workflow-coverages`, input, {
+      headers: { "X-Blentera-Expected-User": expectedUserId, "X-Blentera-Expected-Session": expectedSessionId },
+    }),
 
-  revokeWorkflowCoverage: (companyId: string, coverageId: string) =>
-    api.delete<HumanWorkflowCoverage>(`/companies/${companyId}/workflow-coverages/${coverageId}`),
+  revokeWorkflowCoverage: (companyId: string, coverageId: string, expectedUserId: string, expectedSessionId: string) =>
+    api.delete<HumanWorkflowCoverage>(`/companies/${companyId}/workflow-coverages/${coverageId}`, undefined, {
+      headers: { "X-Blentera-Expected-User": expectedUserId, "X-Blentera-Expected-Session": expectedSessionId },
+    }),
 
   listUserDirectory: (companyId: string) =>
     api.get<CompanyUserDirectoryResponse>(`/companies/${companyId}/user-directory`),

@@ -420,7 +420,9 @@ describe("CompanyAccess", () => {
     expect(document.body.textContent).toContain("Remove member");
     expect(document.body.textContent).toContain("Assigned to removed user");
 
-    const reassignmentSelects = document.body.querySelectorAll("select");
+    const reassignmentSelects = Array.from(document.body.querySelectorAll("select")).filter((select) =>
+      select.querySelector('option[value="__unassigned"]'),
+    );
     expect(reassignmentSelects).toHaveLength(2);
     await act(async () => {
       reassignmentSelects[0]!.value = "user:user-2";

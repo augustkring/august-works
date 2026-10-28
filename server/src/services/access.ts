@@ -2,6 +2,7 @@ import { and, asc, desc, eq, ilike, inArray, isNull, ne, notInArray, or, sql } f
 import type { Db } from "@paperclipai/db";
 import {
   companyMemberships,
+  companies,
   humanWorkflowCoverages,
   activityLog,
   authUsers,
@@ -28,8 +29,10 @@ import { authorizationService, type AuthorizationActor, type AuthorizationResour
 import { ensureHumanRoleDefaultGrants } from "./principal-access-compatibility.js";
 import { routineService } from "./routines.js";
 import { isUniqueViolation } from "../db-errors.js";
+import { assertHumanAuthentication, assertPinnedAuthenticationDeadline } from "../auth/authenticator-assurance.js";
 
 type MembershipRow = typeof companyMemberships.$inferSelect;
+type AccessTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
 type GrantInput = {
   permissionKey: PermissionKey;
   scope?: Record<string, unknown> | null;
@@ -42,12 +45,24 @@ type MemberArchiveInput = {
   } | null;
   routineResponsibleUserId?: string | null;
 };
+const SECURITY_SUSPENSION_REASON_CODES = [
+  "suspected_compromise", "reported_loss", "policy_violation", "other", "enterprise_decommission",
+] as const;
 
 export function accessService(db: Db) {
   const authorization = authorizationService(db);
 
   function workflowCoverageActor(userId: string): AuthorizationActor {
     return { type: "board", source: "session", userId, ignoreInstanceAdmin: true };
+  }
+
+  async function humanCanRunWorkflow(tx: Parameters<Parameters<Db["transaction"]>[0]>[0], companyId: string, userId: string) {
+    const decision = await authorizationService(tx as unknown as Db).decide({
+      actor: workflowCoverageActor(userId),
+      action: "workflows:run",
+      resource: { type: "company", companyId },
+    });
+    return decision.allowed;
   }
 
   async function assertWorkflowCoverageHumanRights(input: {
@@ -523,6 +538,134 @@ export function accessService(db: Db) {
     return owned.length;
   }
 
+  async function clearCompanyResponsibleHuman(
+    tx: AccessTransaction,
+    companyId: string,
+    userId: string,
+    now: Date,
+  ) {
+    await tx.update(companies).set({ defaultResponsibleUserId: null, updatedAt: now }).where(and(
+      eq(companies.id, companyId), eq(companies.defaultResponsibleUserId, userId),
+    ));
+  }
+
+  async function prepareMemberForOffboardingInTransaction(
+    tx: AccessTransaction,
+    userId: string,
+    actorUserId: string | null,
+    now = new Date(),
+  ) {
+    const memberships = await tx.select({ companyId: companyMemberships.companyId, status: companyMemberships.status })
+      .from(companyMemberships).where(and(eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, userId)))
+      .orderBy(asc(companyMemberships.companyId)).for("update");
+    for (const membership of memberships) {
+      await sweepMemberConnectionAccess(tx, membership.companyId, userId, now);
+      await pauseActiveOwnedRoutinesForWithdrawal(tx, membership.companyId, userId, actorUserId);
+      await revokeWorkflowCoveragesForMember(tx, membership.companyId, userId, actorUserId, now);
+      await clearCompanyResponsibleHuman(tx, membership.companyId, userId, now);
+    }
+    // Also clear a stale explicit default if its membership row was already
+    // removed by an earlier offboarding attempt.
+    await tx.update(companies).set({ defaultResponsibleUserId: null, updatedAt: now })
+      .where(eq(companies.defaultResponsibleUserId, userId));
+  }
+
+  async function suspendMemberForSecurityInTransaction(
+    tx: AccessTransaction,
+    companyId: string,
+    memberId: string,
+    actor: AuthorizationActor,
+    reason: string,
+  ) {
+    if (!(SECURITY_SUSPENSION_REASON_CODES as readonly string[]).includes(reason)) {
+      throw forbidden("A recognized security-suspension reason is required.", { code: "security_suspension_reason_required" });
+    }
+    if (actor.type !== "board" || actor.source !== "session" || !actor.userId || !actor.sessionId) {
+      throw forbidden("A current Human session is required for security suspension.", { code: "security_suspension_session_required" });
+    }
+    const authentication = await assertHumanAuthentication(tx, actor, { requireRecent: true, phishingResistant: false });
+    const [targetSnapshot] = await tx.select({ principalId: companyMemberships.principalId }).from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, companyId), eq(companyMemberships.id, memberId),
+      eq(companyMemberships.principalType, "user"),
+    ));
+    if (!targetSnapshot) return null;
+    const principals = [...new Set([actor.userId, targetSnapshot.principalId])];
+    await tx.select({ id: authUsers.id }).from(authUsers).where(and(
+      inArray(authUsers.id, principals),
+      sql`not exists (select 1 from ${accountDeletionOperations} d where d.user_id=${authUsers.id})`,
+    )).orderBy(asc(authUsers.id)).for("share");
+    await tx.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.status, "active"), eq(companyMemberships.membershipRole, "owner"),
+    )).orderBy(asc(companyMemberships.principalId), asc(companyMemberships.id)).for("update");
+    const [targetMembership] = await tx.select().from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, companyId), eq(companyMemberships.id, memberId),
+      eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, targetSnapshot.principalId),
+    )).for("update");
+    if (!targetMembership) return null;
+    if (targetMembership.status === "archived") return null;
+    // Revalidate the proof and company permission after locks. Request actor
+    // membership snapshots are hints only; authorizationService reads live rows.
+    await assertPinnedAuthenticationDeadline(tx, authentication);
+    const decision = await authorizationService(tx as unknown as Db).decide({
+      actor: { ...actor, ignoreInstanceAdmin: true }, action: "users:manage_permissions",
+      resource: { type: "company", companyId },
+    });
+    if (!decision.allowed) throw forbidden("Current company permission is required for security suspension.", {
+      code: "security_suspension_company_permission_required", reason: decision.reason,
+    });
+    const [company] = await tx.select({ status: companies.status }).from(companies).where(eq(companies.id, companyId)).for("share");
+    if (company?.status !== "active") throw forbidden("The current company is unavailable.", { code: "company_unavailable" });
+    const [targetUser] = await tx.select({ id: authUsers.id }).from(authUsers).where(and(
+      eq(authUsers.id, targetMembership.principalId),
+      sql`not exists (select 1 from ${accountDeletionOperations} d where d.user_id=${authUsers.id})`,
+    )).for("share");
+    if (!targetUser) throw conflict("The target Human account is already unavailable.", { code: "member_account_unavailable" });
+
+    const now = new Date();
+    if (targetMembership.status === "suspended") {
+      await clearCompanyResponsibleHuman(tx, companyId, targetMembership.principalId, now);
+      const remainingOwners = await tx.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
+        eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+        eq(companyMemberships.status, "active"), eq(companyMemberships.membershipRole, "owner"),
+      ));
+      return { member: targetMembership, ownerRecoveryRequired: remainingOwners.length === 0, changed: false };
+    }
+    if (targetMembership.status === "active") {
+      await sweepMemberConnectionAccess(tx, companyId, targetMembership.principalId, now);
+      await pauseActiveOwnedRoutinesForWithdrawal(tx, companyId, targetMembership.principalId, actor.userId);
+      await revokeWorkflowCoveragesForMember(tx, companyId, targetMembership.principalId, actor.userId, now);
+    }
+    await tx.delete(principalPermissionGrants).where(and(
+      eq(principalPermissionGrants.companyId, companyId),
+      eq(principalPermissionGrants.principalType, "user"),
+      eq(principalPermissionGrants.principalId, targetMembership.principalId),
+    ));
+    await tx.update(companies).set({ defaultResponsibleUserId: null, updatedAt: now }).where(and(
+      eq(companies.id, companyId), eq(companies.defaultResponsibleUserId, targetMembership.principalId),
+    ));
+    const [updated] = await tx.update(companyMemberships).set({ status: "suspended", updatedAt: now })
+      .where(eq(companyMemberships.id, targetMembership.id)).returning();
+    const remainingOwners = targetMembership.membershipRole === "owner"
+      ? await tx.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
+        eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+        eq(companyMemberships.status, "active"), eq(companyMemberships.membershipRole, "owner"),
+      ))
+      : [true];
+    const ownerRecoveryRequired = remainingOwners.length === 0;
+    await tx.insert(activityLog).values({
+      companyId, actorType: "user", actorId: actor.userId, action: "company_member.security_suspended",
+      entityType: "company_membership", entityId: targetMembership.id,
+      details: { principalId: targetMembership.principalId, reason, ownerRecoveryRequired },
+    });
+    if (ownerRecoveryRequired) await tx.insert(activityLog).values({
+      companyId, actorType: "user", actorId: actor.userId, action: "company.owner_recovery_required",
+      entityType: "company", entityId: companyId,
+      details: { suspendedMembershipId: targetMembership.id, reasonCode: "last_owner_security_suspension" },
+    });
+    return { member: updated ?? targetMembership, ownerRecoveryRequired, changed: true };
+  }
+
   async function isInstanceAdmin(userId: string | null | undefined): Promise<boolean> {
     if (!userId) return false;
     const row = await db
@@ -656,6 +799,9 @@ export function accessService(db: Db) {
         eq(companyMemberships.companyId, companyId), eq(companyMemberships.id, memberId),
       )).for("update");
       if (!member) return null;
+      const now = new Date();
+      const hadWorkflowRun = member.principalType === "user" && member.status === "active" &&
+        await humanCanRunWorkflow(tx, companyId, member.principalId);
       await tx
         .delete(principalPermissionGrants)
         .where(
@@ -679,8 +825,10 @@ export function accessService(db: Db) {
           })),
         );
       }
-      await tx.update(companyMemberships).set({ permissionsInitializedAt: new Date(), updatedAt: new Date() })
+      await tx.update(companyMemberships).set({ permissionsInitializedAt: now, updatedAt: now })
         .where(eq(companyMemberships.id, member.id));
+      if (hadWorkflowRun && !(await humanCanRunWorkflow(tx, companyId, member.principalId)))
+        await revokeWorkflowCoveragesForMember(tx, companyId, member.principalId, grantedByUserId, now);
       return member;
     });
   }
@@ -717,6 +865,8 @@ export function accessService(db: Db) {
       const nextMembershipRole =
         data.membershipRole !== undefined ? data.membershipRole : existing.membershipRole;
       const nextStatus = data.status ?? existing.status;
+      const hadWorkflowRun = existing.principalType === "user" && existing.status === "active" &&
+        await humanCanRunWorkflow(tx, companyId, existing.principalId);
 
       if (
         existing.principalType === "user" &&
@@ -746,6 +896,7 @@ export function accessService(db: Db) {
         await sweepMemberConnectionAccess(tx, companyId, existing.principalId, now);
         await pauseActiveOwnedRoutinesForWithdrawal(tx, companyId, existing.principalId, grantedByUserId);
         await revokeWorkflowCoveragesForMember(tx, companyId, existing.principalId, grantedByUserId, now);
+        await clearCompanyResponsibleHuman(tx, companyId, existing.principalId, now);
       }
       const updated = await tx
         .update(companyMemberships)
@@ -782,6 +933,9 @@ export function accessService(db: Db) {
           })),
         );
       }
+      if (hadWorkflowRun && nextStatus === "active" &&
+        !(await humanCanRunWorkflow(tx, companyId, existing.principalId)))
+        await revokeWorkflowCoveragesForMember(tx, companyId, existing.principalId, grantedByUserId, now);
 
       return updated;
     });
@@ -923,6 +1077,7 @@ export function accessService(db: Db) {
       const now = new Date();
       await sweepMemberConnectionAccess(tx, companyId, existing.principalId, now);
       await revokeWorkflowCoveragesForMember(tx, companyId, existing.principalId, actorUserId, now);
+      await clearCompanyResponsibleHuman(tx, companyId, existing.principalId, now);
       const assignmentPatch = {
         assigneeAgentId: input.reassignment?.assigneeAgentId ?? null,
         assigneeUserId: input.reassignment?.assigneeUserId ?? null,
@@ -1142,6 +1297,7 @@ export function accessService(db: Db) {
             options.actorUserId,
           );
           await revokeWorkflowCoveragesForMember(tx, membership.companyId, membership.principalId, options.actorUserId ?? null, now);
+          await clearCompanyResponsibleHuman(tx, membership.companyId, membership.principalId, now);
         }
         await tx
           .update(companyMemberships)
@@ -1483,6 +1639,14 @@ export function accessService(db: Db) {
         or(eq(humanWorkflowCoverages.principalUserId, userId), eq(humanWorkflowCoverages.delegateeUserId, userId))));
   }
 
+  async function revokeAllWorkflowCoveragesForRestore(
+    tx: Parameters<Parameters<Db["transaction"]>[0]>[0],
+    now = new Date(),
+  ) {
+    await tx.update(humanWorkflowCoverages).set({ revokedAt: now, revokedByUserId: null })
+      .where(isNull(humanWorkflowCoverages.revokedAt));
+  }
+
   async function authorizeWorkflowCoverage(input: {
     tx: Parameters<Parameters<Db["transaction"]>[0]>[0];
     companyId: string;
@@ -1528,6 +1692,8 @@ export function accessService(db: Db) {
       const nextMembershipRole =
         data.membershipRole !== undefined ? data.membershipRole : existing.membershipRole;
       const nextStatus = data.status ?? existing.status;
+      const hadWorkflowRun = existing.principalType === "user" && existing.status === "active" &&
+        await humanCanRunWorkflow(tx, companyId, existing.principalId);
 
       if (
         existing.principalType === "user" &&
@@ -1561,9 +1727,9 @@ export function accessService(db: Db) {
         await sweepMemberConnectionAccess(tx, companyId, existing.principalId, now);
         await pauseActiveOwnedRoutinesForWithdrawal(tx, companyId, existing.principalId, actorUserId);
         await revokeWorkflowCoveragesForMember(tx, companyId, existing.principalId, actorUserId, now);
+        await clearCompanyResponsibleHuman(tx, companyId, existing.principalId, now);
       }
-
-      return tx
+      const updated = await tx
         .update(companyMemberships)
         .set({
           membershipRole: nextMembershipRole,
@@ -1573,6 +1739,10 @@ export function accessService(db: Db) {
         .where(eq(companyMemberships.id, existing.id))
         .returning()
         .then((rows) => rows[0] ?? existing);
+      if (hadWorkflowRun && nextStatus === "active" &&
+        !(await humanCanRunWorkflow(tx, companyId, existing.principalId)))
+        await revokeWorkflowCoveragesForMember(tx, companyId, existing.principalId, actorUserId, now);
+      return updated;
     });
   }
 
@@ -1601,9 +1771,14 @@ export function accessService(db: Db) {
     listPrincipalGrants,
     setPrincipalPermission,
     updateMember,
+    prepareMemberForOffboardingInTransaction,
+    suspendMemberForSecurityInTransaction,
+    suspendMemberForSecurity: (companyId: string, memberId: string, actor: AuthorizationActor, reason: string) =>
+      db.transaction((tx) => suspendMemberForSecurityInTransaction(tx, companyId, memberId, actor, reason)),
     createWorkflowCoverage,
     listWorkflowCoverages,
     revokeWorkflowCoverage,
+    revokeAllWorkflowCoveragesForRestore,
     authorizeWorkflowCoverage,
   };
 }

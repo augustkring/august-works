@@ -5,6 +5,8 @@ import { and, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   activityLog,
+  authSessions,
+  authUsers,
   agents,
   companies,
   companyMemberships,
@@ -19,6 +21,7 @@ import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
+import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 
 vi.hoisted(() => {
   process.env.PAPERCLIP_HOME = "/tmp/paperclip-test-home";
@@ -32,7 +35,7 @@ const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : 
 
 type Db = ReturnType<typeof createDb>;
 
-async function createApp(db: Db, companyId: string, userId: string) {
+async function createApp(db: Db, companyId: string, userId: string, sessionId?: string) {
   process.env.PAPERCLIP_LOG_DIR = "/tmp/paperclip-test-home/logs";
   process.env.PAPERCLIP_IN_WORKTREE = "false";
   const { accessRoutes } = await import("../routes/access.js");
@@ -42,7 +45,8 @@ async function createApp(db: Db, companyId: string, userId: string) {
     req.actor = {
       type: "board",
       userId,
-      source: "local_implicit",
+      source: sessionId ? "session" : "local_implicit",
+      ...(sessionId ? { sessionId } : {}),
       companyIds: [companyId],
       memberships: [{ companyId, membershipRole: "owner", status: "active" }],
       isInstanceAdmin: true,
@@ -132,6 +136,40 @@ describeEmbeddedPostgres("access routes permissions upgrade compatibility", () =
       .then((rows) => rows[0]!);
     expect(unchanged.membershipRole).toBe("owner");
   }, 10_000);
+
+  it("allows an explicitly authorized recent Human to security-suspend the last owner and records owner recovery", async () => {
+    const { company, owner } = await createCompanyWithOwner(db);
+    const actorId = `continuity-admin-${randomUUID()}`;
+    const actor = await seedCurrentHumanSourceActor(db, [company.id], actorId);
+    await db.update(companyMemberships).set({ membershipRole: "admin" }).where(eq(companyMemberships.principalId, actorId));
+    await db.insert(authUsers).values({
+      id: owner.principalId, name: "Last owner", email: `${owner.principalId}@fixture.invalid`,
+      emailVerified: true, createdAt: new Date(), updatedAt: new Date(),
+    });
+    await db.update(companies).set({ defaultResponsibleUserId: owner.principalId }).where(eq(companies.id, company.id));
+
+    const response = await request(await createApp(db, company.id, actorId, actor.sessionId!))
+      .post(`/api/companies/${company.id}/members/${owner.id}/security-suspend`)
+      .send({ reasonCode: "suspected_compromise" });
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    expect(response.body).toMatchObject({ ownerRecoveryRequired: true, member: { id: owner.id, status: "suspended" } });
+    expect(await db.select({ defaultResponsibleUserId: companies.defaultResponsibleUserId }).from(companies).where(eq(companies.id, company.id)))
+      .toEqual([{ defaultResponsibleUserId: null }]);
+    expect(await db.select({ action: activityLog.action }).from(activityLog).where(and(
+      eq(activityLog.companyId, company.id), eq(activityLog.action, "company.owner_recovery_required"),
+    ))).toHaveLength(1);
+
+    const localAttempt = await request(await createApp(db, company.id, actorId))
+      .post(`/api/companies/${company.id}/members/${owner.id}/security-suspend`)
+      .send({ reasonCode: "other" });
+    expect(localAttempt.status).toBe(403);
+    await db.update(authSessions).set({ authenticatedAt: new Date(Date.now() - 301_000) })
+      .where(eq(authSessions.id, actor.sessionId!));
+    const staleAttempt = await request(await createApp(db, company.id, actorId, actor.sessionId!))
+      .post(`/api/companies/${company.id}/members/${owner.id}/security-suspend`)
+      .send({ reasonCode: "other" });
+    expect(staleAttempt.status).toBe(403);
+  }, 20_000);
 
   it("does not let local implicit administrator access read, create, or revoke Human workflow coverage", async () => {
     const { company, owner } = await createCompanyWithOwner(db);

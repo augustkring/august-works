@@ -702,7 +702,8 @@ async function nativeIssuePrivacyDiagnosticQuery<T>(db: Db | DbTransaction, acto
       nativeIssuePrivacyDiagnosticStatements += 1;
       let plan: Record<string, unknown> | null = null;
       let observedSettings: Record<string, unknown> | null = null;
-      if (stage === "effective_acl" && nativeIssuePrivacyDiagnosticObservedSettings.size < 32 &&
+      const explainDiagnosticsEnabled = process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_EXPLAIN_DIAGNOSTICS === "1";
+      if (explainDiagnosticsEnabled && stage === "effective_acl" && nativeIssuePrivacyDiagnosticObservedSettings.size < 32 &&
           !nativeIssuePrivacyDiagnosticObservedSettings.has(`${actorSource}:${caller}`)) {
         nativeIssuePrivacyDiagnosticObservedSettings.add(`${actorSource}:${caller}`);
         try {
@@ -715,7 +716,7 @@ async function nativeIssuePrivacyDiagnosticQuery<T>(db: Db | DbTransaction, acto
         }
       }
       const planKey = `${stage}:${actorSource}:${caller}`;
-      if (succeeded && elapsedMs >= 100 && nativeIssuePrivacyDiagnosticPlans.size < 8 &&
+      if (explainDiagnosticsEnabled && succeeded && elapsedMs >= 100 && nativeIssuePrivacyDiagnosticPlans.size < 8 &&
           !nativeIssuePrivacyDiagnosticPlans.has(planKey)) {
         nativeIssuePrivacyDiagnosticPlans.add(planKey);
         try {
@@ -2118,6 +2119,16 @@ export async function withReadPinnedNativeTaskSnapshot<T>(db: Db | DbTransaction
     actorKey: routineActorKey(actor), issueIds, runIds: new Set(runIds), contextIds: [...new Set(contextIds)].sort(), active: true };
   try { return await memoryTemporalReadScopes.run(scope, () => read(snapshot.data.owner.contentHash, snapshot.data.digest)); }
   finally { scope.active = false; }
+}
+
+/** A nested Memory source owner with no captured Context prefix must use its
+ * ordinary current source policy. Temporarily shadow only a matching outer
+ * reader scope; never mutate the parent's active flag or supply Context IDs. */
+export async function withUnscopedMemorySourceReader<T>(db: Db | DbTransaction, actor: AuthorizationActor,
+  read: (sourceDb: Db | DbTransaction) => Promise<T>): Promise<T> {
+  const parent = memoryTemporalReadScopes.getStore();
+  if (!parent?.active || parent.db !== (db as object) || parent.actorKey !== routineActorKey(actor)) return read(db);
+  return memoryTemporalReadScopes.run({ ...parent, active: false }, () => read(db));
 }
 
 export function activeMemoryTemporalContexts(db: Db | DbTransaction, actor: AuthorizationActor,

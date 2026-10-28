@@ -321,6 +321,55 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
   const systemText = typeof system === "string" ? system : Array.isArray(system) && system.every((part) =>
     managedRecord(part).type === "text" && typeof managedRecord(part).text === "string")
     ? (system as Array<{ text: string }>).map((part) => part.text).join("") : null;
+  const systemParts = Array.isArray(system) && system.every((part) =>
+    managedRecord(part).type === "text" && typeof managedRecord(part).text === "string")
+    ? (system as Array<{ text: string }>).map((part) => part.text) : null;
+  const receiptData = receipt.success ? receipt.data : null;
+  const promptHashesValid = Array.isArray(prompts) && prompts.length > 0 && prompts.length <= 64 &&
+    prompts.every((value) => typeof value === "string" && /^[0-9a-f]{64}$/.test(value));
+  const promptBindingsValid = Array.isArray(promptSourceBindings) && Array.isArray(prompts) &&
+    promptSourceBindings.length === prompts.length && promptSourceBindings.every((value) =>
+      typeof managedRecord(value).promptHash === "string" && /^[0-9a-f]{64}$/.test(managedRecord(value).promptHash as string) &&
+      typeof managedRecord(value).sourceSetHash === "string" && /^[0-9a-f]{64}$/.test(managedRecord(value).sourceSetHash as string));
+  const bootstrapInputs = receiptData?.bootstrap.inputs ?? [];
+  const sourceClosureChecks = {
+    currentRun: Boolean(run),
+    authorityVersion: authority.version === 1,
+    receiptValid: receipt.success,
+    toolSchemasPresent: Array.isArray(schemas),
+    promptHashesValid,
+    promptBindingsValid,
+    executionInputCurrent: authority.executionInputHash === nativeSha256(profile.nativeExecutionInput),
+    toolSchemasCurrent: Array.isArray(authority.toolSchemas) && authority.toolSchemasHash === nativeSha256(schemas),
+    systemInstructionsPresent: typeof authority.systemInstructionsHash === "string" && systemText !== null,
+    systemInstructionsCurrent: systemText !== null && nativeSha256(systemText) === authority.systemInstructionsHash,
+    receiptCompanyBound: receiptData?.binding.companyId === claims.company_id,
+    receiptRunBound: receiptData?.binding.runId === claims.run_id,
+    receiptAgentBound: receiptData?.binding.agentId === claims.sub,
+    receiptHumanBound: receiptData?.binding.responsibleUserId === claims.responsible_user_id,
+    taskSourcePresent: bootstrapInputs.some((source) => source.kind === "task"),
+    completionContractPresent: bootstrapInputs.some((source) => source.kind === "completion_contract"),
+    runtimeInstructionsPresent: bootstrapInputs.some((source) => source.kind === "runtime_instructions"),
+    workspaceMetadataPresent: bootstrapInputs.some((source) => source.kind === "workspace_metadata"),
+  };
+  if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1" &&
+    Object.values(sourceClosureChecks).some((passed) => !passed)) {
+    console.warn("managed_model_source_closure_diagnostic", {
+      runId: claims.run_id,
+      failedChecks: Object.entries(sourceClosureChecks).filter(([, passed]) => !passed).map(([name]) => name),
+      systemShape: typeof system === "string" ? "string" : systemParts ? "text_blocks" : "other",
+      systemBlockCount: systemParts?.length ?? 0,
+      systemTextVariants: systemText === null ? null : {
+        raw: nativeSha256(systemText) === authority.systemInstructionsHash,
+        trimmed: nativeSha256(systemText.trim()) === authority.systemInstructionsHash,
+        trimmedEnd: nativeSha256(systemText.trimEnd()) === authority.systemInstructionsHash,
+        lfNormalized: nativeSha256(systemText.replace(/\r\n/g, "\n")) === authority.systemInstructionsHash,
+        blocksJoinedByNewline: systemParts !== null && nativeSha256(systemParts.join("\n")) === authority.systemInstructionsHash,
+        blocksJoinedByParagraph: systemParts !== null && nativeSha256(systemParts.join("\n\n")) === authority.systemInstructionsHash,
+        blocksJoinedBySpace: systemParts !== null && nativeSha256(systemParts.join(" ")) === authority.systemInstructionsHash,
+      },
+    });
+  }
   if (!run || authority.version !== 1 || !receipt.success || !Array.isArray(schemas) || !Array.isArray(prompts) ||
     prompts.length === 0 || prompts.length > 64 || prompts.some((value) => typeof value !== "string" || !/^[0-9a-f]{64}$/.test(value)) ||
     !Array.isArray(promptSourceBindings) || promptSourceBindings.length !== prompts.length ||
@@ -422,6 +471,35 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
         if (block.type === "text") {
           const promptHash = typeof block.text === "string" ? nativeSha256(block.text) : "";
           const promptBindings = promptSourceBindings.map(managedRecord).filter((binding) => binding.promptHash === promptHash);
+          if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1" &&
+            (typeof block.text !== "string" || !prompts.includes(promptHash) || promptBindings.length !== 1)) {
+            let actualPromptIsJson = false;
+            let compactJsonMatchesAuthorizedPrompt = false;
+            if (typeof block.text === "string") {
+              try {
+                const parsedPrompt = JSON.parse(block.text) as unknown;
+                actualPromptIsJson = true;
+                compactJsonMatchesAuthorizedPrompt = Array.isArray(prompts) &&
+                  prompts.includes(nativeSha256(JSON.stringify(parsedPrompt)));
+              } catch { /* content-free diagnostic only */ }
+            }
+            console.warn("managed_model_prompt_receipt_diagnostic", {
+              runId: claims.run_id,
+              messageContentKind: typeof message.content === "string" ? "string" : Array.isArray(message.content) ? "blocks" : "other",
+              blockType: block.type,
+              blockTextPresent: typeof block.text === "string",
+              blockTextLength: typeof block.text === "string" ? block.text.length : null,
+              actualPromptHash: promptHash || null,
+              actualPromptIsJson,
+              compactJsonMatchesAuthorizedPrompt,
+              authorizedPromptCount: Array.isArray(prompts) ? prompts.length : null,
+              expectedPromptHash: Array.isArray(prompts) && prompts.length === 1 && typeof prompts[0] === "string"
+                ? prompts[0] : null,
+              matchingAuthorizedPrompt: Array.isArray(prompts) && prompts.includes(promptHash),
+              matchingPromptBindingCount: promptBindings.length,
+              promptBindingCount: Array.isArray(promptSourceBindings) ? promptSourceBindings.length : null,
+            });
+          }
           if (typeof block.text !== "string" || !prompts.includes(promptHash) || promptBindings.length !== 1)
             throw forbidden("Managed OpenCode user history is outside the current server-owned prompt receipts");
           const bindingHash = promptBindings[0]!.sourceSetHash;
