@@ -3886,6 +3886,20 @@
       "when": 1793071801521,
       "tag": "0556_customer_operation_expired_lease_recovery",
       "breakpoints": true
+    },
+    {
+      "idx": 557,
+      "version": "7",
+      "when": 1793173128463,
+      "tag": "0557_dear_forgotten_one",
+      "breakpoints": true
+    },
+    {
+      "idx": 558,
+      "version": "7",
+      "when": 1793176800000,
+      "tag": "0558_better_auth_issuer_compatibility",
+      "breakpoints": true
     }
   ]
 }

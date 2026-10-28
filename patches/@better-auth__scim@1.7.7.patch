@@ -1,5 +1,4 @@
 diff --git a/dist/index.mjs b/dist/index.mjs
-index f96a0588ae9d4a25d04fc8682fd1caacaf36fc31..52891756e1813eb88ef96c0c181de06acd873203 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
 @@ -4222,7 +4222,9 @@ function createSCIMIdentityCoordinator(options) {

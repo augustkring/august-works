@@ -35,11 +35,6 @@ const ORIGIN = "http://127.0.0.1:41999";
 const EMAIL = "founder@example.com";
 const PASSWORD = "correct-horse-battery-staple";
 
-// The issuer Better Auth stamps on an email/password account:
-// `createLocalAccountIssuer("credential")`. Sign-in matches on it, so a row
-// written with anything else is a row nobody can sign in as.
-const CREDENTIAL_ISSUER = "local:credential";
-
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
 
@@ -132,7 +127,7 @@ describeEmbeddedPostgres("Better Auth credential sign-up against the real schema
     expect(accounts).toHaveLength(1);
     expect(accounts[0]).toMatchObject({
       providerId: "credential",
-      issuer: CREDENTIAL_ISSUER,
+      issuer: null,
     });
     expect(accounts[0]?.password).toBeTruthy();
 
@@ -231,7 +226,7 @@ describeEmbeddedPostgres("Better Auth credential sign-up against the real schema
     const userId = randomUUID(), email = `legacy-${userId}@example.test`, password = "old-short";
     const now = new Date();
     await db.insert(authUsers).values({ id: userId, name: "Existing account", email, emailVerified: true, createdAt: now, updatedAt: now });
-    await db.insert(authAccounts).values({ id: randomUUID(), issuer: CREDENTIAL_ISSUER, providerId: "credential",
+    await db.insert(authAccounts).values({ id: randomUUID(), providerId: "credential",
       accountId: userId, userId, password: await hashPassword(password), createdAt: now, updatedAt: now });
     const signIn = () => request(app).post("/api/auth/sign-in/email").set("Origin", ORIGIN).send({ email, password });
     const signedIn = await signIn(); expect(signedIn.status).toBe(200);

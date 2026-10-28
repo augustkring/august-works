@@ -48,18 +48,16 @@ export const authSessions = pgTable("session", {
  * `The field "<name>" does not exist in the "account" Drizzle schema`
  * when one is missing, which surfaces as a 500 on sign-up.
  *
- * `issuer` is the account namespace Better Auth 1.7 added. It is
- * `local:credential` for email/password accounts and
- * `local:oauth:<providerId>` for social accounts that do not declare an
- * issuer of their own, and it pairs with `account_id` as the stable
- * provider-side key — hence the unique index, which mirrors the
- * `(issuer, accountId)` unique index Better Auth declares on the model.
+ * `issuer` was required by Better Auth 1.7.0–1.7.2. Better Auth 1.7.3+
+ * identifies accounts by `(provider_id, account_id)` and no longer writes
+ * this field. Keep the legacy column nullable while existing rows are
+ * retained; new rows do not depend on it.
  */
 export const authAccounts = pgTable(
   "account",
   {
     id: text("id").primaryKey(),
-    issuer: text("issuer").notNull(),
+    issuer: text("issuer"),
     accountId: text("account_id").notNull(),
     providerId: text("provider_id").notNull(),
     userId: text("user_id").notNull().references(() => authUsers.id, { onDelete: "cascade" }),
@@ -74,7 +72,7 @@ export const authAccounts = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
   },
   (table) => ({
-    issuerAccountIdUq: uniqueIndex("account_issuer_account_id_uq").on(table.issuer, table.accountId),
+    providerAccountIdUq: uniqueIndex("account_provider_account_id_uq").on(table.providerId, table.accountId),
   }),
 );
 

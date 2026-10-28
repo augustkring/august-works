@@ -314,6 +314,8 @@ export const enterpriseAuthoritySchemaPlugin: BetterAuthPlugin = {
         status: "string",
         configuration: "json",
         qualification: "json",
+        operatingEnvelope: "json",
+        createdByUserId: "string",
         scimTokenHash: "string",
         scimCredentialId: "string",
         scimExpiresAt: "date",
@@ -328,6 +330,7 @@ export const enterpriseAuthoritySchemaPlugin: BetterAuthPlugin = {
         userId: "string",
         status: "string",
         managedMembership: "boolean",
+        createdByUserId: "string",
       }),
     },
     awCompanyMembership: {
@@ -345,6 +348,7 @@ export const enterpriseAuthoritySchemaPlugin: BetterAuthPlugin = {
         companyId: "string",
         principalId: "string",
         principalType: "string",
+        permissionKey: "string",
       }),
     },
     awActivity: {
