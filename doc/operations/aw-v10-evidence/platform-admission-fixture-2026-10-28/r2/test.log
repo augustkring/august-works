@@ -1,0 +1,12 @@
+
+ RUN  v4.1.11 /workspace/blentera-v10/server
+
+[13:01:53] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAUTHORIZED","reason":"deny_missing_grant","action":"workflows:edit","resourceType":"company","companyId":"a038551a-2b21-49a0-967f-94c08b815424","actorAgentId":"f5b1bc7c-accb-48a6-9fd5-e1ec8e99fefe","responsibleUserId":"user-c390d207-951d-437a-901b-494804630479"}[39m
+[13:01:53] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAUTHORIZED","reason":"deny_missing_grant","action":"workflows:edit","resourceType":"company","companyId":"5a2cb474-6b64-4b57-b839-24c5321eab83","actorAgentId":"8a4e5e92-8152-4867-95c8-5585a513c314","responsibleUserId":"user-a18d3ea4-0e2b-40d2-971b-75a8e081cc81"}[39m
+[13:01:53] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAUTHORIZED","reason":"deny_missing_grant","action":"workflows:edit","resourceType":"company","companyId":"43e751e3-1f00-4623-8c7f-876597ac1de1","actorAgentId":"0dd77067-851c-4389-b9e7-b6f85b340135","responsibleUserId":"user-6337dd38-8a12-46e1-a244-b693c59c50ae"}[39m
+
+ Test Files  3 passed (3)
+      Tests  43 passed (43)
+   Start at  13:00:47
+   Duration  90.30s (transform 13.86s, setup 224ms, import 28.00s, tests 61.65s, environment 0ms)
+

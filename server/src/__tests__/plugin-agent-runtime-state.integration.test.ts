@@ -17,6 +17,8 @@ import { companySkillService } from "../services/company-skills.js";
 import { skillLifecycleService } from "../services/skill-lifecycle.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { pluginAgentConnectionAssignments } from "../services/plugin-agent-connections.js";
+import { preparePlatformSkillAdmission } from "../services/platform-skill-admission.js";
+import { blenteraPlatformContractHashes } from "../services/tool-gateway.js";
 import { PROVIDER_CAPABILITY_FEATURES } from "@paperclipai/shared";
 import type { AuthorizationActor } from "../services/authorization.js";
 
@@ -180,13 +182,18 @@ describePostgres("plugin agent runtime state authorization", () => {
       companyId: home, agentId, status: "running", runtimeMode: "native", responsibleUserId: userId,
       startedAt: new Date(), invocationSource: "on_demand",
     }).returning();
+    await preparePlatformSkillAdmission(db, { companyId: home, agentId, runId: run!.id,
+      responsibleUserId: userId, requireExisting: false }, blenteraPlatformContractHashes());
     await agentRuntimeFabricService(db).prepare({
       companyId: home, agentId, runId: run!.id, responsibleUserId: userId, issueId: null, query: "Prepare runtime pin fixture",
     });
     const state = await pluginAgentRuntimeState(db, pluginId, home, agentId);
     expect(state).toMatchObject({
       agent: { id: agentId }, skillsReady: true,
-      skills: [expect.objectContaining({ key: skill.key, versionId: pinnedVersionId, currentVersionId: pinnedVersionId, sourceStatus: "available" })],
+      skills: expect.arrayContaining([
+        expect.objectContaining({ key: "blentera-platform", sourceStatus: "available" }),
+        expect.objectContaining({ key: skill.key, versionId: pinnedVersionId, currentVersionId: pinnedVersionId, sourceStatus: "available" }),
+      ]),
     });
     const candidate = await skillLifecycleService(db).propose(humanActor, home, skill.id, {
       baseActiveVersionId: pinnedVersionId!, markdown: "# Runtime pin fixture\n\nPromoted after this run started.\n",
@@ -202,7 +209,10 @@ describePostgres("plugin agent runtime state authorization", () => {
     const afterDesiredChange = await pluginAgentRuntimeState(db, pluginId, home, agentId);
     expect(afterDesiredChange).toMatchObject({
       skillsReady: true,
-      skills: [expect.objectContaining({ key: skill.key, versionId: pinnedVersionId, currentVersionId: promotedVersionId })],
+      skills: expect.arrayContaining([
+        expect.objectContaining({ key: "blentera-platform", sourceStatus: "available" }),
+        expect.objectContaining({ key: skill.key, versionId: pinnedVersionId, currentVersionId: promotedVersionId }),
+      ]),
     });
     await db.update(companySkills).set({ ownerAgentId: null }).where(eq(companySkills.id, skill.id));
     await expect(pluginAgentRuntimeState(db, pluginId, home, agentId)).rejects.toThrow(/pinned Skill is no longer authorized/);

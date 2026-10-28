@@ -21,6 +21,9 @@ import {
 } from "@paperclipai/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
+import { seedCurrentHumanSourceActor } from "../../__tests__/helpers/current-human-source-fixture.js";
+import { preparePlatformSkillAdmission } from "../platform-skill-admission.js";
+import { blenteraPlatformContractHashes } from "../tool-gateway.js";
 import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
 import { stageNativeRunnerAttachmentBytes } from "./native-runner-file-handoff.js";
 import {
@@ -44,6 +47,7 @@ describe("native external chat workspace boundary", () => {
   const conversationIssue = "01000000-0000-4000-8000-000000000007";
   const conversationRun = "01000000-0000-4000-8000-000000000008";
   const conversationUserId = "user-native-chat-owner";
+  const taskOwnerUserId = "user-native-task-owner";
   const scopeInput = (issueId: string) => ({
     adapterType: "paperclip_runner",
     environmentDriver: "local",
@@ -69,6 +73,8 @@ describe("native external chat workspace boundary", () => {
       issuePrefix: "NCW",
       issueCounter: 3,
     });
+    await seedCurrentHumanSourceActor(db, [companyId], conversationUserId);
+    await seedCurrentHumanSourceActor(db, [companyId], taskOwnerUserId);
     await db.insert(agents).values({
       id: agentId,
       companyId,
@@ -92,6 +98,7 @@ describe("native external chat workspace boundary", () => {
       id: runB,
       companyId,
       agentId,
+      responsibleUserId: taskOwnerUserId,
       nativeIssueId: issueB,
       runtimeMode: "native",
       status: "running",
@@ -103,6 +110,8 @@ describe("native external chat workspace boundary", () => {
       .update(issues)
       .set({ executionRunId: runB })
       .where(eq(issues.id, issueB));
+    await preparePlatformSkillAdmission(db, { companyId, agentId, runId: runB,
+      responsibleUserId: taskOwnerUserId, requireExisting: false }, blenteraPlatformContractHashes());
     await db.insert(issues).values({
       id: conversationIssue,
       companyId,
@@ -176,7 +185,7 @@ describe("native external chat workspace boundary", () => {
     );
   });
 
-  it("leaves ordinary Board tasks, legacy adapters, and remote sandbox realization unchanged", async () => {
+  it("keeps ordinary Board tasks and legacy adapters out while resolving chat scope for sandbox execution", async () => {
     expect(
       await findNativeChatWorkspaceScope(db, scopeInput(boardIssue)),
     ).toBeNull();
@@ -186,12 +195,10 @@ describe("native external chat workspace boundary", () => {
         adapterType: "codex_local",
       }),
     ).toBeNull();
-    expect(
-      await findNativeChatWorkspaceScope(db, {
-        ...scopeInput(issueA),
-        environmentDriver: "sandbox",
-      }),
-    ).toBeNull();
+    expect(await findNativeChatWorkspaceScope(db, {
+      ...scopeInput(issueA),
+      environmentDriver: "sandbox",
+    })).toMatchObject({ companyId, agentId, issueId: issueA });
     await expect(
       findNativeChatWorkspaceScope(db, {
         ...scopeInput(issueA),

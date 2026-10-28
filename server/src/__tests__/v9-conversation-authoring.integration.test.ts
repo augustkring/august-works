@@ -10,6 +10,8 @@ import { ExperienceOverloadError } from "../services/experience/projection.js";
 import { issueService } from "../services/issues.js";
 import { issueThreadInteractionService } from "../services/issue-thread-interactions.js";
 import { PaperclipRunnerToolAuthority } from "../services/native-runtime/paperclip-runner-tool-authority.js";
+import { preparePlatformSkillAdmission } from "../services/platform-skill-admission.js";
+import { blenteraPlatformContractHashes } from "../services/tool-gateway.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
@@ -20,6 +22,10 @@ describe("Current conversation previews use actual Original authoring revisions"
   const view = () => conversationAuthoringService(db).get(f.actor, f.home, conversation.id);
   const tools = () => workflowAuthoringToolsService(db);
   const context = () => ({ companyId: f.home, agentId: f.presence.id, runId: run.id });
+  async function admitNativeRun() {
+    await preparePlatformSkillAdmission(db, { companyId: f.home, agentId: f.presence.id, runId: run.id,
+      responsibleUserId: f.userId, requireExisting: false }, blenteraPlatformContractHashes());
+  }
   beforeAll(async () => {
     database = await startEmbeddedPostgresTestDatabase("aw-v9-conversation-authoring-"); db = createDb(database.connectionString);
     await instanceSettingsService(db).getExperimental(); await enableV5ForTest(db);
@@ -46,6 +52,7 @@ describe("Current conversation previews use actual Original authoring revisions"
   async function saveTask() {
     await db.update(heartbeatRuns).set({ runtimeMode: "native", nativeIssueId: conversation.id }).where(eq(heartbeatRuns.id, run.id));
     await db.update(issues).set({ executionRunId: run.id }).where(eq(issues.id, conversation.id));
+    await admitNativeRun();
     const enqueueWakeup = vi.fn();
     const authority = new PaperclipRunnerToolAuthority(db, { companyId: f.home, agentId: f.presence.id,
       issueId: conversation.id, runId: run.id, enqueueWakeup });
@@ -57,6 +64,7 @@ describe("Current conversation previews use actual Original authoring revisions"
   async function reviewedTask() {
     await db.update(heartbeatRuns).set({ runtimeMode: "native", nativeIssueId: conversation.id }).where(eq(heartbeatRuns.id, run.id));
     await db.update(issues).set({ executionRunId: run.id }).where(eq(issues.id, conversation.id));
+    await admitNativeRun();
     const owner = issueThreadInteractionService(db);
     const proposed = await owner.create(conversation, { kind: "suggest_tasks", sourceRunId: run.id, resolverPolicy: "human_only", continuationPolicy: "none",
       payload: { version: 1, tasks: [{ clientKey: "reviewed-backlog", title: "Human reviewed backlog task", description: "PRIVATE review description", status: "backlog", placement: "company_backlog" }] } },

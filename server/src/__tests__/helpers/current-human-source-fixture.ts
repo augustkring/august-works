@@ -1,12 +1,12 @@
 import express, { type RequestHandler } from "express";
 import request from "supertest";
 import { eq } from "drizzle-orm";
-import { authUsers, companyMemberships, principalPermissionGrants, projects, type Db } from "@paperclipai/db";
+import { authUsers, projects, type Db } from "@paperclipai/db";
 import type { AuthorizationActor } from "../../services/authorization.js";
 import { errorHandler } from "../../middleware/index.js";
 import { projectRoutes } from "../../routes/projects.js";
-import { grantsForHumanRole } from "../../services/company-member-roles.js";
 import { seedNativePasskeySession } from "./native-authentication-fixtures.js";
+import { seedCurrentHumanMembership } from "./current-human-membership-fixture.js";
 
 function assertCanonicalHumanSessionActor(actor: AuthorizationActor): asserts actor is AuthorizationActor & {
   type: "board"; source: "session"; userId: string; sessionId: string;
@@ -18,10 +18,7 @@ function assertCanonicalHumanSessionActor(actor: AuthorizationActor): asserts ac
 export async function seedCurrentHumanSourceActor(db: Db, companyIds: string[], userId = "local-board"): Promise<AuthorizationActor> {
   const now = new Date();
   await db.insert(authUsers).values({ id: userId, name: "Current Human source owner", email: `${userId}@fixture.invalid`, emailVerified: true, createdAt: now, updatedAt: now }).onConflictDoNothing();
-  for (const companyId of companyIds) {
-    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId, membershipRole: "owner", status: "active" }).onConflictDoNothing();
-    await db.insert(principalPermissionGrants).values(grantsForHumanRole("owner").map(grant => ({ companyId, principalType: "user", principalId: userId, ...grant }))).onConflictDoNothing();
-  }
+  for (const companyId of companyIds) await seedCurrentHumanMembership(db, companyId, userId, "owner");
   return { type: "board", source: "session", userId, sessionId: await seedNativePasskeySession(db, userId), companyIds };
 }
 

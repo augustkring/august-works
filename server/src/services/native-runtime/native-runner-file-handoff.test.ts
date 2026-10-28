@@ -33,10 +33,13 @@ import {
 } from "@paperclipai/db";
 
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
+import { seedCurrentHumanSourceActor } from "../../__tests__/helpers/current-human-source-fixture.js";
 import { createLocalDiskStorageProvider } from "../../storage/local-disk-provider.js";
 import { createStorageService } from "../../storage/service.js";
 import type { StorageService } from "../../storage/types.js";
 import { issueService } from "../issues.js";
+import { preparePlatformSkillAdmission } from "../platform-skill-admission.js";
+import { blenteraPlatformContractHashes } from "../tool-gateway.js";
 import { findHeartbeatRunCompletionComment, resolveHeartbeatRunResponse } from "../heartbeat-run-summary.js";
 import {
   renderNativeRunnerStagedAttachmentPrompt,
@@ -57,6 +60,7 @@ describe("native runner file handoff", () => {
   const agentId = "00000000-0000-4000-8000-000000009102";
   const issueId = "00000000-0000-4000-8000-000000009103";
   const runId = "00000000-0000-4000-8000-000000009104";
+  const responsibleUserId = "00000000-0000-4000-8000-000000009105";
 
   beforeAll(async () => {
     temporary = await startEmbeddedPostgresTestDatabase(
@@ -76,6 +80,7 @@ describe("native runner file handoff", () => {
       issuePrefix: "NFH",
       issueCounter: 1,
     });
+    await seedCurrentHumanSourceActor(db, [companyId], responsibleUserId);
     await db.insert(agents).values({
       id: agentId,
       companyId,
@@ -99,6 +104,7 @@ describe("native runner file handoff", () => {
       id: runId,
       companyId,
       agentId,
+      responsibleUserId,
       status: "running",
       runtimeMode: "native",
       nativeIssueId: issueId,
@@ -110,6 +116,8 @@ describe("native runner file handoff", () => {
       .update(issues)
       .set({ executionRunId: runId })
       .where(eq(issues.id, issueId));
+    await preparePlatformSkillAdmission(db, { companyId, agentId, runId,
+      responsibleUserId, requireExisting: false }, blenteraPlatformContractHashes());
   });
 
   afterAll(async () => {
@@ -1257,8 +1265,10 @@ describe("native runner file handoff", () => {
       title: "Previous report", status: "ready_for_review", url: "https://example.com/previous.pdf", createdByRunId: runId }).returning();
     const nextRunId = randomUUID();
     await db.insert(heartbeatRuns).values({ id: nextRunId, companyId, agentId, status: "running", runtimeMode: "native",
-      nativeIssueId: issueId, invocationSource: "assignment", triggerDetail: "system", contextSnapshot: { issueId } });
+      responsibleUserId, nativeIssueId: issueId, invocationSource: "assignment", triggerDetail: "system", contextSnapshot: { issueId } });
     await db.update(issues).set({ executionRunId: nextRunId }).where(eq(issues.id, issueId));
+    await preparePlatformSkillAdmission(db, { companyId, agentId, runId: nextRunId,
+      responsibleUserId, requireExisting: false }, blenteraPlatformContractHashes());
     const ref = kind === "attachment" ? `deliverable:${prior.entityRefs[0]}` : `work_product:${product.id}`;
     try {
       await expect(nativeCompletionFeedback(db, nextRunId, doneReport([ref])))
