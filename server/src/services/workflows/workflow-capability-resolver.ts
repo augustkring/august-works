@@ -1,4 +1,4 @@
-import { and, asc, eq, ilike, ne, or } from "drizzle-orm";
+import { and, asc, eq, ilike, inArray, ne, or } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
@@ -236,6 +236,7 @@ export function workflowCapabilityResolverService(db: Db) {
       companyId: string,
       rawInput: WorkflowCapabilitySearchQuery,
       authorize?: (candidate: WorkflowCapabilityCandidate) => Promise<boolean>,
+      exactToolCatalogEntryIds?: readonly string[],
     ) => {
       const parsed = workflowCapabilitySearchQuerySchema.parse(rawInput);
       const candidateLimit = Math.max(parsed.limit * 6, 100);
@@ -298,7 +299,9 @@ export function workflowCapabilityResolverService(db: Db) {
               eq(toolCatalogEntries.companyId, companyId),
               eq(toolCatalogEntries.entryKind, "tool"),
               eq(toolCatalogEntries.status, "active"),
-              ...searchTerms.map(toolTermPredicate),
+              ...(exactToolCatalogEntryIds?.length
+                ? [inArray(toolCatalogEntries.id, [...new Set(exactToolCatalogEntryIds)])]
+                : searchTerms.map(toolTermPredicate)),
             ),
           )
           .orderBy(asc(toolCatalogEntries.title), asc(toolCatalogEntries.toolName))

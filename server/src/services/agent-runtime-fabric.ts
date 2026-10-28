@@ -22,7 +22,7 @@ import { contextEngineService } from "./context/context-engine.js";
 import { hashContextPolicySnapshot } from "./context/context-manifest.js";
 import { rolePackService } from "./role-packs.js";
 import { skillResolverService } from "./skill-resolver.js";
-import { capabilityResolverService } from "./capability-resolver.js";
+import { capabilityResolverService, selectDeclaredToolCapabilities } from "./capability-resolver.js";
 import { companySkillService } from "./company-skills.js";
 import { blenteraPlatformContractHashes } from "./tool-gateway.js";
 import { withV5ActivityTransaction } from "./v5-mutations.js";
@@ -35,6 +35,8 @@ import { nativeSha256 } from "./native-runtime/canonical.js";
 function sourceRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
+
+const TOOL_CAPABILITY_REF = /^tool:([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
 
 const EMPTY_RUNTIME_SOURCE_POLICY: NativePayloadSourcePolicy = {
   issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [],
@@ -356,7 +358,27 @@ export function agentRuntimeFabricService(db: Db, decisionShadow?: { sourceSha: 
       if (!v5FeatureEnabled(flags, "playbooks_v5") && rolePack?.items.some((item) => item.type === "required_playbook")) throw conflict("This Role Pack requires the Playbook runtime");
       if (authored && !procedures && (resolvedSkills.skills.some(pin => pin.key !== platform.pin.key) || resolvedPlaybooks.pins.length))
         throw conflict("The existing run contains behavior outside this authored version");
-      const capabilities = authored ? [] : await capabilityResolverService(db).search(actor, input.companyId, "");
+      const capabilityExpectations = rolePack?.items.filter((item) => item.type === "capability_expectation") ?? [];
+      const declaredToolRefs = capabilityExpectations.filter((item) => item.ref.startsWith("tool:")).map((item) => {
+        const match = TOOL_CAPABILITY_REF.exec(item.ref);
+        if (!match) throw conflict(`Invalid Role Pack tool capability reference: ${item.ref}`);
+        return `tool:${match[1]!.toLowerCase()}`;
+      });
+      let capabilities = authored ? [] : await capabilityResolverService(db).search(actor, input.companyId, query.slice(0, 200));
+      if (!authored && capabilityExpectations.some((item) => !item.ref.startsWith("tool:"))) {
+        const expectedRefs = new Set(capabilityExpectations.filter((item) => !item.ref.startsWith("tool:")).map((item) => item.ref));
+        const expected = await capabilityResolverService(db).search(actor, input.companyId, "");
+        for (const candidate of expected) if (expectedRefs.has(candidate.ref) && !capabilities.some((current) => current.ref === candidate.ref)) capabilities.push(candidate);
+      }
+      if (!authored && declaredToolRefs.length) {
+        const catalogEntryIds = declaredToolRefs.map((ref) => ref.slice("tool:".length));
+        const desiredBatches = await Promise.all(Array.from({ length: Math.ceil(catalogEntryIds.length / 50) }, (_, index) =>
+          capabilityResolverService(db).search(actor, input.companyId, "", catalogEntryIds.slice(index * 50, (index + 1) * 50))));
+        const declared = new Set(declaredToolRefs);
+        const desiredTools = desiredBatches.flat().filter((candidate) => candidate.type === "tool" && declared.has(candidate.ref));
+        capabilities = selectDeclaredToolCapabilities(capabilities, declaredToolRefs);
+        for (const desired of desiredTools) if (!capabilities.some((candidate) => candidate.ref === desired.ref)) capabilities.push(desired);
+      }
       const context = await freshContext(actor, scope, query, input.runId, input.issueId, claimedScopeRequestId, Boolean(authored), !scope.delegatedScopes.length && Boolean(input.issueId));
       if (stored) {
         if (stored.agentId !== input.agentId || stored.agentIdentityId !== local.identity.id || hashContextPolicySnapshot(stored.manifest.providers) !== hashContextPolicySnapshot(providers)) throw conflict("Pinned provider identity/profile changed; start a new execution");
@@ -370,9 +392,12 @@ export function agentRuntimeFabricService(db: Db, decisionShadow?: { sourceSha: 
         for (const ref of stored.manifest.contextManifests) for (const item of await db.select().from(contextManifestItems).where(and(eq(contextManifestItems.companyId, ref.companyId), eq(contextManifestItems.manifestId, ref.contextManifestId)))) if (!currentRefs.has(`${ref.companyId}:${item.sourceProvider}:${item.sourceRef}:${item.contentHash}`)) throw forbidden("Previously admitted context is no longer authorized/current; start a fresh execution");
       }
       const policies = rolePack?.items.filter((r) => r.type === "required_policy").map((r) => r.ref) ?? ["budget_hard_stop", "source_provenance", "approval_before_side_effects"];
-      for (const expectation of rolePack?.items.filter((r) => r.type === "capability_expectation") ?? []) if (!capabilities.some((c) => c.ref === expectation.ref && (!expectation.versionId || c.versionHash === expectation.versionId))) throw conflict(`Required capability unavailable: ${expectation.ref}`);
+      for (const expectation of capabilityExpectations) {
+        const ref = expectation.ref.startsWith("tool:") ? expectation.ref.toLowerCase() : expectation.ref;
+        if (!capabilities.some((c) => c.ref === ref && (!expectation.versionId || c.versionHash === expectation.versionId))) throw conflict(`Required capability unavailable: ${expectation.ref}`);
+      }
       if (!stored) {
-        const expected = new Set(rolePack?.items.filter((item) => item.type === "capability_expectation").map((item) => item.ref) ?? []);
+        const expected = new Set(capabilityExpectations.map((item) => item.ref.startsWith("tool:") ? item.ref.toLowerCase() : item.ref));
         let tokens = 0;
         for (let index = 0; index < capabilities.length;) {
           const capability = capabilities[index]!, cost = Math.ceil(Buffer.byteLength(`${capability.type}:${capability.ref}; ${capability.access}; risk ${capability.risk}; version ${capability.versionHash ?? "current"}`, "utf8") / 4);

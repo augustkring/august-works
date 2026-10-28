@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { agents, companies, companyMemberships, agentExecutionManifests, agentExecutionScopeRequests, delegatedContextManifestBindings, heartbeatRuns, instanceSettings, issues, projects, toolApplications, toolConnections, connectionGrants, contextManifests, contextManifestItems, toolCatalogEntries, toolProfiles, toolProfileBindings, toolProfileEntries, toolPolicies, toolCallEvents, toolInvocations, principalPermissionGrants, createDb } from "@paperclipai/db";
-import { PROVIDER_CAPABILITY_FEATURES } from "@paperclipai/shared";
+import { PROVIDER_CAPABILITY_FEATURES, rolePackVersionInputSchema } from "@paperclipai/shared";
 import { startEmbeddedPostgresTestDatabase, getEmbeddedPostgresTestSupport } from "./helpers/embedded-postgres.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
 import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
@@ -20,6 +20,7 @@ import { foundationService } from "../services/foundation/foundation-service.js"
 import { foundationIndexService } from "../services/foundation/foundation-index.js";
 import { orchestrationService } from "../services/orchestration/orchestration-service.js";
 import { playbookService } from "../services/playbooks.js";
+import { rolePackService } from "../services/role-packs.js";
 import { createCanonicalHumanProject, seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 import { roadmapPolicySchema, crossCompanyPolicySchema } from "@paperclipai/shared";
 
@@ -401,6 +402,74 @@ describe.skipIf(!support.supported)("V5 execution authority", () => {
     expect(deniedEvent).toMatchObject({ matchedPolicyIds: [block!.id], outcome: "denied" });
     expect(block).toBeDefined();
     expect(denied).toBeDefined();
+  });
+
+  it("selects only Role Pack catalog UUIDs and rejects task-blocked or drifted tool pins", async () => {
+    const f = await seedV5Presences(db), providers = agentProviderBindingService(db), fabric = agentRuntimeFabricService(db);
+    const [settings] = await db.select().from(instanceSettings).where(eq(instanceSettings.singletonKey, "default"));
+    const originalFlags = settings!.experimental;
+    await db.update(instanceSettings).set({ experimental: { ...originalFlags, role_packs_v5: true, skill_resolver_v5: true } })
+      .where(eq(instanceSettings.singletonKey, "default"));
+    try {
+      const binding = await providers.create(f.actor, f.home, f.presence.id, { providerType: "paperclip_native", providerAgentRef: f.presence.id, providerEndpointRef: null, isolationMode: "isolated_per_presence" });
+      await providers.attach(f.actor, f.home, f.presence.id, { providerBindingId: binding.id, providerProfileRef: f.presence.id });
+      await providers.recordDiscovery(f.home, f.presence.id, { provider: "paperclip_native", version: "role-pack-catalog-fixture", features: Object.fromEntries(PROVIDER_CAPABILITY_FEATURES.map(key => [key, false])) as Record<(typeof PROVIDER_CAPABILITY_FEATURES)[number], boolean>, skills: [], tools: [], discoveredAt: new Date().toISOString() }, { connect: true, identity: true, start: true, stream: true, wait: true, cancel: true, memoryScoping: true });
+      await db.insert(companyMemberships).values({ companyId: f.home, principalType: "agent", principalId: f.presence.id, status: "active", membershipRole: "member" }).onConflictDoNothing();
+      await db.insert(principalPermissionGrants).values({ companyId: f.home, principalType: "agent", principalId: f.presence.id, permissionKey: "tools:use" }).onConflictDoNothing();
+
+      const [application] = await db.insert(toolApplications).values({ companyId: f.home, applicationKey: "role-pack-catalog-fixture", name: "Role Pack catalog fixture", type: "mcp_http", status: "active" }).returning();
+      const [connection] = await db.insert(toolConnections).values({ companyId: f.home, applicationId: application!.id, name: "Role Pack catalog fixture", uid: `fixture/${randomUUID()}`, transport: "mcp_remote", status: "active", enabled: true, healthStatus: "ok", config: { url: "https://role-pack.example.test/mcp" }, transportConfig: { url: "https://role-pack.example.test/mcp" }, credentialRefs: [], credentialSecretRefs: [] }).returning();
+      await db.insert(connectionGrants).values({ companyId: f.home, connectionId: connection!.id, kind: "organization", status: "active", isDefault: true, credentialSecretRefs: [] });
+      const catalog = await db.insert(toolCatalogEntries).values(["acme_supplier_lookup", "acme_supplier_update"].map((toolName, index) => ({
+        companyId: f.home, applicationId: application!.id, connectionId: connection!.id, entryKind: "tool" as const,
+        name: toolName, toolName, title: toolName, description: "Review acme supplier account", inputSchema: { type: "object", additionalProperties: false },
+        annotations: { readOnlyHint: index === 0 }, riskLevel: (index === 0 ? "read" : "write") as "read" | "write",
+        isReadOnly: index === 0, isWrite: index === 1, isDestructive: false, status: "active" as const,
+        versionHash: index === 0 ? "a".repeat(64) : "c".repeat(64),
+      }))).returning();
+      const [allowed, taskBlocked] = catalog;
+      const [profile] = await db.insert(toolProfiles).values({ companyId: f.home, profileKey: randomUUID(), name: "Role Pack catalog allow profile", defaultAction: "allow" }).returning();
+      await db.insert(toolProfileBindings).values({ companyId: f.home, profileId: profile!.id, targetType: "agent", targetId: f.presence.id });
+
+      const packs = rolePackService(db);
+      const makePack = async (key: string, catalogEntryId: string) => {
+        const pack = await packs.create(f.actor, f.home, { key, name: key, description: "PostgreSQL runtime selection fixture" });
+        const version = await packs.createVersion(f.actor, f.home, pack.id, rolePackVersionInputSchema.parse({ items: [{ type: "capability_expectation", ref: `tool:${catalogEntryId}`, versionId: null }] }));
+        await packs.publish(f.actor, f.home, pack.id, version.id, null);
+        await packs.assign(f.actor, f.home, { scopeType: "agent", scopeId: f.presence.id, rolePackId: pack.id, versionPolicy: "pinned", pinnedVersionId: version.id });
+      };
+      const makeRun = async (title: string) => {
+        const [task] = await db.insert(issues).values({ companyId: f.home, title, status: "todo", assigneeAgentId: f.presence.id, responsibleUserId: f.userId }).returning();
+        const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId,
+          status: "running", issueId: task!.id, contextSnapshot: { issueId: task!.id } }).returning();
+        await db.update(issues).set({ executionRunId: run!.id }).where(eq(issues.id, task!.id));
+        const [block] = await db.insert(toolPolicies).values({ companyId: f.home, name: `Block Role Pack task tool ${task!.id}`, policyType: "block", priority: 1,
+          selectors: { issueId: task!.id, catalogEntryId: taskBlocked!.id } }).returning();
+        return { task: task!, run: run!, block: block! };
+      };
+
+      await makePack("role-pack-selected-tool", allowed!.id);
+      const selected = await makeRun("Review acme supplier account");
+      const selectedInput = { companyId: f.home, agentId: f.presence.id, runId: selected.run.id, responsibleUserId: f.userId,
+        issueId: selected.task.id, query: selected.task.title };
+      const prepared = await fabric.prepare(selectedInput);
+      expect(prepared!.manifest.capabilities.filter(capability => capability.type === "tool").map(capability => capability.ref))
+        .toEqual([`tool:${allowed!.id}`]);
+      expect(prepared!.manifest.capabilities.find(capability => capability.ref === `tool:${allowed!.id}`)?.versionHash).toBe("a".repeat(64));
+      expect(selected.block).toBeDefined();
+
+      await makePack("role-pack-task-blocked-tool", taskBlocked!.id);
+      const blocked = await makeRun("Review acme supplier account");
+      await expect(fabric.prepare({ companyId: f.home, agentId: f.presence.id, runId: blocked.run.id, responsibleUserId: f.userId,
+        issueId: blocked.task.id, query: blocked.task.title })).rejects.toMatchObject({ status: 409, message: `Required capability unavailable: tool:${taskBlocked!.id}` });
+      expect(await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId, blocked.run.id))).toEqual([]);
+
+      await makePack("role-pack-selected-tool-again", allowed!.id);
+      await db.update(toolCatalogEntries).set({ versionHash: "b".repeat(64) }).where(eq(toolCatalogEntries.id, allowed!.id));
+      await expect(fabric.prepare(selectedInput)).rejects.toMatchObject({ status: 403, message: "A pinned execution capability is no longer authorized/available" });
+    } finally {
+      await db.update(instanceSettings).set({ experimental: originalFlags }).where(eq(instanceSettings.singletonKey, "default"));
+    }
   });
 
 });
