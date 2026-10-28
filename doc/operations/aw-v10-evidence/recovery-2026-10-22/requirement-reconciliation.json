@@ -1167,22 +1167,38 @@
         "bindingClause": "15. `V10-015` capability maturity metadata.",
         "sourceOwners": [
           "packages/shared/src/feature-catalog.ts",
-          "packages/shared/src/v9-feature-flags.ts",
+          "packages/shared/src/feature-catalog.test.ts",
           "scripts/generate-feature-catalog.ts",
-          "packages/shared/src/feature-catalog.test.ts"
+          "scripts/create-github-release.sh",
+          "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/README.md"
         ],
-        "implementationFinding": "The existing feature catalog now carries lifecycle maturity, owner, supported version, surfaces/profiles, entitlement, criticality, data/dependencies, docs/support/evidence, GA-readiness and deprecation/sunset/replacement metadata. Lifecycle admission gates distinguish internal/retired from other maturity states and GA metadata issues are validated. The generator can explicitly emit lifecycle-rich schema v2; release default remains schema v1 until downstream consumers are qualified. Most catalog entries intentionally retain null/unqualified fields.",
+        "implementationFinding": "The schema-derived instance feature catalog carries the §8.2 maturity, version, surfaces/profiles, entitlement, criticality, data/dependencies, docs/support/evidence, GA readiness and deprecation/sunset/replacement metadata; the original admin registry renders those fields. Stable-release automation now retains the existing tier-only feature-catalog.json schema v1 and adds feature-catalog-lifecycle.json schema v2, both generated from the clean exact tagged source. The v2 sidecar is an additive release asset; the external Cloud harness remains unqualified for it. Many flags remain intentionally experimental/unqualified, with no invented GA, support commitment, evidence, or dates.",
         "scopedEvidence": [
           {
             "kind": "current_source_review",
             "paths": [
               "packages/shared/src/feature-catalog.ts",
-              "packages/shared/src/v9-feature-flags.ts",
+              "packages/shared/src/feature-catalog.test.ts",
               "scripts/generate-feature-catalog.ts",
-              "packages/shared/src/feature-catalog.test.ts"
+              "scripts/create-github-release.sh",
+              "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/README.md"
             ],
-            "finding": "The existing feature catalog now carries lifecycle maturity, owner, supported version, surfaces/profiles, entitlement, criticality, data/dependencies, docs/support/evidence, GA-readiness and deprecation/sunset/replacement metadata. Lifecycle admission gates distinguish internal/retired from other maturity states and GA metadata issues are validated. The generator can explicitly emit lifecycle-rich schema v2; release default remains schema v1 until downstream consumers are qualified. Most catalog entries intentionally retain null/unqualified fields.",
-            "verification": "current dirty-worktree source inspection only; source presence is not a test PASS, provider operation, or release qualification"
+            "finding": "The schema-derived instance feature catalog carries the §8.2 maturity, version, surfaces/profiles, entitlement, criticality, data/dependencies, docs/support/evidence, GA readiness and deprecation/sunset/replacement metadata; the original admin registry renders those fields. Stable-release automation now retains the existing tier-only feature-catalog.json schema v1 and adds feature-catalog-lifecycle.json schema v2, both generated from the clean exact tagged source. The v2 sidecar is an additive release asset; the external Cloud harness remains unqualified for it. Many flags remain intentionally experimental/unqualified, with no invented GA, support commitment, evidence, or dates.",
+            "verification": "source inspection; release asset generation is wired but no release/GitHub publication was performed"
+          },
+          {
+            "kind": "focused_test",
+            "paths": [
+              "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/release-sidecar-r1/feature-catalog.test.log",
+              "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/release-sidecar-r1/feature-catalog.test.exit",
+              "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/release-sidecar-r1/pretest-source-pins.sha256",
+              "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/release-sidecar-r1/posttest-source-pins.sha256",
+              "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/release-sidecar-r1/release-helper-syntax.log",
+              "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/release-sidecar-r1/release-helper-syntax.exit",
+              "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/release-sidecar-r1/release-helper-syntax-source-pin.sha256"
+            ],
+            "finding": "The current feature catalog suite passed 17/17 with exit 0. Its recorded pre/post pins match for the catalog, test, release helper and artifact generator at the time of that run; the catalog/test pins still match current source. The release helper later gained a remote-tag commit equality guard, with a separate current `bash -n` pass.",
+            "verification": "raw scoped Vitest log/exit and SHA pins; release-helper syntax log/exit and current source pin; no release upload or remote-tag mismatch scenario exercised"
           }
         ],
         "historicalPinComparison": {
@@ -1190,27 +1206,31 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Complete owner-reviewed lifecycle facts for customer-facing capabilities beyond the instance-flag subset, and qualify every downstream schema-v2 consumer before changing the release artifact default. Do not infer GA/support or customer version from code presence.",
-        "implementationStatus": "partially_implemented_lifecycle_catalog",
+        "remainingWork": "The catalog covers instance-setting flags; complete lifecycle records for product capabilities outside this source-derived flag set where owners can establish their facts. Keep unqualified fields explicit, and qualify downstream Cloud consumption before changing the existing v1 contract or relying on v2 operationally.",
+        "implementationStatus": "implemented_for_instance_flags_external_consumer_unqualified",
         "sourceReviewFindings": [
           {
             "path": "packages/shared/src/feature-catalog.ts",
-            "observedWorktreeSha256": "bd539363efe20b2cc13981708abec1f4f03d801820bf7aa00dfa3648058036b5"
+            "observedWorktreeSha256": "00650dcdad084aeab8eef6c439d66d59a46e5e879f0122e55980e9b57d4bda04"
           },
           {
-            "path": "packages/shared/src/v9-feature-flags.ts",
-            "observedWorktreeSha256": "10d70828a4f7bff8763ac73a49eefab90150b8756ecbcc263eeb39968acbac15"
+            "path": "packages/shared/src/feature-catalog.test.ts",
+            "observedWorktreeSha256": "1c6f8b100e179bb5dbcc5f8fbf16165fb5d33732e84f82f5fc9608f3230945f2"
           },
           {
             "path": "scripts/generate-feature-catalog.ts",
             "observedWorktreeSha256": "0e03be3ec22ad1c468a3d98e1d5e49ed389dab73f78d3c228b4ee45ddc740f77"
           },
           {
-            "path": "packages/shared/src/feature-catalog.test.ts",
-            "observedWorktreeSha256": "710d6390d24b80a64dc773d601521d561ceb5877cd7bceaa17c4186fcdf52c14"
+            "path": "scripts/create-github-release.sh",
+            "observedWorktreeSha256": "c94e593f1d714a088c4abcaac5bddc63d66167f047e01321b07f971822a68af7"
+          },
+          {
+            "path": "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/README.md",
+            "observedWorktreeSha256": "c3f9a72a35bdd6d84745a8f0136d6d6964c5e6b8a18f8501b50d960d61f79529"
           }
         ],
-        "reviewBasis": "Targeted source and document owner review in the shared dirty worktree on 2026-10-28. Hashes identify observed bytes at review time; they do not certify complete tests, external provider/domain operation, Human approval, or release qualification."
+        "reviewBasis": "Current source/document inspection and focused owner proof in the shared dirty worktree on 2026-10-28. Hashes identify observed bytes at review time. No external Cloud consumer, deployment, or release adoption is asserted."
       }
     },
     {
@@ -1224,28 +1244,50 @@
         "bindingClause": "16. `V10-016` capability docs/support/evidence linkage.",
         "sourceOwners": [
           "packages/shared/src/feature-catalog.ts",
+          "packages/shared/src/feature-catalog.test.ts",
+          "scripts/create-github-release.sh",
           "scripts/generate-feature-catalog.ts",
+          "docs/help/workflows-preview.md",
+          "docs/help/apps-and-connections.md",
+          "docs/help/export-and-delete.md",
           "doc/experience/v9/coverage.json",
           "packages/shared/src/experience.ts",
-          "docs/help",
-          "docs/da/help",
-          "server/src/services/company-search-help.generated.ts"
+          "docs/help/change-review.json",
+          "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/README.md"
         ],
-        "implementationFinding": "The same catalog provides `docsRef`, `supportPathRef`, `serviceDependencies`, customer surfaces and release evidence fields; three capability entries have source-checked Help/surface linkage. Help metadata and V9 screen contracts remain separate contracts, and the catalog does not yet map every product capability to reviewed Help, support level, owner, profile and release evidence. Most entries are unqualified and the lifecycle-rich artifact is opt-in schema v2.",
+        "implementationFinding": "The existing catalog now links four source-backed instance capability records to exact Help/support surfaces: workflow preview (enablePipelines and enableAiWorkflowAuthoring), Apps/connections (enableApps), and export/delete/offboarding (company_deletion_v6). The new deletion mapping follows the article’s V10-116/V10-159 references, SETTINGS-DATA-PRIVACY and SETTINGS-PEOPLE-ACCESS contracts, and linked SaaS lifecycle owners. Catalog fields with no source-backed fact remain null/empty/unqualified. Lifecycle mappings are included in the additive schema-v2 release sidecar; v1 remains unchanged and Cloud consumer support for v2 is unknown.",
         "scopedEvidence": [
           {
             "kind": "current_source_review",
             "paths": [
               "packages/shared/src/feature-catalog.ts",
+              "packages/shared/src/feature-catalog.test.ts",
+              "scripts/create-github-release.sh",
               "scripts/generate-feature-catalog.ts",
+              "docs/help/workflows-preview.md",
+              "docs/help/apps-and-connections.md",
+              "docs/help/export-and-delete.md",
               "doc/experience/v9/coverage.json",
               "packages/shared/src/experience.ts",
-              "docs/help",
-              "docs/da/help",
-              "server/src/services/company-search-help.generated.ts"
+              "docs/help/change-review.json",
+              "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/README.md"
             ],
-            "finding": "The same catalog provides `docsRef`, `supportPathRef`, `serviceDependencies`, customer surfaces and release evidence fields; three capability entries have source-checked Help/surface linkage. Help metadata and V9 screen contracts remain separate contracts, and the catalog does not yet map every product capability to reviewed Help, support level, owner, profile and release evidence. Most entries are unqualified and the lifecycle-rich artifact is opt-in schema v2.",
-            "verification": "current dirty-worktree source inspection only; source presence is not a test PASS, provider operation, or release qualification"
+            "finding": "The existing catalog now links four source-backed instance capability records to exact Help/support surfaces: workflow preview (enablePipelines and enableAiWorkflowAuthoring), Apps/connections (enableApps), and export/delete/offboarding (company_deletion_v6). The new deletion mapping follows the article’s V10-116/V10-159 references, SETTINGS-DATA-PRIVACY and SETTINGS-PEOPLE-ACCESS contracts, and linked SaaS lifecycle owners. Catalog fields with no source-backed fact remain null/empty/unqualified. Lifecycle mappings are included in the additive schema-v2 release sidecar; v1 remains unchanged and Cloud consumer support for v2 is unknown.",
+            "verification": "read-only source/frontmatter/screen-contract review; no unsupported lifecycle, support, or release fact was filled"
+          },
+          {
+            "kind": "focused_test",
+            "paths": [
+              "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/release-sidecar-r1/feature-catalog.test.log",
+              "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/release-sidecar-r1/feature-catalog.test.exit",
+              "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/release-sidecar-r1/pretest-source-pins.sha256",
+              "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/release-sidecar-r1/posttest-source-pins.sha256",
+              "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/release-sidecar-r1/release-helper-syntax.log",
+              "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/release-sidecar-r1/release-helper-syntax.exit",
+              "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/release-sidecar-r1/release-helper-syntax-source-pin.sha256"
+            ],
+            "finding": "The catalog metadata assertion for company-deletion Help/screen/source linkage passed within the 17/17 feature catalog suite. Catalog/test pre/post pins match current source; the release helper was edited afterward to add the remote-tag SHA equality guard and separately passes `bash -n`.",
+            "verification": "raw scoped Vitest log/exit and SHA pins; release-helper syntax log/exit and current source pin; not a complete product-capability map or consumer qualification"
           }
         ],
         "historicalPinComparison": {
@@ -1253,16 +1295,36 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Extend verified mappings through the existing catalog and source owners for the remaining product capabilities, keep unverified references null, and qualify the schema-v2 consumer before making the richer artifact the release contract.",
-        "implementationStatus": "partially_implemented_sparse_linkage",
+        "remainingWork": "Extend the same exact source-to-help/screen linkage for additional customer-facing capabilities only when Help frontmatter, screen contracts and domain owners provide an unambiguous mapping. Keep broader V5–V10 capability coverage explicitly open; do not map a V10 work-item reference to a flag by name similarity.",
+        "implementationStatus": "partially_implemented_four_verified_flag_linkages",
         "sourceReviewFindings": [
           {
             "path": "packages/shared/src/feature-catalog.ts",
-            "observedWorktreeSha256": "bd539363efe20b2cc13981708abec1f4f03d801820bf7aa00dfa3648058036b5"
+            "observedWorktreeSha256": "00650dcdad084aeab8eef6c439d66d59a46e5e879f0122e55980e9b57d4bda04"
+          },
+          {
+            "path": "packages/shared/src/feature-catalog.test.ts",
+            "observedWorktreeSha256": "1c6f8b100e179bb5dbcc5f8fbf16165fb5d33732e84f82f5fc9608f3230945f2"
+          },
+          {
+            "path": "scripts/create-github-release.sh",
+            "observedWorktreeSha256": "c94e593f1d714a088c4abcaac5bddc63d66167f047e01321b07f971822a68af7"
           },
           {
             "path": "scripts/generate-feature-catalog.ts",
             "observedWorktreeSha256": "0e03be3ec22ad1c468a3d98e1d5e49ed389dab73f78d3c228b4ee45ddc740f77"
+          },
+          {
+            "path": "docs/help/workflows-preview.md",
+            "observedWorktreeSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384"
+          },
+          {
+            "path": "docs/help/apps-and-connections.md",
+            "observedWorktreeSha256": "9d0a0c41b9d0848c5acbe26386d472fcdf448ef84604421f292483679230042e"
+          },
+          {
+            "path": "docs/help/export-and-delete.md",
+            "observedWorktreeSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9"
           },
           {
             "path": "doc/experience/v9/coverage.json",
@@ -1273,11 +1335,15 @@
             "observedWorktreeSha256": "c3895614a481d92a10939263cb97581fd28c21aa0295f9a5cc8ff5664464829a"
           },
           {
-            "path": "server/src/services/company-search-help.generated.ts",
-            "observedWorktreeSha256": "5d3c1580cc78ca7b8fcd8e8ac7ebe76e6b3d78172c17629b0dd925a1c567c2c4"
+            "path": "docs/help/change-review.json",
+            "observedWorktreeSha256": "b0e4ab136cf46577cbdde8621e85c06f9e4d0d9baf52746a72fb87631c5880ef"
+          },
+          {
+            "path": "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/README.md",
+            "observedWorktreeSha256": "c3f9a72a35bdd6d84745a8f0136d6d6964c5e6b8a18f8501b50d960d61f79529"
           }
         ],
-        "reviewBasis": "Targeted source and document owner review in the shared dirty worktree on 2026-10-28. Hashes identify observed bytes at review time; they do not certify complete tests, external provider/domain operation, Human approval, or release qualification."
+        "reviewBasis": "Current source/document inspection and focused owner proof in the shared dirty worktree on 2026-10-28. Hashes identify observed bytes at review time. No external Cloud consumer, deployment, or release adoption is asserted."
       }
     },
     {
@@ -8972,9 +9038,18 @@
           "server/src/services/agent-native-operation-manifest.ts",
           "server/src/services/platform-skill-admission.ts",
           "server/src/__tests__/platform-skill-admission.test.ts",
-          "scripts/check-aw-v9-coverage.mjs"
+          "scripts/check-aw-v9-coverage.mjs",
+          "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+          "doc/operations/agent-native-ui-operation-coverage.json",
+          "scripts/aw-v10-operation-coverage.mjs",
+          "scripts/check-aw-v10-operation-coverage.mjs",
+          "scripts/check-aw-v10-operation-coverage.test.mjs",
+          ".github/workflows/aw-v9-coverage.yml",
+          "ui/src/App.tsx",
+          "ui/src/pages/V9RouteEntries.tsx",
+          "cli/package.json"
         ],
-        "implementationFinding": "The Agent-Native manifest enumerates canonical operation IDs, principals, mode, profile, permissions, recovery, channel/MCP support and owners, and Platform Skill admission exists. The existing release checker is screen/V9-focused; a generated all-operations inventory and CI unexplained-UI-only gate is not shown.",
+        "implementationFinding": "The runtime Agent-Native manifest exports 62 operations, including all six material entries. A new AST-backed gate reads that typed runtime export, resolves the mounted UI import graph through App/V9 route registries (including aliases, barrels and dynamic imports), classifies API reads from actual client HTTP definitions, and records exact write callsites with route, source line and arguments. It explicitly classifies 58 write/unknown callsites in five scoped UI sources. The current whole-graph scan finds 989 write/unknown callsites across 271 mounted UI modules; 931 calls in 266 other modules remain unclassified, so the release gate currently fails closed. The negative fixture proves an arbitrary API action in a newly mounted route fails. This is bounded classification, not global UI-operation coverage or release acceptance.",
         "scopedEvidence": [
           {
             "kind": "source_review",
@@ -8986,6 +9061,43 @@
             ],
             "finding": "The Agent-Native manifest enumerates canonical operation IDs, principals, mode, profile, permissions, recovery, channel/MCP support and owners, and Platform Skill admission exists. The existing release checker is screen/V9-focused; a generated all-operations inventory and CI unexplained-UI-only gate is not shown.",
             "verification": "current dirty-worktree source inspection only; does not certify a test result, hosted deployment, live provider, operator/Human acceptance, or release readiness"
+          },
+          {
+            "kind": "current_gate_review",
+            "paths": [
+              "server/src/services/agent-native-operation-manifest.ts",
+              "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+              "doc/operations/agent-native-ui-operation-coverage.json",
+              "scripts/aw-v10-operation-coverage.mjs",
+              "scripts/check-aw-v10-operation-coverage.mjs",
+              "scripts/check-aw-v10-operation-coverage.test.mjs",
+              "scripts/check-aw-v9-coverage.mjs",
+              ".github/workflows/aw-v9-coverage.yml",
+              "ui/src/App.tsx",
+              "ui/src/pages/V9RouteEntries.tsx",
+              "cli/package.json"
+            ],
+            "finding": "The operation gate consumes the actual typed 62-entry manifest (six material entries), parses actual API client HTTP definitions, and scans 1,354 reachable UI source modules. It has 58 exact classified write/unknown callsites across its five declared material UI sources. The current whole-graph scan finds 931 additional write/unknown callsites in 266 other mounted modules and fails closed. The new-route/custom-method and duplicate-direct-POST fixtures pass.",
+            "verification": "node --test scripts/check-aw-v10-operation-coverage.test.mjs passed; node scripts/check-aw-v10-operation-coverage.mjs and the integrated V9 release checker fail closed on the 264 unclassified mounted sources; no external provider, user, or deployment qualification is claimed"
+          },
+          {
+            "kind": "additional_route_owner_review",
+            "paths": [
+              "doc/operations/aw-v10-evidence/operation-coverage-2026-10-28/r4/client-operation-groups.json",
+              "doc/operations/aw-v10-evidence/operation-coverage-2026-10-28/r4/review-readiness.json",
+              "server/src/routes/routines.ts",
+              "server/src/services/routines.ts",
+              "server/src/routes/agent-runtime-fabric.ts",
+              "server/src/services/agent-runtime-fabric.ts",
+              "server/src/routes/teams-catalog.ts",
+              "server/src/services/teams-catalog.ts",
+              "server/src/routes/status-cards.ts",
+              "server/src/services/status-cards.ts",
+              "server/src/routes/work-signals.ts",
+              "server/src/services/work-signals/work-signal-service.ts"
+            ],
+            "finding": "The source-review worklist now contains 158 current client-method/route groups (252 callsites) in the readinessApi–workSignalsApi lexical slice. All 158 groups were reviewed at route guards and canonical owners. Findings include Agent-accessible readiness, routine, team install, workflow run, runtime execution, status-card and work-signal operations; board-only Human boundaries; explicit operator-only internal SaaS routes; and non-mutating POST previews/queries. Agent-capable workflow run/cancel/retry APIs lack matching manifest IDs; UI publish remains distinct from the Agent prepare-publication operation. This audit worklist is not merged as active inventory coverage.",
+            "verification": "read-only source inspection; no test claims behavior or release acceptance"
           }
         ],
         "historicalPinComparison": {
@@ -8993,7 +9105,7 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Bind all mounted web operations and actual tool/channel projections to the manifest, fail release on uncovered owners/profiles, and separate code coverage from provider qualification.",
+        "remainingWork": "Review the 931 remaining write/unknown callsites in the 266 unclassified mounted UI modules, reduce them by exact imported client method and HTTP route, resolve canonical server owners, and either map launch-relevant operations to the typed manifest or record operation-specific Human/operator boundaries. Resolve ten unknown API client callsites rather than treating them as reads. Keep the release gate blocked until every launch-relevant write has a reviewed mapping or a specific exclusion.",
         "implementationStatus": "partial_implementation",
         "sourceReviewFindings": [
           {
@@ -9013,7 +9125,129 @@
             "observedWorktreeSha256": "11c0357020a7a400bb176305bdd684149218fe34132689376f2a1c55f4477178"
           }
         ],
-        "reviewBasis": "Current source inspection at recorded repository HEAD plus dirty worktree. Historical checkpoint/test details remain in existing scopedEvidence. Source presence does not certify full journey, hosted provider/runtime behavior, or release acceptance."
+        "reviewBasis": "Current source and AST inspection at dirty worktree; typed manifest import succeeds. The isolated fail-closed fixtures pass. Whole-graph production gate intentionally fails on 266 mounted UI sources with 931 unreviewed write/unknown callsites. The route-owner worklist has 158 groups/252 callsites in the readinessApi–workSignalsApi lexical slice, all 158 source-reviewed. No hosted deployment, provider/Human acceptance, or release readiness is claimed.",
+        "currentPins": [
+          {
+            "path": "server/src/services/agent-native-operation-manifest.ts",
+            "observedWorktreeSha256": "db036b733a5e76ed2b19bc1fbdb48d2b8345401f2b2b54d2e75cfaf2068ae40a"
+          },
+          {
+            "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+            "observedWorktreeSha256": "35dd314a6821b6c039a87f12a673dfd4ca7c3e91c475d67a956c8369c0dea218"
+          },
+          {
+            "path": "doc/operations/agent-native-ui-operation-coverage.json",
+            "observedWorktreeSha256": "b7b26ef1277e4c5185b353fbf90677483f8d63884accd991e13369e9e53f657a"
+          },
+          {
+            "path": "scripts/aw-v10-operation-coverage.mjs",
+            "observedWorktreeSha256": "bf84a89e57e8dc8d35e15c7de725eaf5f2068b063bf7aad6851e2225bf2123ff"
+          },
+          {
+            "path": "scripts/check-aw-v10-operation-coverage.mjs",
+            "observedWorktreeSha256": "b66c55218527d0360537b353a1a80f0a254c5f6a36a71e08adfba1f3d616b7ce"
+          },
+          {
+            "path": "scripts/check-aw-v10-operation-coverage.test.mjs",
+            "observedWorktreeSha256": "cffcb2ebca3b3511160f0cd8a0f8abb7fe262e8d057c2a50a3facd0831428387"
+          },
+          {
+            "path": "scripts/check-aw-v9-coverage.mjs",
+            "observedWorktreeSha256": "af23ed99288e175187625d427e3855903df924c1f1c69d7b1409afad94f4ec9a"
+          },
+          {
+            "path": ".github/workflows/aw-v9-coverage.yml",
+            "observedWorktreeSha256": "b4c2ef6f027d75eafd06c4aa310a8afe0c6515a154ac72f0aee02599afe4eafc"
+          },
+          {
+            "path": "ui/src/App.tsx",
+            "observedWorktreeSha256": "1716e9619c28aec2529902c201a8b45cd641c7327705bf005bcc0ecb2b7589c8"
+          },
+          {
+            "path": "ui/src/pages/V9RouteEntries.tsx",
+            "observedWorktreeSha256": "d3db029bdb89fac6e3b0606797d0753951e8ec1d41debf35fab2b8fed1e69c80"
+          },
+          {
+            "path": "cli/package.json",
+            "observedWorktreeSha256": "310ff36caa8839a9c2090ea84b54c61a1b28a9763edb415323edd6337fa6d1f1"
+          },
+          {
+            "path": "doc/operations/aw-v10-evidence/operation-coverage-2026-10-28/r4/client-operation-groups.json",
+            "observedWorktreeSha256": "0659a132fe7422868afcaa3d8996905c42e8fe3b9d7ff8e8841034a8c96fb841"
+          },
+          {
+            "path": "doc/operations/aw-v10-evidence/operation-coverage-2026-10-28/r4/review-readiness.json",
+            "observedWorktreeSha256": "a7725eaf35c0b2ef4acffb0c4cd0aea3971a8140c2abdaacf6133679f929c47f"
+          },
+          {
+            "path": "server/src/routes/routines.ts",
+            "observedWorktreeSha256": "c3e22c02288f8c585965787a4027f29b8c475749c1055e03c50ff9456ba52ced"
+          },
+          {
+            "path": "server/src/services/routines.ts",
+            "observedWorktreeSha256": "405fdcbbcb8fd9b5d3e6fece3e25722f5ea7f015fc6c0c37dbeff69caf81372c"
+          },
+          {
+            "path": "server/src/routes/summary-slots.ts",
+            "observedWorktreeSha256": "0ca3b3f18bb4ec14b263a3a96c5f9176a2465dcda6fa282d2b7a42eda6c05028"
+          },
+          {
+            "path": "server/src/services/summary-slots.ts",
+            "observedWorktreeSha256": "4071a36b95118e34a586ee113e4e3ce38b045d5611d477a4b4d78faecac5b326"
+          },
+          {
+            "path": "server/src/routes/teams-catalog.ts",
+            "observedWorktreeSha256": "01d3872e3306d6ae5e0aab8acb388f683fde129855d911e85ec79397b775cc81"
+          },
+          {
+            "path": "server/src/services/teams-catalog.ts",
+            "observedWorktreeSha256": "dace666ebf67a404628f6bc6d99cbd4e3eb9457c55dcf5ca8ccdf6204c951428"
+          },
+          {
+            "path": "server/src/routes/agent-runtime-fabric.ts",
+            "observedWorktreeSha256": "6a7ecccf8404fc24ab618aab13756e23dc514f970bb95622e1995f78cc7441bd"
+          },
+          {
+            "path": "server/src/services/agent-runtime-fabric.ts",
+            "observedWorktreeSha256": "a42801d7cf6f558ec14c61bbf6724bd44479025ce46a5be7e5a8c480067cc843"
+          },
+          {
+            "path": "server/src/routes/agent-identities.ts",
+            "observedWorktreeSha256": "c303150c64d3a7ea1d0d218e3f32038209bfe36164bd46eed2decbac2313e85f"
+          },
+          {
+            "path": "server/src/services/agent-identities.ts",
+            "observedWorktreeSha256": "ca92e8637bf189bae862ced70a5d9640987f2bab5ddf87ab65a39cd33f72e56d"
+          },
+          {
+            "path": "server/src/routes/portfolio.ts",
+            "observedWorktreeSha256": "c80b34e8b18bcee014e148429981362e607c619cf05b53b2a3b5d773f297e0f8"
+          },
+          {
+            "path": "server/src/routes/tool-gateway.ts",
+            "observedWorktreeSha256": "47ee9241b50b723b114604d887df665b60302cb52399b065cfdd25381dec993a"
+          },
+          {
+            "path": "server/src/routes/status-cards.ts",
+            "observedWorktreeSha256": "c3df9fa2255d1a624051510be4dbef7e7fa607713ead33407ed41faac8d2b8a4"
+          },
+          {
+            "path": "server/src/services/status-cards.ts",
+            "observedWorktreeSha256": "376c7a9a096ab8a1dcb29f31034962d667087ca61efeed273c52eb1176049c11"
+          },
+          {
+            "path": "server/src/routes/work-signals.ts",
+            "observedWorktreeSha256": "77195aca580ad72146bf67395dd99e014a4b50dcde00e1e1165a110dde11653f"
+          },
+          {
+            "path": "server/src/services/work-signals/work-signal-service.ts",
+            "observedWorktreeSha256": "fdb19a02034d288f5eb481802c3326a4cbd61c10b8f01da7173f3fd6f3944310"
+          },
+          {
+            "path": "server/src/services/portfolio.ts",
+            "observedWorktreeSha256": "36ac80fa1aa48a2650b2f527fbbe999194a89459db8e536a1eee081df8d42e13"
+          }
+        ]
       }
     },
     {
@@ -12805,9 +13039,24 @@
           "server/src/services/agent-runtime-owner-assignments.ts",
           "server/src/services/runtime-skill-selections.ts",
           "server/src/services/native-runtime/native-workspace-sync.ts",
-          "server/src/services/heartbeat.ts"
+          "server/src/services/heartbeat.ts",
+          "server/src/services/plugin-lifecycle-delivery.ts",
+          "server/src/services/plugin-lifecycle-inbox.ts",
+          "server/src/services/plugin-agent-runtime-state.ts",
+          "server/src/services/resource-lifecycle-events.ts",
+          "server/src/services/company-skills.ts",
+          "packages/db/src/schema/resource_lifecycle_events.ts",
+          "packages/db/src/migrations/0538_durable_plugin_lifecycle.sql",
+          "packages/plugins/sdk/src/define-plugin.ts",
+          "packages/plugins/sdk/src/types.ts",
+          "packages/plugins/sdk/src/protocol.ts",
+          "packages/plugins/sdk/src/host-client-factory.ts",
+          "packages/plugins/sdk/src/worker-rpc-host.ts",
+          "packages/plugins/sdk/tests/worker-rpc-host.test.ts",
+          "server/src/__tests__/plugin-lifecycle-delivery.test.ts",
+          "server/src/__tests__/plugin-agent-runtime-state.integration.test.ts"
         ],
-        "implementationFinding": "Runtime assignment, Skill selection, workspace sync and heartbeat services are separately implemented. A source-pinned committed-revision-to-running-session synchronization receipt with stale-fence, exactly-once semantic application and actual topology evidence is still open.",
+        "implementationFinding": "Current source implements the durable lifecycle event path omitted by the earlier owner list: resource mutations write to a commit-ordered bigint outbox; per-resource delivery preserves oldest-unacknowledged ordering; acknowledgments are durable by company/plugin/event; delivery retries and checks the callback response names the exact event before recording its ack. Agent-runtime events carry eligible lifecycle-owner plugin recipients. The runtime snapshot service reads the current revision, assigned owner, active native run and responsible Human, resolves current execution-manifest Skill state and connection assignments, then re-reads source state up to three times and conflicts if revision/run/represented Human changed. The SDK exposes the asynchronous lifecycle callback and `agents.getRuntime` RPC. No missing server join from the runtime owner assignment to the snapshot was established in this review. Remaining uncertainty is semantic application at the external destination and qualification of actual live session topology: the plugin callback acknowledgment is an external assertion, not independent evidence that a supported consumer applied effects exactly once.",
         "scopedEvidence": [
           {
             "kind": "source_review",
@@ -12819,6 +13068,31 @@
             ],
             "finding": "Runtime assignment, Skill selection, workspace sync and heartbeat services are separately implemented. A source-pinned committed-revision-to-running-session synchronization receipt with stale-fence, exactly-once semantic application and actual topology evidence is still open.",
             "verification": "current dirty-worktree source inspection only; does not certify a test result, hosted deployment, live provider, operator/Human acceptance, or release readiness"
+          },
+          {
+            "kind": "current_owner_review",
+            "paths": [
+              "server/src/services/plugin-lifecycle-delivery.ts",
+              "server/src/services/plugin-lifecycle-inbox.ts",
+              "server/src/services/plugin-agent-runtime-state.ts",
+              "server/src/services/resource-lifecycle-events.ts",
+              "server/src/services/agent-runtime-owner-assignments.ts",
+              "server/src/services/company-skills.ts",
+              "server/src/services/native-runtime/native-workspace-sync.ts",
+              "server/src/services/heartbeat.ts",
+              "packages/db/src/schema/resource_lifecycle_events.ts",
+              "packages/db/src/migrations/0538_durable_plugin_lifecycle.sql",
+              "packages/plugins/sdk/src/define-plugin.ts",
+              "packages/plugins/sdk/src/types.ts",
+              "packages/plugins/sdk/src/protocol.ts",
+              "packages/plugins/sdk/src/host-client-factory.ts",
+              "packages/plugins/sdk/src/worker-rpc-host.ts",
+              "packages/plugins/sdk/tests/worker-rpc-host.test.ts",
+              "server/src/__tests__/plugin-lifecycle-delivery.test.ts",
+              "server/src/__tests__/plugin-agent-runtime-state.integration.test.ts"
+            ],
+            "finding": "Corrected owners include the durable delivery/inbox and event transaction, DB tables and migration 0538, runtime snapshot/owner checks, and the SDK callback/getRuntime host protocol. Source implements ordered outbox delivery, persisted per-plugin acknowledgments/retry, assigned-owner scoping and three-attempt snapshot recheck. The remaining question is whether supported external consumers and real sessions satisfy the semantic effect contract; an external callback ACK alone cannot prove that effect.",
+            "verification": "read-only current-source inspection, including existing delivery and runtime-state test source; tests were not run in this assessment update and external consumers/session topology remain unqualified"
           }
         ],
         "historicalPinComparison": {
@@ -12826,7 +13100,7 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Join revision commit through durable apply/reconcile to the actual runtime session, reject stale ordering, preserve retry receipt, and prove changes apply once after restart or actor revocation.",
+        "remainingWork": "Qualify representative supported plugin consumers and real runtime session topology across duplicate delivery, process restart, owner change, and callback retry; verify that the callback ACK contract satisfies the required semantic apply-once outcome. If that qualification shows a missing host-owned invariant, add the smallest receipt at the actual destination owner. Do not infer independent proof from an external plugin ACK or claim external-consumer qualification from source code alone.",
         "implementationStatus": "partial_implementation",
         "sourceReviewFindings": [
           {
@@ -12846,7 +13120,81 @@
             "observedWorktreeSha256": "2e88993a295021b63e235e1bb02f33f7afd5315e55b611b8743254a4405297ff"
           }
         ],
-        "reviewBasis": "Current source inspection at recorded repository HEAD plus dirty worktree. Historical checkpoint/test details remain in existing scopedEvidence. Source presence does not certify full journey, hosted provider/runtime behavior, or release acceptance."
+        "reviewBasis": "Current dirty-worktree read-only source and test inspection. Existing lifecycle-delivery and runtime-state tests cover durable order/acknowledgment, eligible owner routing and snapshot recheck paths, but no tests were run during this assessment update. Source presence does not prove a live external plugin applied its side effects once or establish production session topology.",
+        "currentPins": [
+          {
+            "path": "server/src/services/plugin-lifecycle-delivery.ts",
+            "observedWorktreeSha256": "707584afd72152793592af12000760348038ede2c9b98db6021cde04ecd18f6d"
+          },
+          {
+            "path": "server/src/services/plugin-lifecycle-inbox.ts",
+            "observedWorktreeSha256": "96f3c5bbd2282aea0a9488ae285726848d9b2407ff85d9ecb5e9f1cb7f589f07"
+          },
+          {
+            "path": "server/src/services/plugin-agent-runtime-state.ts",
+            "observedWorktreeSha256": "1b5680accce920050b027d5b814f4e9a989057938366c08a369004c7bd33b01e"
+          },
+          {
+            "path": "server/src/services/resource-lifecycle-events.ts",
+            "observedWorktreeSha256": "089ace0ddf2c0a6d355a01b59ea84871a12d80344ef9f17ee86486738120749f"
+          },
+          {
+            "path": "server/src/services/agent-runtime-owner-assignments.ts",
+            "observedWorktreeSha256": "e045e3d8b82bac60d7f779b400972fb4c044a101fd167585fdb8d202035e8f95"
+          },
+          {
+            "path": "server/src/services/company-skills.ts",
+            "observedWorktreeSha256": "75e78012b3df9c72b322654f517b86eef04f6fc5a3aa13537046aa4869d9fa8c"
+          },
+          {
+            "path": "server/src/services/native-runtime/native-workspace-sync.ts",
+            "observedWorktreeSha256": "55a77ab0afaae05c71823f6ef3d22728bac4a594312debc1527248c8a1b87e3a"
+          },
+          {
+            "path": "server/src/services/heartbeat.ts",
+            "observedWorktreeSha256": "2c8f93b6ee924cacbbf9f6fa8c1104b9989b533fd99f37d96bbe5ecbc95da612"
+          },
+          {
+            "path": "packages/db/src/schema/resource_lifecycle_events.ts",
+            "observedWorktreeSha256": "66c12a0dfeee39bd4e177beb45e1bf60b674a9981252301a20a8034e369710be"
+          },
+          {
+            "path": "packages/db/src/migrations/0538_durable_plugin_lifecycle.sql",
+            "observedWorktreeSha256": "ce3c0560f7e3a3d7e786dbf79f14888b7b8fde3e5bbf12bfab3efd378dd2f25c"
+          },
+          {
+            "path": "packages/plugins/sdk/src/define-plugin.ts",
+            "observedWorktreeSha256": "d8e93b4dcd2d5e2dff9fe95ce685256fcc0eca59edaa0cc24b077f62ee8616f6"
+          },
+          {
+            "path": "packages/plugins/sdk/src/types.ts",
+            "observedWorktreeSha256": "3ee19d80438e1bed4d5b2d906c9d7ac1f5aea750db87c3b030257244bd5dae6e"
+          },
+          {
+            "path": "packages/plugins/sdk/src/protocol.ts",
+            "observedWorktreeSha256": "31fd3497f5e27af374403cc4b175aebb9cba0e05983454d9adacd470f4ae3f40"
+          },
+          {
+            "path": "packages/plugins/sdk/src/host-client-factory.ts",
+            "observedWorktreeSha256": "0646976bf3956ac6341a4dc807cb8b2274b49e3f0d6038b037b9f3cd20982d3a"
+          },
+          {
+            "path": "packages/plugins/sdk/src/worker-rpc-host.ts",
+            "observedWorktreeSha256": "01a1f152e96cfd5c1b4435c1531259ceac14c10f63eedb0cccc49dff528d2876"
+          },
+          {
+            "path": "packages/plugins/sdk/tests/worker-rpc-host.test.ts",
+            "observedWorktreeSha256": "609cc52041159cf2b6a1305c3ea64f978efc258dac7b0a232dbfc4e772e1e498"
+          },
+          {
+            "path": "server/src/__tests__/plugin-lifecycle-delivery.test.ts",
+            "observedWorktreeSha256": "cbdd2bfecb6bfe017174376e3c0cb64378cddd6456dcb9ed6f8e2355ca48ba92"
+          },
+          {
+            "path": "server/src/__tests__/plugin-agent-runtime-state.integration.test.ts",
+            "observedWorktreeSha256": "b109e528af6c45ae8804a03d17fe6f72a7f32970dcecb2ec3b64a7b71d720308"
+          }
+        ]
       }
     },
     {
