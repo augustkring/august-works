@@ -1,9 +1,11 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
+import { randomUUID } from "node:crypto";
 import { expect, request as pwRequest, test, type APIRequestContext, type APIResponse, type Locator, type Page } from "@playwright/test";
 import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
-import { closeRegisteredClients, createDb, heartbeatRuns, issues } from "../../packages/db/src/index.ts";
+import { authUsers, closeRegisteredClients, companyMemberships, createDb, heartbeatRuns, issues,
+  pipelineCaseEvents } from "../../packages/db/src/index.ts";
 import { eq } from "../../packages/db/node_modules/drizzle-orm/index.js";
 import { createLocalAgentJwt } from "../../server/src/agent-auth-jwt";
 import { canActorReadHeartbeatRunPrivacy } from "../../server/src/services/authorization.ts";
@@ -259,10 +261,39 @@ async function assertCurrentHumanReadableProducerRun(
   }
 }
 
-async function createPipeline(board: APIRequestContext, companyId: string) {
+async function seedPrivateCaseEventSource(board: APIRequestContext, companyId: string, caseId: string) {
+  const configPath = process.env.PAPERCLIP_E2E_SERVER_CONFIG;
+  if (!configPath) throw new Error("Pipeline private-source fixture requires the isolated E2E server config");
+  const config = JSON.parse(await readFile(configPath, "utf8")) as { database: { embeddedPostgresDataDir: string } };
+  const pidFile = await readFile(path.join(config.database.embeddedPostgresDataDir, "postmaster.pid"), "utf8");
+  const port = pidFile.split("\n")[3];
+  if (!/^\d+$/.test(port ?? "")) throw new Error("Isolated E2E Postgres port is unavailable");
+  const databaseUrl = `postgres://paperclip:paperclip@127.0.0.1:${port}/paperclip`, db = createDb(databaseUrl);
+  try {
+    const sessionResponse = await board.get("/api/auth/get-session");
+  await expectOk(sessionResponse, "read current Human identity for the source-privacy fixture");
+    const session = await sessionResponse.json() as { user: { id: string } };
+    const ownerId = randomUUID(), issueId = randomUUID(), now = new Date();
+    if (ownerId === session.user.id) throw new Error("Private issue source owner must be a different Human");
+    await db.insert(authUsers).values({ id: ownerId, name: "Private source owner fixture",
+      email: `${ownerId}@example.test`, createdAt: now, updatedAt: now });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: ownerId,
+      status: "active", membershipRole: "member" });
+    await db.insert(issues).values({ id: issueId, companyId, title: "Private event source title",
+      description: "Private event source body", visibility: "private", status: "todo",
+      createdByUserId: ownerId, responsibleUserId: ownerId });
+    await db.insert(pipelineCaseEvents).values({ companyId, caseId, type: "automation_executed",
+      actorType: "user", actorUserId: session.user.id, payload: { issueId, status: "source_fixture" } });
+    return { issueId };
+  } finally {
+    await closeRegisteredClients(databaseUrl);
+  }
+}
+
+async function createPipeline(board: APIRequestContext, companyId: string, key = "content-production") {
   const response = await board.post(`/api/companies/${companyId}/pipelines`, {
     data: {
-      key: "content-production",
+      key,
       name: "Content production",
       description: "Draft, review, and publish launch content.",
       enforceTransitions: true,
@@ -797,11 +828,20 @@ test.describe("Pipelines tutorial UI flow", () => {
       sentBackStage: configured.stages.find((stage) => stage.key === "drafting")!.id,
     });
 
-    const changelogEventsResponse = await board.get(`/api/cases/${changelog!.id}/events`);
-    // Full case history can include producer-run sources this board member
-    // cannot inspect. The filtered company projection below proves the exact
-    // Human-authored learning event without widening full-history access.
-    expect(changelogEventsResponse.status()).toBe(404);
+    const humanOnlyPipeline = await createPipeline(board, company.id, `human-only-${crypto.randomUUID()}`);
+    const humanOnlyCase = await createItem(board, humanOnlyPipeline.id, {
+      caseKey: "human-only-history", title: "Human-only case history", stageKey: "drafting",
+    });
+    const sourceFreeEventsResponse = await board.get(`/api/cases/${humanOnlyCase.id}/events`);
+    await expectOk(sourceFreeEventsResponse, "read the source-free Human case history");
+    expect(sourceFreeEventsResponse.headers()["cache-control"]).toBe("private, no-store");
+    expect((await sourceFreeEventsResponse.json() as { items: Array<{ type: string }> }).items.map(event => event.type))
+      .toContain("ingested");
+    const privateSource = await seedPrivateCaseEventSource(board, company.id, humanOnlyCase.id);
+    const privateEventsResponse = await board.get(`/api/cases/${humanOnlyCase.id}/events`);
+    expect(privateEventsResponse.status()).toBe(404);
+    expect(privateEventsResponse.headers()["cache-control"]).toBe("private, no-store");
+    expect(await privateEventsResponse.text()).not.toContain(privateSource.issueId);
     const learningEventsResponse = await board.get(`/api/companies/${company.id}/case-events?types=review_decided,transition_forced&limit=100`);
     await expectOk(learningEventsResponse, "read company learning events");
     const learningEvents = await learningEventsResponse.json() as { items: Array<{

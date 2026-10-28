@@ -5444,19 +5444,20 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
     async listCaseEventsPage(
       companyId: string,
       caseId: string,
-      options?: { limit?: number; offset?: number; order?: "asc" | "desc" },
+      options?: { limit?: number; offset?: number; order?: "asc" | "desc"; eventIds?: string[]; queryDb?: Db },
     ) {
+      const queryDb = options?.queryDb ?? db;
       const limit = Math.min(
         PIPELINE_CASE_EVENTS_MAX_LIMIT,
         Math.max(1, Math.floor(options?.limit ?? PIPELINE_CASE_EVENTS_DEFAULT_LIMIT)),
       );
       const offset = Math.max(0, Math.floor(options?.offset ?? 0));
       const order = options?.order ?? "asc";
-      const detail = await getCaseWithStageOrThrow(db, companyId, caseId);
+      const detail = await getCaseWithStageOrThrow(queryDb, companyId, caseId);
       const fromStage = alias(pipelineStages, "from_stage");
       const toStage = alias(pipelineStages, "to_stage");
       const actorAgent = alias(agents, "actor_agent");
-      const rows = await db
+      const rows = await queryDb
         .select({
           event: pipelineCaseEvents,
           fromStage: { id: fromStage.id, key: fromStage.key, name: fromStage.name, kind: fromStage.kind },
@@ -5467,7 +5468,8 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
         .leftJoin(fromStage, eq(pipelineCaseEvents.fromStageId, fromStage.id))
         .leftJoin(toStage, eq(pipelineCaseEvents.toStageId, toStage.id))
         .leftJoin(actorAgent, eq(pipelineCaseEvents.actorAgentId, actorAgent.id))
-        .where(and(eq(pipelineCaseEvents.companyId, companyId), eq(pipelineCaseEvents.caseId, caseId)))
+        .where(and(eq(pipelineCaseEvents.companyId, companyId), eq(pipelineCaseEvents.caseId, caseId),
+          options?.eventIds ? inArray(pipelineCaseEvents.id, options.eventIds) : undefined))
         .orderBy(order === "desc" ? desc(pipelineCaseEvents.createdAt) : asc(pipelineCaseEvents.createdAt))
         .limit(limit + 1)
         .offset(offset);
@@ -5492,25 +5494,25 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
         .filter((id): id is string => Boolean(id)))];
       const [routineRows, workflowRows, issueRowsForEvents, pipelineStageRows] = await Promise.all([
         routineIds.length > 0
-          ? db
+          ? queryDb
             .select({ id: routines.id, title: routines.title })
             .from(routines)
             .where(and(eq(routines.companyId, companyId), inArray(routines.id, routineIds)))
           : Promise.resolve([]),
         workflowIds.length > 0
-          ? db
+          ? queryDb
             .select({ id: workflows.id, name: workflows.name })
             .from(workflows)
             .where(and(eq(workflows.companyId, companyId), inArray(workflows.id, workflowIds)))
           : Promise.resolve([]),
         issueIds.length > 0
-          ? db
+          ? queryDb
             .select({ id: issues.id, identifier: issues.identifier, title: issues.title, status: issues.status })
             .from(issues)
             .where(and(eq(issues.companyId, companyId), inArray(issues.id, issueIds)))
           : Promise.resolve([]),
         automationEvents.length > 0
-          ? db
+          ? queryDb
             .select()
             .from(pipelineStages)
             .where(eq(pipelineStages.pipelineId, detail.case.pipelineId))

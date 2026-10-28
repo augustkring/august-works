@@ -112,14 +112,14 @@ describeEmbeddedPostgres("pipeline routes", () => {
     await tempDb?.cleanup();
   });
 
-  function app(actor: Express.Request["actor"]) {
+  function app(actor: Express.Request["actor"], service?: ReturnType<typeof pipelineService>) {
     const instance = express();
     instance.use(express.json());
     instance.use((req, _res, next) => {
       req.actor = actor;
       next();
     });
-    instance.use("/api", pipelineRoutes(db, { heartbeat: noopHeartbeat }));
+    instance.use("/api", pipelineRoutes(db, { heartbeat: noopHeartbeat }, service));
     instance.use("/api", issueRoutes(db, {} as any));
     instance.use("/api", projectRoutes(db));
     instance.use(errorHandler);
@@ -1063,6 +1063,9 @@ describeEmbeddedPostgres("pipeline routes", () => {
     expect(secondCase.body.case.title).toBe("Company shared manual case");
     expect(JSON.stringify(secondCase.body)).not.toContain(taskId);
     expect(JSON.stringify(secondCase.body)).not.toContain("PRIVATE TASK TITLE");
+    const sourceFreeHistory = await secondHttp.get(`/api/cases/${manualCase.case.id}/events`).expect(200);
+    expect(sourceFreeHistory.headers["cache-control"]).toBe("private, no-store");
+    expect(sourceFreeHistory.body.items.map((event: { type: string }) => event.type)).toContain("ingested");
     const secondOutputs = await secondHttp.get(`/api/cases/${manualCase.case.id}/outputs`).expect(200);
     expect(secondOutputs.body).toMatchObject({ items: [], sources: [], counts: { documents: 0, workProducts: 0, attachments: 0 } });
     expect(JSON.stringify(secondOutputs.body)).not.toContain("PRIVATE DOCUMENT");
@@ -1152,6 +1155,45 @@ describeEmbeddedPostgres("pipeline routes", () => {
     expect(agentSearch.body.map((row: { case: { id: string } }) => row.case.id)).not.toContain(agentCase.case.id);
   });
 
+  it("excludes a private event appended after the raw case-event route captures checked event IDs", async () => {
+    const company = await seedCompany("Pipeline checked event snapshot");
+    const owner = await seedHumanMember(company.id, "Private event source owner");
+    const viewer = await seedHumanMember(company.id, "Company case event reader");
+    const pipeline = await request(app(boardActor)).post(`/api/companies/${company.id}/pipelines`)
+      .send({ key: "checked-event-snapshot", name: "Checked event snapshot" }).expect(201);
+    const manualCase = await pipelineService(db).ingestCase({ companyId: company.id, pipelineId: pipeline.body.id,
+      caseKey: "checked-event-snapshot", title: "Shared case before private event", actor: { type: "user", userId: owner.userId } });
+    const privateTaskId = randomUUID();
+    await db.insert(issues).values({ id: privateTaskId, companyId: company.id, title: "Late private source task",
+      description: "Late private source body", status: "done", visibility: "private", createdByUserId: owner.userId,
+      responsibleUserId: owner.userId });
+
+    const service = pipelineService(db, { heartbeat: noopHeartbeat });
+    const listCaseEventsPage = service.listCaseEventsPage.bind(service);
+    let appendedEventId: string | null = null;
+    service.listCaseEventsPage = async (companyId, caseId, options) => {
+      if (caseId === manualCase.case.id && appendedEventId === null) {
+        const [event] = await db.insert(pipelineCaseEvents).values({ companyId, caseId,
+          type: "review_decided", actorType: "user", actorUserId: owner.userId,
+          payload: { decision: "request_changes", reason: "Late private event marker.", issueId: privateTaskId } }).returning({ id: pipelineCaseEvents.id });
+        appendedEventId = event!.id;
+      }
+      return listCaseEventsPage(companyId, caseId, options);
+    };
+
+    const response = await request(app(viewer.actor, service)).get(`/api/cases/${manualCase.case.id}/events`).expect(200);
+    expect(response.headers["cache-control"]).toBe("private, no-store");
+    expect(response.body.items.map((event: { type: string }) => event.type)).toContain("ingested");
+    expect(response.body.items.map((event: { id: string }) => event.id)).not.toContain(appendedEventId);
+    expect(JSON.stringify(response.body)).not.toContain("Late private event marker.");
+    expect(JSON.stringify(response.body)).not.toContain(privateTaskId);
+
+    const nextRead = await request(app(viewer.actor)).get(`/api/cases/${manualCase.case.id}/events`).expect(404);
+    expect(nextRead.headers["cache-control"]).toBe("private, no-store");
+    expect(JSON.stringify(nextRead.body)).not.toContain("Late private event marker.");
+    expect(JSON.stringify(nextRead.body)).not.toContain(privateTaskId);
+  });
+
   it("rechecks source privacy after the case-event read waits behind a source writer", async () => {
     const company = await seedCompany("Pipeline event source writer");
     const owner = await seedHumanMember(company.id, "Pipeline event source reader");
@@ -1183,6 +1225,7 @@ describeEmbeddedPostgres("pipeline routes", () => {
     });
     await writerReady;
     const pendingRead = http.get(`/api/companies/${company.id}/case-events?types=review_decided`).then(response => response);
+    const pendingCaseHistory = http.get(`/api/cases/${manualCase.case.id}/events`).then(response => response);
     try {
       await new Promise(resolve => setTimeout(resolve, 100));
       releaseWriter();
@@ -1193,6 +1236,10 @@ describeEmbeddedPostgres("pipeline routes", () => {
       expect(JSON.stringify(after.body)).not.toContain("Source-backed review");
       expect(after.headers["cache-control"]).toContain("private");
       expect(after.headers["cache-control"]).toContain("no-store");
+      const deniedHistory = await pendingCaseHistory;
+      expect(deniedHistory.status).toBe(404);
+      expect(JSON.stringify(deniedHistory.body)).not.toContain("Private source body");
+      expect(deniedHistory.headers["cache-control"]).toBe("private, no-store");
     } finally {
       releaseWriter();
       await sourceWriter;
@@ -1223,6 +1270,7 @@ describeEmbeddedPostgres("pipeline routes", () => {
     });
     await lockAcquired;
     const pendingRead = http.get(`/api/companies/${company.id}/case-events?types=review_decided`).then(response => response);
+    const pendingCaseHistory = http.get(`/api/cases/${manualCase.case.id}/events`).then(response => response);
     try {
       await new Promise(resolve => setTimeout(resolve, 100));
       await db.update(companyMemberships).set({ status: "revoked" }).where(and(
@@ -1233,6 +1281,10 @@ describeEmbeddedPostgres("pipeline routes", () => {
       const denied = await pendingRead;
       expect(denied.status).toBe(404);
       expect(JSON.stringify(denied.body)).not.toContain("Must remain private after revoke");
+      const deniedHistory = await pendingCaseHistory;
+      expect(deniedHistory.status).toBe(404);
+      expect(JSON.stringify(deniedHistory.body)).not.toContain("Must remain private after revoke");
+      expect(deniedHistory.headers["cache-control"]).toBe("private, no-store");
     } finally {
       releaseRowLock();
       await holdPrivacy;

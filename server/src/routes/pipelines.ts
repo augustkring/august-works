@@ -91,7 +91,8 @@ import {
 } from "../services/pipelines-aggregation.js";
 import { logPostgresLockUnavailable } from "../services/postgres-lock-diagnostics.js";
 import { accessService } from "../services/access.js";
-import { authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, pinCurrentBoardActor } from "../services/authorization.js";
+import { authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, pinCurrentBoardActor,
+  type AuthorizationActor } from "../services/authorization.js";
 import { lockAnalyticalCompany } from "../services/analytical-privacy.js";
 import { lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
 import { issueService } from "../services/issues.js";
@@ -360,22 +361,21 @@ function assertPipelineCompanyAccess(req: Request, companyId: string) {
 async function assertCurrentPipelineCompanyRead(db: Db, req: Request, companyId: string) {
   const [company] = await db.select({ id: companies.id }).from(companies).where(eq(companies.id, companyId)).for("share");
   if (!company) throw notFound("Pipeline resource not found");
-  let actor = req.actor;
+  const actor = req.actor;
+  let decisionActor: AuthorizationActor = actor;
   if (actor.type === "board" && actor.source !== "local_implicit") {
     const pinned = await pinCurrentBoardActor(db, actor);
     if (!pinned) throw notFound("Pipeline resource not found");
-    actor = {
-      ...pinned.actor,
-      userId: pinned.actor.userId ?? undefined,
-      sessionId: pinned.actor.sessionId ?? undefined,
-    };
+    const currentUserId = pinned.actor.type === "board" ? pinned.actor.userId : null;
+    if (!currentUserId) throw notFound("Pipeline resource not found");
+    decisionActor = pinned.actor;
     const [membership] = await db.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
       eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
-      eq(companyMemberships.principalId, actor.userId!), eq(companyMemberships.status, "active"),
+      eq(companyMemberships.principalId, currentUserId), eq(companyMemberships.status, "active"),
     )).for("share", { noWait: true });
     if (!membership) throw notFound("Pipeline resource not found");
   }
-  const decision = await authorizationService(db).decide({ actor, action: "company_scope:read",
+  const decision = await authorizationService(db).decide({ actor: decisionActor, action: "company_scope:read",
     resource: { type: "company", companyId }, scope: null });
   if (!decision.allowed) throw notFound("Pipeline resource not found");
 }
@@ -857,32 +857,33 @@ async function requirePipelineCaseBodySources(db: Db, req: Request, companyId: s
   if (!await canReadPipelineCaseBodySources(db, req, companyId, caseId)) throw notFound("Pipeline case not found");
 }
 
-async function canReadPipelineCaseEventSources(db: Db, req: Request, companyId: string, caseId: string,
+async function readablePipelineCaseEventIds(db: Db, req: Request, companyId: string, caseId: string,
   types?: string[], eventIds?: string[]) {
   const events = await db.select({ id: pipelineCaseEvents.id, actorType: pipelineCaseEvents.actorType, runId: pipelineCaseEvents.runId,
     payload: pipelineCaseEvents.payload }).from(pipelineCaseEvents).where(and(
       eq(pipelineCaseEvents.companyId, companyId), eq(pipelineCaseEvents.caseId, caseId),
       eventIds ? inArray(pipelineCaseEvents.id, eventIds) : undefined,
       types && types.length > 0 ? inArray(pipelineCaseEvents.type, types) : undefined)).limit(257);
-  if (events.length > 256) return false;
+  if (events.length > 256) return null;
   for (const event of events) {
     if (event.actorType === "agent" && (!event.runId ||
-      !await canReadPipelineCaseProducerRun(db, req, companyId, event.runId))) return false;
+      !await canReadPipelineCaseProducerRun(db, req, companyId, event.runId))) return null;
     const payloadIssueId = event.payload && typeof event.payload === "object" && !Array.isArray(event.payload)
       ? (event.payload as Record<string, unknown>).issueId : null;
     if (typeof payloadIssueId === "string" &&
       (!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(payloadIssueId) ||
-        !await canReadPipelineCaseTaskSource(db, req, companyId, payloadIssueId))) return false;
+        !await canReadPipelineCaseTaskSource(db, req, companyId, payloadIssueId))) return null;
   }
-  return true;
+  return events.map(event => event.id);
 }
 
-async function requirePipelineCaseEventSources(db: Db, req: Request, companyId: string, caseId: string) {
+async function requirePipelineCaseEventSources(db: Db, req: Request, companyId: string, caseId: string): Promise<string[]> {
   // Match the case-body proof's bounded retry on no-wait session/run locks;
   // retries re-run the same exact per-event source checks with current auth.
-  if (!await retryPipelineCasePrivacyProof(db, "pipeline_case_event_source", () =>
-    canReadPipelineCaseEventSources(db, req, companyId, caseId)))
-    throw notFound("Pipeline case events not found");
+  const eventIds = await retryPipelineCasePrivacyProof(db, "pipeline_case_event_source", () =>
+    readablePipelineCaseEventIds(db, req, companyId, caseId));
+  if (!eventIds) throw notFound("Pipeline case events not found");
+  return eventIds;
 }
 
 async function getStagesByKey(db: Db, pipelineId: string) {
@@ -984,9 +985,13 @@ async function assertIssueLinkMutationAllowed(
   await input.issuesSvc.assertCheckoutOwner(input.issue.id, actorAgentId, runId);
 }
 
-export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineService>[1] = {}) {
+export function pipelineRoutes(
+  db: Db,
+  options: Parameters<typeof pipelineService>[1] = {},
+  service: ReturnType<typeof pipelineService> = pipelineService(db, options),
+) {
   const router = Router();
-  const svc = pipelineService(db, options);
+  const svc = service;
   const outputsSvc = pipelineCaseOutputsService(db);
   const access = accessService(db);
   const issuesSvc = issueService(db);
@@ -1123,14 +1128,15 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
         // Keep this event-list proof scoped to the event types actually projected
         // below. Full case history has a separate, stricter source proof.
         const bodyReadable = await canReadPipelineCaseBodySources(tx, req, companyId, caseId);
-        const eventsReadable = await canReadPipelineCaseEventSources(tx, req, companyId, caseId, types, eventIds)
-          .catch(error => {
-            if (hasPostgresLockUnavailableCode(error)) throw error;
-            return false;
-          });
-        if (bodyReadable && eventsReadable) {
+        let caseReadableEventIds: string[] | null = null;
+        try {
+          caseReadableEventIds = await readablePipelineCaseEventIds(tx, req, companyId, caseId, types, eventIds);
+        } catch (error) {
+          if (hasPostgresLockUnavailableCode(error)) throw error;
+        }
+        if (bodyReadable && caseReadableEventIds) {
           readableCaseIds.push(caseId);
-          readableEventIds.push(...eventIds);
+          readableEventIds.push(...caseReadableEventIds);
         }
       }
       const projection = await listCompanyCaseEvents(tx, { companyId, types, limit, offset,
@@ -2563,10 +2569,24 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
 
   router.get("/cases/:caseId/events", async (req, res) => {
     const caseId = req.params.caseId as string;
-    const companyId = await assertCaseAccess(db, req, caseId);
+    const companyId = await resolveCaseCompanyId(db, caseId);
+    assertPipelineCompanyAccess(req, companyId);
+    res.setHeader("Cache-Control", "private, no-store");
     const pagination = parseCaseEventsQuery(req.query);
-    await requirePipelineCaseEventSources(db, req, companyId, caseId);
-    res.json(await svc.listCaseEventsPage(companyId, caseId, pagination));
+    const projection = await retryPipelineCasePrivacyProof(db, "pipeline_case_events", () => db.transaction(async raw => {
+      const tx = raw as unknown as Db;
+      await lockAnalyticalCompany(tx, companyId, "read");
+      await lockMemoryPrivacy(tx, companyId, "read");
+      await assertCurrentPipelineCompanyRead(tx, req, companyId);
+      if (!await canReadPipelineCaseBodySources(tx, req, companyId, caseId))
+        throw notFound("Pipeline case events not found");
+      const eventIds = await readablePipelineCaseEventIds(tx, req, companyId, caseId);
+      if (!eventIds) throw notFound("Pipeline case events not found");
+      const result = await svc.listCaseEventsPage(companyId, caseId, { ...pagination, eventIds, queryDb: tx });
+      await assertCurrentPipelineCompanyRead(tx, req, companyId);
+      return result;
+    }));
+    res.json(projection);
   });
 
   router.get("/cases/:caseId/children/tree", async (req, res) => {
@@ -2592,12 +2612,14 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
   router.get("/cases/:caseId/context-pack", async (req, res) => {
     const caseId = req.params.caseId as string;
     const companyId = await assertCaseAccess(db, req, caseId);
-    await requirePipelineCaseEventSources(db, req, companyId, caseId);
+    res.setHeader("Cache-Control", "private, no-store");
+    const eventIds = await requirePipelineCaseEventSources(db, req, companyId, caseId);
     const detail = await getCaseDetail(db, companyId, caseId);
     const [events, outputs, childOutcomes] = await Promise.all([
       svc.listCaseEventsPage(companyId, caseId, {
         limit: PIPELINE_CONTEXT_PACK_EVENT_LIMIT,
         order: "desc",
+        eventIds,
       }),
       outputsSvc.listCaseOutputs(companyId, caseId, (issueId, sourceRunId) =>
         canReadPipelineCaseTaskSource(db, req, companyId, issueId, sourceRunId)),
