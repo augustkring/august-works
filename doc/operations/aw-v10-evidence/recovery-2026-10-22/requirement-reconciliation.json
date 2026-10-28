@@ -1606,7 +1606,9 @@
       "sourceLine": 6795,
       "work": "durable operation persistence/service.",
       "reconciliation": "partial_implementation_open",
-      "evidence": [],
+      "evidence": [
+        "doc/operations/aw-v10-evidence/company-import-route-crash-2026-10-28/r5"
+      ],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
         "bindingClause": "20. `V10-020` durable operation persistence/service.",
@@ -1634,6 +1636,31 @@
             ],
             "finding": "Company Import persistence uses PostgreSQL `customer_operations` with requester/idempotency hashes, attempts, leases, accepted-plan fingerprints, effect checkpoints, status constraints, and a startup/interval expired-lease recovery owner. The shared receipt is projected from that native job. The table check explicitly limits rows to Company Import, so this is not a generic durable-operation store/service for export, delete, restore, or provisioning.",
             "verification": "read-only source inspection; not a test or acceptance receipt"
+          },
+          {
+            "kind": "assembled_current_source_integration_test",
+            "reference": "doc/operations/aw-v10-evidence/company-import-route-crash-2026-10-28/r5",
+            "paths": [
+              "server/src/__tests__/company-import-process-recovery.integration.test.ts",
+              "server/src/__tests__/fixtures/company-import-crash-worker.ts",
+              "server/src/routes/companies.ts",
+              "server/src/services/company-import-jobs.ts",
+              "server/src/services/company-portability.ts",
+              "packages/db/src/migrations/0556_customer_operation_expired_lease_recovery.sql"
+            ],
+            "sourceCommit": "fe526163448a0eadc7abac68c651582b99f8f23b",
+            "sourcePins": "doc/operations/aw-v10-evidence/company-import-route-crash-2026-10-28/r5/source-pins.json",
+            "sourcePinsSha256": "9c648c939d1fef917e234392b66f070af642596009d5229cd77631235d2b4ac8",
+            "testLog": "doc/operations/aw-v10-evidence/company-import-route-crash-2026-10-28/r5/test.log",
+            "testLogSha256": "9eb6b304be7c56842baeed11a9274e5249e710ad0efd657a5eb193285e3a8bc3",
+            "result": "Three tests passed at the captured source snapshot (Vitest exit 0; snapshot, esbuild parse, diff-check and aggregate exits 0).",
+            "scenarioScope": [
+              "Real local embedded PostgreSQL and real HTTP company import routes; the child process test fixture fixes only the authenticated AuthorizationActor at the app boundary.",
+              "After first target Agent/effect checkpoint commits, SIGKILL the route worker and explicitly assert pg_terminate_backend succeeds for the blocked second target write; expiry recovery preserves the original job/attempt as needs_reconciliation and prevents retry or duplicate target writes.",
+              "SIGKILL during final receipt settlement can race with PostgreSQL commit; the restart HTTP status read returns the same succeeded receipt and one target write.",
+              "Deleting the physical Better Auth session row after the first imported target Agent causes the original route to stop before another target write and preserve a needs_reconciliation outcome."
+            ],
+            "scopeLimits": "Scoped company-import producer evidence only. Does not qualify every crash point, external storage/provider unknown outcomes, cross-company governed-positive import, production scheduler/deployment restart, other CustomerOperation domains, or V10 release acceptance."
           }
         ],
         "historicalPinComparison": {
@@ -1683,7 +1710,8 @@
       "reconciliation": "historical_partial_evidence_open",
       "evidence": [
         "doc/operations/aw-v10-evidence/durable-import-2026-10-24/checkpoint.json",
-        "doc/operations/aw-v10-evidence/help-import-history-2026-10-24/checkpoint.json"
+        "doc/operations/aw-v10-evidence/help-import-history-2026-10-24/checkpoint.json",
+        "doc/operations/aw-v10-evidence/company-import-route-crash-2026-10-28/r5"
       ],
       "oct22Reconciliation": "in_progress",
       "currentAssessment": {
@@ -1872,6 +1900,31 @@
             ],
             "finding": "CompanyImport is durably represented by a shared operation contract and a server job owner with lease/recovery checkpoints, plus route and UI status. This is implementation evidence only; the assembled producer/consumer crash path and cross-company acceptance are not proven by this source review.",
             "verification": "current dirty-worktree source inspection only; source presence is not a test PASS or runtime qualification"
+          },
+          {
+            "kind": "assembled_current_source_integration_test",
+            "reference": "doc/operations/aw-v10-evidence/company-import-route-crash-2026-10-28/r5",
+            "paths": [
+              "server/src/__tests__/company-import-process-recovery.integration.test.ts",
+              "server/src/__tests__/fixtures/company-import-crash-worker.ts",
+              "server/src/routes/companies.ts",
+              "server/src/services/company-import-jobs.ts",
+              "server/src/services/company-portability.ts",
+              "packages/db/src/migrations/0556_customer_operation_expired_lease_recovery.sql"
+            ],
+            "sourceCommit": "fe526163448a0eadc7abac68c651582b99f8f23b",
+            "sourcePins": "doc/operations/aw-v10-evidence/company-import-route-crash-2026-10-28/r5/source-pins.json",
+            "sourcePinsSha256": "9c648c939d1fef917e234392b66f070af642596009d5229cd77631235d2b4ac8",
+            "testLog": "doc/operations/aw-v10-evidence/company-import-route-crash-2026-10-28/r5/test.log",
+            "testLogSha256": "9eb6b304be7c56842baeed11a9274e5249e710ad0efd657a5eb193285e3a8bc3",
+            "result": "Three tests passed at the captured source snapshot (Vitest exit 0; snapshot, esbuild parse, diff-check and aggregate exits 0).",
+            "scenarioScope": [
+              "Real local embedded PostgreSQL and real HTTP company import routes; the child process test fixture fixes only the authenticated AuthorizationActor at the app boundary.",
+              "After first target Agent/effect checkpoint commits, SIGKILL the route worker and explicitly assert pg_terminate_backend succeeds for the blocked second target write; expiry recovery preserves the original job/attempt as needs_reconciliation and prevents retry or duplicate target writes.",
+              "SIGKILL during final receipt settlement can race with PostgreSQL commit; the restart HTTP status read returns the same succeeded receipt and one target write.",
+              "Deleting the physical Better Auth session row after the first imported target Agent causes the original route to stop before another target write and preserve a needs_reconciliation outcome."
+            ],
+            "scopeLimits": "Scoped company-import producer evidence only. Does not qualify every crash point, external storage/provider unknown outcomes, cross-company governed-positive import, production scheduler/deployment restart, other CustomerOperation domains, or V10 release acceptance."
           }
         ],
         "historicalPinComparison": {
@@ -1908,7 +1961,8 @@
       "work": "process-kill/restart/idempotency/unknown-outcome tests.",
       "reconciliation": "historical_partial_evidence_open",
       "evidence": [
-        "doc/operations/aw-v10-evidence/durable-import-2026-10-24/checkpoint.json"
+        "doc/operations/aw-v10-evidence/durable-import-2026-10-24/checkpoint.json",
+        "doc/operations/aw-v10-evidence/company-import-route-crash-2026-10-28/r5"
       ],
       "oct22Reconciliation": "in_progress",
       "currentAssessment": {
@@ -2036,6 +2090,31 @@
             ],
             "finding": "Process-recovery, job, and service test sources exercise the import owner, including crash/reconciliation scenarios. Their presence does not certify execution at the current dirty worktree.",
             "verification": "current dirty-worktree source inspection only; source presence is not a test PASS or runtime qualification"
+          },
+          {
+            "kind": "assembled_current_source_integration_test",
+            "reference": "doc/operations/aw-v10-evidence/company-import-route-crash-2026-10-28/r5",
+            "paths": [
+              "server/src/__tests__/company-import-process-recovery.integration.test.ts",
+              "server/src/__tests__/fixtures/company-import-crash-worker.ts",
+              "server/src/routes/companies.ts",
+              "server/src/services/company-import-jobs.ts",
+              "server/src/services/company-portability.ts",
+              "packages/db/src/migrations/0556_customer_operation_expired_lease_recovery.sql"
+            ],
+            "sourceCommit": "fe526163448a0eadc7abac68c651582b99f8f23b",
+            "sourcePins": "doc/operations/aw-v10-evidence/company-import-route-crash-2026-10-28/r5/source-pins.json",
+            "sourcePinsSha256": "9c648c939d1fef917e234392b66f070af642596009d5229cd77631235d2b4ac8",
+            "testLog": "doc/operations/aw-v10-evidence/company-import-route-crash-2026-10-28/r5/test.log",
+            "testLogSha256": "9eb6b304be7c56842baeed11a9274e5249e710ad0efd657a5eb193285e3a8bc3",
+            "result": "Three tests passed at the captured source snapshot (Vitest exit 0; snapshot, esbuild parse, diff-check and aggregate exits 0).",
+            "scenarioScope": [
+              "Real local embedded PostgreSQL and real HTTP company import routes; the child process test fixture fixes only the authenticated AuthorizationActor at the app boundary.",
+              "After first target Agent/effect checkpoint commits, SIGKILL the route worker and explicitly assert pg_terminate_backend succeeds for the blocked second target write; expiry recovery preserves the original job/attempt as needs_reconciliation and prevents retry or duplicate target writes.",
+              "SIGKILL during final receipt settlement can race with PostgreSQL commit; the restart HTTP status read returns the same succeeded receipt and one target write.",
+              "Deleting the physical Better Auth session row after the first imported target Agent causes the original route to stop before another target write and preserve a needs_reconciliation outcome."
+            ],
+            "scopeLimits": "Scoped company-import producer evidence only. Does not qualify every crash point, external storage/provider unknown outcomes, cross-company governed-positive import, production scheduler/deployment restart, other CustomerOperation domains, or V10 release acceptance."
           }
         ],
         "historicalPinComparison": {
@@ -2069,7 +2148,8 @@
       "reconciliation": "historical_partial_evidence_open",
       "evidence": [
         "doc/operations/aw-v10-evidence/durable-import-2026-10-24/checkpoint.json",
-        "doc/operations/aw-v10-evidence/help-import-history-2026-10-24/checkpoint.json"
+        "doc/operations/aw-v10-evidence/help-import-history-2026-10-24/checkpoint.json",
+        "doc/operations/aw-v10-evidence/company-import-route-crash-2026-10-28/r5"
       ],
       "oct22Reconciliation": "in_progress",
       "currentAssessment": {
@@ -2256,6 +2336,31 @@
             ],
             "finding": "CompanyImport exposes its own operation status through typed API receipts and page status. A repository-wide generic customer operation-status surface is not established by these sources.",
             "verification": "current dirty-worktree source inspection only; source presence is not a test PASS or runtime qualification"
+          },
+          {
+            "kind": "assembled_current_source_integration_test",
+            "reference": "doc/operations/aw-v10-evidence/company-import-route-crash-2026-10-28/r5",
+            "paths": [
+              "server/src/__tests__/company-import-process-recovery.integration.test.ts",
+              "server/src/__tests__/fixtures/company-import-crash-worker.ts",
+              "server/src/routes/companies.ts",
+              "server/src/services/company-import-jobs.ts",
+              "server/src/services/company-portability.ts",
+              "packages/db/src/migrations/0556_customer_operation_expired_lease_recovery.sql"
+            ],
+            "sourceCommit": "fe526163448a0eadc7abac68c651582b99f8f23b",
+            "sourcePins": "doc/operations/aw-v10-evidence/company-import-route-crash-2026-10-28/r5/source-pins.json",
+            "sourcePinsSha256": "9c648c939d1fef917e234392b66f070af642596009d5229cd77631235d2b4ac8",
+            "testLog": "doc/operations/aw-v10-evidence/company-import-route-crash-2026-10-28/r5/test.log",
+            "testLogSha256": "9eb6b304be7c56842baeed11a9274e5249e710ad0efd657a5eb193285e3a8bc3",
+            "result": "Three tests passed at the captured source snapshot (Vitest exit 0; snapshot, esbuild parse, diff-check and aggregate exits 0).",
+            "scenarioScope": [
+              "Real local embedded PostgreSQL and real HTTP company import routes; the child process test fixture fixes only the authenticated AuthorizationActor at the app boundary.",
+              "After first target Agent/effect checkpoint commits, SIGKILL the route worker and explicitly assert pg_terminate_backend succeeds for the blocked second target write; expiry recovery preserves the original job/attempt as needs_reconciliation and prevents retry or duplicate target writes.",
+              "SIGKILL during final receipt settlement can race with PostgreSQL commit; the restart HTTP status read returns the same succeeded receipt and one target write.",
+              "Deleting the physical Better Auth session row after the first imported target Agent causes the original route to stop before another target write and preserve a needs_reconciliation outcome."
+            ],
+            "scopeLimits": "Scoped company-import producer evidence only. Does not qualify every crash point, external storage/provider unknown outcomes, cross-company governed-positive import, production scheduler/deployment restart, other CustomerOperation domains, or V10 release acceptance."
           }
         ],
         "historicalPinComparison": {
@@ -4772,7 +4877,7 @@
           "server/src/services/announcement-feed.ts",
           "server/src/routes/announcements.ts"
         ],
-        "implementationFinding": "The operator-published announcement feed has a bounded current/history substrate and Find projection, and the shared contract now permits typed release/deprecation/customer impact and migration references. It does not yet provide a complete customer changelog with a versioned release history, audience/impact, migration and rollback/limitation fields validated as a coherent publication record.",
+        "implementationFinding": "Customer changelog is implemented in Help through the existing operator-owned announcement feed, typed customer release notes, authenticated no-store API and EN/DA UI. Bounded publication coverage, unavailable configuration and locale fallback are explicit; personal news dismissal does not remove history or complete mandatory notices.",
         "scopedEvidence": [
           {
             "kind": "source_review",
@@ -4783,6 +4888,14 @@
             ],
             "finding": "The operator-published announcement feed has a bounded current/history substrate and Find projection, and the shared contract now permits typed release/deprecation/customer impact and migration references. It does not yet provide a complete customer changelog with a versioned release history, audience/impact, migration and rollback/limitation fields validated as a coherent publication record.",
             "verification": "current dirty-worktree source inspection only; not a test, hosted deployment, external provider fact, or acceptance receipt"
+          },
+          {
+            "kind": "source_pinned_automated_checks",
+            "paths": [
+              "doc/operations/aw-v10-evidence/customer-changelog-2026-10-28/README.md"
+            ],
+            "finding": "Feed 31/31, PostgreSQL history route 1 selected/12 skipped, customer Help/UI 12/12 and OpenAPI generation 1 selected/27 skipped passed; separate snapshots preserved.",
+            "verification": "Actual execution logs and source pins; not full-V10 or unchanged-head acceptance."
           }
         ],
         "historicalPinComparison": {
@@ -4790,8 +4903,8 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Implement the canonical customer changelog publication and read surface, validate V10-required customer questions and history/current release semantics, and keep raw commits out of customer-facing content.",
-        "implementationStatus": "partial_implementation",
+        "remainingWork": "Final unchanged-head workspace checks and release qualification; actual operator-owned release publication remains configuration/evidence, not synthesized software content.",
+        "implementationStatus": "implemented_unqualified",
         "sourceReviewFindings": [
           {
             "path": "packages/shared/src/announcements.ts",
@@ -8202,7 +8315,9 @@
       "sourceLine": 6925,
       "work": "process-kill durable import/operation drill.",
       "reconciliation": "no_scoped_evidence_located_open",
-      "evidence": [],
+      "evidence": [
+        "doc/operations/aw-v10-evidence/company-import-route-crash-2026-10-28/r5"
+      ],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
         "bindingClause": "111. `V10-111` process-kill durable import/operation drill.",
@@ -8224,6 +8339,31 @@
             ],
             "finding": "Durable Company Import jobs and runtime finalization/recovery code exist, along with restart recovery for scheduled work. No captured process-kill drill demonstrates all import and accepted-operation producers resume with the original effect/receipt after each required crash point.",
             "verification": "current dirty-worktree source inspection only; does not certify a test result, hosted deployment, live provider, operator/Human acceptance, or release readiness"
+          },
+          {
+            "kind": "assembled_current_source_integration_test",
+            "reference": "doc/operations/aw-v10-evidence/company-import-route-crash-2026-10-28/r5",
+            "paths": [
+              "server/src/__tests__/company-import-process-recovery.integration.test.ts",
+              "server/src/__tests__/fixtures/company-import-crash-worker.ts",
+              "server/src/routes/companies.ts",
+              "server/src/services/company-import-jobs.ts",
+              "server/src/services/company-portability.ts",
+              "packages/db/src/migrations/0556_customer_operation_expired_lease_recovery.sql"
+            ],
+            "sourceCommit": "fe526163448a0eadc7abac68c651582b99f8f23b",
+            "sourcePins": "doc/operations/aw-v10-evidence/company-import-route-crash-2026-10-28/r5/source-pins.json",
+            "sourcePinsSha256": "9c648c939d1fef917e234392b66f070af642596009d5229cd77631235d2b4ac8",
+            "testLog": "doc/operations/aw-v10-evidence/company-import-route-crash-2026-10-28/r5/test.log",
+            "testLogSha256": "9eb6b304be7c56842baeed11a9274e5249e710ad0efd657a5eb193285e3a8bc3",
+            "result": "Three tests passed at the captured source snapshot (Vitest exit 0; snapshot, esbuild parse, diff-check and aggregate exits 0).",
+            "scenarioScope": [
+              "Real local embedded PostgreSQL and real HTTP company import routes; the child process test fixture fixes only the authenticated AuthorizationActor at the app boundary.",
+              "After first target Agent/effect checkpoint commits, SIGKILL the route worker and explicitly assert pg_terminate_backend succeeds for the blocked second target write; expiry recovery preserves the original job/attempt as needs_reconciliation and prevents retry or duplicate target writes.",
+              "SIGKILL during final receipt settlement can race with PostgreSQL commit; the restart HTTP status read returns the same succeeded receipt and one target write.",
+              "Deleting the physical Better Auth session row after the first imported target Agent causes the original route to stop before another target write and preserve a needs_reconciliation outcome."
+            ],
+            "scopeLimits": "Scoped company-import producer evidence only. Does not qualify every crash point, external storage/provider unknown outcomes, cross-company governed-positive import, production scheduler/deployment restart, other CustomerOperation domains, or V10 release acceptance."
           }
         ],
         "historicalPinComparison": {

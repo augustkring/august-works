@@ -22,3 +22,9 @@ The implementation uses the existing public `db._.session` / `PostgresJsSession.
 - The ordinary benchmark does not represent a Native temporal prefix. Browser attempt 146 failed case 7 at the unchanged 20-second predicate (1 failed, exit 1); the full eight-case suite was not run. Source access still consumed a median 862.5 ms per event, so Native browser performance remains unqualified.
 
 Native browser evidence: `../native-retained-run-resume-2026-10-26/attempt-146/`. The original Task-only Native browser qualification failed. Diagnostic attempt 147 measured repeated unprepared original Run ACL reads; the final implementation adds preparation at that unchanged Run select. Browser attempt 148 failed the same unchanged 20-second predicate (1 failed, exit 1), despite a modest source-access median reduction to 786 ms. The full eight-case suite was not run. Native browser performance remains unqualified.
+
+## Conversation routing
+
+Phase probe 149 measured the Native fast-path eligibility/routing phase at a 506.5 ms median, always selecting the full deep reviewer. Its bounded reports include concurrent/startup callers; no exact event-time percentage is claimed. A valid persisted conversation-session generation now selects that same complete mixed Task + Run review directly. The marker grants no access. All current readers, source owners, erasure, retirement, source locks, and final current-run checks remain. Unmarked runs keep the existing source-free fast path.
+
+The focused PostgreSQL routing regression passed **5 tests**, exit 0 (30.45 seconds): unmarked admission, a real current comment with marked positive admission and Human revocation after a writer-lock wait, plus private-source, erased, and retired negatives. Browser attempt 150 was blocked at agent-creation setup before any Native execution. Fresh attempt 151 checks the unchanged case 7 predicate, then all eight only if case 7 passes. Its result is pending.
