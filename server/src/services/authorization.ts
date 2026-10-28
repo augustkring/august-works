@@ -2003,7 +2003,6 @@ type MemoryTemporalReadScope = {
 export interface MemoryPageStructuralProofMemoStore {
   readonly transaction: object;
   readonly proofsByOwnerPrefix: Map<string, Set<string>>;
-  ancestry?: { work: number; activeByActor: Map<string, Set<string>> };
 }
 const memoryTemporalReadScopes = new AsyncLocalStorage<MemoryTemporalReadScope>();
 let nativeMemoryTemporalDiagnostics = 0;
@@ -2083,8 +2082,7 @@ export async function withReadMemoryTemporalSources<T>(db: Db | DbTransaction, a
       contextIds: contextInputs.map(input => input.manifestId).sort(), active: true };
     let currentnessStage: "output_snapshot_currentness" | "context_inputs_currentness" = "output_snapshot_currentness";
     let structuralProofMemo: { transaction: object; actorKey: string; memoryTemporalIdentity: string;
-      frozenTaskSnapshots: Set<string>; ancestry?: { work: number; activeByActor: Map<string, Set<string>> };
-      updateAncestry: (ancestry: { work: number; activeByActor: Map<string, Set<string>> }) => void } | undefined;
+      frozenTaskSnapshots: Set<string> } | undefined;
     const memoActorKey = nativeSha256(actor);
     try {
       const result = await memoryTemporalReadScopes.run(scope, async () => {
@@ -2106,8 +2104,7 @@ export async function withReadMemoryTemporalSources<T>(db: Db | DbTransaction, a
               structuralProofMemoStore.proofsByOwnerPrefix.set(memoKey, frozenTaskSnapshots);
             }
             structuralProofMemo = { transaction: sourceDb as object, actorKey: memoActorKey, memoryTemporalIdentity,
-              frozenTaskSnapshots, ...(structuralProofMemoStore.ancestry ? { ancestry: structuralProofMemoStore.ancestry } : {}),
-              updateAncestry: ancestry => { structuralProofMemoStore.ancestry = ancestry; } };
+              frozenTaskSnapshots };
           }
           const temporalProfile = process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS === "1";
           let contextInputsCurrentnessMs = 0;

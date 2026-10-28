@@ -51,7 +51,7 @@ test "$(printf %s "$session_digest" | wc -c)" -eq 64
 runtime_root="$remote_cwd/.paperclip-runtime/paperclip-runner"; sessions_root="$runtime_root/sessions"; session_root="$sessions_root/$session_digest"
 for directory in "$remote_cwd" "$remote_cwd/.paperclip-runtime" "$runtime_root" "$sessions_root" "$session_root"; do test -d "$directory" && test ! -L "$directory" || exit 4; done
 test "$(dirname -- "$session_root")" = "$sessions_root"
-lock_dir="$sessions_root/."$session_digest".lock"; umask 077; mkdir -m 0700 -- "$lock_dir" || exit 6; trap 'rmdir -- "$lock_dir" 2>/dev/null || true' EXIT; test -d "$lock_dir" && test ! -L "$lock_dir"
+lock_dir="$sessions_root/."$session_digest".lock"; umask 077; mkdir -m 0700 -- "$lock_dir" || exit 6; printf '%s\\n' "$probe_nonce" > "$lock_dir/owner"; chmod 0600 "$lock_dir/owner"; test -d "$lock_dir" && test ! -L "$lock_dir" && test -f "$lock_dir/owner" && test ! -L "$lock_dir/owner" && test "$(cat -- "$lock_dir/owner")" = "$probe_nonce"
 for directory in "$remote_cwd" "$remote_cwd/.paperclip-runtime" "$runtime_root" "$sessions_root" "$session_root"; do test -d "$directory" && test ! -L "$directory" || exit 4; done
 state="$session_root/runner/runner-state.json"; identity="$session_root/runner/runner-process.identity"
 test -d "$session_root/runner" && test ! -L "$session_root/runner" && test -f "$state" && test ! -L "$state" && test -f "$identity" && test ! -L "$identity" || exit 4
@@ -79,14 +79,14 @@ test -d "$remote_cwd" && test ! -L "$remote_cwd" || exit 4
 runtime_root="$remote_cwd/.paperclip-runtime/paperclip-runner"; sessions_root="$runtime_root/sessions"; umask 077
 mkdir -p -- "$sessions_root"
 for directory in "$remote_cwd" "$remote_cwd/.paperclip-runtime" "$runtime_root" "$sessions_root"; do test -d "$directory" && test ! -L "$directory" || exit 4; done
-lock_dir="$sessions_root/."$session_digest".lock"; umask 077; mkdir -m 0700 -- "$lock_dir" || exit 6; trap 'rmdir -- "$lock_dir" 2>/dev/null || true' EXIT; test -d "$lock_dir" && test ! -L "$lock_dir"
+lock_dir="$sessions_root/."$session_digest".lock"; umask 077; mkdir -m 0700 -- "$lock_dir" || exit 6; printf '%s\n' "$probe_nonce" > "$lock_dir/owner"; chmod 0600 "$lock_dir/owner"; test -d "$lock_dir" && test ! -L "$lock_dir" && test -f "$lock_dir/owner" && test ! -L "$lock_dir/owner" && test "$(cat -- "$lock_dir/owner")" = "$probe_nonce"
 for directory in "$remote_cwd" "$remote_cwd/.paperclip-runtime" "$runtime_root" "$sessions_root"; do test -d "$directory" && test ! -L "$directory" || exit 4; done
 probe="$sessions_root/.asset-erasure-probe-$run_id-$probe_nonce"; neighbor="$sessions_root/.asset-erasure-neighbor-$run_id-$probe_nonce"
 test ! -e "$probe" && test ! -L "$probe" && test ! -e "$neighbor" && test ! -L "$neighbor"
-cleanup() { rm -rf -- "$probe" "$neighbor"; }; trap cleanup EXIT
+cleanup() { rm -rf -- "$probe" "$neighbor"; if test -d "$lock_dir" && test ! -L "$lock_dir" && test -f "$lock_dir/owner" && test ! -L "$lock_dir/owner" && test "$(cat -- "$lock_dir/owner")" = "$probe_nonce"; then rm -- "$lock_dir/owner"; rmdir -- "$lock_dir" 2>/dev/null || true; fi; }; trap cleanup EXIT
 mkdir -m 0700 -- "$probe" "$neighbor"; printf '%s' "$probe_nonce" > "$neighbor/retained"
 test -f "$neighbor/retained" && test ! -L "$neighbor/retained" && test "$(cat -- "$neighbor/retained")" = "$probe_nonce"
 rm -rf -- "$probe"; test ! -e "$probe" && test ! -L "$probe"
 test -d "$neighbor" && test ! -L "$neighbor" && test "$(cat -- "$neighbor/retained")" = "$probe_nonce"
 rm -rf -- "$neighbor"; test ! -e "$neighbor" && test ! -L "$neighbor"
-trap - EXIT; printf 'qualified\n'`;
+cleanup; trap - EXIT; printf 'qualified\n'`;

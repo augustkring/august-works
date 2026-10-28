@@ -114,6 +114,8 @@ export async function runManagedNativeConversationFrame(input: {
     db: ReturnType<typeof createDb>;
     actor: AuthorizationActor;
     companyId: string;
+    guestCompanyId: string;
+    identityId: string;
     agentId: string;
     issueId: string;
     run: typeof heartbeatRuns.$inferSelect | null;
@@ -605,7 +607,8 @@ export async function runManagedNativeConversationFrame(input: {
     const nativeInputSourceReceipt = profileValue.nativeInputSourceReceipt ?? null;
     if (finalRun && (["succeeded", "failed", "timed_out", "cancelled", "superseded"].includes(finalRun.status) ||
       process.env.PAPERCLIP_NATIVE_CANCEL_ORIGIN_TEST_DIAGNOSTICS === "1"))
-      await input.afterRunSettledBeforeTeardown?.({ db, actor: human, companyId, agentId,
+      await input.afterRunSettledBeforeTeardown?.({ db, actor: human, companyId, guestCompanyId: f.guest,
+        identityId: f.identity.id, agentId,
         issueId: chat.body.id as string, run: finalRun, manifest: manifest ?? null, reservation: reservation ?? null,
         nativeInputSourceReceipt, sandboxRuntimeFacts, providerCallCount: providerCalls.length,
         providerHookInvoked, providerStubFailure });

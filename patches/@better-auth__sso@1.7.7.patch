@@ -1,0 +1,52 @@
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -577,11 +577,13 @@
+ * the SSO OIDC flow.
+ */
+ async function validateOIDCIdToken(token, jwksEndpoint, options, isTrustedOrigin) {
++	if (typeof options.nonce !== "string" || options.nonce.length < 16) throw new Error("OIDC ID token nonce is required");
+ 	const verified = await jwtVerify(token, createRemoteJWKSet(new URL(jwksEndpoint), { [customFetch]: (url, init) => fetchOIDCEndpointResponse("jwksEndpoint", url, init, isTrustedOrigin) }), {
+ 		audience: options.audience,
+ 		issuer: options.issuer
+ 	});
+ 	if (typeof options.audience === "string") assertOIDCAuthorizedParty(verified.payload, options.audience);
++	if (verified.payload.nonce !== options.nonce) throw new Error("OIDC ID token nonce does not match the authorization request");
+ 	return verified;
+ }
+ /**
+@@ -3097,6 +3099,7 @@
+ 		provisioningOptions: options?.organizationProvisioning
+ 	});
+ 	if ("accountCookie" in result && result.accountCookie) await setAccountCookie(ctx, result.accountCookie);
++	ctx.context.setNewSession({ session, user });
+ 	await setSessionCookie(ctx, {
+ 		session,
+ 		user
+@@ -3702,7 +3705,8 @@
+ 			}
+ 			if (!config.authorizationEndpoint) throw new APIError("BAD_REQUEST", { message: "Invalid OIDC configuration. Authorization URL not found." });
+ 			await addOAuthServerContext({ [SSO_PROVIDER_STATE_KEY]: await computeSSOProviderReference(provider) });
+-			const state = await generateState(ctx);
++			const idTokenNonce = generateRandomString(32);
++			const state = await generateState(ctx, { idTokenNonce });
+ 			const redirectURI = getOIDCRedirectURI(ctx.context.baseURL, provider.providerId, options);
+ 			const authorizationURL = await createAuthorizationURL({
+ 				id: provider.issuer,
+@@ -3712,6 +3716,7 @@
+ 				},
+ 				redirectURI,
+ 				state: state.state,
++				nonce: idTokenNonce,
+ 				codeVerifier: config.pkce ? state.codeVerifier : void 0,
+ 				scopes: ctx.body.scopes || config.scopes || [
+ 					"openid",
+@@ -3895,7 +3900,8 @@
+ 		if (!jwksEndpoint) return redirectOIDCError("invalid_provider", "jwks_endpoint_not_found");
+ 		const verified = await validateOIDCIdToken(tokenResponse.idToken, jwksEndpoint, {
+ 			audience: config.clientId,
+-			issuer: provider.issuer
++			issuer: provider.issuer,
++			nonce: stateData.idTokenNonce
+ 		}, (url) => ctx.context.isTrustedOrigin(url)).catch((error) => {
+ 			if (error instanceof DiscoveryError) return redirectOIDCError("invalid_provider", error.message);
+ 			ctx.context.logger.error(error);

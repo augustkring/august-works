@@ -261,6 +261,41 @@ export const authApi = {
   reauthenticatePassword: async (password: string, expectedUserId?: string, expectedSessionId?: string) =>
     nativeAuthenticationConfirmationSchema.parse(await authPost("/reauthenticate/password", { password }, expectedUserId, expectedSessionId)),
 
+  accountDeletionSsoStatus: async (expectedUserId: string, expectedSessionId: string) => {
+    const response = await fetch("/api/auth/account-deletion/sso/status", { credentials: "include", cache: "no-store",
+      headers: { Accept: "application/json", "X-Blentera-Expected-User": expectedUserId,
+        "X-Blentera-Expected-Session": expectedSessionId } });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw extractAuthError(payload as AuthErrorBody, response.status);
+    if (!payload || typeof payload !== "object" || (payload as Record<string, unknown>).userId !== expectedUserId ||
+      typeof (payload as Record<string, unknown>).available !== "boolean" ||
+      typeof (payload as Record<string, unknown>).ready !== "boolean" ||
+      ((payload as Record<string, unknown>).challengeId !== null && typeof (payload as Record<string, unknown>).challengeId !== "string") ||
+      ((payload as Record<string, unknown>).providerId !== null && typeof (payload as Record<string, unknown>).providerId !== "string"))
+      throw new Error("Company sign-in status is unavailable");
+    return payload as { userId: string; providerId: string | null; available: boolean; ready: boolean; challengeId: string | null };
+  },
+
+  startAccountDeletionSso: async (expectedUserId: string, expectedSessionId: string) => {
+    const value = await authPost("/account-deletion/sso/start", {}, expectedUserId, expectedSessionId) as Record<string, unknown>;
+    if (value.userId !== expectedUserId || typeof value.challengeId !== "string" ||
+      typeof value.providerId !== "string" || typeof value.callbackURL !== "string")
+      throw new Error("Company sign-in confirmation is unavailable");
+    const callback = new URL(value.callbackURL);
+    if (callback.origin !== window.location.origin || callback.pathname !== "/company/settings/security" ||
+      callback.searchParams.get("accountDeletionReauth") !== value.challengeId)
+      throw new Error("Invalid company sign-in confirmation destination");
+    return { challengeId: value.challengeId, providerId: value.providerId, callbackURL: callback.href };
+  },
+
+  signInAccountDeletionSso: async (providerId: string, callbackURL: string, expectedUserId: string, expectedSessionId: string) => {
+    const value = await authPost("/sign-in/sso", { providerId, callbackURL }, expectedUserId, expectedSessionId) as Record<string, unknown>;
+    if (typeof value.url !== "string") throw new Error("Company sign-in redirect is unavailable");
+    const target = new URL(value.url);
+    if (target.protocol !== "https:" || target.username || target.password) throw new Error("Invalid company sign-in redirect");
+    return target.href;
+  },
+
   verifyBackupCode: async (code: string, expectedUserId?: string, expectedSessionId?: string) =>
     nativeAuthenticationConfirmationSchema.parse(await authPost("/two-factor/verify-backup-code", { code }, expectedUserId, expectedSessionId)),
 

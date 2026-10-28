@@ -38,6 +38,7 @@ import {
   memoryDeletionMarkers,
 } from "@paperclipai/db";
 import type { RemoteRuntimeAssetLocator, RemoteRuntimeAssetRemovalReceipt } from "../native-runtime/runtime-asset-retention.js";
+import { isRemoteAssetErasureErrorCode } from "../native-runtime/runtime-asset-erasure-errors.js";
 import type { MemoryJobOperationType } from "@paperclipai/shared";
 import { executionPrincipalSchema, type MemoryScope } from "@paperclipai/shared";
 import { isUniqueViolation } from "../../db-errors.js";
@@ -902,9 +903,11 @@ export function memoryJobService(
         return;
       }
 
+      const domainFailureCode = error instanceof HttpError ? record(error.details).code : null;
       await settle(job, {
         status: "failed",
-        errorCode: "memory_job_handler_failed",
+        errorCode: job.operationType === "retention" && job.sourceRefJson.kind === "runtime_asset_erasure" &&
+          isRemoteAssetErasureErrorCode(domainFailureCode) ? domainFailureCode : "memory_job_handler_failed",
         error: "Memory job handler failed. Inspect server diagnostics for the classified failure.",
         now: new Date(),
       });

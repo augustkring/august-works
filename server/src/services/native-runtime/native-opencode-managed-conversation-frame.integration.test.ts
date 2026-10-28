@@ -1,6 +1,6 @@
 import {and,desc,eq,gte,sql} from "drizzle-orm";
 import {randomUUID} from "node:crypto";
-import {agentPresenceRuntimeBindings,authSessions,authUsers,companyDeletionOperations,companyMemberships,companies,environmentLeases,heartbeatRunEvents,heartbeatRuns,issues,memoryJobs,nativeRunFinalizations,nativeRunResults,projectWorkspaces,projects,runtimeHostCommands} from "@paperclipai/db";
+import {agentPresenceRuntimeBindings,agents,authSessions,authUsers,companyDeletionOperations,companyMemberships,companies,environmentLeases,heartbeatRunEvents,heartbeatRuns,issues,memoryJobs,nativeRunFinalizations,nativeRunResults,projectWorkspaces,projects,runtimeHostCommands} from "@paperclipai/db";
 import type {BusinessMetricQuery} from "@paperclipai/shared";
 import {instanceSettingsService} from "../instance-settings.js";
 import {businessMetricService} from "../business-metrics/service.js";
@@ -29,6 +29,7 @@ import { nativeCancelOriginTestFactsForRun } from "./native-session-executor.js"
 import { redactSensitiveText } from "../../redaction.js";
 import { validatePrpEvent } from "../../vendor/paperclip-runner/index.js";
 import { memoryJobService } from "../memory/memory-jobs.js";
+import { agentIdentityService } from "../agent-identities.js";
 import { enqueueCompanyManagedOpenCodeRuntimeErasure, readRemoteRuntimeAssetLocator } from "./runtime-asset-retention.js";
 import path from "node:path";
 import fs from "node:fs/promises";
@@ -143,6 +144,9 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
       },
       afterRunSettledBeforeTeardown: async facts => {
         if (!facts.run) return;
+        expect(facts.run.status).toBe("succeeded");
+        expect(facts.providerCallCount).toBeGreaterThan(0);
+        expect(facts.providerHookInvoked).toBe(true);
         const events = await db.select({ seq: heartbeatRunEvents.seq, eventType: heartbeatRunEvents.eventType,
           payload: heartbeatRunEvents.payload })
           .from(heartbeatRunEvents).where(eq(heartbeatRunEvents.runId, facts.run.id)).orderBy(heartbeatRunEvents.seq);
@@ -252,6 +256,10 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
           await fs.mkdir(siblingSessionRoot, { recursive: true });
           await fs.writeFile(path.join(siblingSessionRoot, "retained-neighbor.txt"), "neighbor remains");
           const operationId = randomUUID();
+          const purgeActor = { ...facts.actor, companyIds: [...new Set([...(facts.actor.companyIds ?? []), facts.guestCompanyId])] };
+          await agentIdentityService(db).rehome(purgeActor, facts.companyId, facts.identityId, facts.guestCompanyId);
+          const [guestAgent] = await db.select({ id: agents.id }).from(agents).where(eq(agents.companyId, facts.guestCompanyId)).limit(1);
+          if (!guestAgent) throw new Error("conversation_remote_erasure_guest_agent_missing");
           await db.update(companies).set({ status: "archived" }).where(eq(companies.id, facts.companyId));
           await db.insert(companyDeletionOperations).values({ id: operationId, companyId: facts.companyId,
             requestedByUserId: facts.actor.userId ?? "managed-runtime-fixture", idempotencyKey: `remote-runtime-erasure-${operationId}`,
@@ -261,28 +269,42 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
           await db.insert(heartbeatRuns).values({ id: coOwnerRunId, companyId: facts.companyId, agentId: facts.agentId,
             status: "succeeded", runtimeMode: "native", driverKind: "opencode_server",
             nativeSessionId: durableRun.nativeSessionId, runnerInstanceId: durableRun.runnerInstanceId, runnerProfileJson: {} });
+          const foreignTenantRunId = randomUUID();
+          await db.insert(heartbeatRuns).values({ id: foreignTenantRunId, companyId: facts.guestCompanyId, agentId: guestAgent.id,
+            status: "succeeded", runtimeMode: "native", driverKind: "opencode_server",
+            nativeSessionId: durableRun.nativeSessionId, runnerInstanceId: durableRun.runnerInstanceId, runnerProfileJson: {} });
           await enqueueCompanyManagedOpenCodeRuntimeErasure(db, facts.companyId, operationId);
-          await memoryJobService(db, { eraseRemoteNativeRuntimeAsset }).tick({ limit: 32, companyId: facts.companyId });
-          const [blockedJob] = await db.select({ status: memoryJobs.status, resultJson: memoryJobs.resultJson }).from(memoryJobs).where(and(
-            eq(memoryJobs.companyId, facts.companyId), eq(memoryJobs.jobKey, `runtime-asset-erasure:v1:${facts.run.id}`)))
-            .orderBy(desc(memoryJobs.attemptNumber)).limit(1);
+          await db.update(memoryJobs).set({ submittedAt: new Date(Date.now() + 60_000) }).where(and(
+            eq(memoryJobs.companyId, facts.companyId), eq(memoryJobs.jobKey, `runtime-asset-erasure:v1:${coOwnerRunId}`)));
+          await memoryJobService(db, { eraseRemoteNativeRuntimeAsset }).tick({ limit: 1, companyId: facts.companyId });
+          const [blockedJob] = await db.select({ id: memoryJobs.id, status: memoryJobs.status, errorCode: memoryJobs.errorCode,
+            attemptNumber: memoryJobs.attemptNumber, resultJson: memoryJobs.resultJson }).from(memoryJobs).where(and(
+            eq(memoryJobs.companyId, facts.companyId), eq(memoryJobs.jobKey, `runtime-asset-erasure:v1:${facts.run.id}`),
+            eq(memoryJobs.attemptNumber, 1)))
+            .limit(1);
           expect(blockedJob?.status).toBe("failed");
+          expect(blockedJob?.errorCode).toBe("native_asset_erasure_retained_coowner");
           expect((blockedJob?.resultJson as Record<string, unknown> | null)?.remoteRuntimeAssetRemovalReceipt).toBeUndefined();
           await expect(fs.stat(path.join(sessionsRoot, locator.normalizedSessionIdDigest))).resolves.toBeDefined();
           await db.delete(memoryJobs).where(and(eq(memoryJobs.companyId, facts.companyId),
             eq(memoryJobs.jobKey, `runtime-asset-erasure:v1:${coOwnerRunId}`)));
           await db.delete(heartbeatRuns).where(eq(heartbeatRuns.id, coOwnerRunId));
-          await enqueueCompanyManagedOpenCodeRuntimeErasure(db, facts.companyId, operationId);
+          const remainingSessionOwners = await db.select({ id: heartbeatRuns.id, companyId: heartbeatRuns.companyId,
+            status: heartbeatRuns.status, runtimeMode: heartbeatRuns.runtimeMode, driverKind: heartbeatRuns.driverKind })
+            .from(heartbeatRuns).where(and(eq(heartbeatRuns.nativeSessionId, durableRun.nativeSessionId),
+              eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.driverKind, "opencode_server")));
+          console.log("managed remote erasure retained session owner facts", remainingSessionOwners.map(owner => ({
+            currentRun: owner.id === facts.run!.id, sameCompany: owner.companyId === facts.companyId,
+            status: owner.status, runtimeMode: owner.runtimeMode, driverKind: owner.driverKind,
+          })));
+          expect(remainingSessionOwners.some(owner => owner.id === foreignTenantRunId && owner.companyId === facts.guestCompanyId)).toBe(true);
+          expect(remainingSessionOwners.some(owner => owner.id === facts.run!.id)).toBe(true);
           const jobKey = `runtime-asset-erasure:v1:${facts.run.id}`;
-          const [queuedJob] = await db.select().from(memoryJobs).where(and(
-            eq(memoryJobs.companyId, facts.companyId), eq(memoryJobs.jobKey, jobKey)))
-            .orderBy(desc(memoryJobs.attemptNumber)).limit(1);
-          expect(queuedJob?.status).toBe("queued");
           const crashWorkerId = randomUUID();
-          const [crashClaim] = await db.update(memoryJobs).set({ status: "running", executionOwnerId: crashWorkerId,
-            leaseExpiresAt: new Date(Date.now() + 60_000), startedAt: new Date(), updatedAt: new Date() }).where(and(
-            eq(memoryJobs.id, queuedJob!.id), eq(memoryJobs.status, "queued"))).returning();
-          if (!crashClaim) throw new Error("conversation_remote_erasure_crash_claim_missing");
+          let signalReceiptCaptured!: () => void;
+          const receiptCaptured = new Promise<void>(resolve => { signalReceiptCaptured = resolve; });
+          let resumeLostWorker!: () => void;
+          const resumeLostWorkerAfterRecovery = new Promise<void>(resolve => { resumeLostWorker = resolve; });
           const relatedErasureCommands = async () => (await db.select().from(runtimeHostCommands).where(and(
             eq(runtimeHostCommands.companyId, facts.companyId), eq(runtimeHostCommands.commandType, "sandbox_exec"),
             sql`${runtimeHostCommands.payload}->>'nativePreparationPurpose' = 'native_provider_data_erasure'`)))
@@ -323,13 +345,54 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
               const receipts = concurrent.flatMap(result => result.status === "fulfilled" ? [result.value] : []);
               expect(receipts.length).toBeGreaterThan(0);
               expect(receipts.every(receipt => receipt.commandRequestId === receipts[0]!.commandRequestId)).toBe(true);
-              await db.update(memoryJobs).set({ executionOwnerId: "lost-after-remote-receipt",
-                leaseExpiresAt: new Date(Date.now() - 1), updatedAt: new Date() }).where(eq(memoryJobs.id, commandInput.jobId));
+              await db.update(memoryJobs).set({ leaseExpiresAt: new Date(Date.now() - 1), updatedAt: new Date() })
+                .where(and(eq(memoryJobs.id, commandInput.jobId), eq(memoryJobs.status, "running"),
+                  eq(memoryJobs.executionOwnerId, crashWorkerId)));
+              signalReceiptCaptured();
+              // Model a worker that disappears after its durable receipt, then
+              // resumes only after another worker has recovered the job.
+              await resumeLostWorkerAfterRecovery;
               return receipts[0]!;
             } });
-          await raceWorker.executeClaimed(crashClaim);
-          const [crashedJob] = await db.select().from(memoryJobs).where(eq(memoryJobs.id, crashClaim.id));
-          expect(crashedJob).toMatchObject({ status: "running", executionOwnerId: "lost-after-remote-receipt" });
+          let lostWorkerOutcome: "settled" | "rejected" | null = null;
+          const lostWorkerTick = raceWorker.tick({ now: new Date(Date.now() + 61_000), limit: 1, companyId: facts.companyId })
+            .then(() => { lostWorkerOutcome = "settled" as const; }, () => { lostWorkerOutcome = "rejected" as const; });
+          const receiptOrCompletion = await Promise.race([
+            receiptCaptured.then(() => "receipt" as const),
+            lostWorkerTick.then(() => "worker_completed" as const),
+            new Promise<"timeout">(resolve => setTimeout(() => resolve("timeout"), 20_000)),
+          ]);
+          if (receiptOrCompletion !== "receipt") {
+            const [failedJob] = await db.select({ status: memoryJobs.status, errorCode: memoryJobs.errorCode,
+              error: memoryJobs.error, executionOwnerId: memoryJobs.executionOwnerId,
+              attemptNumber: memoryJobs.attemptNumber, resultJson: memoryJobs.resultJson })
+              .from(memoryJobs).where(eq(memoryJobs.id, blockedJob!.id));
+            console.log("managed remote erasure pre-receipt failure", {
+              outcome: receiptOrCompletion,
+              workerOutcome: lostWorkerOutcome,
+              job: failedJob ?? null,
+              commandReceipts: (await relatedErasureCommands()).map(command => ({ requestId: command.idempotencyKey,
+                status: command.status, errorCode: command.errorCode, purpose: command.purpose, attempt: command.attempt })).slice(0, 8),
+            });
+          }
+          expect(receiptOrCompletion).toBe("receipt");
+          const [crashedJob] = await db.select().from(memoryJobs).where(eq(memoryJobs.id, blockedJob!.id));
+          console.log("managed remote erasure crash-window outcome", {
+            jobId: crashedJob?.id ?? null,
+            status: crashedJob?.status ?? null,
+            errorCode: crashedJob?.errorCode ?? null,
+            error: crashedJob?.error ?? null,
+            executionOwnerIdPresent: Boolean(crashedJob?.executionOwnerId),
+            attemptNumber: crashedJob?.attemptNumber ?? null,
+            commandReceipts: (await relatedErasureCommands()).map(command => ({
+              requestId: command.idempotencyKey,
+              status: command.status,
+              errorCode: command.errorCode,
+              purpose: command.purpose,
+              attempt: command.attempt,
+            })).slice(0, 8),
+          });
+          expect(crashedJob).toMatchObject({ status: "running", executionOwnerId: crashWorkerId });
           expect(crashedJob?.leaseExpiresAt && crashedJob.leaseExpiresAt.getTime()).toBeLessThan(Date.now());
           const beforeRecoveryCommands = await relatedErasureCommands();
           expect(beforeRecoveryCommands).toHaveLength(1);
@@ -341,11 +404,7 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
           const [retryQueued] = await db.select().from(memoryJobs).where(and(
             eq(memoryJobs.companyId, facts.companyId), eq(memoryJobs.jobKey, jobKey), eq(memoryJobs.attemptNumber, 2)));
           expect(retryQueued?.status).toBe("queued");
-          const [retryClaim] = await db.update(memoryJobs).set({ status: "running", executionOwnerId: "remote-erasure-recovery-worker",
-            leaseExpiresAt: new Date(Date.now() + 60_000), startedAt: new Date(), updatedAt: new Date() }).where(and(
-            eq(memoryJobs.id, retryQueued!.id), eq(memoryJobs.status, "queued"))).returning();
-          if (!retryClaim) throw new Error("conversation_remote_erasure_retry_claim_missing");
-          await recoveryWorker.executeClaimed(retryClaim);
+          await recoveryWorker.tick({ limit: 1, companyId: facts.companyId });
           const [job] = await db.select({ status: memoryJobs.status, resultJson: memoryJobs.resultJson }).from(memoryJobs).where(and(
             eq(memoryJobs.companyId, facts.companyId), eq(memoryJobs.jobKey, `runtime-asset-erasure:v1:${facts.run.id}`)))
             .orderBy(desc(memoryJobs.attemptNumber)).limit(1);
@@ -359,6 +418,13 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
                 pid: expect.any(Number), processStartFingerprintDigest: expect.stringMatching(/^[a-f0-9]{64}$/) }) });
           expect((job?.resultJson as Record<string, unknown> | null)?.remoteRuntimeAssetRemovalReceipt)
             .toMatchObject({ commandRequestId: beforeRecoveryCommands[0]?.idempotencyKey });
+          resumeLostWorker();
+          await lostWorkerTick;
+          const [staleAttempt] = await db.select({ status: memoryJobs.status, errorCode: memoryJobs.errorCode,
+            error: memoryJobs.error, resultJson: memoryJobs.resultJson }).from(memoryJobs)
+            .where(eq(memoryJobs.id, blockedJob!.id));
+          expect(staleAttempt).toMatchObject({ status: "failed", errorCode: "worker_lost" });
+          expect((staleAttempt?.resultJson as Record<string, unknown> | null)?.remoteRuntimeAssetRemovalReceipt).toBeUndefined();
           expect(await relatedErasureCommands()).toHaveLength(1);
           await expect(fs.stat(path.join(sessionsRoot, locator.normalizedSessionIdDigest))).rejects.toMatchObject({ code: "ENOENT" });
           await expect(fs.readFile(path.join(siblingSessionRoot, "retained-neighbor.txt"), "utf8")).resolves.toBe("neighbor remains");

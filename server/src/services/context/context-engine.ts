@@ -48,7 +48,22 @@ import { cognitiveMemoryActor } from "../memory/cognitive-memory.js";
 export const DEFAULT_CONTEXT_TOTAL_DEADLINE_MS = 1_500;
 export const DEFAULT_CONTEXT_PROVIDER_TIMEOUT_MS = 900;
 const CONTEXT_FINALIZATION_RESERVE_MS = 350;
-const DEFAULT_CONTEXT_MEMORY_PROVIDER_TIMEOUT_MS = DEFAULT_CONTEXT_TOTAL_DEADLINE_MS - CONTEXT_FINALIZATION_RESERVE_MS;
+const MAX_CONTEXT_MEMORY_PROVIDER_TIMEOUT_MS = 8_000;
+/** Native bootstrap invocations get up to 4s for source closure review: the
+ * measured 3-candidate, two-pass Memory review takes 2.8s, leaving 350ms for
+ * finalization and bounded scheduling margin. Generic Context stays at 1.5s. */
+export const NATIVE_CONTEXT_BOOTSTRAP_TOTAL_DEADLINE_MS = 4_000;
+export function contextTotalDeadlineMs(requestedDeadlineMs?: number, nativeBootstrap = false): number {
+  const requested = requestedDeadlineMs ?? (nativeBootstrap
+    ? NATIVE_CONTEXT_BOOTSTRAP_TOTAL_DEADLINE_MS : DEFAULT_CONTEXT_TOTAL_DEADLINE_MS);
+  if (!Number.isFinite(requested) || requested <= 0 || requested > 30_000)
+    throw unprocessable("Context total deadline must be between 1 and 30000 ms");
+  return nativeBootstrap ? Math.min(requested, NATIVE_CONTEXT_BOOTSTRAP_TOTAL_DEADLINE_MS) : requested;
+}
+export function contextMemoryProviderTimeoutMs(totalDeadlineMs: number): number {
+  return Math.min(MAX_CONTEXT_MEMORY_PROVIDER_TIMEOUT_MS,
+    Math.max(0, totalDeadlineMs - CONTEXT_FINALIZATION_RESERVE_MS));
+}
 
 export const DEFAULT_CONTEXT_BUDGET: ContextBudget = {
   maxItems: 24,
@@ -498,14 +513,14 @@ function memoryValidUntil(
   ).toISOString();
 }
 
-function memoryContextProvider(db: Db): ContextProvider {
+function memoryContextProvider(db: Db, totalDeadlineMs: number): ContextProvider {
   const settings = instanceSettingsService(db);
   return {
     key: "memory",
     requirement: "optional",
-    // Local source qualification may take longer than the generic provider cap;
-    // leave the measured manifest-finalization slice inside the unchanged total deadline.
-    timeoutMs: DEFAULT_CONTEXT_MEMORY_PROVIDER_TIMEOUT_MS,
+    // Source qualification has its own bounded slice; reserve time for
+    // manifest finalization inside this invocation's fixed total deadline.
+    timeoutMs: contextMemoryProviderTimeoutMs(totalDeadlineMs),
     async retrieve({ request, signal, providerDeadlineAt }) {
       const experimental = await settings.getExperimental();
       const allowShared = experimental.enableCollectiveMemoryV1 === true;
@@ -727,10 +742,7 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
         throw unprocessable("Unknown context source scope");
       const query = rawInput.query.trim();
       if (!query) throw unprocessable("Context query is required");
-      const totalDeadlineMs = rawInput.totalDeadlineMs ?? DEFAULT_CONTEXT_TOTAL_DEADLINE_MS;
-      if (!Number.isFinite(totalDeadlineMs) || totalDeadlineMs <= 0 || totalDeadlineMs > 30_000) {
-        throw unprocessable("Context total deadline must be between 1 and 30000 ms");
-      }
+      const totalDeadlineMs = contextTotalDeadlineMs(rawInput.totalDeadlineMs, nativeBootstrap);
 
       if (delegatedSource && (!isActiveNativeDelegatedContextSource(activeDb, delegatedSource) || inspectionActor ||
         !rawInput.delegatedExecution || delegatedSource.actor.type !== "agent" ||
@@ -805,7 +817,7 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
         ...(input.issueId ? [taskProvider(activeDb)] : []),
         ...(input.sourceScope === "task_only" ? [] : [
           ...(input.includeFoundation === false ? [] : [foundationProvider(activeDb)]),
-          memoryContextProvider(activeDb), cognitiveContextProvider(activeDb), derivedMemoryContextProvider(activeDb),
+          memoryContextProvider(activeDb, totalDeadlineMs), cognitiveContextProvider(activeDb), derivedMemoryContextProvider(activeDb),
           ...(!inspectionActor ? defaultConnectedKnowledgeContextProviders(activeDb, input) : []),
         ]),
       ];

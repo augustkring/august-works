@@ -9,7 +9,7 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: da
-last_verified_at: 2026-10-26
+last_verified_at: 2026-10-28
 review_trigger: Ændringer i eksport, sletning, opbevaring, privat Memory-deling eller kildeadgang
 security_or_privacy_sensitive: true
 linked_source_files: [ui/src/pages/CompanyExport.tsx, ui/src/pages/SaasDeletion.tsx, ui/src/pages/SaasAccount.tsx, server/src/services/saas/account-deletion.ts, server/src/services/saas/offboarding.ts, server/src/services/saas/company-purge.ts, ui/src/pages/Memory.tsx, server/src/routes/memory.ts, server/src/services/memory/memory-service.ts, server/src/services/memory/memory-privacy.ts, server/src/services/memory/memory-jobs.ts, server/src/services/native-runtime/runtime-asset-retention.ts, server/src/services/native-local-process-stop.ts, server/src/services/heartbeat.ts]
@@ -43,3 +43,5 @@ Den private original forbliver privat. Modtagere skal fortsat have aktuel adgang
 Når du føjer kilder til et eksisterende, menneskeskabt Memory-element, kontrollerer Blentera din aktuelle konto og alle tidligere og nye opgavekilder igen. Hvis en kilde ikke længere er aktuel eller tilgængelig, afvises opdateringen, og de eksisterende kildebegrænsninger bevares.
 
 Hvis du vælger **Forget permanently**, slettes det valgte Memory-indhold og dets afledte rettelses- og delingsposter. Hvis Memory stammer fra en administreret OpenCode-kørsel, sætter Blentera også afviklingens app-administrerede runtimefiler i kø til sletning. Filoprydningen venter, indtil Native har bekræftet, at kørslen er stoppet. Handlingen omfatter ikke data hos eksterne udbydere uden for Blenteras administrerede runtime-lager.
+
+Oprydning af administrerede filer afventer, indtil stop af processen og fjernelse fra lageret kan bekræftes. Hvis oprydningen fortsat afventer, skal du kontakte menneskelig support med den gemte kvittering. Sletning af Memory bekræfter ikke, at data hos en udbyder er fjernet.

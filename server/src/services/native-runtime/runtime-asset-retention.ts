@@ -10,6 +10,7 @@ import { lockMemoryPrivacy, purgeDerivedWorkflowMemory } from "../memory/memory-
 import { hasNativeLocalProcessStop } from "../native-local-process-stop.js";
 import { assertRuntimeStorageDirectories, removeRuntimeStorageTree } from "../runtime-skill-cache.js";
 import { conflict } from "../../errors.js";
+import { REMOTE_ASSET_ERASURE_ERRORS } from "./runtime-asset-erasure-errors.js";
 
 export type NativeRuntimeAssetOwner = { companyId: string; runId: string };
 const digestPattern = /^[a-f0-9]{64}$/;
@@ -201,10 +202,10 @@ export async function assertRemoteRuntimeAssetErasureReady(db: Db, locator: Remo
   if (!run || run.runtimeMode !== "native" || run.driverKind !== "opencode_server" ||
     !["succeeded", "interrupted", "failed", "cancelled", "timed_out"].includes(run.status) ||
     run.processPid !== null || run.processGroupId !== null || run.controllerLeaseExpiresAt !== null)
-    throw conflict("Managed remote OpenCode data erasure awaits confirmed Native Stop");
+    throw conflict("Managed remote OpenCode data erasure awaits confirmed Native Stop", { code: REMOTE_ASSET_ERASURE_ERRORS.stop });
   const currentLocator = await readRemoteRuntimeAssetLocator(db, run);
   if (!currentLocator || remoteRuntimeAssetLocatorDigest(currentLocator) !== remoteRuntimeAssetLocatorDigest(locator))
-    throw conflict("Managed remote OpenCode erasure locator is no longer current");
+    throw conflict("Managed remote OpenCode erasure locator is no longer current", { code: REMOTE_ASSET_ERASURE_ERRORS.locator });
   const [job] = await db.select({ status: memoryJobs.status, operationType: memoryJobs.operationType,
     sourceRefJson: memoryJobs.sourceRefJson }).from(memoryJobs).where(and(
     eq(memoryJobs.companyId, locator.companyId), eq(memoryJobs.jobKey, runtimeAssetJobKey(locator.runId, []))))
@@ -215,9 +216,9 @@ export async function assertRemoteRuntimeAssetErasureReady(db: Db, locator: Remo
     jobSource.companyPurgeOperationId !== companyPurgeOperationId ||
     !isRemoteRuntimeAssetLocator(jobSource.remoteAssetLocator, locator) ||
     remoteRuntimeAssetLocatorDigest(jobSource.remoteAssetLocator as RemoteRuntimeAssetLocator) !== remoteRuntimeAssetLocatorDigest(locator))
-    throw conflict("Managed remote OpenCode erasure has no current exact MemoryJob authority");
+    throw conflict("Managed remote OpenCode erasure has no current exact MemoryJob authority", { code: REMOTE_ASSET_ERASURE_ERRORS.job });
   if (companyPurgeOperationId) {
-    if (!uuidPattern.test(companyPurgeOperationId)) throw conflict("Managed remote OpenCode purge binding is invalid");
+    if (!uuidPattern.test(companyPurgeOperationId)) throw conflict("Managed remote OpenCode purge binding is invalid", { code: REMOTE_ASSET_ERASURE_ERRORS.purgeBinding });
     const [operation] = await db.select({ companyId: companyDeletionOperations.companyId,
       stage: companyDeletionOperations.stage, status: companyDeletionOperations.status,
       evidence: companyDeletionOperations.evidence }).from(companyDeletionOperations).where(and(
@@ -225,26 +226,27 @@ export async function assertRemoteRuntimeAssetErasureReady(db: Db, locator: Remo
     const [company] = await db.select({ status: companies.status }).from(companies).where(eq(companies.id, locator.companyId));
     if (!operation || operation.stage !== "purge" || operation.status !== "processing" ||
       typeof operation.evidence.runtimesErasedAt !== "string" || company?.status !== "archived")
-      throw conflict("Managed remote OpenCode erasure requires the current archived company purge");
+      throw conflict("Managed remote OpenCode erasure requires the current archived company purge", { code: REMOTE_ASSET_ERASURE_ERRORS.purge });
   }
   const [finalization] = await db.select({ phase: nativeRunFinalizations.phase, leaseOwner: nativeRunFinalizations.leaseOwner,
     leaseExpiresAt: nativeRunFinalizations.leaseExpiresAt }).from(nativeRunFinalizations).where(and(
     eq(nativeRunFinalizations.companyId, locator.companyId), eq(nativeRunFinalizations.runId, locator.runId)));
   if (!finalization || !["committed", "terminal_failure"].includes(finalization.phase) ||
     finalization.leaseOwner !== null || finalization.leaseExpiresAt !== null)
-    throw conflict("Managed remote OpenCode data erasure awaits Native finalization");
+    throw conflict("Managed remote OpenCode data erasure awaits Native finalization", { code: REMOTE_ASSET_ERASURE_ERRORS.finalization });
   const remoteLeases = await db.select().from(environmentLeases).where(and(
     eq(environmentLeases.companyId, locator.companyId), eq(environmentLeases.id, locator.environmentLeaseId),
     eq(environmentLeases.heartbeatRunId, locator.runId)));
   if (remoteLeases.length !== 1 || remoteLeases.some(lease => lease.provider === "local" ||
     !["active", "pending_cleanup"].includes(lease.status) || lease.releasedAt !== null || lease.cleanupStatus === "success"))
-    throw conflict("Managed remote OpenCode data erasure awaits its exact current cleanup lease");
+    throw conflict("Managed remote OpenCode data erasure awaits its exact current cleanup lease", { code: REMOTE_ASSET_ERASURE_ERRORS.lease });
   const coOwners = await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.companyId, locator.companyId),
     eq(heartbeatRuns.nativeSessionId, run.nativeSessionId ?? ""), eq(heartbeatRuns.runtimeMode, "native"),
     eq(heartbeatRuns.driverKind, "opencode_server")));
   const otherOwners = coOwners.filter(owner => owner.id !== run.id);
   if (otherOwners.length)
-    throw conflict("Managed remote OpenCode session has another retained Run owner");
+    throw conflict("Managed remote OpenCode session has another retained Run owner", { code: REMOTE_ASSET_ERASURE_ERRORS.coOwner });
   return { run, finalization, remoteLeases, coOwnerRunIds: [run.id] };
 }
 

@@ -252,6 +252,16 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
         { structuralProofMemoStore: store })).toBe(true);
       expect(store.proofsByOwnerPrefix.size).toBe(2);
       expect([...store.proofsByOwnerPrefix.values()][1]).not.toBe(firstPrefix![1]);
+
+      // Completed top-level Memory owner checks share only immutable Task
+      // structure. They start independent bounded Native source traversals;
+      // the same physical transaction does not accumulate their work budget.
+      for (let pass = 0; pass < 3; pass += 1) {
+        expect(await canActorReadMemorySources(tx, first.companyId, second.aliceActor, memoryAId!,
+          { structuralProofMemoStore: store })).toBe(true);
+        expect(await canActorReadMemorySources(tx, first.companyId, second.aliceActor, memoryCId!,
+          { structuralProofMemoStore: store })).toBe(true);
+      }
       expect(await canActorReadMemorySources(tx, first.companyId, second.bobActor, privateRootId!,
         { structuralProofMemoStore: store })).toBe(false);
     });

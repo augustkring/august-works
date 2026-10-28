@@ -12,7 +12,7 @@ import {
   remoteRuntimeAssetPathDigest,
 } from "./runtime-asset-retention.js";
 import { REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT, REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT,
-  REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT } from "./remote-runner-identity.js";
+  REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROBE_SCRIPT, REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT } from "./remote-runner-identity.js";
 
 describe("remote Native runtime asset erasure binding", () => {
   function fixture() {
@@ -77,6 +77,29 @@ describe("remote Native runtime asset erasure binding", () => {
       stopProof: { ...receipt.stopProof, providerLeaseId: "replacement-lease" } }, locator)).toBe(false);
     expect(isRemoteRuntimeAssetRemovalReceipt({ ...receipt,
       target: { ...receipt.target, cellGeneration: "0" } }, locator)).toBe(false);
+  });
+
+  it("releases its owned session fence after each successful physical-erasure probe", async () => {
+    const root = await mkdtemp(join(tmpdir(), "native-erasure-probe-fence-"));
+    const taskRoot = join(root, "task");
+    const digest = createHash("sha256").update(randomUUID()).digest("hex");
+    const runId = randomUUID();
+    const sessionsRoot = join(taskRoot, ".paperclip-runtime", "paperclip-runner", "sessions");
+    const fencePath = join(sessionsRoot, `.${digest}.lock`);
+    try {
+      await mkdir(taskRoot, { recursive: true, mode: 0o700 });
+      const runProbe = () => spawnSync("sh", ["-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROBE_SCRIPT,
+        "paperclip-native-asset-erasure-probe", taskRoot, digest, runId, randomUUID()],
+      { encoding: "utf8", timeout: 10_000 });
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const result = runProbe();
+        expect(result.status, JSON.stringify({ stderr: result.stderr, stdout: result.stdout })).toBe(0);
+        expect(result.stdout.trim()).toBe("qualified");
+        expect(await access(fencePath).then(() => true, () => false)).toBe(false);
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it.skipIf(process.platform !== "linux")("stops only the recorded runner generation before removing its exact session tree", async () => {

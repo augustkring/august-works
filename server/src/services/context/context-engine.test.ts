@@ -3,7 +3,12 @@ import type { Db } from "@paperclipai/db";
 import { forbidden } from "../../errors.js";
 import type { ContextPacket, EvidenceItem } from "@paperclipai/shared";
 import {
+  contextMemoryProviderTimeoutMs,
+  contextTotalDeadlineMs,
+  DEFAULT_CONTEXT_PROVIDER_TIMEOUT_MS,
+  DEFAULT_CONTEXT_TOTAL_DEADLINE_MS,
   defaultConnectedKnowledgeContextProviders,
+  NATIVE_CONTEXT_BOOTSTRAP_TOTAL_DEADLINE_MS,
   runContextProviders,
   serializeContextPacket,
   withContextStageDeadline,
@@ -90,6 +95,36 @@ describe("Context total deadline policy", () => {
 });
 
 describe("Context provider deadline policy", () => {
+  it("keeps generic Context at 1.5s and bounds Native bootstraps at 4s", async () => {
+    expect(DEFAULT_CONTEXT_TOTAL_DEADLINE_MS).toBe(1_500);
+    expect(NATIVE_CONTEXT_BOOTSTRAP_TOTAL_DEADLINE_MS).toBe(4_000);
+    expect(contextTotalDeadlineMs()).toBe(1_500);
+    expect(contextTotalDeadlineMs(undefined, true)).toBe(4_000);
+    expect(contextTotalDeadlineMs(3_000)).toBe(3_000);
+    expect(contextTotalDeadlineMs(30_000, true)).toBe(4_000);
+    expect(DEFAULT_CONTEXT_PROVIDER_TIMEOUT_MS).toBe(900);
+    expect(contextMemoryProviderTimeoutMs(DEFAULT_CONTEXT_TOTAL_DEADLINE_MS)).toBe(1_150);
+    expect(contextMemoryProviderTimeoutMs(NATIVE_CONTEXT_BOOTSTRAP_TOTAL_DEADLINE_MS)).toBe(3_650);
+
+    let capturedSignal: AbortSignal | undefined;
+    let releaseLateResult: ((result: { evidence: EvidenceItem[] }) => void) | undefined;
+    const shortNativeMemorySlice = contextMemoryProviderTimeoutMs(400);
+    const result = await runContextProviders([{
+      key: "memory",
+      requirement: "optional",
+      timeoutMs: shortNativeMemorySlice,
+      retrieve: async ({ signal }) => {
+        capturedSignal = signal;
+        return new Promise(resolve => { releaseLateResult = resolve; });
+      },
+    }], request, Date.now() + 400);
+    expect(capturedSignal?.aborted).toBe(true);
+    expect(result.evidence).toEqual([]);
+    releaseLateResult?.({ evidence: [evidence("late-memory-payload")] });
+    await Promise.resolve();
+    expect(result.evidence).toEqual([]);
+  });
+
   it("runs Native agent providers concurrently while their shared deadline is active", async () => {
     let firstSignal: AbortSignal | undefined;
     let secondSawFirstLive = false;

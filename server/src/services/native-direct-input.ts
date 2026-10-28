@@ -64,14 +64,14 @@ interface NativeSourceReadScope { context: NativeSourceReadContext; actorKey: st
     inputs: NativePayloadSourceInput[] }> }
 /** Read-only structural Task proofs retained only by one bounded Memory page.
  * The exact transaction, actor and active Memory owner prefix are rechecked at
- * every use; live reader authority is still flushed by the owning Native scope. */
+ * every use; live reader authority is still flushed by the owning Native scope.
+ * Recursive work and cycle ancestry stay on the active Native scope and are
+ * never carried forward with completed page proofs. */
 export interface NativeMemoryPageStructuralProofMemo {
   readonly transaction: object;
   readonly actorKey: string;
   readonly memoryTemporalIdentity: string;
   readonly frozenTaskSnapshots: Set<string>;
-  ancestry?: NativeSourceReadAncestry;
-  readonly updateAncestry?: (ancestry: NativeSourceReadAncestry) => void;
 }
 const nativeSourceReadScopes = new AsyncLocalStorage<NativeSourceReadContext>();
 let nativeSourceWorkBudgetDiagnostics = 0;
@@ -392,20 +392,14 @@ function withNativeSourceReadScope<T>(db: Db | Transaction, actor: Authorization
       for (const key of scope.frozenTaskSnapshots) proofMemo.frozenTaskSnapshots.add(key);
       scope.frozenTaskSnapshots = proofMemo.frozenTaskSnapshots;
     }
-    if (memoMatches && proofMemo) {
-      proofMemo.ancestry = current.ancestry;
-      proofMemo.updateAncestry?.(current.ancestry);
-    }
     return read(scope);
   }
   const inheritedAncestry = current?.active && current.db === (db as object)
-    ? current.ancestry : memoMatches ? proofMemo?.ancestry : undefined;
+    ? current.ancestry : undefined;
   const scope = nativeSourceReadScope(db, actor, inheritedAncestry);
   if (memoMatches && proofMemo) {
     for (const key of scope.frozenTaskSnapshots) proofMemo.frozenTaskSnapshots.add(key);
     scope.frozenTaskSnapshots = proofMemo.frozenTaskSnapshots;
-    proofMemo.ancestry = scope.context.ancestry;
-    proofMemo.updateAncestry?.(scope.context.ancestry);
   }
   if (nativeSourceMemoDiagnosticsEnabled()) {
     nativeSourceMemoDiagnostics.roots = Math.min(1_000_000, nativeSourceMemoDiagnostics.roots + 1);
@@ -3134,7 +3128,7 @@ async function assertNativeFrozenTaskSnapshotCurrent(db: Db | Transaction, compa
     nativeSourceMemoRecordFrozenTask(snapshot.inputs, reusable ? "eligible" : "ineligible");
     const completeKey = `frozen-task-snapshot:${nativeSha256({ companyId, issueId, snapshot })}`;
     if (reusable && scope.frozenTaskSnapshots.has(completeKey)) {
-      // A page-retained proof hit still consumes the shared physical-page
+      // A page-retained proof hit still consumes the active Native scope's
       // work budget and participates in its ancestry/cycle guard.
       nativeSourceReadWork(scope);
       nativeSourceMemoRecordFrozenTask(snapshot.inputs, "hit");

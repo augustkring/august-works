@@ -5,9 +5,11 @@ import type { DBFieldAttribute } from "@better-auth/core/db";
 import type { SSOOptions } from "@better-auth/sso";
 import type { SCIMOptions } from "@better-auth/scim";
 import type { EnterpriseIdentityConfiguration } from "@paperclipai/shared";
+import { parseAccountDeletionSsoChallenge } from "./account-deletion-sso-proof.js";
 
 type NativePolicy = {
   id: string;
+  version: number;
   companyId: string;
   providerId: string;
   scimConnectionId: string | null;
@@ -23,6 +25,7 @@ type NativePolicy = {
       valueSha256: string;
     } | null;
   } | null;
+  updatedAt: Date | string;
   scimTokenHash: string | null;
   scimCredentialId: string | null;
   scimExpiresAt: Date | null;
@@ -122,7 +125,7 @@ export function enterpriseIdentityBridge(
     });
     if (!membership)
       return { action: "reject", code: "ENTERPRISE_MEMBERSHIP_INACTIVE" };
-    const user = await context.database.findOne<{ emailVerified: boolean }>({
+    const user = await context.database.findOne<{ emailVerified: boolean; authenticatorVersion: number; twoFactorEnabled: boolean; phishingResistantRequired: boolean }>({
       model: "user",
       where: where({ id: binding.userId }),
     });
@@ -131,6 +134,44 @@ export function enterpriseIdentityBridge(
         action: "reject",
         code: "ENTERPRISE_NATIVE_USER_VERIFICATION_REQUIRED",
       };
+    if (input.protocol === "oidc" && input.verifiedIdTokenClaims) {
+      const challenge = await context.database.findOne<{ id: string; value: string; expiresAt: Date | string }>({
+        model: "verification",
+        where: where({ identifier: `account-deletion-oidc:${binding.userId}` }),
+      });
+      const proof = challenge ? parseAccountDeletionSsoChallenge(challenge.value) : null;
+      const claims = input.verifiedIdTokenClaims;
+      const authTime = claims.auth_time;
+      const authTimeMs = typeof authTime === "number" && Number.isSafeInteger(authTime) ? authTime * 1000 : NaN;
+      const policyUpdatedAt = new Date(policy.updatedAt).toISOString();
+      const revision = createHash("sha256").update(JSON.stringify({ id: policy.id, version: policy.version,
+        companyId: policy.companyId, providerId: policy.providerId, issuer: policy.issuer,
+        configuration: policy.configuration, qualification: policy.qualification, updatedAt: policyUpdatedAt })).digest("hex");
+      const session = proof && await context.database.findOne<{ id: string; userId: string; expiresAt: Date | string; authenticatorVersion: number | null }>({
+        model: "session", where: where({ id: String(proof.sourceSessionId), userId: binding.userId }),
+      });
+      if (challenge && proof && proof.state === "authorization_started" && proof.purpose === "account-deletion" &&
+        proof.userId === binding.userId && proof.providerId === input.providerId && proof.policyId === policy.id &&
+        proof.policyVersion === policy.version && proof.policyRevision === revision && proof.bindingId === binding.id &&
+        proof.issuer === input.accountKey.issuer && proof.subject === input.accountKey.accountId &&
+        proof.idTokenNonce === claims.nonce && typeof claims.nonce === "string" &&
+        !user.twoFactorEnabled && !user.phishingResistantRequired &&
+        Number.isFinite(Date.parse(proof.expiresAt)) && Date.parse(proof.expiresAt) > Date.now() &&
+        Number.isFinite(new Date(challenge.expiresAt).getTime()) && new Date(challenge.expiresAt).getTime() > Date.now() &&
+        Number.isFinite(authTimeMs) && authTimeMs <= Date.now() + 5_000 && Date.now() - authTimeMs <= 300_000 &&
+        typeof proof.createdAt === "string" && authTimeMs >= Date.parse(proof.createdAt) - 1_000 &&
+        session && new Date(session.expiresAt).getTime() > Date.now() &&
+        (session.authenticatorVersion === null || session.authenticatorVersion === proof.authenticatorVersion) &&
+        proof.authenticatorVersion === user.authenticatorVersion) {
+        proof.state = "callback_verified";
+        proof.authTime = authTimeMs;
+        await context.database.update({
+          model: "verification",
+          where: where({ id: challenge.id }),
+          update: { value: JSON.stringify(proof), updatedAt: new Date() },
+        });
+      }
+    }
     return { action: "link", userId: binding.userId, profile: "preserve" };
   };
   const authentication: NonNullable<SCIMOptions["authentication"]> = {
@@ -309,6 +350,7 @@ export const enterpriseAuthoritySchemaPlugin: BetterAuthPlugin = {
       fields: fields({
         companyId: "string",
         providerId: "string",
+        version: "number",
         scimConnectionId: "string",
         issuer: "string",
         status: "string",
@@ -319,6 +361,7 @@ export const enterpriseAuthoritySchemaPlugin: BetterAuthPlugin = {
         scimTokenHash: "string",
         scimCredentialId: "string",
         scimExpiresAt: "date",
+        updatedAt: "date",
       }),
     },
     awEnterpriseBinding: {

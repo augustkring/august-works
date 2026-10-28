@@ -29,13 +29,18 @@ const receipt = { id: "private-deletion-receipt", companyId: "PRIVATE-DELETION-C
 const deferred = <T,>() => { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; };
 let root: Root, host: HTMLDivElement, client: QueryClient;
 async function render() { await act(async () => root.render(<QueryClientProvider client={client}><SaasAccountPage /></QueryClientProvider>)); }
-async function mount(options: { coldSessionFailure?: boolean } = {}) {
+async function mount(options: { coldSessionFailure?: boolean; passwordless?: boolean; readyChallenge?: string } = {}) {
   await i18n.changeLanguage("en"); context.company = "company-one";
+  if (options.readyChallenge) window.history.replaceState({}, "", `/company/settings/security?accountDeletionReauth=${options.readyChallenge}`);
   client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false } } });
   if (!options.coldSessionFailure) client.setQueryData(queryKeys.auth.session, v9SessionFixture("owner"));
   client.setQueryData(["saas-capabilities"], capabilities);
   vi.spyOn(saasApi, "capabilities").mockResolvedValue(capabilities);
   const account = vi.spyOn(authApi, "getSession").mockResolvedValue(v9SessionFixture("owner"));
+  vi.spyOn(authApi, "securityStatus").mockResolvedValue({ userId: "owner", hasPassword: !options.passwordless,
+    twoFactorEnabled: false, phishingResistantRequired: false, passkeysAvailable: false });
+  vi.spyOn(authApi, "accountDeletionSsoStatus").mockResolvedValue({ userId: "owner", providerId: options.passwordless ? "qualified-oidc" : null,
+    available: !!options.passwordless, ready: !!options.readyChallenge, challengeId: options.readyChallenge ?? null });
   if (options.coldSessionFailure) account.mockRejectedValueOnce(new Error("PRIVATE-COLD-BOOT-ERROR"));
   vi.spyOn(instanceSettingsApi, "getExperimental").mockResolvedValue({ notification_policy_v9: true } as never);
   vi.spyOn(saasApi, "sessions").mockResolvedValue([session]);
@@ -51,6 +56,7 @@ async function mount(options: { coldSessionFailure?: boolean } = {}) {
 afterEach(async () => {
   if (root) await act(async () => root.unmount());
   await client?.cancelQueries(); client?.clear(); host?.remove(); vi.restoreAllMocks();
+  window.history.replaceState({}, "", "/");
   localStorage.clear(); sessionStorage.clear(); await i18n.changeLanguage("en");
 });
 function setInput(input: HTMLInputElement, value: string) {
@@ -166,6 +172,38 @@ it("keeps a late deletion acknowledgement unconfirmed across the same account's 
 it("requires all explicit deletion confirmations even when a form submit is dispatched directly", async () => {
   await mount(); const remove = vi.spyOn(saasApi, "deleteAccount");
   await act(async () => submitDeletion()); expect(remove).not.toHaveBeenCalled();
+});
+it("requires a fresh company sign-in and keeps deletion behind the explicit confirmation form", async () => {
+  await mount({ passwordless: true });
+  const start = vi.spyOn(authApi, "startAccountDeletionSso").mockResolvedValue({
+    challengeId: "11111111-1111-4111-8111-111111111111", providerId: "qualified-oidc",
+    callbackURL: "https://example.test/company/settings/security?accountDeletionReauth=11111111-1111-4111-8111-111111111111",
+  });
+  const signIn = vi.spyOn(authApi, "signInAccountDeletionSso").mockReturnValue(new Promise(() => {}));
+  const remove = vi.spyOn(saasApi, "deleteAccount");
+  const submit = deletionSection().querySelector("form")!;
+  await act(async () => submit.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+  expect(remove).not.toHaveBeenCalled();
+  const companySignIn = [...deletionSection().querySelectorAll("button")].find(button => button.textContent === "Continue with company sign-in")!;
+  await act(async () => companySignIn.click());
+  await vi.waitFor(() => expect(signIn).toHaveBeenCalledWith("qualified-oidc",
+    "https://example.test/company/settings/security?accountDeletionReauth=11111111-1111-4111-8111-111111111111", "owner", "session-owner"));
+  expect(start).toHaveBeenCalledWith("owner", "session-owner");
+  expect(remove).not.toHaveBeenCalled();
+});
+
+it("submits a session-bound company sign-in proof only after explicit delete and export confirmation", async () => {
+  const proofId = "22222222-2222-4222-8222-222222222222";
+  await mount({ passwordless: true, readyChallenge: proofId });
+  const remove = vi.spyOn(saasApi, "deleteAccount").mockReturnValue(new Promise(() => {}));
+  await act(async () => {
+    setInput(deletionSection().querySelector<HTMLInputElement>('input[autocomplete="off"]')!, "DELETE MY ACCOUNT");
+    deletionSection().querySelector<HTMLInputElement>('input[type="checkbox"]')!.click();
+  });
+  await act(async () => submitDeletion());
+  await vi.waitFor(() => expect(remove).toHaveBeenCalledOnce());
+  expect(remove.mock.calls[0]![1]).toMatchObject({ confirmation: "DELETE MY ACCOUNT", reauthenticationProofId: proofId, acknowledgeExport: true });
+  expect(remove.mock.calls[0]![1]).not.toHaveProperty("password");
 });
 it("hides private cached data after an actual session failure and exposes an original-session retry", async () => {
   await mount();

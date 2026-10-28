@@ -3,7 +3,7 @@ help_article_id: help-and-human-support
 title: Help and human support
 summary: Search guidance, optionally ask the Support Assistant, view cases, or contact a person
 audience: company-members
-product_capability_refs: [HELP-01, HELP-02, V10-038, V10-051, V10-059]
+product_capability_refs: [HELP-01, HELP-02, V10-038, V10-051, V10-059, V10-095]
 screen_contract_refs: [HELP-01, HELP-02]
 owner: augustkring/august-works
 maturity: preview
@@ -34,6 +34,8 @@ If a submission's result is unknown, keep the page's original request and use it
 If a saved case shows unknown delivery, keep its reference and contact support directly. An interrupted delivery attempt is not automatically sent again, because the provider may already have received it.
 
 Open a case to read replies from support. **Waiting for you** shows what support needs from you. Replying to a resolved case reopens the same case. Replying to a closed case creates a linked follow-up and keeps the original history.
+
+If you already have a Task for follow-up, you can link it from the case when you have access to both records. The support messages stay in the case. Record your investigation and corrective work in the Task. Open **Decisions** to find a related Decision and use its outcome-review controls. A completed or inconclusive review can continue into Learning through those controls.
 
 ## Optional Support Assistant
 

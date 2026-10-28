@@ -159,11 +159,15 @@ export const companyDeletionRequestSchema = z
 export const accountDeletionRequestSchema = z
   .object({
     confirmation: z.literal("DELETE MY ACCOUNT"),
-    password: z.string().min(1).max(LOCAL_PASSWORD_MAX_UTF16_LENGTH),
+    password: z.string().min(1).max(LOCAL_PASSWORD_MAX_UTF16_LENGTH).optional(),
+    reauthenticationProofId: z.string().uuid().optional(),
     acknowledgeExport: z.literal(true),
     idempotencyKey: idempotencyKeySchema,
   })
-  .strict();
+  .strict()
+  .refine(input => Boolean(input.password) !== Boolean(input.reauthenticationProofId), {
+    message: "Provide exactly one current password or verified sign-in confirmation",
+  });
 
 export const runtimeModelProviderSchema = z
   .object({

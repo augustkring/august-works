@@ -520,7 +520,8 @@ export const saasApi = {
     userId: string,
     input: {
       confirmation: "DELETE MY ACCOUNT";
-      password: string;
+      password?: string;
+      reauthenticationProofId?: string;
       acknowledgeExport: true;
       idempotencyKey: string;
     },

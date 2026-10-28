@@ -5,11 +5,11 @@ import { verifyPassword } from "better-auth/crypto";
 import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import {
   accountDeletionOperations,
+  authVerifications,
   feedbackImageDeletions,
   authAccounts,
   authRateLimits,
   authUsers,
-  companySecrets,
   humanWorkflowCoverages,
   heartbeatRuns,
   supportCaseIssueLinks,
@@ -24,6 +24,7 @@ import {
 } from "../../errors.js";
 import { sha256 } from "./crypto.js";
 import { accessService } from "../access.js";
+import { parseAccountDeletionSsoChallenge } from "../../auth/account-deletion-sso-proof.js";
 
 export function accountDeletionService(
   db: Db,
@@ -31,6 +32,7 @@ export function accountDeletionService(
     removeSecret(id: string): Promise<unknown>;
     cancelRun(id: string): Promise<unknown>;
     removeFeedbackImages?(operationId: string): Promise<unknown>;
+    enterpriseSourceSha?: string;
   },
 ) {
   async function request(userId: string, raw: unknown, now = new Date(), actor?: AuthorizationActor) {
@@ -85,14 +87,75 @@ export function accountDeletionService(
           ),
         )
         .for("update");
-      if (
-        !credential?.password ||
-        !(await verifyPassword({
+      if (credential?.password) {
+        if (!input.password || input.reauthenticationProofId || !(await verifyPassword({
           hash: credential.password,
           password: input.password,
-        }))
-      )
-        throw forbidden("Current password confirmation required");
+        }))) throw forbidden("Current password confirmation required");
+      } else {
+        const [proofRow] = await tx.select().from(authVerifications)
+          .where(eq(authVerifications.identifier, `account-deletion-oidc:${userId}`)).for("update");
+        const proof = proofRow ? parseAccountDeletionSsoChallenge(proofRow.value) : null;
+        const proofTime = proof?.authTime ?? NaN;
+        if (!input.reauthenticationProofId || input.password || !proofRow || !proof ||
+          proof.challengeId !== input.reauthenticationProofId || proof.purpose !== "account-deletion" ||
+          proof.state !== "ready" || proof.userId !== userId || proof.proofSessionId !== actor.sessionId ||
+          proof.authenticatorVersion !== user.authenticatorVersion ||
+          !Number.isFinite(proofTime) || now.getTime() - proofTime > 300_000 || proofTime > now.getTime() + 5_000 ||
+          !Number.isFinite(Date.parse(proof.expiresAt)) || Date.parse(proof.expiresAt) <= now.getTime() ||
+          typeof proof.policyRevision !== "string" || !effects.enterpriseSourceSha)
+          throw forbidden("Current company sign-in confirmation required");
+        const [authority] = await tx.execute<{
+          id: string; version: number; companyId: string; providerId: string; issuer: string;
+          configuration: Record<string, unknown>; qualification: Record<string, unknown>; updatedAt: Date | string;
+          bindingId: string; subject: string;
+        }>(sql`
+          select p.id,p.version,p.company_id as "companyId",p.provider_id as "providerId",p.issuer,
+            p.configuration,p.qualification,p.updated_at as "updatedAt",b.id as "bindingId",b.subject
+          from enterprise_identity_policies p
+          join enterprise_subject_bindings b on b.company_id=p.company_id and b.provider_id=p.provider_id
+          join company_memberships m on m.company_id=b.company_id and m.principal_type='user'
+            and m.principal_id=b.user_id and m.status='active'
+          where b.id=${String(proof.bindingId)} and b.user_id=${userId} and b.status='active'
+            and p.id=${String(proof.policyId)} and p.status='qualified' and p.version=${Number(proof.policyVersion)}
+            and p.qualification->>'sourceRevision'=${effects.enterpriseSourceSha}
+            and (p.qualification->>'expiresAt')::timestamptz>clock_timestamp()
+            and p.configuration->>'protocol'='oidc'
+          for share of p,b,m`);
+        if (!authority || authority.companyId !== proof.companyId || authority.providerId !== proof.providerId ||
+          authority.issuer !== proof.issuer || authority.bindingId !== proof.bindingId || authority.subject !== proof.subject)
+          throw forbidden("Current company sign-in confirmation required");
+        const revision = sha256(JSON.stringify({ id: authority.id, version: authority.version,
+          companyId: authority.companyId, providerId: authority.providerId, issuer: authority.issuer,
+          configuration: authority.configuration, qualification: authority.qualification,
+          updatedAt: new Date(authority.updatedAt).toISOString() }));
+        const keyPin = authority.qualification.signingKey as { secretId?: string; version?: number; valueSha256?: string } | null;
+        if (revision !== proof.policyRevision || !keyPin ||
+          keyPin.secretId !== authority.configuration.privateKeySecretId ||
+          keyPin.version !== authority.configuration.privateKeySecretVersion)
+          throw forbidden("Current company sign-in confirmation required");
+        const [key] = await tx.execute<{ id: string }>(sql`
+          select s.id from company_secrets s join company_secret_versions v
+            on v.secret_id=s.id and v.version=${keyPin?.version ?? -1}
+          where s.id=${keyPin?.secretId ?? ""} and s.company_id=${authority.companyId}
+            and s.scope='company' and s.provider='local_encrypted' and s.status='active' and s.deleted_at is null
+            and s.latest_version=${keyPin?.version ?? -1} and v.status='current' and v.revoked_at is null
+            and v.value_sha256=${keyPin?.valueSha256 ?? ""} for share of s,v`);
+        if (!key || !proof.sourceSessionId || proof.sourceSessionId === proof.proofSessionId)
+          throw forbidden("Current company sign-in confirmation required");
+        const liveSessions = await tx.execute<{ id: string }>(sql`select id from "session" where id in (${actor.sessionId},${proof.sourceSessionId})
+          and user_id=${userId} and expires_at>clock_timestamp()
+          and (authenticator_version is null or authenticator_version=${user.authenticatorVersion}) for share nowait`);
+        if (new Set(liveSessions.map(row => row.id)).size !== 2)
+          throw forbidden("Current company sign-in confirmation required");
+        const [fresh] = await tx.execute<{ valid: boolean }>(sql`
+          select ${proofTime}::double precision between
+            (extract(epoch from clock_timestamp())-300)*1000 and extract(epoch from clock_timestamp())*1000
+            and ${proofRow.expiresAt}::timestamptz>clock_timestamp()
+            and (${authority.qualification.expiresAt ?? ""})::timestamptz>clock_timestamp() as valid`);
+        if (!fresh?.valid) throw forbidden("Current company sign-in confirmation required");
+        await tx.delete(authVerifications).where(eq(authVerifications.id, proofRow.id));
+      }
       if (user.twoFactorEnabled || user.phishingResistantRequired) {
         if (actor?.type !== "board" || actor.userId !== userId) throw forbidden("Recent factor confirmation required");
         await assertHumanAuthentication(tx, actor, { requireRecent: true, phishingResistant: false });

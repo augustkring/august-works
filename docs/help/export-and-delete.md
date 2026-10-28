@@ -9,7 +9,7 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: en
-last_verified_at: 2026-10-26
+last_verified_at: 2026-10-28
 review_trigger: Export scope, deletion, retention, or private Memory sharing and source access changes
 security_or_privacy_sensitive: true
 linked_source_files: [ui/src/pages/CompanyExport.tsx, ui/src/pages/SaasDeletion.tsx, ui/src/pages/SaasAccount.tsx, server/src/services/saas/account-deletion.ts, server/src/services/saas/offboarding.ts, server/src/services/saas/company-purge.ts, ui/src/pages/Memory.tsx, server/src/routes/memory.ts, server/src/services/memory/memory-service.ts, server/src/services/memory/memory-privacy.ts, server/src/services/memory/memory-jobs.ts, server/src/services/native-runtime/runtime-asset-retention.ts, server/src/services/native-local-process-stop.ts, server/src/services/heartbeat.ts]
@@ -43,3 +43,5 @@ The private original stays private. Recipients still need current access to the 
 When you add evidence to an existing Human-created Memory item, Blentera checks your current account and every original and new Task source again. If any source is no longer current or accessible, the update is blocked and the existing source restrictions remain in place.
 
 Choosing **Forget permanently** deletes the selected Memory content and its derived correction or sharing records. If that Memory came from a managed OpenCode run, Blentera also queues erasure of the run's app-managed runtime files. That file cleanup waits until Native confirms the run has stopped; provider-held data outside Blentera's managed runtime storage is not covered by this action.
+
+Managed file cleanup stays pending until process and storage removal can be verified. If it remains pending, contact human support with the saved receipt; a completed Memory deletion does not confirm removal of provider-held data.

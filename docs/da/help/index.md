@@ -3,7 +3,7 @@ help_article_id: help-and-human-support-da
 title: Hjælp og menneskelig support
 summary: Søg vejledning, spørg valgfrit Supportassistenten, se sager, eller kontakt en person
 audience: company-members
-product_capability_refs: [HELP-01, HELP-02, V10-038, V10-051, V10-059]
+product_capability_refs: [HELP-01, HELP-02, V10-038, V10-051, V10-059, V10-095]
 screen_contract_refs: [HELP-01, HELP-02]
 owner: augustkring/august-works
 maturity: preview
@@ -34,6 +34,8 @@ Hvis resultatet af en indsendelse er ukendt, skal du beholde den oprindelige anm
 Hvis en gemt sag viser ukendt levering, skal du beholde sagsreferencen og kontakte support direkte. Et afbrudt leveringsforsøg sendes ikke automatisk igen, fordi udbyderen allerede kan have modtaget det.
 
 Åbn en sag for at læse svar fra support. **Afventer dit svar** viser, hvad support har brug for fra dig. Et svar på en løst sag genåbner den samme sag. Et svar på en afsluttet sag opretter en tilknyttet opfølgning og bevarer den oprindelige historik.
+
+Hvis du allerede har en opgave til opfølgning, kan du knytte den til sagen, når du har adgang til begge. Supportbeskederne bliver i sagen. Beskriv din undersøgelse og det korrigerende arbejde i opgaven. Åbn **Beslutninger** for at finde en relateret beslutning og bruge dens kontroller til evaluering af resultatet. En afsluttet evaluering eller en evaluering uden en sikker konklusion kan fortsætte til Learning gennem disse kontroller.
 
 ## Valgfri Supportassistent
 
