@@ -1,0 +1,1 @@
+Focused regression: ui/src/components/TaskChatThread.test.tsx — “does not mount live header controls in the history loading overlay” (included among 160 passing tests).

@@ -1,0 +1,4 @@
+Listing tests:
+  [chromium] › paused-composer.spec.ts:13:3 › paused composer: task chat preserves drafts and requires resume
+  [chromium] › paused-composer.spec.ts:13:3 › paused composer: classic preserves drafts and requires resume
+Total: 2 tests in 1 file
