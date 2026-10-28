@@ -130,6 +130,9 @@ export function CustomerHelpCenter({ navigationState }: { navigationState?: unkn
         <a className={linkClass} href={PRODUCT_IDENTITY.statusOrigin} target="_blank" rel="noreferrer">
           {t("helpCenter.status")}
         </a>
+        <a className={linkClass} href={PRODUCT_IDENTITY.trustOrigin} target="_blank" rel="noreferrer">
+          {t("helpCenter.trust")}
+        </a>
       </div>
       <section aria-labelledby="customer-help-contact" className="space-y-2 rounded-lg border border-border p-4">
         <h2 id="customer-help-contact" className="font-medium">{t("helpCenter.humanTitle")}</h2>

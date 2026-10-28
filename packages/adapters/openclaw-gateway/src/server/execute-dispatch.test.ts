@@ -278,7 +278,7 @@ describe("openclaw_gateway execute dispatch boundary", () => {
     const commitUpload = websocketState.skillUploadRequests.find((request) => request.method === "skills.upload.commit")!;
     const uploadSha = String(beginUpload.params.sha256);
     expect(beginUpload.params).toMatchObject({ kind: "skill-archive", slug: "blentera-platform", force: false,
-      sha256: expect.stringMatching(/^[a-f0-9]{64}$/), idempotencyKey: `paperclip:run-1:db-pinned-version:${uploadSha}` });
+      sha256: expect.stringMatching(/^[a-f0-9]{64}$/), idempotencyKey: `paperclip:run-1:v1:${uploadSha}` });
     expect(commitUpload.params.sha256).toBe(uploadSha);
     const bind = websocketState.governedBridgeRequests.find((request) => request.method === "blentera.platform.bind.v1")!;
     expect(bind.params).toMatchObject({ agentId: "presence-provider", sessionKey: expect.any(String), providerRunId: "remote-run-1", paperclipRunId: "run-1" });

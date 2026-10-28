@@ -38,6 +38,6 @@ it("shows the compact projection for a current incident and renders provider tit
 it("does not turn an unconfigured provider into a green service claim or a global incident", async () => {
   query.result = { data: { state: "unconfigured", statusUrl: PRODUCT_IDENTITY.statusOrigin } };
   await render(true); expect(container.textContent).toBe("");
-  await i18n.changeLanguage("da"); await render();
+  await act(async () => { await i18n.changeLanguage("da"); }); await render();
   expect(container.textContent).toContain("kan ikke bekræfte den aktuelle servicestatus");
 });

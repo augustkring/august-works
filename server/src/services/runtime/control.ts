@@ -2780,6 +2780,20 @@ export function runtimeControlService(
               : []),
             ...(conversationCredentialChecks && Object.values(conversationCredentialChecks).every(Boolean) && !conversationCredentialValid
               ? ["credential_expired_before_admission"] : []),
+            ...(process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1"
+              ? [
+                  `preparation_${nativePreparationPurpose ?? "none"}`,
+                  `session_start_owner_${nativeSessionStartValid}`,
+                  `harness_state_owner_${nativeHarnessStateValid}`,
+                  `source_protocol_v1_${source.run.nativeInputSourceProtocolVersion === 1}`,
+                  `receipt_schema_${nativeRunInputSourceReceiptSchema.safeParse(
+                    source.run.runnerProfileJson && typeof source.run.runnerProfileJson === "object" &&
+                      !Array.isArray(source.run.runnerProfileJson)
+                      ? (source.run.runnerProfileJson as Record<string, unknown>).nativeInputSourceReceipt
+                      : undefined,
+                  ).success}`,
+                ]
+              : []),
           ];
           throw forbidden(`Managed OpenCode model broker capability is missing or outside its exact run scope${
             process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1"

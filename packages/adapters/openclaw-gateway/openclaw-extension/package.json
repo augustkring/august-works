@@ -3,5 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "dependencies": {
+    "typebox": "1.4.1"
+  },
+  "peerDependencies": {
+    "openclaw": "2026.10.7"
+  },
   "openclaw": { "extensions": ["./index.ts"] }
 }

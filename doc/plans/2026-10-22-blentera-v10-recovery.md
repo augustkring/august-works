@@ -2259,3 +2259,11 @@ Draft PR42 remains a preservation/review checkpoint. Whole-brief acceptance, fin
 - Customer Skill document identity is now checked before edited/imported/versioned bytes can take the platform-reserved name; regression tests verify no file/row/version publication on rejection. OpenClaw governed bridge and common canonical conformance remain under focused verification.
 
 Current source was separately preserved at041200Z. Lossless compression of three verified inactive test PG homes and deletion of inactive generated transform caches restored temporary memory headroom without removing installed dependencies, source, user backups or evidence. Whole-brief acceptance and final unchanged-head checks remain open; PR42 stays draft.
+
+
+### 28 October, resumed environment and preserved current source
+
+- Confirmed the workspace and Git history survived the environment restart. Created an additional byte-pinned archive `current-wip-preserved-20261028T072730Z.tar.gz` before continuing. Temporary `/tmp` materializations did not survive restart; no missing temporary artifact is treated as a completed qualification.
+- Complete issue activity route regression now passes **11/11**, including the workspace-change case previously failing CI. Exact snapshot and output are archived under `issue-activity-routes-2026-10-28`. Test error capture remains to expose future failures without changing production authorization.
+- UI token gates and Help metadata/navigation/local-link checks pass. Reverted the experimental transaction-local JIT override: measured runs did not show a benefit, so it is not retained as a proposed fix.
+- Preserved optimizer promotion receipt enforcement, current Gateway replay authorization, generated capability anchors, public EN/DA Trust documentation and pending runtime/browser fixes. These remain subject to the explicitly outstanding integration and final unchanged-head checks. PR42 remains draft; no merge or deployment.

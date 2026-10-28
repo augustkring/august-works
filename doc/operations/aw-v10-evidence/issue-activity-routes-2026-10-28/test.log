@@ -1,0 +1,28 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/__tests__/issue-activity-events-routes.test.ts > issue activity event routes > does not update an issue when privacy denies the actor 12119ms
+ ✓ src/__tests__/issue-activity-events-routes.test.ts > issue activity event routes > returns a field-change receipt and omits a requested no-op field 479ms
+ ✓ src/__tests__/issue-activity-events-routes.test.ts > issue activity event routes > echoes scalar blocker state and summaries when setting and clearing blockers 454ms
+ ✓ src/__tests__/issue-activity-events-routes.test.ts > issue activity event routes > truncates long text receipt values to 200 characters and marks them updated 436ms
+ ✓ src/__tests__/issue-activity-events-routes.test.ts > issue activity event routes > returns only the minimal receipt fields when requested 397ms
+ ✓ src/__tests__/issue-activity-events-routes.test.ts > issue activity event routes > preserves the default full response body with additive receipt fields 387ms
+ ✓ src/__tests__/issue-activity-events-routes.test.ts > issue activity event routes > logs blocker activity with added and removed issue summaries 424ms
+ ✓ src/__tests__/issue-activity-events-routes.test.ts > issue activity event routes > logs readable workspace change activity details for issue updates 411ms
+ ✓ src/__tests__/issue-activity-events-routes.test.ts > issue activity event routes > logs successful_run_handoff_resolved when an in_progress issue transitions to done with a pending required handoff 430ms
+[07:27:58] [33mWARN[39m: [36mfailed to destroy reusable sandbox leases for terminal issue[39m [90m{"issueId":"11111111-1111-4111-8111-111111111111","executionWorkspaceId":null}[39m
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 4090,
+        "column": 10
+      }
+    }
+ ✓ src/__tests__/issue-activity-events-routes.test.ts > issue activity event routes > does not log successful_run_handoff_resolved when status stays in_progress 469ms
+ ✓ src/__tests__/issue-activity-events-routes.test.ts > issue activity event routes > logs explicit reviewer and approver activity when execution policy participants change 507ms
+
+ Test Files  1 passed (1)
+      Tests  11 passed (11)
+   Start at  07:27:39
+   Duration  19.19s (transform 9.91s, setup 132ms, import 2.39s, tests 16.52s, environment 0ms)
+

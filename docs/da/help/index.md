@@ -9,7 +9,7 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: da
-last_verified_at: 2026-10-25
+last_verified_at: 2026-10-27
 review_trigger: Ændringer i Hjælp-navigation, supportindtag, kontaktoplysninger eller genopretning
 security_or_privacy_sensitive: true
 linked_source_files: [ui/src/App.tsx, ui/src/components/ExperienceUtilities.tsx, ui/src/pages/CustomerHelpCenter.tsx, ui/src/pages/CustomerSupportCases.tsx, ui/src/lib/help-navigation.ts, server/src/routes/customer-support.ts, server/src/services/experience/customer-support.ts, server/src/services/experience/support-cases.ts, packages/shared/src/customer-support.ts, packages/shared/src/customer-feedback.ts, packages/shared/src/product-identity.ts, packages/shared/src/support-diagnostics.ts, ui/src/api/search.ts, server/src/services/company-search.ts, server/src/routes/issues.ts, packages/shared/src/types/search.ts, ui/src/components/ExperienceCommandPalette.tsx, ui/src/pages/Search.tsx, packages/shared/src/validators/search.ts, server/src/services/experience/support-case-configuration.ts, server/src/services/experience/support-case-delivery.ts, server/src/services/experience/support-case-http-gateway.ts, server/src/routes/saas.ts, server/src/services/saas/support-case-operator.ts, ui/src/components/CustomerSupportAssistant.tsx, ui/src/components/CustomerSupportAssistant.test.tsx, server/src/services/orchestration/first-party-support-model-gateway.ts, server/src/services/orchestration/first-party-support-model-profiles.ts, server/src/services/experience/support-assistant-grounding.ts, server/src/services/orchestration/model-reservations.ts, server/src/services/agent-packages/execution-gate.ts, server/src/services/agent-packages/package-policy.ts, server/src/services/agent-packages/package-service.ts, server/src/saas-platform-config.ts, server/src/app.ts, server/src/services/company-search-help.generated.ts, packages/shared/src/agent-packages.ts, packages/shared/src/model-broker.ts, server/src/services/orchestration/read-only-model-transport.ts]
@@ -54,3 +54,8 @@ Ved en kørende eller afbrudt virksomhedsimport skal du følge [Importér og eks
 ## Teknisk dokumentation
 
 De øvrige dokumentationsfaner dækker native protokoller, selvhosting, adaptere og udvikler-API'er. Tekniske navne som Paperclip Runner, paperclipai og .paperclip.yaml identificerer de underliggende komponenter og pakkeformater.
+
+
+## Tillid og dokumentation
+
+Hjælp-visningen linker til [Blenteras Trust Center](https://trust.blentera.com) med oplysninger om sikkerhed, privatliv, regioner og underdatabehandlere, AI, tilgængelighed og dokumentation. Kontroller omfang, version, gennemgangsdato og udløb, før du baserer en beslutning på materialet. Produktdokumentation beviser ikke en driftsrevision eller certificering. [Oversigten](/da/trust/index) og [politikken for sårbarhedsrapporter](/da/trust/vulnerability-disclosure) er offentlig vejledning. Kontakt en person for aktuel dokumentation om en bestemt installation eller begrænset materiale.

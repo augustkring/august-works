@@ -152,7 +152,7 @@ function registerModuleMocks() {
   }));
 }
 
-async function createApp(db: unknown = {}) {
+async function createApp(db: unknown = {}, onError?: (error: unknown) => void) {
   const [{ issueRoutes }, { errorHandler }] = await Promise.all([
     vi.importActual<typeof import("../routes/issues.js")>("../routes/issues.js"),
     vi.importActual<typeof import("../middleware/index.js")>("../middleware/index.js"),
@@ -170,6 +170,8 @@ async function createApp(db: unknown = {}) {
     next();
   });
   app.use("/api", issueRoutes(db as any, {} as any));
+  const captureError: express.ErrorRequestHandler = (error, _req, _res, next) => { onError?.(error); next(error); };
+  app.use(captureError);
   app.use(errorHandler);
   return app;
 }
@@ -550,11 +552,12 @@ describe("issue activity event routes", () => {
       })),
     };
 
-    const res = await request(await createApp(dbMock))
+    let routeError: unknown;
+    const res = await request(await createApp(dbMock, error => { routeError = error; }))
       .patch(`/api/issues/${issue.id}`)
       .send({ executionWorkspaceId: nextExecutionWorkspaceId });
 
-    expect(res.status).toBe(200);
+    expect(res.status, routeError instanceof Error ? routeError.stack : undefined).toBe(200);
     await vi.waitFor(() => {
       expect(mockLogActivity).toHaveBeenCalledWith(
         expect.anything(),

@@ -212,6 +212,18 @@
                 ]
               }
             ]
+          },
+          {
+            "tab": "Trust Center",
+            "groups": [
+              {
+                "group": "Assurance",
+                "pages": [
+                  "trust/index",
+                  "trust/vulnerability-disclosure"
+                ]
+              }
+            ]
           }
         ]
       },
@@ -283,6 +295,18 @@
                 "group": "Udvikler og avanceret",
                 "pages": [
                   "help/developer-and-advanced"
+                ]
+              }
+            ]
+          },
+          {
+            "tab": "Tillid og sikkerhed",
+            "groups": [
+              {
+                "group": "Dokumentation",
+                "pages": [
+                  "da/trust/index",
+                  "da/trust/vulnerability-disclosure"
                 ]
               }
             ]

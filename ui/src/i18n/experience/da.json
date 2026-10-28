@@ -141,6 +141,7 @@
     "imports": "Importhistorik",
     "importsDescription": "Se gemte importkvitteringer for dette firma.",
     "status": "Tjenestestatus",
+    "trust": "Tillid og sikkerhed",
     "humanTitle": "Kontakt en person",
     "humanDescription": "Du kan kontakte supportteamet direkte. Du behøver ikke først at bruge en assistent.",
     "security": "Rapportér et sikkerhedsproblem",

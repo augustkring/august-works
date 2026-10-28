@@ -1,0 +1,14 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/services/optimizer/optimizer-promotion.integration.test.ts > optimizer promotion service > prepares canary but refuses activation from a caller boolean without durable receipts 255ms
+ ✓ src/services/optimizer/optimizer-promotion.integration.test.ts > optimizer promotion service > fails closed while promotion is disabled 106ms
+ ✓ src/services/optimizer/optimizer-promotion.integration.test.ts > optimizer promotion service > requires an active approving user when policy requires human approval 54ms
+ ✓ src/services/optimizer/optimizer-promotion.integration.test.ts > optimizer promotion service > requires the approved record to be bound to the exact promotion 78ms
+ ✓ src/services/optimizer/optimizer-promotion.integration.test.ts > optimizer promotion service > rejects stale workflow revisions before canary or activation 52ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  04:27:50
+   Duration  19.76s (transform 10.26s, setup 82ms, import 15.08s, tests 4.47s, environment 0ms)
+

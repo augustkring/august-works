@@ -1,0 +1,31 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/__tests__/v7-read-only-model-verifier.integration.test.ts > native read-only model consumer > requires a separately qualified trajectory purpose and rejects changed queued evidence before spending 1049ms
+ ✓ src/__tests__/v7-read-only-model-verifier.integration.test.ts > native read-only model consumer > records on-track evidence without resuming work, certifying completion or replaying spend 4231ms
+ ↓ src/__tests__/v7-read-only-model-verifier.integration.test.ts > native read-only model consumer > routes off_track trajectory through native pause and human resolution without certifying missing results
+ ↓ src/__tests__/v7-read-only-model-verifier.integration.test.ts > native read-only model consumer > routes uncertain trajectory through native pause and human resolution without certifying missing results
+ ↓ src/__tests__/v7-read-only-model-verifier.integration.test.ts > native read-only model consumer > routes possible_completion trajectory through native pause and human resolution without certifying missing results
+ ✓ src/__tests__/v7-read-only-model-verifier.integration.test.ts > native read-only model consumer > retains a single uncertain trajectory debit when the model cites foreign evidence 3078ms
+ ✓ src/__tests__/v7-read-only-model-verifier.integration.test.ts > native read-only model consumer > automatically queues a current observable trajectory through native supervision with no new worker dispatch 4748ms
+ ✓ src/__tests__/v7-read-only-model-verifier.integration.test.ts > native read-only model consumer > sends possible completion through a separate reserved verifier call and keeps the native Task awaiting human review 8479ms
+ ↓ src/__tests__/v7-read-only-model-verifier.integration.test.ts > native read-only model consumer > discards a late trajectory after source drift and retains its debit and native Stop
+ ↓ src/__tests__/v7-read-only-model-verifier.integration.test.ts > native read-only model consumer > fences an expired queued checkpoint without spending even when its account cannot deliver a new human request
+ ↓ src/__tests__/v7-read-only-model-verifier.integration.test.ts > native read-only model consumer > scrubs retained model trajectory references on native erasure while preserving the spend receipt
+ ↓ src/__tests__/v7-read-only-model-verifier.integration.test.ts > native read-only model consumer > uses the actual encrypted grant with a native debit and never lets model pass hide a missing canonical worker result
+ ✓ src/__tests__/v7-read-only-model-verifier.integration.test.ts > native read-only model consumer > serializes two consumers of one spend identity and refuses a new call beyond the cumulative verifier budget 4587ms
+ ↓ src/__tests__/v7-read-only-model-verifier.integration.test.ts > native read-only model consumer > retains human completion authority even when canonical fixture checks and the model recommendation both pass
+ ↓ src/__tests__/v7-read-only-model-verifier.integration.test.ts > native read-only model consumer > rejects cross-company, expired/revision-drifted profiles and worker self-review before any credential use
+ ↓ src/__tests__/v7-read-only-model-verifier.integration.test.ts > native read-only model consumer > rejects a late result after native grant revocation and retains the uncertain debit
+ ↓ src/__tests__/v7-read-only-model-verifier.integration.test.ts > native read-only model consumer > rejects a late result after native membership revocation and retains the uncertain debit
+ ↓ src/__tests__/v7-read-only-model-verifier.integration.test.ts > native read-only model consumer > rejects a late result after native flag revocation and retains the uncertain debit
+ ↓ src/__tests__/v7-read-only-model-verifier.integration.test.ts > native read-only model consumer > rejects a late result after native source revocation and retains the uncertain debit
+ ✓ src/__tests__/v7-read-only-model-verifier.integration.test.ts > native read-only model consumer > does not refund or retry a usage-ceiling violation or truncated model answer 3044ms
+ ↓ src/__tests__/v7-read-only-model-verifier.integration.test.ts > native read-only model consumer > consumes the existing leased START_VERIFIER delivery and retains the accountable human review request
+ ↓ src/__tests__/v7-read-only-model-verifier.integration.test.ts > native read-only model consumer > pauses and requests human review when configured model qualification expires without spending or retrying
+
+ Test Files  1 passed (1)
+      Tests  7 passed | 15 skipped (22)
+   Start at  04:53:42
+   Duration  46.51s (transform 9.12s, setup 78ms, import 13.26s, tests 33.06s, environment 0ms)
+

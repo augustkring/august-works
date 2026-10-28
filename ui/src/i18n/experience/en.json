@@ -141,6 +141,7 @@
     "imports": "Import history",
     "importsDescription": "View saved import receipts for this company.",
     "status": "Service status",
+    "trust": "Trust Center",
     "humanTitle": "Contact a person",
     "humanDescription": "You can contact the support team directly. You do not need to use an assistant first.",
     "security": "Report a security issue",

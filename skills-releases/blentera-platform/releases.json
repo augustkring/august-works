@@ -74,7 +74,7 @@
       "qualified_agent_skills_adapter"
     ],
     "supersedes": null,
-    "operationManifestHash": "17a206dc1d5685f9fe0cfea8c0abf41573a3ab7453238a377bf2c3c714d162c5",
-    "toolCatalogContractHash": "995ea5605d9fcdfb4acfebb2bc261635826a34d717302eaf44fba99bce193d27"
+    "operationManifestHash": "22c7ebc0014d5df6b5716751b41838d8a5c786515b35e86f019bae7023df3a69",
+    "toolCatalogContractHash": "5c9b1372bf12ad8b962b3249d2ce6e3679f33ba681f5cbc407d1459bee335825"
   }
 ]

@@ -8,7 +8,7 @@ import { assertAnalyticalContextPayloadAccess } from "../analytical-context-auth
 import { assertV5Authorization } from "../v5-authorization.js";
 import type { AuthorizationActor } from "../authorization.js";
 import type { NativeReadScope } from "../analytical-reader.js";
-import { lockAnalyticalCompany } from "../analytical-privacy.js";
+import { lockAnalyticalCompany, markAnalyticalPrivacyReadLocked } from "../analytical-privacy.js";
 import { lockMemoryPrivacy, canActorReadMemorySources } from "../memory/memory-privacy.js";
 
 const sources = z.array(z.uuid()).max(32);
@@ -148,8 +148,11 @@ async function inspectWorkflowRunPayloadSourceAccess(db: Db, companyId: string, 
   actor: AuthorizationActor, readScope?: NativeReadScope) {
   if (!is(db, PgTransaction)) throw forbidden("Workflow source reads require a native transaction");
   await db.execute(sql`set local statement_timeout='8s'`);
-  await lockAnalyticalCompany(db, companyId);
-  await lockMemoryPrivacy(db, companyId);
+  // This boundary only verifies current source state. Shared locks preserve
+  // writer exclusion while allowing concurrent complete readers to proceed.
+  await lockAnalyticalCompany(db, companyId, "read");
+  await lockMemoryPrivacy(db, companyId, "read");
+  markAnalyticalPrivacyReadLocked(db as object);
   const markerBefore = await db.execute<{ erased: boolean }>(sql`select aw_workflow_run_authoring_source_erased(${companyId}::uuid,${runId}::uuid) as erased`);
   if (markerBefore[0]?.erased !== false) throw forbidden("The workflow run source was erased or withdrawn");
   const [run] = await db.select({ id: workflowRuns.id, companyId: workflowRuns.companyId, workflowId: workflowRuns.workflowId,

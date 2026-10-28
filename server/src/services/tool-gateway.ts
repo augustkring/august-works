@@ -4395,6 +4395,42 @@ export function createToolGatewayService(
     );
   }
 
+  async function revalidateFirstPartyBuiltinReplay(
+    session: ToolGatewaySession,
+    tool: ToolGatewayDescriptor,
+    parameters: unknown,
+    invocationId: string,
+  ): Promise<unknown> {
+    if (tool.providerType !== "paperclip_self") return undefined;
+    const operation = agentNativeOperationForLegacyToolName(tool.name);
+    if (!operation || !operation.mcpExposed) {
+      throw new ToolGatewayHttpError(409,
+        "This first-party operation is not classified for replay; refresh through its canonical workflow",
+        "first_party_replay_revalidation_unavailable", { tool: tool.name });
+    }
+    const replayOwnerKind = RUNNER_TASK_OPERATION_BY_SELF_TOOL[tool.name]
+      ? "semantic_receipt"
+      : tool.risk === "read"
+        ? "read_projection"
+        : operation.operationId === "blentera.support.case.request" &&
+            operation.canonicalService === "customerSupportCaseService.createFromNative"
+          ? "idempotent_owner"
+          : null;
+    if (!replayOwnerKind) {
+      throw new ToolGatewayHttpError(409,
+        "This first-party operation has no qualified replay owner; refresh through its canonical workflow",
+        "first_party_replay_revalidation_unavailable", { operationId: operation.operationId });
+    }
+    const actor = currentSessionMemoryActor(session);
+    if (!actor || actor.type !== "agent" || !actor.runId || !actor.onBehalfOfUserId) {
+      throw new ToolGatewayHttpError(403, "Current Agent and represented Human authority is unavailable", "native_task_authority_unavailable");
+    }
+    await assertPlatformSkillAdmission(db, actor, blenteraPlatformContractHashes());
+    const refreshed = await executeBuiltinTool(session, tool, parameters, invocationId);
+    return validateToolContent({ value: refreshed, direction: "result", sensitiveMode: "redact",
+      promptInjectionMode: "block" }).value;
+  }
+
   function remoteEndpoint(config: Record<string, unknown>): string {
     const value = config.url ?? config.endpoint ?? config.remoteUrl;
     const parsed = parseRemoteHttpEndpoint(
@@ -11944,6 +11980,28 @@ export function createToolGatewayService(
           argumentsHash: argumentValidation.summary.sha256 ?? "",
         });
         if (replay?.matched) {
+          if (tool.providerType === "paperclip_self") {
+            // Preserve the original Gateway invocation and its receipt, but
+            // re-enter the original semantic owner before returning any
+            // first-party replay. The manifest classifies its effect and the
+            // matching builtin remains its original executable owner. The
+            // owner rechecks current source, Human, ACL, and Skill authority;
+            // current Tool Gateway policy is also required. An operation
+            // without a known safe owner class fails closed instead of using
+            // the generic cached result.
+            const currentPolicy = await policyService.decide(policyInputForTool({ session, tool }));
+            if (!currentPolicy.allowed) {
+              throw new ToolGatewayHttpError(403, "Current Tool Gateway policy no longer permits this operation", "tool_policy_denied");
+            }
+            const refreshed = await revalidateFirstPartyBuiltinReplay(session, tool, requestedParameters, replay.invocationId);
+            return {
+              invocationId: replay.invocationId,
+              status: "replayed" as const,
+              tool: virtualToolName ?? tool.name,
+              targetTool: virtualToolName ? tool.name : undefined,
+              result: refreshed,
+            };
+          }
           await revalidateScopedMemoryReplay({ invocationId: replay.invocationId,
             argumentsHash: argumentValidation.summary.sha256 ?? "", result: replay.result });
           return {
@@ -12355,8 +12413,10 @@ export function createToolGatewayService(
           if ((session.workflowRunId || scopedContext) && recorded.invocation.status !== "succeeded") throw new ToolGatewayHttpError(409,
             "The original tool operation is pending or failed; its effects cannot be repeated",
             "tool_idempotency_unsettled", { invocationId, status: recorded.invocation.status });
-          const replayResult = session.workflowRunId || scopedContext
-            ? recorded.invocation.workflowResultJson : storedInvocationResult(recorded.invocation);
+          const replayResult = tool.providerType === "paperclip_self"
+            ? await revalidateFirstPartyBuiltinReplay(session, tool, effectiveParameters, invocationId)
+            : session.workflowRunId || scopedContext
+              ? recorded.invocation.workflowResultJson : storedInvocationResult(recorded.invocation);
           await writeAudit({
             session,
             companyId: session.companyId,
@@ -12373,8 +12433,8 @@ export function createToolGatewayService(
               replayed: true,
             },
           });
-          await revalidateScopedMemoryReplay({ invocationId, argumentsHash: argumentValidation.summary.sha256 ?? "",
-            result: replayResult });
+          if (tool.providerType !== "paperclip_self") await revalidateScopedMemoryReplay({ invocationId,
+            argumentsHash: argumentValidation.summary.sha256 ?? "", result: replayResult });
           return {
             invocationId,
             status: "replayed" as const,

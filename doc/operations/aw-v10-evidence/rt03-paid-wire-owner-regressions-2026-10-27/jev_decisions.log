@@ -1,0 +1,52 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ × src/__tests__/jev-decisions-routes.integration.test.ts > Jev setup-test HTTP boundary > uses the real Decisions adapter over a mock wire, settles its original company-purpose reservation, and never resends an idempotent request 189ms
+   → expected { status: 'unknown', …(6) } to match object { status: 'completed', …(5) }
+(1 matching property omitted from actual)
+ ✓ src/__tests__/jev-decisions-routes.integration.test.ts > Jev setup-test HTTP boundary > rejects missing consent, caller-supplied principal, unsaved account, and mismatched profile before any provider request 54ms
+ ✓ src/__tests__/jev-decisions-routes.integration.test.ts > Jev setup-test HTTP boundary > retains an unknown charge and stable idempotency receipt without a second dispatch 93ms
+ ✓ src/__tests__/jev-decisions-routes.integration.test.ts > Jev setup-test HTTP boundary > records known usage and cost for an invalid answer without returning provider content 94ms
+ ✓ src/__tests__/jev-decisions-routes.integration.test.ts > Jev setup-test HTTP boundary > holds a reported provider charge above the immutable reservation quote 103ms
+ ✓ src/__tests__/jev-decisions-routes.integration.test.ts > Jev setup-test HTTP boundary > aborts a single in-flight request when the current company manager is revoked 1083ms
+ ✓ src/__tests__/jev-decisions-routes.integration.test.ts > Jev setup-test HTTP boundary > aborts at the profile expiry instead of allowing a late setup result 4055ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/jev-decisions-routes.integration.test.ts > Jev setup-test HTTP boundary > uses the real Decisions adapter over a mock wire, settles its original company-purpose reservation, and never resends an idempotent request
+AssertionError: expected { status: 'unknown', …(6) } to match object { status: 'completed', …(5) }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "costAmount": "0.0005166",
+-   "costStatus": "reported",
+-   "inputTokens": 12,
++   "costAmount": null,
++   "costStatus": "unpriced",
++   "inputTokens": null,
+    "model": "typesafe/jev-1.13",
+-   "outputTokens": 2,
+-   "status": "completed",
++   "outputTokens": null,
++   "status": "unknown",
+  }
+
+ ❯ src/__tests__/jev-decisions-routes.integration.test.ts:98:24
+     96|     const command = body();
+     97|     const first = await request(app).post(path()).send(command).expect…
+     98|     expect(first.body).toMatchObject({ status: "completed", model: "ty…
+       |                        ^
+     99|     expect(wire).toHaveBeenCalledTimes(1);
+    100|     const [url, init] = wire.mock.calls[0]!;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 6 passed (7)
+   Start at  04:54:29
+   Duration  23.17s (transform 9.39s, setup 73ms, import 13.63s, tests 9.35s, environment 0ms)
+

@@ -520,7 +520,7 @@ async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string
  diagnosticStage="retained_context_lookup";
  const condition="issueId" in scope?or(eq(contextManifests.issueId,scope.issueId),
   sql`exists(select 1 from heartbeat_runs h where h.company_id=${companyId}::uuid and h.id=${contextManifests.runId} and h.agent_id=${contextManifests.agentId} and h.issue_id=${scope.issueId}::uuid)`):or(eq(contextManifests.runId,scope.runId),conversationIssueId?eq(contextManifests.issueId,conversationIssueId):undefined,sql`exists(select 1 from ${agentExecutionManifests} e where e.company_id=${companyId}::uuid and e.run_id=${scope.runId}::uuid and e.context_manifest_id=${contextManifests.id})`);
- const {lockAnalyticalCompany}=await import("./analytical-privacy.js"),{lockMemoryPrivacy}=await import("./memory/memory-privacy.js");
+ const {lockAnalyticalCompany,analyticalPrivacyReadLocked}=await import("./analytical-privacy.js"),{lockMemoryPrivacy}=await import("./memory/memory-privacy.js");
  const inspectIn=async(tx:Db)=>{
   // The caller already owns a pinned source transaction in the batched/Home
   // path. Opening a savepoint for every retained Context root adds a full
@@ -529,7 +529,9 @@ async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string
   if(!companyLocksHeld){
    diagnosticStage="retained_context_privacy_locks";
    await tx.execute(sql`set local statement_timeout='8s'`);
-   await lockAnalyticalCompany(tx,companyId);await lockMemoryPrivacy(tx,companyId);
+   if(!analyticalPrivacyReadLocked(tx as object)){
+    await lockAnalyticalCompany(tx,companyId);await lockMemoryPrivacy(tx,companyId);
+   }
   }
   const currentActor=actor;
   if(!currentActor)throw forbidden("A current reader is required for source-dependent analytical payloads");
@@ -572,17 +574,18 @@ async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string
    .innerJoin(contextManifestMemoryRoots,and(eq(contextManifestMemoryRoots.companyId,contextManifests.companyId),eq(contextManifestMemoryRoots.manifestId,contextManifests.id)))
    .where(and(eq(contextManifests.companyId,companyId),condition)).limit(257);
   if(memoryRoots.length>256)throw forbidden("The complete retained Context exceeds its source review budget");
-  const {canActorReadMemorySources}=await import("./memory/memory-privacy.js");
+  const {canActorReadMemorySourceSet}=await import("./memory/memory-privacy.js");
   const analyticalIds=new Set(roots.map(root=>root.id));
+  const ordinaryMemoryRoots=memoryRoots.filter(root=>!analyticalIds.has(root.id));
   diagnosticStage="retained_memory_reader";
   for(const root of memoryRoots){
    if(analyticalIds.has(root.id)){
     await assertAnalyticalRetentionRootOwnerCurrent(tx,companyId,currentActor,root.id);
-    continue;
    }
-   if(performance.now()>deadline || !await canActorReadMemorySources(tx,companyId,currentActor,root.id))
-    throw forbidden("Retained Context source access is unavailable");
   }
+  if(ordinaryMemoryRoots.length && (performance.now()>deadline ||
+   !await canActorReadMemorySourceSet(tx,companyId,currentActor,ordinaryMemoryRoots.map(root=>root.id))))
+   throw forbidden("Retained Context source access is unavailable");
   const foundation=await tx.selectDistinct({ref:contextManifestItems.sourceRef}).from(contextManifests)
    .innerJoin(contextManifestItems,and(eq(contextManifestItems.companyId,contextManifests.companyId),eq(contextManifestItems.manifestId,contextManifests.id)))
    .where(and(eq(contextManifests.companyId,companyId),condition,eq(contextManifestItems.sourceProvider,"august_works_foundation"))).limit(257);

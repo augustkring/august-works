@@ -9,7 +9,7 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: en
-last_verified_at: 2026-10-25
+last_verified_at: 2026-10-27
 review_trigger: Help navigation, support intake, contacts, or recovery behavior changes
 security_or_privacy_sensitive: true
 linked_source_files: [ui/src/App.tsx, ui/src/components/ExperienceUtilities.tsx, ui/src/pages/CustomerHelpCenter.tsx, ui/src/pages/CustomerSupportCases.tsx, ui/src/lib/help-navigation.ts, server/src/routes/customer-support.ts, server/src/services/experience/customer-support.ts, server/src/services/experience/support-cases.ts, packages/shared/src/customer-support.ts, packages/shared/src/customer-feedback.ts, packages/shared/src/product-identity.ts, packages/shared/src/support-diagnostics.ts, ui/src/api/search.ts, server/src/services/company-search.ts, server/src/routes/issues.ts, packages/shared/src/types/search.ts, ui/src/components/ExperienceCommandPalette.tsx, ui/src/pages/Search.tsx, packages/shared/src/validators/search.ts, server/src/services/experience/support-case-configuration.ts, server/src/services/experience/support-case-delivery.ts, server/src/services/experience/support-case-http-gateway.ts, server/src/routes/saas.ts, server/src/services/saas/support-case-operator.ts, ui/src/components/CustomerSupportAssistant.tsx, ui/src/components/CustomerSupportAssistant.test.tsx, server/src/services/orchestration/first-party-support-model-gateway.ts, server/src/services/orchestration/first-party-support-model-profiles.ts, server/src/services/experience/support-assistant-grounding.ts, server/src/services/orchestration/model-reservations.ts, server/src/services/agent-packages/execution-gate.ts, server/src/services/agent-packages/package-policy.ts, server/src/services/agent-packages/package-service.ts, server/src/saas-platform-config.ts, server/src/app.ts, server/src/services/company-search-help.generated.ts, packages/shared/src/agent-packages.ts, packages/shared/src/model-broker.ts, server/src/services/orchestration/read-only-model-transport.ts]
@@ -54,3 +54,8 @@ For a running or interrupted company import, follow [Importing and exporting com
 ## Technical documentation
 
 The other documentation tabs cover native protocols, self-hosting, adapters, and developer APIs. Technical names such as Paperclip Runner, `paperclipai`, and `.paperclip.yaml` identify the underlying components and package formats.
+
+
+## Trust and assurance
+
+The Help view links to the [Blentera Trust Center](https://trust.blentera.com) for security, privacy, region/subprocessor, AI, accessibility and assurance information. Review the scope, version, review date and expiry of any evidence before relying on it. Product documentation is not proof of a deployment audit or certification. The [documentation overview](/trust/index) and [vulnerability disclosure policy](/trust/vulnerability-disclosure) are public guidance; contact a person for current deployment-specific or restricted evidence.

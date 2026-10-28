@@ -1,0 +1,10 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/__tests__/v6-billing-provider.test.ts > V6 Paddle cancellation contract > preserves period-end cancellation and sends immediate cancellation for paused offboarding 16ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  04:54:53
+   Duration  290ms (transform 48ms, setup 78ms, import 77ms, tests 17ms, environment 0ms)
+

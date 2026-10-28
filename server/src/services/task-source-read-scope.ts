@@ -6,6 +6,7 @@ import {
   pinCurrentBoardActor,
   type AuthorizationActor,
 } from "./authorization.js";
+import { logPostgresLockUnavailable } from "./postgres-lock-diagnostics.js";
 import { forbidden } from "../errors.js";
 
 /** Run a route's Task/Project SQL reads inside the original native read scope.
@@ -23,7 +24,8 @@ export async function withCurrentTaskSourceRead<T>(
     return read(db, false);
   }
 
-  return db.transaction(async (rawTx) => {
+  try {
+    return await db.transaction(async (rawTx) => {
     const tx = rawTx as unknown as Db;
     return authorizationService(tx).withReadCompany(companyId, async (owner) => {
       const decision = await owner.decide({
@@ -141,5 +143,9 @@ export async function withCurrentTaskSourceRead<T>(
         throw forbidden("Current Task source recheck exceeded its budget.");
       return preserveBoardDeadline(Promise.resolve(result));
     });
-  });
+    });
+  } catch (error) {
+    await logPostgresLockUnavailable(db, error, "current_task_source_read");
+    throw error;
+  }
 }

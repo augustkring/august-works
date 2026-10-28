@@ -259,6 +259,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   Popover,
   PopoverAnchor,
+  PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -7264,7 +7265,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
             )}
           >
             <Popover open={moreOpen} onOpenChange={setMoreOpen}>
-              <PopoverAnchor asChild>
+              <PopoverTrigger asChild>
                 <Button
                   ref={moreActionsTriggerRef}
                   type="button"
@@ -7275,21 +7276,14 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
                   title="More task actions"
                   aria-haspopup="dialog"
                   aria-expanded={moreOpen}
-                  onPointerDown={(event) => {
-                    if (event.button !== 0) return;
+                  onClick={(event) => {
                     event.preventDefault();
                     setMoreOpen((open) => !open);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      setMoreOpen((open) => !open);
-                    }
                   }}
                 >
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
-              </PopoverAnchor>
+              </PopoverTrigger>
               <PopoverContent
                 className="w-52 p-1"
                 align="end"

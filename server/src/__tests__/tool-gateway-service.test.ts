@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import { workflowService } from "../services/workflows/workflow-service.js";
 import { workflowExecutorService } from "../services/workflows/workflow-executor.js";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared";
 import {
   activityLog,
   authUsers,
@@ -83,6 +85,8 @@ describe("Blentera platform contract hashes", () => {
     expect(first).toEqual(second);
     expect(first.operationManifestHash).toMatch(/^[a-f0-9]{64}$/);
     expect(first.toolCatalogContractHash).toMatch(/^[a-f0-9]{64}$/);
+    const releaseRegistry = JSON.parse(readFileSync(new URL("../../../skills-releases/blentera-platform/releases.json", import.meta.url), "utf8")) as Array<Record<string, unknown>>;
+    expect(releaseRegistry.find(release => release.id === "v1")).toMatchObject(first);
     const contract = {
       toolId: "blentera.task.list_assigned",
       operationId: "blentera.task.list_assigned",
@@ -97,6 +101,12 @@ describe("Blentera platform contract hashes", () => {
     );
   });
 
+  it("keeps Task progress replay routed by its canonical manifest alias and owner", () => {
+    expect(AGENT_NATIVE_OPERATION_MANIFEST.find(operation => operation.operationId === "blentera.task.comment.add"))
+      .toMatchObject({ domain: "Work", canonicalService: "PaperclipRunnerToolAuthority.report_progress",
+        legacyAliases: ["paperclip-self:report_progress"], mcpExposed: true });
+  });
+
   it("classifies the required least-authority domain projections without claiming unqualified channels", () => {
     const domains = new Set(AGENT_NATIVE_OPERATION_MANIFEST.map(operation => operation.domain));
     for (const domain of ["Tasks", "Projects", "Work", "Agents", "Apps", "Insights", "Decisions", "Support"])
@@ -107,6 +117,10 @@ describe("Blentera platform contract hashes", () => {
       .toMatchObject({ mode: "PROPOSAL_ONLY", openclawQualified: false });
     expect(AGENT_NATIVE_OPERATION_MANIFEST.find(operation => operation.operationId === "blentera.support.case.manage"))
       .toMatchObject({ mode: "HUMAN_ONLY", mcpExposed: false });
+    expect(AGENT_NATIVE_OPERATION_MANIFEST.find(operation => operation.operationId === "blentera.support.intake.status"))
+      .toMatchObject({ toolId: "blentera.support.intake.status", canonicalService: "customerSupportCaseService.intakePolicyFromNative" });
+    expect(AGENT_NATIVE_OPERATION_MANIFEST.find(operation => operation.operationId === "blentera.support.service.status"))
+      .toMatchObject({ toolId: "blentera.support.service.status", canonicalService: "managedServiceHealth.read", mcpExposed: true });
   });
 });
 
@@ -641,13 +655,14 @@ describeEmbeddedPostgres("tool gateway service", () => {
     const proposal = await gateway.executeTool({ sessionToken: session.token,
       tool: "blentera.task.completion.propose", parameters: proposalParameters });
     expect(proposal.status).toBe("completed");
-    expect(proposal.result).toMatchObject({ proposalStatus: "pending_human_review", currentTaskStatus: "in_progress",
-      taskStatusCommitted: false, evidenceRequirement: expect.stringContaining("finalizer") });
+    expect(proposal.result).toMatchObject({ data: { proposalStatus: "pending_human_review", currentTaskStatus: "in_progress",
+      taskStatusCommitted: false, evidenceRequirement: expect.stringContaining("finalizer") } });
     const proposalReplay = await gateway.executeTool({ sessionToken: session.token,
       tool: "blentera.task.completion.propose", parameters: proposalParameters });
     expect(proposalReplay.status).toBe("replayed");
     const [reviewRequest] = await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, issue.id));
-    expect(reviewRequest).toMatchObject({ status: "pending", resolverPolicy: "human_only", sourceRunId: run.id,
+    expect(reviewRequest).toMatchObject({ status: "pending", requestedResolverPolicy: "human_only",
+      effectiveResolverPolicy: "human_only", resolverPolicyProvenance: "explicit", sourceRunId: run.id,
       kind: "request_confirmation" });
     expect(await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, issue.id))).toHaveLength(1);
     const [taskAfterProposal] = await db.select().from(issues).where(eq(issues.id, issue.id));
@@ -661,8 +676,10 @@ describeEmbeddedPostgres("tool gateway service", () => {
       .where(eq(heartbeatRuns.id, run.id));
     await expect(gateway.executeTool({ sessionToken: session.token, tool: "blentera.task.update", parameters: {
       idempotencyKey: randomUUID(), expectedUpdatedAt: taskAfterUpdate.updatedAt.toISOString(), title: "Unpinned write must not apply",
-    } })).rejects.toMatchObject({ status: 409, reasonCode: "platform_skill_readmission_required" });
+    } })).rejects.toMatchObject({ status: 409, details: { code: "platform_skill_readmission_required" } });
 
+    await preparePlatformSkillAdmission(db, { companyId: company.id, agentId: agent.id, runId: run.id,
+      responsibleUserId: userId, requireExisting: false }, blenteraPlatformContractHashes());
     await db.update(companyMemberships).set({ status: "inactive" }).where(and(
       eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"),
       eq(companyMemberships.principalId, userId),
@@ -812,6 +829,57 @@ describeEmbeddedPostgres("tool gateway service", () => {
     expect(await db.select().from(supportCaseEvents)).toHaveLength(1);
     const [activity] = await db.select().from(activityLog).where(eq(activityLog.action, "support.case_requested"));
     expect(activity).toMatchObject({ actorType: "agent", actorId: agent.id, agentId: agent.id, runId: run.id });
+  });
+
+  it("reads public service status separately from Support intake under current run, Human, policy, and Skill pins", async () => {
+    const { company, agent, issue, run } = await createRunFixture(db);
+    const userId = `gateway-service-status-human-${randomUUID()}`;
+    await seedCurrentHumanSourceActor(db, [company.id], userId);
+    await db.insert(companyMemberships).values({ companyId: company.id, principalType: "agent", principalId: agent.id,
+      status: "active", membershipRole: "member" });
+    await db.update(heartbeatRuns).set({ responsibleUserId: userId, runtimeMode: "native", nativeIssueId: issue.id })
+      .where(eq(heartbeatRuns.id, run.id));
+    const humanMembership = await db.select().from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, userId), eq(companyMemberships.status, "active"),
+    )).then(rows => rows[0]!);
+    const actor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: company.id, agentId: agent.id,
+      runId: run.id, onBehalfOfUserId: userId, authenticatedCredentialExpiresAt: Date.now() + 60_000,
+      keyScope: { kind: "standard" }, companyIds: [company.id],
+      memberships: [{ companyId: company.id, membershipRole: "member", status: "active" }],
+      onBehalfOfMemberships: [{ companyId: humanMembership.companyId, membershipRole: humanMembership.membershipRole,
+        status: humanMembership.status }] };
+    await preparePlatformSkillAdmission(db, { companyId: company.id, agentId: agent.id, runId: run.id,
+      responsibleUserId: userId, requireExisting: false }, blenteraPlatformContractHashes());
+    await db.insert(toolPolicies).values({ companyId: company.id, name: "Allow public service status",
+      policyType: "allow", selectors: { toolName: "paperclip-self:get_service_status" } });
+    const projection = { state: "current" as const, statusUrl: PRODUCT_IDENTITY.statusOrigin, source: "statuspage_public_v2" as const,
+      observedAt: new Date().toISOString(), providerUpdatedAt: new Date().toISOString(), indicator: "minor" as const,
+      components: [{ id: "app", name: "Blentera app" as const, status: "degraded_performance" as const }],
+      incidents: [], scheduledMaintenance: [] };
+    const read = vi.fn(async () => projection);
+    const gateway = createTestToolGatewayService(db, { serviceHealthReader: { read } });
+    const session = await gateway.createSession({ companyId: company.id, agentId: agent.id, runId: run.id,
+      issueId: issue.id, authorizationActor: actor });
+    expect((await gateway.listToolsForSession(session.token)).map(tool => tool.name))
+      .toContain("blentera.support.service.status");
+    const result = await gateway.executeTool({ sessionToken: session.token, tool: "blentera.support.service.status", parameters: {} });
+    expect(result.result).toMatchObject({ data: projection });
+    expect(JSON.stringify(result.result)).not.toMatch(/credential|password|supportCase|caseId/i);
+    expect(read).toHaveBeenCalledOnce();
+
+    await db.update(heartbeatRuns).set({ runnerProfileJson: sql`${heartbeatRuns.runnerProfileJson} - 'platformSkillAdmission'` })
+      .where(eq(heartbeatRuns.id, run.id));
+    await expect(gateway.executeTool({ sessionToken: session.token, tool: "blentera.support.service.status", parameters: {} }))
+      .rejects.toMatchObject({ status: 409, details: { code: "platform_skill_readmission_required" } });
+    expect(read).toHaveBeenCalledOnce();
+    await db.update(companyMemberships).set({ status: "suspended" }).where(and(
+      eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, userId),
+    ));
+    await expect(gateway.executeTool({ sessionToken: session.token, tool: "blentera.support.service.status", parameters: {} }))
+      .rejects.toMatchObject({ status: 403 });
+    expect(read).toHaveBeenCalledOnce();
   });
 
   it("executes create_workflow through the governed gateway without publishing", async () => {

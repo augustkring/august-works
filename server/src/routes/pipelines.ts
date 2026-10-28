@@ -87,6 +87,7 @@ import {
   PIPELINE_ATTENTION_MAX_LIMIT,
   type AttentionCaller,
 } from "../services/pipelines-aggregation.js";
+import { logPostgresLockUnavailable } from "../services/postgres-lock-diagnostics.js";
 import { accessService } from "../services/access.js";
 import { authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, pinCurrentBoardActor } from "../services/authorization.js";
 import { issueService } from "../services/issues.js";
@@ -697,12 +698,17 @@ function hasPostgresLockUnavailableCode(error: unknown): boolean {
 /** Retry a complete current-authority read proof only for PostgreSQL's
  * lock-unavailable code. Each attempt starts fresh statements; every retry
  * rechecks the current actor authority and source ownership. */
-async function retryPipelineCasePrivacyProof<T>(read: () => Promise<T>): Promise<T> {
+async function retryPipelineCasePrivacyProof<T>(db: Db, source: string, read: () => Promise<T>): Promise<T> {
+  let diagnosticEmitted = false;
   for (let attempt = 0; ; attempt += 1) {
     try {
       return await read();
     } catch (error) {
       if (!hasPostgresLockUnavailableCode(error)) throw error;
+      if (!diagnosticEmitted) {
+        diagnosticEmitted = true;
+        await logPostgresLockUnavailable(db, error, source);
+      }
       if (attempt >= 4) {
         throw conflict("Authentication state is changing; try again", {
           code: "authentication_state_busy",
@@ -717,7 +723,8 @@ async function retryPipelineCasePrivacyProof<T>(read: () => Promise<T>): Promise
 /** Human-authored case content remains company-shared. Agent-produced body
  * versions inherit the current native privacy of their retained producer runs. */
 async function canReadPipelineCaseBodySources(db: Db, req: Request, companyId: string, caseId: string) {
-  return retryPipelineCasePrivacyProof(() => canReadPipelineCaseBodySourcesOnce(db, req, companyId, caseId));
+  return retryPipelineCasePrivacyProof(db, "pipeline_case_body_source", () =>
+    canReadPipelineCaseBodySourcesOnce(db, req, companyId, caseId));
 }
 
 async function canReadPipelineCaseBodySourcesOnce(db: Db, req: Request, companyId: string, caseId: string) {
@@ -1810,7 +1817,8 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
         terminal === true ? isNotNull(pipelineCases.terminalKind) : terminal === false ? isNull(pipelineCases.terminalKind) : undefined,
       ))
       .orderBy(asc(pipelineCases.createdAt));
-    const visibilityRows = await Promise.all(rows.map(row => retryPipelineCasePrivacyProof(async () => {
+    const visibilityRows = await Promise.all(rows.map(row => retryPipelineCasePrivacyProof(db,
+      "pipeline_case_list_row", async () => {
       if (!await canReadPipelineCaseBodySourcesOnce(db, req, companyId, row.case.id)) return null;
       const [tasksReadable, descendantsReadable] = await Promise.all([
         canReadAllPipelineCaseTaskSources(db, req, companyId, row.case.id),

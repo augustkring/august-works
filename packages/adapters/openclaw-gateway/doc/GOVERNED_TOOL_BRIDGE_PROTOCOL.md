@@ -63,9 +63,15 @@ This extension targets OpenClaw commit `a54402e27d585ab69cccda86ce7c0160a68afeaf
 
 | Upstream file | SHA-256 |
 | --- | --- |
+| `package.json` (OpenClaw version and runtime `typebox` dependency) | `c6917449fce3ade7d74f39eda1378f4dc34743717616bb9ef78e37ec9f6434c1` |
 | `src/plugins/plugin-api.types.ts` (`registerTool`, `registerGatewayMethod`) | `b361b20b14c714b5be09c7060e14dc2a01d8b35dfef4c9e1b90641f517e36024` |
+| `src/plugins/runtime/types-core.ts` (`runtime.config.current()`) | `ca805e255c2c91330f2a022bc1de82bf66929b546816e17807c175dc9d3fa4a5` |
 | `src/plugins/tool-types.ts` (trusted tool context, `agentId`, `sessionKey`, host `runId`, context version 2) | `f4fe73d4137e69ae7d0bd92fa753523a98b5d9c15d17a9c146558cd3f9d45535` |
+| `src/config/types.openclaw.ts` (root `agents` and `tools` config) | `96841ccbc69f013c6dbdc2d57bbed2fbf5a1a513c45d95307864813c97d37dc1` |
+| `src/config/types.agents.ts` (agent `entries` and per-agent tool policy) | `599078a2c5324b98b13d5bb6881b0ed8d6b4eca165c4c298bf1b56811e04af68` |
+| `src/config/types.tools.ts` (global tool policy) | `8b87e91f8bb4bfc8018b96ab1f437e5358a27a55e74efdf7d3107323ba7a0745` |
+| `src/agents/tools/tool-results.ts` (`jsonResult` result envelope) | `13d2e22b750609d8cc848a548a17324e99000f004e89730bf305b3960da2ce3b` |
 | `src/gateway/server-methods/agent-run-handler.ts` (server-owned accepted run lifecycle) | `1fc79b627f192b8259abcfa169201197ea6f14e8a5921109bb2b786eaeeb507a` |
 | `packages/gateway-protocol/src/schema/agent.ts` (`idempotencyKey`, no caller-supplied run ID) | `ee017410bce9bd019ed959e2535ea5dfbea5a2a5b0f543a0c485b60cd5c4036e` |
 
-`conformance.test.ts` uses fake MCP and Gateway boundaries to exercise successful binding, exact accepted-run matching, wrong-run admission, untrusted origins, expiry, policy revocation, invocation-context substitution, and explicit unbinding. It does not mock or weaken Tool Gateway authorization; the actual Gateway remains responsible for the final allow/deny decision. The V10 OpenClaw profile is not qualified until the repository's serialized adapter and Gateway database lanes pass this harness against the exact release source pins.
+The extension manifest pins `typebox` 1.4.1 and declares `openclaw` 2026.10.7 as its peer runtime, matching the pinned commit's package manifest. `bridge-boundary.unit.test.ts` uses fake MCP and Gateway boundaries to exercise successful binding, exact accepted-run matching, wrong-run admission, untrusted origins, expiry, policy revocation, invocation-context substitution, and explicit unbinding. It aliases only OpenClaw's `jsonResult` helper to the unit fixture copied from the pinned implementation; the actual TypeBox 1.4.1 package is used. This is a bridge boundary unit test, not vendor SDK conformance; it does not mock or weaken Tool Gateway authorization, and the actual Gateway remains responsible for the final allow/deny decision. The V10 OpenClaw profile remains unqualified until a test against the pinned OpenClaw runtime and the repository's serialized adapter and Gateway database lanes passes.
