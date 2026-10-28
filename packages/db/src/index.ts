@@ -1,5 +1,6 @@
 export {
   createDb,
+  executePrivacyIdSelect,
   closeRegisteredClients,
   getPostgresDataDirectory,
   ensurePostgresDatabase,

@@ -7,6 +7,7 @@ import { PgTransaction } from "drizzle-orm/pg-core";
 import type { Db } from "@paperclipai/db";
 import type { NativeToolEffectClaim } from "../agent-auth-jwt.js";
 import {
+  executePrivacyIdSelect,
   agents,
   agentApiKeys,
   agentExecutionManifests,
@@ -768,6 +769,49 @@ async function issueReadSqlConditionInMemoryScope(db: Db | DbTransaction, actor:
       diagnostic, ignoreCorruptForDiagnostic);
 }
 
+/** Evaluate the current Task reader predicate for an exact bounded set in one
+ * query per frozen Memory Context scope. Callers must hold the source locks and
+ * owner-row locks for this set; the result is transaction-local and must be
+ * consumed before leaving that lock phase. Rows withheld by the ordinary
+ * predicate still go through the canonical single-Task owner for private
+ * Routine access. */
+export async function canActorReadIssuePrivacyBatch(db: Db | DbTransaction, actor: AuthorizationActor,
+  companyId: string, issueIds: readonly string[]): Promise<Map<string, boolean>> {
+  const ids = [...new Set(issueIds)];
+  if (ids.some(id => !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)))
+    throw forbidden("The complete current Task reader set is unavailable");
+  const readable = new Map(ids.map(id => [id, false]));
+  if (!ids.length) return readable;
+  if (!is(db, PgTransaction))
+    return db.transaction(tx => canActorReadIssuePrivacyBatch(tx, actor, companyId, ids));
+
+  const groups = new Map<string, { contextIds: readonly string[] | undefined; ids: string[] }>();
+  for (const id of ids) {
+    const contextIds = activeMemoryTemporalContexts(db, actor, "issue", id);
+    const key = contextIds === undefined ? "unscoped" : JSON.stringify(contextIds);
+    const group = groups.get(key) ?? { contextIds, ids: [] };
+    group.ids.push(id);
+    groups.set(key, group);
+  }
+  for (const group of groups.values()) {
+    const condition = group.contextIds === undefined ? await issueReadSqlCondition(db, actor)
+      : taskSourcePrivacySqlCondition(db, "issue", sql`${issues.id}`, sql`${issues.companyId}`,
+        actor, group.contextIds);
+    for (let offset = 0; offset < group.ids.length; offset += 256) {
+      const chunk = group.ids.slice(offset, offset + 256);
+      const rows = await executePrivacyIdSelect(db, db.select({ id: issues.id }).from(issues).where(and(
+        eq(issues.companyId, companyId), inArray(issues.id, chunk), condition)));
+      for (const row of rows) readable.set(row.id, true);
+    }
+  }
+
+  for (const id of ids) {
+    if (readable.get(id)) continue;
+    readable.set(id, await canActorReadIssuePrivacy(db, actor, { companyId, id }));
+  }
+  return readable;
+}
+
 /** Same retained-source SQL for the exact typed Workflow Run. A predicate
  * captured inside the native callback still depends on its transaction-local
  * token when executed, so the capability cannot escape callback lifetime. */
@@ -1508,7 +1552,7 @@ export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: Au
   const readQuery = db.select({ id: issues.id }).from(issues).where(and(eq(issues.id, issue.id), eq(issues.companyId, issue.companyId),
     readCondition)).limit(1);
   const readable = (await nativeIssuePrivacyDiagnosticQuery(db, actor, "effective_acl", readQuery,
-    () => readQuery)).length > 0;
+    () => executePrivacyIdSelect(db, readQuery))).length > 0;
   if (!readable && process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1" &&
       temporalScope?.active && temporalScope.companyId === issue.companyId &&
       nativeTaskReaderScopeDiagnostics < 16) {
@@ -1689,10 +1733,11 @@ export async function canActorReadProjectPrivacy(db: Db | DbTransaction, actor: 
  * This narrows payload visibility; company/action and V8 copy checks still apply. */
 export async function canActorReadHeartbeatRunPrivacy(db: Db | DbTransaction, actor: AuthorizationActor, source: { id: string; companyId: string },
 ): Promise<boolean> {
-  const readable = (await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+  const readQuery = db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
     eq(heartbeatRuns.id, source.id), eq(heartbeatRuns.companyId, source.companyId),
     await heartbeatRunReadSqlConditionInMemoryScope(db, actor, source.id),
-  )).limit(1)).length > 0;
+  )).limit(1);
+  const readable = (await executePrivacyIdSelect(db, readQuery)).length > 0;
   if (!readable && process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1" && nativeRunReaderDiagnostics < 16) {
     nativeRunReaderDiagnostics += 1;
     const scope = memoryTemporalReadScopes.getStore();

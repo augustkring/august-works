@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { drizzle as drizzlePg } from "drizzle-orm/postgres-js";
+import { is } from "drizzle-orm";
+import { drizzle as drizzlePg, PostgresJsSession } from "drizzle-orm/postgres-js";
 import { migrate as migratePg } from "drizzle-orm/postgres-js/migrator";
 import { readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -263,6 +264,21 @@ export function createDb(url: string, options?: DatabaseClientOptions) {
   // A disconnect can hide a committed write. Let the driver reconnect, but
   // leave retries and uncertain-outcome reconciliation to the domain owner.
   return installDatabaseWorkSignals(drizzlePg(sql, { schema }));
+}
+
+/** Reuse only the server plan for privacy readers' id projections. The existing
+ * session keeps its connection/transaction; postgres-js's pool-level prepare
+ * opt-out still wins over this per-statement request. No read result is cached. */
+export async function executePrivacyIdSelect(db: Pick<Db, "_">,
+  query: PromiseLike<{ id: string }[]> & { toSQL(): { sql: string; params: unknown[] } },
+): Promise<{ id: string }[]> {
+  const session = db._?.session;
+  if (!is(session, PostgresJsSession)) return query;
+  const compiled = query.toSQL();
+  session.logger.logQuery(compiled.sql, compiled.params);
+  return session.client.unsafe<{ id: string }[]>(compiled.sql,
+    compiled.params as Parameters<typeof session.client.unsafe>[1], { prepare: true });
+
 }
 
 export async function getPostgresDataDirectory(url: string): Promise<string | null> {
