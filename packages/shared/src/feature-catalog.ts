@@ -110,6 +110,16 @@ const VERIFIED_HELP_LINKAGE: Partial<Record<InstanceFeatureKey, Partial<Capabili
     serviceDependencies: ["server/src/services/tool-access.ts", "server/src/services/paperclip-cloud-connector.ts"],
     docsRef: "docs/help/apps-and-connections.md",
   },
+  company_deletion_v6: {
+    customerSurfaces: ["SETTINGS-DATA-PRIVACY", "SETTINGS-PEOPLE-ACCESS"],
+    dataCategories: ["Company export package", "Membership and account access", "Deletion and retention state"],
+    serviceDependencies: [
+      "server/src/services/saas/account-deletion.ts",
+      "server/src/services/saas/offboarding.ts",
+      "server/src/services/saas/company-purge.ts",
+    ],
+    docsRef: "docs/help/export-and-delete.md",
+  },
 };
 
 function capabilityLifecycle(key: InstanceFeatureKey, title: string): CapabilityLifecycle {

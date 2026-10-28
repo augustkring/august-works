@@ -79,6 +79,16 @@ describe("INSTANCE_FEATURE_CATALOG", () => {
       dataCategories: ["Workflow definitions", "Step inputs", "Run history"],
       supportPathRef: "/company/help",
     });
+    expect(INSTANCE_FEATURE_CATALOG.company_deletion_v6.lifecycle).toMatchObject({
+      docsRef: "docs/help/export-and-delete.md",
+      customerSurfaces: ["SETTINGS-DATA-PRIVACY", "SETTINGS-PEOPLE-ACCESS"],
+      dataCategories: ["Company export package", "Membership and account access", "Deletion and retention state"],
+      serviceDependencies: [
+        "server/src/services/saas/account-deletion.ts",
+        "server/src/services/saas/offboarding.ts",
+        "server/src/services/saas/company-purge.ts",
+      ],
+    });
   });
 
   it("keeps compatibility keys deprecated and does not advertise retired/internal capabilities", () => {

@@ -4,9 +4,9 @@ The existing feature catalog now carries lifecycle metadata and projects it in t
 
 The admin page exposes a collapsible registry for every catalog record, including internal and retired records. It shows maturity, owner, customer surfaces, experience profiles, entitlement, criticality, data categories, service dependencies, docs/help, support route and level, release evidence, deprecation/sunset/replacement/migration fields, review date, and GA readiness. English and Danish labels include an accessible maturity name. Retired records retain their readable record while the enablement switch is replaced by a “not available for new use” status.
 
-Verified metadata is limited to current source facts: V5–V9 rollout owner roles; the workflow preview Help record’s owner, screen contracts, linked service files, and data categories; and the Apps Help record’s screen contracts, linked service files, and data categories. All records link to the current in-app human Help route. Unmapped fields remain null or empty and are shown as unqualified; no GA maturity, support commitment, release evidence, reviewed date, deprecation date, or sunset date was invented. The “Blentera Runner” customer label is kept separate from the internal `enableNativeRunner` key.
+Verified metadata is limited to current source facts: V5–V9 rollout owner roles; the workflow preview Help record’s owner, screen contracts, linked service files, and data categories; the Apps Help record’s screen contracts, linked service files, and data categories; and the export/delete Help record’s data-privacy and people/access screens plus its linked SaaS lifecycle owners. All records link to the current in-app human Help route. Unmapped fields remain null or empty and are shown as unqualified; no GA maturity, support commitment, release evidence, reviewed date, deprecation date, or sunset date was invented. The “Blentera Runner” customer label is kept separate from the internal `enableNativeRunner` key.
 
-The release artifact remains compatible by default: `buildFeatureCatalogArtifact()` and the generator’s default output retain schema v1’s tier-only shape. Lifecycle artifact v2 is explicit (`--schema-version 2`) and includes the existing title/description/tier plus lifecycle metadata. The in-repository parser accepts both versions. The external Cloud harness’s ability to consume v2 remains unverified, so v2 is not selected by the release script.
+The release artifact remains compatible by default: `buildFeatureCatalogArtifact()` and the generator’s default output retain schema v1’s tier-only shape. Lifecycle artifact v2 is explicit (`--schema-version 2`) and includes the existing title/description/tier plus lifecycle metadata. The in-repository parser accepts both versions. The release script now generates the existing tier-only `feature-catalog.json` schema v1 and an additive `feature-catalog-lifecycle.json` schema v2 from the clean exact local tag. Before it creates or updates a GitHub release or uploads either file, it requires the remote tag’s peeled commit to equal the local tagged source. The external Cloud harness’s ability to consume v2 remains unverified; publishing the sidecar does not change its contract or imply consumer adoption.
 
 | Check | Result | Raw evidence |
 |---|---:|---|
@@ -29,3 +29,21 @@ The generator smoke used `/workspace/v10-dep-qualification/cli/node_modules/tsx/
 Lifecycle availability now uses the original instance-settings admission owner: `getExperimental()` overlays the catalog’s internal/retired floor in its effective return value, while leaving stored values unchanged; the existing PATCH owner rejects attempts to enable those states. The V5–V9 feature helpers and ordinary direct flag consumers read that effective view. The three production SQL reads found during the raw-consumer audit (agent-run cancellation, chat interaction publication, and chat action confirmation) now use the same service projection; the confirmation read retains its transaction share-lock. The restore-quarantine path only clears settings and does not admit feature use. The current catalog has no sourced `internal` or `retired` entries, so unit coverage applies a synthetic retired maturity to a stored-true flag and verifies effective denial plus persistence preservation. A focused V9 regression confirms canonical plan history and Stop receipts remain available after rollout withdrawal. No capability is assigned an unsupported retirement date or sunset claim.
 
 Earlier failed test attempts and their exact logs/exits are retained in this directory. They exposed and fixed router context, lifecycle badge expectation, and registry-rendering issues. Retirement-specific focused tests, shared typecheck, Stop-preservation regression, and chat-publication regression are recorded in the `retirement-*` files. The final test-source pins match the lifecycle implementation and focused test files listed in `posttest-source-check.json`.
+
+## 2026-10-28 release-sidecar and source-linkage follow-up
+
+The stable GitHub Release helper now keeps the established v1 asset and also
+generates/uploads `feature-catalog-lifecycle.json` schema v2 from the same
+clean commit as the release tag. This is an additive release asset only; the
+external Cloud harness has not been switched to or qualified against v2. The
+catalog adds a fourth source-backed Help mapping for `company_deletion_v6`:
+the export/delete article, its data-privacy and people/access screen contracts,
+and its linked SaaS lifecycle owner files. Other lifecycle facts remain
+unqualified unless their domain owner and current Help/screen sources support
+them.
+
+`release-sidecar-r1/feature-catalog.test.log` records the focused current
+catalog suite (17/17, exit 0), with matching pre/post source pins for the
+catalog, test, release helper, and generator. The generator's v1/v2 local
+artifact smoke is separately recorded there; it proves local schema output,
+not a GitHub release or Cloud consumer behavior.
