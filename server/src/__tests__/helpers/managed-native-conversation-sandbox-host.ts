@@ -666,9 +666,9 @@ export async function configureManagedConversationSandboxHost(input: {
     if (message.type !== "exec_open" || !Array.isArray(message.request?.argv) || typeof message.channelId !== "string") return;
     const request = message.request as Record<string, any>;
     const requestEnv = request.env && typeof request.env === "object" ? request.env as Record<string, unknown> : {};
+    const requestArgv = request.argv as string[];
     const nativePreparationPurpose = purposeByRequestId.get(request.requestId) ??
       (requestArgv[3] === "paperclip-native-asset-erasure" ? "native_provider_data_erasure" : null);
-    const requestArgv = request.argv as string[];
     const requestLabel = requestArgv[0] === "sh" && requestArgv[1] === "-c" ? requestArgv[2] : null;
     relayCommandOwnerByRequestId.set(request.requestId, requestLabel === "paperclip-runner-monitor"
       ? "runner_monitor" : requestLabel === "paperclip-runner-process-identity"

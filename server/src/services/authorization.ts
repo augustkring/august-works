@@ -2095,7 +2095,7 @@ export async function withReadMemoryTemporalSources<T>(db: Db | DbTransaction, a
         frozenTaskSnapshots = new Set();
         structuralProofMemoStore.proofsByOwnerPrefix.set(memoKey, frozenTaskSnapshots);
       }
-      structuralProofMemo = { transaction: sourceDb as object, actorKey, memoryTemporalIdentity, frozenTaskSnapshots,
+      structuralProofMemo = { transaction: sourceDb as object, actorKey: memoActorKey, memoryTemporalIdentity, frozenTaskSnapshots,
         ...(structuralProofMemoStore.ancestry ? { ancestry: structuralProofMemoStore.ancestry } : {}),
         updateAncestry: ancestry => { structuralProofMemoStore.ancestry = ancestry; } };
     }

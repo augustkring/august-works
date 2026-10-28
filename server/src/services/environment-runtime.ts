@@ -544,7 +544,7 @@ export interface EnvironmentDriverExecuteInput extends EnvironmentDriverLeaseInp
   bypassSession?: boolean;
   /** Private Native setup phase for pinned artifacts, exact run-owned harness
    * state access, immutable runtime context staging, or the conversation Runnerd launch. Never user/model-supplied. */
-  nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare";
+  nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe";
   /**
    * Force the command onto the lease's persistent session even when no run step
    * is active. The ACP process session bridge sets this so the long-lived agent
@@ -1298,7 +1298,7 @@ function createSandboxEnvironmentDriver(
       stdin?: string;
       timeoutMs?: number;
       signal?: AbortSignal;
-      nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare";
+      nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe";
       onOutput?: (stream: "stdout" | "stderr", chunk: string) => void | Promise<void>;
     }) => Promise<PluginEnvironmentExecuteResult | null>;
     pluginWorkerReadyTimeoutMs?: number;
@@ -3752,7 +3752,7 @@ export function environmentRuntimeService(
       stdin?: string;
       timeoutMs?: number;
       signal?: AbortSignal;
-      nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare";
+      nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe";
       onOutput?: (stream: "stdout" | "stderr", chunk: string) => void | Promise<void>;
     }) => Promise<PluginEnvironmentExecuteResult | null>;
     pluginWorkerReadyTimeoutMs?: number;

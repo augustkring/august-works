@@ -38,6 +38,7 @@ import {
   runtimeHostCommands,
   runtimeHosts,
   runtimeOperations,
+  memoryJobs,
   runtimeOperationAttempts,
   runtimeBackups,
   runtimeVersionCatalog,
@@ -2709,48 +2710,13 @@ export function runtimeControlService(
   }
   async function eraseRemoteNativeRuntimeAsset(
     locator: RemoteRuntimeAssetLocator,
-    input: { companyPurgeOperationId?: string } = {},
+    input: { jobId: string; jobKey: string; companyPurgeOperationId?: string },
   ): Promise<RemoteRuntimeAssetRemovalReceipt> {
-    if (!isRemoteRuntimeAssetLocator(locator)) throw conflict("Managed remote OpenCode erasure locator is invalid");
+    if (!isRemoteRuntimeAssetLocator(locator) || !/^[0-9a-f-]{36}$/i.test(input.jobId) ||
+      input.jobKey !== `runtime-asset-erasure:v1:${locator.runId}`)
+      throw conflict("Managed remote OpenCode erasure locator or MemoryJob identity is invalid");
     const source = await remoteRuntimeAssetDispatchContext(locator, input.companyPurgeOperationId);
     const locatorDigest = remoteRuntimeAssetLocatorDigest(locator);
-    const recovered = await db.transaction(async transaction => {
-      const tx = transaction as unknown as Db;
-      await lockAnalyticalCompany(tx, locator.companyId);
-      await lockMemoryPrivacy(tx, locator.companyId);
-      await assertRemoteRuntimeAssetErasureReady(tx, locator, input.companyPurgeOperationId);
-      const prior = await tx.select().from(runtimeHostCommands).where(and(
-        eq(runtimeHostCommands.companyId, locator.companyId),
-        eq(runtimeHostCommands.commandType, "sandbox_exec"),
-        sql`${runtimeHostCommands.payload}->'remoteRuntimeAssetErasure'->>'locatorDigest' = ${locatorDigest}`,
-      )).orderBy(desc(runtimeHostCommands.createdAt)).for("update");
-      if (prior.length === 0) return null;
-      const sameOperation = (command: typeof prior[number]) => {
-        const payload = command.payload && typeof command.payload === "object" && !Array.isArray(command.payload)
-          ? command.payload as Record<string, unknown> : {};
-        const erasure = payload.remoteRuntimeAssetErasure && typeof payload.remoteRuntimeAssetErasure === "object" &&
-          !Array.isArray(payload.remoteRuntimeAssetErasure) ? payload.remoteRuntimeAssetErasure as Record<string, unknown> : {};
-        return erasure.companyPurgeOperationId === input.companyPurgeOperationId;
-      };
-      const completed = prior.find(command => sameOperation(command) && command.status === "SUCCEEDED");
-      if (completed) {
-        const safeResult = completed.safeResult && typeof completed.safeResult === "object" && !Array.isArray(completed.safeResult)
-          ? completed.safeResult as Record<string, unknown> : {};
-        const receipt = safeResult.remoteRuntimeAssetRemovalReceipt;
-        if (!isRemoteRuntimeAssetRemovalReceipt(receipt, locator) ||
-          receipt.commandRequestId !== completed.idempotencyKey ||
-          receipt.target.hostId !== source.host.id || receipt.target.cellId !== source.cell.id ||
-          receipt.target.cellGeneration !== source.cell.generation.toString() ||
-          receipt.target.bindingId !== source.binding.id)
-          throw conflict("Completed remote OpenCode erasure has no recoverable exact receipt");
-        return receipt;
-      }
-      // PENDING, CLAIMED, failed, expired, or a different purge operation all
-      // represent an uncertain/consumed physical command. Never issue a second
-      // delete against an absent root until that exact command is reconciled.
-      throw conflict("A prior remote OpenCode erasure command requires reconciliation");
-    });
-    if (recovered) return recovered;
     const requestId = randomUUID();
     const deadlineAt = new Date(Math.min(Date.now() + 60_000, source.lease.expiresAt!.getTime(),
       source.policy.expiresAt.getTime(), source.capabilityExpiresAt ?? Number.POSITIVE_INFINITY));
@@ -2764,6 +2730,9 @@ export function runtimeControlService(
     const commandDigest = nativeSha256({ argv: command, cwd: source.remoteCwd, env, stdinHash: sha256(""),
       timeoutDeadline: deadlineAt.toISOString(), nativePreparationPurpose: "native_provider_data_erasure" });
     const attempt = Math.max(1, source.run.continuationAttempt + 1);
+    const idempotencyKey = `managed-native-asset-erasure:v1:${nativeSha256({ companyId: locator.companyId,
+      jobKey: input.jobKey, locatorDigest, purpose: "native_provider_data_erasure",
+      companyPurgeOperationId: input.companyPurgeOperationId ?? null })}`;
     const desiredState = {
       kind: "sandbox_exec_v1", requestId, bindingId: source.binding.id,
       cellId: source.cell.id, generation: source.cell.generation.toString(), hostId: source.host.id,
@@ -2772,12 +2741,27 @@ export function runtimeControlService(
       policySnapshotId: source.policy.id, policyHash: source.policy.policyHash,
       commandDigest, deadlineAt: deadlineAt.toISOString(), nativePreparationPurpose: "native_provider_data_erasure",
       remoteRuntimeAssetErasure: {
-        locator, locatorDigest,
+        locator, locatorDigest, jobId: input.jobId, jobKey: input.jobKey,
+        purpose: "native_provider_data_erasure", formatVersion: 1, idempotencyKey,
         ...(input.companyPurgeOperationId ? { companyPurgeOperationId: input.companyPurgeOperationId } : {}),
       },
     };
-    const [claim] = await db.transaction(async transaction => {
+    const admission = await db.transaction(async transaction => {
       const tx = transaction as unknown as Db;
+      await lockAnalyticalCompany(tx, locator.companyId);
+      await lockMemoryPrivacy(tx, locator.companyId);
+      const [job] = await tx.select().from(memoryJobs).where(and(
+        eq(memoryJobs.companyId, locator.companyId), eq(memoryJobs.id, input.jobId),
+        eq(memoryJobs.jobKey, input.jobKey), eq(memoryJobs.status, "running"),
+        gt(memoryJobs.leaseExpiresAt, new Date()),
+      )).for("update");
+      const jobSource = job?.sourceRefJson && typeof job.sourceRefJson === "object" && !Array.isArray(job.sourceRefJson)
+        ? job.sourceRefJson as Record<string, unknown> : {};
+      if (!job || job.operationType !== "retention" || jobSource.kind !== "runtime_asset_erasure" ||
+        jobSource.runId !== locator.runId || jobSource.companyPurgeOperationId !== input.companyPurgeOperationId ||
+        !isRemoteRuntimeAssetLocator(jobSource.remoteAssetLocator, { companyId: locator.companyId, runId: locator.runId }) ||
+        remoteRuntimeAssetLocatorDigest(jobSource.remoteAssetLocator as RemoteRuntimeAssetLocator) !== locatorDigest)
+        throw conflict("Remote Native asset erasure requires the exact currently claimed MemoryJob");
       await assertRemoteRuntimeAssetErasureReady(tx, locator, input.companyPurgeOperationId);
       const current = await remoteRuntimeAssetDispatchContext(locator, input.companyPurgeOperationId);
       if (current.host.id !== source.host.id || current.host.credentialVersion !== source.host.credentialVersion ||
@@ -2785,12 +2769,54 @@ export function runtimeControlService(
         current.binding.id !== source.binding.id || current.policy.id !== source.policy.id ||
         current.lease.id !== source.lease.id)
         throw conflict("Managed remote OpenCode erasure target changed before claim admission");
-      return tx.insert(runtimeHostCommands).values({
+      const prior = await tx.select().from(runtimeHostCommands).where(and(
+        eq(runtimeHostCommands.companyId, locator.companyId),
+        eq(runtimeHostCommands.commandType, "sandbox_exec"),
+        sql`${runtimeHostCommands.payload}->>'nativePreparationPurpose' = 'native_provider_data_erasure'`,
+      )).for("update");
+      const related = prior.filter(command => {
+        const payload = command.payload && typeof command.payload === "object" && !Array.isArray(command.payload)
+          ? command.payload as Record<string, unknown> : {};
+        const erasure = payload.remoteRuntimeAssetErasure && typeof payload.remoteRuntimeAssetErasure === "object" &&
+          !Array.isArray(payload.remoteRuntimeAssetErasure) ? payload.remoteRuntimeAssetErasure as Record<string, unknown> : {};
+        return erasure.jobKey === input.jobKey || erasure.locatorDigest === locatorDigest;
+      });
+      if (related.length > 0) {
+        const completed = related.find(command => {
+          const payload = command.payload && typeof command.payload === "object" && !Array.isArray(command.payload)
+            ? command.payload as Record<string, unknown> : {};
+          const erasure = payload.remoteRuntimeAssetErasure && typeof payload.remoteRuntimeAssetErasure === "object" &&
+            !Array.isArray(payload.remoteRuntimeAssetErasure) ? payload.remoteRuntimeAssetErasure as Record<string, unknown> : {};
+          return erasure.idempotencyKey === idempotencyKey && command.status === "SUCCEEDED";
+        });
+        if (completed) {
+          const safeResult = completed.safeResult && typeof completed.safeResult === "object" && !Array.isArray(completed.safeResult)
+            ? completed.safeResult as Record<string, unknown> : {};
+          const receipt = safeResult.remoteRuntimeAssetRemovalReceipt;
+          const resultBinding = safeResult.remoteRuntimeAssetErasure && typeof safeResult.remoteRuntimeAssetErasure === "object" &&
+            !Array.isArray(safeResult.remoteRuntimeAssetErasure)
+            ? safeResult.remoteRuntimeAssetErasure as Record<string, unknown> : {};
+          const completedPayload = completed.payload && typeof completed.payload === "object" && !Array.isArray(completed.payload)
+            ? completed.payload as Record<string, unknown> : {};
+          if (!isRemoteRuntimeAssetRemovalReceipt(receipt, locator) || receipt.commandRequestId !== completedPayload.requestId ||
+            resultBinding.locatorDigest !== locatorDigest || resultBinding.jobKey !== input.jobKey ||
+            resultBinding.companyPurgeOperationId !== (input.companyPurgeOperationId ?? null) || resultBinding.formatVersion !== 1 ||
+            receipt.target.hostId !== current.host.id || receipt.target.cellId !== current.cell.id ||
+            receipt.target.cellGeneration !== current.cell.generation.toString() || receipt.target.bindingId !== current.binding.id)
+            throw conflict("Completed remote OpenCode erasure has no recoverable exact receipt");
+          return { claim: null, receipt };
+        }
+        throw conflict("A prior remote OpenCode erasure command requires reconciliation");
+      }
+      const [claim] = await tx.insert(runtimeHostCommands).values({
         runtimeHostId: source.host.id, companyId: locator.companyId, runtimeCellId: source.cell.id,
         cellGeneration: source.cell.generation, commandType: "sandbox_exec", idempotencyKey: requestId,
         payload: desiredState, deadlineAt, notBefore: new Date(),
       }).returning();
+      return { claim: claim ?? null, receipt: null };
     });
+    if (admission.receipt) return admission.receipt;
+    const claim = admission.claim;
     if (!claim) throw conflict("Managed remote OpenCode erasure command could not be persisted");
     const request = {
       requestId, bindingId: source.binding.id, hostEpoch: source.host.credentialVersion,
@@ -2861,7 +2887,9 @@ export function runtimeControlService(
       };
       const [completed] = await db.update(runtimeHostCommands).set({ status: "SUCCEEDED", completedAt: new Date(),
         safeResult: { exitCode: 0, timedOut: false, postDeleteAbsent: true,
-          remoteRuntimeAssetRemovalReceipt: receipt } }).where(and(
+          remoteRuntimeAssetRemovalReceipt: receipt,
+          remoteRuntimeAssetErasure: { locatorDigest, jobKey: input.jobKey,
+            companyPurgeOperationId: input.companyPurgeOperationId ?? null, formatVersion: 1 } } }).where(and(
         eq(runtimeHostCommands.id, claim.id), eq(runtimeHostCommands.status, "CLAIMED"),
       )).returning({ id: runtimeHostCommands.id });
       if (!completed) throw conflict("Managed remote OpenCode erasure command was fenced");

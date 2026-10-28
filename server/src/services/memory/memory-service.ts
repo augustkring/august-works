@@ -578,6 +578,8 @@ async function visibleMemoryPage(db:Db,companyId:string,actor:MemoryMutationActo
   const profileStats = { stage: "transaction", pageQueries: 0, scannedRows: 0, candidateRows: 0, initiallyVisibleRows: 0,
     firstReviewMs: 0, secondReviewMs: 0, pageQueryMs: 0, transactionOrdinal: null as number | null };
   let profileResult = "error";
+  let profileFailure: { errorName: string; status: number | null; code: string | null; referenceName?: string;
+    frames: string[] } | null = null;
   try { return await db.transaction(async rawTx=>{
     const tx=rawTx as unknown as Db;
     const pageBudget: MemoryReadBudget = { ...budget,
@@ -630,11 +632,25 @@ async function visibleMemoryPage(db:Db,companyId:string,actor:MemoryMutationActo
         return current;
       }
     }
-  }); } finally {
+  }); } catch (error) {
+    const facts = error && typeof error === "object"
+      ? error as { name?: unknown; status?: unknown; code?: unknown; message?: unknown; stack?: unknown } : {};
+    const referenceName = facts.name === "ReferenceError" && typeof facts.message === "string"
+      ? /^([A-Za-z_$][A-Za-z0-9_$]*) is not defined$/.exec(facts.message)?.[1] : undefined;
+    const frames = typeof facts.stack === "string" ? facts.stack.split("\n").flatMap(line => {
+      const match = /server\/src\/services\/([A-Za-z0-9_./-]+\.ts):(\d+):\d+/.exec(line);
+      return match ? [`${match[1]}:${match[2]}`] : [];
+    }).slice(0, 5) : [];
+    profileFailure = { errorName: typeof facts.name === "string" ? facts.name : "unknown",
+      status: typeof facts.status === "number" ? facts.status : null,
+      code: typeof facts.code === "string" ? facts.code : null,
+      ...(referenceName ? { referenceName } : {}), frames };
+    throw error;
+  } finally {
     if (profile && memoryVisiblePageProfileCount < 32) {
       memoryVisiblePageProfileCount += 1;
       console.error("native_memory_visible_page_profile", JSON.stringify({ ...profileStats,
-        elapsedMs: Math.round(performance.now() - profileStartedAt), result: profileResult }));
+        elapsedMs: Math.round(performance.now() - profileStartedAt), result: profileResult, ...(profileFailure ? { failure: profileFailure } : {}) }));
     }
   }
 }

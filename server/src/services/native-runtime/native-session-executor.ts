@@ -18,7 +18,9 @@ import { stoppedCodexTurnIsTextOnly } from "./stopped-codex-turn.js";
 import { prepareVerifiedRemoteProviderPack } from "./remote-provider-pack.js";
 import { readNativeLocalProcessStop, PROCESS_START_REQUESTED } from "../native-local-process-stop.js";
 import { REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROBE_SCRIPT, REMOTE_RUNNER_CHILD_LAUNCH_SCRIPT,
-  REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT, REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT } from "./remote-runner-identity.js";
+  REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT, REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT,
+  REMOTE_RUNNER_PROCESS_FINGERPRINT_SCRIPT } from "./remote-runner-identity.js";
+export { REMOTE_RUNNER_CHILD_LAUNCH_SCRIPT };
 import { remoteLeaseCleanupScope } from "../remote-execution-termination.js";
 import {
   createRemoteRuntimeAssetLocator,
@@ -13539,7 +13541,7 @@ async function createRunnerdBackendWithinSessionClaim(
             eq(environmentLeases.heartbeatRunId, input.execution.binding.runId),
           )).limit(1)
       : [];
-    if (!lease?.provider || lease.provider === "local" || !lease.providerLeaseId ||
+    if (!environmentLeaseId || !environmentId || !lease?.provider || lease.provider === "local" || !lease.providerLeaseId ||
       environmentLeaseId !== effectiveEnvironmentLeaseId) {
       throw new Error("native_remote_runtime_asset_locator_binding_invalid");
     }
