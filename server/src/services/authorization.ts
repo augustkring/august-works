@@ -661,9 +661,24 @@ const nativeIssuePrivacyDiagnosticPlans = new Set<string>();
 const nativeIssuePrivacyDiagnosticObservedSettings = new Set<string>();
 const nativeIssuePrivacyDiagnosticGroups = new Map<string, { stage: string; actorType: string; actorSource: string;
   caller: string; count: number; totalMs: number; maxMs: number }>();
+type NativeIssuePrivacyQueryProfile = Map<string, { stage: string; actorType: string; actorSource: string;
+  caller: string; count: number; totalMs: number; maxMs: number }>;
+const nativeIssuePrivacyQueryProfiles = new AsyncLocalStorage<NativeIssuePrivacyQueryProfile>();
+export async function withNativeIssuePrivacyQueryProfile<T>(read: () => Promise<T>,
+  onComplete: (counts: Array<{ stage: string; actorType: string; actorSource: string; caller: string;
+    count: number; totalMs: number; maxMs: number }>) => void): Promise<T> {
+  const profile: NativeIssuePrivacyQueryProfile = new Map();
+  return nativeIssuePrivacyQueryProfiles.run(profile, async () => {
+    try { return await read(); }
+    finally { onComplete([...profile.values()].map(value => ({ ...value,
+      totalMs: Math.round(value.totalMs), maxMs: Math.round(value.maxMs) }))
+      .sort((left, right) => right.totalMs - left.totalMs)); }
+  });
+}
 async function nativeIssuePrivacyDiagnosticQuery<T>(db: Db | DbTransaction, actor: AuthorizationActor,
   stage: "retained_source_graph" | "effective_acl", query: SQLWrapper, execute: () => Promise<T>): Promise<T> {
-  if (process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS !== "1") return execute();
+  const queryProfile = nativeIssuePrivacyQueryProfiles.getStore();
+  if (process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS !== "1" && !queryProfile) return execute();
   const startedAt = performance.now();
   let succeeded = false;
   let failureCode: string | null = null;
@@ -685,6 +700,15 @@ async function nativeIssuePrivacyDiagnosticQuery<T>(db: Db | DbTransaction, acto
       /native-direct-input|worker-model-gateway|native-session-executor|analytical-context-authority/.test(frame));
     const caller = frames.find(frame => /native-direct-input|worker-model-gateway|native-session-executor|analytical-context-authority/.test(frame)) ?? "native:unknown";
     const actorSource = actor.source ?? "unknown";
+    if (queryProfile) {
+      const key = `${stage}:${actor.type}:${actorSource}:${caller}`;
+      const group = queryProfile.get(key) ?? { stage, actorType: actor.type, actorSource, caller,
+        count: 0, totalMs: 0, maxMs: 0 };
+      group.count += 1;
+      group.totalMs += elapsedMs;
+      group.maxMs = Math.max(group.maxMs, elapsedMs);
+      queryProfile.set(key, group);
+    }
     if (relevant) {
       const key = `${stage}:${actor.type}:${actorSource}:${caller}`;
       const group = nativeIssuePrivacyDiagnosticGroups.get(key) ?? { stage, actorType: actor.type,
@@ -2046,7 +2070,7 @@ export async function withReadMemoryTemporalSources<T>(db: Db | DbTransaction, a
         and m.payload_source_snapshot is not null and m.payload_source_snapshot_invalidated=false`);
     if (!binding?.valid) { diagnostic("source_body_hash", { bodyAndSnapshotDigestValid: binding?.valid === true }); return false; }
     const contextInputs = snapshot.data.inputs.filter((input): input is Extract<typeof input, { kind: "context" }> => input.kind === "context");
-    const { assertNativeMemoryOutputSnapshotCurrent, assertNativeTemporalContextInputsCurrent } = await import("./native-direct-input.js");
+    const { withNativeMemoryOutputSnapshotCurrent, assertNativeTemporalContextInputsCurrent } = await import("./native-direct-input.js");
     const scope: MemoryTemporalReadScope = { db: sourceDb as object, companyId, recordId, actorKey: routineActorKey(actor),
       issueIds: new Set(row.sourceIssueIds), runIds: new Set(capturedRunIds),
       contextIds: contextInputs.map(input => input.manifestId).sort(), active: true };
@@ -2058,9 +2082,15 @@ export async function withReadMemoryTemporalSources<T>(db: Db | DbTransaction, a
           // itself, not only the final caller. Otherwise validating an older
           // Memory can consult a later Context manifest before its ALS scope is
           // installed and retroactively taint the earlier output.
-          if (dispatch) await assertNativeMemoryOutputSnapshotCurrent(sourceDb as Db, { companyId, recordId, snapshot: snapshot.data, actor });
-          currentnessStage = "context_inputs_currentness";
-          await assertNativeTemporalContextInputsCurrent(sourceDb as Db, companyId, contextInputs);
+          const readWithCurrentContext = async (currentDb: Db | DbTransaction) => {
+            currentnessStage = "context_inputs_currentness";
+            await assertNativeTemporalContextInputsCurrent(currentDb as Db, companyId, contextInputs);
+            return read(currentDb);
+          };
+          if (dispatch) return await withNativeMemoryOutputSnapshotCurrent(sourceDb, {
+            companyId, recordId, snapshot: snapshot.data, actor,
+          }, readWithCurrentContext);
+          return await readWithCurrentContext(sourceDb);
         } catch (error) {
           if (error instanceof HttpError && [403, 404, 409, 422].includes(error.status)) {
             const frames = (typeof error.stack === "string" ? error.stack : "").split("\n").flatMap(line => {
@@ -2073,7 +2103,6 @@ export async function withReadMemoryTemporalSources<T>(db: Db | DbTransaction, a
           }
           throw error;
         }
-        return read(sourceDb);
       });
       if (result === false) diagnostic("callback_reader", { callbackReturnedFalse: true });
       return result;
@@ -2144,6 +2173,16 @@ export function activeMemoryTemporalContexts(db: Db | DbTransaction, actor: Auth
   const scope = memoryTemporalReadScopes.getStore();
   return scope?.active && scope.db === (db as object) && scope.actorKey === routineActorKey(actor)
     && (kind === "issue" ? scope.issueIds.has(id) : scope.runIds.has(id)) ? scope.contextIds : undefined;
+}
+
+/** Opaque identity for a Native source proof's ambient Memory prefix. It is
+ * used only to keep transaction-local proof scopes separate across owners. */
+export function activeMemoryTemporalReadScopeIdentity(db: Db | DbTransaction, actor: AuthorizationActor): string | null {
+  const scope = memoryTemporalReadScopes.getStore();
+  if (!scope?.active || scope.db !== (db as object) || scope.actorKey !== routineActorKey(actor)) return null;
+  return createHash("sha256").update(JSON.stringify({ companyId: scope.companyId, recordId: scope.recordId,
+    actorKey: scope.actorKey, issueIds: [...scope.issueIds].sort(), runIds: [...scope.runIds].sort(),
+    contextIds: [...scope.contextIds].sort() }), "utf8").digest("hex");
 }
 
 export function authorizationService(db: Db | DbTransaction) {

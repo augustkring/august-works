@@ -19,7 +19,13 @@ import { prepareVerifiedRemoteProviderPack } from "./remote-provider-pack.js";
 import { readNativeLocalProcessStop, PROCESS_START_REQUESTED } from "../native-local-process-stop.js";
 import { REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT, REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT } from "./remote-runner-identity.js";
 import { remoteLeaseCleanupScope } from "../remote-execution-termination.js";
-import { managedOpenCodeRuntimeDirectory } from "./runtime-asset-retention.js";
+import {
+  createRemoteRuntimeAssetLocator,
+  isRemoteRuntimeAssetLocator,
+  managedOpenCodeRuntimeDirectory,
+  remoteRuntimeAssetLocatorDigest,
+  type RemoteRuntimeAssetLocator,
+} from "./runtime-asset-retention.js";
 import { resolveConnectorAssignments, isConnectorSkill } from "../connector-runtime.js";
 import {
   boundedExecutionCleanup,
@@ -1714,6 +1720,72 @@ function managedOpenCodeRuntimeDataIsolated(execution: NativeExecutionInput, env
   return execution.provider.kind === "opencode" &&
     typeof environment.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === "string" &&
     environment.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN.trim().length > 0;
+}
+
+async function persistRemoteNativeRuntimeAssetLocator(input: {
+  db: Db;
+  locator: RemoteRuntimeAssetLocator;
+  normalizedSessionId: string;
+  runnerInstanceId: string;
+  remoteCwd: string;
+}) {
+  await input.db.transaction(async rawTx => {
+    const tx = rawTx as unknown as Db;
+    const [run] = await tx.select({
+      id: heartbeatRuns.id,
+      companyId: heartbeatRuns.companyId,
+      status: heartbeatRuns.status,
+      runtimeMode: heartbeatRuns.runtimeMode,
+      driverKind: heartbeatRuns.driverKind,
+      nativeSessionId: heartbeatRuns.nativeSessionId,
+      runnerInstanceId: heartbeatRuns.runnerInstanceId,
+      runnerProfileJson: heartbeatRuns.runnerProfileJson,
+    }).from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, input.locator.companyId),
+      eq(heartbeatRuns.id, input.locator.runId),
+      eq(heartbeatRuns.status, "running"),
+      eq(heartbeatRuns.runtimeMode, "native"),
+      eq(heartbeatRuns.driverKind, "opencode_server"),
+    )).for("update");
+    const [lease] = await tx.select({
+      id: environmentLeases.id,
+      environmentId: environmentLeases.environmentId,
+      heartbeatRunId: environmentLeases.heartbeatRunId,
+      provider: environmentLeases.provider,
+      providerLeaseId: environmentLeases.providerLeaseId,
+      status: environmentLeases.status,
+      expiresAt: environmentLeases.expiresAt,
+      metadata: environmentLeases.metadata,
+    }).from(environmentLeases).where(and(
+      eq(environmentLeases.companyId, input.locator.companyId),
+      eq(environmentLeases.id, input.locator.environmentLeaseId),
+    )).for("update");
+    const metadata = lease?.metadata && typeof lease.metadata === "object" && !Array.isArray(lease.metadata)
+      ? lease.metadata as Record<string, unknown> : {};
+    const profile = record(run?.runnerProfileJson);
+    const previous = profile.nativeRemoteRuntimeAssetLocator;
+    if (!run || run.nativeSessionId !== input.normalizedSessionId ||
+      run.runnerInstanceId !== input.runnerInstanceId ||
+      !lease || lease.heartbeatRunId !== run.id || lease.environmentId !== input.locator.environmentId ||
+      lease.provider !== input.locator.provider || lease.providerLeaseId !== input.locator.providerLeaseId ||
+      lease.status !== "active" || !lease.expiresAt || lease.expiresAt <= new Date() ||
+      typeof metadata.remoteCwd !== "string" || metadata.remoteCwd.trim() !== input.remoteCwd ||
+      !isRemoteRuntimeAssetLocator(input.locator, run) ||
+      (previous !== undefined && (!isRemoteRuntimeAssetLocator(previous, run) ||
+        remoteRuntimeAssetLocatorDigest(previous) !== remoteRuntimeAssetLocatorDigest(input.locator)))) {
+      throw new Error("native_remote_runtime_asset_locator_binding_invalid");
+    }
+    if (previous === undefined) {
+      await tx.update(heartbeatRuns).set({
+        runnerProfileJson: { ...profile, nativeRemoteRuntimeAssetLocator: input.locator },
+        updatedAt: new Date(),
+      }).where(and(
+        eq(heartbeatRuns.companyId, run.companyId),
+        eq(heartbeatRuns.id, run.id),
+        eq(heartbeatRuns.status, "running"),
+      ));
+    }
+  });
 }
 
 function nativeSessionWorkspaceScope(execution: NativeExecutionInput) {
@@ -7733,6 +7805,19 @@ async function postgresJsonbSha256(tx: Parameters<Parameters<Db["transaction"]>[
 
 /** Chosen backend-call bytes before I/O, not proof of delivery or complete
  * source provenance. Keep unknown sends and prior attempts as separate facts. */
+function nativeSessionTaskEnvelope(execution: NativeExecutionInput) {
+  return createCodexTaskEnvelope({
+    objective: execution.completionContract.contract.objective,
+    contractRevision: execution.completionContract.contract.revision,
+    criteria: execution.completionContract.contract.criteria,
+    constraints: [
+      "Work only inside the supplied working directory.",
+      ...nativeTaskConstraints(execution),
+      "Return one semantic completion result through paperclip_finish or paperclip_block.",
+    ],
+  });
+}
+
 export async function recordNativeModelInputDispatchIntent(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
   agentId: string;
   eventSeq: number;
@@ -7881,10 +7966,16 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
       const sourceSetHash = nativeSha256(sourceClosure.sourceSet);
       const existingPromptBinding = priorBindings.map(record).filter(value => value.promptHash === promptHash);
       if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1") {
+        const wrappedPrompt = priorPrompts.length === 0
+          ? JSON.stringify({ task: nativeSessionTaskEnvelope(parseNativeExecutionInput(profile.nativeExecutionInput)),
+            message: input.turnInput.message.text })
+          : null;
         console.warn("managed_model_prompt_source_diagnostic", {
           runId: input.runId,
           promptLength: input.turnInput.message.text.length,
           promptHash,
+          firstTurnWrappedPromptLength: wrappedPrompt?.length ?? null,
+          firstTurnWrappedPromptHash: wrappedPrompt ? nativeSha256(wrappedPrompt) : null,
           continuation: input.turnInput.continuation === true,
           sourceClosurePresent: Boolean(sourceClosure),
           sourceClosureMatches: sourceClosureMatches === true,
@@ -13338,16 +13429,7 @@ async function createRunnerdBackendWithinSessionClaim(
       resumeToolNames.some(name => !["read_document", "write_document", "create_task", "create_project", "self_remember", "read_context", "call_api",
         "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric"].includes(name)))
       throw new Error("managed_opencode_resume_tool_catalog_invalid");
-    const taskEnvelope = createCodexTaskEnvelope({
-      objective: input.execution.completionContract.contract.objective,
-      contractRevision: input.execution.completionContract.contract.revision,
-      criteria: input.execution.completionContract.contract.criteria,
-      constraints: [
-        "Work only inside the supplied working directory.",
-        ...nativeTaskConstraints(input.execution),
-        "Return one semantic completion result through paperclip_finish or paperclip_block.",
-      ],
-    });
+    const taskEnvelope = nativeSessionTaskEnvelope(input.execution);
     const sourceContextForAuthority = "runtimeContext" in input.execution ? input.execution.runtimeContext : null;
     const remoteInstructionRootForAuthority = remoteSessionRoot && sourceContextForAuthority
       ? posix.join(remoteSessionRoot, "filesystem", "context", "instructions")
@@ -13434,6 +13516,40 @@ async function createRunnerdBackendWithinSessionClaim(
     durableBinding?.environmentLeaseId ??
     input.durableEnvironmentLeaseId ??
     input.execution.binding.executionWorkspaceId;
+  if (managedOpenCodeDataHome && remoteTarget?.transport === "sandbox") {
+    const environmentLeaseId = remoteTarget.leaseId;
+    const environmentId = remoteTarget.environmentId;
+    const [lease] = environmentLeaseId && environmentId
+      ? await input.db.select({ provider: environmentLeases.provider, providerLeaseId: environmentLeases.providerLeaseId })
+          .from(environmentLeases).where(and(
+            eq(environmentLeases.companyId, input.execution.binding.companyId),
+            eq(environmentLeases.id, environmentLeaseId),
+            eq(environmentLeases.heartbeatRunId, input.execution.binding.runId),
+          )).limit(1)
+      : [];
+    if (!lease?.provider || lease.provider === "local" || !lease.providerLeaseId ||
+      environmentLeaseId !== effectiveEnvironmentLeaseId) {
+      throw new Error("native_remote_runtime_asset_locator_binding_invalid");
+    }
+    const locator = createRemoteRuntimeAssetLocator({
+      companyId: input.execution.binding.companyId,
+      runId: input.execution.binding.runId,
+      environmentId,
+      environmentLeaseId,
+      provider: lease.provider,
+      providerLeaseId: lease.providerLeaseId,
+      runnerInstanceId: effectiveRunnerInstanceId,
+      normalizedSessionId: nativeSessionKey(input.execution),
+      remoteCwd: remoteTarget.remoteCwd,
+    });
+    await persistRemoteNativeRuntimeAssetLocator({
+      db: input.db,
+      locator,
+      normalizedSessionId: nativeSessionKey(input.execution),
+      runnerInstanceId: effectiveRunnerInstanceId,
+      remoteCwd: remoteTarget.remoteCwd,
+    });
+  }
   mkdirSync(root, { recursive: true, mode: 0o700 });
   const requiresRemoteProviderPack =
     remoteTarget !== null &&
@@ -15103,6 +15219,11 @@ async function createRunnerdBackendWithinSessionClaim(
     ),
     codexTransportFactory: (recoveryContext) =>
       createRunnerdCodexTransport({
+        // The runnerd factory is selected for remote/sandboxed sessions and
+        // bypasses the OpenCode local backend's `opencodeEnvironment` option.
+        // Pass the exact server-selected environment through this boundary so
+        // the managed model tuple reaches runnerd's closed provider allowlist.
+        environment: effectiveRunnerEnvironment,
         onSpawn: input.onSpawn,
         provider:
           input.execution.provider.kind === "codex"

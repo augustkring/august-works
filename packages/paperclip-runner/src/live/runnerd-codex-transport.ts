@@ -3252,6 +3252,17 @@ function createSanitizedOpenCodeRunnerEnvironment(
     sanitized.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND = String(inputBound);
     sanitized.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS = String(outputBound);
   }
+  if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1") {
+    console.warn("managed_model_runner_environment_diagnostic", {
+      stage: "post_sanitizer",
+      sourceOriginQualified: isQualifiedManagedModelOrigin(origin),
+      sourceInputBoundValid: inputBound !== null,
+      sourceOutputBoundValid: outputBound !== null,
+      outputOriginPresent: typeof sanitized.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === "string",
+      outputInputBoundPresent: typeof sanitized.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND === "string",
+      outputOutputBoundPresent: typeof sanitized.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS === "string",
+    });
+  }
   return sanitized;
 }
 

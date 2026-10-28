@@ -733,6 +733,8 @@ export async function runManagedNativeOpenCodeFixture(input: {
       try {
         const [sample] = await contextProbe<{ active: number; idleInTransaction: number; waiters: Array<{
           waitEventType: string | null; waitEvent: string | null; blockedByCount: number; queryKind: string;
+          blockers: Array<{ state: string | null; waitEventType: string | null; waitEvent: string | null;
+            transactionAgeMs: number | null; queryAgeMs: number | null; queryKind: string }>;
         }> }[]>`
           select count(*) filter (where state = 'active')::int as active,
             count(*) filter (where state = 'idle in transaction')::int as "idleInTransaction",
@@ -742,9 +744,21 @@ export async function runManagedNativeOpenCodeFixture(input: {
                 when query ilike '%memory_records%' then 'memory_records'
                 when query ilike '%issues%' then 'issues'
                 when query ilike '%heartbeat_runs%' then 'heartbeat_runs'
-                else lower(split_part(query, ' ', 1)) end))
+                else lower(split_part(query, ' ', 1)) end,
+              'blockers', coalesce((select json_agg(json_build_object(
+                'state', blocker.state, 'waitEventType', blocker.wait_event_type, 'waitEvent', blocker.wait_event,
+                'transactionAgeMs', case when blocker.xact_start is null then null else
+                  greatest(0, floor(extract(epoch from clock_timestamp() - blocker.xact_start) * 1000))::int end,
+                'queryAgeMs', case when blocker.query_start is null then null else
+                  greatest(0, floor(extract(epoch from clock_timestamp() - blocker.query_start) * 1000))::int end,
+                'queryKind', case when blocker.query ilike '%context_manifest%' then 'context_manifest'
+                  when blocker.query ilike '%memory_records%' then 'memory_records'
+                  when blocker.query ilike '%issues%' then 'issues'
+                  when blocker.query ilike '%heartbeat_runs%' then 'heartbeat_runs'
+                  else lower(split_part(blocker.query, ' ', 1)) end))
+                from pg_stat_activity blocker where blocker.pid = any(pg_blocking_pids(waiting.pid))), '[]'::json)))
               filter (where state = 'active' and wait_event_type is not null), '[]'::json) as waiters
-          from pg_stat_activity where datname = current_database() and pid <> pg_backend_pid()
+          from pg_stat_activity waiting where datname = current_database() and pid <> pg_backend_pid()
         `;
         postgresWaitFacts = sample ?? { available: false };
       } catch { /* Bounded diagnostic: never mask the context failure with probe failure. */ }

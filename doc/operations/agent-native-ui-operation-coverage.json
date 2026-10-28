@@ -1,0 +1,893 @@
+{
+  "version": 1,
+  "scope": "Bounded material-operation inventory: six material Agent-Native IDs plus reviewed actions in the five listed mounted sources. The checker traverses the current UI route/import graph and fails every write or unresolved API call outside this inventory until a source-backed classification is added. The remaining UI calls are not presumed non-material.",
+  "operations": [
+    {
+      "operationId": "blentera.support.case.manage",
+      "disposition": "mapped",
+      "canonicalOwner": "server/src/services/experience/support-cases.ts",
+      "uiSource": "ui/src/pages/CustomerSupportCases.tsx",
+      "sourceAnchor": "supportCaseDetailSchema",
+      "reason": "The current Human Support case surface uses the canonical customerSupportCaseService owner; its role and case-state controls remain Human-only."
+    },
+    {
+      "operationId": "blentera.memory.share",
+      "disposition": "excluded",
+      "canonicalOwner": "server/src/services/memory/memory-agent-tools.ts",
+      "uiSource": "ui/src/pages/Memory.tsx",
+      "sourceAnchor": "privateShareReview",
+      "reason": "This UI action reviews and publishes a previously proposed private memory share as a Human. It is not the Agent proposal operation and must retain the distinct Human review authority."
+    },
+    {
+      "operationId": "blentera.co-worker.setup.propose",
+      "disposition": "excluded",
+      "canonicalOwner": "server/src/services/agent-setup-authoring-tools.ts",
+      "uiSource": "ui/src/pages/HireAgentSetup.tsx",
+      "sourceAnchor": "agentAuthoringApi",
+      "reason": "The mounted setup wizard authors a Human-owned setup draft. The manifest operation creates an Agent proposal; treating the wizard as equivalent would erase the proposal/review boundary."
+    },
+    {
+      "operationId": "blentera.workflow.publish.prepare",
+      "disposition": "excluded",
+      "canonicalOwner": "server/src/services/workflows/workflow-authoring-tools.ts",
+      "uiSource": "ui/src/pages/WorkflowBuilder.tsx",
+      "sourceAnchor": "workflowsApi.publish",
+      "reason": "The mounted UI publishes a reviewed Workflow revision as a Human. The manifest operation only prepares the exact publication request for confirmation, so these are related but distinct operations."
+    },
+    {
+      "operationId": "blentera.native.task.reassign",
+      "disposition": "mapped",
+      "canonicalOwner": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+      "uiSource": "ui/src/pages/IssueDetail.tsx",
+      "sourceAnchor": "issuesApi.update",
+      "reason": "The mounted Task assignment control and Native Runner operation converge on the issue update and dispatch handoff owners; authorization remains checked by those owners."
+    },
+    {
+      "operationId": "blentera.native.agent.hire",
+      "disposition": "excluded",
+      "canonicalOwner": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+      "uiSource": "ui/src/pages/HireAgentSetup.tsx",
+      "sourceAnchor": "agentAuthoringApi",
+      "reason": "The Human hire/setup wizard is a separate Human publication flow. The Native Runner operation requests a hire and cannot publish or inherit the wizard's Human authority."
+    }
+  ],
+  "uiOnlyActions": [
+    {
+      "actionId": "memory.private-share.review",
+      "source": "ui/src/pages/Memory.tsx",
+      "sourceAnchor": "privateShareReview",
+      "owner": "server/src/services/memory/memory-service.ts",
+      "reason": "Human review publishes an Agent-proposed share through the memory publication owner; it is intentionally not an Agent operation."
+    },
+    {
+      "actionId": "agent.setup.publish",
+      "source": "ui/src/pages/HireAgentSetup.tsx",
+      "sourceAnchor": "agentAuthoringApi",
+      "owner": "server/src/services/agent-setup-authoring-tools.ts",
+      "reason": "Human publication of a reviewed setup remains a separate owner action from an Agent proposal or Native Runner hire request."
+    },
+    {
+      "actionId": "workflow.revision.publish",
+      "source": "ui/src/pages/WorkflowBuilder.tsx",
+      "sourceAnchor": "workflowsApi.publish",
+      "owner": "server/src/services/workflows/workflow-service.ts",
+      "reason": "The Human publish command commits a reviewed revision through workflowService; the Agent manifest operation only prepares a confirmation request and cannot publish."
+    }
+  ],
+  "clientOperations": [
+    {
+      "source": "ui/src/pages/CustomerSupportCases.tsx",
+      "clientCall": "api.post",
+      "apiVerb": "post",
+      "pathSignature": "supportPath(companyId, \"/cases\")",
+      "routeSignatures": [
+        "post:supportPath(companyId, \"/cases\")"
+      ],
+      "argumentsSignature": "supportPath(companyId, \"/cases\"), attempt.payload",
+      "line": 364,
+      "occurrence": 0,
+      "owner": "server/src/services/experience/support-cases.ts",
+      "operationId": "blentera.support.case.manage"
+    },
+    {
+      "source": "ui/src/pages/CustomerSupportCases.tsx",
+      "clientCall": "api.post",
+      "apiVerb": "post",
+      "pathSignature": "supportPath(companyId, `/cases/${encodeURIComponent(attempt.caseId)}/${attempt.kind === \"close\" ? \"close\" : \"replies\"}`)",
+      "routeSignatures": [
+        "post:supportPath(companyId, `/cases/${encodeURIComponent(attempt.caseId)}/${attempt.kind === \"close\" ? \"close\" : \"replies\"}`)"
+      ],
+      "argumentsSignature": "supportPath(companyId, `/cases/${encodeURIComponent(attempt.caseId)}/${attempt.kind === \"close\" ? \"close\" : \"replies\"}`), attempt.payload",
+      "line": 415,
+      "occurrence": 0,
+      "owner": "server/src/services/experience/support-cases.ts",
+      "operationId": "blentera.support.case.manage"
+    },
+    {
+      "source": "ui/src/pages/Memory.tsx",
+      "clientCall": "memoryApi.accept",
+      "apiVerb": "write",
+      "pathSignature": "intent.companyId",
+      "routeSignatures": [
+        "post:`/companies/${companyId}/memory/records/${recordId}/accept`"
+      ],
+      "argumentsSignature": "intent.companyId, intent.recordId, undefined, true",
+      "line": 154,
+      "occurrence": 0,
+      "owner": "server/src/services/memory/memory-service.ts",
+      "reason": "Human review accepts an Agent-proposed Memory record; this is the review decision boundary, distinct from the Agent proposal operation. The exact client route is post:`/companies/${companyId}/memory/records/${recordId}/accept`."
+    },
+    {
+      "source": "ui/src/pages/Memory.tsx",
+      "clientCall": "memoryApi.accept",
+      "apiVerb": "write",
+      "pathSignature": "intent.companyId",
+      "routeSignatures": [
+        "post:`/companies/${companyId}/memory/records/${recordId}/accept`"
+      ],
+      "argumentsSignature": "intent.companyId, intent.recordId",
+      "line": 155,
+      "occurrence": 0,
+      "owner": "server/src/services/memory/memory-service.ts",
+      "reason": "Human review accepts an Agent-proposed Memory record; this is the review decision boundary, distinct from the Agent proposal operation. The exact client route is post:`/companies/${companyId}/memory/records/${recordId}/accept`."
+    },
+    {
+      "source": "ui/src/pages/Memory.tsx",
+      "clientCall": "memoryApi.reject",
+      "apiVerb": "write",
+      "pathSignature": "selectedCompanyId",
+      "routeSignatures": [
+        "post:`/companies/${companyId}/memory/records/${recordId}/reject`"
+      ],
+      "argumentsSignature": "selectedCompanyId, recordId, reason",
+      "line": 180,
+      "occurrence": 0,
+      "owner": "server/src/services/memory/memory-service.ts",
+      "reason": "Human review rejects an Agent-proposed Memory record; this is the review decision boundary, distinct from the Agent proposal operation. The exact client route is post:`/companies/${companyId}/memory/records/${recordId}/reject`."
+    },
+    {
+      "source": "ui/src/pages/Memory.tsx",
+      "clientCall": "memoryApi.revoke",
+      "apiVerb": "write",
+      "pathSignature": "selectedCompanyId",
+      "routeSignatures": [
+        "post:`/companies/${companyId}/memory/records/${recordId}/revoke`"
+      ],
+      "argumentsSignature": "selectedCompanyId, recordId, { reason: reason.trim() }",
+      "line": 181,
+      "occurrence": 0,
+      "owner": "server/src/services/memory/memory-service.ts",
+      "reason": "Human review revokes an active Memory record through the Memory owner; this does not grant an Agent publication or revocation capability. The exact client route is post:`/companies/${companyId}/memory/records/${recordId}/revoke`."
+    },
+    {
+      "source": "ui/src/pages/Memory.tsx",
+      "clientCall": "memoryApi.correct",
+      "apiVerb": "write",
+      "pathSignature": "selectedCompanyId",
+      "routeSignatures": [
+        "post:`/companies/${companyId}/memory/records/${recordId}/correct`"
+      ],
+      "argumentsSignature": "selectedCompanyId, recordId, input",
+      "line": 245,
+      "occurrence": 0,
+      "owner": "server/src/services/memory/memory-service.ts",
+      "reason": "Human editing corrects a Memory record through the Memory owner; this content change is not an Agent proposal operation. The exact client route is post:`/companies/${companyId}/memory/records/${recordId}/correct`."
+    },
+    {
+      "source": "ui/src/pages/Memory.tsx",
+      "clientCall": "memoryApi.createCompanyBinding",
+      "apiVerb": "write",
+      "pathSignature": "selectedCompanyId",
+      "routeSignatures": [
+        "post:`/companies/${companyId}/memory/bindings/company`"
+      ],
+      "argumentsSignature": "selectedCompanyId, {\n        key: bindingKey.trim(),\n        name: bindingName.trim(),\n        providerKey: bindingProvider.trim(),\n        config: {},\n        enabled: true,\n      }",
+      "line": 265,
+      "occurrence": 0,
+      "owner": "server/src/services/memory/memory-service.ts",
+      "reason": "Human configuration creates a company Memory source binding; source admission and sharing remain governed by the Memory owner. The exact client route is post:`/companies/${companyId}/memory/bindings/company`."
+    },
+    {
+      "source": "ui/src/pages/HireAgentSetup.tsx",
+      "clientCall": "agentAuthoringApi.save",
+      "apiVerb": "write",
+      "pathSignature": "company",
+      "routeSignatures": [
+        "post:scope(`${root(company)}/${id}/save`, principal)"
+      ],
+      "argumentsSignature": "company, principal, id, pending.input",
+      "line": 205,
+      "occurrence": 0,
+      "owner": "server/src/services/agent-setup-authoring-tools.ts",
+      "reason": "Human setup saves a reviewed Co-worker setup draft; it remains separate from the Agent-authored setup proposal operation. The exact client route is post:scope(`${root(company)}/${id}/save`, principal)."
+    },
+    {
+      "source": "ui/src/pages/HireAgentSetup.tsx",
+      "clientCall": "agentAuthoringApi.discard",
+      "apiVerb": "write",
+      "pathSignature": "company",
+      "routeSignatures": [
+        "post:scope(`${root(company)}/${id}/discard`, principal)"
+      ],
+      "argumentsSignature": "company, principal, id, pending",
+      "line": 273,
+      "occurrence": 0,
+      "owner": "server/src/services/agent-setup-authoring-tools.ts",
+      "reason": "Human setup discards its pending Co-worker setup draft; it does not accept or publish an Agent proposal. The exact client route is post:scope(`${root(company)}/${id}/discard`, principal)."
+    },
+    {
+      "source": "ui/src/pages/WorkflowBuilder.tsx",
+      "clientCall": "workflowsApi.updateDraft",
+      "apiVerb": "write",
+      "pathSignature": "selectedCompanyId",
+      "routeSignatures": [
+        "patch:`/companies/${companyId}/workflows/${workflowId}/draft`"
+      ],
+      "argumentsSignature": "selectedCompanyId, workflowId, {\n        expectedRevisionId: baseRevisionId,\n        graph: currentGraph(),\n        changeSummary: \"Updated in visual builder\",\n      }",
+      "line": 647,
+      "occurrence": 0,
+      "owner": "server/src/services/workflows/workflow-service.ts",
+      "reason": "Human editing changes the current Workflow draft through workflowService; draft editing does not prepare or publish an Agent request. The exact client route is patch:`/companies/${companyId}/workflows/${workflowId}/draft`."
+    },
+    {
+      "source": "ui/src/pages/WorkflowBuilder.tsx",
+      "clientCall": "workflowsApi.publish",
+      "apiVerb": "write",
+      "pathSignature": "selectedCompanyId",
+      "routeSignatures": [
+        "post:`/companies/${companyId}/workflows/${workflowId}/publish`"
+      ],
+      "argumentsSignature": "selectedCompanyId, workflowId, {\n        expectedDraftRevisionId: baseRevisionId,\n        expectedPublishedRevisionId: publishedRevisionId,\n        approvalId: null,\n      }",
+      "line": 681,
+      "occurrence": 0,
+      "owner": "server/src/services/workflows/workflow-service.ts",
+      "reason": "Human publication commits the reviewed Workflow revision through workflowService; the Agent manifest operation only prepares a publication request for confirmation. The exact client route is post:`/companies/${companyId}/workflows/${workflowId}/publish`."
+    },
+    {
+      "source": "ui/src/pages/WorkflowBuilder.tsx",
+      "clientCall": "workflowsApi.startRun",
+      "apiVerb": "write",
+      "pathSignature": "input.companyId",
+      "routeSignatures": [
+        "post:`/companies/${companyId}/workflows/${workflowId}/run`"
+      ],
+      "argumentsSignature": "input.companyId, workflowId, { input: {}, revisionId: null }, randomId(\"ui-run\"), input.coverageId",
+      "line": 724,
+      "occurrence": 0,
+      "owner": "server/src/services/workflows/workflow-service.ts",
+      "reason": "Human starts a Workflow run from the builder; this is a UI execution command and does not inherit Agent run authority. The exact client route is post:`/companies/${companyId}/workflows/${workflowId}/run`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "agentsApi.retryFailedRun",
+      "apiVerb": "write",
+      "pathSignature": "failedRun.agentId",
+      "routeSignatures": [
+        "post:agentPath(id, companyId, \"/wakeup\")"
+      ],
+      "argumentsSignature": "failedRun.agentId, failedRun.runId, companyId",
+      "line": 1564,
+      "occurrence": 0,
+      "owner": "server/src/services/agents.ts",
+      "reason": "Human retries a failed Agent run through the Agent owner; the retry does not replay an Agent operation receipt or grant a different principal. The exact client route is post:agentPath(id, companyId, \"/wakeup\")."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.editQueuedComment",
+      "apiVerb": "write",
+      "pathSignature": "issueId",
+      "routeSignatures": [
+        "patch:`/issues/${id}/queued-comments/${commentId}`"
+      ],
+      "argumentsSignature": "issueId, commentId, {\n            body,\n            queueId,\n            revision,\n          }",
+      "line": 2087,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human edits a queued Task conversation message using its current queue revision; message ownership and revision checks remain in the Task owner. The exact client route is patch:`/issues/${id}/queued-comments/${commentId}`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.reorderQueuedComments",
+      "apiVerb": "write",
+      "pathSignature": "issueId",
+      "routeSignatures": [
+        "put:`/issues/${id}/queued-comments/order`"
+      ],
+      "argumentsSignature": "issueId, {\n            orderedCommentIds,\n            queueId,\n            revision,\n          }",
+      "line": 2118,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human reorders queued Task conversation messages using the current queue revision; this does not grant an Agent message-ordering operation. The exact client route is put:`/issues/${id}/queued-comments/order`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.steerQueuedComment",
+      "apiVerb": "write",
+      "pathSignature": "issueId",
+      "routeSignatures": [
+        "post:`/issues/${id}/queued-comments/${commentId}/steer`"
+      ],
+      "argumentsSignature": "issueId, commentId, {\n            queueId,\n            targetRunId,\n            revision,\n          }",
+      "line": 2145,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human steers a queued Task conversation message for its current target run; stale-target checks remain in the Task owner. The exact client route is post:`/issues/${id}/queued-comments/${commentId}/steer`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.discardQueuedComment",
+      "apiVerb": "write",
+      "pathSignature": "issueId",
+      "routeSignatures": [
+        "delete:`/issues/${id}/queued-comments/${commentId}`"
+      ],
+      "argumentsSignature": "issueId, commentId, {\n            queueId,\n            revision,\n          }",
+      "line": 2212,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human discards a queued Task conversation message using the current queue revision; it remains a UI queue-control action. The exact client route is delete:`/issues/${id}/queued-comments/${commentId}`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.update",
+      "apiVerb": "write",
+      "pathSignature": "resolved.id",
+      "routeSignatures": [
+        "patch:`/issues/${id}`"
+      ],
+      "argumentsSignature": "resolved.id, { workMode: requestedMode }",
+      "line": 3035,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human changes the current Task work mode before dispatch through the Task owner; this is a Task configuration edit rather than Agent reassignment. The exact client route is patch:`/issues/${id}`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "workflowsApi.startTaskRun",
+      "apiVerb": "write",
+      "pathSignature": "resolvedCompanyId",
+      "routeSignatures": [
+        "post:`/companies/${companyId}/issues/${issueId}/workflows/${workflowId}/run`"
+      ],
+      "argumentsSignature": "resolvedCompanyId, issue.id, input.workflowId, { input: {} }, key, input.coverageId",
+      "line": 3109,
+      "occurrence": 0,
+      "owner": "server/src/services/workflows/workflow-service.ts",
+      "reason": "Human starts a Workflow run for the current Task through the Task workflow owner; this remains governed by the current Task and Workflow authorization. The exact client route is post:`/companies/${companyId}/issues/${issueId}/workflows/${workflowId}/run`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.previewTreeControl",
+      "apiVerb": "write",
+      "pathSignature": "issueId!",
+      "routeSignatures": [
+        "post:`/issues/${id}/tree-control/preview`"
+      ],
+      "argumentsSignature": "issueId!, {\n        mode: treeControlMode,\n        releasePolicy: {\n          strategy: \"manual\",\n        },\n      }",
+      "line": 3591,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human previews a Task tree control decision; the preview does not commit or grant Agent tree-control authority. The exact client route is post:`/issues/${id}/tree-control/preview`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.unarchiveFromInbox",
+      "apiVerb": "write",
+      "pathSignature": "id",
+      "routeSignatures": [
+        "delete:`/issues/${id}/inbox-archive`"
+      ],
+      "argumentsSignature": "id",
+      "line": 4039,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human restores a Task from the personal inbox archive; this is an inbox preference action, not a Task lifecycle operation. The exact client route is delete:`/issues/${id}/inbox-archive`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.markRead",
+      "apiVerb": "write",
+      "pathSignature": "id",
+      "routeSignatures": [
+        "post:`/issues/${id}/read`"
+      ],
+      "argumentsSignature": "id",
+      "line": 4129,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human marks a Task as read for the current user; this changes user attention state rather than Agent Task state. The exact client route is post:`/issues/${id}/read`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.update",
+      "apiVerb": "write",
+      "pathSignature": "issueId!",
+      "routeSignatures": [
+        "patch:`/issues/${id}`"
+      ],
+      "argumentsSignature": "issueId!, data",
+      "line": 4150,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human edits fields on the current Task through the Task update owner; field-level write policy remains authoritative and no additional Agent operation is inferred. The exact client route is patch:`/issues/${id}`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.resolveRecoveryAction",
+      "apiVerb": "write",
+      "pathSignature": "issueId!",
+      "routeSignatures": [
+        "post:`/issues/${id}/recovery-actions/resolve`"
+      ],
+      "argumentsSignature": "issueId!, data",
+      "line": 4236,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human resolves a Task recovery action with current recovery evidence; the result is governed by the recovery owner. The exact client route is post:`/issues/${id}/recovery-actions/resolve`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.resolveRecoveryAction",
+      "apiVerb": "write",
+      "pathSignature": "issueId!",
+      "routeSignatures": [
+        "post:`/issues/${id}/recovery-actions/resolve`"
+      ],
+      "argumentsSignature": "issueId!, {\n        actionId,\n        outcome: \"restored\",\n        sourceIssueStatus: \"todo\",\n      }",
+      "line": 4270,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human resolves a Task recovery action with current recovery evidence; the result is governed by the recovery owner. The exact client route is post:`/issues/${id}/recovery-actions/resolve`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.releaseTreeHold",
+      "apiVerb": "write",
+      "pathSignature": "issueId!",
+      "routeSignatures": [
+        "post:`/issues/${id}/tree-holds/${holdId}/release`"
+      ],
+      "argumentsSignature": "issueId!, pauseHoldId, {\n            reason: null,\n            metadata: {\n              wakeAgents,\n            },\n          }",
+      "line": 4321,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human releases a Task tree hold under its configured release policy; the UI action does not grant an Agent hold-release operation. The exact client route is post:`/issues/${id}/tree-holds/${holdId}/release`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.createTreeHold",
+      "apiVerb": "write",
+      "pathSignature": "issueId!",
+      "routeSignatures": [
+        "post:`/issues/${id}/tree-holds`"
+      ],
+      "argumentsSignature": "issueId!, {\n        mode,\n        reason: null,\n        releasePolicy: {\n          strategy: \"manual\",\n          ...(mode === \"pause\"\n            ? {\n                note: scope === \"leaf\" ? \"leaf_pause\" : \"full_pause\",\n              }\n            : {}),\n        },\n        ...(runId\n          ? { metadata: { source: \"issue_active_run_control\", runId } }\n          : {}),\n        ...(mode === \"restore\" ? { metadata: { wakeAgents } } : {}),\n      }",
+      "line": 4333,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human creates a Task tree hold with an explicit mode and release policy; downstream wake behavior remains governed by the Task owner. The exact client route is post:`/issues/${id}/tree-holds`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "heartbeatsApi.cancel",
+      "apiVerb": "write",
+      "pathSignature": "runId",
+      "routeSignatures": [
+        "post:`/heartbeat-runs/${runId}/cancel`"
+      ],
+      "argumentsSignature": "runId",
+      "line": 4427,
+      "occurrence": 0,
+      "owner": "server/src/services/heartbeat.ts",
+      "reason": "Human stops the current heartbeat run; final status and recovery remain governed by heartbeat and Task owners. The exact client route is post:`/heartbeat-runs/${runId}/cancel`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "heartbeatsApi.cancel",
+      "apiVerb": "write",
+      "pathSignature": "runId",
+      "routeSignatures": [
+        "post:`/heartbeat-runs/${runId}/cancel`"
+      ],
+      "argumentsSignature": "runId",
+      "line": 4443,
+      "occurrence": 0,
+      "owner": "server/src/services/heartbeat.ts",
+      "reason": "Human stops the current heartbeat run; final status and recovery remain governed by heartbeat and Task owners. The exact client route is post:`/heartbeat-runs/${runId}/cancel`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.update",
+      "apiVerb": "write",
+      "pathSignature": "issueId!",
+      "routeSignatures": [
+        "patch:`/issues/${id}`"
+      ],
+      "argumentsSignature": "issueId!, { status }",
+      "line": 4445,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human finalizes the Task status after stopping a run; heartbeat cancellation and status transition retain their separate owner checks. The exact client route is patch:`/issues/${id}`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.update",
+      "apiVerb": "write",
+      "pathSignature": "id",
+      "routeSignatures": [
+        "patch:`/issues/${id}`"
+      ],
+      "argumentsSignature": "id, data",
+      "line": 4503,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human edits fields on a child Task through the Task update owner; the child Task ACL and version checks remain authoritative. The exact client route is patch:`/issues/${id}`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.checkMonitorNow",
+      "apiVerb": "write",
+      "pathSignature": "issueId!",
+      "routeSignatures": [
+        "post:`/issues/${id}/monitor/check-now`"
+      ],
+      "argumentsSignature": "issueId!",
+      "line": 4578,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human requests an immediate Task monitor check; this is an operator-triggered refresh, not a general Agent operation. The exact client route is post:`/issues/${id}/monitor/check-now`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "approvalsApi.approve",
+      "apiVerb": "write",
+      "pathSignature": "approvalId",
+      "routeSignatures": [
+        "post:`/approvals/${id}/approve${account(principal)}`"
+      ],
+      "argumentsSignature": "approvalId",
+      "line": 4609,
+      "occurrence": 0,
+      "owner": "server/src/services/approvals.ts",
+      "reason": "Human approves the current approval through approvalService; Agent visibility of approval state does not confer decision authority. The exact client route is post:`/approvals/${id}/approve${account(principal)}`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "approvalsApi.reject",
+      "apiVerb": "write",
+      "pathSignature": "approvalId",
+      "routeSignatures": [
+        "post:`/approvals/${id}/reject${account(principal)}`"
+      ],
+      "argumentsSignature": "approvalId",
+      "line": 4611,
+      "occurrence": 0,
+      "owner": "server/src/services/approvals.ts",
+      "reason": "Human rejects the current approval through approvalService; Agent visibility of approval state does not confer decision authority. The exact client route is post:`/approvals/${id}/reject${account(principal)}`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.addComment",
+      "apiVerb": "write",
+      "pathSignature": "await resolveWritableIssueId()",
+      "routeSignatures": [
+        "post:`/issues/${id}/comments`"
+      ],
+      "argumentsSignature": "await resolveWritableIssueId(), body, reopen, interrupt, attachmentIds, clientRequestId ?? crypto.randomUUID()",
+      "line": 4658,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human posts a comment to the current Task; the Task owner enforces the current identity and write boundary. The exact client route is post:`/issues/${id}/comments`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.cancelComment",
+      "apiVerb": "write",
+      "pathSignature": "comment.issueId",
+      "routeSignatures": [
+        "delete:`/issues/${id}/comments/${commentId}?mode=cancel`"
+      ],
+      "argumentsSignature": "comment.issueId, comment.id",
+      "line": 4724,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human cancels the specified Task conversation comment; this does not become an Agent message cancellation operation. The exact client route is delete:`/issues/${id}/comments/${commentId}?mode=cancel`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.acceptInteraction",
+      "apiVerb": "write",
+      "pathSignature": "issueId!",
+      "routeSignatures": [
+        "post:`/issues/${id}/interactions/${interactionId}/accept`"
+      ],
+      "argumentsSignature": "issueId!, interaction.id, {\n        selectedClientKeys,\n        selectedOptionIds,\n        rememberAction,\n      }",
+      "line": 4837,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human accepts the current Task interaction with its selected options; the interaction owner validates the current version. The exact client route is post:`/issues/${id}/interactions/${interactionId}/accept`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.rejectInteraction",
+      "apiVerb": "write",
+      "pathSignature": "issueId!",
+      "routeSignatures": [
+        "post:`/issues/${id}/interactions/${interactionId}/reject`"
+      ],
+      "argumentsSignature": "issueId!, interaction.id, reason",
+      "line": 4893,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human rejects the current Task interaction with a reason; the interaction owner validates the current version. The exact client route is post:`/issues/${id}/interactions/${interactionId}/reject`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.respondToInteraction",
+      "apiVerb": "write",
+      "pathSignature": "issueId!",
+      "routeSignatures": [
+        "post:`/issues/${id}/interactions/${interactionId}/respond`"
+      ],
+      "argumentsSignature": "issueId!, interaction.id, { answers }",
+      "line": 4924,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human submits answers to the current Task interaction; the interaction owner validates its state and version. The exact client route is post:`/issues/${id}/interactions/${interactionId}/respond`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.submitInteractionVerdicts",
+      "apiVerb": "write",
+      "pathSignature": "issueId!",
+      "routeSignatures": [
+        "post:`/issues/${id}/interactions/${interactionId}/verdicts`"
+      ],
+      "argumentsSignature": "issueId!, interaction.id, verdicts",
+      "line": 4955,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human submits verdicts for the current Task interaction; the interaction owner retains the decision policy. The exact client route is post:`/issues/${id}/interactions/${interactionId}/verdicts`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.cancelInteraction",
+      "apiVerb": "write",
+      "pathSignature": "issueId!",
+      "routeSignatures": [
+        "post:`/issues/${id}/interactions/${interactionId}/cancel`"
+      ],
+      "argumentsSignature": "issueId!, interaction.id",
+      "line": 4987,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human cancels the current Task interaction; this remains a UI decision action under the interaction owner. The exact client route is post:`/issues/${id}/interactions/${interactionId}/cancel`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.skipInteraction",
+      "apiVerb": "write",
+      "pathSignature": "issueId!",
+      "routeSignatures": [
+        "post:`/issues/${id}/interactions/${interactionId}/skip`"
+      ],
+      "argumentsSignature": "issueId!, interaction.id",
+      "line": 5009,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human skips the current Task interaction; the interaction owner retains current-state checks. The exact client route is post:`/issues/${id}/interactions/${interactionId}/skip`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.update",
+      "apiVerb": "write",
+      "pathSignature": "issueId!",
+      "routeSignatures": [
+        "patch:`/issues/${id}`"
+      ],
+      "argumentsSignature": "issueId!, {\n        comment: body,\n        commentClientRequestId: clientRequestId,\n        ...(attachmentIds?.length ? { attachmentIds } : {}),\n        assigneeAgentId: reassignment.assigneeAgentId,\n        assigneeUserId: reassignment.assigneeUserId,\n        ...(reopen ? { status: \"todo\" } : {}),\n        ...(interrupt ? { interrupt } : {}),\n      }",
+      "line": 5041,
+      "occurrence": 0,
+      "owner": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+      "operationId": "blentera.native.task.reassign"
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.cancelComment",
+      "apiVerb": "write",
+      "pathSignature": "issueId!",
+      "routeSignatures": [
+        "delete:`/issues/${id}/comments/${commentId}?mode=cancel`"
+      ],
+      "argumentsSignature": "issueId!, comment.id",
+      "line": 5119,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human cancels the specified Task conversation comment; this does not become an Agent message cancellation operation. The exact client route is delete:`/issues/${id}/comments/${commentId}?mode=cancel`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.interruptLatestQueuedComments",
+      "apiVerb": "write",
+      "pathSignature": "issueId!",
+      "routeSignatures": [
+        "get:`/issues/${id}/queued-comments`",
+        "post:`/issues/${id}/queued-comments/interrupt`"
+      ],
+      "argumentsSignature": "issueId!, runId",
+      "line": 5214,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human interrupts the latest queued Task messages for the expected run; the queue owner checks target and revision before mutation. The exact client route is get:`/issues/${id}/queued-comments`; post:`/issues/${id}/queued-comments/interrupt`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.cancelComment",
+      "apiVerb": "write",
+      "pathSignature": "issueId!",
+      "routeSignatures": [
+        "delete:`/issues/${id}/comments/${commentId}?mode=cancel`"
+      ],
+      "argumentsSignature": "issueId!, commentId",
+      "line": 5240,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human cancels the specified Task conversation comment; this does not become an Agent message cancellation operation. The exact client route is delete:`/issues/${id}/comments/${commentId}?mode=cancel`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.deleteComment",
+      "apiVerb": "write",
+      "pathSignature": "issueId!",
+      "routeSignatures": [
+        "delete:`/issues/${id}/comments/${commentId}`"
+      ],
+      "argumentsSignature": "issueId!, commentId",
+      "line": 5273,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human deletes the specified Task conversation comment; the Task owner preserves its authorization and audit behavior. The exact client route is delete:`/issues/${id}/comments/${commentId}`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.upsertFeedbackVote",
+      "apiVerb": "write",
+      "pathSignature": "issueId!",
+      "routeSignatures": [
+        "post:`/issues/${id}/feedback-votes`"
+      ],
+      "argumentsSignature": "issueId!, {\n        targetType: variables.targetType,\n        targetId: variables.targetId,\n        vote: variables.vote,\n        ...(variables.reason ? { reason: variables.reason } : {}),\n        ...(variables.allowSharing ? { allowSharing: true } : {}),\n      }",
+      "line": 5332,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human records or changes a feedback vote on the current Task; this is a user feedback action, not an Agent control operation. The exact client route is post:`/issues/${id}/feedback-votes`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.uploadAttachment",
+      "apiVerb": "write",
+      "pathSignature": "conversation.agent.companyId",
+      "routeSignatures": [
+        "postForm:`/companies/${companyId}/issues/${issueId}/attachments`"
+      ],
+      "argumentsSignature": "conversation.agent.companyId, await resolveWritableIssueId(), file",
+      "line": 5400,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human uploads an attachment to the current Task conversation; company membership and Task write checks remain in the owner. The exact client route is postForm:`/companies/${companyId}/issues/${issueId}/attachments`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.uploadAttachment",
+      "apiVerb": "write",
+      "pathSignature": "loadedIssue.companyId",
+      "routeSignatures": [
+        "postForm:`/companies/${companyId}/issues/${issueId}/attachments`"
+      ],
+      "argumentsSignature": "loadedIssue.companyId, loadedIssue.id, file",
+      "line": 5404,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human uploads an attachment to the current Task conversation; company membership and Task write checks remain in the owner. The exact client route is postForm:`/companies/${companyId}/issues/${issueId}/attachments`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.upsertDocument",
+      "apiVerb": "write",
+      "pathSignature": "await resolveWritableIssueId()",
+      "routeSignatures": [
+        "put:`/issues/${id}/documents/${encodeURIComponent(key)}`"
+      ],
+      "argumentsSignature": "await resolveWritableIssueId(), key, {\n        title: key === \"plan\" ? null : nextTitle,\n        format: \"markdown\",\n        body,\n        baseRevisionId: existing?.latestRevisionId ?? null,\n      }",
+      "line": 5432,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human updates a Task document against its current revision; document version and write checks remain in the Task owner. The exact client route is put:`/issues/${id}/documents/${encodeURIComponent(key)}`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.deleteAttachment",
+      "apiVerb": "write",
+      "pathSignature": "attachmentId",
+      "routeSignatures": [
+        "delete:`/attachments/${id}`"
+      ],
+      "argumentsSignature": "attachmentId",
+      "line": 5456,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human removes the selected Task attachment; attachment ownership and Task authorization remain in the canonical owner. The exact client route is delete:`/attachments/${id}`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.archiveFromInbox",
+      "apiVerb": "write",
+      "pathSignature": "id",
+      "routeSignatures": [
+        "post:`/issues/${id}/inbox-archive`"
+      ],
+      "argumentsSignature": "id",
+      "line": 5470,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human archives a Task in the current user inbox; this affects attention state rather than Task lifecycle. The exact client route is post:`/issues/${id}/inbox-archive`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "agentsApi.resume",
+      "apiVerb": "write",
+      "pathSignature": "issueAssigneeAgentIdForResume",
+      "routeSignatures": [
+        "post:agentPath(id, companyId, \"/resume\")"
+      ],
+      "argumentsSignature": "issueAssigneeAgentIdForResume, issueCompanyIdForResume ?? undefined",
+      "line": 6537,
+      "occurrence": 0,
+      "owner": "server/src/services/agents.ts",
+      "reason": "Human resumes the assigned Agent from the Task page; the Agent owner checks its current status and authority. The exact client route is post:agentPath(id, companyId, \"/resume\")."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "agentsApi.wakeup",
+      "apiVerb": "write",
+      "pathSignature": "issueAssigneeAgentIdForResume",
+      "routeSignatures": [
+        "post:agentPath(id, companyId, \"/wakeup\")"
+      ],
+      "argumentsSignature": "issueAssigneeAgentIdForResume, {\n              source: \"assignment\",\n              reason: \"Assignee resumed from the task page\",\n              payload: {\n                issueId: issueIdForResume,\n                mutation: \"assignee_resumed\",\n              },\n            }, issueCompanyIdForResume ?? undefined",
+      "line": 6551,
+      "occurrence": 0,
+      "owner": "server/src/services/agents.ts",
+      "reason": "Human wakes the assigned Agent from the Task page; the Agent owner retains invocation, assignment, and audit checks. The exact client route is post:agentPath(id, companyId, \"/wakeup\")."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.create",
+      "apiVerb": "write",
+      "pathSignature": "issue.companyId",
+      "routeSignatures": [
+        "post:`/companies/${companyId}/issues`"
+      ],
+      "argumentsSignature": "issue.companyId, {\n        title: `Re-issue (isolated): ${issue.title ?? sourceLabel}`,\n        description: descriptionLines.join(\"\\n\"),\n        priority: issue.priority,\n        projectId: issue.projectId ?? null,\n        parentId: issue.parentId ?? null,\n        assigneeAgentId:\n          issue.activeRecoveryAction?.returnOwnerAgentId ??\n          issue.activeRecoveryAction?.previousOwnerAgentId ??\n          issue.assigneeAgentId ??\n          null,\n        executionWorkspacePreference: \"isolated_workspace\",\n        executionWorkspaceSettings: {\n          mode: \"isolated_workspace\",\n          workspaceStrategy: { type: \"git_worktree\", baseRef: request.baseRef },\n        },\n      }",
+      "line": 6651,
+      "occurrence": 0,
+      "owner": "server/src/services/issues.ts",
+      "reason": "Human creates a recovery Task from the current Task context; the Task creation owner validates assignment and isolated-workspace settings. The exact client route is post:`/companies/${companyId}/issues`."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "executionWorkspacesApi.reconcile",
+      "apiVerb": "write",
+      "pathSignature": "workspaceId",
+      "routeSignatures": [
+        "post:`/execution-workspaces/${id}/reconcile-branch`"
+      ],
+      "argumentsSignature": "workspaceId, body",
+      "line": 6718,
+      "occurrence": 0,
+      "owner": "server/src/services/execution-workspaces.ts",
+      "reason": "Human requests reconciliation of the current execution workspace branch; workspace ownership and safety checks remain in executionWorkspacesService. The exact client route is post:`/execution-workspaces/${id}/reconcile-branch`."
+    }
+  ],
+  "nonMaterialUiSources": []
+}

@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import type { Dir } from "node:fs";
 import { createHash } from "node:crypto";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { companies, companyDeletionOperations, heartbeatRuns, memoryJobs, nativeRunFinalizations, type Db } from "@paperclipai/db";
+import { companies, companyDeletionOperations, environmentLeases, heartbeatRuns, memoryJobs, nativeRunFinalizations, type Db } from "@paperclipai/db";
 import { resolvePaperclipInstanceRoot } from "../../home-paths.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy, purgeDerivedWorkflowMemory } from "../memory/memory-privacy.js";
@@ -14,6 +14,295 @@ import { conflict } from "../../errors.js";
 export type NativeRuntimeAssetOwner = { companyId: string; runId: string };
 const digestPattern = /^[a-f0-9]{64}$/;
 const uuidPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+
+/** Exact remote run-session tree owned by one Native OpenCode run. It includes
+ * provider home, staged runtime context, runner state, and diagnostics. The job
+ * stores this content-free locator; RuntimeControl resolves and authenticates
+ * the host/cell/binding at dispatch time. Never persist remote absolute paths. */
+export type RemoteRuntimeAssetLocator = {
+  schema: "paperclip.remote-runtime-asset-locator.v1";
+  companyId: string;
+  runId: string;
+  runtimeKind: "native_opencode_server";
+  environmentId: string;
+  environmentLeaseId: string;
+  provider: string;
+  providerLeaseId: string;
+  runnerInstanceId: string;
+  normalizedSessionIdDigest: string;
+  remoteCwdDigest: string;
+  relativePath: string;
+  pathDigest: string;
+};
+
+/** Server-authored from the authenticated RuntimeControl dispatch and its
+ * stop-before-remove result. Child stdout alone is never a receipt. */
+export type RemoteRuntimeAssetRemovalReceipt = {
+  schema: "paperclip.remote-runtime-asset-removal.v1";
+  locatorDigest: string;
+  commandRequestId: string;
+  purpose: "native_provider_data_erasure";
+  target: { hostId: string; cellId: string; cellGeneration: string; bindingId: string };
+  relativePath: string;
+  pathDigest: string;
+  stopProof: {
+    schema: "paperclip.native-remote-process-stop.v1";
+    runId: string;
+    normalizedSessionIdDigest: string;
+    runnerInstanceId: string;
+    environmentLeaseId: string;
+    providerLeaseId: string;
+    pid: number;
+    startedAt: string;
+    processIdentityDigest: string;
+    processStartFingerprintDigest: string;
+    stoppedAt: string;
+  };
+  stopProofBeforeDelete: true;
+  exitCode: 0;
+  timedOut: false;
+  postDeleteAbsent: true;
+};
+
+const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
+
+export function remoteRuntimeAssetRelativePath(normalizedSessionIdDigest: string) {
+  if (!digestPattern.test(normalizedSessionIdDigest)) throw new Error("Invalid remote Native session digest");
+  return `sessions/${normalizedSessionIdDigest}`;
+}
+
+export function remoteRuntimeAssetPathDigest(relativePath: string) {
+  return sha256(relativePath);
+}
+
+export function remoteRuntimeAssetLocatorDigest(locator: RemoteRuntimeAssetLocator) {
+  return sha256([
+    locator.schema, locator.companyId, locator.runId, locator.runtimeKind, locator.environmentId,
+    locator.environmentLeaseId, locator.provider, locator.providerLeaseId, locator.runnerInstanceId,
+    locator.normalizedSessionIdDigest, locator.remoteCwdDigest, locator.relativePath, locator.pathDigest,
+  ].join("\0"));
+}
+
+export function createRemoteRuntimeAssetLocator(input: {
+  companyId: string;
+  runId: string;
+  environmentId: string;
+  environmentLeaseId: string;
+  provider: string;
+  providerLeaseId: string;
+  runnerInstanceId: string;
+  normalizedSessionId: string;
+  remoteCwd: string;
+}): RemoteRuntimeAssetLocator {
+  const normalizedSessionIdDigest = sha256(input.normalizedSessionId);
+  const relativePath = remoteRuntimeAssetRelativePath(normalizedSessionIdDigest);
+  if (![input.companyId, input.runId, input.environmentId, input.environmentLeaseId].every(id => uuidPattern.test(id)) ||
+    !input.provider.trim() || !input.providerLeaseId.trim() || !input.runnerInstanceId.trim() ||
+    !input.normalizedSessionId.trim() || !input.remoteCwd.trim() ||
+    input.normalizedSessionId !== input.normalizedSessionId.trim() || input.remoteCwd !== input.remoteCwd.trim())
+    throw new Error("Invalid remote Native runtime asset owner");
+  return {
+    schema: "paperclip.remote-runtime-asset-locator.v1",
+    companyId: input.companyId,
+    runId: input.runId,
+    runtimeKind: "native_opencode_server",
+    environmentId: input.environmentId,
+    environmentLeaseId: input.environmentLeaseId,
+    provider: input.provider,
+    providerLeaseId: input.providerLeaseId,
+    runnerInstanceId: input.runnerInstanceId,
+    normalizedSessionIdDigest,
+    remoteCwdDigest: sha256(input.remoteCwd),
+    relativePath,
+    pathDigest: remoteRuntimeAssetPathDigest(relativePath),
+  };
+}
+
+export function isRemoteRuntimeAssetLocator(value: unknown, owner?: NativeRuntimeAssetOwner): value is RemoteRuntimeAssetLocator {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const locator = value as Partial<RemoteRuntimeAssetLocator>;
+  const expectedKeys = ["schema", "companyId", "runId", "runtimeKind", "environmentId", "environmentLeaseId", "provider",
+    "providerLeaseId", "runnerInstanceId", "normalizedSessionIdDigest", "remoteCwdDigest", "relativePath", "pathDigest"];
+  if (Object.keys(locator).length !== expectedKeys.length || Object.keys(locator).some(key => !expectedKeys.includes(key)) ||
+    locator.schema !== "paperclip.remote-runtime-asset-locator.v1" ||
+    ![locator.companyId, locator.runId, locator.environmentId, locator.environmentLeaseId].every(id => typeof id === "string" && uuidPattern.test(id)) ||
+    locator.runtimeKind !== "native_opencode_server" || typeof locator.provider !== "string" || !locator.provider.trim() ||
+    typeof locator.providerLeaseId !== "string" || !locator.providerLeaseId.trim() ||
+    typeof locator.runnerInstanceId !== "string" || !locator.runnerInstanceId.trim() ||
+    typeof locator.normalizedSessionIdDigest !== "string" || !digestPattern.test(locator.normalizedSessionIdDigest) ||
+    typeof locator.remoteCwdDigest !== "string" || !digestPattern.test(locator.remoteCwdDigest) ||
+    typeof locator.relativePath !== "string" || locator.relativePath !== remoteRuntimeAssetRelativePath(locator.normalizedSessionIdDigest) ||
+    typeof locator.pathDigest !== "string" || locator.pathDigest !== remoteRuntimeAssetPathDigest(locator.relativePath)) return false;
+  return !owner || (locator.companyId === owner.companyId && locator.runId === owner.runId);
+}
+
+export function isRemoteRuntimeAssetRemovalReceipt(value: unknown, locator: RemoteRuntimeAssetLocator): value is RemoteRuntimeAssetRemovalReceipt {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const receipt = value as Partial<RemoteRuntimeAssetRemovalReceipt>;
+  return receipt.schema === "paperclip.remote-runtime-asset-removal.v1" &&
+    receipt.locatorDigest === remoteRuntimeAssetLocatorDigest(locator) &&
+    typeof receipt.commandRequestId === "string" && uuidPattern.test(receipt.commandRequestId) &&
+    receipt.purpose === "native_provider_data_erasure" &&
+    Boolean(receipt.target && typeof receipt.target.hostId === "string" && receipt.target.hostId.trim() &&
+      typeof receipt.target.cellId === "string" && uuidPattern.test(receipt.target.cellId) &&
+      typeof receipt.target.cellGeneration === "string" && /^[1-9][0-9]*$/.test(receipt.target.cellGeneration) &&
+      typeof receipt.target.bindingId === "string" && uuidPattern.test(receipt.target.bindingId)) &&
+    receipt.relativePath === locator.relativePath && receipt.pathDigest === locator.pathDigest &&
+    Boolean(receipt.stopProof && receipt.stopProof.schema === "paperclip.native-remote-process-stop.v1" &&
+      receipt.stopProof.runId === locator.runId &&
+      receipt.stopProof.normalizedSessionIdDigest === locator.normalizedSessionIdDigest &&
+      receipt.stopProof.runnerInstanceId === locator.runnerInstanceId &&
+      receipt.stopProof.environmentLeaseId === locator.environmentLeaseId &&
+      receipt.stopProof.providerLeaseId === locator.providerLeaseId &&
+      Number.isSafeInteger(receipt.stopProof.pid) && receipt.stopProof.pid > 1 &&
+      typeof receipt.stopProof.startedAt === "string" && !Number.isNaN(Date.parse(receipt.stopProof.startedAt)) &&
+      typeof receipt.stopProof.stoppedAt === "string" && !Number.isNaN(Date.parse(receipt.stopProof.stoppedAt)) &&
+      typeof receipt.stopProof.processIdentityDigest === "string" && digestPattern.test(receipt.stopProof.processIdentityDigest) &&
+      typeof receipt.stopProof.processStartFingerprintDigest === "string" && digestPattern.test(receipt.stopProof.processStartFingerprintDigest)) &&
+    receipt.stopProofBeforeDelete === true && receipt.exitCode === 0 && receipt.timedOut === false &&
+    receipt.postDeleteAbsent === true;
+}
+
+export async function readRemoteRuntimeAssetLocator(db: Db, run: {
+  id: string; companyId: string; runnerProfileJson: unknown; nativeSessionId: string | null; runnerInstanceId: string | null;
+}): Promise<RemoteRuntimeAssetLocator | null> {
+  const profile = run.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson)
+    ? run.runnerProfileJson as Record<string, unknown> : null;
+  const candidate = profile?.nativeRemoteRuntimeAssetLocator;
+  if (candidate === undefined || candidate === null) return null;
+  if (!isRemoteRuntimeAssetLocator(candidate, run)) throw conflict("Native remote provider-data locator is invalid");
+  const locator = candidate;
+  if (!run.nativeSessionId || !run.runnerInstanceId ||
+    sha256(run.nativeSessionId) !== locator.normalizedSessionIdDigest || run.runnerInstanceId !== locator.runnerInstanceId)
+    throw conflict("Native remote provider-data locator does not match the durable Run identity");
+  const [lease] = await db.select({ id: environmentLeases.id, environmentId: environmentLeases.environmentId,
+    heartbeatRunId: environmentLeases.heartbeatRunId, provider: environmentLeases.provider,
+    providerLeaseId: environmentLeases.providerLeaseId, metadata: environmentLeases.metadata })
+    .from(environmentLeases).where(and(eq(environmentLeases.companyId, run.companyId),
+      eq(environmentLeases.id, locator.environmentLeaseId)));
+  const metadata = lease?.metadata;
+  const remoteCwd = metadata && typeof metadata.remoteCwd === "string" ? metadata.remoteCwd.trim() : "";
+  if (!lease || lease.heartbeatRunId !== run.id || lease.environmentId !== locator.environmentId ||
+    lease.provider !== locator.provider || lease.provider === "local" || lease.providerLeaseId !== locator.providerLeaseId ||
+    !remoteCwd || sha256(remoteCwd) !== locator.remoteCwdDigest)
+    throw conflict("Native remote provider-data locator no longer matches its exact environment lease");
+  return locator;
+}
+
+/** The remote tree can be reused by a later Run that resumes the same native
+ * session. A single-run source erasure must therefore wait while any other
+ * persisted Run may still own that exact session. Company purge may retire the
+ * shared tree only when all co-owners are included in that same purge. */
+export async function assertRemoteRuntimeAssetErasureReady(db: Db, locator: RemoteRuntimeAssetLocator,
+  companyPurgeOperationId?: string) {
+  const [run] = await db.select().from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.companyId, locator.companyId), eq(heartbeatRuns.id, locator.runId)));
+  if (!run || run.runtimeMode !== "native" || run.driverKind !== "opencode_server" ||
+    !["succeeded", "interrupted", "failed", "cancelled", "timed_out"].includes(run.status) ||
+    run.processPid !== null || run.processGroupId !== null || run.controllerLeaseExpiresAt !== null)
+    throw conflict("Managed remote OpenCode data erasure awaits confirmed Native Stop");
+  const currentLocator = await readRemoteRuntimeAssetLocator(db, run);
+  if (!currentLocator || remoteRuntimeAssetLocatorDigest(currentLocator) !== remoteRuntimeAssetLocatorDigest(locator))
+    throw conflict("Managed remote OpenCode erasure locator is no longer current");
+  const [job] = await db.select({ status: memoryJobs.status, operationType: memoryJobs.operationType,
+    sourceRefJson: memoryJobs.sourceRefJson }).from(memoryJobs).where(and(
+    eq(memoryJobs.companyId, locator.companyId), eq(memoryJobs.jobKey, runtimeAssetJobKey(locator.runId, []))))
+    .orderBy(desc(memoryJobs.attemptNumber)).limit(1);
+  const jobSource = job?.sourceRefJson as Record<string, unknown> | undefined;
+  if (!job || job.operationType !== "retention" || !["queued", "running"].includes(job.status) ||
+    jobSource?.kind !== "runtime_asset_erasure" || jobSource.runId !== locator.runId ||
+    jobSource.companyPurgeOperationId !== companyPurgeOperationId ||
+    !isRemoteRuntimeAssetLocator(jobSource.remoteAssetLocator, locator) ||
+    remoteRuntimeAssetLocatorDigest(jobSource.remoteAssetLocator as RemoteRuntimeAssetLocator) !== remoteRuntimeAssetLocatorDigest(locator))
+    throw conflict("Managed remote OpenCode erasure has no current exact MemoryJob authority");
+  const [finalization] = await db.select({ phase: nativeRunFinalizations.phase, leaseOwner: nativeRunFinalizations.leaseOwner,
+    leaseExpiresAt: nativeRunFinalizations.leaseExpiresAt }).from(nativeRunFinalizations).where(and(
+    eq(nativeRunFinalizations.companyId, locator.companyId), eq(nativeRunFinalizations.runId, locator.runId)));
+  if (!finalization || !["committed", "terminal_failure"].includes(finalization.phase) ||
+    finalization.leaseOwner !== null || finalization.leaseExpiresAt !== null)
+    throw conflict("Managed remote OpenCode data erasure awaits Native finalization");
+  const remoteLeases = await db.select().from(environmentLeases).where(and(
+    eq(environmentLeases.companyId, locator.companyId), eq(environmentLeases.id, locator.environmentLeaseId),
+    eq(environmentLeases.heartbeatRunId, locator.runId)));
+  if (remoteLeases.length !== 1 || remoteLeases.some(lease => lease.provider === "local" ||
+    !["active", "pending_cleanup"].includes(lease.status) || lease.releasedAt !== null || lease.cleanupStatus === "success"))
+    throw conflict("Managed remote OpenCode data erasure awaits its exact current cleanup lease");
+  const coOwners = await db.select({ id: heartbeatRuns.id, companyId: heartbeatRuns.companyId,
+    nativeSessionId: heartbeatRuns.nativeSessionId, runtimeMode: heartbeatRuns.runtimeMode,
+    driverKind: heartbeatRuns.driverKind, status: heartbeatRuns.status, processPid: heartbeatRuns.processPid,
+    processGroupId: heartbeatRuns.processGroupId, controllerLeaseExpiresAt: heartbeatRuns.controllerLeaseExpiresAt,
+    runnerProfileJson: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.nativeSessionId, run.nativeSessionId ?? ""), eq(heartbeatRuns.runtimeMode, "native"),
+    eq(heartbeatRuns.driverKind, "opencode_server")));
+  const otherOwners = coOwners.filter(owner => owner.id !== run.id);
+  if (!otherOwners.length) return { run, finalization, remoteLeases, coOwnerRunIds: [run.id] };
+  if (!companyPurgeOperationId || !uuidPattern.test(companyPurgeOperationId))
+    throw conflict("Managed remote OpenCode session still has another retained Run owner");
+  const [operation] = await db.select({ companyId: companyDeletionOperations.companyId,
+    stage: companyDeletionOperations.stage, status: companyDeletionOperations.status,
+    evidence: companyDeletionOperations.evidence }).from(companyDeletionOperations).where(and(
+    eq(companyDeletionOperations.companyId, locator.companyId), eq(companyDeletionOperations.id, companyPurgeOperationId)));
+  if (!operation || operation.stage !== "purge" || operation.status !== "processing" ||
+    typeof operation.evidence.runtimesErasedAt !== "string" || otherOwners.some(owner => owner.companyId !== locator.companyId))
+    throw conflict("Managed remote OpenCode session has another Run outside the current company purge");
+  for (const owner of otherOwners) {
+    if (!owner.nativeSessionId || owner.status === "queued" || owner.status === "running" || owner.status === "scheduled_retry" ||
+      owner.processPid !== null || owner.processGroupId !== null || owner.controllerLeaseExpiresAt !== null)
+      throw conflict("Managed remote OpenCode session has an unsettled Run owner");
+    const profile = owner.runnerProfileJson && typeof owner.runnerProfileJson === "object" && !Array.isArray(owner.runnerProfileJson)
+      ? owner.runnerProfileJson as Record<string, unknown> : null;
+    const otherLocator = profile?.nativeRemoteRuntimeAssetLocator;
+    if (!isRemoteRuntimeAssetLocator(otherLocator, owner) ||
+      otherLocator.normalizedSessionIdDigest !== locator.normalizedSessionIdDigest ||
+      otherLocator.runnerInstanceId !== locator.runnerInstanceId || otherLocator.environmentId !== locator.environmentId ||
+      otherLocator.provider !== locator.provider || otherLocator.providerLeaseId !== locator.providerLeaseId ||
+      otherLocator.remoteCwdDigest !== locator.remoteCwdDigest)
+      throw conflict("Managed remote OpenCode session co-owner does not have an exact matching erasure locator");
+    const [otherFinalization] = await db.select({ phase: nativeRunFinalizations.phase, leaseOwner: nativeRunFinalizations.leaseOwner,
+      leaseExpiresAt: nativeRunFinalizations.leaseExpiresAt }).from(nativeRunFinalizations).where(and(
+      eq(nativeRunFinalizations.companyId, owner.companyId), eq(nativeRunFinalizations.runId, owner.id)));
+    const leases = await db.select().from(environmentLeases).where(and(
+      eq(environmentLeases.companyId, owner.companyId), eq(environmentLeases.id, otherLocator.environmentLeaseId),
+      eq(environmentLeases.heartbeatRunId, owner.id)));
+    const [job] = await db.select({ status: memoryJobs.status, sourceRefJson: memoryJobs.sourceRefJson,
+      resultJson: memoryJobs.resultJson }).from(memoryJobs).where(and(
+      eq(memoryJobs.companyId, owner.companyId), eq(memoryJobs.jobKey, runtimeAssetJobKey(owner.id, []))))
+      .orderBy(desc(memoryJobs.attemptNumber)).limit(1);
+    const jobSource = job?.sourceRefJson as Record<string, unknown> | undefined;
+    if (!otherFinalization || !["committed", "terminal_failure"].includes(otherFinalization.phase) ||
+      otherFinalization.leaseOwner !== null || otherFinalization.leaseExpiresAt !== null ||
+      leases.length !== 1 || leases.some(lease => lease.provider === "local" ||
+        !["active", "pending_cleanup"].includes(lease.status) || lease.releasedAt !== null || lease.cleanupStatus === "success") ||
+      job?.status !== "queued" && job?.status !== "running" && job?.status !== "succeeded" ||
+      jobSource?.companyPurgeOperationId !== companyPurgeOperationId ||
+      !isRemoteRuntimeAssetLocator(jobSource.remoteAssetLocator, owner) ||
+      remoteRuntimeAssetLocatorDigest(jobSource.remoteAssetLocator as RemoteRuntimeAssetLocator) !== remoteRuntimeAssetLocatorDigest(otherLocator) ||
+      (job?.status === "succeeded" && !isRemoteRuntimeAssetRemovalReceipt(
+        (job.resultJson as Record<string, unknown> | null)?.remoteRuntimeAssetRemovalReceipt, otherLocator)))
+      throw conflict("Managed remote OpenCode session co-owner has not joined the current erasure operation");
+  }
+  return { run, finalization, remoteLeases, coOwnerRunIds: [run.id, ...otherOwners.map(owner => owner.id)] };
+}
+
+async function hasNativeRuntimeAssetStop(db: Db, companyId: string, runId: string) {
+  const leases = await db.select().from(environmentLeases).where(and(
+    eq(environmentLeases.companyId, companyId), eq(environmentLeases.heartbeatRunId, runId)));
+  if (leases.some(lease => lease.provider !== "local")) {
+    if (!leases.length || leases.some(lease => lease.provider === "local" ||
+      !["active", "pending_cleanup"].includes(lease.status) || lease.releasedAt !== null)) return false;
+    const [run] = await db.select({ id: heartbeatRuns.id, status: heartbeatRuns.status,
+      processPid: heartbeatRuns.processPid, processGroupId: heartbeatRuns.processGroupId,
+      controllerLeaseExpiresAt: heartbeatRuns.controllerLeaseExpiresAt }).from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, runId)));
+    const [finalization] = await db.select({ phase: nativeRunFinalizations.phase, leaseOwner: nativeRunFinalizations.leaseOwner,
+      leaseExpiresAt: nativeRunFinalizations.leaseExpiresAt }).from(nativeRunFinalizations).where(and(
+      eq(nativeRunFinalizations.companyId, companyId), eq(nativeRunFinalizations.runId, runId)));
+    return Boolean(run && ["succeeded", "interrupted", "failed", "cancelled", "timed_out"].includes(run.status) &&
+      run.processPid === null && run.processGroupId === null && run.controllerLeaseExpiresAt === null && finalization &&
+      ["committed", "terminal_failure"].includes(finalization.phase) && finalization.leaseOwner === null && finalization.leaseExpiresAt === null);
+  }
+  return await hasNativeLocalProcessStop(db, companyId, runId);
+}
 
 export function nativeRuntimeAssetsRoot(owner?: NativeRuntimeAssetOwner) {
   const root = path.join(resolvePaperclipInstanceRoot(), "runtime-context-assets");
@@ -117,7 +406,9 @@ async function companyManagedOpenCodeRuntimeRunIds(companyId: string) {
 export async function assertCompanyManagedOpenCodeRuntimeDataErased(db: Db, companyId: string, operationId?: string) {
   if ((await companyManagedOpenCodeRuntimeRunIds(companyId)).length)
     throw conflict("Managed OpenCode runtime data must be erased before company content purge");
-  const nativeRuns = await db.select({ id: heartbeatRuns.id, runnerProfileJson: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns).where(and(
+  const nativeRuns = await db.select({ id: heartbeatRuns.id, companyId: heartbeatRuns.companyId,
+    nativeSessionId: heartbeatRuns.nativeSessionId, runnerInstanceId: heartbeatRuns.runnerInstanceId,
+    runnerProfileJson: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns).where(and(
     eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.runtimeMode, "native"),
     eq(heartbeatRuns.driverKind, "opencode_server"),
   ));
@@ -126,7 +417,7 @@ export async function assertCompanyManagedOpenCodeRuntimeDataErased(db: Db, comp
       throw conflict("Native OpenCode runs require the current company-purge erasure receipt");
     const runIds = nativeRuns.map(run => run.id);
     const jobs = await db.select({ jobKey: memoryJobs.jobKey, attemptNumber: memoryJobs.attemptNumber,
-      status: memoryJobs.status, sourceRefJson: memoryJobs.sourceRefJson }).from(memoryJobs).where(and(
+      status: memoryJobs.status, sourceRefJson: memoryJobs.sourceRefJson, resultJson: memoryJobs.resultJson }).from(memoryJobs).where(and(
       eq(memoryJobs.companyId, companyId),
       inArray(sql<string>`${memoryJobs.sourceRefJson}->>'runId'`, runIds),
       sql`${memoryJobs.sourceRefJson}->>'kind'='runtime_asset_erasure'`,
@@ -134,10 +425,14 @@ export async function assertCompanyManagedOpenCodeRuntimeDataErased(db: Db, comp
     const latest = new Map<string, typeof jobs[number]>();
     for (const job of jobs) if (!latest.has(job.jobKey)) latest.set(job.jobKey, job);
     for (const run of nativeRuns) {
+      const remoteLocator = await readRemoteRuntimeAssetLocator(db, run);
       const base = latest.get(runtimeAssetJobKey(run.id, []));
       const baseSource = base?.sourceRefJson as Record<string, unknown> | undefined;
       if (base?.status !== "succeeded" || baseSource?.kind !== "runtime_asset_erasure" || baseSource.runId !== run.id ||
-        baseSource.companyPurgeOperationId !== operationId || !Array.isArray(baseSource.legacyDigests) || baseSource.legacyDigests.length !== 0)
+        baseSource.companyPurgeOperationId !== operationId || !Array.isArray(baseSource.legacyDigests) || baseSource.legacyDigests.length !== 0 ||
+        (remoteLocator && (!isRemoteRuntimeAssetLocator(baseSource.remoteAssetLocator, run) ||
+          remoteRuntimeAssetLocatorDigest(baseSource.remoteAssetLocator as RemoteRuntimeAssetLocator) !== remoteRuntimeAssetLocatorDigest(remoteLocator) ||
+          !isRemoteRuntimeAssetRemovalReceipt((base?.resultJson as Record<string, unknown> | null)?.remoteRuntimeAssetRemovalReceipt, remoteLocator))))
         throw conflict("Native OpenCode provider-home erasure has not succeeded for the current purge operation");
       const refs = legacyProfileDigests(run.runnerProfileJson);
       const covered = new Set<string>();
@@ -198,6 +493,8 @@ export async function enqueueCompanyManagedOpenCodeRuntimeErasure(db: Db, compan
       throw conflict("Managed OpenCode erasure requires the current canonical company purge operation");
     const runs = await tx.select({ id: heartbeatRuns.id, status: heartbeatRuns.status,
       runtimeMode: heartbeatRuns.runtimeMode, driverKind: heartbeatRuns.driverKind,
+      companyId: heartbeatRuns.companyId, nativeSessionId: heartbeatRuns.nativeSessionId,
+      runnerInstanceId: heartbeatRuns.runnerInstanceId,
       processPid: heartbeatRuns.processPid, processGroupId: heartbeatRuns.processGroupId,
       controllerLeaseExpiresAt: heartbeatRuns.controllerLeaseExpiresAt,
       runnerProfileJson: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns)
@@ -212,7 +509,7 @@ export async function enqueueCompanyManagedOpenCodeRuntimeErasure(db: Db, compan
       const nativeOpenCodeRun = run.runtimeMode === "native" && run.driverKind === "opencode_server";
       const existingJobs = await tx.select({ id: memoryJobs.id, jobKey: memoryJobs.jobKey,
         attemptNumber: memoryJobs.attemptNumber, status: memoryJobs.status, operationType: memoryJobs.operationType,
-        sourceRefJson: memoryJobs.sourceRefJson }).from(memoryJobs).where(and(
+        sourceRefJson: memoryJobs.sourceRefJson, resultJson: memoryJobs.resultJson }).from(memoryJobs).where(and(
         eq(memoryJobs.companyId, companyId), sql`${memoryJobs.sourceRefJson}->>'runId'=${run.id}`,
         sql`${memoryJobs.sourceRefJson}->>'kind'='runtime_asset_erasure'`))
         .orderBy(memoryJobs.jobKey, desc(memoryJobs.attemptNumber)).for("update");
@@ -232,6 +529,15 @@ export async function enqueueCompanyManagedOpenCodeRuntimeErasure(db: Db, compan
       if (expectedDigests.length > 10_000) throw conflict("Native runtime profile exceeds the legacy asset erasure bound");
       const jobSpecs = [{ jobKey: runtimeAssetJobKey(run.id, []), digests: [] as string[] },
         ...runtimeAssetDigestBatches(expectedDigests).map(digests => ({ jobKey: runtimeAssetJobKey(run.id, digests), digests }))];
+      const remoteLocator = nativeOpenCodeRun ? await readRemoteRuntimeAssetLocator(tx, run) : null;
+      const runProfile = run.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson)
+        ? run.runnerProfileJson as Record<string, unknown> : null;
+      const runHasManagedOpenCodeAuthority = Boolean(runProfile?.nativeOpenCodeSourceAuthority);
+      const [remoteLease] = nativeOpenCodeRun ? await tx.select({ provider: environmentLeases.provider }).from(environmentLeases).where(and(
+        eq(environmentLeases.companyId, companyId), eq(environmentLeases.heartbeatRunId, run.id),
+        sql`${environmentLeases.provider} is not null and ${environmentLeases.provider}<>'local'`)).limit(1) : [];
+      if (runHasManagedOpenCodeAuthority && remoteLease && !remoteLocator)
+        throw conflict("Managed remote OpenCode data has no durable run-bound erasure locator");
       const authorizedPending = [...latestByKey.values()].some(existing => {
         const source = existing.sourceRefJson as Record<string, unknown>;
         return source.companyPurgeOperationId === operationId && existing.status !== "succeeded";
@@ -249,18 +555,23 @@ export async function enqueueCompanyManagedOpenCodeRuntimeErasure(db: Db, compan
           source?.kind === "runtime_asset_erasure" && source.runId === run.id &&
           source.companyPurgeOperationId === operationId && sameDigestSet &&
           await legacyAssetDigestSetAbsent(spec.digests);
-        const providerHomeMustRun = spec.digests.length === 0 && providerHomes.has(run.id);
+        const isRemoteProviderHomeJob = spec.digests.length === 0 && remoteLocator !== null;
+        const remoteReceiptIsCurrent = !isRemoteProviderHomeJob ||
+          (isRemoteRuntimeAssetLocator(source?.remoteAssetLocator, run) &&
+            remoteRuntimeAssetLocatorDigest(source.remoteAssetLocator as RemoteRuntimeAssetLocator) === remoteRuntimeAssetLocatorDigest(remoteLocator!) &&
+            isRemoteRuntimeAssetRemovalReceipt((existing?.resultJson as Record<string, unknown> | null)?.remoteRuntimeAssetRemovalReceipt, remoteLocator!));
+        const providerHomeMustRun = spec.digests.length === 0 && (providerHomes.has(run.id) || isRemoteProviderHomeJob) && !remoteReceiptIsCurrent;
         if (exactSucceededReceipt && !providerHomeMustRun) continue;
         if (existing?.status === "running") { runNeedsWork = true; continue; }
         if (existing && existing.status !== "queued" &&
           (run.processPid !== null || run.processGroupId !== null || run.controllerLeaseExpiresAt !== null ||
             !["succeeded", "interrupted", "failed", "cancelled", "timed_out"].includes(run.status) ||
-            !await hasNativeLocalProcessStop(tx, companyId, run.id))) {
+            !await hasNativeRuntimeAssetStop(tx, companyId, run.id))) {
           runNeedsWork = true;
           continue;
         }
-        const sourceRefJson = { kind: "runtime_asset_erasure", runId: run.id, legacyDigests: spec.digests,
-          companyPurgeOperationId: operationId };
+      const sourceRefJson = { kind: "runtime_asset_erasure", runId: run.id, legacyDigests: spec.digests,
+        ...(spec.digests.length === 0 && remoteLocator ? { remoteAssetLocator: remoteLocator } : {}), companyPurgeOperationId: operationId };
         if (existing) {
           await tx.update(memoryJobs).set({ status: "queued", executionOwnerId: null, leaseExpiresAt: null,
             finishedAt: null, resultJson: null, resultSummary: null, error: null, errorCode: null,
@@ -353,7 +664,8 @@ export async function enqueueCompanyRuntimeAssetErasure(tx: Db, companyId: strin
 
 /** Actual persisted runs and their existing outbox own generated copies, never user-supplied paths. */
 export async function eraseNativeRuntimeAssets(db: Db, owner: NativeRuntimeAssetOwner, legacyDigests: string[],
-  authorization?: { companyPurgeOperationId?: string }) {
+  authorization?: { companyPurgeOperationId?: string; remoteAssetLocator?: RemoteRuntimeAssetLocator;
+    remoteAssetReceipt?: RemoteRuntimeAssetRemovalReceipt }) {
   if (![owner.companyId, owner.runId].every(id => uuidPattern.test(id)) || legacyDigests.length > 256 ||
     legacyDigests.some(digest => !digestPattern.test(digest)) ||
     (authorization?.companyPurgeOperationId !== undefined && !uuidPattern.test(authorization.companyPurgeOperationId)))
@@ -395,9 +707,44 @@ export async function eraseNativeRuntimeAssets(db: Db, owner: NativeRuntimeAsset
             eq(nativeRunFinalizations.runId, owner.runId)));
         if (!finalization || !["committed", "terminal_failure"].includes(finalization.phase) ||
           finalization.leaseOwner !== null || finalization.leaseExpiresAt !== null ||
-          !await hasNativeLocalProcessStop(tx, owner.companyId, owner.runId)) {
+          (!authorization?.remoteAssetLocator && !await hasNativeLocalProcessStop(tx, owner.companyId, owner.runId))) {
           throw new Error("Managed OpenCode data erasure awaits Native Stop receipt");
         }
+      }
+      const runProfile = run.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson)
+        ? run.runnerProfileJson as Record<string, unknown> : null;
+      const persistedRemoteLocator = runProfile?.nativeRemoteRuntimeAssetLocator;
+      if (persistedRemoteLocator !== undefined && persistedRemoteLocator !== null) {
+        if (!isRemoteRuntimeAssetLocator(persistedRemoteLocator, owner))
+          throw conflict("Managed remote OpenCode data erasure has an invalid durable locator");
+        if (authorization?.remoteAssetLocator || authorization?.remoteAssetReceipt) {
+          if (!authorization.remoteAssetLocator || !authorization.remoteAssetReceipt ||
+            !isRemoteRuntimeAssetLocator(authorization.remoteAssetLocator, owner) ||
+            remoteRuntimeAssetLocatorDigest(persistedRemoteLocator as RemoteRuntimeAssetLocator) !==
+              remoteRuntimeAssetLocatorDigest(authorization.remoteAssetLocator) ||
+            !isRemoteRuntimeAssetRemovalReceipt(authorization.remoteAssetReceipt, authorization.remoteAssetLocator))
+            throw conflict("Managed remote OpenCode data erasure has no exact removal receipt");
+          await assertRemoteRuntimeAssetErasureReady(tx, authorization.remoteAssetLocator, authorization.companyPurgeOperationId);
+        } else if (legacyDigests.length > 0 && authorization?.companyPurgeOperationId && companyPurgeAuthorized) {
+          const [baseJob] = await tx.select({ status: memoryJobs.status, sourceRefJson: memoryJobs.sourceRefJson,
+            resultJson: memoryJobs.resultJson }).from(memoryJobs).where(and(
+            eq(memoryJobs.companyId, owner.companyId), eq(memoryJobs.jobKey, runtimeAssetJobKey(owner.runId, []))))
+            .orderBy(desc(memoryJobs.attemptNumber)).limit(1);
+          const source = baseJob?.sourceRefJson as Record<string, unknown> | undefined;
+          if (baseJob?.status !== "succeeded" || !isRemoteRuntimeAssetLocator(source?.remoteAssetLocator, owner) ||
+            remoteRuntimeAssetLocatorDigest(source.remoteAssetLocator as RemoteRuntimeAssetLocator) !==
+              remoteRuntimeAssetLocatorDigest(persistedRemoteLocator as RemoteRuntimeAssetLocator) ||
+            !isRemoteRuntimeAssetRemovalReceipt((baseJob.resultJson as Record<string, unknown> | null)?.remoteRuntimeAssetRemovalReceipt,
+              persistedRemoteLocator as RemoteRuntimeAssetLocator))
+            throw conflict("Managed remote OpenCode data erasure has no succeeded exact provider-root removal receipt");
+        } else throw conflict("Managed remote OpenCode data erasure has no exact removal receipt");
+      } else if (authorization?.remoteAssetLocator || authorization?.remoteAssetReceipt) {
+        throw conflict("Managed remote OpenCode erasure locator is not present in the durable Run owner");
+      } else if (runProfile?.nativeOpenCodeSourceAuthority) {
+        const [remoteLease] = await tx.select({ provider: environmentLeases.provider }).from(environmentLeases).where(and(
+          eq(environmentLeases.companyId, owner.companyId), eq(environmentLeases.heartbeatRunId, owner.runId),
+          sql`${environmentLeases.provider} is not null and ${environmentLeases.provider}<>'local'`)).limit(1);
+        if (remoteLease) throw conflict("Managed remote OpenCode data has no durable run-bound erasure locator");
       }
     }
     const storageRoot = resolvePaperclipInstanceRoot(), runRoot = nativeRuntimeAssetsRoot(owner);

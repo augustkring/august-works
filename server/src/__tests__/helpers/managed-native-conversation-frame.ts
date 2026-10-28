@@ -463,9 +463,10 @@ export async function runManagedNativeConversationFrame(input: {
     activeExecution = execution;
     activeRunId = runId;
     activeIssueId = issueId;
-    if (sandboxHeartbeat?.beforeNativeExecution)
-      return await sandboxHeartbeat.beforeNativeExecution({ execution, runId, issueId, agentId: currentAgentId,
-        responsibleUserId });
+    const hostEnvironment = sandboxHeartbeat?.beforeNativeExecution
+      ? await sandboxHeartbeat.beforeNativeExecution({ execution, runId, issueId, agentId: currentAgentId,
+          responsibleUserId })
+      : {};
     let minted: Awaited<ReturnType<typeof gateway.issueForConversationRun>>;
     try { minted = await gateway.issueForConversationRun({ companyId, agentId: currentAgentId, runId, responsibleUserId }); }
     catch (error) {
@@ -489,11 +490,14 @@ export async function runManagedNativeConversationFrame(input: {
     issuerFacts.push({ scope: claims.scope, runId: claims.run_id, issueId: claims.conversation_model.issueId,
       generation: claims.conversation_model.conversationSessionGeneration,
       manifestId: claims.conversation_model.executionManifestId, manifestHash: claims.conversation_model.executionManifestHash });
-    return { PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: origin,
+    return { PATH: `${dirname(input.opencodeBinary)}:${process.env.PATH ?? ""}`,
+      OPENCODE_DISABLE_DEFAULT_PLUGINS: "true", OPENCODE_DISABLE_MODELS_FETCH: "true",
+      // Preserve the qualified sandbox host's proxy and CA bindings while
+      // adding only the model profile minted for this exact Native run.
+      ...hostEnvironment,
+      PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: origin,
       PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: String(minted.inputTokensUpperBound),
       PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: String(minted.maxOutputTokens),
-      PATH: `${dirname(input.opencodeBinary)}:${process.env.PATH ?? ""}`,
-      OPENCODE_DISABLE_DEFAULT_PLUGINS: "true", OPENCODE_DISABLE_MODELS_FETCH: "true",
       // The relay's exact public-DNS-shaped broker origin is tunneled through
       // a loopback-only test proxy because this environment blocks direct
       // loopback egress. The proxy accepts only that exact broker host+port.

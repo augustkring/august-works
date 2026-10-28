@@ -475,12 +475,30 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
             (typeof block.text !== "string" || !prompts.includes(promptHash) || promptBindings.length !== 1)) {
             let actualPromptIsJson = false;
             let compactJsonMatchesAuthorizedPrompt = false;
+            let actualJsonTaskMessageShape = false;
+            let actualJsonMessageLength: number | null = null;
+            let actualJsonMessageHash: string | null = null;
+            let actualJsonMessageMatchesAuthorizedPrompt = false;
+            let actualJsonTaskHash: string | null = null;
             if (typeof block.text === "string") {
               try {
                 const parsedPrompt = JSON.parse(block.text) as unknown;
                 actualPromptIsJson = true;
                 compactJsonMatchesAuthorizedPrompt = Array.isArray(prompts) &&
                   prompts.includes(nativeSha256(JSON.stringify(parsedPrompt)));
+                if (parsedPrompt && typeof parsedPrompt === "object" && !Array.isArray(parsedPrompt)) {
+                  const promptRecord = parsedPrompt as Record<string, unknown>;
+                  const keys = Object.keys(promptRecord);
+                  actualJsonTaskMessageShape = keys.length === 2 && keys.includes("task") && keys.includes("message");
+                  if (typeof promptRecord.message === "string") {
+                    actualJsonMessageLength = promptRecord.message.length;
+                    actualJsonMessageHash = nativeSha256(promptRecord.message);
+                    actualJsonMessageMatchesAuthorizedPrompt = Array.isArray(prompts) &&
+                      prompts.includes(actualJsonMessageHash);
+                  }
+                  if (Object.prototype.hasOwnProperty.call(promptRecord, "task"))
+                    actualJsonTaskHash = nativeSha256(promptRecord.task);
+                }
               } catch { /* content-free diagnostic only */ }
             }
             console.warn("managed_model_prompt_receipt_diagnostic", {
@@ -492,6 +510,11 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
               actualPromptHash: promptHash || null,
               actualPromptIsJson,
               compactJsonMatchesAuthorizedPrompt,
+              actualJsonTaskMessageShape,
+              actualJsonMessageLength,
+              actualJsonMessageHash,
+              actualJsonMessageMatchesAuthorizedPrompt,
+              actualJsonTaskHash,
               authorizedPromptCount: Array.isArray(prompts) ? prompts.length : null,
               expectedPromptHash: Array.isArray(prompts) && prompts.length === 1 && typeof prompts[0] === "string"
                 ? prompts[0] : null,

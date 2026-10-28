@@ -1,42 +1,87 @@
 import { readFileSync, existsSync } from "node:fs";
-import { resolve } from "node:path";
-import { validateOperationCoverage } from "./aw-v10-operation-coverage.mjs";
+import { createRequire } from "node:module";
+import { resolve, relative, dirname, isAbsolute } from "node:path";
+import { pathToFileURL } from "node:url";
+import { extractApiClientMethods, extractStaticImports, extractUiClientOperations, validateOperationCoverage } from "./aw-v10-operation-coverage.mjs";
 
 const root = resolve(import.meta.dirname, "..");
-const manifestPath = resolve(root, "server/src/services/agent-native-operation-manifest.ts");
-const inventoryPath = resolve(root, "doc/operations/agent-native-ui-operation-coverage.json");
 
-function parseManifest(source) {
-  const entries = [];
-  const lines = source.split(/\r?\n/);
-  for (let index = 0; index < lines.length; index += 1) {
-    if (!/^  \{$/.test(lines[index])) continue;
-    const block = [];
-    for (index += 1; index < lines.length && !/^  \},?$/.test(lines[index]); index += 1) block.push(lines[index]);
-    const text = block.join("\n");
-    const operationId = text.match(/^\s*operationId:\s*"([^"]+)"/m)?.[1];
-    if (!operationId) continue;
-    entries.push({
-      operationId,
-      criticality: text.match(/criticality:\s*"([^"]+)"/)?.[1],
-      canonicalService: text.match(/canonicalService:\s*"([^"]+)"/)?.[1],
-      owner: text.match(/owner:\s*"([^"]+)"/)?.[1],
-    });
+export function collectMountedUiSources(rootPath = root) {
+  const mountedSources = new Set();
+  const pending = ["ui/src/App.tsx", "ui/src/pages/V9RouteEntries.tsx"];
+  const visited = new Set();
+  while (pending.length) {
+    const modulePath = pending.pop();
+    if (visited.has(modulePath) || !existsSync(resolve(rootPath, modulePath))) continue;
+    visited.add(modulePath);
+    if (modulePath.startsWith("ui/src/")) mountedSources.add(modulePath);
+    const source = readFileSync(resolve(rootPath, modulePath), "utf8");
+    for (const specifier of extractStaticImports(source, modulePath)) {
+      const resolvedSpecifier = specifier.startsWith("@/")
+        ? resolve(rootPath, "ui/src", specifier.slice(2))
+        : specifier.startsWith(".")
+          ? resolve(rootPath, dirname(modulePath), specifier)
+          : null;
+      if (!resolvedSpecifier) continue;
+      const path = relative(rootPath, resolvedSpecifier).replaceAll("\\", "/");
+      if (path.startsWith("../") || isAbsolute(path) || !path.startsWith("ui/src/")) continue;
+      const candidate = path.replace(/\.(?:tsx?|jsx?)$/, "");
+      let found = false;
+      for (const extension of [".tsx", ".ts", ".jsx", ".js"]) {
+        if (existsSync(resolve(rootPath, candidate + extension))) {
+          pending.push(candidate + extension);
+          found = true;
+        }
+      }
+      if (!found) {
+        for (const extension of ["/index.tsx", "/index.ts", "/index.jsx", "/index.js"]) {
+          if (existsSync(resolve(rootPath, candidate + extension))) pending.push(candidate + extension);
+        }
+      }
+    }
   }
-  return entries;
+  return mountedSources;
 }
 
-const inventory = JSON.parse(readFileSync(inventoryPath, "utf8"));
-const entries = parseManifest(readFileSync(manifestPath, "utf8"));
-const failures = validateOperationCoverage({
-  manifestEntries: entries,
-  inventory,
-  exists: (path) => existsSync(resolve(root, path)),
-  readSource: (path) => readFileSync(resolve(root, path), "utf8"),
-});
-if (failures.length) {
-  console.error(failures.join("\n"));
-  process.exitCode = 1;
-} else {
-  console.log(`V10 material operation coverage verified: ${inventory.operations.length} manifest operations classified; ${inventory.uiOnlyActions.length} UI-only actions have explicit owners and exclusions.`);
+export async function checkOperationCoverage(rootPath = root) {
+  const inventory = JSON.parse(readFileSync(resolve(rootPath, "doc/operations/agent-native-ui-operation-coverage.json"), "utf8"));
+  createRequire(resolve(rootPath, "cli/package.json"))("tsx/esm/api").register();
+  const { AGENT_NATIVE_OPERATION_MANIFEST } = await import(pathToFileURL(resolve(rootPath, "server/src/services/agent-native-operation-manifest.ts")).href);
+  const mountedSources = collectMountedUiSources(rootPath);
+  const apiClientVerbs = new Map();
+  for (const source of mountedSources) {
+    if (!source.startsWith("ui/src/api/")) continue;
+    for (const method of extractApiClientMethods(readFileSync(resolve(rootPath, source), "utf8"), source)) {
+      const key = `${method.exportName}.${method.method}`;
+      const prior = apiClientVerbs.get(key);
+      apiClientVerbs.set(key, prior && JSON.stringify(prior) !== JSON.stringify(method)
+        ? { verb: "unknown", routeSignatures: [] }
+        : method);
+    }
+  }
+  const mountedUiOperations = new Map();
+  for (const source of mountedSources) {
+    if (source.startsWith("ui/src/api/")) continue;
+    const calls = extractUiClientOperations(readFileSync(resolve(rootPath, source), "utf8"), source, apiClientVerbs);
+    if (calls.length) mountedUiOperations.set(source, calls);
+  }
+  const failures = validateOperationCoverage({
+    manifestEntries: AGENT_NATIVE_OPERATION_MANIFEST,
+    inventory,
+    exists: (path) => existsSync(resolve(rootPath, path)),
+    readSource: (path) => readFileSync(resolve(rootPath, path), "utf8"),
+    mountedSources,
+    mountedUiOperations,
+  });
+  return { failures, summary: `V10 material operation coverage verified: ${inventory.operations.length} manifest operations classified; ${inventory.uiOnlyActions.length} UI-only actions and ${inventory.clientOperations?.length ?? 0} mounted UI client operations reviewed.` };
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename)) {
+  const { failures, summary } = await checkOperationCoverage();
+  if (failures.length) {
+    console.error(failures.join("\n"));
+    process.exitCode = 1;
+  } else {
+    console.log(summary);
+  }
 }

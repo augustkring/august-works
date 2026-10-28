@@ -2,6 +2,7 @@ import { readFileSync, existsSync, realpathSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { resolve, relative, isAbsolute } from "node:path";
 import { v9ReleasePrerequisiteFailures } from "./aw-v9-release-prerequisites.mjs";
+import { checkOperationCoverage } from "./check-aw-v10-operation-coverage.mjs";
 const root = resolve(import.meta.dirname, "..");
 const manifest = JSON.parse(
   readFileSync(resolve(root, "doc/experience/v9/coverage.json"), "utf8"),
@@ -181,6 +182,7 @@ for (const id of [
 const pending = manifest.screens.filter(
   (s) => s.implementationStatus !== "implemented",
 ).length;
+failures.push(...(await checkOperationCoverage(root)).failures);
 if (failures.length) {
   console.error(failures.join("\n"));
   process.exitCode = 1;

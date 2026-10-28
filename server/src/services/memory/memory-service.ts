@@ -1,4 +1,4 @@
-import { lockAnalyticalCompany } from "../analytical-privacy.js";
+import { lockAnalyticalCompany, markAnalyticalPrivacyReadLocked } from "../analytical-privacy.js";
 import { invalidateCognitiveRecords } from "./cognitive-privacy.js";
 import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 import { createHash } from "node:crypto";
@@ -588,7 +588,8 @@ async function visibleMemoryPage(db:Db,companyId:string,actor:MemoryMutationActo
     }
     profileStats.stage = "privacy_fences";
     await setMemoryReadStatementBudget(tx, budget);
-    await lockAnalyticalCompany(tx,companyId); await lockMemoryPrivacy(tx,companyId);
+    await lockAnalyticalCompany(tx,companyId,"read"); await lockMemoryPrivacy(tx,companyId,"read");
+    markAnalyticalPrivacyReadLocked(tx);
     await setMemoryReadStatementBudget(tx, budget);
     await assertActorCompanyScope(tx,companyId,actor);
     const deadline=performance.now()+8000;

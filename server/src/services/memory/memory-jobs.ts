@@ -37,6 +37,7 @@ import {
   memoryRetentionPolicies,
   memoryDeletionMarkers,
 } from "@paperclipai/db";
+import type { RemoteRuntimeAssetLocator, RemoteRuntimeAssetRemovalReceipt } from "../native-runtime/runtime-asset-retention.js";
 import type { MemoryJobOperationType } from "@paperclipai/shared";
 import { executionPrincipalSchema, type MemoryScope } from "@paperclipai/shared";
 import { isUniqueViolation } from "../../db-errors.js";
@@ -309,6 +310,7 @@ function retentionJobKey(companyId: string, now: Date) {
 
 export interface MemoryJobServiceOptions {
   runLogStore?: Pick<RunLogStore, "erase">;
+  eraseRemoteNativeRuntimeAsset?: (locator: RemoteRuntimeAssetLocator, input: { companyPurgeOperationId?: string }) => Promise<RemoteRuntimeAssetRemovalReceipt>;
   ownerId?: string;
   leaseMs?: number;
   maxAttempts?: number;
@@ -676,10 +678,35 @@ export function memoryJobService(
       const stop = await closeWarmNativeSessionsForRun({ companyId: job.companyId, runId: source.runId,
         reason: source.companyPurgeOperationId ? "company offboarding" : "source erasure" });
       if (stop.busy || stop.failed) throw new Error("Managed Native provider Stop is still pending for run asset erasure");
-      const { eraseNativeRuntimeAssets } = await import("../native-runtime/runtime-asset-retention.js");
+      const { eraseNativeRuntimeAssets, assertRemoteRuntimeAssetErasureReady,
+        isRemoteRuntimeAssetLocator, isRemoteRuntimeAssetRemovalReceipt,
+        readRemoteRuntimeAssetLocator, remoteRuntimeAssetLocatorDigest } = await import("../native-runtime/runtime-asset-retention.js");
+      let remoteReceipt: RemoteRuntimeAssetRemovalReceipt | undefined;
+      if (source.remoteAssetLocator !== undefined) {
+        const [run] = await db.select({ id: heartbeatRuns.id, companyId: heartbeatRuns.companyId,
+          runnerProfileJson: heartbeatRuns.runnerProfileJson, nativeSessionId: heartbeatRuns.nativeSessionId,
+          runnerInstanceId: heartbeatRuns.runnerInstanceId }).from(heartbeatRuns).where(and(
+          eq(heartbeatRuns.companyId, job.companyId), eq(heartbeatRuns.id, source.runId as string)));
+        if (!run || !isRemoteRuntimeAssetLocator(source.remoteAssetLocator, run))
+          throw unprocessable("Invalid remote Native runtime asset erasure locator");
+        const currentLocator = await readRemoteRuntimeAssetLocator(db, run);
+        if (!currentLocator || remoteRuntimeAssetLocatorDigest(currentLocator) !== remoteRuntimeAssetLocatorDigest(source.remoteAssetLocator))
+          throw new Error("Remote Native runtime asset locator is no longer current");
+        await assertRemoteRuntimeAssetErasureReady(db, currentLocator,
+          typeof source.companyPurgeOperationId === "string" ? source.companyPurgeOperationId : undefined);
+        if (!options.eraseRemoteNativeRuntimeAsset)
+          throw new Error("Managed remote Native runtime asset erasure is unavailable");
+        remoteReceipt = await options.eraseRemoteNativeRuntimeAsset(currentLocator, {
+          ...(typeof source.companyPurgeOperationId === "string" ? { companyPurgeOperationId: source.companyPurgeOperationId } : {}),
+        });
+        if (!isRemoteRuntimeAssetRemovalReceipt(remoteReceipt, currentLocator))
+          throw new Error("Managed remote Native runtime asset removal has no exact authenticated receipt");
+      }
       await eraseNativeRuntimeAssets(db, { companyId: job.companyId, runId: source.runId }, source.legacyDigests as string[],
-        typeof source.companyPurgeOperationId === "string" ? { companyPurgeOperationId: source.companyPurgeOperationId } : undefined);
-      return { summary: "Erased the native run's generated runtime assets.", result: { processedRunCount: 1 } };
+        { ...(typeof source.companyPurgeOperationId === "string" ? { companyPurgeOperationId: source.companyPurgeOperationId } : {}),
+          ...(remoteReceipt ? { remoteAssetLocator: source.remoteAssetLocator as RemoteRuntimeAssetLocator, remoteAssetReceipt: remoteReceipt } : {}) });
+      return { summary: "Erased the native run's generated runtime assets.", result: { processedRunCount: 1,
+        ...(remoteReceipt ? { remoteRuntimeAssetRemovalReceipt: remoteReceipt } : {}) } };
     }
     if (source.kind === "skill_version_file_erasure") {
       if (typeof source.skillId !== "string" || typeof source.versionId !== "string" ||

@@ -90,6 +90,45 @@ describe("Context total deadline policy", () => {
 });
 
 describe("Context provider deadline policy", () => {
+  it("runs Native agent providers concurrently while their shared deadline is active", async () => {
+    let firstSignal: AbortSignal | undefined;
+    let secondSawFirstLive = false;
+    let releaseFirst: (() => void) | undefined;
+    const secondStarted = new Promise<void>(resolve => { releaseFirst = resolve; });
+    const result = await runContextProviders([
+      { key: "first", requirement: "optional", timeoutMs: 250,
+        retrieve: async ({ signal }) => { firstSignal = signal; await secondStarted; return { evidence: [] }; } },
+      { key: "second", requirement: "optional", timeoutMs: 250,
+        retrieve: async () => { secondSawFirstLive = !firstSignal?.aborted; releaseFirst?.(); return { evidence: [] }; } },
+    ], { ...request, authorizationActor: { type: "agent", source: "agent_jwt" } }, Date.now() + 300);
+    expect(secondSawFirstLive).toBe(true);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("keeps Human inspection providers sequential on their shared transaction", async () => {
+    let firstActive = false;
+    let secondOverlapped = false;
+    await runContextProviders([
+      { key: "first", requirement: "optional", timeoutMs: 100,
+        retrieve: async () => { firstActive = true; await new Promise(resolve => setTimeout(resolve, 15)); firstActive = false; return { evidence: [] }; } },
+      { key: "second", requirement: "optional", timeoutMs: 100,
+        retrieve: async () => { secondOverlapped = firstActive; return { evidence: [] }; } },
+    ], { ...request, authorizationActor: { type: "board", source: "local_implicit" } }, Date.now() + 200);
+    expect(secondOverlapped).toBe(false);
+  });
+
+  it("keeps agent providers sequential when the caller supplied a transaction", async () => {
+    let firstActive = false;
+    let secondOverlapped = false;
+    await runContextProviders([
+      { key: "first", requirement: "optional", timeoutMs: 100,
+        retrieve: async () => { firstActive = true; await new Promise(resolve => setTimeout(resolve, 15)); firstActive = false; return { evidence: [] }; } },
+      { key: "second", requirement: "optional", timeoutMs: 100,
+        retrieve: async () => { secondOverlapped = firstActive; return { evidence: [] }; } },
+    ], { ...request, authorizationActor: { type: "agent", source: "agent_jwt" } }, Date.now() + 200, undefined, true);
+    expect(secondOverlapped).toBe(false);
+  });
+
   it("omits an optional provider that hangs and returns a visible warning", async () => {
     const provider: ContextProvider = {
       key: "slow_optional",

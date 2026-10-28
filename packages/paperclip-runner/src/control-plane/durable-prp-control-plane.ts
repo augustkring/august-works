@@ -3512,6 +3512,14 @@ export function spawnRunner(options: {
 
   const command = options.runnerBinaryPath ?? runnerBinary;
   const environment = runnerEnvironment(options.ticket, options.environment);
+  if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1") {
+    console.warn("managed_model_runner_environment_diagnostic", {
+      stage: "runner_process_launch",
+      brokerOriginPresent: typeof environment.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === "string",
+      inputBoundPresent: typeof environment.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND === "string",
+      outputBoundPresent: typeof environment.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS === "string",
+    });
+  }
   const withRestart = (handle: RunnerProcessHandle): RunnerProcessHandle => ({
     ...handle,
     restart: (ticket) => spawnRunner({ ...options, ticket }),

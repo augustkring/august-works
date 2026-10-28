@@ -15,7 +15,7 @@ import { nativePayloadSourceInputSchema, nativePayloadSourcePolicySchema, native
   type NativePayloadSourceSnapshot, type NativeRunInputSourceReceipt } from "@paperclipai/shared";
 import { HttpError, forbidden } from "../errors.js";
 import { assertAnalyticalContextPayloadAccessBatch } from "./analytical-context-authority.js";
-import { activeMemoryTemporalContexts, withReadPinnedNativeTaskSnapshot,
+import { activeMemoryTemporalContexts, activeMemoryTemporalReadScopeIdentity, withReadPinnedNativeTaskSnapshot,
   canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadPinnedIssuePrivacyBatch, canActorReadProjectPrivacy, authorizationService,
   type AuthorizationActor } from "./authorization.js";
 import { canActorReadMemorySourceSet, canActorReadMemorySources, memoryPayloadVisible } from "./memory/memory-privacy.js";
@@ -40,7 +40,9 @@ import type { NativeToolEffectClaim } from "../agent-auth-jwt.js";
 type Transaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
 type NativeDocumentSourceCurrentRow = { revision: typeof documentRevisions.$inferSelect; latestRevisionId: string | null;
   documentId: string; issueId: string };
-interface NativeSourceReadContext { db: object; txOrdinal?: number; scopes: Map<string, NativeSourceReadScope>; work: number;
+interface NativeSourceReadAncestry { work: number; activeByActor: Map<string, Set<string>> }
+interface NativeSourceReadContext { db: object; txOrdinal?: number; memoryTemporalIdentity: string | null;
+  ancestry: NativeSourceReadAncestry; scopes: Map<string, NativeSourceReadScope>;
   privacyLockedCompanies: Set<string>; active: boolean; runs: Map<string, typeof heartbeatRuns.$inferSelect | null>;
   reservations: Map<string, typeof orchestrationModelReservations.$inferSelect | null>;
   documentSources: Map<string, NativeDocumentSourceCurrentRow>;
@@ -153,29 +155,35 @@ export function resetNativeSourceMemoDiagnosticsForTest() {
 }
 export function nativeSourceMemoDiagnosticsForTest() { return structuredClone(nativeSourceMemoDiagnostics); }
 function nativeSourceReadWork(scope: NativeSourceReadScope) {
-  if (++scope.context.work > 512) {
+  if (++scope.context.ancestry.work > 512) {
     if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1" && nativeSourceWorkBudgetDiagnostics < 1) {
       nativeSourceWorkBudgetDiagnostics += 1;
       const frames = new Error().stack?.split("\n").flatMap(line => {
         const match = /server\/src\/services\/([A-Za-z0-9_./-]+\.ts):(\d+):\d+/.exec(line);
         return match ? [`${match[1]}:${match[2]}`] : [];
       }).slice(0, 5) ?? [];
-      console.error("native_source_work_budget_test_denial", JSON.stringify({ limit: 512, work: scope.context.work, frames,
+      console.error("native_source_work_budget_test_denial", JSON.stringify({ limit: 512, work: scope.context.ancestry.work, frames,
         frozenTaskMemoByKind: nativeSourceMemoDiagnosticsEnabled() ? nativeSourceMemoDiagnostics.frozenTaskMemoByKind : undefined }));
     }
     throw forbidden("The Native source graph exceeds its total-work bound");
   }
 }
-function nativeSourceReadScope(db: Db | Transaction, actor: AuthorizationActor): NativeSourceReadScope {
+function nativeSourceReadScope(db: Db | Transaction, actor: AuthorizationActor,
+  ancestry?: NativeSourceReadAncestry): NativeSourceReadScope {
   const txOrdinal = nativeSourceMemoTransactionOrdinal(db as object);
   const context: NativeSourceReadContext = { db: db as object, ...(txOrdinal === undefined ? {} : { txOrdinal }),
-    scopes: new Map(), work: 0, runs: new Map(), reservations: new Map(), documentSources: new Map(),
+    memoryTemporalIdentity: activeMemoryTemporalReadScopeIdentity(db, actor),
+    ancestry: ancestry ?? { work: 0, activeByActor: new Map() },
+    scopes: new Map(), runs: new Map(), reservations: new Map(), documentSources: new Map(),
     documentParentTasks: new Map(), deferredReaderChecks: new Map(),
     deferredAnalyticalTasks: new Map(),
     deferredReadResultChecks: new Map(), checkedReadResultChecks: new Set(),
     pendingReaderChecks: new Set(), activeReaderChecks: new Set(),
     privacyLockedCompanies: new Set(), active: true };
-  const scope: NativeSourceReadScope = { context, actorKey: nativeSha256(actor), active: new Set(), complete: new Set(),
+  const actorKey = nativeSha256(actor);
+  let active = context.ancestry.activeByActor.get(actorKey);
+  if (!active) { active = new Set(); context.ancestry.activeByActor.set(actorKey, active); }
+  const scope: NativeSourceReadScope = { context, actorKey, active, complete: new Set(),
     frozenTaskSnapshots: new Set(), taskTemporalScopes: new Map(), conversationRootComments: new Set(), deferredReaderSets: new Map() };
   context.scopes.set(scope.actorKey, scope);
   return scope;
@@ -356,17 +364,21 @@ function withNativeSourceReadScope<T>(db: Db | Transaction, actor: Authorization
   read: (scope: NativeSourceReadScope) => Promise<T>): Promise<T> {
   const current = nativeSourceReadScopes.getStore();
   const actorKey = nativeSha256(actor);
-  if (current?.active && current.db === (db as object)) {
+  const memoryTemporalIdentity = activeMemoryTemporalReadScopeIdentity(db, actor);
+  if (current?.active && current.db === (db as object) && current.memoryTemporalIdentity === memoryTemporalIdentity) {
     let scope = current.scopes.get(actorKey);
     if (!scope) {
-      scope = { context: current, actorKey, active: new Set(), complete: new Set(), frozenTaskSnapshots: new Set(), taskTemporalScopes: new Map(),
+      let active = current.ancestry.activeByActor.get(actorKey);
+      if (!active) { active = new Set(); current.ancestry.activeByActor.set(actorKey, active); }
+      scope = { context: current, actorKey, active, complete: new Set(), frozenTaskSnapshots: new Set(), taskTemporalScopes: new Map(),
         conversationRootComments: new Set(), deferredReaderSets: new Map() };
       current.scopes.set(actorKey, scope);
       nativeSourceMemoCount("scopes", actor);
     } else nativeSourceMemoCount("reuses", actor);
     return read(scope);
   }
-  const scope = nativeSourceReadScope(db, actor);
+  const inheritedAncestry = current?.active && current.db === (db as object) ? current.ancestry : undefined;
+  const scope = nativeSourceReadScope(db, actor, inheritedAncestry);
   if (nativeSourceMemoDiagnosticsEnabled()) {
     nativeSourceMemoDiagnostics.roots = Math.min(1_000_000, nativeSourceMemoDiagnostics.roots + 1);
     const txStats = nativeSourceMemoTransactionStats(scope);
@@ -441,15 +453,6 @@ async function assertNativeSourceSetsReaderAccessCurrent(db: Db | Transaction, i
     if (source.kind === "runtime_instructions") runtimeInstructions.set(nativeSha256({ runId: set.runId, source }), { runId: set.runId, source });
     if (source.kind === "context") contextIds.add(source.manifestId);
   }
-  const temporalTasks = [...issueIds].flatMap(issueId => {
-    const temporal = scope?.taskTemporalScopes.get(issueId);
-    return temporal ? [{ issueId, contentHash: temporal.contentHash, snapshotDigest: temporal.snapshotDigest }] : [];
-  });
-  const unscopedIssueIds = [...issueIds].filter(issueId => !scope?.taskTemporalScopes.has(issueId));
-  const issueReaders = await canActorReadPinnedIssuePrivacyBatch(db, input.actor, input.companyId,
-    temporalTasks, unscopedIssueIds);
-  for (const issueId of issueIds) if (issueReaders.get(issueId) !== true)
-    throw forbidden("A Native source Task is unavailable");
   for (const projectId of projectIds) if (!await canActorReadProjectPrivacy(db, input.actor,
     { id: projectId, companyId: input.companyId })) throw forbidden("A Native source Project is unavailable");
   for (const runId of runIds) if (!await canActorReadHeartbeatRunPrivacy(db, input.actor,
@@ -465,13 +468,24 @@ async function assertNativeSourceSetsReaderAccessCurrent(db: Db | Transaction, i
     ]);
     for (const item of items) if (item.sourceProvider === "august_works_tasks") {
       const match = /^issue:\/\/([0-9a-f-]{36})$/i.exec(item.sourceRef);
-      if (!match || !issueIds.has(match[1]!) && !await canActorReadIssuePrivacy(db, input.actor,
-        { id: match[1]!, companyId: input.companyId }))
-        throw forbidden("A Native Context Task source is unavailable");
+      if (!match) throw forbidden("A Native Context Task source is unavailable");
       issueIds.add(match[1]!);
     }
     for (const root of roots) memoryIds.add(root.memoryRecordId);
   }
+  // Context manifests can contribute Task sources that are not direct inputs.
+  // Include them in the same current-ACL batch instead of issuing one recursive
+  // privacy query per manifest item; exact temporal pins and Memory scope are
+  // still resolved by the batch helper before this read returns.
+  const temporalTasks = [...issueIds].flatMap(issueId => {
+    const temporal = scope?.taskTemporalScopes.get(issueId);
+    return temporal ? [{ issueId, contentHash: temporal.contentHash, snapshotDigest: temporal.snapshotDigest }] : [];
+  });
+  const unscopedIssueIds = [...issueIds].filter(issueId => !scope?.taskTemporalScopes.has(issueId));
+  const issueReaders = await canActorReadPinnedIssuePrivacyBatch(db, input.actor, input.companyId,
+    temporalTasks, unscopedIssueIds);
+  for (const issueId of issueIds) if (issueReaders.get(issueId) !== true)
+    throw forbidden("A Native source Task is unavailable");
   if (memoryIds.size && !await canActorReadMemorySourceSet(db as Db, input.companyId, input.actor, [...memoryIds]))
     throw forbidden("A Native source Memory is unavailable");
   // Runtime bundles are the only filesystem reads in this source pass. Finish
@@ -1199,7 +1213,7 @@ async function assertNativeConversationTaskResultCurrentInScope(db: Db | Transac
 async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction, companyId: string, issueId: string,
   capture: NativeModelOutputCapture, expectedToolName: string, scope: NativeSourceReadScope, depth: number,
   currentReader?: AuthorizationActor, conversationState: "live" | "settled" = "live"): Promise<void> {
-  if (depth > 8 || scope.context.work > 512) throw forbidden("The Native output source chain exceeds its bound");
+  if (depth > 8 || scope.context.ancestry.work > 512) throw forbidden("The Native output source chain exceeds its bound");
   nativeSourceReadWork(scope);
   const use = capture.managedOpenCodeToolUse;
   if (!use || capture.runId !== capture.dispatch.runId ||
@@ -1669,6 +1683,15 @@ export async function canActorReadNativeTaskSource(db: Db | Transaction, input: 
           const source: Extract<NativePayloadSourceInput, { kind: "task" }> = { kind: "task", issueId: input.issueId,
             sourceVersion: "snapshot-owner-current", contentHash: snapshot.data.owner.contentHash };
           await assertNativeTaskSourceInputCurrentInScope(tx, input.companyId, input.actor, source, scope);
+        }
+        if (priorProof?.contentHash === snapshot.data.owner.contentHash && priorProof.snapshotDigest === snapshot.data.digest) {
+          // The exact frozen source proof already queued this Task's live
+          // reader check for the scope's final pass, after all owner waits.
+          // Reuse that result path instead of querying the same ACL early and
+          // again at scope exit.
+          deferNativeSourceOwnerReaderChecks(scope, { companyId: input.companyId, actor: input.actor,
+            issueIds: [input.issueId] });
+          return true;
         }
         diagnostic.phase = "effective_acl";
         const readable = await canActorReadIssuePrivacy(tx, input.actor, { id: input.issueId, companyId: input.companyId });
@@ -2597,9 +2620,19 @@ async function assertNativeMemoryToolInvocationCurrentInScope(db: Db | Transacti
 export async function assertNativeMemoryOutputSnapshotCurrent(db: Db | Transaction, input: {
   companyId: string; recordId: string; snapshot: NativePayloadSourceSnapshot; actor: AuthorizationActor;
 }): Promise<void> {
+  return withNativeMemoryOutputSnapshotCurrent(db, input, async () => undefined);
+}
+
+/** Keep checks performed while reading one retained Memory output in the same
+ * source scope. The scope is bounded to this exact owner and its captured
+ * temporal prefix; callers still perform live reader checks before returning. */
+export async function withNativeMemoryOutputSnapshotCurrent<T>(db: Db | Transaction, input: {
+  companyId: string; recordId: string; snapshot: NativePayloadSourceSnapshot; actor: AuthorizationActor;
+}, read: (sourceDb: Db | Transaction) => Promise<T>): Promise<T> {
   return inNativeSourceReadTransaction(db, tx => withNativeSourceReadScope(tx, input.actor, async scope => {
     await lockNativeSourceReadPrivacy(tx, input.companyId, scope);
-    return assertNativeMemoryOutputSnapshotCurrentInScope(tx, input, scope);
+    await assertNativeMemoryOutputSnapshotCurrentInScope(tx, input, scope);
+    return read(tx);
   }));
 }
 
@@ -2897,9 +2930,6 @@ async function assertNativeContextReadSourceSetCurrentInScope(db: Db | Transacti
     manifest.queryHash !== source.queryHash || manifest.policySnapshotHash !== source.policySnapshotHash ||
     nativeTemporalContextContentHash(manifest, items, roots) !== source.contentHash)
     throw forbidden("The Native Context read source changed");
-  if (!await canActorReadIssuePrivacy(db as Db, input.actor, { id: input.issueId, companyId: input.companyId }))
-    throw forbidden("A Native Context Task source is unavailable");
-
   const expectedPolicy: NativePayloadSourcePolicy = { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] };
   const expectedInputs: NativePayloadSourceInput[] = [];
   const appendSnapshot = (raw: unknown, ownerKind: "issue" | "memory_record", ownerId: string) => {
@@ -2949,6 +2979,13 @@ async function assertNativeContextReadSourceSetCurrentInScope(db: Db | Transacti
   }
   await assertNativeTemporalContextInputsCurrent(db as Db, input.companyId, [source]);
   await assertNativeContextInputOwnersCurrent(db as Db, input.companyId, input.actor, [source], scope);
+  // The enclosing source reader flushes this live Task ACL together with the
+  // other owners in the same exact Native source scope. The source set and
+  // current manifest owners have been fully reconstructed above, so this
+  // avoids one serial recursive ACL query per Context result while preserving
+  // the pinned Task prefix and checking the ACL before the owner read returns.
+  deferNativeSourceOwnerReaderChecks(scope, { companyId: input.companyId, actor: input.actor,
+    issueIds: [input.issueId] });
 }
 
 /** Assemble and bind the exact Native Context body returned by the managed

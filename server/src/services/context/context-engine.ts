@@ -1,4 +1,5 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, is } from "drizzle-orm";
+import { PgTransaction } from "drizzle-orm/pg-core";
 import type { Db } from "@paperclipai/db";
 import { issues } from "@paperclipai/db";
 import {
@@ -41,11 +42,13 @@ import { cognitiveContextProvider } from "../memory/cognitive-context.js";
 import { derivedMemoryContextProvider } from "../memory/derived-context.js";
 import {assertAnalyticalContextPayloadAccess} from "../analytical-context-authority.js";
 import { authorizationService, isActiveNativeDelegatedContextSource, type AuthorizationActor, type NativeContextInspectionOwner,
-  type NativeDelegatedContextSource } from "../authorization.js";
+  type NativeDelegatedContextSource, withNativeIssuePrivacyQueryProfile } from "../authorization.js";
 import { cognitiveMemoryActor } from "../memory/cognitive-memory.js";
 
 export const DEFAULT_CONTEXT_TOTAL_DEADLINE_MS = 1_500;
 export const DEFAULT_CONTEXT_PROVIDER_TIMEOUT_MS = 900;
+const CONTEXT_FINALIZATION_RESERVE_MS = 350;
+const DEFAULT_CONTEXT_MEMORY_PROVIDER_TIMEOUT_MS = DEFAULT_CONTEXT_TOTAL_DEADLINE_MS - CONTEXT_FINALIZATION_RESERVE_MS;
 
 export const DEFAULT_CONTEXT_BUDGET: ContextBudget = {
   maxItems: 24,
@@ -139,6 +142,14 @@ export interface ContextProviderRunResult {
   warnings: ContextProviderWarning[];
 }
 
+type ContextProviderTiming = { key: string; startedAfterInvocationMs: number; durationMs: number;
+  remainingMs: number; timeoutMs: number; outcome: string; evidenceCount: number };
+type ContextInvocationProfile = { id: number; startedAt: number; deadlineAt: number;
+  providers: ContextProviderTiming[]; stages: Array<{ stage: string; elapsedMs: number; remainingMs: number; outcome?: string }>;
+  privacyQueries: Array<{ stage: string; actorType: string; actorSource: string; caller: string;
+    count: number; totalMs: number; maxMs: number }> };
+let contextInvocationProfileCount = 0;
+
 export interface ContextAssemblyResult {
   packet: ContextPacket;
   decisions: ContextAuthorityDecision[];
@@ -218,12 +229,18 @@ export async function runContextProviders(
   providers: ContextProvider[],
   request: AssembleContextInput,
   deadlineAt: number,
+  profile?: ContextInvocationProfile,
+  transactionScoped = false,
 ): Promise<ContextProviderRunResult> {
   const runOne = async (provider: ContextProvider) => {
       const timeoutMs = Math.min(
         provider.timeoutMs ?? DEFAULT_CONTEXT_PROVIDER_TIMEOUT_MS,
         Math.max(0, deadlineAt - Date.now()),
       );
+      const providerStartedAt = performance.now();
+      const startedAfterInvocationMs = profile ? Math.round(providerStartedAt - profile.startedAt) : 0;
+      let outcome = "error";
+      let evidenceCount = 0;
       try {
         const result = await withProviderDeadline(
           provider.key,
@@ -240,6 +257,8 @@ export async function runContextProviders(
             evidenceId: crossCompany.id,
           });
         }
+        outcome = "ok";
+        evidenceCount = evidence.length;
         return { evidence, warnings: result.warnings ?? [] };
       } catch (error) {
         // Authorization, tenant-boundary and other client/policy failures are
@@ -263,13 +282,17 @@ export async function runContextProviders(
             ? `Optional source ${provider.key} timed out and was omitted.`
             : `Optional source ${provider.key} failed and was omitted.`,
         };
+        outcome = warning.code;
         return { evidence: [] as EvidenceItem[], warnings: [warning] };
+      } finally {
+        if (profile) profile.providers.push({ key: provider.key, startedAfterInvocationMs,
+          durationMs: Math.round(performance.now() - providerStartedAt), remainingMs: deadlineAt - Date.now(),
+          timeoutMs, outcome, evidenceCount });
       }
     };
   const outcomes: Array<{ evidence: EvidenceItem[]; warnings: ContextProviderWarning[] }> = [];
-  if (request.authorizationActor) {
-    // Human inspection runs on one native transaction. Sequential provider
-    // reads avoid overlapping savepoints on that transaction connection.
+  if (request.authorizationActor?.type === "board" || transactionScoped) {
+    // Reads sharing one transaction connection must not overlap savepoints.
     for (const provider of providers) outcomes.push(await runOne(provider));
   } else outcomes.push(...await Promise.all(providers.map(runOne)));
   return {
@@ -480,6 +503,9 @@ function memoryContextProvider(db: Db): ContextProvider {
   return {
     key: "memory",
     requirement: "optional",
+    // Local source qualification may take longer than the generic provider cap;
+    // leave the measured manifest-finalization slice inside the unchanged total deadline.
+    timeoutMs: DEFAULT_CONTEXT_MEMORY_PROVIDER_TIMEOUT_MS,
     async retrieve({ request, signal, providerDeadlineAt }) {
       const experimental = await settings.getExperimental();
       const allowShared = experimental.enableCollectiveMemoryV1 === true;
@@ -719,8 +745,36 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
       const budget = rawInput.budget ?? DEFAULT_CONTEXT_BUDGET;
       const authorityPolicy = rawInput.authorityPolicy ?? DEFAULT_CONTEXT_AUTHORITY_POLICY;
       const deadlineAt = Date.now() + totalDeadlineMs;
+      const profile = process.env.PAPERCLIP_NATIVE_CONTEXT_PROFILE_DIAGNOSTICS === "1"
+        ? { id: ++contextInvocationProfileCount, startedAt: performance.now(), deadlineAt,
+          providers: [] as ContextProviderTiming[], stages: [] as ContextInvocationProfile["stages"],
+          privacyQueries: [] as ContextInvocationProfile["privacyQueries"] }
+        : undefined;
+      const profileStage = (stage: string, startedAt: number, outcome?: string) => {
+        if (!profile) return;
+        profile.stages.push({ stage, elapsedMs: Math.round(performance.now() - startedAt),
+          remainingMs: deadlineAt - Date.now(), ...(outcome ? { outcome } : {}) });
+      };
+      const emitProfile = (outcome: string) => {
+        if (!profile) return;
+        console.warn("native_context_invocation_profile", JSON.stringify({ id: profile.id, outcome,
+          totalElapsedMs: Math.round(performance.now() - profile.startedAt), remainingMs: deadlineAt - Date.now(),
+          stages: profile.stages, providers: profile.providers, issuePrivacyQueries: profile.privacyQueries }));
+      };
+      const mergePrivacyQueries = (counts: ContextInvocationProfile["privacyQueries"]) => {
+        if (!profile) return;
+        const merged = new Map(profile.privacyQueries.map(value => [`${value.stage}:${value.actorType}:${value.actorSource}:${value.caller}`, value]));
+        for (const value of counts) {
+          const key = `${value.stage}:${value.actorType}:${value.actorSource}:${value.caller}`;
+          const prior = merged.get(key);
+          if (prior) { prior.count += value.count; prior.totalMs += value.totalMs; prior.maxMs = Math.max(prior.maxMs, value.maxMs); }
+          else merged.set(key, { ...value });
+        }
+        profile.privacyQueries = [...merged.values()].sort((left, right) => right.totalMs - left.totalMs);
+      };
 
-      const principalDecision = await withContextStageDeadline(
+      const principalStartedAt = performance.now();
+      const decidePrincipal = () => withContextStageDeadline(
         "authorization",
         () => (input.authorizationDecision ?? access.decide)({
           enforceResponsibleUserIntersection: input.enforceResponsibleUserIntersection,
@@ -737,6 +791,10 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
         }),
         deadlineAt,
       );
+      const principalDecision = profile
+        ? await withNativeIssuePrivacyQueryProfile(decidePrincipal, mergePrivacyQueries)
+        : await decidePrincipal();
+      profileStage("authorization", principalStartedAt, principalDecision.allowed ? "allowed" : "denied");
       if (!principalDecision.allowed) {
         throw forbidden(principalDecision.explanation, {
           code: "permission_denied",
@@ -753,9 +811,23 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
       ];
       if (inspectionActor && options.providers)
         throw forbidden("Human Context inspection cannot use an unscoped provider override");
-      const providerResult = await runContextProviders(providers, input, deadlineAt);
+      const providersStartedAt = performance.now();
+      let providerResult: ContextProviderRunResult;
+      try {
+        providerResult = profile
+          ? await withNativeIssuePrivacyQueryProfile(
+            () => runContextProviders(providers, input, deadlineAt, profile, is(activeDb, PgTransaction)),
+            mergePrivacyQueries)
+          : await runContextProviders(providers, input, deadlineAt, undefined, is(activeDb, PgTransaction));
+        profileStage("providers", providersStartedAt, "ok");
+      } catch (error) {
+        profileStage("providers", providersStartedAt, "error");
+        emitProfile("provider_error");
+        throw error;
+      }
       if (inspectionActor && input.issueId) providerResult.warnings.push({ providerKey: "connected_knowledge",
         code: "source_unavailable", message: "External Context was withheld because no accountable execution binds this Human inspection." });
+      const evidenceStartedAt = performance.now();
       const eligibility = filterEligibleEvidence(dedupeEvidence(providerResult.evidence), {
         asOf,
         sensitivityCeiling,
@@ -764,6 +836,7 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
         resolveEvidenceAuthority(eligibility.eligible, authorityPolicy),
       );
       const budgeted = fitEvidenceToBudget(ordered, budget);
+      profileStage("evidence_filter_and_budget", evidenceStartedAt);
       let inspectionEvidence: EvidenceItem[] = [];
       if (inspectionActor && inspectionHooks?.addEvidence) {
         if (!inspectionAuthority) throw forbidden("Human Context inspection authority is unavailable");
@@ -823,16 +896,29 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
       const manifestBudgetStartedAt = Date.now();
       const manifestBudgetMs = deadlineAt - manifestBudgetStartedAt;
       if (!inspectionActor && process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1")
-        console.warn("native_context_manifest_budget", JSON.stringify({ remainingMs: Math.max(0, manifestBudgetMs),
+        console.warn("native_context_manifest_budget", JSON.stringify({ profileId: profile?.id ?? null,
+          remainingMs: Math.max(0, manifestBudgetMs),
           selectedCount: budgeted.selected.length, providerCount: providers.length,
           nativeBootstrap, taskInputCount: contextSourceInput.selected.filter(({ decision }) =>
             decision.evidence.sourceProvider === "august_works_tasks").length,
           memoryInputCount: contextSourceInput.selected.filter(({ decision }) =>
             decision.evidence.sourceProvider === "august_works_memory" || decision.evidence.sourceProvider === "august_works_derived_memory").length }));
-      const manifestResult = inspectionActor ? null : await withContextStageDeadline(
-        "context_manifest", signal => manifests.create(contextSourceInput,
-          nativeBootstrap && bootstrapMarkdown !== null ? { renderedMarkdown: bootstrapMarkdown } : undefined,
-          { signal, deadlineAt }), deadlineAt);
+      const manifestStartedAt = performance.now();
+      let manifestResult: Awaited<ReturnType<typeof manifests.create>> | null = null;
+      let manifestOutcome = "ok";
+      try {
+        manifestResult = inspectionActor ? null : await withContextStageDeadline(
+          "context_manifest", signal => manifests.create(contextSourceInput,
+            nativeBootstrap && bootstrapMarkdown !== null ? { renderedMarkdown: bootstrapMarkdown } : undefined,
+            { signal, deadlineAt }), deadlineAt);
+      } catch (error) {
+        manifestOutcome = error instanceof HttpError && error.details && typeof error.details === "object" &&
+          "stage" in error.details && typeof error.details.stage === "string" ? `error:${error.details.stage}` : "error";
+        throw error;
+      } finally {
+        profileStage("context_manifest", manifestStartedAt, manifestOutcome);
+        emitProfile(manifestOutcome);
+      }
       const inspectionResult = inspectionActor ? await withContextStageDeadline(
         "context_inspection", () => manifests.inspectReadOnly(contextSourceInput, inspectionActor, inspectionAuthority!), deadlineAt) : null;
 

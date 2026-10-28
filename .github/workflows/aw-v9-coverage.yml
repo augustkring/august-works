@@ -44,9 +44,12 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: '24'
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 9.15.4
+          run_install: false
+      - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: node scripts/check-aw-v9-coverage.mjs
-      - name: Check V10 Agent-Native material operation coverage
-        run: node scripts/check-aw-v10-operation-coverage.mjs
       - name: Test fail-closed V10 coverage inventory
         run: node --test scripts/check-aw-v10-operation-coverage.test.mjs
       - name: Verify inherited release blockers cannot be bypassed

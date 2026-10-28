@@ -1556,6 +1556,54 @@ it("preserves OpenCode runtime bindings when a durable runner is respawned", () 
   );
 });
 
+it("uses the explicit server-selected managed OpenCode tuple instead of ambient values", () => {
+  const names = [
+    "PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN",
+    "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND",
+    "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS",
+  ] as const;
+  const previous = names.map((name) => process.env[name]);
+  try {
+    process.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN = "https://ambient.example.test";
+    process.env.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND = "9000";
+    process.env.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS = "2048";
+    const environment = createCapabilityRunnerdProviderEnvironment({
+      provider: "opencode",
+      options: {
+        provider: "opencode",
+        environment: {
+          PATH: "/bin",
+          PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://selected.example.test",
+          PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "12000",
+          PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "1024",
+        },
+      },
+      identity: {
+        runnerInstanceId: "runner-1",
+        environmentLeaseId: "lease-1",
+        runId: "run-1",
+        normalizedSessionId: "session-1",
+        turnId: "turn-1",
+        itemId: "item-1",
+      },
+      codexHome: "/isolated/codex-home",
+      runtimeContextPath: "/isolated/runtime-context.json",
+      hasRuntimeContext: false,
+    });
+    expect(environment).toMatchObject({
+      PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://selected.example.test",
+      PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "12000",
+      PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "1024",
+    });
+  } finally {
+    names.forEach((name, index) => {
+      const value = previous[index];
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    });
+  }
+});
+
 it("passes the configured Codex API key only through the provider process environment", () => {
   const environment = createCapabilityRunnerdProviderEnvironment({
     provider: "codex",
