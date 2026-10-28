@@ -274,6 +274,8 @@ describeEmbeddedPostgres("tool gateway service", () => {
     await db.delete(companyMemberships);
     await db.delete(companySkills);
     await db.delete(agents);
+    await db.delete(supportCaseEvents);
+    await db.delete(supportCases);
     await db.delete(companies);
   });
 
@@ -798,13 +800,15 @@ describeEmbeddedPostgres("tool gateway service", () => {
       status: "active", membershipRole: "member" });
     await db.update(heartbeatRuns).set({ responsibleUserId: userId, runtimeMode: "native", nativeIssueId: issue.id })
       .where(eq(heartbeatRuns.id, run.id));
+    await preparePlatformSkillAdmission(db, { companyId: company.id, agentId: agent.id, runId: run.id,
+      responsibleUserId: userId, requireExisting: false }, blenteraPlatformContractHashes());
     const humanMembership = await db.select().from(companyMemberships).where(and(
       eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"),
       eq(companyMemberships.principalId, userId), eq(companyMemberships.status, "active"),
     )).then(rows => rows[0]!);
     const actor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: company.id, agentId: agent.id,
       runId: run.id, onBehalfOfUserId: userId, authenticatedCredentialExpiresAt: Date.now() + 60_000,
-      keyScope: { kind: "standard" }, companyIds: [company.id],
+      companyIds: [company.id],
       memberships: [{ companyId: company.id, membershipRole: "member", status: "active" }],
       onBehalfOfMemberships: [{ companyId: humanMembership.companyId, membershipRole: humanMembership.membershipRole, status: humanMembership.status }] };
     const supportCaseDataPolicy = { schemaVersion: 1 as const, policyVersion: "gateway.support.v1", recipientName: "Blentera Support",
@@ -826,7 +830,7 @@ describeEmbeddedPostgres("tool gateway service", () => {
       description: "I could not open the current Task.", category: "access", safeContext: { surface: "work", errorCode: "ACCESS_CHANGED" } };
     const first = await gateway.executeTool({ sessionToken: session.token, tool: "blentera.support.case.request", parameters });
     expect(first.status).toBe("completed");
-    expect(first.result).toMatchObject({ data: { openedByUserId: userId, status: "RECEIVED", delivery: "unknown" } });
+    expect(first.result).toMatchObject({ data: { openedByUserId: userId, status: "RECEIVED", delivery: "pending" } });
     const replay = await gateway.executeTool({ sessionToken: session.token, tool: "blentera.support.case.request", parameters });
     expect(replay.status).toBe("replayed");
     await expect(gateway.executeTool({ sessionToken: session.token, tool: "blentera.support.case.request",
@@ -890,6 +894,12 @@ describeEmbeddedPostgres("tool gateway service", () => {
 
   it("executes create_workflow through the governed gateway without publishing", async () => {
     const { company, agent, run } = await createRunFixture(db);
+    const issue = await db.select().from(issues).where(eq(issues.companyId, company.id)).then(rows => rows[0]!);
+    const userId = `gateway-workflow-human-${randomUUID()}`;
+    await seedCurrentHumanSourceActor(db, [company.id], userId);
+    await db.update(heartbeatRuns).set({ responsibleUserId: userId, runtimeMode: "native", nativeIssueId: issue.id })
+      .where(eq(heartbeatRuns.id, run.id));
+    await db.update(issues).set({ executionRunId: run.id }).where(eq(issues.id, issue.id));
     await db.insert(companyMemberships).values({
       companyId: company.id,
       principalType: "agent",
@@ -904,6 +914,19 @@ describeEmbeddedPostgres("tool gateway service", () => {
       permissionKey: "workflows:edit",
       scope: null,
     });
+    const humanMembership = await db.select().from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, userId), eq(companyMemberships.status, "active"),
+    )).then(rows => rows[0]!);
+    const actor: AuthorizationActor = {
+      type: "agent", source: "agent_jwt", companyId: company.id, agentId: agent.id, runId: run.id,
+      onBehalfOfUserId: userId, authenticatedCredentialExpiresAt: Date.now() + 60_000,
+      companyIds: [company.id], memberships: [{ companyId: company.id, membershipRole: "member", status: "active" }],
+      onBehalfOfMemberships: [{ companyId: humanMembership.companyId,
+        membershipRole: humanMembership.membershipRole, status: humanMembership.status }],
+    };
+    await preparePlatformSkillAdmission(db, { companyId: company.id, agentId: agent.id, runId: run.id,
+      responsibleUserId: userId, requireExisting: false }, blenteraPlatformContractHashes());
     await db.insert(toolPolicies).values({
       companyId: company.id,
       name: "Allow workflow draft creation",
@@ -921,15 +944,18 @@ describeEmbeddedPostgres("tool gateway service", () => {
       companyId: company.id,
       agentId: agent.id,
       runId: run.id,
+      issueId: issue.id,
+      authorizationActor: actor,
     });
+    const parameters = {
+      name: "Gateway-authored workflow",
+      description: "Created through the governed self-tool",
+      idempotencyKey: "gateway-create-v1",
+    };
     const result = await gateway.executeTool({
       sessionToken: session.token,
       tool: "blentera.workflow.draft.create",
-      parameters: {
-        name: "Gateway-authored workflow",
-        description: "Created through the governed self-tool",
-        idempotencyKey: "gateway-create-v1",
-      },
+      parameters,
     });
 
     expect(result.status).toBe("completed");
@@ -947,11 +973,7 @@ describeEmbeddedPostgres("tool gateway service", () => {
     const replay = await gateway.executeTool({
       sessionToken: session.token,
       tool: "paperclip-self:create_workflow",
-      parameters: {
-        name: "Gateway-authored workflow",
-        description: "Created through the governed self-tool",
-        idempotencyKey: "gateway-create-v1",
-      },
+      parameters,
     });
     expect(replay.status).toBe("replayed");
     const workflowId = (value: unknown) => {
@@ -959,6 +981,45 @@ describeEmbeddedPostgres("tool gateway service", () => {
       return (value as { data: { workflow: { id: string } } }).data.workflow.id;
     };
     expect(workflowId(replay.result)).toBe(workflowId(result.result));
+    expect(await db.select().from(workflows).where(eq(workflows.companyId, company.id))).toHaveLength(1);
+
+    await expect(gateway.executeTool({ sessionToken: session.token, tool: "paperclip-self:create_workflow", parameters: {
+      ...parameters, description: "Changed content under the original request key",
+    } })).rejects.toMatchObject({ status: 409, details: { code: "workflow_authoring_idempotency_conflict" } });
+    expect(await db.select().from(workflows).where(eq(workflows.companyId, company.id))).toHaveLength(1);
+
+    const [blockReplay] = await db.insert(toolPolicies).values({ companyId: company.id,
+      name: "Block current workflow draft replay", policyType: "block", priority: 1,
+      selectors: { toolName: "paperclip-self:create_workflow" },
+    }).returning();
+    await expect(gateway.executeTool({ sessionToken: session.token, tool: "paperclip-self:create_workflow", parameters }))
+      .rejects.toMatchObject({ status: 403 });
+    await db.delete(toolPolicies).where(eq(toolPolicies.id, blockReplay!.id));
+    expect(await db.select().from(workflows).where(eq(workflows.companyId, company.id))).toHaveLength(1);
+
+    await db.update(heartbeatRuns).set({ runnerProfileJson: sql`${heartbeatRuns.runnerProfileJson} - 'platformSkillAdmission'` })
+      .where(eq(heartbeatRuns.id, run.id));
+    await expect(gateway.executeTool({ sessionToken: session.token, tool: "paperclip-self:create_workflow", parameters }))
+      .rejects.toMatchObject({ status: 409, details: { code: "platform_skill_readmission_required" } });
+    expect(await db.select().from(workflows).where(eq(workflows.companyId, company.id))).toHaveLength(1);
+
+    await preparePlatformSkillAdmission(db, { companyId: company.id, agentId: agent.id, runId: run.id,
+      responsibleUserId: userId, requireExisting: false }, blenteraPlatformContractHashes());
+    await db.update(companyMemberships).set({ status: "suspended" }).where(and(
+      eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, userId),
+    ));
+    await expect(gateway.executeTool({ sessionToken: session.token, tool: "paperclip-self:create_workflow", parameters }))
+      .rejects.toMatchObject({ status: 403 });
+    expect(await db.select().from(workflows).where(eq(workflows.companyId, company.id))).toHaveLength(1);
+
+    await db.update(companyMemberships).set({ status: "active" }).where(and(
+      eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, userId),
+    ));
+    await db.update(heartbeatRuns).set({ status: "failed" }).where(eq(heartbeatRuns.id, run.id));
+    await expect(gateway.executeTool({ sessionToken: session.token, tool: "paperclip-self:create_workflow", parameters }))
+      .rejects.toMatchObject({ status: 401 });
     expect(await db.select().from(workflows).where(eq(workflows.companyId, company.id))).toHaveLength(1);
   });
 

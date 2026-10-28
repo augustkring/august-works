@@ -473,6 +473,8 @@ export async function assertScopedNativeMemoryReplayReceiptCurrent(db: Db, input
   companyId: string; runId: string; agentId: string; issueId: string; callId: string;
   invocationId: string; argumentsHash: string; result: unknown;
 }): Promise<{ recordId: string; snapshotDigest: string }> {
+  if (input.result === null || input.result === undefined) throw new ToolGatewayHttpError(403,
+    "Managed Memory replay receipt is unavailable", "native_memory_capture_invalid");
   const resultRecord = asRecord(input.result);
   const resultData = asRecord(resultRecord?.data);
   const resultMemory = asRecord(resultData?.record);
@@ -4412,6 +4414,10 @@ export function createToolGatewayService(
       ? "semantic_receipt"
       : tool.risk === "read"
         ? "read_projection"
+        : tool.name === "paperclip-self:create_workflow" &&
+            operation.operationId === "blentera.workflow.draft.create" &&
+            operation.canonicalService === "workflowAuthoringToolsService.create"
+          ? "idempotent_owner"
         : operation.operationId === "blentera.support.case.request" &&
             operation.canonicalService === "customerSupportCaseService.createFromNative"
           ? "idempotent_owner"
