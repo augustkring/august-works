@@ -62,6 +62,17 @@ interface NativeSourceReadScope { context: NativeSourceReadContext; actorKey: st
   conversationRootComments: Set<string>;
   deferredReaderSets: Map<string, { companyId: string; runId: string; policy: NativePayloadSourcePolicy;
     inputs: NativePayloadSourceInput[] }> }
+/** Read-only structural Task proofs retained only by one bounded Memory page.
+ * The exact transaction, actor and active Memory owner prefix are rechecked at
+ * every use; live reader authority is still flushed by the owning Native scope. */
+export interface NativeMemoryPageStructuralProofMemo {
+  readonly transaction: object;
+  readonly actorKey: string;
+  readonly memoryTemporalIdentity: string;
+  readonly frozenTaskSnapshots: Set<string>;
+  ancestry?: NativeSourceReadAncestry;
+  readonly updateAncestry?: (ancestry: NativeSourceReadAncestry) => void;
+}
 const nativeSourceReadScopes = new AsyncLocalStorage<NativeSourceReadContext>();
 let nativeSourceWorkBudgetDiagnostics = 0;
 const nativeSourceMemoDiagnostics = { roots: 0, actorScopes: 0, nestedScopeReuses: 0, memoHits: 0,
@@ -361,10 +372,12 @@ async function flushNativeSourceReaderChecks(context: NativeSourceReadContext) {
   }
 }
 function withNativeSourceReadScope<T>(db: Db | Transaction, actor: AuthorizationActor,
-  read: (scope: NativeSourceReadScope) => Promise<T>): Promise<T> {
+  read: (scope: NativeSourceReadScope) => Promise<T>, proofMemo?: NativeMemoryPageStructuralProofMemo): Promise<T> {
   const current = nativeSourceReadScopes.getStore();
   const actorKey = nativeSha256(actor);
   const memoryTemporalIdentity = activeMemoryTemporalReadScopeIdentity(db, actor);
+  const memoMatches = proofMemo && proofMemo.transaction === (db as object) && proofMemo.actorKey === actorKey &&
+    proofMemo.memoryTemporalIdentity === memoryTemporalIdentity && memoryTemporalIdentity !== null;
   if (current?.active && current.db === (db as object) && current.memoryTemporalIdentity === memoryTemporalIdentity) {
     let scope = current.scopes.get(actorKey);
     if (!scope) {
@@ -375,10 +388,25 @@ function withNativeSourceReadScope<T>(db: Db | Transaction, actor: Authorization
       current.scopes.set(actorKey, scope);
       nativeSourceMemoCount("scopes", actor);
     } else nativeSourceMemoCount("reuses", actor);
+    if (memoMatches && proofMemo && scope.frozenTaskSnapshots !== proofMemo.frozenTaskSnapshots) {
+      for (const key of scope.frozenTaskSnapshots) proofMemo.frozenTaskSnapshots.add(key);
+      scope.frozenTaskSnapshots = proofMemo.frozenTaskSnapshots;
+    }
+    if (memoMatches && proofMemo) {
+      proofMemo.ancestry = current.ancestry;
+      proofMemo.updateAncestry?.(current.ancestry);
+    }
     return read(scope);
   }
-  const inheritedAncestry = current?.active && current.db === (db as object) ? current.ancestry : undefined;
+  const inheritedAncestry = current?.active && current.db === (db as object)
+    ? current.ancestry : memoMatches ? proofMemo?.ancestry : undefined;
   const scope = nativeSourceReadScope(db, actor, inheritedAncestry);
+  if (memoMatches && proofMemo) {
+    for (const key of scope.frozenTaskSnapshots) proofMemo.frozenTaskSnapshots.add(key);
+    scope.frozenTaskSnapshots = proofMemo.frozenTaskSnapshots;
+    proofMemo.ancestry = scope.context.ancestry;
+    proofMemo.updateAncestry?.(scope.context.ancestry);
+  }
   if (nativeSourceMemoDiagnosticsEnabled()) {
     nativeSourceMemoDiagnostics.roots = Math.min(1_000_000, nativeSourceMemoDiagnostics.roots + 1);
     const txStats = nativeSourceMemoTransactionStats(scope);
@@ -2628,12 +2656,13 @@ export async function assertNativeMemoryOutputSnapshotCurrent(db: Db | Transacti
  * temporal prefix; callers still perform live reader checks before returning. */
 export async function withNativeMemoryOutputSnapshotCurrent<T>(db: Db | Transaction, input: {
   companyId: string; recordId: string; snapshot: NativePayloadSourceSnapshot; actor: AuthorizationActor;
+  structuralProofMemo?: NativeMemoryPageStructuralProofMemo;
 }, read: (sourceDb: Db | Transaction) => Promise<T>): Promise<T> {
   return inNativeSourceReadTransaction(db, tx => withNativeSourceReadScope(tx, input.actor, async scope => {
     await lockNativeSourceReadPrivacy(tx, input.companyId, scope);
     await assertNativeMemoryOutputSnapshotCurrentInScope(tx, input, scope);
     return read(tx);
-  }));
+  }, input.structuralProofMemo));
 }
 
 async function assertNativeMemoryOutputSnapshotCurrentInScope(db: Db | Transaction, input: {
@@ -3097,6 +3126,9 @@ async function assertNativeFrozenTaskSnapshotCurrent(db: Db | Transaction, compa
     nativeSourceMemoRecordFrozenTask(snapshot.inputs, reusable ? "eligible" : "ineligible");
     const completeKey = `frozen-task-snapshot:${nativeSha256({ companyId, issueId, snapshot })}`;
     if (reusable && scope.frozenTaskSnapshots.has(completeKey)) {
+      // A page-retained proof hit still consumes the shared physical-page
+      // work budget and participates in its ancestry/cycle guard.
+      nativeSourceReadWork(scope);
       nativeSourceMemoRecordFrozenTask(snapshot.inputs, "hit");
       // Comments are mutable owner rows, so they are deliberately re-read on
       // every frozen Task proof hit. Only the already-validated ancestor and
@@ -3136,7 +3168,7 @@ async function assertNativeFrozenTaskSnapshotCurrent(db: Db | Transaction, compa
     await assertNativeManagedConsumedSourceSetCurrentInScope(db, { companyId, issueId: producer.issueId,
       runId: last.source.runId, actor, components: [component],
       sourceSet: { policy: snapshot.policy, inputs: snapshot.inputs } }, scope);
-    if (reusable) scope.frozenTaskSnapshots.add(completeKey);
+    if (reusable && scope.frozenTaskSnapshots.size < 512) scope.frozenTaskSnapshots.add(completeKey);
   } finally {
     scope.active.delete(visitKey);
   }

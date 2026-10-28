@@ -107,7 +107,7 @@ export interface CommandManagedRuntimeRunner {
     /** Server-owned Native setup phase: pinned artifacts, verified task-root
      * workspace staging, immutable runtime-context staging, run-scoped
      * harness-state access, or the one conversation Runnerd launch. Never model supplied. */
-    nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare";
+    nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe";
   }): Promise<RunProcessResult>;
   /**
    * Optional native inbound file transfer. Present only when the sandbox

@@ -17,7 +17,8 @@ import { hasAcknowledgedNativeReassignmentStopIntent, hasAcknowledgedNativeStopI
 import { stoppedCodexTurnIsTextOnly } from "./stopped-codex-turn.js";
 import { prepareVerifiedRemoteProviderPack } from "./remote-provider-pack.js";
 import { readNativeLocalProcessStop, PROCESS_START_REQUESTED } from "../native-local-process-stop.js";
-import { REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT, REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT } from "./remote-runner-identity.js";
+import { REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROBE_SCRIPT, REMOTE_RUNNER_CHILD_LAUNCH_SCRIPT,
+  REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT, REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT } from "./remote-runner-identity.js";
 import { remoteLeaseCleanupScope } from "../remote-execution-termination.js";
 import {
   createRemoteRuntimeAssetLocator,
@@ -1770,8 +1771,8 @@ async function persistRemoteNativeRuntimeAssetLocator(input: {
       lease.provider !== input.locator.provider || lease.providerLeaseId !== input.locator.providerLeaseId ||
       lease.status !== "active" || !lease.expiresAt || lease.expiresAt <= new Date() ||
       typeof metadata.remoteCwd !== "string" || metadata.remoteCwd.trim() !== input.remoteCwd ||
-      !isRemoteRuntimeAssetLocator(input.locator, run) ||
-      (previous !== undefined && (!isRemoteRuntimeAssetLocator(previous, run) ||
+      !isRemoteRuntimeAssetLocator(input.locator, { companyId: run?.companyId ?? "", runId: run?.id ?? "" }) ||
+      (previous !== undefined && (!isRemoteRuntimeAssetLocator(previous, { companyId: run?.companyId ?? "", runId: run?.id ?? "" }) ||
         remoteRuntimeAssetLocatorDigest(previous) !== remoteRuntimeAssetLocatorDigest(input.locator)))) {
       throw new Error("native_remote_runtime_asset_locator_binding_invalid");
     }
@@ -11692,6 +11693,25 @@ function processEnvironment(
   );
 }
 
+function sandboxRunnerProcessEnvironment(
+  environment: NodeJS.ProcessEnv,
+): Record<string, string> {
+  const result = processEnvironment(environment);
+  // These values belong to RuntimeControl's typed broker credentials. The
+  // runner transport keeps its selected environment, while sandboxExec
+  // receives none of the caller-controlled reserved keys and injects the
+  // current server-issued tuple into the launched process itself.
+  for (const key of [
+    "PAPERCLIP_SANDBOX_BROKER_TOKEN",
+    "PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN",
+    "PAPERCLIP_SANDBOX_BROKER_SESSION_ID",
+    "PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN",
+    "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND",
+    "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS",
+  ]) delete result[key];
+  return result;
+}
+
 /** Preserve package-manager shims that resolve dependencies relative to argv[0]. */
 export function buildRemoteCodexLauncherCommand(
   sourcePath: string,
@@ -11987,7 +12007,7 @@ export async function stageRemoteRunnerFile(input: {
   sourcePath: string;
   targetPath: string;
   mode: number;
-  nativePreparationPurpose?: "provider_artifact" | "native_runtime_context_prepare";
+  nativePreparationPurpose?: "provider_artifact" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe";
   forceRelayChunking?: boolean;
 }): Promise<void> {
   const runner = input.runner;
@@ -12063,7 +12083,7 @@ export async function stageRemoteRunnerDirectory(input: {
   targetPath: string;
   mode: number;
   excludeEntries?: readonly string[];
-  nativePreparationPurpose?: "provider_artifact" | "native_runtime_context_prepare" | "native_harness_state";
+  nativePreparationPurpose?: "provider_artifact" | "native_runtime_context_prepare" | "native_harness_state" | "native_provider_data_erasure_probe";
 }): Promise<void> {
   const excludeArgs = archiveExcludeArgs(input.excludeEntries ?? []);
   // Runtime context is a source-pinned, server-owned preparation phase. Route
@@ -12502,16 +12522,6 @@ async function readRemoteRunnerProviderState(input: {
 const REMOTE_RUNNER_PROCESS_IDENTITY_WAIT_MS = 20_000;
 const REMOTE_RUNNER_PROCESS_POLL_MS = 1_000;
 
-// Linux boot identity plus start ticks identifies a process generation across
-// PID reuse. exec preserves both the launch shell's PID and its start ticks.
-const REMOTE_RUNNER_PROCESS_FINGERPRINT_SCRIPT =
-  "process_fingerprint=$(node -e 'const fs=require(\"node:fs\");try{const stat=fs.readFileSync(\"/proc/\"+process.argv[1]+\"/stat\",\"utf8\");const end=stat.lastIndexOf(\") \");const ticks=stat.slice(end+2).trim().split(/\\s+/)[19];const boot=fs.readFileSync(\"/proc/sys/kernel/random/boot_id\",\"utf8\").trim();if(end<0||!/^\\d+$/.test(ticks||\"\")||!/^[-a-fA-F0-9]+$/.test(boot))process.exit(4);process.stdout.write(\"linux:\"+boot+\":\"+ticks)}catch{process.exit(4)}' \"$pid\")";
-
-export const REMOTE_RUNNER_CHILD_LAUNCH_SCRIPT =
-  'set -eu; identity_path=$1; identity_nonce=$2; runner_instance_id=$3; diagnostics_directory=$4; shift 4; umask 077; test ! -L "$diagnostics_directory"; if test -e "$diagnostics_directory"; then test -d "$diagnostics_directory"; else mkdir -p -- "$diagnostics_directory"; fi; chmod 0700 "$diagnostics_directory"; started_at=$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ"); pid=$$; process_fingerprint=""; if ' +
-  REMOTE_RUNNER_PROCESS_FINGERPRINT_SCRIPT +
-  '; then :; else process_fingerprint=""; fi; identity_tmp="${identity_path}.tmp.$$"; printf "%s\\n%s\\n%s\\n%s\\n%s\\n" "$identity_nonce" "$$" "$started_at" "$runner_instance_id" "$process_fingerprint" > "$identity_tmp"; chmod 0600 "$identity_tmp"; mv -f -- "$identity_tmp" "$identity_path"; exec "$@"';
-
 export function parseRemoteRunnerProcessIdentity(
   value: string,
   expected: { nonce: string; runnerInstanceId: string },
@@ -12837,7 +12847,7 @@ export function createRemoteRunnerProcessLauncher(input: {
           ...remoteArgs,
         ],
         cwd: input.target.remoteCwd,
-        env: processEnvironment(spec.environment),
+        env: sandboxRunnerProcessEnvironment(spec.environment),
         timeoutMs: 20_000,
         bypassSession: true,
         ...(input.nativeSessionStart ? { nativePreparationPurpose: "native_session_start" as const } : {}),
@@ -13515,7 +13525,9 @@ async function createRunnerdBackendWithinSessionClaim(
   const effectiveEnvironmentLeaseId =
     durableBinding?.environmentLeaseId ??
     input.durableEnvironmentLeaseId ??
-    input.execution.binding.executionWorkspaceId;
+    (remoteTarget?.transport === "sandbox" && remoteTarget.leaseId
+      ? remoteTarget.leaseId
+      : input.execution.binding.executionWorkspaceId);
   if (managedOpenCodeDataHome && remoteTarget?.transport === "sandbox") {
     const environmentLeaseId = remoteTarget.leaseId;
     const environmentId = remoteTarget.environmentId;
@@ -13536,8 +13548,8 @@ async function createRunnerdBackendWithinSessionClaim(
       runId: input.execution.binding.runId,
       environmentId,
       environmentLeaseId,
-      provider: lease.provider,
-      providerLeaseId: lease.providerLeaseId,
+      provider: lease.provider!,
+      providerLeaseId: lease.providerLeaseId!,
       runnerInstanceId: effectiveRunnerInstanceId,
       normalizedSessionId: nativeSessionKey(input.execution),
       remoteCwd: remoteTarget.remoteCwd,
@@ -13612,7 +13624,21 @@ async function createRunnerdBackendWithinSessionClaim(
     ? posix.join(remoteSessionRoot, "filesystem")
     : null;
   if (managedOpenCodeDataHome && remoteRunnerFilesystemRoot) {
-    throw new Error("Managed OpenCode provider data erasure is not qualified for remote runner storage");
+    if (remoteTarget?.transport !== "sandbox" || !remoteCommandRunner)
+      throw new Error("Managed OpenCode provider data erasure is not qualified for remote runner storage");
+    const probeNonce = randomUUID();
+    const probe = await remoteCommandRunner.execute({
+      command: "sh",
+      args: ["-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROBE_SCRIPT,
+        "paperclip-native-asset-erasure-probe", remoteTarget.remoteCwd, remoteSessionDigest,
+        input.execution.binding.runId, probeNonce],
+      cwd: remoteTarget.remoteCwd,
+      timeoutMs: 15_000,
+      bypassSession: true,
+      nativePreparationPurpose: "native_provider_data_erasure_probe",
+    });
+    if (probe.exitCode !== 0 || probe.timedOut || probe.stdout.trim() !== "qualified")
+      throw new Error("Managed OpenCode provider data erasure is not qualified for remote runner storage");
   }
   const persistenceProfile = resolveNativeHarnessPersistenceProfile(
     input.execution,
@@ -15219,10 +15245,8 @@ async function createRunnerdBackendWithinSessionClaim(
     ),
     codexTransportFactory: (recoveryContext) =>
       createRunnerdCodexTransport({
-        // The runnerd factory is selected for remote/sandboxed sessions and
-        // bypasses the OpenCode local backend's `opencodeEnvironment` option.
-        // Pass the exact server-selected environment through this boundary so
-        // the managed model tuple reaches runnerd's closed provider allowlist.
+        // This factory owns the remote provider process environment; it must
+        // receive the exact server-selected managed-model tuple.
         environment: effectiveRunnerEnvironment,
         onSpawn: input.onSpawn,
         provider:
@@ -15341,7 +15365,6 @@ async function createRunnerdBackendWithinSessionClaim(
         runnerProcessLauncher: remoteProcessLauncher,
         runnerReconnectGraceMs: remoteTarget ? 120_000 : undefined,
         adoptExistingRunner: adoptedProcess,
-        environment: effectiveRunnerEnvironment,
         onDiagnostic: (message) => {
           logRunnerDiagnostic(
             `[paperclip-runner] runnerd diagnostic: ${redactSensitiveText(message).slice(-4_096)}\n`,

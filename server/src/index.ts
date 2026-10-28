@@ -1225,7 +1225,11 @@ async function startServerWithDatabaseTeardown(
   };
   const executionControlSweepsInFlight = new Set<string>();
   const workflowRecoveryExecutor = workflowExecutorService(db);
-  const memoryJobs = memoryJobService(db);
+  const memoryJobs = memoryJobService(db, {
+    eraseRemoteNativeRuntimeAsset: platform
+      ? (locator, input) => platform.runtime.eraseRemoteNativeRuntimeAsset(locator, input)
+      : undefined,
+  });
   const semanticVerifier = platform?.config.readOnlyModelProfiles?.length
     ? (await import("./services/supervision/read-only-model-verifier.js")).readOnlyModelVerifier(db, {
       profiles: platform.config.readOnlyModelProfiles, sourceSha: platform.config.deployment.sourceSha,

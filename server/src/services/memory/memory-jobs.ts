@@ -310,7 +310,8 @@ function retentionJobKey(companyId: string, now: Date) {
 
 export interface MemoryJobServiceOptions {
   runLogStore?: Pick<RunLogStore, "erase">;
-  eraseRemoteNativeRuntimeAsset?: (locator: RemoteRuntimeAssetLocator, input: { companyPurgeOperationId?: string }) => Promise<RemoteRuntimeAssetRemovalReceipt>;
+  eraseRemoteNativeRuntimeAsset?: (locator: RemoteRuntimeAssetLocator,
+    input: { jobId: string; companyPurgeOperationId?: string }) => Promise<RemoteRuntimeAssetRemovalReceipt>;
   ownerId?: string;
   leaseMs?: number;
   maxAttempts?: number;
@@ -697,6 +698,7 @@ export function memoryJobService(
         if (!options.eraseRemoteNativeRuntimeAsset)
           throw new Error("Managed remote Native runtime asset erasure is unavailable");
         remoteReceipt = await options.eraseRemoteNativeRuntimeAsset(currentLocator, {
+          jobId: job.id,
           ...(typeof source.companyPurgeOperationId === "string" ? { companyPurgeOperationId: source.companyPurgeOperationId } : {}),
         });
         if (!isRemoteRuntimeAssetRemovalReceipt(remoteReceipt, currentLocator))

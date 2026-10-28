@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import {
   and,
+  desc,
   eq,
   gt,
   inArray,
@@ -19,6 +20,7 @@ import {
   activityLog,
   companySecrets,
   agentExecutionManifests,
+  agentExecutionAuthorizations,
   agentProviderBindings,
   agentPresenceRuntimeBindings,
   agents,
@@ -51,6 +53,7 @@ import {
   runtimeOperationSchema,
   nativePayloadSourceSnapshotSchema,
   nativePayloadSourceInputSchema,
+  sandboxCapabilitySnapshotSchema,
 } from "@paperclipai/shared";
 import type { z } from "zod";
 import type { SaasPlatformConfig } from "../../saas-platform-config.js";
@@ -82,7 +85,18 @@ import { assertNativePayloadSourceSetCurrent, assertNativeTaskSourceOwnerCurrent
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { parseNativeExecutionInput } from "../../vendor/paperclip-runner/index.js";
-import { REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT, REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT } from "../native-runtime/remote-runner-identity.js";
+import { REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT, REMOTE_RUNNER_CHILD_LAUNCH_SCRIPT,
+  REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROBE_SCRIPT, REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT,
+  REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT } from "../native-runtime/remote-runner-identity.js";
+import { sandboxProbeCases } from "../execution-sandbox/backend.js";
+import {
+  assertRemoteRuntimeAssetErasureReady,
+  isRemoteRuntimeAssetLocator,
+  isRemoteRuntimeAssetRemovalReceipt,
+  remoteRuntimeAssetLocatorDigest,
+  type RemoteRuntimeAssetLocator,
+  type RemoteRuntimeAssetRemovalReceipt,
+} from "../native-runtime/runtime-asset-retention.js";
 
 type IssuedWorkerModelCredential = Awaited<
   ReturnType<ReturnType<typeof workerModelGateway>["issueForRun"]>
@@ -177,6 +191,46 @@ export function exactNativeHarnessStateCommand(input: {
     archiveIsBoundedBase64;
 }
 
+/** Only the RuntimeControl erasure owner may issue this fixed command. The
+ * signed relay cannot turn caller-provided paths into a remote delete. */
+export function exactNativeRuntimeAssetErasureCommand(input: {
+  request: import("@paperclipai/shared").RuntimeSandboxExecRelayRequest;
+  locator: RemoteRuntimeAssetLocator;
+  remoteCwd: string;
+}): boolean {
+  const { request, locator, remoteCwd } = input;
+  const argv = request.argv;
+  const expected = ["sh", "-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT,
+    "paperclip-native-asset-erasure", remoteCwd, locator.normalizedSessionIdDigest,
+    locator.runId, locator.runnerInstanceId, locator.environmentLeaseId, locator.providerLeaseId,
+    locator.normalizedSessionIdDigest, REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT,
+    REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT];
+  return request.cwd === remoteCwd && request.stdinBase64 === "" && Object.keys(request.env).length === 0 &&
+    argv.length === expected.length && expected.every((value, index) => argv[index] === value) &&
+    request.brokerCredential === undefined && request.modelBrokerCredential === undefined;
+}
+
+export function exactNativeRuntimeAssetErasureProbeCommand(input: {
+  request: import("@paperclipai/shared").RuntimeSandboxExecRelayRequest;
+  taskRoot: string;
+  runId: string;
+  sessionDigest: string;
+}): boolean {
+  const { request } = input;
+  const argv = request.argv;
+  const expectedPrefix = ["sh", "-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROBE_SCRIPT,
+    "paperclip-native-asset-erasure-probe", input.taskRoot, input.sessionDigest, input.runId];
+  return request.cwd === input.taskRoot && request.stdinBase64 === "" &&
+    argv.length === expectedPrefix.length + 1 && expectedPrefix.every((value, index) => argv[index] === value) &&
+    /^[a-f0-9-]{36}$/i.test(argv.at(-1) ?? "") && request.brokerCredential === undefined &&
+    request.modelBrokerCredential === undefined && !Object.keys(request.env).some(name => [
+      "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "PAPERCLIP_SANDBOX_BROKER_TOKEN",
+      "PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN", "PAPERCLIP_SANDBOX_BROKER_SESSION_ID",
+      "PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN", "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND",
+      "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS",
+    ].includes(name));
+}
+
 export function exactNativeRunnerMonitorStatusCommand(input: {
   request: Pick<import("@paperclipai/shared").RuntimeSandboxExecRelayRequest, "argv" | "cwd" | "stdinBase64">;
   taskRoot: string;
@@ -242,7 +296,7 @@ function exactNativeSessionLaunchCommand(input: {
   const diagnosticsDir = path.posix.join(sessionRoot, "diagnostics");
   const runnerBinary = path.posix.join(runtimeRoot, "bin", "paperclip-runnerd");
   const childLaunch = 'set -eu; identity_path=$1; identity_nonce=$2; runner_instance_id=$3; child_script=$4; shift 4; umask 077; identity_dir=$(dirname -- "$identity_path"); mkdir -p -- "$identity_dir"; if command -v setsid >/dev/null 2>&1; then nohup setsid sh -c "$child_script" paperclip-runner-child "$identity_path" "$identity_nonce" "$runner_instance_id" "$@" </dev/null >/dev/null 2>&1 & else nohup sh -c "$child_script" paperclip-runner-child "$identity_path" "$identity_nonce" "$runner_instance_id" "$@" </dev/null >/dev/null 2>&1 & fi';
-  const childScript = 'set -eu; identity_path=$1; identity_nonce=$2; runner_instance_id=$3; diagnostics_directory=$4; shift 4; umask 077; test ! -L "$diagnostics_directory"; if test -e "$diagnostics_directory"; then test -d "$diagnostics_directory"; else mkdir -p -- "$diagnostics_directory"; fi; chmod 0700 "$diagnostics_directory"; started_at=$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ"); pid=$$; process_fingerprint=""; if process_fingerprint=$(node -e \'const fs=require("node:fs");try{const stat=fs.readFileSync("/proc/"+process.argv[1]+"/stat","utf8");const end=stat.lastIndexOf(") ");const ticks=stat.slice(end+2).trim().split(/\\s+/)[19];const boot=fs.readFileSync("/proc/sys/kernel/random/boot_id","utf8").trim();if(end<0||!/^\\d+$/.test(ticks||"")||!/^[-a-fA-F0-9]+$/.test(boot))process.exit(4);process.stdout.write("linux:"+boot+":"+ticks)}catch{process.exit(4)}\' "$pid"); then :; else process_fingerprint=""; fi; identity_tmp="${identity_path}.tmp.$$"; printf "%s\\n%s\\n%s\\n%s\\n%s\\n" "$identity_nonce" "$$" "$started_at" "$runner_instance_id" "$process_fingerprint" > "$identity_tmp"; chmod 0600 "$identity_tmp"; mv -f -- "$identity_tmp" "$identity_path"; exec "$@"';
+  const childScript = REMOTE_RUNNER_CHILD_LAUNCH_SCRIPT;
   const argv = input.request.argv;
   return input.request.cwd === input.taskRoot && input.request.stdinBase64 === "" && argv.length >= 10 &&
     argv[0] === "sh" && argv[1] === "-c" && argv[2] === childLaunch && argv[3] === "paperclip-runner-launch" &&
@@ -2563,6 +2617,261 @@ export function runtimeControlService(
       .where(eq(runtimeCells.companyId, companyId))
       .orderBy(runtimeCells.createdAt);
   }
+  async function remoteRuntimeAssetDispatchContext(locator: RemoteRuntimeAssetLocator, companyPurgeOperationId?: string) {
+    await assertRemoteRuntimeAssetErasureReady(db, locator, companyPurgeOperationId);
+    const [run] = await db.select().from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, locator.companyId), eq(heartbeatRuns.id, locator.runId),
+    ));
+    const [lease] = await db.select().from(environmentLeases).where(and(
+      eq(environmentLeases.companyId, locator.companyId), eq(environmentLeases.id, locator.environmentLeaseId),
+      eq(environmentLeases.heartbeatRunId, locator.runId),
+    ));
+    const metadata = lease?.metadata && typeof lease.metadata === "object" && !Array.isArray(lease.metadata)
+      ? lease.metadata as Record<string, unknown> : {};
+    const remoteCwd = typeof metadata.remoteCwd === "string" ? metadata.remoteCwd.trim() : "";
+    const profile = run?.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson)
+      ? run.runnerProfileJson as Record<string, unknown> : {};
+    let execution: ReturnType<typeof parseNativeExecutionInput> | null = null;
+    try { execution = parseNativeExecutionInput(profile.nativeExecutionInput); } catch { /* fail closed below */ }
+    if (!run || !lease || !remoteCwd || sha256(remoteCwd) !== locator.remoteCwdDigest ||
+      !lease.expiresAt || lease.expiresAt <= new Date() || lease.environmentId !== locator.environmentId ||
+      lease.provider !== locator.provider || lease.providerLeaseId !== locator.providerLeaseId ||
+      !execution || execution.provider.kind !== "opencode" || execution.session.driverKind !== "opencode_server" ||
+      execution.binding.runId !== locator.runId || !execution.session.normalizedSessionId ||
+      sha256(execution.session.normalizedSessionId) !== locator.normalizedSessionIdDigest)
+      throw conflict("Managed remote OpenCode data erasure target no longer matches its current lease");
+    const [runtime] = run.agentId ? await db.select().from(agentPresenceRuntimeBindings).where(and(
+      eq(agentPresenceRuntimeBindings.companyId, locator.companyId), eq(agentPresenceRuntimeBindings.agentId, run.agentId),
+      eq(agentPresenceRuntimeBindings.status, "active"),
+    )) : [];
+    const cellRef = runtime ? /^aw:cell:([0-9a-f-]{36}):generation:([1-9][0-9]{0,18})$/i.exec(runtime.providerProfileRef) : null;
+    if (!cellRef) throw conflict("Managed remote OpenCode erasure requires the current admitted sandbox cell");
+    const [cell] = await db.select().from(runtimeCells).where(and(
+      eq(runtimeCells.companyId, locator.companyId), eq(runtimeCells.id, cellRef[1]!),
+      eq(runtimeCells.generation, BigInt(cellRef[2]!)), eq(runtimeCells.status, "HEALTHY"),
+      isNull(runtimeCells.deletedAt), isNull(runtimeCells.suspendedReason),
+    ));
+    const [host] = cell?.runtimeHostId ? await db.select().from(runtimeHosts).where(and(
+      eq(runtimeHosts.id, cell.runtimeHostId), isNull(runtimeHosts.fencedAt), isNull(runtimeHosts.credentialRevokedAt),
+      isNull(runtimeHosts.retiredAt), inArray(runtimeHosts.status, ["READY", "DRAINING"]),
+      gt(runtimeHosts.lastHeartbeatAt, new Date(Date.now() - config.runtime.suspectSeconds * 1000)),
+    )) : [];
+    const imageDigest = cell?.activeImageDigest ?? cell?.desiredImageDigest;
+    const [software] = imageDigest ? await db.select({ minimum: runtimeVersionCatalog.hostAgentMinimumVersion })
+      .from(runtimeVersionCatalog).where(and(eq(runtimeVersionCatalog.imageDigest, imageDigest),
+        eq(runtimeVersionCatalog.status, "approved"))) : [];
+    const [binding] = cell ? await db.select().from(runtimeSandboxBindings).where(and(
+      eq(runtimeSandboxBindings.companyId, locator.companyId), eq(runtimeSandboxBindings.runtimeCellId, cell.id),
+      eq(runtimeSandboxBindings.cellGeneration, cellRef[2]!), eq(runtimeSandboxBindings.status, "running"),
+    )) : [];
+    const [manifest] = run.agentId ? await db.select().from(agentExecutionManifests).where(and(
+      eq(agentExecutionManifests.companyId, locator.companyId), eq(agentExecutionManifests.runId, locator.runId),
+      eq(agentExecutionManifests.agentId, run.agentId),
+    )) : [];
+    const [agent] = run.agentId ? await db.select().from(agents).where(and(
+      eq(agents.companyId, locator.companyId), eq(agents.id, run.agentId),
+    )) : [];
+    const [authorization] = manifest ? await db.select().from(agentExecutionAuthorizations).where(and(
+      eq(agentExecutionAuthorizations.companyId, locator.companyId),
+      eq(agentExecutionAuthorizations.manifestId, manifest.id),
+    )) : [];
+    const capability = binding?.capabilitySnapshot ? sandboxCapabilitySnapshotSchema.safeParse(binding.capabilitySnapshot) : null;
+    const [qualification] = binding?.qualificationRunId ? await db.select().from(sandboxQualificationRuns).where(and(
+      eq(sandboxQualificationRuns.companyId, locator.companyId), eq(sandboxQualificationRuns.bindingId, binding.id),
+      eq(sandboxQualificationRuns.id, binding.qualificationRunId), eq(sandboxQualificationRuns.status, "passed"),
+    )) : [];
+    const [policy] = binding && manifest ? await db.select().from(runtimePolicySnapshots).where(and(
+      eq(runtimePolicySnapshots.companyId, locator.companyId), eq(runtimePolicySnapshots.bindingId, binding.id),
+      eq(runtimePolicySnapshots.executionManifestId, manifest.id), eq(runtimePolicySnapshots.status, "qualified"),
+    )).orderBy(desc(runtimePolicySnapshots.policyVersion)).limit(1) : [];
+    const qualified = Boolean(cell && host && binding?.backend === "openshell" && binding.status === "running" &&
+      capability?.success && capability.data.evidenceKind === "protected_host_report" &&
+      capability.data.expiresAt > new Date().toISOString() &&
+      capability.data.sandboxImageDigest === (cell.activeImageDigest ?? cell.desiredImageDigest) &&
+      Boolean(software && hostVersionMeetsMinimum(host.hostAgentVersion, software.minimum)) &&
+      qualification?.evidenceKind === "protected_host_report" &&
+      qualification.reportHash === capability.data.qualificationHash &&
+      qualification.results.length === sandboxProbeCases(binding.boundaryPolicyHash, binding.boundaryPolicy.requiredControls).length &&
+      !sandboxProbeCases(binding.boundaryPolicyHash, binding.boundaryPolicy.requiredControls).some(test => {
+        const matches = qualification.results.filter(result => result.caseId === test.caseId);
+        return matches.length !== 1 || matches[0]?.control !== test.control || matches[0]?.contractHash !== test.contractHash ||
+          matches[0]?.verdict !== "pass" || !/^[a-f0-9]{64}$/.test(matches[0]?.observationHash ?? "");
+      }) && policy && authorization && policy.expiresAt > new Date() &&
+      policy.authorityHash === authorization.authorityHash &&
+      policy.sourcePolicyRefs.includes(`manifest:${manifest!.id}:${manifest!.hash}`) &&
+      policy.capabilitySnapshotHash === binding.capabilitySnapshotHash &&
+      policy.compilation.compiledPolicy.credentials.mode === "none" &&
+      policy.compilation.compiledPolicy.credentials.bindings.length === 0);
+    if (!qualified || !cell || !host || !binding || !manifest || !agent || !policy || !capability?.success)
+      throw conflict("Managed remote OpenCode data erasure is not qualified for the current signed sandbox target");
+    return { run, lease, remoteCwd, cell, host, binding, manifest, agent, policy,
+      capabilityExpiresAt: Date.parse(capability.data.expiresAt) };
+  }
+  async function eraseRemoteNativeRuntimeAsset(
+    locator: RemoteRuntimeAssetLocator,
+    input: { companyPurgeOperationId?: string } = {},
+  ): Promise<RemoteRuntimeAssetRemovalReceipt> {
+    if (!isRemoteRuntimeAssetLocator(locator)) throw conflict("Managed remote OpenCode erasure locator is invalid");
+    const source = await remoteRuntimeAssetDispatchContext(locator, input.companyPurgeOperationId);
+    const locatorDigest = remoteRuntimeAssetLocatorDigest(locator);
+    const recovered = await db.transaction(async transaction => {
+      const tx = transaction as unknown as Db;
+      await lockAnalyticalCompany(tx, locator.companyId);
+      await lockMemoryPrivacy(tx, locator.companyId);
+      await assertRemoteRuntimeAssetErasureReady(tx, locator, input.companyPurgeOperationId);
+      const prior = await tx.select().from(runtimeHostCommands).where(and(
+        eq(runtimeHostCommands.companyId, locator.companyId),
+        eq(runtimeHostCommands.commandType, "sandbox_exec"),
+        sql`${runtimeHostCommands.payload}->'remoteRuntimeAssetErasure'->>'locatorDigest' = ${locatorDigest}`,
+      )).orderBy(desc(runtimeHostCommands.createdAt)).for("update");
+      if (prior.length === 0) return null;
+      const sameOperation = (command: typeof prior[number]) => {
+        const payload = command.payload && typeof command.payload === "object" && !Array.isArray(command.payload)
+          ? command.payload as Record<string, unknown> : {};
+        const erasure = payload.remoteRuntimeAssetErasure && typeof payload.remoteRuntimeAssetErasure === "object" &&
+          !Array.isArray(payload.remoteRuntimeAssetErasure) ? payload.remoteRuntimeAssetErasure as Record<string, unknown> : {};
+        return erasure.companyPurgeOperationId === input.companyPurgeOperationId;
+      };
+      const completed = prior.find(command => sameOperation(command) && command.status === "SUCCEEDED");
+      if (completed) {
+        const safeResult = completed.safeResult && typeof completed.safeResult === "object" && !Array.isArray(completed.safeResult)
+          ? completed.safeResult as Record<string, unknown> : {};
+        const receipt = safeResult.remoteRuntimeAssetRemovalReceipt;
+        if (!isRemoteRuntimeAssetRemovalReceipt(receipt, locator) ||
+          receipt.commandRequestId !== completed.idempotencyKey ||
+          receipt.target.hostId !== source.host.id || receipt.target.cellId !== source.cell.id ||
+          receipt.target.cellGeneration !== source.cell.generation.toString() ||
+          receipt.target.bindingId !== source.binding.id)
+          throw conflict("Completed remote OpenCode erasure has no recoverable exact receipt");
+        return receipt;
+      }
+      // PENDING, CLAIMED, failed, expired, or a different purge operation all
+      // represent an uncertain/consumed physical command. Never issue a second
+      // delete against an absent root until that exact command is reconciled.
+      throw conflict("A prior remote OpenCode erasure command requires reconciliation");
+    });
+    if (recovered) return recovered;
+    const requestId = randomUUID();
+    const deadlineAt = new Date(Math.min(Date.now() + 60_000, source.lease.expiresAt!.getTime(),
+      source.policy.expiresAt.getTime(), source.capabilityExpiresAt ?? Number.POSITIVE_INFINITY));
+    if (deadlineAt <= new Date()) throw conflict("Managed remote OpenCode erasure lease expired before dispatch");
+    const command = ["sh", "-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT,
+      "paperclip-native-asset-erasure", source.remoteCwd, locator.normalizedSessionIdDigest,
+      locator.runId, locator.runnerInstanceId, locator.environmentLeaseId, locator.providerLeaseId,
+      locator.normalizedSessionIdDigest, REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT,
+      REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT];
+    const env: Record<string, string> = {};
+    const commandDigest = nativeSha256({ argv: command, cwd: source.remoteCwd, env, stdinHash: sha256(""),
+      timeoutDeadline: deadlineAt.toISOString(), nativePreparationPurpose: "native_provider_data_erasure" });
+    const attempt = Math.max(1, source.run.continuationAttempt + 1);
+    const desiredState = {
+      kind: "sandbox_exec_v1", requestId, bindingId: source.binding.id,
+      cellId: source.cell.id, generation: source.cell.generation.toString(), hostId: source.host.id,
+      hostEpoch: source.host.credentialVersion, runId: source.run.id, attemptId: null,
+      attempt, leaseId: source.lease.id, manifestId: source.manifest.id, manifestHash: source.manifest.hash,
+      policySnapshotId: source.policy.id, policyHash: source.policy.policyHash,
+      commandDigest, deadlineAt: deadlineAt.toISOString(), nativePreparationPurpose: "native_provider_data_erasure",
+      remoteRuntimeAssetErasure: {
+        locator, locatorDigest,
+        ...(input.companyPurgeOperationId ? { companyPurgeOperationId: input.companyPurgeOperationId } : {}),
+      },
+    };
+    const [claim] = await db.transaction(async transaction => {
+      const tx = transaction as unknown as Db;
+      await assertRemoteRuntimeAssetErasureReady(tx, locator, input.companyPurgeOperationId);
+      const current = await remoteRuntimeAssetDispatchContext(locator, input.companyPurgeOperationId);
+      if (current.host.id !== source.host.id || current.host.credentialVersion !== source.host.credentialVersion ||
+        current.cell.id !== source.cell.id || current.cell.generation !== source.cell.generation ||
+        current.binding.id !== source.binding.id || current.policy.id !== source.policy.id ||
+        current.lease.id !== source.lease.id)
+        throw conflict("Managed remote OpenCode erasure target changed before claim admission");
+      return tx.insert(runtimeHostCommands).values({
+        runtimeHostId: source.host.id, companyId: locator.companyId, runtimeCellId: source.cell.id,
+        cellGeneration: source.cell.generation, commandType: "sandbox_exec", idempotencyKey: requestId,
+        payload: desiredState, deadlineAt, notBefore: new Date(),
+      }).returning();
+    });
+    if (!claim) throw conflict("Managed remote OpenCode erasure command could not be persisted");
+    const request = {
+      requestId, bindingId: source.binding.id, hostEpoch: source.host.credentialVersion,
+      runId: source.run.id, attemptId: null, attempt,
+      manifestId: source.manifest.id, manifestHash: source.manifest.hash,
+      policySnapshotId: source.policy.id, policyHash: source.policy.policyHash,
+      commandDigest, deadlineAt: deadlineAt.toISOString(),
+      sandboxRef: source.binding.sandboxRef ?? `aw-v7-${source.binding.id}`,
+      imageDigest: source.cell.activeImageDigest ?? source.cell.desiredImageDigest,
+      argv: command, cwd: source.remoteCwd, env, stdinBase64: "",
+    };
+    const capabilityToken = createSandboxExecJwt({
+      agentId: source.run.agentId!, companyId: locator.companyId, adapterType: source.agent.adapterType,
+      runId: source.run.id, responsibleUserId: source.run.responsibleUserId,
+      claim: { requestId, bindingId: source.binding.id, cellId: source.cell.id,
+        generation: source.cell.generation.toString(), hostId: source.host.id,
+        hostEpoch: source.host.credentialVersion, runId: source.run.id, attemptId: null, attempt,
+        manifestId: source.manifest.id, manifestHash: source.manifest.hash,
+        policySnapshotId: source.policy.id, policyHash: source.policy.policyHash,
+        commandDigest, deadlineAt: deadlineAt.toISOString() },
+      parentExpiresAt: deadlineAt, nativeLeaseExpiresAt: deadlineAt,
+    });
+    if (!capabilityToken) {
+      await db.update(runtimeHostCommands).set({ status: "FAILED", errorCode: "exec_capability_unavailable", completedAt: new Date() })
+        .where(and(eq(runtimeHostCommands.id, claim.id), eq(runtimeHostCommands.status, "PENDING")));
+      throw conflict("Managed remote OpenCode erasure capability could not be issued");
+    }
+    const output: Buffer[] = [];
+    let outputSize = 0;
+    try {
+      const result = await relay.executeOpenShell({ cellId: source.cell.id,
+        generation: source.cell.generation.toString(), request, capabilityToken,
+        onOutput: async (stream, chunk) => {
+          if (stream !== "stdout") return;
+          outputSize += chunk.length;
+          if (outputSize > 4096) throw conflict("Managed remote OpenCode erasure receipt exceeded its bound");
+          output.push(chunk);
+        },
+      });
+      const lines = Buffer.concat(output).toString("utf8").trimEnd().split("\n");
+      if (result.exitCode !== 0 || result.timedOut || lines.length !== 7 ||
+        lines[5] !== locator.runId || lines[6] !== locator.providerLeaseId)
+        throw conflict("Managed remote OpenCode erasure did not return an exact stop and absence proof");
+      const [rawPid, startedAt, processIdentityDigest, processStartFingerprintDigest, stoppedAt] = lines;
+      const pid = Number(rawPid);
+      if (!Number.isSafeInteger(pid) || pid <= 1 || !startedAt || Number.isNaN(Date.parse(startedAt)) ||
+        !stoppedAt || Number.isNaN(Date.parse(stoppedAt)) ||
+        !/^[a-f0-9]{64}$/.test(processIdentityDigest ?? "") || !/^[a-f0-9]{64}$/.test(processStartFingerprintDigest ?? ""))
+        throw conflict("Managed remote OpenCode erasure process stop proof is malformed");
+      const finalSource = await remoteRuntimeAssetDispatchContext(locator, input.companyPurgeOperationId);
+      if (finalSource.host.id !== source.host.id || finalSource.host.credentialVersion !== source.host.credentialVersion ||
+        finalSource.cell.id !== source.cell.id || finalSource.cell.generation !== source.cell.generation ||
+        finalSource.binding.id !== source.binding.id || finalSource.lease.id !== source.lease.id)
+        throw conflict("Managed remote OpenCode erasure target changed before receipt persistence");
+      const receipt: RemoteRuntimeAssetRemovalReceipt = {
+        schema: "paperclip.remote-runtime-asset-removal.v1",
+        locatorDigest: remoteRuntimeAssetLocatorDigest(locator), commandRequestId: requestId,
+        purpose: "native_provider_data_erasure",
+        target: { hostId: source.host.id, cellId: source.cell.id,
+          cellGeneration: source.cell.generation.toString(), bindingId: source.binding.id },
+        relativePath: locator.relativePath, pathDigest: locator.pathDigest,
+        stopProof: { schema: "paperclip.native-remote-process-stop.v1", runId: locator.runId,
+          normalizedSessionIdDigest: locator.normalizedSessionIdDigest,
+          runnerInstanceId: locator.runnerInstanceId, environmentLeaseId: locator.environmentLeaseId,
+          providerLeaseId: locator.providerLeaseId, pid, startedAt,
+          processIdentityDigest: processIdentityDigest!, processStartFingerprintDigest: processStartFingerprintDigest!, stoppedAt },
+        stopProofBeforeDelete: true, exitCode: 0, timedOut: false, postDeleteAbsent: true,
+      };
+      const [completed] = await db.update(runtimeHostCommands).set({ status: "SUCCEEDED", completedAt: new Date(),
+        safeResult: { exitCode: 0, timedOut: false, postDeleteAbsent: true,
+          remoteRuntimeAssetRemovalReceipt: receipt } }).where(and(
+        eq(runtimeHostCommands.id, claim.id), eq(runtimeHostCommands.status, "CLAIMED"),
+      )).returning({ id: runtimeHostCommands.id });
+      if (!completed) throw conflict("Managed remote OpenCode erasure command was fenced");
+      return receipt;
+    } catch (error) {
+      await db.update(runtimeHostCommands).set({ status: "EXPIRED", errorCode: "remote_asset_erasure_unknown", completedAt: new Date() })
+        .where(and(eq(runtimeHostCommands.id, claim.id), inArray(runtimeHostCommands.status, ["PENDING", "CLAIMED"])));
+      throw error;
+    }
+  }
   async function authorizeSandboxExec(input: { cellId: string; generation: string; request: import("@paperclipai/shared").RuntimeSandboxExecRelayRequest; capabilityToken: string }) {
     const claims = verifySandboxExecJwt(input.capabilityToken);
     const capability = claims?.sandbox_exec, request = input.request, now = new Date();
@@ -2598,6 +2907,42 @@ export function runtimeControlService(
         expected.policySnapshotId !== request.policySnapshotId || expected.policyHash !== request.policyHash ||
         expected.commandDigest !== request.commandDigest || expected.deadlineAt !== request.deadlineAt)
         throw forbidden("Sandbox execution claim is missing, expired, or already consumed");
+      if (expected.nativePreparationPurpose === "native_provider_data_erasure") {
+        const rawErasure = expected.remoteRuntimeAssetErasure && typeof expected.remoteRuntimeAssetErasure === "object" &&
+          !Array.isArray(expected.remoteRuntimeAssetErasure) ? expected.remoteRuntimeAssetErasure as Record<string, unknown> : null;
+        const locator = rawErasure?.locator;
+        const companyPurgeOperationId = typeof rawErasure?.companyPurgeOperationId === "string"
+          ? rawErasure.companyPurgeOperationId : undefined;
+        if (!isRemoteRuntimeAssetLocator(locator, { companyId: claims.company_id, runId: request.runId }) ||
+          rawErasure?.locatorDigest !== remoteRuntimeAssetLocatorDigest(locator as RemoteRuntimeAssetLocator) ||
+          locator.environmentLeaseId !== expected.leaseId || locator.runId !== request.runId ||
+          locator.companyId !== claims.company_id)
+          throw forbidden("Sandbox remote asset erasure authority is malformed");
+        await assertRemoteRuntimeAssetErasureReady(tx, locator as RemoteRuntimeAssetLocator, companyPurgeOperationId);
+        const current = await remoteRuntimeAssetDispatchContext(locator as RemoteRuntimeAssetLocator, companyPurgeOperationId);
+        const [agent] = current.run.agentId ? await tx.select().from(agents).where(and(
+          eq(agents.companyId, claims.company_id), eq(agents.id, current.run.agentId),
+        )) : [];
+        if (!agent || claims.sub !== current.run.agentId || claims.responsible_user_id !== current.run.responsibleUserId ||
+          claims.adapter_type !== agent.adapterType || current.binding.id !== request.bindingId ||
+          current.cell.id !== input.cellId || current.cell.generation.toString() !== input.generation ||
+          current.host.id !== capability.hostId || current.host.credentialVersion !== request.hostEpoch ||
+          current.manifest.id !== request.manifestId || current.manifest.hash !== request.manifestHash ||
+          current.policy.id !== request.policySnapshotId || current.policy.policyHash !== request.policyHash ||
+          expected.hostId !== current.host.id || expected.hostEpoch !== request.hostEpoch ||
+          expected.manifestId !== current.manifest.id || expected.manifestHash !== current.manifest.hash ||
+          expected.policySnapshotId !== current.policy.id || expected.policyHash !== current.policy.policyHash ||
+          !exactNativeRuntimeAssetErasureCommand({ request, locator: locator as RemoteRuntimeAssetLocator,
+            remoteCwd: current.remoteCwd }))
+          throw forbidden("Sandbox remote asset erasure target changed before dispatch");
+        const [consumed] = await tx.update(runtimeHostCommands).set({ status: "CLAIMED", attempt: 1 }).where(and(
+          eq(runtimeHostCommands.id, operation.id), eq(runtimeHostCommands.status, "PENDING"),
+          eq(runtimeHostCommands.attempt, 0),
+        )).returning({ id: runtimeHostCommands.id });
+        if (!consumed) throw forbidden("Sandbox remote asset erasure capability was already consumed");
+        return { runtimeHostId: current.host.id, companyId: claims.company_id,
+          generation: current.cell.generation.toString() };
+      }
       const source = await executionSandboxService(tx, { runtimeSuspectSeconds: config.runtime.suspectSeconds }).assertTaskExecutionContext(tx, {
         companyId: claims.company_id, runId: request.runId, leaseId: String(expected.leaseId), now,
       });
@@ -2614,13 +2959,15 @@ export function runtimeControlService(
       if (nativePreparationPurpose !== undefined && nativePreparationPurpose !== "provider_artifact" &&
         nativePreparationPurpose !== "native_session_start" && nativePreparationPurpose !== "native_harness_state" &&
         nativePreparationPurpose !== "native_workspace_prepare" &&
-        nativePreparationPurpose !== "native_runtime_context_prepare")
+        nativePreparationPurpose !== "native_runtime_context_prepare" &&
+        nativePreparationPurpose !== "native_provider_data_erasure_probe")
         throw forbidden("Sandbox preparation purpose is unsupported");
       const providerArtifactPreparation = nativePreparationPurpose === "provider_artifact";
       const nativeSessionStart = nativePreparationPurpose === "native_session_start";
       const nativeHarnessState = nativePreparationPurpose === "native_harness_state";
       const nativeWorkspacePrepare = nativePreparationPurpose === "native_workspace_prepare";
       const nativeRuntimeContextPrepare = nativePreparationPurpose === "native_runtime_context_prepare";
+      const nativeRuntimeAssetErasureProbe = nativePreparationPurpose === "native_provider_data_erasure_probe";
       let nativeSessionStartValid = false;
       let nativeHarnessStateValid = false;
       if (providerArtifactPreparation) {
@@ -2675,7 +3022,7 @@ export function runtimeControlService(
           !exactNativeProviderArtifactChunkCommand({ request, taskRoot: expectedTaskRoot }))
           throw forbidden("Provider artifact relay chunk is outside its exact private Task target");
       }
-      if (nativeSessionStart || nativeHarnessState || nativeWorkspacePrepare || nativeRuntimeContextPrepare) {
+      if (nativeSessionStart || nativeHarnessState || nativeWorkspacePrepare || nativeRuntimeContextPrepare || nativeRuntimeAssetErasureProbe) {
         const task = source.source.task;
         const taskSnapshot = nativePayloadSourceSnapshotSchema.safeParse(task.payloadSourceSnapshot);
         const [taskOwnerVersion] = await tx.select({ sourceVersion: sql<string>`extract(epoch from ${issues.updatedAt})::text` })
@@ -2761,6 +3108,9 @@ export function runtimeControlService(
             nativeExecutionInput: profile.nativeExecutionInput, sourceAuthority: runtimeContextSourceAuthority,
             credentialMode: credentials.mode, credentialBindingCount: credentials.bindings.length,
           });
+        const exactErasureProbe = nativeRuntimeAssetErasureProbe && expectedTaskRoot !== null &&
+          exactNativeRuntimeAssetErasureProbeCommand({ request, taskRoot: expectedTaskRoot,
+            runId: source.run.id, sessionDigest: sha256(execution?.session.normalizedSessionId ?? "") });
         const exactTrustedCommand = nativeSessionStart
           ? execution !== null && expectedTaskRoot !== null && exactNativeSessionLaunchCommand({
             request, taskRoot: expectedTaskRoot, execution,
@@ -2771,6 +3121,8 @@ export function runtimeControlService(
             })
             : nativeRuntimeContextPrepare
               ? exactRuntimeContextOwner
+              : nativeRuntimeAssetErasureProbe
+                ? exactErasureProbe
               : execution !== null && expectedTaskRoot !== null &&
               exactNativeHarnessStateCommand({ request, taskRoot: expectedTaskRoot, execution, runId: source.run.id });
         const exactCredentialShape = nativeSessionStart
@@ -2813,7 +3165,8 @@ export function runtimeControlService(
         nativeSessionStartValid = nativeSessionStart;
         nativeHarnessStateValid = nativeHarnessState;
       }
-      if (!providerArtifactPreparation && !nativeHarnessState && !nativeWorkspacePrepare && !nativeRuntimeContextPrepare && credentials.mode === "brokered") {
+      if (!providerArtifactPreparation && !nativeHarnessState && !nativeWorkspacePrepare && !nativeRuntimeContextPrepare &&
+        !nativeRuntimeAssetErasureProbe && credentials.mode === "brokered") {
         const brokerClaims = brokerCredential ? verifySandboxBrokerJwt(brokerCredential.capabilityToken) : null;
         const brokerCapability = brokerClaims?.sandbox_broker;
         const endpointOrigin = credentialBrokerOrigin;
@@ -2843,7 +3196,8 @@ export function runtimeControlService(
           nativeSha256(resolved.bindings) !== nativeSha256(brokerCapability.bindings) ||
           credentials.bindings.some(binding => resolved.authorizedConnectionGrantHashes[binding.connectionId] !== binding.grantVersionHash))
           throw forbidden("Current assigned ToolGateway grants changed before sandbox dispatch");
-      } else if (!providerArtifactPreparation && !nativeHarnessState && !nativeWorkspacePrepare && !nativeRuntimeContextPrepare && (credentials.mode !== "none" || credentials.bindings.length ||
+      } else if (!providerArtifactPreparation && !nativeHarnessState && !nativeWorkspacePrepare && !nativeRuntimeContextPrepare &&
+        !nativeRuntimeAssetErasureProbe && (credentials.mode !== "none" || credentials.bindings.length ||
         brokerCredential !== undefined)) {
         throw forbidden("Sandbox execution contains an unauthorized broker capability");
       }
@@ -2876,7 +3230,7 @@ export function runtimeControlService(
         // The server-stored preparation purpose is the only path that may run
         // a Native artifact command without either credential family.
         if (modelCredential !== undefined) throw forbidden("Provider-artifact preparation cannot receive a model credential");
-      } else if (nativeHarnessState || nativeWorkspacePrepare || nativeRuntimeContextPrepare) {
+      } else if (nativeHarnessState || nativeWorkspacePrepare || nativeRuntimeContextPrepare || nativeRuntimeAssetErasureProbe) {
         if (modelCredential !== undefined || credentials.mode !== "none" || credentials.bindings.length !== 0 || brokerCredential !== undefined)
           throw forbidden("Native harness state commands cannot receive workload credentials");
       } else if (nativeProvider?.provider === "opencode") {
@@ -3058,7 +3412,7 @@ export function runtimeControlService(
     env?: Record<string, string>;
     stdin?: string;
     timeoutMs?: number;
-    nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare";
+    nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe";
     signal?: AbortSignal;
     onOutput?: (stream: "stdout" | "stderr", chunk: string) => void | Promise<void>;
   }): Promise<{ exitCode: number | null; signal: null; timedOut: boolean; stdout: string; stderr: string } | null> {
@@ -3069,7 +3423,8 @@ export function runtimeControlService(
     if (requestedNativePreparationPurpose !== undefined && requestedNativePreparationPurpose !== "provider_artifact" &&
       requestedNativePreparationPurpose !== "native_session_start" && requestedNativePreparationPurpose !== "native_harness_state" &&
       requestedNativePreparationPurpose !== "native_workspace_prepare" &&
-      requestedNativePreparationPurpose !== "native_runtime_context_prepare")
+      requestedNativePreparationPurpose !== "native_runtime_context_prepare" &&
+      requestedNativePreparationPurpose !== "native_provider_data_erasure_probe")
       throw conflict("Sandbox preparation purpose is unsupported");
     if (!cwd || !cwd.startsWith("/")) throw conflict("Sandbox execution requires an absolute workspace path");
     const env = { ...(input.env ?? {}) };
@@ -3112,6 +3467,8 @@ export function runtimeControlService(
       throw conflict("Native workspace preparation requires an authenticated conversation Task");
     if (requestedNativePreparationPurpose === "native_runtime_context_prepare" && !hasConversationIdentity)
       throw conflict("Native runtime-context preparation requires an authenticated conversation Task");
+    if (requestedNativePreparationPurpose === "native_provider_data_erasure_probe" && !hasConversationIdentity)
+      throw conflict("Native remote erasure storage probe requires an authenticated conversation Task");
     const nativePreparationPurpose = requestedNativePreparationPurpose && hasConversationIdentity
       ? requestedNativePreparationPurpose : undefined;
     const providerArtifactPreparation = nativePreparationPurpose === "provider_artifact";
@@ -3119,6 +3476,7 @@ export function runtimeControlService(
     const nativeHarnessState = nativePreparationPurpose === "native_harness_state";
     const nativeWorkspacePrepare = nativePreparationPurpose === "native_workspace_prepare";
     const nativeRuntimeContextPrepare = nativePreparationPurpose === "native_runtime_context_prepare";
+    const nativeRuntimeAssetErasureProbe = nativePreparationPurpose === "native_provider_data_erasure_probe";
     if (conversationTask.conversationAgentId !== null || conversationTask.conversationUserId !== null) {
       const contextSnapshot = initialSource.run.contextSnapshot &&
         typeof initialSource.run.contextSnapshot === "object"
@@ -3171,7 +3529,7 @@ export function runtimeControlService(
     const runnerProfile = initialSource.source.agent.adapterType === "paperclip_runner"
       ? resolvePaperclipRunnerProviderProfile(initialSource.source.agent.adapterConfig)
       : null;
-    if (providerArtifactPreparation || nativeSessionStart || nativeHarnessState || nativeWorkspacePrepare || nativeRuntimeContextPrepare) {
+    if (providerArtifactPreparation || nativeSessionStart || nativeHarnessState || nativeWorkspacePrepare || nativeRuntimeContextPrepare || nativeRuntimeAssetErasureProbe) {
       const task = initialSource.source.task;
       const contextSnapshot = initialSource.run.contextSnapshot && typeof initialSource.run.contextSnapshot === "object"
         ? initialSource.run.contextSnapshot as Record<string, unknown> : {};
@@ -3184,7 +3542,7 @@ export function runtimeControlService(
         initialSource.manifest.runId !== initialSource.run.id || initialSource.manifest.agentId !== initialSource.run.agentId ||
         initialSource.manifest.manifest.responsibleUserId !== initialSource.run.responsibleUserId)
         throw conflict("Provider artifact preparation requires the current Native conversation Run and manifest");
-      if ((providerArtifactPreparation || nativeHarnessState || nativeWorkspacePrepare || nativeRuntimeContextPrepare) &&
+      if ((providerArtifactPreparation || nativeHarnessState || nativeWorkspacePrepare || nativeRuntimeContextPrepare || nativeRuntimeAssetErasureProbe) &&
         (credentials.mode !== "none" || credentials.bindings.length !== 0 || managedModelPlaceholder))
         throw conflict("Provider artifact preparation cannot receive workload credentials");
     }
@@ -3222,7 +3580,8 @@ export function runtimeControlService(
       env.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND = String(minted.inputTokensUpperBound);
       env.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS = String(minted.maxOutputTokens);
     }
-    if (managedModelPlaceholder && (!modelBrokerCredential || nativeHarnessState || nativeWorkspacePrepare || nativeRuntimeContextPrepare))
+    if (managedModelPlaceholder && (!modelBrokerCredential || nativeHarnessState || nativeWorkspacePrepare ||
+      nativeRuntimeContextPrepare || nativeRuntimeAssetErasureProbe))
       throw conflict("Managed model sentinel requires its current typed broker credential");
     if (credentials.mode === "brokered" && !nativePreparationPurpose) {
       if (credentials.bindings.length === 0) throw conflict("Brokered sandbox policy has no current credential bindings");
@@ -3495,6 +3854,7 @@ export function runtimeControlService(
     relay,
     getCell,
     executeSandboxTask,
+    eraseRemoteNativeRuntimeAsset,
     authorizeSandboxBrokerCapability,
     create,
     request,

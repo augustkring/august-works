@@ -118,7 +118,8 @@ export function createRemoteRuntimeAssetLocator(input: {
   };
 }
 
-export function isRemoteRuntimeAssetLocator(value: unknown, owner?: NativeRuntimeAssetOwner): value is RemoteRuntimeAssetLocator {
+export function isRemoteRuntimeAssetLocator(value: unknown,
+  owner?: NativeRuntimeAssetOwner | { companyId: string; id: string }): value is RemoteRuntimeAssetLocator {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const locator = value as Partial<RemoteRuntimeAssetLocator>;
   const expectedKeys = ["schema", "companyId", "runId", "runtimeKind", "environmentId", "environmentLeaseId", "provider",
@@ -133,7 +134,7 @@ export function isRemoteRuntimeAssetLocator(value: unknown, owner?: NativeRuntim
     typeof locator.remoteCwdDigest !== "string" || !digestPattern.test(locator.remoteCwdDigest) ||
     typeof locator.relativePath !== "string" || locator.relativePath !== remoteRuntimeAssetRelativePath(locator.normalizedSessionIdDigest) ||
     typeof locator.pathDigest !== "string" || locator.pathDigest !== remoteRuntimeAssetPathDigest(locator.relativePath)) return false;
-  return !owner || (locator.companyId === owner.companyId && locator.runId === owner.runId);
+  return !owner || (locator.companyId === owner.companyId && locator.runId === ("runId" in owner ? owner.runId : owner.id));
 }
 
 export function isRemoteRuntimeAssetRemovalReceipt(value: unknown, locator: RemoteRuntimeAssetLocator): value is RemoteRuntimeAssetRemovalReceipt {
@@ -190,9 +191,9 @@ export async function readRemoteRuntimeAssetLocator(db: Db, run: {
 }
 
 /** The remote tree can be reused by a later Run that resumes the same native
- * session. A single-run source erasure must therefore wait while any other
- * persisted Run may still own that exact session. Company purge may retire the
- * shared tree only when all co-owners are included in that same purge. */
+ * session. Keep every single-run and company-purge job pending while another
+ * persisted Run may own that exact session until a group receipt can bind all
+ * owners and their stop proofs. */
 export async function assertRemoteRuntimeAssetErasureReady(db: Db, locator: RemoteRuntimeAssetLocator,
   companyPurgeOperationId?: string) {
   const [run] = await db.select().from(heartbeatRuns).where(and(
@@ -209,12 +210,23 @@ export async function assertRemoteRuntimeAssetErasureReady(db: Db, locator: Remo
     eq(memoryJobs.companyId, locator.companyId), eq(memoryJobs.jobKey, runtimeAssetJobKey(locator.runId, []))))
     .orderBy(desc(memoryJobs.attemptNumber)).limit(1);
   const jobSource = job?.sourceRefJson as Record<string, unknown> | undefined;
-  if (!job || job.operationType !== "retention" || !["queued", "running"].includes(job.status) ||
-    jobSource?.kind !== "runtime_asset_erasure" || jobSource.runId !== locator.runId ||
+  if (!job || !jobSource || job.operationType !== "retention" || !["queued", "running"].includes(job.status) ||
+    jobSource.kind !== "runtime_asset_erasure" || jobSource.runId !== locator.runId ||
     jobSource.companyPurgeOperationId !== companyPurgeOperationId ||
     !isRemoteRuntimeAssetLocator(jobSource.remoteAssetLocator, locator) ||
     remoteRuntimeAssetLocatorDigest(jobSource.remoteAssetLocator as RemoteRuntimeAssetLocator) !== remoteRuntimeAssetLocatorDigest(locator))
     throw conflict("Managed remote OpenCode erasure has no current exact MemoryJob authority");
+  if (companyPurgeOperationId) {
+    if (!uuidPattern.test(companyPurgeOperationId)) throw conflict("Managed remote OpenCode purge binding is invalid");
+    const [operation] = await db.select({ companyId: companyDeletionOperations.companyId,
+      stage: companyDeletionOperations.stage, status: companyDeletionOperations.status,
+      evidence: companyDeletionOperations.evidence }).from(companyDeletionOperations).where(and(
+      eq(companyDeletionOperations.companyId, locator.companyId), eq(companyDeletionOperations.id, companyPurgeOperationId)));
+    const [company] = await db.select({ status: companies.status }).from(companies).where(eq(companies.id, locator.companyId));
+    if (!operation || operation.stage !== "purge" || operation.status !== "processing" ||
+      typeof operation.evidence.runtimesErasedAt !== "string" || company?.status !== "archived")
+      throw conflict("Managed remote OpenCode erasure requires the current archived company purge");
+  }
   const [finalization] = await db.select({ phase: nativeRunFinalizations.phase, leaseOwner: nativeRunFinalizations.leaseOwner,
     leaseExpiresAt: nativeRunFinalizations.leaseExpiresAt }).from(nativeRunFinalizations).where(and(
     eq(nativeRunFinalizations.companyId, locator.companyId), eq(nativeRunFinalizations.runId, locator.runId)));
@@ -227,61 +239,13 @@ export async function assertRemoteRuntimeAssetErasureReady(db: Db, locator: Remo
   if (remoteLeases.length !== 1 || remoteLeases.some(lease => lease.provider === "local" ||
     !["active", "pending_cleanup"].includes(lease.status) || lease.releasedAt !== null || lease.cleanupStatus === "success"))
     throw conflict("Managed remote OpenCode data erasure awaits its exact current cleanup lease");
-  const coOwners = await db.select({ id: heartbeatRuns.id, companyId: heartbeatRuns.companyId,
-    nativeSessionId: heartbeatRuns.nativeSessionId, runtimeMode: heartbeatRuns.runtimeMode,
-    driverKind: heartbeatRuns.driverKind, status: heartbeatRuns.status, processPid: heartbeatRuns.processPid,
-    processGroupId: heartbeatRuns.processGroupId, controllerLeaseExpiresAt: heartbeatRuns.controllerLeaseExpiresAt,
-    runnerProfileJson: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns).where(and(
+  const coOwners = await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
     eq(heartbeatRuns.nativeSessionId, run.nativeSessionId ?? ""), eq(heartbeatRuns.runtimeMode, "native"),
     eq(heartbeatRuns.driverKind, "opencode_server")));
   const otherOwners = coOwners.filter(owner => owner.id !== run.id);
-  if (!otherOwners.length) return { run, finalization, remoteLeases, coOwnerRunIds: [run.id] };
-  if (!companyPurgeOperationId || !uuidPattern.test(companyPurgeOperationId))
-    throw conflict("Managed remote OpenCode session still has another retained Run owner");
-  const [operation] = await db.select({ companyId: companyDeletionOperations.companyId,
-    stage: companyDeletionOperations.stage, status: companyDeletionOperations.status,
-    evidence: companyDeletionOperations.evidence }).from(companyDeletionOperations).where(and(
-    eq(companyDeletionOperations.companyId, locator.companyId), eq(companyDeletionOperations.id, companyPurgeOperationId)));
-  if (!operation || operation.stage !== "purge" || operation.status !== "processing" ||
-    typeof operation.evidence.runtimesErasedAt !== "string" || otherOwners.some(owner => owner.companyId !== locator.companyId))
-    throw conflict("Managed remote OpenCode session has another Run outside the current company purge");
-  for (const owner of otherOwners) {
-    if (!owner.nativeSessionId || owner.status === "queued" || owner.status === "running" || owner.status === "scheduled_retry" ||
-      owner.processPid !== null || owner.processGroupId !== null || owner.controllerLeaseExpiresAt !== null)
-      throw conflict("Managed remote OpenCode session has an unsettled Run owner");
-    const profile = owner.runnerProfileJson && typeof owner.runnerProfileJson === "object" && !Array.isArray(owner.runnerProfileJson)
-      ? owner.runnerProfileJson as Record<string, unknown> : null;
-    const otherLocator = profile?.nativeRemoteRuntimeAssetLocator;
-    if (!isRemoteRuntimeAssetLocator(otherLocator, owner) ||
-      otherLocator.normalizedSessionIdDigest !== locator.normalizedSessionIdDigest ||
-      otherLocator.runnerInstanceId !== locator.runnerInstanceId || otherLocator.environmentId !== locator.environmentId ||
-      otherLocator.provider !== locator.provider || otherLocator.providerLeaseId !== locator.providerLeaseId ||
-      otherLocator.remoteCwdDigest !== locator.remoteCwdDigest)
-      throw conflict("Managed remote OpenCode session co-owner does not have an exact matching erasure locator");
-    const [otherFinalization] = await db.select({ phase: nativeRunFinalizations.phase, leaseOwner: nativeRunFinalizations.leaseOwner,
-      leaseExpiresAt: nativeRunFinalizations.leaseExpiresAt }).from(nativeRunFinalizations).where(and(
-      eq(nativeRunFinalizations.companyId, owner.companyId), eq(nativeRunFinalizations.runId, owner.id)));
-    const leases = await db.select().from(environmentLeases).where(and(
-      eq(environmentLeases.companyId, owner.companyId), eq(environmentLeases.id, otherLocator.environmentLeaseId),
-      eq(environmentLeases.heartbeatRunId, owner.id)));
-    const [job] = await db.select({ status: memoryJobs.status, sourceRefJson: memoryJobs.sourceRefJson,
-      resultJson: memoryJobs.resultJson }).from(memoryJobs).where(and(
-      eq(memoryJobs.companyId, owner.companyId), eq(memoryJobs.jobKey, runtimeAssetJobKey(owner.id, []))))
-      .orderBy(desc(memoryJobs.attemptNumber)).limit(1);
-    const jobSource = job?.sourceRefJson as Record<string, unknown> | undefined;
-    if (!otherFinalization || !["committed", "terminal_failure"].includes(otherFinalization.phase) ||
-      otherFinalization.leaseOwner !== null || otherFinalization.leaseExpiresAt !== null ||
-      leases.length !== 1 || leases.some(lease => lease.provider === "local" ||
-        !["active", "pending_cleanup"].includes(lease.status) || lease.releasedAt !== null || lease.cleanupStatus === "success") ||
-      job?.status !== "queued" && job?.status !== "running" && job?.status !== "succeeded" ||
-      jobSource?.companyPurgeOperationId !== companyPurgeOperationId ||
-      !isRemoteRuntimeAssetLocator(jobSource.remoteAssetLocator, owner) ||
-      remoteRuntimeAssetLocatorDigest(jobSource.remoteAssetLocator as RemoteRuntimeAssetLocator) !== remoteRuntimeAssetLocatorDigest(otherLocator) ||
-      (job?.status === "succeeded" && !isRemoteRuntimeAssetRemovalReceipt(
-        (job.resultJson as Record<string, unknown> | null)?.remoteRuntimeAssetRemovalReceipt, otherLocator)))
-      throw conflict("Managed remote OpenCode session co-owner has not joined the current erasure operation");
-  }
-  return { run, finalization, remoteLeases, coOwnerRunIds: [run.id, ...otherOwners.map(owner => owner.id)] };
+  if (otherOwners.length)
+    throw conflict("Managed remote OpenCode session has another retained Run owner");
+  return { run, finalization, remoteLeases, coOwnerRunIds: [run.id] };
 }
 
 async function hasNativeRuntimeAssetStop(db: Db, companyId: string, runId: string) {
@@ -558,7 +522,7 @@ export async function enqueueCompanyManagedOpenCodeRuntimeErasure(db: Db, compan
         const isRemoteProviderHomeJob = spec.digests.length === 0 && remoteLocator !== null;
         const remoteReceiptIsCurrent = !isRemoteProviderHomeJob ||
           (isRemoteRuntimeAssetLocator(source?.remoteAssetLocator, run) &&
-            remoteRuntimeAssetLocatorDigest(source.remoteAssetLocator as RemoteRuntimeAssetLocator) === remoteRuntimeAssetLocatorDigest(remoteLocator!) &&
+            remoteRuntimeAssetLocatorDigest(source?.remoteAssetLocator as RemoteRuntimeAssetLocator) === remoteRuntimeAssetLocatorDigest(remoteLocator!) &&
             isRemoteRuntimeAssetRemovalReceipt((existing?.resultJson as Record<string, unknown> | null)?.remoteRuntimeAssetRemovalReceipt, remoteLocator!));
         const providerHomeMustRun = spec.digests.length === 0 && (providerHomes.has(run.id) || isRemoteProviderHomeJob) && !remoteReceiptIsCurrent;
         if (exactSucceededReceipt && !providerHomeMustRun) continue;
@@ -732,7 +696,7 @@ export async function eraseNativeRuntimeAssets(db: Db, owner: NativeRuntimeAsset
             .orderBy(desc(memoryJobs.attemptNumber)).limit(1);
           const source = baseJob?.sourceRefJson as Record<string, unknown> | undefined;
           if (baseJob?.status !== "succeeded" || !isRemoteRuntimeAssetLocator(source?.remoteAssetLocator, owner) ||
-            remoteRuntimeAssetLocatorDigest(source.remoteAssetLocator as RemoteRuntimeAssetLocator) !==
+            remoteRuntimeAssetLocatorDigest(source?.remoteAssetLocator as RemoteRuntimeAssetLocator) !==
               remoteRuntimeAssetLocatorDigest(persistedRemoteLocator as RemoteRuntimeAssetLocator) ||
             !isRemoteRuntimeAssetRemovalReceipt((baseJob.resultJson as Record<string, unknown> | null)?.remoteRuntimeAssetRemovalReceipt,
               persistedRemoteLocator as RemoteRuntimeAssetLocator))

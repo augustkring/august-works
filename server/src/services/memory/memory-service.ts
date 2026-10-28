@@ -54,6 +54,7 @@ import { lockMemoryPrivacy, assertMemoryOperationRetained, assertMemorySourcesRe
   purgeMemoryRecords, memoryDeletionKey, memoryPayloadVisible, reapplyMemoryDeletionMarkers, canActorReadMemorySources,
   canActorReadMemorySourceSet, captureMemorySources, capturePrivateShareSource, memoryShareContentFingerprint,
   withNativeMemoryCaptureSources, type NativeMemoryCaptureReceipt } from "./memory-privacy.js";
+import type { MemoryPageStructuralProofMemoStore } from "../authorization.js";
 import { learningActorFromPrincipal } from "../learning/learning-analytical-sources.js";
 import { persistActivity, publishActivity, type ActivityPublication } from "../activity-log.js";
 import { canActorReadIssuePrivacy, pinCurrentBoardActor, type AuthorizationActor } from "../authorization.js";
@@ -543,7 +544,8 @@ async function getRecordDetail(db: Db, companyId: string, recordId: string, budg
   return { ...recordDetail(record, evidence), ...(safeScope?{privateShareReview:safeScope}:{}) };
 }
 
-type MemoryReadBudget = { signal?: AbortSignal; deadlineAt?: number };
+type MemoryReadBudget = { signal?: AbortSignal; deadlineAt?: number;
+  structuralProofMemoStore?: MemoryPageStructuralProofMemoStore };
 let memoryVisiblePageProfileCount = 0;
 function assertMemoryReadActive(budget: MemoryReadBudget = {}) {
   if (budget.signal?.aborted) throw budget.signal.reason ?? new Error("Memory retrieval was cancelled");
@@ -578,6 +580,8 @@ async function visibleMemoryPage(db:Db,companyId:string,actor:MemoryMutationActo
   let profileResult = "error";
   try { return await db.transaction(async rawTx=>{
     const tx=rawTx as unknown as Db;
+    const pageBudget: MemoryReadBudget = { ...budget,
+      structuralProofMemoStore: { transaction: tx as object, proofsByOwnerPrefix: new Map() } };
     if (profile) {
       const globals = globalThis as unknown as Record<PropertyKey, unknown>;
       const ordinals = globals[Symbol.for("paperclip.nativeSourceMemoDiagnosticTxOrdinals.v1")];
@@ -587,15 +591,15 @@ async function visibleMemoryPage(db:Db,companyId:string,actor:MemoryMutationActo
       }
     }
     profileStats.stage = "privacy_fences";
-    await setMemoryReadStatementBudget(tx, budget);
+    await setMemoryReadStatementBudget(tx, pageBudget);
     await lockAnalyticalCompany(tx,companyId,"read"); await lockMemoryPrivacy(tx,companyId,"read");
     markAnalyticalPrivacyReadLocked(tx);
-    await setMemoryReadStatementBudget(tx, budget);
+    await setMemoryReadStatementBudget(tx, pageBudget);
     await assertActorCompanyScope(tx,companyId,actor);
     const deadline=performance.now()+8000;
     const visible:(typeof memoryRecords.$inferSelect)[]=[];
     for(let offset=0;;offset+=100){
-      await setMemoryReadStatementBudget(tx, budget);
+      await setMemoryReadStatementBudget(tx, pageBudget);
       profileStats.stage = "candidate_page_query";
       const pageStartedAt = profile ? performance.now() : 0;
       const rows=await page(tx,offset);
@@ -607,7 +611,7 @@ async function visibleMemoryPage(db:Db,companyId:string,actor:MemoryMutationActo
       const candidates=candidateFilter ? rows.filter(candidateFilter) : rows;
       profileStats.stage = "candidate_source_review";
       const firstReviewStartedAt = profile ? performance.now() : 0;
-      const checked = await visibleMemorySources(tx,companyId,candidates,actor,budget);
+      const checked = await visibleMemorySources(tx,companyId,candidates,actor,pageBudget);
       if (profile) {
         profileStats.candidateRows += candidates.length;
         profileStats.firstReviewMs += performance.now() - firstReviewStartedAt;
@@ -619,7 +623,7 @@ async function visibleMemoryPage(db:Db,companyId:string,actor:MemoryMutationActo
         // A later source may wait while an earlier reader grant is withdrawn.
         profileStats.stage = "candidate_source_revalidation";
         const secondReviewStartedAt = profile ? performance.now() : 0;
-        const current=await visibleMemorySources(tx,companyId,visible.slice(0,limit),actor,budget);
+        const current=await visibleMemorySources(tx,companyId,visible.slice(0,limit),actor,pageBudget);
         if (profile) profileStats.secondReviewMs += performance.now() - secondReviewStartedAt;
         if(performance.now()>deadline)throw conflict("Complete Memory source review exceeded its budget");
         profileResult = "ok";

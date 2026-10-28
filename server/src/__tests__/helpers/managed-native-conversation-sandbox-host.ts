@@ -666,7 +666,8 @@ export async function configureManagedConversationSandboxHost(input: {
     if (message.type !== "exec_open" || !Array.isArray(message.request?.argv) || typeof message.channelId !== "string") return;
     const request = message.request as Record<string, any>;
     const requestEnv = request.env && typeof request.env === "object" ? request.env as Record<string, unknown> : {};
-    const nativePreparationPurpose = purposeByRequestId.get(request.requestId) ?? null;
+    const nativePreparationPurpose = purposeByRequestId.get(request.requestId) ??
+      (requestArgv[3] === "paperclip-native-asset-erasure" ? "native_provider_data_erasure" : null);
     const requestArgv = request.argv as string[];
     const requestLabel = requestArgv[0] === "sh" && requestArgv[1] === "-c" ? requestArgv[2] : null;
     relayCommandOwnerByRequestId.set(request.requestId, requestLabel === "paperclip-runner-monitor"
@@ -676,7 +677,8 @@ export async function configureManagedConversationSandboxHost(input: {
             ? "runner_diagnostic_read" : requestLabel === "paperclip-runner-launch"
               ? "runner_launch" : requestLabel === "paperclip-runner-failure-check"
                 ? "runner_failure_cleanup" : "other");
-    const noBrokerPreparation = ["provider_artifact", "native_harness_state", "native_workspace_prepare", "native_runtime_context_prepare"]
+    const noBrokerPreparation = ["provider_artifact", "native_harness_state", "native_workspace_prepare", "native_runtime_context_prepare",
+      "native_provider_data_erasure", "native_provider_data_erasure_probe"]
       .includes(nativePreparationPurpose ?? "");
     const managedModelOriginMatches = requestEnv.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === brokerOrigin &&
       Boolean(request.modelBrokerCredential);
@@ -866,6 +868,7 @@ export async function configureManagedConversationSandboxHost(input: {
 
   return {
     sandboxExec: runtime.executeSandboxTask,
+    eraseRemoteNativeRuntimeAsset: runtime.eraseRemoteNativeRuntimeAsset,
     environmentRuntime,
     beforeNativeExecution,
     facts: () => {

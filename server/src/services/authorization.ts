@@ -1999,6 +1999,11 @@ type MemoryTemporalReadScope = {
   readonly contextIds: readonly string[];
   active: boolean;
 };
+export interface MemoryPageStructuralProofMemoStore {
+  readonly transaction: object;
+  readonly proofsByOwnerPrefix: Map<string, Set<string>>;
+  ancestry?: { work: number; activeByActor: Map<string, Set<string>> };
+}
 const memoryTemporalReadScopes = new AsyncLocalStorage<MemoryTemporalReadScope>();
 let nativeMemoryTemporalDiagnostics = 0;
 
@@ -2006,7 +2011,8 @@ let nativeMemoryTemporalDiagnostics = 0;
  * This is callable only by the Memory source owner, never from request fields. */
 export async function withReadMemoryTemporalSources<T>(db: Db | DbTransaction, actor: AuthorizationActor,
   companyId: string, recordId: string, read: (sourceDb: Db | DbTransaction) => Promise<T>, expected?: { sourceVersion: string; snapshot: unknown;
-    issueIds: string[]; projectIds: string[]; runIds: string[]; memoryIds: string[]; foundationRevisionIds: string[] }): Promise<T | false> {
+    issueIds: string[]; projectIds: string[]; runIds: string[]; memoryIds: string[]; foundationRevisionIds: string[] },
+  structuralProofMemoStore?: MemoryPageStructuralProofMemoStore): Promise<T | false> {
   const diagnosticStartedAt = performance.now();
   let diagnosticDb = db as object;
   const diagnostic = (stage: "source_snapshot" | "source_body_hash" | "output_snapshot_currentness" |
@@ -2075,6 +2081,24 @@ export async function withReadMemoryTemporalSources<T>(db: Db | DbTransaction, a
       issueIds: new Set(row.sourceIssueIds), runIds: new Set(capturedRunIds),
       contextIds: contextInputs.map(input => input.manifestId).sort(), active: true };
     let currentnessStage: "output_snapshot_currentness" | "context_inputs_currentness" = "output_snapshot_currentness";
+    let structuralProofMemo: { transaction: object; actorKey: string; memoryTemporalIdentity: string;
+      frozenTaskSnapshots: Set<string>; ancestry?: { work: number; activeByActor: Map<string, Set<string>> };
+      updateAncestry: (ancestry: { work: number; activeByActor: Map<string, Set<string>> }) => void } | undefined;
+    const memoryTemporalIdentity = activeMemoryTemporalReadScopeIdentity(sourceDb, actor);
+    const memoActorKey = createHash("sha256").update(JSON.stringify(actor), "utf8").digest("hex");
+    const memoKey = memoryTemporalIdentity
+      ? createHash("sha256").update(JSON.stringify({ actorKey: memoActorKey, memoryTemporalIdentity }), "utf8").digest("hex") : null;
+    if (structuralProofMemoStore && structuralProofMemoStore.transaction === (sourceDb as object) && memoryTemporalIdentity && memoKey &&
+      (structuralProofMemoStore.proofsByOwnerPrefix.has(memoKey) || structuralProofMemoStore.proofsByOwnerPrefix.size < 128)) {
+      let frozenTaskSnapshots = structuralProofMemoStore.proofsByOwnerPrefix.get(memoKey);
+      if (!frozenTaskSnapshots) {
+        frozenTaskSnapshots = new Set();
+        structuralProofMemoStore.proofsByOwnerPrefix.set(memoKey, frozenTaskSnapshots);
+      }
+      structuralProofMemo = { transaction: sourceDb as object, actorKey, memoryTemporalIdentity, frozenTaskSnapshots,
+        ...(structuralProofMemoStore.ancestry ? { ancestry: structuralProofMemoStore.ancestry } : {}),
+        updateAncestry: ancestry => { structuralProofMemoStore.ancestry = ancestry; } };
+    }
     try {
       const result = await memoryTemporalReadScopes.run(scope, async () => {
         try {
@@ -2089,6 +2113,7 @@ export async function withReadMemoryTemporalSources<T>(db: Db | DbTransaction, a
           };
           if (dispatch) return await withNativeMemoryOutputSnapshotCurrent(sourceDb, {
             companyId, recordId, snapshot: snapshot.data, actor,
+            ...(structuralProofMemo ? { structuralProofMemo } : {}),
           }, readWithCurrentContext);
           return await readWithCurrentContext(sourceDb);
         } catch (error) {

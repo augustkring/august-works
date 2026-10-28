@@ -12,7 +12,8 @@ import { activeMemoryTemporalContexts, canActorReadIssuePrivacy, withReadPinnedN
 import { issueService } from "../services/issues.js";
 import { memoryService } from "../services/memory/memory-service.js";
 import { memoryJobService } from "../services/memory/memory-jobs.js";
-import { assertNativeDocumentRevisionCurrentSourceAccess, assertNativeMemoryOutputSnapshotCurrent } from "../services/native-direct-input.js";
+import { assertNativeDocumentRevisionCurrentSourceAccess, assertNativeMemoryOutputSnapshotCurrent,
+  nativeSourceMemoDiagnosticsForTest, resetNativeSourceMemoDiagnosticsForTest } from "../services/native-direct-input.js";
 import { lockAnalyticalCompany } from "../services/analytical-privacy.js";
 import { canActorReadMemorySources, lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
 import { managedOpenCodeRuntimeDirectory } from "../services/native-runtime/runtime-asset-retention.js";
@@ -222,6 +223,38 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
       snapshot, actor: second.bobMemoryActor.authorizationActor })).resolves.toBeUndefined();
     expect((await memories.get(first.companyId, memoryBId, second.aliceMemoryActor))?.record.id).toBe(memoryBId);
     expect(await memories.get(first.companyId, memoryBId, second.bobMemoryActor)).toBeNull();
+  });
+
+  it("reuses frozen Task structure only inside the same Memory owner prefix and transaction", async () => {
+    const { first, second, memoryAId, memoryCId, privateRootId } = temporal;
+    await db.transaction(async rawTx => {
+      const tx = rawTx as unknown as typeof db;
+      const store = { transaction: tx as object, proofsByOwnerPrefix: new Map<string, Set<string>>() };
+      resetNativeSourceMemoDiagnosticsForTest();
+      expect(await canActorReadMemorySources(tx, first.companyId, second.aliceActor, memoryAId!,
+        { structuralProofMemoStore: store })).toBe(true);
+      const firstPrefix = [...store.proofsByOwnerPrefix.entries()][0];
+      expect(firstPrefix).toBeDefined();
+      expect(firstPrefix![1].size).toBeGreaterThan(0);
+
+      // The repeated read may reuse only this exact owner’s immutable Task
+      // structure; the memory/source owners and live actor ACL are checked
+      // again by the existing reader path.
+      expect(await canActorReadMemorySources(tx, first.companyId, second.aliceActor, memoryAId!,
+        { structuralProofMemoStore: store })).toBe(true);
+      expect(store.proofsByOwnerPrefix.size).toBe(1);
+      expect([...store.proofsByOwnerPrefix.values()][0]).toBe(firstPrefix![1]);
+      expect(nativeSourceMemoDiagnosticsForTest().frozenTaskMemoByKind.task?.hits ?? 0).toBeGreaterThan(0);
+
+      // A different Memory owner in the same physical transaction has a
+      // different temporal prefix and must receive an isolated proof set.
+      expect(await canActorReadMemorySources(tx, first.companyId, second.aliceActor, memoryCId!,
+        { structuralProofMemoStore: store })).toBe(true);
+      expect(store.proofsByOwnerPrefix.size).toBe(2);
+      expect([...store.proofsByOwnerPrefix.values()][1]).not.toBe(firstPrefix![1]);
+      expect(await canActorReadMemorySources(tx, first.companyId, second.bobActor, privateRootId!,
+        { structuralProofMemoStore: store })).toBe(false);
+    });
   });
 
   it("keeps earlier Task A readable while later Task B retains the private source", async () => {

@@ -382,7 +382,9 @@ export function saasOffboardingService(
         // remove those owner rows; a failed/active run holds this phase open.
         const managedRunIds = await enqueueCompanyManagedOpenCodeRuntimeErasure(db, operation.companyId, operation.id);
         if (managedRunIds.length) {
-          await memoryJobService(db).tick({ limit: 32, companyId: operation.companyId });
+          await memoryJobService(db, {
+            eraseRemoteNativeRuntimeAsset: (locator, input) => runtime.eraseRemoteNativeRuntimeAsset(locator, input),
+          }).tick({ limit: 32, companyId: operation.companyId });
           const keys = managedRunIds.map(runId => `runtime-asset-erasure:v1:${runId}`);
           const attempts = await db.select({ jobKey: memoryJobs.jobKey, attemptNumber: memoryJobs.attemptNumber,
             status: memoryJobs.status, sourceRefJson: memoryJobs.sourceRefJson })
@@ -412,7 +414,9 @@ export function saasOffboardingService(
           // Stop rows. A second real worker pass can then erase unreferenced
           // bytes before the final company transaction deletes those owners.
           await enqueueCompanyManagedOpenCodeRuntimeErasure(db, operation.companyId, operation.id);
-          await memoryJobService(db).tick({ limit: 50, companyId: operation.companyId });
+          await memoryJobService(db, {
+            eraseRemoteNativeRuntimeAsset: (locator, input) => runtime.eraseRemoteNativeRuntimeAsset(locator, input),
+          }).tick({ limit: 50, companyId: operation.companyId });
         }
         try {
           await assertCompanyManagedOpenCodeRuntimeDataErased(db, operation.companyId, operation.id);

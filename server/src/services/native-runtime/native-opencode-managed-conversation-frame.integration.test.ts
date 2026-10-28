@@ -1,6 +1,6 @@
-import {and,eq,gte,sql} from "drizzle-orm";
+import {and,desc,eq,gte,sql} from "drizzle-orm";
 import {randomUUID} from "node:crypto";
-import {authSessions,authUsers,companyMemberships,heartbeatRunEvents,heartbeatRuns,issues,nativeRunFinalizations,nativeRunResults,projectWorkspaces,projects,runtimeHostCommands} from "@paperclipai/db";
+import {authSessions,authUsers,companyDeletionOperations,companyMemberships,companies,environmentLeases,heartbeatRunEvents,heartbeatRuns,issues,memoryJobs,nativeRunFinalizations,nativeRunResults,projectWorkspaces,projects,runtimeHostCommands} from "@paperclipai/db";
 import type {BusinessMetricQuery} from "@paperclipai/shared";
 import {instanceSettingsService} from "../instance-settings.js";
 import {businessMetricService} from "../business-metrics/service.js";
@@ -28,6 +28,10 @@ import { seedNativePasskeySession } from "../../__tests__/helpers/native-authent
 import { nativeCancelOriginTestFactsForRun } from "./native-session-executor.js";
 import { redactSensitiveText } from "../../redaction.js";
 import { validatePrpEvent } from "../../vendor/paperclip-runner/index.js";
+import { memoryJobService } from "../memory/memory-jobs.js";
+import { enqueueCompanyManagedOpenCodeRuntimeErasure, readRemoteRuntimeAssetLocator } from "./runtime-asset-retention.js";
+import path from "node:path";
+import fs from "node:fs/promises";
 
 function qualifiedOpenCodeBinary(): string | null {
   if (process.platform !== "linux") return null;
@@ -122,10 +126,15 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
     vi.stubEnv("PAPERCLIP_NATIVE_CANCEL_ORIGIN_TEST_DIAGNOSTICS", "1");
     vi.stubEnv("PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS", "1");
     const settledRunEvidence: { current: Record<string, unknown> | null } = { current: null };
+    let eraseRemoteNativeRuntimeAsset: Awaited<ReturnType<typeof configureManagedConversationSandboxHost>>["eraseRemoteNativeRuntimeAsset"] | null = null;
     const binary = qualifiedOpenCodeBinary();
     if (!binary) throw new Error("qualified_opencode_binary_unavailable");
     const result = await runManagedNativeConversationFrame({ db, root, opencodeBinary: binary, sandboxRelay: true, timeoutSec: 600,
-      configureHeartbeat: context => configureManagedConversationSandboxHost({ ...context, root }),
+      configureHeartbeat: async context => {
+        const host = await configureManagedConversationSandboxHost({ ...context, root });
+        eraseRemoteNativeRuntimeAsset = host.eraseRemoteNativeRuntimeAsset;
+        return host;
+      },
       beforeProviderResponse: async facts => {
         expect(facts.run.status).toBe("running");
         expect(facts.run.nativeIssueId).toBe(facts.issueId);
@@ -222,6 +231,57 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
               errorCode: command.errorCode, purpose: command.purpose, attempt: command.attempt,
               commandDigest: command.commandDigest, createdAt: command.createdAt.toISOString() })).slice(0, 32),
         };
+        if (facts.run.status === "succeeded") {
+          if (!eraseRemoteNativeRuntimeAsset) throw new Error("conversation_remote_native_asset_eraser_missing");
+          const [durableRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, facts.run.id)).limit(1);
+          if (!durableRun) throw new Error("conversation_remote_native_asset_run_missing");
+          const locator = await readRemoteRuntimeAssetLocator(db, durableRun);
+          if (!locator) throw new Error("conversation_remote_native_asset_locator_missing");
+          const [lease] = await db.select({ metadata: environmentLeases.metadata }).from(environmentLeases).where(and(
+            eq(environmentLeases.companyId, facts.companyId), eq(environmentLeases.id, locator.environmentLeaseId))).limit(1);
+          const remoteCwd = lease?.metadata && typeof lease.metadata.remoteCwd === "string" ? lease.metadata.remoteCwd : null;
+          if (!remoteCwd) throw new Error("conversation_remote_native_asset_cwd_missing");
+          const sessionsRoot = path.join(remoteCwd, ".paperclip-runtime", "paperclip-runner", "sessions");
+          const siblingSessionRoot = path.join(sessionsRoot, "f".repeat(64));
+          await fs.mkdir(siblingSessionRoot, { recursive: true });
+          await fs.writeFile(path.join(siblingSessionRoot, "retained-neighbor.txt"), "neighbor remains");
+          const operationId = randomUUID();
+          await db.update(companies).set({ status: "archived" }).where(eq(companies.id, facts.companyId));
+          await db.insert(companyDeletionOperations).values({ id: operationId, companyId: facts.companyId,
+            requestedByUserId: facts.actor.userId ?? "managed-runtime-fixture", idempotencyKey: `remote-runtime-erasure-${operationId}`,
+            status: "processing", stage: "purge", evidence: { runtimesErasedAt: new Date().toISOString() } });
+          if (!durableRun.nativeSessionId) throw new Error("conversation_remote_native_asset_session_missing");
+          const coOwnerRunId = randomUUID();
+          await db.insert(heartbeatRuns).values({ id: coOwnerRunId, companyId: facts.companyId, agentId: facts.agentId,
+            status: "succeeded", runtimeMode: "native", driverKind: "opencode_server",
+            nativeSessionId: durableRun.nativeSessionId, runnerInstanceId: durableRun.runnerInstanceId, runnerProfileJson: {} });
+          await enqueueCompanyManagedOpenCodeRuntimeErasure(db, facts.companyId, operationId);
+          await memoryJobService(db, { eraseRemoteNativeRuntimeAsset }).tick({ limit: 32, companyId: facts.companyId });
+          const [blockedJob] = await db.select({ status: memoryJobs.status, resultJson: memoryJobs.resultJson }).from(memoryJobs).where(and(
+            eq(memoryJobs.companyId, facts.companyId), eq(memoryJobs.jobKey, `runtime-asset-erasure:v1:${facts.run.id}`)))
+            .orderBy(desc(memoryJobs.attemptNumber)).limit(1);
+          expect(blockedJob?.status).toBe("failed");
+          expect((blockedJob?.resultJson as Record<string, unknown> | null)?.remoteRuntimeAssetRemovalReceipt).toBeUndefined();
+          await expect(fs.stat(path.join(sessionsRoot, locator.normalizedSessionIdDigest))).resolves.toBeDefined();
+          await db.delete(memoryJobs).where(and(eq(memoryJobs.companyId, facts.companyId),
+            eq(memoryJobs.jobKey, `runtime-asset-erasure:v1:${coOwnerRunId}`)));
+          await db.delete(heartbeatRuns).where(eq(heartbeatRuns.id, coOwnerRunId));
+          await enqueueCompanyManagedOpenCodeRuntimeErasure(db, facts.companyId, operationId);
+          await memoryJobService(db, { eraseRemoteNativeRuntimeAsset }).tick({ limit: 32, companyId: facts.companyId });
+          const [job] = await db.select({ status: memoryJobs.status, resultJson: memoryJobs.resultJson }).from(memoryJobs).where(and(
+            eq(memoryJobs.companyId, facts.companyId), eq(memoryJobs.jobKey, `runtime-asset-erasure:v1:${facts.run.id}`)))
+            .orderBy(desc(memoryJobs.attemptNumber)).limit(1);
+          expect(job?.status).toBe("succeeded");
+          expect((job?.resultJson as Record<string, unknown> | null)?.remoteRuntimeAssetRemovalReceipt)
+            .toMatchObject({ relativePath: locator.relativePath, pathDigest: locator.pathDigest,
+              purpose: "native_provider_data_erasure", stopProofBeforeDelete: true, postDeleteAbsent: true,
+              stopProof: expect.objectContaining({ runId: facts.run.id,
+                normalizedSessionIdDigest: locator.normalizedSessionIdDigest,
+                environmentLeaseId: locator.environmentLeaseId, providerLeaseId: locator.providerLeaseId,
+                pid: expect.any(Number), processStartFingerprintDigest: expect.stringMatching(/^[a-f0-9]{64}$/) }) });
+          await expect(fs.stat(path.join(sessionsRoot, locator.normalizedSessionIdDigest))).rejects.toMatchObject({ code: "ENOENT" });
+          await expect(fs.readFile(path.join(siblingSessionRoot, "retained-neighbor.txt"), "utf8")).resolves.toBe("neighbor remains");
+        }
       } });
     expect(result.success, JSON.stringify({ runStatus: result.runStatus, runError: result.run?.error,
       run: result.run ? { id: result.run.id, status: result.run.status, startedAt: result.run.startedAt,
