@@ -1723,7 +1723,7 @@ const support = await getEmbeddedPostgresTestSupport();
       })).rejects.toMatchObject({ status: 409 });
       await expect(
         broker.assertCompanyPurposeResponseReturn(f.actor, f.home, reservation.id),
-      ).rejects.toMatchObject({ status: 409 });
+      ).rejects.toMatchObject({ status: 403 });
       expect((await db.select().from(orchestrationCompanyPurposeReservations)
         .where(eq(orchestrationCompanyPurposeReservations.id, reservation.id)))[0]?.status).toBe("dispatched");
       expect((await db.select().from(orchestrationCompanyPurposeBudgets).where(eq(orchestrationCompanyPurposeBudgets.companyId, f.home)))[0]).toMatchObject({ reservedMinor: 30, reservedCalls: 1 });
@@ -1739,7 +1739,10 @@ const support = await getEmbeddedPostgresTestSupport();
       expect((await db.select().from(orchestrationCompanyPurposeBudgets).where(eq(orchestrationCompanyPurposeBudgets.companyId, f.home)))[0]).toMatchObject({ reservedMinor: 30, reservedCalls: 1 });
     });
     it("cancels undispatched holds, waits for dispatched outcomes, then purges only through the canonical offboarding receipt", async () => {
-      supportFunding = makeSupportFunding(f.home, { maxCostMinor: 100 });
+      supportFunding = makeSupportFunding(f.home, { maxCostMinor: 100,
+        tariff: { ...tariff(), provider: "anthropic", model: "claude-fixture",
+          expiresAt: new Date(Date.now() + 60 * 60_000).toISOString() },
+      });
       const priorHome = process.env.PAPERCLIP_HOME, priorInstance = process.env.PAPERCLIP_INSTANCE_ID;
       const providerTestHome = await fs.mkdtemp(path.join(os.tmpdir(), "aw-offboard-opencode-"));
       process.env.PAPERCLIP_HOME = providerTestHome;
@@ -1756,7 +1759,9 @@ const support = await getEmbeddedPostgresTestSupport();
       await anthropicReadOnlyCall({ model: "claude-fixture", system: "Bounded software transport receipt.",
         evidence: "No private evidence is used in this dispatch-owner test.", maxOutputTokens: 16 }, supportApiKey,
       new AbortController().signal, {
-        fetch: mockSupportTransport() as unknown as typeof import("../services/remote-http-fetch.js").guardedRemoteHttpFetch,
+        fetch: vi.fn(async () => new Response(JSON.stringify({ type: "message", role: "assistant", model: "claude-fixture",
+          stop_reason: "end_turn", content: [{ type: "text", text: "Controlled offboarding fixture response" }],
+          usage: { input_tokens: 1, output_tokens: 1 } }), { status: 200, headers: { "content-type": "application/json" } })) as unknown as typeof import("../services/remote-http-fetch.js").guardedRemoteHttpFetch,
         onWireDispatch: wire => broker.recordCompanyPurposeWireDispatch(f.actor, f.home, dispatched.id, wire),
       });
       await agentIdentityService(db).rehome(f.actor, f.home, f.identity.id, f.guest);
