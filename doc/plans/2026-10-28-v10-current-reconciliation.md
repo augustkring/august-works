@@ -1,22 +1,22 @@
 # Blentera V10 current software reconciliation — 28 October 2026
 
-This is a current-source closeout overlay for the 169-work-ID index in
+This is the current-source closeout report for the 169-work-ID index in
 `doc/operations/aw-v10-evidence/recovery-2026-10-22/requirement-reconciliation.json`.
-It does not revise that file's item statuses or create a second acceptance
-register. The Oct 22 index is historical: at creation it recorded 145
-`not_reconciled`, 24 `in_progress`, and an open release qualification. It is not
-a current completeness measure. The brief explicitly says the ID count is not
+That existing register now carries per-item current dispositions, exact bound
+clauses, scoped evidence references, pin comparisons, and remaining work. Its
+Oct 22 statuses are retained as history. Neither the ID count nor a scoped
+software receipt establishes completeness or release qualification. The brief explicitly says the ID count is not
 the contract; requirements, inherited registers, acceptance journeys, and
 §§47/50/55/56/57 control.
 
-I read the repository instructions, the Ponytail skill, the V10 catalogue and
-binding execution/qualification/runtime sections used below, the Oct 22
-recovery record, and the latest recovery-plan entries through 28 Oct. The brief
-is too large for a responsible line-by-line reread within this bounded audit;
-the source clause is linked for every disposition. This reconciliation is a
-source/evidence review only. No tests were run and no test is marked PASS here.
-Scoped results below remain only the results at their recorded source pins; a
-newer or mixed source tree does not inherit them.
+I read the repository instructions, the Ponytail skill, the relevant V10
+catalogue and binding execution/qualification/runtime/notice clauses, the Oct
+22 recovery record, and the latest recovery-plan entries through 28 Oct. This
+is a bounded audit, not a claim that every line of the master brief or every
+implementation path was reread. Scoped source findings and linked test attempts
+are recorded separately; none establishes full current-head or release
+qualification. A newer or mixed source tree does not inherit a prior test
+result.
 
 ## Required software closure, in priority order
 
@@ -28,6 +28,8 @@ newer or mixed source tree does not inherit them.
 | P1 — agent operation parity and required operating knowledge | `V10-121`–`130`, `V10-134`–`145`, `V10-168`; §§43.14–43.15, 57.2, 57.6 | The canonical descriptors and platform admission are partial substrate, not complete conformance. Recent notes record required Skill admission wired into heartbeat/material owners, and canonical operation descriptors added, but Gateway PostgreSQL regressions, authored/native coexistence, runtime/profile delivery, reachability and negative/adversarial/recovery matrices remain incomplete or queued. OpenClaw/Hermes managed delivery code is partial; installed-vendor/profile qualification and A2A equivalence are still open. Close the exact current operation/catalog/Skill pins across runtime, actual session topology and canonical owners; prove one ordinary authorized work journey and denied/stale/revoked/replay branches per claimed profile. No profile is eligible merely because the reserved Skill is present. Evidence: latest “27 October, runtime admission…” and “27 October, retained runtime…” notes; brief §§43.14–43.15, 57.2, 57.6. |
 | P1 — durable work/recovery on actual paths | `V10-019`–`024`, `V10-111`, `V10-160`–`162`; §§43.8, 55.2, 56.3 | Company Import now has a durable ledger, fenced checkpoints and transaction-paired logical writes, but current plan still records incomplete original import/process-recovery and cross-company governed-positive coverage. Complete crash-after-effect, unknown storage/provider outcome, retry/reconciliation, cancel/Stop, access loss, restore and duplicate-key cases using original producers/consumers. Recovery must return the original receipt, not make a second effect. Apply the same assembled-path standard to workflow/chat accepted messages and finalization; helper-only tests do not close these IDs. Evidence: latest Oct 27/28 recovery-plan entries including import and recovery continuation; brief §55.2. |
 | P1 — explicit company guest-mode contract | `V10-123`, `V10-124`, `V10-129`–`130`; §57.4 ORG-01; §55.2 | Preserve and qualify cross-company **read and contribute** under current represented-human rights, same logical identity/local presence, target policy and source-sharing rules. The brief explicitly says delegated scopes are currently rejected in bounded orchestration and calls for preserving explicit cross-company reading and contribution. **Autonomous guest writes remain conditional**: only offer them after guest-scoped effect, accounting, revocation and result-ownership receipts are implemented and qualified. Do not remove the guard to claim completion, infer guest rights from portfolio/organizational membership, or drop multi-organization functionality from the product. Qualification must state the supported guest-mode matrix and test late revocation, cache isolation, source provenance and no home-company/private-Memory disclosure. Evidence: §57.2 table, §57.4 ORG-01, §57.6 acceptance matrix. |
+| P1 — model/provider dependency lifecycle and explicit migration | `V10-073`–`079`; §19 | Deployment-pinned qualification profiles can now carry owner-declared lifecycle, region/routing, data-use, supported modalities/tools/rate limits, retirement and replacement facts. Runtime rechecks lifecycle and never silently substitutes a profile. The existing Agent Authoring candidate path records exact profile/configuration hashes, runs its reserved conformance probes, and keeps Human publication separate. Its catalog now identifies an exact current agent profile, unresolved profile references and published workflow revisions that reference that agent; a synthetic DB integration passed 8/8 (attempt-10), and focused lifecycle tests passed 21/21 (attempt-5). Actual provider/deployment profile facts remain unpopulated and explicitly untracked. Full coverage of other consumers, durable customer-profile migration, model-task quality evaluation, rollout monitoring, rollback receipts, and a canonical Action Needed projection remain open. Do not infer provider dates or auto-fallback. Evidence: reconciliation register 073–079 and `doc/operations/aw-v10-evidence/model-lifecycle-2026-10-28/attempt-5/`, `attempt-8/`, `attempt-10/`.|
+| P2 — canonical notice and customer changelog closure | `V10-055`–`060`; §§14, 43.9, 55.2 | The optional announcement feed remains a dismissible communication surface and cannot create mandatory/security authority. The mandatory projection now reads only current Trust material-change requirements and switches on the canonical exact mode: per-principal notice-read, per-principal reacceptance, company-wide current-owner/admin acknowledgment, or no action. It links the exact public body and requires that mode’s receipt; local hide is not completion. Trust routes recheck current Human/account generation/company membership and current reviewed/public exact-version state. Source-pinned Trust mode/API tests passed 21/21, notice/projection tests passed 33/33, migration safety passed, and UI typecheck exited 0; the OpenAPI suite passed 26/26 with the mounted session-only Human route. The earlier six-suite attempt remains 70/71 with one pre-fix failure and is retained as such. Other canonical owner domains and changelog lifecycle projections remain open; hosted Trust Center, procurement, policy, and accessibility qualification are not established. Evidence: reconciliation IDs 055–060, `doc/operations/aw-v10-evidence/trust-material-change-modes-r1-2026-10-28/`, and `doc/operations/aw-v10-evidence/mandatory-notices-2026-10-28/attempt-7/`, `attempt-8/`, `attempt-4/`, `attempt-5/`, and `attempt-6/`.
 | P2 — federated findability and case/status contracts | `V10-034`–`038`, `V10-039`–`054`, `V10-060`–`065`; §§43.2–43.4, 43.9 | Universal Find UI has scoped evidence in the recovery record, but server adapters still need current qualification. Complete required adapters/permission filtering/partial-failure behavior and deterministic Cmd+K routing. Separately, do not conflate the recently added disabled Statuspage adapter with completion of incident publishing, in-app projection, subscriber notifications and failure/runbook paths. Current plan also describes a read-only public status adapter while provider/domain/notification qualification is intentionally absent. Support-case/help intake, human handoff and legal/trust evidence registry/negative stale-evidence behavior remain separate contracts; complete software seams and failure UX while leaving missing live suppliers/people as external qualification. Evidence: Oct 27/28 recovery-plan entries; brief §§43.2–43.4, 43.9, 55.2. |
 | P2 — final current-head compatibility, copy and release evidence | `V10-164`–`169`, `V10-119`–`120`; §§47, 50, 55.2–55.6, 56.6 | Current notes explicitly leave the final unchanged-head workspace typecheck/test/build, complete browser/source-erasure acceptance, final Help/static reconciliation, exact migration phase matrix and integrated release dossier open. Complete paired EN/DA meanings and rendered critical states, actual first-value/recovery journeys, and named operator/Human/provider evidence on the exact candidate. Keep code checks, production-artifact checks, host/provider checks, operator drills, manual accessibility and representative human sessions as separate evidence classes. No stale/fixture-only success or compilation result is a release acceptance. Evidence: latest recovery-plan dated 27–28 Oct notes and brief §§50, 55–56. |
 
@@ -40,23 +42,21 @@ newer or mixed source tree does not inherit them.
    operation/Platform Skill, temporal Source/erasure/restore, paid-path and
    durable-work journeys. Record the exact source pins and retain failures and
    incomplete runs distinctly.
-3. Close remaining server-side Find, support/status/trust contracts and paired
-   EN/DA critical flows; run the applicable current-head suite/build gates only
-   after those owners stop changing the snapshot.
-4. Reconcile every retained V10 ID against its actual clause, predecessor
-   register and §55 journey. Update the existing index only with a concrete
-   disposition, exact evidence pin/result, and remaining owner/action. Then
-   assemble the §55.5 operator dossier and separate live Human/provider/host
-   gates. Until then the honest state is **not ready**; partial source work and
-   scoped PASS receipts do not establish release qualification.
+3. Close remaining server-side Find, support/status/trust and notice contracts,
+   including current route and rendered notice verification, and paired EN/DA
+   critical flows; run applicable current-head suite/build gates only after
+   those owners stop changing the snapshot.
+4. Resolve the open per-ID owner/path gaps in the existing index against each
+   predecessor register and §55 journey. Attach current source pins and raw
+   proof only after the final candidate snapshot exists. Then assemble the
+   §55.5 operator dossier and separate live Human/provider/host gates. Until
+   then the honest state is **not ready**; partial source work and scoped PASS
+   receipts do not establish release qualification.
 
 ## Evidence boundary
 
 The October 22 JSON's `evidence` fields were intentionally sparse and the index
 said it was not acceptance evidence. The recovery plan since records many newer
-bounded results and many retained failures, but this review does not turn those
-into present-day PASS claims. Specific source work attributed to current owners
-may be underway; this document identifies closure conditions and leaves their
-implementation and qualification to those owners. “No evidence cited here” is
-not a finding that no source exists; “code added” is not a finding that the
-required journey passed.
+bounded results and many retained failures. This review retains the earlier mandatory-notice 70/71 attempt as a failure. It records the later four-mode Trust/API 21/21, notice/projection 33/33, migration safety, UI typecheck, and Agent Runtime candidate integration 8/8 as separate bounded results. None establishes present-day full-suite or release PASS.
+“No evidence cited here” is not a finding that no source exists; “code added”
+is not a finding that the required journey passed.
