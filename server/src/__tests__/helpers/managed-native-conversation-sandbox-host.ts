@@ -36,6 +36,7 @@ import { open as unseal } from "../../services/saas/crypto.js";
 import { nativeSha256 } from "../../services/native-runtime/canonical.js";
 import { compileSandboxPolicy } from "../../services/execution-sandbox/policy-compiler.js";
 import { resolvePaperclipInstanceRoot } from "../../home-paths.js";
+import { redactSensitiveText } from "../../redaction.js";
 
 const imageDigest = `fixture.invalid/openshell@sha256:${"a".repeat(64)}`;
 
@@ -660,6 +661,8 @@ export async function configureManagedConversationSandboxHost(input: {
     assignedMcpEnvironmentAbsent: boolean; credentialEnvironmentAbsent: boolean;
     nativePreparationPurpose: string | null; providerPackImageProbe: boolean;
     exitCode: number | null; timedOut: boolean }> = [];
+  let runnerLaunchStderr = Buffer.alloc(0);
+  let runnerDiagnosticTail = Buffer.alloc(0);
   relayHost.on("message", raw => {
     let message: Record<string, any>;
     try { message = JSON.parse(raw.toString()) as Record<string, any>; } catch { return; }
@@ -713,12 +716,29 @@ export async function configureManagedConversationSandboxHost(input: {
       assignedMcpEnvironmentAbsent, credentialEnvironmentAbsent: noCredentialEnvironment,
       nativePreparationPurpose, providerPackImageProbe,
       exitCode: null as number | null, timedOut: false };
+    const captureRunnerLaunchStderr = nativePreparationPurpose === "native_session_start" &&
+      argv[0] === "sh" && argv[1] === "-c" && argv[3] === "paperclip-runner-launch";
+    const captureRunnerDiagnostic = nativePreparationPurpose === "native_harness_state" &&
+      argv[0] === "sh" && argv[1] === "-c" && argv[3] === "paperclip-runner-diagnostics";
     execFacts.push(fact);
     const child = spawn(argv[0]!, argv.slice(1), { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
+    // Startup failures can terminate the remote shell before its one-way stdin
+    // payload is flushed. Treat that closed pipe as a normal child exit.
+    child.stdin.on("error", error => {
+      if ((error as NodeJS.ErrnoException).code !== "EPIPE") {
+        fact.exitCode ??= 127;
+      }
+    });
     if (typeof request.stdinBase64 === "string") child.stdin.end(Buffer.from(request.stdinBase64, "base64")); else child.stdin.end();
     for (const [stream, output] of [["stdout", child.stdout], ["stderr", child.stderr]] as const)
-      output.on("data", (chunk: Buffer) => relayHost.send(JSON.stringify({ type: "exec_output", channelId: message.channelId,
-        stream, base64: chunk.toString("base64") })));
+      output.on("data", (chunk: Buffer) => {
+        if (captureRunnerLaunchStderr && stream === "stderr")
+          runnerLaunchStderr = Buffer.concat([runnerLaunchStderr, chunk]).subarray(-8192);
+        if (captureRunnerDiagnostic && stream === "stdout")
+          runnerDiagnosticTail = Buffer.concat([runnerDiagnosticTail, chunk]).subarray(-8192);
+        relayHost.send(JSON.stringify({ type: "exec_output", channelId: message.channelId,
+          stream, base64: chunk.toString("base64") }));
+      });
     child.on("error", () => { fact.exitCode = 127; relayHost.send(JSON.stringify({ type: "exec_exit", channelId: message.channelId, exitCode: 127, timedOut: false })); });
     child.on("close", (code, signal) => { fact.exitCode = code ?? (signal ? 128 : 1);
       relayHost.send(JSON.stringify({ type: "exec_exit", channelId: message.channelId,
@@ -900,6 +920,8 @@ export async function configureManagedConversationSandboxHost(input: {
       negativeControls: { wrongRunDenied: true, wrongLeaseDenied: true, wrongCwdDenied: true, wrongPolicyDenied: true },
       negativeNativeSessionStartControls,
       nativeSessionStartCredentialNegativeControls,
+      runnerLaunchStderr: redactSensitiveText(runnerLaunchStderr.toString("utf8")).slice(-8192),
+      runnerDiagnosticTail: redactSensitiveText(runnerDiagnosticTail.toString("utf8")).slice(-8192),
       executableNames: [...new Set(execFacts.map(fact => fact.executable.split("/").pop() ?? ""))] };
     },
     close: async () => { clearInterval(hostHeartbeatTimer); if (postgresLockProbeTimer) clearInterval(postgresLockProbeTimer);

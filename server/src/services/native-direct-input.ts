@@ -1329,8 +1329,12 @@ async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction
     agentId: run.agentId, runId: run.id, onBehalfOfUserId: run.responsibleUserId };
   if (!capture.consumedSourceComponents || capture.consumedSourceComponents.length === 0)
     throw forbidden("The Native output capture lacks its consumed source components");
+  const consumedSourceStartedAt = process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS === "1" ? performance.now() : 0;
   await assertNativeManagedConsumedSourceSetCurrentInScope(db, { companyId, issueId, runId: capture.runId,
     actor, components: capture.consumedSourceComponents, sourceSet: capture.sourceSet }, scope);
+  if (consumedSourceStartedAt) console.error("native_memory_output_snapshot_stage", JSON.stringify({
+    consumedSourceSetCurrentnessMs: Math.round(performance.now() - consumedSourceStartedAt),
+  }));
   for (const memoryId of capture.sourceSet.policy.memoryIds) {
     const [memory] = await db.select({ payloadSourceSnapshot: memoryRecords.payloadSourceSnapshot,
       payloadSourceSnapshotInvalidated: memoryRecords.payloadSourceSnapshotInvalidated,
@@ -2725,8 +2729,12 @@ async function assertNativeMemoryOutputSnapshotCurrentInScope(db: Db | Transacti
     consumedSourceComponents: consumed.components,
     dispatch, managedOpenCodeToolUse: { callId, toolName: "paperclip-self:remember",
       argumentsHash: use!.argumentsHash as string, responseContentHash: intentMatches[0]!.responseContentHash as string } };
+  const sourceCurrentnessStartedAt = process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS === "1" ? performance.now() : 0;
   await assertNativeMemoryToolInvocationCurrent(db, { companyId: input.companyId, issueId: run.nativeIssueId,
     actor: inputActor, capture, invocationId, status: "succeeded", resultHash: invocation.resultHash, currentReader: input.actor });
+  if (sourceCurrentnessStartedAt) console.error("native_memory_output_snapshot_stage", JSON.stringify({
+    invocationAndConsumedSourceCurrentnessMs: Math.round(performance.now() - sourceCurrentnessStartedAt),
+  }));
 }
 
 async function assertNativeManagedConsumedSourceSetCurrentInScope(db: Db | Transaction, input: {

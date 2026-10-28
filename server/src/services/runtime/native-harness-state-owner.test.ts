@@ -1,15 +1,19 @@
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { access, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, posix } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RuntimeSandboxExecRelayRequest } from "@paperclipai/shared";
 import { parseNativeExecutionInput } from "../../vendor/paperclip-runner/index.js";
 import { nativeRuntimeContextFixture } from "../native-runtime/runtime-context.test-fixture.js";
-import { exactNativeHarnessStateCommand, exactNativeRunnerMonitorStatusCommand, nativeRelayClaimFailureStatus } from "./control.js";
+import { exactNativeHarnessStateCommand, exactNativeRuntimeAssetErasureCommand, exactNativeRunnerMonitorStatusCommand,
+  exactNativeSessionFilesystemFenceCommand, nativeRelayClaimFailureStatus } from "./control.js";
 import { createRemoteRunnerProcessLauncher, remoteRunnerPathExists, stageRemoteRunnerDirectory, syncRemoteRunnerDirectoryOut } from "../native-runtime/native-session-executor.js";
-import { REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT, REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT } from "../native-runtime/remote-runner-identity.js";
+import { REMOTE_NATIVE_SESSION_FENCE_ACQUIRE_SCRIPT, REMOTE_NATIVE_SESSION_FENCE_RELEASE_SCRIPT,
+  REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT, REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT,
+  REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT } from "../native-runtime/remote-runner-identity.js";
+import { createRemoteRuntimeAssetLocator } from "../native-runtime/runtime-asset-retention.js";
 
 describe("Native harness-state relay command owner", () => {
   let fixtureRoot: string | null = null;
@@ -324,5 +328,95 @@ describe("Native harness-state relay command owner", () => {
       cwd: "/controller", environment: {} }).completion).rejects.toThrow("runner_process_status_unavailable");
     expect(unavailableMonitorAttempts).toBe(4); // Initial observation plus at most three status retries.
     expect(unavailableLaunchCount).toBe(1); // Unknown status never restarts the process.
+  });
+
+  it("authorizes only the exact session fence and serializes its real lock outside the removable session root", async () => {
+    fixtureRoot = await mkdtemp(join(tmpdir(), "native-session-filesystem-fence-"));
+    const taskRoot = join(fixtureRoot, "task");
+    const companyId = randomUUID();
+    const runId = randomUUID();
+    const agentId = randomUUID();
+    const issueId = randomUUID();
+    const sessionId = randomUUID();
+    const digest = createHash("sha256").update(sessionId).digest("hex");
+    const execution = parseNativeExecutionInput({
+      schema: "paperclip.native-execution-input.v4", executionMode: "default", planningContext: null,
+      binding: { companyId, runId, issueId, agentId, executionWorkspaceId: runId },
+      task: { identifier: "FENCE-1", title: "Fence session writes", description: null, prompt: "Keep session writes serialized.", workMode: "standard" },
+      workspace: { cwd: taskRoot, repoUrl: null, repoRef: null, branchName: null },
+      session: { normalizedSessionId: sessionId, driverKind: "opencode_server", protocolVersion: 1,
+        lifecyclePolicy: { mode: "per_turn", idleTimeoutMs: null } },
+      provider: { kind: "opencode", model: "openai/gpt-5", permissionMode: "allow" },
+      completionContract: { id: "contract", sha256: "a".repeat(64), schemaVersion: "paperclip.completion-contract.v1",
+        contract: { revision: "1", objective: "Fence session writes.", criteria: [{ id: "objective", requirement: "Keep it serialized." }] } },
+      interactionResponses: [], credentialBindings: [], runtimeContext: nativeRuntimeContextFixture(),
+    });
+    const nonce = randomUUID();
+    const request = (script: string, label: string) => ({
+      argv: ["sh", "-c", script, label, taskRoot, digest, nonce], cwd: taskRoot, stdinBase64: "", env: {},
+    } as unknown as RuntimeSandboxExecRelayRequest);
+    const acquire = request(REMOTE_NATIVE_SESSION_FENCE_ACQUIRE_SCRIPT, "paperclip-native-session-fence-acquire");
+    expect(exactNativeSessionFilesystemFenceCommand({ request: acquire, taskRoot, execution })).toBe(true);
+    expect(exactNativeHarnessStateCommand({ request: acquire, taskRoot, execution, runId })).toBe(true);
+    expect(exactNativeSessionFilesystemFenceCommand({ request: { ...acquire,
+      argv: [...acquire.argv.slice(0, 3), "paperclip-native-session-fence-release", ...acquire.argv.slice(4)] }, taskRoot, execution })).toBe(false);
+    expect(exactNativeSessionFilesystemFenceCommand({ request: { ...acquire,
+      argv: [...acquire.argv.slice(0, 5), `${"0".repeat(64)}`, ...acquire.argv.slice(6)] }, taskRoot, execution })).toBe(false);
+    expect(exactNativeSessionFilesystemFenceCommand({ request: { ...acquire, cwd: join(taskRoot, "other") }, taskRoot, execution })).toBe(false);
+    expect(exactNativeSessionFilesystemFenceCommand({ request: { ...acquire, env: { PATH: "/tmp" } }, taskRoot, execution })).toBe(false);
+    expect(exactNativeSessionFilesystemFenceCommand({ request: { ...acquire,
+      modelBrokerCredential: { capabilityToken: "test-only" } as any }, taskRoot, execution })).toBe(false);
+
+    const sessionsRoot = join(taskRoot, ".paperclip-runtime", "paperclip-runner", "sessions");
+    const sessionRoot = join(sessionsRoot, digest);
+    const lockPath = join(sessionsRoot, `.${digest}.lock`);
+    const neighborRoot = join(sessionsRoot, "f".repeat(64));
+    await mkdir(sessionRoot, { recursive: true, mode: 0o700 });
+    await mkdir(neighborRoot, { recursive: true, mode: 0o700 });
+    const run = (script: string, label: string, runNonce = nonce) => spawnSync("sh", ["-c", script,
+      label, taskRoot, digest, runNonce], { encoding: "utf8" });
+    expect(run(REMOTE_NATIVE_SESSION_FENCE_ACQUIRE_SCRIPT, "paperclip-native-session-fence-acquire").status).toBe(0);
+    const lockStat = await stat(lockPath);
+    expect(lockStat.isDirectory()).toBe(true);
+    expect(lockStat.mode & 0o777).toBe(0o700);
+    const ownerPath = join(lockPath, "owner");
+    expect((await stat(ownerPath)).mode & 0o777).toBe(0o600);
+    expect(run(REMOTE_NATIVE_SESSION_FENCE_ACQUIRE_SCRIPT, "paperclip-native-session-fence-acquire").status).not.toBe(0);
+    expect(run(REMOTE_NATIVE_SESSION_FENCE_RELEASE_SCRIPT, "paperclip-native-session-fence-release", randomUUID()).status).not.toBe(0);
+    expect(await access(lockPath).then(() => true, () => false)).toBe(true);
+    expect(run(REMOTE_NATIVE_SESSION_FENCE_RELEASE_SCRIPT, "paperclip-native-session-fence-release").status).toBe(0);
+    expect(await access(lockPath).then(() => true, () => false)).toBe(false);
+    await expect(access(sessionRoot)).resolves.toBeUndefined();
+    await expect(access(neighborRoot)).resolves.toBeUndefined();
+    const outsideLockTarget = join(fixtureRoot, "outside-lock-target");
+    await mkdir(outsideLockTarget, { mode: 0o700 });
+    await symlink(outsideLockTarget, lockPath);
+    expect(run(REMOTE_NATIVE_SESSION_FENCE_ACQUIRE_SCRIPT, "paperclip-native-session-fence-acquire").status).not.toBe(0);
+    expect((await stat(outsideLockTarget)).isDirectory()).toBe(true);
+    expect(await access(join(outsideLockTarget, "owner")).then(() => true, () => false)).toBe(false);
+  });
+
+  it("authorizes only the fixed remote erasure command for the locator's exact session path", () => {
+    const remoteCwd = "/workspace/private-task";
+    const locator = createRemoteRuntimeAssetLocator({ companyId: randomUUID(), runId: randomUUID(),
+      environmentId: randomUUID(), environmentLeaseId: randomUUID(), provider: "sandbox-fixture",
+      providerLeaseId: "lease-fixture", runnerInstanceId: randomUUID(), normalizedSessionId: randomUUID(), remoteCwd });
+    const argv = ["sh", "-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT, "paperclip-native-asset-erasure",
+      remoteCwd, locator.normalizedSessionIdDigest, locator.runId, locator.runnerInstanceId,
+      locator.environmentLeaseId, locator.providerLeaseId, locator.normalizedSessionIdDigest,
+      REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT, REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT];
+    const request = { argv, cwd: remoteCwd, stdinBase64: "", env: {} } as unknown as RuntimeSandboxExecRelayRequest;
+    expect(exactNativeRuntimeAssetErasureCommand({ request, locator, remoteCwd })).toBe(true);
+    expect(exactNativeRuntimeAssetErasureCommand({ request: { ...request,
+      argv: [...argv.slice(0, 4), "/workspace/outside", ...argv.slice(5)] }, locator, remoteCwd })).toBe(false);
+    expect(exactNativeRuntimeAssetErasureCommand({ request: { ...request,
+      argv: [...argv.slice(0, 5), "f".repeat(64), ...argv.slice(6)] }, locator, remoteCwd })).toBe(false);
+    expect(exactNativeRuntimeAssetErasureCommand({ request: { ...request, cwd: `${remoteCwd}/other` }, locator, remoteCwd })).toBe(false);
+    expect(exactNativeRuntimeAssetErasureCommand({ request: { ...request, stdinBase64: "eA==" }, locator, remoteCwd })).toBe(false);
+    expect(exactNativeRuntimeAssetErasureCommand({ request: { ...request, env: { PATH: "/tmp" } }, locator, remoteCwd })).toBe(false);
+    expect(exactNativeRuntimeAssetErasureCommand({ request: { ...request,
+      brokerCredential: { capabilityToken: "test-only" } as any }, locator, remoteCwd })).toBe(false);
+    expect(exactNativeRuntimeAssetErasureCommand({ request: { ...request,
+      modelBrokerCredential: { capabilityToken: "test-only" } as any }, locator, remoteCwd })).toBe(false);
   });
 });

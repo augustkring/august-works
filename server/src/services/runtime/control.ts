@@ -88,7 +88,8 @@ import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { parseNativeExecutionInput } from "../../vendor/paperclip-runner/index.js";
 import { REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT, REMOTE_RUNNER_CHILD_LAUNCH_SCRIPT,
   REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROBE_SCRIPT, REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT,
-  REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT } from "../native-runtime/remote-runner-identity.js";
+  REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT, REMOTE_NATIVE_SESSION_FENCE_ACQUIRE_SCRIPT,
+  REMOTE_NATIVE_SESSION_FENCE_RELEASE_SCRIPT } from "../native-runtime/remote-runner-identity.js";
 import { sandboxProbeCases } from "../execution-sandbox/backend.js";
 import {
   assertRemoteRuntimeAssetErasureReady,
@@ -159,6 +160,9 @@ export function exactNativeHarnessStateCommand(input: {
   const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
   const { argv } = input.request;
   const matches = (...expected: string[]) => argv.length === expected.length && expected.every((value, index) => argv[index] === value);
+  if (exactNativeSessionFilesystemFenceCommand({
+    request: input.request, taskRoot: input.taskRoot, execution: input.execution,
+  })) return true;
   const read = (file: string) => matches("sh", "-c", `test -f ${quote(file)} && base64 < ${quote(file)}`);
   const inspect = [
     `test -f ${quote(runnerState)}`,
@@ -190,6 +194,24 @@ export function exactNativeHarnessStateCommand(input: {
   return persistenceRoots.some(directory => matches("sh", "-c",
     `umask 077; mkdir -p ${quote(directory)} && base64 -d | tar -xzf - -C ${quote(directory)} && chmod 700 ${quote(directory)}`)) &&
     archiveIsBoundedBase64;
+}
+
+export function exactNativeSessionFilesystemFenceCommand(input: {
+  request: import("@paperclipai/shared").RuntimeSandboxExecRelayRequest;
+  taskRoot: string;
+  execution: ReturnType<typeof parseNativeExecutionInput>;
+}): boolean {
+  if (input.execution.provider.kind !== "opencode" || input.execution.session.driverKind !== "opencode_server" ||
+    input.request.cwd !== input.taskRoot || input.request.stdinBase64 !== "" ||
+    input.request.modelBrokerCredential !== undefined || input.request.brokerCredential !== undefined ||
+    Object.keys(input.request.env ?? {}).length !== 0) return false;
+  const sessionId = input.execution.session.normalizedSessionId ?? `session-${input.execution.binding.runId}`;
+  const digest = sha256(sessionId);
+  const { argv } = input.request;
+  if (argv.length !== 7 || argv[0] !== "sh" || argv[1] !== "-c" || argv[4] !== input.taskRoot || argv[5] !== digest ||
+    !/^[0-9a-f-]{36}$/i.test(argv[6] ?? "")) return false;
+  return (argv[2] === REMOTE_NATIVE_SESSION_FENCE_ACQUIRE_SCRIPT && argv[3] === "paperclip-native-session-fence-acquire") ||
+    (argv[2] === REMOTE_NATIVE_SESSION_FENCE_RELEASE_SCRIPT && argv[3] === "paperclip-native-session-fence-release");
 }
 
 /** Only the RuntimeControl erasure owner may issue this fixed command. The
@@ -310,6 +332,7 @@ function exactNativeRuntimeContextPrepareCommand(input: {
   taskRoot: string;
   execution: ReturnType<typeof parseNativeExecutionInput>;
 }): boolean {
+  if (exactNativeSessionFilesystemFenceCommand(input)) return true;
   const context = "runtimeContext" in input.execution ? input.execution.runtimeContext : null;
   if (!context || input.execution.provider.kind !== "opencode" || input.execution.session.driverKind !== "opencode_server" ||
     input.request.cwd !== input.taskRoot || input.request.stdinBase64 === "") return false;

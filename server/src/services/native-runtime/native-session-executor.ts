@@ -19,7 +19,8 @@ import { prepareVerifiedRemoteProviderPack } from "./remote-provider-pack.js";
 import { readNativeLocalProcessStop, PROCESS_START_REQUESTED } from "../native-local-process-stop.js";
 import { REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROBE_SCRIPT, REMOTE_RUNNER_CHILD_LAUNCH_SCRIPT,
   REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT, REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT,
-  REMOTE_RUNNER_PROCESS_FINGERPRINT_SCRIPT } from "./remote-runner-identity.js";
+  REMOTE_RUNNER_PROCESS_FINGERPRINT_SCRIPT, REMOTE_NATIVE_SESSION_FENCE_ACQUIRE_SCRIPT,
+  REMOTE_NATIVE_SESSION_FENCE_RELEASE_SCRIPT } from "./remote-runner-identity.js";
 export { REMOTE_RUNNER_CHILD_LAUNCH_SCRIPT };
 import { remoteLeaseCleanupScope } from "../remote-execution-termination.js";
 import {
@@ -13224,6 +13225,37 @@ async function createRunnerdBackendWithinSessionClaim(
       "runner_transport_ineligible: remote process runner is unavailable",
     );
   }
+  const withRemoteSessionFilesystemFence = async <T>(
+    purpose: "native_harness_state" | "native_runtime_context_prepare",
+    work: () => Promise<T>,
+  ): Promise<T> => {
+    if (!managedOpenCodeDataHome || remoteTarget?.transport !== "sandbox" ||
+      !remoteCommandRunner || !remoteSessionRoot) return await work();
+    const nonce = randomUUID();
+    const fenceCommand = async (action: "acquire" | "release") => remoteCommandRunner.execute({
+      command: "sh",
+      args: ["-c", action === "acquire" ? REMOTE_NATIVE_SESSION_FENCE_ACQUIRE_SCRIPT : REMOTE_NATIVE_SESSION_FENCE_RELEASE_SCRIPT,
+        `paperclip-native-session-fence-${action}`, remoteTarget.remoteCwd, remoteSessionDigest, nonce],
+      cwd: remoteTarget.remoteCwd,
+      bypassSession: true,
+      timeoutMs: 10_000,
+      nativePreparationPurpose: purpose,
+    });
+    const acquired = await fenceCommand("acquire");
+    if (acquired.exitCode !== 0 || acquired.timedOut)
+      throw new Error("runner_remote_session_filesystem_fence_unavailable");
+    let workFailed = false;
+    try {
+      return await work();
+    } catch (error) {
+      workFailed = true;
+      throw error;
+    } finally {
+      const released = await fenceCommand("release").catch(() => null);
+      if (!workFailed && (!released || released.exitCode !== 0 || released.timedOut))
+        throw new Error("runner_remote_session_filesystem_fence_release_failed");
+    }
+  };
   const currentWakeComments = await resolveCurrentWakeCommentsBinding(
     input.db,
     input.execution.binding,
@@ -13894,7 +13926,7 @@ async function createRunnerdBackendWithinSessionClaim(
     }
   };
 
-  const prepareRemoteRunner = async (
+  const prepareRemoteRunnerUnlocked = async (
     requiredMode: "dial_wss" | "listen_ws",
   ) => {
     if (
@@ -14262,6 +14294,11 @@ async function createRunnerdBackendWithinSessionClaim(
     remotePrepared = true;
   };
 
+  const prepareRemoteRunner = async (
+    requiredMode: "dial_wss" | "listen_ws",
+  ) => withRemoteSessionFilesystemFence("native_harness_state", () =>
+    prepareRemoteRunnerUnlocked(requiredMode));
+
   const inspectRemoteHarnessState = async (): Promise<{
     complete: boolean;
     runnerState: Record<string, unknown> | null;
@@ -14569,7 +14606,7 @@ async function createRunnerdBackendWithinSessionClaim(
     }
   };
 
-  const ensureRemoteRunner = async (stageLaunchAssets = true) => {
+  const ensureRemoteRunnerUnlocked = async (stageLaunchAssets = true) => {
     await measureNativeRunnerSpan(
       input.trace,
       "stage.sync",
@@ -14590,7 +14627,7 @@ async function createRunnerdBackendWithinSessionClaim(
           }
         } catch {
           remotePrepared = false;
-          await prepareRemoteRunner(selectedRemoteMode);
+          await prepareRemoteRunnerUnlocked(selectedRemoteMode);
         }
         if (!remoteHarnessStatePrepared) {
           await measureNativeRunnerSpan(input.trace, "stage.asset.home", () =>
@@ -14848,7 +14885,11 @@ async function createRunnerdBackendWithinSessionClaim(
     );
   };
 
-  const checkpointRemoteRunner = async (
+  const ensureRemoteRunner = async (stageLaunchAssets = true) =>
+    withRemoteSessionFilesystemFence("native_harness_state", () =>
+      ensureRemoteRunnerUnlocked(stageLaunchAssets));
+
+  const checkpointRemoteRunnerUnlocked = async (
     settlement: "settled" | "unsettled",
   ) => {
     if (
@@ -15021,6 +15062,11 @@ async function createRunnerdBackendWithinSessionClaim(
     }
   };
 
+  const checkpointRemoteRunner = async (
+    settlement: "settled" | "unsettled",
+  ) => withRemoteSessionFilesystemFence("native_harness_state", () =>
+    checkpointRemoteRunnerUnlocked(settlement));
+
   const prepareExternalRunnerState =
     remoteTarget && remoteCommandRunner
       ? async () => {
@@ -15031,7 +15077,7 @@ async function createRunnerdBackendWithinSessionClaim(
           await ensureRemoteRunner(false);
         }
       : undefined;
-  const archiveExternalRunnerState =
+  const archiveExternalRunnerStateUnlocked =
     remoteCommandRunner && remoteStateDirectory && remoteSessionRoot
       ? async (archive: { archiveKey: string }) => {
           if (!/^[0-9a-f]{24}$/.test(archive.archiveKey)) {
@@ -15080,6 +15126,11 @@ async function createRunnerdBackendWithinSessionClaim(
           }
         }
       : undefined;
+
+  const archiveExternalRunnerState = archiveExternalRunnerStateUnlocked
+    ? async (archive: { archiveKey: string }) => withRemoteSessionFilesystemFence(
+        "native_harness_state", () => archiveExternalRunnerStateUnlocked(archive))
+    : undefined;
 
   const remoteProcessLauncher =
     remoteTarget && remoteCommandRunner && remoteBinary && remoteStateDirectory
@@ -15167,18 +15218,21 @@ async function createRunnerdBackendWithinSessionClaim(
       const escapedSource = remoteSessionRoot.replaceAll("'", "'\\''");
       const archivedRemote = `${remoteSessionRoot}.continuity-break-${archiveToken}`;
       const escapedArchive = archivedRemote.replaceAll("'", "'\\''");
-      const result = await remoteCommandRunner.execute({
-        command: "sh",
-        args: [
-          "-c",
-          `if test -d '${escapedSource}'; then mv '${escapedSource}' '${escapedArchive}'; fi`,
-        ],
-        bypassSession: true,
-        timeoutMs: 30_000,
+      await withRemoteSessionFilesystemFence("native_harness_state", async () => {
+        const result = await remoteCommandRunner.execute({
+          command: "sh",
+          args: [
+            "-c",
+            `if test -d '${escapedSource}'; then mv '${escapedSource}' '${escapedArchive}'; fi`,
+          ],
+          bypassSession: true,
+          timeoutMs: 30_000,
+          ...(nativeConversationHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
+        });
+        if (result.exitCode !== 0 || result.timedOut) {
+          throw new Error("runner_continuity_break_archive_failed");
+        }
       });
-      if (result.exitCode !== 0 || result.timedOut) {
-        throw new Error("runner_continuity_break_archive_failed");
-      }
     }
     remotePrepared = false;
   };

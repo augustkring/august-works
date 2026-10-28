@@ -64,6 +64,7 @@ import { conflict, forbidden, HttpError, unprocessable } from "../errors.js";
 import { logger } from "../middleware/logger.js";
 import { normalizeAgentPermissions } from "./agent-permissions.js";
 import { grantsForHumanRole, normalizeHumanRole } from "./company-member-roles.js";
+import { nativeSha256 } from "./native-runtime/canonical.js";
 import { nativeMemoryCapturePrincipalCondition } from "./memory/memory-privacy.js";
 import { assertRoutineSourceAccess } from "./routine-source-authority.js";
 
@@ -2084,38 +2085,59 @@ export async function withReadMemoryTemporalSources<T>(db: Db | DbTransaction, a
     let structuralProofMemo: { transaction: object; actorKey: string; memoryTemporalIdentity: string;
       frozenTaskSnapshots: Set<string>; ancestry?: { work: number; activeByActor: Map<string, Set<string>> };
       updateAncestry: (ancestry: { work: number; activeByActor: Map<string, Set<string>> }) => void } | undefined;
-    const memoryTemporalIdentity = activeMemoryTemporalReadScopeIdentity(sourceDb, actor);
-    const memoActorKey = createHash("sha256").update(JSON.stringify(actor), "utf8").digest("hex");
-    const memoKey = memoryTemporalIdentity
-      ? createHash("sha256").update(JSON.stringify({ actorKey: memoActorKey, memoryTemporalIdentity }), "utf8").digest("hex") : null;
-    if (structuralProofMemoStore && structuralProofMemoStore.transaction === (sourceDb as object) && memoryTemporalIdentity && memoKey &&
-      (structuralProofMemoStore.proofsByOwnerPrefix.has(memoKey) || structuralProofMemoStore.proofsByOwnerPrefix.size < 128)) {
-      let frozenTaskSnapshots = structuralProofMemoStore.proofsByOwnerPrefix.get(memoKey);
-      if (!frozenTaskSnapshots) {
-        frozenTaskSnapshots = new Set();
-        structuralProofMemoStore.proofsByOwnerPrefix.set(memoKey, frozenTaskSnapshots);
-      }
-      structuralProofMemo = { transaction: sourceDb as object, actorKey: memoActorKey, memoryTemporalIdentity, frozenTaskSnapshots,
-        ...(structuralProofMemoStore.ancestry ? { ancestry: structuralProofMemoStore.ancestry } : {}),
-        updateAncestry: ancestry => { structuralProofMemoStore.ancestry = ancestry; } };
-    }
+    const memoActorKey = nativeSha256(actor);
     try {
       const result = await memoryTemporalReadScopes.run(scope, async () => {
         try {
+          // Resolve the memo under this owner's ALS scope. Looking up the
+          // active prefix before `run` sees the parent's prefix (or none at the
+          // page root), so nested proofs either miss or bind to the wrong
+          // owner. The memo remains exact to this physical transaction,
+          // actor, and active temporal prefix.
+          const memoryTemporalIdentity = activeMemoryTemporalReadScopeIdentity(sourceDb, actor);
+          const memoKey = memoryTemporalIdentity
+            ? createHash("sha256").update(JSON.stringify({ actorKey: memoActorKey, memoryTemporalIdentity }), "utf8").digest("hex") : null;
+          if (dispatch && structuralProofMemoStore && structuralProofMemoStore.transaction === (sourceDb as object) &&
+            memoryTemporalIdentity && memoKey &&
+            (structuralProofMemoStore.proofsByOwnerPrefix.has(memoKey) || structuralProofMemoStore.proofsByOwnerPrefix.size < 128)) {
+            let frozenTaskSnapshots = structuralProofMemoStore.proofsByOwnerPrefix.get(memoKey);
+            if (!frozenTaskSnapshots) {
+              frozenTaskSnapshots = new Set();
+              structuralProofMemoStore.proofsByOwnerPrefix.set(memoKey, frozenTaskSnapshots);
+            }
+            structuralProofMemo = { transaction: sourceDb as object, actorKey: memoActorKey, memoryTemporalIdentity,
+              frozenTaskSnapshots, ...(structuralProofMemoStore.ancestry ? { ancestry: structuralProofMemoStore.ancestry } : {}),
+              updateAncestry: ancestry => { structuralProofMemoStore.ancestry = ancestry; } };
+          }
+          const temporalProfile = process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS === "1";
+          let contextInputsCurrentnessMs = 0;
+          let callbackReaderMs = 0;
           // The exact frozen Context prefix must govern the Memory owner proof
           // itself, not only the final caller. Otherwise validating an older
           // Memory can consult a later Context manifest before its ALS scope is
           // installed and retroactively taint the earlier output.
           const readWithCurrentContext = async (currentDb: Db | DbTransaction) => {
             currentnessStage = "context_inputs_currentness";
+            const contextStartedAt = temporalProfile ? performance.now() : 0;
             await assertNativeTemporalContextInputsCurrent(currentDb as Db, companyId, contextInputs);
-            return read(currentDb);
+            const callbackStartedAt = temporalProfile ? performance.now() : 0;
+            const result = await read(currentDb);
+            if (temporalProfile) {
+              contextInputsCurrentnessMs = callbackStartedAt - contextStartedAt;
+              callbackReaderMs = performance.now() - callbackStartedAt;
+            }
+            return result;
           };
-          if (dispatch) return await withNativeMemoryOutputSnapshotCurrent(sourceDb, {
+          const outputStartedAt = temporalProfile ? performance.now() : 0;
+          const result = dispatch ? await withNativeMemoryOutputSnapshotCurrent(sourceDb, {
             companyId, recordId, snapshot: snapshot.data, actor,
             ...(structuralProofMemo ? { structuralProofMemo } : {}),
-          }, readWithCurrentContext);
-          return await readWithCurrentContext(sourceDb);
+          }, readWithCurrentContext) : await readWithCurrentContext(sourceDb);
+          if (temporalProfile) console.error("native_memory_temporal_owner_stage", JSON.stringify({
+            outputSnapshotProofMs: Math.max(0, Math.round(performance.now() - outputStartedAt - contextInputsCurrentnessMs - callbackReaderMs)),
+            contextInputsCurrentnessMs: Math.round(contextInputsCurrentnessMs), callbackReaderMs: Math.round(callbackReaderMs),
+          }));
+          return result;
         } catch (error) {
           if (error instanceof HttpError && [403, 404, 409, 422].includes(error.status)) {
             const frames = (typeof error.stack === "string" ? error.stack : "").split("\n").flatMap(line => {

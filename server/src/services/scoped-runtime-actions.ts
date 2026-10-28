@@ -1,6 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
-import { heartbeatRuns, issues, projects, playbookDocuments, type Db } from "@paperclipai/db";
+import { heartbeatRuns, issues, projects, playbookDocuments, toolCatalogEntries, type Db } from "@paperclipai/db";
 import { scopedRuntimeActionSchema } from "@paperclipai/shared";
 import type { z } from "zod";
 import { conflict, forbidden, HttpError, notFound, unprocessable } from "../errors.js";
@@ -72,7 +72,13 @@ export function scopedRuntimeActionService(db: Db, toolGateway?: ToolGatewayServ
         // Connection output has no general sensitivity contract. Treat it as
         // confidential rather than relabeling an arbitrary upstream response.
         classification = "confidential";
+        const discoveryCatalogEntryIds = input.action === "tool.list"
+          ? record.manifest.capabilities.filter((capability) => capability.type === "tool" &&
+            /^tool:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(capability.ref))
+            .map((capability) => capability.ref.slice("tool:".length))
+          : undefined;
         const context: ScopedToolGatewayContext = {
+          ...(discoveryCatalogEntryIds ? { discoveryCatalogEntryIds } : {}),
           session: { id: randomUUID(), token: "", companyId: input.companyId, agentId: local.presence.id,
             runId: input.companyId === companyId ? runId : null,
             issueId: input.companyId === companyId ? gatewayIssueId : null,
@@ -93,6 +99,19 @@ export function scopedRuntimeActionService(db: Db, toolGateway?: ToolGatewayServ
             }
             await assertV5Authorization(db, fresh.localActor, input.companyId, "tools:use");
             if (await budgets.getInvocationBlock(companyId, run.agentId) || await budgets.getInvocationBlock(input.companyId, fresh.presence.id)) throw forbidden("Current budget blocks this scoped tool");
+          },
+          assertManifestCurrent: async (tool) => {
+            if (!["mcp_remote_http", "mcp_local_stdio"].includes(tool.providerType)) return;
+            if (!tool.catalogEntryId || !tool.connectionId)
+              throw forbidden("Connected tool has no pinned catalog identity", { code: "tool_catalog_identity_missing" });
+            const pinned = record.manifest.capabilities.find(capability => capability.type === "tool" && capability.ref === `tool:${tool.catalogEntryId}`);
+            if (!pinned) throw forbidden("Connected tool is outside the pinned execution manifest", { code: "tool_outside_execution_manifest" });
+            const [currentCatalog] = await db.select({ versionHash: toolCatalogEntries.versionHash })
+              .from(toolCatalogEntries).where(and(eq(toolCatalogEntries.companyId, input.companyId),
+                eq(toolCatalogEntries.id, tool.catalogEntryId), eq(toolCatalogEntries.entryKind, "tool"),
+                eq(toolCatalogEntries.status, "active"))).limit(1);
+            if (!currentCatalog || currentCatalog.versionHash !== pinned.versionHash)
+              throw conflict("Pinned tool catalog changed; reconcile and start a newly admitted execution", { code: "tool_catalog_manifest_drift" });
           },
         };
         try {

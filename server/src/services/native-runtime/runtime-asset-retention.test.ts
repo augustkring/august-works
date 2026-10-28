@@ -1,4 +1,8 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { spawn, spawnSync } from "node:child_process";
+import { access, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   createRemoteRuntimeAssetLocator,
@@ -7,6 +11,8 @@ import {
   remoteRuntimeAssetLocatorDigest,
   remoteRuntimeAssetPathDigest,
 } from "./runtime-asset-retention.js";
+import { REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT, REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT,
+  REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT } from "./remote-runner-identity.js";
 
 describe("remote Native runtime asset erasure binding", () => {
   function fixture() {
@@ -71,5 +77,111 @@ describe("remote Native runtime asset erasure binding", () => {
       stopProof: { ...receipt.stopProof, providerLeaseId: "replacement-lease" } }, locator)).toBe(false);
     expect(isRemoteRuntimeAssetRemovalReceipt({ ...receipt,
       target: { ...receipt.target, cellGeneration: "0" } }, locator)).toBe(false);
+  });
+
+  it.skipIf(process.platform !== "linux")("stops only the recorded runner generation before removing its exact session tree", async () => {
+    const root = await mkdtemp(join(tmpdir(), "native-runtime-physical-erasure-"));
+    const taskRoot = join(root, "task");
+    const companyId = randomUUID();
+    const runId = randomUUID();
+    const environmentId = randomUUID();
+    const environmentLeaseId = randomUUID();
+    const providerLeaseId = randomUUID();
+    const runnerInstanceId = randomUUID();
+    const normalizedSessionId = randomUUID();
+    const digest = createHash("sha256").update(normalizedSessionId).digest("hex");
+    const sessionRoot = join(taskRoot, ".paperclip-runtime", "paperclip-runner", "sessions", digest);
+    const runnerRoot = join(sessionRoot, "runner");
+    const sessionsRoot = join(taskRoot, ".paperclip-runtime", "paperclip-runner", "sessions");
+    const neighborRoot = join(sessionsRoot, "f".repeat(64));
+    const statePath = join(runnerRoot, "runner-state.json");
+    const identityPath = join(runnerRoot, "runner-process.identity");
+    const nonce = randomUUID();
+    const processIsAlive = (pid: number) => {
+      try { process.kill(pid, 0); return true; } catch { return false; }
+    };
+    const runner = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)", "--", "--runner-id", runnerInstanceId],
+      { detached: true, stdio: "ignore" });
+    try {
+      if (!runner.pid) throw new Error("test_runner_pid_unavailable");
+      await mkdir(runnerRoot, { recursive: true, mode: 0o700 });
+      await mkdir(neighborRoot, { recursive: true, mode: 0o700 });
+      await writeFile(join(neighborRoot, "keep.txt"), "neighbor remains\n", { mode: 0o600 });
+      const statText = await readFile(`/proc/${runner.pid}/stat`, "utf8");
+      const statEnd = statText.lastIndexOf(") ");
+      const processTicks = statText.slice(statEnd + 2).trim().split(/\s+/)[19];
+      const bootId = (await readFile("/proc/sys/kernel/random/boot_id", "utf8")).trim();
+      if (statEnd < 0 || !/^\d+$/.test(processTicks ?? "") || !/^[-a-f0-9]+$/i.test(bootId))
+        throw new Error("test_runner_fingerprint_unavailable");
+      const fingerprint = `linux:${bootId}:${processTicks}`;
+      const startedAt = new Date().toISOString();
+      await writeFile(statePath, JSON.stringify({ runId, runnerInstanceId, environmentLeaseId, normalizedSessionId }) + "\n",
+        { mode: 0o600 });
+      await writeFile(identityPath, `${nonce}\n${runner.pid}\n${startedAt}\n${runnerInstanceId}\n${fingerprint}\n`,
+        { mode: 0o600 });
+
+      const commandArgs = (leaseId: string, expectedDigest = digest) => ["-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT,
+        "paperclip-native-runtime-asset-erasure", taskRoot, digest, runId, runnerInstanceId, leaseId, providerLeaseId,
+        expectedDigest, REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT, REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT];
+      const wrongLease = spawnSync("sh", commandArgs(randomUUID()), { encoding: "utf8", timeout: 10_000 });
+      expect(wrongLease.status).not.toBe(0);
+      expect(await access(sessionRoot).then(() => true, () => false)).toBe(true);
+      expect(processIsAlive(runner.pid)).toBe(true);
+      const wrongDigest = spawnSync("sh", commandArgs(environmentLeaseId, "0".repeat(64)),
+        { encoding: "utf8", timeout: 10_000 });
+      expect(wrongDigest.status).not.toBe(0);
+      expect(await access(sessionRoot).then(() => true, () => false)).toBe(true);
+      expect(processIsAlive(runner.pid)).toBe(true);
+      const fencePath = join(sessionsRoot, `.${digest}.lock`);
+      await mkdir(fencePath, { mode: 0o700 });
+      const staleSiblingLock = spawnSync("sh", commandArgs(environmentLeaseId), { encoding: "utf8", timeout: 10_000 });
+      expect(staleSiblingLock.status).not.toBe(0);
+      expect(await access(sessionRoot).then(() => true, () => false)).toBe(true);
+      expect(processIsAlive(runner.pid)).toBe(true);
+      await rm(fencePath, { recursive: true });
+      const outsideLockTarget = join(root, "outside-lock-target");
+      await mkdir(outsideLockTarget, { mode: 0o700 });
+      await symlink(outsideLockTarget, fencePath);
+      const symlinkLock = spawnSync("sh", commandArgs(environmentLeaseId), { encoding: "utf8", timeout: 10_000 });
+      expect(symlinkLock.status).not.toBe(0);
+      expect(await access(join(outsideLockTarget, "owner")).then(() => true, () => false)).toBe(false);
+      expect(await access(sessionRoot).then(() => true, () => false)).toBe(true);
+      expect(processIsAlive(runner.pid)).toBe(true);
+      await rm(fencePath);
+      const validIdentity = await readFile(identityPath, "utf8");
+      await writeFile(identityPath, validIdentity.replace(`${nonce}\n`, "invalid/nonce\n"), { mode: 0o600 });
+      const invalidNonce = spawnSync("sh", commandArgs(environmentLeaseId), { encoding: "utf8", timeout: 10_000 });
+      expect(invalidNonce.status).not.toBe(0);
+      expect(await access(sessionRoot).then(() => true, () => false)).toBe(true);
+      expect(processIsAlive(runner.pid)).toBe(true);
+      await writeFile(identityPath, validIdentity.replace(`${fingerprint}\n`, "linux:deadbeef:1\n"), { mode: 0o600 });
+      const reusedPid = spawnSync("sh", commandArgs(environmentLeaseId), { encoding: "utf8", timeout: 10_000 });
+      expect(reusedPid.status).not.toBe(0);
+      expect(await access(sessionRoot).then(() => true, () => false)).toBe(true);
+      expect(processIsAlive(runner.pid)).toBe(true);
+      await writeFile(identityPath, validIdentity, { mode: 0o600 });
+
+      const erased = spawnSync("sh", commandArgs(environmentLeaseId), { encoding: "utf8", timeout: 15_000 });
+      const failedGroup = spawnSync("ps", ["-o", "pid=,ppid=,sid=,pgid=,stat=,args=", "-g", String(runner.pid)],
+        { encoding: "utf8" }).stdout;
+      expect(erased.status, JSON.stringify({ stderr: erased.stderr, stdout: erased.stdout,
+        runnerExitCode: runner.exitCode, runnerSignal: runner.signalCode, failedGroup })).toBe(0);
+      expect(erased.stdout.trim().split("\n")).toHaveLength(7);
+      expect(await access(sessionRoot).then(() => true, () => false)).toBe(false);
+      expect(await readFile(join(neighborRoot, "keep.txt"), "utf8")).toBe("neighbor remains\n");
+      expect((await stat(sessionsRoot)).isDirectory()).toBe(true);
+      expect(await access(join(sessionsRoot, `.${digest}.lock`)).then(() => true, () => false)).toBe(false);
+      if (runner.exitCode === null && runner.signalCode === null) {
+        await Promise.race([new Promise<void>(resolve => runner.once("exit", () => resolve())),
+          new Promise<void>(resolve => setTimeout(resolve, 2_000))]);
+      }
+      expect(runner.exitCode !== null || runner.signalCode !== null).toBe(true);
+      expect(processIsAlive(runner.pid)).toBe(false);
+    } finally {
+      if (runner.exitCode === null && runner.signalCode === null) {
+        try { process.kill(-runner.pid!, "SIGKILL"); } catch { /* runner already stopped */ }
+      }
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });

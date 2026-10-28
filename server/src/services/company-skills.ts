@@ -6273,7 +6273,7 @@ export function companySkillService(db: Db) {
         const next = versions.find(version => version.releaseId === release.id);
         if (!prior || !next || prior.id === next.id || prior.state !== "active" || next.state !== "candidate") return;
         const priorRelease = releases.find(candidate => candidate.id === prior.releaseId)?.platformRelease;
-        const inventoryDigest = (version: typeof prior) => buildInventoryContentHash(toCompanySkillVersion(version).fileInventory
+        const inventoryDigest = (version: (typeof versions)[number]) => buildInventoryContentHash(toCompanySkillVersion(version).fileInventory
           .map(entry => ({ path: entry.path, sha256: sha256Buffer(entry.content) })));
         if (!priorRelease || priorRelease.sourceSha !== identity.sourceSha || priorRelease.contentDigest !== identity.contentDigest ||
           inventoryDigest(prior) !== identity.contentDigest || inventoryDigest(next) !== identity.contentDigest) return;

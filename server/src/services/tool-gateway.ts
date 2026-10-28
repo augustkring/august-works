@@ -454,7 +454,11 @@ export type ToolGatewayRuntimeSlot = ToolRuntimeSlotView;
 /** Server-owned delegation; never read from request bodies or gateway tokens. */
 export interface ScopedToolGatewayContext {
   session: ToolGatewaySession;
+  /** Current-run disclosure aperture for tool.list; it never authorizes invocation. */
+  discoveryCatalogEntryIds?: readonly string[];
   assertCurrent: (tool?: ToolGatewayDescriptor) => Promise<void>;
+  /** Verify a selected catalog pin after current policy has been evaluated. */
+  assertManifestCurrent?: (tool: ToolGatewayDescriptor) => Promise<void>;
 }
 
 // The output witness is process-local capability state, never a field on an
@@ -1576,7 +1580,7 @@ const VIRTUAL_RUN_TOOL: ToolGatewayDescriptor = {
 const VIRTUAL_TOOLS = [VIRTUAL_SEARCH_TOOLS, VIRTUAL_RUN_TOOL];
 
 function blenteraSelfToolContractCatalog() {
-  const catalog = AGENT_NATIVE_OPERATION_MANIFEST.filter((operation) => operation.legacyAliases.length > 0).map((operation) => {
+  const catalog = AGENT_NATIVE_OPERATION_MANIFEST.filter((operation) => operation.toolId !== null && operation.legacyAliases.length > 0).map((operation) => {
     const legacyName = operation.legacyAliases[0];
     const tool = BUILTIN_TOOLS.find((candidate) => candidate.name === legacyName && candidate.providerType === "paperclip_self");
     if (!tool) throw new Error("agent_native_operation_tool_binding_missing");
@@ -1617,7 +1621,7 @@ export function blenteraPlatformContractHashes(): BlenteraPlatformContractHashes
 
 function blenteraFirstPartyToolForDiscovery(tool: ToolGatewayDescriptor): ToolGatewayDescriptor {
   const operation = agentNativeOperationForLegacyToolName(tool.name);
-  if (!operation) return tool;
+  if (!operation?.toolId) return tool;
   return {
     ...tool,
     name: operation.toolId,
@@ -7205,8 +7209,14 @@ export function createToolGatewayService(
       if (!scopedContext) return;
       try {
         await scopedContext.assertCurrent(tool);
+        await scopedContext.assertManifestCurrent?.(tool);
       } catch (error) {
         if (error instanceof ToolGatewayHttpError) throw error;
+        if (error instanceof HttpError) {
+          const details = error.details && typeof error.details === "object" ? error.details as Record<string, unknown> : {};
+          throw new ToolGatewayHttpError(error.status, error.message,
+            typeof details.code === "string" ? details.code : "scoped_tool_authority_changed", details);
+        }
         throw new ToolGatewayHttpError(403, "Scoped execution authority changed", "scoped_tool_authority_changed");
       }
       const live = await resolveConnectedRemoteTool(session, tool);
@@ -11640,12 +11650,14 @@ export function createToolGatewayService(
 
     async listScopedTools(context: ScopedToolGatewayContext) {
       await context.assertCurrent();
+      const discoveryCatalogEntryIds = context.discoveryCatalogEntryIds ? new Set(context.discoveryCatalogEntryIds) : null;
       const tools = (await listToolsForContext(context.session)).filter(tool =>
-        tool.connectionId && ["mcp_remote_http", "mcp_local_stdio"].includes(tool.providerType));
+        tool.connectionId && ["mcp_remote_http", "mcp_local_stdio"].includes(tool.providerType) &&
+        (!discoveryCatalogEntryIds || typeof tool.catalogEntryId === "string" && discoveryCatalogEntryIds.has(tool.catalogEntryId)));
       const visible: ToolGatewayDescriptor[] = [];
       // ponytail: bound per-tool authority checks to 100; paginate larger inventories.
       for (const tool of tools.slice(0, 100)) {
-        try { await context.assertCurrent(tool); visible.push(tool); }
+        try { await context.assertCurrent(tool); await context.assertManifestCurrent?.(tool); visible.push(tool); }
         catch (error) {
           if (!(error instanceof Error && "status" in error && error.status === 403)) throw error;
         }
@@ -12398,6 +12410,8 @@ export function createToolGatewayService(
         if (accessDecision.allowed && tool.providerType === "paperclip_slack_chat" && SLACK_TOOLS.some(t => t.name === tool.upstreamToolName && t.risk === "approval")) {
           accessDecision = { ...accessDecision, allowed: false, decision: "require_approval", reasonCode: "requires_approval_policy", explanation: "Slack destructive actions, channel creation and invitations require approval." };
         }
+        if (scopedContext && (accessDecision.allowed || accessDecision.decision === "require_approval"))
+          await scopedContext.assertManifestCurrent?.(tool);
         const rememberDraft = scopedMemoryCapture && tool.name === "paperclip-self:remember"
           ? memoryAgentRememberInputSchema.safeParse(effectiveParameters).success : false;
         const recorded = await policyService.recordInvocation(decisionInput, accessDecision,

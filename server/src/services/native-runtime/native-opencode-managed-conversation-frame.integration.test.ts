@@ -1,6 +1,6 @@
 import {and,desc,eq,gte,sql} from "drizzle-orm";
 import {randomUUID} from "node:crypto";
-import {authSessions,authUsers,companyDeletionOperations,companyMemberships,companies,environmentLeases,heartbeatRunEvents,heartbeatRuns,issues,memoryJobs,nativeRunFinalizations,nativeRunResults,projectWorkspaces,projects,runtimeHostCommands} from "@paperclipai/db";
+import {agentPresenceRuntimeBindings,authSessions,authUsers,companyDeletionOperations,companyMemberships,companies,environmentLeases,heartbeatRunEvents,heartbeatRuns,issues,memoryJobs,nativeRunFinalizations,nativeRunResults,projectWorkspaces,projects,runtimeHostCommands} from "@paperclipai/db";
 import type {BusinessMetricQuery} from "@paperclipai/shared";
 import {instanceSettingsService} from "../instance-settings.js";
 import {businessMetricService} from "../business-metrics/service.js";
@@ -167,11 +167,17 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
         const failureArtifactPath = process.env.PAPERCLIP_NATIVE_RELAY_FAILURE_EVIDENCE_PATH;
         if (typeof failureArtifactPath === "string" &&
           /^\/workspace\/blentera-v10\/doc\/operations\/aw-v10-evidence\/rt01-runtime-probe-contract-2026-10-27\/r[0-9]+\/runner-stderr-redacted\.txt$/.test(failureArtifactPath)) {
-          if (typeof facts.run.stderrExcerpt === "string") {
-            const redacted = Buffer.from(redactSensitiveText(facts.run.stderrExcerpt), "utf8");
-            await writeFile(failureArtifactPath, redacted.subarray(Math.max(0, redacted.length - 8192)),
-              { flag: "wx", mode: 0o600 });
-          }
+          const launchStderr = typeof facts.sandboxRuntimeFacts?.runnerLaunchStderr === "string"
+            ? facts.sandboxRuntimeFacts.runnerLaunchStderr : "";
+          const runnerDiagnosticTail = typeof facts.sandboxRuntimeFacts?.runnerDiagnosticTail === "string"
+            ? facts.sandboxRuntimeFacts.runnerDiagnosticTail : "";
+          const redacted = Buffer.from(redactSensitiveText([
+            typeof facts.run.stderrExcerpt === "string" ? facts.run.stderrExcerpt : "",
+            launchStderr,
+            runnerDiagnosticTail,
+          ].filter(Boolean).join("\n")), "utf8");
+          await writeFile(failureArtifactPath, redacted.subarray(Math.max(0, redacted.length - 8192)),
+            { flag: "wx", mode: 0o600 });
           if (sessionFailed || failedTurn) {
             const failurePayload = sessionFailed ? sessionFailedPayload : failedTurnPayload;
             const redactedPayload = Buffer.from(redactSensitiveText(JSON.stringify(failurePayload)), "utf8");
@@ -267,7 +273,79 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
             eq(memoryJobs.jobKey, `runtime-asset-erasure:v1:${coOwnerRunId}`)));
           await db.delete(heartbeatRuns).where(eq(heartbeatRuns.id, coOwnerRunId));
           await enqueueCompanyManagedOpenCodeRuntimeErasure(db, facts.companyId, operationId);
-          await memoryJobService(db, { eraseRemoteNativeRuntimeAsset }).tick({ limit: 32, companyId: facts.companyId });
+          const jobKey = `runtime-asset-erasure:v1:${facts.run.id}`;
+          const [queuedJob] = await db.select().from(memoryJobs).where(and(
+            eq(memoryJobs.companyId, facts.companyId), eq(memoryJobs.jobKey, jobKey)))
+            .orderBy(desc(memoryJobs.attemptNumber)).limit(1);
+          expect(queuedJob?.status).toBe("queued");
+          const crashWorkerId = randomUUID();
+          const [crashClaim] = await db.update(memoryJobs).set({ status: "running", executionOwnerId: crashWorkerId,
+            leaseExpiresAt: new Date(Date.now() + 60_000), startedAt: new Date(), updatedAt: new Date() }).where(and(
+            eq(memoryJobs.id, queuedJob!.id), eq(memoryJobs.status, "queued"))).returning();
+          if (!crashClaim) throw new Error("conversation_remote_erasure_crash_claim_missing");
+          const relatedErasureCommands = async () => (await db.select().from(runtimeHostCommands).where(and(
+            eq(runtimeHostCommands.companyId, facts.companyId), eq(runtimeHostCommands.commandType, "sandbox_exec"),
+            sql`${runtimeHostCommands.payload}->>'nativePreparationPurpose' = 'native_provider_data_erasure'`)))
+            .filter(command => {
+              const payload = command.payload && typeof command.payload === "object" && !Array.isArray(command.payload)
+                ? command.payload as Record<string, unknown> : {};
+              const erasure = payload.remoteRuntimeAssetErasure && typeof payload.remoteRuntimeAssetErasure === "object" &&
+                !Array.isArray(payload.remoteRuntimeAssetErasure)
+                ? payload.remoteRuntimeAssetErasure as Record<string, unknown> : {};
+              return erasure.jobKey === jobKey;
+            });
+          const raceWorker = memoryJobService(db, { ownerId: crashWorkerId,
+            eraseRemoteNativeRuntimeAsset: async (currentLocator, commandInput) => {
+              const mismatchedLocator = { ...currentLocator, providerLeaseId: `${currentLocator.providerLeaseId}-changed` };
+              await expect(eraseRemoteNativeRuntimeAsset!(mismatchedLocator, commandInput)).rejects.toBeDefined();
+              await expect(eraseRemoteNativeRuntimeAsset!(currentLocator,
+                { ...commandInput, companyPurgeOperationId: randomUUID() })).rejects.toBeDefined();
+              const [runtimeBinding] = await db.select().from(agentPresenceRuntimeBindings).where(and(
+                eq(agentPresenceRuntimeBindings.companyId, facts.companyId), eq(agentPresenceRuntimeBindings.agentId, facts.agentId),
+                eq(agentPresenceRuntimeBindings.status, "active"))).limit(1);
+              const generationRef = runtimeBinding && /^aw:cell:([0-9a-f-]{36}):generation:([1-9][0-9]{0,18})$/i
+                .exec(runtimeBinding.providerProfileRef);
+              if (!runtimeBinding || !generationRef) throw new Error("conversation_remote_erasure_generation_ref_missing");
+              await db.update(agentPresenceRuntimeBindings).set({ providerProfileRef:
+                `aw:cell:${generationRef[1]}:generation:${BigInt(generationRef[2]!) + 1n}` })
+                .where(eq(agentPresenceRuntimeBindings.id, runtimeBinding.id));
+              try {
+                await expect(eraseRemoteNativeRuntimeAsset!(currentLocator, commandInput)).rejects.toBeDefined();
+              } finally {
+                await db.update(agentPresenceRuntimeBindings).set({ providerProfileRef: runtimeBinding.providerProfileRef })
+                  .where(eq(agentPresenceRuntimeBindings.id, runtimeBinding.id));
+              }
+              expect(await relatedErasureCommands()).toHaveLength(0);
+              const concurrent = await Promise.allSettled([
+                eraseRemoteNativeRuntimeAsset!(currentLocator, commandInput),
+                eraseRemoteNativeRuntimeAsset!(currentLocator, commandInput),
+              ]);
+              const receipts = concurrent.flatMap(result => result.status === "fulfilled" ? [result.value] : []);
+              expect(receipts.length).toBeGreaterThan(0);
+              expect(receipts.every(receipt => receipt.commandRequestId === receipts[0]!.commandRequestId)).toBe(true);
+              await db.update(memoryJobs).set({ executionOwnerId: "lost-after-remote-receipt",
+                leaseExpiresAt: new Date(Date.now() - 1), updatedAt: new Date() }).where(eq(memoryJobs.id, commandInput.jobId));
+              return receipts[0]!;
+            } });
+          await raceWorker.executeClaimed(crashClaim);
+          const [crashedJob] = await db.select().from(memoryJobs).where(eq(memoryJobs.id, crashClaim.id));
+          expect(crashedJob).toMatchObject({ status: "running", executionOwnerId: "lost-after-remote-receipt" });
+          expect(crashedJob?.leaseExpiresAt && crashedJob.leaseExpiresAt.getTime()).toBeLessThan(Date.now());
+          const beforeRecoveryCommands = await relatedErasureCommands();
+          expect(beforeRecoveryCommands).toHaveLength(1);
+          expect(beforeRecoveryCommands[0]?.status).toBe("SUCCEEDED");
+          const recoveryWorker = memoryJobService(db, { ownerId: "remote-erasure-recovery-worker",
+            eraseRemoteNativeRuntimeAsset });
+          await expect(recoveryWorker.recoverExpiredLeases(new Date(), 32, facts.companyId))
+            .resolves.toMatchObject({ recovered: 1, retried: 1 });
+          const [retryQueued] = await db.select().from(memoryJobs).where(and(
+            eq(memoryJobs.companyId, facts.companyId), eq(memoryJobs.jobKey, jobKey), eq(memoryJobs.attemptNumber, 2)));
+          expect(retryQueued?.status).toBe("queued");
+          const [retryClaim] = await db.update(memoryJobs).set({ status: "running", executionOwnerId: "remote-erasure-recovery-worker",
+            leaseExpiresAt: new Date(Date.now() + 60_000), startedAt: new Date(), updatedAt: new Date() }).where(and(
+            eq(memoryJobs.id, retryQueued!.id), eq(memoryJobs.status, "queued"))).returning();
+          if (!retryClaim) throw new Error("conversation_remote_erasure_retry_claim_missing");
+          await recoveryWorker.executeClaimed(retryClaim);
           const [job] = await db.select({ status: memoryJobs.status, resultJson: memoryJobs.resultJson }).from(memoryJobs).where(and(
             eq(memoryJobs.companyId, facts.companyId), eq(memoryJobs.jobKey, `runtime-asset-erasure:v1:${facts.run.id}`)))
             .orderBy(desc(memoryJobs.attemptNumber)).limit(1);
@@ -279,6 +357,9 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
                 normalizedSessionIdDigest: locator.normalizedSessionIdDigest,
                 environmentLeaseId: locator.environmentLeaseId, providerLeaseId: locator.providerLeaseId,
                 pid: expect.any(Number), processStartFingerprintDigest: expect.stringMatching(/^[a-f0-9]{64}$/) }) });
+          expect((job?.resultJson as Record<string, unknown> | null)?.remoteRuntimeAssetRemovalReceipt)
+            .toMatchObject({ commandRequestId: beforeRecoveryCommands[0]?.idempotencyKey });
+          expect(await relatedErasureCommands()).toHaveLength(1);
           await expect(fs.stat(path.join(sessionsRoot, locator.normalizedSessionIdDigest))).rejects.toMatchObject({ code: "ENOENT" });
           await expect(fs.readFile(path.join(siblingSessionRoot, "retained-neighbor.txt"), "utf8")).resolves.toBe("neighbor remains");
         }
