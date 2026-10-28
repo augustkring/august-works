@@ -7,7 +7,7 @@ import {assertAnalyticalContextPayloadAccess} from "./analytical-context-authori
 import {lockAnalyticalCompany} from "./analytical-privacy.js";
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
-import { agentIdentities, agents, companies, heartbeatRuns, issues, contextManifestItems, contextManifestMemoryRoots, companySkills, companySkillVersions, playbookDocuments, documentRevisions, companySkillTestRuns, companySkillEvalRuns, agentExecutionManifests, agentExecutionManifestItems, agentExecutionAuthorizations, agentExecutionScopeRequests, companySkillUsageEvents, type Db } from "@paperclipai/db";
+import { agentIdentities, agents, companies, heartbeatRuns, issues, contextManifestItems, contextManifestMemoryRoots, companySkills, companySkillVersions, playbookDocuments, documentRevisions, companySkillTestRuns, companySkillEvalRuns, agentExecutionManifests, agentExecutionManifestItems, agentExecutionAuthorizations, agentExecutionScopeRequests, companySkillUsageEvents, toolCatalogEntries, type Db } from "@paperclipai/db";
 import { agentExecutionManifestSchema, agentExecutionScopeSchema, createExecutionScopeRequestSchema, nativePayloadSourceInputSchema, nativeRunInputSourceReceiptSchema, v5FeatureEnabled, type AgentExecutionScope, type NativePayloadSourceInput, type NativePayloadSourcePolicy } from "@paperclipai/shared";
 import type { z } from "zod";
 import { readAuthoredAgentDefinition } from "./agents/authored-definition.js";
@@ -339,7 +339,8 @@ export function agentRuntimeFabricService(db: Db, decisionShadow?: { sourceSha: 
       if (test) query = test.inputSnapshot.slice(0, 500);
       if (!v5FeatureEnabled(flags, "skill_resolver_v5") && rolePack?.items.some((item) => item.type === "required_skill")) throw conflict("This Role Pack requires the Skill resolver runtime");
       const platformContracts = blenteraPlatformContractHashes();
-      const platform = await companySkillService(db).requiredPlatformSkill(input.companyId, actor, platformContracts);
+      const platform = await companySkillService(db).requiredPlatformSkill(input.companyId, actor, platformContracts,
+        { admitContractRefresh: !stored });
       const agentNativeContract = { ...platformContracts, protocolProfile: "2026-07-28" as const,
         runtimeAdapter: local.agent.adapterType, runtimeCapabilitySnapshotHash: provider.provider.capabilitySnapshot!.hash };
       if (stored && (!stored.manifest.platformSkill || !stored.manifest.agentNativeContract || hashContextPolicySnapshot(stored.manifest.platformSkill) !== hashContextPolicySnapshot(platform.identity) ||
@@ -378,6 +379,33 @@ export function agentRuntimeFabricService(db: Db, decisionShadow?: { sourceSha: 
         const desiredTools = desiredBatches.flat().filter((candidate) => candidate.type === "tool" && declared.has(candidate.ref));
         capabilities = selectDeclaredToolCapabilities(capabilities, declaredToolRefs);
         for (const desired of desiredTools) if (!capabilities.some((candidate) => candidate.ref === desired.ref)) capabilities.push(desired);
+      }
+      if (!authored && !declaredToolRefs.length && !capabilities.some((candidate) => candidate.type === "tool")) {
+        // If the task text has no tool match, expose a small deterministic
+        // read/risk-ordered discovery window instead of an empty catalog.
+        const fallback = await capabilityResolverService(db).search(actor, input.companyId, "");
+        for (const candidate of fallback.filter((item) => item.type === "tool").slice(0, 8)) capabilities.push(candidate);
+      }
+      if (!authored && scoped) {
+        for (const delegated of scoped.scopes.filter((entry) => entry.companyId !== input.companyId)) {
+          const guestActor = { ...delegated.localActor };
+          delete guestActor.runId;
+          let guestTools = (await capabilityResolverService(db).search(guestActor, delegated.companyId, delegated.purpose))
+            .filter((candidate) => candidate.type === "tool").slice(0, 8);
+          if (!guestTools.length) guestTools = (await capabilityResolverService(db).search(guestActor, delegated.companyId, ""))
+            .filter((candidate) => candidate.type === "tool").slice(0, 8);
+          // UUID catalog refs are globally unique; resolving under this exact
+          // delegated company binds each pin to the claimed local identity.
+          for (const candidate of guestTools) {
+            const catalogEntryId = /^tool:([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i.exec(candidate.ref)?.[1];
+            if (!catalogEntryId) continue;
+            const [boundEntry] = await db.select({ id: toolCatalogEntries.id }).from(toolCatalogEntries).where(and(
+              eq(toolCatalogEntries.companyId, delegated.companyId), eq(toolCatalogEntries.id, catalogEntryId),
+              eq(toolCatalogEntries.entryKind, "tool"), eq(toolCatalogEntries.status, "active"),
+            )).limit(1);
+            if (boundEntry && !capabilities.some((current) => current.ref === candidate.ref)) capabilities.push(candidate);
+          }
+        }
       }
       const context = await freshContext(actor, scope, query, input.runId, input.issueId, claimedScopeRequestId, Boolean(authored), !scope.delegatedScopes.length && Boolean(input.issueId));
       if (stored) {

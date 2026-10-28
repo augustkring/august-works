@@ -46,7 +46,8 @@ export async function preparePlatformSkillAdmission(db: Db, input: {
   const actor: AuthorizationActor = { type: "agent", source: "none", companyId: input.companyId,
     agentId: input.agentId, runId: input.runId, onBehalfOfUserId: input.responsibleUserId };
   await assertV5Authorization(db, actor, input.companyId, "company_scope:read");
-  const platform = await companySkillService(db).requiredPlatformSkill(input.companyId, actor, contracts);
+  const platform = await companySkillService(db).requiredPlatformSkill(input.companyId, actor, contracts,
+    { admitContractRefresh: !input.requireExisting });
   return db.transaction(async tx => {
     const [run] = await tx.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId),
       eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.status, "running"))).for("update");

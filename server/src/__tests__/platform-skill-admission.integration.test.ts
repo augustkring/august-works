@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { readFileSync } from "node:fs";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { agents, companies, companyMemberships, companySkills, heartbeatRuns, createDb } from "@paperclipai/db";
+import { agents, companies, companyMemberships, companySkills, companySkillVersions, heartbeatRuns, createDb } from "@paperclipai/db";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 import { companySkillService } from "../services/company-skills.js";
@@ -61,5 +62,29 @@ describe.skipIf(!support.supported)("required platform procedure admission", () 
     await preparePlatformSkillAdmission(db, other.input, other.contracts);
     await db.update(companyMemberships).set({ status: "suspended" }).where(and(eq(companyMemberships.companyId, other.input.companyId), eq(companyMemberships.principalId, other.input.responsibleUserId)));
     await expect(assertPlatformSkillAdmission(db, other.actor, other.contracts)).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("refreshes identical procedure bytes only for a fresh admission and never repins the old Run", async () => {
+    const f = await fixture();
+    const service = companySkillService(db);
+    const skill = (await service.listFull(f.input.companyId)).find(row => row.key === "blentera-platform")!;
+    const registry = JSON.parse(readFileSync(new URL("../../../skills-releases/blentera-platform/releases.json", import.meta.url), "utf8"));
+    const prior = registry[0], latest = registry.at(-1);
+    expect(latest.id).not.toBe(prior.id);
+    const oldAdmission = { schemaVersion: 1, platformSkill: { key: "blentera-platform", version: prior.id,
+      digest: prior.contentDigest, sourceSha: prior.sourceSha }, operationManifestHash: prior.operationManifestHash,
+      toolCatalogContractHash: prior.toolCatalogContractHash, runtimeAdapter: "codex_local" };
+    await db.update(heartbeatRuns).set({ runnerProfileJson: { platformSkillAdmission: oldAdmission } }).where(eq(heartbeatRuns.id, f.input.runId));
+    const [fresh] = await db.insert(heartbeatRuns).values({ companyId: f.input.companyId, agentId: f.input.agentId,
+      responsibleUserId: f.input.responsibleUserId, status: "running", runtimeMode: "native" }).returning();
+    await preparePlatformSkillAdmission(db, { ...f.input, runId: fresh!.id }, f.contracts);
+    const [current] = await db.select().from(companySkills).where(eq(companySkills.id, skill.id));
+    const versions = await db.select().from(companySkillVersions).where(eq(companySkillVersions.companySkillId, skill.id));
+    expect(versions.find(version => version.id === current!.activeVersionId)).toMatchObject({ releaseId: latest.id, state: "active" });
+    expect(versions.find(version => version.releaseId === prior.id)).toMatchObject({ state: "superseded" });
+    const [oldRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, f.input.runId));
+    expect(oldRun!.runnerProfileJson).toEqual({ platformSkillAdmission: oldAdmission });
+    await expect(preparePlatformSkillAdmission(db, { ...f.input, requireExisting: true }, f.contracts)).rejects.toMatchObject({ status: 409 });
+    await expect(assertPlatformSkillAdmission(db, f.actor, f.contracts)).rejects.toMatchObject({ status: 409 });
   });
 });

@@ -9,6 +9,7 @@ import { instanceSettingsService } from "./instance-settings.js";
 import { v5FeatureEnabled } from "@paperclipai/shared";
 import { authorizationService, type AuthorizationActor } from "./authorization.js";
 import { logger } from "../middleware/logger.js";
+import { logActivity, publishActivity, type ActivityPublication } from "./activity-log.js";
 import { prepareRuntimeSkillVersionDirectory, removeRuntimeSkillCache, resolveRuntimeSkillCache, runtimeSkillCacheSpec } from "./runtime-skill-cache.js";
 import { createHash, randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
@@ -6246,13 +6247,47 @@ export function companySkillService(db: Db) {
     return out;
   }
 
-  async function requiredPlatformSkill(companyId: string, actor: AuthorizationActor, contracts: { operationManifestHash: string; toolCatalogContractHash: string }, options: { ensureInventory?: boolean } = {}) {
+  async function requiredPlatformSkill(companyId: string, actor: AuthorizationActor, contracts: { operationManifestHash: string; toolCatalogContractHash: string }, options: { ensureInventory?: boolean; admitContractRefresh?: boolean } = {}) {
     // Material operations validate the admitted release; they must never
     // install, repair or promote a procedure while committing a business effect.
     if (options.ensureInventory !== false) await ensureSkillInventoryCurrent(companyId);
     const releases = await readBundledSkillReleaseRegistry("blentera-platform");
     const release = releases.at(-1), identity = release?.platformRelease;
     if (!release || !identity || identity.operationManifestHash !== contracts.operationManifestHash || identity.toolCatalogContractHash !== contracts.toolCatalogContractHash) throw conflict("The required platform Skill needs validation against the current operation and tool contracts", { code: "platform_skill_contract_drift" });
+    // A fresh admission may adopt a reviewed contract binding for identical
+    // procedure bytes. Ordinary reads, resumed Runs and material effects cannot
+    // promote a version or clear a degraded/revalidation lifecycle state.
+    if (options.admitContractRefresh && options.ensureInventory !== false) {
+      const publications: ActivityPublication[] = [];
+      await db.transaction(async raw => {
+        const tx = raw as unknown as Db;
+        const [current] = await tx.select().from(companySkills).where(and(eq(companySkills.companyId, companyId),
+          eq(companySkills.key, BLENTERA_PLATFORM_SKILL_KEY))).for("update");
+        if (!current?.activeVersionId || current.lifecycleState !== "active" ||
+          asString(current.metadata?.sourceKind) !== "paperclip_bundled") return;
+        const versions = await tx.select().from(companySkillVersions).where(and(
+          eq(companySkillVersions.companyId, companyId), eq(companySkillVersions.companySkillId, current.id),
+          or(eq(companySkillVersions.id, current.activeVersionId), eq(companySkillVersions.releaseId, release.id)),
+        )).for("update");
+        const prior = versions.find(version => version.id === current.activeVersionId);
+        const next = versions.find(version => version.releaseId === release.id);
+        if (!prior || !next || prior.id === next.id || prior.state !== "active" || next.state !== "candidate") return;
+        const priorRelease = releases.find(candidate => candidate.id === prior.releaseId)?.platformRelease;
+        const inventoryDigest = (version: typeof prior) => buildInventoryContentHash(toCompanySkillVersion(version).fileInventory
+          .map(entry => ({ path: entry.path, sha256: sha256Buffer(entry.content) })));
+        if (!priorRelease || priorRelease.sourceSha !== identity.sourceSha || priorRelease.contentDigest !== identity.contentDigest ||
+          inventoryDigest(prior) !== identity.contentDigest || inventoryDigest(next) !== identity.contentDigest) return;
+        await tx.update(companySkillVersions).set({ state: "superseded" }).where(eq(companySkillVersions.id, prior.id));
+        await tx.update(companySkillVersions).set({ state: "active", visibility: "company" }).where(eq(companySkillVersions.id, next.id));
+        await tx.update(companySkills).set({ activeVersionId: next.id, currentVersionId: next.id, updatedAt: new Date() })
+          .where(eq(companySkills.id, current.id));
+        await logActivity(tx, { companyId, actorType: "system", actorId: "platform-release",
+          action: "skill.platform_contract_refreshed", entityType: "company_skill", entityId: current.id,
+          details: { fromVersionId: prior.id, toVersionId: next.id, releaseId: release.id,
+            contentDigest: identity.contentDigest, ...contracts } }, publications);
+      });
+      for (const publication of publications) publishActivity(publication);
+    }
     const [skill] = await db.select().from(companySkills).where(and(eq(companySkills.companyId, companyId), eq(companySkills.key, BLENTERA_PLATFORM_SKILL_KEY))).limit(1);
     if (!skill || asString(skill.metadata?.sourceKind) !== "paperclip_bundled" || skill.lifecycleState !== "active" || !skill.activeVersionId) throw conflict("The required platform Skill is unavailable", { code: "platform_skill_unavailable" });
     const version = await getVersion(companyId, skill.id, skill.activeVersionId, actor, "task");
