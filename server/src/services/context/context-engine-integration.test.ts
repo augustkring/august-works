@@ -139,22 +139,15 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       requireBoardApprovalForNewAgents: false,
       defaultResponsibleUserId: userId,
     });
-    const userNow = new Date();
-    await db.insert(authUsers).values({
-      id: userId,
-      name: "Context Owner",
-      email: `context-${companyId}@example.test`,
-      emailVerified: true,
-      createdAt: userNow,
-      updatedAt: userNow,
-    });
-    await db.insert(companyMemberships).values({
-      companyId,
-      principalType: "user",
-      principalId: userId,
-      status: "active",
-      membershipRole: "owner",
-    });
+    const humanActor = await seedCurrentHumanSourceActor(db, [companyId], userId);
+    // Keep this suite's source authorization explicit: its tests grant
+    // foundation:read only where that permission is part of the scenario.
+    await db.delete(principalPermissionGrants).where(and(
+      eq(principalPermissionGrants.companyId, companyId),
+      eq(principalPermissionGrants.principalType, "user"),
+      eq(principalPermissionGrants.principalId, userId),
+      eq(principalPermissionGrants.permissionKey, "foundation:read"),
+    ));
     const [agent] = await db.insert(agents).values({
       companyId,
       name: "Context Agent",
@@ -183,7 +176,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     }).returning();
     const [run] = await db.insert(heartbeatRuns).values({companyId,agentId:agent!.id,responsibleUserId:userId,
       status:"running",runtimeMode:"native",nativeIssueId:issue!.id,issueId:issue!.id}).returning();
-    return { companyId, userId, agent: agent!, issue: issue!, run:run! };
+    return { companyId, userId, humanActor, agent: agent!, issue: issue!, run:run! };
   }
 
   async function createOwnerPrivateMemoryThroughNativeGateway(input: {
@@ -192,7 +185,11 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     onNativeRun?: (run: { id: string; actor: AuthorizationActor; issueId: string }) => void;
   }) {
     const previousSecret = process.env.PAPERCLIP_AGENT_JWT_SECRET;
+    const previousApiUrl = process.env.PAPERCLIP_API_URL;
     process.env.PAPERCLIP_AGENT_JWT_SECRET = randomUUID();
+    // A normal server boot derives this URL before admitting native runs.
+    // Keep the fixture on the same configured environment path.
+    process.env.PAPERCLIP_API_URL = "http://127.0.0.1:3100/api";
     const previousMemorySettings = await instanceSettingsService(db).getExperimental();
     await instanceSettingsService(db).updateExperimental({ enablePrivateAgentMemoryV1: true });
     let releaseTurn!: () => void;
@@ -335,6 +332,8 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       }
       if (previousSecret === undefined) delete process.env.PAPERCLIP_AGENT_JWT_SECRET;
       else process.env.PAPERCLIP_AGENT_JWT_SECRET = previousSecret;
+      if (previousApiUrl === undefined) delete process.env.PAPERCLIP_API_URL;
+      else process.env.PAPERCLIP_API_URL = previousApiUrl;
       await instanceSettingsService(db).updateExperimental({
         enablePrivateAgentMemoryV1: previousMemorySettings.enablePrivateAgentMemoryV1,
       });
@@ -498,6 +497,8 @@ describeEmbeddedPostgres("Context Engine integration", () => {
   it("executes Foundation and Memory query nodes with approved and accepted sources only", async () => {
     const seeded = await seed();
     await instanceSettingsService(db).updateExperimental({ enableFoundationV1: true, enableCollectiveMemoryV1: true });
+    await db.insert(principalPermissionGrants).values({ companyId: seeded.companyId, principalType: "user",
+      principalId: seeded.userId, permissionKey: "foundation:read", scope: null });
     const approved = await createApprovedFoundation({ companyId: seeded.companyId, userId: seeded.userId,
       key: "enterprise-guidance", body: "# Enterprise\nApproved enterprise strategy", sensitivity: "internal" });
     await foundationService(db).createDraft(seeded.companyId, { foundationKey: "enterprise-draft", category: "strategy",
@@ -644,7 +645,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
 
   it("binds actual approved Foundation and private Task Context to one native bootstrap witness and rechecks current Human authority", async () => {
     const seeded = await seed();
-    const human = await seedCurrentHumanSourceActor(db, [seeded.companyId], seeded.userId);
+    const human = seeded.humanActor;
     if (human.type !== "board" || human.source !== "session" || !human.sessionId)
       throw new Error("Context mutation fixture did not retain its actual Human session");
     const task = await issueService(db).create(seeded.companyId, {
@@ -655,6 +656,8 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       responsibleUserId: seeded.userId, issueId: task.id, nativeIssueId: task.id, runtimeMode: "native", status: "running" }).returning();
     await db.insert(principalPermissionGrants).values({ companyId: seeded.companyId, principalType: "agent",
       principalId: seeded.agent.id, permissionKey: "foundation:read", scope: null });
+    await db.insert(principalPermissionGrants).values({ companyId: seeded.companyId, principalType: "user",
+      principalId: seeded.userId, permissionKey: "foundation:read", scope: null });
     const foundation = await createApprovedFoundation({ companyId: seeded.companyId, userId: seeded.userId,
       key: "enterprise-strategy", body: "# Enterprise strategy\nEnterprise strategy prioritizes durable customer value.", sensitivity: "internal" });
 

@@ -1,0 +1,22 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ✓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > executes Foundation and Memory query nodes with approved and accepted sources only 9259ms
+ ↓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > assembles authorized approved Foundation and task context into a durable manifest
+ ↓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > binds actual approved Foundation and private Task Context to one native bootstrap witness and rechecks current Human authority
+ ↓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > preserves an original Human Task source across status changes and rejects it after a canonical body edit
+ ↓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > retrieves only issue-authorized synced GitHub evidence into the governed Context packet
+ ✓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > keeps Memory hydration disabled until Memory flags are enabled 6079ms
+ ✓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > hydrates only eligible relevant shared and owner-private Memory into Context 11423ms
+ ↓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > keeps unsupported, expired, erased, and foreign Human Task evidence out of Memory payload snapshots
+ ✓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > omits Foundation without foundation:read but still admits authorized task context 3557ms
+ ↓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > enforces the represented human's source permission for V5 even in shadow mode
+
+ Test Files  1 passed (1)
+      Tests  4 passed | 6 skipped (10)
+   Start at  11:29:15
+   Duration  48.31s (transform 9.78s, setup 72ms, import 13.96s, tests 34.16s, environment 0ms)
+
