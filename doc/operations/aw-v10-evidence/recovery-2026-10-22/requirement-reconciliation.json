@@ -2446,7 +2446,7 @@
       "id": "V10-024",
       "sourceLine": 6799,
       "work": "evaluate export/delete/restore/provisioning for envelope adoption.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "current_bounded_work_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -2526,7 +2526,54 @@
             "observedWorktreeSha256": "66ed827b1ed817d8ec6394e10d4ae61abe16dcecda180cba3c60e7c2f689ac5c"
           }
         ],
-        "reviewBasis": "Targeted source and document owner review in the shared dirty worktree on 2026-10-28. Hashes identify observed bytes at review time; they do not certify complete tests, external provider/domain operation, Human approval, or release qualification."
+        "reviewBasis": "Targeted source and document owner review in the shared dirty worktree on 2026-10-28. Hashes identify observed bytes at review time; they do not certify complete tests, external provider/domain operation, Human approval, or release qualification.",
+        "boundedFollowupReview": {
+          "review": "source-audit-proposals",
+          "reviewedAt": "2026-10-28",
+          "sourcePins": [
+            {
+              "path": "packages/shared/src/customer-operations.ts",
+              "sha256": "29ce914bb8ed7ec869cefa628b642fccd938de8b2d7d6b686df4efdf698e9b33"
+            },
+            {
+              "path": "server/src/services/company-import-jobs.ts",
+              "sha256": "f2725ca5266e99b73acf799e68281e1e15c669c463622852f8c1523bc1124fca"
+            },
+            {
+              "path": "server/src/routes/companies.ts",
+              "sha256": "b4ee7289e09e3f9e88bdc50c6beee244ac62c5260de7017ffc9415b6bef12e44"
+            },
+            {
+              "path": "server/src/services/company-portability.ts",
+              "sha256": "89d5e6ef9a23d9dc814187bffee2c90bbb499daa12bf21e14f1d36661690995a"
+            },
+            {
+              "path": "server/src/services/saas/account-deletion.ts",
+              "sha256": "3f5fd5937afe47f81c67048a10b6eb97b8d15474113c5c4d93ad75554895c421"
+            },
+            {
+              "path": "server/src/services/saas/support.ts",
+              "sha256": "08ab5f2b158f2fb8d8a70de8f8f8897b061e2047ebd56b554cd7c225c0d4834b"
+            },
+            {
+              "path": "server/src/services/saas/quarantine.ts",
+              "sha256": "dc7b2f4c28bbd148d2e171bd47bc24fc13763cc3fcea9aea636e8e35259291df"
+            },
+            {
+              "path": "server/src/services/saas/onboarding.ts",
+              "sha256": "f29f6b9226e5bd22ce63db8bbe27a5e219294d7947447bd4abb2845b257a9911"
+            },
+            {
+              "path": "doc/plans/2026-10-28-v10-operation-envelope-adoption-decisions.md",
+              "sha256": "66ed827b1ed817d8ec6394e10d4ae61abe16dcecda180cba3c60e7c2f689ac5c"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [],
+          "receiptFileCount": 0,
+          "boundedResult": "No receipt files were listed for this scoped review; no test result is inferred.",
+          "limit": "Source review/proposal only. Historical receipt presence does not prove current-head, full-journey, hosted, provider, Human, or release acceptance.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/source-audit-proposals.json"
+        }
       }
     },
     {
@@ -2773,7 +2820,7 @@
       "id": "V10-027",
       "sourceLine": 6805,
       "work": "scoped time-bound coverage/delegation.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -2823,7 +2870,34 @@
             "observedWorktreeSha256": "e1bc8503213323596dd68dfc8be9cfef095ebe375bed45d0d57d17efa082b23b"
           }
         ],
-        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification."
+        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification.",
+        "boundedFollowupReview": {
+          "review": "source-audit-proposals",
+          "reviewedAt": "2026-10-28",
+          "sourcePins": [
+            {
+              "path": "server/src/services/tool-access.ts",
+              "sha256": "48f91d7dea0ab177bfd34705ed4d8e08eb980d820bb20e7df50152c71f452f0d"
+            },
+            {
+              "path": "server/src/routes/tool-access.ts",
+              "sha256": "e63808413ba881840f70007d21152e8fd766b7cf67bbde4f8d766fc1db25dfe1"
+            },
+            {
+              "path": "packages/db/src/schema/tool_access.ts",
+              "sha256": "4ce9be53c6f6b2661fe5cac3507d8c0d9ab17f1eef0769ad62c4ed15c6e7ba81"
+            },
+            {
+              "path": "packages/shared/src/validators/tool-access.ts",
+              "sha256": "e1bc8503213323596dd68dfc8be9cfef095ebe375bed45d0d57d17efa082b23b"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [],
+          "receiptFileCount": 0,
+          "boundedResult": "No receipt files were listed for this scoped review; no test result is inferred.",
+          "limit": "Source review/proposal only. Historical receipt presence does not prove current-head, full-journey, hosted, provider, Human, or release acceptance.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/source-audit-proposals.json"
+        }
       }
     },
     {
@@ -2950,7 +3024,7 @@
       "id": "V10-029",
       "sourceLine": 6807,
       "work": "critical contact / backup ownership readiness tests.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -3000,7 +3074,34 @@
             "observedWorktreeSha256": "8d2a85da4a348f0576083235f9df8babb931e236e283cb22fe7e136590160ef9"
           }
         ],
-        "reviewBasis": "Targeted source and document owner review in the shared dirty worktree on 2026-10-28. Hashes identify observed bytes at review time; they do not certify complete tests, external provider/domain operation, Human approval, or release qualification."
+        "reviewBasis": "Targeted source and document owner review in the shared dirty worktree on 2026-10-28. Hashes identify observed bytes at review time; they do not certify complete tests, external provider/domain operation, Human approval, or release qualification.",
+        "boundedFollowupReview": {
+          "review": "source-audit-proposals",
+          "reviewedAt": "2026-10-28",
+          "sourcePins": [
+            {
+              "path": "server/src/services/readiness/readiness-policy.ts",
+              "sha256": "13481b89797c5d250ce7cc3f856c92698d5a2045a02d9d1807d3bb7ce11e9f28"
+            },
+            {
+              "path": "server/src/routes/readiness.ts",
+              "sha256": "1769bb4751655c54ab8445b802385a9a6738cb290c7e04605fa51a72a5c66454"
+            },
+            {
+              "path": "server/src/services/access.ts",
+              "sha256": "1db330169f2492f12baf454114298c556a01a761baea72b9e0f68f2fd13c2d9e"
+            },
+            {
+              "path": "server/src/services/stewards/core-stewards.ts",
+              "sha256": "8d2a85da4a348f0576083235f9df8babb931e236e283cb22fe7e136590160ef9"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [],
+          "receiptFileCount": 0,
+          "boundedResult": "No receipt files were listed for this scoped review; no test result is inferred.",
+          "limit": "Source review/proposal only. Historical receipt presence does not prove current-head, full-journey, hosted, provider, Human, or release acceptance.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/source-audit-proposals.json"
+        }
       }
     },
     {
@@ -3475,7 +3576,7 @@
       "id": "V10-034",
       "sourceLine": 6815,
       "work": "federated Universal Find contracts/adapters.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -3525,14 +3626,50 @@
             "observedWorktreeSha256": "e8b757cf2b15085045352319082476a9369f746cc855f3c566b5ea38b1cc6382"
           }
         ],
-        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification."
+        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification.",
+        "boundedFollowupReview": {
+          "review": "source-audit-proposals",
+          "reviewedAt": "2026-10-28",
+          "sourcePins": [
+            {
+              "path": "server/src/services/company-search.ts",
+              "sha256": "72a0916cfbe31bbfe3fef6dec1d8a16ad46aa65365006463176c89d546424cff"
+            },
+            {
+              "path": "server/src/routes/companies.ts",
+              "sha256": "b4ee7289e09e3f9e88bdc50c6beee244ac62c5260de7017ffc9415b6bef12e44"
+            },
+            {
+              "path": "ui/src/pages/Search.tsx",
+              "sha256": "fdf159f6d29222f194596f4bcc63a7561eb00cd1b242c3465c38d9a207e26bd5"
+            },
+            {
+              "path": "ui/src/api/search.ts",
+              "sha256": "e8b757cf2b15085045352319082476a9369f746cc855f3c566b5ea38b1cc6382"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/universal-find-service-2026-10-28/README.md",
+              "sha256": "f688d49dce2ce3842187daee98e4f45e4ad24b82a0bc62121cf795e3be32064c"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/universal-find-notices-2026-10-27/r1/README.md",
+              "sha256": "3acd2c70055be0e2319ad75392ccfa1c1e13b9ab7ba023245883b3324e54a087"
+            }
+          ],
+          "receiptFileCount": 2,
+          "boundedResult": "Retained receipt reports 34/34 focused company-search service tests passed; it excludes the complete browser journey and whole-workspace acceptance.",
+          "limit": "Source review/proposal only. Historical receipt presence does not prove current-head, full-journey, hosted, provider, Human, or release acceptance.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/source-audit-proposals.json"
+        }
       }
     },
     {
       "id": "V10-035",
       "sourceLine": 6816,
       "work": "Workflows/Routines/Apps/Decisions/Insights search adapters.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -3570,14 +3707,38 @@
             "observedWorktreeSha256": "f0263a6a126203cb12f06aaffaccc71c2c756d8dbbfe2eedf41943aea8bc305e"
           }
         ],
-        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification."
+        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification.",
+        "boundedFollowupReview": {
+          "review": "source-audit-proposals",
+          "reviewedAt": "2026-10-28",
+          "sourcePins": [
+            {
+              "path": "server/src/services/company-search.ts",
+              "sha256": "72a0916cfbe31bbfe3fef6dec1d8a16ad46aa65365006463176c89d546424cff"
+            },
+            {
+              "path": "server/src/__tests__/company-search-service.test.ts",
+              "sha256": "f0263a6a126203cb12f06aaffaccc71c2c756d8dbbfe2eedf41943aea8bc305e"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/universal-find-service-2026-10-28/README.md",
+              "sha256": "f688d49dce2ce3842187daee98e4f45e4ad24b82a0bc62121cf795e3be32064c"
+            }
+          ],
+          "receiptFileCount": 1,
+          "boundedResult": "Retained receipt reports 34/34 focused company-search service tests passed; it excludes the complete browser journey and whole-workspace acceptance.",
+          "limit": "Source review/proposal only. Historical receipt presence does not prove current-head, full-journey, hosted, provider, Human, or release acceptance.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/source-audit-proposals.json"
+        }
       }
     },
     {
       "id": "V10-036",
       "sourceLine": 6817,
       "work": "Settings/help/navigation search adapters.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -3621,14 +3782,42 @@
             "observedWorktreeSha256": "132369ced166ef7e7b15204f09b42fe1cb7551d67d1436006b35448108155a2b"
           }
         ],
-        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification."
+        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification.",
+        "boundedFollowupReview": {
+          "review": "source-audit-proposals",
+          "reviewedAt": "2026-10-28",
+          "sourcePins": [
+            {
+              "path": "server/src/services/company-search.ts",
+              "sha256": "72a0916cfbe31bbfe3fef6dec1d8a16ad46aa65365006463176c89d546424cff"
+            },
+            {
+              "path": "ui/src/pages/Search.tsx",
+              "sha256": "fdf159f6d29222f194596f4bcc63a7561eb00cd1b242c3465c38d9a207e26bd5"
+            },
+            {
+              "path": "ui/src/lib/help-navigation.ts",
+              "sha256": "132369ced166ef7e7b15204f09b42fe1cb7551d67d1436006b35448108155a2b"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/universal-find-notices-2026-10-27/r1/README.md",
+              "sha256": "3acd2c70055be0e2319ad75392ccfa1c1e13b9ab7ba023245883b3324e54a087"
+            }
+          ],
+          "receiptFileCount": 1,
+          "boundedResult": "Receipt files present; no test result inferred from presence.",
+          "limit": "Source review/proposal only. Historical receipt presence does not prove current-head, full-journey, hosted, provider, Human, or release acceptance.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/source-audit-proposals.json"
+        }
       }
     },
     {
       "id": "V10-037",
       "sourceLine": 6818,
       "work": "search partial-failure/security/accessibility tests.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -3672,14 +3861,46 @@
             "observedWorktreeSha256": "57943cbc6e38353959bf18830effd876ef1c9b6a7334e7ac39225e2996e835e4"
           }
         ],
-        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification."
+        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification.",
+        "boundedFollowupReview": {
+          "review": "source-audit-proposals",
+          "reviewedAt": "2026-10-28",
+          "sourcePins": [
+            {
+              "path": "server/src/services/company-search.ts",
+              "sha256": "72a0916cfbe31bbfe3fef6dec1d8a16ad46aa65365006463176c89d546424cff"
+            },
+            {
+              "path": "server/src/__tests__/company-search-service.test.ts",
+              "sha256": "f0263a6a126203cb12f06aaffaccc71c2c756d8dbbfe2eedf41943aea8bc305e"
+            },
+            {
+              "path": "ui/src/pages/Search.test.tsx",
+              "sha256": "57943cbc6e38353959bf18830effd876ef1c9b6a7334e7ac39225e2996e835e4"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/universal-find-service-2026-10-28/README.md",
+              "sha256": "f688d49dce2ce3842187daee98e4f45e4ad24b82a0bc62121cf795e3be32064c"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/universal-find-notices-2026-10-27/r1/README.md",
+              "sha256": "3acd2c70055be0e2319ad75392ccfa1c1e13b9ab7ba023245883b3324e54a087"
+            }
+          ],
+          "receiptFileCount": 2,
+          "boundedResult": "Retained receipt reports 34/34 focused company-search service tests passed; it excludes the complete browser journey and whole-workspace acceptance.",
+          "limit": "Source review/proposal only. Historical receipt presence does not prove current-head, full-journey, hosted, provider, Human, or release acceptance.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/source-audit-proposals.json"
+        }
       }
     },
     {
       "id": "V10-038",
       "sourceLine": 6819,
       "work": "Ask/Cmd+K deterministic Universal Find integration.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -3723,14 +3944,42 @@
             "observedWorktreeSha256": "bf6fae3bcb83d24849775ecab779344512220cf041381089f6e913beed8bd000"
           }
         ],
-        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification."
+        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification.",
+        "boundedFollowupReview": {
+          "review": "source-audit-proposals",
+          "reviewedAt": "2026-10-28",
+          "sourcePins": [
+            {
+              "path": "ui/src/pages/Search.tsx",
+              "sha256": "fdf159f6d29222f194596f4bcc63a7561eb00cd1b242c3465c38d9a207e26bd5"
+            },
+            {
+              "path": "ui/src/pages/Search.test.tsx",
+              "sha256": "57943cbc6e38353959bf18830effd876ef1c9b6a7334e7ac39225e2996e835e4"
+            },
+            {
+              "path": "ui/src/components/CommandPalette.tsx",
+              "sha256": "bf6fae3bcb83d24849775ecab779344512220cf041381089f6e913beed8bd000"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/universal-find-notices-2026-10-27/r1/README.md",
+              "sha256": "3acd2c70055be0e2319ad75392ccfa1c1e13b9ab7ba023245883b3324e54a087"
+            }
+          ],
+          "receiptFileCount": 1,
+          "boundedResult": "Receipt files present; no test result inferred from presence.",
+          "limit": "Source review/proposal only. Historical receipt presence does not prove current-head, full-journey, hosted, provider, Human, or release acceptance.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/source-audit-proposals.json"
+        }
       }
     },
     {
       "id": "V10-039",
       "sourceLine": 6823,
       "work": "support case schema/service/API.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -3774,14 +4023,46 @@
             "observedWorktreeSha256": "ded459c7ae516d5defa7c6e4e465857f579bf69175a2baca65876d48a49cbb90"
           }
         ],
-        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification."
+        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification.",
+        "boundedFollowupReview": {
+          "review": "source-audit-proposals",
+          "reviewedAt": "2026-10-28",
+          "sourcePins": [
+            {
+              "path": "packages/db/src/schema/support_cases.ts",
+              "sha256": "69b01365fc5d46b668ee451f3be1384a544371a2976fb095affa54dec0166d36"
+            },
+            {
+              "path": "packages/shared/src/customer-support.ts",
+              "sha256": "fb618a2ec15968cf4f09d29dd8dd6eb2bffeaddb2ae9e1df8754b0fda5f02ec2"
+            },
+            {
+              "path": "server/src/services/experience/support-cases.ts",
+              "sha256": "8ad9cf3c2c5424b034cd13591527485de5fa180baed280c131e438d3b31ba8c9"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/support-cases-2026-10-23/support-case-api-final.log",
+              "sha256": "7a0987c77e557917a08b53ab0f587d7c409e64d0db9c3c6569859fe68f138b4e"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/support-cases-2026-10-23/support-case-api-reviewed.exit",
+              "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+            }
+          ],
+          "receiptFileCount": 2,
+          "boundedResult": "Receipt files present; no test result inferred from presence.",
+          "limit": "Source review/proposal only. Historical receipt presence does not prove current-head, full-journey, hosted, provider, Human, or release acceptance.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/source-audit-proposals.json"
+        }
       }
     },
     {
       "id": "V10-040",
       "sourceLine": 6824,
       "work": "global Help / support intake UI.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -3825,14 +4106,50 @@
             "observedWorktreeSha256": "be3af7f1dc8f2f07b507bac12bc28bcd41661923d8bc89a4824ad90e5db81b86"
           }
         ],
-        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification."
+        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification.",
+        "boundedFollowupReview": {
+          "review": "source-audit-proposals",
+          "reviewedAt": "2026-10-28",
+          "sourcePins": [
+            {
+              "path": "server/src/routes/customer-support.ts",
+              "sha256": "8c11fb33b4fc8e45a02c7eb7ca3d90a68b1ed839ed51bde3337f0de13323e856"
+            },
+            {
+              "path": "ui/src/pages/CustomerHelpCenter.tsx",
+              "sha256": "452e9880a47c77278e15807a73a966d7606d2a5f55e997deb302ee34dc5854d5"
+            },
+            {
+              "path": "ui/src/pages/CustomerSupportCases.tsx",
+              "sha256": "26dcb46390992f02cbbf47ddc4e202fe71d91757b93a06a4a1bae531b6901080"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/support-cases-2026-10-23/support-cases-ui-native-routing.log",
+              "sha256": "524fe04ab845184d3b5a3217f6354c20de5dca0a6bee05bd1652532de26cc5e8"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/support-cases-2026-10-23/browser/support-browser-final.log",
+              "sha256": "fad22a5d7a0bafe45e34aa13982f32f5b964ad3690645edc0f59116bd75004ce"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/support-cases-2026-10-23/browser/support-browser-final.exit",
+              "sha256": "f5bde7eb9f6c71611dc5726e8aca3eb4eba3e386da49e0a4ed5c295a90a73a0d"
+            }
+          ],
+          "receiptFileCount": 3,
+          "boundedResult": "Receipt files present; no test result inferred from presence.",
+          "limit": "Source review/proposal only. Historical receipt presence does not prove current-head, full-journey, hosted, provider, Human, or release acceptance.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/source-audit-proposals.json"
+        }
       }
     },
     {
       "id": "V10-041",
       "sourceLine": 6825,
       "work": "customer-safe case timeline/replies.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -3876,14 +4193,46 @@
             "observedWorktreeSha256": "be3af7f1dc8f2f07b507bac12bc28bcd41661923d8bc89a4824ad90e5db81b86"
           }
         ],
-        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification."
+        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification.",
+        "boundedFollowupReview": {
+          "review": "source-audit-proposals",
+          "reviewedAt": "2026-10-28",
+          "sourcePins": [
+            {
+              "path": "server/src/services/experience/support-cases.ts",
+              "sha256": "8ad9cf3c2c5424b034cd13591527485de5fa180baed280c131e438d3b31ba8c9"
+            },
+            {
+              "path": "packages/shared/src/customer-support.ts",
+              "sha256": "fb618a2ec15968cf4f09d29dd8dd6eb2bffeaddb2ae9e1df8754b0fda5f02ec2"
+            },
+            {
+              "path": "ui/src/pages/CustomerSupportCases.tsx",
+              "sha256": "26dcb46390992f02cbbf47ddc4e202fe71d91757b93a06a4a1bae531b6901080"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/support-cases-2026-10-23/support-cases-close-final.log",
+              "sha256": "cf27228d68420d77865f33bed4e3fc95320fd97ae3eedf2a8341146e134d9add"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/support-cases-2026-10-23/support-cases-close-final.exit",
+              "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+            }
+          ],
+          "receiptFileCount": 2,
+          "boundedResult": "Receipt files present; no test result inferred from presence.",
+          "limit": "Source review/proposal only. Historical receipt presence does not prove current-head, full-journey, hosted, provider, Human, or release acceptance.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/source-audit-proposals.json"
+        }
       }
     },
     {
       "id": "V10-042",
       "sourceLine": 6826,
       "work": "safe support diagnostics.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -3927,14 +4276,46 @@
             "observedWorktreeSha256": "89273dc6b32a9ea45d4d517677d06a66d9d27c393b0153a18210465e350be0a8"
           }
         ],
-        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification."
+        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification.",
+        "boundedFollowupReview": {
+          "review": "source-audit-proposals",
+          "reviewedAt": "2026-10-28",
+          "sourcePins": [
+            {
+              "path": "server/src/services/experience/support-cases.ts",
+              "sha256": "8ad9cf3c2c5424b034cd13591527485de5fa180baed280c131e438d3b31ba8c9"
+            },
+            {
+              "path": "server/src/services/experience/support-case-configuration.ts",
+              "sha256": "f69d0e55c3958d5a82a076ce20391b2e3d53b6623ce3bb91acf36199de27f523"
+            },
+            {
+              "path": "packages/shared/src/customer-support.ts",
+              "sha256": "fb618a2ec15968cf4f09d29dd8dd6eb2bffeaddb2ae9e1df8754b0fda5f02ec2"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/support-cases-2026-10-23/policy/support-policy-native.exit",
+              "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/support-cases-2026-10-23/export/support-rate-race-fixed-native.log",
+              "sha256": "9d5e16b97cd4f19958accad93fd13d3895d605356358707ce3fcc09880063154"
+            }
+          ],
+          "receiptFileCount": 2,
+          "boundedResult": "Receipt files present; no test result inferred from presence.",
+          "limit": "Source review/proposal only. Historical receipt presence does not prove current-head, full-journey, hosted, provider, Human, or release acceptance.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/source-audit-proposals.json"
+        }
       }
     },
     {
       "id": "V10-043",
       "sourceLine": 6827,
       "work": "support case → V6 support-session request flow.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -3984,14 +4365,46 @@
             "observedWorktreeSha256": "89273dc6b32a9ea45d4d517677d06a66d9d27c393b0153a18210465e350be0a8"
           }
         ],
-        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification."
+        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification.",
+        "boundedFollowupReview": {
+          "review": "source-audit-proposals",
+          "reviewedAt": "2026-10-28",
+          "sourcePins": [
+            {
+              "path": "server/src/services/experience/support-cases.ts",
+              "sha256": "8ad9cf3c2c5424b034cd13591527485de5fa180baed280c131e438d3b31ba8c9"
+            },
+            {
+              "path": "server/src/services/experience/customer-support.ts",
+              "sha256": "a66506818899ee0940bb54f71d8f2941fd66ead42f3bea7d884e726f0313f49e"
+            },
+            {
+              "path": "server/src/routes/customer-support.ts",
+              "sha256": "8c11fb33b4fc8e45a02c7eb7ca3d90a68b1ed839ed51bde3337f0de13323e856"
+            },
+            {
+              "path": "packages/shared/src/customer-support.ts",
+              "sha256": "fb618a2ec15968cf4f09d29dd8dd6eb2bffeaddb2ae9e1df8754b0fda5f02ec2"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/support-cases-2026-10-23/request-recovery/support-request-recovery-final.exit",
+              "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+            }
+          ],
+          "receiptFileCount": 1,
+          "boundedResult": "Receipt files present; no test result inferred from presence.",
+          "limit": "Source review/proposal only. Historical receipt presence does not prove current-head, full-journey, hosted, provider, Human, or release acceptance.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/source-audit-proposals.json"
+        }
       }
     },
     {
       "id": "V10-044",
       "sourceLine": 6828,
       "work": "Support Agent Package + approved Help retrieval.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -4041,14 +4454,46 @@
             "observedWorktreeSha256": "04e9d79c1d80d837ed5229483bc83a6c61d3fd726e90207304300dea7ccd0029"
           }
         ],
-        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification."
+        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification.",
+        "boundedFollowupReview": {
+          "review": "source-audit-proposals",
+          "reviewedAt": "2026-10-28",
+          "sourcePins": [
+            {
+              "path": "server/src/services/experience/support-assistant-grounding.ts",
+              "sha256": "e7e4ed4fdd8aece0215d3ab1c849de790b48f09817e4c88edfe5edeca543806f"
+            },
+            {
+              "path": "server/src/services/experience/support-assistant-help.ts",
+              "sha256": "a07712b19f518c3f760c91eb3e80a022e12c0b404baa194c2019547ee416e3d5"
+            },
+            {
+              "path": "server/src/routes/customer-support.ts",
+              "sha256": "8c11fb33b4fc8e45a02c7eb7ca3d90a68b1ed839ed51bde3337f0de13323e856"
+            },
+            {
+              "path": "ui/src/components/CustomerSupportAssistant.tsx",
+              "sha256": "04e9d79c1d80d837ed5229483bc83a6c61d3fd726e90207304300dea7ccd0029"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/support-cases-2026-10-23/support-case-api-final.log",
+              "sha256": "7a0987c77e557917a08b53ab0f587d7c409e64d0db9c3c6569859fe68f138b4e"
+            }
+          ],
+          "receiptFileCount": 1,
+          "boundedResult": "Receipt files present; no test result inferred from presence.",
+          "limit": "Source review/proposal only. Historical receipt presence does not prove current-head, full-journey, hosted, provider, Human, or release acceptance.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/source-audit-proposals.json"
+        }
       }
     },
     {
       "id": "V10-045",
       "sourceLine": 6829,
       "work": "human escalation/no-dead-end tests.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -4098,14 +4543,50 @@
             "observedWorktreeSha256": "89273dc6b32a9ea45d4d517677d06a66d9d27c393b0153a18210465e350be0a8"
           }
         ],
-        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification."
+        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification.",
+        "boundedFollowupReview": {
+          "review": "source-audit-proposals",
+          "reviewedAt": "2026-10-28",
+          "sourcePins": [
+            {
+              "path": "server/src/routes/customer-support.ts",
+              "sha256": "8c11fb33b4fc8e45a02c7eb7ca3d90a68b1ed839ed51bde3337f0de13323e856"
+            },
+            {
+              "path": "ui/src/pages/CustomerHelpCenter.tsx",
+              "sha256": "452e9880a47c77278e15807a73a966d7606d2a5f55e997deb302ee34dc5854d5"
+            },
+            {
+              "path": "ui/src/pages/CustomerSupportCases.tsx",
+              "sha256": "26dcb46390992f02cbbf47ddc4e202fe71d91757b93a06a4a1bae531b6901080"
+            },
+            {
+              "path": "packages/shared/src/customer-support.ts",
+              "sha256": "fb618a2ec15968cf4f09d29dd8dd6eb2bffeaddb2ae9e1df8754b0fda5f02ec2"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/support-cases-2026-10-23/browser/support-browser-final.log",
+              "sha256": "fad22a5d7a0bafe45e34aa13982f32f5b964ad3690645edc0f59116bd75004ce"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/support-cases-2026-10-23/browser/support-browser-final.exit",
+              "sha256": "f5bde7eb9f6c71611dc5726e8aca3eb4eba3e386da49e0a4ed5c295a90a73a0d"
+            }
+          ],
+          "receiptFileCount": 2,
+          "boundedResult": "Receipt files present; no test result inferred from presence.",
+          "limit": "Source review/proposal only. Historical receipt presence does not prove current-head, full-journey, hosted, provider, Human, or release acceptance.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/source-audit-proposals.json"
+        }
       }
     },
     {
       "id": "V10-046",
       "sourceLine": 6830,
       "work": "support provider adapter seam.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -4149,14 +4630,46 @@
             "observedWorktreeSha256": "f69d0e55c3958d5a82a076ce20391b2e3d53b6623ce3bb91acf36199de27f523"
           }
         ],
-        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification."
+        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification.",
+        "boundedFollowupReview": {
+          "review": "source-audit-proposals",
+          "reviewedAt": "2026-10-28",
+          "sourcePins": [
+            {
+              "path": "server/src/services/experience/support-case-delivery.ts",
+              "sha256": "56b422fc04257950bd7217feb902388aa10b7879d1a286e039d3bca0587cf97e"
+            },
+            {
+              "path": "server/src/services/experience/support-case-http-gateway.ts",
+              "sha256": "804d1bc6376d2f4267b55eb4a2397e03845d8a70bfc879da44136bf3ffb9b547"
+            },
+            {
+              "path": "server/src/services/experience/support-case-configuration.ts",
+              "sha256": "f69d0e55c3958d5a82a076ce20391b2e3d53b6623ce3bb91acf36199de27f523"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/support-outbound-gateway-2026-10-25/receipts.json",
+              "sha256": "b9b1b0bf548e33b311b7c143bddfdf60da6ca3da28446b73b0b361f448298a1e"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/support-delivery-lease-2026-10-25/receipts.json",
+              "sha256": "070adad13f8f5fbb5751618596bcd0b3f00bf7c79131cd01a2abde85e7287368"
+            }
+          ],
+          "receiptFileCount": 2,
+          "boundedResult": "Receipt files present; no test result inferred from presence.",
+          "limit": "Source review/proposal only. Historical receipt presence does not prove current-head, full-journey, hosted, provider, Human, or release acceptance.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/source-audit-proposals.json"
+        }
       }
     },
     {
       "id": "V10-047",
       "sourceLine": 6831,
       "work": "support privacy/retention/accessibility evidence.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -4206,14 +4719,50 @@
             "observedWorktreeSha256": "be3af7f1dc8f2f07b507bac12bc28bcd41661923d8bc89a4824ad90e5db81b86"
           }
         ],
-        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification."
+        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification.",
+        "boundedFollowupReview": {
+          "review": "source-audit-proposals",
+          "reviewedAt": "2026-10-28",
+          "sourcePins": [
+            {
+              "path": "packages/shared/src/customer-support.ts",
+              "sha256": "fb618a2ec15968cf4f09d29dd8dd6eb2bffeaddb2ae9e1df8754b0fda5f02ec2"
+            },
+            {
+              "path": "server/src/services/experience/support-cases.ts",
+              "sha256": "8ad9cf3c2c5424b034cd13591527485de5fa180baed280c131e438d3b31ba8c9"
+            },
+            {
+              "path": "server/src/__tests__/v9-customer-support.integration.test.ts",
+              "sha256": "5b48e0d88972a783c933c09c0dfa98e20f01e768c786e87c8e64bc83b5c55e3d"
+            },
+            {
+              "path": "ui/src/pages/CustomerSupportCases.tsx",
+              "sha256": "26dcb46390992f02cbbf47ddc4e202fe71d91757b93a06a4a1bae531b6901080"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/support-cases-2026-10-23/checkpoint.json",
+              "sha256": "d16aa81f135bfe44b20454d9e9be3513a693a152964537f6ea099119822ba77e"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/support-cases-2026-10-23/support-case-api-final.log",
+              "sha256": "7a0987c77e557917a08b53ab0f587d7c409e64d0db9c3c6569859fe68f138b4e"
+            }
+          ],
+          "receiptFileCount": 2,
+          "boundedResult": "Receipt files present; no test result inferred from presence.",
+          "limit": "Source review/proposal only. Historical receipt presence does not prove current-head, full-journey, hosted, provider, Human, or release acceptance.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/source-audit-proposals.json"
+        }
       }
     },
     {
       "id": "V10-048",
       "sourceLine": 6835,
       "work": "managed status provider decision/adapter.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -4257,14 +4806,46 @@
             "observedWorktreeSha256": "9a9d73481a32f1655cd2556f20043388cc3645cc41d47f275c9452071f59c177"
           }
         ],
-        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification."
+        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification.",
+        "boundedFollowupReview": {
+          "review": "source-audit-proposals",
+          "reviewedAt": "2026-10-28",
+          "sourcePins": [
+            {
+              "path": "server/src/services/experience/service-health.ts",
+              "sha256": "a7bbe53bb978cb192b1b598bcc34f3afc314a08c26f7cc13438d6c34d4406972"
+            },
+            {
+              "path": "server/src/routes/service-health.ts",
+              "sha256": "bdf5a7eef496817669c1f21a67637636534d3eef548f44676a0f9c91b982cf82"
+            },
+            {
+              "path": "packages/shared/src/service-health.ts",
+              "sha256": "7973fba774410d46126abe2aea133ecb4d91d56c6f87634dd7e233733a3b0e98"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/service-health/qualification-2026-10-28/README.md",
+              "sha256": "bdf16a941b22a13925136ac7eeed8d75541e2697a8c70ed46b2267ea132b5e8f"
+            },
+            {
+              "path": "doc/operations/service-health/qualification-2026-10-28/server-test.exit",
+              "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+            }
+          ],
+          "receiptFileCount": 2,
+          "boundedResult": "Receipt files present; no test result inferred from presence.",
+          "limit": "Source review/proposal only. Historical receipt presence does not prove current-head, full-journey, hosted, provider, Human, or release acceptance.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/source-audit-proposals.json"
+        }
       }
     },
     {
       "id": "V10-049",
       "sourceLine": 6836,
       "work": "customer service-component catalog.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -4302,14 +4883,38 @@
             "observedWorktreeSha256": "e7d8481bcf4a2a5300ea5db7a953df380e45d1a13f4acadb6b6fc4498be006f0"
           }
         ],
-        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification."
+        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification.",
+        "boundedFollowupReview": {
+          "review": "source-audit-proposals",
+          "reviewedAt": "2026-10-28",
+          "sourcePins": [
+            {
+              "path": "packages/shared/src/service-health.ts",
+              "sha256": "7973fba774410d46126abe2aea133ecb4d91d56c6f87634dd7e233733a3b0e98"
+            },
+            {
+              "path": "server/src/services/experience/service-health.ts",
+              "sha256": "a7bbe53bb978cb192b1b598bcc34f3afc314a08c26f7cc13438d6c34d4406972"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/service-health/qualification-2026-10-28/README.md",
+              "sha256": "bdf16a941b22a13925136ac7eeed8d75541e2697a8c70ed46b2267ea132b5e8f"
+            }
+          ],
+          "receiptFileCount": 1,
+          "boundedResult": "Receipt files present; no test result inferred from presence.",
+          "limit": "Source review/proposal only. Historical receipt presence does not prove current-head, full-journey, hosted, provider, Human, or release acceptance.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/source-audit-proposals.json"
+        }
       }
     },
     {
       "id": "V10-050",
       "sourceLine": 6837,
       "work": "incident/maintenance publish path with role/audit.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "current_bounded_work_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -4359,14 +4964,46 @@
             "observedWorktreeSha256": "38004ac19cdef34a29223e36db8446f6ec87b409e708e7b01a8a2e3f387a5b1c"
           }
         ],
-        "reviewBasis": "Targeted source and document owner review in the shared dirty worktree on 2026-10-28. Hashes identify observed bytes at review time; they do not certify complete tests, external provider/domain operation, Human approval, or release qualification."
+        "reviewBasis": "Targeted source and document owner review in the shared dirty worktree on 2026-10-28. Hashes identify observed bytes at review time; they do not certify complete tests, external provider/domain operation, Human approval, or release qualification.",
+        "boundedFollowupReview": {
+          "review": "source-audit-proposals",
+          "reviewedAt": "2026-10-28",
+          "sourcePins": [
+            {
+              "path": "server/src/services/experience/service-health.ts",
+              "sha256": "a7bbe53bb978cb192b1b598bcc34f3afc314a08c26f7cc13438d6c34d4406972"
+            },
+            {
+              "path": "server/src/routes/service-health.ts",
+              "sha256": "bdf5a7eef496817669c1f21a67637636534d3eef548f44676a0f9c91b982cf82"
+            },
+            {
+              "path": "ui/src/components/ServiceHealth.tsx",
+              "sha256": "ebbbe90c5078d9d89e3dddd545cd7fb628579baa1768cd44e19739719f5072e9"
+            },
+            {
+              "path": "doc/operations/service-health/README.md",
+              "sha256": "efd8df238577726d60eaa88f1020ad9934d0eb0615e0135d2fba30d587c4c8d0"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/service-health/README.md",
+              "sha256": "efd8df238577726d60eaa88f1020ad9934d0eb0615e0135d2fba30d587c4c8d0"
+            }
+          ],
+          "receiptFileCount": 1,
+          "boundedResult": "Receipt files present; no test result inferred from presence.",
+          "limit": "Source review/proposal only. Historical receipt presence does not prove current-head, full-journey, hosted, provider, Human, or release acceptance.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/source-audit-proposals.json"
+        }
       }
     },
     {
       "id": "V10-051",
       "sourceLine": 6838,
       "work": "in-app affected-company incident projection.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -4410,14 +5047,42 @@
             "observedWorktreeSha256": "9a9d73481a32f1655cd2556f20043388cc3645cc41d47f275c9452071f59c177"
           }
         ],
-        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification."
+        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification.",
+        "boundedFollowupReview": {
+          "review": "source-audit-proposals",
+          "reviewedAt": "2026-10-28",
+          "sourcePins": [
+            {
+              "path": "ui/src/components/ServiceHealth.tsx",
+              "sha256": "ebbbe90c5078d9d89e3dddd545cd7fb628579baa1768cd44e19739719f5072e9"
+            },
+            {
+              "path": "server/src/services/experience/service-health.ts",
+              "sha256": "a7bbe53bb978cb192b1b598bcc34f3afc314a08c26f7cc13438d6c34d4406972"
+            },
+            {
+              "path": "packages/shared/src/service-health.ts",
+              "sha256": "7973fba774410d46126abe2aea133ecb4d91d56c6f87634dd7e233733a3b0e98"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/service-health/qualification-2026-10-28/ui-test.exit",
+              "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+            }
+          ],
+          "receiptFileCount": 1,
+          "boundedResult": "Receipt files present; no test result inferred from presence.",
+          "limit": "Source review/proposal only. Historical receipt presence does not prove current-head, full-journey, hosted, provider, Human, or release acceptance.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/source-audit-proposals.json"
+        }
       }
     },
     {
       "id": "V10-052",
       "sourceLine": 6839,
       "work": "subscriber/notification integration.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "current_bounded_work_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -4467,14 +5132,46 @@
             "observedWorktreeSha256": "38004ac19cdef34a29223e36db8446f6ec87b409e708e7b01a8a2e3f387a5b1c"
           }
         ],
-        "reviewBasis": "Targeted source and document owner review in the shared dirty worktree on 2026-10-28. Hashes identify observed bytes at review time; they do not certify complete tests, external provider/domain operation, Human approval, or release qualification."
+        "reviewBasis": "Targeted source and document owner review in the shared dirty worktree on 2026-10-28. Hashes identify observed bytes at review time; they do not certify complete tests, external provider/domain operation, Human approval, or release qualification.",
+        "boundedFollowupReview": {
+          "review": "source-audit-proposals",
+          "reviewedAt": "2026-10-28",
+          "sourcePins": [
+            {
+              "path": "ui/src/components/ServiceHealth.tsx",
+              "sha256": "ebbbe90c5078d9d89e3dddd545cd7fb628579baa1768cd44e19739719f5072e9"
+            },
+            {
+              "path": "server/src/services/experience/service-health.ts",
+              "sha256": "a7bbe53bb978cb192b1b598bcc34f3afc314a08c26f7cc13438d6c34d4406972"
+            },
+            {
+              "path": "server/src/routes/service-health.ts",
+              "sha256": "bdf5a7eef496817669c1f21a67637636534d3eef548f44676a0f9c91b982cf82"
+            },
+            {
+              "path": "doc/operations/service-health/README.md",
+              "sha256": "efd8df238577726d60eaa88f1020ad9934d0eb0615e0135d2fba30d587c4c8d0"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/service-health/README.md",
+              "sha256": "efd8df238577726d60eaa88f1020ad9934d0eb0615e0135d2fba30d587c4c8d0"
+            }
+          ],
+          "receiptFileCount": 1,
+          "boundedResult": "Receipt files present; no test result inferred from presence.",
+          "limit": "Source review/proposal only. Historical receipt presence does not prove current-head, full-journey, hosted, provider, Human, or release acceptance.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/source-audit-proposals.json"
+        }
       }
     },
     {
       "id": "V10-053",
       "sourceLine": 6840,
       "work": "postmortem/customer-communication templates.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "current_bounded_work_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -4512,14 +5209,38 @@
             "observedWorktreeSha256": "e7d8481bcf4a2a5300ea5db7a953df380e45d1a13f4acadb6b6fc4498be006f0"
           }
         ],
-        "reviewBasis": "Targeted source and document owner review in the shared dirty worktree on 2026-10-28. Hashes identify observed bytes at review time; they do not certify complete tests, external provider/domain operation, Human approval, or release qualification."
+        "reviewBasis": "Targeted source and document owner review in the shared dirty worktree on 2026-10-28. Hashes identify observed bytes at review time; they do not certify complete tests, external provider/domain operation, Human approval, or release qualification.",
+        "boundedFollowupReview": {
+          "review": "source-audit-proposals",
+          "reviewedAt": "2026-10-28",
+          "sourcePins": [
+            {
+              "path": "doc/operations/service-health/README.md",
+              "sha256": "efd8df238577726d60eaa88f1020ad9934d0eb0615e0135d2fba30d587c4c8d0"
+            },
+            {
+              "path": "server/src/services/experience/service-health.ts",
+              "sha256": "a7bbe53bb978cb192b1b598bcc34f3afc314a08c26f7cc13438d6c34d4406972"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/service-health/README.md",
+              "sha256": "efd8df238577726d60eaa88f1020ad9934d0eb0615e0135d2fba30d587c4c8d0"
+            }
+          ],
+          "receiptFileCount": 1,
+          "boundedResult": "Receipt files present; no test result inferred from presence.",
+          "limit": "Source review/proposal only. Historical receipt presence does not prove current-head, full-journey, hosted, provider, Human, or release acceptance.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/source-audit-proposals.json"
+        }
       }
     },
     {
       "id": "V10-054",
       "sourceLine": 6841,
       "work": "status-provider outage/failover/manual publication runbook.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -4557,7 +5278,31 @@
             "observedWorktreeSha256": "e7d8481bcf4a2a5300ea5db7a953df380e45d1a13f4acadb6b6fc4498be006f0"
           }
         ],
-        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification."
+        "reviewBasis": "Source-owner review at HEAD e8dcdf53e6d72ddf1859daf80aee7f23386cefa5 plus a shared dirty worktree on 2026-10-28. Source observations do not certify tests, hosted deployment, provider operation, Human review, or release qualification.",
+        "boundedFollowupReview": {
+          "review": "source-audit-proposals",
+          "reviewedAt": "2026-10-28",
+          "sourcePins": [
+            {
+              "path": "doc/operations/service-health/README.md",
+              "sha256": "efd8df238577726d60eaa88f1020ad9934d0eb0615e0135d2fba30d587c4c8d0"
+            },
+            {
+              "path": "server/src/services/experience/service-health.ts",
+              "sha256": "a7bbe53bb978cb192b1b598bcc34f3afc314a08c26f7cc13438d6c34d4406972"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/service-health/README.md",
+              "sha256": "efd8df238577726d60eaa88f1020ad9934d0eb0615e0135d2fba30d587c4c8d0"
+            }
+          ],
+          "receiptFileCount": 1,
+          "boundedResult": "Receipt files present; no test result inferred from presence.",
+          "limit": "Source review/proposal only. Historical receipt presence does not prove current-head, full-journey, hosted, provider, Human, or release acceptance.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/source-audit-proposals.json"
+        }
       }
     },
     {
@@ -4661,7 +5406,67 @@
             "observedWorktreeSha256": "316274f9d6e233b1b76e98f64f750ff751c4394d36b3d05c6d1df688df0ba3c1"
           }
         ],
-        "reviewBasis": "Current source-owner inspection of the dirty worktree plus the named source-pinned focused artifacts. These scoped checks do not establish hosted behavior, Human acceptance, policy accuracy, procurement readiness or release qualification."
+        "reviewBasis": "Current source-owner inspection of the dirty worktree plus the named source-pinned focused artifacts. These scoped checks do not establish hosted behavior, Human acceptance, policy accuracy, procurement readiness or release qualification.",
+        "boundedFollowupReview": {
+          "review": "source-audit-proposals",
+          "reviewedAt": "2026-10-28",
+          "sourcePins": [
+            {
+              "path": "packages/shared/src/announcements.ts",
+              "sha256": "d82062cd1a9f8aaa4bac186794af8ec6c8ae52e04be34e8db359c14150fd5119"
+            },
+            {
+              "path": "server/src/services/announcement-feed.ts",
+              "sha256": "b4a4547fdb525d9bf15010aa4f39788d88c9053a5f96b419ba2798672f4ee7e5"
+            },
+            {
+              "path": "server/src/services/experience/product-notices.ts",
+              "sha256": "5f4d32d54289c70e45dc03ad6d5ab92fad94884d8cb6b87c53a6985c01846a5a"
+            },
+            {
+              "path": "server/src/routes/announcements.ts",
+              "sha256": "ad241e6b46ab6cce71b1d263be23a309d6c5ec4e22b27a894e10249a4ae33767"
+            },
+            {
+              "path": "ui/src/components/MandatoryProductNotices.tsx",
+              "sha256": "7892239a803fc42a1a4007e41b3bd79714eebcda3bcfc48fce159be8a869909c"
+            },
+            {
+              "path": "ui/src/components/AnnouncementWell.tsx",
+              "sha256": "b3bd0f0ca7b9da6fe28bcbf29fcd30fe544f4064bc144c6f479e1e1f2362885f"
+            },
+            {
+              "path": "server/src/routes/v9-api-paths.ts",
+              "sha256": "fbf9aebbdf4918708e97ea2f6f23c2cb360addb354c15ad59083276d8f760403"
+            },
+            {
+              "path": "server/src/routes/openapi.ts",
+              "sha256": "7b6a5b7490701023928ea6a0c7376d8800ca9ecb4cafdf930eb136ef82b8b91d"
+            },
+            {
+              "path": "server/src/routes/trust-documents.ts",
+              "sha256": "49d3fb08619000446da59dd0a44666f1c0deef0433501267610eb5f57e3ee3eb"
+            },
+            {
+              "path": "server/src/__tests__/openapi-routes.test.ts",
+              "sha256": "87cc2a3123e3568246b489d94cc4fa3fe20526af5bdb6e221d6799ac47b6da0e"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/mandatory-notices-2026-10-28/attempt-7/test.log",
+              "sha256": "7cf637d0d6cea9b9b60748af45a908c069f80428c5a07e29719ff554b53caf5e"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/mandatory-notices-2026-10-28/attempt-8/typecheck.log",
+              "sha256": "95d09526415f43fb0567543e66baf52e473a4f2dedb40ab03dc04279fd41a946"
+            }
+          ],
+          "receiptFileCount": 2,
+          "boundedResult": "Receipt files present; no test result inferred from presence.",
+          "limit": "Source review/proposal only. Historical receipt presence does not prove current-head, full-journey, hosted, provider, Human, or release acceptance.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/source-audit-proposals.json"
+        }
       },
       "implementationStatus": "partial_implementation"
     },
@@ -4669,7 +5474,7 @@
       "id": "V10-056",
       "sourceLine": 6846,
       "work": "notice class/targeting/action-required contract.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "reconciled_current_worktree",
       "currentAssessment": {
@@ -4774,7 +5579,67 @@
             "observedWorktreeSha256": "6c1ad69cfdf5b2094ce3cd35d5c62f83ad569abbc4d673b68cee2426f2d6ecaf"
           }
         ],
-        "reviewBasis": "Current source owner inspection at recorded repository HEAD plus dirty worktree. Runtime evidence is scoped to the exact linked captured attempt and its pre-test source pins. Source observations do not establish full V10 behavior, hosted deployment, customer/provider operation, or release acceptance."
+        "reviewBasis": "Current source owner inspection at recorded repository HEAD plus dirty worktree. Runtime evidence is scoped to the exact linked captured attempt and its pre-test source pins. Source observations do not establish full V10 behavior, hosted deployment, customer/provider operation, or release acceptance.",
+        "boundedFollowupReview": {
+          "review": "source-audit-proposals",
+          "reviewedAt": "2026-10-28",
+          "sourcePins": [
+            {
+              "path": "packages/shared/src/announcements.ts",
+              "sha256": "d82062cd1a9f8aaa4bac186794af8ec6c8ae52e04be34e8db359c14150fd5119"
+            },
+            {
+              "path": "server/src/routes/announcements.ts",
+              "sha256": "ad241e6b46ab6cce71b1d263be23a309d6c5ec4e22b27a894e10249a4ae33767"
+            },
+            {
+              "path": "server/src/services/trust-documents.ts",
+              "sha256": "76f0cec023ae7781f45b7938871a8c24f5d2c35f944b1ce1a46dc203cc5d0257"
+            },
+            {
+              "path": "server/src/services/experience/product-notices.ts",
+              "sha256": "5f4d32d54289c70e45dc03ad6d5ab92fad94884d8cb6b87c53a6985c01846a5a"
+            },
+            {
+              "path": "ui/src/api/product-notices.ts",
+              "sha256": "14ea395192370d97deb99cd74f42fceda05c27c93a7511dadba1269d7c1559ca"
+            },
+            {
+              "path": "server/src/routes/v9-api-paths.ts",
+              "sha256": "fbf9aebbdf4918708e97ea2f6f23c2cb360addb354c15ad59083276d8f760403"
+            },
+            {
+              "path": "server/src/routes/openapi.ts",
+              "sha256": "7b6a5b7490701023928ea6a0c7376d8800ca9ecb4cafdf930eb136ef82b8b91d"
+            },
+            {
+              "path": "server/src/__tests__/openapi-routes.test.ts",
+              "sha256": "87cc2a3123e3568246b489d94cc4fa3fe20526af5bdb6e221d6799ac47b6da0e"
+            },
+            {
+              "path": "server/src/routes/trust-documents.ts",
+              "sha256": "49d3fb08619000446da59dd0a44666f1c0deef0433501267610eb5f57e3ee3eb"
+            },
+            {
+              "path": "server/src/__tests__/trust-document-routes.integration.test.ts",
+              "sha256": "592efea21d78d1fdc88faae57cc270f15e10e026ae04ce9419dca368e11306b8"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/mandatory-notices-2026-10-28/attempt-5/openapi-tests.log",
+              "sha256": "9975f8050597b1538bca914fb63c336e1cd03e302d355416f5f8b0be2dcc2a6f"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/mandatory-notices-2026-10-28/attempt-5/openapi-tests.exit",
+              "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+            }
+          ],
+          "receiptFileCount": 2,
+          "boundedResult": "Receipt files present; no test result inferred from presence.",
+          "limit": "Source review/proposal only. Historical receipt presence does not prove current-head, full-journey, hosted, provider, Human, or release acceptance.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/source-audit-proposals.json"
+        }
       },
       "implementationStatus": "partial_implementation"
     },
@@ -4782,7 +5647,7 @@
       "id": "V10-057",
       "sourceLine": 6847,
       "work": "deprecation/sunset/migration notice.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "reconciled_current_worktree",
       "currentAssessment": {
@@ -4860,7 +5725,63 @@
             "observedWorktreeSha256": "b3bd0f0ca7b9da6fe28bcbf29fcd30fe544f4064bc144c6f479e1e1f2362885f"
           }
         ],
-        "reviewBasis": "Current dirty-worktree source owners and a current-source test snapshot are recorded in the linked receipt. This confirms conditional software projection behavior only. No production catalog lifecycle fact, hosted deployment, customer/provider fact, actual deprecation date, or release qualification is asserted."
+        "reviewBasis": "Current dirty-worktree source owners and a current-source test snapshot are recorded in the linked receipt. This confirms conditional software projection behavior only. No production catalog lifecycle fact, hosted deployment, customer/provider fact, actual deprecation date, or release qualification is asserted.",
+        "boundedFollowupReview": {
+          "review": "source-audit-proposals",
+          "reviewedAt": "2026-10-28",
+          "sourcePins": [
+            {
+              "path": "packages/shared/src/feature-catalog.ts",
+              "sha256": "00650dcdad084aeab8eef6c439d66d59a46e5e879f0122e55980e9b57d4bda04"
+            },
+            {
+              "path": "packages/shared/src/announcements.ts",
+              "sha256": "d82062cd1a9f8aaa4bac186794af8ec6c8ae52e04be34e8db359c14150fd5119"
+            },
+            {
+              "path": "server/src/services/experience/product-notices.ts",
+              "sha256": "5f4d32d54289c70e45dc03ad6d5ab92fad94884d8cb6b87c53a6985c01846a5a"
+            },
+            {
+              "path": "server/src/routes/announcements.ts",
+              "sha256": "ad241e6b46ab6cce71b1d263be23a309d6c5ec4e22b27a894e10249a4ae33767"
+            },
+            {
+              "path": "server/src/routes/v9-api-paths.ts",
+              "sha256": "fbf9aebbdf4918708e97ea2f6f23c2cb360addb354c15ad59083276d8f760403"
+            },
+            {
+              "path": "server/src/routes/openapi.ts",
+              "sha256": "7b6a5b7490701023928ea6a0c7376d8800ca9ecb4cafdf930eb136ef82b8b91d"
+            },
+            {
+              "path": "ui/src/api/product-notices.ts",
+              "sha256": "14ea395192370d97deb99cd74f42fceda05c27c93a7511dadba1269d7c1559ca"
+            },
+            {
+              "path": "ui/src/components/CapabilityLifecycleNotices.tsx",
+              "sha256": "06216b34e2a77fdec0a186dc0bf2c44c5b8e80e98c876aafcce3db1dc631dc4f"
+            },
+            {
+              "path": "ui/src/components/AnnouncementWell.tsx",
+              "sha256": "b3bd0f0ca7b9da6fe28bcbf29fcd30fe544f4064bc144c6f479e1e1f2362885f"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/capability-lifecycle-notices-2026-10-28/r1/README.md",
+              "sha256": "6a2d875250aecbc97b1248eb1fff9b74abc3fdfb70a4b7f5b77651f403a72b18"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/capability-lifecycle-notices-2026-10-28/r1/vitest.stdout.txt",
+              "sha256": "9f4091e5204bfca56d2c4d88aa5c3d11c2ae044ca1fd835c58b1b15aec8a0c67"
+            }
+          ],
+          "receiptFileCount": 2,
+          "boundedResult": "Receipt files present; no test result inferred from presence.",
+          "limit": "Source review/proposal only. Historical receipt presence does not prove current-head, full-journey, hosted, provider, Human, or release acceptance.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/source-audit-proposals.json"
+        }
       },
       "implementationStatus": "partial_implementation"
     },
@@ -4868,7 +5789,7 @@
       "id": "V10-058",
       "sourceLine": 6848,
       "work": "notification preference/mandatory-notice semantics.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "reconciled_current_worktree",
       "currentAssessment": {
@@ -4996,7 +5917,75 @@
             "observedWorktreeSha256": "6c1ad69cfdf5b2094ce3cd35d5c62f83ad569abbc4d673b68cee2426f2d6ecaf"
           }
         ],
-        "reviewBasis": "Current source owner inspection at recorded repository HEAD plus dirty worktree. Runtime evidence is scoped to the exact linked captured attempt and its pre-test source pins. Source observations do not establish full V10 behavior, hosted deployment, customer/provider operation, or release acceptance."
+        "reviewBasis": "Current source owner inspection at recorded repository HEAD plus dirty worktree. Runtime evidence is scoped to the exact linked captured attempt and its pre-test source pins. Source observations do not establish full V10 behavior, hosted deployment, customer/provider operation, or release acceptance.",
+        "boundedFollowupReview": {
+          "review": "source-audit-proposals",
+          "reviewedAt": "2026-10-28",
+          "sourcePins": [
+            {
+              "path": "ui/src/components/AnnouncementWell.tsx",
+              "sha256": "b3bd0f0ca7b9da6fe28bcbf29fcd30fe544f4064bc144c6f479e1e1f2362885f"
+            },
+            {
+              "path": "ui/src/components/MandatoryProductNotices.tsx",
+              "sha256": "7892239a803fc42a1a4007e41b3bd79714eebcda3bcfc48fce159be8a869909c"
+            },
+            {
+              "path": "ui/src/api/product-notices.ts",
+              "sha256": "14ea395192370d97deb99cd74f42fceda05c27c93a7511dadba1269d7c1559ca"
+            },
+            {
+              "path": "server/src/routes/announcements.ts",
+              "sha256": "ad241e6b46ab6cce71b1d263be23a309d6c5ec4e22b27a894e10249a4ae33767"
+            },
+            {
+              "path": "server/src/services/trust-documents.ts",
+              "sha256": "76f0cec023ae7781f45b7938871a8c24f5d2c35f944b1ce1a46dc203cc5d0257"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/mandatory-notices-2026-10-28/attempt-2/focused-tests.log",
+              "sha256": "0fa760104c87439a8e208ca05dba50eec374a1e7e2e88d11552c49449cb1372e"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/mandatory-notices-2026-10-28/attempt-2/focused-tests.exit",
+              "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+            },
+            {
+              "path": "server/src/routes/v9-api-paths.ts",
+              "sha256": "fbf9aebbdf4918708e97ea2f6f23c2cb360addb354c15ad59083276d8f760403"
+            },
+            {
+              "path": "server/src/routes/openapi.ts",
+              "sha256": "7b6a5b7490701023928ea6a0c7376d8800ca9ecb4cafdf930eb136ef82b8b91d"
+            },
+            {
+              "path": "server/src/__tests__/openapi-routes.test.ts",
+              "sha256": "87cc2a3123e3568246b489d94cc4fa3fe20526af5bdb6e221d6799ac47b6da0e"
+            },
+            {
+              "path": "server/src/routes/trust-documents.ts",
+              "sha256": "49d3fb08619000446da59dd0a44666f1c0deef0433501267610eb5f57e3ee3eb"
+            },
+            {
+              "path": "server/src/__tests__/trust-document-routes.integration.test.ts",
+              "sha256": "592efea21d78d1fdc88faae57cc270f15e10e026ae04ce9419dca368e11306b8"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/mandatory-notices-2026-10-28/attempt-3/focused-tests.log",
+              "sha256": "58b7392b7614d93709dc0a5bd671aaf2eda39c640b31c76fe433aca0d2065ae7"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/mandatory-notices-2026-10-28/attempt-3/focused-tests.exit",
+              "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+            }
+          ],
+          "receiptFileCount": 2,
+          "boundedResult": "Receipt files present; no test result inferred from presence.",
+          "limit": "Source review/proposal only. Historical receipt presence does not prove current-head, full-journey, hosted, provider, Human, or release acceptance.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/source-audit-proposals.json"
+        }
       },
       "implementationStatus": "partial_implementation"
     },
@@ -5004,7 +5993,7 @@
       "id": "V10-059",
       "sourceLine": 6849,
       "work": "customer changelog surface.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "implemented_unqualified_open",
       "evidence": [],
       "oct22Reconciliation": "reconciled_current_worktree",
       "currentAssessment": {
@@ -5056,7 +6045,35 @@
             "observedWorktreeSha256": "a53fb28f40b8858df6b6e485c7c4fed7520fcec3db0ef5b17b3a8f20905fb7fe"
           }
         ],
-        "reviewBasis": "Current source owner inspection at recorded repository HEAD plus dirty worktree. Runtime evidence is separately scoped to the exact linked captured attempt. Source observations do not establish full V10 behavior, hosted deployment, customer/provider operation, or release acceptance."
+        "reviewBasis": "Current source owner inspection at recorded repository HEAD plus dirty worktree. Runtime evidence is separately scoped to the exact linked captured attempt. Source observations do not establish full V10 behavior, hosted deployment, customer/provider operation, or release acceptance.",
+        "boundedFollowupReview": {
+          "review": "source-audit-proposals",
+          "reviewedAt": "2026-10-28",
+          "sourcePins": [
+            {
+              "path": "packages/shared/src/announcements.ts",
+              "sha256": "d82062cd1a9f8aaa4bac186794af8ec6c8ae52e04be34e8db359c14150fd5119"
+            },
+            {
+              "path": "server/src/services/announcement-feed.ts",
+              "sha256": "b4a4547fdb525d9bf15010aa4f39788d88c9053a5f96b419ba2798672f4ee7e5"
+            },
+            {
+              "path": "server/src/routes/announcements.ts",
+              "sha256": "ad241e6b46ab6cce71b1d263be23a309d6c5ec4e22b27a894e10249a4ae33767"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/customer-changelog-2026-10-28/README.md",
+              "sha256": "4309cd3a897a0ef848817803d510fd155650cbbf3f98c9266e1ef05ee008a58f"
+            }
+          ],
+          "receiptFileCount": 1,
+          "boundedResult": "Retained README reports feed 31/31, PostgreSQL route 1 selected/12 skipped, UI 12/12, and OpenAPI 1 selected/27 skipped; this is not whole-workspace or release acceptance.",
+          "limit": "Source review/proposal only. Historical receipt presence does not prove current-head, full-journey, hosted, provider, Human, or release acceptance.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/source-audit-proposals.json"
+        }
       },
       "implementationStatus": "partial_implementation"
     },
@@ -7874,7 +8891,7 @@
       "id": "V10-101",
       "sourceLine": 6912,
       "work": "chat-channel policy/adapter extraction as V9 touches it.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -7884,7 +8901,7 @@
           "server/src/services/chat-channels.ts",
           "server/src/services/chat-provider-lifecycle.ts"
         ],
-        "implementationFinding": "Chat channel HTTP/webhook routes are separated from provider lifecycle normalization and the shared chat service. Provider-specific behavior remains substantial in route/service branches; the requested policy/adapter extraction is not complete as a uniform V9 extension seam.",
+        "implementationFinding": "The binding clause is deliberately scoped to adapter extraction “as V9 touches it.” `chat-provider-lifecycle.ts` centralizes lifecycle event effects while parsing provider-specific Slack, GitHub, Teams, Discord, Telegram and other shapes. Provider-specific parsing is expected at this seam; no faulty caller, missing guard, or concrete V9-touched lifecycle behavior was identified in the reviewed files. The earlier demand for a uniform provider-neutral adapter across existing providers overstates the clause.",
         "scopedEvidence": [
           {
             "kind": "source_review",
@@ -7902,7 +8919,7 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Finish a provider-neutral policy/adapter boundary for new channel operations and retain per-provider webhook, identity, retry, and approval semantics through that owner.",
+        "remainingWork": "Retain as an incremental maintainability review when a concrete V9 change touches a provider. Only extract a shared operation/policy contract if that change demonstrates duplicated or inconsistent behavior.",
         "implementationStatus": "partial_implementation",
         "sourceReviewFindings": [
           {
@@ -7918,14 +8935,53 @@
             "observedWorktreeSha256": "6baa60b8117162912531e9ac1ee07be6336d04188963f12551e7b0568674816e"
           }
         ],
-        "reviewBasis": "Current source inspection at recorded repository HEAD plus dirty worktree. Historical checkpoint/test details remain in existing scopedEvidence. Source presence does not certify full journey, hosted provider/runtime behavior, or release acceptance."
+        "reviewBasis": "Current source inspection at recorded repository HEAD plus dirty worktree. Historical checkpoint/test details remain in existing scopedEvidence. Source presence does not certify full journey, hosted provider/runtime behavior, or release acceptance.",
+        "boundedFollowupReview": {
+          "review": "lifecycle-review",
+          "reviewDate": "2026-10-28",
+          "classification": "unqualified_no_specific_software_defect_found",
+          "sourcePins": [
+            {
+              "path": "server/src/routes/chat-channels.ts",
+              "sha256": "48610de76e75af45e2b31725bdee3b72900fb7cbf4e33c3d8ff5feede2805500"
+            },
+            {
+              "path": "server/src/services/chat-channels.ts",
+              "sha256": "f167ce1ed44dd346e6d6b8d70e43595c45d61af985f8ff2929319e8b9e031bf8"
+            },
+            {
+              "path": "server/src/services/chat-provider-lifecycle.ts",
+              "sha256": "6baa60b8117162912531e9ac1ee07be6336d04188963f12551e7b0568674816e"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/chat-channel-publication-authorization-2026-10-26/README.md",
+              "sha256": "27ad2c155abf3864c3fb141fa0617ee5eedaf795582ad0f9bf539f821bf4a6de"
+            }
+          ],
+          "receiptFileCount": 1,
+          "receiptReportedTestLines": [
+            {
+              "path": "doc/operations/aw-v10-evidence/chat-channel-publication-authorization-2026-10-26/README.md",
+              "reportedResult": "passed 1/1."
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/chat-channel-publication-authorization-2026-10-26/README.md",
+              "reportedResult": "passed 12/12."
+            }
+          ],
+          "qualificationBoundary": "Retain as an incremental maintainability review when a concrete V9 change touches a provider. Only extract a shared operation/policy contract if that change demonstrates duplicated or inconsistent behavior.",
+          "limit": "Bounded source/receipt review only; no new test run or release qualification.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/lifecycle-review.json"
+        }
       }
     },
     {
       "id": "V10-102",
       "sourceLine": 6913,
       "work": "heartbeat/tool-access/tool-gateway seam review.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "implemented_unqualified_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -7935,7 +8991,7 @@
           "server/src/services/tool-access.ts",
           "server/src/services/tool-gateway.ts"
         ],
-        "implementationFinding": "Heartbeat orchestration, connector/tool authorization, and Tool Gateway execution are separate services with distinct live checks. The requirement is a seam review and regression expansion; their existence does not prove all tool paths use one admission contract or share a current invalidation/version boundary.",
+        "implementationFinding": "Heartbeat, connector authorization and Tool Gateway remain distinct owners. The current Tool Gateway source imports the operation manifest/hash and current Skill/Gateway admission owners, so the stale claim of no shared contract is too broad. The remaining question is complete path-by-path proof that each heartbeat-originated tool call uses those current checks and invalidation boundaries.",
         "scopedEvidence": [
           {
             "kind": "source_review",
@@ -7954,7 +9010,7 @@
           "differentOrMissingCurrentWorktree": 0
         },
         "remainingWork": "Inventory each heartbeat-to-tool path and prove current principal, grant, policy, operation manifest, cancellation, retry, and stale-result checks at the original execution owner.",
-        "implementationStatus": "partial_implementation",
+        "implementationStatus": "implemented_unqualified",
         "sourceReviewFindings": [
           {
             "path": "server/src/services/heartbeat.ts",
@@ -7969,14 +9025,44 @@
             "observedWorktreeSha256": "edc8ee1efc39771f2d1df5b19294daf2150802f19bdef8dee6d3ac2c0cfffa2d"
           }
         ],
-        "reviewBasis": "Current source inspection at recorded repository HEAD plus dirty worktree. Historical checkpoint/test details remain in existing scopedEvidence. Source presence does not certify full journey, hosted provider/runtime behavior, or release acceptance."
+        "reviewBasis": "Current source inspection at recorded repository HEAD plus dirty worktree. Historical checkpoint/test details remain in existing scopedEvidence. Source presence does not certify full journey, hosted provider/runtime behavior, or release acceptance.",
+        "boundedFollowupReview": {
+          "review": "lifecycle-review",
+          "reviewDate": "2026-10-28",
+          "classification": "implemented_unqualified",
+          "sourcePins": [
+            {
+              "path": "server/src/services/heartbeat.ts",
+              "sha256": "2c8f93b6ee924cacbbf9f6fa8c1104b9989b533fd99f37d96bbe5ecbc95da612"
+            },
+            {
+              "path": "server/src/services/tool-access.ts",
+              "sha256": "48f91d7dea0ab177bfd34705ed4d8e08eb980d820bb20e7df50152c71f452f0d"
+            },
+            {
+              "path": "server/src/services/tool-gateway.ts",
+              "sha256": "42ff20943120f7033354b7ccfdee841e4d0d18cf476d2b0dc248328781f4f180"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/agent-platform-boundary-2026-10-28/r2/README.md",
+              "sha256": "a4604a5cca1d49923ba0348e5701e2795dfa71b4cd04d1d622731142bcbbe886"
+            }
+          ],
+          "receiptFileCount": 1,
+          "receiptReportedTestLines": [],
+          "qualificationBoundary": "Inventory each heartbeat-to-tool path and prove current principal, grant, policy, operation manifest, cancellation, retry, and stale-result checks at the original execution owner.",
+          "limit": "Bounded source/receipt review only; no new test run or release qualification.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/lifecycle-review.json"
+        }
       }
     },
     {
       "id": "V10-103",
       "sourceLine": 6914,
       "work": "onboarding/Agent/Inbox legacy convergence completion.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "current_bounded_work_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -7987,7 +9073,7 @@
           "server/src/routes/inbox-agent-policy.ts",
           "server/src/services/inbox-dismissals.ts"
         ],
-        "implementationFinding": "Onboarding seed/service and Inbox policy/dismissal owners exist alongside Agent authoring and activation flows. There is no single demonstrated migration/ownership matrix showing all legacy onboarding, Agent setup, and Inbox paths converge on their canonical owners.",
+        "implementationFinding": "The onboarding seed route documents transactional application and idempotent retry; `saas/onboarding.ts` serializes runs and controls staged first-agent/task creation. Inbox policy and dismissal have separate canonical owners. The review found no specific legacy route/caller that bypasses a canonical owner or a customer behavior regression; the prior “add a route/UI migration map” is inventory work, not proof of a missing implementation.",
         "scopedEvidence": [
           {
             "kind": "source_review",
@@ -8006,8 +9092,8 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Complete a route/UI compatibility inventory and move remaining duplicate behavior through the canonical onboarding/Agent/Inbox owners; remove old paths only after migration evidence.",
-        "implementationStatus": "partial_implementation",
+        "remainingWork": "Keep open for a route/UI inventory and scoped acceptance. Do not remove compatibility paths or add a convergence layer until a specific duplicate or bypassing caller is named.",
+        "implementationStatus": "unqualified_no_specific_software_defect_found",
         "sourceReviewFindings": [
           {
             "path": "server/src/routes/onboarding-seed.ts",
@@ -8026,14 +9112,44 @@
             "observedWorktreeSha256": "e9c2ed1932ff99491d838f8ffa1e14c7475ac73b21ebe732563cb12f09d8b95b"
           }
         ],
-        "reviewBasis": "Current source inspection at recorded repository HEAD plus dirty worktree. Historical checkpoint/test details remain in existing scopedEvidence. Source presence does not certify full journey, hosted provider/runtime behavior, or release acceptance."
+        "reviewBasis": "Current source inspection at recorded repository HEAD plus dirty worktree. Historical checkpoint/test details remain in existing scopedEvidence. Source presence does not certify full journey, hosted provider/runtime behavior, or release acceptance.",
+        "boundedFollowupReview": {
+          "review": "lifecycle-review",
+          "reviewDate": "2026-10-28",
+          "classification": "unqualified_no_specific_software_defect_found",
+          "sourcePins": [
+            {
+              "path": "server/src/routes/onboarding-seed.ts",
+              "sha256": "4e2acc3ab4907e29599c3f1e19668e41167c503109930e8b0db0bf4a793ca21d"
+            },
+            {
+              "path": "server/src/services/saas/onboarding.ts",
+              "sha256": "f29f6b9226e5bd22ce63db8bbe27a5e219294d7947447bd4abb2845b257a9911"
+            },
+            {
+              "path": "server/src/routes/inbox-agent-policy.ts",
+              "sha256": "046cac4288a37355c0c5b058591a96ab7eb6975eed4622f69b75e5760a435837"
+            },
+            {
+              "path": "server/src/services/inbox-dismissals.ts",
+              "sha256": "e9c2ed1932ff99491d838f8ffa1e14c7475ac73b21ebe732563cb12f09d8b95b"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [],
+          "receiptFileCount": 0,
+          "receiptReportedTestLines": [],
+          "qualificationBoundary": "Keep open for a route/UI inventory and scoped acceptance. Do not remove compatibility paths or add a convergence layer until a specific duplicate or bypassing caller is named.",
+          "limit": "Bounded source/receipt review only; no new test run or release qualification.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/lifecycle-review.json",
+          "boundedResult": "No receipt files were listed for this scoped review; no test result is inferred."
+        }
       }
     },
     {
       "id": "V10-104",
       "sourceLine": 6915,
       "work": "module-boundary regression expansion.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "implemented_unqualified_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -8043,7 +9159,7 @@
           "scripts/aw-v9-release-prerequisites.mjs",
           "server/src/__tests__/openapi-routes.test.ts"
         ],
-        "implementationFinding": "The V9 checker validates screen/build-brief/release-prerequisite artifacts and OpenAPI tests compare mounted route inventory. These are useful bounded gates, but they are not a general source-level module-boundary or unexplained UI-only operation gate for all V10 owners.",
+        "implementationFinding": "The source includes `scripts/check-module-boundaries.mjs` with boundary regression tests and a package command, plus the V10 exact mounted-UI/API-operation inventory checker (`scripts/check-aw-v10-operation-coverage.mjs`) with fail-closed tests wired into `.github/workflows/aw-v9-coverage.yml`. This covers the concrete gate previously claimed absent. The review found no failing import, mounted call, or uncovered UI-only action to justify another manifest or gate.",
         "scopedEvidence": [
           {
             "kind": "source_review",
@@ -8061,8 +9177,8 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Add/close explicit module ownership and cross-boundary regression checks for the affected V10 seams; bind any coverage manifest to actual mounted routes and owners.",
-        "implementationStatus": "partial_implementation",
+        "remainingWork": "Retain the existing CI lanes and add a check only when a reproduced boundary violation escapes them. Module-layer coverage is scoped to declared server modules; this source review does not claim universal architecture conformance.",
+        "implementationStatus": "implemented_unqualified_no_specific_software_defect_found",
         "sourceReviewFindings": [
           {
             "path": "scripts/check-aw-v9-coverage.mjs",
@@ -8077,7 +9193,49 @@
             "observedWorktreeSha256": "8bd1b07f3ddf4f67f30bd0bba513b9db3946c009180c2c10eb3b0b58e3210608"
           }
         ],
-        "reviewBasis": "Current source inspection at recorded repository HEAD plus dirty worktree. Historical checkpoint/test details remain in existing scopedEvidence. Source presence does not certify full journey, hosted provider/runtime behavior, or release acceptance."
+        "reviewBasis": "Current source inspection at recorded repository HEAD plus dirty worktree. Historical checkpoint/test details remain in existing scopedEvidence. Source presence does not certify full journey, hosted provider/runtime behavior, or release acceptance.",
+        "boundedFollowupReview": {
+          "review": "lifecycle-review",
+          "reviewDate": "2026-10-28",
+          "classification": "implemented_unqualified_no_specific_software_defect_found",
+          "sourcePins": [
+            {
+              "path": "scripts/check-module-boundaries.mjs",
+              "sha256": "08014b58d6158a0374f25a20ff689edb3678a3743971a1bc9d3e89d03e1f9e05"
+            },
+            {
+              "path": "scripts/check-module-boundaries.test.mjs",
+              "sha256": "0c59c40365284d3d80ef5900b91b778d41281d1cbef443361a171f830caa9f58"
+            },
+            {
+              "path": "scripts/check-aw-v10-operation-coverage.mjs",
+              "sha256": "ab86888bda39eb356b097d34204654396336a01f85705b59aa3748f920ffc189"
+            },
+            {
+              "path": "scripts/aw-v10-operation-coverage.mjs",
+              "sha256": "42b8cb297994d112ce9be6ec66da6f4086b7f44e6c2c0e0b855008426c5860c9"
+            },
+            {
+              "path": "scripts/check-aw-v10-operation-coverage.test.mjs",
+              "sha256": "79d2b7faa5c9be968dfef42964e3f0fe59b1753662662c4f5ce56d5cb540650e"
+            },
+            {
+              "path": ".github/workflows/aw-v9-coverage.yml",
+              "sha256": "b4c2ef6f027d75eafd06c4aa310a8afe0c6515a154ac72f0aee02599afe4eafc"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/agent-platform-boundary-2026-10-28/r1/README.md",
+              "sha256": "cc2246131daddbebeb8e87a4f8126aa836c1400b6ef1ce6210862ffc8e96eefe"
+            }
+          ],
+          "receiptFileCount": 1,
+          "receiptReportedTestLines": [],
+          "qualificationBoundary": "Retain the existing CI lanes and add a check only when a reproduced boundary violation escapes them. Module-layer coverage is scoped to declared server modules; this source review does not claim universal architecture conformance.",
+          "limit": "Bounded source/receipt review only; no new test run or release qualification.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/lifecycle-review.json"
+        }
       }
     },
     {
@@ -8198,7 +9356,7 @@
       "id": "V10-107",
       "sourceLine": 6921,
       "work": "public incident + in-app status + recovery E2E.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "software_requirement_missing_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -8209,7 +9367,7 @@
           "packages/shared/src/service-health.ts",
           "server/src/__tests__/service-health-routes.test.ts"
         ],
-        "implementationFinding": "The current public service-health route reads a bounded Statuspage v2 projection with expiry/unavailable handling. It does not publish incidents, map affected customer tenants, deliver subscribers, or provide the complete incident-recovery journey requested by this item.",
+        "implementationFinding": "The source owner is a read-only public Statuspage projection with unavailable/expiry behavior. It does not author incidents, map affected companies, notify subscribers, or complete recovery.",
         "scopedEvidence": [
           {
             "kind": "source_review",
@@ -8229,7 +9387,7 @@
           "differentOrMissingCurrentWorktree": 0
         },
         "remainingWork": "Keep the read-only public adapter separate from incident authoring, tenant-impact projection, notifications, and recovery/runbook qualification; close only with their original owners and provider evidence.",
-        "implementationStatus": "partial_implementation",
+        "implementationStatus": "software_missing",
         "sourceReviewFindings": [
           {
             "path": "server/src/routes/service-health.ts",
@@ -8248,7 +9406,37 @@
             "observedWorktreeSha256": "a34bffdd16907d9bc6850ecb2f25c684b04620aa4cc1e9b33d411ae1cecce9cf"
           }
         ],
-        "reviewBasis": "Current source inspection at recorded repository HEAD plus dirty worktree. Historical checkpoint/test details remain in existing scopedEvidence. Source presence does not certify full journey, hosted provider/runtime behavior, or release acceptance."
+        "reviewBasis": "Current source inspection at recorded repository HEAD plus dirty worktree. Historical checkpoint/test details remain in existing scopedEvidence. Source presence does not certify full journey, hosted provider/runtime behavior, or release acceptance.",
+        "boundedFollowupReview": {
+          "review": "lifecycle-review",
+          "reviewDate": "2026-10-28",
+          "classification": "software_missing",
+          "sourcePins": [
+            {
+              "path": "server/src/routes/service-health.ts",
+              "sha256": "bdf5a7eef496817669c1f21a67637636534d3eef548f44676a0f9c91b982cf82"
+            },
+            {
+              "path": "server/src/services/experience/service-health.ts",
+              "sha256": "a7bbe53bb978cb192b1b598bcc34f3afc314a08c26f7cc13438d6c34d4406972"
+            },
+            {
+              "path": "packages/shared/src/service-health.ts",
+              "sha256": "7973fba774410d46126abe2aea133ecb4d91d56c6f87634dd7e233733a3b0e98"
+            },
+            {
+              "path": "server/src/__tests__/service-health-routes.test.ts",
+              "sha256": "a34bffdd16907d9bc6850ecb2f25c684b04620aa4cc1e9b33d411ae1cecce9cf"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [],
+          "receiptFileCount": 0,
+          "receiptReportedTestLines": [],
+          "qualificationBoundary": "Keep the read-only public adapter separate from incident authoring, tenant-impact projection, notifications, and recovery/runbook qualification; close only with their original owners and provider evidence.",
+          "limit": "Source review only; no test run or release qualification.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/lifecycle-review.json",
+          "boundedResult": "No receipt files were listed for this scoped review; no test result is inferred."
+        }
       }
     },
     {
@@ -8369,7 +9557,7 @@
       "id": "V10-110",
       "sourceLine": 6924,
       "work": "user offboarding/orphan/coverage drill.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "current_bounded_work_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -8380,7 +9568,7 @@
           "server/src/services/agent-runtime-owner-assignments.ts",
           "server/src/services/authorization.ts"
         ],
-        "implementationFinding": "Company offboarding fences membership, agent keys, support sessions, and deletion work; responsibility attention and runtime assignment owners also exist. A single orphan/coverage inventory over every material object and an owner-transfer/offboard journey is not established here.",
+        "implementationFinding": "The responsibility projection explicitly detects active/paused routines whose responsible Human is absent or inactive, returns an authorized manager-only action, and its PostgreSQL test verifies visibility and disappearance after assignment/revocation. Company offboarding separately refuses deletion while a shared Agent remains outside its home company. These are concrete scoped controls. No specific orphan object with an expected-but-missing caller/guard was proven by the reviewed receipt.",
         "scopedEvidence": [
           {
             "kind": "source_review",
@@ -8399,8 +9587,8 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Complete owner coverage by object class and stale-reference reporting; prove transfer, loss of all owners, revocation, and delayed-job behavior against each original domain owner.",
-        "implementationStatus": "partial_implementation",
+        "remainingWork": "The register item names an offboarding/orphan/coverage drill. Broader coverage across all owner-bearing object types, transfers, and delayed jobs remains unqualified until a defined object inventory identifies a concrete uncovered path.",
+        "implementationStatus": "unqualified_no_specific_software_defect_found",
         "sourceReviewFindings": [
           {
             "path": "server/src/services/saas/offboarding.ts",
@@ -8419,7 +9607,50 @@
             "observedWorktreeSha256": "d3fc48c25bc098bb59751ab0ac229dcc5e2f529e2b8fab5ef48f67443ba9ca96"
           }
         ],
-        "reviewBasis": "Current source inspection at recorded repository HEAD plus dirty worktree. Historical checkpoint/test details remain in existing scopedEvidence. Source presence does not certify full journey, hosted provider/runtime behavior, or release acceptance."
+        "reviewBasis": "Current source inspection at recorded repository HEAD plus dirty worktree. Historical checkpoint/test details remain in existing scopedEvidence. Source presence does not certify full journey, hosted provider/runtime behavior, or release acceptance.",
+        "boundedFollowupReview": {
+          "review": "lifecycle-review",
+          "reviewDate": "2026-10-28",
+          "classification": "unqualified_no_specific_software_defect_found",
+          "sourcePins": [
+            {
+              "path": "server/src/services/saas/offboarding.ts",
+              "sha256": "ff20c7a867ab27127760544386a436f5d20ed79196df02bf333a16997e4e483b"
+            },
+            {
+              "path": "server/src/services/experience/routine-responsibility-attention.ts",
+              "sha256": "94249bed80769a4c1486cfa493574d550c5a359c4e35100b0cb16a81049f42b3"
+            },
+            {
+              "path": "server/src/__tests__/routine-responsibility-attention.integration.test.ts",
+              "sha256": "fec812ab1ad3cd0306295dc3f3527df37c0100743c665e10ae2ba018e5f87ee5"
+            },
+            {
+              "path": "server/src/services/agent-runtime-owner-assignments.ts",
+              "sha256": "e045e3d8b82bac60d7f779b400972fb4c044a101fd167585fdb8d202035e8f95"
+            },
+            {
+              "path": "server/src/services/authorization.ts",
+              "sha256": "47cd39b0a2505470a93a8c9485e656bc70df26623129bf3343398ea2d28c0b7c"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/continuity-security-2026-10-28/README.md",
+              "sha256": "15edca2d2ff0e83ff720ce3dd5e3aef6d0bddd7b65e4707e7912767733b49b43"
+            }
+          ],
+          "receiptFileCount": 1,
+          "receiptReportedTestLines": [
+            {
+              "path": "doc/operations/aw-v10-evidence/continuity-security-2026-10-28/README.md",
+              "reportedResult": "passed: 36 tests across two files. The UI typecheck and token gates passed. See `ui-r5/` and `types-token/` fo"
+            }
+          ],
+          "qualificationBoundary": "The register item names an offboarding/orphan/coverage drill. Broader coverage across all owner-bearing object types, transfers, and delayed jobs remains unqualified until a defined object inventory identifies a concrete uncovered path.",
+          "limit": "Bounded source/receipt review only; no new test run or release qualification.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/lifecycle-review.json"
+        }
       }
     },
     {
@@ -8510,7 +9741,7 @@
       "id": "V10-112",
       "sourceLine": 6926,
       "work": "noisy-neighbor / denial-of-wallet drill.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "current_bounded_work_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -8521,7 +9752,7 @@
           "server/src/services/context/context-budget.ts",
           "server/src/__tests__/native-budget-queue-source-binding.integration.test.ts"
         ],
-        "implementationFinding": "Budget, quota-window, and context-budget owners are present, including native queued-call source binding. This is software substrate; concurrent noisy-tenant/service denial-of-wallet behavior and distributed/global limits are not established by source alone.",
+        "implementationFinding": "The budget owner stores company/Agent/project policies and computes hard-stop state from persisted cost events and model reservations; tests include budget enforcement and source-binding regressions. The operator model-cost receipt explicitly leaves complete cost attribution/shared-account allocation and real runtime qualification unknown. No tenant/fleet race or process-local bypass was reproduced, so “shared multi-process limit if enforcement is process-local” remains conditional rather than a code defect.",
         "scopedEvidence": [
           {
             "kind": "source_review",
@@ -8540,8 +9771,8 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Exercise shared capacity, expensive models, retries, queue growth, and cross-process contention with bounded load and billing receipts; identify which protections are process-local versus shared.",
-        "implementationStatus": "partial_implementation",
+        "remainingWork": "Run the noisy-neighbor/denial-of-wallet drill against the supported topology and cost model. File a software gap only if a specific concurrent admission path bypasses a persisted policy or exceeds a bounded limit.",
+        "implementationStatus": "conditional_unqualified_no_specific_software_defect_found",
         "sourceReviewFindings": [
           {
             "path": "server/src/services/budgets.ts",
@@ -8560,7 +9791,46 @@
             "observedWorktreeSha256": "60ef184146c6ca40d1de0f05d5446e6c9daaa54ec902fbc6cda98c03cebf9302"
           }
         ],
-        "reviewBasis": "Current source inspection at recorded repository HEAD plus dirty worktree. Historical checkpoint/test details remain in existing scopedEvidence. Source presence does not certify full journey, hosted provider/runtime behavior, or release acceptance."
+        "reviewBasis": "Current source inspection at recorded repository HEAD plus dirty worktree. Historical checkpoint/test details remain in existing scopedEvidence. Source presence does not certify full journey, hosted provider/runtime behavior, or release acceptance.",
+        "boundedFollowupReview": {
+          "review": "lifecycle-review",
+          "reviewDate": "2026-10-28",
+          "classification": "conditional_unqualified_no_specific_software_defect_found",
+          "sourcePins": [
+            {
+              "path": "server/src/services/budgets.ts",
+              "sha256": "34574e4024d270f10c584339fd28e2156af7cf23f576975b99b512a8877e6153"
+            },
+            {
+              "path": "server/src/services/quota-windows.ts",
+              "sha256": "41bc0481b1ae5d010045c51a502a5781949354298fe48e3e3ea5a8a7c14e7e0f"
+            },
+            {
+              "path": "server/src/services/context/context-budget.ts",
+              "sha256": "1abbd871cefe55a65932fb9fef845959543b42cf15b78c37644cea5361b2cb7b"
+            },
+            {
+              "path": "server/src/__tests__/native-budget-queue-source-binding.integration.test.ts",
+              "sha256": "60ef184146c6ca40d1de0f05d5446e6c9daaa54ec902fbc6cda98c03cebf9302"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/operator-model-cost-2026-10-28/README.md",
+              "sha256": "7686b7b70c5b554cc3982e5ee30e4d5f629fe1614edd6dacbb2ea5f6cababa25"
+            }
+          ],
+          "receiptFileCount": 1,
+          "receiptReportedTestLines": [
+            {
+              "path": "doc/operations/aw-v10-evidence/operator-model-cost-2026-10-28/README.md",
+              "reportedResult": "3/3 and UI typecheck0. The earlier combined r5 run includes passing pipeline/operator/OpenAPI/UI checks but a cost watermark formatting failure;"
+            }
+          ],
+          "qualificationBoundary": "Run the noisy-neighbor/denial-of-wallet drill against the supported topology and cost model. File a software gap only if a specific concurrent admission path bypasses a persisted policy or exceeds a bounded limit.",
+          "limit": "Bounded source/receipt review only; no new test run or release qualification.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/lifecycle-review.json"
+        }
       }
     },
     {
@@ -8867,7 +10137,7 @@
       "id": "V10-118",
       "sourceLine": 6932,
       "work": "integrated managed-customer golden journey.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "current_bounded_work_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -8878,7 +10148,7 @@
           "tests/e2e/aw-v10-native-auth.spec.ts",
           "doc/plans/2026-10-28-v10-current-reconciliation.md"
         ],
-        "implementationFinding": "First-task, activation, and native-auth browser journeys exist as separate suites. They do not compose one managed customer journey with actual provider connection, staffed support, status incident, data export/delete, live billing and operator evidence.",
+        "implementationFinding": "First-task, activation, native-auth and other journeys are separate suites. No single managed-customer golden path composes actual provider connection, staffed support, incident, export/delete, billing and operator evidence.",
         "scopedEvidence": [
           {
             "kind": "source_review",
@@ -8898,7 +10168,7 @@
           "differentOrMissingCurrentWorktree": 0
         },
         "remainingWork": "Assemble the exact supported managed-customer path after individual owners freeze; retain missing provider/operator/Human receipts as explicit external gates.",
-        "implementationStatus": "partial_implementation",
+        "implementationStatus": "software_missing_and_unqualified",
         "sourceReviewFindings": [
           {
             "path": "tests/e2e/aw-v9-first-task.spec.ts",
@@ -8917,7 +10187,37 @@
             "observedWorktreeSha256": "57419f8a60b107b1b952903ca992e13e9165a1069b61365d8033bb6275207f62"
           }
         ],
-        "reviewBasis": "Current source inspection at recorded repository HEAD plus dirty worktree. Historical checkpoint/test details remain in existing scopedEvidence. Source presence does not certify full journey, hosted provider/runtime behavior, or release acceptance."
+        "reviewBasis": "Current source inspection at recorded repository HEAD plus dirty worktree. Historical checkpoint/test details remain in existing scopedEvidence. Source presence does not certify full journey, hosted provider/runtime behavior, or release acceptance.",
+        "boundedFollowupReview": {
+          "review": "lifecycle-review",
+          "reviewDate": "2026-10-28",
+          "classification": "software_missing_and_unqualified",
+          "sourcePins": [
+            {
+              "path": "tests/e2e/aw-v9-first-task.spec.ts",
+              "sha256": "b5afe22aeb2d87b382c15c6fb0ef6cea2dcf08d75b9a0569907ab513a9ac7bb0"
+            },
+            {
+              "path": "tests/e2e/aw-v9-activation-connections.spec.ts",
+              "sha256": "8599cdd27c2107016347211717af022f58a69a5ffd90ea607ce5d4107c7c9492"
+            },
+            {
+              "path": "tests/e2e/aw-v10-native-auth.spec.ts",
+              "sha256": "6483e96b8f24a9403dab9e0de87a82657ad0799fb03e55c3501b52511e58a79b"
+            },
+            {
+              "path": "doc/plans/2026-10-28-v10-current-reconciliation.md",
+              "sha256": "38b1707cf04e57e760a31683e0e1b81a26ffcb17ac687b31456049e7dd0c776f"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [],
+          "receiptFileCount": 0,
+          "receiptReportedTestLines": [],
+          "qualificationBoundary": "Assemble the exact supported managed-customer path after individual owners freeze; retain missing provider/operator/Human receipts as explicit external gates.",
+          "limit": "Bounded source/receipt review only; no new test run or release qualification.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/lifecycle-review.json",
+          "boundedResult": "No receipt files were listed for this scoped review; no test result is inferred."
+        }
       }
     },
     {
@@ -11749,7 +13049,7 @@
       "work": "Qualified starter/default experience profile",
       "nativeOwnerOrContract": "V6 activation + V7 packages + V9 activation",
       "requiredOutcome": "A usable account reaches real first value without technical setup decisions",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "current_bounded_work_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -11760,7 +13060,7 @@
           "server/src/services/saas/activation.ts",
           "server/src/services/saas/activation-first-agent.ts"
         ],
-        "implementationFinding": "Default and CEO onboarding instructions and first-agent activation are implemented sources. The exact starter profile and its default skills, data scope, enabled integrations, cost limits and actual supported-runtime qualification are not defined as a single verified profile here.",
+        "implementationFinding": "Both default and CEO onboarding assets exist, as do the canonical activation service and first-Agent owner. The open gap is the versioned, owner-reviewed starter/default profile artifact plus first-value evidence across offered install types. No missing runtime function or defective activation caller was identified in this source review.",
         "scopedEvidence": [
           {
             "kind": "source_review",
@@ -11779,8 +13079,8 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Publish an owner-reviewed starter profile with least-authority defaults and prove the same user-visible setup and runtime capability on each advertised installation type.",
-        "implementationStatus": "partial_implementation",
+        "remainingWork": "Produce/qualify the profile artifact and actual first-value journey. Treat as artifact and release evidence work unless a specific setup decision currently blocks the promised no-technical-setup path.",
+        "implementationStatus": "artifact_missing_no_specific_software_defect_found",
         "sourceReviewFindings": [
           {
             "path": "server/src/onboarding-assets/default/AGENTS.md",
@@ -11799,7 +13099,37 @@
             "observedWorktreeSha256": "2a4eb4d46fabdaf033f47555bcf3ee076371478ad6ca9aaa4f01d91db8f195d9"
           }
         ],
-        "reviewBasis": "Current source inspection at recorded repository HEAD plus dirty worktree. Historical checkpoint/test details remain in existing scopedEvidence. Source presence does not certify full journey, hosted provider/runtime behavior, or release acceptance."
+        "reviewBasis": "Current source inspection at recorded repository HEAD plus dirty worktree. Historical checkpoint/test details remain in existing scopedEvidence. Source presence does not certify full journey, hosted provider/runtime behavior, or release acceptance.",
+        "boundedFollowupReview": {
+          "review": "lifecycle-review",
+          "reviewDate": "2026-10-28",
+          "classification": "artifact_missing_no_specific_software_defect_found",
+          "sourcePins": [
+            {
+              "path": "server/src/onboarding-assets/default/AGENTS.md",
+              "sha256": "dd9b13ce54b7e1e0a5707cc3b5da22907f42b6ccdbf0086612bd5a73bdd7985a"
+            },
+            {
+              "path": "server/src/onboarding-assets/ceo/AGENTS.md",
+              "sha256": "044051009fd0947608bcaab2bb550472b57b3e03c9067be7109cc4714a0f209f"
+            },
+            {
+              "path": "server/src/services/saas/activation.ts",
+              "sha256": "4dbe56416e4ee80b9e8abb4a426cb994f05f97e54101bee4fb609fd0585730a7"
+            },
+            {
+              "path": "server/src/services/saas/activation-first-agent.ts",
+              "sha256": "2a4eb4d46fabdaf033f47555bcf3ee076371478ad6ca9aaa4f01d91db8f195d9"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [],
+          "receiptFileCount": 0,
+          "receiptReportedTestLines": [],
+          "qualificationBoundary": "Produce/qualify the profile artifact and actual first-value journey. Treat as artifact and release evidence work unless a specific setup decision currently blocks the promised no-technical-setup path.",
+          "limit": "Bounded source/receipt review only; no new test run or release qualification.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/lifecycle-review.json",
+          "boundedResult": "No receipt files were listed for this scoped review; no test result is inferred."
+        }
       }
     },
     {
@@ -13436,7 +14766,7 @@
       "work": "Short activation composition over retained logical states",
       "nativeOwnerOrContract": "UX-02/03 / ONB-01–12; C",
       "requiredOutcome": "No fabricated skipped step, duplicate command, required project/website or technical first-run setup",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "current_bounded_work_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -13447,7 +14777,7 @@
           "ui/src/pages/Activation.tsx",
           "ui/src/pages/SaasWelcome.tsx"
         ],
-        "implementationFinding": "Activation and first-value stages have separate durable services and UI pages. A short coherent composed flow that preserves each stage receipt and avoids false skipped-step/duplicate effect claims has dedicated journey and copy acceptance still open.",
+        "implementationFinding": "Activation has a retained staged state, first-Agent/task preparation, verified first-value receipt, completion revalidation, and a UI that exposes resume/current-stage behavior. Its code expressly represents optional website as `not_requested`. The retained 012 browser attempt passed the first-value test and failed the separate password-reset selector; it is not evidence of an activation product defect. No missing transition/duplicate command was reproduced.",
         "scopedEvidence": [
           {
             "kind": "source_review",
@@ -13466,8 +14796,8 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Compose required onboarding steps over canonical retained state, expose continue/skip only where owner permits, and prove failure/resume/first-value on the exact supported profile.",
-        "implementationStatus": "partial_implementation",
+        "remainingWork": "Qualify one supported profile end-to-end, including resume, skip/failure, and real first-value. Treat the failed password-reset selector as test evidence only unless current UI behavior is independently shown incorrect.",
+        "implementationStatus": "unqualified_no_specific_software_defect_found",
         "sourceReviewFindings": [
           {
             "path": "server/src/services/saas/activation.ts",
@@ -13486,7 +14816,41 @@
             "observedWorktreeSha256": "c0c2f29263f80cf2ab97a9a255fc1f0d361733eb134c40ff70232c421ed50954"
           }
         ],
-        "reviewBasis": "Current source inspection at recorded repository HEAD plus dirty worktree. Historical checkpoint/test details remain in existing scopedEvidence. Source presence does not certify full journey, hosted provider/runtime behavior, or release acceptance."
+        "reviewBasis": "Current source inspection at recorded repository HEAD plus dirty worktree. Historical checkpoint/test details remain in existing scopedEvidence. Source presence does not certify full journey, hosted provider/runtime behavior, or release acceptance.",
+        "boundedFollowupReview": {
+          "review": "lifecycle-review",
+          "reviewDate": "2026-10-28",
+          "classification": "unqualified_no_specific_software_defect_found",
+          "sourcePins": [
+            {
+              "path": "server/src/services/saas/activation.ts",
+              "sha256": "4dbe56416e4ee80b9e8abb4a426cb994f05f97e54101bee4fb609fd0585730a7"
+            },
+            {
+              "path": "server/src/services/saas/activation-first-value.ts",
+              "sha256": "8de5d8219dc779816aa3b6c26f10bec165b7027ed51284be73ec160eefa53312"
+            },
+            {
+              "path": "ui/src/pages/Activation.tsx",
+              "sha256": "e62bddf303170a0d7f9cc21f4973eaff934e97b91afa7f26e5f2dbeeef57fb52"
+            },
+            {
+              "path": "ui/src/pages/SaasWelcome.tsx",
+              "sha256": "c0c2f29263f80cf2ab97a9a255fc1f0d361733eb134c40ff70232c421ed50954"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/firstvalue-password-locale-rerun-012-2026-10-26/README.md",
+              "sha256": "14559139cb9c86b79becd9fec39e30458d5716d627874805462aa085f6131f17"
+            }
+          ],
+          "receiptFileCount": 1,
+          "receiptReportedTestLines": [],
+          "qualificationBoundary": "Qualify one supported profile end-to-end, including resume, skip/failure, and real first-value. Treat the failed password-reset selector as test evidence only unless current UI behavior is independently shown incorrect.",
+          "limit": "Bounded source/receipt review only; no new test run or release qualification.",
+          "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/lifecycle-review.json"
+        }
       }
     },
     {
@@ -14700,7 +16064,9 @@
       "?? server/src/routes/trust-documents.ts",
       "?? server/src/services/trust-documents.ts"
     ],
-    "scope": "Bounded source/evidence reconciliation against this HEAD plus the explicitly listed dirty worktree, captured before this register/plan reconciliation update. Historical checkpoints stay scoped to their own recorded source hashes. Live Human/provider/host qualification and exact release-candidate acceptance are not implied."
+    "scope": "Bounded source/evidence reconciliation against this HEAD plus the explicitly listed dirty worktree, captured before this register/plan reconciliation update. Historical checkpoints stay scoped to their own recorded source hashes. Live Human/provider/host qualification and exact release-candidate acceptance are not implied.",
+    "followupSourceAudit": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/source-audit-proposals.json",
+    "followupLifecycleReview": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/lifecycle-review.json"
   },
   "reviewedAt": "2026-10-28",
   "currentReleaseQualification": {
